@@ -77,6 +77,16 @@ def max_steps(config: dict[str, Any], *, override: int | None = None) -> int:
     return int(override or config.get("run", {}).get("max_steps", 25))
 
 
+def feedback_tools(config: dict[str, Any], *, override: bool = False) -> bool:
+    """Whether the agent may send feedback through a platform's own tool.
+
+    Off by default: comparisons ask the agent to put everything in its final
+    report instead (prompt v5). A battery that collects product feedback turns it
+    on with `[run] feedback_tools = true` or `--feedback-tools`.
+    """
+    return bool(override or config.get("run", {}).get("feedback_tools", False))
+
+
 def max_result_chars(config: dict[str, Any]) -> int:
     """How much of each tool RESULT is stored per call.
 

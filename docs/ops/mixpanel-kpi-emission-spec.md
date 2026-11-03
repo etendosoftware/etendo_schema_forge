@@ -137,7 +137,7 @@ Recent validation evidence:
 
 The two KPIs of the Movements tab (`eng_movements_tab_adoption`, `eng_movements_tab_frequency`, roadmap idea `etendosoftware/etendo-ai#4`) are computed by the `etendo-kpis` collector from two **saved Mixpanel Insights reports** in the *Etendo Go* project (ids `93773825` and `93773827`, dashboard `11625102` *ETP-5889 · KPIs pestaña Movimientos de Producto*), not from the validation dashboard above.
 
-- Unit: the device (Mixpanel does not identify people, ETP-4352). Adoption = devices that opened the tab / devices with `session_started`, per week; frequency = opens / the same devices.
+- Unit: the device (Mixpanel does not identify people, ETP-4352). **Under review:** once someone signs in Mixpanel merges their devices into one identity (`$user_id`), so the reports count people when signed in; see section 11.1 of the ETP-5889 plan. Adoption = devices that opened the tab / devices with `session_started`, per week; frequency = opens / the same devices.
 - Both reports filter the production hosts (`hostname` contains `app.etendo.`) and the role (`role_groups` contains `warehouse`). The role that counts is changed by editing those filters in Mixpanel, with no change to this repository.
 - Weeks start on Monday 00:00 in the time zone of the Mixpanel project (Europe/Madrid).
 - The KPIs are N/D, never 0, until `product_movements_tab_opened` has been seen in production and there are active devices of the role in the week.

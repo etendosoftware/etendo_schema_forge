@@ -574,6 +574,14 @@
           "capability": "isAdminOrClientAdmin"
         },
         {
+          "name": "document-templates",
+          "label": "Document Templates",
+          "favname": "Document Templates",
+          "icon": "FileText",
+          "featureFlag": "doc-template-selection",
+          "capability": "isAdminOrClientAdmin"
+        },
+        {
           "name": "fiscal-config",
           "label": "Fiscal Configuration",
           "favname": "Fiscal Configuration",

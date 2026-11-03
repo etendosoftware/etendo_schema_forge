@@ -1413,12 +1413,15 @@ rectificative type and the legacy `APC` credit memo.
     the checkbox (plus its dependent AEAT year/period/base-amount fields) when the catalog
     confirms Modelo 349 is active. **Fail-closed** in every failure mode — loading, non-200,
     network error, or a malformed/missing-key response all hide the checkbox, never show it
-    by default. The read-only "Modelo 349" grid-column badge (`CorrectivaBadge`) is **not**
-    gated — it always reflects the underlying `aEAT349IsCorrective` value regardless of
-    catalog state; only the interactive checkbox is affected. **Known non-blocking gap:**
-    toggling 349 off does not clear or warn about an already-`true` `aEAT349IsCorrective` on
-    existing lines — the checkbox just becomes invisible while the data (and the grid badge)
-    stay intact.
+    by default. **Since ETP-5831 (CP-14) the whole "Modelo 349" grid column — header and
+    `CorrectivaBadge` cells — follows the same gate** (`catalogLoaded && isModelActive(activeModels,
+    '349')`): it is absent while the catalog loads and whenever 349 is inactive, so it never
+    flashes in. The column is also dropped from the personal-view column list
+    (`gridColumns`), and the full-width rows (loading, expanded form, draft) span 6 cells
+    instead of 7. Until ETP-5831 the badge column was deliberately left ungated. **Known
+    non-blocking gap:** toggling 349 off does not clear or warn about an already-`true`
+    `aEAT349IsCorrective` on existing lines — the checkbox and the column just become
+    invisible while the data stays intact (and reappears when 349 is switched back on).
   - **New (ETP-5059): the 349 year and period are bound to the original invoice.** The
     classic module `org.openbravo.module.aeat349.es` (trigger `AEAT349_CINVREV_TRG0` on
     `C_Invoice_Reverse`) now accepts, for a "Correctiva del 349", only the original invoice's
@@ -3123,3 +3126,13 @@ The full app-shell `npm run test:all` suite and `npm run build` passed. Browser 
 ## Agent prompt on the business partner — ETP-5852
 
 `businessPartner.agentPrompt`: names can repeat; agents tell partners apart by reading `searchKey` and `taxID` from `contacts/businessPartner` with an `id in [...]` filter. Feedback M-191.
+
+## Voiding an issued invoice, for agents — ETP-5848
+
+An issued invoice is voided with a credit note (factura rectificativa), never by reactivating and deleting it (decided 2026-10-23, OKR O2 flow `f-void-invoice`). Asked to void one, an agent sent `docAction: VO`, got only "send one of [CO, RE]", and reactivated the invoice. Three agent-facing texts now lead to the credit note, with no change of behavior:
+
+- the `documentAction` agent prompt (`artifacts/purchase-invoice/decisions.json`) says RE only reopens the invoice as a draft and does not void it, and names the credit-note route (corrective `transactionDocument`, `importOriginInvoiceLines`, then CO);
+- the header's `MCP_CONFIG.actions.valueReasons.DocAction.VO` adds that route to the 422 a `VO` gets (new `valueReasons` key of the `actions` section, `McpActionsSection`);
+- the agentic docs page `etendo-go-docs/agentic/finance/invoices.md` walks the five calls.
+
+**Verify:** `etendo_action(spec: "purchase-invoice", id: <completed invoice>, action: "documentAction", parameters: {docAction: "VO"})` answers 422 naming the credit note; re-run the okr probe `f-void-invoice`.

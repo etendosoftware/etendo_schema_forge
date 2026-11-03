@@ -113,6 +113,18 @@ export function publicFunctionalText({ summary, capabilities }) {
   };
 }
 
+// A field is published as its NEO value under a public name; nothing transforms it. The
+// `type` / `handlerId` keys of an earlier curation format promised custom handlers that were
+// never implemented, so they are refused rather than silently ignored.
+export function assertNoFieldMapping(field, where) {
+  for (const key of ['type', 'handlerId']) {
+    if (field.publicApi && Object.hasOwn(field.publicApi, key)) {
+      throw new Error(`${where}.${field.name}: publicApi.${key} is not supported; `
+        + 'a public field is its NEO value under a public name. Remove the key.');
+    }
+  }
+}
+
 // An entity is curated when at least one of its fields declares
 // `publicApi.exposed: true`. A curated entity publishes exactly its curation.
 export function isCurated(source) {
@@ -204,13 +216,21 @@ export function publicFieldName(internalName) {
     .toLowerCase();
 }
 
+// Maps a contract field type to the JSON type NEO answers for it. Every numeric
+// AD reference (amount, price, quantity, generic number) is a JSON number; the
+// contract spells date-time `dateTime` (`datetime` is kept for older contracts).
+// Everything else (ids, list codes, buttons, text) is a string.
 function openApiType(fieldType) {
   switch (fieldType) {
     case 'boolean': return { type: 'boolean' };
     case 'integer': return { type: 'integer', format: 'int32' };
     case 'decimal':
-    case 'amount': return { type: 'number', format: 'double' };
+    case 'amount':
+    case 'price':
+    case 'quantity':
+    case 'number': return { type: 'number', format: 'double' };
     case 'date': return { type: 'string', format: 'date' };
+    case 'dateTime':
     case 'datetime': return { type: 'string', format: 'date-time' };
     default: return { type: 'string' };
   }
@@ -306,6 +326,7 @@ export function buildEntity({
   const fields = {};
   const curated = isCurated(source);
   for (const field of source.fields ?? []) {
+    assertNoFieldMapping(field, `${specName}/${entityName}`);
     if (!isPublicField(field, { curated, specName })) continue;
     const apiName = publicFieldName(field.publicApi?.name ?? field.name);
     if (fields[apiName]) {
@@ -316,10 +337,8 @@ export function buildEntity({
       sourceVisibility: field.visibility,
       direction,
       internalPath: field.name,
-      type: 'passthrough',
       dataType: openApiType(field.type),
       reference: field.reference ?? null,
-      handlerId: null,
       ...(direction === 'inout' && policy.requiredFields?.has(field.name) ? { required: true } : {}),
     };
   }
@@ -333,10 +352,8 @@ export function buildEntity({
       sourceVisibility: 'editable',
       direction: input.readable === true ? 'inout' : 'in',
       internalPath: input.internalPath,
-      type: 'passthrough',
       dataType: { type: input.dataType ?? 'string' },
       reference: null,
-      handlerId: null,
       ...(input.required === true ? { required: true } : {}),
     };
   }
@@ -350,10 +367,8 @@ export function buildEntity({
         sourceVisibility: rawField.visibility,
         direction: 'out',
         internalPath: rawField.name,
-        type: 'passthrough',
         dataType: { type: 'string' },
         reference: null,
-        handlerId: null,
       };
     }
     if (rawField.name === 'updated' && !fields.updated) {
@@ -361,10 +376,8 @@ export function buildEntity({
         sourceVisibility: rawField.visibility,
         direction: 'out',
         internalPath: rawField.name,
-        type: 'passthrough',
         dataType: { type: 'string', format: 'date-time' },
         reference: null,
-        handlerId: null,
       };
     }
   }
@@ -377,10 +390,8 @@ export function buildEntity({
       sourceVisibility: 'system',
       direction: 'out',
       internalPath: 'id',
-      type: 'passthrough',
       dataType: { type: 'string' },
       reference: null,
-      handlerId: null,
     };
   }
 

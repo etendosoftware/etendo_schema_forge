@@ -1,15 +1,15 @@
 {
-  "version": "0.6.0",
+  "version": "0.7.0",
   "generatedAt": "2026-09-20T18:16:41.258Z",
-  "updatedAt": "2026-10-28T16:07:37.256Z",
-  "checksum": "7cf6564b25ae29a5",
+  "updatedAt": "2026-11-02T22:48:26.037Z",
+  "checksum": "279e307ad19abaf0",
   "frontendContract": {
     "window": {
       "id": "123",
       "name": "Contacts",
       "primaryEntity": "businessPartner",
       "category": "contact",
-      "agentPrompt": "Master data for contacts (the adopted term for what Etendo classic calls a business partner, also referred to as BP): customers, vendors and employees, with their contact people, locations, discounts and bank accounts. The `bankAccount` entity holds a contact's (business partner / BP) OWN bank accounts (Etendo table C_BP_BankAccount), used to store the contact's payment/bank details. These are NOT the company's own financial accounts. For the company's cash/bank/card accounts (FIN_Financial_Account) use the `financial-account` spec instead.",
+      "agentPrompt": "Master data for contacts (the adopted term for what Etendo classic calls a business partner, also referred to as BP): customers, vendors and employees, with their contact people, locations, discounts and bank accounts. The `bankAccount` entity holds a contact's (business partner / BP) OWN bank accounts (Etendo table C_BP_BankAccount), used to store the contact's payment/bank details. These are NOT the company's own financial accounts. For the company's cash/bank/card accounts (FIN_Financial_Account) use the `financial-account` spec instead.\n\nThe contact itself is the `businessPartner` entity: its name, tax ID, email (`etgoEmail`), phone and website are fields of that record, set on create. The `contact` entity is a different thing: the people who work for the contact, each with their own name and email.",
       "hidePrint": true,
       "hideMoreMenu": true,
       "breadcrumb": "Contact",
@@ -530,8 +530,6 @@
             "publicApi": {
               "exposed": true,
               "name": "searchKey",
-              "type": "passthrough",
-              "handlerId": null,
               "readOnly": true
             }
           },
@@ -555,8 +553,6 @@
             "publicApi": {
               "exposed": true,
               "name": "name",
-              "type": "passthrough",
-              "handlerId": null,
               "required": true
             }
           },
@@ -717,9 +713,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "taxId",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "taxId"
             }
           },
           {
@@ -789,9 +783,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "web",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "web"
             }
           },
           {
@@ -811,9 +803,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "email",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "email"
             }
           },
           {
@@ -833,9 +823,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "phone",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "phone"
             }
           },
           {
@@ -4609,9 +4597,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "locationAddress",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "locationAddress"
             }
           },
           {
@@ -4631,9 +4617,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "phone",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "phone"
             }
           },
           {
@@ -4652,9 +4636,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "alternativePhone",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "alternativePhone"
             }
           },
           {
@@ -4685,9 +4667,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "name",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "name"
             }
           },
           {
@@ -4706,9 +4686,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "fax",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "fax"
             }
           },
           {
@@ -4739,9 +4717,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "shipToAddress",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "shipToAddress"
             }
           },
           {
@@ -4772,9 +4748,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "invoiceToAddress",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "invoiceToAddress"
             }
           },
           {
@@ -4800,9 +4774,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "active",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "active"
             }
           },
           {
@@ -4831,9 +4803,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "taxLocation",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "taxLocation"
             }
           }
         ],
@@ -5410,7 +5380,7 @@
       "name": "Contacts",
       "primaryEntity": "businessPartner",
       "category": "contact",
-      "agentPrompt": "Master data for contacts (the adopted term for what Etendo classic calls a business partner, also referred to as BP): customers, vendors and employees, with their contact people, locations, discounts and bank accounts. The `bankAccount` entity holds a contact's (business partner / BP) OWN bank accounts (Etendo table C_BP_BankAccount), used to store the contact's payment/bank details. These are NOT the company's own financial accounts. For the company's cash/bank/card accounts (FIN_Financial_Account) use the `financial-account` spec instead.",
+      "agentPrompt": "Master data for contacts (the adopted term for what Etendo classic calls a business partner, also referred to as BP): customers, vendors and employees, with their contact people, locations, discounts and bank accounts. The `bankAccount` entity holds a contact's (business partner / BP) OWN bank accounts (Etendo table C_BP_BankAccount), used to store the contact's payment/bank details. These are NOT the company's own financial accounts. For the company's cash/bank/card accounts (FIN_Financial_Account) use the `financial-account` spec instead.\n\nThe contact itself is the `businessPartner` entity: its name, tax ID, email (`etgoEmail`), phone and website are fields of that record, set on create. The `contact` entity is a different thing: the people who work for the contact, each with their own name and email.",
       "hidePrint": true,
       "hideMoreMenu": true,
       "breadcrumb": "Contact",
