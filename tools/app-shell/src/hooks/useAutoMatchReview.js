@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  defaultGroupChecked, isBouncePairGroup, isSelectableGroup,
+  defaultGroupChecked, isSelectableGroup,
 } from '@/components/contract-ui/bouncePairs.js';
 
 /**
@@ -11,30 +11,19 @@ import {
  * ambiguous pair never (it cannot be checked at all).
  *
  * When the suggestions reload, the user's choices are dropped and every group goes back to its
- * default — what the modal always did — unless `keepOnReload` is set. That is the "Revisar en el
- * panel" visit: the modal is hidden while the user works in the reconciliation panel, a discard
- * there reloads the suggestions, and coming back must find the checks as they were left. Then only
- * the choices of groups that are gone are dropped.
+ * default — what the modal always did. While nothing reloads the choices stay, so reopening the
+ * modal on the same suggestions (the Automatch button after "Revisar en el panel") finds the checks
+ * as they were left; a discard or a restore in the panel reloads the suggestions and so resets them.
  *
  * @param {Array<object>} groups the autoMatch groups
- * @param {{ keepOnReload?: boolean }} [options]
  * @returns {{ isChecked: (group: object) => boolean, toggle: (group: object) => void,
  *   setMany: (groups: Array<object>, checked: boolean) => void }}
  */
-export function useAutoMatchSelection(groups, { keepOnReload = false } = {}) {
+export function useAutoMatchSelection(groups) {
   const [overrides, setOverrides] = useState(() => new Map());
-  // Read at reload time only: changing it must not, by itself, reset or prune anything.
-  const keepRef = useRef(keepOnReload);
-  keepRef.current = keepOnReload;
 
   useEffect(() => {
-    setOverrides((prev) => {
-      if (prev.size === 0) return prev;
-      if (!keepRef.current) return new Map();
-      const present = new Set((groups ?? []).map((g) => g.groupKey));
-      const next = new Map([...prev].filter(([key]) => present.has(key)));
-      return next.size === prev.size ? prev : next;
-    });
+    setOverrides((prev) => (prev.size === 0 ? prev : new Map()));
   }, [groups]);
 
   const isChecked = useCallback((group) => {
@@ -67,21 +56,21 @@ export function useAutoMatchSelection(groups, { keepOnReload = false } = {}) {
 }
 
 /**
- * The state the automatch modal and the reconciliation panel share while the user reviews a bounce
- * pair (ETP-5581). Owned by the financial-account detail, which hosts both:
+ * The state the automatch modal and the reconciliation panel share around a bounce pair
+ * (ETP-5581). Owned by the financial-account detail, which hosts both:
  *
- * - `selection` — the modal's checks ({@link useAutoMatchSelection}), kept while reviewing;
+ * - `selection` — the modal's checks ({@link useAutoMatchSelection}), owned here so they outlive a
+ *   close of the modal while the suggestions do not reload;
  * - `startReview(group)` — "Revisar en el panel": asks the panel to select the pair's bounce line
- *   (`focus`, consumed by the panel with `consumeFocus`) and starts the review;
- * - `reviewing` — true from "Revisar en el panel" until the modal is closed or applied
- *   (`endReview`); it drives "Volver a las sugerencias (N)";
+ *   (`focus`, consumed by the panel with `consumeFocus`). The host closes the modal; there is no
+ *   way back other than the Automatch button, which reopens it;
  * - `dismissedKeys` / `dismiss` — pairs the user said are not a bounce ("No es un rebote"). Nothing
  *   is persisted: they are hidden from the panel and the modal until `clearDismissed`, which the
- *   host calls when the automatch runs again (refreshing, the Automatch button);
- * - `remaining` — the suggestions still offered: transaction groups plus undismissed pairs.
+ *   host calls when the automatch is recomputed (the header refresh). The Automatch button does
+ *   NOT clear them: a pair just dismissed in the panel must not reappear in the modal.
  *
- * Leaving the reconciliation (`active` turning false) ends the review and forgets the dismissals,
- * so the next visit starts from what the automatch proposes.
+ * Leaving the reconciliation (`active` turning false) drops the focus request and forgets the
+ * dismissals, so the next visit starts from what the automatch proposes.
  *
  * `panel` bundles what the reconciliation panel needs, as one stable prop.
  *
@@ -90,14 +79,12 @@ export function useAutoMatchSelection(groups, { keepOnReload = false } = {}) {
  * @returns {object}
  */
 export function useAutoMatchReview(groups, { active = true } = {}) {
-  const [reviewing, setReviewing] = useState(false);
   const [focus, setFocus] = useState(null);
   const [dismissedKeys, setDismissedKeys] = useState(() => new Set());
-  const selection = useAutoMatchSelection(groups, { keepOnReload: reviewing });
+  const selection = useAutoMatchSelection(groups);
 
   useEffect(() => {
     if (active) return;
-    setReviewing(false);
     setFocus(null);
     setDismissedKeys((prev) => (prev.size === 0 ? prev : new Set()));
   }, [active]);
@@ -105,12 +92,10 @@ export function useAutoMatchReview(groups, { active = true } = {}) {
   const startReview = useCallback((group) => {
     const lineId = group?.counterpartLine?.id;
     if (!lineId) return;
-    setReviewing(true);
     // `seq` makes a second request for the same line a new request.
     setFocus((prev) => ({ lineId, seq: (prev?.seq ?? 0) + 1 }));
   }, []);
 
-  const endReview = useCallback(() => setReviewing(false), []);
   const consumeFocus = useCallback(() => setFocus(null), []);
 
   const dismiss = useCallback((groupKey) => {
@@ -127,26 +112,18 @@ export function useAutoMatchReview(groups, { active = true } = {}) {
     setDismissedKeys((prev) => (prev.size === 0 ? prev : new Set()));
   }, []);
 
-  const remaining = useMemo(
-    () => (groups ?? []).filter((g) => !(isBouncePairGroup(g) && dismissedKeys.has(g.groupKey))).length,
-    [groups, dismissedKeys],
-  );
-
   const panel = useMemo(() => ({
     focus, onFocusConsumed: consumeFocus, dismissedKeys, onDismiss: dismiss,
   }), [focus, consumeFocus, dismissedKeys, dismiss]);
 
   return {
     selection,
-    reviewing,
     startReview,
-    endReview,
     focus,
     consumeFocus,
     dismissedKeys,
     dismiss,
     clearDismissed,
-    remaining,
     panel,
   };
 }

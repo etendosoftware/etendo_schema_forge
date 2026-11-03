@@ -168,6 +168,8 @@ function OperationRow({ op, isLast, currency }) {
 }
 
 function GroupRow({ group, checked, onToggle, currency, glItemDifference }) {
+  const ui = useUI();
+  const statementLine = group.statementLine ?? {};
   const realOps = group.operations ?? [];
   // Rule-origin groups have no existing transaction — the system will create a payment.
   // For now this is purely visual: show one proposed "New / Create payment" operation with the
@@ -203,6 +205,9 @@ function GroupRow({ group, checked, onToggle, currency, glItemDifference }) {
         <Checkbox
           checked={checked}
           onChange={() => onToggle(group)}
+          aria-label={ui('financeReconcileAutomatchGroupCheck', {
+            line: statementLine.description || statementLine.referenceNo || '—',
+          })}
           data-testid={`automatch-group-check-${group.groupKey}`} />
       </div>
       {/* Statement line (left half) */}
@@ -334,8 +339,9 @@ function notifyApplyWithPairs(results, ui) {
  *   for the panel — used to name the movement a near-match group will create. It is always set
  *   when such a group is present: the engine does not propose an amount deviation for an account
  *   with nowhere to post it.
- *   `selection` (ETP-5581) lifts the checks out of the modal ({@link useAutoMatchSelection}) so they
- *   survive a "Revisar en el panel" visit; without it the modal keeps its own. `dismissedPairKeys`
+ *   `selection` (ETP-5581) lifts the checks out of the modal ({@link useAutoMatchSelection}) so the
+ *   host decides how long they live (the financial-account detail keeps them across a close while
+ *   the suggestions do not reload); without it the modal keeps its own. `dismissedPairKeys`
  *   are pairs the user said are not a bounce, hidden here. `onReviewPair(group)` is "Revisar en el
  *   panel"; without it the button is not offered.
  */

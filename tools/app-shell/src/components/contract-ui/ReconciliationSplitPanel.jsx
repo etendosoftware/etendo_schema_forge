@@ -1667,6 +1667,7 @@ export function ReconciliationSplitPanel({
   // ETP-5581 — bounce pairs and discarded lines. A pass-through while the backend reports neither.
   const bounceLines = useBounceLines({
     lines: pendingLines, counts: pendingCounts, status: leftStatus, review: bounceReview,
+    accountId, dateFrom: toDateParam(leftBounds.from), dateTo: toDateParam(leftBounds.to),
   });
   const { lines, counts: statusCounts } = bounceLines;
   // The selection stores identity (id + matchGroupId); the LIVE line data is re-resolved from the
@@ -1723,12 +1724,14 @@ export function ReconciliationSplitPanel({
   // Pending un-reconcile request (single row OR the bulk selection): { ids, hasAuto, count }.
   const [removeRequest, setRemoveRequest] = useState(null);
 
-  const selectLine = (line) => {
+  // Stable (only state setters inside): the bounce focus request depends on it, and a new function
+  // every render would re-run that effect on every render instead of when its inputs change.
+  const selectLine = useCallback((line) => {
     setSelectedLineSel(line);
     setSelectedOpIds(new Set());
     // Default the type selector to the matching transaction direction for the line.
     setRightSource((Number(line?.amount) || 0) < 0 ? 'payments' : 'receipts');
-  };
+  }, []);
 
   const changeSource = (next) => {
     setRightSource(next);
@@ -1753,8 +1756,9 @@ export function ReconciliationSplitPanel({
   const { panel: bouncePanel } = useBouncePairPanel({
     accountId, currency, bcpLocale, selectedLine, lines, loading: linesLoading,
     discardedLines: bounceLines.discardedLines, reloadLines, onChanged: onReconcileSuccess,
+    onRestored: bounceLines.refreshDefaultCounts,
     dismiss: bounceLines.dismiss, windowReadOnly, review: bounceReview,
-    setStatus: setLeftStatus, setSearch: setLeftSearch, dateRange: leftDateRange,
+    status: leftStatus, setStatus: setLeftStatus, setSearch: setLeftSearch, dateRange: leftDateRange,
     setDateRange: setLeftDateRange, selectLine,
   });
 

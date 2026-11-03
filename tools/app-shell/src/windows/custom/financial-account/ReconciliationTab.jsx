@@ -12,7 +12,7 @@ import { ReconciliationSplitPanel } from '@/components/contract-ui/Reconciliatio
  * panel, which closes every write path under it (reconcile, un-reconcile, post a difference, store
  * the difference account) while leaving browsing and selection available.
  *
- * `bounceReview` (ETP-5581) is the detail view's bounce-pair review state, shared with the
+ * `bounceReview` (ETP-5581) is the detail view's bounce-pair state, shared with the
  * automatch modal: the line "Revisar en el panel" asked to show, and the pairs dismissed with
  * "No es un rebote". Handed straight to the split panel.
  *

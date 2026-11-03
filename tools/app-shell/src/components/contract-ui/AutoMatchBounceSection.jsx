@@ -1,5 +1,6 @@
 import { ArrowUpRight } from 'lucide-react';
 import { useUI } from '@/i18n';
+import { Button } from '@/components/ui/button';
 import { MoneyAmount } from '@/components/ui/money-amount';
 import { TruncatedText } from '@/components/ui/truncated-text';
 import { cn } from '@/lib/utils';
@@ -9,6 +10,11 @@ import {
 } from './bouncePairs.js';
 
 const TAG_CLS = 'inline-flex h-6 shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-normal';
+/**
+ * "Revisar en el panel": the shared `Button` outline variant with the app's secondary colours (the
+ * same formula as the bounce panel's "No es un rebote"), at the row's compact pill size.
+ */
+const REVIEW_BTN = 'h-7 flex-none gap-1 rounded-full border-[hsl(var(--border-control))] bg-card px-2.5 text-xs text-[hsl(var(--foreground))] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-muted hover:text-[hsl(var(--foreground))] [&_svg]:size-4';
 
 /**
  * The ONE tag of a pair row: "Confianza alta", or "Revisar: <short reason>" (ETP-5581). Kept to a
@@ -129,16 +135,17 @@ function BouncePairRow({ group, checked, onToggle, onReview, currency, formatDat
                 {sideMeta(ui, formatDate(bounce.date), bounce)}
               </span>
               {review && onReview ? (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
                   onClick={() => onReview(group)}
-                  className="inline-flex h-7 flex-none items-center gap-1 rounded-full border border-[hsl(var(--border-control))] bg-card px-2.5 text-xs font-medium text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground)_/_0.05)] hover:bg-[hsl(var(--muted))]"
+                  className={REVIEW_BTN}
                   data-testid={`automatch-bounce-review-${group.groupKey}`}>
                   <ArrowUpRight
                     className="h-4 w-4 text-[hsl(var(--text-disabled))]"
                     data-testid="ArrowUpRight__bounce-review" />
                   {ui('financeReconcileAutomatchBounceReview')}
-                </button>
+                </Button>
               ) : null}
             </>
           )}

@@ -1,4 +1,7 @@
-import { useReconciliationPost } from './useReconciliationPost.js';
+import { useCallback } from 'react';
+import { useApiFetch } from '@/auth/useApiFetch.js';
+import { getApiBase } from './useNeoResource';
+import { RECONCILIATION_BASE_PATH, useReconciliationPost } from './useReconciliationPost.js';
 
 /*
  * ── Bounce pairs (ETP-5581) ─────────────────────────────────────────────────────────────────────
@@ -23,8 +26,9 @@ export function useDiscardPair() {
 
 /**
  * Restores the pair of a discarded line (POST `restorePair`): the line AND the counterpart it is
- * linked to, clearing the link. A line discarded on its own is restored alone. Not gated by the
- * flag, so a pair can always be undone.
+ * linked to, clearing the link. A line discarded on its own is restored alone. Gated like
+ * `discardPair`: behind the backend flag `bank-bounce-suggestions` (403 `BOUNCE_SUGGESTIONS_OFF`
+ * otherwise). With the flag off the way to undo a discard is Etendo Classic's PSD2 Restore.
  * Payload: `{ financialAccountId, lineId }` → `{ restored: [ids], lineId, counterpartLineId }`.
  *
  * @returns {{ restorePair: (payload: object) => Promise<object>, loading: boolean, error: Error|null }}
@@ -32,4 +36,27 @@ export function useDiscardPair() {
 export function useRestorePair() {
   const { post, loading, error } = useReconciliationPost('restorePair');
   return { restorePair: post, loading, error };
+}
+
+/**
+ * Fetches the per-state counts of the default `pendingLines` answer (no `status`), for the given
+ * date range. The left panel shows "Descartadas" from a request of its own (`status=discarded`)
+ * whose counts carry only `discarded`; after a restore there the other filters' counts are stale,
+ * and this refreshes them without leaving the filter. Lives here, not in `useReconciliation.js`,
+ * for the same reason as `useReconciliationPost` (the component suites mock that module).
+ *
+ * @returns {(args: { financialAccountId: string, dateFrom?: string, dateTo?: string })
+ *   => Promise<object|null>} the counts, or null when the answer has none
+ */
+export function usePendingLineCounts() {
+  const apiFetch = useApiFetch(getApiBase());
+  return useCallback(async ({ financialAccountId, dateFrom, dateTo }) => {
+    const params = new URLSearchParams({ action: 'pendingLines', accountId: financialAccountId });
+    if (dateFrom) params.set('dateFrom', dateFrom);
+    if (dateTo) params.set('dateTo', dateTo);
+    const res = await apiFetch(`${RECONCILIATION_BASE_PATH}?${params.toString()}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    return json?.response?.data?.counts ?? null;
+  }, [apiFetch]);
 }

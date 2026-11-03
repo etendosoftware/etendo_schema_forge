@@ -28,7 +28,6 @@ import { useBankConnectionFlow } from '@/hooks/useBankConnectionFlow';
 import { AutoMatchSuggestionModal } from '@/components/contract-ui/AutoMatchSuggestionModal';
 import { useAutoMatch } from '@/hooks/useReconciliation';
 import { useAutoMatchReview } from '@/hooks/useAutoMatchReview.js';
-import { BounceReviewBanner } from './BounceReviewBanner.jsx';
 import { SyncStatusInline } from '@/components/financial-accounts/SyncStatusInline';
 import { RefreshButton } from '@/components/financial-accounts';
 import { ACCOUNT_TYPE } from '@/components/financial-accounts/tokens';
@@ -331,28 +330,27 @@ export function FinancialAccountDetail({ recordId }) {
     setAutoMatchArmed(false);
     if (autoMatchGroups.length > 0) setAutoMatchOpen(true);
   }, [autoMatchArmed, autoMatchLoading, autoMatchGroups]);
-  // ETP-5581 — the state the modal and the reconciliation panel share while a bounce pair is
-  // reviewed: the modal's checks, the line "Revisar en el panel" asked to show, and the pairs
-  // dismissed with "No es un rebote". Inert while the backend sends no bounce pair.
+  // ETP-5581 — the state the modal and the reconciliation panel share around a bounce pair: the
+  // modal's checks, the line "Revisar en el panel" asked to show, and the pairs dismissed with
+  // "No es un rebote". Inert while the backend sends no bounce pair.
   const autoMatchReview = useAutoMatchReview(autoMatchGroups, {
     active: activeTab === 'reconciliation' && !isCashAccount,
   });
-  // "Revisar en el panel": hide the modal (its checks are kept) and show the pair's bounce line.
-  // Disarming means the automatch never pops the modal again on its own during this visit.
-  const { startReview, endReview, clearDismissed } = autoMatchReview;
+  // "Revisar en el panel": close the modal and show the pair's bounce line. There is no return
+  // path: the Automatch button reopens the modal, on the same suggestions (and so the same checks)
+  // unless a discard or restore in the panel reloaded them. Disarming means the automatch never
+  // pops the modal again on its own during this visit — a discard reloads the suggestions, and
+  // the user who went to the panel must not have the modal thrown back at them.
+  const { startReview, clearDismissed } = autoMatchReview;
   const handleReviewPair = useCallback((group) => {
     startReview(group);
     setAutoMatchOpen(false);
     setAutoMatchArmed(false);
   }, [startReview]);
-  const closeAutoMatch = useCallback(() => {
-    setAutoMatchOpen(false);
-    endReview();
-  }, [endReview]);
-  const openAutoMatch = useCallback(() => {
-    clearDismissed();
-    setAutoMatchOpen(true);
-  }, [clearDismissed]);
+  const closeAutoMatch = useCallback(() => setAutoMatchOpen(false), []);
+  // Reopens the cached suggestions; it does NOT forget the "No es un rebote" dismissals (only the
+  // header refresh and leaving the tab do), or a pair just dismissed in the panel would reappear.
+  const openAutoMatch = useCallback(() => setAutoMatchOpen(true), []);
   const { movements, totals, enabledDimensions, headerDimensions, trxTypes, accountOrgId, paymentMethods, loading: movementsLoading, reload: reloadMovements } = useAccountMovements(recordId);
   // Movement create/edit/delete/lifecycle and funds transfers change the balances and pending
   // counts the list shows (a transfer touches TWO accounts; the entity-wide invalidation covers both).
@@ -580,22 +578,14 @@ export function FinancialAccountDetail({ recordId }) {
               windowReadOnly={windowReadOnly}
               data-testid="CashCloseTab__f7dbb3" />
           ) : (
-            <>
-              <BounceReviewBanner
-                reviewing={autoMatchReview.reviewing}
-                hidden={autoMatchOpen}
-                count={autoMatchReview.remaining}
-                onBack={() => setAutoMatchOpen(true)}
-                data-testid="BounceReviewBanner__f7dbb3" />
-              <ReconciliationTab
-                key={reconciliationRefreshKey}
-                account={account}
-                paymentMethods={paymentMethods}
-                onReconcileSuccess={() => { reloadAccountAndList(); reloadMovements(); reloadAutoMatch(); }}
-                windowReadOnly={windowReadOnly}
-                bounceReview={autoMatchReview.panel}
-                data-testid="ReconciliationTab__f7dbb3" />
-            </>
+            <ReconciliationTab
+              key={reconciliationRefreshKey}
+              account={account}
+              paymentMethods={paymentMethods}
+              onReconcileSuccess={() => { reloadAccountAndList(); reloadMovements(); reloadAutoMatch(); }}
+              windowReadOnly={windowReadOnly}
+              bounceReview={autoMatchReview.panel}
+              data-testid="ReconciliationTab__f7dbb3" />
           ))}
           {activeTab === 'statements' && (
             <ImportedStatementsTab
@@ -624,7 +614,8 @@ export function FinancialAccountDetail({ recordId }) {
         open={autoMatchOpen && !isCashAccount && !windowReadOnly}
         onClose={closeAutoMatch}
         onSuccess={handleAutoMatchSuccess}
-        // ETP-5581 — the checks live in the review state, so "Revisar en el panel" keeps them.
+        // ETP-5581 — the checks live in the host, so closing the modal for "Revisar en el panel"
+        // and reopening it with the Automatch button keeps them while the suggestions do not reload.
         selection={autoMatchReview.selection}
         dismissedPairKeys={autoMatchReview.dismissedKeys}
         onReviewPair={handleReviewPair}

@@ -3,9 +3,10 @@ import { toast } from 'sonner';
 import { isNetworkError } from '@etendosoftware/app-shell-core/auth';
 import { useUI } from '@/i18n';
 import { translateBackendErrorBody } from '@/lib/backendErrors.js';
-import { useDiscardPair, useRestorePair } from '@/hooks/useBouncePairActions.js';
+import { useDiscardPair, usePendingLineCounts, useRestorePair } from '@/hooks/useBouncePairActions.js';
 import {
-  BOUNCE_STATE, DISCARDED_STATE, bouncePanelModel, countsWithDismissedPairs, withDismissedPairs,
+  BOUNCE_STATE, DISCARDED_STATE, bouncePanelModel, countsWithDismissedPairs, pendingLinesStatusParam,
+  withDismissedPairs,
 } from './bouncePairs.js';
 import { visibleStatusCodes } from './reconciliationStatusFilter.js';
 import { BouncePairPanel } from './BouncePairPanel.jsx';
@@ -39,6 +40,14 @@ function isDiscardedAnswer(counts) {
   return counts?.discarded != null && counts?.all == null;
 }
 
+/** Whether two per-state count objects hold the same numbers. */
+function sameCounts(a, b) {
+  const x = a ?? EMPTY_COUNTS;
+  const y = b ?? EMPTY_COUNTS;
+  const keys = Object.keys(x);
+  return keys.length === Object.keys(y).length && keys.every((k) => x[k] === y[k]);
+}
+
 /** The id of the left-panel row of a line, as `StatementLinesPanel` renders it. */
 function lineRowSelector(lineId) {
   return `[data-testid="recon-line-row-${String(lineId).replaceAll('"', '')}"]`;
@@ -65,11 +74,15 @@ function scrollLineIntoView(lineId) {
  * `review` is the host's shared review state (`useAutoMatchReview().panel`): with it, a pair
  * dismissed here is hidden in the automatch modal too. Without it the panel keeps its own.
  *
+ * `refreshDefaultCounts()` re-reads the default answer's counts while "Descartadas" is shown (a
+ * restore there moves lines back to the other filters); `accountId`, `dateFrom` and `dateTo` are
+ * the panel's own request filters, for that read.
+ *
  * @param {{ lines: Array<object>, counts: object, status: string|null,
- *   review?: object|null }} args
+ *   review?: object|null, accountId?: string, dateFrom?: string, dateTo?: string }} args
  */
 export function useBounceLines({
-  lines, counts, status, review = null,
+  lines, counts, status, review = null, accountId = null, dateFrom, dateTo,
 }) {
   const [ownDismissed, setOwnDismissed] = useState(() => new Set());
   const ownDismiss = useCallback((groupKey) => {
@@ -84,14 +97,31 @@ export function useBounceLines({
   const dismiss = review?.onDismiss ?? ownDismiss;
 
   // The counts of the last default answer, for the filters the discarded answer does not count.
-  // Only ever written with a default answer, so it holds still while the discarded one is shown.
-  const defaultCountsRef = useRef(counts ?? EMPTY_COUNTS);
+  // Taken from each default answer (in an effect, not during render), so they hold still while the
+  // discarded one is shown — until `refreshDefaultCounts` re-reads them after a restore there.
+  const [defaultCounts, setDefaultCounts] = useState(counts ?? EMPTY_COUNTS);
   const discardedAnswer = isDiscardedAnswer(counts);
-  if (!discardedAnswer) defaultCountsRef.current = counts ?? EMPTY_COUNTS;
+  useEffect(() => {
+    if (discardedAnswer) return;
+    // A loading resource answers a fresh `{}` on every render: keep the same object when nothing
+    // changed, or this effect would re-render forever.
+    setDefaultCounts((prev) => (sameCounts(prev, counts) ? prev : (counts ?? EMPTY_COUNTS)));
+  }, [counts, discardedAnswer]);
   const baseCounts = useMemo(
-    () => (discardedAnswer ? { ...defaultCountsRef.current, discarded: counts.discarded } : counts),
-    [counts, discardedAnswer],
+    () => (discardedAnswer ? { ...defaultCounts, discarded: counts.discarded } : counts),
+    [counts, discardedAnswer, defaultCounts],
   );
+
+  const fetchCounts = usePendingLineCounts();
+  const refreshDefaultCounts = useCallback(async () => {
+    if (status !== DISCARDED_STATE || !accountId) return;
+    try {
+      const fresh = await fetchCounts({ financialAccountId: accountId, dateFrom, dateTo });
+      if (fresh && !isDiscardedAnswer(fresh)) setDefaultCounts(fresh);
+    } catch {
+      // Keep the last counts: leaving "Descartadas" reloads the default answer, and with it them.
+    }
+  }, [status, accountId, dateFrom, dateTo, fetchCounts]);
 
   const shownLines = useMemo(() => withDismissedPairs(lines, dismissedKeys), [lines, dismissedKeys]);
   const shownCounts = useMemo(
@@ -105,7 +135,7 @@ export function useBounceLines({
   );
 
   return {
-    lines: shownLines, counts: shownCounts, statusCodes, discardedLines, dismiss,
+    lines: shownLines, counts: shownCounts, statusCodes, discardedLines, dismiss, refreshDefaultCounts,
   };
 }
 
@@ -115,9 +145,15 @@ export function useBounceLines({
  * is selected and scrolled into view. A line outside the active date range widens it to any date
  * once; a line that is still not there is given up on. Either way the request is consumed, so a
  * later visit does not replay it.
+ *
+ * The lines on screen are searched right away, in the same commit as the request — unless the
+ * active filter is one with its own request (`Descartadas`, `status=discarded`): leaving it reloads
+ * the lines, and the discarded ones on screen cannot hold the bounce line, so the search waits for
+ * that reload.
  */
 function useFocusRequest({
-  focus, onFocusConsumed, lines, loading, setStatus, setSearch, dateRange, setDateRange, selectLine,
+  focus, onFocusConsumed, lines, loading, status, setStatus, setSearch, dateRange, setDateRange,
+  selectLine,
 }) {
   const pendingRef = useRef(null);
   // `widened`: the date range was already opened once for this request. `reloaded`: a reload was
@@ -125,11 +161,16 @@ function useFocusRequest({
   const widenedRef = useRef(false);
   const reloadedRef = useRef(true);
 
+  // The active status, read when a request arrives: changing it must not, by itself, restart one.
+  const statusRef = useRef(status);
+  statusRef.current = status;
+
   useEffect(() => {
     if (!focus?.lineId) return;
     pendingRef.current = focus;
     widenedRef.current = false;
-    reloadedRef.current = true;
+    // Leaving a filter with its own request reloads the lines: wait for that reload.
+    reloadedRef.current = pendingLinesStatusParam(statusRef.current) === undefined;
     setStatus(BOUNCE_STATE);
     setSearch('');
   }, [focus, setStatus, setSearch]);
@@ -158,7 +199,7 @@ function useFocusRequest({
     }
     pendingRef.current = null;
     onFocusConsumed?.();
-  }, [lines, loading, dateRange, setDateRange, selectLine, onFocusConsumed]);
+  }, [focus, lines, loading, dateRange, setDateRange, selectLine, onFocusConsumed]);
 }
 
 /**
@@ -172,8 +213,8 @@ function useFocusRequest({
  */
 export function useBouncePairPanel({
   accountId, currency, bcpLocale, selectedLine, lines, loading, discardedLines,
-  reloadLines, onChanged, dismiss, windowReadOnly = false,
-  review = null, setStatus, setSearch, dateRange, setDateRange, selectLine,
+  reloadLines, onChanged, onRestored, dismiss, windowReadOnly = false,
+  review = null, status = null, setStatus, setSearch, dateRange, setDateRange, selectLine,
 }) {
   const ui = useUI();
   const { discardPair, loading: discarding } = useDiscardPair();
@@ -184,7 +225,7 @@ export function useBouncePairPanel({
   useFocusRequest({
     focus: review?.focus ?? null,
     onFocusConsumed: review?.onFocusConsumed,
-    lines, loading, setStatus, setSearch, dateRange, setDateRange, selectLine,
+    lines, loading, status, setStatus, setSearch, dateRange, setDateRange, selectLine,
   });
 
   const model = useMemo(() => bouncePanelModel(selectedLine, {
@@ -228,10 +269,14 @@ export function useBouncePairPanel({
         ? 'financeReconcileBounceToastRestored'
         : 'financeReconcileBounceToastRestoredLine'));
       refresh();
+      onRestored?.();
     } catch (err) {
-      toast.error(failureText(err, ui, 'financeReconcileBounceToastRestoreError'));
+      // A line discarded on its own is restored alone: its failure names the line, not a pair.
+      toast.error(failureText(err, ui, model?.paired === false
+        ? 'financeReconcileBounceToastRestoreLineError'
+        : 'financeReconcileBounceToastRestoreError'));
     }
-  }, [windowReadOnly, selectedLine, restorePair, accountId, ui, refresh]);
+  }, [windowReadOnly, selectedLine, restorePair, accountId, ui, refresh, onRestored, model]);
 
   const panel = model ? (
     <BouncePairPanel

@@ -106,6 +106,19 @@ function TotalRow({ label, value, meta = null, tone = 'neutral', testId }) {
   );
 }
 
+/**
+ * The accessible name of a candidate's radio. Candidates of an ambiguous pair share the amount and
+ * often the text, so the name carries what tells them apart: the date, the amount and the bank
+ * reference when there is one.
+ */
+function chooseLabel(ui, row, currency, bcpLocale) {
+  const ref = String(row.referenceNo ?? '').trim();
+  const params = { date: formatDate(row.date, bcpLocale), amount: formatSigned(row.amount, currency) };
+  return ref
+    ? ui('financeReconcileBounceChooseOriginalLineRef', { ...params, ref })
+    : ui('financeReconcileBounceChooseOriginalLine', params);
+}
+
 function PairRow({ row, model, onChoose, currency, bcpLocale }) {
   const ui = useUI();
   const chosen = row.id === model.chosenId;
@@ -126,7 +139,7 @@ function PairRow({ row, model, onChoose, currency, bcpLocale }) {
           <input
             type="radio"
             name="recon-bounce-original"
-            aria-label={ui('financeReconcileBounceChooseOriginal')}
+            aria-label={chooseLabel(ui, row, currency, bcpLocale)}
             checked={chosen}
             onChange={() => onChoose(row.id)}
             onClick={(e) => e.stopPropagation()}
