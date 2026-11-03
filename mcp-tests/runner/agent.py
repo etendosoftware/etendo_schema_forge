@@ -8,6 +8,7 @@ wrong bet, the suites, the verdict schema and the CLI are unaffected.
 from __future__ import annotations
 
 import json
+import re
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -29,7 +30,11 @@ PROMPT_PATH = Path(__file__).parent / "prompts" / "probe_system.md"
 #: and became a classified record: the prompt now asks for the kind and for what
 #: it would have saved on this task, and tells the agent not to judge whether
 #: anything is broken (that judgement is a human's, under D22).
-PROMPT_VERSION = 4
+#: v5 (2026-11-02, OKR O2): the final report is the only report — no tool may be
+#: used to send feedback about the system. Feedback tools stay in the catalogue
+#: (catalogues are compared as they are), but a call to one would add a turn the
+#: final report already covers, and only one platform offers such a tool.
+PROMPT_VERSION = 5
 
 #: Default cap on how much of a tool RESULT is stored per call (§6.1). Results
 #: are recorded because without them a failure cannot be diagnosed from the run
@@ -105,11 +110,23 @@ _REPORT_INSTRUCTION = (
 )
 
 
-def system_prompt() -> str:
-    """The naive probe system prompt (D20), with its HTML comment header stripped."""
+_FEEDBACK_OFF_BLOCK = re.compile(
+    r"<!-- feedback-tools:off -->\n(.*?)<!-- /feedback-tools:off -->\n?", re.DOTALL
+)
+
+
+def system_prompt(*, feedback_tools: bool = False) -> str:
+    """The naive probe system prompt (D20), with its HTML comment header stripped.
+
+    By default the agent is told not to send feedback through a tool (its final
+    report already carries it, and the extra turn would count in a comparison).
+    `feedback_tools=True` drops that paragraph, for a battery that collects the
+    platform's own feedback.
+    """
     text = PROMPT_PATH.read_text(encoding="utf-8")
     if text.lstrip().startswith("<!--"):
         text = text.split("-->", 1)[1]
+    text = _FEEDBACK_OFF_BLOCK.sub("" if feedback_tools else r"\1", text)
     return text.strip()
 
 
@@ -339,6 +356,7 @@ async def run_probe(
     max_steps: int,
     max_result_chars: int = DEFAULT_MAX_RESULT_CHARS,
     on_event: Callable[[str, dict[str, Any]], None] | None = None,
+    feedback_tools: bool = False,
 ) -> dict[str, Any]:
     """Run one probe to completion and return its verdict plus the objective record.
 
@@ -359,7 +377,7 @@ async def run_probe(
 
     tools = await load_mcp_tools(session)
     model = build_model(provider)
-    agent = create_react_agent(model, tools, prompt=system_prompt())
+    agent = create_react_agent(model, tools, prompt=system_prompt(feedback_tools=feedback_tools))
 
     # Streamed, not ainvoke(), so that the messages survive a blown step cap.
     # recursion_limit counts graph steps; one agent turn is a model node plus a

@@ -842,6 +842,10 @@ merge-block-check: ## Merge-block pre-flight: PR checks across the 3 repos + cop
 check-modules: ## Check every Etendo repo/module is on its expected branch (FETCH=0, ONLY=a,b, ROOT=<env path>[,<path>], ALL_ENVS=1)
 	@node scripts/check-modules.js $(if $(filter 0,$(FETCH)),--no-fetch,) $(if $(ONLY),--only=$(ONLY),) $(if $(ROOT),--root=$(ROOT),) $(if $(ALL_ENVS),--all-envs,)
 
+.PHONY: checkout-modules
+checkout-modules: ## Move base repos (BASE_MOD=develop) and fixed-on-epic modules (EPIC_MOD=epic/ETP-3504) to their branch (PULL=1 also pulls; FETCH=0, ONLY=a,b, ROOT=<env path>)
+	@node scripts/checkout-modules.js $(if $(filter 1,$(PULL)),--pull,) $(if $(filter 0,$(FETCH)),--no-fetch,) $(if $(BASE_MOD),--base-mod=$(BASE_MOD),) $(if $(EPIC_MOD),--epic-mod=$(EPIC_MOD),) $(if $(ONLY),--only=$(ONLY),) $(if $(ROOT),--root=$(ROOT),)
+
 # --- CI parity -------------------------------------------------------------
 # These variable names are shared with unrelated targets earlier in this file
 # (DRY_RUN ?= 0 for data-fixes, PROFILE ?= for regen-check). A plain `?=` here
@@ -1084,8 +1088,8 @@ MODEL  ?=
 REPEAT ?=
 
 .PHONY: mcp-test
-mcp-test: ## Fire an agent probe suite at an MCP target (TARGET=, SUITE=, PROBE=, MODEL=, REPEAT=, CONCURRENCY=)
-	cd mcp-tests && uv run python -m runner.cli --target $(TARGET) --suite $(SUITE) $(if $(PROBE),--probe $(PROBE)) $(if $(MODEL),--model $(MODEL)) $(if $(REPEAT),--repeat $(REPEAT)) $(if $(CONCURRENCY),--concurrency $(CONCURRENCY))
+mcp-test: ## Fire an agent probe suite at an MCP target (TARGET=, SUITE=, PROBE=, MODEL=, REPEAT=, CONCURRENCY=, FEEDBACK=1 lets the agent send platform feedback)
+	cd mcp-tests && uv run python -m runner.cli --target $(TARGET) --suite $(SUITE) $(if $(PROBE),--probe $(PROBE)) $(if $(MODEL),--model $(MODEL)) $(if $(REPEAT),--repeat $(REPEAT)) $(if $(CONCURRENCY),--concurrency $(CONCURRENCY)) $(if $(filter 1,$(FEEDBACK)),--feedback-tools)
 
 TARGETS     ?= local,holded
 SUBJECT     ?=

@@ -3126,3 +3126,13 @@ The full app-shell `npm run test:all` suite and `npm run build` passed. Browser 
 ## Agent prompt on the business partner — ETP-5852
 
 `businessPartner.agentPrompt`: names can repeat; agents tell partners apart by reading `searchKey` and `taxID` from `contacts/businessPartner` with an `id in [...]` filter. Feedback M-191.
+
+## Voiding an issued invoice, for agents — ETP-5848
+
+An issued invoice is voided with a credit note (factura rectificativa), never by reactivating and deleting it (decided 2026-10-23, OKR O2 flow `f-void-invoice`). Asked to void one, an agent sent `docAction: VO`, got only "send one of [CO, RE]", and reactivated the invoice. Three agent-facing texts now lead to the credit note, with no change of behavior:
+
+- the `documentAction` agent prompt (`artifacts/purchase-invoice/decisions.json`) says RE only reopens the invoice as a draft and does not void it, and names the credit-note route (corrective `transactionDocument`, `importOriginInvoiceLines`, then CO);
+- the header's `MCP_CONFIG.actions.valueReasons.DocAction.VO` adds that route to the 422 a `VO` gets (new `valueReasons` key of the `actions` section, `McpActionsSection`);
+- the agentic docs page `etendo-go-docs/agentic/finance/invoices.md` walks the five calls.
+
+**Verify:** `etendo_action(spec: "purchase-invoice", id: <completed invoice>, action: "documentAction", parameters: {docAction: "VO"})` answers 422 naming the credit note; re-run the okr probe `f-void-invoice`.

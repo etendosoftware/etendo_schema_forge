@@ -35,8 +35,11 @@ On rejection: DEV fixes in the SAME worktree, cycle restarts from the rejecting 
 **Update (ETP-5695): develop integrates continuously and main gets one cut a day.** Every
 task enters `develop` through its own PR once its mini pipeline passes; the day's merge block is
 no longer a batch of feature merges but a **cut of `develop`** that reaches `main` through one PR
-with the full pipeline. (The epic tier was retired on 2026-08-30: an `epic/ETP-XXXX` branch is
-never a base or a PR target.)
+with the full pipeline. (The epic tier was retired on 2026-08-30 for the **base repos**
+(`etendo_schema_forge`, `schema_forge_core`, `com.etendoerp.go`): an `epic/ETP-XXXX` branch is
+never a base or a PR target there. `etendo_core` and the "fixed on epic" modules are not affected:
+they stay positioned on `epic/ETP-3504` until they move to the `main`/`develop` model; see the
+README, "Module repos".)
 
 ```
 main     (protected — production; PRs must be up to date)
