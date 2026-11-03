@@ -9,6 +9,9 @@ import {
   isCarryingGlobalDiscount,
 } from './orderGlobalDiscountRule.js';
 
+// Warnings whose body already ends with what happens to the discount (no closing sentence).
+const BODY_ALREADY_CLOSED = new Set(['invoiceHasLines', 'mixed']);
+
 const orderPct = (sharedContext, docId) => normalizeGlobalDiscountPct(sharedContext?.orderDiscountMap?.[docId]);
 
 /**
@@ -73,13 +76,12 @@ export default function useOrderGlobalDiscountImport() {
       : ui('importGlobalDiscountNotCarried'));
 
     const warningTexts = (decision) => {
+      // Generic on purpose (QA, ETP-5828): listing every order and its % made the notice a long
+      // list with many orders. The MCP 422 payload still names them.
       if (decision.kind === 'mixed') {
-        const orders = decision.orders
-          .map(o => ui('importGlobalDiscountOrderEntry', { docNo: o.docNo, pct: fmtPct(o.pct) }))
-          .join(' · ');
         return {
           title: ui('importGlobalDiscountMixedTitle'),
-          body: ui('importGlobalDiscountMixedBody', { orders }),
+          body: ui('importGlobalDiscountMixedBody'),
         };
       }
       if (decision.kind === 'invoiceMismatch') {
@@ -106,9 +108,9 @@ export default function useOrderGlobalDiscountImport() {
             tone="warning"
             role="status"
             title={title}
-            // «invoice has lines» already says the lines import without a global discount (its
-            // Figma body), so the closing sentence would repeat it.
-            body={decision.kind === 'invoiceHasLines' ? body : `${body} ${warningClosing(decision.invoicePct)}`}
+            // «invoice has lines» and «mixed» already say the lines import without a global
+            // discount in their own body, so the closing sentence would repeat it.
+            body={BODY_ALREADY_CLOSED.has(decision.kind) ? body : `${body} ${warningClosing(decision.invoicePct)}`}
             data-testid="ImportGlobalDiscount__warning" />
         );
       }

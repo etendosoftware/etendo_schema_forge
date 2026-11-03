@@ -106,16 +106,15 @@ describe('useOrderGlobalDiscountImport — selection panel', () => {
     {
       name: 'mixed, invoice without %',
       sel: { orders: [{ id: 'SO-A', pct: 10 }, { id: 'SO-B', pct: 0 }] },
-      texts: [
-        'importGlobalDiscountMixedTitle',
-        'importGlobalDiscountMixedBody:{"orders":"importGlobalDiscountOrderEntry:{\\"docNo\\":\\"SO-A\\",\\"pct\\":\\"10\\"} · importGlobalDiscountOrderEntry:{\\"docNo\\":\\"SO-B\\",\\"pct\\":\\"0\\"}"}',
-        'importGlobalDiscountNotCarried',
-      ],
+      texts: ['importGlobalDiscountMixedTitle', 'importGlobalDiscountMixedBody'],
+      // Generic body (QA): no order list, and no closing sentence — the body already says it.
+      absent: ['SO-A', 'SO-B', 'importGlobalDiscountNotCarried', 'importGlobalDiscountKeepsInvoice'],
     },
     {
       name: 'mixed, invoice with %',
       sel: { orders: [{ id: 'SO-A', pct: 10 }, { id: 'SO-B', pct: 0 }], invoicePct: 5 },
-      texts: ['importGlobalDiscountMixedTitle', 'importGlobalDiscountKeepsInvoice:{"invoicePct":"5"}'],
+      texts: ['importGlobalDiscountMixedTitle', 'importGlobalDiscountMixedBody'],
+      absent: ['importGlobalDiscountNotCarried', 'importGlobalDiscountKeepsInvoice'],
     },
     {
       name: 'invoice 5 % vs orders 0 %',
