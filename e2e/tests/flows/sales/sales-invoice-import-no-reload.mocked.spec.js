@@ -1,7 +1,7 @@
 // @covers artifacts/sales-invoice/custom/ImportFromShipmentModal.jsx
 // @covers artifacts/sales-invoice/custom/InvoiceBottomPanel.jsx
 // @covers artifacts/sales-invoice/custom/ImportFromSourceInvoiceModal.jsx
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 import { t } from '../../helpers/i18n.js';
 import { clickLastCheckbox } from '../../helpers/selectors.js';

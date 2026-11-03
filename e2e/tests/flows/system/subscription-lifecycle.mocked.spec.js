@@ -9,7 +9,7 @@
 // @covers tools/app-shell/src/hooks/useEnvironmentSwitch.js
 // @covers tools/app-shell/src/layout/AppLayout.jsx
 // @covers tools/app-shell/src/hooks/useEnvironmentListFreshness.js
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login, declareCookieSession } from '../../helpers/auth.js';
 import { t } from '../../helpers/i18n.js';
 
