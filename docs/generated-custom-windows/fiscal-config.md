@@ -600,11 +600,15 @@ or built differently by the other. Removing it means the wizard calling `configu
 instead of posting the records itself. Not registered in `flags-registry.json`: the feature has
 no flag.
 
-**"Añadir SII" differs from the agent path on one value.** The SPA's complementary POST
-(`useFiscalConfig.createComplementary`) sends `acogidaAlSII: 'Y'` and no `taxtype`/`guipuzcoa`;
-the wizard's SII+TBAI payload — which the action reuses — sends `acogidaAlSII: 'N'`,
-`taxtype: 'IVA'` and, for Gipuzkoa, `guipuzcoa: 'Y'`. The SPA flow is left unchanged pending a
-product decision.
+**SII created by an agent is acogido at once.** The wizard posts SII with `acogidaAlSII: 'N'` and
+its detail save turns `INSIISYSTEM` to `'Y'` (`SiiConfigDeactivateHandler.afterHandle` on PUT).
+`configureFiscalSystem` has no detail step, so the SII it creates — alone, in SII + TicketBAI, or
+added to TicketBAI — is stored with `INSIISYSTEM = 'Y'` and `fechaAcogidaSII` = today.
+
+**"Añadir SII" in the SPA still differs from the agent path.** Its complementary POST
+(`useFiscalConfig.createComplementary`) sends no `taxtype`/`guipuzcoa`; the agent path sends
+`taxtype: 'IVA'` and, for Gipuzkoa, `guipuzcoa: 'Y'`, as the wizard's SII+TBAI payload does. The
+SPA flow is left unchanged pending a product decision.
 
 The confirmation screen's "next step" text (`fiscal.onboarding.confirm.next.body`) only promises
 what the detail step lets the user edit afterwards — the certificate, the SII authorization
