@@ -107,14 +107,14 @@ describe('useOrderGlobalDiscountImport — selection panel', () => {
       name: 'mixed, invoice without %',
       sel: { orders: [{ id: 'SO-A', pct: 10 }, { id: 'SO-B', pct: 0 }] },
       texts: ['importGlobalDiscountMixedTitle', 'importGlobalDiscountMixedBody'],
-      // Generic body (QA): no order list, and no closing sentence — the body already says it.
-      absent: ['SO-A', 'SO-B', 'importGlobalDiscountNotCarried', 'importGlobalDiscountKeepsInvoice'],
+      // Generic body (QA): no order list, and nothing appended — one key, one line.
+      absent: ['SO-A', 'SO-B', 'importGlobalDiscountMixedBodyKeepsInvoice', 'importGlobalDiscountKeepsInvoice'],
     },
     {
       name: 'mixed, invoice with %',
       sel: { orders: [{ id: 'SO-A', pct: 10 }, { id: 'SO-B', pct: 0 }], invoicePct: 5 },
-      texts: ['importGlobalDiscountMixedTitle', 'importGlobalDiscountMixedBody'],
-      absent: ['importGlobalDiscountNotCarried', 'importGlobalDiscountKeepsInvoice'],
+      texts: ['importGlobalDiscountMixedTitle', 'importGlobalDiscountMixedBodyKeepsInvoice:{"invoicePct":"5"}'],
+      absent: ['SO-A', 'importGlobalDiscountKeepsInvoice'],
     },
     {
       name: 'invoice 5 % vs orders 0 %',
@@ -122,8 +122,8 @@ describe('useOrderGlobalDiscountImport — selection panel', () => {
       texts: [
         'importGlobalDiscountInvoiceMismatchTitle:{"invoicePct":"5"}',
         'importGlobalDiscountInvoiceMismatchBody:{"pct":"0","invoicePct":"5"}',
-        'importGlobalDiscountKeepsInvoice:{"invoicePct":"5"}',
       ],
+      absent: ['importGlobalDiscountKeepsInvoice'],
     },
     {
       name: 'invoice 5 % vs orders 10 %',
@@ -131,8 +131,8 @@ describe('useOrderGlobalDiscountImport — selection panel', () => {
       texts: [
         'importGlobalDiscountInvoiceMismatchTitle:{"invoicePct":"5"}',
         'importGlobalDiscountInvoiceMismatchBody:{"pct":"10","invoicePct":"5"}',
-        'importGlobalDiscountKeepsInvoice:{"invoicePct":"5"}',
       ],
+      absent: ['importGlobalDiscountKeepsInvoice'],
     },
     {
       name: 'invoice without % but with lines',
@@ -141,10 +141,9 @@ describe('useOrderGlobalDiscountImport — selection panel', () => {
         'importGlobalDiscountInvoiceHasLinesTitle',
         'importGlobalDiscountInvoiceHasLinesBody:{"pct":"10"}',
       ],
-      // Its Figma body already ends «Se importarán sin descuento global.»: no closing sentence.
-      absent: ['importGlobalDiscountNotCarried', 'importGlobalDiscountKeepsInvoice'],
+      absent: ['importGlobalDiscountKeepsInvoice'],
     },
-  ])('warning ($name): title, body and closing sentence, no toggle', ({ sel, texts, absent = [] }) => {
+  ])('warning ($name): title and its one-key body, no toggle', ({ sel, texts, absent = [] }) => {
     renderPanel(selection(sel));
     const warning = screen.getByTestId('ImportGlobalDiscount__warning');
     for (const text of texts) expect(warning.textContent).toContain(text);

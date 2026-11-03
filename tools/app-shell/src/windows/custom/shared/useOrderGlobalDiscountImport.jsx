@@ -9,9 +9,6 @@ import {
   isCarryingGlobalDiscount,
 } from './orderGlobalDiscountRule.js';
 
-// Warnings whose body already ends with what happens to the discount (no closing sentence).
-const BODY_ALREADY_CLOSED = new Set(['invoiceHasLines', 'mixed']);
-
 const orderPct = (sharedContext, docId) => normalizeGlobalDiscountPct(sharedContext?.orderDiscountMap?.[docId]);
 
 /**
@@ -71,17 +68,16 @@ export default function useOrderGlobalDiscountImport() {
       return pct > 0 ? total * (1 - pct / 100) : total;
     };
 
-    const warningClosing = (invoicePct) => (invoicePct > 0
-      ? ui('importGlobalDiscountKeepsInvoice', { invoicePct: fmtPct(invoicePct) })
-      : ui('importGlobalDiscountNotCarried'));
-
+    // Each warning is ONE sentence pair from ONE key, never a body plus an appended closing, so
+    // it fits the notice's single line (ETP-5828). The orders are not listed (QA): with many
+    // orders that became a long list; the MCP 422 payload still names them.
     const warningTexts = (decision) => {
-      // Generic on purpose (QA, ETP-5828): listing every order and its % made the notice a long
-      // list with many orders. The MCP 422 payload still names them.
       if (decision.kind === 'mixed') {
         return {
           title: ui('importGlobalDiscountMixedTitle'),
-          body: ui('importGlobalDiscountMixedBody'),
+          body: decision.invoicePct > 0
+            ? ui('importGlobalDiscountMixedBodyKeepsInvoice', { invoicePct: fmtPct(decision.invoicePct) })
+            : ui('importGlobalDiscountMixedBody'),
         };
       }
       if (decision.kind === 'invoiceMismatch') {
@@ -108,9 +104,7 @@ export default function useOrderGlobalDiscountImport() {
             tone="warning"
             role="status"
             title={title}
-            // «invoice has lines» and «mixed» already say the lines import without a global
-            // discount in their own body, so the closing sentence would repeat it.
-            body={BODY_ALREADY_CLOSED.has(decision.kind) ? body : `${body} ${warningClosing(decision.invoicePct)}`}
+            body={body}
             data-testid="ImportGlobalDiscount__warning" />
         );
       }
