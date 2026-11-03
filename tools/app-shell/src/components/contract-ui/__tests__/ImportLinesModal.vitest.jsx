@@ -323,6 +323,23 @@ describe('ImportLinesModal', () => {
     expect(within(lineRowOf('Widget B')).getByText('60,00')).toBeInTheDocument();
   });
 
+  it('expands and collapses a document with its round RowExpandToggle, without the row click toggling it back', async () => {
+    renderModal();
+    await waitFor(() => expect(within(docRowOf('INV-001')).getByText('110,00')).toBeInTheDocument(), { timeout: 10000 });
+    const toggle = within(docRowOf('INV-001')).getByTestId('ImportLinesModal__expand');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveAttribute('aria-label', 'expand');
+    expect(within(toggle).getByTestId('ImportLinesModal__expandIcon')).toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument());
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(toggle).toHaveAttribute('aria-label', 'collapse');
+
+    fireEvent.click(toggle);
+    expect(screen.queryByText('Widget A')).toBeNull();
+  });
+
   it('filters documents by search query', async () => {
     renderModal();
 

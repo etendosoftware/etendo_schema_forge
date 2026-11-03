@@ -2,13 +2,14 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import {
-  ChevronDown, ChevronRight, CircleCheck, Loader2, Search, SquareCheck, X,
+  CircleCheck, Loader2, Search, SquareCheck, X,
 } from 'lucide-react';
 import { InfoIcon, WarningIcon } from '@phosphor-icons/react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { NumberStepperInput } from '@/components/contract-ui/NumberStepperInput.jsx';
+import { RowExpandToggle } from '@/components/contract-ui/RowExpandToggle.jsx';
 import { formatCurrency, formatPlainDecimal } from '@/lib/formatCurrency.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { translateQuotaRefusalBody } from '@/lib/backendErrors.js';
@@ -628,7 +629,6 @@ export default function ImportLinesModal({
     const docTotal = lines.length > 0
       ? lines.reduce((sum, l) => sum + (lineAmountOf(l) ?? (l._lineNetAmount || 0) * docTotalSign), 0)
       : null;
-    const ExpandIcon = isExpanded ? ChevronDown : ChevronRight;
     return (
       <div key={doc.id} data-testid="ImportLinesModal__document" data-doc-id={doc.id}>
         <div
@@ -642,16 +642,18 @@ export default function ImportLinesModal({
           )}
         >
           <span className="flex w-10 shrink-0 justify-center px-2">
-            <button
-              type="button"
-              aria-expanded={isExpanded}
-              aria-label={ui(isExpanded ? 'collapse' : 'expand')}
-              onClick={e => { e.stopPropagation(); toggleExpand(doc.id); }}
+            {/* Shared round chevron (ETP-5593), sized to the Figma 24 × 24 with its #C7CBD3 border,
+                shadow-xs and #81848F icon; `!` because RowExpandToggle's own h-7/w-7/border/text
+                classes would otherwise win the cascade. */}
+            <RowExpandToggle
+              orientation="horizontal"
+              expanded={isExpanded}
+              onToggle={() => toggleExpand(doc.id)}
+              stopPropagation
+              iconTestId="ImportLinesModal__expandIcon"
+              className={cn('!h-6 !w-6 !border-[hsl(var(--sf-border-input))] !text-[hsl(var(--sf-icon-outline-secondary))]', SHADOW_XS)}
               data-testid="ImportLinesModal__expand"
-              className={cn('flex h-6 w-6 items-center justify-center rounded-full border bg-card', CONTROL_BORDER, SHADOW_XS, ICON_COLOR)}
-            >
-              <ExpandIcon size={16} aria-hidden="true" data-testid="ExpandIcon__b0ad7a" />
-            </button>
+            />
           </span>
           <span className="flex w-6 shrink-0 justify-center">
             <Checkbox

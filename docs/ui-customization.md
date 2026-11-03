@@ -3220,7 +3220,7 @@ option: a window's `custom/` modal renders it with its own `fetchDocuments` / `f
 (it never resizes or moves); title + business partner; a search box with a
 «Seleccionar todo / Deseleccionar todo» button (`ImportLinesModal__selectAll`, acts on the
 documents the search leaves visible and only on lines that can still be imported); document rows
-with an expand button, a checkbox (indeterminate on a partial selection), number, date, an
+with the shared round `RowExpandToggle` (ETP-5593, sized 24 × 24 through `className`), a checkbox (indeterminate on a partial selection), number, date, an
 adornment slot and the amount; an expanded document shows a bordered lines table with a master
 checkbox and a −/+ quantity stepper (`NumberStepperInput`, bounded by the line's available
 quantity, typed values still validated on blur); the footer has the selection hint and the
