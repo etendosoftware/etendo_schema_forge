@@ -251,7 +251,7 @@ export default function ImportLinesModal({
   }, [documents, docLines, selected, sharedContext, extraState]);
 
   // Only a line that can still be imported is ever selected (by its row, its document, the
-  // inner master checkbox or «Seleccionar todo»).
+  // inner master checkbox or the select-all button, `ImportLinesModal__selectAll`).
   const selectableIdsOf = (lines) => (lines || []).filter(l => !l._alreadyImported).map(l => l.id);
 
   const addToSelection = (ids) => {
@@ -310,8 +310,9 @@ export default function ImportLinesModal({
     return { checked: false, indeterminate: true };
   };
 
-  // «Seleccionar todo» acts on the documents the search leaves visible. A document whose lines
-  // are not loaded yet (eagerLoadLines off) is loaded and selected in one go.
+  // The select-all button (`ImportLinesModal__selectAll`) acts on the documents the search leaves
+  // visible. A document whose lines are not loaded yet (eagerLoadLines off) is loaded and
+  // selected in one go.
   const visibleSelectable = filtered.flatMap(d => selectableIdsOf(docLines[d.id]));
   const allVisibleLoaded = filtered.every(d => docLines[d.id]);
   const allVisibleSelected = allVisibleLoaded && visibleSelectable.length > 0
