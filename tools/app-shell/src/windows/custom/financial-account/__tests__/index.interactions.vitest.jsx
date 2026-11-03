@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/financial-account/index.jsx
+// @covers tools/app-shell/src/windows/custom/financial-account/BounceReviewBanner.jsx
 /**
  * FinancialAccountDetail — the wiring that `index.vitest.jsx` (data hooks + CSV export
  * happy paths) and `index.wrapper.vitest.jsx` (list/detail branch) leave untested:
@@ -25,8 +27,10 @@ vi.mock('react-router-dom', () => ({
   useParams: () => ({ recordId: 'acc-1' }),
 }));
 
+// The key itself; the bounce-review "back" button also shows its count, which is what the banner
+// promises the user (ETP-5581).
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key, params) => (key === 'financeReconcileBounceReviewBack' ? `${key} (${params?.count})` : key),
 }));
 
 let currentWindowAccessTier = 'full';
@@ -140,10 +144,18 @@ vi.mock('../MovementsTab.jsx', () => ({
 let movementsTabProps = null;
 let mockMovementsApi = { filtered: [{ id: 'm1' }] };
 
+// ETP-5581 — `bounceReview` (the shared bounce-pair review state) is surfaced as attributes, and
+// its two callbacks as buttons, so the tests can drive the panel side of a review.
 vi.mock('../ReconciliationTab.jsx', () => ({
-  ReconciliationTab: ({ onReconcileSuccess, windowReadOnly }) => (
-    <div data-testid="tab-reconciliation" data-window-read-only={String(windowReadOnly)}>
+  ReconciliationTab: ({ onReconcileSuccess, windowReadOnly, bounceReview }) => (
+    <div
+      data-testid="tab-reconciliation"
+      data-window-read-only={String(windowReadOnly)}
+      data-focus-line={bounceReview?.focus?.lineId ?? ''}
+      data-dismissed={[...(bounceReview?.dismissedKeys ?? [])].join(',')}>
       <button type="button" data-testid="stub-reconcile-success" onClick={onReconcileSuccess} />
+      <button type="button" data-testid="stub-panel-dismiss" onClick={() => bounceReview?.onDismiss('bp-review')} />
+      <button type="button" data-testid="stub-panel-focus-consumed" onClick={() => bounceReview?.onFocusConsumed()} />
     </div>
   ),
 }));
@@ -202,13 +214,26 @@ vi.mock('../BankConnectionFlowUI.jsx', () => ({
   BankConnectionFlowUI: () => <div data-testid="bank-connection-flow" />,
 }));
 
+// ETP-5581 — the host-owned checks (`selection`), the dismissed pairs and "Revisar en el panel"
+// (`onReviewPair`) are surfaced the same way; `onReviewPair` and the toggle act on the `bp-review` pair.
 vi.mock('@/components/contract-ui/AutoMatchSuggestionModal', () => ({
-  AutoMatchSuggestionModal: ({ open, onClose, onSuccess }) => (
-    <div data-testid="automatch-modal" data-open={String(open)}>
-      <button type="button" data-testid="stub-automatch-close" onClick={onClose} />
-      <button type="button" data-testid="stub-automatch-success" onClick={onSuccess} />
-    </div>
-  ),
+  AutoMatchSuggestionModal: ({
+    open, onClose, onSuccess, groups, selection, dismissedPairKeys, onReviewPair,
+  }) => {
+    const reviewPair = (groups ?? []).find((g) => g.groupKey === 'bp-review');
+    return (
+      <div
+        data-testid="automatch-modal"
+        data-open={String(open)}
+        data-checked={(groups ?? []).filter((g) => selection?.isChecked(g)).map((g) => g.groupKey).join(',')}
+        data-dismissed={[...(dismissedPairKeys ?? [])].join(',')}>
+        <button type="button" data-testid="stub-automatch-close" onClick={onClose} />
+        <button type="button" data-testid="stub-automatch-success" onClick={onSuccess} />
+        <button type="button" data-testid="stub-automatch-review" onClick={() => onReviewPair?.(reviewPair)} />
+        <button type="button" data-testid="stub-automatch-toggle-review" onClick={() => selection?.toggle(reviewPair)} />
+      </div>
+    );
+  },
 }));
 
 import { FinancialAccountDetail } from '../index.jsx';
@@ -644,5 +669,147 @@ describe('FinancialAccountDetail — CSV export failures', () => {
       expect(toastErrorMock).toHaveBeenCalledWith('financeAccountDetailExportError'),
     );
     expect(toastSuccessMock).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5581 — "Revisar en el panel": the review state index.jsx owns and shares between the
+// automatch modal and the reconciliation panel (useAutoMatchReview + BounceReviewBanner).
+// ---------------------------------------------------------------------------
+
+describe('FinancialAccountDetail — bounce-pair review (Revisar en el panel)', () => {
+  const TX = { groupKey: 'tx-1', statementLine: { id: 'S1' }, operations: [{ id: 'op-1' }] };
+  const HIGH = {
+    kind: 'bouncePair', groupKey: 'bp-high', confidence: 'high',
+    statementLine: { id: 'O1' }, counterpartLine: { id: 'B1' },
+  };
+  const REVIEW = {
+    kind: 'bouncePair', groupKey: 'bp-review', confidence: 'review',
+    statementLine: { id: 'O2' }, counterpartLine: { id: 'B2' },
+  };
+  const PAIR_GROUPS = [TX, HIGH, REVIEW];
+
+  const modal = () => screen.getByTestId('automatch-modal');
+
+  /** Enters the reconciliation tab and lets the automatch answer land: the modal auto-opens. */
+  function renderWithPairs() {
+    const utils = render(<FinancialAccountDetail recordId="acc-1" />);
+    currentAutoMatchLoading = true;
+    fireEvent.click(screen.getByTestId('detail-tab-reconciliation'));
+    currentAutoMatchGroups = PAIR_GROUPS;
+    currentAutoMatchLoading = false;
+    utils.rerender(<FinancialAccountDetail recordId="acc-1" />);
+    expect(modal()).toHaveAttribute('data-open', 'true');
+    return utils;
+  }
+
+  it('starts with the default checks and no banner', () => {
+    renderWithPairs();
+    expect(modal()).toHaveAttribute('data-checked', 'tx-1,bp-high');
+    expect(screen.queryByTestId('recon-bounce-review-banner')).not.toBeInTheDocument();
+  });
+
+  it('hides the modal, asks the panel for the bounce line and shows the banner with the count', () => {
+    renderWithPairs();
+    fireEvent.click(screen.getByTestId('stub-automatch-review'));
+
+    expect(modal()).toHaveAttribute('data-open', 'false');
+    expect(screen.getByTestId('tab-reconciliation')).toHaveAttribute('data-focus-line', 'B2');
+    expect(screen.getByTestId('recon-bounce-review-banner')).toHaveTextContent('financeReconcileBounceReviewBanner');
+    expect(screen.getByTestId('recon-bounce-review-back')).toHaveTextContent('financeReconcileBounceReviewBack (3)');
+  });
+
+  it('counts only the suggestions still offered: a dismissed pair leaves the banner count', () => {
+    renderWithPairs();
+    fireEvent.click(screen.getByTestId('stub-automatch-review'));
+    fireEvent.click(screen.getByTestId('stub-panel-dismiss'));
+    expect(screen.getByTestId('recon-bounce-review-back')).toHaveTextContent('financeReconcileBounceReviewBack (2)');
+    expect(screen.getByTestId('tab-reconciliation')).toHaveAttribute('data-dismissed', 'bp-review');
+    expect(modal()).toHaveAttribute('data-dismissed', 'bp-review');
+  });
+
+  it('"Volver" reopens the modal with the checks as they were left, even across a reload', () => {
+    const { rerender } = renderWithPairs();
+    fireEvent.click(screen.getByTestId('stub-automatch-toggle-review'));
+    expect(modal()).toHaveAttribute('data-checked', 'tx-1,bp-high,bp-review');
+    fireEvent.click(screen.getByTestId('stub-automatch-review'));
+
+    // A discard in the panel reloads the suggestions (a new array, same groups).
+    currentAutoMatchGroups = [...PAIR_GROUPS];
+    rerender(<FinancialAccountDetail recordId="acc-1" />);
+
+    fireEvent.click(screen.getByTestId('recon-bounce-review-back'));
+    expect(modal()).toHaveAttribute('data-open', 'true');
+    expect(modal()).toHaveAttribute('data-checked', 'tx-1,bp-high,bp-review');
+    // The banner steps aside while the modal is open.
+    expect(screen.queryByTestId('recon-bounce-review-banner')).not.toBeInTheDocument();
+  });
+
+  it('does not reopen the modal on its own while the review goes on', () => {
+    const { rerender } = renderWithPairs();
+    fireEvent.click(screen.getByTestId('stub-automatch-review'));
+
+    currentAutoMatchLoading = true;
+    rerender(<FinancialAccountDetail recordId="acc-1" />);
+    currentAutoMatchGroups = [...PAIR_GROUPS];
+    currentAutoMatchLoading = false;
+    rerender(<FinancialAccountDetail recordId="acc-1" />);
+
+    expect(modal()).toHaveAttribute('data-open', 'false');
+    expect(screen.getByTestId('recon-bounce-review-banner')).toBeInTheDocument();
+  });
+
+  it('closing the modal ends the review: no banner afterwards', () => {
+    renderWithPairs();
+    fireEvent.click(screen.getByTestId('stub-automatch-review'));
+    fireEvent.click(screen.getByTestId('recon-bounce-review-back'));
+    fireEvent.click(screen.getByTestId('stub-automatch-close'));
+    expect(modal()).toHaveAttribute('data-open', 'false');
+    expect(screen.queryByTestId('recon-bounce-review-banner')).not.toBeInTheDocument();
+  });
+
+  it('leaving the reconciliation tab ends the review and forgets the dismissals', () => {
+    renderWithPairs();
+    fireEvent.click(screen.getByTestId('stub-automatch-review'));
+    fireEvent.click(screen.getByTestId('stub-panel-dismiss'));
+
+    currentAutoMatchLoading = true;
+    fireEvent.click(screen.getByTestId('detail-tab-movements'));
+    fireEvent.click(screen.getByTestId('detail-tab-reconciliation'));
+
+    expect(screen.queryByTestId('recon-bounce-review-banner')).not.toBeInTheDocument();
+    expect(screen.getByTestId('tab-reconciliation')).toHaveAttribute('data-dismissed', '');
+    expect(screen.getByTestId('tab-reconciliation')).toHaveAttribute('data-focus-line', '');
+  });
+
+  it('the Automatch button clears the dismissals and opens the modal', () => {
+    renderWithPairs();
+    fireEvent.click(screen.getByTestId('stub-automatch-review'));
+    fireEvent.click(screen.getByTestId('stub-panel-dismiss'));
+    expect(modal()).toHaveAttribute('data-dismissed', 'bp-review');
+
+    fireEvent.click(screen.getByTestId('financial-account-automatch'));
+    expect(modal()).toHaveAttribute('data-open', 'true');
+    expect(modal()).toHaveAttribute('data-dismissed', '');
+  });
+
+  it('the header refresh clears the dismissals (a fresh automatch run proposes them again)', () => {
+    renderWithPairs();
+    fireEvent.click(screen.getByTestId('stub-automatch-close'));
+    fireEvent.click(screen.getByTestId('stub-panel-dismiss'));
+    expect(screen.getByTestId('tab-reconciliation')).toHaveAttribute('data-dismissed', 'bp-review');
+
+    fireEvent.click(screen.getByTestId('finance-refresh-button'));
+    expect(reloadAutoMatchMock).toHaveBeenCalled();
+    expect(screen.getByTestId('tab-reconciliation')).toHaveAttribute('data-dismissed', '');
+  });
+
+  it('the panel consumes the focus request', () => {
+    renderWithPairs();
+    fireEvent.click(screen.getByTestId('stub-automatch-review'));
+    fireEvent.click(screen.getByTestId('stub-panel-focus-consumed'));
+    expect(screen.getByTestId('tab-reconciliation')).toHaveAttribute('data-focus-line', '');
+    // Consuming the focus does not end the review.
+    expect(screen.getByTestId('recon-bounce-review-banner')).toBeInTheDocument();
   });
 });

@@ -144,6 +144,25 @@ describe('StatementsTable', () => {
     expect(partial.getAttribute('data-label')).toContain('4/10');
   });
 
+  // ETP-5581 — a discarded line (only ever half of a bounce pair) is resolved, exactly as the
+  // backend derives the status from matched + discarded; the two counts are disjoint.
+  it('counts matched + discarded lines as resolved in the PARTIAL pill', () => {
+    const rows = [{ ...ROWS[1], matchedCount: 4, discardedCount: 2 }];
+    render(<StatementsTable statements={rows} loading={false} />);
+    expect(screen.getByTestId('status-warning').getAttribute('data-label')).toMatch(/ 6\/10$/);
+  });
+
+  it('keeps the matched count alone when the backend sends no discardedCount', () => {
+    render(<StatementsTable statements={[ROWS[1]]} loading={false} />);
+    expect(screen.getByTestId('status-warning').getAttribute('data-label')).toMatch(/ 4\/10$/);
+  });
+
+  it('reads numeric-string counts and a missing matchedCount as 0', () => {
+    const rows = [{ ...ROWS[1], matchedCount: undefined, discardedCount: '3' }];
+    render(<StatementsTable statements={rows} loading={false} />);
+    expect(screen.getByTestId('status-warning').getAttribute('data-label')).toMatch(/ 3\/10$/);
+  });
+
   it('expands an accordion row on click and mounts the lines view for the row id', async () => {
     const user = userEvent.setup();
     render(<StatementsTable statements={ROWS} loading={false} currency="USD" />);

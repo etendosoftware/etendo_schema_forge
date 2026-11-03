@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/reconciliationBadges.jsx
 import { render, screen } from '@testing-library/react';
 
 // --- Mocks ----------------------------------------------------------------
@@ -68,6 +69,10 @@ describe('StatusBadge', () => {
     ['pending', 'financeReconcileBadgePending'],
     ['invoice', 'financeReconcileBadgeInvoice'],
     ['partial', 'financeReconcileBadgePartial'],
+    // ETP-5581 — bounce pairs and discarded lines.
+    ['bounce', 'financeReconcileBadgeBounce'],
+    ['bounceOriginal', 'financeReconcileBadgeBounceOriginal'],
+    ['discarded', 'financeReconcileBadgeDiscarded'],
   ];
 
   it.each(KINDS)('renders the i18n label for kind "%s"', (kind, labelKey) => {
@@ -104,5 +109,25 @@ describe('StatusBadge', () => {
     const { container: suggested } = render(<StatusBadge kind="suggested" />);
     const { container: difference } = render(<StatusBadge kind="difference" />);
     expect(suggested.firstChild.className).not.toBe(difference.firstChild.className);
+  });
+
+  it('forwards data-testid to the pill', () => {
+    // It used to be dropped, so the ids every caller passes never reached the DOM.
+    render(<StatusBadge kind="bounce" data-testid="recon-line-badge-L1" />);
+    const pill = screen.getByTestId('recon-line-badge-L1');
+    expect(pill).toHaveTextContent('financeReconcileBadgeBounce');
+  });
+
+  it('renders no data-testid attribute when none is given', () => {
+    const { container } = render(<StatusBadge kind="discarded" />);
+    expect(container.firstChild).not.toHaveAttribute('data-testid');
+  });
+
+  it('styles a discarded line as muted, unlike a bounce to review', () => {
+    const { container: discarded } = render(<StatusBadge kind="discarded" />);
+    const { container: pending } = render(<StatusBadge kind="pending" />);
+    const { container: bounce } = render(<StatusBadge kind="bounce" />);
+    expect(discarded.firstChild.className).toBe(pending.firstChild.className);
+    expect(bounce.firstChild.className).not.toBe(discarded.firstChild.className);
   });
 });

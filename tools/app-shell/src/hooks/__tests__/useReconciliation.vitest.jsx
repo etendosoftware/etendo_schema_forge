@@ -1,3 +1,6 @@
+// @covers tools/app-shell/src/hooks/useReconciliation.js
+// @covers tools/app-shell/src/hooks/useReconciliationPost.js
+// @covers tools/app-shell/src/hooks/useBouncePairActions.js
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { setSessionCredentials, CREDENTIAL_MODES } from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
 
@@ -21,6 +24,8 @@ import {
   useAutoMatch,
   useApplySuggestions,
 } from '../useReconciliation.js';
+import { useReconciliationPost, RECONCILIATION_BASE_PATH } from '../useReconciliationPost.js';
+import { useDiscardPair, useRestorePair } from '../useBouncePairActions.js';
 import { findFetchCall } from './findFetchCall.js';
 
 const BASE = '/sws/neo/bank-reconciliation';
@@ -120,6 +125,25 @@ describe('usePendingStatementLines (GET)', () => {
     expect(url).toContain('dateFrom=2026-01-01');
     expect(url).toContain('q=inv');
     expect(url).not.toContain('dateTo=');
+  });
+
+  // ETP-5581 — the Descartadas filter is served by its own request; the other filters stay
+  // client-side over the default answer.
+  it('sends status=discarded when asked, and refetches when the status changes', async () => {
+    globalThis.fetch.mockResolvedValue(getResponse({ lines: [] }));
+
+    const { rerender } = renderHook(
+      ({ status }) => usePendingStatementLines('acc-1', { status }),
+      { initialProps: { status: undefined } },
+    );
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
+    expect(globalThis.fetch.mock.calls[0][0]).not.toContain('status=');
+
+    rerender({ status: 'discarded' });
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(2));
+    expect(globalThis.fetch.mock.calls[1][0]).toBe(
+      `/etendo${BASE}?action=pendingLines&accountId=acc-1&status=discarded`,
+    );
   });
 
   it('maps lines, total and counts from the payload', async () => {
@@ -638,5 +662,110 @@ describe('useNeoPost error body (ETP-4965)', () => {
     expect(caught.status).toBe(500);
     // `json` parsed to null — reading `.code` off the body must not blow up in the caller.
     expect(caught.body ?? null).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5581 — the shared POST helper moved to its own module, and the two bounce-pair actions.
+// Same AuthProvider `wrapper` as the POST hooks above: the session supplies the token.
+// ---------------------------------------------------------------------------
+
+describe('useReconciliationPost', () => {
+  it('keeps the bank-reconciliation route as the base path of every action', () => {
+    expect(RECONCILIATION_BASE_PATH).toBe(BASE);
+  });
+
+  it('posts ?action=<action> with the JSON payload and returns response.data', async () => {
+    mockActionResponse(postResponse({ ok: 1 }));
+    const { result } = renderHook(() => useReconciliationPost('anyAction'), { wrapper });
+
+    let returned;
+    await act(async () => { returned = await result.current.post({ a: 1 }); });
+
+    const [, init] = findFetchCall(`/etendo${BASE}?action=anyAction`);
+    expect(init.method).toBe('POST');
+    expect(init.headers.Authorization).toBe('Bearer test-token');
+    expect(JSON.parse(init.body)).toEqual({ a: 1 });
+    expect(returned).toEqual({ ok: 1 });
+    expect(result.current.loading).toBe(false);
+  });
+});
+
+/** A coded 409 refusal of a bounce action, as BankBounceErrors answers it. */
+function bounceRefusal(code, messageKey, message) {
+  return {
+    ok: false,
+    status: 409,
+    json: async () => ({ error: { message, status: 409, messageKeys: [messageKey] }, code }),
+  };
+}
+
+describe('useDiscardPair (POST discardPair)', () => {
+  const PAYLOAD = { financialAccountId: 'acc-1', statementLineId: 'L-OUT', counterpartLineId: 'L-IN' };
+
+  it('posts the discardPair action with the original and the bounce', async () => {
+    const answer = { discarded: true, statementLineId: 'L-OUT', counterpartLineId: 'L-IN', signal: 'pis_link', confidence: 'high' };
+    mockActionResponse(postResponse(answer));
+    const { result } = renderHook(() => useDiscardPair(), { wrapper });
+
+    let returned;
+    await act(async () => { returned = await result.current.discardPair(PAYLOAD); });
+
+    const [url, init] = findFetchCall(`/etendo${BASE}?action=discardPair`);
+    expect(url).toBe(`/etendo${BASE}?action=discardPair`);
+    expect(init.method).toBe('POST');
+    expect(init.headers.Authorization).toBe('Bearer test-token');
+    expect(JSON.parse(init.body)).toEqual(PAYLOAD);
+    expect(returned).toEqual(answer);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('exposes err.code and err.body of a coded 409 refusal', async () => {
+    mockActionResponse(bounceRefusal('HAS_PAYMENT', 'ETGO_BounceHasPayment', 'One of the lines is the bank movement of a payment'));
+    const { result } = renderHook(() => useDiscardPair(), { wrapper });
+
+    let caught;
+    await act(async () => { caught = await result.current.discardPair(PAYLOAD).catch((e) => e); });
+
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught.status).toBe(409);
+    expect(caught.code).toBe('HAS_PAYMENT');
+    expect(caught.body.error.messageKeys).toEqual(['ETGO_BounceHasPayment']);
+    expect(result.current.error).toBe(caught);
+    expect(result.current.loading).toBe(false);
+  });
+});
+
+describe('useRestorePair (POST restorePair)', () => {
+  it('posts the restorePair action with the line id', async () => {
+    const answer = { restored: ['L-OUT', 'L-IN'], lineId: 'L-OUT', counterpartLineId: 'L-IN' };
+    mockActionResponse(postResponse(answer));
+    const { result } = renderHook(() => useRestorePair(), { wrapper });
+
+    let returned;
+    await act(async () => {
+      returned = await result.current.restorePair({ financialAccountId: 'acc-1', lineId: 'L-OUT' });
+    });
+
+    const [, init] = findFetchCall(`/etendo${BASE}?action=restorePair`);
+    expect(init.method).toBe('POST');
+    expect(init.headers.Authorization).toBe('Bearer test-token');
+    expect(JSON.parse(init.body)).toEqual({ financialAccountId: 'acc-1', lineId: 'L-OUT' });
+    expect(returned).toEqual(answer);
+  });
+
+  it('exposes err.code and err.body of a 409, and a null code when the body has none', async () => {
+    mockActionResponse(bounceRefusal('LINE_NOT_PENDING', 'ETGO_BounceLineNotPending', 'not pending'));
+    const { result } = renderHook(() => useRestorePair(), { wrapper });
+    let caught;
+    await act(async () => { caught = await result.current.restorePair({ lineId: 'x' }).catch((e) => e); });
+    expect(caught.code).toBe('LINE_NOT_PENDING');
+    expect(caught.body.code).toBe('LINE_NOT_PENDING');
+
+    mockActionResponse({ ok: false, status: 409, json: async () => ({ error: { message: 'plain' } }) });
+    await act(async () => { caught = await result.current.restorePair({ lineId: 'x' }).catch((e) => e); });
+    expect(caught.message).toBe('plain');
+    expect(caught.code).toBeNull();
+    expect(caught.status).toBe(409);
   });
 });

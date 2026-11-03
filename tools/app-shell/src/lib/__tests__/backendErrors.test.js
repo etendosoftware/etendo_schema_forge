@@ -771,6 +771,69 @@ describe('translateBackendErrorBody', () => {
   }
 });
 
+describe('bank bounce-pair refusals (ETP-5581)', () => {
+  // com.etendoerp.go BankBounceErrors / StatementLineDiscard: each coded refusal carries its
+  // English AD_MESSAGE key in error.messageKeys; the SPA translates it with translateBackendErrorBody.
+  const KEYED = [
+    ['LINE_DISCARDED', 'ETGO_StatementLineDiscarded', 'backendError.bankLineDiscarded',
+      'This bank statement line is discarded, so it cannot be reconciled. Restore it first.'],
+    ['BOUNCE_SUGGESTIONS_OFF', 'ETGO_BounceSuggestionsOff', 'backendError.bounceSuggestionsOff',
+      'Bounce suggestions are not enabled for this account.'],
+    ['SIGN_MISMATCH', 'ETGO_BounceSignMismatch', 'backendError.bounceSignMismatch',
+      'The two lines of a bounce must have opposite signs: one takes the money out and the other brings it back.'],
+    ['AMOUNT_MISMATCH', 'ETGO_BounceAmountMismatch', 'backendError.bounceAmountMismatch',
+      'The two lines of a bounce must have exactly the same amount.'],
+    ['HAS_PAYMENT', 'ETGO_BounceHasPayment', 'backendError.bounceHasPayment',
+      'One of the lines is the bank movement of a payment registered in Etendo. Discarding it would leave that payment without its bank movement, so this bounce cannot be discarded.'],
+    ['LINE_NOT_PENDING', 'ETGO_BounceLineNotPending', 'backendError.bounceLineNotPending',
+      'One of the lines is not pending reconciliation: its bank statement is in draft, it is part of a partially reconciled line, or another suggestion already uses it.'],
+    ['DISCARD_NOT_ALLOWED', 'ETGO_BounceDiscardNotAllowed', 'backendError.bounceDiscardNotAllowed',
+      'This bounce cannot be discarded. Both lines must be unreconciled lines imported from the bank, and the later one must be dated at most 60 days after the earlier one.'],
+  ];
+
+  for (const [code, messageKey, localeKey, english] of KEYED) {
+    it(`routes ${messageKey} (${code}) to ${localeKey}`, () => {
+      const body = { error: { code, message: english, messageKeys: [messageKey] } };
+      assert.equal(translateBackendErrorBody(body, (k) => `translated:${k}`, 'fallback'), `translated:${localeKey}`);
+    });
+  }
+
+  it('routes each refusal to its own locale key', () => {
+    const keys = KEYED.map(([code, messageKey]) => translateBackendErrorBody(
+      { error: { code, message: 'x', messageKeys: [messageKey] } }, (k) => `translated:${k}`, 'f'));
+    assert.equal(new Set(keys).size, KEYED.length);
+  });
+
+  it('maps the LINE_DISCARDED English sentence by text, for the paths that forward only the message', () => {
+    const [, , localeKey, english] = KEYED[0];
+    assert.equal(translateBackendError(english, (k) => `translated:${k}`), `translated:${localeKey}`);
+    assert.equal(translateBackendError(`  ${english}  `, (k) => `translated:${k}`), `translated:${localeKey}`);
+  });
+
+  it('does not map the other bounce sentences by text (they are routed by key only)', () => {
+    for (const [, , , english] of KEYED.slice(1)) {
+      assert.equal(translateBackendError(english, (k) => `translated:${k}`), english);
+    }
+  });
+
+  for (const locale of ['en_US', 'es_ES', 'es_AR']) {
+    it(`resolves every refusal to a non-empty ${locale} translation`, () => {
+      const json = JSON.parse(readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'));
+      const t = localeTranslator(locale);
+      for (const [code, messageKey, localeKey, english] of KEYED) {
+        const out = translateBackendErrorBody({ error: { code, message: english, messageKeys: [messageKey] } }, t, 'f');
+        assert.equal(out, json.genericLabels[localeKey], `${locale}.${localeKey}`);
+        assert.ok(out.trim(), `${locale}.${localeKey} is blank`);
+        if (locale !== 'en_US') {
+          assert.notEqual(out, english, `${locale}.${localeKey} is untranslated`);
+          // The product wording is "rebote", never "devolución".
+          assert.doesNotMatch(out, /devoluci/i, `${locale}.${localeKey} says devolución`);
+        }
+      }
+    });
+  }
+});
+
 describe('translateBackendError — legacy "Account could not be found" text, new EN wording (ETP-5175)', () => {
   const es = localeTranslator('es_ES');
 

@@ -287,6 +287,45 @@ describe('StatementLinesInline', () => {
     });
   });
 
+  // ETP-5581 — `discarded: true` comes with every line of `bank-statements?action=lines`, whatever
+  // the bounce flag: a discarded line is out of the reconciliation, so neither pending nor matched.
+  describe('discarded lines (ETP-5581)', () => {
+    function renderLine(line) {
+      linesMock.mockReturnValue({
+        lines: [{ id: 'l1', date: '2026-05-06T00:00:00Z', description: '', amount: -50, ...line }],
+        loading: false,
+      });
+      render(<StatementLinesInline statementId="s1" />);
+    }
+
+    it('renders a grey "Descartada" tag instead of "sin conciliar" for a discarded line', () => {
+      renderLine({ matched: false, reconcileStatus: 'PENDING', discarded: true });
+      expect(screen.getByTestId('status-neutral')).toHaveTextContent('financeAccountStatementLinesStatusDiscarded');
+      expect(screen.queryByText('financeAccountStatementLinesStatusUnmatched')).not.toBeInTheDocument();
+    });
+
+    it('also reads a discarded line without reconcileStatus (matched fallback)', () => {
+      renderLine({ matched: false, discarded: true });
+      expect(screen.getByText('financeAccountStatementLinesStatusDiscarded')).toBeInTheDocument();
+    });
+
+    it('keeps the reconciled pill of a reconciled line even if it carries discarded', () => {
+      renderLine({ matched: true, reconcileStatus: 'RECONCILED', discarded: true });
+      expect(screen.getByText('financeAccountStatementLinesStatusReconciled')).toBeInTheDocument();
+      expect(screen.queryByText('financeAccountStatementLinesStatusDiscarded')).not.toBeInTheDocument();
+    });
+
+    it('keeps the partial pill of a partially reconciled line', () => {
+      renderLine({ matched: false, reconcileStatus: 'PARTIAL', discarded: true, pendingAmount: 10 });
+      expect(screen.getByText('financeAccountStatementLinesStatusPartial')).toBeInTheDocument();
+    });
+
+    it('reads discarded:false as a plain unmatched line', () => {
+      renderLine({ matched: false, reconcileStatus: 'PENDING', discarded: false });
+      expect(screen.getByText('financeAccountStatementLinesStatusUnmatched')).toBeInTheDocument();
+    });
+  });
+
   describe('Transacción column', () => {
     it('shows no chip (—) when the line has no reconciled transactions', () => {
       linesMock.mockReturnValue({
