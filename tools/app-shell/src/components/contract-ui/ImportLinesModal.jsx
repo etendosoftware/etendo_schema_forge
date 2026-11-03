@@ -2,8 +2,9 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import {
-  AlertTriangle, ChevronDown, ChevronRight, CircleCheck, Info, Loader2, Search, SquareCheck, X,
+  ChevronDown, ChevronRight, CircleCheck, Loader2, Search, SquareCheck, X,
 } from 'lucide-react';
+import { InfoIcon, WarningIcon } from '@phosphor-icons/react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -39,9 +40,26 @@ function showCustomToast(custom) {
 // grows or shrinks, and it scrolls.
 const DIALOG_WIDTH = 800;
 const DIALOG_HEIGHT = 648;
-// The notice area under the list is always rendered at this height (title + two body lines), so
-// a warning replacing the neutral notice never changes the height left to the list.
-const NOTICE_HEIGHT = 104;
+// The notice area under the list is always rendered at the Figma's size — a 12 px gap above an
+// 80 px alert (16 + 24 title + 24 body + 16) — so a warning replacing the neutral notice never
+// changes the height left to the list. One body line fits; a longer one is clamped (full text in
+// its `title`), never allowed to grow the box.
+const NOTICE_GAP = 12;
+const NOTICE_HEIGHT = 80;
+
+// Figma «Alert» colours, literal: the closest tokens differ (bg-muted is #F1F5F9, the warning
+// border token is #FFDA85, muted-foreground is #6C6C89). The warning bg (#FFF9EB) and text
+// (#8A6100) are exactly --status-warning-bg / --status-warning-fg, so those stay tokens.
+const NOTICE_TONES = {
+  neutral: {
+    box: 'border-[#C7CBD3] bg-[#F3F5F9]', icon: '#C7CBD3',
+    title: 'text-foreground', body: 'text-[#6B7280]',
+  },
+  warning: {
+    box: 'border-[#FFC233] bg-status-warning', icon: '#C28800',
+    title: 'text-status-warning-foreground', body: 'text-status-warning-foreground',
+  },
+};
 
 const SHADOW_XS = 'shadow-[var(--sf-shadow-xs)]';
 const CONTROL_BORDER = 'border-[hsl(var(--sf-border-input))]';
@@ -50,38 +68,36 @@ const ICON_COLOR = 'text-[hsl(var(--sf-icon-outline-secondary))]';
 const PILL_BASE = 'inline-flex h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-full px-3 py-2 text-sm font-medium leading-6 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2';
 
 /**
- * The notice of an import popup (Figma «Alert»): a left bar, an icon (or a control such as a
- * switch in its place), a title and a body. `neutral` is the idle «Información de importación»
- * state and the tone of an informative control; `warning` is an orange advice. It fills the
- * height its slot gives it, so swapping one notice for another never moves anything.
+ * The notice of an import popup (Figma «Alert», node 2702-6462): a 2 px left bar, a 24 × 24 icon
+ * box (or a control such as a switch in its place), a title and ONE body line. `neutral` is the
+ * idle «Información de importación» state and the tone of an informative control; `warning` is an
+ * orange advice. It fills the 80 px its slot gives it, so swapping one notice for another never
+ * moves anything; a title or body too long for one line is truncated with the full text in `title`.
  */
 export function ImportNotice({ tone = 'neutral', title, body, control, 'data-testid': dataTestId, role }) {
   const warning = tone === 'warning';
-  const Icon = warning ? AlertTriangle : Info;
+  const colours = NOTICE_TONES[warning ? 'warning' : 'neutral'];
+  const Icon = warning ? WarningIcon : InfoIcon;
   return (
     <div
       data-testid={dataTestId}
       data-tone={tone}
       role={role}
-      className={cn(
-        'flex h-full items-start gap-1 overflow-y-auto rounded-r-lg border-l-2 p-4',
-        warning
-          ? 'border-[var(--status-warning-border)] bg-status-warning text-status-warning-foreground'
-          : cn(CONTROL_BORDER, 'bg-muted text-foreground'),
-      )}
+      className={cn('box-border flex h-full items-start gap-1 overflow-hidden rounded-r-lg border-l-2 p-4', colours.box)}
     >
-      <span className="flex h-6 shrink-0 items-center">
+      {/* 24 px high like the title line; 24 wide for the icon, as wide as needed for a control
+          (the 36 × 20 switch of the global-discount toggle). */}
+      <span
+        className={cn('flex h-6 shrink-0 items-center justify-center', control ? 'min-w-6' : 'w-6')}
+        data-testid="ImportNotice__icon"
+      >
         {control || (
-          <Icon
-            size={20}
-            aria-hidden="true"
-            className={warning ? 'text-status-warning-foreground' : 'text-[hsl(var(--sf-border-input))]'}
-            data-testid="Icon__b0ad7a" />
+          <Icon size={20} color={colours.icon} aria-hidden="true" data-testid="Icon__b0ad7a" />
         )}
       </span>
-      <div className="flex min-w-0 flex-col px-2 text-sm leading-6">
-        <strong className="font-medium">{title}</strong>
-        {body && <p className={warning ? '' : 'text-muted-foreground'}>{body}</p>}
+      <div className="flex min-w-0 flex-1 flex-col px-2 text-sm leading-6">
+        <strong className={cn('truncate font-medium', colours.title)} title={title}>{title}</strong>
+        {body && <p className={cn('truncate font-normal', colours.body)} title={body}>{body}</p>}
       </div>
     </div>
   );
@@ -730,8 +746,8 @@ export default function ImportLinesModal({
           {renderSelectionPanel && (
             <div
               data-testid="ImportLinesModal__selectionPanelSlot"
-              className="shrink-0 pt-3"
-              style={{ height: NOTICE_HEIGHT + 12 }}
+              className="box-border shrink-0"
+              style={{ height: NOTICE_GAP + NOTICE_HEIGHT, paddingTop: NOTICE_GAP }}
             >
               {(!loading && !eagerLoadingLines && renderSelectionPanel(selection)) || (
                 <ImportNotice

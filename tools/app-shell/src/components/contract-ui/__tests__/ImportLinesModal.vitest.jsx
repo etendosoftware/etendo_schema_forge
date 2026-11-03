@@ -34,7 +34,7 @@ vi.mock('@/components/ui/checkbox', () => ({
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { toast } from 'sonner';
-import ImportLinesModal from '../ImportLinesModal.jsx';
+import ImportLinesModal, { ImportNotice } from '../ImportLinesModal.jsx';
 
 // --- Helpers ---
 
@@ -1265,8 +1265,10 @@ describe('ImportLinesModal', () => {
       await waitFor(() => expect(screen.getByText('INV-001')).toBeInTheDocument());
 
       const slot = screen.getByTestId('ImportLinesModal__selectionPanelSlot');
+      // Figma: a 12 px gap above an 80 px alert.
       const height = slot.style.height;
-      expect(height).toMatch(/^\d+px$/);
+      expect(height).toBe('92px');
+      expect(slot.style.paddingTop).toBe('12px');
       expect(slot.className).toContain('shrink-0');
       expect(screen.getByTestId('ImportLinesModal__neutralNotice')).toHaveTextContent('importNoticeTitle');
       expect(screen.getByTestId('ImportLinesModal__neutralNotice')).toHaveTextContent('importNoticeBody');
@@ -1285,6 +1287,32 @@ describe('ImportLinesModal', () => {
       renderModal();
       await waitFor(() => expect(screen.getByText('INV-001')).toBeInTheDocument());
       expect(screen.queryByTestId('ImportLinesModal__selectionPanelSlot')).toBeNull();
+    });
+  });
+
+  describe('ImportNotice — the Figma «Alert» (ETP-5828)', () => {
+    it.each([
+      ['neutral', ['bg-[#F3F5F9]', 'border-[#C7CBD3]'], 'text-[#6B7280]'],
+      ['warning', ['bg-status-warning', 'border-[#FFC233]'], 'text-status-warning-foreground'],
+    ])('%s: literal Figma colours, one truncated body line with the full text as its title', (tone, boxClasses, bodyClass) => {
+      const long = 'x '.repeat(200).trim();
+      render(<ImportNotice tone={tone} title="Title" body={long} data-testid="notice" />);
+      const notice = screen.getByTestId('notice');
+      for (const cls of boxClasses) expect(notice.className).toContain(cls);
+      expect(notice.className).toContain('border-l-2');
+      const body = screen.getByText(long);
+      expect(body.className).toContain('truncate');
+      expect(body.className).toContain(bodyClass);
+      expect(body).toHaveAttribute('title', long);
+      expect(screen.getByTestId('ImportNotice__icon').className).toContain('w-6');
+    });
+
+    it('puts a control in place of the icon, in the same 24 px high row', () => {
+      render(<ImportNotice title="T" body="B" control={<button type="button">switch</button>} data-testid="notice" />);
+      const box = screen.getByTestId('ImportNotice__icon');
+      expect(box).toContainElement(screen.getByText('switch'));
+      expect(box.className).toContain('h-6');
+      expect(screen.queryByTestId('Icon__b0ad7a')).toBeNull();
     });
   });
 

@@ -3234,6 +3234,16 @@ quantity, typed values still validated on blur); the footer has the selection hi
 | `selectedDocumentsKey` | i18n key such as `importOrdersSelectedCount` («{count} pedido(s)»): the footer reads «**N pedido(s)** seleccionado(s)» and the import button counts DOCUMENTS with a selected line instead of lines. |
 | `importButtonKey` | i18n key of the primary button (default `importSelected`; `{count}` receives `" (N)"` or `""`). |
 
+**The notice box (Figma «Alert»).** The slot is 92 px: a 12 px gap and an 80 px alert (padding 16,
+gap 4, radius 0 8 8 0, 2 px left bar), a 24 × 24 icon box with a 20 px Phosphor icon (`InfoIcon` /
+`WarningIcon`, the Figma's own set) or the control (the 36 × 20 switch) in that 24 px row, and a
+text column (padding 0 8, Inter 14/24, title 500, body 400). Neutral: bg `#F3F5F9`, bar and icon
+`#C7CBD3`, title `foreground`, body `#6B7280`. Warning: bg `--status-warning-bg` (#FFF9EB), bar
+`#FFC233`, icon `#C28800`, title and body `--status-warning-fg` (#8A6100). Colours are literal where
+no token has the identical value. Only ONE body line fits: a longer title or body is truncated with
+the full text in its `title` attribute — the box never grows. Keep notice texts within ~668 px of
+Inter 14 (~95 characters).
+
 Removed by ETP-5828: `selectionPanelMinHeight` (the notice area now always has its fixed height)
 and `getSelectionHint` (the footer follows the design). Stable test ids: `import-lines-modal`,
 `import-lines-search`, `ImportLinesModal__docRow` / `__lineRow` (with `data-selected`),
