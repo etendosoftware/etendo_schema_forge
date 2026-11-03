@@ -80,8 +80,14 @@ describe('useOrderGlobalDiscountImport — document row', () => {
     const sel = selection({ orders: [{ id: 'SO-A', pct }] });
     render(<div data-testid="host">{hookProps().renderDocAdornment({ id: 'SO-A' }, sel)}</div>);
     const tag = screen.queryByTestId('ImportGlobalDiscount__tag');
-    if (expected) expect(tag).toHaveTextContent(expected);
-    else expect(tag).toBeNull();
+    if (expected) {
+      expect(tag).toHaveTextContent(expected);
+      // The Figma pill colours, literally: a token-based background (bg-sidebar-accent, #F0F3FF)
+      // disappeared against a selected row (#F1F5F9).
+      expect(tag.className).toContain('bg-[#EBEFFF]');
+      expect(tag.className).toContain('text-[#2B48BC]');
+      expect(tag.className).not.toMatch(/bg-sidebar-accent|bg-muted/);
+    } else expect(tag).toBeNull();
   });
 });
 
