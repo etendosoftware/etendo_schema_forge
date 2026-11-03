@@ -83,14 +83,6 @@ describe('useOrderGlobalDiscountImport — document row', () => {
     if (expected) expect(tag).toHaveTextContent(expected);
     else expect(tag).toBeNull();
   });
-
-  it.each([
-    [10, 90],
-    [0, 100],
-  ])('order at %s %% shows a header total of %s for 100 in lines', (pct, expected) => {
-    const { sharedContext } = selection({ orders: [{ id: 'SO-A', pct }] });
-    expect(hookProps().getDocTotal({ doc: { id: 'SO-A' }, total: 100, sharedContext })).toBe(expected);
-  });
 });
 
 describe('useOrderGlobalDiscountImport — selection panel', () => {
@@ -228,13 +220,10 @@ describe.each([
   }
 
   async function selectAllOrders(orders) {
-    // Every line is 100; the row total is shown once the eager line load has finished.
-    const totals = orders.map(o => formatCurrency(undefined, o.pct > 0 ? 90 : 100));
-    await waitFor(() => {
-      for (const total of new Set(totals)) {
-        expect(screen.getAllByText(total)).toHaveLength(totals.filter(t => t === total).length);
-      }
-    });
+    // One line of 1 × 100 per order; the row shows the plain sum of its lines (100), the order's
+    // global discount is only signalled by the badge (ETP-5828, QA obs. 3).
+    const total = formatCurrency(undefined, 100);
+    await waitFor(() => expect(screen.getAllByText(total)).toHaveLength(orders.length));
     fireEvent.click(screen.getByTestId('ImportLinesModal__selectAll'));
   }
 
@@ -242,14 +231,14 @@ describe.each([
   const writeCalls = () => mockApiFetch.mock.calls.filter(([url, opts]) => (
     opts?.method === 'PATCH' || (opts?.method === 'POST' && !url.includes('/action/'))));
 
-  it('carries a single order %: tag, discounted total, toggle in the notice area, ONE import call and the carried toast', async () => {
+  it('carries a single order %: tag, undiscounted row total, toggle in the notice area, ONE import call and the carried toast', async () => {
     const orders = [{ id: 'SO-A', pct: 10 }];
     const { onSuccess } = renderModal({ orders });
     expect(screen.getByText(titleKey)).toBeInTheDocument();
     await selectAllOrders(orders);
 
     expect(screen.getByTestId('ImportGlobalDiscount__tag')).toHaveTextContent('importGlobalDiscountTag:{"pct":"10"}');
-    expect(screen.getByText(formatCurrency(undefined, 90))).toBeInTheDocument();
+    expect(screen.queryByText(formatCurrency(undefined, 90))).toBeNull();
     expect(screen.getByTestId('ImportLinesModal__selectionPanelSlot'))
       .toContainElement(screen.getByTestId('ImportGlobalDiscount__toggle'));
     expect(screen.getByTestId('ImportLinesModal__selectionHint')).toHaveTextContent('importOrdersSelectedCount:{"count":1}');

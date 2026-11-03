@@ -32,7 +32,7 @@ vi.mock('@/components/ui/checkbox', () => ({
 
 // --- Import under test ---
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { toast } from 'sonner';
 import ImportLinesModal, { ImportNotice } from '../ImportLinesModal.jsx';
 
@@ -47,6 +47,11 @@ const LINE_ROWS = [
   { id: 'line-1', _productName: 'Widget A', _maxQty: 5, _alreadyImported: false, _unitPrice: 10, _lineNetAmount: 50 },
   { id: 'line-2', _productName: 'Widget B', _maxQty: 3, _alreadyImported: false, _unitPrice: 20, _lineNetAmount: 60 },
 ];
+
+// The «Importe» cell of a line, and the amount cell of a document row: the row total is the sum
+// of exactly these line amounts, so the same text can appear in both places.
+const lineRowOf = (product) => screen.getByText(product).closest('[data-testid="ImportLinesModal__lineRow"]');
+const docRowOf = (docNo) => screen.getByText(docNo).closest('[data-testid="ImportLinesModal__docRow"]');
 
 const defaultProps = {
   invoiceId: 'inv-1',
@@ -294,16 +299,28 @@ describe('ImportLinesModal', () => {
     // present while docLines is still empty and no total is rendered. A waitFor poll
     // landing in that window (routine under a saturated CI run) satisfies the guard
     // and a synchronous assertion here then reads a total-less DOM.
+    // Row total = the line's own amount, unitPrice 1234.56 × qty 5 (not the caller's _lineNetAmount).
     await waitFor(() => {
-      expect(screen.getAllByText('2.500,00').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('6.172,80').length).toBeGreaterThan(0);
     }, { timeout: 10000 });
-    expect(screen.queryByText('2500.00')).toBeNull();
+    expect(screen.queryByText('6172.80')).toBeNull();
 
     fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
 
     await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument(), { timeout: 10000 });
-    expect(screen.getByText('1.234,56')).toBeInTheDocument();
+    expect(within(lineRowOf('Widget A')).getByText('1.234,56')).toBeInTheDocument();
+    expect(within(lineRowOf('Widget A')).getByText('6.172,80')).toBeInTheDocument();
     expect(screen.queryByText('1234.56')).toBeNull();
+  });
+
+  it('shows on the document row the plain sum of the amounts its lines show', async () => {
+    renderModal();
+    // LINE_ROWS: 10 × 5 = 50 and 20 × 3 = 60 → 110 on each row.
+    await waitFor(() => expect(within(docRowOf('INV-001')).getByText('110,00')).toBeInTheDocument(), { timeout: 10000 });
+    fireEvent.click(docRowOf('INV-001'));
+    await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument());
+    expect(within(lineRowOf('Widget A')).getByText('50,00')).toBeInTheDocument();
+    expect(within(lineRowOf('Widget B')).getByText('60,00')).toBeInTheDocument();
   });
 
   it('filters documents by search query', async () => {
@@ -480,16 +497,16 @@ describe('ImportLinesModal', () => {
       defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
       await renderExpanded({ negativeQuantity: true });
       // unitPrice 10 * displayQty -5 = -50
-      expect(screen.getByText('-50,00')).toBeInTheDocument();
+      expect(within(lineRowOf('Widget A')).getByText('-50,00')).toBeInTheDocument();
     });
 
     it('computes a positive lineTotal preview when negativeQuantity is false (default)', async () => {
       defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
       await renderExpanded();
-      expect(screen.getByText('50,00')).toBeInTheDocument();
+      expect(within(lineRowOf('Widget A')).getByText('50,00')).toBeInTheDocument();
     });
 
-    it('computes a negative docTotal summary when negativeQuantity is true', async () => {
+    it('computes a negative docTotal summary (the sum of its lines) when negativeQuantity is true', async () => {
       defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
       renderModal({ negativeQuantity: true });
       await waitFor(() => {
@@ -497,9 +514,10 @@ describe('ImportLinesModal', () => {
         expect(screen.queryByText('loading')).not.toBeInTheDocument();
         expect(screen.getByText('INV-001')).toBeInTheDocument();
       }, { timeout: 10000 });
-      // _lineNetAmount 77 * docTotalSign -1 = -77, shown collapsed for both docs
-      const totals = screen.getAllByText('-77,00');
-      expect(totals.length).toBeGreaterThan(0);
+      // The row adds up what its lines show (unitPrice 10 × -5 = -50), never the caller's
+      // _lineNetAmount (77): row and lines always agree (ETP-5828, QA obs. 3).
+      await waitFor(() => expect(within(docRowOf('INV-001')).getByText('-50,00')).toBeInTheDocument());
+      expect(screen.queryByText('-77,00')).toBeNull();
     });
 
     it('computes a positive docTotal summary when negativeQuantity is false (default)', async () => {
@@ -510,8 +528,8 @@ describe('ImportLinesModal', () => {
         expect(screen.queryByText('loading')).not.toBeInTheDocument();
         expect(screen.getByText('INV-001')).toBeInTheDocument();
       }, { timeout: 10000 });
-      const totals = screen.getAllByText('77,00');
-      expect(totals.length).toBeGreaterThan(0);
+      await waitFor(() => expect(within(docRowOf('INV-001')).getByText('50,00')).toBeInTheDocument());
+      expect(screen.queryByText('77,00')).toBeNull();
     });
   });
 
@@ -597,8 +615,9 @@ describe('ImportLinesModal', () => {
 
       expect(qtyInput.value).toBe('3');
       expect(toast.error).not.toHaveBeenCalled();
-      // unitPrice 10 * qty 3 = 30
-      expect(screen.getByText('30,00')).toBeInTheDocument();
+      // unitPrice 10 * qty 3 = 30, and the document row follows the edited line
+      expect(within(lineRowOf('Widget A')).getByText('30,00')).toBeInTheDocument();
+      expect(within(docRowOf('INV-001')).getByText('30,00')).toBeInTheDocument();
     });
 
     it('shows the qtyMaxAllowed toast (not qtyMustBePositive) and reverts when blurred above maxQty', async () => {
@@ -671,7 +690,7 @@ describe('ImportLinesModal', () => {
       expect(qtyInput.value).toBe('2,5');
       expect(toast.error).not.toHaveBeenCalled();
       // unitPrice 10 * qty 2.5 = 25
-      expect(screen.getByText('25,00')).toBeInTheDocument();
+      expect(within(lineRowOf('Widget A')).getByText('25,00')).toBeInTheDocument();
     });
 
     // ETP-5429 — the actual reported bug: a Spanish user physically typing the ','
@@ -690,7 +709,7 @@ describe('ImportLinesModal', () => {
       expect(qtyInput.value).toBe('2,5');
       expect(toast.error).not.toHaveBeenCalled();
       // unitPrice 10 * qty 2.5 = 25
-      expect(screen.getByText('25,00')).toBeInTheDocument();
+      expect(within(lineRowOf('Widget A')).getByText('25,00')).toBeInTheDocument();
     });
 
     // ETP-5429 edge case — a comma-typed value landing EXACTLY on the maxQty

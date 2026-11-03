@@ -15,7 +15,7 @@ const orderPct = (sharedContext, docId) => normalizeGlobalDiscountPct(sharedCont
  * Global discount carry-over for the invoice "Import from order" popup (ETP-5828), used by the
  * one order-import modal of sales AND purchase invoices (`InvoiceOrderImportModal`). Returns the
  * generic `ImportLinesModal` extension props (`initialExtraState`, `renderDocAdornment`,
- * `getDocTotal`, `renderSelectionPanel`, `getSuccessToast`) plus `serverCarry`, so the shared
+ * `renderSelectionPanel`, `getSuccessToast`) plus `serverCarry`, so the shared
  * modal stays unaware of discounts.
  *
  * Nothing is written from the browser: the import is ONE `importOrderLines` server action that
@@ -61,11 +61,6 @@ export default function useOrderGlobalDiscountImport() {
           {ui('importGlobalDiscountTag', { pct: fmtPct(pct) })}
         </span>
       );
-    };
-
-    const getDocTotal = ({ doc, total, sharedContext }) => {
-      const pct = orderPct(sharedContext, doc.id);
-      return pct > 0 ? total * (1 - pct / 100) : total;
     };
 
     // Each warning is ONE sentence pair from ONE key, never a body plus an appended closing, so
@@ -160,7 +155,6 @@ export default function useOrderGlobalDiscountImport() {
       serverCarry,
       initialExtraState: { carryGlobalDiscount: true },
       renderDocAdornment,
-      getDocTotal,
       renderSelectionPanel,
       getSuccessToast,
     };

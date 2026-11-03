@@ -138,7 +138,6 @@ export default function ImportLinesModal({
   // `getSuccessToast` as `afterImportResult`.
   initialExtraState,     // caller-owned state kept by the modal (e.g. a toggle), passed back everywhere
   renderDocAdornment,    // (doc, selection) => node shown in the document row, after the date
-  getDocTotal,           // ({ doc, lines, total, sharedContext }) => number shown as the row total
   renderSelectionPanel,  // (selection) => node (usually an <ImportNotice>) shown in the fixed notice
                          // area under the list; null shows the neutral «Información de importación».
                          // Without this prop there is no notice area at all.
@@ -507,19 +506,31 @@ export default function ImportLinesModal({
     );
   };
 
+  // The quantity a line is shown with: the one the user kept, or its available maximum.
+  // negativeQuantity is display-only: the stepper's internal state (currentQty) always stays a
+  // positive magnitude for validation/clamping — only what's shown to the user (and the amounts
+  // derived from it) gets the sign flip. buildLineBody still receives the plain positive qty and
+  // is responsible for negating it before persisting (see ImportFromSourceInvoiceModal).
+  const lineQtyOf = (line) => {
+    const maxQty = line._maxQty || 0;
+    const currentQty = lineQuantities[line.id] ?? maxQty;
+    return { maxQty, currentQty, displayQty: negativeQuantity ? -currentQty : currentQty };
+  };
+
+  // The amount the line's «Importe» cell shows (null = the cell shows «-»). The document row adds
+  // up exactly these, so the row always equals the sum of its lines (ETP-5828, QA obs. 3).
+  const lineAmountOf = (line) => {
+    const unitPrice = line._unitPrice || null;
+    return unitPrice != null ? unitPrice * lineQtyOf(line).displayQty : null;
+  };
+
   const renderLine = (line, docId) => {
     const imported = line._alreadyImported;
     const lineSelected = !imported && selected.has(line.id);
-    const maxQty = line._maxQty || 0;
-    const currentQty = lineQuantities[line.id] ?? maxQty;
+    const { maxQty, currentQty, displayQty } = lineQtyOf(line);
     const qtyEdited = currentQty !== maxQty;
     const unitPrice = line._unitPrice || null;
-    // negativeQuantity is display-only: the stepper's internal state (currentQty) always stays a
-    // positive magnitude for validation/clamping — only what's shown to the user (and the amount
-    // preview derived from it) gets the sign flip. buildLineBody still receives the plain positive
-    // qty and is responsible for negating it before persisting (see ImportFromSourceInvoiceModal).
-    const displayQty = negativeQuantity ? -currentQty : currentQty;
-    const lineTotal = unitPrice != null ? unitPrice * displayQty : null;
+    const lineTotal = lineAmountOf(line);
     return (
       <div
         key={line.id}
@@ -611,13 +622,12 @@ export default function ImportLinesModal({
     const checkState = getDocCheckState(doc.id);
     const hasAnySelected = checkState.checked || checkState.indeterminate;
     const display = getDocDisplay(doc);
+    // The plain sum of what the lines show; a line without a unit price (its cell shows «-»)
+    // contributes the caller's `_lineNetAmount`, as before.
     const docTotalSign = negativeQuantity ? -1 : 1;
-    const baseDocTotal = lines.length > 0
-      ? lines.reduce((sum, l) => sum + (l._lineNetAmount || 0), 0) * docTotalSign
+    const docTotal = lines.length > 0
+      ? lines.reduce((sum, l) => sum + (lineAmountOf(l) ?? (l._lineNetAmount || 0) * docTotalSign), 0)
       : null;
-    const docTotal = (baseDocTotal != null && getDocTotal)
-      ? getDocTotal({ doc, lines, total: baseDocTotal, sharedContext })
-      : baseDocTotal;
     const ExpandIcon = isExpanded ? ChevronDown : ChevronRight;
     return (
       <div key={doc.id} data-testid="ImportLinesModal__document" data-doc-id={doc.id}>

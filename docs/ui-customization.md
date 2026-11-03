@@ -3244,7 +3244,11 @@ no token has the identical value. Only ONE body line fits: a longer title or bod
 the full text in its `title` attribute — the box never grows. Keep notice texts within ~668 px of
 Inter 14 (~95 characters).
 
-Removed by ETP-5828: `selectionPanelMinHeight` (the notice area now always has its fixed height)
+**Document row total.** The row shows the plain sum of what its lines' «Importe» cells show (unit
+price × current quantity; `_lineNetAmount` only for a line without a unit price), so row and lines
+always add up; there is no total override.
+
+Removed by ETP-5828: `getDocTotal`, `selectionPanelMinHeight` (the notice area now always has its fixed height)
 and `getSelectionHint` (the footer follows the design). Stable test ids: `import-lines-modal`,
 `import-lines-search`, `ImportLinesModal__docRow` / `__lineRow` (with `data-selected`),
 `__linesMasterCheckbox`, `__qtyInput` (the stepper's input), `__selectionHint`, `__import`,
