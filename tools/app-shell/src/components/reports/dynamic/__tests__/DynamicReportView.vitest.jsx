@@ -3,6 +3,7 @@
 // @covers tools/app-shell/src/components/reports/dynamic/DynamicReportTable.jsx
 // @covers tools/app-shell/src/components/reports/dynamic/useReportDefaults.js
 // @covers tools/app-shell/src/components/reports/dynamic/useAccountSplit.js
+// @covers tools/app-shell/src/components/reports/dynamic/DynamicDrillPanel.jsx
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 const apiFetchMock = vi.fn();
@@ -56,12 +57,32 @@ const withVariation = (rows) => rows.map((r) => ({ ...r, variationAmount: r.amou
 const json = (body, { ok = true, status = 200 } = {}) => ({ ok, status, json: () => Promise.resolve(body) });
 let years;
 let queryAnswer;
-const queries = () => apiFetchMock.mock.calls.filter(([url]) => url.endsWith('/query')).map(([, init]) => JSON.parse(init.body).params);
+let entryAnswer;
+// pg sends a SQL date as the server's local midnight in UTC: 15 September in Madrid.
+const LEDGER = {
+  kind: 'rows',
+  rows: [
+    { value: '700', dateacct: '2026-09-14T22:00:00.000Z', fact_acct_group_id: 'G1', groupbyname: 'Acme', amtacctdr: 0, amtacctcr: 1050 },
+    { value: '700', dateacct: '2026-10-01T22:00:00.000Z', fact_acct_group_id: 'G2', groupbyname: 'Beta', amtacctdr: 50, amtacctcr: 0 },
+  ],
+  openingRows: [{ value: '700', openingtotal: -200 }],
+};
+const ENTRY = {
+  kind: 'rows',
+  rows: [
+    { document_type: 'Factura', account_no: '430', account_name: 'Clientes', amtacctdr: 1050, amtacctcr: 0, doc_window: 'sales-invoice', doc_record_id: 'INV1', doc_query_key: '', doc_query_value: '' },
+    { document_type: 'Factura', account_no: '700', account_name: 'Ventas nacionales', amtacctdr: 0, amtacctcr: 1050, doc_window: 'sales-invoice', doc_record_id: 'INV1', doc_query_key: '', doc_query_value: '' },
+  ],
+};
+const queriesTo = (reportId) => apiFetchMock.mock.calls.filter(([url]) => url === `/api/reports/${reportId}/query`).map(([, init]) => JSON.parse(init.body).params);
+const queries = () => queriesTo('profit-loss');
 
 function route(url, init) {
   if (url.includes('/report-selectors/acctschema')) return Promise.resolve(json({ items: [{ id: 'S1', name: 'Schema' }] }));
   if (url.includes('/report-selectors/year')) return Promise.resolve(json({ items: years }));
   if (url.endsWith('/render')) return Promise.resolve({ ok: true, status: 200, blob: () => Promise.resolve(new Blob(['x'])) });
+  if (url.endsWith('/report-general-ledger/query')) return Promise.resolve(json(LEDGER));
+  if (url.endsWith('/report-journal-entries/query')) return Promise.resolve(json(entryAnswer));
   if (url.endsWith('/query')) {
     const { params } = JSON.parse(init.body);
     if (params.splitBy) return Promise.resolve(json({ kind: 'split', rows: [{ node_id: 'O1', name: 'Spain', amount: 600, amount_ref: 0 }, { node_id: null, name: null, amount: 400, amount_ref: 0 }] }));
@@ -77,6 +98,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(2026, 10, 3, 12));
   years = JULY_YEARS;
+  entryAnswer = ENTRY;
   queryAnswer = (params) => json({ kind: 'tree', rows: params.compareTo === 'true' ? withVariation(TREE) : TREE });
   apiFetchMock.mockReset();
   apiFetchMock.mockImplementation(route);
@@ -236,6 +258,71 @@ describe('DynamicReportView — split, errors and exports', () => {
     expect(body).toMatchObject({ format: 'pdf', locale: 'es_ES' });
     expect(body.params).toMatchObject({ dateFrom: '2026-07-01', accountLevel: 'C', expandedNodeIds: 'E1' });
     expect(globalThis.URL.createObjectURL).toHaveBeenCalled();
+  });
+});
+
+describe('DynamicReportView — drill-down (F9)', () => {
+  const openLedger = async () => {
+    renderView();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__expandAll'));
+    fireEvent.click(await screen.findByTestId('DynamicReportTable__ledger'));
+    return screen.findByTestId('DynamicDrillPanel__ledger');
+  };
+
+  it('only a leaf account opens its ledger; a summary row only folds', async () => {
+    renderView();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    expect(screen.queryByTestId('DynamicReportTable__ledger')).toBeNull();
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__expandAll'));
+    expect(await screen.findAllByTestId('DynamicReportTable__ledger')).toHaveLength(1);
+    expect(screen.getByTestId('DynamicReportTable__ledger')).toHaveTextContent('700 - Ventas nacionales');
+  });
+
+  it('the ledger reads the account code with the view period and filters, and sums it up', async () => {
+    await openLedger();
+    await waitFor(() => expect(queriesTo('report-general-ledger')).toHaveLength(1));
+    expect(queriesTo('report-general-ledger')[0]).toEqual({
+      acctSchemaId: 'S1', orgId: 'O1', dateFrom: '2026-07-01', dateTo: '2026-11-03', bPartnerId: '', productId: '',
+      fromAccountId: '700', toAccountId: '700',
+    });
+    expect(await screen.findByTestId('DynamicDrillPanel__opening')).toHaveTextContent('-200,00');
+    expect(screen.getByTestId('DynamicDrillPanel__debit')).toHaveTextContent('50,00');
+    expect(screen.getByTestId('DynamicDrillPanel__credit')).toHaveTextContent('1.050,00');
+    expect(screen.getByTestId('DynamicDrillPanel__closing')).toHaveTextContent('-1.200,00');
+    // The day the server meant, not the UTC day before.
+    expect(screen.getAllByTestId('DynamicDrillPanel__openEntry').map((b) => b.textContent)).toEqual(['15/09/2026', '02/10/2026']);
+    fireEvent.change(screen.getByTestId('DynamicDrillPanel__search'), { target: { value: 'beta' } });
+    expect(screen.getAllByTestId('DynamicDrillPanel__ledgerRow')).toHaveLength(1);
+  });
+
+  it('a ledger line opens its whole entry, the source account highlighted, and its document', async () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    await openLedger();
+    fireEvent.click((await screen.findAllByTestId('DynamicDrillPanel__openEntry'))[0]);
+    await screen.findAllByTestId('DynamicDrillPanel__entryRow');
+    expect(queriesTo('report-journal-entries')).toEqual([{ acctSchemaId: 'S1', orgId: 'O1', factAcctGroupId: 'G1' }]);
+    expect(screen.getAllByTestId('DynamicDrillPanel__entryRow').map((r) => r.dataset.source ?? '')).toEqual(['', 'true']);
+    expect(screen.getByTestId('DynamicDrillPanel__crumb-entry')).toHaveTextContent('dynamicReportEntry 15/09/2026');
+    fireEvent.click(screen.getByTestId('DynamicDrillPanel__openDocument'));
+    expect(open).toHaveBeenCalledWith(expect.stringMatching(/\/sales-invoice\/INV1$/), '_blank');
+    fireEvent.click(screen.getByTestId('DynamicDrillPanel__crumb-account'));
+    expect(await screen.findByTestId('DynamicDrillPanel__ledger')).toBeInTheDocument();
+    open.mockRestore();
+  });
+
+  it('an entry whose table has no window ends the drill-down there and says so', async () => {
+    entryAnswer = { kind: 'rows', rows: ENTRY.rows.map((r) => ({ ...r, doc_window: null, doc_record_id: null })) };
+    await openLedger();
+    fireEvent.click((await screen.findAllByTestId('DynamicDrillPanel__openEntry'))[0]);
+    expect(await screen.findByTestId('DynamicDrillPanel__noDocument')).toBeInTheDocument();
+    expect(screen.queryByTestId('DynamicDrillPanel__openDocument')).toBeNull();
+  });
+
+  it('the report crumb closes the panel', async () => {
+    await openLedger();
+    fireEvent.click(screen.getByTestId('DynamicDrillPanel__crumb-report'));
+    await waitFor(() => expect(screen.queryByTestId('DynamicDrillPanel')).toBeNull());
   });
 });
 

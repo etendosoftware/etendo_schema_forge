@@ -37,7 +37,9 @@ With the flag on, the report opens `components/reports/dynamic/DynamicReportView
 - **Context line:** period, organization, filters, comparison and split as chips; the filters, comparison and split can be removed from the chip.
 - **Exports:** PDF / Excel / CSV render the same params plus `accountLevel` and `expandedNodeIds`, so the file shows the rows the screen shows.
 - **Errors:** a role without access to the org sees *No tienes acceso a esta organización* and keeps the last result; any other failure, *No se pudo cargar el informe*.
-- Not in the view yet: the drill-down side panel (F9) and the KPI events (F10).
+- **Drill-down (side panel):** a leaf account's name opens its ledger (`POST /api/reports/report-general-ledger/query` with the view's period, org, schema, Contacto and Producto, and the account **code** as `fromAccountId` = `toAccountId`): opening, debit, credit and closing balance, and a text search over the loaded lines. A summary account only folds. A line opens its whole entry (`report-journal-entries` with only `acctSchemaId`, `orgId` and `factAcctGroupId`, so no line is filtered out and a restricted role is not refused), with the account you came from highlighted, and **Abrir documento** opens the document in a new tab. An entry whose table has no window mapped ends there with a note. The breadcrumb (report › account › entry) goes back a step. The document URL is built by `components/reports/reportDocumentUrl.js`, shared with the old viewer's `navigate-invoice` message.
+- **Dates from `/query`:** `pg` sends a SQL `date` as the server's local midnight in UTC, so the panel reads the day with `sqlDateDay` (rounded to the nearest UTC day), never the raw prefix.
+- Not in the view yet: the KPI events (F10).
 
 ### Interactive-view parameters (ETP-6080)
 Declared `hidden: true`, so they never appear in the filter panel or as an active filter in the PDF header:

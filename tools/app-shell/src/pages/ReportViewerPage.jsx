@@ -19,6 +19,7 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { fetchMyReportAccess } from '@/lib/rolesApi.js';
 import { useFeatureFlag, DYNAMIC_REPORTS } from '@/lib/flags';
 import { opensDynamicView } from '@/components/reports/dynamic/dynamicReports.js';
+import { reportDocumentUrl } from '@/components/reports/reportDocumentUrl.js';
 // Etendo context path prefix (e.g. "/etendo" in production, "" in local dev where
 // Vite proxies /sws/* directly). Same logic as auth/api.js detectBaseUrl().
 function getEtendoBase() {
@@ -1280,25 +1281,12 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
         // the document window (sales-invoice/purchase-invoice) is decided by
         // the report's own template.hbs (docWindow in the postMessage), never
         // hardcoded here, since this handler is shared by every report.
-        const docWindow = e.data.docWindow || 'sales-invoice';
-        const basePath = window.location.pathname.replace(/\/[^/]*$/, '');
-        // Optional deep-link query the report itself supplies (ETP-5013
-        // follow-up): a financial-account transaction has no window of its
-        // own — it opens its PARENT account and needs `?txn=<id>` for that
-        // window to select/expand the right movement. Data-driven, like
-        // docWindow: this handler is shared by every report and never
-        // hardcodes a window's own param names.
-        //
-        // Key and value travel SEPARATELY, and the '=' is joined here rather
-        // than in the report's SQL on purpose: applyPlaceholders rewrites
-        // `= '...'` into an `IN (...)` list to support multi-select params,
-        // so a literal '=' next to a quote inside the query was swallowed by
-        // that rewrite and corrupted the SQL (ETP-5013 follow-up).
-        const { docQueryKey, docQueryValue } = e.data;
-        const docQuery = docQueryKey && docQueryValue
-          ? `?${encodeURIComponent(docQueryKey)}=${encodeURIComponent(docQueryValue)}`
-          : '';
-        window.open(`${window.location.origin}${basePath}/${docWindow}/${e.data.invoiceId}${docQuery}`, '_blank');
+        window.open(reportDocumentUrl({
+          docWindow: e.data.docWindow || 'sales-invoice',
+          recordId: e.data.invoiceId,
+          docQueryKey: e.data.docQueryKey,
+          docQueryValue: e.data.docQueryValue,
+        }), '_blank');
       }
     };
     window.addEventListener('message', handler);

@@ -12,8 +12,8 @@ export const QUERY_DEBOUNCE_MS = 300;
  */
 export const REQUIRED_QUERY_PARAMS = Object.freeze(['orgId', 'acctSchemaId', 'dateFrom', 'dateTo']);
 
-export function isQueryReady(params) {
-  return REQUIRED_QUERY_PARAMS.every((name) => params?.[name] != null && params[name] !== '');
+export function isQueryReady(params, required = REQUIRED_QUERY_PARAMS) {
+  return required.every((name) => params?.[name] != null && params[name] !== '');
 }
 
 /** Error class for telemetry and the UI (`network`, `http_404`, `org_access_denied`), never a message. */
@@ -29,17 +29,19 @@ function errorCodeOf(status, body) {
  *   can never overwrite a newer one. An abort is not an error.
  * - `data` keeps the last good answer while the next one loads, and after a failure.
  *
+ * `required` overrides the params it waits for (the journal-entry drill-down has no dates).
+ *
  * Returns `{ data, loading, error, errorCode }`: `error` is a displayable message (a network failure
  * carries its own translated one), `errorCode` the class (`network`, `org_access_denied`, `http_500`).
  */
-export function useReportQuery(reportId, params, { locale, enabled = true } = {}) {
+export function useReportQuery(reportId, params, { locale, enabled = true, required = REQUIRED_QUERY_PARAMS } = {}) {
   const apiFetch = useApiFetch('');
   const [state, setState] = useState({ data: null, loading: false, error: null, errorCode: null });
   // Params compared by value: the view rebuilds the object on every render.
   const paramsKey = JSON.stringify(params ?? {});
   const paramsRef = useRef(params);
   paramsRef.current = params;
-  const canRun = Boolean(enabled && reportId) && isQueryReady(params);
+  const canRun = Boolean(enabled && reportId) && isQueryReady(params, required);
 
   useEffect(() => {
     if (!canRun) {

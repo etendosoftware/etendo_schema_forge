@@ -51,9 +51,10 @@ function SplitRows({ split, compare, depth, ui }) {
 
 /**
  * ETP-6080 — the account tree: one row per visible node, a chevron to fold it, and with a split
- * dimension chosen, a split toggle on every leaf account that lists its parts underneath.
+ * dimension chosen, a split toggle on every leaf account that lists its parts underneath. A leaf
+ * account's name opens its ledger in the drill-down panel (F9).
  */
-export default function DynamicReportTable({ rows, compare, expanded, onToggle, splitBy, splits, onToggleSplit }) {
+export default function DynamicReportTable({ rows, compare, expanded, onToggle, splitBy, splits, onToggleSplit, onOpenLedger }) {
   const ui = useUI();
   return (
     <table className="w-full border-collapse text-sm" data-testid="DynamicReportTable">
@@ -99,7 +100,16 @@ export default function DynamicReportTable({ rows, compare, expanded, onToggle, 
                       <ChevronRight className={cn('w-3.5 h-3.5 transition-transform', (row.hasChildren ? open : split) && 'rotate-90')} />
                     </button>
                   ) : <span className="w-5 h-5 shrink-0" />}
-                  <span>{name}</span>
+                  {canSplit(row) && row.value ? (
+                    <button
+                      type="button"
+                      className="text-left hover:underline hover:text-primary"
+                      onClick={() => onOpenLedger(row)}
+                      data-testid="DynamicReportTable__ledger"
+                    >
+                      {name}
+                    </button>
+                  ) : <span>{name}</span>}
                 </div>
               </td>
               <td className="px-3 py-1.5 text-right tabular-nums">{amount(row.amount)}</td>

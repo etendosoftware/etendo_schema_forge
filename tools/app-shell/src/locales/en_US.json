@@ -26077,7 +26077,18 @@
     "dynamicReportExpandRow": "Expand {name}",
     "dynamicReportCollapseRow": "Collapse {name}",
     "dynamicReportErrorOrgAccess": "You do not have access to this organization.",
-    "dynamicReportErrorGeneric": "The report could not be loaded."
+    "dynamicReportErrorGeneric": "The report could not be loaded.",
+    "dynamicReportOpening": "Opening balance",
+    "dynamicReportDebit": "Debit",
+    "dynamicReportCredit": "Credit",
+    "dynamicReportClosing": "Closing balance",
+    "dynamicReportSearchLines": "Search lines",
+    "dynamicReportDate": "Date",
+    "dynamicReportDescription": "Description",
+    "dynamicReportEntry": "Entry",
+    "dynamicReportOpenDocument": "Open document",
+    "dynamicReportNoDocument": "This entry has no document window to open.",
+    "dynamicReportDrillPath": "Drill-down path"
   },
   "menus": {
     "Document Templates": {

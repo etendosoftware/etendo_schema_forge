@@ -8,6 +8,7 @@ import { formatCalendarDate, todayCalendarISO } from '@/lib/dateOnly.js';
 import { buildReportFilename } from '@/pages/ReportViewerPage.jsx';
 import DynamicReportPanel from './DynamicReportPanel.jsx';
 import DynamicReportTable from './DynamicReportTable.jsx';
+import DynamicDrillPanel from './DynamicDrillPanel.jsx';
 import { useReportQuery } from './useReportQuery.js';
 import { useReportDefaults } from './useReportDefaults.js';
 import { useAccountSplit } from './useAccountSplit.js';
@@ -107,6 +108,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   });
   const setLevel = (level) => { change({ level }); setExpanded(expansionForLevel(rows, level)); };
 
+  const [drillAccount, setDrillAccount] = useState(null);
   const { splits, toggle: toggleSplit } = useAccountSplit(report.id, queryParams, state.splitBy, { locale });
 
   const shortcut = matchingShortcut(state, defaults.years, today);
@@ -239,12 +241,14 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
                   splitBy={state.splitBy}
                   splits={splits}
                   onToggleSplit={toggleSplit}
+                  onOpenLedger={setDrillAccount}
                 />
               </div>
             )}
           </div>
         </main>
       </div>
+      <DynamicDrillPanel reportTitle={title} account={drillAccount} queryParams={queryParams} onClose={() => setDrillAccount(null)} />
     </div>
   );
 }
