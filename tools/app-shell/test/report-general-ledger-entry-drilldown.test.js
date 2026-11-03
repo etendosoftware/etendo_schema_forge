@@ -193,3 +193,24 @@ describe('report-general-ledger — rendered date link output (ETP-5013)', () =>
     assert.doesNotMatch(html, /Invalid Date/);
   });
 });
+
+// ── ETP-6080: a parent org includes its children, as in Profit & Loss ───────
+//
+// The interactive Profit & Loss drills into these two reports. P&L scopes the
+// org with ad_isorgincluded (a parent covers its children, like Classic), so a
+// ledger opened from a parent-org P&L row must too, or its total differs from
+// the amount the user clicked. Every query that filters by org counts, the
+// GL opening balance included.
+describe('General Ledger / Journal Entries — org scope includes child orgs (ETP-6080)', () => {
+  const TREE = "('__ORGID__' = '' OR ad_isorgincluded(fa.ad_org_id, '__ORGID__', fa.ad_client_id) <> -1)";
+  for (const [label, sql] of [
+    ['General Ledger query', GL_CONTRACT.sql.query],
+    ['General Ledger openingQuery', GL_CONTRACT.sql.openingQuery],
+    ['Journal Entries query', JE_CONTRACT.sql.query],
+  ]) {
+    it(`${label} filters the org through ad_isorgincluded, never an exact match`, () => {
+      assert.ok(sql.includes(TREE), sql);
+      assert.doesNotMatch(sql, /fa\.ad_org_id = '__ORGID__'/);
+    });
+  }
+});

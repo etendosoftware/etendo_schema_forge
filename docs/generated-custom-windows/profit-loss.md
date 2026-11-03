@@ -22,7 +22,7 @@ Show the result of a period (revenue, expenses and the profit or loss they add u
 - `acctSchemaId` and `orgId` are required, hidden and defaulted. `yearId` is required in this viewer and depends on `orgId`.
 - The year and the date range combine: the year clamps activity to its periods, and `dateFrom` / `dateTo` narrow it further. The SQL accepts a request with dates and **no** `yearId` (ETP-6080, for the interactive view): the year clause is optional, so it is stripped instead of zeroing every amount.
 - With **Compare To**, `referenceYearId` becomes required and the reference columns are computed the same way.
-- Amounts are raw debit − credit in SQL; each branch's sign is applied in JS. Organization scope uses `ad_isorgincluded`, so a parent org includes its children. A role that cannot read the requested org gets `403 ORG_ACCESS_DENIED` (ETP-6080).
+- Amounts are raw debit − credit in SQL; each branch's sign is applied in JS. Organization scope uses `ad_isorgincluded`, so a parent org includes its children. General Ledger and Journal Entries use the same rule, so a ledger drilled from a parent-org row adds up to its amount. Their account filter (`fromAccountId` / `toAccountId`) compares account **codes** (`ev.value`), so a drill-down passes the row's `value`, not its id. A role that cannot read the requested org gets `403 ORG_ACCESS_DENIED` (ETP-6080).
 - The contract declares `"trend": "result"`: with a comparison, each row carries `variationAmount`, `variationPct` and `trend` (`improves` when the result goes up: revenue up or expense down).
 
 ### Interactive-view parameters (ETP-6080)
