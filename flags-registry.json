@@ -1969,8 +1969,7 @@
           },
           {
             "root": "frontend",
-            "path": "tools/app-shell/src/components/reports/dynamic/__tests__/useReportQuery.vitest.js",
-            "expected": true
+            "path": "tools/app-shell/src/components/reports/dynamic/__tests__/useReportQuery.vitest.js"
           },
           {
             "root": "frontend",
