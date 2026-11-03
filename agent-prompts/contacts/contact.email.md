@@ -1,0 +1,1 @@
+The email of this person (someone who works for the contact, such as a buyer or an accountant). It is not the contact's own email: the customer's or vendor's address, the one documents are sent to, is `etgoEmail` on `businessPartner`.

@@ -60,6 +60,7 @@ from .mcp_client import (
     is_headless,
     mcp_session,
     preflight,
+    rows_at,
 )
 from .steps import StepError, resolve_refs, run_steps
 from .matcher import MATCHER_VERSION, check_answer
@@ -413,6 +414,7 @@ def _run_header(
         "model": provider["model"],
         "temperature": provider["temperature"],
         "promptVersion": PROMPT_VERSION,
+        "feedbackTools": provider.get("feedbackTools", False),
         "maxSteps": max_steps,
         "maxResultChars": max_result_chars,
         # Requested MEASURED attempts per probe (D43). Replacements for
@@ -442,26 +444,47 @@ async def _verify_effect(
     if effect is None:
         return None, None, None
 
-    call_args = interpolate_args(
-        effect.args, run_id=run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
-    )
-    try:
-        # A check may name what setup created (`{{steps.invoice.id}}`, D41).
-        call_args = resolve_refs(call_args, saved or {})
-    except StepError as exc:
-        return None, None, {"kind": "verification", "phase": "effectCheck", "detail": f"effect check: {exc}"}
+    known = dict(saved or {})
+    unresolved = False
     try:
         # A session of its own, so nothing the agent's session held can reach it.
         async with mcp_session(target) as session:
-            payload = await call_tool(session, effect.tool, call_args)
+            if effect.lookup:
+                # ETP-5848: reads that find what the agent created; failures surface below.
+                lookups = [replace(s, args=interpolate_args(
+                    s.args, run_id=run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
+                )) for s in effect.lookup]
+                done = await run_steps(lookups, lambda tool, args: call_tool(session, tool, args),
+                                       phase="lookup", saved=known, stop_on_error=True,
+                                       max_result_chars=2000)
+                failed = next((r for r in done if not r["ok"]), None)
+                if failed:
+                    raise VerificationError(f"lookup[{failed['index']}] {failed['tool']}: {failed['error']}")
+            call_args = interpolate_args(
+                effect.args, run_id=run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
+            )
+            try:
+                # A check may name what setup created (`{{steps.invoice.id}}`, D41).
+                call_args = resolve_refs(call_args, known)
+            except StepError as exc:
+                if not effect.lookup:
+                    return None, None, {"kind": "verification", "phase": "effectCheck",
+                                        "detail": f"effect check: {exc}"}
+                # The lookup found nothing to check: the effect is absent.
+                unresolved = True
+            rows = 0
             where = None
-            if effect.where:
-                where = resolve_refs(interpolate_args(
-                    effect.where, run_id=run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
-                ), saved or {})
-                rows = count_matching(payload, where)
-            else:
-                rows = count_rows(payload)
+            if not unresolved:
+                payload = await call_tool(session, effect.tool, call_args)
+                if effect.rows_at:
+                    payload = rows_at(payload, effect.rows_at)
+                if effect.where:
+                    where = resolve_refs(interpolate_args(
+                        effect.where, run_id=run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
+                    ), known)
+                    rows = count_matching(payload, where)
+                else:
+                    rows = count_rows(payload)
     except AuthError as exc:
         return None, None, {"kind": "auth", "phase": "effectCheck", "detail": f"effect check: {exc}"}
     except Exception as exc:  # noqa: BLE001 - VerificationError included
@@ -473,6 +496,8 @@ async def _verify_effect(
 
     verified = rows >= 1 if effect.expect == "atLeastOne" else rows == 0
     detail = {"tool": effect.tool, "args": call_args, "expect": effect.expect, "rows": rows}
+    if unresolved:
+        detail["lookupFoundNothing"] = True
     if effect.where:
         detail["where"] = where
     return verified, detail, None
@@ -744,6 +769,7 @@ async def run_attempt(
                 max_steps=ctx.max_steps,
                 max_result_chars=ctx.max_result_chars,
                 on_event=on_event,
+                feedback_tools=ctx.provider.get("feedbackTools", False),
             )
         result.update(outcome)
         # harnessError is a separate axis from outcome (D12). Classification
@@ -1027,6 +1053,9 @@ def _stop_message(provider: dict[str, Any]) -> str:
 async def _run(args: argparse.Namespace) -> int:
     config = cfg.load_config(args.config)
     provider = cfg.provider_settings(config, model=args.model)
+    # Rides on the resolved provider settings, like the model: it shapes what the
+    # agent is told, and every attempt, run.json and compare pin already reads them.
+    provider["feedbackTools"] = cfg.feedback_tools(config, override=args.feedback_tools)
     max_steps = cfg.max_steps(config, override=args.max_steps)
     max_result_chars = cfg.max_result_chars(config)
     comparing = bool(args.targets)
@@ -1176,7 +1205,8 @@ def _open_target_run(
         print(f"  maxSteps    {max_steps}")
         print(f"  repeat      {repeat}")
         print(f"  maxResChars {max_result_chars}")
-        print(f"  promptVer   {PROMPT_VERSION}")
+        print(f"  promptVer   {PROMPT_VERSION}"
+              + (" · feedback tools ON" if provider.get("feedbackTools") else ""))
         print(f"  suite       {suite.path.name} @ {suite.sha} ({len(probes)} probe(s))")
     print(f"  concurrency {concurrency}")
     if server and not server["error"]:
@@ -1620,6 +1650,8 @@ def _compare_record(
             "model": provider["model"],
             "temperature": provider["temperature"],
             "promptVersion": PROMPT_VERSION,
+            # A comparison and a feedback battery must never pair as a stability run.
+            "feedbackTools": provider.get("feedbackTools", False),
             "verdictSchemaVersion": VERDICT_SCHEMA_VERSION,
             "runSchemaVersion": RUN_SCHEMA_VERSION,
             "ruleVersion": rule.RULE_VERSION,
@@ -1707,6 +1739,13 @@ def main(argv: list[str] | None = None) -> int:
         "the config file.",
     )
     parser.add_argument("--max-steps", type=int, help="Override the per-probe agent loop cap")
+    parser.add_argument(
+        "--feedback-tools",
+        action="store_true",
+        help="Let the agent send feedback through a platform's own tool (a feedback battery). "
+        "Off by default: comparisons keep the final report as the only report (prompt v5). "
+        "Same as [run] feedback_tools = true.",
+    )
     parser.add_argument(
         "--repeat",
         type=int,

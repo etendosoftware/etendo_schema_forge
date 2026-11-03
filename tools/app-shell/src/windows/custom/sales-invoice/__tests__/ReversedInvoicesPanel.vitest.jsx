@@ -640,16 +640,65 @@ describe('Model 349 catalog gating (ETP-4755) — "Correctiva del 349" checkbox 
     expect(screen.queryByTestId('checkbox__isCorrective')).not.toBeInTheDocument();
   });
 
-  it('leaves the read-only Modelo 349 grid-column badge unaffected by the catalog gate', async () => {
-    // Grid badge (CorrectivaBadge) reflects the row's own persisted aEAT349IsCorrective
-    // value — it is a display of past data, not the control that creates it, so the
-    // catalog gate (scoped to the checkbox inside ExpandedForm) must not hide it.
-    renderPanel({ lines: [LINE({ aEAT349IsCorrective: 'Y' })], activeModels: { '349': false } });
+  // ETP-5831 CP-14 — the "Modelo 349" grid column (header + badge cells) follows the same
+  // fail-closed catalog gate as the checkbox panel: shown only once the catalog confirms 349.
+  it('hides the whole Modelo 349 grid column (header + badge cells) when the catalog reports 349 inactive', async () => {
+    const { container } = renderPanel({ lines: [LINE({ aEAT349IsCorrective: 'Y' })], activeModels: { '349': false } });
     await screen.findAllByText('10000067');
 
-    expect(screen.getByText('rectCorrective349Badge')).toBeInTheDocument();
+    expect(screen.queryByText('rectColModel349')).not.toBeInTheDocument();
+    expect(screen.queryByText('rectCorrective349Badge')).not.toBeInTheDocument();
+    expect(container.querySelector('thead tr').children).toHaveLength(6);
+    expect(container.querySelector('tbody tr').children).toHaveLength(6);
+    // The remaining columns keep their cells: the total still lands in its own column.
+    expect(screen.getByText('rectColTotal')).toBeInTheDocument();
     await expandFirstRow();
+    expect(container.querySelector('tbody tr').nextElementSibling.querySelector('td')).toHaveAttribute('colspan', '6');
     expect(screen.queryByTestId('checkbox__isCorrective')).not.toBeInTheDocument();
+  });
+
+  it('hides the Modelo 349 grid column (fail-closed) when the catalog fetch fails', async () => {
+    renderPanel({ lines: [LINE({ aEAT349IsCorrective: 'Y' })], catalogOk: false });
+    await screen.findAllByText('10000067');
+
+    expect(screen.queryByText('rectColModel349')).not.toBeInTheDocument();
+    expect(screen.queryByText('rectCorrective349Badge')).not.toBeInTheDocument();
+  });
+
+  it('never flashes the Modelo 349 grid column while the catalog is still loading', async () => {
+    let releaseCatalog;
+    const catalogGate = new Promise(resolve => { releaseCatalog = resolve; });
+    installFetch({ lines: [LINE({ aEAT349IsCorrective: 'Y' })] });
+    const baseFetch = global.fetch;
+    global.fetch = vi.fn(async (url, opts) => {
+      if (String(url).includes('/fiscal-models-catalog')) await catalogGate;
+      return baseFetch(url, opts);
+    });
+    render(
+      <ReversedInvoicesPanel
+        recordId={RECORD_ID}
+        data={{ id: RECORD_ID, isRectificative: true, processed: false, documentStatus: 'DR', businessPartner: BP_ID }}
+        token="tkn"
+        apiBaseUrl={API_BASE}
+        api={{}}
+        catalogs={{}}
+        isActive
+      />
+    );
+    await screen.findAllByText('10000067');
+    expect(screen.queryByText('rectColModel349')).not.toBeInTheDocument();
+    expect(screen.queryByText('rectCorrective349Badge')).not.toBeInTheDocument();
+
+    releaseCatalog();
+    expect(await screen.findByText('rectColModel349')).toBeInTheDocument();
+    expect(screen.getByText('rectCorrective349Badge')).toBeInTheDocument();
+  });
+
+  it('shows the Modelo 349 grid column once the catalog confirms 349 active', async () => {
+    const { container } = renderPanel({ lines: [LINE({ aEAT349IsCorrective: 'Y' })] });
+    expect(await screen.findByText('rectColModel349')).toBeInTheDocument();
+    expect(screen.getByText('rectCorrective349Badge')).toBeInTheDocument();
+    expect(container.querySelector('thead tr').children).toHaveLength(7);
   });
 });
 
@@ -1555,6 +1604,7 @@ describe('ReversedInvoicesPanel personal columns', () => {
   it('keeps all columns and original actions with the flag off', async () => {
     const { container } = renderPanel({ lines: [LINE()] });
     await screen.findAllByText('10000067');
+    await screen.findByText('rectColModel349');
     expect(container.querySelector('thead tr').children).toHaveLength(7);
     expect(screen.getByTestId('btn__deleteLine')).toBeInTheDocument();
     expect(screen.queryByTestId('grid-view-save')).not.toBeInTheDocument();

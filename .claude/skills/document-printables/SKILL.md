@@ -8,9 +8,10 @@ description: >
   different", "the PDF is outdated", "my change is not showing on the PDF".
   ALWAYS load this before editing `artifacts/print-*/template.hbs`, `documentPdf.js`,
   `pdfUtils.js`, `documentPdfRegistry.js`, `DocumentPrintDrawer.jsx`, `SendDocumentModal.jsx`,
-  `useRowEmailModal.jsx`, any `use*Pdf.js` hook, any `*Preview.jsx`, or a window's
-  `custom/*Actions.jsx` / `*TopbarExtra.jsx` — the same document is rendered from FIVE places
-  and THREE templates; changing one does not change the others.
+  `useRowEmailModal.jsx`, any `use*Pdf.js` hook, any `*Preview.jsx`, `printableSources.js`, or a
+  window's `custom/*Actions.jsx` / `*TopbarExtra.jsx` — the same document is produced by SIX
+  producers (five UI entry points plus the server-side MCP render) from THREE templates; changing
+  one does not change the others.
   Triggers on: "imprimible", "printable", "diseño de la factura", "print button", "botón de
   imprimir", "preview del documento", "PDF desactualizado", "stale PDF", "el mail manda otro
   diseño", "QR en la factura", "print-sales-invoice", "template.hbs", "DOCUMENT_TEMPLATE",
@@ -27,8 +28,9 @@ skill is the procedure; that doc is the contract.
 
 ## Why this skill exists
 
-**Three templates, five entry points.** The same document is produced from five different places
-in the UI, each wired in a different file, and it can come out of one of three templates:
+**Three templates, five entry points in the UI, plus a sixth producer on the server.** The same
+document is produced from five different places in the UI, each wired in a different file, and it
+can come out of one of three templates:
 
 - **commercial** — `DOCUMENT_TEMPLATE` (invoice, orders, quotation): prices, tax, total;
 - **movement** — `MOVEMENT_TEMPLATE_*` (shipment, both returns): quantities and a signature, no
@@ -38,6 +40,18 @@ in the UI, each wired in a different file, and it can come out of one of three t
 Every bug in this area has been someone changing one and assuming the rest followed — a legally
 required QR that printed correctly but was missing from the copy emailed to the customer; a
 row-hover envelope silently attaching the wrong layout because one window never passed `usePdf`.
+
+Since ETP-6013 the backend also renders the commercial and movement templates **for the MCP only**
+(after an MCP Complete, or on an MCP PDF request): it fetches what the build publishes from
+`printableSources.js` (`dist/printables/<document>.json`) and ports only the data builders to Java.
+So:
+
+- **Edit a template, its CSS, the shared helpers or the label keys in
+  `windows/custom/shared/printableSources.js`** (the historical names in `documentPdf.js`,
+  `pdfUtils.js` and the `use*Pdf` hooks re-export it). Keep that module alias-free.
+- **Changing what a `build*Data` builder returns means changing its Java port too**
+  (com.etendoerp.go `*PrintableData`), with the shared fixture in
+  `__tests__/printableSources.vitest.js` and `PrintableDataTest` updated in the same change.
 
 **So the first question is never "how do I change the template". It is "which of the five entry
 points does this affect, and which template does each of them produce?"**

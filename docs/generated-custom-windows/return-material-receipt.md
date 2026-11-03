@@ -404,7 +404,7 @@ Response shape (`{"response":{"data":{...}}}`), exactly three keys:
 |---|---|
 | `invoices` | the candidates, newest first; each carries `id`, `documentNo`, `invoiceDate` (`yyyy-MM-dd`), `grandTotalAmount`, `currency` (ISO code), `businessPartner` |
 | `suggestedInvoiceId` | the newest candidate's id, or `null` — deliberately the **same choice `resolveRectifiedInvoiceIds` would make on an empty selection**, so what the modal preselects is exactly what the server would have picked on its own |
-| `hasReturnInvoice` | whether any non-voided invoice already exists for this return; the SPA hides the create button with it, the server also refuses a second one with 409 unless `allowDuplicate:true` (ETP-5712) |
+| `hasReturnInvoice` | whether any non-voided invoice already exists for this return; the SPA hides the create button with it, the server also refuses a second one with 409 (ETP-5712), always since ETP-6026 |
 
 ### The picker, in both entry points
 
@@ -453,7 +453,7 @@ invoice including a draft, and a draft cannot be rectified.
 
 ### Guard P5 — 409 on a return document that is already invoiced
 
-> **Superseded (ETP-5712 section below):** this guard was removed by ETP-5381 and restored by ETP-5712 as 409 `returnInvoiceAlreadyExists`, lifted only by `allowDuplicate:true`. Kept for history.
+> **Superseded (ETP-5712 section below):** this guard was removed by ETP-5381 and restored by ETP-5712 as 409 `returnInvoiceAlreadyExists` (lifted by `allowDuplicate:true` until ETP-6026, which removed that way past it on this window). Kept for history.
 
 `RectifiableInvoiceUtils.hasNonVoidedReturnInvoice` (`:199-220`) joins
 `M_InOutLine → C_InvoiceLine → C_Invoice` for this return and looks for any
@@ -476,7 +476,7 @@ through exactly the duplicate it exists to prevent.
 **400** = "nothing to invoice" or a missing datum — including the missing-rectified-invoice
 case and `"Invoice to rectify not found: <id>"`. **422** = the zero-amount refusal
 (`returnInvoiceWithoutAmount`, ETP-5712). **409** (`returnInvoiceAlreadyExists`, ETP-5712) = the return
-already has a non-voided rectificativa and the call did not pass `allowDuplicate:true` (see ETP-5712 below). Messages are English literals in Java on
+already has a non-voided rectificativa (see ETP-5712 and ETP-6026 below). Messages are English literals in Java on
 purpose (no `AD_MESSAGE` rows) and are localized by
 `tools/app-shell/src/lib/backendErrors.js`:
 
@@ -526,7 +526,8 @@ Reactivar is now the way to edit the invoice.
    Factura Rectificativa" button is not rendered (the SPA hides it through
    `hasReturnInvoice`); then POST `createReturnInvoice` directly and verify it is
    refused with 409 `returnInvoiceAlreadyExists` (nothing created, the earlier one listed in
-   `previousReturnInvoices`); with `allowDuplicate:true` a second one is created.
+   `previousReturnInvoices`); since ETP-6026 `allowDuplicate:true` changes nothing on REST
+   and is refused as an unknown parameter (422) on MCP.
 6. Void the existing rectificative invoice and verify the button reappears — the
    predicate is "non-voided", not "any".
 7. Force the completion to fail and verify no draft rectificative invoice and no
@@ -695,14 +696,21 @@ changes is what the **server and the MCP agents** see:
   The return headers' `documentAction` description (`ReturnCompletionContract`), the text of every return action
   and the spec prompt (`agent-prompts/return-material-receipt/spec.md`) now say so. The goods receipt / shipment
   `documentAction` text is unchanged.
-- **One per return, unless `allowDuplicate:true`.** The screen allows one rectificativa per return (the button is hidden
+- **One per return (ETP-5712; no exception since ETP-6026).** The screen allows one rectificativa per return (the button is hidden
   once a non-voided one exists), and the action now does the same on every channel: a second call without
   `allowDuplicate:true` is refused **409** `returnInvoiceAlreadyExists` ("A rectificative invoice already exists for
   this return document."; the SPA already localizes that sentence), creating nothing and listing the existing ones in
   `previousReturnInvoices`. ETP-5381 had removed the server guard and left it to the client, which an agent has no
-  button to honour. Only the JSON boolean `true` lifts it (a string or number is 422); with it a second one is
-  created and the answer lists the ones the return had before. `allowDuplicate` is an MCP-only capability the screen
-  does not offer (declared in `neo-headless.md` §4.12.9).
+  button to honour. Only the JSON boolean `true` lifted it (a string or number was 422); with it a second one was
+  created. **Since ETP-6026 that way past it is gone on this window** (AC 2: "a return cannot have more than one
+  non-voided rectificativa through MCP, same as the UI"): `allowDuplicate` is no longer declared in the
+  `createReturnInvoice` contract (MCP refuses it with 422 `unknownParameters`), REST does not read it, and the 409
+  keeps its code and message (the SPA mapping is unchanged) with a hint that says to use the existing rectificativa
+  or void it first. The `availableNow:false` reason and the spec prompt say the same. The return to vendor keeps
+  `allowDuplicate` (`neo-headless.md` §4.12.9).
+- **Binding (ETP-6026).** `ReturnMaterialReceiptHeaderHandler` is bound to `return-material-receipt/returnMaterialReceipt`
+  by `@NeoExtension`; the `returnMaterialReceiptHeaderHandler` `Java_Qualifier` (go `ETGO_SF_ENTITY`, this window's
+  `decisions.json`) and the class's `@Named` were removed in the same change (neo-extension-migration).
 - **Richer answer.** `{id, documentNo, documentStatus}` plus `documentType`, `isSalesTransaction` (`true` here),
   `grandTotalAmount`, `totalLines` (negative amounts, read after the completion), `linkedReturnId`,
   `returnDocumentNo`, `rectifiedInvoices` and `previousReturnInvoices`. The invoice stays COMPLETED.
@@ -723,7 +731,7 @@ The amount of the created invoice reaches the SPA as `invoice.amount` (`ConfirmI
 component renders it. Full reference: `neo-headless.md` §4.12.33.
 
 **Manual verification (MCP).** Confirm a return, then create its factura rectificativa; call `createReturnInvoice` a
-second time (409, nothing created) and then with `allowDuplicate:true` and check `previousReturnInvoices`; try a return whose product has no price anywhere (422, nothing created) and one whose product was invoiced at 0 (created at 0);
+second time (409, nothing created, the earlier one in `previousReturnInvoices`) and again with `allowDuplicate:true` (still 409 on REST, 422 `unknownParameters` on MCP, ETP-6026); try a return whose product has no price anywhere (422, nothing created) and one whose product was invoiced at 0 (created at 0);
 try a return of a never-invoiced shipment (400 with the new wording).
 
 ## Period not open (ETP-5577)
@@ -744,7 +752,7 @@ Agents (MCP) no longer have to learn what a return allows from refusals:
   `docAction` of RE or RC answers 422 saying so.
 - Applies to a draft: the import actions. Applies to a completed document: `rectifiableInvoices`, `createReturnInvoice`.
 - `createReturnInvoice` applies to a completed return that has **no** factura rectificativa yet: the availability reads the same
-  query as `hasReturnInvoice`, because a second call is refused with 409 unless `allowDuplicate:true` is passed.
+  query as `hasReturnInvoice`, because a second call is always refused with 409 (ETP-6026).
 - Response keys the window adds to a record (`sourceShipments`, `returnInvoices`, `hasReturnInvoice`, `linesCount`, `invoiceStatus`) are declared, so `fields:[…]` projections do not list them under
   `unknownFields`.
 - Posting a just-completed document (`post`) can answer **409 `costNotCalculated`** with `retryAfterSeconds: 30`: cost is

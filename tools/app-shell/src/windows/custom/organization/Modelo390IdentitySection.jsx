@@ -3,42 +3,56 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import RepresentantesLegalesSection from './RepresentantesLegalesSection.jsx';
+import { RepresentativeTableFrame, RepresentativeHeaderCell } from './RepresentativeTableFrame.jsx';
 import { AEAT390_INFO_MAX_LENGTH } from './representanteLegal.js';
 
 // The natural-person identity fields of `AD_OrgInfo` (Classic: Organization > Information,
-// "Modelo 390" group). Laid out in pairs, like the rest of the page.
+// "Modelo 390" group): [field, i18n label key]. ETP-5831 (CP-16) — rendered as the single row of a
+// table with the representatives grid's format (RepresentativeTableFrame), one column per field.
 // Required while "Persona física" is on (classic CHECK EM_AEAT390_ISPERSON_MAND_CH).
 const REQUIRED_PERSON_FIELDS = new Set(['aeat390Firstname', 'aeat390Surname1']);
 
-const PERSON_FIELD_ROWS = [
-  [['aeat390Firstname', 'orgRepFirstNameLabel'], ['aeat390Surname1', 'orgRepLastname1Label']],
-  [['aeat390Surname2', 'orgRepLastname2Label'], null],
-  [['aeat390RepNif', 'org390RepNifLabel'], ['aeat390RepName', 'org390RepNameLabel']],
+const PERSON_FIELDS = [
+  ['aeat390Firstname', 'orgRepFirstNameLabel'],
+  ['aeat390Surname1', 'orgRepLastname1Label'],
+  ['aeat390Surname2', 'orgRepLastname2Label'],
+  ['aeat390RepNif', 'org390RepNifLabel'],
+  ['aeat390RepName', 'org390RepNameLabel'],
 ];
 
-function PersonField({ field, labelKey, value, error, onChange }) {
+const personInputId = (field) => `org-${field}`;
+
+/** Column header of one natural-person field; it labels that field's input in the row below. */
+function PersonFieldHeader({ field, labelKey }) {
   const ui = useUI();
-  const inputId = `org-${field}`;
   return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={inputId} className="text-sm text-foreground font-medium" data-testid={`Label__${field}`}>
+    <RepresentativeHeaderCell data-testid={`RepresentativeHeaderCell__${field}`}>
+      <Label htmlFor={personInputId(field)} className="text-xs font-semibold text-foreground" data-testid={`Label__${field}`}>
         {ui(labelKey)}
         {REQUIRED_PERSON_FIELDS.has(field) && <span className="text-destructive"> *</span>}
       </Label>
+    </RepresentativeHeaderCell>
+  );
+}
+
+/** One editable cell of the natural-person row; its error shows inside the cell. */
+function PersonFieldCell({ field, value, error, onChange }) {
+  return (
+    <td className="py-1.5 px-2 align-top">
       <Input
-        id={inputId}
+        id={personInputId(field)}
         value={value ?? ''}
         maxLength={AEAT390_INFO_MAX_LENGTH[field]}
         onChange={e => onChange(field, e.target.value)}
         aria-invalid={Boolean(error)}
-        className={'bg-card hover:bg-muted focus-visible:bg-card' + (error ? ' border-destructive' : '')}
+        className={'h-8 bg-card hover:bg-muted focus-visible:bg-card' + (error ? ' border-destructive' : '')}
         data-testid={`Modelo390IdentitySection__${field}`} />
       {error && (
-        <p role="alert" className="text-xs text-destructive mt-0.5" data-testid={`Modelo390IdentitySection__error-${field}`}>
+        <p role="alert" className="text-xs text-destructive mt-1" data-testid={`Modelo390IdentitySection__error-${field}`}>
           {error}
         </p>
       )}
-    </div>
+    </td>
   );
 }
 
@@ -49,6 +63,7 @@ function PersonField({ field, labelKey, value, error, onChange }) {
  * - "Persona física" ON  → the organization IS a natural person: its own name/surnames and its
  *   representative's NIF/name live on `AD_OrgInfo` (`information.aeat390*`). Those values belong
  *   to the page's form, so they are saved with the page's Save button like every other field.
+ *   Shown as a single-row table in the representatives grid's format, with no "add" button.
  * - "Persona física" OFF → the legal representatives grid (`representanteLegal`), which persists
  *   row by row on its own, like the IAE grid.
  *
@@ -77,21 +92,25 @@ export default function Modelo390IdentitySection({ form, fieldErrors = {}, onFie
       </div>
 
       {isPerson ? (
-        <div className="flex flex-col gap-4" data-testid="Modelo390IdentitySection__personFields">
-          {PERSON_FIELD_ROWS.map((pair) => (
-            <div key={pair[0][0]} className="grid grid-cols-2 gap-4">
-              {pair.map((cell) => (cell ? (
-                <PersonField
-                  key={cell[0]}
-                  field={cell[0]}
-                  labelKey={cell[1]}
-                  value={form[cell[0]]}
-                  error={fieldErrors[cell[0]]}
+        // Exactly one row and no "add" affordance: the organization IS the natural person.
+        <div data-testid="Modelo390IdentitySection__personFields">
+          <RepresentativeTableFrame
+            head={PERSON_FIELDS.map(([field, labelKey]) => (
+              <PersonFieldHeader key={field} field={field} labelKey={labelKey} data-testid={`PersonFieldHeader__${field}`} />
+            ))}
+            data-testid="RepresentativeTableFrame__person390">
+            <tr data-testid="Modelo390IdentitySection__personRow">
+              {PERSON_FIELDS.map(([field]) => (
+                <PersonFieldCell
+                  key={field}
+                  field={field}
+                  value={form[field]}
+                  error={fieldErrors[field]}
                   onChange={onFieldChange}
-                  data-testid={`PersonField__${cell[0]}`} />
-              ) : <div key="empty" />))}
-            </div>
-          ))}
+                  data-testid={`PersonFieldCell__${field}`} />
+              ))}
+            </tr>
+          </RepresentativeTableFrame>
         </div>
       ) : (
         <RepresentantesLegalesSection
