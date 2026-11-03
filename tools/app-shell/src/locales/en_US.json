@@ -21298,7 +21298,7 @@
     "fiscal.onboarding.confirm.row.choice": "Choice",
     "fiscal.onboarding.confirm.row.system": "Fiscal system",
     "fiscal.onboarding.confirm.next.title": "Next step:",
-    "fiscal.onboarding.confirm.next.body": "After confirming, you can add operational details (enrollment dates, submission cadences, test or production environment).",
+    "fiscal.onboarding.confirm.next.body": "After confirming, you can complete the remaining details: the digital certificate and, depending on the system, the authorization registration number (SII) or automatic sending (TicketBAI).",
     "fiscal.onboarding.confirm.creating": "Creating…",
     "fiscal.onboarding.confirm.btn": "Confirm",
     "fiscal.onboarding.manual.title": "Manual configuration",

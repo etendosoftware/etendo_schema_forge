@@ -21534,7 +21534,7 @@
     "fiscal.onboarding.confirm.row.choice": "Elección",
     "fiscal.onboarding.confirm.row.system": "Sistema fiscal",
     "fiscal.onboarding.confirm.next.title": "Próximo paso:",
-    "fiscal.onboarding.confirm.next.body": "Tras confirmar, podrás añadir los detalles operativos (fechas de incorporación, cadencias de envío, entorno de pruebas o producción).",
+    "fiscal.onboarding.confirm.next.body": "Tras confirmar, podrás completar los datos restantes: el certificado digital y, según el sistema, el n.º de registro de la autorización (SII) o el envío automático (TicketBAI).",
     "fiscal.onboarding.confirm.creating": "Creando…",
     "fiscal.onboarding.confirm.btn": "Confirmar",
     "fiscal.onboarding.manual.title": "Configuración manual",

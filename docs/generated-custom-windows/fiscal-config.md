@@ -101,7 +101,7 @@ The three SIF modules originally enforced "one config per org" through a UNIQUE 
 | Module | Table | Trigger |
 |--------|-------|---------|
 | SII (`org.openbravo.module.sii`) | `AEATSII_CONFIG` | `AEATSII_ONE_ACTIVE_CONFIG_TRG` |
-| TicketBAI (`com.smf.ticketbai`) | `TBAI_CONFIG` | `TBAI_ONE_ACTIVE_CONFIG_TRG` |
+| TicketBAI (`com.smf.ticketbai`) | `TBAI_CONFIG` | none any more — `TBAI_ONE_ACTIVE_CONFIG_TRG` was dropped by `com.smf.ticketbai` dcd88b3 (ETP-4783). Since ETP-6053 the rule is enforced for every NEO write by `FiscalSifGuard` in `com.etendoerp.go` (see "Agents (MCP)") |
 | Verifactu (`com.etendoerp.verifactu`) | `ETVFAC_VERIFACTU_CONFIG` | `ETVFAC_ONE_ACTIVE_CONFIG_TRG` |
 
 The invariant is therefore: **at most one active config record per system per org at any time**, with any number of inactive trace rows alongside it. Exactly one active config across all three systems is the "configured" state; zero active rows is the "no active SIF" state.
@@ -566,6 +566,50 @@ as UTC, which in Spain hid every invoice dated on the adoption day from the fisc
   `useFiscalConfig()` (`earliestSiiCutoverDate`, `earliestTbaiCutoverDate`), the invoice send gate,
   and `fiscal-monitor`'s `buildCutoverCriteria`, which already sliced the first 10 characters and is
   unaffected.
+
+## Agents (MCP) — same rules as the wizard (ETP-6053)
+
+Agents never create the three config records with `etendo_create`: that verb (and `etendo_batch`
+creates, and `etendo_delete`) is hidden on `sii-config/siiConfiguration`, `tbai-config/header` and
+`verifactu-config/cabeceraDeConfiguraciónVerifactu` through `MCP_CONFIG.verbs`. They activate a
+SIF with one declared action that applies this window's onboarding rules on the server:
+
+```
+etendo_action(spec:'organization', entity:'organization', id:'<organizationId>',
+              action:'configureFiscalSystem', parameters:{system:'SII+TBAI', territory:'gipuzkoa'})
+```
+
+| Wizard rule | Where it lives for agents |
+|---|---|
+| Territory mandatory, system compatible with it (`TERRITORY_ALLOWED_SYSTEMS`) | `FiscalSifRules` (Java twin of the JS table) — 400 `ETGO_FiscalSifNotAllowed` |
+| Derived values (`navarra`/`guipuzcoa`/`taxtype`, TicketBAI territory, VERI*FACTU *Impuesto de aplicación*) | built by `FiscalSifRules.onboardingPayloads` = `buildOnboardingPayloads`; not parameters. On `etendo_update` they stay read-only (`tAXType` through a field-level `MCP_CONFIG.fields.readOnly`) |
+| One active SIF per organization, SII + TicketBAI aside | 409 `ETGO_FiscalSifAlreadyConfigured`; `system:'SII'` on an organization with only TicketBAI adds SII ("Añadir SII"), in TicketBAI's own territory |
+| Only in a productive environment (`ETSG_ForceTestMode`, `fiscal.testModeLock.warning`) | 409 `ETGO_FiscalSifTestMode`, same sentence: "Solo podrá activar un sistema fiscal en un entorno productivo." |
+| Certificate | not writable by agents (`organization/certificadoDigital` verbs hidden). When the organization has none, the action answers a warning to upload it from Configuración fiscal |
+| "Cambiar SIF" (deactivate) | UI only: an agent changing `active` gets 400 `ETGO_FiscalSifActiveByAgent` |
+
+Server-side rules that now hold for the SPA too (every NEO channel, `FiscalSifGuard` in the
+three config customizations): no config created inactive, none created in forced test mode, and
+one active config per system and organization. The SPA never breaks them — the wizard and
+"Añadir SII" are already locked in test mode — so it sees no change.
+
+**Known debt — the territory table exists twice.** `TERRITORY_ALLOWED_SYSTEMS` /
+`buildOnboardingPayloads` (`fiscalConfig.utils.js`) and `FiscalSifRules` (com.etendoerp.go) must
+change together; a territory or system added to one only is offered by one surface and refused
+or built differently by the other. Removing it means the wizard calling `configureFiscalSystem`
+instead of posting the records itself. Not registered in `flags-registry.json`: the feature has
+no flag.
+
+**"Añadir SII" differs from the agent path on one value.** The SPA's complementary POST
+(`useFiscalConfig.createComplementary`) sends `acogidaAlSII: 'Y'` and no `taxtype`/`guipuzcoa`;
+the wizard's SII+TBAI payload — which the action reuses — sends `acogidaAlSII: 'N'`,
+`taxtype: 'IVA'` and, for Gipuzkoa, `guipuzcoa: 'Y'`. The SPA flow is left unchanged pending a
+product decision.
+
+The confirmation screen's "next step" text (`fiscal.onboarding.confirm.next.body`) only promises
+what the detail step lets the user edit afterwards — the certificate, the SII authorization
+number and TicketBAI automatic sending — and no longer mentions the test or production
+environment, enrollment dates or submission cadences.
 
 ## Manual verification
 
