@@ -284,6 +284,11 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
     // (legacy backend / unannotated spec): unlike the kebab, this component has already fetched
     // the real shipments, invoices and lines, so falling back costs nothing and keeps both the
     // label AND the modal's sections (`derived.needsShip` / `derived.needsInvoice` below) working.
+    //
+    // ETP-5828 — `needsInvoiceDoc` now follows the net-of-drafts rule of "Generar factura": a draft
+    // invoice only turns it off when it holds everything left to invoice. The fallback cannot see
+    // what a draft's lines hold (the invoice list carries headers only), so it keeps the
+    // conservative "any draft hides it"; the backend refuses with a translated reason anyway.
     const { needsPrimaryDoc, needsInvoiceDoc } = readOrderPendingDocs(data);
     const needsShip    = needsPrimaryDoc ?? (qtyPending !== 0 && shipmentsDraft.length === 0);
     const needsInvoice = needsInvoiceDoc ?? (totalPending !== 0 && !invoiceDraft);
@@ -816,9 +821,10 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
           { method: 'POST', body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          // ETP-5051 — a plan-quota refusal reads as the translated quota sentence.
+          // ETP-5051 — a plan-quota refusal reads as the translated quota sentence. ETP-5828 —
+          // any other refusal (e.g. the draft-covers 400) is translated too, never shown raw.
           throw new Error(translateQuotaRefusalBody(e, ui)
-            || e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`);
+            || translateBackendErrorBody(e, ui, `Error (${res.status})`));
         }
         const doc = (await res.json())?.response?.data;
         // ETP-5381: carry documentStatus so the result modal badges the invoice as Confirmada
@@ -1033,6 +1039,7 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
   // ends now read one value off one record instead of two independent computations.
   // `fetched != null` still gates both: while loading, neither "needs" flag may read true off the
   // placeholder empty arrays above, or the close-effect below could fire before data ever loads.
+  // ETP-5828 — same net-of-drafts annotation and same conservative fallback as the button above.
   const { needsPrimaryDoc, needsInvoiceDoc } = readOrderPendingDocs(data);
   const needsShip    = fetched != null && (needsPrimaryDoc ?? (qtyPending !== 0 && shipmentsDraft.length === 0));
   const needsInvoice = fetched != null && (needsInvoiceDoc ?? (totalPending !== 0 && !invoiceDraft));

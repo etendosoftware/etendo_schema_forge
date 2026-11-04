@@ -211,6 +211,16 @@ describe('InvoiceBottomPanel.linesEmptyState — import modal selection (ETP-445
     expect(onSave).toHaveBeenLastCalledWith('shipment');
     expectOnlyModal('import-shipment-modal');
   });
+
+  // ETP-5828 — only «Importar desde pedido» opts into skipping the save of an unedited invoice;
+  // the shipment import above keeps the plain onSave(type) of every other popup.
+  it("clicking the order button asks onSave to skip the save when the header is clean", async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn().mockResolvedValue(true);
+    render(<LinesEmptyState {...BASE_PROPS} data={FAC_DRAFT} onSave={onSave} />);
+    await user.click(screen.getByText('importFromSalesOrder'));
+    expect(onSave).toHaveBeenLastCalledWith('order', { skipSaveWhenClean: true });
+  });
 });
 
 describe('InvoiceBottomPanel.detailExtraActions — import modal selection (ETP-4459)', () => {
