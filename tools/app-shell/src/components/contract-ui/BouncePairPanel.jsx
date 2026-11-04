@@ -197,16 +197,16 @@ function netTone(net) {
  * - A line of a detected pair lists its counterpart line(s): the possible outgoing lines when the
  *   selected line is the bounce (a radio each when the pair is ambiguous), or the bounce line. The
  *   notice says why the pair is proposed, the footer shows the pair's net effect, and the actions
- *   are "No es un rebote" (hides it for the session, persists nothing) and "Descartar par".
+ *   are "No es un rechazo" (hides it for the session, persists nothing) and "Descartar par".
  * - A discarded line lists the line it was discarded with and offers "Restaurar par" (or
  *   "Restaurar línea" for a line discarded on its own).
  * - Identical-looking lines are told apart without a new column: each row shows the bank
  *   reference (`referenceNo`) muted next to its badge, the full description on hover, and the
- *   footer opens with the selected line itself ("Rebote seleccionado" / "Salida seleccionada" /
+ *   footer opens with the selected line itself ("Rechazo seleccionado" / "Salida seleccionada" /
  *   "Línea seleccionada") with its date and reference, above the counterpart and the net.
  *
  * Discard and restore are writes: disabled under the window's read-only tier (the caller's handlers
- * are guarded too). "No es un rebote" changes no data and stays available.
+ * are guarded too). "No es un rechazo" changes no data and stays available.
  *
  * Presentational: `model` comes from `bouncePanelModel` (bouncePairs.js).
  *

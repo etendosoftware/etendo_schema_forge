@@ -14,7 +14,7 @@ import { ReconciliationSplitPanel } from '@/components/contract-ui/Reconciliatio
  *
  * `bounceReview` (ETP-5581) is the detail view's bounce-pair state, shared with the
  * automatch modal: the line "Revisar en el panel" asked to show, and the pairs dismissed with
- * "No es un rebote". Handed straight to the split panel.
+ * "No es un rechazo". Handed straight to the split panel.
  *
  * @param {{ account: object|null, paymentMethods?: Array<object>, onReconcileSuccess?: () => void, windowReadOnly?: boolean, bounceReview?: object|null }} props
  */

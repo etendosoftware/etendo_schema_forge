@@ -1612,7 +1612,7 @@ export function ReconciliationSplitPanel({
   windowReadOnly = false,
   // ETP-5581 — the host's bounce-pair review state (`useAutoMatchReview().panel`): the line
   // "Revisar en el panel" asked to show (`focus` / `onFocusConsumed`) and the pairs dismissed with
-  // "No es un rebote" (`dismissedKeys` / `onDismiss`), shared with the automatch modal. Optional:
+  // "No es un rechazo" (`dismissedKeys` / `onDismiss`), shared with the automatch modal. Optional:
   // without it the panel keeps its own dismissals.
   bounceReview = null,
 }) {

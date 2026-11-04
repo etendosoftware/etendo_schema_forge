@@ -64,7 +64,7 @@ export function useAutoMatchSelection(groups) {
  * - `startReview(group)` — "Revisar en el panel": asks the panel to select the pair's bounce line
  *   (`focus`, consumed by the panel with `consumeFocus`). The host closes the modal; there is no
  *   way back other than the Automatch button, which reopens it;
- * - `dismissedKeys` / `dismiss` — pairs the user said are not a bounce ("No es un rebote"). Nothing
+ * - `dismissedKeys` / `dismiss` — pairs the user said are not a bounce ("No es un rechazo"). Nothing
  *   is persisted: they are hidden from the panel and the modal until `clearDismissed`, which the
  *   host calls when the automatch is recomputed (the header refresh). The Automatch button does
  *   NOT clear them: a pair just dismissed in the panel must not reappear in the modal.

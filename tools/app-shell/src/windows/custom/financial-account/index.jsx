@@ -338,7 +338,7 @@ export function FinancialAccountDetail({ recordId }) {
   }, [autoMatchArmed, autoMatchLoading, autoMatchGroups]);
   // ETP-5581 — the state the modal and the reconciliation panel share around a bounce pair: the
   // modal's checks, the line "Revisar en el panel" asked to show, and the pairs dismissed with
-  // "No es un rebote". Inert while the backend sends no bounce pair.
+  // "No es un rechazo". Inert while the backend sends no bounce pair.
   const autoMatchReview = useAutoMatchReview(autoMatchGroups, {
     active: activeTab === 'reconciliation' && !isCashAccount,
   });
@@ -354,7 +354,7 @@ export function FinancialAccountDetail({ recordId }) {
     setAutoMatchArmed(false);
   }, [startReview]);
   const closeAutoMatch = useCallback(() => setAutoMatchOpen(false), []);
-  // Reopens the cached suggestions; it does NOT forget the "No es un rebote" dismissals (only the
+  // Reopens the cached suggestions; it does NOT forget the "No es un rechazo" dismissals (only the
   // header refresh and leaving the tab do), or a pair just dismissed in the panel would reappear.
   const openAutoMatch = useCallback(() => {
     setAutoMatchAutoOpened(false);
@@ -396,7 +396,7 @@ export function FinancialAccountDetail({ recordId }) {
     reloadAutoMatch();
     reloadMovements();
     reloadReconciliations();
-    // A fresh automatch run proposes again the bounce pairs dismissed with "No es un rebote".
+    // A fresh automatch run proposes again the bounce pairs dismissed with "No es un rechazo".
     clearDismissed();
     setReconciliationRefreshKey((k) => k + 1);
   }, [reloadAccountAndList, reloadAutoMatch, reloadMovements, reloadReconciliations, clearDismissed]);

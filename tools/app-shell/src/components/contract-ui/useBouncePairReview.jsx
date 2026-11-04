@@ -68,7 +68,7 @@ function scrollLineIntoView(lineId) {
 
 /**
  * The lines, counts and filter codes of the left panel, with the bounce pairs applied:
- * - the pairs the user dismissed ("No es un rebote") read as plain pending lines again;
+ * - the pairs the user dismissed ("No es un rechazo") read as plain pending lines again;
  * - while the `discarded` filter is active the panel's request asks for `status=discarded`
  *   (`pendingLinesStatusParam`, bouncePairs.js), whose counts carry only `discarded`: the other filters keep
  *   the counts of the last default answer;
@@ -144,7 +144,7 @@ export function useBounceLines({
 
 /**
  * "Revisar en el panel" (ETP-5581): the host asks the panel to show the bounce line of a pair. The
- * filter moves to "Posibles rebotes" and the search is cleared; once the lines have loaded the line
+ * filter moves to "Posibles rechazos" and the search is cleared; once the lines have loaded the line
  * is selected and scrolled into view. A line outside the active date range widens it to any date
  * once; a line that is still not there is given up on. Either way the request is consumed, so a
  * later visit does not replay it.

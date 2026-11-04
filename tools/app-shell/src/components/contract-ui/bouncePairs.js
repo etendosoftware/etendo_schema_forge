@@ -1,7 +1,7 @@
 /**
  * Pure logic of the bounce pairs of the bank reconciliation (ETP-5581).
  *
- * A bounce ("rebote") is an outgoing bank-statement line plus the line that reverses it: opposite
+ * A bounce ("rechazo" bancario in the UI) is an outgoing bank-statement line plus the line that reverses it: opposite
  * sign, exact amount, a few days later. The backend (com.etendoerp.go, behind the per-account flag
  * `bank-bounce-suggestions`) detects them; the SPA only renders what it answers:
  * - `autoMatch` groups with `kind: "bouncePair"` (the flag-off answer has no `kind` at all, and a
@@ -188,7 +188,7 @@ export function withBounceDecisions(payload, pairs, isChecked, sentToPanelKeys =
 }
 
 /**
- * The `dismissPair` body of "No es un rebote" (ETP-5581): the line selected in the panel and, when
+ * The `dismissPair` body of "No es un rechazo" (ETP-5581): the line selected in the panel and, when
  * the card shows one, the other line of the pair (the chosen original of an ambiguous pair; left
  * out while none is chosen). Null when there is no line.
  *
@@ -324,7 +324,7 @@ export function isBounceReviewLine(line) {
 }
 
 /**
- * The pendingLines rows with every line of a dismissed pair ("No es un rebote") turned back into a
+ * The pendingLines rows with every line of a dismissed pair ("No es un rechazo") turned back into a
  * plain pending line. Nothing is persisted: the backend still proposes the pair, the user just
  * asked not to see it again in this session.
  *

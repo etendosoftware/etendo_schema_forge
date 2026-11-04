@@ -39,7 +39,7 @@ export function useRestorePair() {
 }
 
 /**
- * Reports "No es un rebote" (POST `dismissPair`, ETP-5581): the user said a suggested pair is not a
+ * Reports "No es un rechazo" (POST `dismissPair`, ETP-5581): the user said a suggested pair is not a
  * bounce. Nothing is persisted — the backend only emits the KPI event (`decision=unchecked`,
  * `surface=panel`); the pair stays hidden for the session on the client side alone. Callers fire it
  * and forget it: a failure must change nothing on screen.

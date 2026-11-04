@@ -333,7 +333,7 @@ function notifyApplyWithPairs(results, ui) {
  * left = bank statement lines (with checkboxes), right = system operations to link.
  *
  * ETP-5581 — with the backend flag `bank-bounce-suggestions` on, `groups` also carries bounce pairs
- * (`kind: "bouncePair"`), rendered below the reconciliation groups as "Rebotes bancarios (N)"
+ * (`kind: "bouncePair"`), rendered below the reconciliation groups as "Rechazos bancarios (N)"
  * ({@link AutoMatchBounceSection}) and applied in the SAME `applySuggestions` call. With the flag
  * off nothing in `groups` has that kind and the modal is exactly what it was.
  *

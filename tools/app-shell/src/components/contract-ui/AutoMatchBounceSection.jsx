@@ -12,7 +12,7 @@ import {
 const TAG_CLS = 'inline-flex h-6 shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-normal';
 /**
  * "Revisar en el panel": the shared `Button` outline variant with the app's secondary colours (the
- * same formula as the bounce panel's "No es un rebote"), at the row's compact pill size.
+ * same formula as the bounce panel's "No es un rechazo"), at the row's compact pill size.
  */
 const REVIEW_BTN = 'h-7 flex-none gap-1 rounded-full border-[hsl(var(--border-control))] bg-card px-2.5 text-xs text-[hsl(var(--foreground))] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-muted hover:text-[hsl(var(--foreground))] [&_svg]:size-4';
 
@@ -156,7 +156,7 @@ function BouncePairRow({ group, checked, onToggle, onReview, currency, formatDat
 }
 
 /**
- * "Rebotes bancarios (N)" — the bounce pairs of the automatch modal (ETP-5581), below its
+ * "Rechazos bancarios (N)" — the bounce pairs of the automatch modal (ETP-5581), below its
  * reconciliation groups and in the same card style: left the outgoing line, right the bounce.
  *
  * - High-confidence pairs start checked; pairs to review start unchecked and carry a
