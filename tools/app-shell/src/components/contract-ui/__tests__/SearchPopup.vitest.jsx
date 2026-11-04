@@ -1,4 +1,6 @@
 // @covers tools/app-shell/src/components/contract-ui/SearchPopup.jsx
+// @covers tools/app-shell/src/components/contract-ui/useLocateCommittedValue.js
+// @covers tools/app-shell/src/components/contract-ui/LocatingNotice.jsx
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
@@ -6,6 +8,7 @@ vi.mock('@/i18n', () => ({
   useUI: () => (k) => k,
 }));
 
+import { mockGeometry, ROW_H, PANEL_H } from './selectorTestGeometry.js';
 import { SearchPopup, staticPageLoader, SEARCH_POPUP_PAGE_SIZE } from '../SearchPopup.jsx';
 
 // Captures the infinite-scroll observer so a test can "scroll" the sentinel into view.
@@ -279,7 +282,7 @@ describe('SearchPopup — committed value (ETP-5948)', () => {
   }
   const listCalls = (loadPage) => loadPage.mock.calls.filter(([q]) => q === '').map(([, offset, , opts]) => [offset, opts.limit]);
 
-  it('locates the value with 100-row pages, capped at the walk total (ETP-6103)', async () => {
+  it('locates the value with 100-row pages, with the last page trimmed to the walk total (ETP-6103)', async () => {
     const loadPage = sizedPager(1000);
     renderPopup({ loadPage, value: 'acc-500', valueLabel: 'Account 0500' });
 
@@ -295,30 +298,71 @@ describe('SearchPopup — committed value (ETP-5948)', () => {
     expect(listCalls(loadPage)).toEqual([[0, SEARCH_POPUP_PAGE_SIZE]]);
   });
 
-  it('holds the rows invisible until the value is centred, then reveals them (ETP-6103)', async () => {
+  let restoreGeometry = null;
+  afterEach(() => { restoreGeometry?.(); restoreGeometry = null; });
+
+  const deferredPage = () => { let resolve; const promise = new Promise((r) => { resolve = r; }); return { promise, resolve }; };
+
+  it('keeps the rows hidden, then reveals them centred (ETP-6103)', async () => {
+    restoreGeometry = mockGeometry();
     const loadPage = sizedPager(300);
-    // jsdom has no layout: report the value as centrable so the hold can end.
-    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ top: 0, height: 10 });
-    renderPopup({ loadPage, value: 'acc-118', valueLabel: 'Account 0118' });
-    const option = await screen.findByTestId('search-popup-option-acc-118');
+    renderPopup({ loadPage, value: 'acc-40', valueLabel: 'Account 0040' });
+    // Held: right after the first page the value is not yet positioned, so the notice shows and the
+    // rows are invisible. (waitFor polls, so assert on the first frame where the option exists.)
+    const option = await screen.findByTestId('search-popup-option-acc-40');
     await waitFor(() => expect(screen.queryByTestId('search-popup-locating')).toBeNull());
     expect(option).not.toHaveClass('invisible');
+    expect(Math.abs(option.getBoundingClientRect().top - (PANEL_H - ROW_H) / 2)).toBeLessThan(2);
     expect(option).toHaveAttribute('aria-selected', 'true');
-    rect.mockRestore();
   });
 
-  it('keeps the rows hidden while the value sits among the last loaded rows, then loads one more page (ETP-6103)', async () => {
-    const loadPage = sizedPager(300);
-    // The panel can never scroll far enough on its own: scrollHeight == clientHeight == 0 gives a
-    // negative-or-zero target, so force "not centrable" until a second page exists.
-    const scrollHeight = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(0);
-    const clientHeight = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(400);
-    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ top: 5000, height: 10 });
-    renderPopup({ loadPage, value: 'acc-95', valueLabel: 'Account 0095' });
-    await screen.findByTestId('search-popup-option-acc-95');
-    // First page (100 rows) holds the value near its end: never revealed uncentred; another page loads.
-    await waitFor(() => expect(listCalls(loadPage).length).toBeGreaterThan(1));
-    scrollHeight.mockRestore(); clientHeight.mockRestore(); rect.mockRestore();
+  it('stays held while the extra page is in flight, then centres when it lands (ETP-6103)', async () => {
+    restoreGeometry = mockGeometry();
+    const all = Array.from({ length: 300 }, (_, i) => row(i));
+    const next = deferredPage();
+    const loadPage = vi.fn((q, offset, _signal, opts) => {
+      const size = opts?.limit ?? SEARCH_POPUP_PAGE_SIZE;
+      const page = { items: all.slice(offset, offset + size), hasMore: offset + size < all.length };
+      return offset > 0 ? next.promise.then(() => page) : Promise.resolve(page);
+    });
+    renderPopup({ loadPage, value: 'acc-98', valueLabel: 'Account 0098' });
+    // acc-98 is among the last rows of the 100-row first page: it cannot be centred yet.
+    await waitFor(() => expect(loadPage.mock.calls.filter((c) => c[1] > 0)).toHaveLength(1));
+    const option = screen.getByTestId('search-popup-option-acc-98');
+    expect(screen.getByTestId('search-popup-locating')).toBeInTheDocument();
+    expect(option).toHaveClass('invisible');
+    // Still held a moment later: the in-flight page must not be mistaken for the page cap.
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    expect(screen.getByTestId('search-popup-locating')).toBeInTheDocument();
+    expect(option).toHaveClass('invisible');
+
+    await act(async () => { next.resolve(); await next.promise; });
+    await waitFor(() => expect(screen.queryByTestId('search-popup-locating')).toBeNull());
+    expect(option).not.toHaveClass('invisible');
+    expect(Math.abs(option.getBoundingClientRect().top - (PANEL_H - ROW_H) / 2)).toBeLessThan(2);
+  });
+
+  it('does not hold forever when reopened after the walk page was aborted (ETP-6103)', async () => {
+    const all = Array.from({ length: 1000 }, (_, i) => row(i));
+    let hang = true;
+    const loadPage = vi.fn((q, offset, signal, opts) => {
+      const size = opts?.limit ?? SEARCH_POPUP_PAGE_SIZE;
+      if (offset > 0 && hang) {
+        return new Promise((_, reject) => signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))));
+      }
+      const matches = q ? all.filter((o) => o.name.includes(q)) : all;
+      return Promise.resolve({ items: matches.slice(offset, offset + size), hasMore: offset + size < matches.length });
+    });
+    const popup = (open) => <SearchPopup open={open} onClose={() => {}} onSelect={() => {}} loadPage={loadPage} value="acc-150" valueLabel="Account 0150" title="t" />;
+    const { rerender } = render(popup(true));
+    await waitFor(() => expect(loadPage.mock.calls.filter((c) => c[1] > 0)).toHaveLength(1));
+    rerender(popup(false));
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    hang = false;
+    rerender(popup(true));
+    await screen.findByTestId('search-popup-option-acc-0');
+    await waitFor(() => expect(screen.queryByTestId('search-popup-locating')).toBeNull());
+    expect(screen.getByTestId('search-popup-option-acc-0')).not.toHaveClass('invisible');
   });
 
   it('releases the hold when the value is not found (ETP-6103)', async () => {

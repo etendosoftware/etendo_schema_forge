@@ -103,6 +103,9 @@ export function SearchPopup({
     const controller = new AbortController();
     abortRef.current = controller;
     setLoading(true);
+    // An aborted walk page never lowers these (its finally returns early): reset on every (re)open.
+    setLoadingMore(false);
+    loadingMoreRef.current = false;
     setError(null);
     setOptions([]);
     setHasMore(false);

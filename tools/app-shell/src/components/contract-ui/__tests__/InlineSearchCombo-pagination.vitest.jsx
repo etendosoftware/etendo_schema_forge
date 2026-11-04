@@ -25,6 +25,7 @@ vi.mock('@/i18n', () => ({
 }));
 
 import InlineSearchCombo from '../InlineSearchCombo.jsx';
+import { mockGeometry } from './selectorTestGeometry.js';
 
 const FIELD = { key: 'tax' };
 
@@ -470,6 +471,30 @@ describe('InlineSearchCombo — current-selection resolution off the loaded page
     await waitFor(() => expect(screen.getByTestId('inline-add-option-tax-tax-77')).toBeInTheDocument());
     expect(listOffsets()).toEqual([0, 100]);
     expect(lookupCalls()).toHaveLength(1);
+  });
+
+  // ETP-6103 — the committed value also sits in the local catalog, so it resolves a row before the
+  // first server page lands. The centring must wait for that page, not refetch page 0 itself
+  // (that would supersede the opening request and take the 1 s typing debounce).
+  it('does not refetch page 0 while the opening page is still in flight', async () => {
+    // With a fake layout the catalog row cannot be centred yet, which is what triggered the refetch.
+    const restoreGeometry = mockGeometry();
+    try {
+    let release;
+    const first = new Promise((resolve) => { release = resolve; });
+    global.fetch = vi.fn().mockReturnValueOnce(first).mockImplementation(() => jsonOk(makePage(0, 100)));
+    const options = ['c0', 'c1', 'c2', 'c3', 'c4'].map((id) => ({ id, name: id }));
+
+    await committedCombo({ value: 'c4', displayLabel: 'c4', options });
+    await openViaChip();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+
+    release({ ok: true, json: async () => ({ items: makePage(0, 100) }) });
+    await screen.findByTestId('inline-add-option-tax-0');
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    expect(listOffsets().filter((o) => o === 0)).toHaveLength(1);
+    } finally { restoreGeometry(); }
   });
 
   it('does not walk once the user typed a search', async () => {

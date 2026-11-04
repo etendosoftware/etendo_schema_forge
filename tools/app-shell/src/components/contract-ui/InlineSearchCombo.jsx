@@ -219,7 +219,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           const items = data.items.map(it => ({ id: it.id, name: it.label || it.name, ...it }));
           setServerResults(prev => (offset === 0 ? items : [...(prev ?? []), ...items]));
           offsetRef.current = offset + items.length;
-          const more = items.length >= limit;
+          const more = data.hasMore ?? items.length >= limit;
           hasMoreRef.current = more;
           setHasMore(more);
         })
@@ -467,7 +467,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
   const selectedIndex = resolveSelectedIndex(filtered, value);
   const { locating } = useLocateCommittedValue({
     open, query, value, excludeId, dropdownRef, interactedRef, selectorUrl, rows: serverResults,
-    hasMore, pageSize: SERVER_SEARCH_PAGE, settledFetches, locateDone, setLocateDone,
+    panelLoading: loadingFirstPage, hasMore, pageSize: SERVER_SEARCH_PAGE, settledFetches, locateDone, setLocateDone,
     fetchPage: fetchServerResults, offsetRef,
     selectedIndex, renderedCount: filtered.length, layoutKey: dropdownStyle,
   });

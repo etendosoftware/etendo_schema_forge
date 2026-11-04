@@ -102,13 +102,17 @@ export function useLocateCommittedValue({
 
   useLayoutEffect(() => {
     if (!open || selectedIndex < 0 || centreBlocked || centeredRef.current || interactedRef.current) return;
+    // Rows from the local catalog can match before any server page landed: wait for the page.
+    if (paged && canFetch && rows == null) return;
     const panel = dropdownRef.current;
     const el = panel?.querySelector(`[data-option-index="${selectedIndex}"]`);
     if (!el) return;
     if (centerOptionInPanel(panel, el) || !hasMore) {
       centeredRef.current = true;
       setReleased(true);
-    } else if (paged && canFetch && !loading && loadedRows < LOCATE_SELECTION_MAX_PAGES * pageSize) {
+    } else if (paged && canFetch && loading) {
+      // A page is in flight: stay held; `settledFetches` re-runs this once it has landed.
+    } else if (paged && canFetch && loadedRows < LOCATE_SELECTION_MAX_PAGES * pageSize) {
       // Among the last loaded rows: it can only be centred once more rows exist below it.
       fetchPage('', offsetRef.current, { limit: walkLimit });
     } else {
@@ -116,7 +120,7 @@ export function useLocateCommittedValue({
       centeredRef.current = true;
       setReleased(true);
     }
-  }, [open, selectedIndex, centreBlocked, layoutKey, renderedCount, hasMore, loading, settledFetches, loadedRows, paged, canFetch, pageSize, walkLimit, fetchPage, offsetRef, dropdownRef, interactedRef]);
+  }, [open, selectedIndex, centreBlocked, layoutKey, renderedCount, hasMore, loading, settledFetches, loadedRows, paged, canFetch, rows, pageSize, walkLimit, fetchPage, offsetRef, dropdownRef, interactedRef]);
 
   return { locating };
 }

@@ -210,7 +210,7 @@ function fetchServerOptions({ apiFetch, selectorUrl, selectorContext, parentKey,
     })
     .then(data => {
       const items = (data?.items ?? []).map(i => ({ id: i.id, name: i.label || i.name || i.id, ...i }));
-      return { items, hasMore: items.length >= limit };
+      return { items, hasMore: data?.hasMore ?? items.length >= limit };
     });
 }
 
