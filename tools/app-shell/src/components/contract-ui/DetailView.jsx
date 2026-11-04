@@ -1582,7 +1582,7 @@ export function DetailView({
       // same lightweight, non-disruptive header refresh already used after
       // primary-line edits (see the exchangeRates PATCH handler above).
       hook.refreshHeaderTotals?.(currentId);
-      toast.success(ui('totalDiscountSaved'));
+      toast.success(ui(Number(pct) > 0 ? 'totalDiscountSaved' : 'totalDiscountRemoved'));
     } catch (err) {
       toast.error(err?.message || ui('networkError'));
     }

@@ -918,8 +918,11 @@ test.describe('return-to-vendor-shipment — import from receipt modal', () => {
     expect(availableReceiptsBodies[0]).toMatchObject({ businessPartner: 'bp-vendor-001' });
 
     // ── Case 8: expand the receipt to load its lines ──────────────────────
-    // Click the receipt row to toggle expand
-    const receiptRow = page.locator('div').filter({ hasText: /^GR-SRC-001/ }).first();
+    // Click the receipt row to toggle expand. ETP-5828: target the document row itself
+    // (ImportLinesModal__docRow). The old `div` filtered by leading text matched the first such
+    // div, which in the fixed-size popup is the whole scrollable list — a click at its centre
+    // lands on empty space below the single row and expands nothing.
+    const receiptRow = page.getByTestId('ImportLinesModal__docRow').filter({ hasText: 'GR-SRC-001' });
     await receiptRow.click();
 
     // Product line becomes visible after availableReceiptLines is called
