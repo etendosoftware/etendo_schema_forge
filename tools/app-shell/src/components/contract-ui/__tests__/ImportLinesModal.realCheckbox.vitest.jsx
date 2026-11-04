@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/ImportLinesModal.jsx
 // --- Mocks (before imports) ---
 
 vi.mock('@/i18n', () => ({
@@ -5,6 +6,7 @@ vi.mock('@/i18n', () => ({
     if (params) return `${key}:${JSON.stringify(params)}`;
     return key;
   },
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 
 vi.mock('sonner', () => ({
@@ -73,7 +75,7 @@ async function expandDoc() {
   let clicked = false;
   await waitFor(() => {
     if (!clicked) {
-      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
       clicked = true;
     }
     expect(screen.getByText('Widget A')).toBeInTheDocument();
@@ -103,8 +105,8 @@ describe('ImportLinesModal — real Checkbox click semantics (ETP-5067)', () => 
     renderModal();
     await expandDoc();
 
-    // [doc-1 checkbox, line-1 checkbox, line-2 checkbox]
-    const lineCheckbox = screen.getAllByRole('checkbox')[1];
+    // [doc-1 checkbox, doc-1 lines master checkbox, line-1 checkbox, line-2 checkbox]
+    const lineCheckbox = screen.getAllByRole('checkbox')[2];
     expect(lineCheckbox).not.toBeChecked();
 
     clickVisibleBox(lineCheckbox);
@@ -117,7 +119,7 @@ describe('ImportLinesModal — real Checkbox click semantics (ETP-5067)', () => 
     renderModal();
     await expandDoc();
 
-    const lineCheckbox = screen.getAllByRole('checkbox')[1];
+    const lineCheckbox = screen.getAllByRole('checkbox')[2];
     clickVisibleBox(lineCheckbox);
     expect(lineCheckbox).toBeChecked();
 
@@ -129,7 +131,7 @@ describe('ImportLinesModal — real Checkbox click semantics (ETP-5067)', () => 
     renderModal();
     await expandDoc();
 
-    const lineCheckbox = screen.getAllByRole('checkbox')[1];
+    const lineCheckbox = screen.getAllByRole('checkbox')[2];
     clickVisibleBox(lineCheckbox);
 
     expect(screen.getByText('Widget A')).toBeInTheDocument();

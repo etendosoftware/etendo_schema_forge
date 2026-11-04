@@ -119,7 +119,7 @@ export default function ImportFromSalesOrderModal(props) {
     <ImportLinesModal
       {...props}
       linesEndpoint="goods-shipment/goodsShipmentLine"
-      titleKey="importFromSalesOrder"
+      titleKey="addFromSalesOrder"
       searchPlaceholderKey="searchSalesOrder"
       emptyMessageKey="noCompletedSalesOrdersForThisCustomer"
       noSearchResultsKey="noOrdersMatchYourSearch"

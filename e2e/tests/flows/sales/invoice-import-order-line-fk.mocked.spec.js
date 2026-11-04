@@ -1,5 +1,6 @@
 // @covers artifacts/sales-invoice/custom/ImportFromOrderModal.jsx
 // @covers artifacts/purchase-invoice/custom/ImportFromPurchaseOrderModal.jsx
+// @covers tools/app-shell/src/windows/custom/shared/InvoiceOrderImportModal.jsx
 import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 
@@ -20,8 +21,10 @@ import { login } from '../../helpers/auth.js';
  *     `{ orders: [{ orderId, lines: [{ sourceLineId, quantity }] }], carryGlobalDiscount }`.
  *     The FK travels as `sourceLineId` and the server builds the line; pending quantities are
  *     read through `.../action/availableOrderLines`, never computed in the browser.
- *   - purchase-invoice (`ImportFromPurchaseOrderModal`) — still one `POST /purchase-invoice/lines`
- *     per line, carrying the FK as `salesOrderLine` (the spec's java_qualifier).
+ *   - purchase-invoice (`ImportFromPurchaseOrderModal`) — the same unified popup (ETP-5828) on its
+ *     client path (`importVia: 'client'`, until QA decides MCP-2): still one
+ *     `POST /purchase-invoice/lines` per line, carrying the FK as `salesOrderLine` (the spec's
+ *     java_qualifier).
  *
  * What this spec locks, per window:
  *   1. The FK of the selected order line reaches the server under the key that window's
@@ -73,8 +76,8 @@ const WINDOWS = [
     label: 'sales-invoice ← sales-order',
     invoiceSpec: 'sales-invoice',
     orderSpec: 'sales-order',
-    // ui('importFromSalesOrder') — "Add from order" / "Añadir desde pedido"
-    importButton: /Add from order|Añadir desde pedido/i,
+    // ui('importFromSalesOrder') — "Import from order" / "Importar desde pedido"
+    importButton: /Import from order|Importar desde pedido/i,
     documentType: { transactionDocument: 'doctype-ar-001', 'transactionDocument$_identifier': 'AR Invoice' },
     importVia: 'action',
   },
@@ -319,8 +322,8 @@ async function expandOrder(page) {
 
 // The modal's Checkbox renders its native input sr-only inside a 1px clip-rect, which
 // Playwright's mouse-based click cannot reliably hit (same reason the shared
-// clickLastCheckbox() helper uses a DOM click). Index 0 is the document-level checkbox,
-// 1..n are the lines in render order.
+// clickLastCheckbox() helper uses a DOM click). Index 0 is the document-level checkbox, 1 the
+// master checkbox of the expanded order's lines table, 2..n the lines in render order.
 function modalCheckboxes(page) {
   return page.locator('.fixed.inset-0.z-50').first().getByRole('checkbox');
 }
@@ -349,9 +352,10 @@ for (const win of WINDOWS) {
       await expect(page.getByText('Producto Pedido B').first()).toBeVisible({ timeout: 10_000 });
 
       // Select the second order line only, so the assertion pins a specific id.
-      await modalCheckboxes(page).nth(2).evaluate((el) => el.click());
+      await modalCheckboxes(page).nth(3).evaluate((el) => el.click());
 
-      const importBtn = page.getByRole('button', { name: /Import selected|Importar seleccionadas/i });
+      // ui('importSelectedOrders') — "Import selected (1)" / "Importar seleccionados (1)"
+      const importBtn = page.getByRole('button', { name: /Import selected|Importar seleccionados/i });
       await expect(importBtn).toBeEnabled({ timeout: 5_000 });
       await importBtn.click();
 
