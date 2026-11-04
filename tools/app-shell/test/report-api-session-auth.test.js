@@ -123,8 +123,9 @@ function stubFetch({ sessionOk = true, sessionStatus = 200, roleOrgs = ['0'] } =
   };
 }
 
+// A report's NEO data call. The access check (ETP-6080) also reads /sws/neo/myreportaccess; that is not one.
 function neoCall() {
-  return [...fetchCalls].reverse().find((c) => c.url.includes('/sws/neo/'));
+  return [...fetchCalls].reverse().find((c) => c.url.includes('/sws/neo/') && !c.url.includes('/sws/neo/myreportaccess'));
 }
 
 describe('report-api.js — session-cookie authentication (ETP-5460)', () => {
@@ -556,12 +557,14 @@ describe('report-api.js — session-cookie authentication (ETP-5460)', () => {
   describe('report-api.js source — wiring', () => {
     it('resolves the /query route and the org check from the shared core modules (ETP-6080)', () => {
       assert.match(PLUGIN_SRC, /const \{ handleReportQuery, runReportSql \} = await loadReportCli\('report-query'\)/);
-      assert.match(PLUGIN_SRC, /assertReportOrgAccess \} = await loadReportCli\('report-auth'\)/);
+      assert.match(PLUGIN_SRC, /assertReportOrgAccess, assertReportAccess \} = await loadReportCli\('report-auth'\)/);
       const render = PLUGIN_SRC.indexOf("path.match(/^\\/api\\/reports\\/([\\w-]+)\\/render$/)");
       assert.ok(render > 0, 'render route not found');
       const check = PLUGIN_SRC.indexOf('await checkRenderOrgAccess(reportId, session, params)', render);
       const fetch = PLUGIN_SRC.indexOf('await fetchReportData(reportId', render);
       assert.ok(check > 0 && check < fetch, 'the org check must run before fetchReportData on /render');
+      const access = PLUGIN_SRC.indexOf('await assertReportAccess(session, reportId, { etendoBase: etendoUrl })', render);
+      assert.ok(access > 0 && access < check, 'the report access check must run before the org check on /render');
     });
 
     it('runs the render SQL through core runReportSql, not a copy of it (ETP-6080 W4)', () => {

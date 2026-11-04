@@ -27,7 +27,7 @@ const { resolveGrouping, buildNestedGroups, buildAccountReportTree, buildRenderA
 const { applyPlaceholders } = await loadReportCli('report-sql');
 const { filterAndTransformParams } = await loadReportCli('report-filters');
 const { hydrateDocumentBranding, resolveCompanyLogoDataUrl } = await loadReportCli('report-branding');
-const { resolveReportSession, reportAuthErrorBody, assertReportOrgAccess } = await loadReportCli('report-auth');
+const { resolveReportSession, reportAuthErrorBody, assertReportOrgAccess, assertReportAccess } = await loadReportCli('report-auth');
 const { handleReportQuery, runReportSql } = await loadReportCli('report-query');
 
 const ARTIFACTS_DIR = resolve(import.meta.dirname, '../../../artifacts');
@@ -765,6 +765,8 @@ export default function reportApiPlugin(options = {}) {
           let session;
           try {
             session = await resolveReportSession(req.headers, { method: req.method, etendoBase: etendoUrl });
+            // ETP-6080: the role must be allowed to open this report, as on /query.
+            await assertReportAccess(session, reportId, { etendoBase: etendoUrl });
           } catch (e) {
             const { status, body: errorBody } = reportAuthErrorBody(e);
             res.statusCode = status;
