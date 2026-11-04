@@ -590,7 +590,9 @@ test('passes Etendo statuses 400, 401, 402, 403, 404, 409 and 422 through', asyn
     );
     assert.equal(result.status, status);
     assert.equal(result.errors?.[0].status, String(status));
-    assert.equal(result.errors?.[0].detail, `m${status}`);
+    // A blocked tenant's 402 never forwards Etendo's text: it is always tenant_blocked.
+    if (status === 402) assert.equal(result.errors?.[0].code, 'tenant_blocked');
+    else assert.equal(result.errors?.[0].detail, `m${status}`);
   }
 });
 
