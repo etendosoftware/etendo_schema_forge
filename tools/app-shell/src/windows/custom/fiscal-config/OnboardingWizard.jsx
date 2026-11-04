@@ -10,45 +10,21 @@ import { neoBase } from '@/components/related-documents/helpers.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import {
-  buildOnboardingPayloads,
-  getFiscalRecordId,
-  getAllowedSystemsForTerritory,
+  allowedSystemsFor,
   resolveSystem,
 } from './fiscalConfig.utils.js';
+import { configureFiscalSystem, fetchCreatedRecords } from './fiscalSystemApi.js';
+import { useFiscalCatalog } from './useFiscalCatalog.js';
 import SiiSection from './SiiSection.jsx';
 import TbaiSection from './TbaiSection.jsx';
 import VerifactuSection from './VerifactuSection.jsx';
 import TabBar from './TabBar.jsx';
 import { TERRITORY_GROUP_META, buildTerritories, buildSystems } from './fiscalCatalog.js';
 
-// Keep in sync with useFiscalConfig.js
-const SII_ENTITY      = 'siiConfiguration';
-const TBAI_ENTITY     = 'header';
-const VERIFACTU_ENTITY = 'cabeceraDeConfiguraciónVerifactu';
-
 // ── Network ───────────────────────────────────────────────────────────────────
-
-async function postRecord(path, body, apiFetch) {
-  const res = await apiFetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
-  const json = await res.json().catch(() => null);
-  return json?.response?.data?.[0] ?? null;
-}
-
-async function createAndFetchRecord({ specName, entityName, body, apiFetch, system }) {
-  const created = await postRecord(`/${specName}/${entityName}`, body, apiFetch);
-  const recordId = getFiscalRecordId(created, system);
-  if (!recordId) return created;
-  const fetched = await apiFetch(`/${specName}/${entityName}/${recordId}`)
-    .then(r => r.ok ? r.json() : null)
-    .then(j => j?.response?.data?.[0] || null)
-    .catch(() => null);
-  return fetched ?? created;
-}
+// ETP-6053: the wizard no longer builds or posts config records itself. It reads the territory ×
+// system rules from the backend (useFiscalCatalog) and activates the chosen system with the
+// organization's configureFiscalSystem action (fiscalSystemApi.js), the same call agents make.
 
 // ── Badge color by regime ─────────────────────────────────────────────────────
 
@@ -674,8 +650,8 @@ function ManualTerrCard({ territory, selected, onPick }) {
   );
 }
 
-function ManualScreen({ selectedTerritory, manualSystem, orgName, selectedOrg, orgList, onSelectOrg, ui, TERRITORIES, SYSTEMS, goTo, onSelectTerritory, onSetManualSystem }) {
-  const manualAllowedSystems = getAllowedSystemsForTerritory(selectedTerritory);
+function ManualScreen({ selectedTerritory, manualSystem, orgName, selectedOrg, orgList, onSelectOrg, ui, TERRITORIES, SYSTEMS, goTo, onSelectTerritory, onSetManualSystem, catalog }) {
+  const manualAllowedSystems = allowedSystemsFor(catalog, selectedTerritory);
   const pageHeadEl = renderPageHead({ selectedOrg, orgList, onSelectOrg, ui });
 
   return (
@@ -1043,6 +1019,7 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome, for
   const orgName = selectedOrg?.name ?? null;
   const orgList = selectedRole?.orgList ?? [];
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
+  const { catalog, error: catalogError } = useFiscalCatalog(apiBaseUrl, orgId);
 
   function handleSelectOrg(org) {
     selectOrg(org);
@@ -1088,7 +1065,10 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome, for
   }
 
   const t = TERRITORIES[selectedTerritory];
-  const resolvedSystem = manualSystem ?? resolveSystem({ regime: t?.regime ?? null, alsoNational, volume, lowChoice, territory: selectedTerritory });
+  const resolvedSystem = manualSystem ?? resolveSystem({
+    regime: t?.regime ?? null, alsoNational, volume, lowChoice,
+    allowedSystems: allowedSystemsFor(catalog, selectedTerritory),
+  });
 
   async function createRecords() {
     // ETP-5272 follow-up: the "Confirm" button is already disabled while
@@ -1102,19 +1082,11 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome, for
     setSaving(true);
     setError(null);
     try {
-      const org = { adOrgId: orgId };
-      const records = {};
-      const payloads = buildOnboardingPayloads(sys, terrId);
-
-      if (payloads.sii) {
-        records.sii = await createAndFetchRecord({ specName: 'sii-config', entityName: SII_ENTITY, body: { ...org, ...payloads.sii }, apiFetch, system: 'SII' });
-      }
-      if (payloads.tbai) {
-        records.tbai = await createAndFetchRecord({ specName: 'tbai-config', entityName: TBAI_ENTITY, body: { ...org, ...payloads.tbai }, apiFetch, system: 'TBAI' });
-      }
-      if (payloads.verifactu) {
-        records.verifactu = await createAndFetchRecord({ specName: 'verifactu-config', entityName: VERIFACTU_ENTITY, body: { ...org, ...payloads.verifactu }, apiFetch, system: 'VERIFACTU' });
-      }
+      // The server builds every record from the territory and refuses, in the user's language,
+      // what the wizard must not do (test mode, a SIF already active, a territory that does not
+      // allow the system). Its message is shown as before, below the confirm button.
+      const outcome = await configureFiscalSystem(apiFetch, orgId, { system: sys, territory: terrId });
+      const records = await fetchCreatedRecords(apiFetch, outcome?.created);
       setCreatedRecords(records);
       setSystem(sys);
       goTo('detail');
@@ -1191,6 +1163,7 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome, for
         TERRITORY_GROUPS={TERRITORY_GROUPS}
         onSelectTerritory={handleTerritorySelection}
         onSetManualSystem={setManualSystem}
+        catalog={catalog}
         data-testid="ManualScreen__e9ef3f" />
     );
   } else if (step === 'subquestion') {
@@ -1227,6 +1200,16 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome, for
             icon={AlertTriangle}
             data-testid="OnboardingWizard__testModeBanner">
             {ui('fiscal.testModeLock.warning')}
+          </InfoBanner>
+        </div>
+      )}
+      {catalogError && (
+        <div className="px-5 pt-4 flex-shrink-0">
+          <InfoBanner
+            tone="danger"
+            icon={AlertTriangle}
+            data-testid="OnboardingWizard__catalogErrorBanner">
+            {ui('fiscal.catalog.err.load', { error: catalogError })}
           </InfoBanner>
         </div>
       )}

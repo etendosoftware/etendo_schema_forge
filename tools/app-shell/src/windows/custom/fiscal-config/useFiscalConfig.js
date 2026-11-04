@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { detectProfile, activeOrNull, isActiveRecord } from './fiscalConfig.utils.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
-import { todayCalendarISO } from '@/lib/dateOnly.js';
 import { parseAdoptionDate } from '@/windows/custom/shared/fiscalTargets.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { configureFiscalSystem, fetchCreatedRecords } from './fiscalSystemApi.js';
 
 // Confirmed from artifacts/*/contract.json → backendContract.window.primaryEntity
 const SII_ENTITY      = 'siiConfiguration';
@@ -156,46 +156,20 @@ export function useFiscalConfig(orgId, apiBaseUrl) {
   useEffect(() => { load(); }, [load]);
 
   /**
-   * POSTs a minimal record for the complementary system (sii or tbai) under
-   * the current org. Returns the created record (first item in response.data).
-   * Throws on HTTP error.
+   * "Añadir SII": activates the complementary system on top of the current one through the
+   * backend's `configureFiscalSystem` action (ETP-6053) — the same call, rules and records as the
+   * wizard and agents. No territory is sent: the server takes the existing TicketBAI's, derives
+   * every SII value from it, and refuses (in the request language) what the wizard would refuse.
+   * Returns the created record. Throws with the server's message on refusal.
    *
    * @param {'sii'|'tbai'} system
-   * @param {string} adOrgId
+   * @param {string} orgId
    * @returns {Promise<object|null>}
    */
-  async function createComplementary(system, adOrgId) {
-    // tbai-config/header  or  sii-config/siiConfiguration
-    const specPath = system === 'tbai'
-      ? `/tbai-config/${TBAI_ENTITY}`
-      : `/sii-config/${SII_ENTITY}`;
-
-    // For SII, include the same defaults the onboarding wizard sets so the record
-    // is fully operational from the start (ETP-4783: fix for "Añadir SII" button
-    // when TBAI is already configured — the wizard path sets these, but the
-    // complementary POST skipped them, leaving the record with empty/false defaults).
-    // ETP-5700 — the LOCAL calendar day, not the UTC one (toISOString), which in
-    // Spain between 00:00 and 01:00/02:00 is still yesterday.
-    const today = todayCalendarISO();
-    const body = system === 'sii'
-      ? {
-          adOrgId,
-          acogidaAlSII:      'Y',   // In SII System
-          fechaAcogidaSII:   today, // In SII System Date
-          monitordate:       today, // From date display in SII Monitor
-          entornoDeProduccin: 'Y',  // Production Environment
-          adjuntarArchivosXML: 'Y', // Attach XML Files
-        }
-      : { adOrgId };
-
-    const res = await apiFetch(specPath, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
-    const json = await res.json().catch(() => null);
-    return json?.response?.data?.[0] ?? null;
+  async function createComplementary(system, orgId) {
+    const outcome = await configureFiscalSystem(apiFetch, orgId, { system: system.toUpperCase() });
+    const records = await fetchCreatedRecords(apiFetch, outcome?.created);
+    return records[system] ?? null;
   }
 
   return { ...state, refetch: load, createComplementary };

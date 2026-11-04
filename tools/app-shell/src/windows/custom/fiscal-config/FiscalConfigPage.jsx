@@ -19,6 +19,7 @@ import { useFiscalConfig } from './useFiscalConfig.js';
 import { detectProfile } from './fiscalConfig.utils.js';
 import { useCertExpiry } from './useCertExpiry.js';
 import { useFiscalTestMode } from './useFiscalTestMode.js';
+import { useFiscalCatalog } from './useFiscalCatalog.js';
 import { useDebugMode } from '../fiscal-monitor/useDebugMode.js';
 import CertExpiryBanner from './CertExpiryBanner.jsx';
 import OnboardingWizard from './OnboardingWizard.jsx';
@@ -188,6 +189,9 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
   // when active, the whole window becomes read-only (no new SIF activation is
   // allowed outside a production environment). Fails open on fetch error.
   const { forceTestMode } = useFiscalTestMode(apiBaseUrl);
+  // ETP-6053 — the territory × system rules come from the backend; the status panel reads which
+  // territory the stored records belong to from them.
+  const { catalog: fiscalCatalog } = useFiscalCatalog(apiBaseUrl, orgId);
 
   const siiRef       = useRef(null);
   const tbaiRef      = useRef(null);
@@ -309,6 +313,7 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
   // derived from the stored records (deriveConfiguredStatus); no link to the submission history.
   const configuredStatus = deriveConfiguredStatus({
     profile: effectiveProfile, siiRecord: effectiveSii, tbaiRecord: effectiveTbai, verifactuRecord: effectiveVerifactu,
+    catalog: fiscalCatalog,
   });
   // What each tab of the SII + TicketBAI layout edits: the stored record, or the complementary one
   // while it is being added.

@@ -20441,6 +20441,7 @@
     "fiscal.onboarding.confirm.row.system": "Sistema fiscal",
     "fiscal.onboarding.confirm.next.title": "Próximo paso:",
     "fiscal.onboarding.confirm.next.body": "Tras confirmar, podrás completar los datos restantes: el certificado digital y, según el sistema, el n.º de registro de la autorización (SII) o el envío automático (TicketBAI).",
+    "fiscal.catalog.err.load": "No se pudieron cargar los sistemas fiscales disponibles por territorio: {error}",
     "fiscal.onboarding.confirm.creating": "Creando…",
     "fiscal.onboarding.confirm.btn": "Confirmar",
     "fiscal.onboarding.manual.title": "Configuración manual",

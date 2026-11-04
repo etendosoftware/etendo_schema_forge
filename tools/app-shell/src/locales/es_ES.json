@@ -21363,6 +21363,7 @@
     "fiscal.changeSif.err.noRecordId": "No se ha podido resolver el registro de configuración fiscal a desactivar.",
     "fiscal.changeSif.err.partial": "Los siguientes sistemas ya se desactivaron: {deactivated}. No se pudieron desactivar los restantes: {error}. Vuelve a abrir este diálogo para terminar de desactivar el resto.",
     "fiscal.testModeLock.warning": "Solo podrá activar un sistema fiscal en un entorno productivo.",
+    "fiscal.catalog.err.load": "No se han podido cargar los sistemas fiscales disponibles por territorio: {error}",
     "fiscal.save": "Guardar",
     "fiscal.saving": "Guardando…",
     "fiscal.noOrg": "No se ha seleccionado una organización en la sesión actual.",

@@ -68,7 +68,7 @@ The manual screen still enforces territory-driven compatibility, but it no longe
 | Place | Options (order shown) |
 |---|---|
 | Sub-question, billing ≤ 6.010.121 € (`siiver` territories, `lowChoice`) | SII, VERI\*FACTU (was VERI\*FACTU, SII — reordered in ETP-5597) |
-| Manual screen, "Sistema fiscal" (`getAllowedSystemsForTerritory`) | Navarra: SII · Álava/Bizkaia/Gipuzkoa: TicketBAI, SII + TicketBAI · Baleares/Canarias: SII, VERI\*FACTU · Ceuta/Melilla: VERI\*FACTU |
+| Manual screen, "Sistema fiscal" (`allowedSystemsFor(catalog, territory)`, from the backend catalog since ETP-6053) | Navarra: SII · Álava/Bizkaia/Gipuzkoa: TicketBAI, SII + TicketBAI · Baleares/Canarias: SII, VERI\*FACTU · Ceuta/Melilla: VERI\*FACTU |
 | Territory screen groups (by regime) | SII (Navarra), TicketBAI (País Vasco), SII / VERI\*FACTU (rest) |
 | Detail/config tabs for SII + TicketBAI | SII, TicketBAI |
 
@@ -456,7 +456,12 @@ Ceuta/Melilla in the first place, unlike SII.
 
 ### Fix — data/config-level, not a one-off `if`
 
-`getAllowedSystemsForTerritory(territory)` in `fiscalConfig.utils.js` is now backed by a
+> **Since ETP-6053** the table below lives only in the backend (`FiscalSifRules` in
+> com.etendoerp.go) and reaches the window through the `fiscalSystemCatalog` action; the JS table,
+> `getAllowedSystemsForTerritory`, `buildOnboardingPayloads` and `getTerritoryDefaults` were
+> removed. See "Activation through the backend (ETP-6053)". The text below is the ETP-5272 history.
+
+`getAllowedSystemsForTerritory(territory)` in `fiscalConfig.utils.js` was backed by a
 single declarative table, `TERRITORY_ALLOWED_SYSTEMS`, instead of a switch that grouped
 `baleares`/`canarias`/`ceuta` together:
 
@@ -554,8 +559,8 @@ The SII and TicketBAI adoption dates (`fechaAcogidaSII` / `monitordate` on `aeat
 as UTC, which in Spain hid every invoice dated on the adoption day from the fiscal send gate
 (`sales-invoice.md` → "Fiscal sending … — ETP-5700"):
 
-- **Writing "today".** The onboarding payloads (`todayIsoDate()` in `fiscalConfig.utils.js`),
-  `createComplementary` (`useFiscalConfig.js`) and the save handlers of `SiiSection.jsx` /
+- **Writing "today".** The onboarding records (built by the backend since ETP-6053, on the
+  server's local day) and the save handlers of `SiiSection.jsx` /
   `TbaiSection.jsx` now use `todayCalendarISO()` (`@/lib/dateOnly.js`). The previous
   `new Date().toISOString().slice(0, 10)` is the UTC day, still yesterday in Spain between local
   midnight and 01:00/02:00.
@@ -567,48 +572,60 @@ as UTC, which in Spain hid every invoice dated on the adoption day from the fisc
   and `fiscal-monitor`'s `buildCutoverCriteria`, which already sliced the first 10 characters and is
   unaffected.
 
-## Agents (MCP) — same rules as the wizard (ETP-6053)
+## Activation through the backend (ETP-6053)
+
+The window no longer builds or posts the config records itself. The onboarding wizard and the
+"Añadir SII" button activate a billing system with the same action agents use, on the
+organization (`useApiFetch`, `fiscalSystemApi.js`):
+
+| Call | What the window does with it |
+|---|---|
+| `GET /organization/organization/{orgId}/action/fiscalSystemCatalog` (`useFiscalCatalog`) | `systems` per territory: the manual screen's choices (`allowedSystemsFor`) and the SII veto of `resolveSystem` (Ceuta/Melilla → VERI*FACTU). The record values per territory: which territory a stored configuration belongs to (`territoryOfRecords`, the "Estado" panel). A failed read shows a `fiscal.catalog.err.load` banner over the wizard |
+| `POST /organization/organization/{orgId}/action/configureFiscalSystem` `{system, territory}` | The wizard's "Confirmar": the server validates and creates the records; the window reads them back (`fetchCreatedRecords`) for the detail step |
+| same, `{system: 'SII'}` | "Añadir SII" (`useFiscalConfig.createComplementary`): no territory, the server takes the TicketBAI's |
+
+Rules and refusals (messages in the user's language, shown where the wizard and "Añadir SII"
+showed errors before — below the confirm button, and in the `fiscal.addComplementary.err.createFailed`
+banner):
+
+| Rule | Refusal |
+|---|---|
+| territory mandatory and compatible with the system | `ETGO_FiscalSifTerritoryRequired`, `ETGO_FiscalSifNotAllowed` |
+| one active SIF per organization, SII + TicketBAI aside | `ETGO_FiscalSifAlreadyConfigured`; "Añadir SII" in TicketBAI's own territory only (`ETGO_FiscalSifTerritoryMismatch`), refused on a legacy TicketBAI without territory (`ETGO_FiscalSifTbaiNoTerritory`) |
+| only in a productive environment (`ETSG_ForceTestMode`) | `ETGO_FiscalSifTestMode` — "Solo podrá activar un sistema fiscal en un entorno productivo." (the window is also locked, as before) |
+
+What stays in the window is presentation only: `fiscalCatalog.js` keeps the territory order, the
+wizard's questions (`regime`, `askNational`, `askVolume`) and the labels; no allowed systems and
+no derived values.
+
+**SII is acogido from creation, on every channel.** The records `configureFiscalSystem` builds
+carry `acogidaAlSII: 'Y'` and the SII is stored with `INSIISYSTEM = 'Y'` and `fechaAcogidaSII` =
+today. Before ETP-6053 the wizard posted `'N'` and turned it on with the detail save, so leaving the
+detail step without saving left an active SII that was not acogido; the detail save now keeps the
+same value. `AEATSII_CHECK_SIFS_CONFIGS_TRG` therefore runs at the activation instead of at the
+detail save. "Añadir SII" gets the same SII record the wizard's SII + TicketBAI gets for that
+territory (`taxtype` IVA, `guipuzcoa` for Gipuzkoa) — it used to post `acogidaAlSII: 'Y'` alone.
+
+### Agents (MCP)
 
 Agents never create the three config records with `etendo_create`: that verb (and `etendo_batch`
 creates, and `etendo_delete`) is hidden on `sii-config/siiConfiguration`, `tbai-config/header` and
-`verifactu-config/cabeceraDeConfiguraciónVerifactu` through `MCP_CONFIG.verbs`. They activate a
-SIF with one declared action that applies this window's onboarding rules on the server:
+`verifactu-config/cabeceraDeConfiguraciónVerifactu` through `MCP_CONFIG.verbs`. They call the same
+action:
 
 ```
 etendo_action(spec:'organization', entity:'organization', id:'<organizationId>',
               action:'configureFiscalSystem', parameters:{system:'SII+TBAI', territory:'gipuzkoa'})
 ```
 
-| Wizard rule | Where it lives for agents |
-|---|---|
-| Territory mandatory, system compatible with it (`TERRITORY_ALLOWED_SYSTEMS`) | `FiscalSifRules` (Java twin of the JS table) — 400 `ETGO_FiscalSifNotAllowed` |
-| Derived values (`navarra`/`guipuzcoa`/`taxtype`, TicketBAI territory, VERI*FACTU *Impuesto de aplicación*) | built by `FiscalSifRules.onboardingPayloads` = `buildOnboardingPayloads`; not parameters. On `etendo_update` they stay read-only (`tAXType` through a field-level `MCP_CONFIG.fields.readOnly`) |
-| One active SIF per organization, SII + TicketBAI aside | 409 `ETGO_FiscalSifAlreadyConfigured`; `system:'SII'` on an organization with only TicketBAI adds SII ("Añadir SII"), in TicketBAI's own territory |
-| Only in a productive environment (`ETSG_ForceTestMode`, `fiscal.testModeLock.warning`) | 409 `ETGO_FiscalSifTestMode`, same sentence: "Solo podrá activar un sistema fiscal en un entorno productivo." |
-| Certificate | not writable by agents (`organization/certificadoDigital` verbs hidden). When the organization has none, the action answers a warning to upload it from Configuración fiscal |
-| "Cambiar SIF" (deactivate) | UI only: an agent changing `active` gets 400 `ETGO_FiscalSifActiveByAgent` |
+On top of the rules above: derived fields stay read-only on `etendo_update` (`tAXType` through a
+field-level `MCP_CONFIG.fields.readOnly`); the certificate is not writable by agents
+(`organization/certificadoDigital` verbs hidden) and the action warns when the organization has
+none; and "Cambiar SIF" is UI only — an agent changing `active` gets `ETGO_FiscalSifActiveByAgent`.
 
-Server-side rules that now hold for the SPA too (every NEO channel, `FiscalSifGuard` in the
-three config customizations): no config created inactive, none created in forced test mode, and
-one active config per system and organization. The SPA never breaks them — the wizard and
-"Añadir SII" are already locked in test mode — so it sees no change.
-
-**Known debt — the territory table exists twice.** `TERRITORY_ALLOWED_SYSTEMS` /
-`buildOnboardingPayloads` (`fiscalConfig.utils.js`) and `FiscalSifRules` (com.etendoerp.go) must
-change together; a territory or system added to one only is offered by one surface and refused
-or built differently by the other. Removing it means the wizard calling `configureFiscalSystem`
-instead of posting the records itself. Not registered in `flags-registry.json`: the feature has
-no flag.
-
-**SII created by an agent is acogido at once.** The wizard posts SII with `acogidaAlSII: 'N'` and
-its detail save turns `INSIISYSTEM` to `'Y'` (`SiiConfigDeactivateHandler.afterHandle` on PUT).
-`configureFiscalSystem` has no detail step, so the SII it creates — alone, in SII + TicketBAI, or
-added to TicketBAI — is stored with `INSIISYSTEM = 'Y'` and `fechaAcogidaSII` = today.
-
-**"Añadir SII" in the SPA still differs from the agent path.** Its complementary POST
-(`useFiscalConfig.createComplementary`) sends no `taxtype`/`guipuzcoa`; the agent path sends
-`taxtype: 'IVA'` and, for Gipuzkoa, `guipuzcoa: 'Y'`, as the wizard's SII+TBAI payload does. The
-SPA flow is left unchanged pending a product decision.
+Server-side rules that hold for the window too (every NEO channel, `FiscalSifGuard` in the three
+config customizations): no config created inactive, none created in forced test mode, and one
+active config per system and organization.
 
 The confirmation screen's "next step" text (`fiscal.onboarding.confirm.next.body`) only promises
 what the detail step lets the user edit afterwards — the certificate, the SII authorization
@@ -645,7 +662,9 @@ environment, enrollment dates or submission cadences.
 - `tools/app-shell/src/windows/custom/fiscal-config/OnboardingWizard.jsx` — 5-screen wizard with territory groups, sub-questions, confirm, detail and skipped screens (the applied screen was removed in ETP-5831; the detail save hands over to the page).
 - `tools/app-shell/src/windows/custom/fiscal-config/CertSection.jsx` — cert status widget with on-mount GET fetch to restore state after refresh.
 - `tools/app-shell/src/windows/custom/fiscal-config/CertModal.jsx` — PKCS#12 upload modal (pick → verify → confirmNif? → done).
-- `tools/app-shell/src/windows/custom/fiscal-config/fiscalConfig.utils.js` — `detectProfile`, `resolveSystem`, `getTerritoryDefaults`, `getCertificateContext`, `parseApiError` (async helper that reads the error body from a failed NEO response and extracts a human-readable message), plus the Change SIF helpers `isActiveRecord`, `activeOrNull`, `getChangeSifNoticeKey`, `getSystemsToDeactivate`, `getFiscalRecordId`. `buildOnboardingPayloads` creates the POST body for wizard confirmation; `acogidaAlSII` defaults to `'N'` so the SII enrollment flag is not prematurely activated during onboarding. `mapSiiRecordToForm` no longer maps `plazoLmiteDeEnvoASII`, `cadenciaEnvoFacturasVentaASII`, or `cadenciaEnvoFacturasCompraASII` — those fields are retained in the DB but excluded from the form state.
+- `tools/app-shell/src/windows/custom/fiscal-config/fiscalConfig.utils.js` — `detectProfile`, `resolveSystem`, `allowedSystemsFor` / `territoryOfRecords` (read the backend catalog, ETP-6053), `getCertificateContext`, `parseApiError` (async helper that reads the error body from a failed NEO response and extracts a human-readable message), plus the Change SIF helpers `isActiveRecord`, `activeOrNull`, `getChangeSifNoticeKey`, `getSystemsToDeactivate`, `getFiscalRecordId`. The onboarding records are built by the backend (`configureFiscalSystem`, see "Activation through the backend"). `mapSiiRecordToForm` no longer maps `plazoLmiteDeEnvoASII`, `cadenciaEnvoFacturasVentaASII`, or `cadenciaEnvoFacturasCompraASII` — those fields are retained in the DB but excluded from the form state.
+- `tools/app-shell/src/windows/custom/fiscal-config/fiscalSystemApi.js` — `fetchFiscalCatalog`, `configureFiscalSystem`, `fetchCreatedRecords`: the window's calls to the organization's fiscal-system actions (ETP-6053).
+- `tools/app-shell/src/windows/custom/fiscal-config/useFiscalCatalog.js` — the backend territory × system catalog for the wizard and the status panel (ETP-6053).
 - `tools/app-shell/src/windows/custom/fiscal-config/ChangeSifDialog.jsx` — "Change SIF" confirm dialog: per-profile permanence notice, sequential deactivation via `PUT {active:false}`, partial-failure handling for `sii+tbai`.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/ChangeSifDialog.vitest.jsx` — dialog tests: notice selection per profile, deactivation PUT path, sii+tbai two-step, partial-failure message, INFORM-not-block posture.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/FiscalConfigPage.vitest.jsx` — page tests including `canChangeSif` visibility gating (`CONFIGURED_PROFILES`, no mock override) and dialog wiring, plus (ETP-5395 Fix 3) a "no access" describe block asserting `WindowAccessGuard` renders instead of the raw error box for a `'none'` access tier.
