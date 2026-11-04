@@ -3209,6 +3209,57 @@ fine: the backend computes the rate on create from the reference date whenever i
 / `ETGO_ExchangeRateMissingOnComplete` + params) and are composed in the UI locale by
 `backendErrors.js` — see `docs/i18n-guide.md`, mechanism 3.
 
+### 23. «Import from …» popups — `ImportLinesModal` (ETP-5828 Figma)
+
+`tools/app-shell/src/components/contract-ui/ImportLinesModal.jsx` is the ONE shell of every
+«Importar desde …» / «Añadir desde …» popup (orders, shipments, receipts, returns, source
+invoices, in invoices, shipments, receipts and the return windows). It is not a `decisions.json`
+option: a window's `custom/` modal renders it with its own `fetchDocuments` / `fetchLines` /
+`getDocDisplay` and either `submitImport` (one server action, preferred) or
+`linesEndpoint` + `buildLineBody` (one POST per line).
+
+**Layout (Figma «Pop Up Añadir desde pedido», node 2702-6462).** A FIXED 800 × 648 dialog, centred
+(it never resizes or moves); title + business partner; a search box with a
+«Seleccionar todo / Deseleccionar todo» button (`ImportLinesModal__selectAll`, acts on the
+documents the search leaves visible and only on lines that can still be imported); document rows
+with the shared round `RowExpandToggle` (ETP-5593, sized 24 × 24 through `className`), a checkbox (indeterminate on a partial selection), number, date, an
+adornment slot and the amount; an expanded document shows a bordered lines table with a master
+checkbox and a −/+ quantity stepper (`NumberStepperInput`, bounded by the line's available
+quantity, typed values still validated on blur); the footer has the selection hint and the
+«Cancelar» / primary pills.
+
+**Optional props added by ETP-5828** (all default to the previous behaviour):
+
+| Prop | Effect |
+|---|---|
+| `renderSelectionPanel(selection)` | Renders the fixed-height notice area under the list (`ImportLinesModal__selectionPanelSlot`). Return an `<ImportNotice tone="neutral"\|"warning" title body control? />` (exported from the same file); `null` shows the neutral «Información de importación» notice. Without the prop there is no notice area. |
+| `selectedDocumentsKey` | i18n key such as `importOrdersSelectedCount` («{count} pedido(s)»): the footer reads «**N pedido(s)** seleccionado(s)» and the import button counts DOCUMENTS with a selected line instead of lines. |
+| `importButtonKey` | i18n key of the primary button (default `importSelected`; `{count}` receives `" (N)"` or `""`). |
+
+**The notice box (Figma «Alert»).** The slot is 92 px: a 12 px gap and an 80 px alert (padding 16,
+gap 4, radius 0 8 8 0, 2 px left bar), a 24 × 24 icon box with a 20 px Phosphor icon (`InfoIcon` /
+`WarningIcon`, the Figma's own set) or the control (the 36 × 20 switch) in that 24 px row, and a
+text column (padding 0 8, Inter 14/24, title 500, body 400). Neutral: bg `#F3F5F9`, bar and icon
+`#C7CBD3`, title `foreground`, body `#6B7280`. Warning: bg `--status-warning-bg` (#FFF9EB), bar
+`#FFC233`, icon `#C28800`, title and body `--status-warning-fg` (#8A6100). Colours are literal where
+no token has the identical value. Only ONE body line fits: a longer title or body is truncated with
+the full text in its `title` attribute — the box never grows. Keep notice texts within ~668 px of
+Inter 14 (~95 characters).
+
+**Document row total.** The row shows the plain sum of what its lines' «Importe» cells show (unit
+price × current quantity; `_lineNetAmount` only for a line without a unit price), so row and lines
+always add up; there is no total override.
+
+Removed by ETP-5828: `getDocTotal`, `selectionPanelMinHeight` (the notice area now always has its fixed height)
+and `getSelectionHint` (the footer follows the design). Stable test ids: `import-lines-modal`,
+`import-lines-search`, `ImportLinesModal__docRow` / `__lineRow` (with `data-selected`),
+`__linesMasterCheckbox`, `__qtyInput` (the stepper's input), `__selectionHint`, `__import`,
+`__cancel`, `__close`, `__neutralNotice`.
+
+The invoice order import is the reference consumer: `windows/custom/shared/InvoiceOrderImportModal.jsx`
+(one component, `direction="sales"|"purchase"`), with the global-discount notice from
+`useOrderGlobalDiscountImport.jsx`. See `docs/generated-custom-windows/sales-invoice.md`.
+
 ## Decision tree: which option to use?
 
 ```
