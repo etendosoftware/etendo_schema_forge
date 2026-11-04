@@ -1,15 +1,15 @@
 // ETP-6053 — the Fiscal Configuration window activates a billing system (SIF) through the same
-// backend actions agents use, on organization/organization (com.etendoerp.go
-// FiscalSystemConfigureAction):
-//   GET  /organization/organization/{orgId}/action/fiscalSystemCatalog  — territory × system rules
-//   POST /organization/organization/{orgId}/action/configureFiscalSystem — creates the records
+// backend actions agents use, on sii-config/siiConfiguration (com.etendoerp.go
+// FiscalSystemConfigureAction; {orgId} is the organization, not a config row):
+//   GET  /sii-config/siiConfiguration/{orgId}/action/fiscalSystemCatalog  — territory × system rules
+//   POST /sii-config/siiConfiguration/{orgId}/action/configureFiscalSystem — creates the records
+// They are gated on the SII Configuration window — the window this page is gated on — so they
+// need exactly the access the page has; the activation also checks the window of each system.
 // The window keeps no copy of the rules: which systems a territory allows and every value a record
 // carries for it (SII flags and tax type, TicketBAI territory, VERI*FACTU tax type) come from the
 // catalog, and the records are built by the server.
 
-import { parseApiError } from './fiscalConfig.utils.js';
-
-const ORGANIZATION_PATH = '/organization/organization';
+const ACTIONS_PATH = '/sii-config/siiConfiguration';
 
 /** spec / entity of each record system the action reports in `created`. */
 const RECORD_ENDPOINTS = {
@@ -19,7 +19,38 @@ const RECORD_ENDPOINTS = {
 };
 
 function actionPath(orgId, action) {
-  return `${ORGANIZATION_PATH}/${encodeURIComponent(orgId)}/action/${action}`;
+  return `${ACTIONS_PATH}/${encodeURIComponent(orgId)}/action/${action}`;
+}
+
+/**
+ * A request the role is not allowed to make at all: the generic NEO access refusal (403 without
+ * `messageKeys`, whose English text must never reach the user). The caller shows its own
+ * translated message (`fiscal.err.noPermission`) instead. A 403 the action words itself — e.g.
+ * no write access to the VERI*FACTU window — carries `messageKeys` and is a plain Error.
+ */
+export class FiscalAccessDeniedError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'FiscalAccessDeniedError';
+    this.code = 'forbidden';
+  }
+}
+
+/** @returns {boolean} whether `err` is a {@link FiscalAccessDeniedError} */
+export function isFiscalAccessDenied(err) {
+  return err?.code === 'forbidden';
+}
+
+/** The Error a failed response stands for: the server's message, or an access denial. */
+async function failureOf(res) {
+  const text = await res.text().catch(() => '');
+  let parsed = null;
+  try { parsed = JSON.parse(text); } catch { parsed = null; }
+  const error = parsed?.error;
+  const message = (typeof error === 'string' ? error : error?.message) ?? parsed?.message ?? (text || res.statusText);
+  const keyed = Array.isArray(error?.messageKeys) && error.messageKeys.length > 0;
+  if (res.status === 403 && !keyed) return new FiscalAccessDeniedError(message);
+  return new Error(message);
 }
 
 /** A body that may come wrapped in `response.data` (NEO) or bare (an action's own JSON). */
@@ -37,7 +68,7 @@ function unwrap(json) {
  */
 export async function fetchFiscalCatalog(apiFetch, orgId, { signal } = {}) {
   const res = await apiFetch(actionPath(orgId, 'fiscalSystemCatalog'), { signal });
-  if (!res.ok) throw new Error(await parseApiError(res));
+  if (!res.ok) throw await failureOf(res);
   return unwrap(await res.json());
 }
 
@@ -58,7 +89,7 @@ export async function configureFiscalSystem(apiFetch, orgId, { system, territory
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(await parseApiError(res));
+  if (!res.ok) throw await failureOf(res);
   return unwrap(await res.json());
 }
 

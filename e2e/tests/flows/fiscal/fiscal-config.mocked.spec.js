@@ -588,7 +588,7 @@ test.describe('Fiscal Config — onboarding save regression (ETP-4401)', () => {
         page.waitForRequest(req => req.method() === 'POST' && req.url().includes('/action/configureFiscalSystem')),
         page.getByRole('button', { name: t('fiscal.onboarding.confirm.btn') }).click(),
       ]);
-      expect(createReq.url()).toContain(`/organization/organization/${MOCK_ORG_ID}/action/configureFiscalSystem`);
+      expect(createReq.url()).toContain(`/sii-config/siiConfiguration/${MOCK_ORG_ID}/action/configureFiscalSystem`);
       expect(JSON.parse(createReq.postData() || '{}')).toEqual(testCase.action);
 
       // Detail screen — the created record (fetched back by its universal `id`) is mounted.
@@ -755,7 +755,7 @@ test.describe('Fiscal Config — Add complementary SIF (ETP-4785)', () => {
       page.getByTestId('FiscalConfigPage__addComplementary').click(),
     ]);
 
-    expect(actionReq.url()).toContain(`/organization/organization/${MOCK_ORG_ID}/action/configureFiscalSystem`);
+    expect(actionReq.url()).toContain(`/sii-config/siiConfiguration/${MOCK_ORG_ID}/action/configureFiscalSystem`);
     expect(JSON.parse(actionReq.postData() || '{}')).toEqual({ system: 'SII' });
 
     // After the action the layout switches to sii+tbai:

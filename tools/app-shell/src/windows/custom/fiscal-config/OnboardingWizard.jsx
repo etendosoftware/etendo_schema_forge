@@ -13,7 +13,7 @@ import {
   allowedSystemsFor,
   resolveSystem,
 } from './fiscalConfig.utils.js';
-import { configureFiscalSystem, fetchCreatedRecords } from './fiscalSystemApi.js';
+import { configureFiscalSystem, fetchCreatedRecords, isFiscalAccessDenied } from './fiscalSystemApi.js';
 import { useFiscalCatalog } from './useFiscalCatalog.js';
 import SiiSection from './SiiSection.jsx';
 import TbaiSection from './TbaiSection.jsx';
@@ -1019,7 +1019,7 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome, for
   const orgName = selectedOrg?.name ?? null;
   const orgList = selectedRole?.orgList ?? [];
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
-  const { catalog, error: catalogError } = useFiscalCatalog(apiBaseUrl, orgId);
+  const { catalog, error: catalogError, forbidden: catalogForbidden } = useFiscalCatalog(apiBaseUrl, orgId);
 
   function handleSelectOrg(org) {
     selectOrg(org);
@@ -1091,7 +1091,7 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome, for
       setSystem(sys);
       goTo('detail');
     } catch (err) {
-      setError(err.message);
+      setError(isFiscalAccessDenied(err) ? ui('fiscal.err.noPermission') : err.message);
     } finally {
       setSaving(false);
     }
@@ -1209,7 +1209,7 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome, for
             tone="danger"
             icon={AlertTriangle}
             data-testid="OnboardingWizard__catalogErrorBanner">
-            {ui('fiscal.catalog.err.load', { error: catalogError })}
+            {catalogForbidden ? ui('fiscal.err.noPermission') : ui('fiscal.catalog.err.load', { error: catalogError })}
           </InfoBanner>
         </div>
       )}

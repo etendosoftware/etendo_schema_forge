@@ -62,7 +62,7 @@ import { FISCAL_SYSTEM_CATALOG } from './fiscalSystemCatalog.fixture.js';
 
 // --- Helpers --------------------------------------------------------------
 
-const ACTION_PATH = '/organization/organization/org-1/action/configureFiscalSystem';
+const ACTION_PATH = '/sii-config/siiConfiguration/org-1/action/configureFiscalSystem';
 
 function jsonResponse(body, { ok = true, status = 200 } = {}) {
   return Promise.resolve({

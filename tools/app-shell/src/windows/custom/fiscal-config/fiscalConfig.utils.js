@@ -32,6 +32,7 @@ function resolveSiiverSystem({ allowedSystems, volume, lowChoice }) {
  * @returns {'SII'|'TBAI'|'SII+TBAI'|'VERIFACTU'|null}
  */
 export function resolveSystem({ regime, alsoNational, volume, lowChoice, allowedSystems = null }) {
+  // A UI guess only: the server (configureFiscalSystem) is the authority on which pairs are valid.
   if (regime === 'sii_foral') return 'SII';
   if (regime === 'tbai') return alsoNational ? 'SII+TBAI' : 'TBAI';
   if (regime === 'siiver') return resolveSiiverSystem({ allowedSystems, volume, lowChoice });

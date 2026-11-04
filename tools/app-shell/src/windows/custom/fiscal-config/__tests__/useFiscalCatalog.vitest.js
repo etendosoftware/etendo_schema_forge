@@ -47,7 +47,7 @@ describe('useFiscalCatalog', () => {
     expect(result.current.catalog).toEqual(FISCAL_SYSTEM_CATALOG);
     expect(result.current.error).toBeNull();
     expect(mockApiFetch).toHaveBeenCalledTimes(1);
-    expect(mockApiFetch.mock.calls[0][0]).toBe('/organization/organization/ORG1/action/fiscalSystemCatalog');
+    expect(mockApiFetch.mock.calls[0][0]).toBe('/sii-config/siiConfiguration/ORG1/action/fiscalSystemCatalog');
     expect(mockApiFetch.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
   });
 
@@ -76,14 +76,14 @@ describe('useFiscalCatalog', () => {
   it('does not fetch without an organization', async () => {
     const { result } = renderHook(() => useFiscalCatalog('/api', null));
 
-    expect(result.current).toEqual({ catalog: null, error: null, loading: false });
+    expect(result.current).toEqual({ catalog: null, error: null, forbidden: false, loading: false });
     expect(mockApiFetch).not.toHaveBeenCalled();
   });
 
   it('does not fetch without an apiBaseUrl', () => {
     const { result } = renderHook(() => useFiscalCatalog('', 'ORG1'));
 
-    expect(result.current).toEqual({ catalog: null, error: null, loading: false });
+    expect(result.current).toEqual({ catalog: null, error: null, forbidden: false, loading: false });
     expect(mockApiFetch).not.toHaveBeenCalled();
   });
 
@@ -98,7 +98,7 @@ describe('useFiscalCatalog', () => {
 
     await waitFor(() => expect(mockApiFetch).toHaveBeenCalledTimes(2));
     expect(firstSignal.aborted).toBe(true);
-    expect(mockApiFetch.mock.calls[1][0]).toBe('/organization/organization/ORG2/action/fiscalSystemCatalog');
+    expect(mockApiFetch.mock.calls[1][0]).toBe('/sii-config/siiConfiguration/ORG2/action/fiscalSystemCatalog');
     await waitFor(() => expect(result.current.loading).toBe(false));
   });
 
@@ -113,7 +113,7 @@ describe('useFiscalCatalog', () => {
     resolveLate({ ok: true, json: async () => FISCAL_SYSTEM_CATALOG });
     await new Promise((r) => setTimeout(r, 0));
 
-    expect(result.current).toEqual({ catalog: null, error: null, loading: false });
+    expect(result.current).toEqual({ catalog: null, error: null, forbidden: false, loading: false });
   });
 
   it('keeps the same state across re-renders with the same inputs (no re-fetch loop)', async () => {

@@ -24,7 +24,7 @@ describe('fetchFiscalCatalog', () => {
 
     expect(apiFetch).toHaveBeenCalledTimes(1);
     const [path, opts] = apiFetch.mock.calls[0];
-    expect(path).toBe('/organization/organization/ORG1/action/fiscalSystemCatalog');
+    expect(path).toBe('/sii-config/siiConfiguration/ORG1/action/fiscalSystemCatalog');
     expect(opts?.method).toBeUndefined();
   });
 
@@ -42,7 +42,7 @@ describe('fetchFiscalCatalog', () => {
 
     await fetchFiscalCatalog(apiFetch, 'A/B C');
 
-    expect(apiFetch.mock.calls[0][0]).toBe('/organization/organization/A%2FB%20C/action/fiscalSystemCatalog');
+    expect(apiFetch.mock.calls[0][0]).toBe('/sii-config/siiConfiguration/A%2FB%20C/action/fiscalSystemCatalog');
   });
 
   it('unwraps the NEO envelope (response.data object)', async () => {
@@ -95,7 +95,7 @@ describe('configureFiscalSystem', () => {
     await configureFiscalSystem(apiFetch, 'ORG1', { system: 'SII+TBAI', territory: 'alava' });
 
     const [path, opts] = apiFetch.mock.calls[0];
-    expect(path).toBe('/organization/organization/ORG1/action/configureFiscalSystem');
+    expect(path).toBe('/sii-config/siiConfiguration/ORG1/action/configureFiscalSystem');
     expect(opts.method).toBe('POST');
     expect(opts.headers).toEqual({ 'Content-Type': 'application/json' });
     expect(JSON.parse(opts.body)).toEqual({ system: 'SII+TBAI', territory: 'alava' });

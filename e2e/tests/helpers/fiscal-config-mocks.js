@@ -97,14 +97,14 @@ export async function installFiscalProfileMocks(page, profile, { territory = 'GI
 // ── Organization fiscal actions (ETP-6053) ────────────────────────────────────
 //
 // The Fiscal Configuration window reads the territory × system rules from
-// `GET /organization/organization/{orgId}/action/fiscalSystemCatalog` and activates a
+// `GET /sii-config/siiConfiguration/{orgId}/action/fiscalSystemCatalog` and activates a
 // billing system with `POST …/action/configureFiscalSystem` (the server builds the
 // records). Without the catalog mock the generic `**/sws/**` stub answers an empty
 // body: the manual screen then offers no system and the "Estado" panel shows no
 // territory. Both routes end in `/action/<name>` — two segments past the org id — so
 // they are matched with a `*` per segment (see the e2e guide's glob gotcha).
 
-const ACTION_ROUTE = '**/sws/neo/organization/organization/*/action/';
+const ACTION_ROUTE = '**/sws/neo/sii-config/siiConfiguration/*/action/';
 
 /**
  * Answer the fiscal catalog. Must be called AFTER `login(page)`.

@@ -20,6 +20,7 @@ import { detectProfile } from './fiscalConfig.utils.js';
 import { useCertExpiry } from './useCertExpiry.js';
 import { useFiscalTestMode } from './useFiscalTestMode.js';
 import { useFiscalCatalog } from './useFiscalCatalog.js';
+import { isFiscalAccessDenied } from './fiscalSystemApi.js';
 import { useDebugMode } from '../fiscal-monitor/useDebugMode.js';
 import CertExpiryBanner from './CertExpiryBanner.jsx';
 import OnboardingWizard from './OnboardingWizard.jsx';
@@ -197,8 +198,8 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
   const tbaiRef      = useRef(null);
   const verifactuRef = useRef(null);
 
-  // "Add complementary SIF" — only when real API data (not mock), org selected,
-  // and profile is singly sii or tbai (not already combined or verifactu).
+  // "Add SII" — only when real API data (not mock), org selected, and the profile is TicketBAI
+  // alone: SII is the only system that can be added on top of another one.
   const canAddComplementary = !mockOverride && !!orgId && !forceTestMode &&
     effectiveProfile === 'tbai';
 
@@ -207,14 +208,15 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
     setCreatingComplementary(true);
     setAddingComplementaryError(null);
     try {
-      const system = effectiveProfile === 'sii' ? 'tbai' : 'sii';
-      const created = await createComplementary(system, orgId);
+      const created = await createComplementary(orgId);
       setComplementaryRecord(created);
-      setAddingComplementary(system);
+      setAddingComplementary('sii');
     } catch (err) {
-      setAddingComplementaryError(
-        ui('fiscal.addComplementary.err.createFailed', { error: err instanceof Error ? err.message : String(err) })
-      );
+      // A role the backend does not let run the action at all gets our own sentence, never the
+      // generic English "Access denied to spec" text.
+      const reason = isFiscalAccessDenied(err) ? ui('fiscal.err.noPermission')
+        : (err instanceof Error ? err.message : String(err));
+      setAddingComplementaryError(ui('fiscal.addComplementary.err.createFailed', { error: reason }));
     } finally {
       setCreatingComplementary(false);
     }

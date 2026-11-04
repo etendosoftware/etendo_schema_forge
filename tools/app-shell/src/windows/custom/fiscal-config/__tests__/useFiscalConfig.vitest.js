@@ -228,7 +228,7 @@ describe('earliestCutoverDate', () => {
 // configureFiscalSystem action with the system only (the server takes TicketBAI's territory and
 // derives every SII value), then reads the created record back.
 describe('useFiscalConfig — createComplementary', () => {
-  const ACTION = '/organization/organization/org-1/action/configureFiscalSystem';
+  const ACTION = '/sii-config/siiConfiguration/org-1/action/configureFiscalSystem';
 
   function jsonResponse(body, { ok = true, status = 200 } = {}) {
     return Promise.resolve({
@@ -271,7 +271,7 @@ describe('useFiscalConfig — createComplementary', () => {
   it('POSTs {system: "SII"} with no territory to the configureFiscalSystem action', async () => {
     const result = await renderLoaded();
 
-    await result.current.createComplementary('sii', 'org-1');
+    await result.current.createComplementary('org-1');
 
     const [path, opts] = actionCall();
     expect(path).toBe(ACTION);
@@ -282,7 +282,7 @@ describe('useFiscalConfig — createComplementary', () => {
   it('never POSTs a config record directly (no complementary POST to sii-config)', async () => {
     const result = await renderLoaded();
 
-    await result.current.createComplementary('sii', 'org-1');
+    await result.current.createComplementary('org-1');
 
     const posts = mockApiFetch.mock.calls.filter(([, opts]) => opts?.method === 'POST');
     expect(posts).toHaveLength(1);
@@ -292,29 +292,16 @@ describe('useFiscalConfig — createComplementary', () => {
   it('returns the created SII record as read back from sii-config', async () => {
     const result = await renderLoaded();
 
-    const created = await result.current.createComplementary('sii', 'org-1');
+    const created = await result.current.createComplementary('org-1');
 
     expect(created).toEqual({ id: 'sii-new', acogidaAlSII: 'Y', taxtype: 'IVA' });
-  });
-
-  it('upper-cases the system it sends (tbai → TBAI)', async () => {
-    actionAnswer = () => jsonResponse({
-      response: { data: { created: [{ system: 'TBAI', id: 'tbai-new' }] } },
-    });
-    const result = await renderLoaded();
-
-    const created = await result.current.createComplementary('tbai', 'org-1');
-
-    expect(JSON.parse(actionCall()[1].body)).toEqual({ system: 'TBAI' });
-    // The read-back answers the default record; what matters is it is keyed by the asked system.
-    expect(created).toEqual({ id: 'rec-1' });
   });
 
   it('returns null when the action created no record of the asked system', async () => {
     actionAnswer = () => jsonResponse({ response: { data: { created: [] } } });
     const result = await renderLoaded();
 
-    await expect(result.current.createComplementary('sii', 'org-1')).resolves.toBeNull();
+    await expect(result.current.createComplementary('org-1')).resolves.toBeNull();
   });
 
   it('throws with the server message when the action refuses', async () => {
@@ -324,7 +311,7 @@ describe('useFiscalConfig — createComplementary', () => {
     );
     const result = await renderLoaded();
 
-    await expect(result.current.createComplementary('sii', 'org-1')).rejects.toThrow('Ya hay un SIF activo');
+    await expect(result.current.createComplementary('org-1')).rejects.toThrow('Ya hay un SIF activo');
   });
 });
 
@@ -383,7 +370,7 @@ describe('useFiscalConfig — createComplementary updates the state (SII added t
     const result = await renderTbaiOnly();
     const readsBefore = listReads();
 
-    await act(() => result.current.createComplementary('sii', 'org-1'));
+    await act(() => result.current.createComplementary('org-1'));
 
     expect(result.current.profile).toBe('sii+tbai');
     expect(result.current.siiRecord).toEqual(SII_REC);
@@ -401,7 +388,7 @@ describe('useFiscalConfig — createComplementary updates the state (SII added t
     const result = await renderTbaiOnly();
 
     await act(async () => {
-      await expect(result.current.createComplementary('sii', 'org-1')).rejects.toThrow('Ya hay un SIF activo');
+      await expect(result.current.createComplementary('org-1')).rejects.toThrow('Ya hay un SIF activo');
     });
 
     expect(result.current.profile).toBe('tbai');
@@ -414,7 +401,7 @@ describe('useFiscalConfig — createComplementary updates the state (SII added t
     actionAnswer = () => jsonResponse({ response: { data: { created: [] } } });
     const result = await renderTbaiOnly();
 
-    await act(() => result.current.createComplementary('sii', 'org-1'));
+    await act(() => result.current.createComplementary('org-1'));
 
     expect(result.current.profile).toBe('tbai');
     expect(result.current.siiRecord).toBeNull();

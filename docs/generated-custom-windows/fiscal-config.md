@@ -575,14 +575,30 @@ as UTC, which in Spain hid every invoice dated on the adoption day from the fisc
 ## Activation through the backend (ETP-6053)
 
 The window no longer builds or posts the config records itself. The onboarding wizard and the
-"Añadir SII" button activate a billing system with the same action agents use, on the
-organization (`useApiFetch`, `fiscalSystemApi.js`):
+"Añadir SII" button activate a billing system with the same actions agents use, on
+`sii-config/siiConfiguration` with the organization as id (`useApiFetch`, `fiscalSystemApi.js`):
 
 | Call | What the window does with it |
 |---|---|
-| `GET /organization/organization/{orgId}/action/fiscalSystemCatalog` (`useFiscalCatalog`) | `systems` per territory: the manual screen's choices (`allowedSystemsFor`) and the SII veto of `resolveSystem` (Ceuta/Melilla → VERI*FACTU). The record values per territory: which territory a stored configuration belongs to (`territoryOfRecords`, the "Estado" panel). A failed read shows a `fiscal.catalog.err.load` banner over the wizard |
-| `POST /organization/organization/{orgId}/action/configureFiscalSystem` `{system, territory}` | The wizard's "Confirmar": the server validates and creates the records; the window reads them back (`fetchCreatedRecords`) for the detail step |
-| same, `{system: 'SII'}` | "Añadir SII" (`useFiscalConfig.createComplementary`): no territory, the server takes the TicketBAI's |
+| `GET /sii-config/siiConfiguration/{orgId}/action/fiscalSystemCatalog` (`useFiscalCatalog`) | `systems` per territory: the manual screen's choices (`allowedSystemsFor`) and the SII veto of `resolveSystem` (Ceuta/Melilla → VERI*FACTU). The record values per territory: which territory a stored configuration belongs to (`territoryOfRecords`, the "Estado" panel). A failed read shows a `fiscal.catalog.err.load` banner over the wizard |
+| `POST /sii-config/siiConfiguration/{orgId}/action/configureFiscalSystem` `{system, territory}` | The wizard's "Confirmar": the server validates and creates the records; the window reads them back (`fetchCreatedRecords`) for the detail step |
+| same, `{system: 'SII'}` | "Añadir SII" (`useFiscalConfig.createComplementary(orgId)`, SII only): no territory, the server takes the TicketBAI's |
+
+**Which access gates them.** Both actions hang off `sii-config`, so NEO gates them on the role's
+access to the **SII Configuration window** — the window this page is gated on (see "Window-access
+gate") — read for the catalog, read-write for the activation. Nothing on the Organization window is
+needed (an earlier version of ETP-6053 put them on `organization/organization`, which locked out
+roles such as "F&B España, S.A - Admin" or "Finance" that write the fiscal windows but not
+Organization). The activation also needs read-write on the window of each system it creates
+(TicketBAI, VERI*FACTU) and refuses otherwise with `ETGO_FiscalSifNoWindowAccess` ("Tu rol no tiene
+permiso para configurar VERI*FACTU…"). If a role reaches the page without the access the actions
+need, the window shows `fiscal.err.noPermission` — never NEO's English "Access denied to spec for
+current role" (`FiscalAccessDeniedError` in `fiscalSystemApi.js`: a 403 without `messageKeys`).
+
+The tests read the catalog from `__tests__/fiscalSystemCatalog.golden.json`
+(`fiscalSystemCatalog.fixture.js`, also used by the e2e mocks). com.etendoerp.go keeps the same
+file and asserts `FiscalSifRules.catalog()` equals it; both suites pin its SHA-256, so the rules
+cannot change on one side without the other.
 
 Rules and refusals (messages in the user's language, shown where the wizard and "Añadir SII"
 showed errors before — below the confirm button, and in the `fiscal.addComplementary.err.createFailed`
@@ -663,7 +679,7 @@ environment, enrollment dates or submission cadences.
 - `tools/app-shell/src/windows/custom/fiscal-config/CertSection.jsx` — cert status widget with on-mount GET fetch to restore state after refresh.
 - `tools/app-shell/src/windows/custom/fiscal-config/CertModal.jsx` — PKCS#12 upload modal (pick → verify → confirmNif? → done).
 - `tools/app-shell/src/windows/custom/fiscal-config/fiscalConfig.utils.js` — `detectProfile`, `resolveSystem`, `allowedSystemsFor` / `territoryOfRecords` (read the backend catalog, ETP-6053), `getCertificateContext`, `parseApiError` (async helper that reads the error body from a failed NEO response and extracts a human-readable message), plus the Change SIF helpers `isActiveRecord`, `activeOrNull`, `getChangeSifNoticeKey`, `getSystemsToDeactivate`, `getFiscalRecordId`. The onboarding records are built by the backend (`configureFiscalSystem`, see "Activation through the backend"). `mapSiiRecordToForm` no longer maps `plazoLmiteDeEnvoASII`, `cadenciaEnvoFacturasVentaASII`, or `cadenciaEnvoFacturasCompraASII` — those fields are retained in the DB but excluded from the form state.
-- `tools/app-shell/src/windows/custom/fiscal-config/fiscalSystemApi.js` — `fetchFiscalCatalog`, `configureFiscalSystem`, `fetchCreatedRecords`: the window's calls to the organization's fiscal-system actions (ETP-6053).
+- `tools/app-shell/src/windows/custom/fiscal-config/fiscalSystemApi.js` — `fetchFiscalCatalog`, `configureFiscalSystem`, `fetchCreatedRecords`: the window's calls to the fiscal-system actions on `sii-config/siiConfiguration` (ETP-6053), plus `FiscalAccessDeniedError` / `isFiscalAccessDenied` for a role the backend refuses outright.
 - `tools/app-shell/src/windows/custom/fiscal-config/useFiscalCatalog.js` — the backend territory × system catalog for the wizard and the status panel (ETP-6053).
 - `tools/app-shell/src/windows/custom/fiscal-config/ChangeSifDialog.jsx` — "Change SIF" confirm dialog: per-profile permanence notice, sequential deactivation via `PUT {active:false}`, partial-failure handling for `sii+tbai`.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/ChangeSifDialog.vitest.jsx` — dialog tests: notice selection per profile, deactivation PUT path, sii+tbai two-step, partial-failure message, INFORM-not-block posture.

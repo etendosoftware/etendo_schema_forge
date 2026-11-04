@@ -1,17 +1,23 @@
 // Test fixture, not a test: the `fiscalSystemCatalog` answer of com.etendoerp.go
-// (FiscalSifRules.catalog()), shared by the fiscal-config suites so every one of them reads the
-// territory × system rules the backend really serves. Keep it in sync with
-// FiscalSifRules.ALLOWED / recordPayload / TBAI_TERRITORY / VERIFACTU_TAX_TYPE.
+// (FiscalSifRules.catalog()), shared by the fiscal-config suites and the e2e mocks so every one of
+// them reads the territory × system rules the backend really serves.
+//
+// The data is fiscalSystemCatalog.golden.json, the same bytes as
+// com.etendoerp.go/src-test/src/com/etendoerp/go/schemaforge/fiscal/fiscalSystemCatalog.golden.json,
+// which FiscalSifRulesTest asserts equal to FiscalSifRules.catalog(). The two repositories are
+// tested separately, so both suites pin the file's SHA-256 (FISCAL_SYSTEM_CATALOG_SHA256 here,
+// GOLDEN_SHA256 there): a change to the rules must update the golden file and the hash in both.
 
-export const FISCAL_SYSTEM_CATALOG = Object.freeze({
-  systems: ['SII', 'TBAI', 'SII+TBAI', 'VERIFACTU'],
-  territories: [
-    { territory: 'navarra', systems: ['SII'], sii: { navarra: true, guipuzcoa: false, taxtype: 'IVA' }, tbaiTerritory: null, verifactuTaxType: null },
-    { territory: 'alava', systems: ['TBAI', 'SII+TBAI'], sii: { navarra: false, guipuzcoa: false, taxtype: 'IVA' }, tbaiTerritory: 'ARABA', verifactuTaxType: null },
-    { territory: 'bizkaia', systems: ['TBAI', 'SII+TBAI'], sii: { navarra: false, guipuzcoa: false, taxtype: 'IVA' }, tbaiTerritory: 'BIZKAIA', verifactuTaxType: null },
-    { territory: 'gipuzkoa', systems: ['TBAI', 'SII+TBAI'], sii: { navarra: false, guipuzcoa: true, taxtype: 'IVA' }, tbaiTerritory: 'GIPUZKOA', verifactuTaxType: null },
-    { territory: 'baleares', systems: ['SII', 'VERIFACTU'], sii: { navarra: false, guipuzcoa: false, taxtype: 'IVA' }, tbaiTerritory: null, verifactuTaxType: '01' },
-    { territory: 'canarias', systems: ['SII', 'VERIFACTU'], sii: { navarra: false, guipuzcoa: false, taxtype: 'IGIC' }, tbaiTerritory: null, verifactuTaxType: '03' },
-    { territory: 'ceuta', systems: ['VERIFACTU'], sii: null, tbaiTerritory: null, verifactuTaxType: '02' },
-  ],
-});
+import GOLDEN from './fiscalSystemCatalog.golden.json' with { type: 'json' };
+
+/**
+ * The golden file as text — its canonical two-space serialization, which is exactly the file's
+ * bytes (the file is kept in that form): what the SHA-256 is computed over.
+ */
+export const FISCAL_SYSTEM_CATALOG_GOLDEN_TEXT = `${JSON.stringify(GOLDEN, null, 2)}\n`;
+
+/** SHA-256 of the golden file; equal to FiscalSifRulesTest.GOLDEN_SHA256 in com.etendoerp.go. */
+export const FISCAL_SYSTEM_CATALOG_SHA256 =
+  '176abb4fdbba906c8f6831ff6a9a58dbbdab86d88432bfac86ac4a33121079df';
+
+export const FISCAL_SYSTEM_CATALOG = Object.freeze(GOLDEN);

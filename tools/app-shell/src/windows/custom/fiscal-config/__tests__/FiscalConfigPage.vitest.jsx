@@ -627,7 +627,7 @@ describe('FiscalConfigPage — profile: tbai', () => {
     fireEvent.click(screen.getByTestId('FiscalConfigPage__actionsMenu'));
     fireEvent.click(screen.getByTestId('FiscalConfigPage__addComplementary'));
     await waitFor(() => {
-      expect(createComplementaryMock).toHaveBeenCalledWith('sii', 'org-1');
+      expect(createComplementaryMock).toHaveBeenCalledWith('org-1');
     });
   });
 

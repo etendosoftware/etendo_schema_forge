@@ -156,29 +156,31 @@ export function useFiscalConfig(orgId, apiBaseUrl) {
   useEffect(() => { load(); }, [load]);
 
   /**
-   * "Añadir SII": activates the complementary system on top of the current one through the
-   * backend's `configureFiscalSystem` action (ETP-6053) — the same call, rules and records as the
-   * wizard and agents. No territory is sent: the server takes the existing TicketBAI's, derives
-   * every SII value from it, and refuses (in the request language) what the wizard would refuse.
+   * "Añadir SII": adds SII to the organization's existing TicketBAI through the backend's
+   * `configureFiscalSystem` action (ETP-6053) — the same call, rules and records as the wizard
+   * and agents. Only SII can be added on top of another system (TicketBAI), so no system argument.
+   * No territory is sent: the server takes the TicketBAI's, derives every SII value from it, and
+   * refuses (in the request language) what the wizard would refuse.
+   *
    * Returns the created record and puts it in this hook's state (records + profile), so whatever
    * derives from them — page title, "Estado" panel — shows the combined configuration at once.
-   * Throws with the server's message on refusal.
+   * Throws with the server's message on refusal, or a `FiscalAccessDeniedError` when the role may
+   * not run the action at all.
    *
-   * @param {'sii'|'tbai'} system
    * @param {string} orgId
-   * @returns {Promise<object|null>}
+   * @returns {Promise<object|null>} the created SII record
    */
-  async function createComplementary(system, orgId) {
-    const outcome = await configureFiscalSystem(apiFetch, orgId, { system: system.toUpperCase() });
+  async function createComplementary(orgId) {
+    const outcome = await configureFiscalSystem(apiFetch, orgId, { system: 'SII' });
     const records = await fetchCreatedRecords(apiFetch, outcome?.created);
-    const created = records[system] ?? null;
+    const created = records.sii ?? null;
     // The record is stored and active from this moment, so the configuration IS the combined
     // one now: put it in the state and re-detect the profile, as a reload would. Without this the
     // title and the "Estado" panel kept showing the single system until the page was reloaded
     // (ETP-6053). Not a refetch: that would flip `loading` and unmount the tab being edited.
     if (created) {
       setState(s => {
-        const next = { ...s, [`${system}Record`]: created };
+        const next = { ...s, siiRecord: created };
         return { ...next, profile: detectProfile(next.siiRecord, next.tbaiRecord, next.verifactuRecord) };
       });
     }

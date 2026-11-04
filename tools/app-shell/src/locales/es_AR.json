@@ -20443,6 +20443,7 @@
     "fiscal.onboarding.confirm.next.body": "Tras confirmar, podrás completar los datos restantes: el certificado digital y, según el sistema, el n.º de registro de la autorización (SII) o el envío automático (TicketBAI).",
     "fiscal.changeSif.body": "Se desactivará el sistema de facturación actual para esta organización. Si ya se enviaron facturas con este sistema, su configuración se conserva como registro; si no, se elimina. A continuación vas a poder elegir un nuevo sistema de facturación, o dejar la organización sin ninguno activo.",
     "fiscal.catalog.err.load": "No se pudieron cargar los sistemas fiscales disponibles por territorio: {error}",
+    "fiscal.err.noPermission": "Tu rol no tiene permiso para activar un sistema de facturación. Pedile a tu administrador acceso de escritura a las ventanas de configuración fiscal.",
     "fiscal.onboarding.confirm.creating": "Creando…",
     "fiscal.onboarding.confirm.btn": "Confirmar",
     "fiscal.onboarding.manual.title": "Configuración manual",
