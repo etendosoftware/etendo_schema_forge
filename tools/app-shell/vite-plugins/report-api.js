@@ -28,7 +28,7 @@ const { applyPlaceholders } = await loadReportCli('report-sql');
 const { filterAndTransformParams } = await loadReportCli('report-filters');
 const { hydrateDocumentBranding, resolveCompanyLogoDataUrl } = await loadReportCli('report-branding');
 const { resolveReportSession, reportAuthErrorBody, assertReportOrgAccess } = await loadReportCli('report-auth');
-const { handleReportQuery } = await loadReportCli('report-query');
+const { handleReportQuery, runReportSql } = await loadReportCli('report-query');
 
 const ARTIFACTS_DIR = resolve(import.meta.dirname, '../../../artifacts');
 const ROOT = resolve(ARTIFACTS_DIR, '..');
@@ -405,24 +405,9 @@ async function fetchReportData(reportId, { limit, session, params = {}, locale }
 
     if (limit) sql = sql.replace(/;\s*$/, '') + ` LIMIT ${parseInt(limit, 10)}`;
 
-    const { rows } = await pool.query(sql);
-
-    // Optional opening-balance query (ETP-4898 — Libro Mayor's "Initial Balance"/Saldo inicial).
-    // Same placeholder rules as the main query, just no LIMIT — it's already pre-aggregated.
-    let openingRows = null;
-    if (contract.sql?.openingQuery) {
-      const openingSql = applyPlaceholders(contract.sql.openingQuery, { clientId, params, contract, locale });
-      openingRows = (await pool.query(openingSql)).rows;
-    }
-
-    // Optional formula-operand query (ETP-4899 — Profit & Loss's computed nodes,
-    // e.g. "A) RESULTADO DE EXPLOTACIÓN (1+2+...+12)"). Same placeholder rules;
-    // consumed by buildAccountReportTree(), never rendered directly.
-    let operandRows = null;
-    if (contract.sql?.operandsQuery) {
-      const operandsSql = applyPlaceholders(contract.sql.operandsQuery, { clientId, params, contract, locale });
-      operandRows = (await pool.query(operandsSql)).rows;
-    }
+    // Main query plus Libro Mayor's openingQuery (ETP-4898) and Profit & Loss's
+    // operandsQuery (ETP-4899): core's runner, shared with `/query` and the report-server.
+    const { rows, openingRows, operandRows } = await runReportSql(pool, contract, { clientId, params, locale, mainSql: sql });
 
     // Company logo for listing reports (ETP-5013) — "document" contracts
     // (print-*) resolve org_logo_id from their own header SQL row (see the

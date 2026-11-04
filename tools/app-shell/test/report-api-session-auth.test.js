@@ -555,13 +555,18 @@ describe('report-api.js — session-cookie authentication (ETP-5460)', () => {
 
   describe('report-api.js source — wiring', () => {
     it('resolves the /query route and the org check from the shared core modules (ETP-6080)', () => {
-      assert.match(PLUGIN_SRC, /const \{ handleReportQuery \} = await loadReportCli\('report-query'\)/);
+      assert.match(PLUGIN_SRC, /const \{ handleReportQuery, runReportSql \} = await loadReportCli\('report-query'\)/);
       assert.match(PLUGIN_SRC, /assertReportOrgAccess \} = await loadReportCli\('report-auth'\)/);
       const render = PLUGIN_SRC.indexOf("path.match(/^\\/api\\/reports\\/([\\w-]+)\\/render$/)");
       assert.ok(render > 0, 'render route not found');
       const check = PLUGIN_SRC.indexOf('await checkRenderOrgAccess(reportId, session, params)', render);
       const fetch = PLUGIN_SRC.indexOf('await fetchReportData(reportId', render);
       assert.ok(check > 0 && check < fetch, 'the org check must run before fetchReportData on /render');
+    });
+
+    it('runs the render SQL through core runReportSql, not a copy of it (ETP-6080 W4)', () => {
+      assert.match(PLUGIN_SRC, /\{ rows, openingRows, operandRows \} = await runReportSql\(pool, contract, \{[^}]*mainSql: sql/);
+      assert.doesNotMatch(PLUGIN_SRC, /applyPlaceholders\(contract\.sql\.(openingQuery|operandsQuery)/);
     });
 
     it('imports loadReportCli from the gated local-core loader', () => {
