@@ -219,6 +219,14 @@ describe('observability payload normalization', () => {
     }
   });
 
+  it('drops a fractional bounce pair count: the counts are integers', () => {
+    for (const key of ['pairs_shown', 'pairs_preselected', 'pairs_checked_at_close']) {
+      for (const value of [2.5, 0.1, 999999.9]) {
+        assert.deepEqual(sanitizeEventProperties({ [key]: value }), {}, `${key}=${String(value)}`);
+      }
+    }
+  });
+
   it('gives the denylist priority over the allowlist', () => {
     assert.deepEqual(
       sanitizeEventProperties({
