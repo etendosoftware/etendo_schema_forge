@@ -106,9 +106,10 @@ test.describe('Profit & Loss — interactive view (ETP-6080)', () => {
     await expect(page.getByTestId('DynamicReportTable__row')).toHaveCount(1);
     expect(queries['profit-loss']).toHaveLength(sent);
 
-    await page.getByTestId('DynamicReportPanel__shortcut-month').click();
+    // 12 meses, not Mes: in January "this month" equals the opening period and sends nothing.
+    await page.getByTestId('DynamicReportPanel__shortcut-last12').click();
     await expect.poll(() => queries['profit-loss'].length).toBeGreaterThan(sent);
-    expect(queries['profit-loss'].at(-1).dateFrom).toMatch(/-01$/);
+    expect(queries['profit-loss'].at(-1).dateFrom.slice(0, 4)).toBe(String(new Date().getFullYear() - 1));
   });
 
   test('drills from an account to its ledger, the entry and the document', async ({ page, context }) => {
