@@ -1444,7 +1444,11 @@ stays available (it hides the pair and reports nothing: no `dismissPair` call).
 **KPI reporting (roadmap #15).** The SPA reports what the user decided about the suggested pairs;
 the backend turns it into the `backend_bank_bounce_pair_decided` events, and the browser sends two
 frontend events of its own. No property or body field carries a line id other than the ones the
-actions already send, an amount, a counterparty or a statement text.
+actions already send, an amount, a counterparty or a statement text. Two backend behaviours need
+nothing from the SPA: an MCP `applySuggestions` (an agent sends no `bounceDecisions`) has the
+proposed pairs it left out reported as `unchecked` by the backend itself, with `channel: mcp`; and
+`backend_bank_bounce_pair_restored` also carries `preselected`, so a restore can be subtracted from
+the high-confidence KPI. Event contract: com.etendoerp.go `docs/backend-observability.md`.
 
 - **`applySuggestions` → `bounceDecisions`.** When the modal shows at least one pair, the body gains
   `bounceDecisions: [{ groupKey, decision }]`, one entry per **shown** pair that is **not applied**
