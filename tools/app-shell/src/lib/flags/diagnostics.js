@@ -8,8 +8,9 @@ const REASONS = new Set(['settled', 'inflight', 'context_changed', 'account_chan
 const SOURCES = new Set(['auth', 'session', 'cache', 'remote', 'startup', 'provider']);
 
 /** Reports bounded technical labels, never a credential, URL, email or evaluation context. */
-export function reportFlagDiagnostic(properties = {}, trackImpl) {
+export function reportFlagDiagnostic(properties, trackImpl) {
   try {
+    properties ??= {};
     if (!OPERATIONS.has(properties.operation) || !OUTCOMES.has(properties.outcome)) return;
     const safe = { operation: properties.operation, outcome: properties.outcome };
     for (const [key, values] of [['provider', PROVIDERS], ['reason', REASONS], ['source', SOURCES]]) {

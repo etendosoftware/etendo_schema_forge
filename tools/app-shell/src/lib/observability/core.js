@@ -70,6 +70,25 @@ export function createObservability(options = {}) {
     return { ...context };
   }
 
+  async function replayIdentityGroups(groups, replayGeneration) {
+    for (const group of groups) {
+      if (generation !== replayGeneration) break;
+      await gateway.group(group.key, group.id, group.traits);
+    }
+  }
+
+  async function resetGatewayContext() {
+    await gateway.reset();
+    if (analyticsSuppressed) await markSupport();
+  }
+
+  async function replayBufferedFlagEvents(events, replayGeneration) {
+    for (const event of events) {
+      if (generation !== replayGeneration || analyticsSuppressed) break;
+      await gateway.track(event.name, buildEventPayload({ properties: event.properties, context: {}, metadata, timestamp: event.timestamp }));
+    }
+  }
+
   return {
     async initObservability(config = {}) {
       logger = config.logger ?? logger;
@@ -102,14 +121,8 @@ export function createObservability(options = {}) {
         pendingUser = undefined;
         pendingGroups.clear();
         if (user) await gateway.identify(user.userId, user.traits);
-        for (const group of groups) {
-          if (generation !== replayGeneration) break;
-          await gateway.group(group.key, group.id, group.traits);
-        }
-        if (generation !== replayGeneration) {
-          await gateway.reset();
-          if (analyticsSuppressed) await markSupport();
-        }
+        await replayIdentityGroups(groups, replayGeneration);
+        if (generation !== replayGeneration) await resetGatewayContext();
       }
       ready = true;
       const replayGeneration = generation;
@@ -120,10 +133,7 @@ export function createObservability(options = {}) {
         if (generation !== replayGeneration) break;
         await gateway.addFeatureFlagEvaluation(key, value);
       }
-      for (const event of events) {
-        if (generation !== replayGeneration || analyticsSuppressed) break;
-        await gateway.track(event.name, buildEventPayload({ properties: event.properties, context: {}, metadata, timestamp: event.timestamp }));
-      }
+      await replayBufferedFlagEvents(events, replayGeneration);
     },
 
     /**
