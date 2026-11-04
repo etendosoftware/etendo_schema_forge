@@ -1369,7 +1369,7 @@ export default function LocationEditorModal({
                                                 maxWidth: '100%', minWidth: 0, overflow: 'hidden',
                                             }}
                                         >
-                                            <Lock size={12} style={{ color: 'hsl(var(--muted-foreground))', flexShrink: 0 }} />
+                                            <Lock size={12} style={{ color: 'hsl(var(--muted-foreground))', flexShrink: 0 }} data-testid="Lock__927831" />
                                             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                 {form.address}
                                             </span>
@@ -1396,7 +1396,7 @@ export default function LocationEditorModal({
                                                     maxWidth: '100%', minWidth: 0, overflow: 'hidden',
                                                 }}
                                             >
-                                                <Lock size={12} style={{ color: 'hsl(var(--muted-foreground))', flexShrink: 0 }} />
+                                                <Lock size={12} style={{ color: 'hsl(var(--muted-foreground))', flexShrink: 0 }} data-testid="Lock__927831" />
                                                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                     {form.address2}
                                                 </span>
@@ -1503,7 +1503,7 @@ export default function LocationEditorModal({
                                                 border: `1px solid ${badgeBorder}`,
                                             }}
                                         >
-                                            {!showingLegacyPreview && composedAddress.address1 && <Check size={11} style={{ flexShrink: 0 }} />}
+                                            {!showingLegacyPreview && composedAddress.address1 && <Check size={11} style={{ flexShrink: 0 }} data-testid="Check__927831" />}
                                             {ui(badgeKey)}
                                         </span>
                                     </div>
@@ -1513,7 +1513,7 @@ export default function LocationEditorModal({
                                             data-testid="location-resulting-address1"
                                             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '2px 10px', borderRadius: 9999, border: '1px solid hsl(var(--border-subtle))', background: 'hsl(var(--card))', fontSize: 12, color: 'hsl(var(--foreground))' }}
                                         >
-                                            <Lock size={12} style={{ color: 'hsl(var(--muted-foreground))', flexShrink: 0 }} />
+                                            <Lock size={12} style={{ color: 'hsl(var(--muted-foreground))', flexShrink: 0 }} data-testid="Lock__927831" />
                                             {line1 || '—'}
                                         </span>
                                     </div>
@@ -1523,7 +1523,7 @@ export default function LocationEditorModal({
                                             data-testid="location-resulting-address2"
                                             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '2px 10px', borderRadius: 9999, border: '1px solid hsl(var(--border-subtle))', background: 'hsl(var(--card))', fontSize: 12, color: 'hsl(var(--foreground))' }}
                                         >
-                                            <Lock size={12} style={{ color: 'hsl(var(--muted-foreground))', flexShrink: 0 }} />
+                                            <Lock size={12} style={{ color: 'hsl(var(--muted-foreground))', flexShrink: 0 }} data-testid="Lock__927831" />
                                             {line2 || '—'}
                                         </span>
                                     </div>
