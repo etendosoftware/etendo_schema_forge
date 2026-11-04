@@ -497,6 +497,23 @@ describe('InlineSearchCombo — current-selection resolution off the loaded page
     } finally { restoreGeometry(); }
   });
 
+  // ETP-6103 — an empty page that claims hasMore (DISTINCT page, COUNT(alias)) must end the walk.
+  it('stops walking on an empty page even if the server says hasMore', async () => {
+    global.fetch = vi.fn((url) => {
+      const params = new URL(String(url), 'http://test').searchParams;
+      if (params.has('q')) return jsonOk([]);
+      const offset = Number(params.get('offset') || 0);
+      return Promise.resolve({ ok: true, json: async () => ({ items: offset === 0 ? makePage(0, 100) : [], hasMore: true }) });
+    });
+
+    await committedCombo();
+    await openViaChip();
+    await screen.findByTestId('inline-add-option-tax-0');
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    expect(listOffsets().filter((o) => o > 0).length).toBeLessThanOrEqual(2);
+  });
+
   it('does not walk once the user typed a search', async () => {
     global.fetch = routedFetch({ totalRows: 1000 });
 

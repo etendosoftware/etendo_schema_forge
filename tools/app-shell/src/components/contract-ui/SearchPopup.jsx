@@ -138,7 +138,7 @@ export function SearchPopup({
   const loadMore = useCallback((_query, _offset, opts) => {
     const controller = abortRef.current;
     // The sentinel and the ETP-5948 walk both page: one request at a time.
-    if (!controller || controller.signal.aborted || loadingMoreRef.current) return;
+    if (!controller || controller.signal.aborted || loadingMoreRef.current) return false;
     loadingMoreRef.current = true;
     setLoadingMore(true);
     setError(null);

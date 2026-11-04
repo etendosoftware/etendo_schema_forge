@@ -139,7 +139,7 @@ test('pinSearchTerms tries the full label, then each " - " segment, capped', () 
   assert.deepEqual(pinSearchTerms(null), []);
 });
 
-test('locatePageLimit asks for 100 rows but never past the walk total (6 x own page size)', () => {
+test('locatePageLimit asks for 100 rows, trimmed to what is left of the walk total (6 x own page size)', () => {
   assert.equal(locatePageLimit(30, 0), 100);
   assert.equal(locatePageLimit(30, 100), 80);
   assert.equal(locatePageLimit(50, 200), 100);

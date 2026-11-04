@@ -15,7 +15,7 @@ export const LOCATE_WALK_PAGE_SIZE = 100;
 
 /**
  * Rows to request in the next page of the locate walk (ETP-6103): up to LOCATE_WALK_PAGE_SIZE but
- * never past the walk's total cap (LOCATE_SELECTION_MAX_PAGES x the picker's own page size), and
+ * trimmed to what is left of the walk's total cap (LOCATE_SELECTION_MAX_PAGES x the picker's own page size), but
  * never below the picker's own size.
  *
  * @param {number} pageSize the picker's own page size

@@ -183,7 +183,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
   const fetchServerResults = useCallback((q, offset = 0, { immediate = false, limit: requestedLimit } = {}) => {
     // ETP-4576 - no `!token` here: under the cookie scheme the client holds none.
     if (!selectorUrl) { setServerResults(null); setLoadingFirstPage(false); return; }
-    if (offset > 0 && (!hasMoreRef.current || fetchInFlightRef.current)) return;
+    if (offset > 0 && (!hasMoreRef.current || fetchInFlightRef.current)) return false;
     clearTimeout(fetchTimer.current);
     // ETP-4975 BUG-2 fix: offset===0 always starts a NEW search generation (typed, or via
     // focus/open/toggle); offset>0 (scroll-triggered "load more") is tagged with whatever
@@ -201,7 +201,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     const trimmed = (q || '').trim();
     const queryParams = trimmed ? { ...selectorContext, q: trimmed } : { ...selectorContext };
     // ETP-6103 — the opening page is the larger walk page when a value is committed; the walk
-    // asks for its own size. `hasMore` below is judged against THIS limit.
+    // asks for its own size. `hasMore` below is the server's value, else judged against THIS limit.
     const limit = requestedLimit
       ?? (offset === 0 ? firstPageLimit(SERVER_SEARCH_PAGE, valueRef.current, trimmed) : SERVER_SEARCH_PAGE);
     queryParams.limit = limit;
@@ -219,7 +219,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           const items = data.items.map(it => ({ id: it.id, name: it.label || it.name, ...it }));
           setServerResults(prev => (offset === 0 ? items : [...(prev ?? []), ...items]));
           offsetRef.current = offset + items.length;
-          const more = data.hasMore ?? items.length >= limit;
+          const more = items.length > 0 && (data.hasMore ?? items.length >= limit);
           hasMoreRef.current = more;
           setHasMore(more);
         })

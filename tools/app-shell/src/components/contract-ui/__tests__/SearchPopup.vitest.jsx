@@ -365,6 +365,36 @@ describe('SearchPopup — committed value (ETP-5948)', () => {
     expect(screen.getByTestId('search-popup-option-acc-0')).not.toHaveClass('invisible');
   });
 
+  // The server can answer an empty page with hasMore: true (a SELECT DISTINCT page counted with
+  // COUNT(alias)): neither offset nor loaded rows advance, so the walk must end instead of
+  // re-requesting the same page on every settle.
+  it('ends the walk and releases the hold on an empty page that claims hasMore (ETP-6103)', async () => {
+    const all = Array.from({ length: 100 }, (_, i) => row(i));
+    const loadPage = vi.fn((q, offset) => Promise.resolve(offset === 0
+      ? { items: all, hasMore: true }
+      : { items: [], hasMore: true }));
+    renderPopup({ loadPage, value: 'acc-missing', valueLabel: 'Account missing' });
+
+    await screen.findByTestId('search-popup-option-acc-0');
+    await waitFor(() => expect(screen.queryByTestId('search-popup-locating')).toBeNull());
+    await act(async () => { await new Promise((r) => setTimeout(r, 200)); });
+    expect(loadPage.mock.calls.filter(([q, offset]) => q === '' && offset > 0).length).toBeLessThanOrEqual(2);
+    expect(screen.getByTestId('search-popup-option-acc-0')).not.toHaveClass('invisible');
+  });
+
+  it('ends the extra-page centring on an empty page that claims hasMore (ETP-6103)', async () => {
+    restoreGeometry = mockGeometry();
+    const all = Array.from({ length: 100 }, (_, i) => row(i));
+    const loadPage = vi.fn((q, offset) => Promise.resolve(offset === 0
+      ? { items: all, hasMore: true }
+      : { items: [], hasMore: true }));
+    renderPopup({ loadPage, value: 'acc-98', valueLabel: 'Account 0098' });
+
+    await waitFor(() => expect(screen.queryByTestId('search-popup-locating')).toBeNull());
+    await act(async () => { await new Promise((r) => setTimeout(r, 200)); });
+    expect(loadPage.mock.calls.filter(([, offset]) => offset > 0).length).toBeLessThanOrEqual(2);
+  });
+
   it('releases the hold when the value is not found (ETP-6103)', async () => {
     const loadPage = sizedPager(1000);
     renderPopup({ loadPage, value: 'acc-900', valueLabel: 'Account 0900' });

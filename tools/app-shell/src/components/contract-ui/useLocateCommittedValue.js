@@ -25,7 +25,7 @@ import {
  *   `locating: true`. The caller then keeps its rows laid out but invisible (they must keep layout so
  *   the centring can measure them), hides its scrollbar and shows `<LocatingNotice/>`. The hold ends
  *   when the value is centred (a value among the last loaded rows stays held until one more page
- *   lands or the list ends), when it cannot be found (the ETP-5846 pin takes over), when a page
+ *   lands or the list ends; a page that adds no rows twice in a row also ends it, whatever `hasMore` says), when it cannot be found (the ETP-5846 pin takes over), when a page
  *   fails or the list ends, when the user types or presses a key, and on close. It never starts
  *   before the first page has landed (the caller's own loading state covers that) nor when there is
  *   no committed value. Centring and release happen in a layout effect, so the first painted frame
@@ -55,7 +55,8 @@ import {
  * @param {boolean} p.locateDone
  * @param {(done: boolean) => void} p.setLocateDone
  * @param {(query: string, offset: number, opts: {limit: number}) => void} p.fetchPage stable page loader;
- *   `opts.limit` is the number of rows to request (it must derive `hasMore` from THAT limit)
+ *   Returns `false` when the call was swallowed by the loader's own in-flight guard.
+ *   `opts.limit` is the number of rows to request (a `hasMore` it infers itself must use THAT limit; an empty page ends the walk)
  * @param {{current: number}} p.offsetRef offset of the next page
  * @param {number} p.selectedIndex the committed option's index in the rendered list, -1 if absent
  * @param {number} p.renderedCount rows in the rendered list
@@ -70,6 +71,21 @@ export function useLocateCommittedValue({
   selectedIndex, renderedCount, layoutKey,
 }) {
   const centeredRef = useRef(false);
+  // The last page request: rows loaded and fetches settled when it was issued, and how many settles
+  // since then added no rows. One such settle can belong to a fetch that was already running (the
+  // opening page settles after the walk has started), so the walk only gives up on the second one.
+  const lastRequestRef = useRef(null);
+  const settledWithoutRows = () => {
+    const last = lastRequestRef.current;
+    return last != null && settledFetches > last.settled && loadedRows === last.loaded;
+  };
+  const stalled = () => settledWithoutRows() && lastRequestRef.current.strikes >= 1;
+  // A loader whose in-flight guard swallowed the call returns false: that is not a request.
+  const requestNextPage = () => {
+    const strikes = settledWithoutRows() ? lastRequestRef.current.strikes + 1 : 0;
+    if (fetchPage('', offsetRef.current, { limit: walkLimit }) === false) return;
+    lastRequestRef.current = { loaded: loadedRows, settled: settledFetches, strikes };
+  };
   const walkLimit = largePages ? locatePageLimit(pageSize, loadedRows) : pageSize;
   const [released, setReleased] = useState(false);
   const searching = query.trim() !== '';
@@ -84,6 +100,7 @@ export function useLocateCommittedValue({
   useLayoutEffect(() => {
     interactedRef.current = false;
     centeredRef.current = false;
+    lastRequestRef.current = null;
     setReleased(false);
   }, [open, interactedRef]);
 
@@ -96,8 +113,9 @@ export function useLocateCommittedValue({
     const keepGoing = shouldKeepLocating({
       found, hasMore, loadedRows, pageSize, interacted: interactedRef.current,
     });
-    if (keepGoing) fetchPage('', offsetRef.current, { limit: walkLimit });
-    else setLocateDone(true);
+    if (keepGoing && !stalled()) {
+      requestNextPage();
+    } else setLocateDone(true);
   }, [walkEnabled, locateDone, rows, loadedRows, found, hasMore, pageSize, walkLimit, settledFetches, fetchPage, offsetRef, setLocateDone, interactedRef]);
 
   useLayoutEffect(() => {
@@ -112,11 +130,11 @@ export function useLocateCommittedValue({
       setReleased(true);
     } else if (paged && canFetch && loading) {
       // A page is in flight: stay held; `settledFetches` re-runs this once it has landed.
-    } else if (paged && canFetch && loadedRows < LOCATE_SELECTION_MAX_PAGES * pageSize) {
+    } else if (paged && canFetch && !stalled() && loadedRows < LOCATE_SELECTION_MAX_PAGES * pageSize) {
       // Among the last loaded rows: it can only be centred once more rows exist below it.
-      fetchPage('', offsetRef.current, { limit: walkLimit });
+      requestNextPage();
     } else {
-      // Page cap reached: keep it where it is rather than holding the list forever.
+      // Page cap reached or the list stopped growing: keep it where it is, never hold forever.
       centeredRef.current = true;
       setReleased(true);
     }

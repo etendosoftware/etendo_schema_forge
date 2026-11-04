@@ -196,8 +196,8 @@ function buildServerSearchParams({ selectorContext, parentKey, parentValue, filt
 /** Fetches and maps one page of selector options from the server for the server-search mode.
  * Shared by the debounced typing flow, the initial on-focus/on-open load, and the
  * scroll-triggered "load more" (ETP-4600 Phase 2a; pagination added ETP-4975). Returns
- * `hasMore` (inferred the same way as SelectorInput.jsx: a short page means the server is
- * exhausted) alongside the mapped `items` so the caller can decide whether to keep paginating. */
+ * `hasMore` (the server's value when present; otherwise inferred like SelectorInput.jsx: a short
+ * page means the server is exhausted; an empty page never has more) alongside the mapped `items` so the caller can decide whether to keep paginating. */
 function fetchServerOptions({ apiFetch, selectorUrl, selectorContext, parentKey, parentValue, filterKey, query, offset = 0, limit = SERVER_SEARCH_PAGE }) {
   const params = buildServerSearchParams({ selectorContext, parentKey, parentValue, filterKey, query, offset, limit });
   return apiFetch(buildUrlWithParams(selectorUrl, params), { baseUrl: '' })
@@ -210,7 +210,7 @@ function fetchServerOptions({ apiFetch, selectorUrl, selectorContext, parentKey,
     })
     .then(data => {
       const items = (data?.items ?? []).map(i => ({ id: i.id, name: i.label || i.name || i.id, ...i }));
-      return { items, hasMore: data?.hasMore ?? items.length >= limit };
+      return { items, hasMore: items.length > 0 && (data?.hasMore ?? items.length >= limit) };
     });
 }
 
@@ -683,7 +683,7 @@ export function CreatableSearchSelect({
   // is gone (the debounce timer; this function itself has no timer of its own).
   const triggerServerSearch = useCallback((searchQuery, offset = 0, { limit: requestedLimit } = {}) => {
     if (!serverSearch || !selectorUrl) return;
-    if (offset > 0 && (!hasMoreRef.current || fetchInFlightRef.current)) return;
+    if (offset > 0 && (!hasMoreRef.current || fetchInFlightRef.current)) return false;
     // ETP-4975 BUG-2 fix: offset===0 always starts a NEW search generation (typed, or via
     // focus/open); offset>0 (scroll-triggered "load more") is tagged with whatever generation
     // was already current when it fired — it never starts one of its own. When the fetch
@@ -693,7 +693,7 @@ export function CreatableSearchSelect({
     if (offset === 0) searchGenerationRef.current += 1;
     const requestGeneration = searchGenerationRef.current;
     // ETP-6103 — the opening page is the larger walk page when a value is committed; the walk asks
-    // for its own size. fetchServerOptions judges `hasMore` against THIS limit.
+    // for its own size. fetchServerOptions takes `hasMore` from the server, else judges it against THIS limit.
     const limit = requestedLimit
       ?? (offset === 0 ? firstPageLimit(SERVER_SEARCH_PAGE, valueRef.current, searchQuery ?? '') : SERVER_SEARCH_PAGE);
     const applyPage = ({ items, hasMore: more }) => {
