@@ -6,6 +6,8 @@ import {
   NEEDS_INVOICE_DOC,
   readAnnotatedFlag,
   readOrderPendingDocs,
+  PENDING_INVOICE_AMOUNT,
+  readPendingInvoiceAmount,
 } from '../orderPendingDocs.js';
 
 // ETP-5295 — this module is the single frontend reader for the two backend GET annotations
@@ -142,5 +144,29 @@ describe('orderPendingDocs', () => {
       const record = { [NEEDS_PRIMARY_DOC]: 'Y', [NEEDS_INVOICE_DOC]: 'Y' };
       assert.deepEqual(readOrderPendingDocs(record), { needsPrimaryDoc: true, needsInvoiceDoc: true });
     });
+  });
+
+  // ETP-5828 — `pendingInvoiceAmount`, the amount «Generar factura» would invoice now (sales
+  // order single-record GET only). Absent must stay `undefined` so the modal keeps its fallback;
+  // 0 is a real answer.
+  describe('readPendingInvoiceAmount', () => {
+    it('names the backend key', () => {
+      assert.equal(PENDING_INVOICE_AMOUNT, 'pendingInvoiceAmount');
+    });
+
+    for (const [name, record, expected] of [
+      ['a number', { pendingInvoiceAmount: 38.12 }, 38.12],
+      ['a numeric string', { pendingInvoiceAmount: '51.18' }, 51.18],
+      ['zero, a real answer', { pendingInvoiceAmount: 0 }, 0],
+      ['absent', {}, undefined],
+      ['null', { pendingInvoiceAmount: null }, undefined],
+      ['empty string', { pendingInvoiceAmount: '' }, undefined],
+      ['not a number', { pendingInvoiceAmount: 'n/a' }, undefined],
+      ['no record', null, undefined],
+    ]) {
+      it(`reads ${name}`, () => {
+        assert.equal(readPendingInvoiceAmount(record), expected);
+      });
+    }
   });
 });

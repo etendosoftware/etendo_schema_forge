@@ -9,7 +9,7 @@ import { ConfirmResultModal } from '@/components/contract-ui';
 import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { useOrderPdf } from '@/windows/custom/shared/useOrderPdf.js';
-import { readOrderPendingDocs } from '@/windows/custom/shared/orderPendingDocs.js';
+import { readOrderPendingDocs, readPendingInvoiceAmount, PENDING_INVOICE_AMOUNT } from '@/windows/custom/shared/orderPendingDocs.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { ETGO_DTO_PRODUCT_ID } from '@/lib/documentTotals.js';
 import { translateBackendError, translateBackendErrorBody, translateQuotaRefusalBody } from '@/lib/backendErrors.js';
@@ -781,10 +781,15 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
         : ui('soQtyPendingDelivery', { pending: fmtNum(qtyPending, 0) }))
     : ui('soCreateShipmentCheckDesc');
 
+  // ETP-5828 — the pending figure is what «Generar factura» WOULD invoice now, computed by the
+  // backend with the action's own rule (net of draft invoices, shipment-scoped, global discount)
+  // and annotated on the order's single-record GET. Without it (a list row, a legacy backend) the
+  // old derivation stays: order total − completed invoices.
+  const pendingToInvoice = readPendingInvoiceAmount(d) ?? totalPending;
   const invoiceSubtitle = totalOrder !== 0
     ? (totalInvoiced > 0
-        ? ui('soAmountInvoicedOf', { invoiced: formatCurrency(currency, totalInvoiced), total: formatCurrency(currency, totalOrder), pending: formatCurrency(currency, totalPending) })
-        : ui('soAmountPendingInvoice', { pending: formatCurrency(currency, totalPending) }))
+        ? ui('soAmountInvoicedOf', { invoiced: formatCurrency(currency, totalInvoiced), total: formatCurrency(currency, totalOrder), pending: formatCurrency(currency, pendingToInvoice) })
+        : ui('soAmountPendingInvoice', { pending: formatCurrency(currency, pendingToInvoice) }))
     : ui('soCreateInvoiceCheckDesc');
 
   // ETP-5381: with only ONE action left, the tick is a confirmation of a confirmation. The user
@@ -971,6 +976,21 @@ const closeBtn = {
 // as still pending, and this launcher reads those same annotations. The silent close survives
 // only as the defence for the no-annotation fallback path and for a record that changed between
 // the list load and the click.
+/**
+ * ETP-5828 — `pendingInvoiceAmount` of one order, from its single-record GET (the only GET the
+ * backend annotates with it); `undefined` when absent or unreadable.
+ */
+async function fetchPendingInvoiceAmount(apiFetch, apiBaseUrl, orderId) {
+  try {
+    const res = await apiFetch(`${apiBaseUrl}/header/${orderId}`);
+    if (!res.ok) return undefined;
+    const record = (await res.json())?.response?.data?.[0];
+    return readPendingInvoiceAmount(record);
+  } catch {
+    return undefined;
+  }
+}
+
 export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, onCreated }) {
   const ui = useUI();
   const [fetched, setFetched] = useState(null);
@@ -989,16 +1009,20 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
     let cancelled = false;
     (async () => {
       try {
-        const [shipRes, linesRes, invRes] = await Promise.all([
+        const [shipRes, linesRes, invRes, pendingInvoiceAmount] = await Promise.all([
           apiFetch(`${base}/goods-shipment/goodsShipment?criteria=${CRITERIA('salesOrder', orderId)}&_limit=50`),
           apiFetch(`${apiBaseUrl}/lines?parentId=${orderId}&_startRow=0&_endRow=999`),
           apiFetch(`${apiBaseUrl}/header/${orderId}/action/listInvoices`),
+          // ETP-5828 — list rows are not annotated with `pendingInvoiceAmount` (performance), so
+          // the launcher reads it off the order's single-record GET. A failure only loses the
+          // figure: the modal then falls back to order total − completed invoices.
+          fetchPendingInvoiceAmount(apiFetch, apiBaseUrl, orderId),
         ]);
         if (cancelled) return;
         const shipments  = shipRes.ok  ? ((await shipRes.json())?.response?.data  ?? []) : [];
         const orderLines = linesRes.ok ? ((await linesRes.json())?.response?.data ?? []) : [];
         const invoices   = invRes.ok   ? ((await invRes.json())?.response?.data   ?? []) : [];
-        if (!cancelled) setFetched({ shipments, invoices, orderLines });
+        if (!cancelled) setFetched({ shipments, invoices, orderLines, pendingInvoiceAmount });
       } catch {
         if (!cancelled) setFetched({ shipments: [], invoices: [], orderLines: [] });
       }
@@ -1079,7 +1103,9 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
   return createPortal(
     <CreateDocsModal
       orderId={orderId}
-      data={data}
+      // ETP-5828: the row plus the single-record GET's pendingInvoiceAmount, when it came back
+      data={fetched.pendingInvoiceAmount === undefined ? data
+        : { ...data, [PENDING_INVOICE_AMOUNT]: fetched.pendingInvoiceAmount }}
       base={base}
       currency={data?.['currency$_identifier'] || ''}
       derived={derived}
