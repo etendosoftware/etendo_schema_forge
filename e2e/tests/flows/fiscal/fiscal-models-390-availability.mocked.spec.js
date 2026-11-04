@@ -3,7 +3,7 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/FmListPage.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-models/FmCatalogPage.jsx
 // @covers tools/app-shell/src/windows/custom/organization/useFiscalSectionVisibility.js
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login, MOCK_ORG_ID } from '../../helpers/auth.js';
 
 /**
