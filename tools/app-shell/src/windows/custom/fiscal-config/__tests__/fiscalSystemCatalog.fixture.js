@@ -10,12 +10,6 @@
 
 import GOLDEN from './fiscalSystemCatalog.golden.json' with { type: 'json' };
 
-/**
- * The golden file as text — its canonical two-space serialization, which is exactly the file's
- * bytes (the file is kept in that form): what the SHA-256 is computed over.
- */
-export const FISCAL_SYSTEM_CATALOG_GOLDEN_TEXT = `${JSON.stringify(GOLDEN, null, 2)}\n`;
-
 /** SHA-256 of the golden file; equal to FiscalSifRulesTest.GOLDEN_SHA256 in com.etendoerp.go. */
 export const FISCAL_SYSTEM_CATALOG_SHA256 =
   '176abb4fdbba906c8f6831ff6a9a58dbbdab86d88432bfac86ac4a33121079df';

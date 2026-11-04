@@ -609,6 +609,9 @@ banner):
 | territory mandatory and compatible with the system | `ETGO_FiscalSifTerritoryRequired`, `ETGO_FiscalSifNotAllowed` |
 | one active SIF per organization, SII + TicketBAI aside | `ETGO_FiscalSifAlreadyConfigured`; "Añadir SII" in TicketBAI's own territory only (`ETGO_FiscalSifTerritoryMismatch`), refused on a legacy TicketBAI without territory (`ETGO_FiscalSifTbaiNoTerritory`) |
 | only in a productive environment (`ETSG_ForceTestMode`) | `ETGO_FiscalSifTestMode` — "Solo podrá activar un sistema fiscal en un entorno productivo." (the window is also locked, as before) |
+| never on the `*` organization (`0`) | `ETGO_FiscalSifOrgStar` — "No se puede activar un sistema de facturación en la organización «*». Usa la organización de tu empresa." |
+
+Two activations of the same organization never overlap: the action locks the organization's `AD_OrgInfo` row before its "one active SIF" checks, and holds it until its records are committed, so the second one waits and is then refused (see neo-headless §4.12.1.10). The catalog action answers `GET` only.
 
 What stays in the window is presentation only: `fiscalCatalog.js` keeps the territory order, the
 wizard's questions (`regime`, `askNational`, `askVolume`) and the labels; no allowed systems and
@@ -634,8 +637,9 @@ etendo_action(spec:'organization', entity:'organization', id:'<organizationId>',
               action:'configureFiscalSystem', parameters:{system:'SII+TBAI', territory:'gipuzkoa'})
 ```
 
-On top of the rules above: derived fields stay read-only on `etendo_update` (`tAXType` through a
-field-level `MCP_CONFIG.fields.readOnly`); the certificate is not writable by agents
+On top of the rules above: derived fields stay read-only on `etendo_update` — `tAXType`, and the values this window never edits but the activation sets (SII `acogidaAlSII`, `entornoDeProduccin`, `adjuntarArchivosXML`; TicketBAI `productionEnv`, `uSEAsproductDesc`, `validatePreviousInvoice`), each through a
+field-level `MCP_CONFIG.fields.readOnly` (the window's detail step PUTs them back unchanged over REST,
+where `MCP_CONFIG` does not apply); the certificate is not writable by agents
 (`organization/certificadoDigital` verbs hidden) and the action warns when the organization has
 none; and "Cambiar SIF" is UI only — an agent changing `active` gets `ETGO_FiscalSifActiveByAgent`.
 
