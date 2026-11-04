@@ -108,7 +108,7 @@ function beginIdentityEffect({ isAuthenticated, identity, token }, state, onRetr
   if (attempt.companyChanged) {
     reportFlagDiagnostic({ operation: 'company_switch', outcome: 'started', source: 'auth', account_id: identity.clientId });
   }
-  void resolveIdentityAttempt(attempt, state, token, onRetry).catch(() => {
+  resolveIdentityAttempt(attempt, state, token, onRetry).catch(() => {
     reportFlagDiagnostic({ operation: 'identity_resolution', outcome: 'error', reason: 'provider_error' });
     retryUnresolved(attempt, state, onRetry);
   });
