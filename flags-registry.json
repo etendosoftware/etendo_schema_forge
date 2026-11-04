@@ -2005,8 +2005,7 @@
         "e2e": [
           {
             "root": "frontend",
-            "path": "e2e/tests/flows/accounting/dynamic-profit-loss.mocked.spec.js",
-            "expected": true
+            "path": "e2e/tests/flows/accounting/dynamic-profit-loss.mocked.spec.js"
           }
         ]
       }
