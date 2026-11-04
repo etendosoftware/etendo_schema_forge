@@ -57,10 +57,12 @@ max_steps = 50
 feedback_tools = false
 
 # Per tool call, how much of the RESULT body is stored in the run file. Results
-# are recorded so a failure is diagnosable from runs/ alone; the cap exists
-# because one `etendo_discover` answer is ~79 KB. The true size is always kept as
-# `resultBytes`, truncated or not.
-max_result_chars = 20000
+# are recorded so a failure is diagnosable from runs/ alone. Recording only: the
+# agent always sees the whole answer. 200000 keeps every answer seen so far whole
+# (the largest in the 2 Nov okr sweep was ~98 KB; at 20000, 11 % were cut — the
+# biggest, the ones worth reading when looking for savings). The true size is
+# always kept as `resultBytes`, truncated or not.
+max_result_chars = 200000
 
 # Attempts in flight per target (D44) — read by `make mcp-compare` ONLY
 # (default 4). `make mcp-test` ignores it and stays sequential unless
