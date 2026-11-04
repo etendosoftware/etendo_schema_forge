@@ -368,6 +368,7 @@
           "label": "Email",
           "section": "principal",
           "order": 10,
+          "agentPrompt": "#REF#agent-prompts/contacts/business-partner.etgo-email.md",
           "publicApi": { "exposed": true, "name": "email" }
         },
         "etgoPhone": {
@@ -619,7 +620,8 @@
           "grid": true,
           "searchable": true,
           "section": "principal",
-          "columnWidth": 320
+          "columnWidth": 320,
+          "agentPrompt": "#REF#agent-prompts/contacts/contact.email.md"
         },
         "phone": {
           "visibility": "editable",

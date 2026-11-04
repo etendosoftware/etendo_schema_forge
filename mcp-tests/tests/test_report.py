@@ -19,6 +19,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
+from runner import decide as rule
 from runner import report
 
 FIXTURE = Path(__file__).parent / "fixtures" / "compare-okr"
@@ -149,25 +150,36 @@ class SummaryTest(unittest.TestCase):
         cls.summary = report.build_summary(FIXTURE)
 
     def test_every_task_lands_on_its_decision_path(self):
-        got = {t["task"]: (t["status"], t["winner"], t["decidedBy"]) for t in self.summary["tasks"]}
+        got = {t["task"]: (t["status"], t["winner"], t["decidedBy"], t["result"]) for t in self.summary["tasks"]}
         self.assertEqual(got, {
-            "w-invoice-one-product-issued": ("decided", "subject", "0-capability"),
-            "q-product-prices-stock": ("decided", "subject", "1-success"),
-            "f-process-sales-order": ("decided", "reference", "2-calls"),
-            "e-unknown-document": ("decided", "tie", "1-noSuccess"),
-            "q-both-not-possible": ("excluded", None, None),
-            "q-short-of-attempts": ("notEvaluable", None, None),
-            "q-tokens-missing": ("decided", "subject", "4-bytes"),
+            "w-invoice-one-product-issued": ("decided", "subject", "0-capability", "subjectOnly"),
+            "q-product-prices-stock": ("decided", "subject", "1-success", "subjectWin"),
+            "f-process-sales-order": ("decided", "subject", "3-tokens", "subjectWin"),
+            "e-unknown-document": ("decided", "tie", "1-noSuccess", "tie"),
+            "q-both-not-possible": ("excluded", None, None, None),
+            "q-short-of-attempts": ("notEvaluable", None, None, None),
+            "q-tokens-missing": ("notEvaluable", None, None, None),
         })
+        reasons = {r["task"]: r["reason"] for r in self.summary["notEvaluable"]}
+        self.assertEqual(reasons["q-tokens-missing"], "reference: token usage missing")
 
-    def test_kr_is_split_by_capability_and_measurement(self):
+    def test_kr_headline_counts_the_five_results(self):
         kr = self.summary["kr"]
-        self.assertEqual(kr["tasks"], 7)
-        self.assertEqual(kr["evaluated"], 5, "excluded and not-evaluable tasks are out of the denominator")
-        self.assertEqual(kr["subjectWins"], {"total": 3, "byCapability": 1, "byMeasurement": 2})
-        self.assertEqual(kr["referenceWins"], {"total": 1, "byCapability": 0, "byMeasurement": 1})
-        self.assertEqual(kr["ties"], 1)
-        self.assertEqual((kr["winRate"], kr["winRateByCapability"], kr["winRateByMeasurement"]), (0.6, 0.2, 0.4))
+        self.assertEqual((kr["tasks"], kr["evaluated"]), (7, 4),
+                         "excluded and not-evaluable tasks are out of the denominator")
+        self.assertEqual(kr["results"], {"subjectOnly": 1, "subjectWin": 2, "referenceWin": 0,
+                                         "referenceOnly": 0, "tie": 1})
+        self.assertEqual((kr["winRate"], kr["target"]), (0.75, 0.8))
+        self.assertEqual((kr["subjectLabel"], kr["referenceLabel"]), ("Etendo", "Holded"))
+        headline = report.render_markdown(self.summary).splitlines()[2]
+        self.assertEqual(headline, "**KR2.1: 75 % sobre 4 pruebas** (meta 80 %) — 1 Etendo Only, 2 Etendo Win, "
+                                   "0 Holded Win, 0 Holded Only, 1 empate. 7 en la suite, 1 frágiles.")
+
+    def test_a_reference_win_by_capability_is_holded_only(self):
+        self.assertEqual(report.task_result(rule.Decision("decided", rule.REFERENCE, "0-capability")),
+                         "referenceOnly")
+        self.assertEqual(report.task_result(rule.Decision("decided", rule.REFERENCE, "3-tokens")), "referenceWin")
+        self.assertIsNone(report.task_result(rule.Decision("notEvaluable")))
 
     def test_stumble_indicators_per_target(self):
         s = self.summary["stumbleIndicators"]
@@ -180,7 +192,8 @@ class SummaryTest(unittest.TestCase):
         gaps = {(g["task"], g["target"]) for g in self.summary["capabilityGaps"]}
         self.assertIn(("w-invoice-one-product-issued", "holded"), gaps)
         self.assertEqual([r["task"] for r in self.summary["excluded"]], ["q-both-not-possible"])
-        self.assertEqual([r["task"] for r in self.summary["notEvaluable"]], ["q-short-of-attempts"])
+        self.assertEqual([r["task"] for r in self.summary["notEvaluable"]],
+                         ["q-short-of-attempts", "q-tokens-missing"])
 
     def test_unofficial_when_a_target_is_not_fresh(self):
         self.assertFalse(self.summary["official"])
@@ -316,7 +329,7 @@ class SummaryTest(unittest.TestCase):
         self.assertEqual(unescaped(row), unescaped(header))
 
     def test_rule_version_and_parameters_are_recorded(self):
-        self.assertEqual(self.summary["rule"]["version"], 1)
+        self.assertEqual(self.summary["rule"]["version"], 2)
         self.assertEqual(self.summary["rule"]["parameters"]["callsMargin"], 0.2)
         self.assertEqual(self.summary["pins"]["rule"], {k: self.summary["rule"][k]
                                                         for k in ("version", "parameters", "parametersSha")})
@@ -569,16 +582,16 @@ class StabilityTest(unittest.TestCase):
     def test_identical_runs_agree_fully_and_a_tie_equals_a_tie(self):
         result = report.stability(self.base, copy.deepcopy(self.base))
         self.assertTrue(result["valid"])
-        self.assertEqual(result["agreement"], {"agree": 5, "of": 5, "ratio": 1.0})
+        self.assertEqual(result["agreement"], {"agree": 4, "of": 4, "ratio": 1.0})
         self.assertTrue(next(t for t in result["tasks"] if t["task"] == "e-unknown-document")["agree"])
         self.assertTrue(result["meetsTarget"])
 
     def test_a_flipped_task_lowers_agreement_and_non_fragile_is_separate(self):
         b = copy.deepcopy(self.base)
         _task(b, "q-product-prices-stock")["winner"] = "tie"   # fragile in A
-        _task(b, "q-tokens-missing")["winner"] = "reference"   # not fragile
+        _task(b, "f-process-sales-order")["winner"] = "reference"   # not fragile
         result = report.stability(self.base, b)
-        self.assertEqual(result["agreement"], {"agree": 3, "of": 5, "ratio": 0.6})
+        self.assertEqual(result["agreement"], {"agree": 2, "of": 4, "ratio": 0.5})
         self.assertFalse(result["meetsTarget"])
         self.assertEqual(result["agreementNonFragile"], {"agree": 2, "of": 3, "ratio": 0.6667})
         self.assertIn("q-short-of-attempts", result["onlyEvaluableInOne"])
@@ -650,7 +663,7 @@ class StabilityTest(unittest.TestCase):
             t["status"] = "fresh"
         a["official"] = True
         b = copy.deepcopy(a)
-        _task(b, "f-process-sales-order")["winner"] = "subject"
+        _task(b, "f-process-sales-order")["winner"] = "reference"
         result = report.stability(a, b)
         flipped = next(t for t in result["tasks"] if t["task"] == "f-process-sales-order")
         self.assertFalse(flipped["agree"])
@@ -666,8 +679,8 @@ class StabilityTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertFalse(result["valid"])
         self.assertEqual(result["refusals"], ["both runs must be official (every target fresh)"])
-        self.assertEqual(result["agreement"], {"agree": 5, "of": 5, "ratio": 1.0})
-        self.assertEqual(len(result["tasks"]), 5)
+        self.assertEqual(result["agreement"], {"agree": 4, "of": 4, "ratio": 1.0})
+        self.assertEqual(len(result["tasks"]), 4)
 
     def test_cli_stability_exits_two_when_not_valid(self):
         with redirect_stdout(io.StringIO()) as out:

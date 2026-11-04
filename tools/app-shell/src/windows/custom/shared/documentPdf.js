@@ -1,8 +1,10 @@
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { buildLocationAddressLines } from '@/lib/locationAddress.js';
 import { computeDocumentTotals } from '@/lib/documentTotals';
 import { ORDER_LINE_CONFIG } from '@/hooks/useLineGrossAmount';
 import { getCurrencyFormatConfig } from '@/lib/currencyFormatConfig.js';
+import { loadDocTemplateConfig } from './docTemplateConfig.js';
+import { resolveDocumentTemplate, applyTemplateConfigData } from './documentTemplateVariants.js';
 import {
   DOCUMENT_CSS,
   DOCUMENT_TEMPLATE,
@@ -182,7 +184,7 @@ export async function buildOrderData(spec, orderId, base, token, currencyData = 
 // ---------------------------------------------------------------------------
 // Render via jsreport (delegates to shared renderPdf in pdfUtils.js)
 // ---------------------------------------------------------------------------
-export async function renderDocumentPdf(data) {
+export async function renderDocumentPdf(data, templateConfig = null) {
   // Currency/amount formatting in DOCUMENT_TEMPLATE MUST go through the
   // {{formatCurrency}} helper built by buildCommercialHelpers — never add a
   // template-local formatter (see CLAUDE.md § Currency & Amount Formatting).
@@ -191,15 +193,17 @@ export async function renderDocumentPdf(data) {
   // The server-side render (ETP-6013) fills the same helpers from the published
   // manifest — see printableSources.js#buildCommercialHelpersTemplate.
   const helpers = buildCommercialHelpers(data.rateDecimals, getCurrencyFormatConfig());
-  return renderPdf(DOCUMENT_TEMPLATE, DOCUMENT_CSS, helpers, data);
+  const { template, css } = resolveDocumentTemplate(templateConfig, DOCUMENT_TEMPLATE, DOCUMENT_CSS);
+  return renderPdf(template, css, helpers, applyTemplateConfigData(data, templateConfig));
 }
 
-export async function renderDocumentHtml(data) {
+export async function renderDocumentHtml(data, templateConfig = null) {
   // HTML twin of renderDocumentPdf, for the list view's multi-document print (which
   // concatenates markup before making one PDF). Keep the two in step: same helpers,
   // same data shape — only the recipe differs.
   const helpers = buildCommercialHelpers(data.rateDecimals, getCurrencyFormatConfig());
-  return renderHtml(DOCUMENT_TEMPLATE, DOCUMENT_CSS, helpers, data);
+  const { template, css } = resolveDocumentTemplate(templateConfig, DOCUMENT_TEMPLATE, DOCUMENT_CSS);
+  return renderHtml(template, css, helpers, applyTemplateConfigData(data, templateConfig));
 }
 
 // ---------------------------------------------------------------------------
@@ -239,11 +243,29 @@ export function computeDiscountBreakdown(linesRaw, etgoTotalDiscount, getGrossLi
 // Generic PDF hook — shared by all document-type hooks
 // labels are kept in a ref so they never re-trigger the effect on locale change
 // ---------------------------------------------------------------------------
-export function useDocumentPdf(recordId, apiBaseUrl, token, buildDataFn, labels, cacheConfig) {
+export function useDocumentPdf(recordId, apiBaseUrl, token, buildDataFn, labels, cacheConfig, docType = null) {
   const labelsRef = useRef(labels);
   labelsRef.current = labels;
-  return usePdfGenerator(recordId, apiBaseUrl, token, (id, base, tok) =>
-    buildDataFn(id, base, tok).then((data) => renderDocumentPdf({ ...data, labels: labelsRef.current }))
-  , cacheConfig);
+  // ETP-5988: the organization's saved template (undefined while it is being read, null when it has
+  // none). It is read BEFORE generating so a document that has one never serves a cached PDF
+  // (nothing a record edit does would invalidate it when only the configuration changed), while one
+  // that has none keeps the cache config untouched. A type with no template concept (docType null)
+  // is settled from the start.
+  const [templateConfig, setTemplateConfig] = useState(docType ? undefined : null);
+  const templateRef = useRef(null);
+  templateRef.current = templateConfig ?? null;
+  useEffect(() => {
+    if (!docType || !recordId || !apiBaseUrl) return undefined;
+    let cancelled = false;
+    setTemplateConfig(undefined);
+    // apiBaseUrl is the window's url; the configuration lives one segment up (as usePdfGenerator strips it).
+    loadDocTemplateConfig(docType, apiBaseUrl.replace(/\/[^/]+$/, ''), token)
+      .then((config) => { if (!cancelled) setTemplateConfig(config); });
+    return () => { cancelled = true; };
+  }, [docType, recordId, apiBaseUrl, token]);
+  const settled = templateConfig !== undefined;
+  return usePdfGenerator(settled ? recordId : null, apiBaseUrl, token, async (id, base, tok) => {
+    const data = await buildDataFn(id, base, tok);
+    return renderDocumentPdf({ ...data, labels: labelsRef.current }, templateRef.current);
+  }, templateConfig ? null : cacheConfig);
 }
-

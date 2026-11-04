@@ -12,6 +12,7 @@ import { DateField } from '@/components/ui/date-field';
 import { AddLineButton } from '@/components/ui/add-line-button';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { useRepresentantesLegales } from './useRepresentantesLegales.js';
+import { RepresentativeTableFrame, RepresentativeHeaderCell } from './RepresentativeTableFrame.jsx';
 import {
   EMPTY_REPRESENTATIVE,
   MODELO_390_REPRESENTATIVE_LIMIT,
@@ -326,29 +327,30 @@ export default function RepresentantesLegalesSection({ apiBaseUrl, orgId }) {
         ui={ui}
         t={gridLabel}
         data-testid="GridViewControls__f6a856" />}
-      <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full table-fixed">
-          <thead>
-            <tr className="border-b border-border bg-muted/40">
-              <th className="h-9 w-20 px-3 text-left align-middle text-xs font-semibold text-foreground">{ui('orgRepLineLabel')}</th>
-              {columns.map(column => {
-                const label = column.label;
-                return (
-                  <th key={column.key} className="relative h-9 px-3 text-left align-middle text-xs font-semibold text-foreground"
-                    style={headerCellStyle(column)}
-                    {...gridHeaderProps(column, gridView)}>
-                    {label}
-                    {gridReorderHandle(column, gridView, label, ui)}
-                    {gridResizeHandle(column, gridView, label, ui)}
-                  </th>
-                );
-              })}
-              <th className="h-9 w-20 px-2" />
-            </tr>
-          </thead>
-          <tbody>{renderRowsBody()}</tbody>
-        </table>
-      </div>
+      <RepresentativeTableFrame
+        head={(
+          <>
+            <RepresentativeHeaderCell className="w-20" data-testid="RepresentativeHeaderCell__f6a856">{ui('orgRepLineLabel')}</RepresentativeHeaderCell>
+            {columns.map(column => {
+              const label = column.label;
+              return (
+                <RepresentativeHeaderCell
+                  key={column.key}
+                  style={headerCellStyle(column)}
+                  {...gridHeaderProps(column, gridView)}
+                  data-testid="RepresentativeHeaderCell__f6a856">
+                  {label}
+                  {gridReorderHandle(column, gridView, label, ui)}
+                  {gridResizeHandle(column, gridView, label, ui)}
+                </RepresentativeHeaderCell>
+              );
+            })}
+            <th className="h-9 w-20 px-2" />
+          </>
+        )}
+        data-testid="RepresentativeTableFrame__f6a856">
+        {renderRowsBody()}
+      </RepresentativeTableFrame>
       {editing ? (
         <RepresentativeForm
           // Remount per target so switching from one row to another (or to "new") reseeds it.

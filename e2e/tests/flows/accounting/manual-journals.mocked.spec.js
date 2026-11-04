@@ -3,7 +3,7 @@
 // @covers artifacts/manual-journals/decisions.json
 // @covers artifacts/manual-journals/custom/ManualJournalsBottomPanel.jsx
 // @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 
 /**

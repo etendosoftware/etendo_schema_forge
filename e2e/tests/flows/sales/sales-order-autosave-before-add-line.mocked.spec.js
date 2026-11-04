@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 // @covers tools/app-shell/src/components/contract-ui/CurrencyRatePicker.jsx
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 
 /**

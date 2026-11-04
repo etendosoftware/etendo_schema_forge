@@ -1,3 +1,4 @@
+// @covers artifacts/goods-shipment/custom/GoodsShipmentBottomPanel.jsx
 // Regression tests for ETP-5066: on Sales Goods Shipment (Albarán de Venta),
 // clicking "Añadir desde Factura" (import from invoice) opened the ORDER
 // import modal on the first invocation instead of the invoice one.
@@ -81,12 +82,12 @@ describe('ShipmentLinesEmptyState (ETP-5066)', () => {
     vi.clearAllMocks();
   });
 
-  it('forwards "order" to onSave when "Añadir desde pedido" (importFromSalesOrder) is clicked', async () => {
+  it('forwards "order" to onSave when "Añadir desde pedido" (addFromSalesOrder) is clicked', async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(true);
     render(<ShipmentLinesEmptyState {...BASE_PROPS} onSave={onSave} />);
 
-    await user.click(screen.getByText('importFromSalesOrder'));
+    await user.click(screen.getByText('addFromSalesOrder'));
 
     expect(onSave).toHaveBeenCalledTimes(1);
     expect(onSave).toHaveBeenCalledWith('order');
