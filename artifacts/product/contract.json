@@ -1,8 +1,8 @@
 {
   "version": "0.18.0",
   "generatedAt": "2026-09-11T00:36:11.322Z",
-  "updatedAt": "2026-11-02T15:20:59.062Z",
-  "checksum": "26b155e9007b835a",
+  "updatedAt": "2026-11-03T16:29:54.985Z",
+  "checksum": "77070d8743266a96",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -72,7 +72,7 @@
       "toolbarBorderBottom": true,
       "compactSidebarPadding": true,
       "whiteFormBackground": true,
-      "sidebarClassName": "w-[320px] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle",
+      "sidebarClassName": "w-[320px] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle has-[[data-product-sidebar-collapsed=true]]:w-12 has-[[data-product-sidebar-collapsed=true]]:pr-0 has-[[data-product-sidebar-collapsed=true]]:overflow-hidden",
       "formCardPadding": "px-2",
       "tabsBarPaddingX": "px-2",
       "toolbarPaddingX": "px-2",
@@ -2683,7 +2683,7 @@
       "toolbarBorderBottom": true,
       "compactSidebarPadding": true,
       "whiteFormBackground": true,
-      "sidebarClassName": "w-[320px] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle",
+      "sidebarClassName": "w-[320px] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle has-[[data-product-sidebar-collapsed=true]]:w-12 has-[[data-product-sidebar-collapsed=true]]:pr-0 has-[[data-product-sidebar-collapsed=true]]:overflow-hidden",
       "formCardPadding": "px-2",
       "tabsBarPaddingX": "px-2",
       "toolbarPaddingX": "px-2",

@@ -211,4 +211,27 @@ describe('dateRangeBounds helpers', () => {
       }
     });
   });
+
+  describe('presetBounds — last3m / last6m (calendar months, day clamped)', () => {
+    const at = (y, m, d) => new Date(y, m - 1, d, 12, 0, 0).getTime();
+    const ymd = (date) => [date.getFullYear(), date.getMonth() + 1, date.getDate()];
+    const cases = [
+      ['last3m', [2026, 11, 3], [2026, 8, 3]],
+      ['last3m', [2026, 5, 31], [2026, 2, 28]],
+      ['last3m', [2028, 5, 31], [2028, 2, 29]],
+      ['last6m', [2026, 8, 31], [2026, 2, 28]],
+      ['last6m', [2026, 1, 31], [2025, 7, 31]],
+      ['last6m', [2028, 2, 29], [2027, 8, 29]],
+    ];
+    for (const [preset, today, from] of cases) {
+      it(`${preset} on ${today.join('-')} starts ${from.join('-')} and ends the same day`, () => {
+        withFixedClock('Europe/Madrid', at(...today), () => {
+          const b = presetBounds(preset);
+          assert.deepEqual(ymd(b.from), from);
+          assert.deepEqual(ymd(b.to), today);
+          assert.equal(b.to.getHours(), 23);
+        });
+      });
+    }
+  });
 });
