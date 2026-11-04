@@ -271,6 +271,16 @@ describe('DynamicReportView — split, errors and exports', () => {
     const body = JSON.parse(init.body);
     expect(body).toMatchObject({ format: 'pdf', locale: 'es_ES' });
     expect(body.params).toMatchObject({ dateFrom: '2026-07-01', accountLevel: 'C', expandedNodeIds: 'E1' });
+  });
+
+  it('a fully collapsed export sends "none", never the blank value core reads as not sent', async () => {
+    renderView();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__collapseAll'));
+    fireEvent.click(screen.getByTestId('DynamicReportView__export-pdf'));
+    await waitFor(() => expect(apiFetchMock.mock.calls.some(([u]) => u.endsWith('/render'))).toBe(true));
+    const [, init] = apiFetchMock.mock.calls.find(([u]) => u.endsWith('/render'));
+    expect(JSON.parse(init.body).params.expandedNodeIds).toBe('none');
     expect(globalThis.URL.createObjectURL).toHaveBeenCalled();
   });
 });

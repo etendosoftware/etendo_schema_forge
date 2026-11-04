@@ -1,5 +1,5 @@
 // @covers tools/app-shell/src/components/reports/dynamic/reportTree.js
-import { canSplit, expandAll, expansionForLevel, foldExpansion, parentIds, visibleRows } from '../reportTree.js';
+import { canSplit, expandAll, expandedNodeIdsParam, expansionForLevel, foldExpansion, parentIds, visibleRows } from '../reportTree.js';
 
 // A heading with an account, which has a breakdown with a subaccount; a formula total at the top.
 const ROWS = [
@@ -13,6 +13,11 @@ const ROWS = [
 const ids = (rows) => rows.map((r) => r.node_id);
 
 describe('reportTree', () => {
+  it('expandedNodeIdsParam joins the open rows and says "none" when nothing is open', () => {
+    expect(expandedNodeIdsParam(new Set(['E1', 'C1']))).toBe('E1,C1');
+    expect(expandedNodeIdsParam(new Set())).toBe('none');
+  });
+
   it('parentIds lists the rows that have children', () => {
     expect([...parentIds(ROWS)].sort()).toEqual(['C1', 'D1', 'E1']);
   });

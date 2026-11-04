@@ -52,7 +52,7 @@ With the flag on, the report opens `components/reports/dynamic/DynamicReportView
 
 ### Interactive-view parameters (ETP-6080)
 Declared `hidden: true`, so they never appear in the filter panel or as an active filter in the PDF header:
-- `expandedNodeIds`: comma-separated ids of the expanded rows. When sent, the export prints exactly those rows instead of cutting at the account level.
+- `expandedNodeIds`: comma-separated ids of the expanded rows. When sent, the export prints exactly those rows instead of cutting at the account level. `none` means no row is open (only the top rows print). A blank value counts as not sent: the old viewer sends `''` for every parameter it has no value for, so it keeps the account-level cutoff.
 - `splitBy` (`org` / `bpartner` / `product`), `splitNodeId`, `splitSign`: split one account (and its whole subtree) by a dimension through `sql.splitQuery`, which reads `fact_acct` with exactly the main query's period, organization, schema and dimension predicates, so the parts add up to the account's amount.
 
 ### Performance (ETP-6080, measured 2026-11-04)

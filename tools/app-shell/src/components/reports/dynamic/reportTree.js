@@ -5,6 +5,13 @@
  * every ancestor is expanded.
  */
 
+/**
+ * The exports' `expandedNodeIds`: the open rows comma-joined, or core's `NO_EXPANDED_NODES` ('none')
+ * when nothing is open. Never '': core reads a blank value as "not sent" (the old viewer sends ''
+ * for every parameter) and would print the level cutoff instead of the folded tree.
+ */
+export const expandedNodeIdsParam = (expanded) => (expanded.size ? [...expanded].join(',') : 'none');
+
 // Same ranks as core ELEMENT_LEVEL_RANK: Heading < Account < Breakdown < Subaccount.
 const LEVEL_RANK = { E: 1, C: 2, D: 3, S: 4 };
 

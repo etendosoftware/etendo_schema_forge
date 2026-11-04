@@ -14,7 +14,7 @@ import { useReportDefaults } from './useReportDefaults.js';
 import { useAccountSplit } from './useAccountSplit.js';
 import { REPORT_EVENTS, filterTypeOf, useReportTelemetry } from './reportTelemetry.js';
 import { comparisonPeriod, matchingShortcut, openingPeriod, pickedYearPeriod, shortcutPeriod } from './dynamicDates.js';
-import { foldExpansion, visibleRows } from './reportTree.js';
+import { expandedNodeIdsParam, foldExpansion, visibleRows } from './reportTree.js';
 
 const EXPORTS = [
   { format: 'pdf', label: 'PDF', icon: FileDown },
@@ -143,7 +143,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
         body: JSON.stringify({
           format,
           locale,
-          params: { ...queryParams, accountLevel: state.level, expandedNodeIds: [...expandedSet].join(',') },
+          params: { ...queryParams, accountLevel: state.level, expandedNodeIds: expandedNodeIdsParam(expandedSet) },
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
