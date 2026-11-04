@@ -34,7 +34,26 @@ to fix.
 `useId` keys the entry, and the cleanup removes it on unmount. A form that unmounts while dirty
 must never leave the app permanently "dirty".
 
-## The six consumers
+### What counts as dirty on a NEW record (ETP-5888)
+
+`DetailView` registers `computeIsDirtyForGuard(...)`, not the `isDirty` that drives its Save
+button. The difference is the header of a new record: `/defaults` and the callouts that run when
+the form opens fill fields before the user touches anything, so `isDirtyHeader` is true from the
+first render. Registering it made every way out of an untouched new record prompt — and made the
+company switcher look broken (below).
+
+The guard reads `useEntity`'s `hasUserHeaderEdits` instead. For a new record it is true only when
+a key the **user** authored exists (`isUserAuthoredKey`: in `userChangedKeysRef`, not in
+`calloutAppliedKeysRef`) — including a defaulted field the user emptied, which `isDirtyHeader`'s
+"has a value" rule misses. For a saved record it equals `isDirtyHeader`. Line edits, open add-rows
+and `additionalDirtyState` count exactly as in `computeIsDirty`.
+
+This only holds if every **programmatic** write says so. A value the server or the form computed
+goes through `handleChange(key, value, { origin: 'callout' })` — callout fields, callout combos,
+their `$_identifier` labels, and the labels `DetailView` resolves for defaulted FKs. A write
+without the flag reads as a user edit and brings the false prompt back.
+
+## The seven consumers
 
 | Surface | Mechanism | Ticket |
 |---|---|---|
@@ -44,6 +63,16 @@ must never leave the app permanently "dirty".
 | Clone | `CloneOrderModal` disables its action and explains why | ETP-5073 |
 | Confirm / document actions | `maybeSaveBeforeConfirm` in `saveActions.jsx` | ETP-4940 |
 | Opening line-creation UI (add-line button, secondary-tab inline add, secondary-tab custom modal) on an already-saved record | `maybeSaveBeforeAddLine` in `detailViewHelpers.jsx`, via `runPrimaryAddLineFlow` / `runSecondaryAddLineFlow` | ETP-5147 |
+| Company switcher | `switchTo` in `useEnvironmentSwitch.js` → the navigation gate, before the session rotates | ETP-5888 |
+
+### The company switcher asks BEFORE the session rotates
+
+Switching tenants rotates the session cookie (`POST /sws/go/session/environment`) and then reloads.
+It used to do both and leave the only warning to `beforeunload`; cancelling the browser's prompt
+kept the page on the old tenant against a session already on the new one, and `switching` stayed
+set, so every later pick did nothing — no request, no message. `switchTo` now goes through
+`requestTransition` first: the user gets *Save* / *Discard* / *Cancel*, a cancel changes nothing,
+and once they confirm the reload calls `suppressNextUnloadPrompt()` so the browser cannot veto it.
 
 ## Guarding a navigation
 
@@ -108,6 +137,10 @@ registered dirty form. The line switch shipped without it and behaved like this:
 A button labelled *Save* that throws the user's work away is worse than the silent loss this guard
 exists to prevent. Whatever `isDirty` is scoped to, `save` must persist that same thing.
 
+A caller that must know the transition did **not** happen passes `onCancel`. It fires when the user
+cancels, when the save is refused, and when a newer transition replaces the held one — never when
+the transition runs. The company switcher needs it to release its spinner and resolve its promise.
+
 The saver must answer falsy when the write was refused: `savePendingNavigation` stops there and
 leaves the user on the form, which is what keeps a validation error or a concurrency conflict from
 navigating away from unsaved work. `handleSaveLine` returns `false` on every refusal for exactly
@@ -131,7 +164,10 @@ first — pick whichever is honest for the action.
 | File | Covers |
 |---|---|
 | `lib/__tests__/unsavedChanges.vitest.js` | the registry and the unload guard |
-| `lib/__tests__/unsavedChanges.navigation.vitest.js` | the gate: hold, save, discard, cancel, fail-open, stop-at-refusal |
+| `lib/__tests__/unsavedChanges.navigation.vitest.js` | the gate: hold, save, discard, cancel, fail-open, stop-at-refusal, `onCancel` |
+| `hooks/__tests__/useEnvironmentSwitch.vitest.jsx` | the company switcher behind the gate (ETP-5888) |
+| `hooks/__tests__/useEntity.defaultsRace.vitest.jsx` | `hasUserHeaderEdits` on a new record (ETP-5888) |
+| `components/contract-ui/__tests__/DetailView.helpers.vitest.jsx` | `computeIsDirtyForGuard` |
 | `components/__tests__/GuardedNavLink.vitest.jsx` | click routing and the unguarded gestures |
 | `components/contract-ui/__tests__/CloneOrderModal.unsavedChanges.vitest.jsx` | DOC-09 / DOC-10 |
 | `components/contract-ui/__tests__/detailViewHelpers.lineSwitchGuard.vitest.js` | the "another row" case |

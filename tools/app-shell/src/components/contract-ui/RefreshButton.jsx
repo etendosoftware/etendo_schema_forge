@@ -9,15 +9,20 @@ import { RefreshCw } from 'lucide-react';
  *
  * Pair it with `ListProgressBar`, shown under the same `loading && rows.length > 0` condition:
  * this is what the user clicks, that is what tells them it is working.
+ *
+ * `className` (optional) is appended to the button's classes — e.g. the list-modal compact list
+ * adds the Figma white fill + xs shadow. Absent, the button renders exactly as before.
  */
-export function RefreshButton({ onRefresh, label }) {
+const REFRESH_BUTTON_CLASS = 'h-10 w-10 flex items-center justify-center rounded-lg border border-border text-[#828FA3] hover:bg-[hsl(var(--muted))] transition-colors';
+
+export function RefreshButton({ onRefresh, label, className = '' }) {
   return (
     <button
       type="button"
       onClick={onRefresh}
       title={label}
       aria-label={label}
-      className="h-10 w-10 flex items-center justify-center rounded-lg border border-border text-[#828FA3] hover:bg-[hsl(var(--muted))] transition-colors"
+      className={className ? `${REFRESH_BUTTON_CLASS} ${className}` : REFRESH_BUTTON_CLASS}
       data-testid="finance-refresh-button"
     >
       <RefreshCw className="h-5 w-5" data-testid="RefreshCw__finance-refresh" />

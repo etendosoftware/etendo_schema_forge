@@ -40,6 +40,8 @@ import { apiFetch } from '@/auth/api.js';
 import { clearStoredDateRange } from '@/components/dashboard/DashboardDateRangeContext.jsx';
 import { clearAccountIdentity } from '@/lib/flags/bootstrap.js';
 import { detectBasePath, getNeoBaseUrl } from '@/lib/neoBaseUrl.js';
+import { withSupportModeCapabilities } from '@/lib/supportSession.js';
+import { useSupportSessionSync } from '@/hooks/useSupportSessionSync.js';
 // ETP-4300: the full locale dictionaries are no longer bundled eagerly. Only the
 // active locale's sliced "core" (the dict minus the per-window `fields` monolith)
 // is lazy-loaded below; per-window field labels ride each window's lazy chunk (see
@@ -317,7 +319,8 @@ export async function fetchWindowAccess(session) {
     // Already in flight (started above, in parallel) — `.catch()` there means this
     // never rejects, so no separate try/catch is needed here.
     const menuAccess = await resolveMenuAccessWithoutBlocking(menuAccessPromise);
-    return { ...payload, menuAccess };
+    // ETP-5351 — a support session is never the owner; see withSupportModeCapabilities.
+    return withSupportModeCapabilities({ ...payload, menuAccess });
   } catch {
     // Deliberately NOT clearing the decision on network errors — the last server-confirmed block must survive transient failures.
     return null;
@@ -414,6 +417,13 @@ function ServiceWorkerManager() {
   useEffect(() => {
     checkForUpdate();
   }, [location.pathname, checkForUpdate]);
+  return null;
+}
+
+// ETP-5351 — reads `supportSession` off /me for the session AuthProvider holds. See
+// hooks/useSupportSessionSync.js.
+function SupportSessionSync() {
+  useSupportSessionSync();
   return null;
 }
 
@@ -538,6 +548,7 @@ export default function App() {
         <ObservabilityRouteTracker data-testid="ObservabilityRouteTracker__ecaf3f" />
         <ListStateRouteGuard data-testid="ListStateRouteGuard__ecaf3f" />
         <ServiceWorkerManager data-testid="ServiceWorkerManager__ecaf3f" />
+        <SupportSessionSync data-testid="SupportSessionSync__ecaf3f" />
         <AppStoreKeyWatcher data-testid="AppStoreKeyWatcher__ecaf3f" />
         <SurveyManager data-testid="SurveyManager__ecaf3f" />
         <LocaleChangeConfirmDialog

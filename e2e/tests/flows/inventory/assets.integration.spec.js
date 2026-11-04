@@ -582,6 +582,10 @@ test.describe('Assets (real backend)', () => {
   // Case 5 — copy of Case 2 (by TIME, monthly) + Descripción/Valor residual edits
   // + cascade delete (deleting the asset also removes its amortization lines).
   test('Case 5: by time (monthly) — edit description/residual, then cascade delete', async ({ page }) => {
+    // Long real-backend flow: ~6 save→process cycles, each waiting for Sonner's
+    // ~4 s toast auto-dismiss, plus plan creation, delete and cleanup. It exceeds
+    // the default 60 s budget under Jenkins load with no assertion failing.
+    test.slow();
     const stamp = Date.now();
     const name = `Activo E2E residual ${stamp}`;
     await createDepreciableAsset(page, { stamp, name });

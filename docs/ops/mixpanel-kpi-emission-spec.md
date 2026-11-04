@@ -48,6 +48,7 @@ Backend token values must remain outside committed source files.
 | App lifecycle | `app_started`, `page_view` | Validation dashboard base events. |
 | Onboarding | `onboarding_auth_*`, `onboarding_setup_*`, `onboarding_run_*`, `onboarding_environment_enter_*` | Validation dashboard onboarding report. |
 | Product usage | `window_opened`, `record_created`, `record_updated`, `search_performed`, `search_result_selected` | Validation dashboard Product Usage report. |
+| Product usage (ETP-5889) | `product_movements_tab_opened` (`account_id`, `category`, `entity`, `source` = `tab` or `side_panel_link`, `specName`) | **Implemented, emitted once the tab is on**: the hook `useProductMovementsTabTracking` calls `trackProductMovementsTabOpened` when the tab becomes active, never on mount (custom tabs are mounted with the record and only hidden). The tab exists only for accounts with the backend flag `product-movements-tab` on (`capabilities.productMovements`); with it off nothing renders and nothing is emitted, so the KPIs stay N/D until the flag is on for some account in a released build. The event is sent whatever the role of the user is: the role travels on every event as the list property `role_groups` (ETP-6043) and is only a filter of the KPI reports. Merged into `develop` on 2026-11-02 (etendo_schema_forge#2073, com.etendoerp.go#1507); the Datadog flag has a targeting rule by account email in Production. Not in the validation dashboard: its KPIs have their own dashboard, see *Reading the Movements KPIs*. |
 | Dashboard KPI slice | `quick_action_used`, `pending_task_opened`, `dashboard_document_opened`, `accounting_dashboard_viewed` | Implemented in dashboard/accounting call sites; emits when those UI widgets are used. |
 | Backend write telemetry | `backend_write_operation_completed` | Java backend sink submitted to Mixpanel with HTTP 200 and response `status=1`; Mixpanel query `93de91d8` showed product writes. |
 | Feature flags | `feature_flag_evaluated` | Global OpenFeature hook (`lib/flags/flag-exposure.js`); confirmed live via Mixpanel queries `b653bf8a` / `6a731a9c` (342 unique users / 30d across both current flags). |
@@ -131,6 +132,17 @@ Recent validation evidence:
 - `Eventos KPI avanzados` is expected to remain empty until the specific
   advanced KPI call sites are implemented. An empty report there does not mean
   Mixpanel ingestion is broken.
+
+## Reading the Movements KPIs
+
+The two KPIs of the Movements tab (`eng_movements_tab_adoption`, `eng_movements_tab_frequency`, roadmap idea `etendosoftware/etendo-ai#4`) are computed by the `etendo-kpis` collector from two **saved Mixpanel Insights reports** in the *Etendo Go* project (ids `93773825` and `93773827`, dashboard `11625102` *ETP-5889 · KPIs pestaña Movimientos de Producto*), not from the validation dashboard above.
+
+- Unit: the device (Mixpanel does not identify people, ETP-4352). **Under review:** once someone signs in Mixpanel merges their devices into one identity (`$user_id`), so the reports count people when signed in; see section 11.1 of the ETP-5889 plan. Adoption = devices that opened the tab / devices with `session_started`, per week; frequency = opens / the same devices.
+- Both reports filter the production hosts (`hostname` contains `app.etendo.`) and the role (`role_groups` contains `warehouse`). The role that counts is changed by editing those filters in Mixpanel, with no change to this repository.
+- Weeks start on Monday 00:00 in the time zone of the Mixpanel project (Europe/Madrid).
+- The KPIs are N/D, never 0, until `product_movements_tab_opened` has been seen in production and there are active devices of the role in the week.
+
+Ids, filters, the series-name contract and how to rebuild the reports are documented in `etendo-kpis`: [`docs/mixpanel-saved-reports.md`](https://github.com/etendosoftware/etendo-kpis/blob/main/docs/mixpanel-saved-reports.md).
 
 ## Next Implementation Work
 

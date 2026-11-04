@@ -47,6 +47,7 @@ vi.mock('../runtime-routes.jsx', () => ({
 vi.mock('../auth/AuthContext.jsx', () => ({
   AuthProvider: ({ children }) => <div data-testid="auth-provider">{children}</div>,
   useAuth: () => ({ isAuthenticated: true, token: 'test-token', logout: vi.fn() }),
+  useAuthOptional: () => ({ isAuthenticated: true, token: 'test-token', logout: vi.fn() }),
 }));
 
 vi.mock('../layout/AppLayout.jsx', () => ({

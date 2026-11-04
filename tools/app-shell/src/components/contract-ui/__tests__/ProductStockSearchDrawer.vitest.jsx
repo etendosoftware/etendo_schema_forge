@@ -646,4 +646,59 @@ describe('ProductStockSearchDrawer', () => {
 
     expect(screen.queryByTestId('product-search-create')).not.toBeInTheDocument();
   });
+
+  // ETP-5948 — reopening on a saved line: the product's group opens by itself, the location row the
+  // line was saved with is marked (check + aria-selected), and the arrows continue from it. Without a
+  // saved location, the product group is marked and the first ArrowDown lands on its first row.
+  describe('committed value (ETP-5948)', () => {
+    const P1_MAIN = { id: 'p1', label: 'Alpha', warehouse: 'Main', _aux: { _LOC: 'loc-main', _QTY: '5' } };
+    const P1_BACK = { id: 'p1', label: 'Alpha', warehouse: 'Back', _aux: { _LOC: 'loc-back', _QTY: '2' } };
+    const P2_MAIN = { id: 'p2', label: 'Beta', warehouse: 'Main', _aux: { _LOC: 'loc-b', _QTY: '1' } };
+
+    async function openWith(props) {
+      globalThis.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ items: [P1_MAIN, P1_BACK, P2_MAIN], hasMore: false }),
+      });
+      render(<ProductStockSearchDrawer {...defaultProps} {...props} />);
+      await vi.advanceTimersByTimeAsync(100);
+      await waitFor(() => expect(screen.getByText('Alpha')).toBeInTheDocument());
+    }
+    const rowOf = (loc) => screen.getAllByTestId('product-stock-option-p1')
+      .find((b) => b.id.endsWith(loc));
+
+    it('opens the committed product group and marks the saved location row', async () => {
+      await openWith({ value: 'p1', valueLabel: 'Alpha', committedItem: { id: 'p1', _aux: { _LOC: 'loc-back' } } });
+
+      await waitFor(() => expect(rowOf('loc-back')).toHaveAttribute('aria-selected', 'true'));
+      expect(rowOf('loc-main')).toHaveAttribute('aria-selected', 'false');
+      expect(screen.queryByTestId('product-stock-group-check')).toBeNull();
+      expect(screen.queryByTestId('product-stock-option-p2')).toBeNull(); // other groups stay closed
+    });
+
+    it('continues the arrows from the saved location row', async () => {
+      await openWith({ value: 'p1', valueLabel: 'Alpha', committedItem: { id: 'p1', _aux: { _LOC: 'loc-main' } } });
+      await waitFor(() => expect(rowOf('loc-main')).toHaveAttribute('aria-selected', 'true'));
+
+      act(() => { fireEvent.keyDown(screen.getByRole('dialog'), { key: 'ArrowDown' }); });
+
+      expect(rowOf('loc-back')).toHaveAttribute('data-highlighted', 'true');
+      expect(screen.getByTestId('product-search-input')).toHaveAttribute('aria-activedescendant', rowOf('loc-back').id);
+    });
+
+    it('marks the product group when the line has no saved location, and the first ArrowDown lands on its first row', async () => {
+      await openWith({ value: 'p1', valueLabel: 'Alpha', committedItem: { id: 'p1' } });
+
+      expect(await screen.findByTestId('product-stock-group-check')).toBeInTheDocument();
+      expect(screen.getAllByRole('option').filter((o) => o.getAttribute('aria-selected') === 'true')).toHaveLength(0);
+      act(() => { fireEvent.keyDown(screen.getByRole('dialog'), { key: 'ArrowDown' }); });
+      expect(rowOf('loc-main')).toHaveAttribute('data-highlighted', 'true');
+    });
+
+    it('opens nothing and marks nothing without a value', async () => {
+      await openWith({});
+      expect(screen.queryByTestId('product-stock-option-p1')).toBeNull();
+      expect(screen.queryByTestId('product-stock-group-check')).toBeNull();
+    });
+  });
 });

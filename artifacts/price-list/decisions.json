@@ -112,6 +112,7 @@
       "javaQualifier": "priceListVersionHandler"
     },
     "priceListLine": {
+      "agentPrompt": "Prices of one price list version (parentId = the version). There is no bulk update, in the app either: to change many prices, list them here (paged, totalRows is the real count), show the user the new prices, and after the user confirms update them one by one with etendo_update.",
       "fields": {
         "product": {
           "grid": true,

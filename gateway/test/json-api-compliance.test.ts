@@ -38,10 +38,10 @@ test('the manifest is not empty and exposes at least one operation per resource'
 test('no relationship is duplicated inside attributes in the OpenAPI schemas', () => {
   for (const { path, method, operation } of operations) {
     const schemas = [
-      ...Object.values(operation.responses).flatMap((response) => Object.values(response.content ?? {})).map((media) => media.schema),
-      ...Object.values(operation.requestBody?.content ?? {}).map((media) => media.schema),
+      ...Object.values(operation.responses).flatMap((response) => Object.values(response.content ?? {})).map((media) => ({ schema: media.schema, request: false })),
+      ...Object.values(operation.requestBody?.content ?? {}).map((media) => ({ schema: media.schema, request: true })),
     ];
-    for (const schema of schemas) {
+    for (const { schema, request } of schemas) {
       const data = (schema.properties as any)?.data;
       const resource = data?.items ?? data;
       if (!resource?.properties?.attributes) continue;
@@ -50,7 +50,10 @@ test('no relationship is duplicated inside attributes in the OpenAPI schemas', (
       for (const [field, definition] of Object.entries(entity.fields as Record<string, any>)) {
         if (!definition.relationship) continue;
         assert.equal(resource.properties.attributes.properties[field], undefined, `${method} ${path}: ${entityName}.${field} is in attributes`);
-        assert.ok(resource.properties.relationships.properties[field], `${method} ${path}: ${entityName}.${field} is not a relationship`);
+        // A request body lists only writable relationships; a response only readable ones.
+        const published = (request ? ['in', 'inout'] : ['out', 'inout']).includes(definition.direction);
+        if (!published) continue;
+        assert.ok(resource.properties.relationships?.properties[field], `${method} ${path}: ${entityName}.${field} is not a relationship`);
       }
     }
   }

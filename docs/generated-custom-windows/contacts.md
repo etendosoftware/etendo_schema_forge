@@ -423,9 +423,9 @@ pending manual verification (steps below) rather than a follow-up ticket.
 
 | Classic field | Go field (camelCase) | Entity | Where it lives in Go |
 |---|---|---|---|
-| "Clave por Defecto" | `aeatsiiDefaultsiikey` | `customer` | Toggle in the Financial tab → **Default fiscal values** section, "SII" sub-block, `FiscalDefaultsSection.jsx` — shown only when `data.customer` is true (see part 3 below) |
+| "Clave por Defecto" | `aeatsiiDefaultsiikey` | `customer` | Toggle in the Financial tab → **Default fiscal values** section, "SII" sub-block, `FiscalDefaultsSection.jsx` — shown only when SII is active for the organization AND `data.customer` is true (ETP-5831, see "SIF-gated blocks" below) |
 | "Clave tipo factura" | `aeatsiiSiikeylist` | `customer` | Enum selector (`R`/`F1`/`F2`/`F4`) in the same "SII" sub-block, visible only when `aeatsiiDefaultsiikey` is checked |
-| "Factura Simplificada" | `tbaiIssimplifiedinv` | `businessPartner` | Toggle in the "TicketBAI" sub-block, `FiscalDefaultsSection.jsx` — always shown, unconditional (see part 3 below) |
+| "Factura Simplificada" | `tbaiIssimplifiedinv` | `businessPartner` | Toggle in the "TicketBAI" sub-block, `FiscalDefaultsSection.jsx` — shown only when TicketBAI is active for the organization (ETP-5831, see "SIF-gated blocks" below) |
 
 **SII (`aeatsiiDefaultsiikey` / `aeatsiiSiikeylist`):** both fields were already `editable`
 and already pushed to NEO from earlier work — only the UI wiring was missing. **Correction
@@ -504,6 +504,9 @@ and all Contacts vitest suites (`BillingPreferencesForm.vitest.jsx`,
 
 ## ETP-4784 (part 3) — Simplified back to Classic parity, no "SII/TBAI active" gating
 
+> **Superseded by ETP-5831 (CP-20)** — see "SIF-gated blocks" right after this section. Kept
+> for the history of the decision.
+
 Parts 3 and 4 of this ticket (see git history for the discarded intermediate design)
 explored gating the "SII"/"TicketBAI" blocks on whether the contact's organization actually
 had SII/TicketBAI configured — first by fetching and filtering the `sii-config`/`tbai-config`
@@ -544,6 +547,34 @@ custom-component revert. Verified with `npx vitest run src/windows/custom/contac
 Contacts suites pass; `FiscalDefaultsSection.vitest.jsx` rewritten to cover: SII block
 visible/hidden by `data.customer`, TicketBAI block always visible, and both toggles' wiring
 to `onChange`).
+
+## ETP-5831 (CP-20) — SIF-gated blocks
+
+QA (ETP-5831 CP-20) reported the section offering SII and TicketBAI options to tenants where
+those SIF are not active. Product decision (this ticket): **each option depends on its own SIF
+being active for the organization**, deliberately departing from Classic's AD DisplayLogic (part
+3 above). `FiscalDefaultsSection.jsx` now reads the organization's active fiscal configuration
+through the existing `useFiscalConfig(orgId, apiBaseUrl)` (`fiscal-config/useFiscalConfig.js` —
+the same reader the invoice windows and the Organization window's fiscal sections use; no new
+reader). `orgId` is the organization selected in the top-nav (`useAuth().selectedOrg`), the same
+source as the invoice lists' SIF columns: a business partner usually lives at org `*`, which never
+carries a SIF config. `ContactsFinancialPanel.jsx` now passes `apiBaseUrl` down.
+
+The rule is the exported pure `resolveFiscalDefaultsBlocks({ fiscal, isCustomer })`:
+
+- **"SII" block** (`aeatsiiDefaultsiikey` + `aeatsiiSiikeylist`) — an active SII config
+  (`siiRecord`) **and** `data.customer` true (the customer gate is unchanged).
+- **"TicketBAI" block** (`tbaiIssimplifiedinv`) — an active TicketBAI config (`tbaiRecord`).
+- **VERI\*FACTU** — the section has no VERI\*FACTU-specific option, so nothing to gate.
+- **Neither block → no section at all**: the component returns `null`, title, description and
+  divider included. The divider (`<hr>`) moved from `ContactsFinancialPanel.jsx` into the
+  section for that reason, so a hidden section leaves no stray rule.
+- **Fail closed, no flash:** until `useFiscalConfig` has settled (a resolved `profile` or an
+  `error` — it starts at `loading: false, profile: null`), and after a failed read, no block is
+  shown. Same "settled" rule as `organization/useFiscalSectionVisibility.js`.
+
+Hidden is not stripped: hiding a block never clears the stored values; they reappear when the SIF
+is activated again.
 
 ## ETP-4784 (part 4) — SII fields silently discarded on save (fix)
 
@@ -1485,6 +1516,7 @@ the report filters use for "Desde la cuenta") instead of a dropdown that cut lon
 popup is titled with the translated field label, shows each `"<code> - <name>"` in full, searches
 by code or name and lists **posting accounts only** (`PostingAccountCombinationSelectorPolicy` in
 `com.etendoerp.go` hides summary headings).
+Reopening the popup on a field that already holds an account opens on that account: it is marked with a check and centred, and arrows start from it (ETP-5948, see `docs/ui-customization.md`).
 
 ## ETP-5758 — Bulk delete uses ListView's generic action
 
@@ -1684,3 +1716,103 @@ With a `read-only` tier on Contactos:
 - **`/contacts/new` by URL** redirects to the list.
 
 Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.
+
+## ETP-5824 — Missing postal code and TicketBAI: completion block + address warning
+
+**Problem.** For a contact **not** flagged as *Factura simplificada* (`tbaiIssimplifiedinv = N`,
+the default for contacts created from GO), TicketBAI requires a postal code and address line 1 on
+the invoice partner address, and a tax ID on the contact. The check only ran while the TicketBAI XML was being built, after
+the invoice had already been completed. The invoice was completed but never sent, the error only
+went to the TicketBAI sync log (and Datadog, `tbai-tercero-sin-codigo-postal`), and the user got
+no feedback.
+
+**Backend (com.smf.ticketbai) — completion is blocked.** `ProcessInvoiceTbaiHook.preProcess` now
+runs the same rules (`XMLUtils.findRecipientDataError`) before an invoice is completed (`CO`). It
+returns an error, so the document stays in draft and the user sees `TBAI_EmptyPostalCode` /
+`TBAI_EmptyDir` / `TBAI_EmptyNifCode` (checked in that order; only the first failure is
+reported). A value made only of spaces counts as missing (a postal code `' '` used to slip
+through), and an invoice with no partner address at all is reported as a missing postal code.
+These three messages exist only in Spanish (the module's base language is `es_ES`), so a user on
+an English UI sees them in Spanish; an English translation needs a translation module and is out
+of scope for ETP-5824. The check applies when all of these hold:
+- it is a sales invoice;
+- the invoice organization resolves a TicketBAI configuration up the organization tree;
+- the invoice date is not earlier than the TicketBAI system date.
+
+The hook also runs the check on a void (`RC`), but that only matters in Classic: GO offers no void
+for TicketBAI invoices, by design. In Classic, this means an invoice that this bug left completed but never
+sent cannot be voided until the partner address is fixed: the reversal invoice is sent to
+TicketBAI and needs the recipient block.
+
+It does **not** depend on *auto-send*: an invoice sent later, with the send button or by the
+background process, fails just the same. Auto-send still decides only whether postProcess sends
+the invoice right away; that decision now also resolves the configuration by the invoice's
+organization, not the client. The same check still runs while the XML is built, as a last line of
+defence.
+
+**Address modal — non-blocking warning.** `LocationEditorModal` in `'bpartner'` mode (its
+default) shows the note wherever it is opened with a business partner: the Contactos *Dirección*
+tab, the invoice "+ Añadir dirección" picker (`PartnerAddressPicker`, sales and purchase invoice),
+and the fiscal monitor's contact detail (`ContactDetailModal`). The note is shown only for
+**customers**, because only sales invoices are blocked: a supplier-only contact (for example, an
+address added from the purchase invoice picker) never sees it, and a contact that is both customer
+and supplier does. The modal shows an inline note under *Código postal*
+(`data-testid="location-postalCode-tbai-warning"`, key `tbaiPostalCodeMissingWarning`) when all of
+these hold:
+- the contact is a customer (`/contacts/businessPartner/{bpId}` → `customer`, AD `IsCustomer`);
+- the contact is not simplified invoice (same record → `tbaiIssimplifiedinv`);
+- TicketBAI is in use: at least one ACTIVE `tbai-config/header` row is readable by the user;
+- the postal code is empty or only spaces.
+
+Why "TicketBAI is in use" and not the contact's organization: neither spec gives the browser an
+organization to match on. The contacts record has no organization field, and the `tbai-config`
+list ignores an `organization` parameter. A GO tenant normally has a single legal organization, so
+the simple criterion is right in practice. The note is advisory; the hard guarantee is the
+completion block above, which resolves the invoice's organization up the tree.
+
+The note disappears as soon as a postal code is typed. **It never blocks the save**: the postal code
+is not part of the save gate (address line 1 + country with the `structured-address-for-sepa` flag
+off, ETP-5103; street, number, city + country with it on, ETP-5806). The `'location'` mode (Warehouse) has no business
+partner and never asks for this data. A contact that is not a customer, or is simplified, never
+triggers the configuration lookup. If a lookup fails, or the record does not carry the customer or
+simplified flag, the note stays hidden. Logic:
+`tools/app-shell/src/windows/custom/shared/tbaiPostalCodeWarning.js`.
+
+**Manual check.**
+1. In a tenant with TicketBAI configured, open a customer contact with *Factura simplificada* off.
+   Add an address without a postal code (or with only spaces): the note appears, and Guardar still
+   works.
+2. Type a postal code: the note disappears.
+3. Create a sales invoice for that contact using the address without a postal code (or with a
+   postal code of only spaces), and complete it. Completion is refused with the postal code
+   message, and the invoice stays in draft.
+4. From a purchase invoice, use "+ Añadir dirección" on a supplier-only contact (not a customer)
+   and leave the postal code empty: no note appears.
+
+## Contact searchKey over MCP — ETP-5852
+
+As in the app (whose form does not show it), a contact's `searchKey` is its number (`etgoIdentifier`). `etendo_schema(view:"create")` lists it as optional, `serverDefaulted` (`BusinessPartnerHandler#serverResolvedCreateFields`), and the placeholder the save needs is put before MCP's mandatory pre-check (`resolveServerCreateFields`), so a create without it is no longer refused. A value the agent sends is still replaced by the number, and the answer says so in `searchKeyNote`. Field `agentPrompt` tells agents not to send it. Feedback M-107.
+
+## Contact address name over MCP — ETP-5852
+
+An address created over MCP without `name` gets the name the address editor gives (city and address line, else region and country, else "Location"), not the AD default ".". Feedback M-168.
+
+## Agent prompts on accounting accounts — ETP-5852
+
+The account fields of `customerAccounting` and `vendorAccounting` tell agents they take an accounting combination id, found with `etendo_selectors` by account number, not a chart-of-accounts `elementValue` id. Feedback M-129.
+
+## Billing preferences of a new contact over MCP — ETP-5852
+
+As in the app, a new contact is saved without billing preferences (`priceList`, `paymentTerms`, `paymentMethod`, `account`, `customerBlocking` and their purchase twins): the form fills them in after the contact exists. Over MCP a value the agent itself sends on create is now kept (it was dropped without a word); the defaults pass still does not fill them. `etendo_schema(view:"create")` no longer marks them `serverDefaulted` and `etendo_defaults` no longer offers them (`BusinessPartnerHandler#createUnsetFields`). The entity `agentPrompt` says so. REST and the app are unchanged. Feedback M-106.
+
+## Where a contact's email goes, for agents — ETP-5848
+
+The OKR O2 sweep (`docs/mcp-evaluation/okr-o2-sweep-analysis.md`, H4) found an agent spending 20 calls of a 25-call "add this customer with their email" deciding between `businessPartner.etgoEmail`, a `contact` row and a user. Three agent-facing texts now settle it, with no change of behavior:
+
+- the spec prompt (`agent-prompts/contacts/spec.md`) says the contact itself is `businessPartner`, with its name, tax ID, email (`etgoEmail`), phone and website, and that `contact` holds the people who work for it;
+- `businessPartner.etgoEmail` (`agent-prompts/contacts/business-partner.etgo-email.md`): the contact's own address, the one documents are sent to;
+- `contact.email` (`agent-prompts/contacts/contact.email.md`): a person's email, not the contact's.
+
+The agentic docs served by the `docs` tool (`etendo-go-docs/agentic/contacts/index.md`) carry the same field map for customers and vendors.
+
+**Verify:** `etendo_schema(spec: "contacts", view: "create")` lists `etgoEmail` with that `agentPrompt`; re-run the okr probe `w-customer-crud` and compare its calls with the sweep (25).

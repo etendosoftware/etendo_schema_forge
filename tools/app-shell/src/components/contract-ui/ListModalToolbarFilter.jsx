@@ -2,6 +2,8 @@ import { ChevronDown, Check } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 
+// committed-selection-ok: a short, static list-filter menu that already sets aria-selected from the active value; nothing to page or centre.
+
 /**
  * Generic toolbar dropdown filter for the `list-modal` layout.
  *

@@ -11,9 +11,16 @@
 // The registry's `defaultActive` is deliberately NOT applied here — it only seeds the catalog
 // drawer's toggles. Every reader must agree on this, or one surface would show a model as active
 // while another hides it.
+//
+// Unavailable models (ETP-5716, backend-only flag `fiscal-model-390`): the answer may carry a
+// `_unavailable` marker, split off by `splitCatalogAnswer` (catalogAvailability.js) so
+// `activeModels` only ever holds models; `unavailableModels` hides them in the catalog drawer. Until
+// an answer arrives, and after a failed read, `unavailableModels` is `unavailableWithoutAnswer()`
+// (fail hidden).
 import { useEffect, useState } from 'react';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
+import { splitCatalogAnswer, unavailableWithoutAnswer } from './catalogAvailability.js';
 
 /** True when the catalog `activeModels` marks model `id` as active. */
 export function isModelActive(activeModels, id) {
@@ -25,13 +32,15 @@ export function isModelActive(activeModels, id) {
  *
  * @param {string} apiBaseUrl a spec URL (`.../sws/neo/<spec>`); falsy → nothing is fetched
  * @param {*} [refreshKey] re-reads the catalog when it changes (e.g. the session token)
- * @returns {{ activeModels: object, setActiveModels: Function, loaded: boolean, error: * }}
+ * @returns {{ activeModels: object, setActiveModels: Function, unavailableModels: string[],
+ *   loaded: boolean, error: * }}
  *   `loaded` turns true once the read settles, successfully or not. On failure `activeModels`
  *   stays `{}` (no model active) and `error` holds the cause.
  */
 export function useFiscalModelsCatalog(apiBaseUrl, refreshKey) {
   const apiFetch = useApiFetch(apiBaseUrl);
   const [activeModels, setActiveModels] = useState({});
+  const [unavailableModels, setUnavailableModels] = useState(unavailableWithoutAnswer);
   const [loaded, setLoaded] = useState(!apiBaseUrl);
   const [error, setError] = useState(null);
 
@@ -42,13 +51,19 @@ export function useFiscalModelsCatalog(apiBaseUrl, refreshKey) {
       .then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then(data => {
         if (cancelled) return;
-        setActiveModels(data ?? {});
+        const answer = splitCatalogAnswer(data);
+        setActiveModels(answer.activeModels);
+        setUnavailableModels(answer.unavailableModels);
         setError(null);
       })
-      .catch(err => { if (!cancelled) setError(err ?? true); })
+      .catch(err => {
+        if (cancelled) return;
+        setError(err ?? true);
+        setUnavailableModels(unavailableWithoutAnswer());
+      })
       .finally(() => { if (!cancelled) setLoaded(true); });
     return () => { cancelled = true; };
   }, [apiBaseUrl, apiFetch, refreshKey]);
 
-  return { activeModels, setActiveModels, loaded, error };
+  return { activeModels, setActiveModels, unavailableModels, loaded, error };
 }

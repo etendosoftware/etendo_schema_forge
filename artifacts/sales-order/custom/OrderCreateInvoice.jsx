@@ -12,7 +12,7 @@ import { useOrderPdf } from '@/windows/custom/shared/useOrderPdf.js';
 import { readOrderPendingDocs } from '@/windows/custom/shared/orderPendingDocs.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { ETGO_DTO_PRODUCT_ID } from '@/lib/documentTotals.js';
-import { translateBackendError, translateBackendErrorBody } from '@/lib/backendErrors.js';
+import { translateBackendError, translateBackendErrorBody, translateQuotaRefusalBody } from '@/lib/backendErrors.js';
 // ETP-5024 x ETP-4576: this modal used to hand-build its headers, and they were missing
 // `Accept-Language` — the backend (NeoAuthenticator.applyRequestLanguage) silently falls
 // back to AD_User.AD_Language, so the "business partner is on hold" refusal from
@@ -816,7 +816,9 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
           { method: 'POST', body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`);
+          // ETP-5051 — a plan-quota refusal reads as the translated quota sentence.
+          throw new Error(translateQuotaRefusalBody(e, ui)
+            || e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`);
         }
         const doc = (await res.json())?.response?.data;
         // ETP-5381: carry documentStatus so the result modal badges the invoice as Confirmada

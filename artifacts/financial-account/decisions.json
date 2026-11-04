@@ -75,6 +75,7 @@
     "transaction": {
       "javaQualifier": "document-posting",
       "fields": {
+        "etblkpAccountingstatus": { "visibleWhenCapability": "showAccountingFields" },
         "transactionDate": { "visibility": "readOnly", "grid": true, "gridOrder": 1 },
         "documentNo": { "visibility": "readOnly", "grid": true, "gridOrder": 2 },
         "businessPartner": { "visibility": "readOnly", "grid": true, "gridOrder": 3, "displayLogic": "@Trxtype@!''", "displayLogicJs": "record['transactionType'] !== ''", "reason": "ETP-4529 — Contacto is always shown regardless of the accounting-dimension config (strips @ACCT_DIMENSION_DISPLAY@ from the raw '@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!\\'\\'' expression), but the unrelated Trxtype condition is preserved as client-evaluable JS: Trxtype (Transaction Type — BP Deposit/Withdrawal/Bank fee) is mandatory with a default, so this only hides the field for the instant before a type is set on a brand-new record." },
@@ -126,6 +127,7 @@
       "javaQualifier": "bankStatementEntityHandler",
       "agentPrompt": "#REF#agent-prompts/financial-account/importedBankStatements.md",
       "fields": {
+        "etblkpAccountingstatus": { "visibleWhenCapability": "showAccountingFields" },
         "documentNo": { "visibility": "readOnly", "grid": true, "gridOrder": 1 },
         "name": { "visibility": "editable", "grid": true, "gridOrder": 2 },
         "fileName": { "visibility": "readOnly", "grid": true, "gridOrder": 3 },

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import { translateBackendError, translateQuotaRefusalBody } from '@/lib/backendErrors.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUI, useMenuLabel } from '@/i18n';
@@ -333,7 +333,9 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
       );
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        throw new Error(err?.response?.message || err?.message || `Failed (${res.status})`);
+        // ETP-5051 — a plan-quota refusal reads as the translated quota sentence.
+        throw new Error(translateQuotaRefusalBody(err, ui)
+          || err?.response?.message || err?.message || `Failed (${res.status})`);
       }
       const json = await res.json();
       const invoiceId = json?.response?.data?.id;

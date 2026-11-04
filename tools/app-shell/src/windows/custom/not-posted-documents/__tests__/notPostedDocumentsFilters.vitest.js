@@ -24,7 +24,7 @@ describe('status definitions', () => {
 
   it('takes each tone from the shared posting registry: N yellow warning, every failure red (ETP-5647)', () => {
     expect(STATUS_DEFS.map((d) => [d.token, d.tone])).toEqual([
-      ['N', 'warning'], ['p', 'destructive'], ['i', 'destructive'], ['NC', 'destructive'], ['E', 'destructive'],
+      ['N', 'warning'], ['p', 'caution'], ['i', 'destructive'], ['NC', 'destructive'], ['E', 'destructive'],
     ]);
   });
 

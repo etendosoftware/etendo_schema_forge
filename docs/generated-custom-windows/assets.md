@@ -1093,6 +1093,7 @@ the report filters use for "Desde la cuenta") instead of a dropdown that cut lon
 popup is titled with the translated field label, shows each `"<code> - <name>"` in full, searches
 by code or name and lists **posting accounts only** (`PostingAccountCombinationSelectorPolicy` in
 `com.etendoerp.go` hides summary headings).
+Reopening the popup on a field that already holds an account opens on that account: it is marked with a check and centred, and arrows start from it (ETP-5948, see `docs/ui-customization.md`).
 
 ## ETP-5693 — Posting accounts only, on write
 
@@ -1101,3 +1102,9 @@ Saving an account field of the asset accounting mappings now refuses a summary (
 ## Read-only role tier: amortization panel — ETP-5830
 
 With a `read-only` tier, `AssetsAmortizationPanel` lists the amortization lines but never shows the selection toolbar (bulk actions). Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.
+
+## Bespoke grid personal views
+
+The bespoke `AssetsAmortizationPanel` uses the existing personal-view contract for `assets` / `amortizationLine`. Data-column visibility, order and widths apply consistently to header, rows and totals while selection stays structural.
+
+The full app-shell `npm run test:all` suite and `npm run build` passed. Browser smoke covered Sales Order only, not this grid; authenticated preference persistence and human QA remain pending. See [the bespoke-grid inventory](../bespoke-grid-views.md) for verification boundaries.

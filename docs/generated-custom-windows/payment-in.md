@@ -403,7 +403,7 @@ every page of the same query. While the summary is missing the panel shows a ske
 added up in the browser, because they may be in different currencies.
 
 - **Title:** fixed "Cobrado" plus an info tooltip (same blue tooltip as the Cuentas "Saldo"). The old "este mes" wording is gone.
-- **Subtitle:** `<period> · <N> cobros`. The period is the active `paymentDate` filter: a preset shows its own label
+- **Subtitle:** `<period> · <N> cobros` — `1 cobro` for exactly one (English: `collection` / `collections`; ETP-5978, it used to read `1 cobros`). The period is the active `paymentDate` filter: a preset shows its own label
   ("Hoy", "Últimos 30 días", ...), no filter or "Cualquier fecha" shows "Todo el tiempo", and a custom range shows
   `dd/mm/yyyy – dd/mm/yyyy`. N counts every non-voided payment in the period, drafts included.
 - **Total (Cobrado):** deposited payments (`DEPOSITED_STATUSES`, which includes PPM), converted to the organization
@@ -439,8 +439,14 @@ A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO
 
 - The activity history of the payment sidebar (`windows/custom/shared/PaymentDetailSidebarBase.jsx`) omits the "Asiento contabilizado" entry.
 
+- `etblkpAccountingstatus` ("Estado contable") is `form: false` here, but it also carries the gate (QA pass 1): the accounting guard (`tools/app-shell/test/accounting-capability-guard.test.js`) reads every status column of the resolved contract, so a later `form: true` cannot expose it ungated.
+
 Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
 
 ## Default date filter: Last 30 days — ETP-5778
 
 The list opens with the date filter on "Últimos 30 días" (`window.listViewOptions.defaultDatePreset: "last30"` in `decisions.json`, applied to `dateFilterKey: paymentDate`). Choosing "Cualquier fecha"/"Todo el tiempo" is honoured and kept while the user stays in the window; a saved session view wins over the default. See `docs/decisions-reference.md` (Default date preset).
+
+## Agent prompts on account and status — ETP-5852
+
+`decisions.json` carries an `agentPrompt` on `account` (the financial account the money is received into), `status` (the collection lifecycle codes, RPAP to RPPC, and that accounting is a separate field) and `etblkpAccountingstatus` (Y posted, N not posted, any other value the reason posting failed). Feedback M-29.

@@ -151,6 +151,33 @@ Run 2 before trusting 3: if the control sees no request, the interceptor is what
   `KNOWN_COLLAPSED` in `tools/app-shell/src/lib/__tests__/observability-routes.test.js`, which
   turns red when it is fixed.
 
+### Support sessions silence product analytics (ETP-5351)
+
+An Etendo operator can enter a tenant as "Soporte Etendo" from Classic (see
+`lib/supportSession.js`). Nothing that session does may count as the customer's activity, so
+while it lasts product events are suppressed, and monitoring keeps running. The cut is a single
+switch in the facade, `setAnalyticsSuppressed(true)` (`observability/core.js`), on top of the gateway:
+
+- A pure product-analytics adapter is tagged `analytics: true` (today only Mixpanel, in
+  `providers/mixpanel.js`). The facade kills it by name on the gateway kill switch: its SDK is
+  never started and it receives no event, `page`, `identify`, `group`, `reset` or flag exposure.
+  Lifting the suppression starts it. The flag-driven `enable(name)` cannot revive it meanwhile.
+- `track` is dropped for every provider, so no shared business event (`session_started`,
+  `document_created`, `transaction_posted`, KPIs, ...) becomes a Datadog custom action either.
+  Errors, views, resources, long tasks, session replay, feature-flag evaluations and
+  `identify`/`group` (error attribution) keep flowing. AWS RUM has no `track` and is not affected.
+- Monitoring adapters are marked through the gateway context: `support_session: true` (allowlisted
+  boolean and a gateway/adapter `trustedKeys` entry, because its name contains `session`). Datadog
+  sets it as its RUM global context; the facade re-applies it after `reset`, which replaces the
+  whole global context. Automatic click actions cannot be cut without turning
+  `trackUserInteractions` off for every user, so they still arrive: dashboards over customer usage
+  must exclude `@context.support_session:true`.
+- The switch is driven by the support-session store, wired once in `lib/observability.js`.
+  `main.jsx` calls `bootSupportSession()` first, so a support load never starts the Mixpanel SDK
+  and is marked in Datadog from its first view (the store starts in support mode on the handoff
+  route and whenever the `sf_support_session` marker is still live).
+- NPS/CSAT surveys are off in the same session (`useSurveyEngine`), see `docs/surveys.md`.
+
 ## Events
 
 Event definitions live in
@@ -369,8 +396,8 @@ await stop({ status: 'success' });
 
 Payloads are normalized before providers receive them:
 
-- Allowed common fields: `app`, `environment`, `hostname`, `mockMode`, `route`,
-  `routePattern`, `timestamp`, and `windowName`.
+- Allowed common fields: `app`, `environment`, `hostname`, `mockMode`, `role_groups`,
+  `route`, `routePattern`, `timestamp`, and `windowName`.
 - Allowed KPI numeric fields: `accuracy`, `attempt`, `count`, `durationMs`,
   `position`, `score`, `step`, and `value`. These must be finite numbers within
   their configured bounds; strings and booleans are dropped for numeric keys.
@@ -386,6 +413,27 @@ Payloads are normalized before providers receive them:
 Do not pass free-form user-entered values to `track`, `page`, or future business
 events. Add new event fields to the allowlist only when they are stable,
 non-sensitive product metadata.
+
+### `role_groups` (ETP-6043)
+
+Every event carries `role_groups`, the coarse functional areas of the session's
+active role, so KPIs can segment by role (first consumer: the Product
+«Movimientos» tab KPIs in `etendo-kpis`, ETP-5889). It is the only list-valued
+property: the payload policy keeps a list of known values and drops anything else,
+including a plain string.
+
+| Value | When |
+|---|---|
+| `admin` | The role is the tenant admin (`selectedRole.isClientAdmin`); no other value is added |
+| `warehouse` / `sales` / `purchasing` / `finance` | The personal role composes the Inventory / Sales / Purchasing / Finance system template (`selectedRole.effectiveRoleNames`); one entry per template, sorted |
+| `other` | The role is known but composes none of those templates (a tenant not migrated to ETP-4852, or a future template) |
+| *(absent)* | The role is not known yet |
+
+The groups come from the system templates, never from the role name, which is
+free text per tenant. `useSessionStartTracking` keeps them in the common context
+with `setContext`, before `session_started` fires, follows a role switch, and
+clears them on unmount. In a Mixpanel `where`, filter with
+`"warehouse" in properties["role_groups"]`. Mapping: `lib/observability/roleGroups.js`.
 
 The health event helpers read `account_id` from the in-memory session identity
 (`lib/sessionIdentity.js`), which `trackSessionStarted` records on sign-in and
@@ -637,6 +685,13 @@ or account reset clears all pending events, identities, groups and RUM values;
 generation guards stop an older replay from restoring the previous grouping.
 Other arbitrary pre-initialization business events are still discarded. Bounded
 buffers can drop events during a long initialization and are not durable delivery.
+
+Support-session suppression applies to the replay path too: flag exposure and
+`feature_flags_diagnostic` custom actions are discarded while support mode is
+active. Entering support mode also clears pending custom actions, so lifting it
+cannot replay support activity into customer analytics. Native RUM flag values,
+monitoring identity and company grouping continue with the `support_session`
+marker; logout during pending identity replay restores that marker after reset.
 
 Code and unit tests establish this emission contract. Confirm receipt in the
 selected Mixpanel project and Datadog environment after deployment before using

@@ -19,23 +19,20 @@ vi.mock('@/hooks/useDocumentAction', () => ({
   }),
 }));
 
-// ETP-5414 — useNeoAction stub, shared by both the declarative `neoAction`
-// dispatch and the new `preUnpost` pre-step (which also calls `execute`, with
-// actionName='unpost'). A single mock lets tests assert call ORDER across
-// both steps via `mockNeoExecute.mock.calls`.
+// ETP-5414 — useNeoAction stub for the declarative `neoAction` dispatch. Tests also
+// assert it is NOT called with 'unpost' before a reactivation (ETP-5684).
 const mockNeoExecute = vi.fn();
 vi.mock('@/hooks/useNeoAction', () => ({
   useNeoAction: () => ({ execute: mockNeoExecute, loading: false }),
 }));
 
-// ETP-5378 — alias kept for the preUnpost-order assertions below, written
+// ETP-5378 — alias kept for the reactivate assertions below, written
 // before ETP-5414 introduced the `mock`-prefixed name Vitest's `vi.mock`
 // hoisting requires for a variable referenced inside the factory above. Same
 // underlying vi.fn(); resetting/asserting on either name hits the same mock.
 const neoActionExecuteMock = mockNeoExecute;
 
-// ETP-5414 — RowQuickActions now toasts directly for a preUnpost failure (the
-// one exception to its "never toasts" rule — see its own docblock).
+// RowQuickActions never toasts itself; mocked so a test can assert that.
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
@@ -441,12 +438,10 @@ describe('RowQuickActions', () => {
     });
   });
 
-  // ETP-5378 — the row kebab gained its first `preUnpost` action (invoice Reactivate).
-  // The rule lives in lib/preUnpost.js, shared with the detail kebab and the bulk bar so
-  // the three surfaces cannot drift: reactivating a POSTED document from the list used to
-  // send a bare docAction the backend rejects with "Factura contabilizada".
-  describe('preUnpost on a documentAction kebab item (ETP-5378)', () => {
-    const REACTIVATE = [{ key: 'reactivate', label: 'Reactivate', documentAction: 'RE', preUnpost: true }];
+  // ETP-5378 — invoice Reactivate on the row kebab. ETP-5684 — a posted row is un-posted by
+  // the server inside the RE, so the kebab sends the document action alone.
+  describe('reactivate documentAction kebab item (ETP-5378)', () => {
+    const REACTIVATE = [{ key: 'reactivate', label: 'Reactivate', documentAction: 'RE' }];
     const POSTED_ROW = { id: '9', documentStatus: 'CO', posted: 'Y' };
     const UNPOSTED_ROW = { id: '9', documentStatus: 'CO', posted: 'N' };
 
@@ -458,28 +453,10 @@ describe('RowQuickActions', () => {
       return utils;
     }
 
-    it('unposts first, then runs the document action, on a posted row', async () => {
+    it('runs the document action on a posted row without unposting it first', async () => {
       await clickReactivate({ row: POSTED_ROW });
-      expect(neoActionExecuteMock).toHaveBeenCalledWith('9', 'unpost');
-      expect(docActionExecuteMock).toHaveBeenCalledWith('9', 'RE');
-      expect(neoActionExecuteMock.mock.invocationCallOrder[0])
-        .toBeLessThan(docActionExecuteMock.mock.invocationCallOrder[0]);
-    });
-
-    it('skips the unpost entirely on a row that is not posted', async () => {
-      await clickReactivate({ row: UNPOSTED_ROW });
       expect(neoActionExecuteMock).not.toHaveBeenCalled();
       expect(docActionExecuteMock).toHaveBeenCalledWith('9', 'RE');
-    });
-
-    it('aborts without running the document action when the unpost is rejected', async () => {
-      neoActionExecuteMock.mockResolvedValue({ success: false, message: 'period closed' });
-      const { onMenuActionExecuted } = await clickReactivate({ row: POSTED_ROW });
-      expect(docActionExecuteMock).not.toHaveBeenCalled();
-      expect(onMenuActionExecuted).toHaveBeenCalledWith(
-        expect.objectContaining({ key: 'reactivate' }),
-        { success: false, message: 'period closed' },
-      );
     });
 
     // useDocumentAction THROWS on failure (useNeoAction resolves instead), so without
@@ -498,16 +475,14 @@ describe('RowQuickActions', () => {
     });
   });
 
-  // ETP-5745 QA follow-up (BUG-1) — the row-hover kebab is a THIRD surface running the
-  // preUnpost-then-reactivate sequence, and list rows are never GET-enriched with
-  // `reactivationBlocked`. `preUnpostGuard` is the generic, domain-agnostic hook point: when
-  // present on a `documentAction` menu entry, it MUST be checked and MUST block both
-  // `runPreUnpost` (neoAction.execute) and `docAction.execute` whenever it resolves to
-  // anything other than exactly `true` — otherwise this surface un-posts the row and THEN
-  // fails, which is the exact side effect ETP-5745 exists to prevent.
+  // ETP-5745 QA follow-up (BUG-1) — the row-hover kebab is a THIRD surface offering the
+  // reactivation, and list rows are never GET-enriched with `reactivationBlocked`.
+  // `preUnpostGuard` is the generic, domain-agnostic hook point: when present on a
+  // `documentAction` menu entry, it MUST be checked and MUST block `docAction.execute`
+  // whenever it resolves to anything other than exactly `true`.
   describe('preUnpostGuard on a documentAction kebab item (ETP-5745 follow-up)', () => {
     const GUARDED_REACTIVATE = {
-      key: 'reactivate', label: 'Reactivate', documentAction: 'RE', preUnpost: true,
+      key: 'reactivate', label: 'Reactivate', documentAction: 'RE',
     };
     const POSTED_ROW = { id: '9', documentStatus: 'CO', posted: 'Y' };
 
@@ -526,7 +501,7 @@ describe('RowQuickActions', () => {
       expect(preUnpostGuard).toHaveBeenCalledWith(POSTED_ROW, 'RE', expect.any(Function));
     });
 
-    it('blocks the action: reports failure and never runs runPreUnpost/docAction.execute when the guard resolves to a message', async () => {
+    it('blocks the action: reports failure and never runs docAction.execute when the guard resolves to a message', async () => {
       const preUnpostGuard = vi.fn().mockResolvedValue('reactivation blocked: fiscal rectification');
       const { onMenuActionExecuted } = await clickGuardedReactivate(preUnpostGuard, { row: POSTED_ROW });
       expect(onMenuActionExecuted).toHaveBeenCalledWith(
@@ -539,13 +514,11 @@ describe('RowQuickActions', () => {
       expect(docActionExecuteMock).not.toHaveBeenCalled();
     });
 
-    it('lets the normal flow run unchanged when the guard resolves to true: preUnpost then docAction.execute, in that order', async () => {
+    it('lets the normal flow run when the guard resolves to true: docAction.execute, no unpost', async () => {
       const preUnpostGuard = vi.fn().mockResolvedValue(true);
       const { onMenuActionExecuted } = await clickGuardedReactivate(preUnpostGuard, { row: POSTED_ROW });
-      expect(neoActionExecuteMock).toHaveBeenCalledWith('9', 'unpost');
+      expect(neoActionExecuteMock).not.toHaveBeenCalled();
       expect(docActionExecuteMock).toHaveBeenCalledWith('9', 'RE');
-      expect(neoActionExecuteMock.mock.invocationCallOrder[0])
-        .toBeLessThan(docActionExecuteMock.mock.invocationCallOrder[0]);
       expect(onMenuActionExecuted).toHaveBeenCalledWith(
         expect.objectContaining({ key: 'reactivate' }),
         { ok: true },
@@ -630,14 +603,14 @@ describe('RowQuickActions', () => {
     });
   });
 
-  // ── ETP-5414: neoActionName override + preUnpost gate on a `neoAction` menu entry ──
-  describe('neoAction menu entries — neoActionName / preUnpost (ETP-5414)', () => {
+  // ── ETP-5414: neoActionName override on a `neoAction` menu entry ──
+  describe('neoAction menu entries — neoActionName (ETP-5414)', () => {
     async function clickMenuAction(row, action) {
       const user = userEvent.setup();
       const { onMenuActionExecuted } = setup({ row, menuActions: [action] });
       await user.click(screen.getByTestId('row-quick-action-more'));
       await user.click(screen.getByText(action.label));
-      // Let the async handleMenuActionClick chain (preUnpost + main execute) settle.
+      // Let the async handleMenuActionClick chain settle.
       await new Promise((r) => setTimeout(r, 0));
       return { onMenuActionExecuted };
     }
@@ -657,7 +630,7 @@ describe('RowQuickActions', () => {
       expect(mockNeoExecute).toHaveBeenCalledTimes(1);
     });
 
-    it('backward compat: an action with neither neoActionName nor preUnpost calls execute once with the literal name, no unpost call, no toast', async () => {
+    it('backward compat: an action without neoActionName calls execute once with the literal name, no unpost call, no toast', async () => {
       const { onMenuActionExecuted } = await clickMenuAction(
         DRAFT_ROW,
         { key: 'x', label: 'Do X', neoAction: 'X' },
@@ -673,51 +646,12 @@ describe('RowQuickActions', () => {
       );
     });
 
-    it('preUnpost success path: on a posted row, unpost runs BEFORE the main action, which still runs after', async () => {
+    // ETP-5684 — amortization's Reactivar: a posted row is un-posted by the server.
+    it('runs the main action alone on a posted row, never unposting first', async () => {
       const postedRow = { id: '9', documentStatus: 'CO', posted: 'Y' };
-      const { onMenuActionExecuted } = await clickMenuAction(postedRow, {
-        key: 'reactivate', label: 'Reactivar', neoAction: 'Processed', preUnpost: true,
-      });
-      // Both calls share the one mock, so call order IS array order.
-      expect(mockNeoExecute.mock.calls).toEqual([
-        ['9', 'unpost'],
-        ['9', 'Processed'],
-      ]);
-      expect(onMenuActionExecuted).toHaveBeenCalledWith(
-        expect.objectContaining({ key: 'reactivate' }),
-        { success: true },
-        expect.objectContaining({ id: expect.anything() }), // the row (ETP-5577)
-      );
+      await clickMenuAction(postedRow, { key: 'reactivate', label: 'Reactivar', neoAction: 'Processed' });
+      expect(mockNeoExecute.mock.calls).toEqual([['9', 'Processed']]);
       expect(toast.error).not.toHaveBeenCalled();
-    });
-
-    it('preUnpost failure path: toasts the translated message, never calls the main action, and reports failure to onMenuActionExecuted', async () => {
-      mockNeoExecute.mockImplementation(async (id, actionName) => {
-        if (actionName === 'unpost') return { success: false, message: 'accounting settled' };
-        return { success: true };
-      });
-      const postedRow = { id: '9', documentStatus: 'CO', posted: 'Y' };
-      const { onMenuActionExecuted } = await clickMenuAction(postedRow, {
-        key: 'reactivate', label: 'Reactivar', neoAction: 'Processed', preUnpost: true,
-      });
-      expect(mockNeoExecute).toHaveBeenCalledWith('9', 'unpost');
-      expect(mockNeoExecute).not.toHaveBeenCalledWith('9', 'Processed');
-      expect(mockNeoExecute).toHaveBeenCalledTimes(1);
-      expect(toast.error).toHaveBeenCalledWith('accounting settled');
-      expect(onMenuActionExecuted).toHaveBeenCalledWith(
-        expect.objectContaining({ key: 'reactivate' }),
-        { success: false, message: 'accounting settled' },
-      );
-    });
-
-    it('preUnpost is a no-op when the row is NOT posted: only the main action call fires, no unpost call', async () => {
-      const unpostedRow = { id: '9', documentStatus: 'CO', posted: 'N' };
-      await clickMenuAction(unpostedRow, {
-        key: 'reactivate', label: 'Reactivar', neoAction: 'Processed', preUnpost: true,
-      });
-      expect(mockNeoExecute).toHaveBeenCalledWith('9', 'Processed');
-      expect(mockNeoExecute).not.toHaveBeenCalledWith('9', 'unpost');
-      expect(mockNeoExecute).toHaveBeenCalledTimes(1);
     });
   });
 });

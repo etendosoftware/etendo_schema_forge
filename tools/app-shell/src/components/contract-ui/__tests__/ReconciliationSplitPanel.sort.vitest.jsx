@@ -1,3 +1,8 @@
+// @covers tools/app-shell/src/components/contract-ui/ReconciliationSplitPanel.jsx
+const personalGrid = vi.hoisted(() => ({ enabled: false, apiFetch: vi.fn() }));
+vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => personalGrid.apiFetch }));
+vi.mock('@/lib/flags', () => ({ GRID_COLUMN_VIEWS: 'grid-column-views', useFeatureFlag: () => personalGrid.enabled }));
+
 // ETP-5242 — client-side column sorting on both tables of the reconciliation split panel, plus the
 // Información partner-name tooltip on the right panel.
 //
@@ -86,9 +91,10 @@ vi.mock('@/hooks/useReconciliation', () => ({
   useReconcileDifference: () => reconcileDifferenceState,
 }));
 
-import { render, screen, fireEvent, within } from '@testing-library/react';
-import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
-import { ReconciliationSplitPanel } from '@/components/contract-ui/ReconciliationSplitPanel.jsx';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
+import { ReconciliationSplitPanel, resolveReconciliationCandidateScope } from '@/components/contract-ui/ReconciliationSplitPanel.jsx';
+import userEvent from '@testing-library/user-event';
 import { formatSigned } from '@/lib/formatSigned';
 
 // ── Fixtures ───────────────────────────────────────────────────────────────────
@@ -498,5 +504,179 @@ describe('Información partner name', () => {
     fireEvent.focus(fitting);
 
     expect(screen.queryByTestId('recon-cand-partner-C2-tooltip')).toBeNull();
+  });
+});
+
+describe('reconciliation personal column views', () => {
+  beforeEach(() => {
+    personalGrid.enabled = true;
+    personalGrid.apiFetch.mockReset().mockResolvedValue({ ok: true, status: 204 });
+  });
+  afterEach(() => { personalGrid.enabled = false; });
+
+  it('keeps the original tables and selection behavior with the feature flag off', () => {
+    personalGrid.enabled = false;
+    renderPanel();
+    selectLine();
+    expect(personalGrid.apiFetch).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('grid-view-controls')).toBeNull();
+    expect(leftTable().querySelector('thead tr').children).toHaveLength(5);
+    expect(rightTable().querySelector('thead tr').children).toHaveLength(5);
+    fireEvent.click(rightHeader('amount'));
+    expect(candOrder()).toEqual(['C1', 'C3', 'C2']);
+    expect(candCheckbox('C2')).toBeChecked();
+    expect(screen.getByTestId('recon-line-radio-L1')).toBeChecked();
+  });
+});
+
+describe('reconciliation candidate view identity', () => {
+  it.each([
+    [true, 'sales-invoice'],
+    [false, 'purchase-invoice'],
+  ])('uses the installment identity for invoice rows in direction %s', (isReceipt, spec) => {
+    const candidates = [{ id: 'schedule-1', scheduleId: 'schedule-1', invoiceId: 'invoice-header-1', kind: 'invoice', isReceipt }];
+    expect(resolveReconciliationCandidateScope(candidates, null)).toEqual({ spec, entity: 'paymentPlan' });
+  });
+
+  it('uses movement identity for transaction candidates and linked operations', () => {
+    expect(resolveReconciliationCandidateScope([{ id: 'movement-1' }], null)).toEqual({ spec: 'financial-account', entity: 'transaction' });
+    expect(resolveReconciliationCandidateScope([{ id: 'movement-1', linked: true }], null, true)).toEqual({ spec: 'financial-account', entity: 'transaction' });
+  });
+
+  it.each([
+    [{ id: 'schedule-1', kind: 'invoice', scheduleId: 'different-id', isReceipt: true }],
+    [{ id: 'schedule-1', kind: 'invoice', scheduleId: 'schedule-1' }],
+    [{ id: 'movement-1', kind: 'unrecognized' }],
+    [{ id: '' }],
+    [{ id: 'movement-1' }, { id: 'schedule-1', kind: 'invoice', scheduleId: 'schedule-1', isReceipt: true }],
+    [{ id: 'schedule-1', kind: 'invoice', scheduleId: 'schedule-1', isReceipt: true }, { id: 'schedule-2', kind: 'invoice', scheduleId: 'schedule-2', isReceipt: false }],
+  ])('declines personal views for rows without one valid common contract: %j', (...candidates) => {
+    expect(resolveReconciliationCandidateScope(candidates, null)).toBeNull();
+  });
+
+  it.each([
+    ['salesInvoices', { spec: 'sales-invoice', entity: 'paymentPlan' }],
+    ['purchaseInvoices', { spec: 'purchase-invoice', entity: 'paymentPlan' }],
+    ['receipts', { spec: 'financial-account', entity: 'transaction' }],
+    ['payments', { spec: 'financial-account', entity: 'transaction' }],
+    [null, null],
+  ])('scopes an empty list only from its declared source: %s', (source, expected) => {
+    expect(resolveReconciliationCandidateScope([], source)).toEqual(expected);
+  });
+});
+
+const gridResponse = (body, status = 200) => ({ ok: true, status, json: async () => body });
+const leftGridControls = () => screen.getByTestId('recon-grid-view-financial-account-bankStatementLines');
+const transactionGridControls = () => screen.getByTestId('recon-grid-view-financial-account-transaction');
+const personalView = (columns) => ({ version: 1, surface: 'list', columns });
+
+describe('reconciliation scoped column layouts', () => {
+  beforeEach(() => {
+    personalGrid.enabled = true;
+    personalGrid.apiFetch.mockReset().mockImplementation((url) => Promise.resolve(gridResponse(personalView(url.endsWith('/bankStatementLines') ? [
+      { id: 'list:field:selection', visible: false, order: 30, width: 999 },
+      { id: 'list:ad:Description:field:description', visible: false, order: 1 },
+      { id: 'list:field:amount', order: 0 },
+      { id: 'list:field:reconciliationProgress', order: 2 },
+      { id: 'list:ad:Datetrx:field:transactionDate', order: 3 },
+    ] : [
+      { id: 'list:field:selection', visible: false, order: 30, width: 999 },
+      { id: 'list:field:reconciliationDocumentInfo', visible: false },
+      { id: 'list:field:amount', order: 0 },
+    ]))));
+  });
+  afterEach(() => { personalGrid.enabled = false; });
+
+  it('loads each real scope and preserves sorting, selection and totals under saved layouts', async () => {
+    renderPanel();
+    await waitFor(() => expect(within(leftGridControls()).getByTestId('grid-view-columns-trigger')).toBeEnabled());
+    selectLine();
+    await waitFor(() => expect(within(transactionGridControls()).getByTestId('grid-view-columns-trigger')).toBeEnabled());
+    expect(personalGrid.apiFetch).toHaveBeenCalledWith('/sws/neo/grid-views/financial-account/bankStatementLines', { baseUrl: '' });
+    expect(personalGrid.apiFetch).toHaveBeenCalledWith('/sws/neo/grid-views/financial-account/transaction', { baseUrl: '' });
+    expect(leftTable().querySelector('thead tr').children).toHaveLength(4);
+    expect(leftTable().querySelector('thead tr').children[1]).toContainElement(leftHeader('amount'));
+    expect(screen.queryByTestId('recon-line-desc-L1')).toBeNull();
+    expect(within(rightTable()).queryByTestId('column-header-sort-info')).toBeNull();
+    expect(rightTable().querySelector('thead tr').firstElementChild).not.toHaveAttribute('draggable', 'true');
+    expect(screen.getByTestId('recon-line-radio-L1')).toBeChecked();
+    expect(candCheckbox('C2')).toBeChecked();
+    const totalBefore = selectedTotal();
+    const remainingBefore = remainingTotal();
+    fireEvent.click(rightHeader('amount'));
+    expect(candOrder()).toEqual(['C1', 'C3', 'C2']);
+    expect(selectedTotal()).toBe(totalBefore);
+    expect(remainingTotal()).toBe(remainingBefore);
+    fireEvent.click(leftHeader('amount'));
+    expect(lineOrder()).toEqual(['L3', 'L2', 'L1']);
+    expect(screen.getByTestId('recon-line-radio-L1')).toBeChecked();
+  });
+
+  it.each([[true, 'sales-invoice'], [false, 'purchase-invoice']])('loads invoice installment preferences for direction %s', async (isReceipt, spec) => {
+    candidatesState.candidates = CANDIDATES.map((candidate) => ({ ...candidate, kind: 'invoice', scheduleId: candidate.id, invoiceId: `invoice-${candidate.id}`, isReceipt }));
+    renderPanel();
+    selectLine();
+    const controls = await screen.findByTestId(`recon-grid-view-${spec}-paymentPlan`);
+    await waitFor(() => expect(within(controls).getByTestId('grid-view-columns-trigger')).toBeEnabled());
+    expect(personalGrid.apiFetch).toHaveBeenCalledWith(`/sws/neo/grid-views/${spec}/paymentPlan`, { baseUrl: '' });
+    expect(personalGrid.apiFetch.mock.calls.some(([url]) => /\/header(?:$|\/)/.test(url))).toBe(false);
+    expect(screen.getByTestId('recon-cand-row-C1')).toBeInTheDocument();
+  });
+
+  it('leaves a mixed candidate table intact without mounting right-side view controls or making up a scope', async () => {
+    candidatesState.candidates = [CANDIDATES[0], { ...CANDIDATES[1], kind: 'invoice', scheduleId: 'C2', invoiceId: 'invoice-C2', isReceipt: true }];
+    renderPanel();
+    selectLine();
+    await waitFor(() => expect(within(leftGridControls()).getByTestId('grid-view-columns-trigger')).toBeEnabled());
+    expect(screen.getAllByTestId('grid-view-controls')).toHaveLength(1);
+    expect(personalGrid.apiFetch.mock.calls.map(([url]) => url)).toEqual(['/sws/neo/grid-views/financial-account/bankStatementLines']);
+    expect(rightTable().querySelector('thead tr').children).toHaveLength(5);
+    expect(rightHeader('info')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('recon-cand-check-C1'));
+    expect(candCheckbox('C1')).toBeChecked();
+  });
+
+  it('saves personal visibility explicitly without changing reconciliation mutations or selection', async () => {
+    personalGrid.apiFetch.mockResolvedValue(gridResponse(null, 204));
+    const user = userEvent.setup();
+    renderPanel();
+    await waitFor(() => expect(within(leftGridControls()).getByTestId('grid-view-columns-trigger')).toBeEnabled());
+    selectLine();
+    const controls = leftGridControls();
+    await user.click(within(controls).getByTestId('grid-view-columns-trigger'));
+    expect(screen.getByTestId('grid-view-column-selection')).toHaveAttribute('aria-disabled', 'true');
+    await user.click(screen.getByTestId('grid-view-column-transactionDate'));
+    expect(within(leftTable()).queryByTestId('column-header-sort-date')).toBeNull();
+    expect(screen.getByTestId('recon-line-radio-L1')).toBeChecked();
+    await user.click(within(controls).getByTestId('grid-view-save'));
+    await waitFor(() => expect(personalGrid.apiFetch.mock.calls.some(([, options]) => options.method === 'PUT')).toBe(true));
+    const [url, request] = personalGrid.apiFetch.mock.calls.find(([, options]) => options.method === 'PUT');
+    expect(url).toBe('/sws/neo/grid-views/financial-account/bankStatementLines');
+    expect(JSON.parse(request.body).columns).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'list:ad:Datetrx:field:transactionDate', visible: false }),
+      expect.objectContaining({ id: 'list:field:selection', visible: true }),
+    ]));
+    expect(reconcileState.reconcile).not.toHaveBeenCalled();
+    expect(removeState.removeOperation).not.toHaveBeenCalled();
+  });
+
+  it('locks reconciled unlink cells and keeps window read-only behavior when views are active', async () => {
+    linesState.lines = [{ ...LINES[0], status: 'reconciled', state: 'reconciled', reconcileStatus: 'RECONCILED' }];
+    candidatesState.candidates = CANDIDATES.map((candidate) => ({ ...candidate, linked: true }));
+    personalGrid.apiFetch.mockImplementation(() => Promise.resolve(gridResponse(personalView([
+      { id: 'list:field:amount', visible: false, order: -1 },
+      { id: 'list:field:selection', visible: false, order: 30 },
+    ]))));
+    const { rerender } = renderPanel();
+    fireEvent.click(screen.getByTestId('recon-status-option-all'));
+    selectLine();
+    await waitFor(() => expect(within(transactionGridControls()).getByTestId('grid-view-columns-trigger')).toBeEnabled());
+    expect(screen.getByTestId('recon-unlink-C1')).toBeInTheDocument();
+    expect(candCheckbox('C1')).toBeChecked();
+    rerender(<ReconciliationSplitPanel {...PANEL_PROPS} windowReadOnly />);
+    expect(screen.queryByTestId('recon-unlink-C1')).toBeNull();
+    expect(screen.getByTestId('recon-action-reconcile')).toBeDisabled();
+    expect(candCheckbox('C1')).toBeInTheDocument();
+    expect(removeState.removeOperation).not.toHaveBeenCalled();
   });
 });

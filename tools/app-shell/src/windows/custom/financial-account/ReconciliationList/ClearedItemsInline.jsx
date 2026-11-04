@@ -1,3 +1,4 @@
+import { FinancialGridView, FinancialGridRow } from '../FinancialGridView.jsx';
 import { Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
@@ -195,29 +196,40 @@ export function ClearedItemsInline({ reconciliationId, currency = 'EUR' }) {
   };
 
   return (
-    <div
-      className="rounded-lg border border-[hsl(var(--border-subtle))] bg-card shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)]"
-      data-testid="cleared-items-inline"
-    >
-      {/* Same header treatment as the parent table and the Movements grid. */}
+    <FinancialGridView
+      spec="financial-account"
+      entity="clearedItems"
+      columns={[
+        ...COLUMNS.map((col) => ({ ...col, key: col.name, labelKey: CELL_RENDERERS[col.name]?.labelKey, gridTrack: CELL_RENDERERS[col.name]?.width, ...(col.name === 'financialAccountTransaction' ? { gridConfigurable: false } : {}) })),
+        { key: 'amount', labelKey: 'financeAccountClearedItemsColAmount', gridTrack: TAIL_TRACKS },
+      ]}
+      data={items}
+      data-testid="FinancialGridView__9d6ccb">
       <div
-        role="row"
-        style={GRID_STYLE}
-        className={cn(
-          GRID_CLASS,
-          'h-10 items-center border-b border-[hsl(var(--border-subtle))] px-4',
-          'text-xs font-semibold leading-4 text-[hsl(var(--foreground))]',
-        )}
+        className="rounded-lg border border-[hsl(var(--border-subtle))] bg-card shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)]"
+        data-testid="cleared-items-inline"
       >
-        {COLUMNS.map((col) => (
-          <span key={col.name}>
-            {CELL_RENDERERS[col.name] ? ui(CELL_RENDERERS[col.name].labelKey) : col.label}
-          </span>
-        ))}
-        <span className="text-right">{ui('financeAccountClearedItemsColAmount')}</span>
+        {/* Same header treatment as the parent table and the Movements grid. */}
+        <FinancialGridRow
+          header
+          role="row"
+          style={GRID_STYLE}
+          className={cn(
+            GRID_CLASS,
+            'h-10 items-center border-b border-[hsl(var(--border-subtle))] px-4',
+            'text-xs font-semibold leading-4 text-[hsl(var(--foreground))]',
+          )}
+          data-testid="FinancialGridRow__9d6ccb">
+          {COLUMNS.map((col) => (
+            <span key={col.name}>
+              {CELL_RENDERERS[col.name] ? ui(CELL_RENDERERS[col.name].labelKey) : col.label}
+            </span>
+          ))}
+          <span className="text-right">{ui('financeAccountClearedItemsColAmount')}</span>
+        </FinancialGridRow>
+        {renderBody({ loading, items, ui, currency, cellCtx })}
       </div>
-      {renderBody({ loading, items, ui, currency, cellCtx })}
-    </div>
+    </FinancialGridView>
   );
 }
 
@@ -225,14 +237,14 @@ export function ClearedItemsInline({ reconciliationId, currency = 'EUR' }) {
 function renderBody({ loading, items, ui, currency, cellCtx }) {
   if (loading) {
     return SKELETON_ROWS.map((n) => (
-      <div
+      <FinancialGridRow
         key={n}
         role="row"
         style={GRID_STYLE}
         className={cn(GRID_CLASS, 'border-b border-[hsl(var(--border-subtle))] px-4 py-2.5 last:border-b-0')}
-      >
+        data-testid="FinancialGridRow__9d6ccb">
         {SKELETON_CELL_KEYS.map((k) => <Skeleton key={k} className="h-4 w-full" data-testid="Skeleton__9d6ccb" />)}
-      </div>
+      </FinancialGridRow>
     ));
   }
   if (items.length === 0) {
@@ -243,7 +255,7 @@ function renderBody({ loading, items, ui, currency, cellCtx }) {
     );
   }
   return items.map((row) => (
-    <div
+    <FinancialGridRow
       key={row.id}
       role="row"
       style={GRID_STYLE}
@@ -264,6 +276,6 @@ function renderBody({ loading, items, ui, currency, cellCtx }) {
         );
       })}
       <AmountCell row={row} currency={currency} data-testid="AmountCell__9d6ccb" />
-    </div>
+    </FinancialGridRow>
   ));
 }

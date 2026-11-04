@@ -58,6 +58,14 @@ describe('AccountSelect', () => {
     expect(within(screen.getByTestId('acct-select')).getByText('requiredField')).toBeInTheDocument();
   });
 
+  // ETP-5948 — the committed account is handed to the popup, which marks it on open.
+  it('opens the popup with the selected account marked', async () => {
+    render(<AccountSelect label="Cuenta" options={OPTIONS} value="acc-626" data-testid="acct-select" />);
+    await openSelector('acct-select');
+    expect(await screen.findByTestId('acct-select-popup-option-acc-626')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('acct-select-popup-option-acc-572')).toHaveAttribute('aria-selected', 'false');
+  });
+
   it('opens a popup titled with the field label that lists every option with its FULL name', async () => {
     render(<AccountSelect label="Cuenta" options={OPTIONS} data-testid="acct-select" />);
     await openSelector('acct-select');

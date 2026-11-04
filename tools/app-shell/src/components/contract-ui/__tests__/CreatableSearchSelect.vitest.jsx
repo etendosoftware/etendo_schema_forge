@@ -505,7 +505,7 @@ describe('CreatableSearchSelect — ETP-5902 labelPrefix', () => {
   };
   const field = { key: 'tax', required: false };
   const staticOptions = [
-    { id: 'iva21', name: 'IVA 21%', labelPrefix: '21 %' },
+    { id: 'iva21', name: 'IVA 21%', labelPrefix: '21%' },
     { id: 'exento', name: 'Exento' },
   ];
 
@@ -514,10 +514,10 @@ describe('CreatableSearchSelect — ETP-5902 labelPrefix', () => {
     render(<CreatableSearchSelect {...baseProps} field={field} staticOptions={staticOptions} onChange={onChange} />);
 
     fireEvent.focus(screen.getByTestId('field-tax'));
-    expect(screen.getByTestId('option-tax-iva21')).toHaveTextContent('21 % - IVA 21%');
+    expect(screen.getByTestId('option-tax-iva21')).toHaveTextContent('21% - IVA 21%');
     expect(screen.getByTestId('option-tax-exento')).toHaveTextContent(/^Exento$/);
 
     fireEvent.mouseDown(screen.getByTestId('option-tax-iva21'));
-    expect(onChange).toHaveBeenCalledWith('iva21', 'IVA 21%', expect.objectContaining({ labelPrefix: '21 %' }));
+    expect(onChange).toHaveBeenCalledWith('iva21', 'IVA 21%', expect.objectContaining({ labelPrefix: '21%' }));
   });
 });

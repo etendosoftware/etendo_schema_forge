@@ -304,6 +304,24 @@ describe('CreatableSearchSelect — locating the committed value on reopen (ETP-
     expect(screen.queryByTestId('option-partner-bp-99')).not.toBeInTheDocument();
   });
 
+  // ETP-5948 — the backend matches each identifier column on its own, so a "<code> - <name>"
+  // label finds nothing as a whole; the lookup retries with the code segment.
+  it('retries the label lookup with the code when the full "code - name" label finds nothing', async () => {
+    const paged = routedFetch({ totalRows: 1000 });
+    global.fetch = vi.fn((url) => {
+      const q = new URL(String(url), 'http://test').searchParams.get('q');
+      if (q === '57200000') return jsonOk([{ id: 'acc-572', label: '57200000 - Bancos' }]);
+      if (q != null) return jsonOk([]);
+      return paged(url);
+    });
+
+    await reopen('acc-572', '57200000 - Bancos');
+
+    await waitFor(() => expect(screen.getByTestId('option-partner-acc-572')).toHaveAttribute('aria-selected', 'true'));
+    expect(lookupCalls().map(([url]) => new URL(String(url), 'http://test').searchParams.get('q')))
+      .toEqual(['57200000 - Bancos', '57200000']);
+  });
+
   it('opens from the top without error when the value is nowhere (list ends, lookup finds nothing)', async () => {
     global.fetch = routedFetch({ totalRows: 30, lookup: [] });
 

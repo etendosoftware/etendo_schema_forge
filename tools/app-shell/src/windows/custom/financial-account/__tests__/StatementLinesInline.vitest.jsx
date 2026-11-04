@@ -1,4 +1,13 @@
-import { render, screen } from '@testing-library/react';
+import { gridViewColumnId } from '@/hooks/useGridView.js';
+import { getContractGridColumns } from '@/components/financial-accounts/contractColumns';
+
+// Exercise personal views through the real shared hook; only the session/API boundary is mocked.
+const personalGrid = vi.hoisted(() => ({ enabled: false, apiFetch: vi.fn() }));
+vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => personalGrid.apiFetch }));
+vi.mock('@/lib/flags', () => ({ GRID_COLUMN_VIEWS: 'grid-column-views', useFeatureFlag: () => personalGrid.enabled }));
+
+// @covers tools/app-shell/src/windows/custom/financial-account/StatementLinesInline.jsx
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -345,5 +354,34 @@ describe('StatementLinesInline', () => {
       expect(headerFor('financeAccountStatementLinesColDate').className).not.toContain('text-right');
       expect(headerFor('financeAccountStatementLinesColMatched').className).not.toContain('text-right');
     });
+  });
+});
+
+describe('StatementLinesInline — personal column views', () => {
+  beforeEach(() => {
+    personalGrid.enabled = true;
+    const column = getContractGridColumns('bankStatementLines').find((item) => item.name === 'description');
+    personalGrid.apiFetch.mockReset().mockResolvedValue({ ok: true, status: 200, json: async () => ({
+      version: 1, surface: 'list', columns: [
+        { id: gridViewColumnId({ ...column, key: 'description' }), visible: false },
+        { id: 'list:field:txns', visible: false, order: -1 },
+        { id: 'list:field:matched', visible: false, order: -2 },
+      ],
+    }) });
+    linesMock.mockReturnValue({ lines: [{
+      id: 'personal-line', date: '2026-05-06', description: 'hidden-personal-description', amount: 100,
+      matched: true, txns: [{ documentNo: 'TXN-001', amount: 100, transactionId: 'txn-001' }],
+    }], loading: false });
+  });
+  afterEach(() => { personalGrid.enabled = false; });
+
+  it('keeps reconciliation status and transaction actions while hiding a data column', async () => {
+    render(<StatementLinesInline statementId="statement-A" />);
+    await waitFor(() => expect(screen.getByTestId('grid-view-columns-trigger')).toBeEnabled());
+    expect(personalGrid.apiFetch).toHaveBeenCalledWith('/sws/neo/grid-views/financial-account/bankStatementLines', { baseUrl: '' });
+    expect(screen.queryByText('hidden-personal-description')).toBeNull();
+    expect(screen.getByText('financeAccountStatementLinesStatusReconciled')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('statement-line-txn-personal-line'));
+    expect(screen.getByTestId('txn-modal')).toHaveAttribute('data-doc', 'TXN-001');
   });
 });

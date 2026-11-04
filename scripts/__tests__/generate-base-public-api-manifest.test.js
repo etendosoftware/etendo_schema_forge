@@ -1,10 +1,11 @@
 // @covers scripts/generate-base-public-api-manifest.mjs
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  assertNoFieldMapping,
   buildEntity,
   fiscalMonitorWindows,
   generateManifest,
@@ -129,6 +130,29 @@ describe('buildEntity — non-curated entity derives its form and read-only list
     assert.equal(fields.order_date.internalPath, 'orderDate');
     assert.equal(fields.order_date.sourceVisibility, 'editable');
     assert.deepEqual(fields.order_date.dataType, { type: 'string', format: 'date' });
+  });
+
+  it('declares every numeric and date-time contract type with the JSON type NEO answers', () => {
+    const typed = [
+      ['orderedQuantity', 'quantity'], ['listPrice', 'price'], ['lineNo', 'number'],
+      ['amount', 'amount'], ['rate', 'decimal'], ['seqNo', 'integer'],
+      ['created', 'dateTime'], ['legacyCreated', 'datetime'], ['orderDate', 'date'],
+      ['active', 'boolean'], ['status', 'enum'], ['description', 'text'],
+    ].map(([name, type]) => ({ name, visibility: 'editable', form: true, type }));
+    const { fields } = build('sales-order', typed);
+    const double = { type: 'number', format: 'double' };
+    assert.deepEqual(fields.ordered_quantity.dataType, double);
+    assert.deepEqual(fields.list_price.dataType, double);
+    assert.deepEqual(fields.line_no.dataType, double);
+    assert.deepEqual(fields.amount.dataType, double);
+    assert.deepEqual(fields.rate.dataType, double);
+    assert.deepEqual(fields.seq_no.dataType, { type: 'integer', format: 'int32' });
+    assert.deepEqual(fields.created.dataType, { type: 'string', format: 'date-time' });
+    assert.deepEqual(fields.legacy_created.dataType, { type: 'string', format: 'date-time' });
+    assert.deepEqual(fields.order_date.dataType, { type: 'string', format: 'date' });
+    assert.deepEqual(fields.active.dataType, { type: 'boolean' });
+    assert.deepEqual(fields.status.dataType, { type: 'string' });
+    assert.deepEqual(fields.description.dataType, { type: 'string' });
   });
 
   it('marks every derived field out when the entity has no write endpoint', () => {
@@ -294,6 +318,22 @@ describe('buildEntity — conservative base exposure', () => {
       assert.equal(entity.fields.name.direction, 'inout');
     }
     assert.equal(build('product', fields).fields.search_key.direction, 'inout');
+  });
+
+  it('marks a writable field declared publicApi.required, and never a read-only one', () => {
+    const fields = [
+      { name: 'searchKey', visibility: 'editable', form: true, type: 'string' },
+      { name: 'name', visibility: 'editable', form: true, type: 'string' },
+      { name: 'description', visibility: 'editable', form: true, type: 'string' },
+    ];
+    const policy = exposurePolicyOf({ entities: { header: { fields: {
+      searchKey: { publicApi: { required: true } },
+      name: { publicApi: { required: true, readOnly: true } },
+    } } } }, 'header');
+    const entity = buildEntity({ specName: 'product', entityName: 'header', contract: contractFor('product', fields), functional, parent: null, rawEntity: null, policy });
+    assert.equal(entity.fields.search_key.required, true);
+    assert.equal(entity.fields.name.required, undefined, 'a read-only field is never required on write');
+    assert.equal(entity.fields.description.required, undefined);
   });
 
   it('lets a read-only field work on a curated entity too', () => {
@@ -482,11 +522,12 @@ describe('generateManifest — child tabs and functional texts', () => {
           businessPartner: tab('c_bpartner', 'Business Partner'),
           bankAccount: tab('c_bp_bankaccount', 'Bank Account'),
           locationAddress: tab('c_bpartner_location', 'Location/Address'),
+          addressNote: tab('c_bp_address_note', 'Address Note'),
         },
       },
       backendContract: {
         entities: {},
-        endpoints: ['businessPartner', 'bankAccount', 'locationAddress'].map((entity) => ({ entity, method: 'POST' })),
+        endpoints: ['businessPartner', 'bankAccount', 'locationAddress', 'addressNote'].map((entity) => ({ entity, method: 'POST' })),
         processEndpoints: [],
       },
     };
@@ -504,6 +545,8 @@ describe('generateManifest — child tabs and functional texts', () => {
         { tableName: 'c_bpartner', fields: [{ name: 'id', type: 'id', visibility: 'system', columnName: 'c_bpartner_id' }] },
         child('c_bp_bankaccount'),
         child('c_bpartner_location'),
+        // A tab under a child tab (AD level 2), linked to the window's record as well.
+        { ...child('c_bp_address_note'), level: 'subline' },
       ],
     }));
     mkdirSync(join(root, 'docs'), { recursive: true });
@@ -512,7 +555,7 @@ describe('generateManifest — child tabs and functional texts', () => {
 
   after(() => rmSync(root, { recursive: true, force: true }));
 
-  it('does not publish the bank account tab, but keeps the other linked children', async () => {
+  it('does not publish the bank account tab nor a tab under a child tab, but keeps the other linked children', async () => {
     const manifest = await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'docs') });
     assert.deepEqual(Object.keys(manifest.entities).sort(), ['contacts', 'contacts-locationAddress']);
     assert.ok(manifest.policy.excludedChildTabs.includes('^bank account$'));
@@ -522,5 +565,74 @@ describe('generateManifest — child tabs and functional texts', () => {
     const { functional } = (await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'docs') })).entities.contacts;
     assert.equal(functional.functionalSummary, 'Public API resource for the Contacts window.');
     assert.deepEqual(functional.functionalCapabilities, ['Create a contact']);
+  });
+});
+
+describe('assertNoFieldMapping — removed publicApi type/handlerId keys', () => {
+  const field = (publicApi) => ({ name: 'orderDate', visibility: 'editable', type: 'date', publicApi });
+
+  for (const [key, value] of [['type', 'string'], ['handlerId', 'passthrough'], ['handlerId', null], ['type', null]]) {
+    it(`throws naming the field and the key for ${key}=${JSON.stringify(value)}`, () => {
+      assert.throws(
+        () => assertNoFieldMapping(field({ exposed: true, name: 'x', [key]: value }), 'spec/header'),
+        (err) => err instanceof Error && err.message.includes('spec/header.orderDate') && err.message.includes(`publicApi.${key}`)
+      );
+    });
+  }
+
+  it('does not throw for exposed/readOnly curation or a field without publicApi', () => {
+    assert.doesNotThrow(() => assertNoFieldMapping(field({ exposed: true, name: 'x' }), 'spec/header'));
+    assert.doesNotThrow(() => assertNoFieldMapping(field({ exposed: true, name: 'x', readOnly: true }), 'spec/header'));
+    assert.doesNotThrow(() => assertNoFieldMapping(field(undefined), 'spec/header'));
+  });
+
+  it('buildEntity rejects the keys even on a field that would not be published', () => {
+    const fields = [
+      { name: 'orderDate', visibility: 'editable', publicApi: { exposed: true, name: 'date' } },
+      { name: 'secret', visibility: 'discarded', publicApi: { handlerId: 'passthrough' } },
+    ];
+    assert.throws(() => build('contacts', fields), /contacts\/header\.secret.*publicApi\.handlerId/);
+  });
+
+  it('no emit site puts a type or handlerId key on a manifest field', () => {
+    const curated = [{ name: 'orderDate', visibility: 'editable', type: 'date', publicApi: { exposed: true, name: 'date' } }];
+    const inputFields = [
+      { name: 'city_name', internalPath: 'cityName', dataType: 'string', readable: true },
+      { name: 'secret_note', internalPath: 'secretNote', required: true },
+    ];
+    const rawEntity = { tableName: 'contacts_table', fields: [
+      { name: 'contactId', type: 'id', visibility: 'system' },
+      { name: 'updated', type: 'dateTime', visibility: 'system' },
+    ] };
+    const entities = [
+      // curated field + input-param fields + synthetic id/updated from schema-raw
+      buildEntity({ specName: 'contacts', entityName: 'header', contract: contractFor('contacts', curated),
+        functional, parent: null, rawEntity, inputFields }),
+      // fallback id (no raw schema)
+      buildEntity({ specName: 'contacts', entityName: 'header', contract: contractFor('contacts', curated),
+        functional, parent: null, rawEntity: null }),
+    ];
+    const published = entities.flatMap((entity) => Object.entries(entity.fields));
+    const names = published.map(([name]) => name);
+    for (const expected of ['date', 'city_name', 'secret_note', 'id', 'updated']) {
+      assert.ok(names.includes(expected), `${expected} should be emitted`);
+    }
+    for (const [name, field] of published) {
+      assert.equal(Object.hasOwn(field, 'type'), false, `${name} has a type key`);
+      assert.equal(Object.hasOwn(field, 'handlerId'), false, `${name} has a handlerId key`);
+    }
+  });
+
+  it('the committed public-api/base.v1.json has no field with type or handlerId', () => {
+    const manifest = JSON.parse(readFileSync(new URL('../../public-api/base.v1.json', import.meta.url), 'utf8'));
+    let checked = 0;
+    for (const [entityName, entity] of Object.entries(manifest.entities)) {
+      for (const [name, field] of Object.entries(entity.fields ?? {})) {
+        checked += 1;
+        assert.equal(Object.hasOwn(field, 'type'), false, `${entityName}.${name} has a type key`);
+        assert.equal(Object.hasOwn(field, 'handlerId'), false, `${entityName}.${name} has a handlerId key`);
+      }
+    }
+    assert.ok(checked > 0);
   });
 });

@@ -254,6 +254,31 @@ describe('FmListPage — Reactivar confirm dialog flow', () => {
     expect(screen.getByTestId('FmRowActions__reactivate')).toBeInTheDocument();
   });
 
+  // ETP-5725 (QA CP-20) — the confirmation dialog must close on BOTH outcomes. It used to
+  // be dismissed only inside the `result.ok` branch, so every rejected reactivation left the
+  // modal open behind its own error toast and the user had to cancel it by hand. The dialog
+  // is now cleared in `.finally`, alongside the busy flag.
+  it.each([
+    ['generic failure',             { ok: false, error: 'http_409' }],
+    ['corrective_sibling_presented', { ok: false, error: 'http_409', reason: 'corrective_sibling_presented' }],
+    ['sibling_exists',               { ok: false, error: 'http_409', reason: 'sibling_exists' }],
+  ])('closes the confirm dialog after a rejected reactivate (%s)', async (_desc, result) => {
+    globalThis.fetch = mockCatalogFetch();
+    persistDeclarationStatus.mockResolvedValue(result);
+    render(<FmListPage declarations={[makeDecl({ id: 'react-cp20', status: 'submitted' })]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    fireEvent.click(screen.getByTestId('FmRowActions__reactivate'));
+    fireEvent.click(screen.getByTestId('fm-reactivate-confirm'));
+
+    const { toast } = await import('sonner');
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    // The modal is gone …
+    await waitFor(() => expect(screen.queryByTestId('fm-reactivate-confirm')).not.toBeInTheDocument());
+    // … and the row is untouched, so the action can be retried.
+    expect(screen.getByTestId('FmRowActions__reactivate')).toBeInTheDocument();
+  });
+
   // ETP-5725 (reopened QA fix, UX follow-up) — `persistDeclarationStatus` now parses the
   // backend's `[reason=...]`-tagged 409 message (FiscalDeclCrudHandler#rejectReactivationWithSibling)
   // and returns it as `result.reason`; `handleConfirmReactivate` branches on it for a more

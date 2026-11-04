@@ -1,8 +1,10 @@
+import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
+import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { FileCheck, Link2 } from 'lucide-react';
-import { useUI } from '@/i18n';
+import { useUI, useLabel } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { DistinctValuesFilter } from '@etendosoftware/app-shell-core/components/ui/distinct-values-filter.jsx';
 import { DataTable } from '@/components/contract-ui';
@@ -56,11 +58,35 @@ import { NotPostedRowActions } from './NotPostedRowActions';
  * Same pattern `windows/custom/calendar/PeriodsExpandablePanel.jsx` already uses for
  * document *categories* (its `MXI: 'calendarDocCategoryMatchInvoice'` entry).
  *
- * Add an entry only when a GO window's name genuinely diverges from core's translation —
- * anything absent here keeps the backend's label untouched.
+ * ETP-5591 (QA CP-1b): every code is listed now. Core's translations are inconsistent ("Factura
+ * (Cliente)" next to "Albarán (cliente)", "Cobros" next to "Pago", "Landed Cost" untranslated),
+ * so the page names all 23 types in the design's sentence case. A code core adds later and
+ * this map lacks keeps the backend's label.
  */
-const DOC_TYPE_LABEL_KEYS = {
+export const DOC_TYPE_LABEL_KEYS = {
+  A: 'docTypeAmortization',
+  BMP: 'docTypeBomProduction',
+  BS: 'docTypeBankStatement',
+  CA: 'docTypeCostAdjustment',
+  DD: 'docTypeDoubtfulDebt',
+  GLJ: 'docTypeGlJournal',
+  GR: 'docTypeGoodsReceipt',
+  GS: 'docTypeGoodsShipment',
+  IC: 'docTypeInternalConsumption',
+  INV: 'docTypeInventory',
+  LC: 'docTypeLandedCost',
+  LCC: 'docTypeLandedCostCost',
+  M: 'docTypeMovements',
   MI: 'docTypeMatchedInvoices',
+  PI: 'docTypePurchaseInvoice',
+  PIN: 'docTypePaymentIn',
+  POT: 'docTypePaymentOut',
+  R: 'docTypeReconciliation',
+  RMR: 'docTypeReturnMaterialReceipt',
+  RVS: 'docTypeReturnToVendorShipment',
+  SI: 'docTypeSalesInvoice',
+  T: 'docTypeTransaction',
+  WE: 'docTypeWorkEffort',
 };
 
 /**
@@ -85,6 +111,7 @@ const ICON_BUTTON_CLASS = 'h-10 w-10 flex items-center justify-center rounded-lg
 
 export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
   const ui = useUI();
+  const t = useLabel();
   const navigate = useNavigate();
   // apiBaseUrl already points to the spec (e.g. .../swebsf/not-posted-documents)
   const apiFetch = useApiFetch(apiBaseUrl);
@@ -230,17 +257,22 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
     sorted, sortKey, sortDirection, toggleSort, selectSort, clearSort, isDefaultSort,
   } = useClientSort(displayRows);
 
+  // ETP-5591 (QA): sized to fit a 1440px screen with the 260px row actions — the description
+  // takes what is left (`grow`, 320px floor) and the rest hold their longest value. With the
+  // default type widths the table needed 1468px and scrolled sideways on a 1440px screen.
   const columns = useMemo(() => [
     {
       key: 'documentTypeLabel',
       label: ui('documentType'),
       type: 'string',
+      minWidth: 208,
       render: (row) => <span className="font-semibold text-foreground">{row.documentTypeLabel}</span>,
     },
     {
       key: 'accountingStatusLabel',
       label: ui('statusLabel'),
       type: 'string',
+      minWidth: 184,
       render: (row) => (row.statusTone
         ? (
           <span data-testid={`npd-status-${row.documentId}`}>
@@ -249,12 +281,21 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
         )
         : null),
     },
-    { key: 'description', label: ui('description'), type: 'string' },
+    { key: 'description', label: ui('description'), type: 'string', grow: true },
     // `dot: false` — the date cell's due-date dot (red when past) means nothing for an
     // accounting date.
-    { key: 'accountingDate', label: ui('accountingDate'), type: 'date', dot: false },
-    { key: 'organization', label: ui('organization'), type: 'string' },
+    { key: 'accountingDate', label: ui('accountingDate'), type: 'date', dot: false, minWidth: 136 },
+    { key: 'organization', label: ui('organization'), type: 'string', minWidth: 176 },
   ], [ui]);
+
+  // Use the backing NEO entity, independently of the surrounding route or parent record.
+  const { gridView } = useFlaggedGridView({
+    spec: 'not-posted-documents',
+    entity: 'header',
+    columns,
+    data: sorted,
+    apiBaseUrl,
+  });
 
   // ── Posting ───────────────────────────────────────────────────────────────────
   const [posting, setPosting] = useState(() => new Set());
@@ -456,7 +497,6 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
           <DateRangePopover
             value={filters.date}
             onChange={(date) => updateFilters({ date })}
-            placeholder={ui('dateRangeAnyTime')}
             data-testid="DateRangePopover__npd" />
         </span>
         {!filtersAreDefault && (
@@ -482,6 +522,12 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
           onClear={clearSort}
           isDefaultSort={isDefaultSort}
           data-testid="ListSortPopover__npd" />
+        {gridView.enabled && <GridViewControls
+          gridView={gridView}
+          gridColumns={columns}
+          ui={ui}
+          t={t}
+          data-testid="GridViewControls__b28bb1" />}
         <RefreshButton onRefresh={reload} label={ui('refresh')} data-testid="RefreshButton__npd" />
       </div>
       {/* Refetches keep the current rows on screen under a progress bar; only the very first
@@ -493,6 +539,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
           the sticky hover-actions cell stays pinned to the right edge. */}
       <div className="flex-1 min-w-0 overflow-auto" data-testid="npd-table-scroll">
         <DataTable
+          gridView={gridView}
           columns={columns}
           data={sorted}
           loading={loading && !loaded}

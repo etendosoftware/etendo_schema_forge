@@ -1,3 +1,11 @@
+const gridBoundary = await vi.hoisted(async () => (await import('@/test/gridViewTestDoubles.jsx')).createGridBoundary());
+vi.mock('@/lib/flags', async () => (await import('@/test/gridViewTestDoubles.jsx')).gridFlagsMock(() => gridBoundary.enabled));
+vi.mock('@/hooks/useGridView.js', async () => (await import('@/test/gridViewTestDoubles.jsx')).gridViewHookMock(gridBoundary));
+vi.mock('@/components/contract-ui/GridViewControls.jsx', async () => (await import('@/test/gridViewTestDoubles.jsx')).gridViewControlsMock());
+import { resetGridBoundary } from '@/test/gridViewTestDoubles.jsx';
+
+beforeEach(() => resetGridBoundary(gridBoundary));
+
 // @covers tools/app-shell/src/windows/custom/organization/ActividadesIaeSection.jsx
 // @covers tools/app-shell/src/windows/custom/organization/useActividadesIae.js
 // Vitest component tests for ActividadesIaeSection — the "Actividades del IAE"
@@ -198,7 +206,7 @@ describe('ActividadesIaeSection — add row', () => {
     const [postUrl, postOpts] = methodCalls(fetchMock, 'POST')[0];
     expect(postUrl).toContain('/actividadesDelIae');
     expect(JSON.parse(postOpts.body)).toEqual({
-      epgrafeIAE: 'epgrafeIAE-new-id', epiaeType: null, epiaeCode: null, default: false, parentId: ORG_ID,
+      epgrafeIAE: 'epgrafeIAE-new-id', epiaeCode: null, default: false, parentId: ORG_ID,
     });
     // No single-default sweep for a non-default new row.
     expect(methodCalls(fetchMock, 'PATCH')).toHaveLength(0);
@@ -342,7 +350,7 @@ describe('ActividadesIaeSection — single-default rule persists via real PATCH'
 
     await waitFor(() => expect(methodCalls(fetchMock, 'POST')).toHaveLength(1));
     expect(JSON.parse(methodCalls(fetchMock, 'POST')[0][1].body)).toEqual({
-      epgrafeIAE: null, epiaeType: null, epiaeCode: null, default: true, parentId: ORG_ID,
+      epgrafeIAE: null, epiaeCode: null, default: true, parentId: ORG_ID,
     });
 
     await waitFor(() => expect(methodCalls(fetchMock, 'PATCH')).toHaveLength(1));
@@ -471,6 +479,75 @@ describe('ActividadesIaeSection — Modelo 390 cap (1 main + 5 others)', () => {
     expect(screen.getAllByTestId(/^ActividadesIaeSection__row-/)).toHaveLength(8);
     expect(screen.getByTestId('ActividadesIaeSection__overCapWarning')).toHaveTextContent('orgIaeOverCapWarning');
     expect(screen.getByTestId('ActividadesIaeSection__addButton')).toBeDisabled();
+  });
+});
+
+describe('ActividadesIaeSection personal columns', () => {
+  it('keeps inline selectors and the required default checkbox aligned in existing and new rows', async () => {
+    gridBoundary.enabled = true;
+    gridBoundary.active = true;
+    gridBoundary.keys = ['default', 'epgrafeIAE'];
+    gridBoundary.widths = { epgrafeIAE: 245 };
+    const fetchMock = makeFetchMock({ rows: [{ id: 'row-1', default: false, epgrafeIAE: 'e1', 'epgrafeIAE$_identifier': 'Epigraph 1' }] });
+    global.fetch = fetchMock;
+    render(<ActividadesIaeSection {...baseProps} />);
+    const row = await screen.findByTestId('ActividadesIaeSection__row-row-1');
+    const headers = screen.getAllByRole('columnheader');
+    expect(headers).toHaveLength(3);
+    expect(headers[0]).toHaveTextContent('orgIaeDefaultLabel');
+    expect(headers[1]).toHaveTextContent('orgIaeEpigraphLabel');
+    expect(headers[1]).toHaveStyle({ width: '245px' });
+    expect(row.children).toHaveLength(3);
+    expect(within(row.children[0]).getByRole('checkbox')).toBeInTheDocument();
+    expect(within(row).getByTestId('ActividadesIaeSection__delete').closest('td')).toBe(row.lastElementChild);
+    fireEvent.click(within(row).getByTestId('selector-epgrafeIAE'));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, options]) => options.method === 'PATCH'
+      && JSON.parse(options.body).epgrafeIAE === 'epgrafeIAE-new-id')).toBe(true));
+
+    fireEvent.click(screen.getByTestId('ActividadesIaeSection__addButton'));
+    const draft = screen.getByTestId('ActividadesIaeSection__addRow');
+    expect(draft.children).toHaveLength(3);
+    expect(within(draft.children[0]).getByRole('checkbox')).toBeInTheDocument();
+    fireEvent.click(within(draft).getByTestId('selector-epgrafeIAE'));
+    fireEvent.click(screen.getByTestId('ActividadesIaeSection__saveNew'));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, options]) => options.method === 'POST'
+      && JSON.parse(options.body).epgrafeIAE === 'epgrafeIAE-new-id')).toBe(true));
+    expect(gridBoundary.last).toMatchObject({ spec: 'organization', entity: 'actividadesDelIae', enabled: true });
+    expect(gridBoundary.last.columns.find(column => column.key === 'default').required).toBe(true);
+  });
+
+  // ETP-5831 CP-17 — three data columns (Epígrafe, Código, Principal): "Clave" is not offered.
+  it('keeps the three data columns when the personal view is unavailable', async () => {
+    gridBoundary.enabled = true;
+    gridBoundary.keys = ['default'];
+    global.fetch = makeFetchMock({ rows: [] });
+    render(<ActividadesIaeSection {...baseProps} />);
+    await screen.findByTestId('ActividadesIaeSection__empty');
+    expect(screen.getAllByRole('columnheader')).toHaveLength(4);
+    expect(screen.getByTestId('ActividadesIaeSection__empty')).toHaveAttribute('colspan', '4');
+  });
+
+  it('does not offer the "Clave" (IAE type) column, nor send it on create', async () => {
+    const rows = [{ id: 'row-1', default: true, epiaeCode: 'C1', epiaeType: 't1', 'epiaeType$_identifier': 'Type 1' }];
+    const fetchMock = makeFetchMock({ rows });
+    global.fetch = fetchMock;
+    render(<ActividadesIaeSection {...baseProps} />);
+    const row = await screen.findByTestId('ActividadesIaeSection__row-row-1');
+
+    expect(screen.getAllByRole('columnheader').map(header => header.textContent)).not.toContain('Clave');
+    expect(screen.getAllByRole('columnheader')).toHaveLength(4);
+    expect(within(row).queryByTestId('selector-epiaeType')).not.toBeInTheDocument();
+    expect(gridBoundary.last.columns.map(column => column.key)).toEqual(['epgrafeIAE', 'epiaeCode', 'default']);
+
+    fireEvent.click(screen.getByTestId('ActividadesIaeSection__addButton'));
+    const addRow = await screen.findByTestId('ActividadesIaeSection__addRow');
+    expect(within(addRow).queryByTestId('selector-epiaeType')).not.toBeInTheDocument();
+    fetchMock.mockClear();
+    fireEvent.click(within(addRow).getByTestId('ActividadesIaeSection__saveNew'));
+    await waitFor(() => expect(methodCalls(fetchMock, 'POST')).toHaveLength(1));
+    expect(JSON.parse(methodCalls(fetchMock, 'POST')[0][1].body)).not.toHaveProperty('epiaeType');
+    // The existing row's value is never touched.
+    expect(methodCalls(fetchMock, 'PATCH').some(([, opts]) => 'epiaeType' in JSON.parse(opts.body))).toBe(false);
   });
 });
 

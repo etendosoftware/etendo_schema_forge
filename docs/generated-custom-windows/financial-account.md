@@ -1574,7 +1574,7 @@ index.jsx                          — receives { recordId }, sets page meta, mo
 |-----------|------|-------|
 | `Tabs` / `TabsList` / `TabsTrigger` / `TabsContent` | `components/ui/tabs.jsx` | Manual implementation (no Radix react-tabs). Underline-style active indicator in `#121217`. Accepts `icon` and `badge` on `TabsTrigger`. Context value memoized via `useMemo`. |
 | `MoneyAmount` | `components/ui/money-amount.jsx` | Props: `value`, `currency`, `tone` (`auto`/`positive`/`negative`/`neutral`), `compact`. Locale: `es-ES`. `tone='auto'` colors positive green (`#1E874C`), negative red (`#D50B3E`), zero neutral. Sign prefix `+`/`-` applied automatically. |
-| `DateRangePopover` / `DateRangePopoverContent` | `components/ui/date-range-popover.jsx` | Canonical date range picker — same UX as the grid views (Sales Order, etc.). Presets list (Hoy / Ayer / Últimos 7/30 días / Últimos 12 meses / Todo el tiempo / Personalizado) + dual-month calendar with year selector. Value shape: `null \| { presetId } \| { from, to }`. `DateRangePopoverContent` is the inner panel — use it when you need a custom trigger button (as `ListFilterBar.jsx` does). **`placeholder` must be the "no constraint" label** (`ui('dateRangeAnyTime')` — "Cualquier fecha"), never the name of a preset: "Todo el tiempo" is encoded as `value === null`, indistinguishable from "nothing chosen", so `computeTriggerLabel` falls through to `placeholder`. Conciliación used to pass `ui('financeReconcileFilterDate')`, whose literal value is "Últimos 12 meses", so picking "Todo el tiempo" applied the wider filter but left the button still reading "Últimos 12 meses" (ETP-4956). The default label still comes from the initial `{ presetId: 'last12m' }` state, not from the placeholder. |
+| `DateRangePopover` / `DateRangePopoverContent` | `components/ui/date-range-popover.jsx` | Canonical date range picker — same UX as the grid views (Sales Order, etc.). Presets list (Hoy / Ayer / Últimos 7/30 días / Últimos 12 meses / Todo el tiempo / Personalizado) (opt-in `extraPresets={['last3m','last6m']}` adds Últimos 3 / 6 meses before Últimos 12 meses; used only by the Product Movements tab) + dual-month calendar with year selector. Value shape: `null \| { presetId } \| { from, to }`. `DateRangePopoverContent` is the inner panel — use it when you need a custom trigger button (as `ListFilterBar.jsx` does). **`placeholder` must be the "no constraint" label** (`ui('dateRangeAnyTime')` — "Cualquier fecha"), never the name of a preset: "Todo el tiempo" is encoded as `value === null`, indistinguishable from "nothing chosen", so `computeTriggerLabel` falls through to `placeholder`. Conciliación used to pass `ui('financeReconcileFilterDate')`, whose literal value is "Últimos 12 meses", so picking "Todo el tiempo" applied the wider filter but left the button still reading "Últimos 12 meses" (ETP-4956). The default label still comes from the initial `{ presetId: 'last12m' }` state, not from the placeholder. |
 | `DistinctValuesFilter` | `components/ui/distinct-values-filter.jsx` | Reusable Popover-wrapped `DistinctValuesList` for in-memory fixed code lists (no backend pagination). Used by `StatusFilter` and `TypeFilter`. |
 | `ProgressRing` | `components/ui/progress-ring.jsx` | SVG circular progress ring. Props: `value` (0–100), `size` (default 32), `strokeWidth` (default 3). Track is `#E8EAEF`, fill is `#26A95F`. |
 
@@ -3755,6 +3755,7 @@ A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO
 - Movements (`MovementsTable.jsx`): the posting dot under the type and the "Contabilizado" half of the "Tipo & Contabilizado" header are hidden, and the "Ordenar por" popover loses the entry (`buildMovementSortColumns(ui, capabilities)`). The movement kebab (`MovementRowKebab.jsx`) hides Contabilizar / Descontabilizar, and no stray separator is left above Eliminar.
 - Reconciliations: `decisions.json → entities.reconciliations.fields.posted` carries the gate; `getContractGridColumns` forwards it, so `ReconciliationListTable.jsx` drops the column, its cells and its sort entry, and the advanced filter (`buildReconciliationFilterColumns(ui, capabilities)`) drops the field. `entities.transaction.fields.posted` carries it too.
 - The reconciled-transactions modal (`ReconciledTxnsModal.jsx`) hides the posting dot.
+- The bulk-posting module's `etblkpAccountingstatus` ("Estado contable") form field of `transaction` and `importedBankStatements` carries the gate too (QA pass 1, CP-8): the generator writes it on the form line and `EntityForm` hides it at render time.
 - Kept on purpose: the Reactivar / Eliminar confirmation dialogs still say the accounting entry will be removed (a consequence of an action the user may take).
 
 Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
@@ -3768,3 +3769,50 @@ A refusal because the document's date has no open accounting period (`PeriodNotA
 Saving an account field of the Accounting tab now refuses a summary (heading) account, an inactive account or combination, and an account of another accounting schema than the row's; on update the row's accounting schema cannot change. The account selectors already hide those accounts (ETP-5681), so in the UI this only shows up in a race, as a translated toast (`backendError.accountIsSummary` / `accountIsInactive` / `accountWrongLedger` / `ledgerNotUpdatable`); REST and MCP callers get a 400 whose text names the field and the account. A value already stored is not re-checked, so existing rows stay saveable. Backend: `PostingAccountGuard` via `FinancialAccountAccountingHandler` (now rolled back on refusal, including a row it had just created) (`com.etendoerp.go`, see `neo-headless.md`).
 
 Error display: `EditAccountModal` now passes the response's `messageKeys` / `messageParams` to `translateBackendError`, so every keyed backend refusal of this window is shown in the UI locale.
+
+## Personal account-grid views
+
+The account list is audited as the standard DataTable surface behind the exact
+`AccountsHeaderTable` contract slot. Under the shared `grid-column-views` flag
+(enabled by default), personal-view controls are reachable and use the existing
+visibility/order/width persistence contract. Existing column protection still
+applies: account columns carrying `headClass`/`cellClass` remain locked against
+hiding, resizing and reordering by useGridView; admitting the entry point does not
+remove those restrictions. Because this window hides ListView's
+normal toolbar and owns its scrolling, ListView places Columns and Save view in a
+separate region above the grid. The custom account toolbar, selection, row actions
+and scroll ownership retain their existing behavior. Unknown replacement header
+tables fail closed until audited. Automated execution and QA for this integration
+remain pending.
+
+### Reconciliation workspace personal column views
+
+Under `GRID_COLUMN_VIEWS`, both tables in `ReconciliationSplitPanel` offer the
+existing Columns and Save view controls. `ReconciliationTab` remains the same thin
+caller. Statement lines use `financial-account/bankStatementLines`; candidate rows
+use `financial-account/transaction` for movements or `sales-invoice/paymentPlan` /
+`purchase-invoice/paymentPlan` for invoice installments. The action endpoint
+`bank-reconciliation` is not used as a row entity.
+
+Scope resolution follows the actual candidate rows rather than assuming the source
+filter describes every row. Invoice candidates must carry `kind: 'invoice'`,
+`id === scheduleId`, and a boolean `isReceipt` selecting sales or purchase. Backend
+`ReconciliationHandler` emits statement-line IDs from `FIN_BankStatementLine`,
+movement IDs from `FIN_Finacc_Transaction`, and invoice-candidate IDs from
+`FIN_Payment_Schedule`; both invoice contracts declare the latter as `paymentPlan`.
+Mixed or unverifiable scopes keep the original candidate table without requesting
+preferences. Admitting them requires a homogeneous verifiable backend identity or
+an explicitly supported heterogeneous scope contract. Missing invoice-window access
+can cause a preference-load error; the original grid remains usable.
+
+Selection cells stay fixed and visible; in reconciled mode the amount/unlink cell
+is also locked. Matching, sorting, totals, selection, expansion, actions, and
+read-only write guards keep their existing behavior. Partial-match flex cards are
+unchanged. Views share the existing user/spec/entity persistence with other
+projections: saving a projection does not retain settings for absent columns.
+
+The full app-shell `npm run test:all` suite passed, including these reconciliation cases, and
+`npm run build` passed. Browser smoke covered Sales Order only, not financial-account grids;
+authenticated preference persistence and human QA remain pending. See the
+[`financial-account README`](../../tools/app-shell/src/windows/custom/financial-account/README.md)
+for the full inventory and fallback rules.

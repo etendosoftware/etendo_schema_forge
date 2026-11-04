@@ -1,6 +1,6 @@
 // @covers artifacts/internal-consumption/decisions.json
 // @covers tools/app-shell/src/components/contract-ui/ProductStockSearchDrawer.jsx
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 
 /**
@@ -152,12 +152,13 @@ test.describe('Internal Consumption — inline line entry (mocked)', () => {
     // 5. The product group renders with its (only) location row already visible.
     //    Clicking the product-row button just toggles the group open/closed —
     //    it does NOT fire onSelect. The LOCATION row ("Main Warehouse 100 ud")
-    //    is what calls onSelect and triggers the auto-close + mapping.
+    //    is what calls onSelect and triggers the auto-close + mapping. It is a
+    //    listbox option (ETP-5948: aria-selected marks the saved location).
     //
     //    Ensure the group is expanded (the product button toggles it; if the
     //    location row is already visible the click would collapse it, so we
     //    only click it when the location row is not yet visible).
-    const locationRow = drawer.getByRole('button', { name: /Main Warehouse\s+100/i });
+    const locationRow = drawer.getByRole('option', { name: /Main Warehouse\s+100/i });
     if (!(await locationRow.isVisible().catch(() => false))) {
       await drawer.getByRole('button', { name: /Widget Co\. 10mm/i }).first().click();
     }

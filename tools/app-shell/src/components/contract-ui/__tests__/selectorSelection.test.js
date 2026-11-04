@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import {
   LOCATE_SELECTION_MAX_PAGES, resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor,
   hasCommittedValue,
-  shouldKeepLocating, centerOptionInPanel,
+  shouldKeepLocating, centerOptionInPanel, committedItemFromRow, pinSearchTerms,
 } from '../selectorSelection.js';
 
 const ROWS = [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }];
@@ -102,4 +102,38 @@ test('centerOptionInPanel reports whether the option could be centred', () => {
 test('centerOptionInPanel is a no-op without a panel or an option', () => {
   assert.doesNotThrow(() => centerOptionInPanel(null, fakeBox(0, 10)));
   assert.doesNotThrow(() => centerOptionInPanel(fakeBox(0, 10), null));
+});
+
+// ETP-5948 — the reverse of onSelectMappings: the stock drawer recognises its committed row by the
+// locator the selection mapped onto the line.
+test('committedItemFromRow writes each mapped target back at its source path', () => {
+  const field = { onSelectMappings: [
+    { from: '_aux._LOC', to: 'storageBin' },
+    { from: 'uOM', to: 'uom' },
+    { value: '0', to: 'movementQuantity' },
+  ] };
+  const row = { storageBin: 'LOC-1', uom: 'EA', movementQuantity: 5 };
+  assert.deepEqual(committedItemFromRow(field, row, 'P1'), { id: 'P1', _aux: { _LOC: 'LOC-1' }, uOM: 'EA' });
+});
+
+test('committedItemFromRow skips empty targets and works without mappings', () => {
+  const field = { onSelectMappings: [{ from: '_aux._LOC', to: 'storageBin' }] };
+  assert.deepEqual(committedItemFromRow(field, { storageBin: null }, 'P1'), { id: 'P1' });
+  assert.deepEqual(committedItemFromRow({}, {}, 'P1'), { id: 'P1' });
+});
+
+test('committedItemFromRow is null without a committed value', () => {
+  assert.equal(committedItemFromRow({ onSelectMappings: [] }, {}, ''), null);
+  assert.equal(committedItemFromRow({ onSelectMappings: [] }, {}, null), null);
+});
+
+test('pinSearchTerms tries the full label, then each " - " segment, capped', () => {
+  assert.deepEqual(pinSearchTerms('60000000 - Compras de mercaderías'),
+    ['60000000 - Compras de mercaderías', '60000000', 'Compras de mercaderías']);
+  assert.deepEqual(pinSearchTerms('21% - Entregas IVA 21% - IVA Normal'),
+    ['21% - Entregas IVA 21% - IVA Normal', '21%', 'Entregas IVA 21%', 'IVA Normal']);
+  assert.deepEqual(pinSearchTerms('A - B - C - D'), ['A - B - C - D', 'A', 'B', 'C']);
+  assert.deepEqual(pinSearchTerms('TestProduct'), ['TestProduct']);
+  assert.deepEqual(pinSearchTerms(''), []);
+  assert.deepEqual(pinSearchTerms(null), []);
 });

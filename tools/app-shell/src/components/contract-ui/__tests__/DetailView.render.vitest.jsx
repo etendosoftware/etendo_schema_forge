@@ -2367,23 +2367,23 @@ describe('applyCalloutComboUpdates', () => {
     const hook = { handleChange: vi.fn() };
     const ctx = { data: {}, triggerField: 'bp', userTouchedRef: { current: new Set() }, appliedFields: new Map(), hook };
     applyCalloutComboUpdates({ region: { selected: 'R1', _identifier: 'Region 1', entries: [] } }, ctx);
-    expect(hook.handleChange).toHaveBeenCalledWith('region', 'R1');
-    expect(hook.handleChange).toHaveBeenCalledWith('region$_identifier', 'Region 1');
+    expect(hook.handleChange).toHaveBeenCalledWith('region', 'R1', { origin: 'callout' });
+    expect(hook.handleChange).toHaveBeenCalledWith('region$_identifier', 'Region 1', { origin: 'callout' });
   });
 
   it('auto-selects first entry when selected is null', () => {
     const hook = { handleChange: vi.fn() };
     const ctx = { data: {}, triggerField: 'bp', userTouchedRef: { current: new Set() }, appliedFields: new Map(), hook };
     applyCalloutComboUpdates({ addr: { selected: null, entries: [{ id: 'A1', identifier: 'Address 1' }] } }, ctx);
-    expect(hook.handleChange).toHaveBeenCalledWith('addr', 'A1');
-    expect(hook.handleChange).toHaveBeenCalledWith('addr$_identifier', 'Address 1');
+    expect(hook.handleChange).toHaveBeenCalledWith('addr', 'A1', { origin: 'callout' });
+    expect(hook.handleChange).toHaveBeenCalledWith('addr$_identifier', 'Address 1', { origin: 'callout' });
   });
 
   it('auto-selects first entry using _identifier fallback', () => {
     const hook = { handleChange: vi.fn() };
     const ctx = { data: {}, triggerField: 'bp', userTouchedRef: { current: new Set() }, appliedFields: new Map(), hook };
     applyCalloutComboUpdates({ addr: { selected: null, entries: [{ id: 'A1', _identifier: 'Alt Label' }] } }, ctx);
-    expect(hook.handleChange).toHaveBeenCalledWith('addr$_identifier', 'Alt Label');
+    expect(hook.handleChange).toHaveBeenCalledWith('addr$_identifier', 'Alt Label', { origin: 'callout' });
   });
 
   it('skips when entries is empty and selected is null', () => {
@@ -2406,7 +2406,7 @@ describe('applyCalloutComboUpdates', () => {
     const ctx = { data: {}, triggerField: 'bp', userTouchedRef: { current: new Set() }, appliedFields: new Map(), hook };
     applyCalloutComboUpdates({ region: { selected: 'R1', _identifier: '', entries: [] } }, ctx);
     expect(hook.handleChange).toHaveBeenCalledTimes(1);
-    expect(hook.handleChange).toHaveBeenCalledWith('region', 'R1');
+    expect(hook.handleChange).toHaveBeenCalledWith('region', 'R1', { origin: 'callout' });
   });
 });
 

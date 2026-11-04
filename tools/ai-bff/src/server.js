@@ -80,7 +80,8 @@ function sessionCookieOnly(cookieHeader) {
 }
 
 /**
- * Build the headers that carry the caller's credential through to Etendo Go's MCP endpoint.
+ * Build the headers that carry the caller's credential through to Etendo Go: the MCP endpoint and
+ * the usage endpoint (`/sws/neo/usage`) both receive exactly these, under either scheme.
  *
  * `Origin` (and `Referer` behind it) is the one that is easy to drop and expensive to debug:
  * `GoSessionSecurity.isOriginAllowed()` fails closed on unsafe methods, so a cookie session
@@ -89,7 +90,7 @@ function sessionCookieOnly(cookieHeader) {
  * Both are forwarded verbatim rather than reconstructed, because the backend compares the
  * origin exactly and derives its own fallback from `Referer`.
  */
-function mcpAuthHeaders({ authorization, cookie, csrfToken, origin, referer } = {}) {
+export function credentialHeaders({ authorization, cookie, csrfToken, origin, referer } = {}) {
   const headers = {};
   if (authorization) headers.Authorization = authorization;
   if (cookie) headers.Cookie = cookie;
@@ -104,7 +105,7 @@ export function mcpClientOptions(credentials) {
     transport: {
       type: 'http',
       url: mcpUrl,
-      headers: mcpAuthHeaders(credentials),
+      headers: credentialHeaders(credentials),
     },
     // Etendo Go currently implements the legacy initialize handshake, not
     // the optional stateless server/discover probe from newer MCP clients.
@@ -124,6 +125,9 @@ export function opencodeProviderOptions(sessionId) {
     baseURL: process.env.OPENCODE_BASE_URL || 'https://opencode.ai/zen/go/v1',
     apiKey: process.env.OPENCODE_API_KEY,
     headers: { 'x-opencode-session': sessionId },
+    // Sends `stream_options.include_usage`. Without it LiteLLM (llm.etendo.software) streams
+    // no usage at all, so every turn was recorded with 0 tokens and no cost (src/usage.js).
+    includeUsage: true,
   };
 }
 
@@ -267,7 +271,7 @@ export async function handleChat(req, res) {
   const cacheKey = !isPageHelpRequest && req.headers['x-opencode-session'] === opencodeSession ? opencodeSession : undefined;
   const usage = createTurnRecorder({
     url: usageEndpoint(mcpUrl),
-    authorization: credentials.authorization,
+    headers: credentialHeaders(credentials),
     sessionKey: opencodeSession,
     target: isPageHelpRequest ? 'page-help' : 'agent-chat',
     modelId,

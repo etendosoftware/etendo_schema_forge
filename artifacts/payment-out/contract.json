@@ -1,8 +1,8 @@
 {
-  "version": "0.16.0",
+  "version": "0.17.0",
   "generatedAt": "2026-04-29T18:11:46.137Z",
-  "updatedAt": "2026-10-22T17:16:47.922Z",
-  "checksum": "549aca6721562fbf",
+  "updatedAt": "2026-10-29T13:31:33.672Z",
+  "checksum": "b8ae621dd1afa341",
   "frontendContract": {
     "window": {
       "id": "6F8F913FA60F4CBD93DC1D3AA696E76E",
@@ -1041,6 +1041,7 @@
               }
             ],
             "defaultValue": "N",
+            "visibleWhenCapability": "showAccountingFields",
             "validation": {
               "required": true,
               "maxLength": 60

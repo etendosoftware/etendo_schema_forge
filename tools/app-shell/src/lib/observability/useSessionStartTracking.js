@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
+import { setContext } from '../observability.js';
 import { trackSessionStarted } from './health-events.js';
+import { resolveRoleGroups } from './roleGroups.js';
 
 /**
  * Fires `session_started` once per authenticated app-shell mount (ETP-4210).
@@ -13,10 +15,25 @@ import { trackSessionStarted } from './health-events.js';
  * to react to `authRevision`, which also bumps on role/org switches, or to `token`,
  * which changes on every silent JWT refresh — either would over-fire relative to
  * "the user opened the app this session".
+ *
+ * ETP-6043 — it also keeps `role_groups` in the common event context, following the
+ * active role. That effect is declared first on purpose: React runs a component's
+ * effects in declaration order and `setContext` updates the context synchronously
+ * before its first await, so `session_started` already carries the groups.
  */
 export function useSessionStartTracking() {
-  const { username, clientId } = useAuth();
+  const { username, clientId, selectedRole } = useAuth();
   const fired = useRef(false);
+  const roleGroups = resolveRoleGroups(selectedRole);
+  // A silent refresh hands back an equal role in a new object; only a real change re-sets it.
+  const roleGroupsKey = roleGroups?.join(',');
+
+  useEffect(() => {
+    void setContext({ role_groups: roleGroupsKey ? roleGroupsKey.split(',') : undefined }); // NOSONAR -- fire-and-forget, same as trackSessionStarted below.
+    return () => {
+      void setContext({ role_groups: undefined }); // NOSONAR -- a signed-out page must not keep the last role.
+    };
+  }, [roleGroupsKey]);
 
   useEffect(() => {
     if (fired.current) return;

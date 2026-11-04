@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { FilePlus } from 'lucide-react';
 import { useUI } from '@/i18n';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import { translateBackendError, translateQuotaRefusalBody } from '@/lib/backendErrors.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
@@ -294,7 +294,9 @@ export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, 
       );
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        throw new Error(err?.response?.message || err?.message || `Failed (${res.status})`);
+        // ETP-5051 — a plan-quota refusal reads as the translated quota sentence.
+        throw new Error(translateQuotaRefusalBody(err, ui)
+          || err?.response?.message || err?.message || `Failed (${res.status})`);
       }
       const json = await res.json();
       setShowModal(false);

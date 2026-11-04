@@ -1,5 +1,19 @@
 # Calendar
 
+## Personal secondary-grid views
+
+With `GRID_COLUMN_VIEWS` enabled, the Accounting and Periods secondary panels expose the
+existing column visibility/order/width controls and explicit personal-view save action.
+The fiscal-year list also supplies local controls for `fiscal-calendar/year` when its parent
+does not supply a controller; an inherited controller retains ownership even while loading.
+Their scopes are `end-year-close/accounting` and
+`open-close-period-control/periodControl`, respectively; changing the selected fiscal year
+changes the rows, not the saved-view identity. The combined `/calendar` route is not a NEO
+spec. Loading/error/empty states, period selection, read-only restrictions, confirmation and
+bulk open/close actions retain their existing behavior. See the
+[standalone DataTable inventory](../standalone-datatable-grid-views.md) for scope constraints
+and the pending validation status.
+
 ## Intent
 Unifies **Fiscal Calendar** and **Periods** (`open-close-period-control`) — previously two
 separate windows connected only by a "Go to Fiscal Calendar" cross-navigation modal (ETP-4452
@@ -719,3 +733,11 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
 ## Read-only role tier: Períodos tab — ETP-5830
 
 With a `read-only` tier, `PeriodsExpandablePanel` (reached through `SecondaryPanelTab`, which now forwards `readOnly`) renders no checkboxes and no row links. The Accounting tab has no writes. Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.
+
+## Agent prompt on fiscal-calendar/year — ETP-5852
+
+`fiscal-calendar` `entities.year.agentPrompt` sends an agent that wants to know whether a date is in an open period to `open-close-period-control/periodControl` filtered by `startingDate`/`endingDate`, instead of walking calendar → year → period. Feedback M-43.
+
+## Fiscal years across calendars for agents — ETP-6036
+
+`fiscal-calendar/year` is a child of `calendar`, and `calendar` is excluded from the spec, so an agent had no parent id to pass and `etendo_list` on `year` always answered `parent_required` (pre-ticket etendo-ai#50). The `year` entity now carries `MCP_CONFIG.parent.allParents` (com.etendoerp.go `ETGO_SF_ENTITY`, MCP only; the UI is unchanged): `etendo_list(spec:"fiscal-calendar", entity:"year", allParents:true)` lists the years of every calendar of the client, each row naming its `calendar`. Without `allParents` the call still answers `parent_required`, now with a hint that names `allParents`.

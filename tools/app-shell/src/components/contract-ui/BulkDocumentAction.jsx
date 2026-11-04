@@ -8,7 +8,6 @@ import { useUI } from '@/i18n';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
 import { showBulkActionToast, persistBulkActionResult } from '@/hooks/useBulkActionToast';
-import { runPreUnpost, preUnpostErrorIdentity } from '@/lib/preUnpost.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { filterPostingActions } from '@/lib/capabilityVisibility.js';
@@ -93,13 +92,6 @@ export default function BulkDocumentAction({
   rowFilter,
   labelKey = 'bulkCompletion',
   actionMode = 'documentAction',
-  // ETP-5302 — document actions that must reverse the accounting of an already-posted
-  // record before they run, mirroring the `preUnpost: true` flag those same actions carry
-  // in `decisions.json` for the detail kebab. Opt-in per window rather than applied to
-  // every 'RE': an order's PL/SQL has no posted-state guard at all (C_ORDER_POST1), so
-  // unposting there would be a gratuitous accounting reversal, while an invoice's does
-  // block RE while Posted='Y' (C_INVOICE_POST) — which is exactly the bug this closes.
-  preUnpostActions = [],
   // ETP-5414 — row identifier used to label a row in the ok/omitted/failed toast.
   // Defaults to the DocAction-window convention (`documentNo`, falling back to `id`).
   // A window with no `documentNo` at all (e.g. amortization, whose readable identifier
@@ -214,23 +206,9 @@ export default function BulkDocumentAction({
     // one (its third parameter is an unrelated `{ onSuccess, onError }` options bag).
     const wireActionBody = actionMode === 'neoAction' ? selectedActionDef?.neoActionBody : undefined;
 
-    // ETP-5302 — each row runs the same two-step sequence the detail kebab runs for an
-    // action flagged `preUnpost`: reverse the accounting first, then the document action.
-    // Without this the bulk bar sent a bare `docAction: 'RE'` for a posted invoice and
-    // Core's C_INVOICE_POST rejected it with "Factura contabilizada", so reactivating from
-    // the list failed while reactivating the very same invoice from its form succeeded.
-    // A failed unpost aborts that row (never reactivate a document still carrying its
-    // accounting entries) and is reported as the row's failure message, like any other.
+    // ETP-5684 — reactivating a posted invoice or amortization un-posts it on the server,
+    // inside the reactivation, so a row sends only its own action.
     const runRow = async (row) => {
-      const pre = await runPreUnpost({
-        recordId: row.id,
-        record: row,
-        enabled: preUnpostActions.includes(selectedAction),
-        execute: neoAction.execute,
-      });
-      if (!pre.success) {
-        throw new Error(translateBackendError(pre.message, ui, preUnpostErrorIdentity(pre)) || ui('actionFailed'));
-      }
       // Arity kept at two when there is no body, so every existing call is unchanged.
       await (wireActionBody === undefined
         ? execute(row.id, wireActionName)

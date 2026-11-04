@@ -12,6 +12,15 @@ import { SAFE_EVENT_PROPERTY_KEYS } from '../payload.js';
  * token, site and environment the deploy workflow injects. The SDK is only downloaded when it is
  * enabled and not killed (`telemetry-kill-datadog`).
  */
+/**
+ * ETP-5351 — RUM global-context key that marks a support session ("Soporte Etendo" inside a
+ * customer's tenant). Product events never reach Datadog there (see ../core.js); the automatic
+ * click actions cannot be cut without turning `trackUserInteractions` off for everybody, so every
+ * event of the session carries this marker instead. It is a boolean in the payload allowlist, and
+ * a trusted key because its name contains `session` (the sanitizer would redact it otherwise).
+ */
+export const SUPPORT_SESSION_CONTEXT_KEY = 'support_session';
+
 export function createDatadogProvider({
   env = import.meta.env,
   logger = console,
@@ -33,6 +42,7 @@ export function createDatadogProvider({
     traceSampleRate: resolvedEnv.VITE_DATADOG_TRACE_SAMPLE_RATE,
     remoteConfigurationId: resolvedEnv.VITE_DATADOG_REMOTE_CONFIGURATION_ID || undefined,
     allowedKeys: SAFE_EVENT_PROPERTY_KEYS,
+    trustedKeys: [SUPPORT_SESSION_CONTEXT_KEY],
     logger,
   });
 }

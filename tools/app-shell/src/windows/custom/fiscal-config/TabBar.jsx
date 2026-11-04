@@ -1,6 +1,9 @@
-export default function TabBar({ tabs, active, onChange }) {
+// `className` sets the wrapper's spacing: full-width bars (the default) carry the page's own
+// `px-6 py-3`; a bar placed inside an already padded column (FiscalConfigPage's form column,
+// ETP-5831) passes its own.
+export default function TabBar({ tabs, active, onChange, className = 'px-6 py-3' }) {
   return (
-    <div className="flex px-6 py-3">
+    <div className={`flex ${className}`}>
       <div className="inline-flex gap-1 p-1 rounded-xl" style={{ background: 'hsl(var(--muted))' }}>
         {tabs.map((tab, i) => (
           <button

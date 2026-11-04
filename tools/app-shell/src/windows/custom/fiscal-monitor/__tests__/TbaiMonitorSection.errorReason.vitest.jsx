@@ -1,7 +1,9 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-monitor/TbaiMonitorSection.jsx
 // Vitest render tests for the TBAI error-reason join (resultadoValidación → sincronización
 // by tbaiSyncinvoiceID). Isolated from TbaiMonitorSection.vitest.jsx because that file mocks
 // isErrorStatus to always return false; here we need real error-status matching (so
 // FmPrimitives.jsx is NOT mocked — ScrollSentinel needs a jsdom IntersectionObserver stub).
+import { allIconsAs } from '@/test/lucideIconMock.js';
 global.IntersectionObserver = class {
   observe() {}
   unobserve() {}
@@ -9,12 +11,9 @@ global.IntersectionObserver = class {
 };
 
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
-vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => vi.fn() }));
+vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => vi.fn().mockResolvedValue({ ok: true, status: 204 }) }));
 vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u }));
-vi.mock('lucide-react', () => ({
-  ArrowUpRight: () => null,
-  TriangleAlert: () => null,
-}));
+vi.mock('lucide-react', async (importOriginal) => allIconsAs(() => null, importOriginal));
 vi.mock('@/components/ui/checkbox', () => ({
   Checkbox: ({ checked, onChange }) => <input type="checkbox" checked={!!checked} onChange={onChange ?? (() => {})} />,
 }));

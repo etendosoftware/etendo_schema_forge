@@ -18,6 +18,42 @@ tools/app-shell/src/windows/custom/{window}/ (your hand-written components)
 - Add/change a key in `decisions.json` and re-run the generator, or
 - Write/update a component in `windows/custom/{window}/` that the generator already imports via a config key.
 
+### Personal business-grid views
+
+`GRID_COLUMN_VIEWS` (`grid-column-views`) gates the existing `useGridView` and
+`GridViewControls` integration. Its shipped default is false (it ships dark); an explicit remote
+provider value of true (or a deterministic local override) enables it. A view belongs to the authenticated user and a verified
+configured spec/entity, never to a display name, selected parent record, or invented
+endpoint alias. Saving column visibility, order and widths is explicit; sorting,
+filters, selection, expansion, drafts and business actions stay with their original
+controllers.
+
+Coverage spans audited standard `ListView` entry points and their forwarding
+DataTable adapters, `ListModalWindow` with a validated scope, `InlineLinesPanel`
+using `DetailView`'s spec/entity context, migrated bespoke business grids, the
+financial-account custom grids and reconciliation workspace, and independent
+Calendar / Not Posted Documents DataTable surfaces. A direct DataTable consumer
+does not acquire a controller automatically. An existing parent controller keeps
+ownership, including while its preference request is pending. Inline add-row forms
+temporarily keep the default line layout and disabled controls for alignment.
+
+Structural selection, expansion, hierarchy and action slots remain protected;
+saved preferences cannot override runtime-hidden columns or break grouped/nested
+layouts. Inactive, failed or invalid-scope views keep their original usable grid.
+Reconciliation candidates are eligible only for a homogeneous verified movement
+or sales/purchase installment scope. `AttachmentsTable` remains unchanged: its
+table/record attachment endpoint has no configured attachment entity or
+collision-free personal-view surface contract. Reusing its document header scope
+would overwrite the document list's view.
+
+The [bespoke inventory](bespoke-grid-views.md),
+[standalone DataTable inventory](standalone-datatable-grid-views.md), and
+[financial-account inventory](../tools/app-shell/src/windows/custom/financial-account/README.md)
+record actual scopes and remaining blockers. Neither an unaudited custom layout
+nor an aggregate/action projection is eligible solely because it renders a table.
+Tests were authored; no checks were run at the user's request, and runtime QA
+remains pending.
+
 ### Gotcha — a hand-rolled `index.jsx` prop can silently shadow `decisions.json` (ETP-4839)
 
 Some windows have a hand-written `windows/custom/{window}/index.jsx` wrapper (not the pipeline-window
@@ -82,7 +118,7 @@ Overrides win over the type: `col.minWidth` (decisions `columnWidth`; elastic by
 
 **Date with time — documented exception.** There is no `datetime` tier: no list or lines column carries one today (the only `datetime` fields in the contracts are the hidden `created`/`updated` audit columns; the generator maps a visible datetime to `string`, and a `date` column renders date-only). When a datetime column is ever exposed, add its tier together with its renderer (and the generator mapping in `schema_forge_core`).
 
-**Surfaces covered:** the standard list (`ListView` → `DataTable`) and the standard lines grid (`InlineLinesPanel` + the `DataTable` add-row row). **Explicit overrides inventoried** (they keep their own width, unchanged): decisions `columnWidth` in `contacts` (4), `goods-movements`, `internal-consumption`, `physical-inventory` (3), `manual-journals`; custom `minWidth` in `components/attachments/AttachmentsTable.jsx` (both dates, 130 + `headerWrap` — narrow side panel), `financial-account/custom/AccountsHeaderTable.jsx` and `sales-invoice/custom/InvoiceHeaderTable.jsx`. **Excluded (bespoke tables, not adapted):** `windows/custom/{amortization,assets,calendar}`, `ReconciliationSplitPanel`, `CreateReturnWizard`, `ListModalWindow`, `OcrLinesReviewModal`, `ReportDrawer`, `AccountTreeView`, and the settings pages (`RolesAccessMatrix`, `ApiKeysPage`, …). No new view persistence or user resizing is part of this; the defaults are the fallback when one is added. Regeneration-safe: the behaviour lives in the shared lib, never in generated output.
+**Surfaces covered:** the standard list (`ListView` → `DataTable`) and the standard lines grid (`InlineLinesPanel` + the `DataTable` add-row row). **Explicit overrides inventoried** (they keep their own width, unchanged): decisions `columnWidth` in `contacts` (4), `goods-movements`, `internal-consumption`, `physical-inventory` (3), `manual-journals`; custom `minWidth` in `components/attachments/AttachmentsTable.jsx` (both dates, 130 + `headerWrap` — narrow side panel), `financial-account/custom/AccountsHeaderTable.jsx` and `sales-invoice/custom/InvoiceHeaderTable.jsx`. **Excluded (bespoke tables, not adapted):** `windows/custom/{amortization,assets,calendar}`, `ReconciliationSplitPanel`, `CreateReturnWizard`, `ListModalWindow` (no type-based defaults; since ETP-5978 it honours an explicit `columnWidth` / `columnMaxWidth` as a FIXED width with a spacer column, not the elastic ETP-5332 rule — see `docs/window-templates.md` → *Fixed column widths*), `OcrLinesReviewModal`, `ReportDrawer`, `AccountTreeView`, and the settings pages (`RolesAccessMatrix`, `ApiKeysPage`, …). No new view persistence or user resizing is part of this; the defaults are the fallback when one is added. Regeneration-safe: the behaviour lives in the shared lib, never in generated output.
 
 Tests: `lib/__tests__/linesColumnWidth.test.js` (basis per type, list = lines basis, "only descriptive types grow"), plus the geometry specs `e2e/tests/flows/sales/sales-quotation-list-column-widths.mocked.spec.js` (list) and `e2e/tests/flows/platform/lines-grid-narrow-viewport.mocked.spec.js` (lines), and the `linesAddRowColumnAlignment.vitest.jsx` cases. The implicit absorber is `withImplicitGrowColumn` (list) / `withLinesAbsorberColumn` (lines + add-row): a descriptive non-code column when one exists (never a `tag` pill, never `DocumentNo`/`Value` while something else describes), otherwise the first unpinned column (e.g. the leading amount on Product > Costo). Header floor: `linesColumnWidth.test.js` (*list header floor*) and `DataTable.percentHeader.vitest.jsx` (*plain list header floor*: AD-resolved label drives `<th>`, cells and table min-width; sorting does not move a column).
 
@@ -171,6 +207,20 @@ Props received: `recordId`, `data`, `token`, `apiBaseUrl`, `api`. **Real example
 For `contacts`, the custom `BillingPreferencesForm` keeps customer/vendor billing controls disabled
 until the header record exists (`data.id` present). This mirrors Classic behavior where billing
 details are edited after the Business Partner is created.
+
+**Holding Save while the form is calculating (ETP-5680).** A `customForm` that starts a request whose
+answer must become part of the record being saved (the product's tax category after a type change)
+registers it in `lib/formPendingWork.js`: `const release = registerPending(onLocalChange)` —
+synchronously, before issuing the request — and calls `release()` on EVERY way out (`finally`, stale
+or dropped reply, record switch, unmount; the release is idempotent). While anything is pending, the
+save buttons of that form instance (new record, existing record, draftMode) are disabled through the
+same `saveGate` they already honour, show their spinner and carry the `saveCalculating` tooltip, and
+the auto-save-on-blur skips its save without rolling the edit back. The scope is `onLocalChange`
+(the instance's `hook.handleChange`, the same reference the save buttons read from `hook`), so the
+main window and the embedded "new record" popup never see each other's pending work. It is a
+module-level store, not a prop, because `DetailView.jsx` cannot grow (`docs/detailview-growth-hook.md`).
+Do not make Save await a promise instead: `performSave` is closed over the render's `editing`.
+Reference use: `windows/custom/product/ProductStockDefaultsWatcher.jsx`.
 
 For `user`, `AssignTemplateRolesControl` (ETP-4906) renders a multi-select chip control for
 composing 1+ system-level template roles onto an existing user, with its own save-first
@@ -396,6 +446,8 @@ The kebab content has no save handle, so it cannot flush pending header edits it
 
 **Real examples:** `goods-shipment` (cancel), `payment-in` (reverse via `columnName`), `sales-invoice` (duplicate, cancel), `sales-order` (reactivate via `documentAction: "RE"`).
 
+**Gotcha — a hand-written Radix `DropdownMenu` that opens a `Dialog` must be `modal={false}` (ETP-5831, dev server only).** In `make dev`, `@radix-ui/react-dialog` is pre-bundled by Vite while `@radix-ui/react-dropdown-menu` is served raw through the excluded `app-shell-core`, so each loads its own copy of `@radix-ui/react-dismissable-layer`. A modal menu sets `pointer-events: none` on `<body>`; the dialog's copy saves that lock as the "original" value and restores it on close, and the page stays frozen until a reload. A non-modal menu never takes the lock. Production builds bundle a single copy and are not affected. Reference: the org-bar kebab in `fiscal-config/FiscalConfigPage.jsx` ("Cambiar SIF"). Root fix deferred, see `docs/feedback.md` (ETP-5831).
+
 #### Posting actions follow "Show Accounting Fields" (ETP-5684)
 
 Contabilizar / Descontabilizar are hidden from every role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins always have it). **You declare nothing for this.** The three action renderers drop any descriptor whose `neoAction` (form kebab, row kebab) or `value` (bulk toolbar) is `post` or `unpost`:
@@ -406,9 +458,9 @@ Contabilizar / Descontabilizar are hidden from every role whose `capabilities.sh
 | `RowQuickActions.jsx` | row kebab (`rowQuickActions` menu entries, incl. hand-rolled ones in a window's `index.jsx`) |
 | `BulkDocumentAction.jsx` | bulk toolbar, whichever builder produced the list (`buildPostActions`, a window's own builder) |
 
-All three call `filterPostingActions(actions, capabilities)` from `tools/app-shell/src/lib/capabilityVisibility.js`. It keys on the generic posting action that `DocumentPostingService` serves for every document — a structural contract, not an entity name — and ignores `key`, which is a free label. The gate fails closed, so a component test without an `AuthProvider` loses Post/Unpost: grant the capability with `src/test/capabilitiesSafeMock.js` (see its header). Reactivate's `preUnpost` calls `unpost` directly, not through a menu, so it is unaffected.
+All three call `filterPostingActions(actions, capabilities)` from `tools/app-shell/src/lib/capabilityVisibility.js`. It keys on the generic posting action that `DocumentPostingService` serves for every document — a structural contract, not an entity name — and ignores `key`, which is a free label. The gate fails closed, so a component test without an `AuthProvider` loses Post/Unpost: grant the capability with `src/test/capabilitiesSafeMock.js` (see its header). Reactivating a posted document never calls `unpost` from the SPA: the server un-posts inside the reactivation (see *Reactivating a posted document* below).
 
-The posting **status** (the `posted` field) is NOT automatic: declare `"visibleWhenCapability": "showAccountingFields"` on it in `decisions.json`, and on any hand-written `posted` list column (`visibleWhenCapability: ACCOUNTING_CAPABILITY`). `ListView` then also drops the column from the advanced filter, the sort popover and the export, and strips a restored filter or sort on it. `tools/app-shell/test/accounting-capability-guard.test.js` fails the build on an ungated `posted` in either place. Hand-rolled financial-account surfaces gate themselves (movements dot + sort segment + kebab, reconciliations column/filter/sort, reconciled-transactions modal, payment timeline "Asiento contabilizado"). Confirm-dialog warnings about removing the accounting entry are kept on purpose: they describe a consequence of an action the user is allowed to take.
+The posting **status** (the `posted` field, and the bulk-posting module's `etblkpAccountingstatus` / `EM_Etblkp_Accountingstatus`) is NOT automatic: declare `"visibleWhenCapability": "showAccountingFields"` on it in `decisions.json`, and on any hand-written list column (`visibleWhenCapability: ACCOUNTING_CAPABILITY`). `ListView` then also drops the column from the advanced filter, the sort popover and the export, and strips a restored filter or sort on it. On a **form** the generator writes the gate on the field line and `EntityForm` hides it at render time only — the field stays registered, so save exclusions and the required gate still know it — and `DetailView` re-probes its "Others" tab when the capability map changes (ETP-5684). `tools/app-shell/test/accounting-capability-guard.test.js` fails the build on an ungated status column in `decisions.json`, in any resolved `contract.json` (form or grid, which catches a field the raw default shows without a decisions entry), or in a hand-written column. Hand-rolled financial-account surfaces gate themselves (movements dot + sort segment + kebab, reconciliations column/filter/sort, reconciled-transactions modal, payment timeline "Asiento contabilizado"). Confirm-dialog warnings about removing the accounting entry are kept on purpose: they describe a consequence of an action the user is allowed to take.
 
 #### Dynamic process-button captions — `processOverrides.<proc>.labelToggle`
 
@@ -518,7 +570,7 @@ For the five sales documents (`sales-quotation`, `sales-order`, `sales-invoice`,
 
 Payments (cobros) are deliberately **not** related documents: no sales or purchase order/invoice lists its payments as chips (functional decision, ETP-5527 / ETP-5539). Do not add a payments source to a definition.
 
-The definition always reads the **detail** record: `linkedShipments`, `sourceInvoice`, `originInvoices` and the goods-shipment `linked*` fields are injected by the backend handlers on the detail GET only, so a list row is not enough.
+The definition always reads the **detail** record: `linkedShipments`, `originInvoices`, `rectifyingInvoices` and the goods-shipment `linked*` fields are injected by the backend handlers on the detail GET only, so a list row is not enough.
 
 `RelatedDocumentsCard` (`tools/app-shell/src/windows/custom/shared/preview-cards/`) gained two optional props:
 
@@ -1239,41 +1291,31 @@ that button read as if pressing it would mark the selected documents as
 completed. `accept` is a new key in all three locales; `done` was deliberately
 left alone because `RecordCreateModal.jsx` still uses it.
 
-#### `preUnpostActions` — replaying the detail kebab's "unpost first" rule in bulk
+#### Reactivating a posted document — the un-post runs on the server (ETP-5684)
 
-Some document actions must **reverse the record's accounting before they run**.
-The rule is declared per window in `decisions.json` as `preUnpost: true` on a
-`menuActions` entry (today: `sales-invoice`, `purchase-invoice`, `amortization`),
-and it is implemented once, in `tools/app-shell/src/lib/preUnpost.js`:
+Core refuses to reactivate a posted invoice (`C_INVOICE_POST` raises
+`@InvoiceDocumentPosted@`, "Factura contabilizada"), and an amortization only
+un-processes while `Posted<>'Y'`. Reactivating one of those therefore has to
+reverse its accounting first. From ETP-5302 to ETP-5684 the SPA did that itself:
+a `preUnpost: true` flag on the `menuActions` entry, a `preUnpostActions` prop on
+`BulkDocumentAction`, and a shared `runPreUnpost` helper sent `unpost` before the
+reactivation from the detail kebab, the row kebab and the bulk bar.
 
-| Export | Contract |
-|---|---|
-| `isPosted(row)` | `true` only for `posted === 'Y'` / `true`. The AD *Posted status* domain also carries `T`, `E`, `D`, `p`, `i` — **none of which mean "posted"** |
-| `runPreUnpost({ recordId, record, enabled, execute })` | → `{ ran, success, message }`. `ran: false` means the step did not apply (not enabled, or the record was not posted) and callers treat that as success |
+**That mechanism is gone.** Since ETP-5684, `unpost` needs the
+`showAccountingFields` capability, which a Sales or Purchasing role does not have,
+while reactivating stays theirs to do. The un-post is now a step of the
+reactivation on the server (`ReactivationUnpost` in com.etendoerp.go, called by
+the sales/purchase invoice and amortization handlers right before the reactivation
+process runs), for REST and MCP alike. Every SPA surface sends the reactivation
+alone: `documentAction: 'RE'` for invoices, the `Processed` button for
+amortizations. A refused un-post comes back as the reactivation's own error.
 
-It is a plain module, **deliberately not a hook**, because `BulkDocumentAction`
-is reached from the `bulkActions` slot, which `ListView` invokes as a flat
-function call (the ETP-5209 constraint above).
-
-Both call sites now go through it: `DetailMoreActionsMenu.jsx` (which had the
-rule inlined, and duplicated across its two branches — observable behaviour
-unchanged) and `BulkDocumentAction`'s new `preUnpostActions` prop:
-
-```jsx
-<BulkDocumentAction {...props} labelKey="process" preUnpostActions={['RE']} />
-```
-
-Each row then runs *unpost → document action*. A failed unpost **aborts that
-row** — a document still carrying its accounting entries is never reactivated —
-and the row is reported with the translated backend message like any other
-failure.
-
-**It is opt-in per window on purpose.** Invoices need it: Core's
-`C_INVOICE_POST` raises `@InvoiceDocumentPosted@` ("Factura contabilizada") if
-`RE` arrives while `Posted='Y'`. Orders must **not** have it: `C_ORDER_POST1` has
-no posted-state guard on its `RE` branch at all, so unposting there would be a
-gratuitous accounting reversal for no functional gain. Do not "harmonise" this by
-applying `preUnpostActions={['RE']}` to every window that offers `RE`.
+Do **not** reintroduce a client-side `unpost` before a reactivation: it is refused
+with a 403 (`ETGO_AccountingAccessDenied`) for exactly the roles that need to
+reactivate. The posted predicate the invoice windows still gate their standalone
+*Descontabilizar* on is `isPosted(row)` in `tools/app-shell/src/lib/postedStatus.js`
+(`true` only for `posted === 'Y'` / `true`; the AD *Posted status* domain also
+carries `T`, `E`, `D`, `p`, `i`, none of which mean "posted").
 
 #### `buildUnpostActions` / `unpostRowFilter` — the bulk "Descontabilizar" pair
 
@@ -1296,11 +1338,11 @@ window whose detail kebab also declares a standalone *Descontabilizar*
 (`menuActions` entry with `action: "unpost"`) should mount the unpost pair — a
 window must not grow the action in the bulk bar only. ETP-5302 shipped with
 `sales-invoice` and `purchase-invoice` deliberately excluded (invoice unposting
-lived only *inside* Reactivate, via `preUnpost`); **ETP-5692 reversed that**:
+lived only *inside* Reactivate); **ETP-5692 reversed that**:
 both invoice windows now declare the `unpost` menu action, offer it in the row
 kebab (`buildInvoiceRowQuickActions`) and mount a bulk unpost button, so an
-invoice can be unposted and stay Completed. Reactivate keeps its own `preUnpost`
-step. The invoice button uses its own pair, `buildInvoiceUnpostActions` /
+invoice can be unposted and stay Completed. Reactivate still reverses the
+accounting itself, on the server since ETP-5684. The invoice button uses its own pair, `buildInvoiceUnpostActions` /
 `invoiceUnpostRowFilter` in `windows/custom/shared/useInvoiceWindow.js`, which
 also requires status `CO` (a non-Completed row is rejected with
 `bulkRowNotCompleted` and counted as skipped — like every row filter, the reason is
@@ -1692,9 +1734,17 @@ Default: `"classic"`. Validator F12 enforces the enum (`"classic"` | `"inlineEdi
 - Inline edit covers all column types: `string`, `number`, `amount`, `percent`, `date`, `selector` and `search`. Selector/search columns use `InlineSearchCombo` — a compact text input with server-side search (`?q=term`) and portal dropdown — so FK fields with many options (e.g., tax rates) are filterable by typing. Lookup/popup columns (e.g., product) continue to open `ProductSearchDrawer`.
   - **The current selection is identified when the selector is reopened (ETP-5846).** Reopening an `InlineSearchCombo` (chip click, cell focus, chevron toggle) always shows an **empty** search box and the full list (ETP-4600), and the committed label becomes the input's placeholder (ETP-5005). On top of that, the option that currently holds the value is now **marked**: `aria-selected="true"` on that `role="option"`, a check icon inside the row, and the panel is scrolled so that row sits in its vertical **centre** (ETP-5903; `centerOptionInPanel` sets the panel's own `scrollTop`, so the page behind the portalled panel never moves). Centring happens once per open and never after the user has typed or pressed a key. This state is derived from the `value` prop alone (`resolveSelectedIndex`), never from the keyboard state, so it cannot drift from what the parent holds.
   - **Two independent per-row states, deliberately not conflated.** `aria-selected` means *"this is your committed value"*; the keyboard/hover highlight is a separate `data-highlighted` marker plus the info background, exposed to assistive tech through `aria-activedescendant` on the input. Before ETP-5846 a single `aria-selected` was derived from the highlight index, so neither was readable — and since opening resets the highlight to `-1`, nothing could ever mean "the value you already chose". A row may legitimately be both (you arrowed onto your own value).
-  - **Locating the value in place before pinning it (ETP-5903).** The list pages 50 rows at a time, so a committed value can be anywhere in the catalog. On open, with an empty query, the selector first **walks** the list: it loads the next page through the normal "load more" path until the value shows up, the list ends, `LOCATE_SELECTION_MAX_PAGES` (6 pages, 300 rows) is reached, or the user types or presses a key (`shouldKeepLocating` in `contract-ui/selectorSelection.js`). Found that way, the value is shown **at its real position**, centred, with the rows before and after it. Only when the walk ends without it is the pin below used. The walk relies on every selector page having a total order — the backend breaks display-name ties by id (`SelectorQueryExecutor`, `ListReferenceSelectorExecutor`, `PaymentMethodSelectorSupport`; see `com.etendoerp.go/docs/neo-headless.md`), otherwise a row could move between pages and be skipped. The same walk, centring and pin apply to `CreatableSearchSelect` (form foreign keys, server-search mode), and the walk alone to `SelectorInput` (Radix `Select`, which already marks and focuses its checked item). `SearchPopup` is out of scope.
+  - **Locating the value in place before pinning it (ETP-5903).** The list pages 50 rows at a time, so a committed value can be anywhere in the catalog. On open, with an empty query, the selector first **walks** the list: it loads the next page through the normal "load more" path until the value shows up, the list ends, `LOCATE_SELECTION_MAX_PAGES` (6 pages, 300 rows) is reached, or the user types or presses a key (`shouldKeepLocating` in `contract-ui/selectorSelection.js`). Found that way, the value is shown **at its real position**, centred, with the rows before and after it. Only when the walk ends without it is the pin below used. The walk relies on every selector page having a total order — the backend breaks display-name ties by id (`SelectorQueryExecutor`, `ListReferenceSelectorExecutor`, `PaymentMethodSelectorSupport`; see `com.etendoerp.go/docs/neo-headless.md`), otherwise a row could move between pages and be skipped. The same walk, centring and pin apply to `CreatableSearchSelect` (form foreign keys, server-search mode), and the walk alone to `SelectorInput` (Radix `Select`, which already marks and focuses its checked item).
+  - **The same reopen contract in Moneda, the product drawers and the account popup (ETP-5948).** Four more pickers now open on the committed value with the same marker (check + `aria-selected`), centring, arrow start and `aria-activedescendant` contract:
+    - `CurrencyRatePicker` (Moneda on invoices, orders, quotations) — a non-paged list, so there is no walk. If the committed currency is not in the loaded list, it is pinned on top from `value` + `displayValue`. Picking the committed row again only closes the panel.
+    - `SearchPopup` (the account/lookup popup behind `AccountSelect`, `AccountLookupPopup` and the report filters in `ReportViewerPage`) — callers pass `value` and `valueLabel`. It walks and pins like `InlineSearchCombo`, through an id-strict `loadPage(term, 0)`. The selector search matches each identifier column on its own, so a `"<code> - <name>"` label finds nothing as a whole. When the full label returns no row with that id, the pin retries with each ` - ` segment in turn, up to three, and stops at the first one that returns the id (`pinSearchTerms` in `selectorSelection.js`). For an account the code segment is the one that matches. For a tax label (`"21% - <name> - <category>"`) it is the name.
+    - `ProductSearchDrawer` / `ProductStockSearchDrawer` (through `ProductDrawerShell`), opened from `LookupTrigger` (lines), `LookupFormField` and `PopupSearchInput` (forms). They take `value`, `valueLabel` and, for the stock drawer, `committedItem`. Pages are 30 rows (`PRODUCT_SELECTOR_PAGE_SIZE`). The walk cap counts raw backend rows, because the drawers deduplicate. A failed page ends the walk, and a page that arrives after the drawer was closed or the query changed is dropped (generation guard).
+    - The stock drawer lists one row per location, so the product id alone does not identify the saved row. `committedItemFromRow(field, row, value)` (`contract-ui/selectorSelection.js`) rebuilds the committed item by reversing the field's `onSelectMappings`, with no entity named in shared code. Generated grid columns carry no `onSelectMappings`: the inline commit applies them from the entry fields (`addRow.fields`), so `InlineLinesPanel` takes them from the same place for a column that lacks its own. While the add-row form is open the wrapper strips `addRow`, so in that state the drawer marks the product group instead. When the saved location row is loaded, it is marked. Otherwise the product group is expanded, its header gets the check, and its first row is centred.
+    - Known limit: the stock walk stops as soon as the product appears. A saved location on a later page therefore falls back to the group mark.
+    - **Enforced for new pickers.** `tools/app-shell/test/committed-selection-policy.test.js` fails the build when (A) a source file renders `role="option"` without importing `selectorSelection.js` (directly or through `useLocateCommittedValue`), or (B) a JSX use of `SearchPopup`, `AccountLookupPopup`, `ProductSearchDrawer`, `ProductStockSearchDrawer`, `ProductDrawerShell` or a drawer taken from `lookupDrawers.js` passes no `value=`. Both scan `tools/app-shell/src` and `artifacts/`. The way out is a `committed-selection-ok: <reason>` comment, anywhere in the file for (A) and on or up to two lines above the tag for (B). It is meant for lists with no single committed value, or short, fully rendered lists that already set `aria-selected` from their value. The opt-outs in place today are the list-filter menus (`ListModalToolbarFilter`, `AccountTypeFilter`, `DistinctValuesList`), three fiscal custom lists, and the add-row `LookupButton` in `DataTable`. `DistinctValuesList` is paged and does not scroll to the active filter, which is a known gap noted in its opt-out.
+    - In the default product drawer, the check marks what *is* chosen (the committed value, or the multi-select picks of the report picker). A click that is still in flight keeps only its border and background.
   - **Arrows start from the current value (ETP-5903).** With an empty query and nothing highlighted yet, the first `ArrowDown` lands on the row **after** the committed one and `ArrowUp` on the row before it (`nextActiveIndex`); with no committed value, or after typing, arrows start from the top as before. Typing a query also scrolls the panel back to the top, so the first match is in view.
-  - **Resolving a value that is off the loaded pages.** Once the locate walk is done and the value is in neither the local `options` nor the fetched pages, the combo fires **one** lookup per open on the *same* selector with the value's known label as `q` (`limit=20`) and merges back only the rows whose **id equals the value** — `q` is a substring match, so a label like `IVA 4%` can also match `IVA 4% Recargo`. Pages appended by scroll-triggered "load more" never repeat it (`pinAttemptedRef` remembers the id already requested in this open); once a page brings the real row, the pinned copy is no longer prepended and the marker moves onto it. The lookup carries the identical `selectorContext` as every other selector call, so a value the caller's context forbids simply never comes back and nothing is marked; it is a lookup, not a list page, so `offsetRef`/`hasMoreRef`, scroll-triggered "load more" and the first-page skeleton are untouched. A resolved row is dropped as soon as the value changes, a new query is typed, or the panel opens or closes, so a previous selection is never shown as the current one, and it is subject to the same `excludeId` filter as any other option.
+  - **Resolving a value that is off the loaded pages.** Once the locate walk is done and the value is in neither the local `options` nor the fetched pages, the combo fires **one** lookup per open on the *same* selector with the value's known label as `q` (`limit=20`) and merges back only the rows whose **id equals the value** — `q` is a substring match, so a label like `IVA 4%` can also match `IVA 4% Recargo`. Pages appended by scroll-triggered "load more" never repeat it (`pinAttemptedRef` remembers the id already requested in this open); once a page brings the real row, the pinned copy is no longer prepended and the marker moves onto it. The lookup carries the identical `selectorContext` as every other selector call, so a value the caller's context forbids simply never comes back and nothing is marked; a `"<code> - <name>"` label finds nothing as a whole, because the backend matches each identifier column on its own, so the lookup then retries with each ` - ` segment (`pinSearchTerms`, ETP-5948; the same rule applies in `CreatableSearchSelect`, `SearchPopup` and the product drawers); it is a lookup, not a list page, so `offsetRef`/`hasMoreRef`, scroll-triggered "load more" and the first-page skeleton are untouched. A resolved row is dropped as soon as the value changes, a new query is typed, or the panel opens or closes, so a previous selection is never shown as the current one, and it is subject to the same `excludeId` filter as any other option.
   - **Enter never substitutes the first option for the current value.** With no committed value, `Enter` still commits the first match (the fast "type + Enter" / one-shot grid-entry flow), and after a typed query it still commits the first *match* — both are explicit intent, as is any arrow/Home/End key, which selects exactly the navigated row. But reopening a cell that already holds a value and pressing `Enter` **without typing and without navigating** closes the panel and leaves the value untouched: it is not a choice, so it must not be turned into one. Before ETP-5846 that case took the `filtered[0]` fallback and silently rewrote the user's own selection with whatever sorted first (measured on the unmodified component: committed `iva21` + `Enter` → `onChange("iva10")`).
 - Pencil and trash carry full logic. No other action icons are rendered in this iteration.
 - **Where the hover-action strip goes (ETP-5245, revised by ETP-5600):** the strip is always appended at the **end** of the row's flex container, in its own 158px slot (`ACTION_SLOT_WIDTH_PX`, the Figma band width: 4 × 32 + 3 × 2 + 24). **Since ETP-5600 (QA pass 2) an editable (draft) table always reserves that slot** on the header, every row, the balance footer and the add-row colgroup (`resolveTrailingColumn(visibleColumns, { editable })` / `reservesActionSlot` in `tools/app-shell/src/lib/linesActionSlot.js`, shared by `InlineLinesPanel` and `DataTable`), and no cell is suppressed on hover any more. While its actions show, the slot turns `sticky right-0` (`LINE_STICKY_ACTIONS_SLOT` in `contract-ui/rowVisuals.js`) so, with horizontal overflow, the buttons stay on the **visible** right edge of the lines scroll box instead of being cut off past it; the buttons sit in the list's *Sticky Acciones* band (`LINE_STICKY_ACTIONS_BAND`: padding 0 12px, at least 100px, the same `linear-gradient(90deg, transparent 0%, var(--row-hover-bg) 10.58%)` as `ROW_STICKY_ACTIONS`), so a column it floats over fades out behind an opaque background. The rest of the slot paints nothing and is click-through. Scrolled to the end, the strip sits in its own slot, so the last column (e.g. *Importe bruto de línea*) is always fully readable. Each line sets `--row-hover-bg` for its state (card at rest, `--field-hover` when checked, the composited `bg-muted/40` when highlighted). Before ETP-5600 the swap below applied to editable tables too: the trailing amount disappeared on hover and the strip took its place, which with horizontal overflow cut the buttons off on the far left and read as the buttons covering the amount on the far right. The former rule now only shapes a **read-only** table (completed documents look unchanged): when the **last** visible column is an `amount` without `noTrailing`, no slot is reserved (`trailingColumn`). In **every other** shape — no amount column at all (Cuenta Bancaria, Persona) *or* an amount that is not last (Product > Cost: `cost`, `startingDate`, `endingDate`) — `reserveActionSlot` reserves a permanent action slot (now 158px) on the header and on every row instead. Selecting the sacrificed cell by column *type* rather than by position was the ETP-5245 bug: on the Cost tab it suppressed the **first** cell, so hovering deleted the amount and slid the dates one slot left, out of alignment with the header. See `docs/feedback.md` and `InlineLinesPanel.trailingAmountColumn.vitest.jsx`.
@@ -1703,6 +1753,14 @@ Default: `"classic"`. Validator F12 enforces the enum (`"classic"` | `"inlineEdi
 - **Date columns (ETP-5245):** a `type: 'date'` column renders the shared `DateField` (calendar trigger + locale-masked text input, emitting `yyyy-MM-dd`) in **all three** paths that can edit it — `EntityForm.renderDateField` (form mode), `DataTable.renderInlineAddFieldControl` (the add-line row) and `InlineLinesPanel.EditCell` (inline edit of an existing row). Each of those keeps its **own** field-type `if` chain, so a new field-type control has to be added to all three or it degrades silently into that path's fall-through renderer — which is exactly how add-row dates shipped as bare text boxes. Two accepted limits inside the add-row/inline-edit cells: `DateField` takes no `ref` (no `firstInputRef` autofocus if it is the first add-row field) and no `onKeyDown` (row-level Enter/Escape does not fire from inside it; `DateField` binds both itself).
 - **Add-line flow** keeps using the existing `DataTable` inline-add row (callouts, focus management, defaults from header context). The generated `<Window>LineTable.jsx` falls back to `<DataTable>` while `addRow.active` is true and returns to `<InlineLinesPanel>` once the new line is saved or cancelled. This avoids duplicating the heavyweight add-row machinery and keeps a single source of truth for line creation.
 - **Dynamic column visibility (ETP-4543):** `InlineLinesPanel` accepts a `hiddenColumns = []` prop (mirroring `DataTable`'s existing one) that hides columns whose key is in the list, on top of any static `col.hidden` flag. `DetailView.jsx` computes this list from `lineDisplayLogic.visibility` (the same live evaluate-display map already threaded into the secondary `DetailForm`) and passes it to the primary lines table — so a grid column whose field resolves to `visibility: false` (e.g. a config-gated accounting dimension behind `@ACCT_DIMENSION_DISPLAY@`) is hidden at runtime rather than always shown just because it exists as a column. This makes `grid: true` fields under `inlineEditable` layouts respect the same runtime visibility rules non-grid fields already got via `DetailForm` — see `docs/feedback.md` ("ETP-4543") and `docs/generated-custom-windows/sales-invoice.md` for the full write-up.
+
+**Personal column views (ETP-5835).** With `GRID_COLUMN_VIEWS` enabled and both `specName` and `entity` supplied, `InlineLinesPanel` uses the existing `useGridView` and `GridViewControls` contract. `DetailView` passes `specName={windowName}` to its primary lines table; the entity key completes the stable scope. Users can hide, reorder and resize eligible business-data columns, then explicitly save their personal view for that spec/entity; changing the selected header record does not create a different view. With the flag off, an incomplete scope or no grid-data columns, controls are absent and no grid-view request is made. Existing type-based widths remain the fallback for columns without a saved width.
+
+Static `hidden` and runtime `hiddenColumns` exclusions take precedence over personalization: a saved view cannot expose those columns. Selection checkboxes, dimension expanders and action slots remain structural, outside the personal column controls. Required columns, explicit `gridConfigurable: false` or `gridReorderable: false` columns, `headClass`/`cellClass` columns, action/selection columns, presentation-only custom columns without an AD `column`, balance-footer debit/credit columns and the trailing amount column on a read-only document retain their default slots and widths. A saved order cannot move data across those locked slots. No-truncate columns cannot be hidden or resized, preserving their content-based width, but may be reordered. The dimension panel itself is not a grid-data column. The header, saved rows and balance footer use the same effective column layout, while inline edits, row actions, selection and dimension editing keep their existing handlers.
+
+**Add-row constraint:** while `lineFormActive` is true, the panel temporarily uses its default column layout and leaves the personal-view controls mounted but disabled. The sibling `DataTable` owns the add-row form and its colgroup, so suspending personalization keeps that form aligned inside the existing shared scroll-host portal without changing `DataTable` or generated wrappers. The current personal layout, including unsaved column changes, is retained and restored when the add-row form closes. This slice does not personalize the active add-row form.
+
+Behavior-level line-grid tests accompany this integration; tests, builds, lint and formatters were not executed at the user's request. Runtime and QA validation remain pending.
 
 **How it threads through the pipeline:**
 - `cli/src/resolve-curated.js` — added to `WINDOW_TRUTHY_PROPS` (auto-passes through).
@@ -1976,6 +2034,7 @@ Customer/Vendor Accounting, etc.).
    ETP-4565, and the per-tab `visibleWhenCapability` role gate added in ETP-5116 — used by
    `product`/`asset-group`/`assets`/`warehouse`/`contacts`'s Accounting tab(s) to hide behind
    `showAccountingFields`): `docs/decisions-reference.md` → "Secondary Tabs (`window.secondaryTabs`)".
+   Data-driven visibility is declared with `visibleWhenLogic` (ETP-5986): an AD logic string compiled into `visibleWhen(record, ctx)` on the tab entry, evaluated against the live header record and a session context (`OrgCurrencyId`/`OrgCurrencyCode`), fail-closed while loading, AND-ed with `visibleWhenCapability` — used by `sales-invoice`/`purchase-invoice` to show Exchange rates only for a foreign-currency invoice; see `docs/decisions-reference.md`.
    A capability-hidden tab is also never fetched in the background (ETP-5648). When the
    accounting tab is the window's *detail* tab (`detailEntity`, as in `product-category` and
    `business-partner-category`), gate it with `window.detailVisibleWhenCapability` instead.
@@ -3111,8 +3170,9 @@ threads `documentDateField` into the header `<Form>` calls; no generator change 
   open. Listed: the org currency plus every currency with a conversion range to or from it
   on ANY date (client or system, document org or `0`); a currency with no range at all is not
   offered. One whose ranges do not cover the reference date has `rate: null` and shows «—»
-  (tooltip `currencyRateNotAvailable`). The dropdown header shows the date as
-  dd/mm/yyyy (`currencyRatesAtDate`, `formatCalendarDate`).
+  (tooltip `currencyRateNotAvailable`). The dropdown header shows the reference date as
+  «Conversiones al dd/mm/yyyy» / «Conversions as of dd/mm/yyyy» (`currencyRatesAtDate`,
+  `formatCalendarDate`; worded «Conversiones», not «Tipos», since ETP-5840 QA).
 - Selecting a currency ALWAYS stages its rate — `null` when there is no range — so neither the
   previous currency's rate nor a manual rate survives a currency change. There is no
   client-side blocking anymore: the old «Cambio de moneda cancelado» revert
@@ -3148,6 +3208,57 @@ fine: the backend computes the rate on create from the reference date whenever i
 **Refusals.** The save and complete refusals carry their identity (`ETGO_ExchangeRateMissingOnSave`
 / `ETGO_ExchangeRateMissingOnComplete` + params) and are composed in the UI locale by
 `backendErrors.js` — see `docs/i18n-guide.md`, mechanism 3.
+
+### 23. «Import from …» popups — `ImportLinesModal` (ETP-5828 Figma)
+
+`tools/app-shell/src/components/contract-ui/ImportLinesModal.jsx` is the ONE shell of every
+«Importar desde …» / «Añadir desde …» popup (orders, shipments, receipts, returns, source
+invoices, in invoices, shipments, receipts and the return windows). It is not a `decisions.json`
+option: a window's `custom/` modal renders it with its own `fetchDocuments` / `fetchLines` /
+`getDocDisplay` and either `submitImport` (one server action, preferred) or
+`linesEndpoint` + `buildLineBody` (one POST per line).
+
+**Layout (Figma «Pop Up Añadir desde pedido», node 2702-6462).** A FIXED 800 × 648 dialog, centred
+(it never resizes or moves); title + business partner; a search box with a
+«Seleccionar todo / Deseleccionar todo» button (`ImportLinesModal__selectAll`, acts on the
+documents the search leaves visible and only on lines that can still be imported); document rows
+with the shared round `RowExpandToggle` (ETP-5593, sized 24 × 24 through `className`), a checkbox (indeterminate on a partial selection), number, date, an
+adornment slot and the amount; an expanded document shows a bordered lines table with a master
+checkbox and a −/+ quantity stepper (`NumberStepperInput`, bounded by the line's available
+quantity, typed values still validated on blur); the footer has the selection hint and the
+«Cancelar» / primary pills.
+
+**Optional props added by ETP-5828** (all default to the previous behaviour):
+
+| Prop | Effect |
+|---|---|
+| `renderSelectionPanel(selection)` | Renders the fixed-height notice area under the list (`ImportLinesModal__selectionPanelSlot`). Return an `<ImportNotice tone="neutral"\|"warning" title body control? />` (exported from the same file); `null` shows the neutral «Información de importación» notice. Without the prop there is no notice area. |
+| `selectedDocumentsKey` | i18n key such as `importOrdersSelectedCount` («{count} pedido(s)»): the footer reads «**N pedido(s)** seleccionado(s)» and the import button counts DOCUMENTS with a selected line instead of lines. |
+| `importButtonKey` | i18n key of the primary button (default `importSelected`; `{count}` receives `" (N)"` or `""`). |
+
+**The notice box (Figma «Alert»).** The slot is 92 px: a 12 px gap and an 80 px alert (padding 16,
+gap 4, radius 0 8 8 0, 2 px left bar), a 24 × 24 icon box with a 20 px Phosphor icon (`InfoIcon` /
+`WarningIcon`, the Figma's own set) or the control (the 36 × 20 switch) in that 24 px row, and a
+text column (padding 0 8, Inter 14/24, title 500, body 400). Neutral: bg `#F3F5F9`, bar and icon
+`#C7CBD3`, title `foreground`, body `#6B7280`. Warning: bg `--status-warning-bg` (#FFF9EB), bar
+`#FFC233`, icon `#C28800`, title and body `--status-warning-fg` (#8A6100). Colours are literal where
+no token has the identical value. Only ONE body line fits: a longer title or body is truncated with
+the full text in its `title` attribute — the box never grows. Keep notice texts within ~668 px of
+Inter 14 (~95 characters).
+
+**Document row total.** The row shows the plain sum of what its lines' «Importe» cells show (unit
+price × current quantity; `_lineNetAmount` only for a line without a unit price), so row and lines
+always add up; there is no total override.
+
+Removed by ETP-5828: `getDocTotal`, `selectionPanelMinHeight` (the notice area now always has its fixed height)
+and `getSelectionHint` (the footer follows the design). Stable test ids: `import-lines-modal`,
+`import-lines-search`, `ImportLinesModal__docRow` / `__lineRow` (with `data-selected`),
+`__linesMasterCheckbox`, `__qtyInput` (the stepper's input), `__selectionHint`, `__import`,
+`__cancel`, `__close`, `__neutralNotice`.
+
+The invoice order import is the reference consumer: `windows/custom/shared/InvoiceOrderImportModal.jsx`
+(one component, `direction="sales"|"purchase"`), with the global-discount notice from
+`useOrderGlobalDiscountImport.jsx`. See `docs/generated-custom-windows/sales-invoice.md`.
 
 ## Decision tree: which option to use?
 

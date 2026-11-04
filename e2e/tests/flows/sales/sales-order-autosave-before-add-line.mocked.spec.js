@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 // @covers tools/app-shell/src/components/contract-ui/CurrencyRatePicker.jsx
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 
 /**
@@ -176,7 +176,7 @@ async function changeCurrencyToUsd(page) {
   await expect(trigger).toContainText('EUR');
 
   await trigger.click();
-  const usdOption = page.getByRole('button', { name: /USD/ }).last();
+  const usdOption = page.getByRole('option', { name: /USD/ }).last();
   await expect(usdOption).toBeVisible({ timeout: 5_000 });
   await usdOption.click();
 

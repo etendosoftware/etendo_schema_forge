@@ -401,8 +401,7 @@ describe('AmortizationBulkActions — rowFilter "reactivate" branch (ETP-5414)',
     const result = await readPersistedResult();
     expect(result).toEqual({ ok: 1, omitted: [], failed: [] });
     expect(mockNeoExecute).toHaveBeenCalledWith('r1', 'Processed');
-    // `runPreUnpost` short-circuits on `!isPosted(record)` — the ONLY neoAction call for
-    // this row is the main 'Processed' one, never 'unpost'.
+    // The ONLY neoAction call for this row is the main 'Processed' one, never 'unpost'.
     expect(mockNeoExecute).toHaveBeenCalledTimes(1);
     expect(mockApiFetch).not.toHaveBeenCalled();
   });
@@ -410,8 +409,8 @@ describe('AmortizationBulkActions — rowFilter "reactivate" branch (ETP-5414)',
   // ETP-5414 reversal — a posted row is no longer pre-blocked by `rowFilter` at all (the
   // `isPosted` check and its `amortizationBulkPosted` key were removed entirely from
   // AmortizationBulkActions.jsx). It is eligible exactly like any other confirmed row; what
-  // happens to its accounting is decided at EXECUTION time by `preUnpostActions`, covered in
-  // the dedicated "unpost-then-reactivate execution flow" describe block below.
+  // happens to its accounting is decided by the server inside the reactivation (ETP-5684),
+  // covered in the "posted-row execution" describe block below.
   it('a confirmed, ALREADY-posted row is NO LONGER omitted by rowFilter — it is eligible with NO lines fetch', async () => {
     // Also a lone row: confirmed+posted still makes 'reactivate' the only (and thus
     // auto-selected) action.
@@ -440,8 +439,7 @@ describe('AmortizationBulkActions — rowFilter "reactivate" branch (ETP-5414)',
   });
 
   // ETP-5414 reversal — only the not-confirmed row is omitted now. The posted row is
-  // eligible and reaches execution (unpost then reactivate) — see below for the
-  // ok/failed split on the posted row's OWN outcome.
+  // eligible and reaches execution (Processed alone; the server un-posts it, ETP-5684).
   it('a mixed-eligibility reactivate batch (ok / not-confirmed / posted) produces the correct ok/omitted counts with NO lines fetch at all', async () => {
     mockNeoExecute.mockResolvedValue({ success: true });
     const rows = [
@@ -458,72 +456,33 @@ describe('AmortizationBulkActions — rowFilter "reactivate" branch (ETP-5414)',
     expect(result.failed).toEqual([]);
     expect(result.omitted).toEqual([{ documentNo: 'Amort NotConf', message: 'amortizationBulkNotConfirmed' }]);
     expect(mockNeoExecute).toHaveBeenCalledWith('r-ok', 'Processed');
-    expect(mockNeoExecute).toHaveBeenCalledWith('r-posted', 'unpost');
     expect(mockNeoExecute).toHaveBeenCalledWith('r-posted', 'Processed');
-    // r-ok: 1 call (Processed only, not posted). r-posted: 2 calls (unpost + Processed).
-    expect(mockNeoExecute).toHaveBeenCalledTimes(3);
+    // One Processed call per eligible row, never an 'unpost'.
+    expect(mockNeoExecute).toHaveBeenCalledTimes(2);
     expect(mockApiFetch).not.toHaveBeenCalled();
   });
 });
 
-// ETP-5414 — the unpost-then-reactivate execution flow itself, per the file's top docblock:
-// `preUnpostActions={['reactivate']}` makes `runRow` call `neoAction.execute(id, 'unpost')`
-// before the main `Processed` call for any POSTED row selected for reactivate (via
-// `runPreUnpost` in `lib/preUnpost.js`). This is deliberately exercised through the real
-// mounted `BulkDocumentAction` (not a `rowFilter`-only unit test) because the interesting
-// behaviour lives in `runRow`, not in `rowFilter` — `rowFilter` no longer knows about
-// `posted` at all.
-describe('AmortizationBulkActions — unpost-then-reactivate execution flow (ETP-5414)', () => {
-  it('a posted row: unpost succeeds, then Processed runs, in that order — row ends up ok', async () => {
+// ETP-5684 — a posted row selected for reactivate is un-posted by the server inside the
+// reactivation (`AmortizationHeaderHandler` → `ReactivationUnpost`), so `runRow` sends only
+// `Processed`. A refused un-post comes back as that row's failure, like any other refusal.
+describe('AmortizationBulkActions — posted-row execution (ETP-5684)', () => {
+  it('a posted row: only Processed is sent — row ends up ok', async () => {
     mockNeoExecute.mockResolvedValue({ success: true });
     openAndConfirm([row('r1', 'Amort Posted', 'Y', 'Y')]);
 
     const result = await readPersistedResult();
     expect(result).toEqual({ ok: 1, omitted: [], failed: [] });
-    // Both calls go through the same mock, so array order IS call order: unpost first.
-    expect(mockNeoExecute.mock.calls).toEqual([
-      ['r1', 'unpost'],
-      ['r1', 'Processed'],
-    ]);
+    expect(mockNeoExecute.mock.calls).toEqual([['r1', 'Processed']]);
   });
 
-  it('a posted row whose unpost FAILS lands in failed with the server message — Processed is never called', async () => {
-    mockNeoExecute.mockImplementation(async (id, actionName) => {
-      if (actionName === 'unpost') return { success: false, message: 'accounting settled' };
-      return { success: true };
-    });
+  it('a posted row whose server-side un-post fails lands in failed with the server message', async () => {
+    mockNeoExecute.mockResolvedValue({ success: false, message: 'accounting settled' });
     openAndConfirm([row('r1', 'Amort Posted', 'Y', 'Y')]);
 
     const result = await readPersistedResult();
-    expect(result.ok).toBe(0);
-    expect(result.omitted).toEqual([]);
     expect(result.failed).toEqual([{ documentNo: 'Amort Posted', message: 'accounting settled' }]);
-    expect(mockNeoExecute).toHaveBeenCalledWith('r1', 'unpost');
-    expect(mockNeoExecute).not.toHaveBeenCalledWith('r1', 'Processed');
-    expect(mockNeoExecute).toHaveBeenCalledTimes(1);
-  });
-
-  it('one posted row failing its unpost does NOT abort a sibling not-posted row\'s success in the same batch', async () => {
-    mockNeoExecute.mockImplementation(async (id, actionName) => {
-      if (id === 'r-posted-fail' && actionName === 'unpost') {
-        return { success: false, message: 'cannot unpost' };
-      }
-      return { success: true };
-    });
-    const rows = [
-      row('r-posted-fail', 'Amort PostedFail', 'Y', 'Y'),
-      row('r-notposted-ok', 'Amort NotPostedOk', 'Y', 'N'),
-    ];
-    openAndConfirm(rows);
-
-    const result = await readPersistedResult();
-    expect(result.ok).toBe(1);
-    expect(result.omitted).toEqual([]);
-    expect(result.failed).toEqual([{ documentNo: 'Amort PostedFail', message: 'cannot unpost' }]);
-    expect(mockNeoExecute).toHaveBeenCalledWith('r-posted-fail', 'unpost');
-    expect(mockNeoExecute).not.toHaveBeenCalledWith('r-posted-fail', 'Processed');
-    expect(mockNeoExecute).toHaveBeenCalledWith('r-notposted-ok', 'Processed');
-    expect(mockNeoExecute).not.toHaveBeenCalledWith('r-notposted-ok', 'unpost');
+    expect(mockNeoExecute).not.toHaveBeenCalledWith('r1', 'unpost');
   });
 });
 

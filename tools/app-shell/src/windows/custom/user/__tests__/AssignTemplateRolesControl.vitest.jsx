@@ -19,6 +19,8 @@ vi.mock('@/lib/rolesApi.js', () => ({
 import { fetchTemplateRoles, fetchRolesOverview } from '@/lib/rolesApi.js';
 import AssignTemplateRolesControl from '../AssignTemplateRolesControl.jsx';
 import { RoleSelectionProvider } from '../roleSelectionContext.js';
+import { applySupportSessionFromServer, resetSupportSessionForTests } from '@/lib/supportSession.js';
+
 
 const TEMPLATE_ROLES = [
   { id: 'role-fin', name: 'Finance' },
@@ -69,6 +71,18 @@ describe('AssignTemplateRolesControl', () => {
     // Default: no client-admin row at all — matches most pre-existing tests, which exercise
     // the normal (non-locked) editor. Admin-lock tests override this explicitly.
     mockOverviewOk();
+  });
+
+  // ETP-5351 — the backend refuses template-role assignment for a support session.
+  it('renders nothing in a support session', () => {
+    applySupportSessionFromServer({ clientId: '1', clientName: 'Acme', expiresAt: '2099-01-01T00:00:00Z' }, { storage: localStorage });
+    try {
+      const { container } = renderControl();
+      expect(container).toBeEmptyDOMElement();
+    } finally {
+      resetSupportSessionForTests();
+      localStorage.clear();
+    }
   });
 
   describe('save-first placeholder (new, not-yet-persisted user)', () => {

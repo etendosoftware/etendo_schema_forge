@@ -1,4 +1,4 @@
-"""The versioned decision rule: every step and its margin edges (plan §5.6, D47).
+"""The versioned decision rule (rule 2): every step and its margin edges (plan §5.6, D47; plan 2026-10-22 §3.4).
 
 @covers mcp-tests/runner/decide.py
 """
@@ -59,86 +59,85 @@ class SuccessStepTest(unittest.TestCase):
         self.assertEqual((d.winner, d.decided_by), ("tie", "1-noSuccess"))
 
 
-class CallsStepTest(unittest.TestCase):
-    def test_exactly_twenty_percent_decides(self):
-        d = decide.decide(ok(calls=10), ok(calls=8), P)
-        self.assertEqual((d.winner, d.decided_by), ("reference", "2-calls"))
-        self.assertAlmostEqual(d.margin["gap"], 0.20)
-
-    def test_nineteen_percent_falls_through(self):
-        d = decide.decide(ok(calls=100), ok(calls=81), P)
-        self.assertNotEqual(d.decided_by, "2-calls")
-        self.assertEqual(d.decided_by, "5-tie")
-        self.assertTrue(d.fragile, "a gap just under the threshold can flip")
-
-    def test_a_wide_gap_is_not_fragile(self):
-        d = decide.decide(ok(calls=4), ok(calls=10), P)
-        self.assertEqual((d.winner, d.decided_by, d.fragile), ("subject", "2-calls", False))
-
-
 class UnrecoveredStepTest(unittest.TestCase):
     def test_fewer_unrecovered_errors_wins(self):
         d = decide.decide(ok(unrecovered=3), ok(unrecovered=1), P)
-        self.assertEqual((d.winner, d.decided_by), ("reference", "3-unrecovered"))
+        self.assertEqual((d.winner, d.decided_by), ("reference", "2-unrecovered"))
         self.assertFalse(d.fragile, "two errors apart is not a single-error call")
 
     def test_a_single_unrecovered_error_apart_is_fragile(self):
         d = decide.decide(ok(unrecovered=0), ok(unrecovered=1), P)
-        self.assertEqual((d.winner, d.decided_by), ("subject", "3-unrecovered"))
-        self.assertTrue(d.fragile)
-        self.assertEqual(d.fragile_reasons, ["step 3 decided by a single unrecovered error"])
+        self.assertEqual((d.winner, d.decided_by), ("subject", "2-unrecovered"))
+        self.assertEqual(d.fragile_reasons, ["step 2 decided by a single unrecovered error"])
+
+    def test_errors_decide_before_tokens(self):
+        # The side with more errors is far cheaper; errors still come first.
+        d = decide.decide(ok(unrecovered=2, tokens=100), ok(unrecovered=0, tokens=1000), P)
+        self.assertEqual((d.winner, d.decided_by), ("reference", "2-unrecovered"))
 
 
-class CostStepTest(unittest.TestCase):
+class TokensStepTest(unittest.TestCase):
     def test_tokens_at_ten_percent_decide(self):
         d = decide.decide(ok(tokens=900), ok(tokens=1000), P)
-        self.assertEqual((d.winner, d.decided_by), ("subject", "4-tokens"))
+        self.assertEqual((d.winner, d.decided_by), ("subject", "3-tokens"))
+        self.assertAlmostEqual(d.margin["gap"], 0.10)
 
-    def test_tokens_under_ten_percent_tie(self):
-        d = decide.decide(ok(tokens=910), ok(tokens=1000), P)
-        self.assertEqual((d.winner, d.decided_by), ("tie", "5-tie"))
-
-    def test_missing_tokens_fall_back_to_bytes(self):
-        d = decide.decide(ok(tokens=None, nbytes=300), ok(tokens=1000, nbytes=1000), P)
-        self.assertEqual((d.winner, d.decided_by), ("subject", "4-bytes"))
-        self.assertEqual(d.margin["metric"], "bytes")
+    def test_tokens_decide_before_calls(self):
+        # Plan 2026-10-22 §3.4: the verb + discovery design makes more calls but
+        # spends fewer tokens; rule 1 gave this task to the other side on calls.
+        d = decide.decide(ok(calls=12, tokens=20_000), ok(calls=4, tokens=100_000), P)
+        self.assertEqual((d.winner, d.decided_by), ("subject", "3-tokens"))
 
     def test_a_token_win_just_past_the_threshold_is_fragile(self):
         # 12 % gap: decides (>= 10 %) but within the 5-point band.
         d = decide.decide(ok(tokens=880), ok(tokens=1000), P)
-        self.assertEqual((d.winner, d.decided_by), ("subject", "4-tokens"))
-        self.assertTrue(d.fragile)
-        self.assertIn("step 4 gap within the fragile band of its threshold", d.fragile_reasons)
-        # 20 %: clear of the band.
+        self.assertEqual((d.winner, d.decided_by), ("subject", "3-tokens"))
+        self.assertIn("step 3 gap within the fragile band of its threshold", d.fragile_reasons)
         self.assertFalse(decide.decide(ok(tokens=800), ok(tokens=1000), P).fragile)
 
-    def test_a_token_tie_just_under_the_threshold_is_fragile(self):
-        d = decide.decide(ok(tokens=930), ok(tokens=1000), P)
+    def test_missing_tokens_make_the_task_not_evaluable(self):
+        # No byte fallback: bytes leave the catalogue out (plan §3.4).
+        for s, r, who in ((ok(tokens=None), ok(), "subject"), (ok(), ok(tokens=None), "reference")):
+            d = decide.decide(s, r, P)
+            self.assertEqual((d.status, d.reason), ("notEvaluable", f"{who}: token usage missing"))
+
+    def test_missing_tokens_do_not_matter_without_successes(self):
+        none = Side(successes=0, attempts=3, median_calls=None, median_tokens=None)
+        self.assertEqual(decide.decide(none, none, P).decided_by, "1-noSuccess")
+
+
+class CallsStepTest(unittest.TestCase):
+    def test_calls_decide_when_tokens_are_within_their_margin(self):
+        d = decide.decide(ok(calls=10, tokens=950), ok(calls=8, tokens=1000), P)
+        self.assertEqual((d.winner, d.decided_by), ("reference", "4-calls"))
+        self.assertAlmostEqual(d.margin["gap"], 0.20)
+
+    def test_nineteen_percent_falls_through_to_a_fragile_tie(self):
+        d = decide.decide(ok(calls=100), ok(calls=81), P)
         self.assertEqual(d.decided_by, "5-tie")
         self.assertIn("step 4 gap just under its threshold", d.fragile_reasons)
-        self.assertFalse(decide.decide(ok(tokens=1000), ok(tokens=1000), P).fragile)
 
-    def test_the_byte_fallback_has_the_same_fragile_band(self):
-        d = decide.decide(ok(tokens=None, nbytes=880), ok(tokens=None, nbytes=1000), P)
-        self.assertEqual((d.winner, d.decided_by), ("subject", "4-bytes"))
-        self.assertTrue(d.fragile)
-        d = decide.decide(ok(tokens=None, nbytes=930), ok(tokens=None, nbytes=1000), P)
+    def test_a_tie_records_both_margins(self):
+        d = decide.decide(ok(tokens=930), ok(tokens=1000), P)
         self.assertEqual(d.decided_by, "5-tie")
-        self.assertTrue(d.fragile)
-        self.assertEqual(d.margin["cost"]["metric"], "bytes")
+        self.assertEqual((d.margin["tokens"]["metric"], d.margin["calls"]["metric"]), ("tokens", "calls"))
+        self.assertIn("step 3 gap just under its threshold", d.fragile_reasons)
+        self.assertFalse(decide.decide(ok(), ok(), P).fragile)
 
-    def test_a_missing_byte_median_past_step_one_is_an_error_not_a_tie(self):
-        with self.assertRaises(ValueError):
-            decide.decide(ok(tokens=None, nbytes=None), ok(tokens=None, nbytes=None), P)
+
+class RuleOneRefusedTest(unittest.TestCase):
+    def test_a_suite_asking_for_rule_one_is_refused(self):
+        with self.assertRaises(decide.RuleMismatch):
+            decide.resolve_parameters({"ruleVersion": 1})
 
 
 class VersioningTest(unittest.TestCase):
     def test_parameters_come_from_the_declared_block(self):
-        params = decide.resolve_parameters({"ruleVersion": 1, "callsMargin": 0.5})
+        params = decide.resolve_parameters({"ruleVersion": 2, "callsMargin": 0.5})
         self.assertEqual(params["callsMargin"], 0.5)
         self.assertEqual(params["tokensMargin"], decide.DEFAULT_PARAMETERS["tokensMargin"])
         d = decide.decide(ok(calls=10), ok(calls=8), params)
-        self.assertNotEqual(d.decided_by, "2-calls")
+        self.assertEqual(d.decided_by, "5-tie", "a 20 % calls gap no longer decides under a 50 % margin")
 
     def test_an_unknown_rule_version_is_refused(self):
         with self.assertRaises(decide.RuleMismatch):

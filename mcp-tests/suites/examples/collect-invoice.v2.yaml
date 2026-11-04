@@ -24,7 +24,7 @@
 
 schemaVersion: 2
 window: treasury-example
-decision: { ruleVersion: 1 }
+decision: { ruleVersion: 2 }
 
 x-fixtures:
   si-setup: &si-setup

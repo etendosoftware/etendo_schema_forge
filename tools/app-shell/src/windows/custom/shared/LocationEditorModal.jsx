@@ -14,6 +14,7 @@ import {
 import { matchOptionByLabel } from '@/lib/matchOptionLabel.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useTbaiPostalCodeContext, shouldWarnMissingTbaiPostalCode } from './tbaiPostalCodeWarning.js';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 const EMPTY_FORM = {
     address: '',
@@ -615,6 +616,10 @@ export default function LocationEditorModal({
         city: form.city,
         country: form.country,
     });
+
+    // ETP-5824: advisory only — never part of saveDisabled. See tbaiPostalCodeWarning.js.
+    const tbaiContext = useTbaiPostalCodeContext({open, saveMode, bpId, apiBase: contactsApiBase});
+    const showTbaiPostalCodeWarning = shouldWarnMissingTbaiPostalCode({...tbaiContext, postalCode: form.postalCode});
 
     // ETP-5806 — client-side preview only; the backend recomputes this itself and is the
     // source of truth (see composeAddressLines' own doc comment above).
@@ -1379,6 +1384,11 @@ export default function LocationEditorModal({
                                     )}
                                 </div>
                             </div>
+                            {showTbaiPostalCodeWarning && (
+                                <div role="note" data-testid="location-postalCode-tbai-warning" className="text-amber-700 dark:text-amber-400" style={{ fontSize: 12, lineHeight: 1.4, marginTop: -6 }}>
+                                    {ui('tbaiPostalCodeMissingWarning')}
+                                </div>
+                            )}
 
                             {/* País + Región comparten fila (ETP-5806) */}
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
