@@ -1,21 +1,36 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ExternalLink, Box, Calendar, ChevronDown } from 'lucide-react';
+import { Maximize2, Box, Calendar, ChevronDown, PanelRightClose } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { useUI } from '@/i18n';
-import { niceScale, formatDashboardAxisTick } from '@/lib/dashboardNumberFormat';
-import { parseCalendarDate } from '@/lib/dateOnly';
+import { useUI, useLocaleSwitch } from '@/i18n';
+import { SIDEBAR_PERIOD_OPTIONS, DEFAULT_SIDEBAR_PERIOD, formatPeriodRange } from './productSidebarPeriod';
+import { niceScale } from '@/lib/dashboardNumberFormat';
+import { formatStockQuantity } from './stockQuantityFormat';
+import { buildXAxisLabels, buildTooltipModel } from './stockChartAxis';
+import { buildChartModel, dayFraction, fractionToDay, valueAtDay } from './stockSeries';
+import { useStockHistory } from './useStockHistory';
+import StockChartTooltip from './StockChartTooltip';
+import StockChartLegend from './StockChartLegend';
+import StockWarehouseList from './StockWarehouseList';
+import { resolveVisible, isolate, activeHighlight, dimmedOpacity, filterVisibleSeries, useSeriesVisibility } from './stockSeriesVisibility';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import ProductSidebarCollapsed from './ProductSidebarCollapsed';
+import ViewMovementsLink from './ViewMovementsLink';
+import { useSidebarCollapsed } from './useSidebarCollapsed';
 
 const DOT_COLORS = ['#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#14b8a6', '#f97316', '#6366f1'];
 
-// Time-range dropdown shown above the summary. Mirrors the Contacts PeriodSelector.
-// Drives the inline stock-movement chart window (see `inlineMonths`).
-const SIDEBAR_PERIOD_OPTIONS = [
-  { value: '3M', key: 'last3Months', months: 3 },
-  { value: '6M', key: 'last6Months', months: 6 },
-  { value: '12M', key: 'last12Months', months: 12 },
-];
+// Exact range (DD/MM/AAAA – DD/MM/AAAA) covered by the selected period (ETP-5908 RF-05).
+function PeriodRangeLabel({ period, className = '' }) {
+  return (
+    <span
+      className={`text-xs font-normal text-muted-foreground ${className}`}
+      data-testid="SidebarPeriodRange"
+    >
+      {formatPeriodRange(period)}
+    </span>
+  );
+}
 
 function SidebarPeriodSelector({ period, onChangePeriod, ui, disabled = false }) {
   const [open, setOpen] = useState(false);
@@ -31,7 +46,7 @@ function SidebarPeriodSelector({ period, onChangePeriod, ui, disabled = false })
   const current = SIDEBAR_PERIOD_OPTIONS.find(o => o.value === period) ?? SIDEBAR_PERIOD_OPTIONS[0];
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative flex flex-col gap-1">
       <button
         type="button"
         disabled={disabled}
@@ -47,6 +62,7 @@ function SidebarPeriodSelector({ period, onChangePeriod, ui, disabled = false })
           className={`h-5 w-5 shrink-0 ${disabled ? 'text-disabled' : 'text-muted-foreground'}`}
           data-testid="ChevronDown__59b33d" />
       </button>
+      <PeriodRangeLabel period={period} data-testid="PeriodRangeLabel__59b33d" />
       {open && (
         <div className="absolute top-11 left-0 z-50 min-w-full bg-card border border-border-control rounded-lg shadow-md overflow-hidden">
           {SIDEBAR_PERIOD_OPTIONS.map(opt => (
@@ -65,18 +81,29 @@ function SidebarPeriodSelector({ period, onChangePeriod, ui, disabled = false })
   );
 }
 
-// Horizontal availability widget: icon box + label + locations badge + big number.
-function AvailabilityWidget({ label, value, badge }) {
+// Horizontal availability widget: icon box + label + locations link/badge + big number.
+// With `onBadgeClick` the badge is a real button (RF-06: opens the Warehouses tab).
+function AvailabilityWidget({ label, value, badge, onBadgeClick }) {
   return (
     <div className="flex-1 flex items-center gap-3 pl-3 pr-2 py-2 bg-card border border-border-subtle rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]">
       <div className="w-10 h-10 shrink-0 flex items-center justify-center bg-card border border-border-control rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]">
         <Box className="w-6 h-6 text-disabled" data-testid="Box__59b33d" />
       </div>
       <div className="flex-1 min-w-0 flex flex-col">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-muted-foreground">{label}</span>
-          {badge && (
-            <span className="px-2 py-1 rounded-full bg-muted text-xs text-muted-foreground whitespace-nowrap">{badge}</span>
+        <div className="flex items-center gap-1 min-w-0">
+          <span className="text-xs text-muted-foreground shrink-0">{badge && onBadgeClick ? `${label} ·` : label}</span>
+          {badge && onBadgeClick && (
+            <button
+              type="button"
+              onClick={onBadgeClick}
+              className="text-xs text-status-info-foreground underline underline-offset-2 whitespace-nowrap rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+              data-testid="AvailabilityLocationsLink"
+            >
+              {badge}
+            </button>
+          )}
+          {badge && !onBadgeClick && (
+            <span className="ml-1 px-2 py-1 rounded-full bg-muted text-xs text-muted-foreground whitespace-nowrap truncate min-w-0 max-w-full" title={typeof badge === 'string' ? badge : undefined} data-testid="AvailabilityWarehousePill">{badge}</span>
           )}
         </div>
         <span className="text-2xl font-medium tracking-[-0.01em] text-foreground leading-9">
@@ -86,94 +113,6 @@ function AvailabilityWidget({ label, value, badge }) {
     </div>
   );
 }
-
-// Build chart data: group by month, cumulative sum, anchor to current stock
-function buildChartData(transactions, currentStock, maxMonths = 12) {
-  if (!transactions || transactions.length === 0) return null;
-
-  // Group all transactions by YYYY-MM key
-  const byMonth = {};
-  for (const t of transactions) {
-    const d = parseCalendarDate(t.movementDate);
-    if (!d) continue;
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    byMonth[key] = (byMonth[key] || 0) + Number(t.movementQuantity || 0);
-  }
-
-  let months;
-  if (maxMonths >= 999) {
-    // "All time": use actual transaction date range, extended to current month
-    const allKeys = Object.keys(byMonth).sort((a, b) => a.localeCompare(b));
-    if (allKeys.length === 0) return null;
-    months = allKeys;
-    const now = new Date();
-    const nowKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    if (months[months.length - 1] < nowKey) months = [...months, nowKey];
-  } else {
-    // Fixed window: generate exactly maxMonths months back from today (inclusive)
-    const now = new Date();
-    months = [];
-    for (let i = maxMonths - 1; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-    }
-  }
-
-  let cum = 0;
-  const rawValues = months.map(m => { cum += byMonth[m] || 0; return cum; });
-
-  // Anchor: shift so the last point equals currentStock
-  const offset = currentStock != null ? currentStock - rawValues[rawValues.length - 1] : 0;
-  const values = rawValues.map(v => v + offset);
-
-  // Hide chart only if there's truly nothing to show (no movements and no stock)
-  if (values.every(v => v === 0)) return null;
-  return { months, values };
-}
-
-// Build the month axis used by the per-warehouse series (same fixed-window logic as buildChartData).
-function buildMonthAxis(maxMonths) {
-  const now = new Date();
-  const months = [];
-  for (let i = maxMonths - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-  }
-  return months;
-}
-
-// One cumulative series per warehouse, anchored to each warehouse's current stock.
-// `warehouses` is sortedRows ([{ binName, quantityOnHand }]); series order + color match the legend.
-function buildWarehouseSeries(transactions, warehouses, locatorToWarehouse, maxMonths = 12) {
-  if (!transactions || transactions.length === 0 || !warehouses || warehouses.length === 0) return null;
-
-  const months = buildMonthAxis(maxMonths);
-
-  const series = warehouses.map((w, i) => {
-    // Bucket this warehouse's movements by month
-    const byMonth = {};
-    for (const t of transactions) {
-      if (locatorToWarehouse[t.storageBin] !== w.binName) continue;
-      const d = parseCalendarDate(t.movementDate);
-      if (!d) continue;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      byMonth[key] = (byMonth[key] || 0) + Number(t.movementQuantity || 0);
-    }
-
-    let cum = 0;
-    const rawValues = months.map(m => { cum += byMonth[m] || 0; return cum; });
-
-    // Anchor: shift so the last point equals this warehouse's current stock
-    const offset = w.quantityOnHand != null ? w.quantityOnHand - rawValues[rawValues.length - 1] : 0;
-    const values = rawValues.map(v => v + offset);
-
-    return { name: w.binName, color: DOT_COLORS[i % DOT_COLORS.length], values };
-  });
-
-  return { months, series };
-}
-
-const MONTH_NAMES = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function smoothPath(xs, ys) {
   if (xs.length < 2) return xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x},${ys[i]}`).join(' ');
@@ -185,97 +124,53 @@ function smoothPath(xs, ys) {
   return d.join(' ');
 }
 
-function ChartSVG({ months, values, series, W, H, PAD_X, PAD_Y, gradId, fontSize = 10, PAD_R = PAD_X, preserveAspectRatio = 'xMidYMid meet' }) {
-  const [hoveredIdx, setHoveredIdx] = useState(null);
+function ChartSVG({ range, series, W, H, PAD_X, PAD_Y, gradId, fontSize = 10, PAD_R = PAD_X, highlight = null, onClick, className = 'cursor-crosshair', preserveAspectRatio = 'xMidYMid meet' }) {
+  const [hoveredDay, setHoveredDay] = useState(null);
+  const ui = useUI();
+  const { locale } = useLocaleSwitch();
 
-  // Single-series (modal) vs multi-series (per-warehouse). Single keeps the original blue look.
-  const multi = Array.isArray(series) && series.length > 0;
-  const seriesList = multi ? series : [{ name: null, color: 'var(--status-info-fg)', values }];
-  const pointCount = seriesList[0].values.length;
+  // A single unnamed series (aggregated line) keeps the original blue look; named ones are per-warehouse.
+  const multi = series.length > 0 && series[0].name != null;
 
   // Global Y scale spanning every series. Baseline is always 0 (stock can't be negative);
   // niceScale gives a rounded max + ticks, same as the dashboard / sibling charts.
-  const allVals = seriesList.flatMap(s => s.values);
+  const allVals = series.flatMap(s => s.points.map(p => p.value));
   const maxVal = Math.max(...allVals, 0);
   const { niceMax, ticks: yTicks } = niceScale(maxVal);
 
-  const xStep = (W - PAD_X - PAD_R) / Math.max(pointCount - 1, 1);
+  const plotW = W - PAD_X - PAD_R;
   const toY = v => PAD_Y + (H - PAD_Y * 2) * (1 - Math.max(v, 0) / niceMax);
-  const toX = i => PAD_X + i * xStep;
+  // Points sit on a date scale: window start .. today, proportional to their day.
+  const toX = day => PAD_X + dayFraction(day, range) * plotW;
 
-  const paths = seriesList.map((s, idx) => {
-    const xs = s.values.map((_, i) => toX(i));
-    const ys = s.values.map(v => toY(v));
+  const paths = series.map((s, idx) => {
+    const xs = s.points.map(p => toX(p.day));
+    const ys = s.points.map(p => toY(p.value));
     const linePath = smoothPath(xs, ys);
     const areaPath = `${linePath} L${xs[xs.length - 1]},${H} L${xs[0]},${H} Z`;
-    return { color: s.color, idx, linePath, areaPath };
+    return { color: s.color, idx, linePath, areaPath, opacity: dimmedOpacity(s.name, highlight), emphasis: highlight != null && s.name === highlight };
   });
 
-  const yLabels = yTicks.map(t => ({ v: t, label: formatDashboardAxisTick(t) }));
+  const yLabels = yTicks.map(t => ({ v: t, label: formatStockQuantity(t) }));
 
-  const n = pointCount;
-  const showQuarters = n <= 48;
-
-  const MIN_YEAR_GAP_PX = 40;
-  const yearBoundaries = months.reduce((acc, m, i) => {
-    const [yr, mo] = m.split('-');
-    const moNum = parseInt(mo, 10);
-    const prevYr = i > 0 ? months[i - 1].split('-')[0] : null;
-    if (moNum === 1 || prevYr !== yr) acc.push({ i, yr, x: toX(i) });
-    return acc;
-  }, []);
-
-  const shownYears = new Set();
-  let lastShownX = -Infinity;
-  for (const c of yearBoundaries) {
-    if (c.x - lastShownX >= MIN_YEAR_GAP_PX) { shownYears.add(c.i); lastShownX = c.x; }
-  }
-
-  const xLabels = months.map((m, i) => {
-    const [yr, mo] = m.split('-');
-    const moNum = parseInt(mo, 10);
-    const prevYr = i > 0 ? months[i - 1].split('-')[0] : null;
-    const isYearBoundary = moNum === 1 || prevYr !== yr;
-    if (isYearBoundary) {
-      if (!shownYears.has(i)) return { x: toX(i), text: null };
-      return { x: toX(i), text: `'${yr.slice(2)}`, bold: true };
-    }
-    if (showQuarters && (moNum === 4 || moNum === 7 || moNum === 10))
-      return { x: toX(i), text: MONTH_NAMES[moNum], bold: false };
-    return { x: toX(i), text: null };
-  });
+  const xLabels = buildXAxisLabels(range, locale);
+  const ANCHOR = { start: 'start', middle: 'middle', end: 'end' };
 
   const handleMouseMove = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const viewX = (mouseX / rect.width) * W;
-    const rawIdx = (viewX - PAD_X) / xStep;
-    const idx = Math.max(0, Math.min(pointCount - 1, Math.round(rawIdx)));
-    setHoveredIdx(idx);
+    const viewX = ((e.clientX - rect.left) / rect.width) * W;
+    setHoveredDay(fractionToDay((viewX - PAD_X) / plotW, range));
   };
 
-  const hx = hoveredIdx !== null ? toX(hoveredIdx) : null;
-  const hMonth = hoveredIdx !== null ? (() => {
-    const [yr, mo] = months[hoveredIdx].split('-');
-    return `${MONTH_NAMES[parseInt(mo, 10)]} '${yr.slice(2)}`;
-  })() : null;
-
-  // Single-series tooltip box (modal — unchanged)
-  const TW = fontSize * 5, TH = fontSize * 3.2, TR = 4;
-  const hy = hoveredIdx !== null ? toY(seriesList[0].values[hoveredIdx]) : null;
-  const tooltipX = hx !== null ? Math.max(PAD_X, Math.min(W - PAD_X - TW, hx - TW / 2)) : null;
-  const tooltipY = hy !== null ? Math.max(PAD_Y, hy - TH - 8) : null;
-  const hVal = hoveredIdx !== null ? seriesList[0].values[hoveredIdx].toLocaleString() : null;
-
-  // Multi-series tooltip box (one row per warehouse)
-  const rowH = fontSize * 1.6;
-  const MTW = fontSize * 7, MTH = rowH * (seriesList.length + 1) + 6;
-  const mTipX = hx !== null ? Math.max(PAD_X, Math.min(W - PAD_R - MTW, hx + 8)) : null;
-  const mTipY = Math.max(PAD_Y, PAD_Y + 2);
+  const hx = hoveredDay !== null ? toX(hoveredDay) : null;
+  const tooltipModel = hoveredDay !== null
+    ? buildTooltipModel({ series, day: hoveredDay, locale, totalLabel: ui('total'), unitLabel: ui('stockUnitAbbr') })
+    : null;
 
   return (
-    <svg viewBox={`0 0 ${W} ${H + 20}`} preserveAspectRatio={preserveAspectRatio} className="w-full h-full cursor-crosshair"
-      onMouseMove={handleMouseMove} onMouseLeave={() => setHoveredIdx(null)}>
+    <svg viewBox={`0 0 ${W} ${H + 20 + fontSize + 2}`} preserveAspectRatio={preserveAspectRatio} className={`w-full h-full ${className}`}
+      onClick={onClick}
+      onMouseMove={handleMouseMove} onMouseLeave={() => setHoveredDay(null)}>
       <defs>
         {paths.map((p) => (
           <linearGradient key={p.idx} id={`${gradId}-${p.idx}`} x1="0" y1="0" x2="0" y2="1">
@@ -291,43 +186,28 @@ function ChartSVG({ months, values, series, W, H, PAD_X, PAD_Y, gradId, fontSize
         <text key={yl.label} x={PAD_X - 5} y={toY(yl.v) + 4} textAnchor="end" fontSize={fontSize} fill="hsl(var(--text-disabled))">{yl.label}</text>
       ))}
       {paths.map((p) => (
-        <path key={`area-${p.idx}`} d={p.areaPath} fill={`url(#${gradId}-${p.idx})`} />
+        <path key={`area-${p.idx}`} d={p.areaPath} fill={`url(#${gradId}-${p.idx})`} opacity={p.opacity} />
       ))}
       {paths.map((p) => (
-        <path key={`line-${p.idx}`} d={p.linePath} fill="none" stroke={p.color} strokeWidth="2"
+        <path key={`line-${p.idx}`} d={p.linePath} fill="none" stroke={p.color} strokeWidth={p.emphasis ? 3 : 2} opacity={p.opacity}
           strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
       ))}
-      {hoveredIdx !== null && !multi && (
+      {hoveredDay !== null && (
         <>
           <line x1={hx} y1={PAD_Y} x2={hx} y2={H} stroke="hsl(var(--text-disabled))" strokeWidth="1" strokeDasharray="3,2" />
-          <circle cx={hx} cy={hy} r="5" fill="white" stroke="var(--status-info-fg)" strokeWidth="2" />
-          <rect x={tooltipX} y={tooltipY} width={TW} height={TH} rx={TR} fill="hsl(var(--foreground))" />
-          <text x={tooltipX + TW / 2} y={tooltipY + fontSize + 2} textAnchor="middle" fontSize={fontSize} fill="hsl(var(--text-disabled))">{hMonth}</text>
-          <text x={tooltipX + TW / 2} y={tooltipY + TH - 4} textAnchor="middle" fontSize={fontSize + 1} fontWeight="700" fill="white">{hVal}</text>
+          {series.map((s) => (
+            <circle key={s.name ?? 'single'} cx={hx} cy={toY(valueAtDay(s.points, hoveredDay))} r={multi ? 4 : 5} fill="white" stroke={s.color} strokeWidth="2" />
+          ))}
+          <StockChartTooltip model={tooltipModel} hx={hx} W={W} PAD_X={PAD_X} PAD_R={PAD_R} PAD_Y={PAD_Y} fontSize={fontSize} data-testid="StockChartTooltip__59b33d" />
         </>
       )}
-      {hoveredIdx !== null && multi && (
-        <>
-          <line x1={hx} y1={PAD_Y} x2={hx} y2={H} stroke="hsl(var(--text-disabled))" strokeWidth="1" strokeDasharray="3,2" />
-          {seriesList.map((s) => (
-            <circle key={s.name} cx={hx} cy={toY(s.values[hoveredIdx])} r="4" fill="white" stroke={s.color} strokeWidth="2" />
-          ))}
-          <rect x={mTipX} y={mTipY} width={MTW} height={MTH} rx={4} fill="hsl(var(--foreground))" />
-          <text x={mTipX + 6} y={mTipY + fontSize + 2} fontSize={fontSize} fill="hsl(var(--text-disabled))">{hMonth}</text>
-          {seriesList.map((s, idx) => (
-            <g key={s.name}>
-              <rect x={mTipX + 6} y={mTipY + rowH * (idx + 1) + 1} width={8} height={3} rx={1} fill={s.color} />
-              <text x={mTipX + 18} y={mTipY + rowH * (idx + 1) + fontSize} fontSize={fontSize} fontWeight="600" fill="white">
-                {s.values[hoveredIdx].toLocaleString()}
-              </text>
-            </g>
-          ))}
-        </>
-      )}
-      {xLabels.map((l, i) => l.text && (
-        <text key={i} x={l.x} y={H + 14} textAnchor="middle"
-          fontSize={l.bold ? fontSize + 1 : fontSize} fontWeight={l.bold ? '700' : '400'}
-          fill={l.bold ? 'hsl(var(--muted-foreground))' : 'hsl(var(--text-disabled))'}>{l.text}</text>
+      {xLabels.map((l) => (
+        <g key={l.day} data-testid="StockChartXLabel">
+          <text x={toX(l.day)} y={H + 14} textAnchor={ANCHOR[l.anchor]} fontSize={fontSize} fontWeight="400" fill="hsl(var(--text-disabled))">{l.text}</text>
+          {l.year && (
+            <text x={toX(l.day)} y={H + 14 + fontSize + 2} textAnchor={ANCHOR[l.anchor]} fontSize={fontSize} fontWeight="400" fill="hsl(var(--muted-foreground))">{l.year}</text>
+          )}
+        </g>
       ))}
     </svg>
   );
@@ -362,98 +242,110 @@ function StockEmptyState({ onAdjustStock, onReplenish }) {
   );
 }
 
+function PartialHistoryNote({ partial }) {
+  const ui = useUI();
+  if (!partial) return null;
+  return <span className="text-xs text-muted-foreground" data-testid="StockChartPartialNote">{ui('stockHistoryPartial')}</span>;
+}
+
 function StockChart({
-  transactions, currentStock, locationRows = [], locatorToWarehouse = {},
+  transactions, partial = false, currentStock, locationRows = [], locatorToWarehouse = {},
   // Inline chart time window (driven by the sidebar period selector). Modal keeps its own period.
   inlineMonths = 12,
+  // Panel period; the modal starts on it each time it opens, then keeps its own state.
+  panelPeriod = DEFAULT_SIDEBAR_PERIOD,
   // External control: open modal pre-filtered to a warehouse
   externalOpen, externalWarehouse, onExternalClose,
+  // Series visible in the panel (Set of warehouse names) + its toggle handler; owned by ProductSidebar.
+  panelVisible, onTogglePanelSeries,
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
-  const [period, setPeriod] = useState('6M');
-  const [selectedWarehouse, setSelectedWarehouse] = useState(null);
+  const [period, setPeriod] = useState(panelPeriod);
+  // Modal visibility: a copy of the panel's set taken on every open; never written back to the panel.
+  const [modalVisibleRaw, setModalVisibleRaw] = useState(null);
+  const [panelHover, setPanelHover] = useState(null);
+  const [modalHover, setModalHover] = useState(null);
   const ui = useUI();
 
   const isOpen = externalOpen || internalOpen;
 
-  // Sync external warehouse selection when opening from outside
+  // Every open: inherit the panel period (RF-02) and the panel's visible series (RF-15), or the
+  // warehouse requested from outside; changes inside the modal stay local.
   useEffect(() => {
-    if (externalOpen) {
-      setSelectedWarehouse(externalWarehouse ?? null);
-    }
-  }, [externalOpen, externalWarehouse]);
+    if (!isOpen) return;
+    setPeriod(panelPeriod);
+    setModalVisibleRaw(externalOpen && externalWarehouse ? new Set([externalWarehouse]) : new Set(panelVisible));
+    setModalHover(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   const handleOpenChange = (open) => {
     if (!open) {
-      setSelectedWarehouse(null);
+      setModalVisibleRaw(null);
       setInternalOpen(false);
       onExternalClose?.();
     }
   };
 
-  const handleWarehouseClick = (name) => {
-    setSelectedWarehouse(prev => prev === name ? null : name);
-  };
-
-  const chart = buildChartData(transactions, currentStock, inlineMonths);
+  const sortedRows = [...locationRows].sort((a, b) => b.quantityOnHand - a.quantityOnHand);
+  const modalMonths = SIDEBAR_PERIOD_OPTIONS.find(o => o.value === period)?.months ?? 6;
+  const modelOf = (months) => buildChartModel({
+    transactions, currentStock, warehouses: sortedRows, locatorToWarehouse, months, today: new Date(), colors: DOT_COLORS,
+  });
+  // Inline chart (panel period) and modal chart (its own period): both slice the same loaded history.
+  const chart = modelOf(inlineMonths);
+  const chartLarge = isOpen ? modelOf(modalMonths) : null;
 
   if (!chart) return null;
 
-  const sortedRows = [...locationRows].sort((a, b) => b.quantityOnHand - a.quantityOnHand);
-
-  // Per-warehouse series for the inline chart (one line per warehouse, colors match the legend)
-  const seriesChart = buildWarehouseSeries(transactions, sortedRows, locatorToWarehouse, inlineMonths);
-
-  // Per-warehouse series for the modal, driven by its own period selector
-  const modalMonths = SIDEBAR_PERIOD_OPTIONS.find(o => o.value === period)?.months ?? 6;
-  const seriesLarge = buildWarehouseSeries(transactions, sortedRows, locatorToWarehouse, modalMonths);
-  // When a warehouse is selected, isolate its series; fall back to aggregated single line if needed
-  const displaySeries = selectedWarehouse && seriesLarge
-    ? { ...seriesLarge, series: seriesLarge.series.filter(s => s.name === selectedWarehouse) }
-    : seriesLarge;
-  const chartLargeFallback = !seriesLarge ? buildChartData(transactions, currentStock, modalMonths) : null;
+  const legendItems = sortedRows.map((b, i) => ({ name: b.binName, color: DOT_COLORS[i % DOT_COLORS.length] }));
+  const large = chartLarge ?? chart;
+  const allKeys = sortedRows.map(b => b.binName);
+  const panelShown = resolveVisible(panelVisible, allKeys);
+  const panelHighlight = activeHighlight(panelHover, panelShown);
+  const modalShown = resolveVisible(modalVisibleRaw ?? panelVisible, allKeys);
+  const modalHighlight = activeHighlight(modalHover, modalShown);
+  const handleModalSelect = (name) => setModalVisibleRaw(isolate(modalShown, name, allKeys));
 
   return (
     <>
       {/* Mini chart shown in Summary tab */}
       <div className="px-4 pt-2 pb-3 flex flex-col gap-2">
-        {/* Title + Expandir */}
+        {/* Title + icon-only expand button */}
         <div className="flex items-center justify-between gap-1.5">
           <span className="text-sm font-normal text-muted-foreground flex-1">{ui('stockMovement')}</span>
           <button
+            type="button"
             onClick={() => setInternalOpen(true)}
-            className="inline-flex items-center gap-1 text-sm font-medium text-foreground underline underline-offset-2 shrink-0"
+            title={ui('expand')}
+            aria-label={ui('expand')}
+            className="inline-flex items-center justify-center w-6 h-6 rounded-sm text-muted-foreground hover:text-foreground shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+            data-testid="StockChartExpandButton"
           >
-            {ui('expand')} <ExternalLink size={16} className="text-disabled" data-testid="ExternalLink__59b33d" />
+            <Maximize2 size={16} aria-hidden="true" data-testid="Maximize2__59b33d" />
           </button>
         </div>
-        {/* Warehouse legend */}
-        {sortedRows.length > 0 && (
-          <div className="flex items-center gap-5 flex-wrap">
-            {sortedRows.map((b, i) => (
-              <div key={b.binName} className="flex items-center gap-2">
-                <span className="flex-shrink-0 rounded-sm" style={{ width: 14, height: 4, backgroundColor: DOT_COLORS[i % DOT_COLORS.length] }} />
-                <span className="text-xs font-normal text-foreground">{b.binName}</span>
-              </div>
-            ))}
-          </div>
-        )}
+        <StockChartLegend items={legendItems} visible={panelShown} highlight={panelHighlight} onToggle={onTogglePanelSeries} onHover={setPanelHover} data-testid="StockChartLegend__59b33d" />
         <div style={{ height: 170 }}>
           <ChartSVG
-            months={seriesChart?.months ?? chart.months}
-            series={seriesChart?.series}
-            values={chart.values}
+            range={chart.range}
+            series={filterVisibleSeries(chart.series, panelShown)}
+            highlight={panelHighlight}
             W={340}
             H={100}
-            PAD_X={36}
+            PAD_X={46}
             PAD_R={8}
             PAD_Y={12}
             gradId="sbGrad"
             fontSize={10}
             preserveAspectRatio="none"
+            onClick={() => setInternalOpen(true)}
+            className="cursor-pointer"
             data-testid="ChartSVG__59b33d" />
         </div>
+        <PartialHistoryNote partial={partial} data-testid="PartialHistoryNote__59b33d" />
       </div>
+
       {/* Expanded modal */}
       <Dialog
         open={isOpen}
@@ -463,7 +355,10 @@ function StockChart({
           <DialogHeader data-testid="DialogHeader__59b33d">
             <DialogTitle data-testid="DialogTitle__59b33d">
               <div className="flex items-center justify-between gap-4 pr-8">
-                <span>{ui('stockMovement')}</span>
+                <div className="flex flex-col gap-0.5">
+                  <span>{ui('stockMovement')}</span>
+                  <PeriodRangeLabel period={period} data-testid="PeriodRangeLabel__59b33d" />
+                </div>
                 <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
                   {SIDEBAR_PERIOD_OPTIONS.map(opt => (
                     <button key={opt.value} onClick={() => setPeriod(opt.value)}
@@ -475,45 +370,24 @@ function StockChart({
               </div>
             </DialogTitle>
           </DialogHeader>
+          <StockChartLegend items={legendItems} visible={modalShown} highlight={modalHighlight} onToggle={handleModalSelect} onHover={setModalHover} data-testid="StockChartLegend__59b33d" />
+          <PartialHistoryNote partial={partial} data-testid="PartialHistoryNote__59b33d" />
           <div className="flex gap-6 pt-2">
             <div className="flex-1 min-w-0" style={{ height: 300 }}>
               <ChartSVG
-                months={displaySeries?.months ?? chartLargeFallback?.months ?? chart.months}
-                series={displaySeries?.series}
-                values={chartLargeFallback?.values ?? chart.values}
+                range={large.range}
+                series={filterVisibleSeries(large.series, modalShown)}
+                highlight={modalHighlight}
                 W={600}
                 H={250}
-                PAD_X={52}
+                PAD_X={60}
                 PAD_Y={16}
                 gradId="sbGradLarge"
                 fontSize={13}
                 data-testid="ChartSVG__59b33d" />
             </div>
             {sortedRows.length > 0 && (
-              <div className="w-56 flex-shrink-0 flex flex-col gap-2">
-                <div className="text-sm font-semibold text-foreground">{ui('stockByWarehouse')}</div>
-                {sortedRows.map((b, i) => {
-                  const isSelected = selectedWarehouse === b.binName;
-                  const isDimmed = selectedWarehouse !== null && !isSelected;
-                  return (
-                    <button key={b.binName} onClick={() => handleWarehouseClick(b.binName)}
-                      className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg transition-colors text-left
-                        ${isSelected ? 'bg-status-info ring-1 focus:ring-focus-ring' : 'bg-muted hover:bg-muted'}
-                        ${isDimmed ? 'opacity-40' : ''}`}>
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: DOT_COLORS[i % DOT_COLORS.length] }} />
-                        <span className="text-sm text-muted-foreground truncate">{b.binName}</span>
-                      </div>
-                      <span className="text-sm font-semibold text-foreground flex-shrink-0">{b.quantityOnHand.toLocaleString()}</span>
-                    </button>
-                  );
-                })}
-                <div className="text-xs text-disabled mt-auto pt-2">
-                  {selectedWarehouse
-                    ? `${locationRows.find(r => r.binName === selectedWarehouse)?.quantityOnHand?.toLocaleString() ?? 0} ${ui('units')}`
-                    : `${ui('total')}: ${currentStock?.toLocaleString()} ${ui('units')}`}
-                </div>
-              </div>
+              <StockWarehouseList rows={sortedRows} colors={DOT_COLORS} visible={modalShown} onSelect={handleModalSelect} total={currentStock} data-testid="StockWarehouseList__59b33d" />
             )}
           </div>
         </DialogContent>
@@ -523,28 +397,51 @@ function StockChart({
 }
 
 
+// One card per warehouse: series-coloured dot + name + "Available" left / "N u" right (ETP-5908 RF-08/RF-09).
+// No reserved data: Etendo does not manage reservations.
+function WarehouseCards({ rows, ui, fmt }) {
+  if (rows.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-[10px]" data-testid="WarehouseCards">
+      {rows.map((b, i) => (
+        <div key={b.binName} className="flex flex-col gap-2 bg-muted rounded-lg p-3" data-testid="WarehouseCard">
+          <div className="flex items-center gap-1 h-6">
+            <span className="w-6 h-6 flex items-center justify-center flex-shrink-0">
+              <span
+                className="w-2 h-2 rounded-full"
+                style={{ backgroundColor: DOT_COLORS[i % DOT_COLORS.length] }}
+                data-testid="WarehouseCardDot"
+              />
+            </span>
+            <span className="text-xs font-semibold text-muted-foreground truncate" title={b.binName}>{b.binName}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2 pl-1 text-sm" data-testid="WarehouseCardAvailability">
+            <span className="text-muted-foreground">{ui('stockAvailableLabel')}</span>
+            <span className="font-semibold text-foreground">{fmt(b.quantityOnHand)} u</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
   const ui = useUI();
   const apiFetch = useApiFetch(apiBaseUrl);
-  const [stockRows, setStockRows] = useState(null);
-  const [transactions, setTransactions] = useState(null);
+  const { stockRows, transactions, partial } = useStockHistory(recordId, apiFetch);
   const [activeTab, setActiveTab] = useState('summary');
-  const [period, setPeriod] = useState('3M');
-  const [chartTrigger, setChartTrigger] = useState({ open: false, warehouse: null });
-
+  // RF-16: collapsed is only different markup; every hook above/below stays mounted, so period, hidden series and history survive.
+  const [collapsed, setCollapsed] = useSidebarCollapsed();
+  // Focus handoff: the toggled button unmounts, so after a USER toggle focus moves to its counterpart (never on mount).
+  const pendingFocus = useRef(null);
+  const toggle = (next, focusTestId) => { pendingFocus.current = focusTestId; setCollapsed(next); };
   useEffect(() => {
-    if (!recordId) return;
-
-    apiFetch(`/stock?parentId=${recordId}&_startRow=0&_endRow=200`)
-      .then(r => (r.ok ? r.json() : null))
-      .then(data => setStockRows(data?.response?.data ?? []))
-      .catch(() => setStockRows([]));
-
-    apiFetch(`/transactions?parentId=${recordId}&_startRow=0&_endRow=500`)
-      .then(r => (r.ok ? r.json() : null))
-      .then(data => setTransactions(data?.response?.data ?? []))
-      .catch(() => setTransactions([]));
-  }, [recordId, token, apiFetch]);
+    const target = pendingFocus.current;
+    pendingFocus.current = null;
+    if (target) document.querySelector(`[data-testid="${target}"]`)?.focus();
+  }, [collapsed]);
+  const [period, setPeriod] = useState(DEFAULT_SIDEBAR_PERIOD);
+  const [chartTrigger, setChartTrigger] = useState({ open: false, warehouse: null });
 
   const onHand = stockRows?.reduce((s, r) => s + (Number(r.quantityOnHand) || 0), 0) ?? null;
 
@@ -555,32 +452,39 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
 
   const binMap = (stockRows ?? []).reduce((acc, r) => {
     const binName = r['warehouse$_identifier'] ?? r.warehouse ?? r['storageBin$_identifier'] ?? r.storageBin ?? 'Unknown';
-    if (!acc[binName]) acc[binName] = { binName, quantityOnHand: 0, reservedQty: 0 };
+    if (!acc[binName]) acc[binName] = { binName, quantityOnHand: 0 };
     acc[binName].quantityOnHand += Number(r.quantityOnHand) || 0;
-    acc[binName].reservedQty += Number(r.reservedQty) || 0;
     return acc;
   }, {});
   const locationRows = Object.values(binMap).filter(b => b.quantityOnHand > 0);
   const binCount = locationRows.length;
 
-  const fmt = v => (v === null ? null : v.toLocaleString());
+  const fmt = v => (v === null ? null : formatStockQuantity(v));
 
   let onHandSubtitle = null;
   if (binCount === 1) onHandSubtitle = locationRows[0]?.binName ?? null;
-  else if (binCount > 1) onHandSubtitle = `${binCount} ${ui('locations')}`;
+  else if (binCount > 1) onHandSubtitle = ui('stockLocationsCount', { count: binCount });
 
   const hasChart = transactions !== null && transactions.length > 0;
   const sortedRows = [...locationRows].sort((a, b) => b.quantityOnHand - a.quantityOnHand);
   const navigate = useNavigate();
 
+  // Panel series visibility, shared by the Summary and Warehouses tabs; resets per product / warehouse set.
+  const warehouseKeys = sortedRows.map(b => b.binName);
+  const [panelVisible, onTogglePanelSeries] = useSeriesVisibility(`${recordId}|${warehouseKeys.join('\u0001')}`, warehouseKeys);
+
   const inlineMonths = (SIDEBAR_PERIOD_OPTIONS.find(o => o.value === period) ?? SIDEBAR_PERIOD_OPTIONS[0]).months;
 
   const stockChartProps = {
     transactions,
+    partial,
     currentStock: onHand,
     locationRows,
     locatorToWarehouse,
     inlineMonths,
+    panelPeriod: period,
+    panelVisible,
+    onTogglePanelSeries,
     externalOpen: chartTrigger.open,
     externalWarehouse: chartTrigger.warehouse,
     onExternalClose: () => setChartTrigger({ open: false, warehouse: null }),
@@ -590,17 +494,27 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
   // show (ETP-4606, extended to Expense/Resource in ETP-5091).
   if (['S', 'E', 'R'].includes(data?.productType)) return null;
 
+  if (collapsed) {
+    return (
+      <ProductSidebarCollapsed
+        onOpen={() => toggle(false, 'ProductSidebarCollapseButton')}
+        onSelectTab={(tab) => { setActiveTab(tab); toggle(false, `ProductSidebarTab-${tab}`); }}
+        data-testid="ProductSidebarCollapsed__59b33d" />
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" data-product-sidebar-collapsed="false">
       {/* ── Inventory overview ── */}
       <div>
 
         {/* Segmented tabs (pill) — full width, no title */}
-        <div className="px-4 pt-2">
-          <div className="flex items-center gap-1 p-1 h-10 rounded-xl" style={{ background: 'hsl(var(--muted))' }}>
+        <div className="px-4 pt-2 flex items-center gap-2">
+          <div className="flex-1 min-w-0 flex items-center gap-1 p-1 h-10 rounded-xl" style={{ background: 'hsl(var(--muted))' }}>
             {['summary', 'warehouses'].map(tab => (
               <button
                 key={tab}
+                data-testid={`ProductSidebarTab-${tab}`}
                 onClick={() => setActiveTab(tab)}
                 className="flex-1 h-8 px-3 text-sm rounded-lg transition-all"
                 style={
@@ -614,6 +528,17 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            onClick={() => toggle(true, 'ProductSidebarOpenButton')}
+            title={ui('hidePanel')}
+            aria-label={ui('hidePanel')}
+            aria-expanded="true"
+            className="inline-flex items-center justify-center w-8 h-8 shrink-0 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+            data-testid="ProductSidebarCollapseButton"
+          >
+            <PanelRightClose size={20} aria-hidden="true" data-testid="PanelRightClose__59b33d" />
+          </button>
         </div>
 
         {/* Summary tab content */}
@@ -626,9 +551,10 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
               disabled={!hasChart}
               data-testid="SidebarPeriodSelector__59b33d" />
             {hasChart && <AvailabilityWidget
-              label={ui('onHand')}
+              label={ui('stockAvailableLabel')}
               value={fmt(onHand)}
               badge={onHandSubtitle}
+              onBadgeClick={binCount > 1 ? () => setActiveTab('warehouses') : undefined}
               data-testid="AvailabilityWidget__59b33d" />}
           </div>
         )}
@@ -642,32 +568,7 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
               ui={ui}
               disabled={!hasChart}
               data-testid="SidebarPeriodSelector__59b33d" />
-            {sortedRows.length > 0 && <div className="flex flex-col gap-[10px]">
-              {sortedRows.map((b, i) => {
-                const wAvailable = b.quantityOnHand - b.reservedQty;
-                return (
-                  <div key={b.binName} className="flex flex-col gap-3 bg-muted rounded-lg p-3">
-                    <div className="flex items-center gap-1 h-6">
-                      <span className="w-6 h-6 flex items-center justify-center flex-shrink-0">
-                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: DOT_COLORS[i % DOT_COLORS.length] }} />
-                      </span>
-                      <span className="text-xs font-semibold text-muted-foreground truncate">{b.binName}</span>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-normal text-muted-foreground">{ui('available')}</span>
-                        <span className="text-sm font-medium text-foreground">{fmt(wAvailable)}</span>
-                      </div>
-                      <div className="border-t border-[hsl(var(--foreground) / 0.05)]" />
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-normal text-muted-foreground">{ui('reserved')}</span>
-                        <span className="text-sm font-medium text-foreground">{fmt(b.reservedQty)}</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>}
+            <WarehouseCards rows={sortedRows} ui={ui} fmt={fmt} data-testid="WarehouseCards__59b33d" />
           </div>
         )}
       </div>
@@ -685,6 +586,8 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
         onReplenish={() => navigate('/purchase-order/new')}
         data-testid="StockEmptyState__59b33d" />
       }
+      {/* ETP-5908: under the chart, in both tabs (once: the hidden chart below is only a modal host) */}
+      {hasChart && <ViewMovementsLink period={period} data-testid="ViewMovementsLink__59b33d" />}
       {/* Hidden StockChart for warehouse tab modal trigger */}
       {activeTab === 'warehouses' && hasChart && (
         <div className="hidden">

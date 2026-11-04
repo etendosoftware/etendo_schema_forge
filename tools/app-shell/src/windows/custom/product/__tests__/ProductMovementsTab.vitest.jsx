@@ -10,6 +10,12 @@ const mocks = vi.hoisted(() => ({
   tracking: vi.fn(),
   // The per-account flag, published by the backend as `capabilities.productMovements`.
   capabilities: { productMovements: true },
+  navigate: vi.fn(),
+  location: { pathname: '/product/p1', search: '?a=1', hash: '', state: null },
+}));
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => mocks.navigate,
+  useLocation: () => mocks.location,
 }));
 
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
@@ -18,7 +24,13 @@ vi.mock('@/hooks/useCapabilitiesSafe.js', () => ({ useCapabilitiesSafe: () => mo
 vi.mock('@/hooks/useCurrency', () => ({ useCurrency: () => 'EUR' }));
 vi.mock('../useProductMovementsTabTracking', () => ({ useProductMovementsTabTracking: (args) => mocks.tracking(args) }));
 vi.mock('@/components/ui/date-range-popover.jsx', () => ({
-  DateRangePopover: ({ onChange }) => <button type="button" data-testid="period" onClick={() => onChange({ presetId: 'last30' })}>period</button>,
+  DateRangePopover: ({ onChange, extraPresets }) => (
+    <>
+      <button type="button" data-testid="period" onClick={() => onChange({ presetId: 'last30' })}>period</button>
+      <span data-testid="extra-presets">{(extraPresets ?? []).join(',')}</span>
+      <button type="button" data-testid="period-6m" onClick={() => onChange({ presetId: 'last6m' })}>6m</button>
+    </>
+  ),
 }));
 vi.mock('@/components/ui/skeleton', () => ({ Skeleton: () => <span /> }));
 vi.mock('@/components/ui/select', () => {
@@ -40,6 +52,7 @@ vi.mock('lucide-react', () => new Proxy({}, {
 }));
 
 import ProductMovementsTab from '../ProductMovementsTab';
+import { computePeriodRange } from '../productSidebarPeriod.js';
 import enUS from '@/locales/en_US.json';
 import esES from '@/locales/es_ES.json';
 import esAR from '@/locales/es_AR.json';
@@ -63,26 +76,26 @@ const row = (overrides = {}) => ({
 
 const respond = (rows, totalRows = rows.length, extra = {}) => ({ ok: true, json: async () => ({ response: { data: rows, totalRows, ...extra } }) });
 
-// Routes every request: the count (one row), the stock (warehouses) and the pages.
-function route({ pages = [[row()]], total = 1, stock = [], withExactTotal = true } = {}) {
+// Routes every request: the stock (warehouses) and the pages.
+function route({ pages = [[row()]], total = 1, stock = [] } = {}) {
   let page = 0;
   mocks.apiFetch.mockImplementation(async (path) => {
     if (path.startsWith('/stock')) return respond(stock);
-    // NEO reports the rows returned plus one as totalRows on a partial page; the exact total is the backend's.
-    if (path.includes('_endRow=0&') || path.endsWith('_endRow=0')) return respond([], 2, withExactTotal ? { etgoTotalRows: total } : {});
     const rows = pages[Math.min(page, pages.length - 1)];
     page += 1;
     return respond(rows, total);
   });
 }
 
-const pageRequests = () => mocks.apiFetch.mock.calls.map(([path]) => path).filter((p) => p.startsWith('/transactions') && !p.includes('_endRow=0&') && !p.endsWith('_endRow=0'));
+const pageRequests = () => mocks.apiFetch.mock.calls.map(([path]) => path).filter((p) => p.startsWith('/transactions'));
 const query = (path) => new URLSearchParams(path.split('?')[1]);
 
 describe('ProductMovementsTab (ETP-5889)', () => {
   beforeEach(() => {
     mocks.apiFetch.mockReset();
     mocks.tracking.mockReset();
+    mocks.navigate.mockReset();
+    mocks.location = { pathname: '/product/p1', search: '?a=1', hash: '', state: null };
     mocks.capabilities = { productMovements: true };
     route();
   });
@@ -104,18 +117,16 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     ])('hides itself, fetches nothing and emits no telemetry while the capability is %s', async (_name, capabilities) => {
       mocks.capabilities = capabilities;
       const onVisibilityChange = vi.fn();
-      const onCountChange = vi.fn();
       const { container } = render(
-        <ProductMovementsTab data={storable} isActive onVisibilityChange={onVisibilityChange} onCountChange={onCountChange} />,
+        <ProductMovementsTab data={storable} isActive onVisibilityChange={onVisibilityChange} />,
       );
 
       expect(container).toBeEmptyDOMElement();
       expect(onVisibilityChange).toHaveBeenCalledWith(false);
       expect(onVisibilityChange).not.toHaveBeenCalledWith(true);
       expect(mocks.apiFetch).not.toHaveBeenCalled();
-      expect(onCountChange).not.toHaveBeenCalled();
       // The tracking hook only fires on isActive: it must never be told the tab is active.
-      expect(mocks.tracking).not.toHaveBeenCalledWith({ isActive: true });
+      expect(mocks.tracking).not.toHaveBeenCalledWith(expect.objectContaining({ isActive: true }));
     });
 
     it('appears and starts loading when the capability turns on after mount', async () => {
@@ -181,29 +192,20 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     expect(onVisibilityChange).toHaveBeenCalledWith(true);
   });
 
-  it('counts the movements as soon as it is mounted, but loads the rows only once it is shown', async () => {
-    const onCountChange = vi.fn();
-    const { rerender } = render(<ProductMovementsTab data={storable} isActive={false} onCountChange={onCountChange} />);
+  it('sends no request while it is mounted but not shown, and only page requests (no counting probe) once it is', async () => {
+    const { rerender } = render(<ProductMovementsTab data={storable} isActive={false} />);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(mocks.apiFetch).not.toHaveBeenCalled();
 
-    await waitFor(() => expect(onCountChange).toHaveBeenCalledWith(1));
-    expect(pageRequests()).toHaveLength(0);
-
-    rerender(<ProductMovementsTab data={storable} isActive onCountChange={onCountChange} />);
+    rerender(<ProductMovementsTab data={storable} isActive />);
 
     await waitFor(() => expect(pageRequests()).toHaveLength(1));
+    const paths = mocks.apiFetch.mock.calls.map(([path]) => path);
+    expect(paths.some((path) => /_endRow=0(&|$)/.test(path))).toBe(false);
+    expect(query(pageRequests()[0]).get('_endRow')).toBe('49');
   });
 
-  it('counts with the exact total of the backend, not with the lower bound NEO calls totalRows', async () => {
-    route({ total: 8 });
-    const onCountChange = vi.fn();
-    render(<ProductMovementsTab data={storable} isActive={false} onCountChange={onCountChange} />);
-
-    await waitFor(() => expect(onCountChange).toHaveBeenCalledWith(8));
-    expect(onCountChange).not.toHaveBeenCalledWith(2);
-  });
-
-  it('shows no counter, rather than a wrong one, when the backend sends no exact total', async () => {
-    route({ total: 8, withExactTotal: false });
+  it('does not report a counter to the tab strip', async () => {
     const onCountChange = vi.fn();
     render(<ProductMovementsTab data={storable} isActive onCountChange={onCountChange} />);
 
@@ -226,13 +228,13 @@ describe('ProductMovementsTab (ETP-5889)', () => {
 
   it('tells the tracking hook it is active only while it is shown for a stocked product', async () => {
     const { rerender } = render(<ProductMovementsTab data={storable} isActive={false} />);
-    expect(mocks.tracking).toHaveBeenLastCalledWith({ isActive: false });
+    expect(mocks.tracking).toHaveBeenLastCalledWith({ isActive: false, source: 'tab' });
 
     rerender(<ProductMovementsTab data={storable} isActive />);
-    expect(mocks.tracking).toHaveBeenLastCalledWith({ isActive: true });
+    expect(mocks.tracking).toHaveBeenLastCalledWith({ isActive: true, source: 'tab' });
 
     rerender(<ProductMovementsTab data={{ ...storable, productType: 'S' }} isActive />);
-    expect(mocks.tracking).toHaveBeenLastCalledWith({ isActive: false });
+    expect(mocks.tracking).toHaveBeenLastCalledWith({ isActive: false, source: 'tab' });
   });
 
   it('shows type, document, warehouse, signed quantity, cost and resulting stock of each movement', async () => {
@@ -309,6 +311,29 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     expect(lines[1]).toHaveTextContent('productMovementsTypeTransfer');
   });
 
+  it('shows the time of day under the date, straight from etgoProcessTime', async () => {
+    route({ pages: [[
+      row({ etgoProcessTime: '2026-11-03T09:05:07' }),
+      row({ etgoProcessTime: '2026-11-03T16:21:43' }),
+    ]], total: 2 });
+    render(<ProductMovementsTab data={storable} isActive />);
+
+    const times = await screen.findAllByTestId('product-movements-time');
+    expect(times.map((t) => t.textContent)).toEqual(['09:05', '16:21']);
+    const [first] = await screen.findAllByTestId('product-movements-row');
+    expect(first.querySelector('[data-testid="product-movements-time"]').className).toContain('text-muted-foreground');
+  });
+
+  it('renders no second line and no extra element when etgoProcessTime is absent or malformed', async () => {
+    route({ pages: [[row(), row({ etgoProcessTime: null }), row({ etgoProcessTime: 'nope' })]], total: 3 });
+    render(<ProductMovementsTab data={storable} isActive />);
+
+    const lines = await screen.findAllByTestId('product-movements-row');
+    expect(lines).toHaveLength(3);
+    expect(screen.queryByTestId('product-movements-time')).toBeNull();
+    lines.forEach((line) => expect(line.querySelector('[role="cell"]').children).toHaveLength(0));
+  });
+
   it('sorts by the warehouse name and starts again from the first page', async () => {
     render(<ProductMovementsTab data={storable} isActive />);
     await waitFor(() => expect(pageRequests()).toHaveLength(1));
@@ -363,6 +388,30 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     expect(criteria).toContainEqual({ fieldName: 'etgoWarehouse', operator: 'equals', value: 'wh-9' });
   });
 
+  it('offers the last 3 / 6 months presets and filters by the last 6 months', async () => {
+    route();
+    render(<ProductMovementsTab data={storable} isActive />);
+    await waitFor(() => expect(pageRequests()).toHaveLength(1));
+    expect(screen.getByTestId('extra-presets')).toHaveTextContent('last3m,last6m');
+
+    await userEvent.click(screen.getByTestId('period-6m'));
+    await waitFor(() => expect(pageRequests()).toHaveLength(2));
+    const criteria = JSON.parse(query(pageRequests()[1]).get('criteria'));
+    const { start, end } = computePeriodRange(6, new Date());
+    const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    expect(criteria).toContainEqual({ fieldName: 'movementDate', operator: 'greaterOrEqual', value: iso(start) });
+    expect(criteria).toContainEqual({ fieldName: 'movementDate', operator: 'lessOrEqual', value: iso(end) });
+  });
+
+  it('makes the scroll box a containing block so sr-only rows cannot grow the page scroll', async () => {
+    route({ pages: [[row({ id: 'a-0' })]], total: 1 });
+    render(<ProductMovementsTab data={storable} isActive />);
+    await waitFor(() => expect(screen.getAllByTestId('product-movements-row')).toHaveLength(1));
+    const box = screen.getByTestId('product-movements-scroll');
+    expect(box.className.split(' ')).toContain('relative');
+    expect(box.className).toContain('overflow-y-auto');
+  });
+
   it('loads the next 50 rows when the list is scrolled to the end', async () => {
     const firstPage = Array.from({ length: 50 }, (_, i) => row({ id: `a-${i}` }));
     route({ pages: [firstPage, [row({ id: 'b-0' })]], total: 51 });
@@ -392,15 +441,8 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     expect(pageRequests()).toHaveLength(1);
   });
 
-  it('says the product has no movements when its total is zero', async () => {
+  it('says there are no results for the filters when the page comes back empty', async () => {
     route({ pages: [[]], total: 0 });
-    render(<ProductMovementsTab data={storable} isActive />);
-
-    expect(await screen.findByTestId('product-movements-empty')).toHaveTextContent('noStockMovements');
-  });
-
-  it('says there are no results for the filters when the product does have movements', async () => {
-    route({ pages: [[]], total: 12 });
     render(<ProductMovementsTab data={storable} isActive />);
 
     expect(await screen.findByTestId('product-movements-no-results')).toHaveTextContent('productMovementsNoResults');
@@ -414,25 +456,23 @@ describe('ProductMovementsTab (ETP-5889)', () => {
   });
 
   it('shows an error instead of an empty state when the request fails', async () => {
-    mocks.apiFetch.mockImplementation(async (path) => (path.startsWith('/transactions') && !path.endsWith('_endRow=0')
+    mocks.apiFetch.mockImplementation(async (path) => (path.startsWith('/transactions')
       ? { ok: false, status: 500, statusText: 'Server Error', json: async () => ({}) }
       : respond([], 3)));
     render(<ProductMovementsTab data={storable} isActive />);
 
     expect(await screen.findByText('productMovementsError')).toBeInTheDocument();
-    expect(screen.queryByTestId('product-movements-empty')).toBeNull();
+    expect(screen.queryByTestId('product-movements-no-results')).toBeNull();
   });
 
   // Retry of a failed load: the error is an alert with a button that asks for the same page again.
   describe('error and retry', () => {
-    const isCount = (p) => p.startsWith('/transactions') && (p.includes('_endRow=0&') || p.endsWith('_endRow=0'));
     const failure = { ok: false, status: 500, statusText: 'Server Error', json: async () => ({}) };
     // `outcomes` is consumed one per page request: 'reject' | 'http' | an array of rows.
     function routeOutcomes(outcomes, total = 51) {
       let n = 0;
       mocks.apiFetch.mockImplementation(async (path) => {
         if (path.startsWith('/stock')) return respond([]);
-        if (isCount(path)) return respond([], 2, { etgoTotalRows: total });
         const outcome = outcomes[Math.min(n, outcomes.length - 1)];
         n += 1;
         if (outcome === 'reject') throw new Error('network down');
@@ -482,7 +522,7 @@ describe('ProductMovementsTab (ETP-5889)', () => {
       const gate = new Promise((r) => { release = r; });
       const inner = mocks.apiFetch.getMockImplementation();
       mocks.apiFetch.mockImplementation(async (path, ...rest) => {
-        if (path.startsWith('/transactions') && !isCount(path)) await gate;
+        if (path.startsWith('/transactions')) await gate;
         return inner(path, ...rest);
       });
 
@@ -560,10 +600,10 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     it('is aria-busy while the first page loads and not busy at rest', async () => {
       let release;
       mocks.apiFetch.mockImplementation((path) => {
-        if (path.startsWith('/transactions') && !path.endsWith('_endRow=0')) {
+        if (path.startsWith('/transactions')) {
           return new Promise((resolve) => { release = () => resolve(respond([row()])); });
         }
-        return Promise.resolve(respond([], 2, { etgoTotalRows: 1 }));
+        return Promise.resolve(respond([]));
       });
       render(<ProductMovementsTab data={storable} isActive />);
 
@@ -581,7 +621,6 @@ describe('ProductMovementsTab (ETP-5889)', () => {
       let calls = 0;
       mocks.apiFetch.mockImplementation((path) => {
         if (path.startsWith('/stock')) return Promise.resolve(respond([]));
-        if (path.includes('_endRow=0&') || path.endsWith('_endRow=0')) return Promise.resolve(respond([], 2, { etgoTotalRows: 80 }));
         calls += 1;
         if (calls === 1) return Promise.resolve(respond(full, 80));
         return new Promise((resolve) => { releaseSecond = () => resolve(respond([row({ id: 'r-next' })], 80)); });
@@ -694,7 +733,7 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     });
 
     it('keeps the error block as an alert', async () => {
-      mocks.apiFetch.mockImplementation(async (path) => (path.startsWith('/transactions') && !path.endsWith('_endRow=0')
+      mocks.apiFetch.mockImplementation(async (path) => (path.startsWith('/transactions')
         ? { ok: false, status: 500, statusText: 'Server Error', json: async () => ({}) }
         : respond([], 3)));
       render(<ProductMovementsTab data={storable} isActive />);
@@ -768,7 +807,6 @@ describe('ProductMovementsTab (ETP-5889)', () => {
   describe('change of product with the tab mounted', () => {
     const productA = { id: 'pA', productType: 'I', stocked: true };
     const productB = { id: 'pB', productType: 'I', stocked: true };
-    const isCount = (p) => p.startsWith('/transactions') && (p.includes('_endRow=0&') || p.endsWith('_endRow=0'));
     const parentOf = (p) => query(p).get('parentId');
     const deferred = () => {
       let resolve;
@@ -777,42 +815,20 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     };
     const pagesOf = (id) => pageRequests().filter((p) => parentOf(p) === id);
 
-    // Per-product router. `count`, `pages` and `stock` may be a value or a deferred promise to hold the answer.
+    // Per-product router. `pages` and `stock` may be a value or a deferred promise to hold the answer.
     function routeProducts(config) {
       mocks.apiFetch.mockImplementation(async (path) => {
         const id = path.startsWith('/stock') ? new URLSearchParams(path.split('?')[1]).get('parentId') : parentOf(path);
         const cfg = config[id];
         if (path.startsWith('/stock')) return respond(await (cfg.stock ?? []));
-        if (isCount(path)) return respond([], 2, { etgoTotalRows: await cfg.count });
         return respond(await (cfg.pages ?? [row()]));
       });
     }
 
-    it('does not show the "no movements" notice of the previous product while the counter of the new one is pending, and clears the tab counter', async () => {
-      const countB = deferred();
-      routeProducts({ pA: { count: 0, pages: [] }, pB: { count: countB.promise, pages: [] } });
-      const onCountChange = vi.fn();
-      const { rerender } = render(<ProductMovementsTab data={productA} isActive onCountChange={onCountChange} />);
-      expect(await screen.findByTestId('product-movements-empty')).toBeInTheDocument();
-      expect(onCountChange).toHaveBeenLastCalledWith(0);
-
-      rerender(<ProductMovementsTab data={productB} isActive onCountChange={onCountChange} />);
-
-      await waitFor(() => expect(pagesOf('pB')).toHaveLength(1));
-      await screen.findByTestId('product-movements-no-results');
-      expect(screen.queryByTestId('product-movements-empty')).toBeNull();
-      expect(onCountChange).toHaveBeenCalledWith(undefined);
-      expect(onCountChange).toHaveBeenLastCalledWith(undefined);
-
-      countB.resolve(0);
-      expect(await screen.findByTestId('product-movements-empty')).toBeInTheDocument();
-      expect(onCountChange).toHaveBeenLastCalledWith(0);
-    });
-
     it('does not apply the warehouse filter of the previous product to the new one, and takes the warehouse list from the new one', async () => {
       routeProducts({
-        pA: { count: 1, stock: [{ warehouse: 'wh-A', 'warehouse$_identifier': 'Almacén A' }] },
-        pB: { count: 1, stock: [{ warehouse: 'wh-B', 'warehouse$_identifier': 'Almacén B' }] },
+        pA: { stock: [{ warehouse: 'wh-A', 'warehouse$_identifier': 'Almacén A' }] },
+        pB: { stock: [{ warehouse: 'wh-B', 'warehouse$_identifier': 'Almacén B' }] },
       });
       const { rerender } = render(<ProductMovementsTab data={productA} isActive />);
       await userEvent.click(await screen.findByTestId('warehouse-wh-A'));
@@ -833,8 +849,8 @@ describe('ProductMovementsTab (ETP-5889)', () => {
       const pagesA = deferred();
       const pagesB = deferred();
       routeProducts({
-        pA: { count: 1, pages: pagesA.promise },
-        pB: { count: 1, pages: pagesB.promise },
+        pA: { pages: pagesA.promise },
+        pB: { pages: pagesB.promise },
       });
       const { rerender } = render(<ProductMovementsTab data={productA} isActive />);
       await waitFor(() => expect(pagesOf('pA')).toHaveLength(1));
@@ -854,7 +870,7 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     });
 
     it('loads the new product when the tab is active, and waits to be shown when it is not', async () => {
-      routeProducts({ pA: { count: 1 }, pB: { count: 1 } });
+      routeProducts({ pA: {}, pB: {} });
       const active = render(<ProductMovementsTab data={productA} isActive />);
       await waitFor(() => expect(pagesOf('pA')).toHaveLength(1));
       active.rerender(<ProductMovementsTab data={productB} isActive />);
@@ -862,38 +878,124 @@ describe('ProductMovementsTab (ETP-5889)', () => {
       active.unmount();
 
       mocks.apiFetch.mockClear();
-      const onCountChange = vi.fn();
-      const idle = render(<ProductMovementsTab data={productA} isActive={false} onCountChange={onCountChange} />);
-      await waitFor(() => expect(onCountChange).toHaveBeenCalledWith(1));
-      idle.rerender(<ProductMovementsTab data={productB} isActive={false} onCountChange={onCountChange} />);
-      await waitFor(() => expect(mocks.apiFetch.mock.calls.some(([p]) => isCount(p) && parentOf(p) === 'pB')).toBe(true));
+      const idle = render(<ProductMovementsTab data={productA} isActive={false} />);
+      idle.rerender(<ProductMovementsTab data={productB} isActive={false} />);
       await new Promise((r) => setTimeout(r, 20));
-      expect(pageRequests()).toHaveLength(0);
-      expect(mocks.apiFetch.mock.calls.some(([p]) => p.startsWith('/stock'))).toBe(false);
+      expect(mocks.apiFetch).not.toHaveBeenCalled();
 
-      idle.rerender(<ProductMovementsTab data={productB} isActive onCountChange={onCountChange} />);
+      idle.rerender(<ProductMovementsTab data={productB} isActive />);
       await waitFor(() => expect(pagesOf('pB')).toHaveLength(1));
       expect(pagesOf('pA')).toHaveLength(0);
     });
 
     it('does not reset anything nor repeat requests when it re-renders with the same product', async () => {
-      routeProducts({ pA: { count: 1, stock: [{ warehouse: 'wh-A', 'warehouse$_identifier': 'Almacén A' }] } });
-      const onCountChange = vi.fn();
-      const { rerender } = render(<ProductMovementsTab data={productA} isActive onCountChange={onCountChange} />);
+      routeProducts({ pA: { stock: [{ warehouse: 'wh-A', 'warehouse$_identifier': 'Almacén A' }] } });
+      const { rerender } = render(<ProductMovementsTab data={productA} isActive />);
       await screen.findByTestId('product-movements-row');
-      await waitFor(() => expect(onCountChange).toHaveBeenCalledWith(1));
       await screen.findByTestId('warehouse-wh-A');
       const calls = mocks.apiFetch.mock.calls.length;
-      onCountChange.mockClear();
 
-      rerender(<ProductMovementsTab data={{ ...productA }} isActive onCountChange={onCountChange} />);
+      rerender(<ProductMovementsTab data={{ ...productA }} isActive />);
       await new Promise((r) => setTimeout(r, 20));
 
       expect(mocks.apiFetch).toHaveBeenCalledTimes(calls);
-      expect(onCountChange).not.toHaveBeenCalled();
       expect(screen.getByTestId('product-movements-row')).toBeInTheDocument();
       expect(screen.getByTestId('warehouse-wh-A')).toBeInTheDocument();
       expect(screen.queryByTestId('product-movements-skeleton')).toBeNull();
+    });
+  });
+  // ETP-5908 batch E: arriving from the side panel's "Ver movimientos" link.
+  describe('period requested by the side panel link (location.state.movementsPeriod)', () => {
+    const requestState = (preset) => ({ openSecondaryTab: 'custom:movements', movementsPeriod: preset });
+    const bounds = (path) => ({ from: query(path).get('_where') ?? path });
+    const lastPage = () => pageRequests().at(-1);
+
+    it.each([['last3m', 3], ['last6m', 6], ['last12m', 12]])('applies %s, keeping direction and warehouse, and restarts the paging', async (preset, months) => {
+      route({ stock: [{ warehouse: 'wh-1', 'warehouse$_identifier': 'Norte' }] });
+      const user = userEvent.setup();
+      const { rerender } = render(<ProductMovementsTab data={storable} isActive />);
+      await screen.findByTestId('product-movements-row');
+      await user.click(screen.getByRole('button', { name: 'productMovementsOut' }));
+      await user.click(await screen.findByTestId('warehouse-wh-1'));
+      await waitFor(() => expect(lastPage()).toContain('wh-1'));
+      const before = pageRequests().length;
+
+      mocks.location = { ...mocks.location, state: requestState(preset) };
+      rerender(<ProductMovementsTab data={storable} isActive />);
+
+      await waitFor(() => expect(pageRequests().length).toBeGreaterThan(before));
+      const path = lastPage();
+      const today = new Date();
+      const { start } = computePeriodRange(months, new Date(today.getFullYear(), today.getMonth(), today.getDate()));
+      const iso = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+      expect(decodeURIComponent(path)).toContain(iso);
+      expect(path).toContain('wh-1');
+      expect(path).toMatch(/_startRow=0/);
+      expect(screen.getByRole('button', { name: 'productMovementsOut' })).toHaveAttribute('aria-pressed', 'true');
+      expect(bounds(path)).toBeTruthy();
+    });
+
+    it('clears the router state once (replace, same path and search), and does not re-apply on re-render', async () => {
+      const { rerender } = render(<ProductMovementsTab data={storable} isActive={false} />);
+      mocks.location = { ...mocks.location, state: requestState('last6m') };
+      rerender(<ProductMovementsTab data={storable} isActive={false} />);
+
+      await waitFor(() => expect(mocks.navigate).toHaveBeenCalledTimes(1));
+      expect(mocks.navigate).toHaveBeenCalledWith('/product/p1?a=1', { replace: true, state: null });
+
+      // The router state is gone: the user changes the period by hand and a re-render keeps it.
+      mocks.location = { ...mocks.location, state: null };
+      rerender(<ProductMovementsTab data={storable} isActive />);
+      await screen.findByTestId('product-movements-row');
+      fireEvent.click(screen.getByTestId('period'));
+      await waitFor(() => expect(decodeURIComponent(lastPage())).not.toContain('last6m'));
+      const calls = pageRequests().length;
+      rerender(<ProductMovementsTab data={storable} isActive />);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(pageRequests()).toHaveLength(calls);
+      expect(mocks.navigate).toHaveBeenCalledTimes(1);
+    });
+
+    it('a second request (state sequence request -> cleared -> request) is applied again', async () => {
+      const { rerender } = render(<ProductMovementsTab data={storable} isActive />);
+      await screen.findByTestId('product-movements-row');
+      for (const preset of ['last3m', 'last12m']) {
+        mocks.location = { ...mocks.location, state: requestState(preset) };
+        rerender(<ProductMovementsTab data={storable} isActive />);
+        await waitFor(() => expect(mocks.navigate).toHaveBeenCalledTimes(preset === 'last3m' ? 1 : 2));
+        mocks.location = { ...mocks.location, state: null };
+        rerender(<ProductMovementsTab data={storable} isActive />);
+      }
+    });
+
+    it('ignores (and does not clear) the request while the capability is off', async () => {
+      mocks.capabilities = { productMovements: false };
+      mocks.location = { ...mocks.location, state: requestState('last6m') };
+      const { container } = render(<ProductMovementsTab data={storable} isActive />);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(container).toBeEmptyDOMElement();
+      expect(mocks.navigate).not.toHaveBeenCalled();
+      expect(mocks.apiFetch).not.toHaveBeenCalled();
+    });
+
+    it('ignores an unknown preset but still clears the state', async () => {
+      mocks.location = { ...mocks.location, state: { movementsPeriod: 'bogus' } };
+      render(<ProductMovementsTab data={storable} isActive={false} />);
+      await waitFor(() => expect(mocks.navigate).toHaveBeenCalledTimes(1));
+      expect(mocks.tracking).not.toHaveBeenCalledWith(expect.objectContaining({ source: 'side_panel_link' }));
+    });
+
+    it('tells the tracking the source is the link while a request is pending, and the tab otherwise', async () => {
+      const { rerender } = render(<ProductMovementsTab data={storable} isActive={false} />);
+      expect(mocks.tracking).toHaveBeenLastCalledWith({ isActive: false, source: 'tab' });
+      mocks.location = { ...mocks.location, state: requestState('last6m') };
+      rerender(<ProductMovementsTab data={storable} isActive />);
+      await waitFor(() => expect(mocks.tracking).toHaveBeenLastCalledWith({ isActive: true, source: 'side_panel_link' }));
+      // Deactivating resets it: the next opening by clicking the tab is 'tab'.
+      mocks.location = { ...mocks.location, state: null };
+      rerender(<ProductMovementsTab data={storable} isActive={false} />);
+      rerender(<ProductMovementsTab data={storable} isActive />);
+      await waitFor(() => expect(mocks.tracking).toHaveBeenLastCalledWith({ isActive: true, source: 'tab' }));
     });
   });
 });
