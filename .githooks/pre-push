@@ -578,22 +578,52 @@ run_playwright() {
   fi
 
   if [ "$RUN_PW_MOCKED" = "1" ]; then
-    # Only mocked specs changed: run those, not all of them (the PR's mini pipeline runs the whole
-    # suite). UI source, e2e infrastructure or dependencies still run it whole.
-    local changed_specs spec
-    changed_specs="$(printf '%s\n' "${CHANGED_FILES:-}" | relevance_mocked_specs)"
+    # ETP-5891: run only the mocked specs the change can affect, picked by
+    # scripts/select-mocked-specs.js from the coverage map CI publishes for develop; the PR's mini
+    # pipeline and the cut still run every spec. PRE_PUSH_MOCKED_ALL=1, tooling or an unknown file,
+    # no base ref or any selector problem run the whole suite: never fewer specs when in doubt.
+    local whole_reason plan_file plan_out plan_status total contract_out
     MOCKED_SPECS=""
-    for spec in $changed_specs; do
-      [ -f "$REPO_DIR/$spec" ] && MOCKED_SPECS="$MOCKED_SPECS ${spec#e2e/}"
-    done
-    MOCKED_SPECS="${MOCKED_SPECS# }"
-    if [ -n "$changed_specs" ] && [ -z "$MOCKED_SPECS" ]; then
-      echo "==> Playwright E2E — mocked specs... SKIPPED ⏭️  (the change only deletes mocked specs)"
-      record_summary_row "Playwright — mocked" "-" "SKIPPED" "only deleted specs"
-    elif [ -n "$MOCKED_SPECS" ]; then
-      run_e2e_suite mocked "mocked specs, only the $(printf '%s\n' $MOCKED_SPECS | wc -l | tr -d ' ') changed" "$password" "$backend_url"
+    # A spec off the shared fixture records no coverage, so the selection could never reach it.
+    if contract_out="$(cd "$REPO_DIR" && node --test scripts/__tests__/mocked-specs-coverage-contract.test.js 2>&1)"; then
+      echo "==> Mocked specs coverage contract... OK ✅"
     else
+      printf '%s\n' "$contract_out" | grep -E '^not ok|^\s+[+-] |^\s+(actual|message):' | sed 's/^/   /'
+      echo "==> Mocked specs coverage contract... FAILED ❌ (scripts/__tests__/mocked-specs-coverage-contract.test.js)"
+      record_failure "Mocked specs coverage contract (every mocked spec imports e2e/tests/helpers/test.js; extra pages go in e2e/mocked-always-run.json)"
+    fi
+    whole_reason="$(printf '%s\n' "${CHANGED_FILES:-}" | relevance_mocked_whole)"
+    if [ "${PRE_PUSH_MOCKED_ALL:-}" = "1" ]; then
+      whole_reason="PRE_PUSH_MOCKED_ALL=1"
+    elif [ -z "$whole_reason" ] && [ -z "$BASE_REF" ]; then
+      whole_reason="no base ref to compare with"
+    fi
+    if [ -n "$whole_reason" ]; then
+      echo "==> Mocked spec selection: the whole suite ($whole_reason)"
       run_e2e_suite mocked "mocked specs" "$password" "$backend_url"
+    else
+      plan_file="$(mktemp)"
+      set +e
+      plan_out="$(cd "$REPO_DIR" && node scripts/select-mocked-specs.js --base "$BASE_REF" --out "$plan_file" 2>&1)"
+      plan_status=$?
+      set -e
+      echo "==> Mocked spec selection:"
+      printf '%s\n' "$plan_out" | sed 's/^/   /'
+      if [ "$plan_status" -ne 0 ] || [ "$(head -n 1 "$plan_file")" = "*" ]; then
+        if [ "$plan_status" -ne 0 ]; then
+          echo "   (the selector exited $plan_status: running the whole suite)"
+        fi
+        run_e2e_suite mocked "mocked specs" "$password" "$backend_url"
+      elif [ ! -s "$plan_file" ]; then
+        echo "==> Playwright E2E — mocked specs... SKIPPED ⏭️  (no mocked spec reaches the change)"
+        record_summary_row "Playwright — mocked" "-" "SKIPPED" "no mocked spec reaches the change"
+      else
+        MOCKED_SPECS="$(tr '\n' ' ' < "$plan_file")"
+        MOCKED_SPECS="${MOCKED_SPECS% }"
+        total="$(cd "$REPO_DIR" && git ls-files 'e2e/*.mocked.spec.js' | wc -l | tr -d ' ')"
+        run_e2e_suite mocked "mocked specs, $(wc -l < "$plan_file" | tr -d ' ') of $total the change can affect" "$password" "$backend_url"
+      fi
+      rm -f "$plan_file"
     fi
   else
     echo "==> Playwright E2E — mocked specs... SKIPPED ⏭️  (no mocked-spec / UI changes)"

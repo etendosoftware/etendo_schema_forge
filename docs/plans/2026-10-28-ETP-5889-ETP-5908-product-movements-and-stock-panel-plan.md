@@ -1,8 +1,8 @@
 # Product Movements Tab (ETP-5889) and Stock Side Panel (ETP-5908) — Plan
 
 > **Date:** 2026-10-28 · **Updated:** 2026-11-02
-> **Status:** **ETP-5889 is implemented and merged into `develop`** (etendo_schema_forge#2073 and #2079, com.etendoerp.go#1507 and etendo-kpis#15, #17, #23, #24; all merged). What is left of it is the deployment, QA and the first measurement (section 5). **ETP-5908 (side panel) is not started and is paused** until ETP-5889 is closed.
-> **Branch:** `feature/ETP-5889`. ETP-5908 gets its own branch, `feature/ETP-5908`, and reuses this plan.
+> **Status:** **ETP-5889 is fully merged into `develop`** (etendo_schema_forge#2073 and #2079, com.etendoerp.go#1507 and etendo-kpis#15, #17, #23, #24; verified on 2026-11-02: nothing of `feature/ETP-5889` is outside `origin/develop`; the two PRs still open in Jira are the automatic mergeblocks #2087 and #1516 to `main`). What is left of it is the deployment, QA and the first measurement (section 5). **ETP-5908 (side panel) is in progress** on `feature/ETP-5908`, cut from `develop` at `e0fc18af9`.
+> **Branch:** ETP-5889 was delivered on `feature/ETP-5889` (merged). ETP-5908 works on `feature/ETP-5908` and reuses this plan.
 > **Intent:** develop **both** tasks. They are related in Jira (`relates to`), share the epic ETP-3504, the label `CelulaAlmacenes` and the same design file. Neither task is optional or secondary.
 >
 > **How to read this document:** sections 1 to 3 are the analysis of 2026-10-28 (kept as the record of what was found and why); sections 4 to 10 are updated to 2026-11-02 and say what was done, what was decided and what is pending.
@@ -100,15 +100,27 @@ Differences with the written tasks:
 | 5 | Empty, no-results, loading (skeleton) and error (with retry) states | **Done** |
 | 6 | Read-only everywhere, including the API (CP-11) | **Done**: the `transactions` entity has POST/PUT/PATCH/DELETE disabled; only GET and GET-by-id are open. Writes were not exercised with a valid CSRF token |
 | 7 | Queryable from the MCP (scope 12) | **Not verified** |
-| 8 | Rename the panel link "Expandir" → "Ver movimientos" (scope 13) | **Pending**, belongs to workstream B |
+| 8 | Rename the panel link "Expandir" → "Ver movimientos" (scope 13) | **Pending**, belongs to workstream B (ETP-5908, flag-gated) |
 | 9 | Behind a per-account feature flag | **Done** (added during delivery, section 10) |
 
-### B. Side panel (ETP-5908) — **not started, paused**
+### B. Side panel (ETP-5908) — **in progress** (`feature/ETP-5908`, from `develop` at `e0fc18af9`, 2026-11-02)
 1. Period selector (3/6/12 months, default 12), exact date range under it, modal that inherits the period but keeps independent state.
 2. Per-warehouse series chart; month labels in the system language; X-axis rules; tooltip with sorted rows and a Total row.
 3. Interactive legend (panel and modal behave differently), at least one series always visible.
 4. Summary / Warehouses tabs, "N ubicaciones" link, warehouse cards, remove "Reserved".
 5. Collapse to a 48 px strip, state persisted across reloads.
+
+**Design verification (Claude Design board, 2026-11-02).** Checked in the board: RF-01 to RF-05, RF-09, RF-11, RF-12, RF-14 (click), RF-15 and RF-16 behave as written. Details left open:
+- The Y axis rescales when a series is hidden; the RFs say nothing about it.
+- Warehouse card text: the design shows "Disponible" on the left and "21 u" on the right, RF-09 says "Disponible · N u".
+- RF-12 gives the same date example for Spanish and English (already listed in section 5).
+- Legend hover (RF-14) and "at least one series always visible" were **not exercised** in the board.
+
+**Current local panel vs the RFs (2026-11-02, product Fernet `SK-003`):** default period is 3M; no date range shown; "N ubicaciones" is not a link; the control reads "Expandir" with an external-link icon; no collapse button; the available quantity shows as `1,380` in the Spanish UI and the Y axis is labelled `13K/1K`. The last two are **to check** against the canonical formatter (`formatCurrency` / number utilities); not yet established as defects.
+
+**Flag decision (2026-11-02).** ETP-5908 reuses the existing capability `productMovements`; it has no flag of its own.
+- Independent of the flag (plain improvements): 12-month default, exact range, "N ubicaciones" link, warehouse cards without "Reservado", chart / axis / tooltip, legend, modal, `maximize-2` icon, collapse to 48 px.
+- Dependent on the flag, each reading `isCapabilityVisible(useCapabilitiesSafe(), PRODUCT_MOVEMENTS_CAPABILITY)` and **failing closed**: the "Ver movimientos" link (with the flag off the panel keeps "Expandir"), the period synchronisation, and the `side_panel_link` telemetry source.
 
 ### C. Telemetry (shared)
 
@@ -134,6 +146,8 @@ The role is not an event property of this event: it travels on every event as th
 | Resulting stock with a warehouse filter | **Follows the filter**: per product and warehouse when a warehouse is selected, per product otherwise. Not computed for the count-only request |
 | Return types | `C_DocType.IsReturn`, resolved by the handler |
 | Sortable Almacén and Tipo | Two stored computed columns on `M_Transaction` (`EM_Etgo_Warehouse_ID`, `EM_Etgo_Doc_Kind`, `S`/`S`) |
+| Default periods (decided 2026-11-02) | The Movements tab keeps **last 7 days** (as built and as in the design); the side panel defaults to **12 months** with the exact range `DD/MM/AAAA – DD/MM/AAAA` under the selector (RF-01, RF-05). Neither default changes. The Jira text of ETP-5889 (scope item "Barra de filtros" and CP-07) was corrected by the user from "3 months" to "7 days" on 2026-11-02 |
+| Flag for ETP-5908 (decided 2026-11-02) | Reuses the capability `productMovements`, no own flag; see section 4B for what depends on it |
 | Who sees the tab | A per-account feature flag, `product-movements-tab` (default off), evaluated only in the backend by `ProductMovementsPolicy` and published as the capability `productMovements`. The flag gates behaviour only: it is **not** access control (with it off the `transactions` rows stay readable under the role's access; only `etgoStockAfter` and `etgoTotalRows` are withheld) |
 
 ### Pending
@@ -144,16 +158,18 @@ The role is not an event property of this event: it travels on every event as th
 - **Datadog**: the flag exists and has a targeting rule by account email in Production (two accounts); it must be widened for the KPIs to measure anything. A real TTL is still to be set (the registry holds a placeholder, 2027-01-31).
 - **First KPI value**: the collector reports the last complete Monday–Sunday week, so the first value appears on the Monday after the first complete week in which the tab was deployed and used (for the week of 2 to 8 November, on 2026-11-09). Until the event has been seen in production the KPIs are N/D, never 0.
 - **Analyst**: does the tenant admin count as a warehouse role; release date and cohort the 3-month target counts from; whether the KPI is restricted to accounts with the flag (with a gradual rollout the denominator includes devices that cannot see the tab).
-- **Default period of the tab**: implemented on the last 7 days, as in the design; ETP-5889 scope 9 says the last 3 months and "3 months" is not one of the design's quick ranges. To confirm.
+- ~~Default period of the tab~~: **closed 2026-11-02**, last 7 days; the Jira text was corrected (see "Decisions taken").
 - **`W+`/`W-` (Work Order) movements**: not in the type table and not excluded; not decided.
 - **Not verified**: MCP access (scope 12), a product with more than one page of movements, the flag off in a hosted environment, the event reaching Datadog and Mixpanel (nothing is configured locally), and the filter of the lists (`"x" in properties[…]`) in the collector's own segmentation query.
 - Optional hardening: a `RAISE WARNING` in the two PL/pgSQL functions instead of returning null on error (needs `update.database`).
 
-**ETP-5908 (all pending)**
+**ETP-5908 (in progress)**
 - KPIs, if any (use of the period selector, Expand, "Ver movimientos").
 - RF-12 gives the same example for Spanish and English ("23 Oct 2026" twice); confirm the intended format per language.
-- **Between the two tasks**, to settle before the panel work: the default period (panel 12 months vs tab), the period mapping (the tab supports a single date and a custom range, the panel only 3/6/12 months) and the "Expandir" control (ETP-5889 scope 13 renames it "Ver movimientos"; ETP-5908 RF-02/RF-07 keep a button called "Expandir").
-- The panel gaps found on 2026-10-28 (section 3) are still there.
+- **STILL OPEN, needs the analyst: what "the period is synchronised with the side panel" means** (ETP-5889 acceptance criterion and CP-07). Facts: the design opens the panel on 12 months and the tab on 7 days; the tab has no 3/6/12-month presets (only 12 months, All time and a custom range), so the panel's 3/6/12 values do not map one to one onto the tab. **Reading 1 (recommended, not decided):** each opens on its own default and a change in one propagates to the other. Verified live on local on 2026-11-02 (product Fernet `SK-003`): changing the panel to 12 months left the tab on 7 days, so **no synchronisation exists today**. Per the flag decision, whatever is built here is gated by `productMovements`.
+- **UX finding (2026-11-02):** with the 7-day default, a product with no recent activity opens the tab empty ("Sin resultados para los filtros aplicados") while the counter says 10. Not decided whether this needs a change (for example, a hint to widen the period).
+- The "Expandir" control: ETP-5889 scope 13 renames it "Ver movimientos"; ETP-5908 RF-02/RF-07 keep a button called "Expandir". Resolved by the flag decision (section 4B): "Ver movimientos" with the flag on, "Expandir" with it off.
+- The panel gaps found on 2026-10-28 (section 3) and 2026-11-02 (section 4B) are still there.
 
 ## 6. Next steps
 
@@ -161,7 +177,9 @@ The role is not an event property of this event: it travels on every event as th
 2. QA of the tab and of the flag (on and off).
 3. Widen the Datadog rule; confirm in Mixpanel that `product_movements_tab_opened` and `role_groups` arrive and that the reports return values.
 4. Read the first KPI values (the Monday after the first complete week with usage) with the analyst and settle the admin question.
-5. Resume ETP-5908, starting with the three cross-task decisions of section 5.
+5. ETP-5908 is under way on `feature/ETP-5908`. Build first the panel changes that do not depend on the flag (section 4B), then the three flag-gated pieces ("Ver movimientos" link, period synchronisation, `side_panel_link` telemetry).
+6. Get the analyst's answer on what "synchronised" means (section 5, Pending) before implementing the synchronisation; until then it is not built.
+7. Check the `1,380` and `13K/1K` rendering in the panel against the canonical formatter, and settle the open design details of section 4B (Y-axis rescale, warehouse card text).
 
 ## 7. Outside this repository
 
@@ -251,8 +269,8 @@ A week with 10 active warehouse users, of whom Ana opens the tab 8 times, Luis 2
 
 ### 11.7 For ETP-5908, to decide before coding
 
-1. The three cross-task decisions of section 5 (default period, period mapping, "Expandir" vs "Ver movimientos").
-2. Whether the panel reuses the `productMovements` capability or has its own flag.
+1. Status 2026-11-02: default period **decided** (tab 7 days, panel 12 months); "Expandir" vs "Ver movimientos" **decided** through the flag; the period mapping / synchronisation is **still open** (section 5).
+2. Decided 2026-11-02: the panel reuses the `productMovements` capability, no own flag.
 3. Whether to measure the panel at all (ETP-5908 has no KPIs) and, if so, per person or per tenant, after Platform answers the question in 11.1.
 4. The panel link to the tab already has a `source = side_panel_link` value reserved in `product_movements_tab_opened`; the event is not sent from the panel yet.
 

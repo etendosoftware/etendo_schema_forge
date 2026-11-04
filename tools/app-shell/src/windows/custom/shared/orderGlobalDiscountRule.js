@@ -1,6 +1,6 @@
 /**
  * Decision rule for carrying an order's global discount (`etgoTotalDiscount`, a percentage) into
- * an invoice when its lines are imported with the "Add from order" popup (ETP-5828).
+ * an invoice when its lines are imported with the "Import from order" popup (ETP-5828).
  *
  * Shared by the sales-invoice and purchase-invoice import modals. Pure: no React, no I/O, so it
  * can be evaluated on every selection change and covered with plain `node --test`.

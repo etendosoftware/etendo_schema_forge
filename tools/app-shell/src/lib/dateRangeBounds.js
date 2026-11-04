@@ -12,7 +12,11 @@ import { todayCalendarISO } from './dateOnly.js';
 /**
  * Resolves a named preset id into `{ from, to }` Date bounds.
  *
- * Presets: today, yesterday, last7, last30, last12m. The `to` bound is pushed
+ * Presets: today, yesterday, last7, last30, last12m, plus the opt-in last3m / last6m
+ * (the Product Movements tab). last3m / last6m clamp the day to the end of the target month
+ * (3 Nov - 3 months = 3 Aug; 31 May - 3 months = 28/29 Feb), exactly like the product side
+ * panel's `computePeriodRange`. last12m is left as it was (`setMonth(-12)`, no clamp: it only
+ * differs on 29 Feb, which rolls to 1 Mar) because other windows depend on it. The `to` bound is pushed
  * to the end of its day (23:59:59.999) so a same-day comparison is inclusive.
  *
  * @param {string} presetId
@@ -32,6 +36,10 @@ export function presetBounds(presetId) {
     from.setDate(from.getDate() - 6);
   } else if (presetId === 'last30') {
     from.setDate(from.getDate() - 29);
+  } else if (presetId === 'last3m' || presetId === 'last6m') {
+    const months = presetId === 'last3m' ? 3 : 6;
+    const lastDayOfTarget = new Date(today.getFullYear(), today.getMonth() - months + 1, 0).getDate();
+    from.setFullYear(today.getFullYear(), today.getMonth() - months, Math.min(today.getDate(), lastDayOfTarget));
   } else if (presetId === 'last12m') {
     from.setMonth(from.getMonth() - 12);
   } else {

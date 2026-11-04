@@ -274,7 +274,7 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
       await page.getByRole('checkbox').first().click({ force: true });
       await slow(page);
 
-      const importSelectedBtn = page.getByRole('button', { name: /importar seleccionadas|import selected/i });
+      const importSelectedBtn = page.getByRole('button', { name: /importar seleccionados|import selected/i });
       await expect(importSelectedBtn,
         '"Import selected" button should be enabled after selecting lines',
       ).toBeEnabled({ timeout: 8_000 });
