@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
+import { toast } from 'sonner';
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUI } from '@/i18n';
@@ -7,6 +8,7 @@ import {
   invoiceOrderImportConfig,
   fetchOrderDocuments,
   fetchOrderLines,
+  describeLoadFailure,
   getOrderDisplay,
   submitOrderImport,
   buildOrderInvoiceLineBody,
@@ -39,10 +41,27 @@ export default function InvoiceOrderImportModal({ direction, ...props }) {
 
   // Stable per apiFetch/direction: ImportLinesModal re-reads the documents when fetchDocuments
   // changes identity.
-  const handlers = useMemo(() => ({
-    fetchDocuments: (args) => fetchOrderDocuments({ ...args, apiFetch, config }),
-    fetchLines: (args) => fetchOrderLines({ ...args, apiFetch, config }),
-  }), [apiFetch, config]);
+  // ETP-5828 — a failed read (server path) is told with the toast the popup already uses for its
+  // import errors; the list then shows what it showed before (no orders / an empty order). `ui`
+  // is read through a ref so the handlers keep their identity: the modal refetches when they change.
+  const uiRef = useRef(ui);
+  uiRef.current = ui;
+  const handlers = useMemo(() => {
+    const fetchDocuments = (args) => fetchOrderDocuments({ ...args, apiFetch, config });
+    const fetchLines = (args) => fetchOrderLines({ ...args, apiFetch, config });
+    // Server path only: the purchase (client) path keeps propagating untoasted, as before.
+    if (!viaServer) return { fetchDocuments, fetchLines };
+    return {
+      fetchDocuments: (args) => fetchDocuments(args).catch((err) => {
+        toast.error(describeLoadFailure(err, uiRef.current));
+        return { documents: [], sharedContext: { invoiceId: args.invoiceId }, excludedByCurrency: false };
+      }),
+      fetchLines: (args) => fetchLines(args).catch((err) => {
+        toast.error(describeLoadFailure(err, uiRef.current));
+        return [];
+      }),
+    };
+  }, [apiFetch, config, viaServer]);
 
   const submitImport = (args) => submitOrderImport({ ...args, apiFetch, config, serverCarry, ui });
 

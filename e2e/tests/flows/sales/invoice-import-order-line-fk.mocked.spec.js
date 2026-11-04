@@ -20,7 +20,10 @@ import { login } from '../../helpers/auth.js';
  *     `POST /sales-invoice/header/{id}/action/importOrderLines`, with
  *     `{ orders: [{ orderId, lines: [{ sourceLineId, quantity }] }], carryGlobalDiscount }`.
  *     The FK travels as `sourceLineId` and the server builds the line; pending quantities are
- *     read through `.../action/availableOrderLines`, never computed in the browser.
+ *     read through `.../action/availableOrderLines`, never computed in the browser. Since
+ *     ETP-5828 the popup also LISTS through the invoice's actions: `availableOrders` for the
+ *     orders and one `availableOrderLines` (`includeCovered: true`) per order for the lines, their
+ *     price and pending — the order GETs are not read on this path.
  *   - purchase-invoice (`ImportFromPurchaseOrderModal`) — the same unified popup (ETP-5828) on its
  *     client path (`importVia: 'client'`, until QA decides MCP-2): still one
  *     `POST /purchase-invoice/lines` per line, carrying the FK as `salesOrderLine` (the spec's
@@ -231,14 +234,33 @@ async function installMocks(page, cfg, { existingInvoiceLines = [], state }) {
   const invoiceActionHandler = async (route) => {
     const req = route.request();
     const name = headerActionName(req.url(), invoiceId);
-    if (req.method() !== 'POST' || !['availableOrderLines', 'importOrderLines'].includes(name)) {
+    if (req.method() !== 'POST'
+      || !['availableOrders', 'availableOrderLines', 'importOrderLines'].includes(name)) {
       return route.fallback();
     }
     const body = req.postData() ? JSON.parse(req.postData()) : {};
     state.actionCalls.push({ name, body });
-    const data = name === 'availableOrderLines'
-      ? (body.orderId === orderId ? pendingByLine : [])
-      : { importedCount: body.orders?.flatMap(o => o.lines || []).length ?? 0 };
+    let data;
+    if (name === 'availableOrders') {
+      // The order row as the action reports it (ETP-5828): `date`, `globalDiscount` as a %.
+      data = [{
+        id: orderId, documentNo: order.documentNo, date: order.orderDate,
+        businessPartner: order.businessPartner, 'businessPartner$_identifier': order['businessPartner$_identifier'],
+        currency: order.currency, globalDiscount: 0, pendingLines: pendingByLine.length,
+      }];
+    } else if (name === 'availableOrderLines') {
+      // Each line with its product, price and the server's pending (ETP-5828: one call per order).
+      data = body.orderId !== orderId ? [] : pendingByLine.map((p, i) => {
+        const line = orderLines.find((l) => l.id === p.id);
+        return {
+          id: p.id, lineNo: (i + 1) * 10, product: line.product,
+          'product$_identifier': line['product$_identifier'], uOM: line.uOM,
+          pendingQuantity: p.pendingQuantity, unitPrice: line.unitPrice,
+        };
+      });
+    } else {
+      data = { importedCount: body.orders?.flatMap(o => o.lines || []).length ?? 0 };
+    }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -363,9 +385,11 @@ for (const win of WINDOWS) {
         const imports = () => state.actionCalls.filter((c) => c.name === 'importOrderLines');
         await expect.poll(() => imports().length, { timeout: 10_000 }).toBe(1);
 
-        // Pending quantities came from the server, for the expanded order.
+        // The orders and the pending quantities came from the server (ETP-5828: listed through
+        // availableOrders, lines in ONE availableOrderLines per order, covered ones included).
+        expect(state.actionCalls.some((c) => c.name === 'availableOrders')).toBe(true);
         expect(state.actionCalls.filter((c) => c.name === 'availableOrderLines').map((c) => c.body))
-          .toContainEqual({ orderId });
+          .toContainEqual({ orderId, includeCovered: true });
 
         // ONE request: the order, its selected line by FK, the server's pending quantity (2,
         // not ordered − invoiced = 3), and no global discount to carry (the order has none).
