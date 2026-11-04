@@ -39,6 +39,21 @@ export function useRestorePair() {
 }
 
 /**
+ * Reports "No es un rebote" (POST `dismissPair`, ETP-5581): the user said a suggested pair is not a
+ * bounce. Nothing is persisted — the backend only emits the KPI event (`decision=unchecked`,
+ * `surface=panel`); the pair stays hidden for the session on the client side alone. Callers fire it
+ * and forget it: a failure must change nothing on screen.
+ * Payload: `{ financialAccountId, statementLineId, counterpartLineId? }` (the selected line and, when
+ * the card shows one, the other line of the pair).
+ *
+ * @returns {{ dismissPair: (payload: object) => Promise<object>, loading: boolean, error: Error|null }}
+ */
+export function useDismissPair() {
+  const { post, loading, error } = useReconciliationPost('dismissPair');
+  return { dismissPair: post, loading, error };
+}
+
+/**
  * Fetches the per-state counts of the default `pendingLines` answer (no `status`), for the given
  * date range. The left panel shows "Descartadas" from a request of its own (`status=discarded`)
  * whose counts carry only `discarded`; after a restore there the other filters' counts are stale,

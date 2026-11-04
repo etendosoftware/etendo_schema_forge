@@ -137,6 +137,77 @@ export function bouncePairPayload(group) {
 }
 
 /**
+ * The `applySuggestions` body key that reports, for the KPI events the backend emits, what became of
+ * every bounce pair the modal SHOWED but is not applying (ETP-5581). One constant, so the field name
+ * lives in one place.
+ */
+export const BOUNCE_DECISIONS_KEY = 'bounceDecisions';
+
+/** The decision a shown, not-applied pair is reported with in {@link BOUNCE_DECISIONS_KEY}. */
+export const BOUNCE_DECISION = Object.freeze({
+  /** Left (or turned) unchecked in the modal. */
+  UNCHECKED: 'unchecked',
+  /** Sent to the panel with "Revisar en el panel" during this modal session, and not re-checked. */
+  SENT_TO_PANEL: 'sent_to_panel',
+});
+
+/**
+ * The {@link BOUNCE_DECISIONS_KEY} entries of an apply: one per shown pair that is not checked
+ * (an ambiguous pair, which cannot be checked, included). A checked pair is not listed: it travels
+ * in `groups` as before. Only the `groupKey` goes, never a line id, amount or text.
+ *
+ * @param {Array<object>} pairs the bounce pairs the modal shows (dismissed ones already left out)
+ * @param {(group: object) => boolean} isChecked the modal's check state
+ * @param {Set<string>|null} [sentToPanelKeys] pairs sent to the panel during this modal session
+ * @returns {Array<{ groupKey: string, decision: string }>}
+ */
+export function bounceDecisions(pairs, isChecked, sentToPanelKeys = null) {
+  return (pairs ?? [])
+    .filter((pair) => pair?.groupKey && !isChecked(pair))
+    .map((pair) => ({
+      groupKey: pair.groupKey,
+      decision: sentToPanelKeys?.has(pair.groupKey)
+        ? BOUNCE_DECISION.SENT_TO_PANEL
+        : BOUNCE_DECISION.UNCHECKED,
+    }));
+}
+
+/**
+ * The `applySuggestions` body with {@link BOUNCE_DECISIONS_KEY} added — only when the modal showed
+ * bounce pairs; an apply without pairs keeps the body it always had.
+ *
+ * @param {object} payload the body without bounce decisions
+ * @param {Array<object>} pairs the bounce pairs the modal shows
+ * @param {(group: object) => boolean} isChecked
+ * @param {Set<string>|null} [sentToPanelKeys]
+ * @returns {object}
+ */
+export function withBounceDecisions(payload, pairs, isChecked, sentToPanelKeys = null) {
+  if (!pairs?.length) return payload;
+  return { ...payload, [BOUNCE_DECISIONS_KEY]: bounceDecisions(pairs, isChecked, sentToPanelKeys) };
+}
+
+/**
+ * The `dismissPair` body of "No es un rebote" (ETP-5581): the line selected in the panel and, when
+ * the card shows one, the other line of the pair (the chosen original of an ambiguous pair; left
+ * out while none is chosen). Null when there is no line.
+ *
+ * @param {string} financialAccountId
+ * @param {object|null} line the selected row
+ * @param {object|null} model its {@link bouncePanelModel}
+ * @returns {{ financialAccountId: string, statementLineId: string, counterpartLineId?: string }|null}
+ */
+export function dismissPairPayload(financialAccountId, line, model) {
+  if (!line?.id) return null;
+  const counterpartLineId = model?.other?.id ?? null;
+  return {
+    financialAccountId,
+    statementLineId: line.id,
+    ...(counterpartLineId ? { counterpartLineId } : {}),
+  };
+}
+
+/**
  * The original lines a pair offers: its candidates when ambiguous, else its original.
  *
  * @param {object} group an autoMatch bounce-pair group

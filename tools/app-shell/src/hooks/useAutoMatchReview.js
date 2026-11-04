@@ -69,8 +69,14 @@ export function useAutoMatchSelection(groups) {
  *   host calls when the automatch is recomputed (the header refresh). The Automatch button does
  *   NOT clear them: a pair just dismissed in the panel must not reappear in the modal.
  *
+ * - `sentToPanelKeys` — pairs sent to the panel with "Revisar en el panel" during this modal
+ *   session, reported as `sent_to_panel` in the apply's `bounceDecisions` (KPI events). The session
+ *   is the life of the current suggestions: a reload forgets them, like the checks. Checking a pair
+ *   again (alone or with "select all") forgets it too: from then on it is a plain modal decision.
+ *
  * Leaving the reconciliation (`active` turning false) drops the focus request and forgets the
- * dismissals, so the next visit starts from what the automatch proposes.
+ * dismissals and the pairs sent to the panel, so the next visit starts from what the automatch
+ * proposes.
  *
  * `panel` bundles what the reconciliation panel needs, as one stable prop.
  *
@@ -81,19 +87,61 @@ export function useAutoMatchSelection(groups) {
 export function useAutoMatchReview(groups, { active = true } = {}) {
   const [focus, setFocus] = useState(null);
   const [dismissedKeys, setDismissedKeys] = useState(() => new Set());
-  const selection = useAutoMatchSelection(groups);
+  const [sentToPanelKeys, setSentToPanelKeys] = useState(() => new Set());
+  const baseSelection = useAutoMatchSelection(groups);
 
   useEffect(() => {
     if (active) return;
     setFocus(null);
     setDismissedKeys((prev) => (prev.size === 0 ? prev : new Set()));
+    setSentToPanelKeys((prev) => (prev.size === 0 ? prev : new Set()));
   }, [active]);
+
+  // New suggestions start a new modal session: what was sent to the panel is forgotten, as the
+  // checks are (useAutoMatchSelection).
+  useEffect(() => {
+    setSentToPanelKeys((prev) => (prev.size === 0 ? prev : new Set()));
+  }, [groups]);
+
+  const forgetSentToPanel = useCallback((list) => {
+    const keys = (list ?? []).filter(isSelectableGroup).map((g) => g.groupKey).filter(Boolean);
+    if (keys.length === 0) return;
+    setSentToPanelKeys((prev) => {
+      if (!keys.some((k) => prev.has(k))) return prev;
+      const next = new Set(prev);
+      for (const k of keys) next.delete(k);
+      return next;
+    });
+  }, []);
+
+  // The modal's checks, with "a pair checked again is no longer sent to the panel" layered on top.
+  const {
+    isChecked, toggle: baseToggle, setMany: baseSetMany,
+  } = baseSelection;
+  const toggle = useCallback((group) => {
+    if (!isChecked(group)) forgetSentToPanel([group]);
+    baseToggle(group);
+  }, [isChecked, baseToggle, forgetSentToPanel]);
+  const setMany = useCallback((list, checked) => {
+    if (checked) forgetSentToPanel(list);
+    baseSetMany(list, checked);
+  }, [baseSetMany, forgetSentToPanel]);
+  const selection = useMemo(() => ({ isChecked, toggle, setMany }), [isChecked, toggle, setMany]);
 
   const startReview = useCallback((group) => {
     const lineId = group?.counterpartLine?.id;
     if (!lineId) return;
     // `seq` makes a second request for the same line a new request.
     setFocus((prev) => ({ lineId, seq: (prev?.seq ?? 0) + 1 }));
+    const key = group?.groupKey;
+    if (key) {
+      setSentToPanelKeys((prev) => {
+        if (prev.has(key)) return prev;
+        const next = new Set(prev);
+        next.add(key);
+        return next;
+      });
+    }
   }, []);
 
   const consumeFocus = useCallback(() => setFocus(null), []);
@@ -124,6 +172,7 @@ export function useAutoMatchReview(groups, { active = true } = {}) {
     dismissedKeys,
     dismiss,
     clearDismissed,
+    sentToPanelKeys,
     panel,
   };
 }

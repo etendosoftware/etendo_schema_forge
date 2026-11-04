@@ -241,6 +241,9 @@ export function FinancialAccountDetail({ recordId }) {
     () => searchParams.get('autoMatch') === 'true' || searchParams.get('tab') === 'reconciliation',
   );
   const [autoMatchOpen, setAutoMatchOpen] = useState(false);
+  // ETP-5581 — whether the current opening of the modal was the automatch's own (the armed check
+  // below) or the Automatch button, for the `auto_opened` property of the bounce-suggestion events.
+  const [autoMatchAutoOpened, setAutoMatchAutoOpened] = useState(false);
   // Transaction to highlight in the Movements tab (deep-link from the reconciled-txns modal arrow).
   // `txnAny` is the same deep-link with one extra promise: the target may be OLDER than the
   // Movements tab's 30-day default, so that tab must open its date filter unbounded or the row
@@ -328,7 +331,10 @@ export function FinancialAccountDetail({ recordId }) {
     }
     if (!autoMatchFetchedRef.current) return;
     setAutoMatchArmed(false);
-    if (autoMatchGroups.length > 0) setAutoMatchOpen(true);
+    if (autoMatchGroups.length > 0) {
+      setAutoMatchAutoOpened(true);
+      setAutoMatchOpen(true);
+    }
   }, [autoMatchArmed, autoMatchLoading, autoMatchGroups]);
   // ETP-5581 — the state the modal and the reconciliation panel share around a bounce pair: the
   // modal's checks, the line "Revisar en el panel" asked to show, and the pairs dismissed with
@@ -350,7 +356,10 @@ export function FinancialAccountDetail({ recordId }) {
   const closeAutoMatch = useCallback(() => setAutoMatchOpen(false), []);
   // Reopens the cached suggestions; it does NOT forget the "No es un rebote" dismissals (only the
   // header refresh and leaving the tab do), or a pair just dismissed in the panel would reappear.
-  const openAutoMatch = useCallback(() => setAutoMatchOpen(true), []);
+  const openAutoMatch = useCallback(() => {
+    setAutoMatchAutoOpened(false);
+    setAutoMatchOpen(true);
+  }, []);
   const { movements, totals, enabledDimensions, headerDimensions, trxTypes, accountOrgId, paymentMethods, loading: movementsLoading, reload: reloadMovements } = useAccountMovements(recordId);
   // Movement create/edit/delete/lifecycle and funds transfers change the balances and pending
   // counts the list shows (a transfer touches TWO accounts; the entity-wide invalidation covers both).
@@ -619,6 +628,10 @@ export function FinancialAccountDetail({ recordId }) {
         selection={autoMatchReview.selection}
         dismissedPairKeys={autoMatchReview.dismissedKeys}
         onReviewPair={handleReviewPair}
+        // ETP-5581 — what the apply reports as `sent_to_panel`, and how this opening happened, for
+        // the bounce-suggestion KPI events.
+        sentToPanelKeys={autoMatchReview.sentToPanelKeys}
+        autoOpened={autoMatchAutoOpened}
         // Same shape ReconciliationTab hands the split panel — the modal names the accounting
         // account a near-match difference will be posted to.
         glItemDifference={account?.glItemDifferenceId

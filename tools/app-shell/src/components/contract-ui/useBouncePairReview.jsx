@@ -3,9 +3,12 @@ import { toast } from 'sonner';
 import { isNetworkError } from '@etendosoftware/app-shell-core/auth';
 import { useUI } from '@/i18n';
 import { translateBackendErrorBody } from '@/lib/backendErrors.js';
-import { useDiscardPair, usePendingLineCounts, useRestorePair } from '@/hooks/useBouncePairActions.js';
 import {
-  BOUNCE_STATE, DISCARDED_STATE, bouncePanelModel, countsWithDismissedPairs, pendingLinesStatusParam,
+  useDiscardPair, useDismissPair, usePendingLineCounts, useRestorePair,
+} from '@/hooks/useBouncePairActions.js';
+import {
+  BOUNCE_STATE, DISCARDED_STATE, bouncePanelModel, countsWithDismissedPairs, dismissPairPayload,
+  pendingLinesStatusParam,
   withDismissedPairs,
 } from './bouncePairs.js';
 import { visibleStatusCodes } from './reconciliationStatusFilter.js';
@@ -219,6 +222,7 @@ export function useBouncePairPanel({
   const ui = useUI();
   const { discardPair, loading: discarding } = useDiscardPair();
   const { restorePair, loading: restoring } = useRestorePair();
+  const { dismissPair } = useDismissPair();
   // The original chosen for an ambiguous pair, remembered per bounce line.
   const [chosen, setChosen] = useState({ lineId: null, originalId: null });
 
@@ -247,7 +251,17 @@ export function useBouncePairPanel({
     if (!groupKey) return;
     dismiss(groupKey);
     toast.success(ui('financeReconcileBounceToastDismissed'));
-  }, [selectedLine, dismiss, ui]);
+    // ETP-5581 — tell the backend, for its KPI event; nothing is persisted. Fire-and-forget: the
+    // hide above is the whole user-visible effect, so a failure is silent. Read-only skips it.
+    if (windowReadOnly) return;
+    const body = dismissPairPayload(accountId, selectedLine, model);
+    if (!body) return;
+    try {
+      Promise.resolve(dismissPair(body)).catch(() => {});
+    } catch {
+      // Never let the report break the dismissal.
+    }
+  }, [selectedLine, dismiss, ui, windowReadOnly, accountId, model, dismissPair]);
 
   const onDiscard = useCallback(async () => {
     if (windowReadOnly || !model?.discard) return;

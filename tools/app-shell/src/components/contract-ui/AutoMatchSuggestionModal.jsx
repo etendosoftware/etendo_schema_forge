@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useEffect, useRef } from 'react';
 import { ArrowUpRight, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
@@ -15,8 +15,12 @@ import { StatusBadge, automatchBadgeKind } from './reconciliationBadges.jsx';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AutoMatchBounceSection } from './AutoMatchBounceSection.jsx';
 import {
-  bouncePairPayload, splitAutoMatchGroups, summarizeApplyResults,
+  bouncePairPayload, defaultGroupChecked, splitAutoMatchGroups, summarizeApplyResults,
+  withBounceDecisions,
 } from './bouncePairs.js';
+import {
+  trackBounceSuggestionsDismissed, trackBounceSuggestionsViewed,
+} from '@/lib/bounceSuggestionsTelemetry.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -344,6 +348,13 @@ function notifyApplyWithPairs(results, ui) {
  *   the suggestions do not reload); without it the modal keeps its own. `dismissedPairKeys`
  *   are pairs the user said are not a bounce, hidden here. `onReviewPair(group)` is "Revisar en el
  *   panel"; without it the button is not offered.
+ *   `sentToPanelKeys` (ETP-5581) are the pairs sent to the panel during this modal session
+ *   (`useAutoMatchReview().sentToPanelKeys`): an apply reports them as `sent_to_panel` in its
+ *   `bounceDecisions`, every other shown and unchecked pair as `unchecked`. `autoOpened` says the
+ *   modal opened by itself rather than from the Automatch button, for the `bounce_suggestions_*`
+ *   events: `viewed` once per opening with at least one pair, `dismissed` when that opening is
+ *   closed without applying (Cancelar, "Abrir conciliación", X, Esc, backdrop — never "Revisar en
+ *   el panel", which the host closes, nor an apply).
  */
 export function AutoMatchSuggestionModal({
   accountId,
@@ -358,6 +369,8 @@ export function AutoMatchSuggestionModal({
   selection = null,
   dismissedPairKeys = null,
   onReviewPair = null,
+  sentToPanelKeys = null,
+  autoOpened = false,
 }) {
   const ui = useUI();
   const { apply, loading } = useApplySuggestions();
@@ -395,10 +408,36 @@ export function AutoMatchSuggestionModal({
   const willLink = checkedGroups.filter((g) => !g.isNew).length;
   const applyCount = checkedGroups.length + checkedPairs.length;
 
+  // ETP-5581 — `bounce_suggestions_viewed`, once per opening that shows at least one pair (the
+  // pairs may land after the modal opened). The flag resets when the modal closes.
+  const viewedRef = useRef(false);
+  const pairsPreselected = useMemo(() => pairs.filter(defaultGroupChecked).length, [pairs]);
+  useEffect(() => {
+    if (!open) {
+      viewedRef.current = false;
+      return;
+    }
+    if (viewedRef.current || pairs.length === 0) return;
+    viewedRef.current = true;
+    trackBounceSuggestionsViewed({ pairsShown: pairs.length, pairsPreselected, autoOpened });
+  }, [open, pairs.length, pairsPreselected, autoOpened]);
+
+  // Every close that is not an apply and not "Revisar en el panel" (which the host performs).
+  const handleDismiss = useCallback(() => {
+    if (pairs.length > 0) {
+      trackBounceSuggestionsDismissed({
+        pairsShown: pairs.length, pairsCheckedAtClose: checkedPairs.length, autoOpened,
+      });
+    }
+    onClose();
+  }, [pairs.length, checkedPairs.length, autoOpened, onClose]);
+
   const handleApply = async () => {
     if (applyCount === 0 || loading) return;
     try {
-      const payload = {
+      // ETP-5581 — with bounce pairs on screen, `bounceDecisions` reports what became of each pair
+      // that is NOT applied (unchecked / sent_to_panel) for the backend's KPI events.
+      const payload = withBounceDecisions({
         financialAccountId: accountId,
         groups: [
           ...checkedGroups.map((g) => ({
@@ -410,7 +449,7 @@ export function AutoMatchSuggestionModal({
           // them first and refuses a line that two checked suggestions share.
           ...checkedPairs.map(bouncePairPayload),
         ],
-      };
+      }, pairs, isChecked, sentToPanelKeys);
       const response = await apply(payload);
       const results = response?.results ?? [];
       if (checkedPairs.length > 0) notifyApplyWithPairs(results, ui);
@@ -432,7 +471,7 @@ export function AutoMatchSuggestionModal({
   return (
     <Dialog
       open={open}
-      onOpenChange={(v) => { if (!v) onClose(); }}
+      onOpenChange={(v) => { if (!v) handleDismiss(); }}
       data-testid="Dialog__a89979">
       <DialogContent
         className="overflow-hidden p-0"
@@ -558,7 +597,7 @@ export function AutoMatchSuggestionModal({
             <Button
               type="button"
               variant="ghost"
-              onClick={onClose}
+              onClick={handleDismiss}
               data-testid="automatch-modal-cancel"
               className="h-10 rounded-full px-3 text-[hsl(var(--foreground))] hover:bg-muted hover:text-[hsl(var(--foreground))]"
             >
@@ -569,7 +608,7 @@ export function AutoMatchSuggestionModal({
             <Button
               type="button"
               variant="outline"
-              onClick={onClose}
+              onClick={handleDismiss}
               data-testid="automatch-modal-open-reconciliation"
               className="h-10 gap-1 rounded-full border-[hsl(var(--border-control))] bg-card px-3 text-[hsl(var(--foreground))] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-muted hover:text-[hsl(var(--foreground))] [&_svg]:size-5"
             >
