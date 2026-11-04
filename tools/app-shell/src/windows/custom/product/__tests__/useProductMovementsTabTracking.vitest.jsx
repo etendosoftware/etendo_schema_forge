@@ -69,4 +69,15 @@ describe('useProductMovementsTabTracking (ETP-5889)', () => {
       expect.objectContaining({ source: 'side_panel_link' }),
     );
   });
+
+  it('emits exactly one event per opening when the source changes while the tab stays active (ETP-5908)', () => {
+    const { rerender } = renderHook((props) => useProductMovementsTabTracking(props), {
+      initialProps: { isActive: true, source: 'side_panel_link' },
+    });
+    rerender({ isActive: true, source: 'tab' });
+    rerender({ isActive: true, source: 'side_panel_link' });
+
+    expect(telemetry.trackProductMovementsTabOpened).toHaveBeenCalledTimes(1);
+    expect(telemetry.trackProductMovementsTabOpened).toHaveBeenCalledWith(expect.objectContaining({ source: 'side_panel_link' }));
+  });
 });

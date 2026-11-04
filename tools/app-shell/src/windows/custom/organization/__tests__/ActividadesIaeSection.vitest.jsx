@@ -206,7 +206,7 @@ describe('ActividadesIaeSection — add row', () => {
     const [postUrl, postOpts] = methodCalls(fetchMock, 'POST')[0];
     expect(postUrl).toContain('/actividadesDelIae');
     expect(JSON.parse(postOpts.body)).toEqual({
-      epgrafeIAE: 'epgrafeIAE-new-id', epiaeType: null, epiaeCode: null, default: false, parentId: ORG_ID,
+      epgrafeIAE: 'epgrafeIAE-new-id', epiaeCode: null, default: false, parentId: ORG_ID,
     });
     // No single-default sweep for a non-default new row.
     expect(methodCalls(fetchMock, 'PATCH')).toHaveLength(0);
@@ -350,7 +350,7 @@ describe('ActividadesIaeSection — single-default rule persists via real PATCH'
 
     await waitFor(() => expect(methodCalls(fetchMock, 'POST')).toHaveLength(1));
     expect(JSON.parse(methodCalls(fetchMock, 'POST')[0][1].body)).toEqual({
-      epgrafeIAE: null, epiaeType: null, epiaeCode: null, default: true, parentId: ORG_ID,
+      epgrafeIAE: null, epiaeCode: null, default: true, parentId: ORG_ID,
     });
 
     await waitFor(() => expect(methodCalls(fetchMock, 'PATCH')).toHaveLength(1));
@@ -516,14 +516,38 @@ describe('ActividadesIaeSection personal columns', () => {
     expect(gridBoundary.last.columns.find(column => column.key === 'default').required).toBe(true);
   });
 
-  it('keeps the original four data columns when the personal view is unavailable', async () => {
+  // ETP-5831 CP-17 — three data columns (Epígrafe, Código, Principal): "Clave" is not offered.
+  it('keeps the three data columns when the personal view is unavailable', async () => {
     gridBoundary.enabled = true;
     gridBoundary.keys = ['default'];
     global.fetch = makeFetchMock({ rows: [] });
     render(<ActividadesIaeSection {...baseProps} />);
     await screen.findByTestId('ActividadesIaeSection__empty');
-    expect(screen.getAllByRole('columnheader')).toHaveLength(5);
-    expect(screen.getByTestId('ActividadesIaeSection__empty')).toHaveAttribute('colspan', '5');
+    expect(screen.getAllByRole('columnheader')).toHaveLength(4);
+    expect(screen.getByTestId('ActividadesIaeSection__empty')).toHaveAttribute('colspan', '4');
+  });
+
+  it('does not offer the "Clave" (IAE type) column, nor send it on create', async () => {
+    const rows = [{ id: 'row-1', default: true, epiaeCode: 'C1', epiaeType: 't1', 'epiaeType$_identifier': 'Type 1' }];
+    const fetchMock = makeFetchMock({ rows });
+    global.fetch = fetchMock;
+    render(<ActividadesIaeSection {...baseProps} />);
+    const row = await screen.findByTestId('ActividadesIaeSection__row-row-1');
+
+    expect(screen.getAllByRole('columnheader').map(header => header.textContent)).not.toContain('Clave');
+    expect(screen.getAllByRole('columnheader')).toHaveLength(4);
+    expect(within(row).queryByTestId('selector-epiaeType')).not.toBeInTheDocument();
+    expect(gridBoundary.last.columns.map(column => column.key)).toEqual(['epgrafeIAE', 'epiaeCode', 'default']);
+
+    fireEvent.click(screen.getByTestId('ActividadesIaeSection__addButton'));
+    const addRow = await screen.findByTestId('ActividadesIaeSection__addRow');
+    expect(within(addRow).queryByTestId('selector-epiaeType')).not.toBeInTheDocument();
+    fetchMock.mockClear();
+    fireEvent.click(within(addRow).getByTestId('ActividadesIaeSection__saveNew'));
+    await waitFor(() => expect(methodCalls(fetchMock, 'POST')).toHaveLength(1));
+    expect(JSON.parse(methodCalls(fetchMock, 'POST')[0][1].body)).not.toHaveProperty('epiaeType');
+    // The existing row's value is never touched.
+    expect(methodCalls(fetchMock, 'PATCH').some(([, opts]) => 'epiaeType' in JSON.parse(opts.body))).toBe(false);
   });
 });
 

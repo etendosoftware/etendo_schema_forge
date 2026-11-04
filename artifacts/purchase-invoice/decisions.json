@@ -527,7 +527,8 @@
         },
         "etgoTotalDiscount": {
           "visibility": "editable",
-          "form": false
+          "form": false,
+          "agentPrompt": "The invoice's total discount: always a percentage (0 to 100), never an amount. It applies to the subtotal of the lines after their own line discounts (each line keeps its line discount). Importing from orders (importOrderLines) and invoicing an order in one step carry the orders' global discount here as the same %. On a draft it can be changed with etendo_update; the totals are recomputed."
         },
         "aeatsiiClaveTipoFc": {
           "visibility": "editable",

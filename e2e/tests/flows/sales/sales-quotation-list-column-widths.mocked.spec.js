@@ -1,7 +1,7 @@
 // @covers tools/app-shell/src/lib/linesColumnWidth.js
 // @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
 // @covers tools/app-shell/src/windows/custom/sales-quotation/index.jsx
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 
 /**

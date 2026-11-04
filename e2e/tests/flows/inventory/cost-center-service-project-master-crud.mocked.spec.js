@@ -1,6 +1,6 @@
 // @covers artifacts/cost-center/decisions.json
 // @covers artifacts/service-project/decisions.json
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 
 /**
