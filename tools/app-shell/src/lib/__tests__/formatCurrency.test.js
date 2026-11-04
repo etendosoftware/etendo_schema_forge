@@ -1,6 +1,7 @@
+// @covers tools/app-shell/src/lib/formatCurrency.js
 import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatCurrency, getCurrencySymbol } from '../formatCurrency.js';
+import { formatCurrency, getCurrencySymbol, formatGroupedNumber } from '../formatCurrency.js';
 import { fetchCurrencyFormatConfig } from '../currencyFormatConfig.js';
 
 // NOTE (ETP-4314): under the `es-ES` locale, `Intl.NumberFormat` inserts a
@@ -439,5 +440,67 @@ describe('symbol position — driven by C_CURRENCY.ISSYMBOLRIGHTSIDE (ETP-4314 f
 
   it('compact notation also respects the left-side position for USD', () => {
     assert.equal(formatCurrency('USD', 12500, { compact: true }), `$12,50${NBSP}mil`);
+  });
+});
+
+describe('formatGroupedNumber — instance separators, grouping, rounding', () => {
+  it('uses 0 decimals by default and groups thousands', () => {
+    assert.equal(formatGroupedNumber(9999), '9.999');
+    assert.equal(formatGroupedNumber(1234.5), '1.235');
+  });
+
+  it('leaves values below 1000 ungrouped', () => {
+    assert.equal(formatGroupedNumber(999), '999');
+    assert.equal(formatGroupedNumber(0), '0');
+  });
+
+  it('formats a large value with the decimal comma and max fraction digits', () => {
+    assert.equal(formatGroupedNumber(1234567.891, { maximumFractionDigits: 2 }), '1.234.567,89');
+  });
+
+  it('honours minimumFractionDigits by padding', () => {
+    assert.equal(formatGroupedNumber(1234, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), '1.234,00');
+  });
+
+  it('raises max to min when max < min', () => {
+    assert.equal(formatGroupedNumber(1.5, { minimumFractionDigits: 2, maximumFractionDigits: 0 }), '1,50');
+  });
+
+  it('clamps fraction digits to 20', () => {
+    const out = formatGroupedNumber(1, { minimumFractionDigits: 50, maximumFractionDigits: 50 });
+    assert.equal(out, `1,${'0'.repeat(20)}`);
+  });
+
+  it('rounds half up', () => {
+    assert.equal(formatGroupedNumber(2.5), '3');
+    assert.equal(formatGroupedNumber(1.005, { maximumFractionDigits: 2 }), '1,01');
+  });
+
+  it('keeps the sign on negatives', () => {
+    assert.equal(formatGroupedNumber(-1234.5, { maximumFractionDigits: 1 }), '-1.234,5');
+    assert.equal(formatGroupedNumber(-9999), '-9.999');
+  });
+
+  it('never renders -0 for a negative that rounds to zero', () => {
+    assert.equal(formatGroupedNumber(-0.4), '0');
+    assert.equal(formatGroupedNumber(-0.001, { maximumFractionDigits: 2 }), '0');
+  });
+
+  it('accepts numeric strings', () => {
+    assert.equal(formatGroupedNumber('1234567'), '1.234.567');
+  });
+
+  it('returns empty string for null, undefined, blank, NaN and Infinity', () => {
+    for (const v of [null, undefined, '', NaN, Infinity, -Infinity, 'abc']) {
+      assert.equal(formatGroupedNumber(v), '', `input ${String(v)}`);
+    }
+  });
+
+  it('agrees with formatCurrency on grouping and decimal separators', () => {
+    const money = formatCurrency('EUR', 1234.5);
+    const digits = money.replace(/[^0-9.,]/g, '');
+    assert.equal(formatGroupedNumber(1234.5, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), digits);
+    const big = formatCurrency('EUR', 1234567.891).replace(/[^0-9.,]/g, '');
+    assert.equal(formatGroupedNumber(1234567.891, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), big);
   });
 });

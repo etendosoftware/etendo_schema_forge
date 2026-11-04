@@ -4,7 +4,7 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-config/ChangeSifDialog.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-config/fiscalSystemApi.js
 // @covers tools/app-shell/src/windows/custom/fiscal-config/useFiscalCatalog.js
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login, navigateTo, MOCK_ORG_ID } from '../../helpers/auth.js';
 import { t } from '../../helpers/i18n.js';
 import {

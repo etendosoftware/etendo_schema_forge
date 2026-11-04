@@ -59,25 +59,18 @@ describe('relevance_checks', () => {
   });
 });
 
-describe('relevance_mocked_specs', () => {
-  it('names the changed mocked specs when nothing else calls for the mocked suite', () => {
-    assert.deepEqual(run('relevance_mocked_specs', [SPEC, OTHER_SPEC, 'docs/guide.md']).split('\n'), [SPEC, OTHER_SPEC]);
-  });
-
-  it('names nothing, so the whole suite runs, when UI source, e2e infrastructure or dependencies changed too', () => {
-    for (const other of ['tools/app-shell/src/App.jsx', 'e2e/playwright.config.js', 'e2e/tests/helpers/auth.js',
-      'e2e/quarantine.json', 'package.json', '.githooks/pre-push', 'unknown/file.txt']) {
-      assert.equal(run('relevance_mocked_specs', [SPEC, other]), '', other);
+describe('relevance_mocked_whole', () => {
+  it('says why the mocked suite runs whole for a file no check knows or the hooks tooling', () => {
+    assert.equal(run('relevance_mocked_whole', [SPEC, 'unknown/file.txt']), 'a changed file matches no known check');
+    for (const tooling of ['.githooks/pre-push', 'run-sonar.sh', 'scripts/run-e2e-full.sh']) {
+      assert.equal(run('relevance_mocked_whole', [SPEC, tooling]), "the change touches the hooks' own tooling", tooling);
     }
   });
 
-  it('still names the changed mocked specs next to workflow, script or agent changes', () => {
-    assert.deepEqual(run('relevance_mocked_specs', [SPEC, '.github/workflows/mini-pipeline.yml', 'scripts/back-merge-main.sh',
-      '.codex/agents/helper.toml']).split('\n'), [SPEC]);
-  });
-
-  it('names nothing when no mocked spec changed', () => {
-    assert.equal(run('relevance_mocked_specs', ['e2e/tests/flows/login.integration.spec.js']), '');
-    assert.equal(run('relevance_mocked_specs', []), '');
+  it('leaves UI source, e2e files, dependencies and tooling around them to the coverage selector', () => {
+    assert.equal(run('relevance_mocked_whole', [SPEC, OTHER_SPEC, 'tools/app-shell/src/App.jsx', 'e2e/playwright.config.js',
+      'e2e/tests/helpers/auth.js', 'e2e/quarantine.json', 'package.json', 'artifacts/orders/contract.json',
+      '.github/workflows/mini-pipeline.yml', 'scripts/back-merge-main.sh', '.codex/agents/helper.toml', 'docs/guide.md']), '');
+    assert.equal(run('relevance_mocked_whole', []), '');
   });
 });

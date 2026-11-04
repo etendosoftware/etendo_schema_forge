@@ -48,6 +48,11 @@ describe('computeTriggerLabel — preset labels', () => {
     expect(computeTriggerLabel({ presetId: 'last12m' }, undefined, ui, 'es-ES')).toBe('dateRangeLast12Months');
   });
 
+  it('labels the opt-in last3m / last6m presets', () => {
+    expect(computeTriggerLabel({ presetId: 'last3m' }, undefined, ui, 'es-ES')).toBe('dateRangeLast3Months');
+    expect(computeTriggerLabel({ presetId: 'last6m' }, undefined, ui, 'es-ES')).toBe('dateRangeLast6Months');
+  });
+
   it('labels an `allTime` preset with the all-time label, not the placeholder', () => {
     expect(computeTriggerLabel({ presetId: 'allTime' }, undefined, ui, 'es-ES')).toBe('dateRangeAllTime');
     // The defensive half of the fix: a period-specific placeholder must not win
@@ -116,4 +121,50 @@ describe('DateRangePopover — picking "all time" updates the trigger', () => {
 
     expect(screen.getByText('dateRangeLast7Days')).toBeInTheDocument();
   });
+});
+
+describe('DateRangePopover — opt-in extraPresets (last3m / last6m)', () => {
+  const DEFAULT_ORDER = [
+    'dateRangeToday', 'dateRangeYesterday', 'dateRangeLast7Days', 'dateRangeLast30Days',
+    'dateRangeLast12Months', 'dateRangeAllTime', 'dateRangeCustom',
+  ];
+  const optionLabels = () => screen.getAllByRole('button')
+    .map((b) => b.textContent)
+    .filter((t) => t.startsWith('dateRange') && !/Cancel|Apply/.test(t));
+
+  it('keeps the default list untouched for a caller that passes nothing', async () => {
+    const user = userEvent.setup();
+    render(<DateRangePopover value={null} onChange={() => {}} placeholder="anyTime" />);
+    await user.click(screen.getByText('anyTime'));
+    await screen.findByText('dateRangeToday');
+    expect(optionLabels()).toEqual(DEFAULT_ORDER);
+  });
+
+  it('inserts the two presets between last30 and last12m when opted in', async () => {
+    const user = userEvent.setup();
+    render(<DateRangePopover value={null} onChange={() => {}} placeholder="anyTime" extraPresets={['last3m', 'last6m']} />);
+    await user.click(screen.getByText('anyTime'));
+    await screen.findByText('dateRangeToday');
+    expect(optionLabels()).toEqual([
+      'dateRangeToday', 'dateRangeYesterday', 'dateRangeLast7Days', 'dateRangeLast30Days',
+      'dateRangeLast3Months', 'dateRangeLast6Months', 'dateRangeLast12Months', 'dateRangeAllTime', 'dateRangeCustom',
+    ]);
+  });
+
+  it.each([['dateRangeLast3Months', 'last3m'], ['dateRangeLast6Months', 'last6m']])(
+    'selecting %s emits the %s preset and the trigger shows its label',
+    async (label, presetId) => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      function Spy() {
+        const [v, setV] = useState(null);
+        return <DateRangePopover value={v} onChange={(x) => { onChange(x); setV(x); }} placeholder="anyTime" extraPresets={['last3m', 'last6m']} />;
+      }
+      render(<Spy />);
+      await user.click(screen.getByText('anyTime'));
+      await user.click(await screen.findByText(label));
+      expect(onChange).toHaveBeenCalledWith({ presetId });
+      expect(screen.getByText(label)).toBeInTheDocument();
+    },
+  );
 });
