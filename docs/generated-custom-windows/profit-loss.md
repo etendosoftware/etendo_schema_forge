@@ -55,6 +55,14 @@ Declared `hidden: true`, so they never appear in the filter panel or as an activ
 - `expandedNodeIds`: comma-separated ids of the expanded rows. When sent, the export prints exactly those rows instead of cutting at the account level.
 - `splitBy` (`org` / `bpartner` / `product`), `splitNodeId`, `splitSign`: split one account (and its whole subtree) by a dimension through `sql.splitQuery`, which reads `fact_acct` with exactly the main query's period, organization, schema and dimension predicates, so the parts add up to the account's amount.
 
+### Performance (ETP-6080, measured 2026-11-04)
+Production read replica, the client with the most accounting lines (9.2k lines in its main schema, 6 orgs), org `*` (every org), a three-year period. Server execution time (`EXPLAIN ANALYZE`, 3 runs each); the browser adds the network round trip on top:
+- Tree: 140–190 ms (98 rows); with a comparison, the same.
+- Split by contact, product or organization: 22–30 ms.
+- Operands query: 2–4 ms.
+
+Almost all of the tree's time is the scan of the client's `fact_acct` lines through the `fact_acct_account` index with `ad_isorgincluded` evaluated on each line (about 14 µs per line). The period is applied inside the sums, not as a filter, so the cost follows the client's total number of lines, not the period's. At that rate a client with 100k lines would take about 1.5 s. No index was added.
+
 ## Gap assessment
 - One accounting schema per run.
 - Balance Sheet keeps the old parameter set until ETP-6079; the two contracts match on everything except the parameters above.
