@@ -6,9 +6,10 @@ import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
 import { SelectorChip } from './SelectorChip.jsx';
 import {
-  resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor, hasCommittedValue, pinSearchTerms,
+  resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor, hasCommittedValue, pinSearchTerms, firstPageLimit,
 } from './selectorSelection.js';
 import { useLocateCommittedValue } from './useLocateCommittedValue.js';
+import { LocatingNotice } from './LocatingNotice.jsx';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
 import { createQueryKey, useOptionalDataCache } from '@etendosoftware/app-shell-core/data';
 import { needsSelectorRevalidation } from '@/lib/selectorRevalidation.js';
@@ -274,7 +275,7 @@ function CreateAction({ field, createLabel, onCreateRequest, onCreate, query }) 
 function SearchSelectOptionsPanel({
   field, ui, query, showEmptyOption, emptyOptionLabel, onSelectEmpty,
   createLabel, onCreateRequest, onCreate, loading, filteredOptions, onSelect,
-  activeIndex, selectedIndex, onHoverOption, serverSearch, hasMore, renderOption,
+  activeIndex, selectedIndex, onHoverOption, serverSearch, hasMore, renderOption, locating = false,
 }) {
   return (
     // min-w-full + w-max: sizes this inner content wrapper to the widest option's natural
@@ -309,6 +310,7 @@ function SearchSelectOptionsPanel({
       {loading && (
         <div className="px-3 py-2 text-xs text-muted-foreground">{ui('loading')}</div>
       )}
+      {locating && !loading && <LocatingNotice testId={`options-${field.key}-locating`} />}
       {!loading && filteredOptions.map((opt, index) => {
         // ETP-5903 — two independent per-row states, as in InlineSearchCombo (ETP-5846):
         // `aria-selected` + check icon + bold label = the COMMITTED value; `data-highlighted` +
@@ -326,7 +328,7 @@ function SearchSelectOptionsPanel({
             data-option-index={index}
             data-testid={`option-${field.key}-${opt.id}`}
             // block required alongside w-full — see the CreateAction className comment above.
-            className={`w-full block text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer whitespace-nowrap${isHighlighted ? ' bg-accent text-accent-foreground' : ''}${isSelected ? ' font-medium' : ''}`}
+            className={`w-full block text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer whitespace-nowrap${locating ? ' invisible' : ''}${isHighlighted ? ' bg-accent text-accent-foreground' : ''}${isSelected ? ' font-medium' : ''}`}
             onMouseDown={(e) => { e.preventDefault(); onSelect(opt); }}
             onMouseEnter={() => onHoverOption?.(index)}
           >
@@ -346,7 +348,7 @@ function SearchSelectOptionsPanel({
           {ui('noResultsFor')} &ldquo;{query}&rdquo;
         </div>
       )}
-      {serverSearch && !loading && hasMore && filteredOptions.length > 0 && (
+      {serverSearch && !loading && hasMore && !locating && filteredOptions.length > 0 && (
         <div className="py-1 text-center text-xs text-muted-foreground select-none pointer-events-none">
           {ui('loading')}
         </div>
@@ -679,7 +681,7 @@ export function CreatableSearchSelect({
   // scroll listener below to APPEND the next page (ETP-4975, mirrors SelectorInput.jsx's
   // fetchPage). Cleared on unmount so no stale timer fires a setState after the component
   // is gone (the debounce timer; this function itself has no timer of its own).
-  const triggerServerSearch = useCallback((searchQuery, offset = 0) => {
+  const triggerServerSearch = useCallback((searchQuery, offset = 0, { limit: requestedLimit } = {}) => {
     if (!serverSearch || !selectorUrl) return;
     if (offset > 0 && (!hasMoreRef.current || fetchInFlightRef.current)) return;
     // ETP-4975 BUG-2 fix: offset===0 always starts a NEW search generation (typed, or via
@@ -690,6 +692,10 @@ export function CreatableSearchSelect({
     // of overwriting/appending onto the newer search's state (serverOptions/offsetRef/hasMoreRef).
     if (offset === 0) searchGenerationRef.current += 1;
     const requestGeneration = searchGenerationRef.current;
+    // ETP-6103 — the opening page is the larger walk page when a value is committed; the walk asks
+    // for its own size. fetchServerOptions judges `hasMore` against THIS limit.
+    const limit = requestedLimit
+      ?? (offset === 0 ? firstPageLimit(SERVER_SEARCH_PAGE, valueRef.current, searchQuery ?? '') : SERVER_SEARCH_PAGE);
     const applyPage = ({ items, hasMore: more }) => {
       if (searchGenerationRef.current !== requestGeneration) return;
       setServerOptions(prev => (offset === 0 ? items : [...(prev ?? []), ...items]));
@@ -699,7 +705,7 @@ export function CreatableSearchSelect({
     };
     const fetchPage = () => fetchServerOptions({
       apiFetch, selectorUrl, selectorContext, parentKey, parentValue, filterKey,
-      query: searchQuery, offset, limit: SERVER_SEARCH_PAGE,
+      query: searchQuery, offset, limit,
     });
     // ETP-4564: route the FIRST page through the shared cache so reopening the dropdown
     // (same context + query) reuses it instead of refetching. Falls back to a direct fetch
@@ -847,7 +853,7 @@ export function CreatableSearchSelect({
   // ETP-5903 — locate the committed value in place (walk), then centre it; see the hook. The walk
   // is serverSearch-only and waits while a page is loading: until the first one lands,
   // `serverOptions` may still hold the previous open's list.
-  useLocateCommittedValue({
+  const { locating } = useLocateCommittedValue({
     open, query, value, dropdownRef, interactedRef,
     paged: serverSearch, selectorUrl, rows: serverOptions, loading, panelLoading,
     hasMore, pageSize: SERVER_SEARCH_PAGE, settledFetches, locateDone, setLocateDone,
@@ -1290,7 +1296,7 @@ export function CreatableSearchSelect({
           id={`options-${field.key}`}
           role="listbox"
           data-testid={`options-${field.key}`}
-          className="bg-card border rounded-md shadow-lg overflow-auto"
+          className={`bg-card border rounded-md shadow-lg ${locating ? 'overflow-hidden' : 'overflow-auto'}`}
           style={dropdownStyle}
           data-open-up={openUp ? 'true' : 'false'}
           // Radix Dialog (react-remove-scroll) locks body scroll while open by attaching a
@@ -1349,6 +1355,7 @@ export function CreatableSearchSelect({
             onHoverOption={setActiveIndex}
             serverSearch={serverSearch}
             hasMore={hasMore}
+            locating={locating}
             data-testid={"SearchSelectOptionsPanel__" + field.id} />
         </div>,
         document.body,

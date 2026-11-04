@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   shouldKeepLocating, centerOptionInPanel, resolveSelectedIndex, hasCommittedValue,
+  locatePageLimit, LOCATE_SELECTION_MAX_PAGES,
 } from './selectorSelection.js';
 
 /**
@@ -17,6 +18,18 @@ import {
  * - The centring: ONCE per open, when the committed option first appears, never under a user who
  *   already typed or pressed a key. An option among the last loaded rows cannot be centred yet: it
  *   is retried when the next page lands.
+ * - ETP-6103, bigger pages: the walk (and the caller's first page, see `firstPageLimit`) requests
+ *   `locatePageLimit` rows per page instead of the picker's own `pageSize`; the total row cap stays
+ *   LOCATE_SELECTION_MAX_PAGES x `pageSize`.
+ * - ETP-6103, the hold: while the committed value is being located and centred the hook returns
+ *   `locating: true`. The caller then keeps its rows laid out but invisible (they must keep layout so
+ *   the centring can measure them), hides its scrollbar and shows `<LocatingNotice/>`. The hold ends
+ *   when the value is centred (a value among the last loaded rows stays held until one more page
+ *   lands or the list ends), when it cannot be found (the ETP-5846 pin takes over), when a page
+ *   fails or the list ends, when the user types or presses a key, and on close. It never starts
+ *   before the first page has landed (the caller's own loading state covers that) nor when there is
+ *   no committed value. Centring and release happen in a layout effect, so the first painted frame
+ *   is already centred.
  *
  * @param {object} p
  * @param {boolean} p.open
@@ -35,32 +48,43 @@ import {
  * @param {boolean} [p.loading=false] a page is loading: the walk waits (`rows` may be stale)
  * @param {boolean} [p.panelLoading=false] the panel shows its loading state: no centring yet
  * @param {boolean} p.hasMore another page may exist
- * @param {number} p.pageSize
+ * @param {number} p.pageSize the picker's own page size
+ * @param {boolean} [p.largePages=true] request LOCATE_WALK_PAGE_SIZE rows per walk page; false keeps
+ *   `pageSize` (a picker whose rows are costly to mount, like the product drawer's avatars)
  * @param {number} p.settledFetches bumped by the caller every time a page fetch has settled
  * @param {boolean} p.locateDone
  * @param {(done: boolean) => void} p.setLocateDone
- * @param {(query: string, offset: number) => void} p.fetchPage stable page loader
+ * @param {(query: string, offset: number, opts: {limit: number}) => void} p.fetchPage stable page loader;
+ *   `opts.limit` is the number of rows to request (it must derive `hasMore` from THAT limit)
  * @param {{current: number}} p.offsetRef offset of the next page
  * @param {number} p.selectedIndex the committed option's index in the rendered list, -1 if absent
  * @param {number} p.renderedCount rows in the rendered list
  * @param {*} p.layoutKey changes when the panel is (re)positioned
+ * @returns {{locating: boolean}} true while the caller must hold its list (see above)
  */
 export function useLocateCommittedValue({
   open, query, value, excludeId = null, dropdownRef, interactedRef,
   paged = true, selectorUrl, canFetch = !!selectorUrl, rows, loadedRows = rows?.length ?? 0,
   loading = false, panelLoading = false,
-  hasMore, pageSize, settledFetches, locateDone, setLocateDone, fetchPage, offsetRef,
+  hasMore, pageSize, largePages = true, settledFetches, locateDone, setLocateDone, fetchPage, offsetRef,
   selectedIndex, renderedCount, layoutKey,
 }) {
   const centeredRef = useRef(false);
+  const walkLimit = largePages ? locatePageLimit(pageSize, loadedRows) : pageSize;
+  const [released, setReleased] = useState(false);
   const searching = query.trim() !== '';
   const walkEnabled = paged && open && hasCommittedValue(value) && canFetch && !loading && !searching;
   const found = resolveSelectedIndex(rows ?? [], value) !== -1 || (excludeId != null && value === excludeId);
   const centreBlocked = searching || panelLoading;
+  // The walk is over and there is nothing to centre: not found (the pin takes over), or hidden.
+  const nothingToCentre = locateDone && selectedIndex < 0;
+  const locating = open && paged && canFetch && rows != null && hasCommittedValue(value) && !searching
+    && !released && !nothingToCentre && !interactedRef.current;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     interactedRef.current = false;
     centeredRef.current = false;
+    setReleased(false);
   }, [open, interactedRef]);
 
   useEffect(() => {
@@ -72,15 +96,27 @@ export function useLocateCommittedValue({
     const keepGoing = shouldKeepLocating({
       found, hasMore, loadedRows, pageSize, interacted: interactedRef.current,
     });
-    if (keepGoing) fetchPage('', offsetRef.current);
+    if (keepGoing) fetchPage('', offsetRef.current, { limit: walkLimit });
     else setLocateDone(true);
-  }, [walkEnabled, locateDone, rows, loadedRows, found, hasMore, pageSize, settledFetches, fetchPage, offsetRef, setLocateDone, interactedRef]);
+  }, [walkEnabled, locateDone, rows, loadedRows, found, hasMore, pageSize, walkLimit, settledFetches, fetchPage, offsetRef, setLocateDone, interactedRef]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open || selectedIndex < 0 || centreBlocked || centeredRef.current || interactedRef.current) return;
     const panel = dropdownRef.current;
     const el = panel?.querySelector(`[data-option-index="${selectedIndex}"]`);
     if (!el) return;
-    centeredRef.current = centerOptionInPanel(panel, el) || !hasMore;
-  }, [open, selectedIndex, centreBlocked, layoutKey, renderedCount, hasMore, dropdownRef, interactedRef]);
+    if (centerOptionInPanel(panel, el) || !hasMore) {
+      centeredRef.current = true;
+      setReleased(true);
+    } else if (paged && canFetch && !loading && loadedRows < LOCATE_SELECTION_MAX_PAGES * pageSize) {
+      // Among the last loaded rows: it can only be centred once more rows exist below it.
+      fetchPage('', offsetRef.current, { limit: walkLimit });
+    } else {
+      // Page cap reached: keep it where it is rather than holding the list forever.
+      centeredRef.current = true;
+      setReleased(true);
+    }
+  }, [open, selectedIndex, centreBlocked, layoutKey, renderedCount, hasMore, loading, settledFetches, loadedRows, paged, canFetch, pageSize, walkLimit, fetchPage, offsetRef, dropdownRef, interactedRef]);
+
+  return { locating };
 }

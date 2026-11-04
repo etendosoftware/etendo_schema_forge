@@ -13,6 +13,7 @@ import {
 } from './productSelectorDrawerShared.jsx';
 import { hasCommittedValue, pinSearchTerms, prependCurrentSelection, resolveSelectedIndex } from './selectorSelection.js';
 import { useLocateCommittedValue } from './useLocateCommittedValue.js';
+import { LocatingNotice } from './LocatingNotice.jsx';
 
 // Stable no-op so swapping it in for `onClose` does not churn the hook's ref effect.
 const NOOP = () => {};
@@ -206,12 +207,14 @@ export default function ProductDrawerShell({
   // - a failed page ends the walk (`hasMore` alone stays true after an append error).
   const { results, pageQuery, rawOffsetRef, doFetch, loading, loadingMore, hasMore, error, listRef } = fetchState;
   const walkPage = useCallback(() => doFetch('', rawOffsetRef.current, true), [doFetch, rawOffsetRef]);
-  useLocateCommittedValue({
+  // largePages: false — every mounted row fetches its own avatar (`/image/<id>`), so 100-row walk
+  // pages would fire ~3x the image requests per step. The hold still applies.
+  const { locating } = useLocateCommittedValue({
     open, query: fetchState.query, value, dropdownRef: listRef, interactedRef, selectorUrl,
     rows: pageQuery !== null && pageQuery === fetchState.query.trim() ? results : null,
     loadedRows: rawOffsetRef.current, loading: loading || loadingMore,
     panelLoading: loading && results.length === 0, hasMore: hasMore && !error,
-    pageSize: PRODUCT_SELECTOR_PAGE_SIZE, settledFetches: fetchState.settledFetches,
+    pageSize: PRODUCT_SELECTOR_PAGE_SIZE, largePages: false, settledFetches: fetchState.settledFetches,
     locateDone, setLocateDone, fetchPage: walkPage, offsetRef: rawOffsetRef,
     selectedIndex: variant.selectedIndex ?? -1, renderedCount: renderedResults.length, layoutKey: open,
   });
@@ -309,7 +312,7 @@ export default function ProductDrawerShell({
               {toolbar}
 
               {/* Results */}
-              <div className="flex-1 overflow-y-auto" ref={listRef} onScroll={handleScroll}>
+              <div className={`flex-1 ${locating ? 'overflow-hidden' : 'overflow-y-auto'}`} ref={listRef} onScroll={handleScroll}>
                 {/*
                   Pinned create row. Sits at the TOP of the list rather than in the footer
                   because the footer is gated on `hasResults` — i.e. hidden in exactly the
@@ -373,7 +376,8 @@ export default function ProductDrawerShell({
                   </div>
                 )}
 
-                {hasResults && body}
+                {locating && !loading && <LocatingNotice testId="product-search-locating" />}
+                {hasResults && <div className={locating ? 'invisible' : undefined}>{body}</div>}
 
                 {/* A failed "load more" keeps the rows already shown and offers a retry below them. */}
                 {!loadingMore && error && results.length > 0 && (

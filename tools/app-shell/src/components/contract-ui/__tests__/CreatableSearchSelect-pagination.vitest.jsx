@@ -263,7 +263,7 @@ describe('CreatableSearchSelect — locating the committed value on reopen (ETP-
       if (params.has('q')) return jsonOk(lookup);
       if (params.has('id')) return jsonOk([]);
       const offset = Number(params.get('offset') || 0);
-      return jsonOk(makePage(offset, Math.max(0, Math.min(50, totalRows - offset))));
+      return jsonOk(makePage(offset, Math.max(0, Math.min(Number(params.get('limit') || 50), totalRows - offset))));
     });
   }
   const listOffsets = () => global.fetch.mock.calls
@@ -284,7 +284,8 @@ describe('CreatableSearchSelect — locating the committed value on reopen (ETP-
     await reopen('120', 'Item-120');
 
     await waitFor(() => expect(screen.getByTestId('option-partner-120')).toHaveAttribute('aria-selected', 'true'));
-    expect(listOffsets()).toEqual([0, 50, 100]);
+    // ETP-6103: the opening page and the walk ask for 100 rows.
+    expect(listOffsets()).toEqual([0, 100]);
     expect(lookupCalls()).toHaveLength(0);
     expect(screen.getByTestId('option-partner-119')).toBeInTheDocument();
     expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'option-partner-0');
@@ -296,7 +297,7 @@ describe('CreatableSearchSelect — locating the committed value on reopen (ETP-
     await reopen('bp-9', 'Zeta');
 
     await waitFor(() => expect(screen.getByTestId('option-partner-bp-9')).toHaveAttribute('aria-selected', 'true'));
-    expect(listOffsets()).toEqual([0, 50, 100, 150, 200, 250]);
+    expect(listOffsets()).toEqual([0, 100, 200]);
     expect(lookupCalls()).toHaveLength(1);
     // Only the id-equal row is pinned, on top of the 300 walked rows.
     expect(screen.getAllByRole('option')).toHaveLength(301);

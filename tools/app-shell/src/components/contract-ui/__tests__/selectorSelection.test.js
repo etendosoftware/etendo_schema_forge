@@ -10,6 +10,7 @@ import {
   LOCATE_SELECTION_MAX_PAGES, resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor,
   hasCommittedValue,
   shouldKeepLocating, centerOptionInPanel, committedItemFromRow, pinSearchTerms,
+  locatePageLimit, firstPageLimit,
 } from '../selectorSelection.js';
 
 const ROWS = [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }];
@@ -136,4 +137,25 @@ test('pinSearchTerms tries the full label, then each " - " segment, capped', () 
   assert.deepEqual(pinSearchTerms('TestProduct'), ['TestProduct']);
   assert.deepEqual(pinSearchTerms(''), []);
   assert.deepEqual(pinSearchTerms(null), []);
+});
+
+test('locatePageLimit asks for 100 rows but never past the walk total (6 x own page size)', () => {
+  assert.equal(locatePageLimit(30, 0), 100);
+  assert.equal(locatePageLimit(30, 100), 80);
+  assert.equal(locatePageLimit(50, 200), 100);
+  assert.equal(locatePageLimit(50, 0), 100);
+});
+
+test('locatePageLimit never goes below the own page size (big pickers, end of the walk)', () => {
+  assert.equal(locatePageLimit(200, 0), 200);
+  assert.equal(locatePageLimit(30, 179), 30);
+});
+
+test('firstPageLimit is large only with a committed value and no typed search', () => {
+  assert.equal(firstPageLimit(30, 'x', ''), 100);
+  assert.equal(firstPageLimit(30, 'x', '  '), 100);
+  assert.equal(firstPageLimit(30, null, ''), 30);
+  assert.equal(firstPageLimit(30, '', ''), 30);
+  assert.equal(firstPageLimit(30, 'x', 'abc'), 30);
+  assert.equal(firstPageLimit(30, 'x', undefined), 100);
 });

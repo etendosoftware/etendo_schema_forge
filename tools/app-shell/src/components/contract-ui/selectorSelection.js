@@ -8,6 +8,32 @@
 // a catalog of thousands (business partners, products) must not cost dozens of requests per open.
 export const LOCATE_SELECTION_MAX_PAGES = 6;
 
+// ETP-6103 — rows per request while a reopened selector looks for its committed value. One 100-row
+// request costs about the same as a 30-row one (measured on production: ~500-700 ms flat), so
+// walking in big pages cuts the wait. 100 is the server's MAX_LIMIT (NeoSelectorService).
+export const LOCATE_WALK_PAGE_SIZE = 100;
+
+/**
+ * Rows to request in the next page of the locate walk (ETP-6103): up to LOCATE_WALK_PAGE_SIZE but
+ * never past the walk's total cap (LOCATE_SELECTION_MAX_PAGES x the picker's own page size), and
+ * never below the picker's own size.
+ *
+ * @param {number} pageSize the picker's own page size
+ * @param {number} loadedRows rows fetched so far
+ */
+export function locatePageLimit(pageSize, loadedRows) {
+  const remaining = LOCATE_SELECTION_MAX_PAGES * pageSize - loadedRows;
+  return Math.max(pageSize, Math.min(LOCATE_WALK_PAGE_SIZE, remaining));
+}
+
+/**
+ * Rows for a picker's FIRST page (ETP-6103): the larger walk size when the open has a committed
+ * value and no typed search, so the walk needs fewer requests; the picker's own size otherwise.
+ */
+export function firstPageLimit(pageSize, value, query) {
+  return hasCommittedValue(value) && String(query ?? '').trim() === '' ? locatePageLimit(pageSize, 0) : pageSize;
+}
+
 /** Whether `value` holds a committed id (not null, undefined or ''). */
 export function hasCommittedValue(value) {
   return value != null && value !== '';

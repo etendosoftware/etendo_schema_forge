@@ -6,9 +6,10 @@ import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
 import { useUI } from '@/i18n';
 import { SelectorChip } from './SelectorChip.jsx';
 import {
-  resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor, pinSearchTerms,
+  resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor, pinSearchTerms, firstPageLimit,
 } from './selectorSelection.js';
 import { useLocateCommittedValue } from './useLocateCommittedValue.js';
+import { LocatingNotice } from './LocatingNotice.jsx';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 // Page size for the server-side search's paginated fetches (initial load, search, and
@@ -156,6 +157,8 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
   // ETP-5903 — the user typed or pressed a key during this open: the walk stops and the list is not
   // re-centred under them. Reset on every open.
   const interactedRef = useRef(false);
+  const valueRef = useRef(value);
+  valueRef.current = value;
 
   // Resets pagination state before a fresh search (new typed query, or reopening with an
   // empty query) — mirrors the resets CreatableSearchSelect.jsx performs at each of its
@@ -177,7 +180,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
   // click, chevron toggle, clear) fetches at once, while TYPING waits out
   // TYPED_SEARCH_DEBOUNCE_MS. They used to share one 300ms debounce, which made both wrong at
   // once: too slow to open, too eager while typing.
-  const fetchServerResults = useCallback((q, offset = 0, { immediate = false } = {}) => {
+  const fetchServerResults = useCallback((q, offset = 0, { immediate = false, limit: requestedLimit } = {}) => {
     // ETP-4576 - no `!token` here: under the cookie scheme the client holds none.
     if (!selectorUrl) { setServerResults(null); setLoadingFirstPage(false); return; }
     if (offset > 0 && (!hasMoreRef.current || fetchInFlightRef.current)) return;
@@ -197,7 +200,11 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     if (offset === 0) setLoadingFirstPage(true);
     const trimmed = (q || '').trim();
     const queryParams = trimmed ? { ...selectorContext, q: trimmed } : { ...selectorContext };
-    queryParams.limit = SERVER_SEARCH_PAGE;
+    // ETP-6103 — the opening page is the larger walk page when a value is committed; the walk
+    // asks for its own size. `hasMore` below is judged against THIS limit.
+    const limit = requestedLimit
+      ?? (offset === 0 ? firstPageLimit(SERVER_SEARCH_PAGE, valueRef.current, trimmed) : SERVER_SEARCH_PAGE);
+    queryParams.limit = limit;
     queryParams.offset = offset;
     const runFetch = () => {
       fetchInFlightRef.current = true;
@@ -212,7 +219,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           const items = data.items.map(it => ({ id: it.id, name: it.label || it.name, ...it }));
           setServerResults(prev => (offset === 0 ? items : [...(prev ?? []), ...items]));
           offsetRef.current = offset + items.length;
-          const more = items.length >= SERVER_SEARCH_PAGE;
+          const more = items.length >= limit;
           hasMoreRef.current = more;
           setHasMore(more);
         })
@@ -458,7 +465,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
 
   // ETP-5903 — locate the committed value in place (walk), then centre it; see the hook.
   const selectedIndex = resolveSelectedIndex(filtered, value);
-  useLocateCommittedValue({
+  const { locating } = useLocateCommittedValue({
     open, query, value, excludeId, dropdownRef, interactedRef, selectorUrl, rows: serverResults,
     hasMore, pageSize: SERVER_SEARCH_PAGE, settledFetches, locateDone, setLocateDone,
     fetchPage: fetchServerResults, offsetRef,
@@ -692,7 +699,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           id={`inline-options-${field.key}`}
           role="listbox"
           data-testid={`inline-add-options-${field.key}`}
-          className="bg-card border rounded-md shadow-lg overflow-auto"
+          className={`bg-card border rounded-md shadow-lg ${locating ? 'overflow-hidden' : 'overflow-auto'}`}
           style={dropdownStyle}
           data-open-up={openUp ? 'true' : 'false'}
           data-inline-add-portal="true"
@@ -730,6 +737,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
               shrink-to-fit sizing inflates the panel to ~2x its content width in Chrome — see
               CreatableSearchSelect's identical comment for the full root cause. */}
           <div className="min-w-full w-max">
+            {locating && <LocatingNotice testId={`inline-add-options-${field.key}-locating`} />}
             {/* ETP-5005 — first-page skeleton. Shown only while nothing is displayable yet, so
                 it never replaces options the user can already act on: once the first page lands
                 (or the local catalog has entries) the list below takes over. Three rows rather
@@ -753,6 +761,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
                 ))}
               </div>
             )}
+            <div className={locating ? 'invisible' : undefined}>
             {filtered.map((opt, index) => {
               // ETP-5846 — TWO INDEPENDENT per-row states, deliberately never derived from one
               // another:
@@ -797,13 +806,14 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
                 </button>
               );
             })}
+            </div>
             {/* "Loading more" footer while a scroll-triggered next page fetches. Gated on
                 `serverResults != null` rather than a separate loading flag — that's also true
                 exactly while the INITIAL page is still in flight (serverResults stays null
                 until the first page resolves), so this never flashes during that load —
                 mirrors SelectorInput.jsx's `{hasMore && selectorUrl && (...)}` /
                 CreatableSearchSelect.jsx's `{serverSearch && !loading && hasMore && ...}` footer. */}
-            {serverResults != null && hasMore && (
+            {serverResults != null && hasMore && !locating && (
               <div className="py-1 text-center text-xs text-muted-foreground select-none pointer-events-none">
                 {ui('loading')}
               </div>

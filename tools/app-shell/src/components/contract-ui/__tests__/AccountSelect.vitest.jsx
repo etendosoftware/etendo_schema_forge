@@ -157,7 +157,7 @@ describe('AccountSelect', () => {
 
     await openSelector('acct-select');
     fireEvent.click(await screen.findByTestId('acct-select-popup-option-vc-430'));
-    expect(loadPage).toHaveBeenCalledWith('', 0, expect.any(AbortSignal));
+    expect(loadPage).toHaveBeenCalledWith('', 0, expect.any(AbortSignal), { limit: 100 });
     expect(screen.queryByText('572 - Bancos c/c')).not.toBeInTheDocument();
     expect(onChange).toHaveBeenCalledWith('vc-430', '430 - Clientes');
   });

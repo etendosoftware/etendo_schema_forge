@@ -338,6 +338,7 @@ describe('InlineSearchCombo — current-selection resolution off the loaded page
     expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(3);
   });
 
+  // ETP-6103 — the opening page and the walk ask for 100 rows (capped at the walk total of 6 x 50).
   // ETP-5903 — a full page 0 without the committed id first walks forward (up to 6 pages = 300
   // rows) looking for it in place; the ETP-5846 label lookup only runs once that walk is over.
   // `routedFetch` answers by URL (`offset`, or `q=` for the lookup) so the tests do not depend
@@ -348,7 +349,7 @@ describe('InlineSearchCombo — current-selection resolution off the loaded page
       if (params.has('q')) return jsonOk(lookup);
       const offset = Number(params.get('offset') || 0);
       if (hold[offset]) return hold[offset];
-      return jsonOk(makePage(offset, Math.max(0, Math.min(50, totalRows - offset))));
+      return jsonOk(makePage(offset, Math.max(0, Math.min(Number(params.get('limit') || 50), totalRows - offset))));
     });
   }
   const listOffsets = () => global.fetch.mock.calls
@@ -364,7 +365,7 @@ describe('InlineSearchCombo — current-selection resolution off the loaded page
     await openViaChip();
 
     await waitFor(() => expect(screen.getByTestId('inline-add-option-tax-120')).toHaveAttribute('aria-selected', 'true'));
-    expect(listOffsets()).toEqual([0, 50, 100]);
+    expect(listOffsets()).toEqual([0, 100]);
     expect(lookupCalls()).toHaveLength(0);
     // In place: its neighbours are rendered and it is not pinned on top.
     expect(screen.getByTestId('inline-add-option-tax-119')).toBeInTheDocument();
@@ -379,7 +380,7 @@ describe('InlineSearchCombo — current-selection resolution off the loaded page
     await openViaChip();
 
     await waitFor(() => expect(screen.getByTestId('inline-add-option-tax-tax-77')).toHaveAttribute('aria-selected', 'true'));
-    expect(listOffsets()).toEqual([0, 50, 100, 150, 200, 250]);
+    expect(listOffsets()).toEqual([0, 100, 200]);
     expect(lookupCalls()).toHaveLength(1);
     // 300 walked rows plus the pinned one, on top.
     expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(301);
@@ -402,7 +403,7 @@ describe('InlineSearchCombo — current-selection resolution off the loaded page
     const failing = routedFetch({ totalRows: 1000, lookup: [{ id: 'tax-77', name: 'IVA 4%' }] });
     global.fetch = vi.fn((url) => {
       const params = new URL(String(url), 'http://test').searchParams;
-      if (!params.has('q') && Number(params.get('offset')) === 50) {
+      if (!params.has('q') && Number(params.get('offset')) === 100) {
         return Promise.resolve({ ok: false, status: 500, json: async () => ({}) });
       }
       return failing(url);
@@ -412,7 +413,7 @@ describe('InlineSearchCombo — current-selection resolution off the loaded page
     await openViaChip();
 
     await waitFor(() => expect(screen.getByTestId('inline-add-option-tax-tax-77')).toHaveAttribute('aria-selected', 'true'));
-    expect(listOffsets()).toEqual([0, 50]);
+    expect(listOffsets()).toEqual([0, 100]);
     expect(lookupCalls()).toHaveLength(1);
   });
 
@@ -457,17 +458,17 @@ describe('InlineSearchCombo — current-selection resolution off the loaded page
   it('stops walking as soon as the user presses a key, and only then pins the value', async () => {
     let releasePage1;
     const page1 = new Promise((resolve) => { releasePage1 = resolve; });
-    global.fetch = routedFetch({ totalRows: 1000, lookup: [{ id: 'tax-77', name: 'IVA 4%' }], hold: { 50: page1 } });
+    global.fetch = routedFetch({ totalRows: 1000, lookup: [{ id: 'tax-77', name: 'IVA 4%' }], hold: { 100: page1 } });
 
     await committedCombo();
     const input = await openViaChip();
-    await waitFor(() => expect(listOffsets()).toEqual([0, 50]));
+    await waitFor(() => expect(listOffsets()).toEqual([0, 100]));
 
     fireEvent.keyDown(input, { key: 'ArrowDown' });
-    releasePage1(await jsonOk(makePage(50, 50)));
+    releasePage1(await jsonOk(makePage(100, 100)));
 
     await waitFor(() => expect(screen.getByTestId('inline-add-option-tax-tax-77')).toBeInTheDocument());
-    expect(listOffsets()).toEqual([0, 50]);
+    expect(listOffsets()).toEqual([0, 100]);
     expect(lookupCalls()).toHaveLength(1);
   });
 

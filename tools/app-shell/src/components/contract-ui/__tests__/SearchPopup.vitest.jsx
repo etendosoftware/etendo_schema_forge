@@ -45,7 +45,7 @@ describe('SearchPopup', () => {
     const { loadPage } = renderPopup();
     expect(await screen.findByText('572 - Bancos c/c')).toBeInTheDocument();
     expect(screen.getByText('Cuenta')).toBeInTheDocument();
-    expect(loadPage).toHaveBeenCalledWith('', 0, expect.any(AbortSignal));
+    expect(loadPage).toHaveBeenCalledWith('', 0, expect.any(AbortSignal), { limit: SEARCH_POPUP_PAGE_SIZE });
   });
 
   it('calls onSelect with the clicked option', async () => {
@@ -64,7 +64,7 @@ describe('SearchPopup', () => {
     expect(loadPage).not.toHaveBeenCalled();
     await act(async () => { vi.advanceTimersByTime(300); });
     expect(loadPage).toHaveBeenCalledTimes(1);
-    expect(loadPage).toHaveBeenCalledWith('banc', 0, expect.any(AbortSignal));
+    expect(loadPage).toHaveBeenCalledWith('banc', 0, expect.any(AbortSignal), { limit: SEARCH_POPUP_PAGE_SIZE });
   });
 
   it('shows an error with a retry — not "no results" — when the page fails, and retries', async () => {
@@ -92,7 +92,7 @@ describe('SearchPopup', () => {
     await screen.findByText('572 - Bancos c/c');
     await act(async () => { observerCallback([{ isIntersecting: true }]); });
     expect(await screen.findByText('626 - Servicios bancarios')).toBeInTheDocument();
-    expect(loadPage).toHaveBeenLastCalledWith('', 1, expect.any(AbortSignal));
+    expect(loadPage).toHaveBeenLastCalledWith('', 1, expect.any(AbortSignal), { limit: SEARCH_POPUP_PAGE_SIZE });
     expect(screen.getAllByRole('option')).toHaveLength(2);
   });
 
@@ -266,6 +266,67 @@ describe('SearchPopup — committed value (ETP-5948)', () => {
     await waitFor(() => expect(screen.getByTestId('search-popup-option-acc-75')).toHaveAttribute('aria-selected', 'true'));
     expect(listOffsets(loadPage)).toEqual([0, 30, 60]);
     expect(labelLookups(loadPage)).toHaveLength(0);
+  });
+
+  // ETP-6103 — a limit-aware server-like loader, to see the page sizes the popup asks for.
+  function sizedPager(total) {
+    const all = Array.from({ length: total }, (_, i) => row(i));
+    return vi.fn((q, offset, _signal, opts) => {
+      const size = opts?.limit ?? SEARCH_POPUP_PAGE_SIZE;
+      const matches = q ? all.filter((o) => o.name.includes(q)) : all;
+      return Promise.resolve({ items: matches.slice(offset, offset + size), hasMore: offset + size < matches.length });
+    });
+  }
+  const listCalls = (loadPage) => loadPage.mock.calls.filter(([q]) => q === '').map(([, offset, , opts]) => [offset, opts.limit]);
+
+  it('locates the value with 100-row pages, capped at the walk total (ETP-6103)', async () => {
+    const loadPage = sizedPager(1000);
+    renderPopup({ loadPage, value: 'acc-500', valueLabel: 'Account 0500' });
+
+    await waitFor(() => expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'search-popup-option-acc-500'));
+    // 100 + 80 = 6 x 30 rows, no more.
+    expect(listCalls(loadPage)).toEqual([[0, 100], [100, 80]]);
+  });
+
+  it('asks for the own page size when there is no value or the user searches (ETP-6103)', async () => {
+    const loadPage = sizedPager(200);
+    renderPopup({ loadPage });
+    await screen.findByTestId('search-popup-option-acc-0');
+    expect(listCalls(loadPage)).toEqual([[0, SEARCH_POPUP_PAGE_SIZE]]);
+  });
+
+  it('holds the rows invisible until the value is centred, then reveals them (ETP-6103)', async () => {
+    const loadPage = sizedPager(300);
+    // jsdom has no layout: report the value as centrable so the hold can end.
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ top: 0, height: 10 });
+    renderPopup({ loadPage, value: 'acc-118', valueLabel: 'Account 0118' });
+    const option = await screen.findByTestId('search-popup-option-acc-118');
+    await waitFor(() => expect(screen.queryByTestId('search-popup-locating')).toBeNull());
+    expect(option).not.toHaveClass('invisible');
+    expect(option).toHaveAttribute('aria-selected', 'true');
+    rect.mockRestore();
+  });
+
+  it('keeps the rows hidden while the value sits among the last loaded rows, then loads one more page (ETP-6103)', async () => {
+    const loadPage = sizedPager(300);
+    // The panel can never scroll far enough on its own: scrollHeight == clientHeight == 0 gives a
+    // negative-or-zero target, so force "not centrable" until a second page exists.
+    const scrollHeight = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(0);
+    const clientHeight = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(400);
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ top: 5000, height: 10 });
+    renderPopup({ loadPage, value: 'acc-95', valueLabel: 'Account 0095' });
+    await screen.findByTestId('search-popup-option-acc-95');
+    // First page (100 rows) holds the value near its end: never revealed uncentred; another page loads.
+    await waitFor(() => expect(listCalls(loadPage).length).toBeGreaterThan(1));
+    scrollHeight.mockRestore(); clientHeight.mockRestore(); rect.mockRestore();
+  });
+
+  it('releases the hold when the value is not found (ETP-6103)', async () => {
+    const loadPage = sizedPager(1000);
+    renderPopup({ loadPage, value: 'acc-900', valueLabel: 'Account 0900' });
+    await waitFor(() => expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'search-popup-option-acc-900'));
+    expect(screen.queryByTestId('search-popup-locating')).toBeNull();
+    expect(screen.getAllByRole('option')[0]).not.toHaveClass('invisible');
   });
 
   it('behaves as before without a value: nothing marked, no walk', async () => {
