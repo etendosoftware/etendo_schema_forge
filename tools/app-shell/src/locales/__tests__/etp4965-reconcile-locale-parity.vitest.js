@@ -209,8 +209,9 @@ describe('ETP-4965 — financeReconcile* locale parity', () => {
 });
 
 // The bounce-pair panel footer and the bank reference (flag `bank-bounce-suggestions`): the selected
-// line opens the footer ("Rebote seleccionado" / "Línea seleccionada"), and "Ref. X" tells two lines
-// of the same text and amount apart. The UI's own wording is "rebote", never "devolución".
+// line opens the footer ("Rechazo seleccionado" / "Línea seleccionada"), and "Ref. X" tells two lines
+// of the same text and amount apart. The UI's own wording is "rechazo" (bancario), never "rebote"
+// nor "devolución" — the code keeps the technical name "bounce".
 describe('financeReconcileBounce* — the footer and reference keys', () => {
   const LOCALES = { en_US: enUS, es_ES: esES, es_AR: esAR };
   const KEYS = [
@@ -235,12 +236,12 @@ describe('financeReconcileBounce* — the footer and reference keys', () => {
     }
   });
 
-  it('say "rebote" and never "devolución" in Spanish', () => {
+  it('say "rechazo" and never "rebote" nor "devolución" in Spanish', () => {
     for (const [name, dictionary] of Object.entries({ es_ES: esES, es_AR: esAR })) {
       const g = dictionary.genericLabels;
-      expect(g.financeReconcileBounceSelectedBounce, name).toMatch(/rebote/i);
+      expect(g.financeReconcileBounceSelectedBounce, name).toMatch(/rechazo/i);
       for (const key of KEYS) {
-        expect(g[key], `${name}.${key}`).not.toMatch(/devoluci[oó]n/i);
+        expect(g[key], `${name}.${key}`).not.toMatch(/devoluci[oó]n|rebote/i);
       }
     }
   });
@@ -254,15 +255,54 @@ describe('financeReconcileBounce* — the footer and reference keys', () => {
     }
   });
 
-  // ETP-5581 — the bounce section of the automatch modal says "rebote", never "devolución": the
-  // bank's own descriptions may say "DEVOLUCION", the UI copy does not. The hint under the
-  // "Rebotes bancarios" title is where the old wording lived.
-  it('keeps the bounce hint free of "devolución" wording in the Spanish locales', () => {
+  // ETP-5581 — the bounce section of the automatch modal says "rechazo", never "rebote" nor
+  // "devolución": the bank's own descriptions may say "DEVOLUCION", the UI copy does not. The hint
+  // under the "Rechazos bancarios" title is where the old wording lived.
+  it('keeps the bounce hint in "rechazo" wording in the Spanish locales', () => {
     for (const [name, dictionary] of Object.entries({ es_ES: esES, es_AR: esAR })) {
       const hint = dictionary.genericLabels?.financeReconcileAutomatchBounceHint;
       expect(typeof hint, `${name}.genericLabels.financeReconcileAutomatchBounceHint`).toBe('string');
-      expect(hint, `${name}`).toContain('rebote');
-      expect(hint, `${name}`).not.toMatch(/devoluci/i);
+      expect(hint, `${name}`).toContain('rechazo');
+      expect(hint, `${name}`).not.toMatch(/devoluci|rebote/i);
+    }
+  });
+
+  // The copy change (ETP-5581): the whole bounce flow — every label key that names a bounce
+  // (`*Bounce*`, `backendError.bounce*`) — speaks of "rechazo" in Spanish and "rejection" in
+  // English. A superset rule over the key family, so a new bounce string cannot bring the old word
+  // back. The key names keep "bounce": only the copy changed.
+  const BOUNCE_FAMILY = /bounce/i;
+  const bounceEntries = (dictionary) => Object.entries(dictionary.genericLabels ?? {})
+    .filter(([key]) => BOUNCE_FAMILY.test(key));
+
+  it('the Spanish bounce-flow copy never says "rebote" nor "devolución"', () => {
+    for (const [name, dictionary] of Object.entries({ es_ES: esES, es_AR: esAR })) {
+      const entries = bounceEntries(dictionary);
+      expect(entries.length, name).toBeGreaterThan(20);
+      for (const [key, value] of entries) {
+        expect(value, `${name}.${key}`).not.toMatch(/rebote|devoluci/i);
+      }
+    }
+  });
+
+  it('the English bounce-flow copy says "rejection", never "bounce"', () => {
+    for (const [key, value] of bounceEntries(enUS)) {
+      expect(value, `en_US.${key}`).not.toMatch(/bounce/i);
+    }
+  });
+
+  it('names the bounce with "rechazo" / "rejection" on its headline labels', () => {
+    const HEADLINES = [
+      'financeReconcileFilterStatusBounce', 'financeReconcileBadgeBounce',
+      'financeReconcileAutomatchBounceTitle', 'financeReconcileAutomatchBounceColBounce',
+      'financeReconcileAutomatchKpiBouncePairs', 'financeReconcileBounceTotalBounce',
+      'financeReconcileBounceSelectedBounce', 'financeReconcileBounceDismiss',
+      'financeReconcileBounceNoticeReview',
+    ];
+    for (const key of HEADLINES) {
+      expect(esES.genericLabels[key], `es_ES.${key}`).toMatch(/rechazo/i);
+      expect(esAR.genericLabels[key], `es_AR.${key}`).toMatch(/rechazo/i);
+      expect(enUS.genericLabels[key], `en_US.${key}`).toMatch(/rejection/i);
     }
   });
 });

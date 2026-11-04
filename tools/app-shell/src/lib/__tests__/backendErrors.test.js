@@ -826,8 +826,9 @@ describe('bank bounce-pair refusals (ETP-5581)', () => {
         assert.ok(out.trim(), `${locale}.${localeKey} is blank`);
         if (locale !== 'en_US') {
           assert.notEqual(out, english, `${locale}.${localeKey} is untranslated`);
-          // The product wording is "rebote", never "devolución".
+          // The product wording is "rechazo" (bancario), never "rebote" nor "devolución".
           assert.doesNotMatch(out, /devoluci/i, `${locale}.${localeKey} says devolución`);
+          assert.doesNotMatch(out, /rebote/i, `${locale}.${localeKey} says rebote`);
         }
       }
     });

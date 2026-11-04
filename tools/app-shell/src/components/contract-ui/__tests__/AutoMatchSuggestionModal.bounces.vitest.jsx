@@ -2,7 +2,7 @@
 // @covers tools/app-shell/src/components/contract-ui/AutoMatchBounceSection.jsx
 // @covers tools/app-shell/src/components/contract-ui/bouncePairs.js
 /**
- * The "Rebotes bancarios" section of the automatch modal (bounce pairs, flag `bank-bounce-suggestions`).
+ * The "Rechazos bancarios" section of the automatch modal (bounce pairs, flag `bank-bounce-suggestions`).
  *
  * The SPA never evaluates the flag: with it off the backend sends groups without `kind` and no
  * `kpis.bouncePairs`, and the modal must be exactly what it was. With it on, the bounce-pair groups
@@ -201,7 +201,7 @@ describe('AutoMatchSuggestionModal — flag off (no kind, no kpis.bouncePairs)',
   });
 });
 
-describe('AutoMatchSuggestionModal — the Rebotes bancarios section', () => {
+describe('AutoMatchSuggestionModal — the Rechazos bancarios section', () => {
   it('renders the pairs below the groups, with their count and the KPI', () => {
     renderModal();
     const section = screen.getByTestId('automatch-bounce-section');
@@ -746,7 +746,7 @@ describe('AutoMatchSuggestionModal — bounceDecisions in the applySuggestions b
     expect(body.bounceDecisions).toEqual([{ groupKey: 'bp-amb', decision: 'unchecked' }]);
   });
 
-  it('pairs dismissed with "No es un rebote" are not shown, so not reported', async () => {
+  it('pairs dismissed with "No es un rechazo" are not shown, so not reported', async () => {
     renderModal({ dismissedPairKeys: new Set(['bp-review', 'bp-amb']) });
     await clickApply();
     expect(applyMock.mock.calls[0][0].bounceDecisions).toEqual([]);

@@ -220,7 +220,7 @@ describe('ReconciliationSplitPanel — bounce lines in the left panel', () => {
 
   // The backend only sends counts.discarded with the flag on, and then always with counts.bounce:
   // an account whose pairs were all discarded answers `bounce: 0` next to `discarded: N`.
-  it('flag on with no pair left but discarded lines: offers Posibles rebotes (0) and Descartadas', async () => {
+  it('flag on with no pair left but discarded lines: offers Posibles rechazos (0) and Descartadas', async () => {
     pending.answer = () => ({ lines: [PLAIN], counts: { all: 1, pending: 1, bounce: 0, discarded: 2 } });
     renderPanel();
     await screen.findByTestId('recon-line-row-P1');
@@ -230,7 +230,7 @@ describe('ReconciliationSplitPanel — bounce lines in the left panel', () => {
     expect(screen.getByText(/^financeReconcileFilterStatusDiscarded \(2\)/)).toBeInTheDocument();
   });
 
-  it('shows the "Posible rebote" badge, the bounce entry and counts bounce lines as Pendientes', async () => {
+  it('shows the "Posible rechazo" badge, the bounce entry and counts bounce lines as Pendientes', async () => {
     renderPanel();
     await screen.findByTestId('recon-line-row-B3');
     expect(within(row('B3')).getByText('financeReconcileBadgeBounce')).toBeInTheDocument();
@@ -243,7 +243,7 @@ describe('ReconciliationSplitPanel — bounce lines in the left panel', () => {
     expect(screen.getByText(/^financeReconcileFilterStatusDiscarded \(3\)/)).toBeInTheDocument();
   });
 
-  it('the Posibles rebotes filter shows only the bounce lines, still without a status param', async () => {
+  it('the Posibles rechazos filter shows only the bounce lines, still without a status param', async () => {
     renderPanel();
     await screen.findByTestId('recon-line-row-B3');
     selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusBounce');
@@ -346,9 +346,9 @@ describe('ReconciliationSplitPanel — the bounce-pair panel', () => {
   });
 });
 
-// ── Dismissal ("No es un rebote") ──────────────────────────────────────────────
+// ── Dismissal ("No es un rechazo") ──────────────────────────────────────────────
 
-describe('ReconciliationSplitPanel — "No es un rebote"', () => {
+describe('ReconciliationSplitPanel — "No es un rechazo"', () => {
   it('without a bounceReview prop: the pair turns back into pending lines, locally', async () => {
     renderPanel();
     await selectLineRow('O1');
@@ -359,7 +359,7 @@ describe('ReconciliationSplitPanel — "No es un rebote"', () => {
     expect(within(row('B1')).getByText('financeReconcileBadgePending')).toBeInTheDocument();
     expect(within(row('B3')).getByText('financeReconcileBadgeBounce')).toBeInTheDocument();
     expect(discardPairMock).not.toHaveBeenCalled();
-    // The two lines move from Posibles rebotes to plain pending; Pendientes is unchanged.
+    // The two lines move from Posibles rechazos to plain pending; Pendientes is unchanged.
     expect(screen.getByText(/^financeReconcileFilterStatusPending \(6\)/)).toBeInTheDocument();
     openStatus('financeReconcileFilterStatusPending');
     expect(screen.getByText(/^financeReconcileFilterStatusBounce \(3\)/)).toBeInTheDocument();
@@ -564,7 +564,7 @@ describe('ReconciliationSplitPanel — the Descartadas filter', () => {
 // ── Read-only tier ─────────────────────────────────────────────────────────────
 
 describe('ReconciliationSplitPanel — bounce panel under the read-only tier', () => {
-  it('disables Descartar par but keeps "No es un rebote" available', async () => {
+  it('disables Descartar par but keeps "No es un rechazo" available', async () => {
     renderPanel({ windowReadOnly: true });
     await selectLineRow('O1');
     expect(screen.getByTestId('recon-bounce-discard')).toBeDisabled();
@@ -574,7 +574,7 @@ describe('ReconciliationSplitPanel — bounce panel under the read-only tier', (
     expect(discardPairMock).not.toHaveBeenCalled();
   });
 
-  it('"No es un rebote" still hides the pair, but reports nothing to the backend', async () => {
+  it('"No es un rechazo" still hides the pair, but reports nothing to the backend', async () => {
     renderPanel({ windowReadOnly: true });
     await selectLineRow('O1');
     fireEvent.click(screen.getByTestId('recon-bounce-dismiss'));
@@ -605,7 +605,7 @@ describe('ReconciliationSplitPanel — the "Revisar en el panel" focus request',
     };
   }
 
-  it('switches to Posibles rebotes, clears the search, selects and scrolls to the line, then consumes', async () => {
+  it('switches to Posibles rechazos, clears the search, selects and scrolls to the line, then consumes', async () => {
     const r = review(null);
     const { rerender } = renderPanel({ bounceReview: r });
     await screen.findByTestId('recon-line-row-B3');
@@ -651,12 +651,12 @@ describe('ReconciliationSplitPanel — the "Revisar en el panel" focus request',
     expect(r.onFocusConsumed).toHaveBeenCalledTimes(1);
   });
 
-  it('a second request with the lines loaded and the filter already on Posibles rebotes selects the line', async () => {
+  it('a second request with the lines loaded and the filter already on Posibles rechazos selects the line', async () => {
     const r = review({ lineId: 'B3', seq: 1 });
     const { rerender } = renderPanel({ bounceReview: r });
     await waitFor(() => expect(r.onFocusConsumed).toHaveBeenCalledTimes(1));
     expect(screen.getByTestId('recon-line-radio-B3')).toBeChecked();
-    // The user moves on to another line; nothing reloads, the filter stays on Posibles rebotes.
+    // The user moves on to another line; nothing reloads, the filter stays on Posibles rechazos.
     fireEvent.click(screen.getByTestId('recon-line-radio-B1'));
     expect(screen.getByTestId('recon-line-radio-B1')).toBeChecked();
     const callsBefore = pending.calls.length;
@@ -735,7 +735,7 @@ const totalValue = (which) => total(which).lastElementChild.textContent;
 describe('ReconciliationSplitPanel — ambiguous pairs sharing a candidate', () => {
   beforeEach(() => { pending.answer = sharedAnswer; });
 
-  it('the Posibles rebotes filter lists both pairs, the shared candidate once', async () => {
+  it('the Posibles rechazos filter lists both pairs, the shared candidate once', async () => {
     renderPanel();
     await screen.findByTestId('recon-line-row-R-B2');
     selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusBounce');
@@ -815,7 +815,7 @@ describe('ReconciliationSplitPanel — the bank reference and the description of
 describe('ReconciliationSplitPanel — the footer of the bounce panel', () => {
   beforeEach(() => { pending.answer = sharedAnswer; });
 
-  it('a bounce line: "Rebote seleccionado" with its amount and "date · Ref. X"', async () => {
+  it('a bounce line: "Rechazo seleccionado" with its amount and "date · Ref. X"', async () => {
     renderPanel();
     await selectLineRow('R-B1');
     expect(within(total('selected')).getByText('financeReconcileBounceSelectedBounce')).toBeInTheDocument();
@@ -879,7 +879,7 @@ describe('ReconciliationSplitPanel — the footer of the bounce panel', () => {
 // ── The shared controls of the bounce panel ───────────────────────────────────
 
 describe('ReconciliationSplitPanel — buttons and radios of the bounce panel', () => {
-  it('"Descartar par" is the blue primary Button, "No es un rebote" the outline one', async () => {
+  it('"Descartar par" is the blue primary Button, "No es un rechazo" the outline one', async () => {
     renderPanel();
     await selectLineRow('O1');
     const discard = screen.getByTestId('recon-bounce-discard');

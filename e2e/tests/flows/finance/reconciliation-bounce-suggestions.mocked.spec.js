@@ -10,7 +10,7 @@ import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
 /**
- * Bounce-pair suggestions (the modal's "Rebotes bancarios" section, the panel's "Posibles rebotes"
+ * Bounce-pair suggestions (the modal's "Rechazos bancarios" section, the panel's "Posibles rechazos"
  * filter) in the bank reconciliation — mocked.
  *
  * The backend detects bounce pairs behind the per-account flag `bank-bounce-suggestions`; the SPA
@@ -23,7 +23,7 @@ import { login } from '../../helpers/auth.js';
  *   1. the automatch modal auto-opens with one transaction group and three pairs (high, review,
  *      ambiguous): high checked, review unchecked, ambiguous disabled;
  *   2. "Revisar en el panel" on the ambiguous pair closes the modal, switches the panel filter to
- *      "Posibles rebotes" and selects the bounce line, with no review banner; each candidate shows
+ *      "Posibles rechazos" and selects the bounce line, with no review banner; each candidate shows
  *      its bank reference ("Ref. X") and the footer the selected bounce's, the clipped description is
  *      on hover; choosing the original and "Descartar par" POSTs `discardPair` with the original and
  *      the bounce;
@@ -33,12 +33,12 @@ import { login } from '../../helpers/auth.js';
  *      pair `sent_to_panel`;
  *   4. "Descartadas" lists the discarded lines (`status=discarded`) and "Restaurar par" POSTs
  *      `restorePair`;
- *   5. flag off: no "Rebotes bancarios" section, no bounce KPI, the original apply payload;
- *   6. "No es un rebote" POSTs `dismissPair` with the selected line and the other line of the pair,
+ *   5. flag off: no "Rechazos bancarios" section, no bounce KPI, the original apply payload;
+ *   6. "No es un rechazo" POSTs `dismissPair` with the selected line and the other line of the pair,
  *      and a failing `dismissPair` changes nothing on screen (no error toast);
  *   7. a pair sent to the panel, then checked and unchecked again in the reopened modal, is
  *      reported as `unchecked`, not `sent_to_panel`;
- *   8. read-only tier: the modal never opens and "No es un rebote" posts nothing;
+ *   8. read-only tier: the modal never opens and "No es un rechazo" posts nothing;
  *   9. (E2E_TELEMETRY=configured only) the `bounce_suggestions_viewed` / `_dismissed` Mixpanel
  *      events, read from the requests to the Mixpanel host — see the describe below.
  *
@@ -50,7 +50,7 @@ const ACCOUNT_ID = 'acc-bounce';
 
 const ACCOUNT = {
   id: ACCOUNT_ID,
-  name: 'Banco Rebotes',
+  name: 'Banco Rechazos',
   type: 'B',
   currentBalance: 1000,
   currencyId: '102',
@@ -312,13 +312,13 @@ test.describe('Reconciliation — bounce-pair suggestions (mocked)', () => {
     await expect(page.getByTestId('automatch-bounce-tag-high-bp-high')).toBeVisible();
     await expect(page.getByTestId('automatch-bounce-review-bp-amb')).toBeVisible();
     await expect(page.getByTestId('automatch-bounce-review-bp-high')).toHaveCount(0);
-    // The UI's own wording is "rebote", never "devolución" (the bank descriptions may say it).
-    await expect(section).toContainText('Rebotes bancarios');
-    await expect(section).toContainText('Pagos que el banco rechazó: una salida y su rebote');
+    // The UI's own wording is "rechazo", never "rebote" nor "devolución" (the bank descriptions may say it).
+    await expect(section).toContainText('Rechazos bancarios');
+    await expect(section).toContainText('Pagos que el banco rechazó: la salida y su rechazo');
     // The same label twice: the section title and the KPI strip.
-    await expect(modal(page).getByText('Rebotes bancarios', { exact: true })).toHaveCount(2);
+    await expect(modal(page).getByText('Rechazos bancarios', { exact: true })).toHaveCount(2);
     const reviewTag = page.getByTestId('automatch-bounce-tag-review-bp-review');
-    await expect(reviewTag).toContainText('rebote 3 día(s) después');
+    await expect(reviewTag).toContainText('rechazo 3 día(s) después');
     await expect(reviewTag).not.toContainText(/devoluci[oó]n/i);
     // The bounce of the ambiguous pair names its bank reference; its original side, still to be
     // chosen in the panel, shows the candidate dates only.
@@ -340,8 +340,8 @@ test.describe('Reconciliation — bounce-pair suggestions (mocked)', () => {
     // No review banner and no way back: the Automatch button is how the user returns.
     await expect(page.getByTestId('recon-bounce-review-banner')).toHaveCount(0);
     await expect(page.getByTestId('recon-bounce-review-back')).toHaveCount(0);
-    // The filter moved to "Posibles rebotes": the suggested transaction line is gone.
-    await expect(page.getByRole('button', { name: /^Posibles rebotes \(7\)/ })).toBeVisible();
+    // The filter moved to "Posibles rechazos": the suggested transaction line is gone.
+    await expect(page.getByRole('button', { name: /^Posibles rechazos \(7\)/ })).toBeVisible();
     await expect(page.getByTestId(`recon-line-row-${TX_LINE.id}`)).toHaveCount(0);
     await expect(page.getByTestId(`recon-line-radio-${AMB_BOUNCE.id}`)).toBeChecked();
 
@@ -351,7 +351,7 @@ test.describe('Reconciliation — bounce-pair suggestions (mocked)', () => {
     // Each candidate row shows its bank reference; the footer opens with the selected bounce.
     await expect(panel.getByTestId(`recon-bounce-ref-${AMB_CAND_1.id}`)).toHaveText(`Ref. ${AMB_CAND_1.referenceNo}`);
     await expect(panel.getByTestId(`recon-bounce-ref-${AMB_CAND_2.id}`)).toHaveText(`Ref. ${AMB_CAND_2.referenceNo}`);
-    await expect(panel.getByTestId('recon-bounce-total-selected')).toContainText('Rebote seleccionado');
+    await expect(panel.getByTestId('recon-bounce-total-selected')).toContainText('Rechazo seleccionado');
     await expect(panel.getByTestId('recon-bounce-total-selected-meta')).toContainText(`Ref. ${AMB_BOUNCE.referenceNo}`);
     await expect(panel.getByTestId('recon-bounce-total-other-meta')).toHaveCount(0);
     // The clipped description reveals its full text on hover.
@@ -449,7 +449,7 @@ test.describe('Reconciliation — bounce-pair suggestions (mocked)', () => {
 
     await expect(modal(page)).toBeVisible();
     await expect(page.getByTestId('automatch-bounce-section')).toHaveCount(0);
-    await expect(modal(page)).not.toContainText('Rebotes bancarios');
+    await expect(modal(page)).not.toContainText('Rechazos bancarios');
 
     const post = page.waitForRequest((r) => r.method() === 'POST' && r.url().includes('action=applySuggestions'));
     await page.getByTestId('automatch-modal-apply').click();
@@ -463,7 +463,7 @@ test.describe('Reconciliation — bounce-pair suggestions (mocked)', () => {
     // The panel offers neither of the bounce entries, and never asks for status=discarded.
     await page.getByRole('button', { name: /^Pendientes \(/ }).click();
     await expect(page.getByRole('option', { name: /^Conciliadas/ })).toBeVisible();
-    await expect(page.getByRole('option', { name: /^Posibles rebotes/ })).toHaveCount(0);
+    await expect(page.getByRole('option', { name: /^Posibles rechazos/ })).toHaveCount(0);
     await expect(page.getByRole('option', { name: /^Descartadas/ })).toHaveCount(0);
     expect(pendingQueries.every((q) => !q.has('status'))).toBe(true);
   });
@@ -480,15 +480,15 @@ function recordDismissPairRequests(page) {
   return seen;
 }
 
-/** Selects a line of the panel through the "Posibles rebotes" entry of the status filter. */
+/** Selects a line of the panel through the "Posibles rechazos" entry of the status filter. */
 async function selectBounceLineInPanel(page, lineId) {
   await page.getByRole('button', { name: /^Pendientes \(/ }).click();
-  await page.getByRole('option', { name: /^Posibles rebotes/ }).click();
+  await page.getByRole('option', { name: /^Posibles rechazos/ }).click();
   await page.getByTestId(`recon-line-row-${lineId}`).click();
 }
 
 test.describe('Reconciliation — bounce-pair KPI reporting (mocked)', () => {
-  test('"No es un rebote" posts dismissPair with the selected line and the other line of the pair', async ({ page }) => {
+  test('"No es un rechazo" posts dismissPair with the selected line and the other line of the pair', async ({ page }) => {
     await login(page);
     const { posts } = await installMocks(page);
     await openReconciliation(page);
@@ -570,7 +570,7 @@ test.describe('Reconciliation — bounce-pair KPI reporting (mocked)', () => {
     ]);
   });
 
-  test('read-only tier: the modal never opens and "No es un rebote" posts nothing', async ({ page }) => {
+  test('read-only tier: the modal never opens and "No es un rechazo" posts nothing', async ({ page }) => {
     await login(page, { windowAccessOverrides: { [FINANCIAL_ACCOUNT_WINDOW_ID]: 'read-only' } });
     const { posts } = await installMocks(page);
     const dismissRequests = recordDismissPairRequests(page);

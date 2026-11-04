@@ -1,7 +1,7 @@
 // @covers tools/app-shell/src/hooks/useAutoMatchReview.js
 /**
  * `useAutoMatchSelection` / `useAutoMatchReview` — the automatch checks and the "Revisar en el
- * panel" state (focus request, "No es un rebote" dismissals) shared by the automatch modal and the
+ * panel" state (focus request, "No es un rechazo" dismissals) shared by the automatch modal and the
  * reconciliation panel (bounce pairs).
  */
 import { renderHook, act } from '@testing-library/react';

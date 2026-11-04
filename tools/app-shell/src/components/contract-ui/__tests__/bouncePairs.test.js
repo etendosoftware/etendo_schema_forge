@@ -1,7 +1,7 @@
 // @covers tools/app-shell/src/components/contract-ui/bouncePairs.js
 /**
  * Unit tests for `bouncePairs.js` — the pure logic of the bank reconciliation bounce pairs
- * ("rebotes"). The backend detects them behind the `bank-bounce-suggestions` flag; this module only
+ * ("rechazos" bancarios in the UI). The backend detects them behind the `bank-bounce-suggestions` flag; this module only
  * reads what it answers (autoMatch groups with `kind: "bouncePair"`, `pendingLines` rows in the
  * `bounce` state with a `bouncePair` annotation, and the `status=discarded` rows with their
  * `bounceLink`). Contract: com.etendoerp.go docs/neo-headless.md §4.12.1.1.
@@ -205,7 +205,7 @@ describe('bounceDecisions / withBounceDecisions (applySuggestions KPI report)', 
   });
 });
 
-describe('dismissPairPayload ("No es un rebote" KPI report)', () => {
+describe('dismissPairPayload ("No es un rechazo" KPI report)', () => {
   it('sends the selected line and the other line of the pair', () => {
     assert.deepEqual(dismissPairPayload('acc', { id: 'L-IN' }, { other: { id: 'L-OUT' } }), {
       financialAccountId: 'acc', statementLineId: 'L-IN', counterpartLineId: 'L-OUT',
