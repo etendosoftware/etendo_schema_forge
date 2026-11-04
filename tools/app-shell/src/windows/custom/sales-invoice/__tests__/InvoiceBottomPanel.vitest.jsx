@@ -1,3 +1,4 @@
+// @covers artifacts/sales-invoice/custom/InvoiceBottomPanel.jsx
 // Regression suite for the import-modal remount bug (ETP-4459).
 //
 // Component under test: artifacts/sales-invoice/custom/InvoiceBottomPanel.jsx
