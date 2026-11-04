@@ -217,7 +217,8 @@ vi.mock('../BankConnectionFlowUI.jsx', () => ({
 // (`onReviewPair`) are surfaced the same way; `onReviewPair` and the toggle act on the `bp-review` pair.
 vi.mock('@/components/contract-ui/AutoMatchSuggestionModal', () => ({
   AutoMatchSuggestionModal: ({
-    open, onClose, onSuccess, groups, selection, dismissedPairKeys, onReviewPair,
+    open, onClose, onSuccess, groups, selection, dismissedPairKeys, onReviewPair, sentToPanelKeys,
+    autoOpened,
   }) => {
     const reviewPair = (groups ?? []).find((g) => g.groupKey === 'bp-review');
     return (
@@ -225,7 +226,9 @@ vi.mock('@/components/contract-ui/AutoMatchSuggestionModal', () => ({
         data-testid="automatch-modal"
         data-open={String(open)}
         data-checked={(groups ?? []).filter((g) => selection?.isChecked(g)).map((g) => g.groupKey).join(',')}
-        data-dismissed={[...(dismissedPairKeys ?? [])].join(',')}>
+        data-dismissed={[...(dismissedPairKeys ?? [])].join(',')}
+        data-sent-to-panel={[...(sentToPanelKeys ?? [])].join(',')}
+        data-auto-opened={String(autoOpened)}>
         <button type="button" data-testid="stub-automatch-close" onClick={onClose} />
         <button type="button" data-testid="stub-automatch-success" onClick={onSuccess} />
         <button type="button" data-testid="stub-automatch-review" onClick={() => onReviewPair?.(reviewPair)} />
@@ -706,6 +709,38 @@ describe('FinancialAccountDetail — bounce-pair review (Revisar en el panel)', 
   it('starts with the default checks', () => {
     renderWithPairs();
     expect(modal()).toHaveAttribute('data-checked', 'tx-1,bp-high');
+  });
+
+  // ETP-5581 KPI events: how the modal opened, and the pairs sent to the panel.
+
+  it('an opening by the automatch itself is auto_opened; one from the Automatch button is not', () => {
+    renderWithPairs();
+    expect(modal()).toHaveAttribute('data-auto-opened', 'true');
+    fireEvent.click(screen.getByTestId('stub-automatch-close'));
+    fireEvent.click(screen.getByTestId('financial-account-automatch'));
+    expect(modal()).toHaveAttribute('data-open', 'true');
+    expect(modal()).toHaveAttribute('data-auto-opened', 'false');
+  });
+
+  it('"Revisar en el panel" records the pair as sent to the panel, kept when the Automatch button reopens', () => {
+    renderWithPairs();
+    expect(modal()).toHaveAttribute('data-sent-to-panel', '');
+    fireEvent.click(screen.getByTestId('stub-automatch-review'));
+    fireEvent.click(screen.getByTestId('financial-account-automatch'));
+    expect(modal()).toHaveAttribute('data-sent-to-panel', 'bp-review');
+  });
+
+  it('re-checking a pair sent to the panel forgets it; a reload of the suggestions forgets them all', () => {
+    const { rerender } = renderWithPairs();
+    fireEvent.click(screen.getByTestId('stub-automatch-review'));
+    fireEvent.click(screen.getByTestId('stub-automatch-toggle-review'));
+    expect(modal()).toHaveAttribute('data-sent-to-panel', '');
+
+    fireEvent.click(screen.getByTestId('stub-automatch-review'));
+    expect(modal()).toHaveAttribute('data-sent-to-panel', 'bp-review');
+    currentAutoMatchGroups = [...PAIR_GROUPS];
+    rerender(<FinancialAccountDetail recordId="acc-1" />);
+    expect(modal()).toHaveAttribute('data-sent-to-panel', '');
   });
 
   it('closes the modal and asks the panel for the bounce line, with no review banner', () => {

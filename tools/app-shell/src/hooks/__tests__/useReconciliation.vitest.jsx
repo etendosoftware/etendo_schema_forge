@@ -25,7 +25,9 @@ import {
   useApplySuggestions,
 } from '../useReconciliation.js';
 import { useReconciliationPost, RECONCILIATION_BASE_PATH } from '../useReconciliationPost.js';
-import { useDiscardPair, usePendingLineCounts, useRestorePair } from '../useBouncePairActions.js';
+import {
+  useDiscardPair, useDismissPair, usePendingLineCounts, useRestorePair,
+} from '../useBouncePairActions.js';
 import { findFetchCall } from './findFetchCall.js';
 
 const BASE = '/sws/neo/bank-reconciliation';
@@ -733,6 +735,33 @@ describe('useDiscardPair (POST discardPair)', () => {
     expect(caught.body.error.messageKeys).toEqual(['ETGO_BounceHasPayment']);
     expect(result.current.error).toBe(caught);
     expect(result.current.loading).toBe(false);
+  });
+});
+
+describe('useDismissPair (POST dismissPair, ETP-5581 KPI report)', () => {
+  it('posts the dismissPair action with the selected line and, when known, the other one', async () => {
+    mockActionResponse(postResponse({ dismissed: true }));
+    const { result } = renderHook(() => useDismissPair(), { wrapper });
+    const payload = { financialAccountId: 'acc-1', statementLineId: 'L-IN', counterpartLineId: 'L-OUT' };
+
+    await act(async () => { await result.current.dismissPair(payload); });
+
+    const [url, init] = findFetchCall(`/etendo${BASE}?action=dismissPair`);
+    expect(url).toBe(`/etendo${BASE}?action=dismissPair`);
+    expect(init.method).toBe('POST');
+    expect(init.headers.Authorization).toBe('Bearer test-token');
+    expect(JSON.parse(init.body)).toEqual(payload);
+  });
+
+  it('rejects on a refusal, for the caller to swallow', async () => {
+    mockActionResponse(bounceRefusal('BOUNCE_SUGGESTIONS_OFF', 'ETGO_BounceSuggestionsOff', 'off'));
+    const { result } = renderHook(() => useDismissPair(), { wrapper });
+    let caught;
+    await act(async () => {
+      caught = await result.current.dismissPair({ financialAccountId: 'acc-1', statementLineId: 'x' }).catch((e) => e);
+    });
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught.code).toBe('BOUNCE_SUGGESTIONS_OFF');
   });
 });
 

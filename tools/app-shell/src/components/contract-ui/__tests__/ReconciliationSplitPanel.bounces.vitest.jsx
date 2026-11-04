@@ -1,6 +1,7 @@
 // @covers tools/app-shell/src/components/contract-ui/ReconciliationSplitPanel.jsx
 // @covers tools/app-shell/src/components/contract-ui/BouncePairPanel.jsx
 // @covers tools/app-shell/src/components/contract-ui/useBouncePairReview.jsx
+// @covers tools/app-shell/src/components/contract-ui/bouncePairs.js
 /**
  * Bounce pairs and discarded lines in the reconciliation split panel (flag `bank-bounce-suggestions`).
  * The backend sends `counts.bounce`, `counts.discarded` and the discarded rows only with the flag
@@ -84,12 +85,14 @@ vi.mock('@/hooks/useReconciliation', async () => {
 
 const discardPairMock = vi.fn();
 const restorePairMock = vi.fn();
+const dismissPairMock = vi.fn();
 // Read on every render, so a test can put a discard or a restore in flight (the panel's `busy`).
 const pairActions = { discarding: false, restoring: false };
 const pendingLineCountsMock = vi.fn();
 vi.mock('@/hooks/useBouncePairActions.js', () => ({
   useDiscardPair: () => ({ discardPair: discardPairMock, loading: pairActions.discarding, error: null }),
   useRestorePair: () => ({ restorePair: restorePairMock, loading: pairActions.restoring, error: null }),
+  useDismissPair: () => ({ dismissPair: dismissPairMock, loading: false, error: null }),
   usePendingLineCounts: () => pendingLineCountsMock,
 }));
 
@@ -194,6 +197,7 @@ beforeEach(() => {
   candidateLineIds.length = 0;
   discardPairMock.mockReset().mockResolvedValue({ discarded: true });
   restorePairMock.mockReset().mockResolvedValue({ restored: ['D1', 'D2'] });
+  dismissPairMock.mockReset().mockResolvedValue({});
   pendingLineCountsMock.mockReset().mockResolvedValue(null);
   toast.success.mockClear();
   toast.error.mockClear();
@@ -379,6 +383,57 @@ describe('ReconciliationSplitPanel — "No es un rebote"', () => {
     expect(within(row('C1')).getByText('financeReconcileBadgePending')).toBeInTheDocument();
     expect(screen.queryByTestId('recon-bounce-panel')).toBeNull();
   });
+
+  // ETP-5581 KPI: the dismissal is also reported to the backend (dismissPair), fire-and-forget.
+
+  it('reports it with dismissPair: the selected line and the other line of the pair', async () => {
+    renderPanel();
+    await selectLineRow('O1');
+    fireEvent.click(screen.getByTestId('recon-bounce-dismiss'));
+    expect(dismissPairMock).toHaveBeenCalledTimes(1);
+    expect(dismissPairMock).toHaveBeenCalledWith({
+      financialAccountId: 'ACC-1', statementLineId: 'O1', counterpartLineId: 'B1',
+    });
+  });
+
+  it('an ambiguous pair with an original chosen sends it as the counterpart', async () => {
+    renderPanel();
+    await selectLineRow('B3');
+    fireEvent.click(screen.getByTestId('recon-bounce-radio-C2'));
+    fireEvent.click(screen.getByTestId('recon-bounce-dismiss'));
+    expect(dismissPairMock).toHaveBeenCalledWith({
+      financialAccountId: 'ACC-1', statementLineId: 'B3', counterpartLineId: 'C2',
+    });
+  });
+
+  it('an ambiguous pair with no original chosen omits the counterpart', async () => {
+    renderPanel();
+    await selectLineRow('B3');
+    fireEvent.click(screen.getByTestId('recon-bounce-dismiss'));
+    expect(dismissPairMock).toHaveBeenCalledWith({ financialAccountId: 'ACC-1', statementLineId: 'B3' });
+  });
+
+  it('a failed report is silent: the pair is still hidden, only the dismissal toast shows', async () => {
+    dismissPairMock.mockRejectedValue(new Error('HTTP 500'));
+    renderPanel();
+    await selectLineRow('O1');
+    fireEvent.click(screen.getByTestId('recon-bounce-dismiss'));
+    await waitFor(() => expect(dismissPairMock).toHaveBeenCalled());
+    await Promise.resolve();
+    expect(toast.success).toHaveBeenCalledWith('financeReconcileBounceToastDismissed');
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('recon-bounce-panel')).toBeNull();
+    expect(within(row('O1')).getByText('financeReconcileBadgePending')).toBeInTheDocument();
+  });
+
+  it('a report that throws synchronously does not break the dismissal either', async () => {
+    dismissPairMock.mockImplementation(() => { throw new Error('boom'); });
+    renderPanel();
+    await selectLineRow('O1');
+    fireEvent.click(screen.getByTestId('recon-bounce-dismiss'));
+    expect(toast.success).toHaveBeenCalledWith('financeReconcileBounceToastDismissed');
+    expect(screen.queryByTestId('recon-bounce-panel')).toBeNull();
+  });
 });
 
 // ── Discarded lines ────────────────────────────────────────────────────────────
@@ -517,6 +572,16 @@ describe('ReconciliationSplitPanel — bounce panel under the read-only tier', (
     fireEvent.click(screen.getByTestId('recon-bounce-discard'));
     await Promise.resolve();
     expect(discardPairMock).not.toHaveBeenCalled();
+  });
+
+  it('"No es un rebote" still hides the pair, but reports nothing to the backend', async () => {
+    renderPanel({ windowReadOnly: true });
+    await selectLineRow('O1');
+    fireEvent.click(screen.getByTestId('recon-bounce-dismiss'));
+    expect(toast.success).toHaveBeenCalledWith('financeReconcileBounceToastDismissed');
+    expect(screen.queryByTestId('recon-bounce-panel')).toBeNull();
+    await Promise.resolve();
+    expect(dismissPairMock).not.toHaveBeenCalled();
   });
 
   it('disables Restaurar par', async () => {

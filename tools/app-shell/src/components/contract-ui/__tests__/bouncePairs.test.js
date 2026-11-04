@@ -35,6 +35,11 @@ import {
   countsWithDismissedPairs,
   bouncePanelModel,
   summarizeApplyResults,
+  BOUNCE_DECISIONS_KEY,
+  BOUNCE_DECISION,
+  bounceDecisions,
+  withBounceDecisions,
+  dismissPairPayload,
 } from '../bouncePairs.js';
 
 const MODULE_URL = pathToFileURL(
@@ -155,6 +160,70 @@ describe('bouncePairPayload / pairOriginalLines', () => {
   it('offers nothing when a plain pair has no original', () => {
     assert.deepEqual(pairOriginalLines(pairGroup({ statementLine: null })), []);
     assert.deepEqual(pairOriginalLines(pairGroup({ ambiguous: true, statementLine: null })), []);
+  });
+});
+
+// --- bounceDecisions / withBounceDecisions / dismissPairPayload (KPI events) --
+
+describe('bounceDecisions / withBounceDecisions (applySuggestions KPI report)', () => {
+  const A = pairGroup({ groupKey: 'a' });
+  const B = pairGroup({ groupKey: 'b' });
+  const C = pairGroup({ groupKey: 'c' });
+  const checked = new Set(['a']);
+  const isChecked = (g) => checked.has(g.groupKey);
+
+  it('names the body key and the decisions in one place', () => {
+    assert.equal(BOUNCE_DECISIONS_KEY, 'bounceDecisions');
+    assert.deepEqual({ ...BOUNCE_DECISION }, { UNCHECKED: 'unchecked', SENT_TO_PANEL: 'sent_to_panel' });
+  });
+
+  it('lists every not-checked pair, sent_to_panel when it was sent there, unchecked otherwise', () => {
+    assert.deepEqual(bounceDecisions([A, B, C], isChecked, new Set(['c', 'a'])), [
+      { groupKey: 'b', decision: 'unchecked' },
+      { groupKey: 'c', decision: 'sent_to_panel' },
+    ]);
+  });
+
+  it('tolerates no sent-to-panel set, no pairs, and pairs without a groupKey', () => {
+    assert.deepEqual(bounceDecisions([B], isChecked), [{ groupKey: 'b', decision: 'unchecked' }]);
+    assert.deepEqual(bounceDecisions(null, isChecked), []);
+    assert.deepEqual(bounceDecisions([pairGroup({ groupKey: undefined })], isChecked), []);
+  });
+
+  it('carries no line id, amount or text: only groupKey and decision', () => {
+    for (const entry of bounceDecisions([B, C], isChecked)) {
+      assert.deepEqual(Object.keys(entry).sort(), ['decision', 'groupKey']);
+    }
+  });
+
+  it('adds the key only when pairs were shown, even if every one is applied', () => {
+    const body = { financialAccountId: 'acc', groups: [] };
+    assert.equal(withBounceDecisions(body, [], isChecked), body);
+    assert.equal(withBounceDecisions(body, null, isChecked), body);
+    assert.deepEqual(withBounceDecisions(body, [A], isChecked), { ...body, bounceDecisions: [] });
+    assert.ok(!('bounceDecisions' in body), 'the original body is not mutated');
+  });
+});
+
+describe('dismissPairPayload ("No es un rebote" KPI report)', () => {
+  it('sends the selected line and the other line of the pair', () => {
+    assert.deepEqual(dismissPairPayload('acc', { id: 'L-IN' }, { other: { id: 'L-OUT' } }), {
+      financialAccountId: 'acc', statementLineId: 'L-IN', counterpartLineId: 'L-OUT',
+    });
+  });
+
+  it('omits the counterpart while none is chosen', () => {
+    assert.deepEqual(dismissPairPayload('acc', { id: 'L-IN' }, { other: null }), {
+      financialAccountId: 'acc', statementLineId: 'L-IN',
+    });
+    assert.deepEqual(dismissPairPayload('acc', { id: 'L-IN' }, null), {
+      financialAccountId: 'acc', statementLineId: 'L-IN',
+    });
+  });
+
+  it('answers null without a line', () => {
+    assert.equal(dismissPairPayload('acc', null, { other: { id: 'x' } }), null);
+    assert.equal(dismissPairPayload('acc', {}, null), null);
   });
 });
 

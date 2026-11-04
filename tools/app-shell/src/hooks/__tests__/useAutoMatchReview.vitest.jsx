@@ -184,4 +184,68 @@ describe('useAutoMatchReview', () => {
     expect(result.current.focus).toBeNull();
     expect(result.current.dismissedKeys.size).toBe(0);
   });
+
+  // --- sent_to_panel (ETP-5581 KPI): the pairs "Revisar en el panel" sent during this modal session
+
+  it('startReview records the pair as sent to the panel, once', () => {
+    const { result } = renderHook(() => useAutoMatchReview(GROUPS));
+    expect(result.current.sentToPanelKeys.size).toBe(0);
+    act(() => result.current.startReview(REVIEW));
+    const first = result.current.sentToPanelKeys;
+    expect([...first]).toEqual(['bp-review']);
+    act(() => result.current.startReview(REVIEW));
+    expect(result.current.sentToPanelKeys).toBe(first);
+    act(() => result.current.startReview(AMBIGUOUS));
+    expect([...result.current.sentToPanelKeys]).toEqual(['bp-review', 'bp-amb']);
+  });
+
+  it('a group without a bounce line is never recorded as sent to the panel', () => {
+    const { result } = renderHook(() => useAutoMatchReview(GROUPS));
+    act(() => result.current.startReview(TX));
+    expect(result.current.sentToPanelKeys.size).toBe(0);
+  });
+
+  it('keeps the pairs sent to the panel while the suggestions do not reload, and forgets them on a reload', () => {
+    const { result, rerender } = renderHook(({ groups }) => useAutoMatchReview(groups), {
+      initialProps: { groups: GROUPS },
+    });
+    act(() => result.current.startReview(REVIEW));
+    rerender({ groups: GROUPS });
+    expect([...result.current.sentToPanelKeys]).toEqual(['bp-review']);
+    rerender({ groups: [...GROUPS] });
+    expect(result.current.sentToPanelKeys.size).toBe(0);
+  });
+
+  it('checking a pair again forgets that it was sent to the panel; unchecking does not', () => {
+    const { result } = renderHook(() => useAutoMatchReview(GROUPS));
+    act(() => result.current.startReview(HIGH));
+    act(() => result.current.startReview(REVIEW));
+    // HIGH starts checked: this toggle unchecks it, so it stays "sent to the panel".
+    act(() => result.current.selection.toggle(HIGH));
+    expect(result.current.sentToPanelKeys.has('bp-high')).toBe(true);
+    // REVIEW starts unchecked: this toggle re-checks it.
+    act(() => result.current.selection.toggle(REVIEW));
+    expect(result.current.selection.isChecked(REVIEW)).toBe(true);
+    expect(result.current.sentToPanelKeys.has('bp-review')).toBe(false);
+  });
+
+  it('select-all of the pairs forgets them as sent to the panel; unselect-all keeps them', () => {
+    const { result } = renderHook(() => useAutoMatchReview(GROUPS));
+    act(() => result.current.startReview(REVIEW));
+    act(() => result.current.startReview(AMBIGUOUS));
+    act(() => result.current.selection.setMany([HIGH, REVIEW, AMBIGUOUS], false));
+    expect([...result.current.sentToPanelKeys]).toEqual(['bp-review', 'bp-amb']);
+    act(() => result.current.selection.setMany([HIGH, REVIEW, AMBIGUOUS], true));
+    // The ambiguous pair cannot be checked, so it is still the panel's.
+    expect([...result.current.sentToPanelKeys]).toEqual(['bp-amb']);
+  });
+
+  it('active=false forgets the pairs sent to the panel', () => {
+    const { result, rerender } = renderHook(({ active }) => useAutoMatchReview(GROUPS, { active }), {
+      initialProps: { active: true },
+    });
+    act(() => result.current.startReview(REVIEW));
+    rerender({ active: false });
+    expect(result.current.sentToPanelKeys.size).toBe(0);
+  });
 });

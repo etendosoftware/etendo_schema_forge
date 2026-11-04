@@ -1,5 +1,6 @@
 // @covers tools/app-shell/src/components/contract-ui/AutoMatchSuggestionModal.jsx
 // @covers tools/app-shell/src/components/contract-ui/AutoMatchBounceSection.jsx
+// @covers tools/app-shell/src/components/contract-ui/bouncePairs.js
 /**
  * The "Rebotes bancarios" section of the automatch modal (bounce pairs, flag `bank-bounce-suggestions`).
  *
@@ -29,8 +30,14 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }));
 
+// `dialog-dismiss` stands for every close the Dialog itself reports (X, Esc, backdrop).
 vi.mock('@/components/ui/dialog', () => ({
-  Dialog: ({ open, children }) => (open ? <div data-testid="dialog">{children}</div> : null),
+  Dialog: ({ open, onOpenChange, children }) => (open ? (
+    <div data-testid="dialog">
+      <button type="button" data-testid="dialog-dismiss" onClick={() => onOpenChange?.(false)}>x</button>
+      {children}
+    </div>
+  ) : null),
   DialogContent: ({ children, ...rest }) => <div {...rest}>{children}</div>,
   DialogTitle: ({ children, ...rest }) => <h2 {...rest}>{children}</h2>,
 }));
@@ -44,6 +51,13 @@ const applyMock = vi.fn();
 const applyState = { loading: false };
 vi.mock('@/hooks/useReconciliation', () => ({
   useApplySuggestions: () => ({ apply: applyMock, loading: applyState.loading, error: null }),
+}));
+
+const trackViewed = vi.fn();
+const trackDismissed = vi.fn();
+vi.mock('@/lib/bounceSuggestionsTelemetry.js', () => ({
+  trackBounceSuggestionsViewed: (...args) => trackViewed(...args),
+  trackBounceSuggestionsDismissed: (...args) => trackDismissed(...args),
 }));
 
 // --- Import under test (after mocks) ----------------------------------------
@@ -149,6 +163,8 @@ beforeEach(() => {
   toast.success.mockReset();
   toast.error.mockReset();
   toast.warning.mockReset();
+  trackViewed.mockReset();
+  trackDismissed.mockReset();
 });
 
 // ---------------------------------------------------------------------------
@@ -357,6 +373,8 @@ describe('AutoMatchSuggestionModal — applying pairs', () => {
         { kind: 'bouncePair', statementLineId: 'O1', counterpartLineId: 'B1' },
         { kind: 'bouncePair', statementLineId: 'O2', counterpartLineId: 'B2' },
       ],
+      // The shown pair that is not applied (the ambiguous one cannot be checked).
+      bounceDecisions: [{ groupKey: 'bp-amb', decision: 'unchecked' }],
     });
   });
 
@@ -684,5 +702,142 @@ describe('AutoMatchSuggestionModal — ambiguous pairs', () => {
     expect(onReviewPair).toHaveBeenCalledWith(SHARED_B);
     fireEvent.click(screen.getByTestId('automatch-bounce-review-bp-amb'));
     expect(onReviewPair).toHaveBeenLastCalledWith(SHARED_A);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// KPI events (ETP-5581): bounceDecisions in the apply, and the frontend Mixpanel events
+// ---------------------------------------------------------------------------
+
+describe('AutoMatchSuggestionModal — bounceDecisions in the applySuggestions body', () => {
+  it('reports every shown pair that is not applied as unchecked, and leaves the applied ones in groups', async () => {
+    renderModal();
+    await clickApply();
+    const body = applyMock.mock.calls[0][0];
+    expect(body.groups).toContainEqual({ kind: 'bouncePair', statementLineId: 'O1', counterpartLineId: 'B1' });
+    expect(body.bounceDecisions).toEqual([
+      { groupKey: 'bp-review', decision: 'unchecked' },
+      { groupKey: 'bp-amb', decision: 'unchecked' },
+    ]);
+  });
+
+  it('a preselected pair the user unchecked is reported as unchecked', async () => {
+    renderModal();
+    fireEvent.click(check('bp-high'));
+    await clickApply();
+    expect(applyMock.mock.calls[0][0].bounceDecisions).toContainEqual({ groupKey: 'bp-high', decision: 'unchecked' });
+  });
+
+  it('a pair sent to the panel and left unchecked is reported as sent_to_panel', async () => {
+    renderModal({ sentToPanelKeys: new Set(['bp-amb', 'bp-review']) });
+    await clickApply();
+    expect(applyMock.mock.calls[0][0].bounceDecisions).toEqual([
+      { groupKey: 'bp-review', decision: 'sent_to_panel' },
+      { groupKey: 'bp-amb', decision: 'sent_to_panel' },
+    ]);
+  });
+
+  it('a pair sent to the panel but checked when applying is applied, not reported', async () => {
+    renderModal({ sentToPanelKeys: new Set(['bp-review']) });
+    fireEvent.click(check('bp-review'));
+    await clickApply();
+    const body = applyMock.mock.calls[0][0];
+    expect(body.groups).toContainEqual({ kind: 'bouncePair', statementLineId: 'O2', counterpartLineId: 'B2' });
+    expect(body.bounceDecisions).toEqual([{ groupKey: 'bp-amb', decision: 'unchecked' }]);
+  });
+
+  it('pairs dismissed with "No es un rebote" are not shown, so not reported', async () => {
+    renderModal({ dismissedPairKeys: new Set(['bp-review', 'bp-amb']) });
+    await clickApply();
+    expect(applyMock.mock.calls[0][0].bounceDecisions).toEqual([]);
+  });
+
+  it('carries the key, empty, when every shown pair is applied', async () => {
+    renderModal({ groups: [TX, HIGH] });
+    await clickApply();
+    expect(applyMock.mock.calls[0][0]).toHaveProperty('bounceDecisions', []);
+  });
+
+  it('sends no bounceDecisions when the modal shows no pair', async () => {
+    renderModal({ groups: [TX], kpis: KPIS_OFF });
+    await clickApply();
+    expect(applyMock.mock.calls[0][0]).not.toHaveProperty('bounceDecisions');
+  });
+});
+
+describe('AutoMatchSuggestionModal — bounce_suggestions_viewed', () => {
+  it('is emitted once per opening with the shown and preselected pair counts', () => {
+    const { rerender, props } = renderModal({ autoOpened: true });
+    expect(trackViewed).toHaveBeenCalledTimes(1);
+    expect(trackViewed).toHaveBeenCalledWith({ pairsShown: 3, pairsPreselected: 1, autoOpened: true });
+
+    // Re-renders of the same opening (a toggle) emit nothing more.
+    fireEvent.click(check('bp-review'));
+    rerender(<AutoMatchSuggestionModal {...props} kpis={{ ...KPIS_ON }} />);
+    expect(trackViewed).toHaveBeenCalledTimes(1);
+  });
+
+  it('is emitted again on a new opening, with how it opened', () => {
+    const { rerender, props } = renderModal({ autoOpened: true });
+    rerender(<AutoMatchSuggestionModal {...props} open={false} />);
+    rerender(<AutoMatchSuggestionModal {...props} open autoOpened={false} />);
+    expect(trackViewed).toHaveBeenCalledTimes(2);
+    expect(trackViewed).toHaveBeenLastCalledWith({ pairsShown: 3, pairsPreselected: 1, autoOpened: false });
+  });
+
+  it('is emitted when the pairs land after the modal opened', () => {
+    const { rerender, props } = renderModal({ groups: [] });
+    expect(trackViewed).not.toHaveBeenCalled();
+    rerender(<AutoMatchSuggestionModal {...props} groups={[TX, HIGH]} />);
+    expect(trackViewed).toHaveBeenCalledWith({ pairsShown: 1, pairsPreselected: 1, autoOpened: false });
+  });
+
+  it('counts only the pairs still shown (dismissed ones left out)', () => {
+    renderModal({ dismissedPairKeys: new Set(['bp-high']) });
+    expect(trackViewed).toHaveBeenCalledWith({ pairsShown: 2, pairsPreselected: 0, autoOpened: false });
+  });
+
+  it('is not emitted without bounce pairs, nor while closed', () => {
+    renderModal({ groups: [TX], kpis: KPIS_OFF });
+    renderModal({ open: false });
+    expect(trackViewed).not.toHaveBeenCalled();
+  });
+});
+
+describe('AutoMatchSuggestionModal — bounce_suggestions_dismissed', () => {
+  it.each([
+    ['Cancelar', 'automatch-modal-cancel'],
+    ['Abrir conciliación', 'automatch-modal-open-reconciliation'],
+    ['X / Esc / backdrop', 'dialog-dismiss'],
+  ])('%s closes and reports the dismissal with the pairs checked at close', (_label, testId) => {
+    const { props } = renderModal({ autoOpened: true });
+    fireEvent.click(check('bp-review'));
+    fireEvent.click(screen.getByTestId(testId));
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+    expect(trackDismissed).toHaveBeenCalledTimes(1);
+    expect(trackDismissed).toHaveBeenCalledWith({ pairsShown: 3, pairsCheckedAtClose: 2, autoOpened: true });
+  });
+
+  it('is not reported on an apply', async () => {
+    const { props } = renderModal();
+    await clickApply();
+    await vi.waitFor(() => expect(props.onClose).toHaveBeenCalled());
+    expect(trackDismissed).not.toHaveBeenCalled();
+  });
+
+  it('is not reported on "Revisar en el panel" (the host closes the modal)', () => {
+    const onReviewPair = vi.fn();
+    const { rerender, props } = renderModal({ onReviewPair });
+    fireEvent.click(screen.getByTestId('automatch-bounce-review-bp-review'));
+    rerender(<AutoMatchSuggestionModal {...props} onReviewPair={onReviewPair} open={false} />);
+    expect(onReviewPair).toHaveBeenCalledWith(REVIEW);
+    expect(trackDismissed).not.toHaveBeenCalled();
+  });
+
+  it('is not reported when the modal had no bounce pair', () => {
+    const { props } = renderModal({ groups: [TX], kpis: KPIS_OFF });
+    fireEvent.click(screen.getByTestId('automatch-modal-cancel'));
+    expect(props.onClose).toHaveBeenCalled();
+    expect(trackDismissed).not.toHaveBeenCalled();
   });
 });

@@ -4,6 +4,8 @@
 // @covers tools/app-shell/src/components/contract-ui/useBouncePairReview.jsx
 // @covers tools/app-shell/src/hooks/useAutoMatchReview.js
 // @covers tools/app-shell/src/windows/custom/financial-account/index.jsx
+// @covers tools/app-shell/src/hooks/useBouncePairActions.js
+// @covers tools/app-shell/src/lib/bounceSuggestionsTelemetry.js
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
@@ -27,10 +29,18 @@ import { login } from '../../helpers/auth.js';
  *      the bounce;
  *   3. after "Revisar en el panel", the Automatch button reopens the modal on the same suggestions
  *      with the checks as they were left, and Apply sends ONE `applySuggestions` with the
- *      transaction group first and both checked pairs;
+ *      transaction group first and both checked pairs, plus `bounceDecisions` naming the ambiguous
+ *      pair `sent_to_panel`;
  *   4. "Descartadas" lists the discarded lines (`status=discarded`) and "Restaurar par" POSTs
  *      `restorePair`;
- *   5. flag off: no "Rebotes bancarios" section, no bounce KPI, the original apply payload.
+ *   5. flag off: no "Rebotes bancarios" section, no bounce KPI, the original apply payload;
+ *   6. "No es un rebote" POSTs `dismissPair` with the selected line and the other line of the pair,
+ *      and a failing `dismissPair` changes nothing on screen (no error toast);
+ *   7. a pair sent to the panel, then checked and unchecked again in the reopened modal, is
+ *      reported as `unchecked`, not `sent_to_panel`;
+ *   8. read-only tier: the modal never opens and "No es un rebote" posts nothing;
+ *   9. (E2E_TELEMETRY=configured only) the `bounce_suggestions_viewed` / `_dismissed` Mixpanel
+ *      events, read from the requests to the Mixpanel host — see the describe below.
  *
  * Mock mode only (run against plain `make dev`, not `make dev-mock`). Every route is installed AFTER
  * `login()` so it beats the generic `**\/sws\/**` stub (Playwright matches in reverse order).
@@ -195,12 +205,12 @@ const json = (route, body, status = 200) => route.fulfill({
  * Installs every route the account detail's reconciliation tab needs and records the POSTs.
  *
  * @param {import('@playwright/test').Page} page
- * @param {{ flagOn?: boolean }} [opts]
+ * @param {{ flagOn?: boolean, dismissPairStatus?: number }} [opts]
  * @returns {Promise<{ posts: Record<string, object[]>, pendingQueries: URLSearchParams[] }>}
  */
-async function installMocks(page, { flagOn = true } = {}) {
+async function installMocks(page, { flagOn = true, dismissPairStatus = 200 } = {}) {
   const data = answers(flagOn);
-  const posts = { discardPair: [], restorePair: [], applySuggestions: [] };
+  const posts = { discardPair: [], restorePair: [], applySuggestions: [], dismissPair: [] };
   const pendingQueries = [];
 
   await page.route(/\/sws\/neo\/financial-account\/account\?/, async (route) => {
@@ -224,6 +234,15 @@ async function installMocks(page, { flagOn = true } = {}) {
       if (action === 'discardPair') {
         posts.discardPair.push(body);
         await json(route, { response: { data: { discarded: true, ...body, signal: 'counterparty', confidence: 'review' } } });
+        return;
+      }
+      if (action === 'dismissPair') {
+        posts.dismissPair.push(body);
+        if (dismissPairStatus !== 200) {
+          await json(route, { error: { status: dismissPairStatus, message: 'Internal error' } }, dismissPairStatus);
+          return;
+        }
+        await json(route, { response: { data: { dismissed: true } } });
         return;
       }
       if (action === 'restorePair') {
@@ -386,6 +405,8 @@ test.describe('Reconciliation — bounce-pair suggestions (mocked)', () => {
         { kind: 'bouncePair', statementLineId: HIGH_ORIGINAL.id, counterpartLineId: HIGH_BOUNCE.id },
         { kind: 'bouncePair', statementLineId: REVIEW_ORIGINAL.id, counterpartLineId: REVIEW_BOUNCE.id },
       ],
+      // ETP-5581 KPI: the shown pair not applied, sent to the panel with "Revisar en el panel".
+      bounceDecisions: [{ groupKey: 'bp-amb', decision: 'sent_to_panel' }],
     });
     await expect(modal(page)).toHaveCount(0);
     await expect(page.locator('[data-type="success"]').first()).toBeVisible();
@@ -445,5 +466,316 @@ test.describe('Reconciliation — bounce-pair suggestions (mocked)', () => {
     await expect(page.getByRole('option', { name: /^Posibles rebotes/ })).toHaveCount(0);
     await expect(page.getByRole('option', { name: /^Descartadas/ })).toHaveCount(0);
     expect(pendingQueries.every((q) => !q.has('status'))).toBe(true);
+  });
+});
+
+const FINANCIAL_ACCOUNT_WINDOW_ID = '94EAA455D2644E04AB25D93BE5157B6D';
+
+/** Records every `dismissPair` request the page attempts, whatever its answer. */
+function recordDismissPairRequests(page) {
+  const seen = [];
+  page.on('request', (req) => {
+    if (req.method() === 'POST' && req.url().includes('action=dismissPair')) seen.push(req.url());
+  });
+  return seen;
+}
+
+/** Selects a line of the panel through the "Posibles rebotes" entry of the status filter. */
+async function selectBounceLineInPanel(page, lineId) {
+  await page.getByRole('button', { name: /^Pendientes \(/ }).click();
+  await page.getByRole('option', { name: /^Posibles rebotes/ }).click();
+  await page.getByTestId(`recon-line-row-${lineId}`).click();
+}
+
+test.describe('Reconciliation — bounce-pair KPI reporting (mocked)', () => {
+  test('"No es un rebote" posts dismissPair with the selected line and the other line of the pair', async ({ page }) => {
+    await login(page);
+    const { posts } = await installMocks(page);
+    await openReconciliation(page);
+    await expect(modal(page)).toBeVisible();
+
+    await page.getByTestId('automatch-bounce-review-bp-review').click();
+    await expect(modal(page)).toHaveCount(0);
+    await expect(page.getByTestId(`recon-line-radio-${REVIEW_BOUNCE.id}`)).toBeChecked();
+    const panel = page.getByTestId('recon-bounce-panel');
+    await expect(panel).toBeVisible();
+
+    const post = page.waitForRequest((r) => r.method() === 'POST' && r.url().includes('action=dismissPair'));
+    await panel.getByTestId('recon-bounce-dismiss').click();
+    await post;
+
+    expect(posts.dismissPair).toEqual([{
+      financialAccountId: ACCOUNT_ID,
+      statementLineId: REVIEW_BOUNCE.id,
+      counterpartLineId: REVIEW_ORIGINAL.id,
+    }]);
+    await expect(page.locator('[data-type="success"]').first()).toBeVisible();
+    // The pair is hidden for the session: neither of its lines is left in the list.
+    await expect(page.getByTestId(`recon-line-row-${REVIEW_BOUNCE.id}`)).toHaveCount(0);
+    await expect(page.getByTestId(`recon-line-row-${REVIEW_ORIGINAL.id}`)).toHaveCount(0);
+  });
+
+  test('a failing dismissPair changes nothing on screen and shows no error', async ({ page }) => {
+    await login(page);
+    const { posts } = await installMocks(page, { dismissPairStatus: 500 });
+    await openReconciliation(page);
+    await expect(modal(page)).toBeVisible();
+
+    await page.getByTestId('automatch-bounce-review-bp-review').click();
+    const panel = page.getByTestId('recon-bounce-panel');
+    await expect(panel).toBeVisible();
+
+    const answered = page.waitForResponse((r) => r.request().method() === 'POST' && r.url().includes('action=dismissPair'));
+    await panel.getByTestId('recon-bounce-dismiss').click();
+    expect((await answered).status()).toBe(500);
+    expect(posts.dismissPair).toHaveLength(1);
+
+    // Exactly what a successful report leaves: the confirmation, and the pair hidden.
+    await expect(page.locator('[data-type="success"]').first()).toBeVisible();
+    await expect(page.getByTestId(`recon-line-row-${REVIEW_BOUNCE.id}`)).toHaveCount(0);
+    await expect(page.getByTestId(`recon-line-row-${REVIEW_ORIGINAL.id}`)).toHaveCount(0);
+    await expect(page.locator('[data-type="error"]')).toHaveCount(0);
+    // Still hidden when the modal is reopened: the failure did not undo the dismissal.
+    await page.getByTestId('financial-account-automatch').click();
+    await expect(modal(page)).toBeVisible();
+    await expect(pairCheck(page, 'bp-high')).toBeVisible();
+    await expect(pairCheck(page, 'bp-review')).toHaveCount(0);
+    await expect(page.locator('[data-type="error"]')).toHaveCount(0);
+  });
+
+  test('a pair sent to the panel, then checked and unchecked again, is reported as unchecked', async ({ page }) => {
+    await login(page);
+    const { posts } = await installMocks(page);
+    await openReconciliation(page);
+    await expect(modal(page)).toBeVisible();
+
+    await page.getByTestId('automatch-bounce-review-bp-review').click();
+    await expect(modal(page)).toHaveCount(0);
+
+    await page.getByTestId('financial-account-automatch').click();
+    await expect(modal(page)).toBeVisible();
+    await pairCheck(page, 'bp-review').click();
+    await expect(pairInput(page, 'bp-review')).toHaveAttribute('aria-checked', 'true');
+    await pairCheck(page, 'bp-review').click();
+    await expect(pairInput(page, 'bp-review')).toHaveAttribute('aria-checked', 'false');
+
+    const post = page.waitForRequest((r) => r.method() === 'POST' && r.url().includes('action=applySuggestions'));
+    await page.getByTestId('automatch-modal-apply').click();
+    await post;
+
+    expect(posts.applySuggestions).toHaveLength(1);
+    expect(posts.applySuggestions[0].bounceDecisions).toEqual([
+      { groupKey: 'bp-review', decision: 'unchecked' },
+      { groupKey: 'bp-amb', decision: 'unchecked' },
+    ]);
+  });
+
+  test('read-only tier: the modal never opens and "No es un rebote" posts nothing', async ({ page }) => {
+    await login(page, { windowAccessOverrides: { [FINANCIAL_ACCOUNT_WINDOW_ID]: 'read-only' } });
+    const { posts } = await installMocks(page);
+    const dismissRequests = recordDismissPairRequests(page);
+    await openReconciliation(page);
+
+    // The suggestions did load (the bounce lines are in the panel), yet nothing pops.
+    await selectBounceLineInPanel(page, REVIEW_BOUNCE.id);
+    await expect(page.getByTestId('recon-bounce-panel')).toBeVisible();
+    await expect(modal(page)).toHaveCount(0);
+    await expect(page.getByTestId('financial-account-automatch')).toHaveCount(0);
+
+    await page.getByTestId('recon-bounce-panel').getByTestId('recon-bounce-dismiss').click();
+    // The session-only hide still happens; only the report is skipped.
+    await expect(page.getByTestId(`recon-line-row-${REVIEW_BOUNCE.id}`)).toHaveCount(0);
+    await page.waitForTimeout(500);
+    expect(dismissRequests).toEqual([]);
+    expect(posts.dismissPair).toEqual([]);
+  });
+});
+
+// ── Frontend KPI events (Mixpanel) ────────────────────────────────────────────
+
+const TELEMETRY_CONFIGURED = process.env.E2E_TELEMETRY === 'configured';
+
+/**
+ * Captures the events the app sends to Mixpanel and answers them locally (nothing leaves the
+ * machine). Providers are configured at BUILD time, so these events only exist in a bundle built
+ * with the fake Mixpanel configuration of the `configured` scenario of telemetry-egress
+ * (docs/ops/app-shell-observability.md, "Verifying egress in a browser"); the default bundle has
+ * no provider and sends nothing. Installed BEFORE `login()`, so the boot's `app_started` is seen
+ * too: its keys are the baseline every event carries (context + SDK), which lets the bounce
+ * events be checked for exactly the properties they declare.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<Array<{ event: string, properties: object }>>}
+ */
+async function captureMixpanelEvents(page) {
+  const events = [];
+  await page.route((url) => /(^|\.)mixpanel\.com$/.test(url.hostname), async (route) => {
+    const req = route.request();
+    const url = new URL(req.url());
+    if (url.pathname.startsWith('/track')) {
+      const raw = new URLSearchParams(req.postData() ?? url.search.slice(1)).get('data');
+      if (raw) {
+        let decoded;
+        try { decoded = JSON.parse(raw); } catch { decoded = JSON.parse(Buffer.from(raw, 'base64').toString('utf8')); }
+        for (const item of [].concat(decoded)) events.push({ event: item.event, properties: item.properties ?? {} });
+      }
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":1}' });
+  });
+  return events;
+}
+
+const named = (events, name) => events.filter((e) => e.event === name).map((e) => e.properties);
+const VIEWED = 'bounce_suggestions_viewed';
+const DISMISSED = 'bounce_suggestions_dismissed';
+/**
+ * The event's own properties: what it carries beyond what every event of the page carries — the
+ * context and SDK keys of `app_started`, plus `role_groups`, the common-context key set once the
+ * role is known (ETP-6043), which may land after the boot event or before it.
+ */
+function ownProperties(events, properties) {
+  const boots = named(events, 'app_started');
+  const baseline = new Set([...Object.keys(boots[boots.length - 1] ?? {}), 'role_groups']);
+  return Object.fromEntries(Object.entries(properties).filter(([k]) => !baseline.has(k)));
+}
+
+test.describe('Reconciliation — bounce suggestion events (Mixpanel, mocked)', () => {
+  test.skip(!TELEMETRY_CONFIGURED, 'needs a bundle built with fake Mixpanel config (E2E_TELEMETRY=configured)');
+
+  test('viewed per opening (auto vs Automatch button) and dismissed once per close, on Esc and on the backdrop', async ({ page }) => {
+    const events = await captureMixpanelEvents(page);
+    await login(page);
+    await installMocks(page);
+    await openReconciliation(page);
+    await expect(modal(page)).toBeVisible();
+    await expect.poll(() => named(events, VIEWED)).toEqual([
+      expect.objectContaining({ pairs_shown: 3, pairs_preselected: 1, auto_opened: true }),
+    ]);
+
+    await page.keyboard.press('Escape');
+    await expect(modal(page)).toHaveCount(0);
+    await expect.poll(() => named(events, DISMISSED)).toEqual([
+      expect.objectContaining({ pairs_shown: 3, pairs_checked_at_close: 1, auto_opened: true }),
+    ]);
+
+    // Second opening, same suggestions, no reload: a new `viewed`, now from the button.
+    await page.getByTestId('financial-account-automatch').click();
+    await expect(modal(page)).toBeVisible();
+    await pairCheck(page, 'bp-review').click();
+    await expect.poll(() => named(events, VIEWED).length).toBe(2);
+    expect(named(events, VIEWED)[1]).toMatchObject({ pairs_shown: 3, pairs_preselected: 1, auto_opened: false });
+
+    // The backdrop (a click outside the dialog content).
+    await page.getByTestId('DialogOverlay__6a5928').last().click({ position: { x: 5, y: 5 } });
+    await expect(modal(page)).toHaveCount(0);
+    await expect.poll(() => named(events, DISMISSED).length).toBe(2);
+    expect(named(events, DISMISSED)[1]).toMatchObject({ pairs_shown: 3, pairs_checked_at_close: 2, auto_opened: false });
+
+    await page.waitForTimeout(500);
+    expect(named(events, VIEWED)).toHaveLength(2);
+    expect(named(events, DISMISSED)).toHaveLength(2);
+  });
+
+  test('"Abrir conciliación" counts as dismissed', async ({ page }) => {
+    const events = await captureMixpanelEvents(page);
+    await login(page);
+    await installMocks(page);
+    await openReconciliation(page);
+    await expect(modal(page)).toBeVisible();
+
+    await page.getByTestId('automatch-modal-open-reconciliation').click();
+    await expect(modal(page)).toHaveCount(0);
+    await expect.poll(() => named(events, DISMISSED)).toEqual([
+      expect.objectContaining({ pairs_shown: 3, pairs_checked_at_close: 1, auto_opened: true }),
+    ]);
+  });
+
+  test('an apply sends no dismissed', async ({ page }) => {
+    const events = await captureMixpanelEvents(page);
+    await login(page);
+    await installMocks(page);
+    await openReconciliation(page);
+    await expect(modal(page)).toBeVisible();
+    await expect.poll(() => named(events, VIEWED).length).toBe(1);
+
+    const post = page.waitForRequest((r) => r.method() === 'POST' && r.url().includes('action=applySuggestions'));
+    await page.getByTestId('automatch-modal-apply').click();
+    await post;
+    await expect(modal(page)).toHaveCount(0);
+
+    await page.waitForTimeout(1000);
+    expect(named(events, DISMISSED)).toEqual([]);
+    expect(named(events, VIEWED)).toHaveLength(1);
+  });
+
+  test('"Revisar en el panel" sends no dismissed', async ({ page }) => {
+    const events = await captureMixpanelEvents(page);
+    await login(page);
+    await installMocks(page);
+    await openReconciliation(page);
+    await expect(modal(page)).toBeVisible();
+    await expect.poll(() => named(events, VIEWED).length).toBe(1);
+
+    await page.getByTestId('automatch-bounce-review-bp-amb').click();
+    await expect(modal(page)).toHaveCount(0);
+    await expect(page.getByTestId('recon-bounce-panel')).toBeVisible();
+
+    await page.waitForTimeout(1000);
+    expect(named(events, DISMISSED)).toEqual([]);
+  });
+
+  test('read-only tier: no bounce event at all', async ({ page }) => {
+    const events = await captureMixpanelEvents(page);
+    await login(page, { windowAccessOverrides: { [FINANCIAL_ACCOUNT_WINDOW_ID]: 'read-only' } });
+    await installMocks(page);
+    await openReconciliation(page);
+    await selectBounceLineInPanel(page, REVIEW_BOUNCE.id);
+    await page.getByTestId('recon-bounce-panel').getByTestId('recon-bounce-dismiss').click();
+
+    // Control: telemetry does flow in this page, so the empty result below means something.
+    await expect.poll(() => named(events, 'app_started').length).toBeGreaterThan(0);
+    await page.waitForTimeout(1000);
+    expect(named(events, VIEWED)).toEqual([]);
+    expect(named(events, DISMISSED)).toEqual([]);
+  });
+
+  test('the events carry only the tenant, the counts and auto_opened: no id, amount or text', async ({ page }) => {
+    const events = await captureMixpanelEvents(page);
+    await login(page);
+    await installMocks(page);
+    await openReconciliation(page);
+    await expect(modal(page)).toBeVisible();
+    await page.getByTestId('automatch-modal-cancel').click();
+    await expect.poll(() => named(events, DISMISSED).length).toBe(1);
+    await expect.poll(() => named(events, 'app_started').length).toBeGreaterThan(0);
+
+    const viewed = named(events, VIEWED)[0];
+    const dismissed = named(events, DISMISSED)[0];
+    expect(Object.keys(ownProperties(events, viewed)).sort())
+      .toEqual(['account_id', 'auto_opened', 'pairs_preselected', 'pairs_shown']);
+    expect(Object.keys(ownProperties(events, dismissed)).sort())
+      .toEqual(['account_id', 'auto_opened', 'pairs_checked_at_close', 'pairs_shown']);
+
+    // Nothing from the suggestions travels anywhere in the payload: no line or group id,
+    // description, reference or amount. The financial account is checked on the event's own
+    // properties only (account_id is the tenant): the SDK's `$current_url`, which every event of
+    // the page carries, holds the route path `/financial-account/<id>` — a page-wide matter, not
+    // one of these events.
+    const lines = [TX_LINE, HIGH_ORIGINAL, HIGH_BOUNCE, REVIEW_ORIGINAL, REVIEW_BOUNCE, AMB_CAND_1, AMB_CAND_2, AMB_BOUNCE];
+    const forbiddenText = [
+      ACCOUNT.name, ACCOUNT.iban,
+      ...lines.flatMap((l) => [l.id, l.description, l.referenceNo].filter(Boolean)),
+      ...[TX_GROUP, HIGH_PAIR, REVIEW_PAIR, AMB_PAIR].map((g) => g.groupKey),
+    ];
+    const forbiddenAmounts = new Set(lines.flatMap((l) => [l.amount, Math.abs(l.amount)]));
+    for (const props of [viewed, dismissed]) {
+      const own = ownProperties(events, props);
+      expect(JSON.stringify(own)).not.toContain(ACCOUNT_ID);
+      for (const value of Object.values(own)) {
+        if (typeof value === 'number') expect(forbiddenAmounts.has(value)).toBe(false);
+      }
+      const serialized = JSON.stringify(props);
+      for (const text of forbiddenText) expect(serialized).not.toContain(text);
+    }
   });
 });
