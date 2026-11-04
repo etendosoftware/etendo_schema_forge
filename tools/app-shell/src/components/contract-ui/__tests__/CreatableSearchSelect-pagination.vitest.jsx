@@ -249,8 +249,8 @@ describe('CreatableSearchSelect — serverSearch pagination (ETP-4975)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// ETP-5903 — reopening with a committed value that is not on page 0 walks forward (up to 6 pages
-// = 300 rows) to show it IN PLACE; beyond that it is pinned on top through one label lookup.
+// ETP-5903 — reopening with a committed value that is not on page 0 walks forward (up to the
+// 1000-row walk total) to show it IN PLACE; beyond that it is pinned on top through one label lookup.
 // `routedFetch` answers by URL (`offset`, or `q=` for the lookup), independent of request order.
 // ---------------------------------------------------------------------------
 describe('CreatableSearchSelect — locating the committed value on reopen (ETP-5903)', () => {
@@ -293,15 +293,16 @@ describe('CreatableSearchSelect — locating the committed value on reopen (ETP-
   });
 
   it('stops at the page cap, then pins the value on top through one label lookup', async () => {
-    global.fetch = routedFetch({ totalRows: 1000, lookup: [{ id: 'bp-9', label: 'Zeta' }, { id: 'bp-99', label: 'Zeta 2' }] });
+    global.fetch = routedFetch({ totalRows: 2000, lookup: [{ id: 'bp-9', label: 'Zeta' }, { id: 'bp-99', label: 'Zeta 2' }] });
 
     await reopen('bp-9', 'Zeta');
 
     await waitFor(() => expect(screen.getByTestId('option-partner-bp-9')).toHaveAttribute('aria-selected', 'true'));
-    expect(listOffsets()).toEqual([0, 100, 200]);
+    // ETP-6103: 100 rows, then the rest of the 1000-row walk total in one request.
+    expect(listOffsets()).toEqual([0, 100]);
     expect(lookupCalls()).toHaveLength(1);
-    // Only the id-equal row is pinned, on top of the 300 walked rows.
-    expect(screen.getAllByRole('option')).toHaveLength(301);
+    // Only the id-equal row is pinned, on top of the 1000 walked rows.
+    expect(screen.getAllByRole('option')).toHaveLength(1001);
     expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'option-partner-bp-9');
     expect(screen.queryByTestId('option-partner-bp-99')).not.toBeInTheDocument();
   });

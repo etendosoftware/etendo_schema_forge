@@ -9,21 +9,35 @@
 export const LOCATE_SELECTION_MAX_PAGES = 6;
 
 // ETP-6103 — rows per request while a reopened selector looks for its committed value. One 100-row
-// request costs about the same as a 30-row one (measured on production: ~500-700 ms flat), so
-// walking in big pages cuts the wait. 100 is the server's MAX_LIMIT (NeoSelectorService).
+// request costs about the same as a 30-row one (measured on production: ~500-700 ms flat), so the
+// walk is two requests, not a dozen: the first page has this many rows, and if the value is not
+// there the second asks for all the rest of the walk at once. Pickers that opt out of big pages
+// (`largePages: false`, the product drawers) keep their own size and LOCATE_SELECTION_MAX_PAGES.
 export const LOCATE_WALK_PAGE_SIZE = 100;
 
+// ETP-6103 — total rows a big-page walk may load, which is also the server's selector cap
+// (MAX_LIMIT in NeoSelectorService). A typical tenant's 650-account catalogue fits.
+export const LOCATE_WALK_MAX_ROWS = 1000;
+
 /**
- * Rows to request in the next page of the locate walk (ETP-6103): up to LOCATE_WALK_PAGE_SIZE but
- * trimmed to what is left of the walk's total cap (LOCATE_SELECTION_MAX_PAGES x the picker's own page size), but
- * never below the picker's own size.
+ * Most rows a locate walk may load for a picker: LOCATE_WALK_MAX_ROWS with big pages, otherwise
+ * LOCATE_SELECTION_MAX_PAGES x the picker's own page size.
+ */
+export function locateMaxRows(pageSize, largePages = true) {
+  return largePages ? LOCATE_WALK_MAX_ROWS : LOCATE_SELECTION_MAX_PAGES * pageSize;
+}
+
+/**
+ * Rows to request in the next page of the locate walk (ETP-6103): LOCATE_WALK_PAGE_SIZE for the
+ * first page, then everything that is left of the walk total in one request; never below the
+ * picker's own size.
  *
  * @param {number} pageSize the picker's own page size
  * @param {number} loadedRows rows fetched so far
  */
 export function locatePageLimit(pageSize, loadedRows) {
-  const remaining = LOCATE_SELECTION_MAX_PAGES * pageSize - loadedRows;
-  return Math.max(pageSize, Math.min(LOCATE_WALK_PAGE_SIZE, remaining));
+  if (loadedRows <= 0) return Math.max(pageSize, LOCATE_WALK_PAGE_SIZE);
+  return Math.max(pageSize, LOCATE_WALK_MAX_ROWS - loadedRows);
 }
 
 /**
@@ -98,9 +112,11 @@ export function arrowStartIndexFor(query, selected) {
  * (ETP-5903). It stops as soon as the value is on screen, the list ends, the page cap is reached,
  * or the user did something on their own (typed, pressed a key).
  */
-export function shouldKeepLocating({ found, hasMore, loadedRows, pageSize, interacted }) {
+export function shouldKeepLocating({
+  found, hasMore, loadedRows, pageSize, interacted, maxRows = LOCATE_SELECTION_MAX_PAGES * pageSize,
+}) {
   if (found || !hasMore || interacted) return false;
-  return loadedRows < LOCATE_SELECTION_MAX_PAGES * pageSize;
+  return loadedRows < maxRows;
 }
 
 /**

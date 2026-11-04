@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   shouldKeepLocating, centerOptionInPanel, resolveSelectedIndex, hasCommittedValue,
-  locatePageLimit, LOCATE_SELECTION_MAX_PAGES,
+  locatePageLimit, locateMaxRows,
 } from './selectorSelection.js';
 
 /**
@@ -12,15 +12,17 @@ import {
  * - AC4: a typed search shows its results from the top, even after the list was centred.
  * - The walk: while `walkEnabled`, a committed value that is not on the loaded `rows` loads the
  *   next page, one page at a time, until it shows up IN PLACE, the list ends, the user takes over,
- *   or LOCATE_SELECTION_MAX_PAGES is reached; then `setLocateDone(true)` hands over to the
+ *   or the walk total is reached (`locateMaxRows`: LOCATE_WALK_MAX_ROWS with big pages, otherwise
+ *   LOCATE_SELECTION_MAX_PAGES x `pageSize`); then `setLocateDone(true)` hands over to the
  *   ETP-5846 pin. One step per settled page: `settledFetches` re-runs it once each fetch has fully
  *   finished, so the caller's in-flight guard in `fetchPage` can never swallow a step.
  * - The centring: ONCE per open, when the committed option first appears, never under a user who
  *   already typed or pressed a key. An option among the last loaded rows cannot be centred yet: it
  *   is retried when the next page lands.
  * - ETP-6103, bigger pages: the walk (and the caller's first page, see `firstPageLimit`) requests
- *   `locatePageLimit` rows per page instead of the picker's own `pageSize`; the total row cap stays
- *   LOCATE_SELECTION_MAX_PAGES x `pageSize`.
+ *   `locatePageLimit` rows per page instead of the picker's own `pageSize`: 100 for the first page,
+ *   then all the rest of the 1000-row walk total in one request, so a typical catalogue is located
+ *   in two requests. `largePages: false` keeps the picker's own size and 6 pages.
  * - ETP-6103, the hold: while the committed value is being located and centred the hook returns
  *   `locating: true`. The caller then keeps its rows laid out but invisible (they must keep layout so
  *   the centring can measure them), hides its scrollbar and shows `<LocatingNotice/>`. The hold ends
@@ -86,6 +88,7 @@ export function useLocateCommittedValue({
     if (fetchPage('', offsetRef.current, { limit: walkLimit }) === false) return;
     lastRequestRef.current = { loaded: loadedRows, settled: settledFetches, strikes };
   };
+  const maxRows = locateMaxRows(pageSize, largePages);
   const walkLimit = largePages ? locatePageLimit(pageSize, loadedRows) : pageSize;
   const [released, setReleased] = useState(false);
   const searching = query.trim() !== '';
@@ -111,12 +114,12 @@ export function useLocateCommittedValue({
   useEffect(() => {
     if (!walkEnabled || locateDone || rows == null) return;
     const keepGoing = shouldKeepLocating({
-      found, hasMore, loadedRows, pageSize, interacted: interactedRef.current,
+      found, hasMore, loadedRows, pageSize, maxRows, interacted: interactedRef.current,
     });
     if (keepGoing && !stalled()) {
       requestNextPage();
     } else setLocateDone(true);
-  }, [walkEnabled, locateDone, rows, loadedRows, found, hasMore, pageSize, walkLimit, settledFetches, fetchPage, offsetRef, setLocateDone, interactedRef]);
+  }, [walkEnabled, locateDone, rows, loadedRows, found, hasMore, pageSize, maxRows, walkLimit, settledFetches, fetchPage, offsetRef, setLocateDone, interactedRef]);
 
   useLayoutEffect(() => {
     if (!open || selectedIndex < 0 || centreBlocked || centeredRef.current || interactedRef.current) return;
@@ -130,7 +133,7 @@ export function useLocateCommittedValue({
       setReleased(true);
     } else if (paged && canFetch && loading) {
       // A page is in flight: stay held; `settledFetches` re-runs this once it has landed.
-    } else if (paged && canFetch && !stalled() && loadedRows < LOCATE_SELECTION_MAX_PAGES * pageSize) {
+    } else if (paged && canFetch && !stalled() && loadedRows < maxRows) {
       // Among the last loaded rows: it can only be centred once more rows exist below it.
       requestNextPage();
     } else {
@@ -138,7 +141,7 @@ export function useLocateCommittedValue({
       centeredRef.current = true;
       setReleased(true);
     }
-  }, [open, selectedIndex, centreBlocked, layoutKey, renderedCount, hasMore, loading, settledFetches, loadedRows, paged, canFetch, rows, pageSize, walkLimit, fetchPage, offsetRef, dropdownRef, interactedRef]);
+  }, [open, selectedIndex, centreBlocked, layoutKey, renderedCount, hasMore, loading, settledFetches, loadedRows, paged, canFetch, rows, pageSize, maxRows, walkLimit, fetchPage, offsetRef, dropdownRef, interactedRef]);
 
   return { locating };
 }

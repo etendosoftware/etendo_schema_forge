@@ -214,30 +214,32 @@ describe('SearchPopup — committed value (ETP-5948)', () => {
     expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'search-popup-option-acc-0');
   });
 
-  it('stops at the page cap, then pins the value on top through a label lookup', async () => {
-    const loadPage = pager(1000);
-    renderPopup({ loadPage, value: 'acc-500', valueLabel: 'Account 0500' });
+  it('stops at the 1000-row walk total, then pins the value on top through a label lookup', async () => {
+    const loadPage = pager(2000);
+    renderPopup({ loadPage, value: 'acc-1500', valueLabel: 'Account 1500' });
 
-    await waitFor(() => expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'search-popup-option-acc-500'));
-    expect(screen.getByTestId('search-popup-option-acc-500')).toHaveAttribute('aria-selected', 'true');
-    expect(listOffsets(loadPage)).toEqual([0, 30, 60, 90, 120, 150]);
+    await waitFor(() => expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'search-popup-option-acc-1500'),
+      { timeout: 25000 });
+    expect(screen.getByTestId('search-popup-option-acc-1500')).toHaveAttribute('aria-selected', 'true');
+    // A loader that ignores the size hint walks 30 rows at a time up to the 1000-row walk total.
+    expect(listOffsets(loadPage)).toEqual(Array.from({ length: 34 }, (_, i) => i * 30));
     expect(labelLookups(loadPage)).toHaveLength(1);
-    expect(screen.getAllByRole('option')).toHaveLength(181);
-  });
+    expect(screen.getAllByRole('option')).toHaveLength(1021);
+  }, 30000);
 
   // The backend matches each identifier column on its own, so "<code> - <name>" as a whole finds
   // nothing (seen live on the product account popup); the code alone does.
   it('retries the pin with the code segment when the full "code - name" label finds nothing', async () => {
-    const loadPage = pager(1000);
-    renderPopup({ loadPage, value: 'acc-500', valueLabel: 'Account 0500 - Compras de mercaderías' });
+    const loadPage = sizedPager(2000);
+    renderPopup({ loadPage, value: 'acc-1500', valueLabel: 'Account 1500 - Compras de mercaderías' });
 
-    await waitFor(() => expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'search-popup-option-acc-500'));
-    expect(labelLookups(loadPage).map(([q]) => q)).toEqual(['Account 0500 - Compras de mercaderías', 'Account 0500']);
+    await waitFor(() => expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'search-popup-option-acc-1500'));
+    expect(labelLookups(loadPage).map(([q]) => q)).toEqual(['Account 1500 - Compras de mercaderías', 'Account 1500']);
   });
 
   it('stops walking when a page fails, without retrying it', async () => {
-    const loadPage = pager(1000, { failAt: 60 });
-    renderPopup({ loadPage, value: 'acc-500', valueLabel: 'Account 0500' });
+    const loadPage = pager(2000, { failAt: 60 });
+    renderPopup({ loadPage, value: 'acc-1500', valueLabel: 'Account 1500' });
 
     await screen.findByTestId('search-popup-load-more-error');
     await waitFor(() => expect(labelLookups(loadPage)).toHaveLength(1));
@@ -246,13 +248,13 @@ describe('SearchPopup — committed value (ETP-5948)', () => {
 
   it('does not walk or pin while a search is typed', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    const loadPage = pager(1000);
-    renderPopup({ loadPage, value: 'acc-500', valueLabel: 'Account 0500' });
+    const loadPage = pager(2000);
+    renderPopup({ loadPage, value: 'acc-1500', valueLabel: 'Account 1500' });
     fireEvent.change(screen.getByTestId('search-popup-input'), { target: { value: 'Account 001' } });
     await act(async () => { vi.advanceTimersByTime(300); });
 
     await screen.findByTestId('search-popup-option-acc-10');
-    expect(screen.queryByTestId('search-popup-option-acc-500')).toBeNull();
+    expect(screen.queryByTestId('search-popup-option-acc-1500')).toBeNull();
     expect(loadPage.mock.calls.every(([q, offset]) => q === 'Account 001' || offset === 0)).toBe(true);
   });
 
@@ -282,13 +284,23 @@ describe('SearchPopup — committed value (ETP-5948)', () => {
   }
   const listCalls = (loadPage) => loadPage.mock.calls.filter(([q]) => q === '').map(([, offset, , opts]) => [offset, opts.limit]);
 
-  it('locates the value with 100-row pages, with the last page trimmed to the walk total (ETP-6103)', async () => {
-    const loadPage = sizedPager(1000);
-    renderPopup({ loadPage, value: 'acc-500', valueLabel: 'Account 0500' });
+  it('locates a value near row 600 in two requests: 100 rows, then all the rest (ETP-6103)', async () => {
+    const loadPage = sizedPager(659);
+    renderPopup({ loadPage, value: 'acc-600', valueLabel: 'Account 0600' });
 
-    await waitFor(() => expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'search-popup-option-acc-500'));
-    // 100 + 80 = 6 x 30 rows, no more.
-    expect(listCalls(loadPage)).toEqual([[0, 100], [100, 80]]);
+    await waitFor(() => expect(screen.getByTestId('search-popup-option-acc-600')).toHaveAttribute('aria-selected', 'true'));
+    expect(listCalls(loadPage)).toEqual([[0, 100], [100, 900]]);
+    expect(labelLookups(loadPage)).toHaveLength(0);
+    expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'search-popup-option-acc-0');
+  });
+
+  it('stops at 1000 rows and pins the value when it is further (ETP-6103)', async () => {
+    const loadPage = sizedPager(2000);
+    renderPopup({ loadPage, value: 'acc-1500', valueLabel: 'Account 1500' });
+
+    await waitFor(() => expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'search-popup-option-acc-1500'));
+    expect(listCalls(loadPage)).toEqual([[0, 100], [100, 900]]);
+    expect(screen.getAllByRole('option')).toHaveLength(1001);
   });
 
   it('asks for the own page size when there is no value or the user searches (ETP-6103)', async () => {
@@ -396,9 +408,9 @@ describe('SearchPopup — committed value (ETP-5948)', () => {
   });
 
   it('releases the hold when the value is not found (ETP-6103)', async () => {
-    const loadPage = sizedPager(1000);
-    renderPopup({ loadPage, value: 'acc-900', valueLabel: 'Account 0900' });
-    await waitFor(() => expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'search-popup-option-acc-900'));
+    const loadPage = sizedPager(2000);
+    renderPopup({ loadPage, value: 'acc-1900', valueLabel: 'Account 1900' });
+    await waitFor(() => expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'search-popup-option-acc-1900'));
     expect(screen.queryByTestId('search-popup-locating')).toBeNull();
     expect(screen.getAllByRole('option')[0]).not.toHaveClass('invisible');
   });

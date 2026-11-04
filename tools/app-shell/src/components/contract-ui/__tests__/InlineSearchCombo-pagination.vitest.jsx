@@ -339,9 +339,9 @@ describe('InlineSearchCombo — current-selection resolution off the loaded page
     expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(3);
   });
 
-  // ETP-6103 — the opening page and the walk ask for 100 rows (capped at the walk total of 6 x 50).
-  // ETP-5903 — a full page 0 without the committed id first walks forward (up to 6 pages = 300
-  // rows) looking for it in place; the ETP-5846 label lookup only runs once that walk is over.
+  // ETP-6103 — the opening page and the walk ask for 100 rows (the second request takes all the rest of the 1000-row walk total).
+  // ETP-5903 — a full page 0 without the committed id first walks forward (up to the 1000-row
+  // walk total) looking for it in place; the ETP-5846 label lookup only runs once that walk is over.
   // `routedFetch` answers by URL (`offset`, or `q=` for the lookup) so the tests do not depend
   // on the order the requests are issued in.
   function routedFetch({ totalRows, lookup = [], hold = {} }) {
@@ -375,27 +375,28 @@ describe('InlineSearchCombo — current-selection resolution off the loaded page
   });
 
   it('stops walking at the page cap, then pins the value through the label lookup — once per open', async () => {
-    global.fetch = routedFetch({ totalRows: 1000, lookup: [{ id: 'tax-77', name: 'IVA 4%' }] });
+    global.fetch = routedFetch({ totalRows: 2000, lookup: [{ id: 'tax-77', name: 'IVA 4%' }] });
 
     await committedCombo();
     await openViaChip();
 
     await waitFor(() => expect(screen.getByTestId('inline-add-option-tax-tax-77')).toHaveAttribute('aria-selected', 'true'));
-    expect(listOffsets()).toEqual([0, 100, 200]);
+    // ETP-6103: 100 rows, then the rest of the 1000-row walk total in one request.
+    expect(listOffsets()).toEqual([0, 100]);
     expect(lookupCalls()).toHaveLength(1);
-    // 300 walked rows plus the pinned one, on top.
-    expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(301);
+    // 1000 walked rows plus the pinned one, on top.
+    expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(1001);
     expect(screen.getAllByTestId(/^inline-add-option-tax-/)[0]).toHaveAttribute('data-testid', 'inline-add-option-tax-tax-77');
 
     // User scrolling keeps paging from where the walk stopped; the lookup is not repeated.
     const panel = screen.getByTestId('inline-add-options-tax');
     setScrollGeometry(panel, { scrollHeight: 1000, clientHeight: 500, scrollTop: 950 });
     fireEvent.scroll(panel);
-    await waitFor(() => expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(351));
+    await waitFor(() => expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(1051));
     setScrollGeometry(panel, { scrollHeight: 2000, clientHeight: 500, scrollTop: 1950 });
     fireEvent.scroll(panel);
-    await waitFor(() => expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(401));
-    expect(listOffsets().slice(-2)).toEqual([300, 350]);
+    await waitFor(() => expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(1101));
+    expect(listOffsets().slice(-2)).toEqual([1000, 1050]);
     expect(lookupCalls()).toHaveLength(1);
     expect(screen.getAllByTestId('inline-add-option-tax-tax-77')).toHaveLength(1);
   });
@@ -440,17 +441,17 @@ describe('InlineSearchCombo — current-selection resolution off the loaded page
   it('does not re-resolve the current selection when the lookup found nothing', async () => {
     // The lookup resolved NOTHING (the selector context forbids the id). The attempt still counts:
     // re-firing it on every page append would be pure waste.
-    global.fetch = routedFetch({ totalRows: 1000, lookup: makePage(900, 2) });
+    global.fetch = routedFetch({ totalRows: 2000, lookup: makePage(1900, 2) });
 
     await committedCombo();
     await openViaChip();
 
     await waitFor(() => expect(lookupCalls()).toHaveLength(1));
-    await waitFor(() => expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(300));
+    await waitFor(() => expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(1000));
     const panel = screen.getByTestId('inline-add-options-tax');
     setScrollGeometry(panel, { scrollHeight: 1000, clientHeight: 500, scrollTop: 950 });
     fireEvent.scroll(panel);
-    await waitFor(() => expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(350));
+    await waitFor(() => expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(1050));
 
     expect(lookupCalls()).toHaveLength(1);
     expect(screen.queryByTestId('inline-add-options-tax').querySelector('[aria-selected="true"]')).toBeNull();
