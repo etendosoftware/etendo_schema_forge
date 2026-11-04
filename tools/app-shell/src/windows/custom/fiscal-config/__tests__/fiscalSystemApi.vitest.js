@@ -3,7 +3,13 @@
 // GET fiscalSystemCatalog for the territory × system rules, POST configureFiscalSystem to create
 // the records. Every call goes through the injected `apiFetch` (docs/request-policy.md).
 import { describe, it, expect, vi } from 'vitest';
-import { fetchFiscalCatalog, configureFiscalSystem, fetchCreatedRecords } from '../fiscalSystemApi.js';
+import {
+  fetchFiscalCatalog,
+  configureFiscalSystem,
+  fetchCreatedRecords,
+  FiscalAccessDeniedError,
+  isFiscalAccessDenied,
+} from '../fiscalSystemApi.js';
 import { FISCAL_SYSTEM_CATALOG } from './fiscalSystemCatalog.fixture.js';
 
 function jsonResponse(body, { ok = true, status = 200 } = {}) {
@@ -146,6 +152,73 @@ describe('configureFiscalSystem', () => {
 
     await expect(configureFiscalSystem(apiFetch, 'ORG1', { system: 'SII', territory: 'navarra' }))
       .rejects.toThrow('Bad gateway');
+  });
+});
+
+// NEO's generic role refusal ("Access denied to spec for current role") comes as a 403 without
+// messageKeys: it becomes a FiscalAccessDeniedError so the UI shows its own translated sentence.
+// A 403 the action words itself carries messageKeys and stays a plain Error with that message.
+describe('access denial (403)', () => {
+  const RAW_DENIAL = { error: { message: 'Access denied to spec for current role', status: 403 } };
+  const KEYED_DENIAL = {
+    error: { message: 'No tiene permiso de escritura en VERI*FACTU.', status: 403, messageKeys: ['fiscal.noWriteVerifactu'] },
+  };
+
+  it('configureFiscalSystem throws FiscalAccessDeniedError on a 403 without messageKeys', async () => {
+    const apiFetch = vi.fn().mockResolvedValue(jsonResponse(RAW_DENIAL, { ok: false, status: 403 }));
+
+    const err = await configureFiscalSystem(apiFetch, 'ORG1', { system: 'SII', territory: 'navarra' }).catch(e => e);
+
+    expect(err).toBeInstanceOf(FiscalAccessDeniedError);
+    expect(err.name).toBe('FiscalAccessDeniedError');
+    expect(err.code).toBe('forbidden');
+    expect(isFiscalAccessDenied(err)).toBe(true);
+  });
+
+  it('treats an empty messageKeys array as the raw denial too', async () => {
+    const apiFetch = vi.fn().mockResolvedValue(jsonResponse(
+      { error: { message: 'Access denied to spec for current role', messageKeys: [] } },
+      { ok: false, status: 403 },
+    ));
+
+    const err = await configureFiscalSystem(apiFetch, 'ORG1', { system: 'SII', territory: 'navarra' }).catch(e => e);
+
+    expect(isFiscalAccessDenied(err)).toBe(true);
+  });
+
+  it('fetchFiscalCatalog throws FiscalAccessDeniedError on a 403 without messageKeys', async () => {
+    const apiFetch = vi.fn().mockResolvedValue(jsonResponse(RAW_DENIAL, { ok: false, status: 403 }));
+
+    const err = await fetchFiscalCatalog(apiFetch, 'ORG1').catch(e => e);
+
+    expect(err).toBeInstanceOf(FiscalAccessDeniedError);
+    expect(isFiscalAccessDenied(err)).toBe(true);
+  });
+
+  it('a 403 that carries messageKeys is a plain Error with the server message', async () => {
+    const apiFetch = vi.fn().mockResolvedValue(jsonResponse(KEYED_DENIAL, { ok: false, status: 403 }));
+
+    const err = await configureFiscalSystem(apiFetch, 'ORG1', { system: 'VERIFACTU', territory: 'ceuta' }).catch(e => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect(err).not.toBeInstanceOf(FiscalAccessDeniedError);
+    expect(err.message).toBe('No tiene permiso de escritura en VERI*FACTU.');
+    expect(isFiscalAccessDenied(err)).toBe(false);
+  });
+
+  it('a non-403 failure without messageKeys is not an access denial', async () => {
+    const apiFetch = vi.fn().mockResolvedValue(jsonResponse({ error: { message: 'boom' } }, { ok: false, status: 500 }));
+
+    const err = await configureFiscalSystem(apiFetch, 'ORG1', { system: 'SII', territory: 'navarra' }).catch(e => e);
+
+    expect(isFiscalAccessDenied(err)).toBe(false);
+    expect(err.message).toBe('boom');
+  });
+
+  it('isFiscalAccessDenied is false for a plain Error, null and undefined', () => {
+    expect(isFiscalAccessDenied(new Error('x'))).toBe(false);
+    expect(isFiscalAccessDenied(null)).toBe(false);
+    expect(isFiscalAccessDenied(undefined)).toBe(false);
   });
 });
 

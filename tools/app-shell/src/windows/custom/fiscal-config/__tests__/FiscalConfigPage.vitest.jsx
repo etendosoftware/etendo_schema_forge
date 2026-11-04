@@ -292,6 +292,7 @@ import { useFiscalCatalog } from '../useFiscalCatalog.js';
 import { FISCAL_SYSTEM_CATALOG } from './fiscalSystemCatalog.fixture.js';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { detectProfile } from '../fiscalConfig.utils.js';
+import { FiscalAccessDeniedError } from '../fiscalSystemApi.js';
 
 // --- Helpers --------------------------------------------------------------
 
@@ -657,6 +658,28 @@ describe('FiscalConfigPage — profile: tbai', () => {
     // Refused: no SII section was mounted and the layout stays TicketBAI-only.
     expect(screen.queryByTestId('sii-section')).not.toBeInTheDocument();
     expect(screen.getByTestId('tbai-section')).toBeInTheDocument();
+  });
+
+  it('shows fiscal.err.noPermission inside the banner when "Add SII" is refused for the role', async () => {
+    i18nMode.withParams = true;
+    const RAW = 'Access denied to spec for current role';
+    vi.mocked(useFiscalConfig).mockReturnValue({
+      loading: false,
+      error: null,
+      profile: 'tbai',
+      siiRecord: null,
+      tbaiRecord: { id: 'tbai-1' },
+      verifactuRecord: null,
+      refetch: vi.fn(),
+      createComplementary: vi.fn().mockRejectedValue(new FiscalAccessDeniedError(RAW)),
+    });
+    renderPage();
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__actionsMenu'));
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__addComplementary'));
+
+    expect(await screen.findByText('fiscal.addComplementary.err.createFailed fiscal.err.noPermission')).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(RAW);
+    expect(screen.queryByTestId('sii-section')).not.toBeInTheDocument();
   });
 
   it('closes the "Add SII" error banner with its dismiss button', async () => {

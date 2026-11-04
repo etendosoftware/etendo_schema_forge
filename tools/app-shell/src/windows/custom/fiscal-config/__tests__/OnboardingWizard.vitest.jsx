@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-config/OnboardingWizard.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-config/fiscalSystemApi.js
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // --- Mocks ----------------------------------------------------------------
@@ -718,6 +719,37 @@ describe('OnboardingWizard — confirm calls configureFiscalSystem', () => {
 
     expect(await screen.findByText('Network error')).toBeInTheDocument();
   });
+
+  it('shows fiscal.err.noPermission, never NEO\'s raw English denial, on a 403 without messageKeys', async () => {
+    const RAW = 'Access denied to spec for current role';
+    backend.fetch = vi.fn((path) => (path.includes('/action/configureFiscalSystem')
+      ? jsonResponse({ error: { message: RAW, status: 403 } }, { ok: false, status: 403 })
+      : jsonResponse({})));
+    renderWizard();
+    fireEvent.click(screen.getByText('fiscal.territory.navarra'));
+    fireEvent.click(continueBtn());
+    fireEvent.click(screen.getByTestId('OnboardingWizard__confirmActivateButton'));
+
+    const message = await screen.findByText('fiscal.err.noPermission');
+    expect(message).toHaveClass('text-destructive');
+    expect(screen.queryByText(RAW)).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(RAW);
+    expect(screen.getByText('fiscal.onboarding.confirm.title')).toBeInTheDocument();
+  });
+
+  it('shows the server message of a 403 that carries messageKeys (the action worded it)', async () => {
+    const KEYED = 'No tiene permiso de escritura en VERI*FACTU.';
+    backend.fetch = vi.fn((path) => (path.includes('/action/configureFiscalSystem')
+      ? jsonResponse({ error: { message: KEYED, status: 403, messageKeys: ['fiscal.noWrite'] } }, { ok: false, status: 403 })
+      : jsonResponse({})));
+    renderWizard();
+    fireEvent.click(screen.getByText('fiscal.territory.navarra'));
+    fireEvent.click(continueBtn());
+    fireEvent.click(screen.getByTestId('OnboardingWizard__confirmActivateButton'));
+
+    expect(await screen.findByText(KEYED)).toBeInTheDocument();
+    expect(screen.queryByText('fiscal.err.noPermission')).not.toBeInTheDocument();
+  });
 });
 
 // ETP-6053 — a catalog that cannot be read is said, not silently turned into an empty choice.
@@ -732,6 +764,16 @@ describe('OnboardingWizard — fiscal catalog', () => {
     renderWizard();
     const banner = screen.getByTestId('OnboardingWizard__catalogErrorBanner');
     expect(banner).toHaveTextContent('fiscal.catalog.err.load');
+  });
+
+  it('shows fiscal.err.noPermission in the banner when the role may not read the catalog', () => {
+    const RAW = 'Access denied to spec for current role';
+    catalogState.value = { catalog: null, error: RAW, forbidden: true, loading: false };
+    renderWizard();
+    const banner = screen.getByTestId('OnboardingWizard__catalogErrorBanner');
+    expect(banner).toHaveTextContent('fiscal.err.noPermission');
+    expect(banner).not.toHaveTextContent('fiscal.catalog.err.load');
+    expect(document.body).not.toHaveTextContent(RAW);
   });
 
   it('shows no catalog-load banner while the catalog loads or once it is loaded', () => {

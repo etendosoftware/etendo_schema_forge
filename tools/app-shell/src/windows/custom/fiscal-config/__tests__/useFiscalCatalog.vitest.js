@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-config/useFiscalCatalog.js
+// @covers tools/app-shell/src/windows/custom/fiscal-config/fiscalSystemApi.js
 import { renderHook, waitFor } from '@testing-library/react';
 import { FISCAL_SYSTEM_CATALOG } from './fiscalSystemCatalog.fixture.js';
 
@@ -62,6 +63,29 @@ describe('useFiscalCatalog', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.catalog).toBeNull();
     expect(result.current.error).toBe('Could not read the fiscal system catalog.');
+  });
+
+  it('flags forbidden when the role may not read the catalog (403 without messageKeys)', async () => {
+    mockApiFetch.mockImplementation(() => jsonResponse(
+      { error: { message: 'Access denied to spec for current role', status: 403 } },
+      { ok: false, status: 403 },
+    ));
+
+    const { result } = renderHook(() => useFiscalCatalog('/api', 'ORG1'));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.forbidden).toBe(true);
+    expect(result.current.catalog).toBeNull();
+  });
+
+  it('does not flag forbidden on an ordinary failure', async () => {
+    mockApiFetch.mockImplementation(() => jsonResponse({ error: { message: 'boom' } }, { ok: false, status: 500 }));
+
+    const { result } = renderHook(() => useFiscalCatalog('/api', 'ORG1'));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.forbidden).toBe(false);
+    expect(result.current.error).toBe('boom');
   });
 
   it('exposes a network error message', async () => {

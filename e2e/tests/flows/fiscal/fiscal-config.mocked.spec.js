@@ -7,7 +7,11 @@
 import { test, expect } from '@playwright/test';
 import { login, navigateTo, MOCK_ORG_ID } from '../../helpers/auth.js';
 import { t } from '../../helpers/i18n.js';
-import { installFiscalCatalogMock, installConfigureFiscalSystemMock } from '../../helpers/fiscal-config-mocks.js';
+import {
+  installFiscalCatalogMock,
+  installConfigureFiscalSystemMock,
+  NEO_ACCESS_DENIED_MESSAGE,
+} from '../../helpers/fiscal-config-mocks.js';
 
 // ── NEO API response envelope ─────────────────────────────────────────────────
 
@@ -48,8 +52,20 @@ const VERIFACTU_RECORD = {
 
 // ── Route helpers ─────────────────────────────────────────────────────────────
 
+// The organization's fiscal actions live on sii-config too
+// (`…/sii-config/siiConfiguration/{orgId}/action/…`, ETP-6053) and have their own mocks
+// (fiscal-config-mocks.js). A `sii-config/**` catch-all registered after them would win
+// (Playwright matches routes in reverse registration order), so every such catch-all hands the
+// action requests back with this guard.
+async function handOffFiscalAction(route) {
+  if (!route.request().url().includes('/action/')) return false;
+  await route.fallback();
+  return true;
+}
+
 async function installFiscalConfigMocks(page, { sii = null, tbai = null, verifactu = null } = {}) {
   await page.route('**/sws/neo/sii-config/**', async route => {
+    if (await handOffFiscalAction(route)) return;
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -321,6 +337,7 @@ test.describe('Fiscal Config — certificate upload flow', () => {
 async function installChangeSifMocks(page, { spec, record }) {
   const state = { deactivated: false };
   await page.route(`**/sws/neo/${spec}/**`, async route => {
+    if (await handOffFiscalAction(route)) return;
     const req = route.request();
     const method = req.method();
     if (method === 'GET') {
@@ -342,9 +359,10 @@ async function installChangeSifMocks(page, { spec, record }) {
     return route.fallback();
   });
   for (const other of ['sii-config', 'tbai-config', 'verifactu-config'].filter(s => s !== spec)) {
-    await page.route(`**/sws/neo/${other}/**`, route =>
-      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(neoOk([])) }),
-    );
+    await page.route(`**/sws/neo/${other}/**`, async route => {
+      if (await handOffFiscalAction(route)) return;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(neoOk([])) });
+    });
   }
   return state;
 }
@@ -456,6 +474,7 @@ async function installOnboardingRecordMock(page, { spec, system, record }) {
   // it, so the page leaves the wizard for the configured view.
   let created = false;
   await page.route(`**/sws/neo/${spec}/**`, async route => {
+    if (await handOffFiscalAction(route)) return;
     const req = route.request();
     const method = req.method();
     const url = req.url();
@@ -606,7 +625,9 @@ test.describe('Fiscal Config — onboarding save regression (ETP-4401)', () => {
       // applied screen) instead of throwing "record id not found".
       await expect(page.getByTestId('FiscalStatusSummary__panel')).toBeVisible({ timeout: 8_000 });
       expect(actionBodies).toEqual([testCase.action]);
-      expect(posts.filter(url => url.includes(`/${testCase.spec}/`))).toEqual([]);
+      // The action itself lives on sii-config (…/action/configureFiscalSystem); any other POST
+      // to the spec would be a config record written by the window.
+      expect(posts.filter(url => url.includes(`/${testCase.spec}/`) && !url.includes('/action/'))).toEqual([]);
     });
   }
 });
@@ -644,6 +665,23 @@ test.describe('Fiscal Config — wizard activates through configureFiscalSystem'
 
     await expect(page.getByText(refusal)).toBeVisible({ timeout: 5_000 });
     await expect(page.getByText(t('fiscal.onboarding.confirm.title'))).toBeVisible();
+  });
+
+  test('a role refused by NEO (403 without messageKeys) sees the translated no-permission message', async ({ page }) => {
+    await loginWithOrg(page);
+    await installFiscalConfigMocks(page);
+    const bodies = await installConfigureFiscalSystemMock(page, { forbidden: true });
+    await navigateTo(page, 'fiscal-config');
+
+    await expect(page.getByText(t('fiscal.onboarding.territory.title'))).toBeVisible({ timeout: 8_000 });
+    await page.getByRole('button', { name: new RegExp(t('fiscal.territory.navarra')) }).click();
+    await page.getByRole('button', { name: t('fiscal.onboarding.continue') }).click();
+    await page.getByTestId('OnboardingWizard__confirmActivateButton').click();
+
+    await expect(page.getByText(t('fiscal.err.noPermission'))).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText(NEO_ACCESS_DENIED_MESSAGE)).toHaveCount(0);
+    await expect(page.getByText(t('fiscal.onboarding.confirm.title'))).toBeVisible();
+    expect(bodies).toHaveLength(1);
   });
 
   test('the manual screen offers only the catalog systems of the territory', async ({ page }) => {
@@ -708,6 +746,7 @@ async function installAddSiiMocks(page, { refusal = null } = {}) {
   });
 
   await page.route('**/sws/neo/sii-config/**', async route => {
+    if (await handOffFiscalAction(route)) return;
     const req = route.request();
     if (req.method() === 'GET') {
       return route.fulfill({
@@ -741,7 +780,10 @@ test.describe('Fiscal Config — Add complementary SIF (ETP-4785)', () => {
     const bodies = await installAddSiiMocks(page);
     const configPosts = [];
     page.on('request', req => {
-      if (req.method() === 'POST' && /\/(sii|tbai|verifactu)-config\//.test(req.url())) configPosts.push(req.url());
+      // The action itself lives on sii-config (…/action/…); only a record POST counts here.
+      if (req.method() === 'POST' && /\/(sii|tbai|verifactu)-config\//.test(req.url()) && !req.url().includes('/action/')) {
+        configPosts.push(req.url());
+      }
     });
     await navigateTo(page, 'fiscal-config');
 
@@ -807,6 +849,7 @@ test.describe('Fiscal Config — Add complementary SIF (ETP-4785)', () => {
 async function installChangeSifDeletedMocks(page, { spec, record }) {
   const state = { deleted: false };
   await page.route(`**/sws/neo/${spec}/**`, async route => {
+    if (await handOffFiscalAction(route)) return;
     const req = route.request();
     const method = req.method();
     if (method === 'GET') {
@@ -837,9 +880,10 @@ async function installChangeSifDeletedMocks(page, { spec, record }) {
     return route.fallback();
   });
   for (const other of ['sii-config', 'tbai-config', 'verifactu-config'].filter(s => s !== spec)) {
-    await page.route(`**/sws/neo/${other}/**`, route =>
-      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(neoOk([])) }),
-    );
+    await page.route(`**/sws/neo/${other}/**`, async route => {
+      if (await handOffFiscalAction(route)) return;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(neoOk([])) });
+    });
   }
   return state;
 }
@@ -973,9 +1017,10 @@ async function installTbaiSaveMocks(page) {
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(neoOk([TBAI_RECORD])) });
   });
   for (const other of ['sii-config', 'verifactu-config']) {
-    await page.route(`**/sws/neo/${other}/**`, route =>
-      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(neoOk([])) }),
-    );
+    await page.route(`**/sws/neo/${other}/**`, async route => {
+      if (await handOffFiscalAction(route)) return;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(neoOk([])) });
+    });
   }
   await page.route('**/certificate{/**,}**', route =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ exists: false }) }),

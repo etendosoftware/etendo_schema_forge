@@ -127,6 +127,9 @@ export async function installFiscalCatalogMock(page, { catalog = FISCAL_SYSTEM_C
   });
 }
 
+/** NEO's raw English refusal for a role without access to the spec — never shown to the user. */
+export const NEO_ACCESS_DENIED_MESSAGE = 'Access denied to spec for current role';
+
 /** The record systems each activated system creates. */
 const RECORD_SYSTEMS = { SII: ['SII'], TBAI: ['TBAI'], 'SII+TBAI': ['SII', 'TBAI'], VERIFACTU: ['VERIFACTU'] };
 
@@ -134,17 +137,27 @@ const RECORD_SYSTEMS = { SII: ['SII'], TBAI: ['TBAI'], 'SII+TBAI': ['SII', 'TBAI
  * Answer `configureFiscalSystem`. Must be called AFTER `login(page)`.
  *
  * @param {import('@playwright/test').Page} page
- * @param {{ ids?: Record<string, string>, refusal?: string|null, onCreate?: Function }} [options]
+ * @param {{ ids?: Record<string, string>, refusal?: string|null, forbidden?: boolean, onCreate?: Function }} [options]
  *   `ids` maps a record system (SII / TBAI / VERIFACTU) to the id the action reports;
- *   `refusal` makes the action refuse with that message (HTTP 409); `onCreate(body)` runs
- *   after a successful activation (e.g. to make the config lists return the new record).
+ *   `refusal` makes the action refuse with that message (HTTP 409); `forbidden` makes it answer
+ *   NEO's generic role refusal (HTTP 403, {@link NEO_ACCESS_DENIED_MESSAGE}, no `messageKeys`);
+ *   `onCreate(body)` runs after a successful activation (e.g. to make the config lists return
+ *   the new record).
  * @returns {Promise<Array<object>>} the parsed request bodies, in call order
  */
-export async function installConfigureFiscalSystemMock(page, { ids = {}, refusal = null, onCreate = null } = {}) {
+export async function installConfigureFiscalSystemMock(page, { ids = {}, refusal = null, forbidden = false, onCreate = null } = {}) {
   const bodies = [];
   await page.route(`${ACTION_ROUTE}configureFiscalSystem**`, async (route) => {
     const body = JSON.parse(route.request().postData() || '{}');
     bodies.push(body);
+    if (forbidden) {
+      await route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { message: NEO_ACCESS_DENIED_MESSAGE, status: 403 } }),
+      });
+      return;
+    }
     if (refusal) {
       await route.fulfill({
         status: 409,
