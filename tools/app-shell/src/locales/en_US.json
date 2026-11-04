@@ -26077,6 +26077,7 @@
     "dynamicReportExpandRow": "Expand {name}",
     "dynamicReportCollapseRow": "Collapse {name}",
     "reportErrorOrgAccess": "You do not have access to this organization.",
+    "reportErrorReportAccess": "You do not have access to this report.",
     "dynamicReportErrorGeneric": "The report could not be loaded.",
     "dynamicReportOpening": "Opening balance",
     "dynamicReportDebit": "Debit",

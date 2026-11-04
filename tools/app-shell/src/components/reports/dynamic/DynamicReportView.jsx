@@ -9,6 +9,7 @@ import { buildReportFilename } from '@/pages/ReportViewerPage.jsx';
 import DynamicReportPanel from './DynamicReportPanel.jsx';
 import DynamicReportTable from './DynamicReportTable.jsx';
 import DynamicDrillPanel from './DynamicDrillPanel.jsx';
+import { ENTRY_REPORT_ID, LEDGER_REPORT_ID } from './drillDown.js';
 import { useReportQuery } from './useReportQuery.js';
 import { useReportDefaults } from './useReportDefaults.js';
 import { useAccountSplit } from './useAccountSplit.js';
@@ -22,7 +23,7 @@ const EXPORTS = [
   { format: 'csv', label: 'CSV', icon: FileText },
 ];
 const SPLIT_DIMENSIONS = [['org', 'orgId'], ['bpartner', 'bPartnerId'], ['product', 'productId']];
-const ERROR_KEYS = { org_access_denied: 'reportErrorOrgAccess' };
+const ERROR_KEYS = { org_access_denied: 'reportErrorOrgAccess', report_access_denied: 'reportErrorReportAccess' };
 
 const pick = (labelObj, locale) => labelObj?.[locale] || labelObj?.en_US || labelObj?.es_ES || '';
 
@@ -42,7 +43,9 @@ function initialState(defaultOrgId, period, level) {
  * print what the screen shows: same params plus `expandedNodeIds`. `source` ('menu' | 'deep_link')
  * is how the report was opened, for `report_opened` (F10).
  */
-export default function DynamicReportView({ report, onBack, selectedOrgId, roleOrgs = [], source = 'deep_link' }) {
+export default function DynamicReportView({ report, onBack, selectedOrgId, roleOrgs = [], source = 'deep_link', reportAccess = null }) {
+  // The server refuses a drill step the role cannot open (ETP-6080), so the view does not offer it.
+  const canOpen = (id) => Boolean(reportAccess?.[id]);
   const ui = useUI();
   const tMenu = useMenuLabel();
   const { locale } = useLocaleSwitch();
@@ -256,14 +259,14 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
                   splitBy={state.splitBy}
                   splits={splits}
                   onToggleSplit={toggleSplit}
-                  onOpenLedger={setDrillAccount}
+                  onOpenLedger={canOpen(LEDGER_REPORT_ID) ? setDrillAccount : null}
                 />
               </div>
             )}
           </div>
         </main>
       </div>
-      <DynamicDrillPanel reportTitle={title} account={drillAccount} queryParams={queryParams} session={telemetry.session} onClose={() => setDrillAccount(null)} />
+      <DynamicDrillPanel reportTitle={title} account={drillAccount} queryParams={queryParams} session={telemetry.session} canOpenEntry={canOpen(ENTRY_REPORT_ID)} onClose={() => setDrillAccount(null)} />
     </div>
   );
 }

@@ -100,7 +100,7 @@ export default function DynamicReportTable({ rows, compare, expanded, onToggle, 
                       <ChevronRight className={cn('w-3.5 h-3.5 transition-transform', (row.hasChildren ? open : split) && 'rotate-90')} />
                     </button>
                   ) : <span className="w-5 h-5 shrink-0" />}
-                  {canSplit(row) && row.value ? (
+                  {onOpenLedger && canSplit(row) && row.value ? (
                     <button
                       type="button"
                       className="text-left hover:underline hover:text-primary"

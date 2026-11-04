@@ -26315,6 +26315,7 @@
     "dynamicReportExpandRow": "Expandir {name}",
     "dynamicReportCollapseRow": "Contraer {name}",
     "reportErrorOrgAccess": "No tienes acceso a esta organización.",
+    "reportErrorReportAccess": "No tienes acceso a este informe.",
     "dynamicReportErrorGeneric": "No se pudo cargar el informe.",
     "dynamicReportOpening": "Saldo inicial",
     "dynamicReportDebit": "Debe",

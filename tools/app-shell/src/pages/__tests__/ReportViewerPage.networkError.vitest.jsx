@@ -213,6 +213,26 @@ describe('ReportViewerPage — network failures and render timeout (ETP-5424)', 
   });
 });
 
+describe('ReportViewerPage — render refused by the report access check (ETP-6080)', () => {
+  beforeEach(() => {
+    apiFetchCalls.length = 0;
+    mockSearchParams = new URLSearchParams({ report: 'report-simple' });
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('shows "no access to this report" translated', async () => {
+    const user = userEvent.setup();
+    stubFetch(() => Promise.resolve({
+      ok: false, status: 403,
+      json: () => Promise.resolve({ error: 'The role has no access to this report', code: 'REPORT_ACCESS_DENIED' }),
+    }));
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('Free Text')).toBeInTheDocument());
+    await user.click(screen.getByText('runReport'));
+    await waitFor(() => expect(screen.getByText('reportErrorReportAccess')).toBeInTheDocument());
+  });
+});
+
 describe('ReportViewerPage — render refused by the org check (ETP-6080)', () => {
   const denied = () => Promise.resolve({
     ok: false, status: 403,

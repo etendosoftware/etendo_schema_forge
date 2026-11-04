@@ -94,7 +94,8 @@ function route(url, init) {
   return Promise.reject(new Error(`unexpected ${url}`));
 }
 
-const renderView = (props = {}) => render(<DynamicReportView report={REPORT} onBack={vi.fn()} selectedOrgId="O1" {...props} />);
+const FULL_ACCESS = { 'profit-loss': 'full', 'report-general-ledger': 'full', 'report-journal-entries': 'full' };
+const renderView = (props = {}) => render(<DynamicReportView report={REPORT} onBack={vi.fn()} selectedOrgId="O1" reportAccess={FULL_ACCESS} {...props} />);
 const rowIds = () => screen.queryAllByTestId('DynamicReportTable__row').map((r) => r.dataset.nodeId);
 
 beforeEach(() => {
@@ -282,6 +283,30 @@ describe('DynamicReportView — split, errors and exports', () => {
     const [, init] = apiFetchMock.mock.calls.find(([u]) => u.endsWith('/render'));
     expect(JSON.parse(init.body).params.expandedNodeIds).toBe('none');
     expect(globalThis.URL.createObjectURL).toHaveBeenCalled();
+  });
+});
+
+describe('DynamicReportView — drill steps the role cannot open (ETP-6080)', () => {
+  it('shows the account name as plain text without General Ledger access', async () => {
+    renderView({ reportAccess: { 'profit-loss': 'full' } });
+    fireEvent.click(await screen.findByTestId('DynamicReportPanel__expandAll'));
+    await waitFor(() => expect(rowIds()).toContain('S1'));
+    expect(screen.queryByTestId('DynamicReportTable__ledger')).toBeNull();
+    expect(screen.getByText('700 - Ventas nacionales')).toBeInTheDocument();
+  });
+
+  it('opens the ledger but not the entry without Journal Entries access', async () => {
+    renderView({ reportAccess: { 'profit-loss': 'full', 'report-general-ledger': 'read-only' } });
+    fireEvent.click(await screen.findByTestId('DynamicReportPanel__expandAll'));
+    fireEvent.click(await screen.findByTestId('DynamicReportTable__ledger'));
+    expect(await screen.findAllByTestId('DynamicDrillPanel__ledgerRow')).toHaveLength(2);
+    expect(screen.queryByTestId('DynamicDrillPanel__openEntry')).toBeNull();
+  });
+
+  it('shows a refused query as "no access to this report"', async () => {
+    queryAnswer = () => json({ error: 'x', code: 'REPORT_ACCESS_DENIED' }, { ok: false, status: 403 });
+    renderView();
+    expect(await screen.findByTestId('DynamicReportView__error')).toHaveTextContent('reportErrorReportAccess');
   });
 });
 

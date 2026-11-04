@@ -23,7 +23,8 @@ function useErrorText(error, errorCode) {
   const ui = useUI();
   if (!error) return null;
   if (errorCode === 'network') return error;
-  return ui(errorCode === 'org_access_denied' ? 'reportErrorOrgAccess' : 'dynamicReportErrorGeneric');
+  const keys = { org_access_denied: 'reportErrorOrgAccess', report_access_denied: 'reportErrorReportAccess' };
+  return ui(keys[errorCode] || 'dynamicReportErrorGeneric');
 }
 
 /** report_drilldown for one step, timed from the click (this mount) to its first answer. */
@@ -95,14 +96,16 @@ function Ledger({ params, sign, locale, dateText, onOpenEntry, session }) {
             {shown.map((r, i) => (
               <tr key={`${r.fact_acct_group_id}-${i}`} className="border-b border-border/30 hover:bg-muted/40" data-testid="DynamicDrillPanel__ledgerRow">
                 <td className={cell}>
-                  <button
-                    type="button"
-                    className="text-primary hover:underline"
-                    onClick={() => onOpenEntry({ id: r.fact_acct_group_id, dateDisplay: dateText(r.dateacct) })}
-                    data-testid="DynamicDrillPanel__openEntry"
-                  >
-                    {dateText(r.dateacct)}
-                  </button>
+                  {onOpenEntry ? (
+                    <button
+                      type="button"
+                      className="text-primary hover:underline"
+                      onClick={() => onOpenEntry({ id: r.fact_acct_group_id, dateDisplay: dateText(r.dateacct) })}
+                      data-testid="DynamicDrillPanel__openEntry"
+                    >
+                      {dateText(r.dateacct)}
+                    </button>
+                  ) : dateText(r.dateacct)}
                 </td>
                 <td className={cell}>{r.groupbyname}</td>
                 <td className={num}>{amount(r.amtacctdr)}</td>
@@ -185,7 +188,7 @@ function Entry({ params, locale, accountValue, session }) {
  * goes back to its step. An entry whose table has no window mapped ends the drill-down there (Q5).
  * Each step emits `report_drilldown` (ledger / entry timed, document when the tab opens).
  */
-export default function DynamicDrillPanel({ reportTitle, account, queryParams, session, onClose }) {
+export default function DynamicDrillPanel({ reportTitle, account, queryParams, session, canOpenEntry = true, onClose }) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   const [entry, setEntry] = useState(null);
@@ -216,7 +219,7 @@ export default function DynamicDrillPanel({ reportTitle, account, queryParams, s
             ))}
           </nav>
         </SheetDescription>
-        {account && !entry && <Ledger params={ledger} sign={account?.sign} locale={locale} dateText={dateText} onOpenEntry={setEntry} session={session} />}
+        {account && !entry && <Ledger params={ledger} sign={account?.sign} locale={locale} dateText={dateText} onOpenEntry={canOpenEntry ? setEntry : null} session={session} />}
         {entry && <Entry key={entry.id} params={entryQuery} locale={locale} accountValue={account.value} session={session} />}
       </SheetContent>
     </Sheet>

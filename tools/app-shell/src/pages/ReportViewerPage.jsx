@@ -1091,12 +1091,14 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
 }
 
 /**
- * The message of a failed render. The org check (ETP-6080) answers `ORG_ACCESS_DENIED` with an
- * English text, so that code is shown translated; anything else keeps the server's message.
+ * The message of a failed render. The org and report access checks (ETP-6080) answer
+ * `ORG_ACCESS_DENIED` / `REPORT_ACCESS_DENIED` with an
+ * English text, so those codes are shown translated; anything else keeps the server's message.
  */
 async function renderErrorMessage(res, ui) {
   const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
   if (data?.code === 'ORG_ACCESS_DENIED') return ui('reportErrorOrgAccess');
+  if (data?.code === 'REPORT_ACCESS_DENIED') return ui('reportErrorReportAccess');
   return data?.error || `Render failed: ${res.status}`;
 }
 
@@ -2137,6 +2139,7 @@ export default function ReportViewerPage() {
           selectedOrgId={selectedOrg?.id || null}
           roleOrgs={selectedRole?.orgList || []}
           source={pickedReportId === selectedReport.id ? 'menu' : 'deep_link'}
+          reportAccess={reportAccess}
           data-testid="DynamicReportView__3c998a" />
       </Suspense>
     );
