@@ -1439,7 +1439,51 @@ refused as already discarded; a second restore finds nothing left to restore).
 
 **Read-only tier.** The modal never opens under the read-only tier. In the panel *Descartar par* and
 *Restaurar par* are disabled and their handlers return early; *No es un rebote* changes no data and
-stays available.
+stays available (it hides the pair and reports nothing: no `dismissPair` call).
+
+**KPI reporting (roadmap #15).** The SPA reports what the user decided about the suggested pairs;
+the backend turns it into the `backend_bank_bounce_pair_decided` events, and the browser sends two
+frontend events of its own. No property or body field carries a line id other than the ones the
+actions already send, an amount, a counterparty or a statement text.
+
+- **`applySuggestions` → `bounceDecisions`.** When the modal shows at least one pair, the body gains
+  `bounceDecisions: [{ groupKey, decision }]`, one entry per **shown** pair that is **not applied**
+  (the checked ones travel in `groups` as before; pairs hidden with *No es un rebote* are not shown,
+  so not listed). `decision` is `sent_to_panel` for a pair sent to the panel with *Revisar en el
+  panel* during this modal session and not checked again, `unchecked` for every other one (an
+  ambiguous pair included). The key is present, possibly empty, whenever pairs were shown, and absent
+  otherwise, so an apply without pairs keeps its old body. Key and values are one constant each in
+  `bouncePairs.js` (`BOUNCE_DECISIONS_KEY`, `BOUNCE_DECISION`; built by `withBounceDecisions`).
+  Example: `{ financialAccountId, groups: [ {…tx…}, { kind: "bouncePair", statementLineId: "O1",
+  counterpartLineId: "B1" } ], bounceDecisions: [ { groupKey: "bp-amb", decision: "sent_to_panel" },
+  { groupKey: "bp-review", decision: "unchecked" } ] }`.
+- **The modal session** is the life of the current suggestions: `useAutoMatchReview` keeps the
+  `sentToPanelKeys` (added by `startReview`) across a close and the Automatch button, and forgets
+  them when the suggestions reload (a discard or restore in the panel, an apply, the header refresh)
+  or the user leaves the tab. Checking a pair again — alone or with the pairs' select-all — removes
+  it from the set; unchecking does not.
+- **"No es un rebote" → `dismissPair`.** Besides the session-only hide (unchanged), the panel posts
+  `bank-reconciliation?action=dismissPair` with `{ financialAccountId, statementLineId,
+  counterpartLineId? }`: the line selected in the panel and, when the card shows one, the other line
+  of the pair (the chosen original of an ambiguous pair; left out while none is chosen). The
+  backend persists nothing. Fire-and-forget: a failure shows nothing and blocks nothing; skipped in
+  the read-only tier. `useDismissPair` (`useBouncePairActions.js`), `dismissPairPayload`
+  (`bouncePairs.js`).
+- **`bounce_suggestions_viewed`** (Mixpanel, frontend): once per opening of the modal that shows at
+  least one pair (also when the pairs land after it opened). Properties `account_id`,
+  `pairs_shown`, `pairs_preselected` (pairs that came checked: high confidence, not ambiguous),
+  `auto_opened`.
+- **`bounce_suggestions_dismissed`**: the modal closed **without applying** while it showed pairs —
+  *Cancelar*, *Abrir conciliación*, the X, Esc or the backdrop. Not on an apply, and not on *Revisar
+  en el panel* (the host closes the modal itself). Properties `account_id`, `pairs_shown`,
+  `pairs_checked_at_close`, `auto_opened`. Best effort: closing the browser tab sends nothing.
+- **`auto_opened`** is `true` when the automatch opened the modal by itself (the armed check on
+  entering the tab) and `false` when the Automatch button opened it; `index.jsx` records it per
+  opening and passes it as the modal's `autoOpened` prop.
+- Both events go through the shared tracker (`lib/bounceSuggestionsTelemetry.js` →
+  `@/lib/observability.js`), so the support-session suppression, the kill switch and the
+  provider/environment gating apply, and the payload policy (`payload.js`) keeps only the declared
+  properties (the three counts are bounded integers, `auto_opened` a boolean).
 
 **Errors.** The coded refusals (`LINE_DISCARDED`, `BOUNCE_SUGGESTIONS_OFF`, `SIGN_MISMATCH`,
 `AMOUNT_MISMATCH`, `HAS_PAYMENT`, `LINE_NOT_PENDING`, `DISCARD_NOT_ALLOWED`) carry their English
@@ -1669,8 +1713,8 @@ index.jsx                          — receives { recordId }, sets page meta, mo
 | `useStatementImport()` / `useStatementPreview()` | `hooks/useStatementImport.js`, `hooks/useStatementPreview.js` | **No longer called from the UI since ETP-4954** — `ImportStatementModal` parses in the browser and writes through `useCreateStatement`. Kept because the endpoints behind them remain the Cuaderno 43 path; since ETP-5447 the MCP reaches them through the `bank-statements` spec actions `previewStatement` / `importStatement` (see *MCP / agent access to bank statements*). Mutation hooks for file import — post `{ FIN_Financial_Account_ID, fileName, contentBase64 }` to `POST /sws/neo/bank-statements?action=import`. Returns `{ importStatement, importing, error }`. Both this and `useStatementPreview` are thin wrappers over `useStatementFileRequest(action)` (`hooks/useStatementFileRequest.js`) — same body, same auth, same error shape, only the action and the flag name differ, so the plumbing lives there. A rejected call carries `err.status` and `err.code` (the NEO `error.code`, e.g. `NO_VALID_LINES`). |
 | `useCreateStatement()` | `hooks/useCreateStatement.js` | Mutation hook for manual statement creation — posts `{ FIN_Financial_Account_ID, name, transactionDate, importDate, fileName, notes, lines[] }` to `POST /sws/neo/bank-statements?action=create`. Returns `{ createStatement, creating, error }`. |
 | `useStatementActions()` | `hooks/useStatementActions.js` | Mutation hook for the draft row actions — `processStatement(id)` (`?action=process`), `updateStatement({ id, ...header, lines })` (`?action=update`), `deleteStatement(id)` (`?action=delete`). All only valid for drafts (backend returns 400 otherwise). Returns `{ processStatement, updateStatement, deleteStatement, busy, error }`. |
-| `useAutoMatchReview(groups, { active })` / `useAutoMatchSelection(groups)` | `hooks/useAutoMatchReview.js` | ETP-5581. The automatch modal's checks (only the user's changes are stored; defaults: every transaction group, high-confidence bounce pairs; reset on every reload) and the bounce-pair state the modal and the panel share: `startReview` (focus only), `focus` / `consumeFocus`, `dismissedKeys` / `dismiss` / `clearDismissed`, `panel`. Owned by `index.jsx`. |
-| `useDiscardPair()` / `useRestorePair()` / `usePendingLineCounts()` | `hooks/useBouncePairActions.js` | ETP-5581. `POST bank-reconciliation?action=discardPair` / `restorePair`, both behind the flag (403 `BOUNCE_SUGGESTIONS_OFF`). Refusals are coded; translate them with `translateBackendErrorBody(err.body, ui, fallback)`. `usePendingLineCounts` reads the counts of the default `pendingLines` answer (no `status`), for the *Descartadas* filter after a restore. |
+| `useAutoMatchReview(groups, { active })` / `useAutoMatchSelection(groups)` | `hooks/useAutoMatchReview.js` | ETP-5581. The automatch modal's checks (only the user's changes are stored; defaults: every transaction group, high-confidence bounce pairs; reset on every reload) and the bounce-pair state the modal and the panel share: `startReview` (focus, and records the pair in `sentToPanelKeys` for the KPI report), `focus` / `consumeFocus`, `dismissedKeys` / `dismiss` / `clearDismissed`, `sentToPanelKeys`, `panel`. Owned by `index.jsx`. |
+| `useDiscardPair()` / `useRestorePair()` / `useDismissPair()` / `usePendingLineCounts()` | `hooks/useBouncePairActions.js` | ETP-5581. `POST bank-reconciliation?action=discardPair` / `restorePair`, both behind the flag (403 `BOUNCE_SUGGESTIONS_OFF`); `dismissPair` reports *No es un rebote* for the KPI events (persists nothing, called fire-and-forget). Refusals are coded; translate them with `translateBackendErrorBody(err.body, ui, fallback)`. `usePendingLineCounts` reads the counts of the default `pendingLines` answer (no `status`), for the *Descartadas* filter after a restore. |
 | `useReconciliationPost(action)` | `hooks/useReconciliationPost.js` | The shared POST of every `bank-reconciliation` action (moved out of `useReconciliation.js` in ETP-5581). Throws with `err.body` / `err.code`. |
 
 ## Backend endpoints
