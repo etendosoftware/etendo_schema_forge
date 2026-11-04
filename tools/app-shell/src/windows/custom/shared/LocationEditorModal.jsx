@@ -1423,12 +1423,14 @@ export default function LocationEditorModal({
                                         label={ui('legacyAddressOldTextLabel')}
                                         value={form.address}
                                         testId="location-legacy-banner-address1"
+                                        data-testid="LegacyAddressLineRow__927831"
                                     />
                                     {Boolean(form.address2) && (
                                         <LegacyAddressLineRow
                                             label={ui('legacyAddressOldTextLabel2')}
                                             value={form.address2}
                                             testId="location-legacy-banner-address2"
+                                            data-testid="LegacyAddressLineRow__927831"
                                         />
                                     )}
                                 </div>
