@@ -1,4 +1,7 @@
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+// @covers tools/app-shell/src/lib/observability/health-events.js
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { OpenFeature, TypedInMemoryProvider } from '@openfeature/web-sdk';
+import { setFeatureFlagContext } from '@/lib/flags/bootstrap.js';
 
 // ── Module mocks (must be hoisted before any import of the module under test) ──
 
@@ -285,6 +288,44 @@ describe('trackTransactionPosted', () => {
 
 // ── trackSessionStarted ────────────────────────────────────────────────────────
 
+describe('session telemetry preserves an already resolved flag context', () => {
+  afterEach(async () => {
+    await OpenFeature.clearProviders();
+    await OpenFeature.clearContexts();
+  });
+
+  it('does not reconcile identical account context again when session telemetry starts', async () => {
+    const onContextChange = vi.fn().mockResolvedValue(undefined);
+    const provider = new TypedInMemoryProvider({});
+    provider.onContextChange = onContextChange;
+    await OpenFeature.setProviderAndWait(provider);
+    localStorage.setItem('sf_account_id', 'account-a');
+    localStorage.setItem('sf_account_email', 'account-a@example.test');
+    await setFeatureFlagContext({ username: 'erp-admin', clientId: 'company-a' });
+    onContextChange.mockClear();
+
+    await trackSessionStarted({ username: 'erp-admin', clientId: 'company-a' });
+
+    expect(onContextChange).not.toHaveBeenCalled();
+    expect(track).toHaveBeenCalledWith('session_started', { account_id: 'company-a' });
+  });
+
+  it('does not trigger a second reconciliation for repeated session events with the same identity', async () => {
+    const onContextChange = vi.fn().mockResolvedValue(undefined);
+    const provider = new TypedInMemoryProvider({});
+    provider.onContextChange = onContextChange;
+    await OpenFeature.setProviderAndWait(provider);
+    localStorage.setItem('sf_account_id', 'account-a');
+    localStorage.setItem('sf_account_email', 'account-a@example.test');
+
+    await trackSessionStarted({ username: 'erp-admin', clientId: 'company-a' });
+    await trackSessionStarted({ username: 'erp-admin', clientId: 'company-a' });
+
+    expect(onContextChange).toHaveBeenCalledTimes(1);
+    expect(track.mock.calls.filter(([name]) => name === 'session_started')).toHaveLength(2);
+  });
+});
+
 describe('trackSessionStarted', () => {
   it('calls group("account_id", clientId) when clientId is provided', async () => {
     await trackSessionStarted({ username: 'alice', clientId: 'client-123' });
@@ -345,7 +386,7 @@ describe('trackSessionStarted', () => {
   it('still calls track and flush even without clientId', async () => {
     await trackSessionStarted({ username: 'charlie' });
 
-    expect(track).toHaveBeenCalledOnce();
+    expect(track.mock.calls.filter(([name]) => name === 'session_started')).toHaveLength(1);
     expect(flush).toHaveBeenCalledOnce();
   });
 

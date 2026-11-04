@@ -1,5 +1,6 @@
 // @covers tools/app-shell/src/lib/flags/bootstrap.js
 import { OpenFeature } from '@openfeature/web-sdk';
+import { track } from '@/lib/observability.js';
 import {
   createFlagProvider, resolvePollSeconds, initFeatureFlags, resolveRemoteFlagProvider, buildDatadogFlagOptions,
 } from '../bootstrap.js';
@@ -66,7 +67,7 @@ describe('remote provider selection', () => {
     expect(result.metadata.name).toBe('datadog');
     expect(result.options).toMatchObject({ applicationId: 'rum-app', enableRumFeatureFlagTracking: false });
     expect(withTimeout).toHaveBeenCalledWith(expect.any(Function), 4000);
-    expect(result.options.flagConfigurationFetch.ms).toBe(4000);
+    expect(result.options.flagConfigurationFetch).toEqual(expect.any(Function));
   });
 
   it('local overrides beat Datadog without loading its SDK', async () => {
@@ -187,4 +188,87 @@ describe('ConfigCat control plane selection', () => {
     expect(resolvePollSeconds(value, logger)).toBe(60);
   });
   it('accepts a positive configured poll interval', () => expect(resolvePollSeconds('15', logger)).toBe(15));
+});
+
+
+describe('configuration transport diagnostics', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it.each([
+    ['success', { ok: true }, undefined],
+    ['error', { ok: false }, undefined],
+    ['error', undefined, new Error('private failure must not escape into telemetry')],
+  ])('reports %s from the actual injected configuration request', async (outcome, response, failure) => {
+    const { loader } = datadogLoaderStub();
+    const transport = vi.fn(async () => { if (failure) throw failure; return response; });
+    const provider = await createFlagProvider({ env: datadogEnv, datadogLoader: loader, datadogFetch: transport });
+    const request = provider.options.flagConfigurationFetch('https://flags.example.test/private', {});
+    if (failure) await expect(request).rejects.toBe(failure);
+    else expect(await request).toBe(response);
+    expect(transport).toHaveBeenCalledTimes(1);
+    const diagnostics = track.mock.calls.filter(([name]) => name === 'feature_flags_diagnostic').map(([, properties]) => properties);
+    expect(diagnostics).toEqual([
+      { operation: 'configuration_fetch', outcome: 'started', provider: 'datadog' },
+      expect.objectContaining({ operation: 'configuration_fetch', outcome, provider: 'datadog', durationMs: expect.any(Number) }),
+    ]);
+    expect(JSON.stringify(diagnostics)).not.toContain('private');
+    expect(JSON.stringify(diagnostics)).not.toContain('https://');
+  });
+
+  it('distinguishes a superseded request from a network failure', async () => {
+    const { loader } = datadogLoaderStub();
+    const controller = new AbortController();
+    const transport = vi.fn(async () => { controller.abort(); throw new DOMException('superseded', 'AbortError'); });
+    const provider = await createFlagProvider({ env: datadogEnv, datadogLoader: loader, datadogFetch: transport });
+    await expect(provider.options.flagConfigurationFetch('https://flags.example.test', { signal: controller.signal })).rejects.toThrow();
+    expect(track).toHaveBeenCalledWith('feature_flags_diagnostic', expect.objectContaining({
+      operation: 'configuration_fetch', outcome: 'cancelled', reason: 'superseded',
+    }));
+  });
+});
+
+describe('Datadog assignments cannot cross account or company boundaries', () => {
+  async function providerWithTransport(transport) {
+    const sdk = await import('@datadog/openfeature-browser');
+    return createFlagProvider({
+      env: { ...datadogEnv, VITE_DATADOG_APPLICATION_ID: '00000000-0000-4000-8000-000000000001' },
+      datadogFetch: transport,
+      datadogLoader: async () => ({ ...sdk, DatadogProvider: class extends sdk.DatadogProvider {
+        constructor(options) { super({ ...options, enableExposureLogging: false, enableFlagEvaluationTracking: false }); }
+      } }),
+    });
+  }
+
+  function assignments() {
+    return new Response(JSON.stringify({ data: { type: 'precomputed-configuration', attributes: {
+      createdAt: '2026-11-04T00:00:00Z', flags: {
+        [PROOF_OF_CONCEPT_MENU]: { allocationKey: 'allocation', variationKey: 'on', variationType: 'BOOLEAN', variationValue: true, reason: 'TARGETING_MATCH', doLog: false },
+      },
+    } } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }
+
+  it.each([
+    ['company change', { targetingKey: 'a@example.test', clientId: 'company-b' }],
+    ['account change', { targetingKey: 'b@example.test', clientId: 'company-a' }],
+    ['logout', {}],
+  ])('returns the safe default after a failed %s instead of the previous account assignment', async (_name, nextContext) => {
+    const transport = vi.fn().mockResolvedValueOnce(assignments()).mockRejectedValue(new Error('network unavailable'));
+    const provider = await providerWithTransport(transport);
+    await OpenFeature.setContext({ targetingKey: 'a@example.test', clientId: 'company-a' });
+    await OpenFeature.setProviderAndWait(provider);
+    expect(OpenFeature.getClient().getBooleanValue(PROOF_OF_CONCEPT_MENU, false)).toBe(true);
+    await OpenFeature.setContext(nextContext);
+    expect(OpenFeature.getClient().getBooleanValue(PROOF_OF_CONCEPT_MENU, false)).toBe(false);
+    expect(transport).toHaveBeenCalledTimes(2);
+  });
+
+  it('retains accepted assignments when a refresh of the same context cannot reach the network', async () => {
+    const transport = vi.fn().mockResolvedValueOnce(assignments()).mockRejectedValue(new Error('network unavailable'));
+    const provider = await providerWithTransport(transport);
+    const context = { targetingKey: 'a@example.test', clientId: 'company-a' };
+    await OpenFeature.setContext(context);
+    await OpenFeature.setProviderAndWait(provider);
+    await OpenFeature.setContext({ ...context });
+    expect(OpenFeature.getClient().getBooleanValue(PROOF_OF_CONCEPT_MENU, false)).toBe(true);
+  });
 });

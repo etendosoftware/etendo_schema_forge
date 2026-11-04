@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/lib/observability/core.js
 import { createObservability } from '../core.js';
 
 function makeProvider(name = 'test', overrides = {}) {
@@ -431,5 +432,120 @@ describe('callProvider error handling', () => {
     const p = makeProvider('broken', { track: vi.fn().mockRejectedValue(new Error('x')) });
     await obs.initObservability({ providers: [p], logger: {} });
     await expect(obs.track('event')).resolves.toBeUndefined();
+  });
+});
+
+describe('flag telemetry startup and identity lifecycle', () => {
+  it('replays early flag events but keeps unrelated pre-init events discarded', async () => {
+    const obs = createObservability();
+    const provider = makeProvider();
+    await obs.track('feature_flag_evaluated', { flagKey: 'sample', enabled: true, username: 'account-a', account_id: 'company-a' });
+    await obs.track('feature_flags_diagnostic', { operation: 'configuration_fetch', outcome: 'success', durationMs: 15 });
+    await obs.track('unrelated_event', { action: 'click' });
+    await obs.initObservability({ providers: [provider] });
+    expect(provider.track.mock.calls.map(([name]) => name)).toEqual(['feature_flag_evaluated', 'feature_flags_diagnostic']);
+    expect(provider.track.mock.calls[0][1]).toMatchObject({ username: 'account-a', account_id: 'company-a' });
+  });
+
+  it('holds flag events during adapter initialization and preserves capture-time company context', async () => {
+    let finishInit;
+    const provider = makeProvider('test', { init: vi.fn(() => new Promise(resolve => { finishInit = resolve; })) });
+    const obs = createObservability();
+    await obs.setContext({ account_id: 'company-a' });
+    await obs.track('feature_flag_evaluated', { flagKey: 'sample', enabled: true });
+    const init = obs.initObservability({ providers: [provider], context: { account_id: 'company-b' } });
+    await obs.track('feature_flags_diagnostic', { operation: 'context_update', outcome: 'success', account_id: 'company-b' });
+    expect(provider.track).not.toHaveBeenCalled();
+    finishInit();
+    await init;
+    expect(provider.track.mock.calls[0][1]).toMatchObject({ account_id: 'company-a' });
+    expect(provider.track.mock.calls[1][1]).toMatchObject({ account_id: 'company-b' });
+  });
+
+  it('bounds early flag events to the latest hundred', async () => {
+    const obs = createObservability();
+    const provider = makeProvider();
+    for (let i = 0; i < 150; i += 1) await obs.track('feature_flags_diagnostic', { operation: 'context_update', outcome: 'success', durationMs: i });
+    await obs.initObservability({ providers: [provider] });
+    expect(provider.track).toHaveBeenCalledTimes(100);
+    expect(provider.track.mock.calls[0][1].durationMs).toBe(50);
+  });
+
+  it('replays only the latest pending account and company before exposures', async () => {
+    const obs = createObservability();
+    const calls = [];
+    const provider = makeProvider('test', {
+      identify: vi.fn(async id => { calls.push(['identify', id]); }),
+      group: vi.fn(async (key, id) => { calls.push(['group', id]); }),
+      track: vi.fn(async name => { calls.push(['track', name]); }),
+    });
+    await obs.identify('old-account');
+    await obs.identify('current-account');
+    await obs.group('account_id', 'old-company');
+    await obs.group('account_id', 'current-company');
+    await obs.track('feature_flag_evaluated', { flagKey: 'sample', enabled: true });
+    await obs.initObservability({ providers: [provider] });
+    expect(calls).toEqual([['identify', 'current-account'], ['group', 'current-company'], ['track', 'feature_flag_evaluated']]);
+  });
+
+  it('clears pending identity, exposures and RUM evaluations on logout before initialization', async () => {
+    const obs = createObservability();
+    const provider = makeProvider('test', { addFeatureFlagEvaluation: vi.fn() });
+    await obs.identify('old-account');
+    await obs.group('account_id', 'old-company');
+    await obs.track('feature_flag_evaluated', { flagKey: 'sample', enabled: true });
+    await obs.addFeatureFlagEvaluation('sample', true);
+    await obs.reset();
+    await obs.initObservability({ providers: [provider] });
+    expect(provider.identify).not.toHaveBeenCalled();
+    expect(provider.group).not.toHaveBeenCalled();
+    expect(provider.track).not.toHaveBeenCalled();
+    expect(provider.addFeatureFlagEvaluation).not.toHaveBeenCalled();
+  });
+
+  it('does not restore old company grouping when logout races pending identity replay', async () => {
+    let finishIdentity;
+    const obs = createObservability();
+    const provider = makeProvider('test', {
+      identify: vi.fn(() => new Promise(resolve => { finishIdentity = resolve; })),
+      reset: vi.fn(),
+    });
+    await obs.identify('old-account');
+    await obs.group('account_id', 'old-company');
+    await obs.track('feature_flag_evaluated', { flagKey: 'sample', enabled: true });
+    const init = obs.initObservability({ providers: [provider] });
+    await vi.waitFor(() => expect(provider.identify).toHaveBeenCalled());
+    await obs.reset();
+    finishIdentity();
+    await init;
+    expect(provider.group).not.toHaveBeenCalled();
+    expect(provider.track).not.toHaveBeenCalled();
+    expect(provider.reset).toHaveBeenCalled();
+  });
+
+  it('keeps buffered flag events behind the gateway kill switch', async () => {
+    const obs = createObservability();
+    const provider = makeProvider('datadog');
+    await obs.track('feature_flag_evaluated', { flagKey: 'sample', enabled: true });
+    await obs.initObservability({ providers: [provider], disabled: true });
+    expect(provider.track).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('buffered flag event occurrence time', () => {
+  it('keeps the time at evaluation instead of the later replay time', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-11-04T12:00:00Z'));
+      const obs = createObservability();
+      const provider = makeProvider();
+      await obs.track('feature_flag_evaluated', { flagKey: 'sample', enabled: true });
+      vi.setSystemTime(new Date('2026-11-04T12:00:10Z'));
+      await obs.initObservability({ providers: [provider] });
+      expect(provider.track.mock.calls[0][1].timestamp).toBe('2026-11-04T12:00:00.000Z');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

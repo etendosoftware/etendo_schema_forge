@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/lib/flags/flag-exposure.js
+// @covers tools/app-shell/src/lib/flags/diagnostics.js
 /**
  * Flag exposure reporting (ETP-4686).
  *
@@ -26,6 +28,7 @@ import {
 } from '../flag-exposure.js';
 import { buildObservabilityEvent, OBSERVABILITY_EVENTS } from '../../observability/events.js';
 import { sanitizeEventProperties } from '../../observability/payload.js';
+import { reportFlagDiagnostic } from '../diagnostics.js';
 
 function hookContext({ flagKey = 'sample-flag', provider = 'in-memory', targetingKey = 'ada' } = {}) {
   return {
@@ -317,5 +320,72 @@ describe('createFlagExposureHook — never disturbs evaluation', () => {
     expect(result).toBeUndefined();
     expect(trackImpl).toHaveBeenCalledTimes(1);
     resolveTrack?.();
+  });
+});
+
+
+describe('account and company scoped exposure telemetry', () => {
+  it('reports the same flag again for a new company or account, without exporting the targeting email', () => {
+    const trackImpl = vi.fn();
+    const hook = createFlagExposureHook({ trackImpl, rumEvaluationImpl: vi.fn() });
+    const ctx = (accountId, clientId) => ({ ...hookContext(), context: { accountId, clientId, targetingKey: 'private@example.test' } });
+    hook.after(ctx('a', 'company-a'), details(true));
+    hook.after(ctx('a', 'company-a'), details(true));
+    hook.after(ctx('a', 'company-b'), details(true));
+    hook.after(ctx('b', 'company-b'), details(true));
+    expect(trackImpl).toHaveBeenCalledTimes(3);
+    expect(trackImpl.mock.calls.map(([, p]) => [p.username, p.account_id])).toEqual([
+      ['a', 'company-a'], ['a', 'company-b'], ['b', 'company-b'],
+    ]);
+    expect(JSON.stringify(trackImpl.mock.calls)).not.toContain('private@example.test');
+  });
+
+  it('omits email targeting identity when an opaque account ID is unavailable', () => {
+    expect(buildExposureProperties(hookContext({ targetingKey: 'private@example.test' }), details(true)).username).toBeUndefined();
+  });
+
+  it('reports finite numeric flags using value while preserving boolean enabled', () => {
+    const trackImpl = vi.fn();
+    const rumEvaluationImpl = vi.fn();
+    const hook = createFlagExposureHook({ trackImpl, rumEvaluationImpl });
+    hook.after(hookContext({ flagKey: 'import-batch-size' }), { value: 20, reason: 'STATIC' });
+    hook.after(hookContext({ flagKey: 'import-batch-size' }), { value: Infinity });
+    expect(trackImpl).toHaveBeenCalledTimes(1);
+    expect(trackImpl).toHaveBeenCalledWith('feature_flag_evaluated', expect.objectContaining({ value: 20, reason: 'STATIC' }));
+    expect(trackImpl.mock.calls[0][1]).not.toHaveProperty('enabled');
+    expect(rumEvaluationImpl).toHaveBeenCalledWith('import_batch_size', 20);
+  });
+
+  it('reports an evaluation error once per identity and excludes telemetry kill switches', () => {
+    const diagnosticImpl = vi.fn();
+    const hook = createFlagExposureHook({ diagnosticImpl });
+    hook.error(hookContext({ provider: 'datadog' }), new Error('private URL'));
+    hook.error(hookContext({ provider: 'datadog' }), new Error('private URL'));
+    hook.error(hookContext({ flagKey: 'telemetry-kill-datadog' }), new Error('private URL'));
+    expect(diagnosticImpl).toHaveBeenCalledTimes(1);
+    expect(diagnosticImpl).toHaveBeenCalledWith(expect.objectContaining({ operation: 'flag_evaluation', outcome: 'error', reason: 'provider_error' }));
+    expect(JSON.stringify(diagnosticImpl.mock.calls)).not.toContain('private URL');
+  });
+});
+
+describe('feature flag diagnostic payload boundary', () => {
+  it('emits only bounded operational labels and tenant identifiers', () => {
+    const tracker = vi.fn();
+    reportFlagDiagnostic({ operation: 'configuration_fetch', outcome: 'success', provider: 'datadog',
+      durationMs: 25, account_id: 'company-a', reason: 'network_error', source: 'remote',
+      username: 'private@example.test', accountId: 'private-id', url: 'https://private', token: 'secret' }, tracker);
+    expect(tracker).toHaveBeenCalledWith('feature_flags_diagnostic', {
+      operation: 'configuration_fetch', outcome: 'success', provider: 'datadog', durationMs: 25,
+      account_id: 'company-a', reason: 'network_error', source: 'remote',
+    });
+  });
+
+  it('ignores arbitrary diagnostic labels and never throws for a failed reporter', async () => {
+    const tracker = vi.fn();
+    reportFlagDiagnostic({ operation: 'private@example.test', outcome: 'error' }, tracker);
+    expect(tracker).not.toHaveBeenCalled();
+    expect(() => reportFlagDiagnostic({ operation: 'context_update', outcome: 'error' }, () => { throw new Error('offline'); })).not.toThrow();
+    reportFlagDiagnostic({ operation: 'context_update', outcome: 'error', reason: 'private@example.test' }, () => Promise.reject(new Error('offline')));
+    await Promise.resolve();
   });
 });

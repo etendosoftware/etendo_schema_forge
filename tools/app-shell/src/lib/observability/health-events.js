@@ -27,7 +27,7 @@ export async function trackSessionStarted({ username, clientId, clientName } = {
   // that call was removed entirely from the survey/session flow as part of the
   // ETP-4352 GDPR remediation and must stay gone; setFeatureFlagContext is a local
   // OpenFeature evaluation-context update, unrelated to Mixpanel identity tracking.
-  setFeatureFlagContext({ username, clientId });
+  await setFeatureFlagContext({ username, clientId });
   if (clientId) {
     void group('account_id', clientId);
     const clientNameValue = clientName || getSessionIdentity().clientName;
