@@ -55,6 +55,74 @@ const BUILDING_NAME_MAX_LENGTH = 35;
 // for the input's placeholder, not for this composed value).
 const EMPTY_BUILDING_NUMBER_FALLBACK = 's/n';
 
+/**
+ * Resolves the `buildingNumber` save value (ETP-5806 follow-up): structured mode only, and
+ * an empty Number is persisted as "s/n" ONLY once a street is present (matching the composed
+ * preview); with no street yet, an empty Number stays null rather than forcing the fallback.
+ */
+function resolveBuildingNumberForSave(structuredAddressEnabled, form) {
+    if (!structuredAddressEnabled) return null;
+    const hasStreet = (form.streetName || '').trim() !== '';
+    if (hasStreet) return form.buildingNumber.trim() || EMPTY_BUILDING_NUMBER_FALLBACK;
+    return form.buildingNumber.trim() || null;
+}
+
+// ETP-5806 follow-up — the resulting-address preview badge has exactly 3 states (legacy / auto /
+// complete); keyed lookup instead of nested ternaries so adding a state never means touching 4
+// near-identical conditionals at once.
+const ADDRESS_PREVIEW_BADGE_BY_STATE = {
+    legacy: {
+        key: 'addressPreviewLegacyBadge',
+        color: 'var(--status-neutral-fg)',
+        background: 'var(--status-neutral-bg)',
+        border: 'var(--status-neutral-border)',
+    },
+    complete: {
+        key: 'addressPreviewCompleteBadge',
+        color: 'var(--status-success-fg)',
+        background: 'var(--status-success-bg)',
+        border: 'var(--status-success-border)',
+    },
+    auto: {
+        key: 'addressPreviewAutoBadge',
+        color: 'var(--status-info-fg)',
+        background: 'var(--status-info-bg)',
+        border: 'var(--status-info-border)',
+    },
+};
+
+/**
+ * One row of the legacy-address banner's "old text" readout (ETP-5806 follow-up): a sub-label,
+ * a locked pill with the truncated value, and a copy button. `testId` is reused as the base for
+ * the copy button's id (`${testId}-copy`) — callers pass the existing
+ * `location-legacy-banner-address{1,2}` ids unchanged.
+ */
+function LegacyAddressLineRow({ label, value, testId }) {
+    return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', flexShrink: 0, minWidth: 140 }}>
+                {label}
+            </span>
+            <span
+                data-testid={testId}
+                style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '2px 10px', borderRadius: 9999,
+                    border: '1px solid hsl(var(--border-subtle))',
+                    background: 'hsl(var(--card))', fontSize: 12, color: 'hsl(var(--foreground))',
+                    maxWidth: '100%', minWidth: 0, overflow: 'hidden',
+                }}
+            >
+                <Lock size={12} style={{ color: 'hsl(var(--muted-foreground))', flexShrink: 0 }} data-testid="Lock__927831" />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {value}
+                </span>
+            </span>
+            <CopyButton value={value} data-testid={`${testId}-copy`} />
+        </div>
+    );
+}
+
 /** Concatenates two parts with `sep` only when BOTH are non-empty — mirrors Java's `append`. */
 function appendPart(base, sep, part) {
     if (!base) return part;
@@ -1129,9 +1197,7 @@ export default function LocationEditorModal({
             // ETP-5806 follow-up — Number is optional; an empty one is persisted as "s/n"
             // (see EMPTY_BUILDING_NUMBER_FALLBACK / composeAddressLines) so the stored value
             // matches what the preview showed, rather than persisting an empty string.
-            buildingNumber: structuredAddressEnabled
-                ? ((form.streetName || '').trim() ? (form.buildingNumber.trim() || EMPTY_BUILDING_NUMBER_FALLBACK) : (form.buildingNumber.trim() || null))
-                : null,
+            buildingNumber: resolveBuildingNumberForSave(structuredAddressEnabled, form),
             buildingName: structuredAddressEnabled ? (form.buildingName.trim() || null) : null,
             postalCode: form.postalCode || null,
             cityName: form.city || null,
@@ -1353,59 +1419,17 @@ export default function LocationEditorModal({
                                             <X size={14} style={{ color: 'hsl(var(--text-disabled))' }} data-testid="X__location-legacy-banner-dismiss" />
                                         </button>
                                     </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <span
-                                            style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', flexShrink: 0, minWidth: 140 }}
-                                        >
-                                            {ui('legacyAddressOldTextLabel')}
-                                        </span>
-                                        <span
-                                            data-testid="location-legacy-banner-address1"
-                                            style={{
-                                                display: 'inline-flex', alignItems: 'center', gap: 6,
-                                                padding: '2px 10px', borderRadius: 9999,
-                                                border: '1px solid hsl(var(--border-subtle))',
-                                                background: 'hsl(var(--card))', fontSize: 12, color: 'hsl(var(--foreground))',
-                                                maxWidth: '100%', minWidth: 0, overflow: 'hidden',
-                                            }}
-                                        >
-                                            <Lock size={12} style={{ color: 'hsl(var(--muted-foreground))', flexShrink: 0 }} data-testid="Lock__927831" />
-                                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                {form.address}
-                                            </span>
-                                        </span>
-                                        <CopyButton
-                                            value={form.address}
-                                            data-testid="location-legacy-banner-address1-copy"
-                                        />
-                                    </div>
+                                    <LegacyAddressLineRow
+                                        label={ui('legacyAddressOldTextLabel')}
+                                        value={form.address}
+                                        testId="location-legacy-banner-address1"
+                                    />
                                     {Boolean(form.address2) && (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                            <span
-                                                style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', flexShrink: 0, minWidth: 140 }}
-                                            >
-                                                {ui('legacyAddressOldTextLabel2')}
-                                            </span>
-                                            <span
-                                                data-testid="location-legacy-banner-address2"
-                                                style={{
-                                                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                                                    padding: '2px 10px', borderRadius: 9999,
-                                                    border: '1px solid hsl(var(--border-subtle))',
-                                                    background: 'hsl(var(--card))', fontSize: 12, color: 'hsl(var(--foreground))',
-                                                    maxWidth: '100%', minWidth: 0, overflow: 'hidden',
-                                                }}
-                                            >
-                                                <Lock size={12} style={{ color: 'hsl(var(--muted-foreground))', flexShrink: 0 }} data-testid="Lock__927831" />
-                                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                    {form.address2}
-                                                </span>
-                                            </span>
-                                            <CopyButton
-                                                value={form.address2}
-                                                data-testid="location-legacy-banner-address2-copy"
-                                            />
-                                        </div>
+                                        <LegacyAddressLineRow
+                                            label={ui('legacyAddressOldTextLabel2')}
+                                            value={form.address2}
+                                            testId="location-legacy-banner-address2"
+                                        />
                                     )}
                                 </div>
                             )}
@@ -1464,18 +1488,16 @@ export default function LocationEditorModal({
                                 const showingLegacyPreview = isLegacyAddress && !composedAddress.address1;
                                 const line1 = showingLegacyPreview ? (form.address || '') : composedAddress.address1;
                                 const line2 = showingLegacyPreview ? (form.address2 || '') : composedAddress.address2;
-                                const badgeKey = showingLegacyPreview
-                                    ? 'addressPreviewLegacyBadge'
-                                    : (composedAddress.address1 ? 'addressPreviewCompleteBadge' : 'addressPreviewAutoBadge');
-                                const badgeColor = showingLegacyPreview
-                                    ? 'var(--status-neutral-fg)'
-                                    : (composedAddress.address1 ? 'var(--status-success-fg)' : 'var(--status-info-fg)');
-                                const badgeBackground = showingLegacyPreview
-                                    ? 'var(--status-neutral-bg)'
-                                    : (composedAddress.address1 ? 'var(--status-success-bg)' : 'var(--status-info-bg)');
-                                const badgeBorder = showingLegacyPreview
-                                    ? 'var(--status-neutral-border)'
-                                    : (composedAddress.address1 ? 'var(--status-success-border)' : 'var(--status-info-border)');
+                                let addressPreviewState;
+                                if (showingLegacyPreview) addressPreviewState = 'legacy';
+                                else if (composedAddress.address1) addressPreviewState = 'complete';
+                                else addressPreviewState = 'auto';
+                                const {
+                                    key: badgeKey,
+                                    color: badgeColor,
+                                    background: badgeBackground,
+                                    border: badgeBorder,
+                                } = ADDRESS_PREVIEW_BADGE_BY_STATE[addressPreviewState];
                                 return (
                             <div>
                                 <div
