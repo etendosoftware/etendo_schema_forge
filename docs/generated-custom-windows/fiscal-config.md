@@ -92,7 +92,7 @@ Changing the territory in either the main wizard screen or the manual screen res
 
 ## Change SIF (switching the active fiscal system)
 
-Once an organization has a live fiscal configuration, the window lets the user **change the active SIF** — for example to move from Verifactu to SII+TBAI, or simply to leave the organization with no active fiscal system. The change is intentionally destructive-looking but non-destructive: the outgoing configuration is **deactivated and kept as a trace, never deleted**.
+Once an organization has a live fiscal configuration, the window lets the user **change the active SIF** — for example to move from Verifactu to SII+TBAI, or simply to leave the organization with no active fiscal system. What happens to the outgoing configuration depends on whether it was ever used (smart deactivation, ETP-4785 — `AbstractSmartDeactivationHandler` and its three subclasses in com.etendoerp.go): if **no invoice was ever sent through it** since its adoption date (or it has no adoption date), the row is **deleted**; if invoices were sent, it is **deactivated and kept as a trace** (audit trail). Either way the organization is left without that active system.
 
 ### One active config per org (data model)
 
@@ -118,7 +118,7 @@ canChangeSif = !mockOverride && orgId && CONFIGURED_PROFILES.includes(effectiveP
 
 ### Confirm dialog and deactivation
 
-Clicking the button opens `ChangeSifDialog` (`data-testid="ChangeSifDialog__content"`). On **Confirm** (`fiscal.changeSif.confirm`, "Deactivate and change"), the dialog deactivates each config record the active profile spans, using the **same NEO save path the section forms use for edits** — a `PUT` to `/{spec}/{entity}/{recordId}` with body `{ active: false }` (NEO writes `isactive='N'`). The row is retained as a trace; nothing is deleted.
+Clicking the button opens `ChangeSifDialog` (`data-testid="ChangeSifDialog__content"`). On **Confirm** (`fiscal.changeSif.confirm`, "Deactivate and change"), the dialog deactivates each config record the active profile spans, using the **same NEO save path the section forms use for edits** — a `PUT` to `/{spec}/{entity}/{recordId}` with body `{ active: false }` The backend then applies the smart deactivation: the row is **deleted** when no invoice was sent through it since its adoption date (SII `aeatsii_facturas`, TicketBAI `c_invoice.em_tbai_issent`, VERI*FACTU invoices from `in_vfactu_system`), and only **deactivated** (`isactive='N'`, kept as a trace) when there were — the answer is then `{"deleted": true}` instead of the record. The auto-send schedule of SII/TicketBAI is removed in both cases. VERI*FACTU refuses the change while completed invoices are still pending submission (`ETVFAC_cfg_verifactu_block`).
 
 `getSystemsToDeactivate(profile)` in `fiscalConfig.utils.js` maps the profile to the systems that must be deactivated:
 
@@ -133,11 +133,11 @@ On success the dialog closes and calls `onChanged` → `refetch`; with no active
 
 ### sii+tbai — two-step deactivation and partial failure
 
-A combined `sii+tbai` profile spans two rows, deactivated **sequentially**. By design there is **no rollback**: if the second PUT fails after the first succeeded, the first system stays deactivated (e.g. `sii+tbai` degrades to `tbai`-only). No data is corrupted — a row is only flagged inactive — and the state is fully recoverable. In that case the dialog shows `fiscal.changeSif.err.partial` (`data-testid="ChangeSifDialog__error"`), naming which system(s) were already deactivated and instructing the user to **re-open the dialog to finish deactivating the rest**. Rollback is intentionally out of scope because the partial state is rare and self-recoverable.
+A combined `sii+tbai` profile spans two rows, deactivated **sequentially**. By design there is **no rollback**: if the second PUT fails after the first succeeded, the first system stays deactivated (e.g. `sii+tbai` degrades to `tbai`-only). No data is corrupted — each row is deleted or flagged inactive exactly as a single deactivation would — and the state is fully recoverable. In that case the dialog shows `fiscal.changeSif.err.partial` (`data-testid="ChangeSifDialog__error"`), naming which system(s) were already deactivated and instructing the user to **re-open the dialog to finish deactivating the rest**. Rollback is intentionally out of scope because the partial state is rare and self-recoverable.
 
 ### Wizard reappearance
 
-Leaving the wizard without choosing a system is a **valid "no active SIF" state** — an org may legitimately carry only inactive trace rows. Picking and configuring a SIF from the wizard creates a new active config (possibly from a different SIF family than the one deactivated). Because the trigger enforces one active row per org per system, the new active config coexists cleanly with the old trace rows.
+Leaving the wizard without choosing a system is a **valid "no active SIF" state** — an org may legitimately carry only inactive trace rows (or none, when the deactivated configurations were never used and were deleted). Picking and configuring a SIF from the wizard creates a new active config (possibly from a different SIF family than the one deactivated). Because the trigger enforces one active row per org per system, the new active config coexists cleanly with the old trace rows.
 
 **Freeze after confirming (fixed in ETP-5831, pre-existing).** Confirming "Cambiar SIF" used to
 leave `pointer-events: none` on `<body>`: the wizard appeared but nothing responded until a full

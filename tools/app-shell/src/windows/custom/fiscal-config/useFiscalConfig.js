@@ -160,7 +160,9 @@ export function useFiscalConfig(orgId, apiBaseUrl) {
    * backend's `configureFiscalSystem` action (ETP-6053) — the same call, rules and records as the
    * wizard and agents. No territory is sent: the server takes the existing TicketBAI's, derives
    * every SII value from it, and refuses (in the request language) what the wizard would refuse.
-   * Returns the created record. Throws with the server's message on refusal.
+   * Returns the created record and puts it in this hook's state (records + profile), so whatever
+   * derives from them — page title, "Estado" panel — shows the combined configuration at once.
+   * Throws with the server's message on refusal.
    *
    * @param {'sii'|'tbai'} system
    * @param {string} orgId
@@ -169,7 +171,18 @@ export function useFiscalConfig(orgId, apiBaseUrl) {
   async function createComplementary(system, orgId) {
     const outcome = await configureFiscalSystem(apiFetch, orgId, { system: system.toUpperCase() });
     const records = await fetchCreatedRecords(apiFetch, outcome?.created);
-    return records[system] ?? null;
+    const created = records[system] ?? null;
+    // The record is stored and active from this moment, so the configuration IS the combined
+    // one now: put it in the state and re-detect the profile, as a reload would. Without this the
+    // title and the "Estado" panel kept showing the single system until the page was reloaded
+    // (ETP-6053). Not a refetch: that would flip `loading` and unmount the tab being edited.
+    if (created) {
+      setState(s => {
+        const next = { ...s, [`${system}Record`]: created };
+        return { ...next, profile: detectProfile(next.siiRecord, next.tbaiRecord, next.verifactuRecord) };
+      });
+    }
+    return created;
   }
 
   return { ...state, refetch: load, createComplementary };
