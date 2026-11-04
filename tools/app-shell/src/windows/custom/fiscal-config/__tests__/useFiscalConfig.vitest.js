@@ -224,69 +224,106 @@ describe('earliestCutoverDate', () => {
   });
 });
 
-// Runs fn with process.env.TZ forced (same pattern as shared/__tests__/fiscalTargets.test.js),
-// so an east-of-UTC case is exercised whatever the host timezone is. Awaits async fns.
-async function withTimezone(tz, fn) {
-  const previous = process.env.TZ;
-  process.env.TZ = tz;
-  try {
-    return await fn();
-  } finally {
-    if (previous === undefined) delete process.env.TZ;
-    else process.env.TZ = previous;
-  }
-}
-
-// 00:30 on 2026-10-09 in Europe/Madrid (CEST, UTC+2). The UTC day is still 2026-10-08,
-// so the old `toISOString().slice(0, 10)` returned yesterday here.
-const MADRID_0030 = new Date('2026-10-08T22:30:00.000Z');
-
+// ETP-6053 — "Añadir SII" no longer builds a record in JS: it calls the organization's
+// configureFiscalSystem action with the system only (the server takes TicketBAI's territory and
+// derives every SII value), then reads the created record back.
 describe('useFiscalConfig — createComplementary', () => {
+  const ACTION = '/organization/organization/org-1/action/configureFiscalSystem';
+
+  function jsonResponse(body, { ok = true, status = 200 } = {}) {
+    return Promise.resolve({
+      ok,
+      status,
+      statusText: ok ? 'OK' : 'Conflict',
+      json: () => Promise.resolve(body),
+      text: () => Promise.resolve(JSON.stringify(body)),
+    });
+  }
+
+  let actionAnswer;
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(detectProfile).mockReturnValue('tbai');
-    mockApiFetch.mockImplementation(() => makeSuccessResponse({ id: 'rec-1' }));
+    actionAnswer = () => jsonResponse({
+      response: { data: { system: 'SII+TBAI', territory: 'alava', created: [{ system: 'SII', spec: 'sii-config', entity: 'siiConfiguration', id: 'sii-new' }] } },
+    });
+    mockApiFetch.mockImplementation((path) => {
+      if (path.includes('/action/configureFiscalSystem')) return actionAnswer();
+      if (path === '/sii-config/siiConfiguration/sii-new') {
+        return jsonResponse({ response: { data: [{ id: 'sii-new', acogidaAlSII: 'Y', taxtype: 'IVA' }] } });
+      }
+      return makeSuccessResponse({ id: 'rec-1' });
+    });
     vi.mocked(useApiFetch).mockReturnValue(mockApiFetch);
   });
 
-  function postBody() {
-    const post = mockApiFetch.mock.calls.find(([, opts]) => opts?.method === 'POST');
-    return { path: post[0], body: JSON.parse(post[1].body) };
+  function actionCall() {
+    return mockApiFetch.mock.calls.find(([path]) => path.includes('/action/configureFiscalSystem'));
   }
 
-  it('stamps the SII adoption date with the Madrid day at 00:30 Madrid time', async () => {
-    await withTimezone('Europe/Madrid', async () => {
-      vi.useFakeTimers({ toFake: ['Date'] });
-      try {
-        vi.setSystemTime(MADRID_0030);
-        expect(new Date().toISOString().slice(0, 10)).toBe('2026-10-08');
-        const { result } = renderHook(() => useFiscalConfig('org-1', '/api'));
-        await waitFor(() => expect(result.current.loading).toBe(false));
-
-        await result.current.createComplementary('sii', 'org-1');
-
-        const { path, body } = postBody();
-        expect(path).toBe('/sii-config/siiConfiguration');
-        expect(body).toMatchObject({
-          adOrgId: 'org-1',
-          acogidaAlSII: 'Y',
-          fechaAcogidaSII: '2026-10-09',
-          monitordate: '2026-10-09',
-        });
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-  });
-
-  it('posts only the org for a complementary TBAI record', async () => {
+  async function renderLoaded() {
     const { result } = renderHook(() => useFiscalConfig('org-1', '/api'));
     await waitFor(() => expect(result.current.loading).toBe(false));
+    return result;
+  }
 
-    await result.current.createComplementary('tbai', 'org-1');
+  it('POSTs {system: "SII"} with no territory to the configureFiscalSystem action', async () => {
+    const result = await renderLoaded();
 
-    const { path, body } = postBody();
-    expect(path).toBe('/tbai-config/header');
-    expect(body).toEqual({ adOrgId: 'org-1' });
+    await result.current.createComplementary('sii', 'org-1');
+
+    const [path, opts] = actionCall();
+    expect(path).toBe(ACTION);
+    expect(opts.method).toBe('POST');
+    expect(JSON.parse(opts.body)).toEqual({ system: 'SII' });
+  });
+
+  it('never POSTs a config record directly (no complementary POST to sii-config)', async () => {
+    const result = await renderLoaded();
+
+    await result.current.createComplementary('sii', 'org-1');
+
+    const posts = mockApiFetch.mock.calls.filter(([, opts]) => opts?.method === 'POST');
+    expect(posts).toHaveLength(1);
+    expect(posts[0][0]).toBe(ACTION);
+  });
+
+  it('returns the created SII record as read back from sii-config', async () => {
+    const result = await renderLoaded();
+
+    const created = await result.current.createComplementary('sii', 'org-1');
+
+    expect(created).toEqual({ id: 'sii-new', acogidaAlSII: 'Y', taxtype: 'IVA' });
+  });
+
+  it('upper-cases the system it sends (tbai → TBAI)', async () => {
+    actionAnswer = () => jsonResponse({
+      response: { data: { created: [{ system: 'TBAI', id: 'tbai-new' }] } },
+    });
+    const result = await renderLoaded();
+
+    const created = await result.current.createComplementary('tbai', 'org-1');
+
+    expect(JSON.parse(actionCall()[1].body)).toEqual({ system: 'TBAI' });
+    // The read-back answers the default record; what matters is it is keyed by the asked system.
+    expect(created).toEqual({ id: 'rec-1' });
+  });
+
+  it('returns null when the action created no record of the asked system', async () => {
+    actionAnswer = () => jsonResponse({ response: { data: { created: [] } } });
+    const result = await renderLoaded();
+
+    await expect(result.current.createComplementary('sii', 'org-1')).resolves.toBeNull();
+  });
+
+  it('throws with the server message when the action refuses', async () => {
+    actionAnswer = () => jsonResponse(
+      { error: { message: 'Ya hay un SIF activo', status: 409 } },
+      { ok: false, status: 409 },
+    );
+    const result = await renderLoaded();
+
+    await expect(result.current.createComplementary('sii', 'org-1')).rejects.toThrow('Ya hay un SIF activo');
   });
 });

@@ -1,14 +1,25 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-config/FiscalConfigPage.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-config/FiscalStatusSummary.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-config/fiscalCatalog.js
+// @covers tools/app-shell/src/windows/custom/fiscal-config/fiscalConfig.utils.js
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import React from 'react';
 
 // --- Mocks ----------------------------------------------------------------
 
+// `ui()` returns the key; a test that must see an interpolated value (a server message inside a
+// translated sentence) turns `withParams` on, and `ui()` then appends the params' values.
+const i18nMode = vi.hoisted(() => ({ withParams: false }));
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key, params) => (i18nMode.withParams && params ? `${key} ${Object.values(params).join(' ')}` : key),
   useLocaleSwitch: () => ({ locale: 'es_ES' }),
+}));
+
+// ETP-6053 — the territory × system rules (and so the "Estado" territory) come from the backend
+// catalog; useFiscalCatalog has its own suite. `catalogState.value` is what the hook returns.
+const catalogState = vi.hoisted(() => ({ value: null }));
+vi.mock('../useFiscalCatalog.js', () => ({
+  useFiscalCatalog: vi.fn(() => catalogState.value),
 }));
 
 // ETP-5395 Fix 3: FiscalConfigPage is now gated by useWindowAccess — default to 'full' so
@@ -269,8 +280,15 @@ import { useNavigate } from 'react-router-dom';
 import { hasUnsavedChanges, saveUnsavedChanges } from '@/lib/unsavedChanges.js';
 import { deriveConfiguredStatus, buildConfiguredStatusRows } from '../FiscalStatusSummary.jsx';
 import { buildTerritories, buildSystems } from '../fiscalCatalog.js';
+import { useFiscalCatalog } from '../useFiscalCatalog.js';
+import { FISCAL_SYSTEM_CATALOG } from './fiscalSystemCatalog.fixture.js';
 
 // --- Helpers --------------------------------------------------------------
+
+beforeEach(() => {
+  catalogState.value = { catalog: FISCAL_SYSTEM_CATALOG, error: null, loading: false };
+  i18nMode.withParams = false;
+});
 
 const BASE_PROPS = {
   token: 'test-token',
@@ -601,6 +619,54 @@ describe('FiscalConfigPage — profile: tbai', () => {
     await waitFor(() => {
       expect(createComplementaryMock).toHaveBeenCalledWith('sii', 'org-1');
     });
+  });
+
+  // ETP-6053 — createComplementary calls the configureFiscalSystem action and throws the server's
+  // own message on refusal; the page shows it inside the "could not add" banner.
+  it('shows the backend refusal message in the error banner when "Add SII" is refused', async () => {
+    i18nMode.withParams = true;
+    const createComplementaryMock = vi.fn().mockRejectedValue(new Error('El modo prueba está forzado: no se puede activar SII.'));
+    vi.mocked(useFiscalConfig).mockReturnValue({
+      loading: false,
+      error: null,
+      profile: 'tbai',
+      siiRecord: null,
+      tbaiRecord: { id: 'tbai-1' },
+      verifactuRecord: null,
+      refetch: vi.fn(),
+      createComplementary: createComplementaryMock,
+    });
+    renderPage();
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__actionsMenu'));
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__addComplementary'));
+
+    const banner = await screen.findByText(
+      'fiscal.addComplementary.err.createFailed El modo prueba está forzado: no se puede activar SII.',
+    );
+    expect(banner).toBeInTheDocument();
+    // Refused: no SII section was mounted and the layout stays TicketBAI-only.
+    expect(screen.queryByTestId('sii-section')).not.toBeInTheDocument();
+    expect(screen.getByTestId('tbai-section')).toBeInTheDocument();
+  });
+
+  it('closes the "Add SII" error banner with its dismiss button', async () => {
+    vi.mocked(useFiscalConfig).mockReturnValue({
+      loading: false,
+      error: null,
+      profile: 'tbai',
+      siiRecord: null,
+      tbaiRecord: { id: 'tbai-1' },
+      verifactuRecord: null,
+      refetch: vi.fn(),
+      createComplementary: vi.fn().mockRejectedValue(new Error('refused')),
+    });
+    renderPage();
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__actionsMenu'));
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__addComplementary'));
+
+    const banner = await screen.findByText('fiscal.addComplementary.err.createFailed');
+    fireEvent.click(banner.parentElement.querySelector('button'));
+    expect(screen.queryByText('fiscal.addComplementary.err.createFailed')).not.toBeInTheDocument();
   });
 });
 
@@ -1452,6 +1518,46 @@ describe('FiscalConfigPage — "Estado" status panel on load (ETP-5831 B)', () =
     for (const row of absent) expect(screen.queryByTestId(`FiscalStatusSummary__row-${row}`)).not.toBeInTheDocument();
   });
 
+  // ETP-6053 — the territory is read from the records through the backend catalog.
+  it('reads the catalog for the selected organization', () => {
+    mockConfig({ profile: 'sii', siiRecord: SII_REC });
+    renderPage();
+    expect(useFiscalCatalog).toHaveBeenCalledWith('/api', 'org-1');
+  });
+
+  it.each([
+    ['tbai', { tbaiRecord: { ...TBAI_REC, etsgSifTerritory: 'ARABA' } }, 'alava'],
+    ['tbai', { tbaiRecord: { ...TBAI_REC, etsgSifTerritory: 'BIZKAIA' } }, 'bizkaia'],
+    ['sii', { siiRecord: { ...SII_REC, taxtype: 'IGIC' } }, 'canarias'],
+    ['sii', { siiRecord: SII_REC }, 'baleares'],
+    ['sii-navarra', { siiRecord: { ...SII_REC, navarra: 'Y' } }, 'navarra'],
+    ['verifactu', { verifactuRecord: { id: 'vf-1', tAXType: '02' } }, 'ceuta'],
+  ])('resolves the %s territory from the records via the catalog (%j → %s)', (profile, records, territoryId) => {
+    mockConfig({ profile, ...records });
+    renderPage();
+    const label = territoryId === 'baleares' ? 'fiscal.territory.espania' : `fiscal.territory.${territoryId}`;
+    expect(screen.getByTestId('FiscalStatusSummary__row-territory')).toHaveTextContent(label);
+  });
+
+  it('follows the catalog it is given: a TicketBAI value mapped elsewhere names that territory', () => {
+    catalogState.value = {
+      catalog: { territories: [{ territory: 'bizkaia', systems: ['TBAI'], sii: null, tbaiTerritory: 'GIPUZKOA', verifactuTaxType: null }] },
+      error: null,
+      loading: false,
+    };
+    mockConfig({ profile: 'tbai', tbaiRecord: TBAI_REC });
+    renderPage();
+    expect(screen.getByTestId('FiscalStatusSummary__row-territory')).toHaveTextContent('fiscal.territory.bizkaia');
+  });
+
+  it('shows the panel without a territory row while the catalog is not available', () => {
+    catalogState.value = { catalog: null, error: 'Could not read the fiscal system catalog.', loading: false };
+    mockConfig({ profile: 'tbai', tbaiRecord: TBAI_REC });
+    renderPage();
+    expect(screen.getByTestId('FiscalStatusSummary__panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('FiscalStatusSummary__row-territory')).not.toBeInTheDocument();
+  });
+
   it('marks a TicketBAI-only territory without SII as "No aplica" for the national operation', () => {
     mockConfig({ profile: 'tbai', tbaiRecord: TBAI_REC });
     renderPage();
@@ -1530,9 +1636,11 @@ describe('FiscalStatusSummary — deriveConfiguredStatus / buildConfiguredStatus
   const rowsFor = (status) => buildConfiguredStatusRows({ status, territories, systems, cert: null, locale: 'es_ES', ui });
   const rowKeys = (rows) => rows.map(r => r.key);
   const rowValue = (rows, key) => rows.find(r => r.key === key)?.value;
+  // ETP-6053 — the territory comes from the backend catalog (fiscalSystemCatalog).
+  const catalog = FISCAL_SYSTEM_CATALOG;
 
   it('maps sii-navarra to the Navarra territory with no national-operation row', () => {
-    const status = deriveConfiguredStatus({ profile: 'sii-navarra', siiRecord: { id: 'sii-1', navarra: 'Y' } });
+    const status = deriveConfiguredStatus({ profile: 'sii-navarra', siiRecord: { id: 'sii-1', navarra: 'Y', taxtype: 'IVA' }, catalog });
     expect(status.system).toBe('SII');
     expect(status.territoryId).toBe('navarra');
     const rows = rowsFor(status);
@@ -1542,8 +1650,8 @@ describe('FiscalStatusSummary — deriveConfiguredStatus / buildConfiguredStatus
   });
 
   it('maps SII with IGIC to Canarias, and SII with IVA to the common territory', () => {
-    expect(deriveConfiguredStatus({ profile: 'sii', siiRecord: { id: 'sii-1', taxtype: 'igic' } }).territoryId).toBe('canarias');
-    expect(deriveConfiguredStatus({ profile: 'sii', siiRecord: { id: 'sii-1', taxtype: 'IVA' } }).territoryId).toBe('baleares');
+    expect(deriveConfiguredStatus({ profile: 'sii', siiRecord: { id: 'sii-1', taxtype: 'igic' }, catalog }).territoryId).toBe('canarias');
+    expect(deriveConfiguredStatus({ profile: 'sii', siiRecord: { id: 'sii-1', taxtype: 'IVA' }, catalog }).territoryId).toBe('baleares');
   });
 
   it.each([
@@ -1551,18 +1659,37 @@ describe('FiscalStatusSummary — deriveConfiguredStatus / buildConfiguredStatus
     ['02', 'ceuta'],
     ['03', 'canarias'],
   ])('maps VERI*FACTU tax type %s to %s', (tAXType, territoryId) => {
-    const status = deriveConfiguredStatus({ profile: 'verifactu', verifactuRecord: { id: 'ver-1', tAXType } });
+    const status = deriveConfiguredStatus({ profile: 'verifactu', verifactuRecord: { id: 'ver-1', tAXType }, catalog });
     expect(status.system).toBe('VERIFACTU');
     expect(status.territoryId).toBe(territoryId);
     expect(rowValue(rowsFor(status), 'tax')).toBe(`fiscal.territory.${territoryId}.systemLong`);
   });
 
   it('leaves the territory null for an unknown VERI*FACTU tax type and falls back to the system long name', () => {
-    const status = deriveConfiguredStatus({ profile: 'verifactu', verifactuRecord: { id: 'ver-1', tAXType: '99' } });
+    const status = deriveConfiguredStatus({ profile: 'verifactu', verifactuRecord: { id: 'ver-1', tAXType: '99' }, catalog });
     expect(status.territoryId).toBeNull();
     const rows = rowsFor(status);
     expect(rowKeys(rows)).not.toContain('territory');
     expect(rowValue(rows, 'tax')).toBe('fiscal.system.verifactu.long');
+  });
+
+  it('maps the TicketBAI territory before the SII flags for SII + TicketBAI', () => {
+    const status = deriveConfiguredStatus({
+      profile: 'sii+tbai',
+      siiRecord: { id: 'sii-1', taxtype: 'IVA' },
+      tbaiRecord: { id: 'tbai-1', etsgSifTerritory: 'ARABA' },
+      catalog,
+    });
+    expect(status.system).toBe('SII+TBAI');
+    expect(status.territoryId).toBe('alava');
+    expect(status.nationalSii).toBe(true);
+  });
+
+  it('leaves the territory null without a catalog (not loaded or failed)', () => {
+    const status = deriveConfiguredStatus({ profile: 'tbai', tbaiRecord: { id: 'tbai-1', etsgSifTerritory: 'ARABA' } });
+    expect(status.system).toBe('TBAI');
+    expect(status.territoryId).toBeNull();
+    expect(rowKeys(rowsFor(status))).not.toContain('territory');
   });
 
   it('has no "activated" row when the records carry no creation date', () => {
