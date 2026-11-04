@@ -42,3 +42,22 @@ export function formatPeriodRange(periodValue, today = new Date()) {
   const opts = { day: '2-digit', month: '2-digit', year: 'numeric' };
   return `${formatCalendarDate(start, 'en-GB', opts)} – ${formatCalendarDate(end, 'en-GB', opts)}`;
 }
+
+// Key DetailView gives the Movements custom tab (`customTabKey({ key: 'movements' })`): the value the
+// "Ver movimientos" link sends as `location.state.openSecondaryTab` (ETP-5908).
+export const MOVEMENTS_TAB_KEY = 'custom:movements';
+
+// Panel period -> Movements tab period preset (1:1; the tab opts into the 3/6 month presets).
+const PERIOD_TO_MOVEMENTS_PRESET = Object.freeze(
+  Object.fromEntries(SIDEBAR_PERIOD_OPTIONS.map(o => [o.value, `last${o.months}m`])),
+);
+
+/** '3M' | '6M' | '12M' -> 'last3m' | 'last6m' | 'last12m'; any other value -> null. */
+export function periodToMovementsPreset(periodValue) {
+  return PERIOD_TO_MOVEMENTS_PRESET[periodValue] ?? null;
+}
+
+/** True when `presetId` is one the side panel link can request. */
+export function isMovementsPresetRequest(presetId) {
+  return Object.values(PERIOD_TO_MOVEMENTS_PRESET).includes(presetId);
+}

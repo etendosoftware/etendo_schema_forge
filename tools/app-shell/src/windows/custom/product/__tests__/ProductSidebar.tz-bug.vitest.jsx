@@ -35,6 +35,7 @@ vi.mock('@/i18n', () => ({
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
+  useLocation: () => ({ pathname: '/product/prod-1', search: '', hash: '', state: null }),
 }));
 
 vi.mock('@/lib/dashboardNumberFormat', () => ({
@@ -50,11 +51,15 @@ vi.mock('@/components/ui/dialog', () => ({
 }));
 
 vi.mock('lucide-react', () => ({
-  ExternalLink: (props) => <span data-testid="icon-external" {...props} />,
-  Maximize2: (props) => <span data-testid="icon-maximize" {...props} />,
-  Box: (props) => <span data-testid="icon-box" {...props} />,
-  Calendar: (props) => <span data-testid="icon-calendar" {...props} />,
-  ChevronDown: (props) => <span data-testid="icon-chevron" {...props} />,
+  ExternalLink: (props) => <span {...props} data-testid="icon-external" />,
+  Maximize2: (props) => <span {...props} data-testid="icon-maximize" />,
+  Box: (props) => <span {...props} data-testid="icon-box" />,
+  Calendar: (props) => <span {...props} data-testid="icon-calendar" />,
+  ChevronDown: (props) => <span {...props} data-testid="icon-chevron" />,
+  PanelRightClose: (props) => <span {...props} data-testid="icon-panel-close" />,
+  PanelRightOpen: (props) => <span {...props} data-testid="icon-panel-open" />,
+  Package: (props) => <span {...props} data-testid="icon-package" />,
+  Warehouse: (props) => <span {...props} data-testid="icon-warehouse" />,
 }));
 
 // --- Import under test ---
@@ -98,7 +103,7 @@ describe('ProductSidebar — ETP-4850 date off-by-one bug', () => {
 
   beforeEach(() => {
     // Pin "now" to a fixed, midday instant so the fixed 3-month window
-    // (period switched to 3M below; the panel opens on 12M) is deterministic: months = ['2026-06','2026-07','2026-08'].
+    // (period switched to 3M below; the panel opens on 12M) is deterministic: months = ['2026-05','2026-06','2026-07','2026-08'] (range start month through current month).
     vi.setSystemTime(new Date(2026, 7, 15, 12, 0, 0));
     // jsdom does not implement layout, so getBoundingClientRect() would
     // otherwise return all zeros — mock it to match the inline chart's
@@ -114,7 +119,7 @@ describe('ProductSidebar — ETP-4850 date off-by-one bug', () => {
     vi.restoreAllMocks();
   });
 
-  it('buckets a transaction dated 2026-08-01 into the August point, not July', async () => {
+  it('places a transaction dated 2026-08-01 on 1 Aug, not on 31 Jul', async () => {
     const stockRows = [
       { storageBin: 'BIN1', 'warehouse$_identifier': 'WH-A', quantityOnHand: 20, reservedQty: 0 },
     ];
@@ -136,22 +141,20 @@ describe('ProductSidebar — ETP-4850 date off-by-one bug', () => {
     const svg = container.querySelector('svg');
     expect(svg).toBeTruthy();
 
-    // Inline chart geometry: W=340, PAD_X=36, PAD_R=8, pointCount=3 months
-    // (June, July, August) → xStep = (340-36-8)/(3-1) = 148.
-    // Hover at index 1 ("July"): mouseX = PAD_X + 1*xStep = 184.
-    fireEvent.mouseMove(svg, { clientX: 184, clientY: 50 });
+    // Inline chart geometry: W=340, PAD_X=46, PAD_R=8 -> plot width 286, date scale 15 May .. 15 Aug
+    // (92 days). The x of a day is 46 + (days since 15 May) / 92 * 286.
+    const xOf = (offsetDays) => 46 + (offsetDays / 92) * 286;
 
-    // The per-series tooltip value sits inside a <g><text> (structurally
-    // distinct from the Y-axis tick labels, which are direct <svg> children).
-    const tooltipMonthLabel = screen.getByText("Jul '26");
-    expect(tooltipMonthLabel).toBeInTheDocument();
+    // 31 Jul is offset 77: the balance is still 0 (the 2026-08-01 movement must not slip into July).
+    fireEvent.mouseMove(svg, { clientX: xOf(77), clientY: 50 });
+    expect(screen.getByText("31 Jul 2026")).toBeInTheDocument();
+    const rowValue = () => container.querySelector('[data-testid="StockChartTooltipRow"] text:last-child').textContent;
+    // NOTE: exact string equality: a substring match would also pass against the buggy "20".
+    expect(rowValue()).toBe('0 stockUnitAbbr');
 
-    const tooltipValue = container.querySelector('svg g text');
-    // Correct expected behavior: the 2026-08-01 transaction lands in the
-    // August bucket, so July's cumulative value is still 0 (unaffected).
-    // NOTE: exact string equality is required here — toHaveTextContent('0')
-    // does a substring match, which would also (wrongly) pass against the
-    // buggy "20" value.
-    expect(tooltipValue.textContent).toBe('0');
+    // 1 Aug is offset 78: the movement lands on that very day.
+    fireEvent.mouseMove(svg, { clientX: xOf(78), clientY: 50 });
+    expect(screen.getByText('1 Ago 2026')).toBeInTheDocument();
+    expect(rowValue()).toBe('20 stockUnitAbbr');
   });
 });
