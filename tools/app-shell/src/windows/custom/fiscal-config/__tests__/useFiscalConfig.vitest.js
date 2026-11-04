@@ -1,5 +1,5 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-config/useFiscalConfig.js
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 
 // --- Mocks ----------------------------------------------------------------
 
@@ -325,5 +325,98 @@ describe('useFiscalConfig — createComplementary', () => {
     const result = await renderLoaded();
 
     await expect(result.current.createComplementary('sii', 'org-1')).rejects.toThrow('Ya hay un SIF activo');
+  });
+});
+
+// After "Añadir SII" the hook's own state must already be the combined configuration: the page
+// title and the "Estado" panel derive from `profile` / `siiRecord`, and they kept showing
+// TicketBAI until a reload. Starts from a TicketBAI-only organization with the real profile
+// detection, so the profile is derived from the records exactly as on a load.
+describe('useFiscalConfig — createComplementary updates the state (SII added to TicketBAI)', () => {
+  const TBAI_REC = { id: 'tbai-1', etsgSifTerritory: 'GIPUZKOA' };
+  const SII_REC = { id: 'sii-new', acogidaAlSII: 'Y', taxtype: 'IVA' };
+
+  function jsonResponse(body, { ok = true, status = 200 } = {}) {
+    return Promise.resolve({
+      ok,
+      status,
+      json: () => Promise.resolve(body),
+      text: () => Promise.resolve(JSON.stringify(body)),
+    });
+  }
+
+  let actionAnswer;
+  let defaultProfileImpl;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    defaultProfileImpl = vi.mocked(detectProfile).getMockImplementation();
+    const actual = await vi.importActual('../fiscalConfig.utils.js');
+    vi.mocked(detectProfile).mockImplementation(actual.detectProfile);
+    actionAnswer = () => jsonResponse({
+      response: { data: { system: 'SII+TBAI', created: [{ system: 'SII', id: 'sii-new' }] } },
+    });
+    mockApiFetch.mockImplementation((path) => {
+      if (path.includes('/action/configureFiscalSystem')) return actionAnswer();
+      if (path === '/sii-config/siiConfiguration/sii-new') return jsonResponse({ response: { data: [SII_REC] } });
+      if (path.startsWith('/tbai-config/header?')) return jsonResponse({ response: { data: [TBAI_REC] } });
+      return jsonResponse({ response: { data: [] } });
+    });
+    vi.mocked(useApiFetch).mockReturnValue(mockApiFetch);
+  });
+
+  afterEach(() => {
+    vi.mocked(detectProfile).mockImplementation(defaultProfileImpl);
+  });
+
+  const listReads = () => mockApiFetch.mock.calls.filter(([path]) => /\?organization=/.test(path)).length;
+
+  async function renderTbaiOnly() {
+    const { result } = renderHook(() => useFiscalConfig('org-1', '/api'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.profile).toBe('tbai');
+    expect(result.current.siiRecord).toBeNull();
+    return result;
+  }
+
+  it('exposes profile "sii+tbai" and the created siiRecord once the call resolves, with no reload', async () => {
+    const result = await renderTbaiOnly();
+    const readsBefore = listReads();
+
+    await act(() => result.current.createComplementary('sii', 'org-1'));
+
+    expect(result.current.profile).toBe('sii+tbai');
+    expect(result.current.siiRecord).toEqual(SII_REC);
+    expect(result.current.tbaiRecord).toEqual(TBAI_REC);
+    expect(result.current.loading).toBe(false);
+    // Not a refetch: no list was read again.
+    expect(listReads()).toBe(readsBefore);
+  });
+
+  it('leaves the profile and the records untouched when the action refuses', async () => {
+    actionAnswer = () => jsonResponse(
+      { error: { message: 'Ya hay un SIF activo', status: 409 } },
+      { ok: false, status: 409 },
+    );
+    const result = await renderTbaiOnly();
+
+    await act(async () => {
+      await expect(result.current.createComplementary('sii', 'org-1')).rejects.toThrow('Ya hay un SIF activo');
+    });
+
+    expect(result.current.profile).toBe('tbai');
+    expect(result.current.siiRecord).toBeNull();
+    expect(result.current.tbaiRecord).toEqual(TBAI_REC);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('leaves the state untouched when the action created no SII record', async () => {
+    actionAnswer = () => jsonResponse({ response: { data: { created: [] } } });
+    const result = await renderTbaiOnly();
+
+    await act(() => result.current.createComplementary('sii', 'org-1'));
+
+    expect(result.current.profile).toBe('tbai');
+    expect(result.current.siiRecord).toBeNull();
   });
 });

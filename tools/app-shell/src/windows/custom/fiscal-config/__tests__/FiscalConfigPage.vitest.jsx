@@ -2,6 +2,7 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-config/FiscalStatusSummary.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-config/fiscalCatalog.js
 // @covers tools/app-shell/src/windows/custom/fiscal-config/fiscalConfig.utils.js
+// @covers tools/app-shell/src/windows/custom/fiscal-config/useFiscalConfig.js
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import React from 'react';
 
@@ -41,6 +42,13 @@ vi.mock('react-router-dom', () => ({
 
 vi.mock('@/components/layout/PageMetaContext', () => ({
   useSetPageMeta: vi.fn(),
+}));
+
+// The real useFiscalConfig runs in one suite ("Añadir SII" with the real hook); its requests go
+// through this stable apiFetch, never a network.
+const mockApiFetch = vi.hoisted(() => vi.fn());
+vi.mock('@/auth/useApiFetch.js', () => ({
+  useApiFetch: () => mockApiFetch,
 }));
 
 vi.mock('../useFiscalConfig.js', () => ({
@@ -282,6 +290,8 @@ import { deriveConfiguredStatus, buildConfiguredStatusRows } from '../FiscalStat
 import { buildTerritories, buildSystems } from '../fiscalCatalog.js';
 import { useFiscalCatalog } from '../useFiscalCatalog.js';
 import { FISCAL_SYSTEM_CATALOG } from './fiscalSystemCatalog.fixture.js';
+import { useSetPageMeta } from '@/components/layout/PageMetaContext';
+import { detectProfile } from '../fiscalConfig.utils.js';
 
 // --- Helpers --------------------------------------------------------------
 
@@ -667,6 +677,118 @@ describe('FiscalConfigPage — profile: tbai', () => {
     const banner = await screen.findByText('fiscal.addComplementary.err.createFailed');
     fireEvent.click(banner.parentElement.querySelector('button'));
     expect(screen.queryByText('fiscal.addComplementary.err.createFailed')).not.toBeInTheDocument();
+  });
+});
+
+// ETP-6053 — after "Añadir SII" the page title and the "Estado" panel kept saying TicketBAI until
+// a reload. Here the REAL useFiscalConfig drives the page (only apiFetch is mocked), from a
+// TicketBAI-only Gipuzkoa organization: the action creates the SII record, the read-back returns
+// it, and the page must show the combined configuration at once.
+describe('FiscalConfigPage — "Añadir SII" with the real useFiscalConfig', () => {
+  const TBAI = { id: 'tbai-1', productionEnv: 'Y', etsgSifTerritory: 'GIPUZKOA', created: '2026-11-02T11:08:00+01:00' };
+  const SII = { id: 'sii-new', entornoDeProduccin: 'Y', guipuzcoa: 'Y', taxtype: 'IVA', created: '2026-11-04T10:00:00+01:00' };
+
+  function jsonResponse(body, { ok = true, status = 200 } = {}) {
+    return Promise.resolve({
+      ok, status, json: () => Promise.resolve(body), text: () => Promise.resolve(JSON.stringify(body)),
+    });
+  }
+
+  let actionAnswer;
+  let previousConfigImpl;
+  let previousProfileImpl;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    i18nMode.withParams = true;
+    certExpiry.value = { daysLeft: 200, validTo: '2027-07-01' };
+    vi.mocked(useAuth).mockReturnValue({
+      selectedOrg: { id: 'org-1', name: 'Test Org' },
+      selectedRole: { orgList: [{ id: 'org-1', name: 'Test Org' }] },
+      selectOrg: vi.fn(),
+    });
+    vi.mocked(useWindowAccess).mockReturnValue('full');
+    vi.mocked(useFiscalTestMode).mockReturnValue({ forceTestMode: false });
+    previousConfigImpl = vi.mocked(useFiscalConfig).getMockImplementation();
+    previousProfileImpl = vi.mocked(detectProfile).getMockImplementation();
+    const realHook = await vi.importActual('../useFiscalConfig.js');
+    const realUtils = await vi.importActual('../fiscalConfig.utils.js');
+    vi.mocked(useFiscalConfig).mockImplementation(realHook.useFiscalConfig);
+    vi.mocked(detectProfile).mockImplementation(realUtils.detectProfile);
+
+    actionAnswer = () => jsonResponse({
+      response: { data: { system: 'SII+TBAI', territory: 'gipuzkoa', created: [{ system: 'SII', id: 'sii-new' }] } },
+    });
+    mockApiFetch.mockReset();
+    mockApiFetch.mockImplementation((path) => {
+      if (path.includes('/action/configureFiscalSystem')) return actionAnswer();
+      if (path === '/sii-config/siiConfiguration/sii-new') return jsonResponse({ response: { data: [SII] } });
+      if (path.startsWith('/tbai-config/header?')) return jsonResponse({ response: { data: [TBAI] } });
+      return jsonResponse({ response: { data: [] } });
+    });
+  });
+
+  afterEach(() => {
+    vi.mocked(useFiscalConfig).mockImplementation(previousConfigImpl);
+    vi.mocked(detectProfile).mockImplementation(previousProfileImpl);
+  });
+
+  const lastPageTitle = () => vi.mocked(useSetPageMeta).mock.calls.at(-1)[0].title;
+  const listReads = () => mockApiFetch.mock.calls.filter(([path]) => /\?organization=/.test(path)).length;
+
+  async function renderTbaiOnly() {
+    renderPage();
+    await screen.findByTestId('tbai-section');
+    expect(lastPageTitle()).toBe('fiscal.title TBAI');
+    expect(screen.getByTestId('FiscalStatusSummary__title')).toHaveTextContent('fiscal.status.active TicketBAI');
+    expect(screen.getByTestId('FiscalStatusSummary__row-national')).toHaveTextContent('fiscal.onboarding.applied.national.na');
+  }
+
+  function clickAddSii() {
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__actionsMenu'));
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__addComplementary'));
+  }
+
+  it('shows SII + TicketBAI in the title and the "Estado" panel as soon as the call resolves', async () => {
+    await renderTbaiOnly();
+    const readsBefore = listReads();
+
+    clickAddSii();
+
+    await waitFor(() => expect(lastPageTitle()).toBe('fiscal.title SII + TBAI'));
+    expect(screen.getByTestId('FiscalStatusSummary__title')).toHaveTextContent('fiscal.status.active SII + TicketBAI');
+    expect(screen.getByTestId('FiscalStatusSummary__row-national')).toHaveTextContent('fiscal.onboarding.applied.national.active');
+    // No reload: the lists were not read again and no loading skeleton replaced the form.
+    expect(listReads()).toBe(readsBefore);
+    expect(screen.queryByTestId('skeleton')).not.toBeInTheDocument();
+    expect(screen.getByTestId('tab-bar')).toBeInTheDocument();
+  });
+
+  it('no longer offers "Añadir SII" once SII has been added', async () => {
+    await renderTbaiOnly();
+
+    clickAddSii();
+
+    await waitFor(() => expect(lastPageTitle()).toBe('fiscal.title SII + TBAI'));
+    const menu = screen.queryByTestId('FiscalConfigPage__actionsMenu');
+    if (menu) fireEvent.click(menu);
+    expect(screen.queryByTestId('FiscalConfigPage__addComplementary')).not.toBeInTheDocument();
+  });
+
+  it('keeps the TicketBAI title and panel when the action refuses', async () => {
+    actionAnswer = () => jsonResponse(
+      { error: { message: 'Ya hay un SIF activo', status: 409 } },
+      { ok: false, status: 409 },
+    );
+    await renderTbaiOnly();
+
+    clickAddSii();
+
+    await screen.findByText('fiscal.addComplementary.err.createFailed Ya hay un SIF activo');
+    expect(lastPageTitle()).toBe('fiscal.title TBAI');
+    expect(screen.getByTestId('FiscalStatusSummary__title')).toHaveTextContent('fiscal.status.active TicketBAI');
+    expect(screen.getByTestId('FiscalStatusSummary__row-national')).toHaveTextContent('fiscal.onboarding.applied.national.na');
+    expect(screen.queryByTestId('sii-section')).not.toBeInTheDocument();
   });
 });
 
