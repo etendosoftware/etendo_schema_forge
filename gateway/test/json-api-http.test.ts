@@ -85,6 +85,50 @@ test('upstreamException keeps the code and message of a 503 service_unavailable'
   assert.equal(errors[0].detail, 'Service temporarily unavailable');
 });
 
+test('upstreamException answers a blocked tenant (402) with tenant_blocked and no internal billing state', () => {
+  const error = upstreamException(402, {
+    error: { status: 402, code: 'ENVIRONMENT_ACCESS_DENIED', decision: 'DEMO_TRIAL_EXPIRED', message: 'Environment access is not available: DEMO_TRIAL_EXPIRED', hint: 'internal hint' },
+  });
+  assert.equal(error.getStatus(), 402);
+  const { status, errors } = toErrorDocument(error);
+  assert.equal(status, 402);
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0].code, 'tenant_blocked');
+  assert.equal(errors[0].status, '402');
+  assert.match(errors[0].detail ?? '', /suspended/);
+  assert.equal(errors[0].meta, undefined);
+  assert.doesNotMatch(JSON.stringify(errors), /DEMO_TRIAL|ENVIRONMENT|internal hint/i);
+  assert.equal(toErrorDocument(upstreamException(402, null)).errors[0].code, 'tenant_blocked');
+});
+
+test('upstreamException gives a code-less 503 the service_unavailable code', () => {
+  const { status, errors } = toErrorDocument(upstreamException(503, { error: { status: 503, message: 'Service temporarily unavailable' } }));
+  assert.equal(status, 503);
+  assert.equal(errors[0].code, 'service_unavailable');
+});
+
+test('upstreamException turns Etendo UPPER_SNAKE, camelCase, acronym and plain-text codes into public snake_case', () => {
+  const cases: Array<[number, string, string]> = [
+    [403, 'QUOTA_EXCEEDED', 'quota_exceeded'],
+    [422, 'INCOMPLETE_FISCAL_YEAR', 'incomplete_fiscal_year'],
+    [422, 'invoiceLinesWithoutAmount', 'invoice_lines_without_amount'],
+    [409, 'stale_record', 'stale_record'],
+    [422, 'HTTPError', 'http_error'],
+    [422, 'parseHTTPResponse', 'parse_http_response'],
+    [422, 'ISO8601Date', 'iso8601_date'],
+    [404, 'Not Found', 'not_found'],
+    [400, '  -bad request- ', 'bad_request'],
+    // Nothing left after normalizing: the status's own code.
+    [422, '---', 'unprocessable_entity'],
+    // A huge code is capped before normalizing, so it stays fast.
+    [422, 'A'.repeat(100_000), 'a'.repeat(100)],
+  ];
+  for (const [status, upstreamCode, code] of cases) {
+    const { errors } = toErrorDocument(upstreamException(status, { error: { status, code: upstreamCode, message: 'm' } }));
+    assert.equal(errors[0].code, code, upstreamCode);
+  }
+});
+
 test('upstreamException gives a code-less Etendo refusal the code of its status', () => {
   const { errors } = toErrorDocument(upstreamException(400, { error: { status: 400, message: 'Invalid country: ES' } }));
   assert.equal(errors[0].code, 'bad_request');
@@ -115,7 +159,7 @@ test('toErrorDocument renders gateway and Nest exceptions as error documents wit
   });
   assert.deepEqual(toErrorDocument(new ServiceUnavailableException('Authentication service unavailable')), {
     status: 503,
-    errors: [{ status: '503', title: 'Service Unavailable', detail: 'Authentication service unavailable' }],
+    errors: [{ status: '503', code: 'service_unavailable', title: 'Service Unavailable', detail: 'Authentication service unavailable' }],
   });
   const many = toErrorDocument(new BadRequestException({ message: ['a is required', 'b is invalid'] }));
   assert.deepEqual(many.errors.map((error) => error.detail), ['a is required', 'b is invalid']);
