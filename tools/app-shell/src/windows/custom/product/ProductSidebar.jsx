@@ -12,7 +12,7 @@ import { useStockHistory } from './useStockHistory';
 import StockChartTooltip from './StockChartTooltip';
 import StockChartLegend from './StockChartLegend';
 import StockWarehouseList from './StockWarehouseList';
-import { resolveVisible, toggleVisible, isolate, activeHighlight, dimmedOpacity, filterVisibleSeries, useSeriesVisibility } from './stockSeriesVisibility';
+import { resolveVisible, isolate, activeHighlight, dimmedOpacity, filterVisibleSeries, useSeriesVisibility } from './stockSeriesVisibility';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import ProductSidebarCollapsed from './ProductSidebarCollapsed';
 import ViewMovementsLink from './ViewMovementsLink';
