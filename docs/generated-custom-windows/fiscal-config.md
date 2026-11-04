@@ -15,7 +15,7 @@ warning, information, neutral and destructive roles.
 
 ## What this window should allow
 
-- Guide new organizations through fiscal territory selection and system assignment via a 6-screen onboarding wizard.
+- Guide new organizations through fiscal territory selection and system assignment via a 6-screen onboarding wizard (five logical steps plus the skipped screen, see "Wizard screens").
 - Detect which fiscal records already exist and render only the applicable section(s): SII, TBAI, SII+TBAI (combined), or Verifactu.
 - Allow editing of operational fields for each system: fiscal year dates, TBAI certificate upload, and Verifactu editable fields only. (SII submission cadences — `plazoLmiteDeEnvoASII`, `cadenciaEnvoFacturasVentaASII`, `cadenciaEnvoFacturasCompraASII` — are stored in the DB but are no longer exposed in the SiiSection UI; they retain any value set outside the app.)
 - SII's "Authorization registration number" field (`authorizationno`, `SiiSection.jsx`) has `autoComplete="off"` — without it the browser autofilled the field with the logged-in user's saved email — plus a client-side `maxLength={15}` and a `validate()` guard rejecting values over 15 characters, matching the `authorizationno VARCHAR(15)` DB column; the error surfaces via the `fiscal.sii.err.authRegNoTooLong` i18n key (`en_US.json`/`es_ES.json`).
@@ -196,7 +196,7 @@ NEO Headless reads fiscal-config records with `NO_ACTIVE_FILTER=true` (see `NeoC
 
 ## Window-access gate (ETP-5395 Fix 3)
 
-`FiscalConfigPage.jsx` is a fully hand-written custom page, so — despite menu.json carrying this window's own real `AD_Window_ID` (`C1D3A2A017AC4B82B9FEE6F4D2A0C55A`) — it never automatically picked up the generic `useWindowAccess`/`WindowAccessGuard` gate `generate-frontend.js` wires into every generated window, the same class of gap ETP-4658 found and fixed for `financial-account`/`sales-invoice`/etc. Without it, a role with no grant on this window still fired the sii/tbai/verifactu-config fetches, got a correct backend 403 (`"Access denied to spec for current role"`), and `useFiscalConfig.js`'s `fetchAllRows()` HTTP-status-only error message rendered raw ("Failed to load {spec}: HTTP 403" + a Retry button that can never help). Fixed by gating in a thin default-export wrapper (`FiscalConfigPage` → `useWindowAccess` → `WindowAccessGuard` or `FiscalConfigPageContent`): without access the page's hooks never mount, so the doomed config fetches are not even sent. (A first version checked the tier inside the page, after its last hook; moving it out also keeps the page under Sonar's cognitive-complexity limit.) **Not yet applied to `fiscal-monitor`**, whose `useFiscalMonitor.js` reuses this same `fetchAllRows()` helper and has the identical gap (grepped: zero `WindowAccessGuard`/`useWindowAccess` references anywhere in that window's custom directory) — out of scope for this fix since it was not part of the reported symptom, flagged as a follow-up candidate.
+`FiscalConfigPage.jsx` is a fully hand-written custom page, so — despite menu.json carrying this window's own real `AD_Window_ID` (`C1D3A2A017AC4B82B9FEE6F4D2A0C55A`) — it never automatically picked up the generic `useWindowAccess`/`WindowAccessGuard` gate `generate-frontend.js` wires into every generated window, the same class of gap ETP-4658 found and fixed for `financial-account`/`sales-invoice`/etc. Without it, a role with no grant on this window still fired the sii/tbai/verifactu-config fetches, got a correct backend 403 (`"Access denied to spec for current role"`), and `useFiscalConfig.js`'s `fetchAllRows()` HTTP-status-only error message rendered raw ("Failed to load {spec}: HTTP 403" + a Retry button that can never help). Fixed by gating in a thin default-export wrapper (`FiscalConfigPage` → `useWindowAccess` → `WindowAccessGuard` or `FiscalConfigPageContent`): without access the page's hooks never mount, so the doomed config fetches are not even sent. (A first version checked the tier inside the page, after its last hook; moving it out also keeps the page under Sonar's cognitive-complexity limit.) `fiscal-monitor`, whose `useFiscalMonitor.js` reuses the same `fetchAllRows()` helper, had the identical gap and was fixed the same way (`FiscalMonitorPage.jsx`, 2026-09-23; see `docs/feedback.md`).
 
 ## Data model
 
@@ -208,7 +208,7 @@ Three independent NEO Headless entities (one per system):
 | TBAI | `tbai-config` | `header` |
 | Verifactu | `verifactu-config` | `cabeceraDeConfiguraciónVerifactu` |
 
-Records are POST-created during wizard confirmation step and then edited in the detail step. `useFiscalConfig.js` parallelizes the 3 GET fetches and derives the profile client-side. Since the "Change SIF" feature (ETP-4785), each system can hold **at most one active row plus any number of inactive trace rows** per org; the client filters to the active row before resolving the profile (see "Change SIF" → "Active-config resolution").
+Records are created by the backend when the wizard's confirmation step calls `configureFiscalSystem` (see "Activation through the backend (ETP-6053)") and then edited in the detail step. `useFiscalConfig.js` parallelizes the 3 GET fetches and derives the profile client-side. Since the "Change SIF" feature (ETP-4785), each system can hold **at most one active row plus any number of inactive trace rows** per org; the client filters to the active row before resolving the profile (see "Change SIF" → "Active-config resolution").
 
 ## Certificate upload (CertModal + CertSection)
 
@@ -379,7 +379,8 @@ When `forceTestMode` is `true` the window becomes **read-only**:
   `SiiSection` and `TbaiSection` gained the identical `locked` prop and guard so all three
   sections lock the same way.
 - The page-level Save button is disabled (`disabled={saving || !orgId || forceTestMode || !(isDirty || addingComplementary)}` — the last term is the ETP-5831 unsaved-changes rule).
-- The "Add SII"/"Add TBAI" complementary action (`canAddComplementary`) is hidden — creating
+- The "Añadir SII" complementary action (`canAddComplementary`; since ETP-6053 SII is the only
+  system that can be added, and only on a TicketBAI-alone profile) is hidden — creating
   a new active fiscal system record is itself a kind of activation forced-test-mode must block.
 - A warning banner (`data-testid="FiscalConfigPage__testModeBanner"`, same testid on
   `OnboardingWizard__testModeBanner` for the wizard) is shown above the section content.
@@ -582,7 +583,7 @@ The window no longer builds or posts the config records itself. The onboarding w
 |---|---|
 | `GET /sii-config/siiConfiguration/{orgId}/action/fiscalSystemCatalog` (`useFiscalCatalog`) | `systems` per territory: the manual screen's choices (`allowedSystemsFor`) and the SII veto of `resolveSystem` (Ceuta/Melilla → VERI*FACTU). The record values per territory: which territory a stored configuration belongs to (`territoryOfRecords`, the "Estado" panel). A failed read shows a `fiscal.catalog.err.load` banner over the wizard |
 | `POST /sii-config/siiConfiguration/{orgId}/action/configureFiscalSystem` `{system, territory}` | The wizard's "Confirmar": the server validates and creates the records; the window reads them back (`fetchCreatedRecords`) for the detail step |
-| same, `{system: 'SII'}` | "Añadir SII" (`useFiscalConfig.createComplementary(orgId)`, SII only): no territory, the server takes the TicketBAI's |
+| same, `{system: 'SII'}` | "Añadir SII" (`useFiscalConfig.createComplementary(orgId)`, offered only on a TicketBAI-alone profile): no territory, the server takes the TicketBAI's. The created SII record is put straight into the hook's state and the profile re-detected, so the page title and the "Estado" panel show SII + TicketBAI at once — not a refetch, which would flip `loading` and unmount the tab being edited |
 
 **Which access gates them.** Both actions hang off `sii-config`, so NEO gates them on the role's
 access to the **SII Configuration window** — the window this page is gated on (see "Window-access
@@ -633,13 +634,14 @@ creates, and `etendo_delete`) is hidden on `sii-config/siiConfiguration`, `tbai-
 action:
 
 ```
-etendo_action(spec:'organization', entity:'organization', id:'<organizationId>',
+etendo_action(spec:'sii-config', entity:'siiConfiguration', id:'<organizationId>',
               action:'configureFiscalSystem', parameters:{system:'SII+TBAI', territory:'gipuzkoa'})
 ```
 
 On top of the rules above: derived fields stay read-only on `etendo_update` — `tAXType`, and the values this window never edits but the activation sets (SII `acogidaAlSII`, `entornoDeProduccin`, `adjuntarArchivosXML`; TicketBAI `productionEnv`, `uSEAsproductDesc`, `validatePreviousInvoice`), each through a
-field-level `MCP_CONFIG.fields.readOnly` (the window's detail step PUTs them back unchanged over REST,
-where `MCP_CONFIG` does not apply); the certificate is not writable by agents
+field-level `MCP_CONFIG.fields.readOnly` (the window's detail step never changes them over REST,
+where `MCP_CONFIG` does not apply: `SiiSection` PUTs the SII ones back with the record's values,
+`TbaiSection` leaves the TicketBAI ones out of its PUT); the certificate is not writable by agents
 (`organization/certificadoDigital` verbs hidden) and the action warns when the organization has
 none; and "Cambiar SIF" is UI only — an agent changing `active` gets `ETGO_FiscalSifActiveByAgent`.
 
@@ -665,11 +667,11 @@ environment, enrollment dates or submission cadences.
 6a. (ETP-5831) With a `sii+tbai` org, confirm "Certificado digital" appears in both the SII and the TicketBAI tab. Replace the certificate from the TicketBAI tab and confirm the SII tab and the status panel's "Certificado" row show the new expiry date.
 7. Open `/fiscal-config` with an org that has both SII and Verifactu records and confirm the conflict warning renders.
 8. Press "Omitir por ahora" on the territory screen and confirm the skipped screen shows with a "← Volver al asistente" button that returns to territory selection.
-9. Open `/fiscal-config` with an org that has a single active SII (or Verifactu/TBAI) config. Confirm the **"Change SIF"** button appears in the org bar. Press it, confirm the dialog shows the matching permanence notice, press "Deactivate and change", and verify the onboarding wizard reappears (org resolved to `unconfigured`). Query the DB and confirm the old config row still exists with `isactive='N'`.
+9. Open `/fiscal-config` with an org that has a single active SII (or Verifactu/TBAI) config. Confirm the **"Change SIF"** button appears in the org bar. Press it, confirm the dialog shows the matching permanence notice, press "Deactivate and change", and verify the onboarding wizard reappears (org resolved to `unconfigured`). Query the DB: if invoices were sent through the old config, its row still exists with `isactive='N'`; if none were, the row is gone (smart deactivation, see "Change SIF").
 10. Repeat with a `sii+tbai` org and confirm **both** the SII and TBAI rows are deactivated (two-step) and the wizard reappears.
 11. Open `/fiscal-config` with an org that has NO config, or one in a `conflict` state — confirm the "Change SIF" button is NOT shown.
 12. (Verifactu, `isReady=true`) Confirm the Verifactu section fields are locked for editing but the "Change SIF" button still works — the lock does not block the change.
-13. (ETP-5272) With the AD_Preference "Fuerza SII/TicketBAI/VeriFactu a modo prueba" active, open `/fiscal-config` for a configured org and confirm: the `FiscalConfigPage__testModeBanner` warning appears, all section inputs are disabled, the page Save button is disabled, and "Add SII"/"Add TBAI" is absent from the kebab menu — while "Change SIF" (if present) and certificate upload remain usable. Deactivate the preference and confirm the window returns to its normal editable state.
+13. (ETP-5272) With the AD_Preference "Fuerza SII/TicketBAI/VeriFactu a modo prueba" active, open `/fiscal-config` for a configured org and confirm: the `FiscalConfigPage__testModeBanner` warning appears, all section inputs are disabled, the page Save button is disabled, and "Añadir SII" is absent from the kebab menu — while "Change SIF" (if present) and certificate upload remain usable. Deactivate the preference and confirm the window returns to its normal editable state.
 14. (ETP-5272) Simulate a `/sws/neo/fiscal-test-mode` fetch failure (network block or 500 in devtools) and confirm the window stays fully editable — fail-open — while a `console.warn` is logged.
 15. (ETP-5272 follow-up — wizard lock) With the AD_Preference active, open `/fiscal-config` for a brand-new org (no SII/TBAI/Verifactu records) and confirm the onboarding wizard shows the `OnboardingWizard__testModeBanner` warning on every step. Pick a territory and reach the confirm screen — the activate button (`OnboardingWizard__confirmActivateButton`) must be disabled, and clicking it must not create any config record (check the DB / network tab). Deactivate the preference and confirm the same wizard flow now creates the record and reaches the detail step and then the configured page normally.
 
@@ -698,9 +700,10 @@ environment, enrollment dates or submission cadences.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/OnboardingWizard.vitest.jsx` — ETP-5272 follow-up: banner shown/hidden by `forceTestMode`; territory→confirm navigation unaffected (browsing is not blocked); confirm/activate button disabled when locked and enabled when not; `createRecords()` never calls the API when locked; default (`forceTestMode` omitted) behaves as unlocked.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/FiscalConfigPage.vitest.jsx` — ETP-5272 follow-up: `forceTestMode` is forwarded to `OnboardingWizard` as a prop (both `true` and `false`); the page's own `FiscalConfigPage__testModeBanner` correctly does NOT render in the `'unconfigured'` branch (that banner belongs to the configured-profile branch — the wizard renders its own).
 - DB triggers (com.etendoerp.go SIF modules) — `AEATSII_ONE_ACTIVE_CONFIG_TRG`, `TBAI_ONE_ACTIVE_CONFIG_TRG`, `ETVFAC_ONE_ACTIVE_CONFIG_TRG` enforce one *active* config per org (relaxed from one config per org).
-- `cli/test/fiscal-config.utils.test.js` — 92 regression tests covering profile detection, onboarding payloads, contract-specific ids, Verifactu save guards, SII field mapping, CertModal upload flow, and confirmNif flow (all passing).
+- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/fiscalConfig.utils.vitest.js` — the pure helpers: boolean/date normalization, Verifactu tax type and update payload, `allowedSystemsFor` / `territoryOfRecords` against the backend catalog golden, `resolveSystem` (with the allowed-systems veto), `detectProfile`, `getFiscalRecordId`, `mapSiiRecordToForm`, the Change SIF helpers, `parseApiError` and the environment helpers. (It replaced `cli/test/fiscal-config.utils.test.js`; the onboarding-payload cases went with `buildOnboardingPayloads` in ETP-6053 and are covered in com.etendoerp.go.)
 - `tools/app-shell/src/windows/custom/fiscal-config/useFiscalConfig.js` — parallel fetcher hook for the 3 config records; filters inactive trace rows (`activeOrNull`) before `detectProfile` so a "Change SIF" leftover never masks the live config. `fetchAllRows` and `earliestCutoverDate` (previously private; the latter returns the earliest row's raw value since ETP-5700) are now **exported** so other fiscal windows reuse the same "all config rows, earliest-ever cutover" mechanism instead of duplicating it — first reused by `fiscal-monitor/useFiscalMonitor.js` for the TBAI monitor's earliest-cutover gate (ETP-5229, item #13; see `fiscal-monitor.md`).
-- `cli/test/useFiscalConfig.test.js` — 16 tests covering source guards (named export, Promise.all, entity constants, detectProfile wiring), `fetchRecord` URL construction via `useApiFetch` (no manual Authorization header), response parsing (empty/missing data), and error handling.
+- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/useFiscalConfig.vitest.js` — the hook without an org, a successful fetch, API errors and non-ok answers, `refetch`, `earliestCutoverDate`, and `createComplementary` ("Añadir SII" through `configureFiscalSystem`, and the state/profile update to SII + TicketBAI without a refetch).
+- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/fiscalSystemApi.vitest.js` / `useFiscalCatalog.vitest.js` / `fiscalSystemCatalog.fixture.vitest.js` — ETP-6053: the catalog read, the `configureFiscalSystem` call, the 403 access denial (`FiscalAccessDeniedError`), `fetchCreatedRecords`, the catalog hook, and the golden file pinned by its SHA-256.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/SiiSection.test.js` — 17 component source-guard tests: forwardRef/`useImperativeHandle`, navarra badge, form fields, PUT endpoint contract, hideSave/hideCert.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/TbaiSection.test.js` — 17 component source-guard tests: enroll date + invoice description validation, PUT endpoint, boolean serialization. Note: `TbaiSection` deliberately excludes `productionEnv`, `uSEAsproductDesc`, and `validatePreviousInvoice` from the PUT body — overriding those fields would silently revert any change the operator made in Etendo Classic (e.g. `productionEnv='N'` for testing). Only the fields owned by the Etendo GO form (enroll date and invoice description) are sent.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/VerifactuSection.test.js` — 18 component source-guard tests: `isLocked` derived from `isReady` (no status badge — removed, lock behavior unaffected), disabled controls when locked, tax type select, absence of the removed `inVfactuSystem` field/enrollment date, PUT payload contract.
