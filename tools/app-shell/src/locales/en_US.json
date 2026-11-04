@@ -21114,7 +21114,7 @@
     "fiscal.actions.menu": "More actions",
     "fiscal.changeSif.action": "Change SIF",
     "fiscal.changeSif.title": "Change fiscal system (SIF)",
-    "fiscal.changeSif.body": "The current fiscal system will be deactivated for this organization. Its configuration is kept as a record and is not deleted. You will then be able to choose a new fiscal system, or leave the organization without an active one.",
+    "fiscal.changeSif.body": "The current fiscal system will be deactivated for this organization. If invoices were already sent with it, its configuration is kept as a record; otherwise it is deleted. You will then be able to choose a new fiscal system, or leave the organization without an active one.",
     "fiscal.changeSif.softWarning": "This may affect your permanence obligations — please verify your situation before continuing.",
     "fiscal.changeSif.notice.title": "Permanence obligations",
     "fiscal.changeSif.notice.sii": "Voluntary SII enrollment carries a one-natural-year permanence. To renounce it you must file form 036 during November of the year prior to the change. Mandatory SII (Large Enterprise, REDEME or VAT group) cannot be renounced while the cause that requires it still holds.",
