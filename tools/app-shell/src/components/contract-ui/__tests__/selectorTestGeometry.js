@@ -3,10 +3,11 @@ import { vi } from 'vitest';
 // jsdom has no layout: a fake one (36px rows, 400px panel) so centring really can succeed or fail.
 export const ROW_H = 36;
 export const PANEL_H = 400;
-export function mockGeometry() {
+// `isPanel` picks the scrollable options panel; the default is the listbox of the combos/popup.
+export function mockGeometry({ isPanel = (el) => el.getAttribute('role') === 'listbox' } = {}) {
   const P = HTMLElement.prototype;
   const scroll = new WeakMap();
-  const isPanel = (el) => el.getAttribute('role') === 'listbox';
+  const panelOf = (el) => { for (let n = el.parentElement; n; n = n.parentElement) if (isPanel(n)) return n; return null; };
   const count = (el) => el.querySelectorAll('[data-option-index]').length;
   const defs = {
     clientHeight: { get() { return isPanel(this) ? Math.min(PANEL_H, count(this) * ROW_H) : 0; } },
@@ -21,7 +22,7 @@ export function mockGeometry() {
   const rect = vi.spyOn(P, 'getBoundingClientRect').mockImplementation(function rectOf() {
     const idx = this.getAttribute('data-option-index');
     if (idx == null) return { top: 0, height: PANEL_H, bottom: PANEL_H, left: 0, right: 100, width: 100 };
-    return { top: Number(idx) * ROW_H - (this.closest('[role=listbox]')?.scrollTop ?? 0), height: ROW_H, bottom: 0, left: 0, right: 0, width: 100 };
+    return { top: Number(idx) * ROW_H - (panelOf(this)?.scrollTop ?? 0), height: ROW_H, bottom: 0, left: 0, right: 0, width: 100 };
   });
   return () => {
     rect.mockRestore();

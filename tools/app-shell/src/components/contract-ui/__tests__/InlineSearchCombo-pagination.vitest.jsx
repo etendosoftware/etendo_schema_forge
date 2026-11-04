@@ -25,7 +25,7 @@ vi.mock('@/i18n', () => ({
 }));
 
 import InlineSearchCombo from '../InlineSearchCombo.jsx';
-import { mockGeometry } from './selectorTestGeometry.js';
+import { mockGeometry, ROW_H, PANEL_H } from './selectorTestGeometry.js';
 
 const FIELD = { key: 'tax' };
 
@@ -607,5 +607,160 @@ describe('InlineSearchCombo — current-selection resolution off the loaded page
     // Only page 0's own rows are on offer.
     expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(3);
     expect(screen.queryByTestId(/inline-add-option-tax-.*-selected-indicator/)).not.toBeInTheDocument();
+  });
+});
+
+// ETP-6103 — a committed value past the first page: the rows stay laid out but invisible under the
+// loading notice until the value is centred; every way out of the walk must release the hold.
+describe('InlineSearchCombo — the hold while locating the committed value (ETP-6103)', () => {
+  const originalFetch = global.fetch;
+  let restoreGeometry;
+  beforeEach(() => { restoreGeometry = mockGeometry(); });
+  afterEach(() => {
+    restoreGeometry();
+    vi.restoreAllMocks();
+    global.fetch = originalFetch;
+  });
+
+  const deferred = () => { let resolve; const promise = new Promise((r) => { resolve = r; }); return { promise, resolve }; };
+  const NOTICE = 'inline-add-options-tax-locating';
+  const optionOf = (id) => screen.getByTestId(`inline-add-option-tax-${id}`);
+  const isHidden = (el) => el.closest('.invisible') !== null;
+  // 300 rows, 100 per page. `onPage(offset)` may return a promise to delay / fail that page.
+  function pagedFetch({ onPage } = {}) {
+    return vi.fn((url) => {
+      const params = new URL(String(url), 'http://test').searchParams;
+      const offset = Number(params.get('offset') || 0);
+      const limit = Number(params.get('limit') || 50);
+      const page = () => jsonOk(makePage(offset, Math.max(0, Math.min(limit, 300 - offset))));
+      return onPage?.(offset, page) ?? page();
+    });
+  }
+  const walkCalls = () => global.fetch.mock.calls.filter(([url]) => new URL(String(url), 'http://test').searchParams.get('offset') === '100');
+  async function openHeld(overrides) {
+    // '98' is among the last rows of the 100-row first page: it cannot be centred until page 2 lands.
+    renderCombo({ value: '98', displayLabel: 'Item-98', options: [], clearOnType: false, ...overrides });
+    fireEvent.click(screen.getByTestId('inline-add-field-tax-chip'));
+    const input = await screen.findByTestId('inline-add-field-tax');
+    await waitFor(() => expect(walkCalls()).toHaveLength(1));
+    return input;
+  }
+
+  it('shows the notice with the rows invisible while locating, then releases them centred', async () => {
+    const page2 = deferred();
+    global.fetch = pagedFetch({ onPage: (offset, page) => (offset === 100 ? page2.promise.then(page) : undefined) });
+    await openHeld();
+
+    expect(screen.getByTestId(NOTICE)).toBeInTheDocument();
+    expect(isHidden(optionOf('98'))).toBe(true);
+
+    page2.resolve();
+    await waitFor(() => expect(screen.queryByTestId(NOTICE)).toBeNull());
+    expect(isHidden(optionOf('98'))).toBe(false);
+    expect(optionOf('98')).toHaveAttribute('aria-selected', 'true');
+    expect(Math.abs(optionOf('98').getBoundingClientRect().top - (PANEL_H - ROW_H) / 2)).toBeLessThan(2);
+  });
+
+  it('releases the hold when the page fails', async () => {
+    const page2 = deferred();
+    global.fetch = pagedFetch({
+      onPage: (offset) => (offset === 100 ? page2.promise.then(() => ({ ok: false, status: 500, json: async () => ({}) })) : undefined),
+    });
+    await openHeld();
+    expect(screen.getByTestId(NOTICE)).toBeInTheDocument();
+
+    page2.resolve();
+    await waitFor(() => expect(screen.queryByTestId(NOTICE)).toBeNull());
+    expect(isHidden(optionOf('98'))).toBe(false);
+  });
+
+  it('leaves no stuck hold when closed and reopened during the hold', async () => {
+    const stale = deferred();
+    let first = true;
+    global.fetch = pagedFetch({
+      onPage: (offset, page) => {
+        if (offset !== 100 || !first) return undefined;
+        first = false;
+        return stale.promise.then(page);
+      },
+    });
+    const input = await openHeld();
+    fireEvent.blur(input);
+    await waitFor(() => expect(screen.queryByTestId('inline-add-options-tax')).toBeNull(), { timeout: 2000 });
+
+    fireEvent.click(screen.getByTestId('inline-add-field-tax-chip'));
+    await screen.findByTestId('inline-add-field-tax');
+    stale.resolve(); // the page of the closed open lands late
+    await waitFor(() => expect(screen.queryByTestId(NOTICE)).toBeNull());
+    expect(isHidden(optionOf('98'))).toBe(false);
+    expect(optionOf('98')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('ends the hold on a key press', async () => {
+    const page2 = deferred();
+    global.fetch = pagedFetch({ onPage: (offset, page) => (offset === 100 ? page2.promise.then(page) : undefined) });
+    const input = await openHeld();
+    expect(screen.getByTestId(NOTICE)).toBeInTheDocument();
+
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    await waitFor(() => expect(screen.queryByTestId(NOTICE)).toBeNull());
+    expect(isHidden(optionOf('98'))).toBe(false);
+    page2.resolve();
+  });
+
+  it('ends the hold when the user types', async () => {
+    const page2 = deferred();
+    global.fetch = pagedFetch({ onPage: (offset, page) => (offset === 100 ? page2.promise.then(page) : undefined) });
+    const input = await openHeld();
+
+    fireEvent.change(input, { target: { value: 'Item' } });
+    await waitFor(() => expect(screen.queryByTestId(NOTICE)).toBeNull());
+    page2.resolve();
+  });
+});
+
+// hasMore: the server's value when present, else judged against the limit that page asked for.
+describe('InlineSearchCombo — hasMore of a page (ETP-6103)', () => {
+  const originalFetch = global.fetch;
+  afterEach(() => { vi.restoreAllMocks(); global.fetch = originalFetch; });
+  const pageOf = (items, hasMore) => Promise.resolve({ ok: true, json: async () => ({ items, ...(hasMore === undefined ? {} : { hasMore }) }) });
+  async function openWith(response) {
+    global.fetch = vi.fn().mockReturnValueOnce(response);
+    const { input } = renderCombo();
+    fireEvent.focus(input);
+    await screen.findAllByTestId(/^inline-add-option-tax-/, {}, { timeout: 1500 });
+  }
+  const moreFooter = () => screen.queryByText('loading');
+
+  it('prefers the server: a full page with hasMore false has no further page', async () => {
+    await openWith(pageOf(makePage(0, 50), false));
+    expect(moreFooter()).toBeNull();
+  });
+
+  it('prefers the server: a short page with hasMore true still has a further page', async () => {
+    await openWith(pageOf(makePage(0, 3), true));
+    expect(moreFooter()).not.toBeNull();
+  });
+
+  it('falls back to items.length >= limit when the server says nothing', async () => {
+    await openWith(pageOf(makePage(0, 50)));
+    expect(moreFooter()).not.toBeNull();
+  });
+
+  it('falls back to no further page for a short page', async () => {
+    await openWith(pageOf(makePage(0, 49)));
+    expect(moreFooter()).toBeNull();
+  });
+
+  it('is false on an empty page even when the server claims hasMore', async () => {
+    global.fetch = vi.fn().mockReturnValue(pageOf([], true));
+    const { input } = renderCombo({ value: '7', displayLabel: 'Item-7', options: [], clearOnType: false });
+    fireEvent.click(screen.getByTestId('inline-add-field-tax-chip'));
+    await screen.findByTestId('inline-add-field-tax');
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 150));
+    const pages = global.fetch.mock.calls.filter(([url]) => !new URL(String(url), 'http://test').searchParams.has('q'));
+    expect(pages).toHaveLength(1);
+    expect(input).toBeNull(); // the chip was shown, not the input, before the click
   });
 });
