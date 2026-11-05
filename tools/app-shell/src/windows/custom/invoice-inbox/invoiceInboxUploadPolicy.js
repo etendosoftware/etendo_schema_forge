@@ -84,7 +84,8 @@ export function selectionWarnings({ blocked, rejected }) {
 export function groupRejectedNames(rejected) {
   const groups = {};
   for (const { file, reason } of rejected ?? []) {
-    (groups[reason] ??= []).push(file.name);
+    groups[reason] ??= [];
+    groups[reason].push(file.name);
   }
   return groups;
 }
