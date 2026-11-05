@@ -577,8 +577,9 @@ test.describe('Sales Invoice — Import from Source Invoice (ETP-4737)', () => {
     // Assertion: the already-imported source line is grayed out / cannot be re-selected.
     await expect(page.getByText(/already imported|ya importado/i)).toBeVisible();
     const checkboxes = page.getByRole('checkbox');
-    // nth(0) = document-level checkbox, nth(1) = line 1 (already imported), nth(2) = line 2.
-    await expect(checkboxes.nth(1)).toBeDisabled();
+    // nth(0) = document-level checkbox, nth(1) = the lines table's master checkbox,
+    // nth(2) = line 1 (already imported), nth(3) = line 2.
+    await expect(checkboxes.nth(2)).toBeDisabled();
 
     // Assertion: the quantity stepper displays a NEGATIVE value (negativeQuantity prop),
     // not a positive magnitude — checked on the selectable line (invoicedQuantity=3 → -3).
@@ -589,7 +590,7 @@ test.describe('Sales Invoice — Import from Source Invoice (ETP-4737)', () => {
     // as the shared clickLastCheckbox() helper) instead of Playwright's actionability
     // click — the Checkbox's 1px visual target is frequently occluded by its own
     // decorative wrapper div, which fails Playwright's pointer-events hit test.
-    await checkboxes.nth(2).evaluate((el) => el.click());
+    await checkboxes.nth(3).evaluate((el) => el.click());
     const importSelectedBtn = page.getByRole('button', { name: /Import.*selected|Importar.*seleccionadas/i });
     await expect(importSelectedBtn).toBeEnabled({ timeout: 3_000 });
     await importSelectedBtn.click();

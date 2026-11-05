@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeftRight, ArrowUpRight, Loader2 } from 'lucide-react';
+import { ArrowUpRight, Loader2 } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useCurrency } from '@/hooks/useCurrency';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { PRODUCT_MOVEMENTS_CAPABILITY, isCapabilityVisible } from '@/lib/capabilityVisibility.js';
-import { formatCurrency, formatGroupedNumber } from '@/lib/formatCurrency.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
+import { formatStockQuantity } from './stockQuantityFormat';
 import { formatCalendarDate } from '@/lib/dateOnly';
 import { getRouterBase } from '@/lib/deploymentBasePath';
 import { DateRangePopover } from '@/components/ui/date-range-popover.jsx';
@@ -15,12 +16,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { SortableHeaderLabel } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
 import { useProductMovementsTabTracking } from './useProductMovementsTabTracking';
+import { useMovementsPeriodRequest } from './useMovementsPeriodRequest';
+import { useRemainingHeight } from './useRemainingHeight';
 import {
   DEFAULT_MOVEMENTS_PERIOD,
   MOVEMENTS_DEFAULT_SORT,
   MOVEMENTS_PAGE_SIZE,
-  buildMovementsCountQuery,
   buildMovementsQuery,
+  formatProcessTime,
   isMovementsSortKey,
   isStorableProduct,
   quantityTone,
@@ -33,6 +36,9 @@ import {
 // pages on the server, which the generic secondary tabs do not do). Rows are M_Transaction; the backend
 // adds the source document (`etgoDocLabel`, `etgoDocWindow`, `etgoDocHeaderId`) and the stock left after
 // each movement (`etgoStockAfter`).
+
+// Opt-in presets of the period filter: they map 1:1 to the side panel's 3M / 6M (12M is a default one).
+const MOVEMENTS_EXTRA_PRESETS = ['last3m', 'last6m'];
 
 const GRID = 'grid grid-cols-[150px_minmax(220px,1.6fr)_minmax(140px,1fr)_100px_150px_130px] items-center gap-x-4';
 const NEAR_BOTTOM_PX = 80;
@@ -55,15 +61,7 @@ const SEGMENT_ACTIVE = { background: 'hsl(var(--card))', color: 'hsl(var(--foreg
 const SEGMENT_IDLE = { color: 'hsl(var(--foreground))', fontWeight: 400 };
 
 const rowsOf = (json) => json?.response?.data ?? json?.data ?? [];
-// NEO's own `totalRows` is only a lower bound on a partial page (the rows returned plus one), so it must
-// not be used as a count. The backend sends the exact total as `etgoTotalRows`; without it there is no
-// counter rather than a wrong one.
 const ARIA_SORT = { asc: 'ascending', desc: 'descending' };
-
-const totalOf = (json) => {
-  const total = json?.response?.etgoTotalRows;
-  return total == null ? Number.NaN : Number(total);
-};
 
 function DocumentLink({ row, label, openInNewTab }) {
   const open = () => {
@@ -89,12 +87,17 @@ function DocumentLink({ row, label, openInNewTab }) {
 function MovementRow({ row, ui, currency }) {
   const { labelKey, tone } = resolveMovementType(row);
   const typeLabel = labelKey ? ui(labelKey) : (row['movementType$_identifier'] ?? row.movementType ?? '—');
+  const time = formatProcessTime(row.etgoProcessTime);
   const hasDocument = row.etgoDocWindow && row.etgoDocHeaderId && row.etgoDocLabel;
-  const formatQuantity = (n) => formatGroupedNumber(n, { maximumFractionDigits: 2 });
 
   return (
     <div role="row" className={`${GRID} border-b border-border/50 px-3 py-3 text-sm`} data-testid="product-movements-row">
-      <span role="cell" className="font-medium tabular-nums">{formatCalendarDate(row.movementDate)}</span>
+      {time ? (
+        <div role="cell" className="flex flex-col items-start gap-1">
+          <span className="font-medium tabular-nums">{formatCalendarDate(row.movementDate)}</span>
+          <span className="text-xs tabular-nums text-muted-foreground" data-testid="product-movements-time">{time}</span>
+        </div>
+      ) : <span role="cell" className="font-medium tabular-nums">{formatCalendarDate(row.movementDate)}</span>}
       <div role="cell" className="flex flex-col items-start gap-1">
         <Tag variant={TAG_VARIANT[tone]} data-testid="Tag__763719">{typeLabel}</Tag>
         {hasDocument ? <DocumentLink
@@ -105,33 +108,22 @@ function MovementRow({ row, ui, currency }) {
       </div>
       <span role="cell" className="truncate">{row['etgoWarehouse$_identifier'] ?? '—'}</span>
       <span role="cell" className="text-right font-semibold tabular-nums" style={{ color: SIGN_COLOR[quantityTone(row.movementQuantity)] }}>
-        {signedQuantity(row.movementQuantity, formatQuantity)}
+        {signedQuantity(row.movementQuantity, formatStockQuantity)}
       </span>
       <span role="cell" className="text-right tabular-nums">{formatCurrency(currency, row.transactionCost)}</span>
       <span role="cell" className="text-right font-semibold tabular-nums">
-        {row.etgoStockAfter == null ? '—' : formatQuantity(row.etgoStockAfter)}
+        {row.etgoStockAfter == null ? '—' : formatStockQuantity(row.etgoStockAfter)}
       </span>
     </div>
   );
 }
 
-/** The empty state: a product that never moved, or filters that match none of its movements. */
-function EmptyMovements({ ui, noMovementsAtAll }) {
-  if (!noMovementsAtAll) {
-    return <p className="p-10 text-center text-sm text-muted-foreground" data-testid="product-movements-no-results">{ui('productMovementsNoResults')}</p>;
-  }
-  return (
-    <div className="flex flex-col items-center gap-1 p-10 text-center" data-testid="product-movements-empty">
-      <ArrowLeftRight
-        className="mb-2 h-8 w-8 text-muted-foreground"
-        data-testid="ArrowLeftRight__763719" />
-      <p className="font-semibold">{ui('noStockMovements')}</p>
-      <p className="max-w-sm text-sm text-muted-foreground">{ui('productMovementsEmptyText')}</p>
-    </div>
-  );
+/** The empty state: the filters of the view (the period included) match none of the movements. */
+function EmptyMovements({ ui }) {
+  return <p className="p-10 text-center text-sm text-muted-foreground" data-testid="product-movements-no-results">{ui('productMovementsNoResults')}</p>;
 }
 
-export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onCountChange, onVisibilityChange }) {
+export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onVisibilityChange }) {
   const ui = useUI();
   const apiFetch = useApiFetch(apiBaseUrl);
   const currency = useCurrency() ?? 'USD';
@@ -140,7 +132,7 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onCoun
   // the access map is not loaded, or with the flag off, the tab hides and does nothing at all.
   const enabled = isCapabilityVisible(useCapabilitiesSafe(), PRODUCT_MOVEMENTS_CAPABILITY);
   const visible = enabled && shouldShowMovementsTab(data);
-  // Only a saved, stocked product has movements to read or to count.
+  // Only a saved, stocked product has movements to read.
   const storable = enabled && isStorableProduct(data);
 
   const [direction, setDirection] = useState('all');
@@ -148,13 +140,15 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onCoun
   const [warehouseId, setWarehouseId] = useState(null);
   const [sort, setSort] = useState(MOVEMENTS_DEFAULT_SORT);
   const [warehouses, setWarehouses] = useState([]);
-  const [total, setTotal] = useState(null);
   const [state, setState] = useState({ rows: [], loading: true, loadingMore: false, error: null, hasMore: false });
   const [everActive, setEverActive] = useState(false);
   const generation = useRef(0);
+  // The tab's own scroll box is bounded by the room left in the content column (inline maxHeight wins
+  // over the class, which only stays as the pre-measure fallback), so the page itself never scrolls.
+  const scrollBox = useRemainingHeight({ active: Boolean(isActive) });
 
-  // The tab survives a change of record, so nothing of the previous product may outlive it: its counter,
-  // its warehouses and its warehouse filter (an option the new product may not have). The state is reset
+  // The tab survives a change of record, so nothing of the previous product may outlive it: its
+  // warehouses and its warehouse filter (an option the new product may not have). The state is reset
   // while rendering, so the effects of this same commit already see the clean filters; resetting it in an
   // effect would let the first page of the new product go out with the warehouse of the old one.
   const [stateProductId, setStateProductId] = useState(productId);
@@ -162,20 +156,17 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onCoun
     setStateProductId(productId);
     setWarehouseId(null);
     setWarehouses([]);
-    setTotal(null);
     setEverActive(Boolean(isActive && storable));
     setState({ rows: [], loading: true, loadingMore: false, error: null, hasMore: false });
   }
 
   // Side effects of that change cannot run while rendering: the pages of the old product still in flight
-  // are dropped by bumping the generation, and the counter of the tab strip is cleared.
+  // are dropped by bumping the generation.
   const lastProductId = useRef(productId);
   useEffect(() => {
     if (lastProductId.current === productId) return;
     lastProductId.current = productId;
     generation.current += 1;
-    onCountChange?.(undefined);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId]);
 
   // The tab is mounted with the record and only hidden while another one is selected, so the data is
@@ -184,31 +175,14 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onCoun
     if (isActive && storable) setEverActive(true);
   }, [isActive, storable]);
 
-  // A service, expense or resource has no stock: the tab hides itself (the counter hides with it).
+  // A service, expense or resource has no stock: the tab hides itself.
   const visibilityRef = useRef(onVisibilityChange);
   visibilityRef.current = onVisibilityChange;
   useEffect(() => { visibilityRef.current?.(visible); }, [visible]);
 
-  useProductMovementsTabTracking({ isActive: Boolean(isActive && storable) });
-
-  // Tab counter: every movement of the product, whatever the filters.
-  useEffect(() => {
-    if (!storable || !productId) return undefined;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await apiFetch(buildMovementsCountQuery(productId));
-        if (!res.ok) return;
-        const count = totalOf(await res.json());
-        if (!cancelled && Number.isFinite(count)) {
-          setTotal(count);
-          onCountChange?.(count);
-        }
-      } catch { /* the counter is optional */ }
-    })();
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productId, storable, apiFetch]);
+  // "Ver movimientos" (side panel): prefilters the period once, and tells the telemetry how the tab was opened.
+  const source = useMovementsPeriodRequest({ enabled: storable, isActive: Boolean(isActive && storable), onPeriod: setDateRange });
+  useProductMovementsTabTracking({ isActive: Boolean(isActive && storable), source });
 
   // Warehouses of the filter: the ones the product has stock in (the same source as the side panel).
   useEffect(() => {
@@ -288,8 +262,6 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onCoun
       data-testid="SortableHeaderLabel__763719" />
   );
 
-  const noMovementsAtAll = total === 0;
-
   return (
     <div className="flex flex-col gap-3" data-testid="product-movements-tab">
       <div className="flex flex-wrap items-center gap-2">
@@ -310,6 +282,7 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onCoun
         <DateRangePopover
           value={dateRange}
           onChange={setDateRange}
+          extraPresets={MOVEMENTS_EXTRA_PRESETS}
           data-testid="DateRangePopover__763719" />
         <Select
           value={warehouseId ?? 'all'}
@@ -331,7 +304,12 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onCoun
         aria-label={ui('productMovements')}
         aria-busy={state.loading || state.loadingMore}
         tabIndex={0}
-        className="max-h-[calc(100vh-420px)] min-h-[200px] overflow-y-auto rounded-lg border border-border"
+        ref={scrollBox.ref}
+        style={scrollBox.style}
+        // `relative` is load-bearing: the rows hold `sr-only` (position:absolute) spans, and an absolute box whose
+        // containing block is OUTSIDE this scroll container is not clipped by it, so every loaded row kept adding
+        // its static position to the content column's scrollable height (blank page after scrolling).
+        className="relative max-h-[calc(100vh-420px)] min-h-[200px] overflow-y-auto rounded-lg border border-border"
         onScroll={onScroll}
         data-testid="product-movements-scroll">
         <div role="row" className={`${GRID} sticky top-0 z-30 border-b border-border bg-card px-3 py-2 text-xs font-medium text-muted-foreground`}>
@@ -365,10 +343,7 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onCoun
         ) : null}
 
         {!state.loading && !state.error && state.rows.length === 0
-          ? <EmptyMovements
-          ui={ui}
-          noMovementsAtAll={noMovementsAtAll}
-          data-testid="EmptyMovements__763719" /> : null}
+          ? <EmptyMovements ui={ui} data-testid="EmptyMovements__763719" /> : null}
 
         {state.rows.map((row) => <MovementRow
           key={row.id}

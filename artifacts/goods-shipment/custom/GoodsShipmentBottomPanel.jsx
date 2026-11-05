@@ -61,7 +61,7 @@ function ShipmentLinesEmptyState({ data, recordId, apiBaseUrl, token, onAddLine,
                 <polyline points="17 8 12 3 7 8" />
                 <line x1="12" y1="3" x2="12" y2="15" />
               </svg>
-              {ui('importFromSalesOrder')}
+              {ui('addFromSalesOrder')}
             </button>
           )}
           {bpId && (
@@ -171,7 +171,7 @@ GoodsShipmentBottomPanel.lineMenuActions = function lineMenuActions({ data, impo
   const bpId = data?.businessPartner;
   if (!isDraft || !bpId) return [];
   return [
-    { key: 'import-order', label: 'importFromSalesOrder', onClick: () => importRef.current?.openOrderModal?.() },
+    { key: 'import-order', label: 'addFromSalesOrder', onClick: () => importRef.current?.openOrderModal?.() },
     { key: 'import-invoice', label: 'importFromSalesInvoice', onClick: () => importRef.current?.openInvoiceModal?.() },
   ];
 };
