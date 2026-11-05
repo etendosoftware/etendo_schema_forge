@@ -67,6 +67,13 @@ describe('useReportQuery', () => {
     expect(result.current).toMatchObject({ data: { rows: [{ node_id: 'A' }] }, loading: false, error: null });
   });
 
+  it('debounceMs: 0 (a drill-down click) sends on the next tick, not after the filter wait', async () => {
+    apiFetchMock.mockResolvedValue(json({ kind: 'rows', rows: [] }));
+    render(READY, { debounceMs: 0 });
+    await act(async () => { vi.advanceTimersByTime(0); });
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('a burst of changes sends one request, with the last params', async () => {
     apiFetchMock.mockResolvedValue(json({ rows: [] }));
     const { rerender } = render(READY);

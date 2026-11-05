@@ -52,7 +52,7 @@ function Ledger({ params, sign, locale, dateText, onOpenEntry, session, allLines
   const [search, setSearch] = useState('');
   // One line past the cap tells a capped ledger from one that has exactly the cap.
   const limit = allLines ? undefined : LEDGER_LINE_CAP + 1;
-  const { data, loading, error, errorCode, settled } = useReportQuery(LEDGER_REPORT_ID, params, { locale, limit });
+  const { data, loading, error, errorCode, settled } = useReportQuery(LEDGER_REPORT_ID, params, { locale, limit, debounceMs: 0 });
   useDrillTiming(session, 'ledger', settled, errorCode);
   const loaded = data?.rows ?? [];
   const capped = !allLines && loaded.length > LEDGER_LINE_CAP;
@@ -133,7 +133,7 @@ function Ledger({ params, sign, locale, dateText, onOpenEntry, session, allLines
 
 function Entry({ params, locale, accountValue, session }) {
   const ui = useUI();
-  const { data, loading, error, errorCode, settled } = useReportQuery(ENTRY_REPORT_ID, params, { locale, required: ENTRY_REQUIRED_PARAMS });
+  const { data, loading, error, errorCode, settled } = useReportQuery(ENTRY_REPORT_ID, params, { locale, required: ENTRY_REQUIRED_PARAMS, debounceMs: 0 });
   useDrillTiming(session, 'entry', settled, errorCode);
   const rows = data?.rows ?? [];
   const doc = entryDocument(rows);

@@ -31,12 +31,14 @@ function errorCodeOf(status, body) {
  *
  * `required` overrides the params it waits for (the journal-entry drill-down has no dates).
  * `limit` caps the rows of the main query (`undefined` = every row).
+ * `debounceMs` is the wait after the last change: filters keep the default; a drill-down click passes 0,
+ * since it is one deliberate action and the wait would outlast the query itself.
  *
  * Returns `{ data, loading, error, errorCode, settled }`: `error` is a displayable message (a network failure
  * carries its own translated one), `errorCode` the class (`network`, `org_access_denied`, `http_500`),
  * `settled` a counter that moves once per answered request (success or failure), never on abort.
  */
-export function useReportQuery(reportId, params, { locale, limit, enabled = true, required = REQUIRED_QUERY_PARAMS } = {}) {
+export function useReportQuery(reportId, params, { locale, limit, enabled = true, required = REQUIRED_QUERY_PARAMS, debounceMs = QUERY_DEBOUNCE_MS } = {}) {
   const apiFetch = useApiFetch('');
   const [state, setState] = useState({ data: null, loading: false, error: null, errorCode: null, settled: 0 });
   // Params compared by value: the view rebuilds the object on every render.
@@ -78,12 +80,12 @@ export function useReportQuery(reportId, params, { locale, limit, enabled = true
           settled: s.settled + 1,
         }));
       }
-    }, QUERY_DEBOUNCE_MS);
+    }, debounceMs);
     return () => {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [apiFetch, reportId, paramsKey, locale, limit, canRun]);
+  }, [apiFetch, reportId, paramsKey, locale, limit, canRun, debounceMs]);
 
   return state;
 }
