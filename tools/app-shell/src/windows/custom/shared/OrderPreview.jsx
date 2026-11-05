@@ -75,6 +75,10 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
   const ui = useUI();
   const tMenu = useMenuLabel();
   const modalRef = useRef(null);
+  // The close animation's timer is cleared on unmount: if it fired after the preview is gone it
+  // would set state on an unmounted component (and, in tests, after jsdom is torn down).
+  const closeTimerRef = useRef(null);
+  useEffect(() => () => clearTimeout(closeTimerRef.current), []);
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendModalClosing, setSendModalClosing] = useState(false);
   // ETP-5069 — bumped when a send succeeds, so the email-history card refetches
@@ -160,10 +164,6 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
     setSendModalClosing(false);
     setShowSendModal(true);
   };
-  // The close animation's timer is cleared on unmount: if it fired after the preview is gone it
-  // would set state on an unmounted component (and, in tests, after jsdom is torn down).
-  const closeTimerRef = useRef(null);
-  useEffect(() => () => clearTimeout(closeTimerRef.current), []);
   const closeEmailModal = () => {
     setSendModalClosing(true);
     clearTimeout(closeTimerRef.current);
