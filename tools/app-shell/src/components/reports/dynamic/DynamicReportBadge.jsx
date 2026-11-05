@@ -1,20 +1,34 @@
 import { Sparkles } from 'lucide-react';
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useUI } from '@/i18n';
+import { cn } from '@/lib/utils';
 
 /** Card ring + glow for a report that opens the interactive view (ETP-6080). */
 export const DYNAMIC_REPORT_CARD_CLASS = 'border-primary/40 ring-1 ring-primary/20 shadow-md shadow-primary/20';
 
-/** "Interactivo" tag on the catalog card and list row of a report with an interactive view. */
-export default function DynamicReportBadge() {
+/**
+ * Sparkle mark on the catalog card (top-right corner) and list row of a report with an interactive
+ * view; the tooltip names it. Carries its own provider so it works in any tree (as TruncatedText).
+ */
+export default function DynamicReportBadge({ className }) {
   const ui = useUI();
+  const label = `${ui('dynamicReportBadge')}: ${ui('dynamicReportBadgeHint')}`;
   return (
-    <span
-      className="inline-flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium"
-      title={ui('dynamicReportBadgeHint')}
-      data-testid="DynamicReportBadge"
-    >
-      <Sparkles className="w-3 h-3" aria-hidden="true" />
-      {ui('dynamicReportBadge')}
-    </span>
+    <TooltipProvider>
+      <Tooltip delayDuration={200}>
+        <TooltipTrigger asChild>
+          <span
+            className={cn('inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary shrink-0', className)}
+            aria-label={label}
+            data-testid="DynamicReportBadge"
+          >
+            <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

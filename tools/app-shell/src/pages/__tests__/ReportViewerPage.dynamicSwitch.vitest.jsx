@@ -113,7 +113,7 @@ describe('ReportViewerPage — the catalog marks interactive reports', () => {
     const tags = screen.getAllByTestId('DynamicReportBadge');
     expect(tags).toHaveLength(1);
     expect(tags[0].closest('button')).toHaveTextContent('Profit & Loss');
-    expect(tags[0]).toHaveTextContent('dynamicReportBadge');
+    expect(tags[0]).toHaveAttribute('aria-label', 'dynamicReportBadge: dynamicReportBadgeHint');
   });
 
   it('flag off: no report carries the tag', async () => {

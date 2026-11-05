@@ -170,15 +170,15 @@ function ReportCard({ report, onRun, interactive = false }) {
   return (
     <button
       onClick={() => onRun(report)}
-      className={cn('flex flex-col items-stretch w-full p-1 rounded-xl border border-border bg-card shadow-sm hover:border-primary/30 hover:shadow-md transition-all text-left overflow-hidden', interactive && DYNAMIC_REPORT_CARD_CLASS)}
+      className={cn('relative flex flex-col items-stretch w-full p-1 rounded-xl border border-border bg-card shadow-sm hover:border-primary/30 hover:shadow-md transition-all text-left overflow-hidden', interactive && DYNAMIC_REPORT_CARD_CLASS)}
     >
       <ReportCardPreview reportId={report.id} data-testid="ReportCardPreview__3c998a" />
+      {interactive && <DynamicReportBadge className="absolute top-2.5 right-2.5 bg-card shadow-sm" />}
       <div className="flex flex-col items-stretch gap-1 p-3">
         <div className="flex items-center gap-2">
           <h3 className="text-base font-medium text-foreground min-w-0 flex-1">
             <TruncatedText text={reportTitle} data-testid="ReportCard__title" />
           </h3>
-          {interactive && <DynamicReportBadge />}
         </div>
         <div className="flex gap-2 flex-wrap pt-1">
           {/* 'html' is filtered out here only — it's still a real entry in
