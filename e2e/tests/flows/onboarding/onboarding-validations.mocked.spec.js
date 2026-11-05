@@ -159,6 +159,7 @@ test.describe('Onboarding — Full registration flow', () => {
 
     await page.locator('#reg-name').fill('QA User');
     await page.locator('#reg-email').fill(`qa-reg-${ts}@example.com`);
+    await page.getByTestId('sector-select').selectOption('servicios');
     await page.getByTestId('action-register-submit').click();
 
     await expect(page.getByText(/vamos a dejar todo listo/i)).toBeVisible({ timeout: 5_000 });
@@ -288,6 +289,7 @@ test.describe('Onboarding — Login & password recovery flow', () => {
 
     await page.locator('#reg-name').fill('QA User');
     await page.locator('#reg-email').fill('existing@example.com');
+    await page.getByTestId('sector-select').selectOption('servicios');
     await page.getByTestId('action-register-submit').click();
 
     // Error message shown
