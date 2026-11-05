@@ -1,5 +1,5 @@
 // @covers tools/app-shell/src/components/ui/truncated-text.jsx
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { TruncatedText } from '../truncated-text.jsx';
 
 /**
@@ -103,6 +103,41 @@ describe('TruncatedText', () => {
       setMetrics(span, 640, 320);
       fireEvent.focus(span);
       expect(screen.queryByTestId('desc-tooltip')).toBeNull();
+    });
+  });
+
+  // `tabIndex` is opt-in: Radix opens on focus only for a focusable trigger.
+  describe('tabIndex', () => {
+    it('is not focusable (no tabindex attribute) when the prop is omitted', () => {
+      const span = renderText();
+      expect(span).not.toHaveAttribute('tabindex');
+    });
+
+    it('is keyboard-focusable with tabIndex={0}', () => {
+      render(<TruncatedText text={LONG} tabIndex={0} data-testid="desc" />);
+      const span = screen.getByTestId('desc');
+      expect(span).toHaveAttribute('tabindex', '0');
+      span.focus();
+      expect(document.activeElement).toBe(span);
+    });
+
+    it('opens the tooltip on real focus when clipped and links it with aria-describedby', () => {
+      render(<TruncatedText text={LONG} tabIndex={0} data-testid="desc" />);
+      const span = screen.getByTestId('desc');
+      setMetrics(span, 640, 320);
+      expect(span).not.toHaveAttribute('aria-describedby');
+      act(() => span.focus());
+      expect(screen.getByTestId('desc-tooltip')).toHaveTextContent(LONG);
+      expect(span).toHaveAttribute('aria-describedby');
+    });
+
+    it('stays silent on focus when the focusable text fits', () => {
+      render(<TruncatedText text="Nómina" tabIndex={0} data-testid="desc" />);
+      const span = screen.getByTestId('desc');
+      setMetrics(span, 80, 320);
+      act(() => span.focus());
+      expect(screen.queryByTestId('desc-tooltip')).toBeNull();
+      expect(span).not.toHaveAttribute('aria-describedby');
     });
   });
 

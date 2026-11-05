@@ -268,6 +268,31 @@ describe('registry', () => {
       expect(reports.items.map(i => i.name)).toContain('report-viewer-finance');
     });
 
+    describe('item gated by BOTH accessWindowId and a capability (invoice-inbox)', () => {
+      const inbox = () => [{ group: 'Purchases', items: [{ name: 'invoice-inbox', accessWindowId: 'AW1', capability: 'invoiceInbox' }] }];
+      const names = result => result.flatMap(g => g.items.map(i => i.name));
+
+      it('is visible only when the capability is true and the window access is granted', () => {
+        expect(names(filterMenuGroupsByAccess(inbox(), null, { invoiceInbox: true }, { AW1: 'full' }))).toEqual(['invoice-inbox']);
+      });
+
+      it('is hidden when the capability is true but the window access is not granted', () => {
+        expect(names(filterMenuGroupsByAccess(inbox(), null, { invoiceInbox: true }, {}))).toEqual([]);
+      });
+
+      it('is hidden when the window access is granted but the capability is false', () => {
+        expect(names(filterMenuGroupsByAccess(inbox(), null, { invoiceInbox: false }, { AW1: 'full' }))).toEqual([]);
+      });
+
+      it('stays hidden for an admin without the capability (the admin bypass only waives window access)', () => {
+        expect(names(filterMenuGroupsByAccess(inbox(), null, { isAdminOrClientAdmin: true }, {}))).toEqual([]);
+      });
+
+      it('is visible for an admin who has the capability, without a window grant', () => {
+        expect(names(filterMenuGroupsByAccess(inbox(), null, { isAdminOrClientAdmin: true, invoiceInbox: true }, {}))).toEqual(['invoice-inbox']);
+      });
+    });
+
     it('shows an accessWindowId-gated item when windowAccess[id] is "read-only" (presence, not tier value, is what is checked)', () => {
       const groups = [{
         group: 'Reports',
@@ -519,7 +544,9 @@ describe('registry', () => {
       const { allowedIds, capabilities, windowAccess } = navigationPermissions([entry]);
       const groups = filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess, NOT_DISMISSED);
       const bypassedAnchors = entry.capability === 'isAdminOrClientAdmin'
-        ? defaultNavigation.filter(candidate => candidate.accessWindowId) : [];
+        // The admin bypass only waives the accessWindowId axis; an entry that ALSO declares its own
+        // capability (invoice-inbox -> invoiceInbox) stays hidden until that capability is granted.
+        ? defaultNavigation.filter(candidate => candidate.accessWindowId && !candidate.capability) : [];
       // A capability is a NAMED BOOLEAN, not a per-entry grant: switching one on reveals every
       // entry gated on that same name, not only the entry we asked for. Latent until ETP-5269
       // added a second `isAdminOrClientAdmin` entry next to `roles` — with one entry per

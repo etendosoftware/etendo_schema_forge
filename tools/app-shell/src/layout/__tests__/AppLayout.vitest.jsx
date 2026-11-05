@@ -568,7 +568,9 @@ describe('AppLayout — access load error (ETP-5489)', () => {
 });
 
 describe('AppLayout shipped permission-anchor menu (ETP-5240)', () => {
-  const anchors = defaultNavigation.filter(entry => entry.accessWindowId).map(entry => [entry.name, entry.accessWindowId]);
+  // The third column is the capability an entry ALSO needs (invoice-inbox: `invoiceInbox`), or null.
+  const anchors = defaultNavigation.filter(entry => entry.accessWindowId)
+    .map(entry => [entry.name, entry.accessWindowId, entry.capability ?? null]);
 
   beforeEach(() => {
     vi.mocked(useRoleMenu).mockReturnValue(undefined);
@@ -591,7 +593,7 @@ describe('AppLayout shipped permission-anchor menu (ETP-5240)', () => {
     expect(screen.queryByTestId('NoAccessScreen__488148')).not.toBeInTheDocument();
   }
 
-  it.each(anchors)('%s follows loading, grant and revocation with the real menu', (name, id) => {
+  it.each(anchors)('%s follows loading, grant and revocation with the real menu', (name, id, capability) => {
     const menuGroups = buildMenuGroups();
     const { rerender } = render(<AppLayout menuGroups={menuGroups} />);
     // ETP-5395 — while allowedIds is undefined (SFListMenu in flight), AppLayout
@@ -604,6 +606,8 @@ describe('AppLayout shipped permission-anchor menu (ETP-5240)', () => {
     // loading gate still blocks rendering until allowedIds itself resolves —
     // so the grant here is not yet visible.
     vi.mocked(useWindowAccessSafe).mockReturnValue({ [id]: 'read-only' });
+    // An entry gated by a capability as well as by the window grant needs both to show.
+    if (capability) vi.mocked(useCapabilitiesSafe).mockReturnValue({ [capability]: true });
     rerender(<AppLayout menuGroups={menuGroups} />);
     expect(screen.getByTestId('AppLayoutLoading__488148')).toBeInTheDocument();
     expect(screen.queryByTestId('side-menu')).not.toBeInTheDocument();

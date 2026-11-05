@@ -8349,6 +8349,109 @@
         }
       ]
     },
+    "903f86a96e254429233780d22a019f33e228884c01fd5d4c105d864693f104aa": {
+      "checksum": "8e61429105474c5370653e9336dfb27a56e532f860a1c8eb4c50748dc8615ccd",
+      "params": [
+        [
+          "C06E614BB0634D869D2157F90C87AF4B",
+          "5CBF4BF1989D4B3D8AB348B6892E1408",
+          "0E84F6E3A472468EAAB2D9F070577893",
+          "DA054E7557434A46A4BC0E774D66E9E3"
+        ]
+      ],
+      "rows": [
+        {
+          "ad_reference_id": "0E84F6E3A472468EAAB2D9F070577893",
+          "name": "Manual upload",
+          "name_es": "Manual upload",
+          "value": "UPLOAD"
+        },
+        {
+          "ad_reference_id": "5CBF4BF1989D4B3D8AB348B6892E1408",
+          "name": "Processing",
+          "name_es": "Processing",
+          "value": "PROCESSING"
+        },
+        {
+          "ad_reference_id": "C06E614BB0634D869D2157F90C87AF4B",
+          "name": "Purchase invoice",
+          "name_es": "Purchase invoice",
+          "value": "PURCHASE_INVOICE"
+        },
+        {
+          "ad_reference_id": "DA054E7557434A46A4BC0E774D66E9E3",
+          "name": "Unreadable document",
+          "name_es": "Unreadable document",
+          "value": "UNREADABLE"
+        },
+        {
+          "ad_reference_id": "0E84F6E3A472468EAAB2D9F070577893",
+          "name": "Email",
+          "name_es": "Email",
+          "value": "EMAIL"
+        },
+        {
+          "ad_reference_id": "DA054E7557434A46A4BC0E774D66E9E3",
+          "name": "Extraction service failed",
+          "name_es": "Extraction service failed",
+          "value": "SERVICE_FAILURE"
+        },
+        {
+          "ad_reference_id": "5CBF4BF1989D4B3D8AB348B6892E1408",
+          "name": "Pending review",
+          "name_es": "Pending review",
+          "value": "PENDING_REVIEW"
+        },
+        {
+          "ad_reference_id": "5CBF4BF1989D4B3D8AB348B6892E1408",
+          "name": "Error",
+          "name_es": "Error",
+          "value": "ERROR"
+        },
+        {
+          "ad_reference_id": "DA054E7557434A46A4BC0E774D66E9E3",
+          "name": "Receiver tax ID is not the company's",
+          "name_es": "Receiver tax ID is not the company's",
+          "value": "FOREIGN_RECEIVER"
+        },
+        {
+          "ad_reference_id": "5CBF4BF1989D4B3D8AB348B6892E1408",
+          "name": "Ready to confirm",
+          "name_es": "Ready to confirm",
+          "value": "READY"
+        },
+        {
+          "ad_reference_id": "DA054E7557434A46A4BC0E774D66E9E3",
+          "name": "Required data missing",
+          "name_es": "Required data missing",
+          "value": "MISSING_FIELDS"
+        },
+        {
+          "ad_reference_id": "5CBF4BF1989D4B3D8AB348B6892E1408",
+          "name": "Confirmed",
+          "name_es": "Confirmed",
+          "value": "CONFIRMED"
+        },
+        {
+          "ad_reference_id": "DA054E7557434A46A4BC0E774D66E9E3",
+          "name": "Supplier reference too long",
+          "name_es": "Supplier reference too long",
+          "value": "REFERENCE_TOO_LONG"
+        },
+        {
+          "ad_reference_id": "DA054E7557434A46A4BC0E774D66E9E3",
+          "name": "Confirmation failed",
+          "name_es": "Confirmation failed",
+          "value": "CONFIRM_FAILED"
+        },
+        {
+          "ad_reference_id": "5CBF4BF1989D4B3D8AB348B6892E1408",
+          "name": "Discarded",
+          "name_es": "Discarded",
+          "value": "DISCARDED"
+        }
+      ]
+    },
     "910d24c5e04bd0653472a12dc47eccd73e36338057fe0dd184d4e20cf35a31f5": {
       "checksum": "58f1722a752eb274b7b9686acf0db427f8f0f6427aaf7e64ab9421bb4c3afdce",
       "params": [

@@ -1620,7 +1620,7 @@
     },
     {
       "id": "invoice-inbox",
-      "description": "Invoice Inbox (epic ETP-6046; ETP-6047 flag and upload, ETP-6048 background reading): incoming supplier documents uploaded, run through OCR and turned into purchase invoices. Backend-only flag for now, evaluated per account. Off refuses the inbox upload endpoint before any OCR work is enqueued; the background worker that reads each accepted document (OCR, matching, validation) is only reachable through that upload. The ETGO_INCOMING_DOCUMENT table and the Invoice Inbox window ship unconditionally: the flag gates behaviour, not schema.",
+      "description": "Invoice Inbox (epic ETP-6046; ETP-6047 flag and upload, ETP-6048 background reading): incoming supplier documents uploaded, run through OCR and turned into purchase invoices. Backend-only flag for now, evaluated per account. Off refuses the inbox upload endpoint before any OCR work is enqueued, every read of the invoice-inbox spec and the discard action (ETP-6049) (403 feature_disabled); the background worker that reads each accepted document (OCR, matching, validation) is only reachable through that upload. The ETGO_INCOMING_DOCUMENT table and the Invoice Inbox window ship unconditionally: the flag gates behaviour, not schema.",
       "owner": "ivanrobledofutit",
       "jira": "ETP-6047",
       "created": "2026-11-02",
@@ -1628,20 +1628,55 @@
         "key": "invoice-inbox",
         "defaultValue": false,
         "ttl": "2027-01-31",
-        "ttlNote": "PROVISIONAL, pending confirmation with product (epic ETP-6046). Retirement means the inbox ships to everyone: unwrap the upload endpoint toggle point(s) that call InvoiceInboxFlag, delete InvoiceInboxFlag.java and its test, delete FLAG_INVOICE_INBOX from GoFeatureFlags, remove the com.etendoerp.go docs section and configuration-table row, delete the hosted Datadog setting, and (once ETP-6049 adds it) the INVOICE_INBOX key in flag-keys.js with its toggle points; delete the flag object, keep this entry. Retirement does NOT remove the background worker (InvoiceInboxProcessor, InvoiceInboxWorkStore), the stalled-row sweeper (InvoiceInboxSweeperStartup), the validator and status policy, the matchers, or the shared OCR changes (total_amount in ocr-config.json, retryable OcrUnavailableException, TaxIdNormalizer, vendor tax id lookups): they ship permanently.",
+        "ttlNote": "PROVISIONAL, pending confirmation with product (epic ETP-6046). Retirement means the inbox ships to everyone: unwrap the upload endpoint toggle point(s) that call InvoiceInboxFlag and remove the flag gate from InvoiceInboxHeaderHandler (the handler STAYS: it serves the discard action), delete InvoiceInboxFlag.java and its test, delete FLAG_INVOICE_INBOX from GoFeatureFlags, remove the com.etendoerp.go docs section and configuration-table row, delete the hosted Datadog setting, remove the invoiceInbox capability from SFWindowAccessMap (INVOICE_INBOX constant and its put) together with InvoiceInboxFlag.isEnabledFor, and in the SPA drop the capability key from the menu.json item, the capability check in windows/custom/invoice-inbox/index.jsx and INVOICE_INBOX_CAPABILITY from lib/capabilityVisibility.js (the window access check stays); delete the flag object, keep this entry. Retirement does NOT remove the background worker (InvoiceInboxProcessor, InvoiceInboxWorkStore), the stalled-row sweeper (InvoiceInboxSweeperStartup), the validator and status policy, the matchers, or the shared OCR changes (total_amount in ocr-config.json, retryable OcrUnavailableException, TaxIdNormalizer, vendor tax id lookups): they ship permanently.",
         "symbols": [
           "invoice-inbox",
           "FLAG_INVOICE_INBOX",
-          "InvoiceInboxFlag"
+          "InvoiceInboxFlag",
+          "invoiceInbox",
+          "INVOICE_INBOX_CAPABILITY"
         ],
-        "$symbolsComment": "Backend-only flag: no key in flag-keys.js yet (ETP-6049 adds INVOICE_INBOX when there is UI). ETGO_FLAG_INVOICE_INBOX is the local env arm and is not listed as a symbol: it is only spelled in docs and javadoc. The backend is the only evaluator."
+        "$symbolsComment": "Backend-only flag: no key in flag-keys.js, on purpose (docs/feature-flags.md, backend-only flags). The frontend trail is the capability name: since ETP-6049 the browser reads capabilities.invoiceInbox off SFWindowAccessMap (INVOICE_INBOX_CAPABILITY in lib/capabilityVisibility.js, the capability key of the menu.json item). ETGO_FLAG_INVOICE_INBOX is the local env arm and is not listed as a symbol: it is only spelled in docs and javadoc. The backend is the only evaluator.",
+        "capability": {
+          "field": "invoiceInbox",
+          "sources": [
+            "com.etendoerp.go SFWindowAccessMap webhook response (capabilities.invoiceInbox, ETP-6049) -- InvoiceInboxFlag.isEnabledFor(account email) evaluated per account with the tenant as clientId, admins included"
+          ]
+        }
       },
-      "$gatingComment": "ONE evaluator, the backend (InvoiceInboxFlag), evaluated at REQUEST ENTRY. Targeted PER ACCOUNT: FeatureFlagContext.forAccount(<ETGO_ACCOUNT email of the request user, via GoAccountResolver.currentAccountEmail()>).with(clientId); the targeting key, `Email` and lowercase `email` carry the account. Datadog rules are written on the lowercase `email` attribute only (never identifier, percentage or tenant attribute), because the web client and the backend use different targeting keys. With no resolvable account the context carries clientId only and the default stays off; never throws. The asynchronous OCR worker has no OBContext user, so it must NOT re-evaluate the flag; off-request callers use InvoiceInboxFlag.isEnabled(accountEmail, clientId) with values captured at request entry. Local: etendo.go.flags.invoice-inbox / ETGO_FLAG_INVOICE_INBOX (Tomcat restart). Hosted rollout: create the boolean setting `invoice-inbox` (default false) in Datadog Experimental/Production BEFORE targeting anyone. The toggle point is InvoiceInboxUploadEndpoint (POST /sws/neo/invoice-inbox/upload), which refuses with 403 feature_disabled before reading the multipart. ETP-6048 adds no second evaluator: everything it added is only REACHABLE through that gated upload. The worker (InvoiceInboxProcessor, which the upload endpoint feeds through InvoiceInboxProcessor.submit) and the sweeper never evaluate the flag by design: a PROCESSING row exists only because the flag was on at upload, so turning the flag off does NOT stop rows already queued or processing. Pieces that run REGARDLESS of the flag (removal cost and blast radius): (a) InvoiceInboxSweeperStartup, a SessionAwareStartup that runs at every startup and every 2 minutes and scans etgo_incoming_document for stalled PROCESSING rows, a no-op when the table has none; (b) the SHARED OCR schema ocr/ocr-config.json gained total_amount (number|null, in required), which also changes the schema served by GET /sws/neo/ocrconfig to the SPA 'Extraer y completar' of /purchase-invoice and to the MCP: verified manually and by the 577 SPA vitests, no behavior change; (c) shared OCR client changes: OcrUnavailableException.retryable (the old constructor stays retryable) and CopilotOcrServiceClient classifying HTTP failures through HttpStatusException; (d) ReceiverTaxIdCheck now delegates to the new TaxIdNormalizer; (e) PurchaseInvoiceOcrLookups has new vendorsByTaxId and vendorTaxId, organizationTaxId now reads through OBDal.getInstance(), and selector failures log WARN, while OcrLookups gained default methods vendorsByTaxId and vendorTaxId; (f) three new columns on ETGO_INCOMING_DOCUMENT (PROCESSING_ATTEMPTS, PROCESSING_LEASE, PROCESSED_AT) ship unconditionally: the flag gates behaviour, not schema.",
+      "$gatingComment": "ONE evaluator, the backend (InvoiceInboxFlag), evaluated at REQUEST ENTRY. Targeted PER ACCOUNT: FeatureFlagContext.forAccount(<ETGO_ACCOUNT email of the request user, via GoAccountResolver.currentAccountEmail()>).with(clientId); the targeting key, `Email` and lowercase `email` carry the account. Datadog rules are written on the lowercase `email` attribute only (never identifier, percentage or tenant attribute), because the web client and the backend use different targeting keys. With no resolvable account the context carries clientId only and the default stays off; never throws. The asynchronous OCR worker has no OBContext user, so it must NOT re-evaluate the flag; off-request callers use InvoiceInboxFlag.isEnabled(accountEmail, clientId) with values captured at request entry. Local: etendo.go.flags.invoice-inbox / ETGO_FLAG_INVOICE_INBOX (Tomcat restart). Hosted rollout: create the boolean setting `invoice-inbox` (default false) in Datadog Experimental/Production BEFORE targeting anyone. Toggle points: (1) InvoiceInboxUploadEndpoint (POST /sws/neo/invoice-inbox/upload), which refuses with 403 feature_disabled before reading the multipart; (2) since ETP-6049, SFWindowAccessMap publishes the same evaluation as capabilities.invoiceInbox, read by the SPA in two places only: the menu item (menu.json capability key) and the page guard (windows/custom/invoice-inbox/index.jsx). Still ONE evaluator: the browser never evaluates the flag. The capability is NOT access control by itself, but the API is gated too: (3) InvoiceInboxHeaderHandler, an @NeoExtension(spec=invoice-inbox, entity=header) pre-hook, refuses EVERY request on the spec (REST list/getById and MCP etendo_list/etendo_get, same NeoExtensionDispatcher READ surface) with the same 403 feature_disabled when the flag is off; flag on it returns null and the default handling runs, except for the discard action (POST .../header/{id}/action/discard, ETP-6049), which the same handle serves AFTER the flag check, so the action is behind the same gate with no second evaluation point; the page itself also requires the window access. A flag change reaches the SPA on the next access-map load. ETP-6048 adds no second evaluator: everything it added is only REACHABLE through that gated upload. The worker (InvoiceInboxProcessor, which the upload endpoint feeds through InvoiceInboxProcessor.submit) and the sweeper never evaluate the flag by design: a PROCESSING row exists only because the flag was on at upload, so turning the flag off does NOT stop rows already queued or processing. Pieces that run REGARDLESS of the flag (removal cost and blast radius): (a) InvoiceInboxSweeperStartup, a SessionAwareStartup that runs at every startup and every 2 minutes and scans etgo_incoming_document for stalled PROCESSING rows, a no-op when the table has none; (b) the SHARED OCR schema ocr/ocr-config.json gained total_amount (number|null, in required), which also changes the schema served by GET /sws/neo/ocrconfig to the SPA 'Extraer y completar' of /purchase-invoice and to the MCP: verified manually and by the 577 SPA vitests, no behavior change; (c) shared OCR client changes: OcrUnavailableException.retryable (the old constructor stays retryable) and CopilotOcrServiceClient classifying HTTP failures through HttpStatusException; (d) ReceiverTaxIdCheck now delegates to the new TaxIdNormalizer; (e) PurchaseInvoiceOcrLookups has new vendorsByTaxId and vendorTaxId, organizationTaxId now reads through OBDal.getInstance(), and selector failures log WARN, while OcrLookups gained default methods vendorsByTaxId and vendorTaxId; (f) three new columns on ETGO_INCOMING_DOCUMENT (PROCESSING_ATTEMPTS, PROCESSING_LEASE, PROCESSED_AT) ship unconditionally: the flag gates behaviour, not schema.",
       "paths": {
-        "frontend": [],
+        "frontend": [
+          "tools/app-shell/src/windows/custom/invoice-inbox/index.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxPage.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxToolbar.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxTable.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxCells.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxDropZone.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxDragOverlay.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxUploadTray.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxSelectionBar.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxRowActions.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxDiscardDialog.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxFilters.js",
+          "tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxApi.js",
+          "tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxMessages.js",
+          "tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxUploadPolicy.js",
+          "tools/app-shell/src/windows/custom/invoice-inbox/useInvoiceInboxList.js",
+          "tools/app-shell/src/windows/custom/invoice-inbox/useInvoiceInboxUpload.js",
+          "tools/app-shell/src/windows/custom/invoice-inbox/useInvoiceInboxDiscard.js",
+          "tools/app-shell/src/windows/custom/invoice-inbox/useProcessingRowsPoll.js",
+          "tools/app-shell/src/windows/custom/invoice-inbox/useInboxFileDrop.js",
+          "tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxUploadLog.js",
+          "tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxUploadResult.js",
+          "tools/app-shell/src/windows/custom/invoice-inbox/useInvoiceInboxUploadResult.js",
+          "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxUploadResult.jsx"
+        ],
         "backend": [
           "src/com/etendoerp/go/schemaforge/InvoiceInboxFlag.java",
           "src/com/etendoerp/go/schemaforge/InvoiceInboxUploadEndpoint.java",
+          "src/com/etendoerp/go/schemaforge/InvoiceInboxHeaderHandler.java",
+          "src/com/etendoerp/go/schemaforge/InvoiceInboxDiscard.java",
           "src/com/etendoerp/go/schemaforge/InvoiceInboxIntake.java",
           "src/com/etendoerp/go/schemaforge/InvoiceInboxMessages.java",
           "src/com/etendoerp/go/schemaforge/InvoiceInboxProcessor.java",
@@ -1657,7 +1692,7 @@
           "src/com/etendoerp/go/startup/InvoiceInboxSweeperStartup.java"
         ]
       },
-      "$pathsComment": "Owned code only. GoFeatureFlags.java is framework. The ONE toggle point is InvoiceInboxUploadEndpoint (the flag check at the top of handle(), at request entry); InvoiceInboxIntake and InvoiceInboxMessages are the endpoint's per-file work and texts. Shared code that only delegates, listed for removal cost: NeoBuiltInEndpointHandler.java (the one `invoice-inbox` / `upload` / POST branch, which stays after retirement because it is the route), NeoServlet.java (maxRequestSize 210 MB, stays). Also a touch point (shared, removal cost none): src/com/etendoerp/go/roles/TemplateRoleWindowAccess.java and src-util/modulescript/.../EnsureSystemRoleTemplatesScript.java carry the Invoice Inbox window grant (full for Compras and Financiero); the grant stays after retirement. NeoAttachmentPolicy.java holds the 210 MB request constants and stays. ETP-6048 owned files are the worker (InvoiceInboxProcessor, InvoiceInboxWorkStore), the validator and status policy (InvoiceInboxValidator, InvoiceInboxStatusPolicy, InvoiceInboxSummary), the matchers and tax id normalizer under schemaforge/ocr/, and InvoiceInboxSweeperStartup under startup/. They carry no flag check of their own: the only toggle point stays InvoiceInboxUploadEndpoint, which also hands each accepted row to InvoiceInboxProcessor.submit. Shared files ETP-6048 touched (NOT owned, they stay after retirement, listed for removal cost): ocr/ocr-config.json, ocr/OcrLookups.java, ocr/OcrUnavailableException.java, ocr/CopilotOcrServiceClient.java, ocr/ReceiverTaxIdCheck.java, schemaforge/PurchaseInvoiceOcrLookups.java, schemaforge/NeoAttachmentsHelper.java (new copyMainAttachmentToTemp), schemaforge/InvoiceInboxIntake.java (processingAttempts starts at 0).",
+      "$pathsComment": "Owned code only. Frontend (ETP-6049): the invoice-inbox custom window; the page ships with the feature and stays after flag retirement (only the capability check in index.jsx is a toggle point). Shared SPA files the flag merely touches, not listed: menu.json (the Purchases item with accessWindowId + capability), lib/capabilityVisibility.js (INVOICE_INBOX_CAPABILITY), windows/registry.js (customLoaders entry), components/contract-ui/SegmentedTabs.jsx (optional count), the three locale files; backend SFWindowAccessMap.java (capability) is shared too. GoFeatureFlags.java is framework. The ONE toggle point is InvoiceInboxUploadEndpoint (the flag check at the top of handle(), at request entry); InvoiceInboxIntake and InvoiceInboxMessages are the endpoint's per-file work and texts. Shared code that only delegates, listed for removal cost: NeoBuiltInEndpointHandler.java (the one `invoice-inbox` / `upload` / POST branch, which stays after retirement because it is the route), NeoServlet.java (maxRequestSize 210 MB, stays). Also a touch point (shared, removal cost none): src/com/etendoerp/go/roles/TemplateRoleWindowAccess.java and src-util/modulescript/.../EnsureSystemRoleTemplatesScript.java carry the Invoice Inbox window grant (full for Compras and Financiero); the grant stays after retirement. NeoAttachmentPolicy.java holds the 210 MB request constants and stays. ETP-6048 owned files are the worker (InvoiceInboxProcessor, InvoiceInboxWorkStore), the validator and status policy (InvoiceInboxValidator, InvoiceInboxStatusPolicy, InvoiceInboxSummary), the matchers and tax id normalizer under schemaforge/ocr/, and InvoiceInboxSweeperStartup under startup/. They carry no flag check of their own: the only toggle point stays InvoiceInboxUploadEndpoint, which also hands each accepted row to InvoiceInboxProcessor.submit. Shared files ETP-6048 touched (NOT owned, they stay after retirement, listed for removal cost): ocr/ocr-config.json, ocr/OcrLookups.java, ocr/OcrUnavailableException.java, ocr/CopilotOcrServiceClient.java, ocr/ReceiverTaxIdCheck.java, schemaforge/PurchaseInvoiceOcrLookups.java, schemaforge/NeoAttachmentsHelper.java (new copyMainAttachmentToTemp), schemaforge/InvoiceInboxIntake.java (processingAttempts starts at 0).",
       "testSpecs": {
         "$testSpecsComment": "Backend specs are tester-go's. All are written and pass: the gate, the upload endpoint (toggle point), the intake, the messages, the shared specs and one DB-backed integration test (WeldBaseTest: the attachment manager is resolved through the Weld static bean manager, absent under a plain OBBaseTest). The environment-variable spelling of the local arm cannot be set from the JVM, so only the property is tested. ETP-6048 specs are written and pass in the same way; the work-store, inbox-duplicates and vendor-tax-id integration tests are DB-backed (WeldBaseTest).",
         "unit": [
@@ -1785,26 +1820,72 @@
             "root": "backend",
             "path": "src-test/src/com/etendoerp/go/schemaforge/ocr/OcrSanitizerTest.java",
             "note": "Shared spec, extended (ETP-6048): the packaged schema keeps a printed total (number or numeric string), reads a missing total as null, and a hostile total becomes null."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/invoiceInboxFilters.test.js",
+            "expected": true,
+            "note": "ETP-6049 (tester-functional, node --test): criteria per tab, all = two streams ERROR then rest, withAllCount/workCount, isSelectableRow, buildListQuery (_noCount=false only for counters, _extraProperties otherwise, -created sort)."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/invoiceInboxUploadPolicy.test.js",
+            "expected": true,
+            "note": "ETP-6049 (tester-functional, node --test): 21 files blocked, mixed formats split, empty and over 10 MB refused, upper-case extensions accepted, selectionWarnings keys one/many with file names."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/invoiceInboxApi.test.js",
+            "expected": true,
+            "note": "ETP-6049 (tester-functional): fetchNextPage walks stream A then B across pages without overlap, over-fetch of one row decides more; fetchCounts sends _noCount=false; uploadInboxFile maps 200 accepted/rejected and non-2xx error.code, sends one FormData part files with timeout 0. To extend (ETP-6049 discard): discardInboxDocument posts to /header/{encoded id}/action/discard with no body and timeout 0, maps 200 to discarded and a non-2xx answer to failed with error.code and httpStatus, lets NetworkError propagate."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/useInvoiceInboxUpload.vitest.js",
+            "expected": true,
+            "note": "ETP-6049 (tester-functional): one request per file, concurrency 2, done/total, rejected reason by code, queue stopped on org_not_allowed/feature_disabled/access_denied, NetworkError message, onAccepted per delivered file."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/useProcessingRowsPoll.vitest.js",
+            "expected": true,
+            "note": "ETP-6049 (tester-functional, fake timers): polls only with PROCESSING ids, backoff 3 s to 30 s, reset on change and resetKey, gives up after 15 min, paused while document hidden."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/InvoiceInboxPage.vitest.jsx",
+            "expected": true,
+            "note": "ETP-6049 (tester-functional): route guard (capability off or tier none -> access denied), page meta title and work counter, tab change clears selection, cells (linked / extracted / no data vendor, duplicate icon hidden on CONFIRMED, PROCESSING placeholders, error reason by code), selection bar buttons disabled, empty states. To update (ETP-6049 discard): Discard enabled and Confirm disabled; discard flow OK -> toast, list and counters reloaded, selection empty; partial -> warning; double click -> one batch; row trash opens the dialog with count 1; DISCARDED row shows Descartada el {date}."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/useInvoiceInboxDiscard.vitest.js",
+            "expected": true,
+            "note": "ETP-6049 discard (tester-functional): runDiscardQueue sends one request per row, at most 3 in flight; 409/404/org_not_allowed fail only that row; feature_disabled, code-less 403 and NetworkError stop the rest (notSent); discardToast success one/many, partial warning, error, reason stopping/common/generic; the hook filters non-selectable rows, exposes running and refuses a second batch while running, stops sending after unmount."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/InvoiceInboxDiscardDialog.vitest.jsx",
+            "expected": true,
+            "note": "ETP-6049 discard (tester-functional): title for 1 and N, body without a 30-day purge text, focus on Cancel at open, running locks Escape/outside/Cancel and shows the spinner."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/InvoiceInboxRowActions.vitest.jsx",
+            "expected": true,
+            "note": "ETP-6049 discard (tester-functional): PROCESSING renders nothing; CONFIRMED/DISCARDED render edit and kebab without trash; PENDING_REVIEW/ERROR/READY render the trash, which calls onDiscard(row); edit and kebab are aria-disabled, call nothing and show the coming-soon tooltip."
+          }
+        ],
+        "e2e": [
+          {
+            "root": "frontend",
+            "path": "e2e/tests/flows/purchases/invoice-inbox-upload-and-status.mocked.spec.js",
+            "expected": true,
+            "note": "ETP-6049 (tester-functional): menu entry with the capability, upload of two mocked files (X of N), more than 20 refused with no request, PROCESSING row turning PENDING_REVIEW through polling, counters, empty tab, batch bar with Confirm disabled. To extend (discard): select 2 -> dialog -> confirm -> two POST .../action/discard -> toast -> counters; a partial batch with a mocked 409; the row trash on hover. File names here are proposals; the tester may extend existing files per docs/testing/test-reuse-policy.md and update these paths."
           }
         ]
       },
       "deferredItems": [
-        {
-          "id": "web-key-with-ui",
-          "kind": "scope",
-          "note": "No key in tools/app-shell/src/lib/flags/flag-keys.js on purpose. Story ETP-6049 adds INVOICE_INBOX when the inbox has a UI. Web client and backend use different targeting keys, so the Datadog rules must be written on the lowercase `email` attribute only.",
-          "refs": [
-            "ETP-6049"
-          ]
-        },
-        {
-          "id": "neo-spec-and-role-access",
-          "kind": "scope",
-          "note": "The NEO spec and the role access matrix of the Invoice Inbox window (see ETP-4878) are not part of this flag change.",
-          "refs": [
-            "ETP-4878"
-          ]
-        },
         {
           "id": "ttl-to-confirm",
           "kind": "precondition",
