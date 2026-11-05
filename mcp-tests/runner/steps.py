@@ -13,7 +13,10 @@ Deliberately small. A step is one tool call; the only extras are:
   the prompt and the effect check as `{{steps.<name>.<path>}}`;
 * `forEach: "{{steps.<name>.<path>}}"` repeats a step once per element of a list
   result, each element readable as `{{item.<path>}}` — the one loop teardown
-  needs, because how many payments an agent left behind is not known upfront.
+  needs, because how many payments an agent left behind is not known upfront;
+* `aggregate:` sums a value over the step's rows and saves the sum instead of the
+  rows — the expected figure of a query probe on an MCP with no summed read
+  (ETP-5848, `runner/aggregate.py`).
 
 `<path>` is dotted; a numeric segment indexes a list (`data.0.id`). A value that
 is EXACTLY one reference keeps the referenced value's type (a number stays a
@@ -33,6 +36,9 @@ import time
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
+from .aggregate import AggregateError, aggregate, validate as validate_aggregate
+from .mcp_client import VerificationError
+
 #: `{{steps.<name>[.<path>]}}` or `{{item[.<path>]}}`.
 _REF_RE = re.compile(r"\{\{\s*(steps\.[A-Za-z0-9_\-]+(?:\.[A-Za-z0-9_\-]+)*|item(?:\.[A-Za-z0-9_\-]+)*)\s*\}\}")
 
@@ -47,6 +53,7 @@ class Step:
     args: dict[str, Any]
     save_as: str | None = None
     for_each: str | None = None
+    aggregate: dict[str, Any] | None = None
 
 
 def parse_steps(raw: Any, *, probe_id: str, phase: str) -> list[Step]:
@@ -59,7 +66,7 @@ def parse_steps(raw: Any, *, probe_id: str, phase: str) -> list[Step]:
     for i, entry in enumerate(raw):
         if not isinstance(entry, dict) or not entry.get("tool"):
             raise ValueError(f"Probe {probe_id!r}: {phase}[{i}] needs a `tool`.")
-        unknown = set(entry) - {"tool", "args", "saveAs", "forEach"}
+        unknown = set(entry) - {"tool", "args", "saveAs", "forEach", "aggregate"}
         if unknown:
             raise ValueError(
                 f"Probe {probe_id!r}: {phase}[{i}] has unknown key(s) {sorted(unknown)}."
@@ -70,12 +77,16 @@ def parse_steps(raw: Any, *, probe_id: str, phase: str) -> list[Step]:
                 f"Probe {probe_id!r}: {phase}[{i}].forEach must be one "
                 f"{{{{steps.<name>.<path>}}}} reference, got {for_each!r}."
             )
+        spec = entry.get("aggregate")
+        if spec is not None:
+            validate_aggregate(spec, f"Probe {probe_id!r}: {phase}[{i}]")
         steps.append(
             Step(
                 tool=entry["tool"],
                 args=entry.get("args") or {},
                 save_as=entry.get("saveAs"),
                 for_each=for_each,
+                aggregate=spec,
             )
         )
     return steps
@@ -186,6 +197,15 @@ async def run_steps(
                     return records
                 continue
             rec["ms"] = int((time.monotonic() - started) * 1000)
+            if step.aggregate:
+                try:
+                    payload = aggregate(payload, resolve_refs(step.aggregate, saved, item))
+                except (AggregateError, VerificationError) as exc:
+                    rec.update(ok=False, error=f"aggregate: {exc}")
+                    record(rec)
+                    if stop_on_error:
+                        return records
+                    continue
             text = json.dumps(payload, ensure_ascii=False, default=str)
             rec.update(
                 ok=True,

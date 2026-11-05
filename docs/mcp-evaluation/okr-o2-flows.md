@@ -78,6 +78,7 @@ fija. Se itera; todavía **no son pruebas de la suite**.
 | | **Configuración** | | | | |
 | 37 | `w-commercial-setup` | Tarifa y condiciones de pago | Tarifa, Condiciones de pago | ✅ | verificar |
 | 38 | `w-company-users-numbering` | Usuarios, roles, datos de la empresa y numeración | Usuarios, Roles, Organización, Secuencias de documentos | ✅/👁 | parcial |
+| 38b | `q-invoice-numbering` | Prefijo de las facturas de venta: la parte de 38 que también hace Holded | Secuencias de documentos | 👁 | sí |
 | | **Errores y negativas** | | | | |
 | 39 | `e-unknown-document` | Documento que no existe | Factura | 📄 | sí |
 | 40 | ~~`e-invalid-write`~~ | Cantidad negativa — **retirada del KR** (Etendo la acepta por diseño) | Pedido | 📄 | — |

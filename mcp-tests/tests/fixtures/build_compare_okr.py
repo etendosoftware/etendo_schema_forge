@@ -80,7 +80,7 @@ w(root / "compare.json", {
     "compareSchemaVersion": 1, "compareId": "20261014T1000-cmp-fixture",
     "startedAt": "2026-10-14T10:00:00Z", "finishedAt": "2026-10-14T10:30:00Z",
     "subject": "local", "repeat": 3,
-    "decision": {"ruleVersion": 2, "callsMargin": 0.20, "tokensMargin": 0.10},
+    "decision": {"ruleVersion": 3, "callsMargin": 0.20, "tokensMargin": 0.10},
     "suite": {"file": "okr.yaml", "sha": "deadbeef", "schemaVersion": 2},
     "probes": ["w-invoice-one-product-issued", "q-product-prices-stock", "f-process-sales-order",
                "e-unknown-document", "q-both-not-possible", "q-short-of-attempts", "q-tokens-missing"],
