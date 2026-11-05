@@ -20,6 +20,9 @@ import { translateImportRefusal } from '../../../lib/backendErrors.js';
  * - all or nothing: a refusal (e.g. more than pending, a discount conflict) imports no line.
  * The selectable quantity is the action's own pending (`availableOrderLines`: ordered − invoiced −
  * what any draft invoice already holds), so the popup never offers more than the server accepts.
+ * ETP-5828 (speed): the server path also LISTS through the invoice's actions — `availableOrders`
+ * for the orders and one `availableOrderLines` per order for the lines, price and pending — instead
+ * of the company-wide order list and two requests per order, and neither read re-reads the invoice.
  */
 
 /**
@@ -71,6 +74,48 @@ const actionUrl = (base, config, invoiceId, action) =>
 const rowsOf = async (res) => (await res.json())?.response?.data || [];
 
 /**
+ * ETP-5828 — the longest `availableOrders` page the popup asks for (the server's maximum on a
+ * sales invoice). The old read took at most 500 orders of the WHOLE company, so a customer's older
+ * orders vanished once the company passed 500; the action lists the customer's own pending ones.
+ */
+export const MAX_LISTED_ORDERS = 1000;
+
+/**
+ * ETP-5828 — `availableOrders` / `availableOrderLines` are reads served as POSTs: they never touch
+ * the invoice, so the post-action re-read of the record (`refreshVersion`, ETP-5434) is skipped.
+ * Every pending query used to re-read the whole invoice once per order.
+ */
+const readAction = (body) => ({ method: 'POST', body: JSON.stringify(body), refreshVersion: false });
+
+/**
+ * ETP-5828 — a failed `availableOrders` / `availableOrderLines` read is NOT "nothing to import":
+ * it rejects with this error, carrying the response body, and the popup tells the user
+ * (`InvoiceOrderImportModal`, `describeLoadFailure`) while showing what it showed before.
+ */
+export class OrderImportLoadError extends Error {
+  constructor(body) {
+    super('orderImportLoadFailed');
+    this.name = 'OrderImportLoadError';
+    this.body = body;
+  }
+}
+
+async function loadFailure(res) {
+  return new OrderImportLoadError(await res.json().catch(() => null));
+}
+
+/**
+ * The sentence for a failed order-import read: the server's refusal by its code when it has one,
+ * a request that got no answer by its own (already translated) message, otherwise the generic
+ * «No se pudieron cargar los documentos».
+ */
+export function describeLoadFailure(err, ui) {
+  const fallback = ui('documentsLoadError');
+  if (err instanceof OrderImportLoadError) return translateImportRefusal(err.body, ui, fallback);
+  return err?.message || fallback;
+}
+
+/**
  * The refusal of the import action in the user's language: its code (`importQuantityExceedsPending`,
  * `globalDiscountConflict`, …) is rendered by `translateImportRefusal`, never the server's English
  * prose; anything it cannot render becomes the generic "Failed to import lines".
@@ -89,8 +134,14 @@ async function actionErrorMessage(res, ui) {
  * global-discount notice needs (`useOrderGlobalDiscountImport`).
  */
 export async function fetchOrderDocuments({ apiFetch, config, base, bpId, invoiceId }) {
+  const viaServer = config.importVia === 'server';
   const [ordersRes, invLinesRes, headerRes] = await Promise.all([
-    apiFetch(`${base}/${config.orderSpec}/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
+    // ETP-5828 — the server path lists through the invoice's own `availableOrders` (the customer's
+    // completed orders in the invoice's currency with something pending, drafts counted); the
+    // client path keeps reading the order list and filtering it here.
+    viaServer
+      ? apiFetch(actionUrl(base, config, invoiceId, 'availableOrders'), readAction({ limit: MAX_LISTED_ORDERS }))
+      : apiFetch(`${base}/${config.orderSpec}/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
     apiFetch(`${base}/${config.invoiceSpec}/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`),
     apiFetch(`${base}/${config.invoiceSpec}/header/${invoiceId}`),
   ]);
@@ -119,19 +170,16 @@ export async function fetchOrderDocuments({ apiFetch, config, base, bpId, invoic
 
   let documents = [];
   let excludedByCurrency = false;
-  const orderDiscountMap = {};
+  if (viaServer && !ordersRes.ok) throw await loadFailure(ordersRes);
   if (ordersRes.ok) {
-    const candidates = (await rowsOf(ordersRes)).filter(o =>
-      o.documentStatus === 'CO'
-      && o.businessPartner === bpId
-      && Number(o.invoiceStatus ?? 0) < 100
-    );
-    documents = invoiceCurrency ? candidates.filter(o => o.currency === invoiceCurrency) : candidates;
-    excludedByCurrency = !!invoiceCurrency && documents.length === 0 && candidates.length > 0;
-    documents.forEach(o => {
-      if (o.etgoTotalDiscount) orderDiscountMap[o.id] = Number(o.etgoTotalDiscount);
-    });
+    ({ documents, excludedByCurrency } = viaServer
+      ? await listedOrders({ apiFetch, config, base, bpId, invoiceCurrency, rows: await rowsOf(ordersRes) })
+      : filterCandidateOrders(await rowsOf(ordersRes), bpId, invoiceCurrency));
   }
+  const orderDiscountMap = {};
+  documents.forEach(o => {
+    if (o.etgoTotalDiscount) orderDiscountMap[o.id] = Number(o.etgoTotalDiscount);
+  });
   return {
     documents,
     sharedContext: {
@@ -142,50 +190,94 @@ export async function fetchOrderDocuments({ apiFetch, config, base, bpId, invoic
   };
 }
 
-/** Pending per order line as the import action counts it (drafts included), or null if unread. */
-async function fetchActionPending({ apiFetch, config, base, invoiceId, orderId }) {
-  if (!invoiceId) return null;
+/**
+ * The client path's candidates: the partner's completed, not fully invoiced orders, those in the
+ * invoice's currency kept (`excludedByCurrency` when that empties a non-empty list).
+ */
+function filterCandidateOrders(orders, bpId, invoiceCurrency) {
+  const candidates = orders.filter(o =>
+    o.documentStatus === 'CO'
+    && o.businessPartner === bpId
+    && Number(o.invoiceStatus ?? 0) < 100
+  );
+  const documents = invoiceCurrency ? candidates.filter(o => o.currency === invoiceCurrency) : candidates;
+  return { documents, excludedByCurrency: !!invoiceCurrency && documents.length === 0 && candidates.length > 0 };
+}
+
+/**
+ * The server path's documents: the `availableOrders` rows, in the shape the popup reads
+ * (`orderDate`, `etgoTotalDiscount`). Only when that list is EMPTY is the partner's order list read
+ * (server-filtered by partner and status), so the popup still tells "no orders in this currency"
+ * apart from "no orders" — and, when the only orders left are entirely held by draft invoices,
+ * still lists them for the popup to hide, exactly as it did when it read every order.
+ */
+async function listedOrders({ apiFetch, config, base, bpId, invoiceCurrency, rows }) {
+  if (rows.length > 0) {
+    return {
+      documents: rows.map(r => ({
+        ...r,
+        orderDate: r.date,
+        documentStatus: 'CO',
+        etgoTotalDiscount: Number(r.globalDiscount) || 0,
+      })),
+      excludedByCurrency: false,
+    };
+  }
+  const criteria = encodeURIComponent(JSON.stringify([
+    { fieldName: 'businessPartner', operator: 'equals', value: bpId },
+    { fieldName: 'documentStatus', operator: 'equals', value: 'CO' },
+  ]));
   try {
-    const res = await apiFetch(actionUrl(base, config, invoiceId, 'availableOrderLines'), {
-      method: 'POST', body: JSON.stringify({ orderId }),
-    });
-    if (!res.ok) return null;
-    const rows = await rowsOf(res);
-    return new Map(rows.map(r => [r.id, Number(r.pendingQuantity) || 0]));
+    const res = await apiFetch(`${base}/${config.orderSpec}/header?criteria=${criteria}&_startRow=0&_endRow=500&_sortBy=creationDate desc`);
+    if (!res.ok) return { documents: [], excludedByCurrency: false };
+    return filterCandidateOrders(await rowsOf(res), bpId, invoiceCurrency);
   } catch {
-    return null;
+    return { documents: [], excludedByCurrency: false };
   }
 }
 
-/** The order's lines, each capped at what the import action still accepts. */
+/**
+ * ETP-5828 — the server path's lines: ONE `availableOrderLines` call per order brings every line
+ * the popup shows with its pending (drafts counted, this invoice included), price and product, the
+ * lines with nothing left included at 0 (`includeCovered`) so the popup still greys them out.
+ * It replaced the order lines GET + pending POST pair. Lines in `lineNo` order, as the GET listed.
+ */
+async function fetchServerOrderLines({ apiFetch, config, base, docId, sharedContext }) {
+  const invoiceId = sharedContext?.invoiceId;
+  if (!invoiceId) return [];
+  const res = await apiFetch(actionUrl(base, config, invoiceId, 'availableOrderLines'),
+    readAction({ orderId: docId, includeCovered: true }));
+  if (!res.ok) throw await loadFailure(res);
+  const rows = [...await rowsOf(res)].sort((a, b) => (Number(a.lineNo) || 0) - (Number(b.lineNo) || 0));
+  return rows.map(r => orderLineRow(r, Number(r.pendingQuantity) || 0, sharedContext));
+}
+
+function orderLineRow(l, pending, sharedContext) {
+  const unitPrice = Number(l.unitPrice) || 0;
+  const alreadyInCurrent = sharedContext?.alreadyImportedOrderLines?.has(l.id) || false;
+  return {
+    ...l,
+    _productName: l['product$_identifier'] || l.id,
+    _maxQty: pending,
+    _unitPrice: unitPrice,
+    _lineNetAmount: unitPrice * pending,
+    _alreadyImported: alreadyInCurrent || pending <= 0,
+  };
+}
+
+/** The order's lines, each capped at what the import still accepts. */
 export async function fetchOrderLines({ apiFetch, config, base, docId, sharedContext }) {
-  const [res, actionPending] = await Promise.all([
-    apiFetch(`${base}/${config.orderSpec}/lines?parentId=${docId}&_startRow=0&_endRow=200`),
-    // The client path never asks the action: its pending is the order line's ordered − invoiced.
-    config.importVia === 'server'
-      ? fetchActionPending({ apiFetch, config, base, invoiceId: sharedContext?.invoiceId, orderId: docId })
-      : null,
-  ]);
+  if (config.importVia === 'server') {
+    return fetchServerOrderLines({ apiFetch, config, base, docId, sharedContext });
+  }
+  // The client path never asks the action: its pending is the order line's ordered − invoiced.
+  const res = await apiFetch(`${base}/${config.orderSpec}/lines?parentId=${docId}&_startRow=0&_endRow=200`);
   if (!res.ok) return [];
   const lines = await rowsOf(res);
   return lines.map(l => {
     const ordered = Number(l.orderedQuantity) || 0;
     const invoiced = Number(l.invoicedQuantity) || 0;
-    // The action's pending wins (it counts draft invoices, this one included); a line it does not
-    // list has nothing left. Without it, the order line's own ordered − invoiced.
-    const pending = actionPending
-      ? (actionPending.get(l.id) ?? 0)
-      : Math.max(0, ordered - invoiced);
-    const unitPrice = Number(l.unitPrice) || 0;
-    const alreadyInCurrent = sharedContext?.alreadyImportedOrderLines?.has(l.id) || false;
-    return {
-      ...l,
-      _productName: l['product$_identifier'] || l.id,
-      _maxQty: pending,
-      _unitPrice: unitPrice,
-      _lineNetAmount: unitPrice * pending,
-      _alreadyImported: alreadyInCurrent || pending <= 0,
-    };
+    return orderLineRow(l, Math.max(0, ordered - invoiced), sharedContext);
   });
 }
 

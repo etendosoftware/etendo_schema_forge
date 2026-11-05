@@ -9,6 +9,12 @@ import ImportFromReturnShipmentModal from './ImportFromReturnShipmentModal';
 import ImportFromSourceInvoiceModal from './ImportFromSourceInvoiceModal';
 import { getArSubtype } from './invoiceSubtype';
 
+// ETP-5828 — «Importar desde pedido» only: an existing invoice with no header edits is not saved
+// (and so not re-read, and no «Registro guardado» toast) before the popup opens; with edits it is
+// saved as before. Every other «Importar desde…» popup keeps saving on open (DetailView's
+// handleImportClick default).
+const IMPORT_ORDER_SAVE_OPTIONS = Object.freeze({ skipSaveWhenClean: true });
+
 /**
  * Sales Invoice bottom section. Delegates to the shared LinesBottomSection so
  * the Docs/Notes/Totals layout stays identical to the rest of the
@@ -58,7 +64,7 @@ function InvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, recordId, 
 
   const handleImportOrderClick = async () => {
     pendingModal.current = 'order';
-    if (onSave) { const ok = await onSave('order'); if (!ok) return; }
+    if (onSave) { const ok = await onSave('order', IMPORT_ORDER_SAVE_OPTIONS); if (!ok) return; }
     setShowImportOrderModal(true);
   };
 
@@ -208,7 +214,7 @@ const InvoiceLineActions = forwardRef(function InvoiceLineActions(
 
   const openOrderModal = async () => {
     pendingModal.current = 'order';
-    if (onSave) { const ok = await onSave('order'); if (!ok) return; }
+    if (onSave) { const ok = await onSave('order', IMPORT_ORDER_SAVE_OPTIONS); if (!ok) return; }
     setShowImportOrderModal(true);
   };
 

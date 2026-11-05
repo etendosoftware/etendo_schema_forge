@@ -1202,8 +1202,8 @@ export function DetailView({
 
   // Save header first (if new → navigate with flag; if existing → save in place), then open import modal.
   // modalType ('order' | 'invoice') is forwarded in navigation state so the destination component
-  // knows which modal to auto-open via the forceOpen mechanism.
-  const handleImportClick = useCallback(async (modalType = 'order') => {
+  // knows which modal to auto-open via the forceOpen mechanism. ETP-5828: `skipSaveWhenClean` (opt-in, per caller) skips the save + re-read of an existing record with no header edits.
+  const handleImportClick = useCallback(async (modalType = 'order', { skipSaveWhenClean = false } = {}) => {
     if (isNew) {
       // Concurrent clicks share one create — see handleAddLineClick.
       const saved = await hook.handleSave();
@@ -1215,7 +1215,7 @@ export function DetailView({
       });
       return false;
     }
-    await hook.handleSave();
+    if (!skipSaveWhenClean || hook.isDirtyHeader) await hook.handleSave(); // skip only an unedited header, when asked
     return true;
   }, [isNew, hook, navigate, windowName, ui]);
 
