@@ -2,6 +2,7 @@
 // @covers artifacts/sales-invoice/custom/ImportFromOrderModal.jsx
 // @covers artifacts/purchase-invoice/custom/ImportFromPurchaseOrderModal.jsx
 // @covers tools/app-shell/src/windows/custom/shared/InvoiceOrderImportModal.jsx
+// @covers tools/app-shell/src/windows/custom/shared/importActionClient.js
 import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -190,6 +191,20 @@ describe('invoice order import (sales) — fetchDocuments lists through availabl
     const plain = [{ id: 'x' }, { id: 'y' }];
     assert.equal(newestCreatedFirst(plain), plain);
   });
+
+  for (const [name, rows, expected] of [
+    ['equal timestamps keep the server order (stable)',
+      [{ id: 'a', creationDate: '2026-01-01T10:00:00' }, { id: 'b', creationDate: '2026-01-01T10:00:00' }], ['a', 'b']],
+    ['rows without creationDate go last, in server order',
+      [{ id: 'n1' }, { id: 'a', creationDate: '2026-01-01T10:00:00' }, { id: 'n2' },
+        { id: 'b', creationDate: '2026-02-01T10:00:00' }], ['b', 'a', 'n1', 'n2']],
+    ['an unparseable creationDate sorts like a missing one',
+      [{ id: 'bad', creationDate: 'not a date' }, { id: 'a', creationDate: '2026-01-01T10:00:00' }], ['a', 'bad']],
+  ]) {
+    it(`newestCreatedFirst: ${name}`, () => {
+      assert.deepEqual(newestCreatedFirst(rows).map(r => r.id), expected);
+    });
+  }
 
   // ETP-6099 — lines are read on expand, so the row decides from the availableOrders row.
   it('the row hides an order with pendingLines 0 and totals it from amount', () => {
