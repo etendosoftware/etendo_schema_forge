@@ -119,8 +119,8 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
 
   const vfInvTypeDefaultedRef = useRef(null);
   const vfReverseTypeRef = useRef(null);
-  const siiRectifTypeRef = useRef(null);
-  const siiTipoRectifDefaultedRef = useRef(null);
+  // ETP-5747: the record id the user explicitly picked an SII invoice type for (see setSiiType).
+  const siiTypeUserChoiceRef = useRef(null);
 
   function getVal(key) {
     return data?.[key] ?? '';
@@ -128,6 +128,13 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
 
   function getDateVal(key) {
     return normalizeDateInputValue(data?.[key] ?? '');
+  }
+
+  // ETP-5747: the SII "Tipo factura" Select writes through here, so the auto-set-to-R effect
+  // below can tell a type the USER chose (respected) from one the record state was reset to.
+  function setSiiType(value) {
+    siiTypeUserChoiceRef.current = recordId;
+    onChange?.(siiTypeField, value);
   }
 
   // ETP-4390: Classic defaults etvfacInvType ("Tipo de Factura") to 'F1' at the AD
@@ -151,8 +158,7 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
   // ETP-4783: When SII is configured and the selected document type is rectificative
   // (isRectificative injected by AbstractInvoiceHeaderHandler.enrichIsRectificative),
   // auto-set the SII "Tipo de Factura" field (aeatsiiClaveTipo) to 'R' (Factura
-  // rectificativa). Keyed on recordId+isRectificative so a document-type change
-  // mid-session re-fires. Never clobbers a value that is already 'R'.
+  // rectificativa). Never clobbers a value that is already 'R'.
   //
   // ETP-5745 CP-10: sales-only. This effect used to also force `aeatsiiClaveTipoFc` to
   // 'R' on purchase invoices, even though `PURCHASE_CLAVE_TIPO_FC_OPTIONS` never offers
@@ -161,18 +167,23 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
   // (MCP's direct-DAL write skips both this effect and that validation, so it never saw
   // the failure). Purchase-side corrective-invoice support (rectification-reason handling,
   // AEAT XML payload) isn't implemented yet, so purchase invoices stay at 'F1' for now.
+  //
+  // ETP-5747: no longer a one-shot per record. The value it writes is a PENDING edit (saved with
+  // the "Motivo de rectificación", which EM_AEATSII_C_INV_RECT_CHK requires alongside 'R'), and
+  // anything that re-reads the record replaces pending edits with the stored 'F1' — "Importar
+  // desde factura origen" does exactly that after importing (DetailView onRefresh → fetchById).
+  // The old `${recordId}:rectif` guard had already fired, so the tab showed F1 until a page
+  // reload reset the guard. It now re-applies whenever the record shows anything but 'R',
+  // unless the user picked a type in the Select (setSiiType) — that choice is never overridden.
   useEffect(() => {
     if (isPurchaseInvoice) return;
     if (!showSii || !isDraft || !recordId) return;
     if (!data?.isRectificative) return;
-    const currentVal = data?.[siiTypeField];
-    if (currentVal === 'R') return; // already correct — no-op
-    const key = `${recordId}:rectif`;
-    if (siiRectifTypeRef.current === key) return;
-    siiRectifTypeRef.current = key;
+    if (data?.[siiTypeField] === 'R') return; // already correct — no-op
+    if (siiTypeUserChoiceRef.current === recordId) return; // the user chose — respect it
     onChange?.(siiTypeField, 'R');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPurchaseInvoice, showSii, isDraft, recordId, data?.isRectificative, siiTypeField, onChange]);
+  }, [isPurchaseInvoice, showSii, isDraft, recordId, data?.isRectificative, siiTypeField, data?.[siiTypeField], onChange]);
 
   // ETP-4783: "Tipo de Factura Rectificativa" (etvfacReverseinvtype) is hidden from
   // the UI. When the Verifactu invoice type is rectificative (R1–R5) the field must
@@ -201,13 +212,13 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
   // same default decisions.json already declares for this field (dead there: the field is
   // form:false, so the generator-declared defaultValue is never applied to any form). Never
   // clobbers a value the user (or Classic) already set.
+  // ETP-5747: no one-shot guard either — a re-read of the record (see the effect above) drops the
+  // pending 'I' together with the pending 'R', and both must come back. It only ever fills an
+  // empty field, so re-firing cannot loop or override anything.
   useEffect(() => {
     if (!showSii || !isDraft || !recordId) return;
     if (data?.[siiTypeField] !== 'R') return;
     if (data?.aeatsiiTipoRectif) return; // already has a value — never clobber
-    const key = `${recordId}:${data?.[siiTypeField]}`;
-    if (siiTipoRectifDefaultedRef.current === key) return;
-    siiTipoRectifDefaultedRef.current = key;
     onChange?.('aeatsiiTipoRectif', 'I');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showSii, isDraft, recordId, siiTypeField, data?.[siiTypeField], data?.aeatsiiTipoRectif, onChange]);
@@ -230,5 +241,6 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
     siiFieldReadOnly,
     getVal,
     getDateVal,
+    setSiiType,
   };
 }

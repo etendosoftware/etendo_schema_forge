@@ -1421,6 +1421,35 @@ describe('SifTab', () => {
       expect(onChange).not.toHaveBeenCalledWith('aeatsiiClaveTipo', expect.anything());
     });
 
+    // ETP-5747 repro: "Importar desde factura origen" re-reads the record after importing
+    // (DetailView onRefresh → fetchById), which replaces the pending 'R' with the stored 'F1'.
+    // The effect used to be a one-shot per record, so the tab kept showing F1 until a reload.
+    it('sales: re-applies R after a re-read of the record resets the pending value to F1', () => {
+      const onChange = vi.fn();
+      const props = (claveTipo) => makeProps({
+        data: { documentStatus: 'DR', isRectificative: true, aeatsiiClaveTipo: claveTipo },
+        onChange,
+      });
+      const { rerender } = render(<SifTab {...props('F1')} />);
+      rerender(<SifTab {...props('R')} />);
+      rerender(<SifTab {...props('F1')} />);
+      const rCalls = onChange.mock.calls.filter(([f, v]) => f === 'aeatsiiClaveTipo' && v === 'R');
+      expect(rCalls).toHaveLength(2);
+    });
+
+    it('sales: never overrides a type the user picked in the Select', () => {
+      const onChange = vi.fn();
+      const props = (claveTipo) => makeProps({
+        data: { documentStatus: 'DR', isRectificative: true, aeatsiiClaveTipo: claveTipo },
+        onChange,
+      });
+      const { rerender } = render(<SifTab {...props('R')} />);
+      fireEvent.click(screen.getByTestId('mock-select-option-F1'));
+      expect(onChange).toHaveBeenCalledWith('aeatsiiClaveTipo', 'F1');
+      rerender(<SifTab {...props('F1')} />);
+      expect(onChange).not.toHaveBeenCalledWith('aeatsiiClaveTipo', 'R');
+    });
+
     // ETP-5745 CP-10 — the corrected behavior under test.
     it('purchase: NEVER auto-sets aeatsiiClaveTipoFc to R, even when the invoice is rectificative', () => {
       const onChange = vi.fn();
@@ -1462,6 +1491,20 @@ describe('SifTab', () => {
       const onChange = vi.fn();
       render(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiClaveTipo: 'R' }, onChange })} />);
       expect(onChange).toHaveBeenCalledWith('aeatsiiTipoRectif', 'I');
+    });
+
+    // ETP-5747: the same re-read drops the pending 'I' with the pending 'R'; it must come back.
+    it('sales: re-applies I after a re-read of the record empties aeatsiiTipoRectif again', () => {
+      const onChange = vi.fn();
+      const props = (tipoRectif) => makeProps({
+        data: { documentStatus: 'DR', aeatsiiClaveTipo: 'R', aeatsiiTipoRectif: tipoRectif },
+        onChange,
+      });
+      const { rerender } = render(<SifTab {...props(null)} />);
+      rerender(<SifTab {...props('I')} />);
+      rerender(<SifTab {...props(null)} />);
+      const iCalls = onChange.mock.calls.filter(([f, v]) => f === 'aeatsiiTipoRectif' && v === 'I');
+      expect(iCalls).toHaveLength(2);
     });
 
     it('purchase: calls onChange with I when the SII type (ClaveTipoFc) is R and no value exists yet', () => {
