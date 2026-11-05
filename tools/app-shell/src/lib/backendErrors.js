@@ -256,6 +256,11 @@ const BACKEND_ERROR_MAP = {
   // AD_Message/i18n involvement, so it always renders in Spanish regardless of session
   // locale (ETP-4831 case 2, inverse symptom of the invoice-line skeleton below).
   'No hay líneas a facturar en este pedido': 'backendError.noLinesToInvoice',
+  // OrderDocumentAvailability.DRAFT_COVERS_INVOICE_UNNAMED (com.etendoerp.go — ETP-5828): the
+  // draft-covers 400 when no covering draft is readable by the role (another organization), so
+  // the sentence carries no numbers; the numbered form is matchDraftInvoiceCoversPending.
+  'A draft invoice already covers what is left to invoice; complete or delete it instead of creating another one.':
+    'backendError.draftInvoiceCoversPendingUnnamed',
   // ETP-5712: the backend answers 409 `returnInvoiceAlreadyExists` with exactly this sentence when
   // the return already has a non-voided rectificative invoice and the request does not carry
   // `allowDuplicate:true` (one per return, like the screen, which hides its button). ETP-5381 had
@@ -1210,6 +1215,24 @@ function matchDraftInvoiceExists(msg) {
   return docs ? { docs } : null;
 }
 
+// OrderDocumentAvailability.draftCoversInvoiceReason (com.etendoerp.go — ETP-5828): "Generar
+// factura" on a sales order whose draft invoices already hold everything left to invoice answers
+// 400 "A draft invoice (D1, D2) already covers what is left to invoice; complete or delete it
+// instead of creating another one." — the same sentence as the MCP's availableNow:false advice.
+// The draft numbers are one opaque {docs} param between the fixed prefix and suffix (never a
+// regex), kept in step with DRAFT_COVERS_INVOICE_PREFIX / _SUFFIX. Read by the bulk "Generar
+// factura" (BulkOrderMoreMenu), which no longer pre-skips orders with a draft invoice.
+const DRAFT_INVOICE_COVERS_PREFIX = 'A draft invoice (';
+const DRAFT_INVOICE_COVERS_SUFFIX = ') already covers what is left to invoice; complete or delete it instead of creating another one.';
+
+function matchDraftInvoiceCoversPending(msg) {
+  if (!msg.startsWith(DRAFT_INVOICE_COVERS_PREFIX) || !msg.endsWith(DRAFT_INVOICE_COVERS_SUFFIX)) {
+    return null;
+  }
+  const docs = msg.slice(DRAFT_INVOICE_COVERS_PREFIX.length, -DRAFT_INVOICE_COVERS_SUFFIX.length);
+  return docs ? { docs } : null;
+}
+
 // CreateDraftInvoiceHandler.java:606 (com.etendoerp.go) — "Order not found: " +
 // orderId. Fixed English prefix + dynamic order id appended, no closing delimiter
 // (ETP-4831 case 4, family B). Same plain-string-slicing rationale as
@@ -1654,6 +1677,7 @@ const PARAMETERIZED_MATCHERS = [
   [matchReturnReasonTooLong, 'backendError.returnReasonTooLong'],
   [matchReturnInvoiceWithoutAmount, 'backendError.returnInvoiceWithoutAmount'],
   [matchDraftInvoiceExists, 'backendError.draftInvoiceExists'],
+  [matchDraftInvoiceCoversPending, 'backendError.draftInvoiceCoversPending'],
   [matchOrderNotFound, 'backendError.orderNotFound'],
   [matchShipmentNotFound, 'backendError.shipmentNotFound'],
   [matchAccountAlreadyExists, 'backendError.accountAlreadyExists'],

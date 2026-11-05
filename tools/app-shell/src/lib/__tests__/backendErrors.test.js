@@ -4506,6 +4506,38 @@ describe('translateBackendError — draft invoice already exists (ETP-5714)', ()
     const ar = readFileSync(new URL('../../locales/es_AR.json', import.meta.url), 'utf8');
     assert.ok(ar.includes('Confirmala o eliminala antes de generar otra'));
   });
+
+  // ETP-5828 — the sales order's "Generar factura" answers 400 with this sentence when its draft
+  // invoices already hold everything left (OrderDocumentAvailability.draftCoversInvoiceReason).
+  const coversEs = fakeUiTranslator({
+    'backendError.draftInvoiceCoversPending': 'La factura borrador {docs} ya cubre lo que queda por facturar. Confírmala o elimínala en lugar de generar otra.',
+    'backendError.draftInvoiceCoversPendingUnnamed': 'Una factura borrador ya cubre lo que queda por facturar. Confírmala o elimínala en lugar de generar otra.',
+  });
+  const covers = (docs) => `A draft invoice (${docs}) already covers what is left to invoice; complete or delete it instead of creating another one.`;
+  // DRAFT_COVERS_INVOICE_UNNAMED: no covering draft is readable by the role, so no numbers at all.
+  const coversUnnamed = 'A draft invoice already covers what is left to invoice; complete or delete it instead of creating another one.';
+
+  for (const [label, message, expected] of [
+    ['numbered drafts keep their numbers', covers('FV-1, FV-2'),
+      'La factura borrador FV-1, FV-2 ya cubre lo que queda por facturar. Confírmala o elimínala en lugar de generar otra.'],
+    ['the unnamed sentence gets its own sentence', coversUnnamed,
+      'Una factura borrador ya cubre lo que queda por facturar. Confírmala o elimínala en lugar de generar otra.'],
+    ['empty parentheses stay untouched', covers(''), covers('')],
+  ]) {
+    it(`translates the draft-covers 400 from the { status, message } body — ${label}`, () => {
+      assert.equal(translateBackendErrorBody({ status: 'error', message }, coversEs, 'Error (400)'), expected);
+    });
+  }
+
+  it('ships backendError.draftInvoiceCoversPending with {docs} and its unnamed form in en_US, es_ES and es_AR (es_AR in voseo)', () => {
+    for (const loc of ['en_US', 'es_ES', 'es_AR']) {
+      const flat = readFileSync(new URL(`../../locales/${loc}.json`, import.meta.url), 'utf8');
+      assert.ok(flat.match(/"backendError\.draftInvoiceCoversPending":\s*"[^"]*\{docs\}/), `${loc} lost {docs}`);
+      assert.ok(flat.match(/"backendError\.draftInvoiceCoversPendingUnnamed":\s*"[^"{]+"/), `${loc} lacks the unnamed sentence`);
+    }
+    const ar = readFileSync(new URL('../../locales/es_AR.json', import.meta.url), 'utf8');
+    assert.ok(ar.includes('Confirmala o eliminala en lugar de generar otra'));
+  });
 });
 
 // Line-import action refusals (ETP-6002): `{ error: { code, message, product, requested, pending } }`

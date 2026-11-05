@@ -52,25 +52,26 @@ beforeEach(() => {
 // decides the draft-pending rule (MCP-2); flipping them back adds their row here again.
 describe.each([
   { direction: 'sales', invoiceSpec: 'sales-invoice', orderSpec: 'sales-order', titleKey: 'importFromSalesOrder' },
-])('InvoiceOrderImportModal ($direction, server path)', ({ direction, invoiceSpec, orderSpec, titleKey }) => {
+])('InvoiceOrderImportModal ($direction, server path)', ({ direction, invoiceSpec, titleKey }) => {
   const ok = (data) => ({ ok: true, json: async () => ({ response: { data } }) });
 
-  function renderModal({ orders, importRes = ok({ importedCount: 1 }) }) {
+  // ETP-5828 — the server path lists through the invoice's actions only: availableOrders for the
+  // orders and ONE availableOrderLines per order (price and product included); the order GETs are
+  // never read, so any of them is an unexpected request here.
+  function renderModal({ orders, importRes = ok({ importedCount: 1 }), ordersRes }) {
     mockApiFetch.mockImplementation(async (url, opts) => {
-      if (url.includes(`/${orderSpec}/header?`)) {
+      if (url.endsWith('/action/availableOrders')) {
+        if (ordersRes) return ordersRes;
         return ok(orders.map(o => ({
-          id: o.id, documentNo: o.id, documentStatus: 'CO', businessPartner: 'bp-1', invoiceStatus: 0,
-          currency: 'EUR', etgoTotalDiscount: o.pct, orderDate: '2026-10-30',
+          id: o.id, documentNo: o.id, businessPartner: 'bp-1', 'businessPartner$_identifier': 'BP 1',
+          currency: 'EUR', globalDiscount: o.pct, date: '2026-10-30', pendingLines: 1, amount: 100,
         })));
       }
       if (url.includes(`/${invoiceSpec}/lines?parentId=`)) return ok([]);
       if (url.endsWith(`/${invoiceSpec}/header/inv-1`)) return ok([{ currency: 'EUR', etgoTotalDiscount: 0 }]);
-      if (url.includes(`/${orderSpec}/lines?parentId=`)) {
-        const docId = new URL(url, 'http://x').searchParams.get('parentId');
-        return ok([{ id: `${docId}-l1`, 'product$_identifier': `Product ${docId}`, orderedQuantity: 1, invoicedQuantity: 0, unitPrice: 100 }]);
-      }
       if (url.endsWith('/action/availableOrderLines')) {
-        return ok([{ id: `${JSON.parse(opts.body).orderId}-l1`, pendingQuantity: 1 }]);
+        const docId = JSON.parse(opts.body).orderId;
+        return ok([{ id: `${docId}-l1`, lineNo: 10, 'product$_identifier': `Product ${docId}`, pendingQuantity: 1, unitPrice: 100 }]);
       }
       if (url.endsWith('/action/importOrderLines')) return importRes;
       throw new Error(`Unexpected request ${opts?.method || 'GET'} ${url}`);
@@ -187,9 +188,10 @@ describe.each([
 describe('InvoiceOrderImportModal (purchase, client path)', () => {
   const ok = (data) => ({ ok: true, json: async () => ({ response: { data } }) });
 
-  function renderModal({ orders, patchOk = true }) {
+  function renderModal({ orders, patchOk = true, ordersError }) {
     mockApiFetch.mockImplementation(async (url, opts) => {
       if (url.includes('/purchase-order/header?')) {
+        if (ordersError) throw ordersError;
         return ok(orders.map(o => ({
           id: o.id, documentNo: o.id, documentStatus: 'CO', businessPartner: 'bp-1', invoiceStatus: 0,
           currency: 'EUR', etgoTotalDiscount: o.pct, orderDate: '2026-10-30',
@@ -229,6 +231,14 @@ describe('InvoiceOrderImportModal (purchase, client path)', () => {
   const linePosts = () => calls(([url, opts]) => url === '/purchase-invoice/lines' && opts?.method === 'POST');
   const patches = () => calls(([, opts]) => opts?.method === 'PATCH');
   const actionCalls = () => calls(([url]) => url.includes('/action/'));
+
+  // ETP-5828 — the load-error toast is the sales (server) path's only: a failed purchase order read
+  // still ends silently in the usual "no orders" state.
+  it('a failed purchase order read shows no error toast, only the empty list', async () => {
+    renderModal({ orders: [], ordersError: new Error('Failed to fetch') });
+    expect(await screen.findByText('noCompletedPurchaseOrdersForThisSupplier')).toBeInTheDocument();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
 
   it('carries the order %: one line POST per line, then the header PATCH, and the carried toast', async () => {
     const orders = [{ id: 'PO-A', pct: 10 }];
