@@ -1,4 +1,5 @@
 import { KPI_BOOLEAN_KEYS, KPI_NUMERIC_RANGES, isNumberInRange } from './propertyPolicy.js';
+import { ROLE_GROUP_VALUES } from './roleGroups.js';
 
 const DENYLISTED_PROPERTY_KEYS = new Set([
   'authCode',
@@ -28,6 +29,7 @@ export const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'accuracy',
   'app',
   'attempt',
+  'auto_opened',
   'branch',
   'category',
   'channel',
@@ -57,6 +59,9 @@ export const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'mockMode',
   'operation',
   'orgId',
+  'pairs_checked_at_close',
+  'pairs_preselected',
+  'pairs_shown',
   'rowsTotal',
   'rowsCreated',
   'rowsFailed',
@@ -76,6 +81,7 @@ export const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'position',
   'provider',
   'reason',
+  'role_groups',
   'route',
   'routePattern',
   'score',
@@ -123,15 +129,33 @@ const NUMERIC_EVENT_PROPERTY_KEYS = new Map([
   ['columnsManuallyMapped', { min: 0, max: 1000000000 }],
   ['fkAutoResolved', { min: 0, max: 1000000000 }],
   ['fkCreated', { min: 0, max: 1000000000 }],
+  // Bounce suggestions of the automatch modal (ETP-5581): pair counts, integers only
+  // (INTEGER_EVENT_PROPERTY_KEYS).
+  ['pairs_shown', { min: 0, max: 1000000 }],
+  ['pairs_preselected', { min: 0, max: 1000000 }],
+  ['pairs_checked_at_close', { min: 0, max: 1000000 }],
 
   ...KPI_NUMERIC_RANGES,
 ]);
 
+// Numeric keys that are counts of whole things: a fractional value is dropped, not sent.
+const INTEGER_EVENT_PROPERTY_KEYS = new Set([
+  'pairs_shown',
+  'pairs_preselected',
+  'pairs_checked_at_close',
+]);
+
 const BOOLEAN_EVENT_PROPERTY_KEYS = new Set([
   ...KPI_BOOLEAN_KEYS,
+  'auto_opened',
   'enabled',
   'mockMode',
   'supportRequested',
+]);
+
+// The only keys that may carry a list, each with its closed set of values (ETP-6043).
+const LIST_EVENT_PROPERTY_VALUES = new Map([
+  ['role_groups', ROLE_GROUP_VALUES],
 ]);
 
 const SKIP_PROPERTY = Symbol('skip-property');
@@ -236,6 +260,10 @@ function sanitizeEventProperty(key, value) {
   }
   if (value == null) return SKIP_PROPERTY;
 
+  if (LIST_EVENT_PROPERTY_VALUES.has(key)) {
+    return sanitizeListProperty(key, value);
+  }
+
   if (NUMERIC_EVENT_PROPERTY_KEYS.has(key)) {
     return isSafeNumberForKey(key, value) ? value : SKIP_PROPERTY;
   }
@@ -251,7 +279,15 @@ function sanitizeEventProperty(key, value) {
   return typeof value === 'string' || typeof value === 'boolean' ? value : SKIP_PROPERTY;
 }
 
+function sanitizeListProperty(key, value) {
+  if (!Array.isArray(value)) return SKIP_PROPERTY;
+  const allowed = LIST_EVENT_PROPERTY_VALUES.get(key);
+  const kept = [...new Set(value.filter(item => allowed.has(item)))];
+  return kept.length > 0 ? kept : SKIP_PROPERTY;
+}
+
 function isSafeNumberForKey(key, value) {
+  if (INTEGER_EVENT_PROPERTY_KEYS.has(key) && !Number.isInteger(value)) return false;
   return isNumberInRange(value, NUMERIC_EVENT_PROPERTY_KEYS.get(key));
 }
 

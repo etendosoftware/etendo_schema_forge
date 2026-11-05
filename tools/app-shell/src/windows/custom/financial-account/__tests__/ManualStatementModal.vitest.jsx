@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/financial-account/ManualStatementModal.jsx
 import { useEffect, useState } from 'react';
 import { render, screen, waitFor, within, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -953,6 +954,35 @@ describe('ManualStatementModal', () => {
       // Editing reports "updated", not "created".
       expect(toastSuccess).toHaveBeenCalledWith('financeAccountStatementsManualUpdateSuccess');
       expect(toastSuccess).not.toHaveBeenCalledWith('financeAccountStatementsManualSuccess');
+    });
+
+    /**
+     * ETP-5581 — `?action=update` deletes and recreates the unmatched lines. A body line that
+     * carries the `id` of the line it replaces keeps what that line carried: the PSD2 transaction
+     * id (else the next bank sync imports the movement twice), the PSD2 discard flag and the
+     * bounce-pair link. Without it every edit silently dropped them.
+     */
+    it('sends the id of each hydrated line, and none for a line added in the editor', async () => {
+      linesRef.value = [{
+        id: 'ln-1', date: '2026-05-09T00:00:00Z', reference: 'REF9', description: '',
+        bpartnerName: 'Acme', bpartnerId: null, bpartnerFkName: '', glItemId: null, glItemName: '',
+        in: 250, out: 0,
+      }];
+      const user = userEvent.setup();
+      renderModal({ statement: STATEMENT });
+      await waitFor(() => expect(within(firstEditRow()).getByTestId('manual-line-ref')).toHaveValue('REF9'));
+
+      await user.click(screen.getByTestId('action-add-line'));
+      const added = within(screen.getAllByTestId('manual-line-editrow')[1]);
+      await user.type(added.getByTestId('manual-line-ref'), 'NEW');
+      await user.type(added.getByTestId('manual-line-in'), '10');
+      await user.click(screen.getByTestId('manual-statement-save'));
+
+      await waitFor(() => expect(updateStatement).toHaveBeenCalledTimes(1));
+      const { lines } = updateStatement.mock.calls[0][0];
+      expect(lines).toHaveLength(2);
+      expect(lines[0].id).toBe('ln-1');
+      expect(lines[1]).not.toHaveProperty('id');
     });
 
     /**

@@ -388,13 +388,7 @@ regen-help: ## Show usage and examples for `make regen`
 #
 # The gateway/ NestJS app serves public-api/base.v1.json, built by
 # `generate-base-public-api-manifest` from artifacts/*/contract.json and the gitignored
-# artifacts/*/schema-raw.json. `regen-public-api` writes a separate allowlist
-# (artifacts/_public-api/allowlist.v1.json) that no runtime component reads.
-# Same LOCAL_CORE dispatcher as `regen` above.
-
-.PHONY: regen-public-api
-regen-public-api: ## Generate artifacts/_public-api/allowlist.v1.json from curated publicApi fields
-	$(SF) sf-generate-public-api-schema --artifacts-root artifacts
+# artifacts/*/schema-raw.json. It is the only source of the public API schema.
 
 .PHONY: generate-base-public-api-manifest
 generate-base-public-api-manifest: ## Generate public-api/base.v1.json, the manifest the public API gateway serves
@@ -437,6 +431,10 @@ gateway-link-local-core: ## Build api-gateway-core in the sibling core repo and 
 .PHONY: gateway-dev-local-core
 gateway-dev-local-core: ## Start the gateway dev server against the linked local api-gateway-core (LOCAL_CORE dev only)
 	cd gateway && NODE_OPTIONS=--preserve-symlinks npm run start:dev
+
+.PHONY: public-api-e2e
+public-api-e2e: ## Run the public API end-to-end suite against a RUNNING gateway (PUBLIC_API_BASE_URL, PUBLIC_API_KEY; localhost only)
+	cd gateway && npm run test:e2e
 
 .PHONY: docs-api-sync
 docs-api-sync: ## Copy the running gateway OpenAPI contract into the Docusaurus portal
@@ -668,11 +666,12 @@ HOST ?=
 MCP_TARGET = $(or $(PROFILE),$(HOST))
 
 .PHONY: mcp-usage
-mcp-usage: ## Export ETGO_MCP_USAGE from a deployed instance (PROFILE=<name>|HOST=<ssh-alias> [MARK_REVIEWED=1] [INCLUDE_REVIEWED=1] [ARGS='...'])
+mcp-usage: ## Export ETGO_MCP_USAGE from a deployed instance (PROFILE=<name>|HOST=<ssh-alias> [MARK_REVIEWED=1 REVIEWER=<name>] [INCLUDE_REVIEWED=1] [ARGS='...'])
 	@if [ "$(HELP)" = "1" ]; then $(MAKE) -s mcp-usage-help; exit 0; fi; \
 	if [ -z "$(MCP_TARGET)" ]; then echo "PROFILE (or HOST) is required, e.g. make mcp-usage PROFILE=production"; exit 1; fi; \
 	scripts/mcp-usage-dump.sh $(MCP_TARGET) \
 		$(if $(filter 1,$(MARK_REVIEWED)),--mark-reviewed) \
+		$(if $(REVIEWER),--reviewer '$(REVIEWER)') \
 		$(if $(filter 1,$(INCLUDE_REVIEWED)),--include-reviewed) \
 		$(if $(filter 1,$(COUNT)),--count) \
 		$(if $(SINCE),--since $(SINCE)) \
@@ -842,6 +841,10 @@ merge-block-check: ## Merge-block pre-flight: PR checks across the 3 repos + cop
 .PHONY: check-modules
 check-modules: ## Check every Etendo repo/module is on its expected branch (FETCH=0, ONLY=a,b, ROOT=<env path>[,<path>], ALL_ENVS=1)
 	@node scripts/check-modules.js $(if $(filter 0,$(FETCH)),--no-fetch,) $(if $(ONLY),--only=$(ONLY),) $(if $(ROOT),--root=$(ROOT),) $(if $(ALL_ENVS),--all-envs,)
+
+.PHONY: checkout-modules
+checkout-modules: ## Move base repos (BASE_MOD=develop) and fixed-on-epic modules (EPIC_MOD=epic/ETP-3504) to their branch (PULL=1 also pulls; FETCH=0, ONLY=a,b, ROOT=<env path>)
+	@node scripts/checkout-modules.js $(if $(filter 1,$(PULL)),--pull,) $(if $(filter 0,$(FETCH)),--no-fetch,) $(if $(BASE_MOD),--base-mod=$(BASE_MOD),) $(if $(EPIC_MOD),--epic-mod=$(EPIC_MOD),) $(if $(ONLY),--only=$(ONLY),) $(if $(ROOT),--root=$(ROOT),)
 
 # --- CI parity -------------------------------------------------------------
 # These variable names are shared with unrelated targets earlier in this file
@@ -1085,8 +1088,8 @@ MODEL  ?=
 REPEAT ?=
 
 .PHONY: mcp-test
-mcp-test: ## Fire an agent probe suite at an MCP target (TARGET=, SUITE=, PROBE=, MODEL=, REPEAT=, CONCURRENCY=)
-	cd mcp-tests && uv run python -m runner.cli --target $(TARGET) --suite $(SUITE) $(if $(PROBE),--probe $(PROBE)) $(if $(MODEL),--model $(MODEL)) $(if $(REPEAT),--repeat $(REPEAT)) $(if $(CONCURRENCY),--concurrency $(CONCURRENCY))
+mcp-test: ## Fire an agent probe suite at an MCP target (TARGET=, SUITE=, PROBE=, MODEL=, REPEAT=, CONCURRENCY=, FEEDBACK=1 lets the agent send platform feedback)
+	cd mcp-tests && uv run python -m runner.cli --target $(TARGET) --suite $(SUITE) $(if $(PROBE),--probe $(PROBE)) $(if $(MODEL),--model $(MODEL)) $(if $(REPEAT),--repeat $(REPEAT)) $(if $(CONCURRENCY),--concurrency $(CONCURRENCY)) $(if $(filter 1,$(FEEDBACK)),--feedback-tools)
 
 TARGETS     ?= local,holded
 SUBJECT     ?=

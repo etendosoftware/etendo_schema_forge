@@ -2,7 +2,7 @@
   "version": "0.56.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
   "updatedAt": "2026-10-29T12:11:05.728Z",
-  "contractChecksum": "cfbe1d59acaf757a",
+  "contractChecksum": "d7df7f1a37619ed5",
   "apiPrediction": {
     "specName": "purchase-order",
     "baseUrl": "/sws/neo/purchase-order",

@@ -40,6 +40,7 @@ vi.mock('../use349Pdf.js', () => ({
   }),
 }));
 vi.mock('../../../FmCommon.jsx', () => ({
+  FmInfoTooltip: () => null,
   StatusPillMenu: () => null,
   KpiWidget: ({ value, label, valueColor, badgeBg, badgeColor }) => React.createElement(
     'div',

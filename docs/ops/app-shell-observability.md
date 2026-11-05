@@ -396,8 +396,8 @@ await stop({ status: 'success' });
 
 Payloads are normalized before providers receive them:
 
-- Allowed common fields: `app`, `environment`, `hostname`, `mockMode`, `route`,
-  `routePattern`, `timestamp`, and `windowName`.
+- Allowed common fields: `app`, `environment`, `hostname`, `mockMode`, `role_groups`,
+  `route`, `routePattern`, `timestamp`, and `windowName`.
 - Allowed KPI numeric fields: `accuracy`, `attempt`, `count`, `durationMs`,
   `position`, `score`, `step`, and `value`. These must be finite numbers within
   their configured bounds; strings and booleans are dropped for numeric keys.
@@ -413,6 +413,27 @@ Payloads are normalized before providers receive them:
 Do not pass free-form user-entered values to `track`, `page`, or future business
 events. Add new event fields to the allowlist only when they are stable,
 non-sensitive product metadata.
+
+### `role_groups` (ETP-6043)
+
+Every event carries `role_groups`, the coarse functional areas of the session's
+active role, so KPIs can segment by role (first consumer: the Product
+«Movimientos» tab KPIs in `etendo-kpis`, ETP-5889). It is the only list-valued
+property: the payload policy keeps a list of known values and drops anything else,
+including a plain string.
+
+| Value | When |
+|---|---|
+| `admin` | The role is the tenant admin (`selectedRole.isClientAdmin`); no other value is added |
+| `warehouse` / `sales` / `purchasing` / `finance` | The personal role composes the Inventory / Sales / Purchasing / Finance system template (`selectedRole.effectiveRoleNames`); one entry per template, sorted |
+| `other` | The role is known but composes none of those templates (a tenant not migrated to ETP-4852, or a future template) |
+| *(absent)* | The role is not known yet |
+
+The groups come from the system templates, never from the role name, which is
+free text per tenant. `useSessionStartTracking` keeps them in the common context
+with `setContext`, before `session_started` fires, follows a role switch, and
+clears them on unmount. In a Mixpanel `where`, filter with
+`"warehouse" in properties["role_groups"]`. Mapping: `lib/observability/roleGroups.js`.
 
 The health event helpers read `account_id` from the in-memory session identity
 (`lib/sessionIdentity.js`), which `trackSessionStarted` records on sign-in and

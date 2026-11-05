@@ -13,6 +13,7 @@ import {
   resolveDocumentCurrencyCode,
   useDocumentPdf,
 } from './documentPdf.js';
+import { QUOTATION_PDF_LABEL_KEYS, resolveLabelKeys } from './printableSources.js';
 
 // ---------------------------------------------------------------------------
 // Build quotation data for the template
@@ -94,14 +95,9 @@ export async function buildQuotationData(quotationId, base, token, currencyData 
  * @param {(key: string) => string} ui
  */
 export function buildQuotationPdfLabels(ui) {
-  return buildDocumentPdfLabels(ui, {
-    title:           ui('quotationPdfTitle'),
-    documentNo:      ui('quotationPdfDocumentNo'),
-    documentSection: ui('quotationPdfSection'),
-    date:            ui('quotationPdfDate'),
-    validUntil:      ui('quotationPdfValidUntil'),
-    colQty:          ui('quotationPdfColQty'),
-  });
+  // Key map in printableSources.js, which the build also publishes for the server-side
+  // render (ETP-6013) — one definition, so the two cannot drift.
+  return buildDocumentPdfLabels(ui, resolveLabelKeys(ui, QUOTATION_PDF_LABEL_KEYS));
 }
 
 export function useQuotationPdf(quotationId, apiBaseUrl, token, currencyData = null, cacheConfig = null) {
@@ -112,5 +108,5 @@ export function useQuotationPdf(quotationId, apiBaseUrl, token, currencyData = n
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [currencyData?.exchangeRate, currencyData?.orgCurrencyCode],
   );
-  return useDocumentPdf(quotationId, apiBaseUrl, token, buildData, labels, cacheConfig);
+  return useDocumentPdf(quotationId, apiBaseUrl, token, buildData, labels, cacheConfig, 'sales-quotation');
 }

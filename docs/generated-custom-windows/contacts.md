@@ -423,9 +423,9 @@ pending manual verification (steps below) rather than a follow-up ticket.
 
 | Classic field | Go field (camelCase) | Entity | Where it lives in Go |
 |---|---|---|---|
-| "Clave por Defecto" | `aeatsiiDefaultsiikey` | `customer` | Toggle in the Financial tab → **Default fiscal values** section, "SII" sub-block, `FiscalDefaultsSection.jsx` — shown only when `data.customer` is true (see part 3 below) |
+| "Clave por Defecto" | `aeatsiiDefaultsiikey` | `customer` | Toggle in the Financial tab → **Default fiscal values** section, "SII" sub-block, `FiscalDefaultsSection.jsx` — shown only when SII is active for the organization AND `data.customer` is true (ETP-5831, see "SIF-gated blocks" below) |
 | "Clave tipo factura" | `aeatsiiSiikeylist` | `customer` | Enum selector (`R`/`F1`/`F2`/`F4`) in the same "SII" sub-block, visible only when `aeatsiiDefaultsiikey` is checked |
-| "Factura Simplificada" | `tbaiIssimplifiedinv` | `businessPartner` | Toggle in the "TicketBAI" sub-block, `FiscalDefaultsSection.jsx` — always shown, unconditional (see part 3 below) |
+| "Factura Simplificada" | `tbaiIssimplifiedinv` | `businessPartner` | Toggle in the "TicketBAI" sub-block, `FiscalDefaultsSection.jsx` — shown only when TicketBAI is active for the organization (ETP-5831, see "SIF-gated blocks" below) |
 
 **SII (`aeatsiiDefaultsiikey` / `aeatsiiSiikeylist`):** both fields were already `editable`
 and already pushed to NEO from earlier work — only the UI wiring was missing. **Correction
@@ -504,6 +504,9 @@ and all Contacts vitest suites (`BillingPreferencesForm.vitest.jsx`,
 
 ## ETP-4784 (part 3) — Simplified back to Classic parity, no "SII/TBAI active" gating
 
+> **Superseded by ETP-5831 (CP-20)** — see "SIF-gated blocks" right after this section. Kept
+> for the history of the decision.
+
 Parts 3 and 4 of this ticket (see git history for the discarded intermediate design)
 explored gating the "SII"/"TicketBAI" blocks on whether the contact's organization actually
 had SII/TicketBAI configured — first by fetching and filtering the `sii-config`/`tbai-config`
@@ -544,6 +547,34 @@ custom-component revert. Verified with `npx vitest run src/windows/custom/contac
 Contacts suites pass; `FiscalDefaultsSection.vitest.jsx` rewritten to cover: SII block
 visible/hidden by `data.customer`, TicketBAI block always visible, and both toggles' wiring
 to `onChange`).
+
+## ETP-5831 (CP-20) — SIF-gated blocks
+
+QA (ETP-5831 CP-20) reported the section offering SII and TicketBAI options to tenants where
+those SIF are not active. Product decision (this ticket): **each option depends on its own SIF
+being active for the organization**, deliberately departing from Classic's AD DisplayLogic (part
+3 above). `FiscalDefaultsSection.jsx` now reads the organization's active fiscal configuration
+through the existing `useFiscalConfig(orgId, apiBaseUrl)` (`fiscal-config/useFiscalConfig.js` —
+the same reader the invoice windows and the Organization window's fiscal sections use; no new
+reader). `orgId` is the organization selected in the top-nav (`useAuth().selectedOrg`), the same
+source as the invoice lists' SIF columns: a business partner usually lives at org `*`, which never
+carries a SIF config. `ContactsFinancialPanel.jsx` now passes `apiBaseUrl` down.
+
+The rule is the exported pure `resolveFiscalDefaultsBlocks({ fiscal, isCustomer })`:
+
+- **"SII" block** (`aeatsiiDefaultsiikey` + `aeatsiiSiikeylist`) — an active SII config
+  (`siiRecord`) **and** `data.customer` true (the customer gate is unchanged).
+- **"TicketBAI" block** (`tbaiIssimplifiedinv`) — an active TicketBAI config (`tbaiRecord`).
+- **VERI\*FACTU** — the section has no VERI\*FACTU-specific option, so nothing to gate.
+- **Neither block → no section at all**: the component returns `null`, title, description and
+  divider included. The divider (`<hr>`) moved from `ContactsFinancialPanel.jsx` into the
+  section for that reason, so a hidden section leaves no stray rule.
+- **Fail closed, no flash:** until `useFiscalConfig` has settled (a resolved `profile` or an
+  `error` — it starts at `loading: false, profile: null`), and after a failed read, no block is
+  shown. Same "settled" rule as `organization/useFiscalSectionVisibility.js`.
+
+Hidden is not stripped: hiding a block never clears the stored values; they reappear when the SIF
+is activated again.
 
 ## ETP-4784 (part 4) — SII fields silently discarded on save (fix)
 
@@ -1757,3 +1788,31 @@ simplified flag, the note stays hidden. Logic:
    message, and the invoice stays in draft.
 4. From a purchase invoice, use "+ Añadir dirección" on a supplier-only contact (not a customer)
    and leave the postal code empty: no note appears.
+
+## Contact searchKey over MCP — ETP-5852
+
+As in the app (whose form does not show it), a contact's `searchKey` is its number (`etgoIdentifier`). `etendo_schema(view:"create")` lists it as optional, `serverDefaulted` (`BusinessPartnerHandler#serverResolvedCreateFields`), and the placeholder the save needs is put before MCP's mandatory pre-check (`resolveServerCreateFields`), so a create without it is no longer refused. A value the agent sends is still replaced by the number, and the answer says so in `searchKeyNote`. Field `agentPrompt` tells agents not to send it. Feedback M-107.
+
+## Contact address name over MCP — ETP-5852
+
+An address created over MCP without `name` gets the name the address editor gives (city and address line, else region and country, else "Location"), not the AD default ".". Feedback M-168.
+
+## Agent prompts on accounting accounts — ETP-5852
+
+The account fields of `customerAccounting` and `vendorAccounting` tell agents they take an accounting combination id, found with `etendo_selectors` by account number, not a chart-of-accounts `elementValue` id. Feedback M-129.
+
+## Billing preferences of a new contact over MCP — ETP-5852
+
+As in the app, a new contact is saved without billing preferences (`priceList`, `paymentTerms`, `paymentMethod`, `account`, `customerBlocking` and their purchase twins): the form fills them in after the contact exists. Over MCP a value the agent itself sends on create is now kept (it was dropped without a word); the defaults pass still does not fill them. `etendo_schema(view:"create")` no longer marks them `serverDefaulted` and `etendo_defaults` no longer offers them (`BusinessPartnerHandler#createUnsetFields`). The entity `agentPrompt` says so. REST and the app are unchanged. Feedback M-106.
+
+## Where a contact's email goes, for agents — ETP-5848
+
+The OKR O2 sweep (`docs/mcp-evaluation/okr-o2-sweep-analysis.md`, H4) found an agent spending 20 calls of a 25-call "add this customer with their email" deciding between `businessPartner.etgoEmail`, a `contact` row and a user. Three agent-facing texts now settle it, with no change of behavior:
+
+- the spec prompt (`agent-prompts/contacts/spec.md`) says the contact itself is `businessPartner`, with its name, tax ID, email (`etgoEmail`), phone and website, and that `contact` holds the people who work for it;
+- `businessPartner.etgoEmail` (`agent-prompts/contacts/business-partner.etgo-email.md`): the contact's own address, the one documents are sent to;
+- `contact.email` (`agent-prompts/contacts/contact.email.md`): a person's email, not the contact's.
+
+The agentic docs served by the `docs` tool (`etendo-go-docs/agentic/contacts/index.md`) carry the same field map for customers and vendors.
+
+**Verify:** `etendo_schema(spec: "contacts", view: "create")` lists `etgoEmail` with that `agentPrompt`; re-run the okr probe `w-customer-crud` and compare its calls with the sweep (25).

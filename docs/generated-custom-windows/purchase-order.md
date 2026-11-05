@@ -90,6 +90,7 @@ The current evidence shows a purchase-order-specific experience rather than a ge
 - Save button dirty-state tracking: the "Save" and "Save Draft" buttons are disabled whenever there are no pending unsaved changes (`isDirty = false`). Four independent sources make `isDirty` true: (1) any header field value differs from the last-saved record; (2) an add-row form is open on the primary lines tab; (3) an add-row form is open on a secondary child tab; (4) a sidebar line edit is open. The "Confirm" button in draftMode is never blocked by dirty state — completing an order is always allowed regardless of whether header changes are pending. New records always have Save active because backend defaults populate the form immediately on open. After a successful save, `selected` syncs to the server response and the button disables automatically. Reverting a changed field back to its original value also disables the button. When a line is added, `refreshHeaderTotals` updates server-computed totals in `editing` without overwriting fields the user explicitly changed, so pending header edits survive line operations.
 - Copy-link visibility (ETP-4721): in the grid selection bar, `Copy link` appears only when exactly one row is selected — hidden with 0 or 2+ rows selected. In the detail topbar, `Copy link` is visible whenever the record has a persisted `recordId` (not the unsaved `'new'` sentinel), with no selection gate since detail always represents a single record. Both copy `{origin}/{windowName}/{recordId}` to the clipboard, show a `Link copied` / `Enlace copiado` toast, and display a `Copy link` / `Copiar enlace` tooltip on hover. The legacy dead link icon previously shown in the idle-state (no-selection) grid toolbar is now hidden via the `hideLink` prop passed to `<ListView>`.
 - Header totals default to 0 on a new record — ETP-5676: `grandTotalAmount` and `summedLineAmount` declare `"defaultExpr": "0"` in `decisions.json`, so `GET /defaults` returns `"0"` for both (via `ETGO_SF_FIELD.defaultvalue`). Neither is in `requiredHeaderFields` any more — the generator excludes readOnly fields from the add-lines guard (ETP-5676) — so "+ Añadir líneas" no longer waits for them; the default only makes the totals read 0 before the header's first save.
+- Company agent defaults to the session user — ETP-6036: `salesRepresentative` (`companyAgent`, `SalesRep_ID`, hidden in the form) declares `"defaultExpr": "@#AD_User_ID@"`. `SalesRep_ID` has no AD default, so `GET /defaults` (and MCP `etendo_defaults`) used to fall back to the first row of the user combo, `Admin`, whoever was logged in. The field is renamed (`name: "companyAgent"`), and `push-to-neo` only carries a renamed field's `defaultExpr` (and `agentPrompt`) since schema_forge_core keys them by the pushed name (ETP-6036, `buildFieldDefaultExprMap`); with an older core pin the value is not pushed and `make regen-check` reports the `DEFAULTVALUE` as drift.
 
 ## MCP agent actions — ETP-5709
 
@@ -168,7 +169,7 @@ See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#
 - `artifacts/purchase-order/custom/BulkPurchaseOrderMoreMenu.jsx` proves the kebab-menu bulk creation flow that wraps `createPurchaseInvoice` / `createGoodsReceipt` NeoHandlers in a `Promise.allSettled` loop with `useBulkActionToast` aggregation.
 - **ETP-5302 — selection-bar button renamed to "Procesar", dropdown option renamed to "Confirmar"**: the floating selection-bar button is now mounted with `labelKey="process"` ("Procesar" / "Process") — the `confirmBulk` key it used before was deleted from `en_US.json`, `es_ES.json` and `es_AR.json`. In the same move, `BulkDocumentAction`'s `CO` entry (in both `buildInOutActions` and the default `buildActions`) switched from `labelKey: 'book'` to `labelKey: 'confirm'`, so the dropdown option that completes the document now reads "Confirmar" / "Confirm". The `RE` entry keeps `labelKey: 'reactivate'`. Labels only — the dialog, the per-row `Promise.allSettled` loop, the `documentAction=CO` call and the result toast are untouched. **Superseded in part:** when this note was written the window still excluded `RE` from its bulk dropdown (the ETP-4011 exclusion, carried by `buildInOutActions`). ETP-5302 later folded the two buttons into one and dropped `buildInOutActions` here entirely, so this window's dropdown now offers `RE` as well — see the `Reactivate` bullets under "Gap assessment". The rename described above is unaffected.
 - **ETP-5302 — the kebab's bulk actions no longer reload the page**: `ListView.jsx` now hands `refresh` (a stable in-place refetch) to the `bulkActions` slot context. `BulkPurchaseOrderMoreMenu` accepts it and ends with `clearSelection()` → `showBulkActionToast(ui, result)` → `refresh()`, so "Crear facturas" / "Crear albaranes" keep the user's scroll position and active filters instead of rebooting the SPA. Its `runBulkPurchaseOrderAction` helper now **returns** `{ ok, failed }` rather than writing it to `sessionStorage` itself — persisting is the caller's decision and happens only on the legacy fallback path, kept for a host mounted outside `ListView`'s slot. The same treatment was applied to `BulkDocumentAction` (the `Procesar` button beside this kebab) and to `artifacts/sales-order/custom/BulkOrderMoreMenu.jsx`. Note it calls the exported `showBulkActionToast(ui, result)`, not `useBulkActionToast()`: mounting the hook to reach `showResult` also installs its `sessionStorage`-draining effect, which would consume the caller's own persisted result before a fallback reload could hand it to the next mount. Full contract: `docs/ui-customization.md` §9e.
-- **ETP-5302 — orders deliberately do NOT carry `preUnpostActions`**: `BulkDocumentAction` gained a `preUnpostActions` prop so a bulk `RE` can reverse a posted record's accounting first, mirroring the `preUnpost: true` flag the detail kebab honours. `sales-invoice` and `purchase-invoice` mount it as `preUnpostActions={['RE']}`; **this window does not**. The reason is Core's `C_ORDER_POST1.xml` has no `Posted` guard on its `RE` branch at all, so there is nothing to work around even now that ETP-5315 offers `RE` here again — unposting first would be a gratuitous accounting reversal. Do not "harmonise" this by copying the invoice wiring onto the order windows.
+- **ETP-5302 — orders deliberately do NOT carry `preUnpostActions`**: `BulkDocumentAction` gained a `preUnpostActions` prop so a bulk `RE` can reverse a posted record's accounting first, mirroring the `preUnpost: true` flag the detail kebab honours. `sales-invoice` and `purchase-invoice` mount it as `preUnpostActions={['RE']}`; **this window does not**. The reason is Core's `C_ORDER_POST1.xml` has no `Posted` guard on its `RE` branch at all, so there is nothing to work around even now that ETP-5315 offers `RE` here again — unposting first would be a gratuitous accounting reversal. Do not "harmonise" this by copying the invoice wiring onto the order windows. **ETP-5684:** the prop no longer exists — reactivating a posted invoice or amortization un-posts on the server.
 - **ETP-5302 — dialog confirm button reads "Aceptar"**: `BulkDocumentAction`'s dialog footer now calls `ui('accept')` instead of `ui('done')`. `done` translates to "Completado", the name of a document *state* shown in this list's status column, so the button read as though it would mark the documents completed. `accept` is a new key in all three locale files; `done` was left in place because `RecordCreateModal.jsx` still uses it.
 - `artifacts/purchase-order/custom/PurchaseOrderActions.jsx` (`ConfirmModal`) tracks `orderConfirmed`, `receiptResult`, and `invoiceResult` in component state to make `handleConfirm` idempotent across retries. Each step is wrapped in a `!persistedResult` guard so retries never re-trigger a step that already succeeded, and the `onConfirmed` callback uses `currentX ?? persistedX` to ensure the result modal shows every document created during the multi-attempt confirmation, regardless of which attempt produced each one.
 - **ETP-4721 — Copy link**: `tools/app-shell/src/hooks/useCopyLinkAction.js` implements `useCopyLinkAction` (grid selection-bar copy) and `useCopyRecordLinkAction` (detail-topbar copy); `tools/app-shell/src/components/contract-ui/CopyLinkButton.jsx` and `CopyRecordLinkButton.jsx` render the tooltip-wrapped buttons for each context. `tools/app-shell/src/windows/custom/purchase-order/index.jsx` wires the grid action into `bulkActions` and passes `hideLink` to `<ListView>`. **Since ETP-5260**, the detail-topbar Copy link button no longer lives in `PurchaseOrderActions.jsx` (`topbarRight`) — it moved to `PurchaseOrderSecondaryActions.jsx` (`topbarSecondary`), left of Save/Confirm, alongside Clone and Send.
@@ -181,7 +182,7 @@ See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#
 - `origin/develop:artifacts/purchase-order/generated/web/purchase-order/HeaderPage.jsx` at `36f10538` proves `hideSaveStatuses={['CO','CL','VO']}` on the detail page.
 - `e2e/tests/flows/purchase-order-create.spec.js` provides browser-level checks for the new-order `Save` / `Save draft` / `Cancel` controls, order-line-tab visibility before first save, and cancel-to-list navigation.
 - `e2e/tests/flows/purchase-order-partner-address-bug.spec.js` provides browser-level evidence that the partner-address selector is expected to enable and offer vendor locations after business-partner selection.
-- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/PurchaseOrderHeaderHandler.java` extends `AbstractOrderHeaderHandler` and is the CDI bean registered as `purchaseOrderHeaderHandler`. Its inherited `afterHandle()` appends `hasLinkedDocuments` to every GET response record (single and batch), and since ETP-5295 also `needsPrimaryDoc` (the receipt, for this window) and `needsInvoiceDoc`, computed with the detail form's own formula — pending quantity/amount AND no draft document already covering it — which the frontend reads through `tools/app-shell/src/windows/custom/shared/orderPendingDocs.js`. As of ETP-5315 this field is consumed by all three Reactivate surfaces on the purchase-order frontend — the detail-view `window.menuActions` gate, `useOrderWindow`'s row-hover `menuActions` builder, and `PurchaseOrderReactivateBulkAction`'s `rowFilter` — no backend work was needed since the field was already computed for both order windows by this shared handler; only the frontend consumption had been removed as part of ETP-4011.
+- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/PurchaseOrderHeaderHandler.java` extends `AbstractOrderHeaderHandler` and is bound to `purchase-order/header` by `@NeoExtension(spec = "purchase-order", entity = "header")` (ETP-6108; it used to be the `purchaseOrderHeaderHandler` `Java_Qualifier`, cleared in the same change). Its inherited `afterHandle()` appends `hasLinkedDocuments` to every GET response record (single and batch), and since ETP-5295 also `needsPrimaryDoc` (the receipt, for this window) and `needsInvoiceDoc`, computed with the detail form's own formula — pending quantity/amount AND no draft document already covering it — which the frontend reads through `tools/app-shell/src/windows/custom/shared/orderPendingDocs.js`. As of ETP-5315 this field is consumed by all three Reactivate surfaces on the purchase-order frontend — the detail-view `window.menuActions` gate, `useOrderWindow`'s row-hover `menuActions` builder, and `PurchaseOrderReactivateBulkAction`'s `rowFilter` — no backend work was needed since the field was already computed for both order windows by this shared handler; only the frontend consumption had been removed as part of ETP-4011.
 - `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/AbstractOrderHeaderHandler.java` — shared base class; contains all `afterHandle()` logic including the batch IN query used on list responses to avoid N+1 DB calls.
 - Evidence reviewed for this document:
   - `tools/app-shell/src/menu.json`
@@ -296,10 +297,11 @@ Booking a draft order over MCP:
     etendo_action { spec: "purchase-order", entity: "header", id: "<orderId>",
                  action: "documentAction", parameters: { docAction: "CO" } }
 
-Flow encoded in the prompt: `DR -> CO` books, `DR -> VO` voids, `CO -> RE` reactivates it back to
-`DR`, but only while the order has no linked documents (no receipt or invoice generated from it) —
-the UI hides Reactivate in that case and the process will reject it — and `CO -> CL` closes pending
-quantities. **This window now has a Reactivate menu action** (`window.menuActions` in
+Flow encoded in the prompt (ETP-6108, same allow-list as `sales-order`): `DR -> CO` and
+`IP -> CO` book, `CO -> RE` reactivates it back to `DR`, but only while the order has no linked
+documents (no receipt or invoice generated from it) — the UI hides Reactivate in that case and the
+pre-hook refuses it. Close (`CL`), Void (`VO`) and Prepare (`PR`) are not offered by the window and
+are refused with 400 in every status. **This window now has a Reactivate menu action** (`window.menuActions` in
 `decisions.json`, added by ETP-5315), matching `sales-order`'s own conditional Reactivate.
 
 This runs `PurchaseOrderHeaderHandler` exactly as the UI does — including the pre-CO
@@ -482,7 +484,7 @@ confirmed, that 400 is reliable. Do not expect a 409 here — the 409s in this
 ticket belong to the shipment/receipt/quotation/return windows.
 
 **To modify a generated invoice**, the user reactivates it. `purchase-invoice`
-exposes a `reactivate` menu action (`documentAction: 'RE'`, `preUnpost: true`,
+exposes a `reactivate` menu action (`documentAction: 'RE'`,
 visible at `DocStatus='CO'`), which is now the only route back to `DR`. The
 previous "review the draft before confirming it" workflow no longer exists on
 this path.
@@ -641,9 +643,10 @@ A refusal because the document's date has no open accounting period (`PeriodNotA
 ## Which actions apply now, and what the values mean over MCP — ETP-5714
 
 - `etendo_schema(spec, entity, view:"actions", id:<purchase order id>)` says `availableNow` / `unavailableReason` per action for that
-  record, and `availableValuesNow` for `documentAction`: a draft takes `CO`, `VO` or `PR`; a completed order takes `CL` or `RE`.
-  `RE` is reported unavailable (`unavailableValues`) while the order has linked shipments, receipts or invoices, the rule
-  behind the UI's `hasLinkedDocuments` flag. Advice only: nothing is blocked by it.
+  record, and `availableValuesNow` for `documentAction`: a draft or in-progress order takes `CO`; a completed order takes `RE`.
+  `RE` is reported unavailable (`unavailableValues`) while the order has linked receipts or invoices, the rule
+  behind the UI's `hasLinkedDocuments` flag. Every other value is reported under `unavailableValues` with its reason and is
+  refused by the pre-hook (see "Only the document actions the window offers run" below).
 - `createGoodsReceipt` and `createPurchaseInvoice` applies to a completed order only.
 - The classic *Cancel and Replace* buttons (and, on the purchase order, *Pick from Receipt*) are hidden from agents with a reason:
   they are multi-step classic flows with no MCP equivalent. To change a completed order, reactivate it, edit it and complete it again.
@@ -681,3 +684,54 @@ Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.41 and the ETP
 ## Manage-documents popup title follows the pending action — ETP-5688
 
 `CreateDocsModal` (`artifacts/purchase-order/custom/PurchaseOrderActions.jsx`) used to title itself with the fixed `soManageDocsTitle` ("Generar factura") even when only the receipt was pending. The title now comes from the same `poManageDocsLabel(ui, needsReceipt, needsInvoice)` helper that labels the detail-view button: `poManageReceiptAndInvoice` ("Gestionar recepción y factura") when both are pending, `poManageInvoice` ("Gestionar factura") for invoice only, `poManageReceipt` ("Gestionar recepción") for receipt only, falling back to `soManageDocsTitle` only if the modal opens with nothing pending. It follows what is **pending** (`derived.needsReceipt` / `derived.needsInvoice`), not what the user ticked, and applies to both openers (the detail button and `ManageDocsLauncher`, used by the list-row kebab). Mirrors the Sales Order change in ETP-5525.
+
+## Agent prompts on order date and line tax — ETP-5852
+
+`orderDate` (M-31) and `lines.tax` (M-35). Over MCP a line price sent alone on update is the line's Precio and the net follows the discount, as on create (M-103).
+
+## Order date and accounting date — ETP-5852
+
+`orderDate.agentPrompt` also says the accounting date always follows the order date (`mirrorAccountingDate`, ETP-4531), so an agent changing it expects both to move. Feedback M-183.
+
+## Voided order lines — ETP-5852
+
+`lines.lineGrossAmount.agentPrompt`: on a voided order the line keeps its gross amount while quantity and net drop to 0 (checked live), so agents read the header status before adding lines up. Feedback M-240.
+
+## Cancelling a line — ETP-5852
+
+`lines.agentPrompt`: a single line of a booked order cannot be cancelled; reactivate and edit while there are no linked documents, otherwise the order can be neither reactivated nor closed (CL is refused with 400, ETP-6108) and any correction goes through the linked documents (receipts or invoices). Feedback M-123.
+
+## Agent prompt on the business partner — ETP-5852
+
+`businessPartner.agentPrompt`: names can repeat; agents tell partners apart by reading `searchKey` and `taxID` from `contacts/businessPartner` with an `id in [...]` filter. Feedback M-191.
+
+### Only the document actions the window offers run — ETP-6108
+
+Over MCP, `etendo_action` with `docAction: "CL"` closed a completed purchase order (ordered quantity
+and totals zeroed), which the Purchase Order window never offers. The `DocAction` button is now an
+**allow-list** per stored `documentStatus`, identical to the sales order's (`OrderDocActionPolicy`,
+shared by both handlers):
+
+| Status | Accepted | Where the UI sends it |
+|---|---|---|
+| `DR` | `CO` | Confirmar (form, row action, bulk bar) |
+| `IP` | `CO` | Treated like sales; it could not be reproduced on screen |
+| `CO` | `RE` (and `CO`, a no-op) | Reactivar, only without linked receipts or invoices. `CO` is let through only for the bulk bar's mixed selections (`DocActionIdempotency` answers "already applied") |
+| any other | nothing | — |
+
+- `PurchaseOrderHeaderHandler.handle()` decides on the **effective** value (root `docAction` when the
+  DAL accepts it, else the stored one) through `DocActionRefusalGuard.refuseUnlessAllowed`; a
+  request with nothing to run is refused, an unknown id answers 404, an unreadable status 500.
+  REST single, REST batch and MCP all reach it.
+- **Refusal**: HTTP 400 with `messageKeys` `ETGO_PurchaseOrderCloseNotOffered` (CL),
+  `ETGO_PurchaseOrderVoidNotOffered` (VO) or `ETGO_PurchaseOrderActionNotOffered` (any other
+  value), English / Spanish. `RE` on a draft goes on to `DocActionReactivationRule`'s 422
+  `ETGO_ReactivateOnlyCompleted`, as on sales.
+- **Reactivate with linked documents** is refused with 400 `ETGO_PurchaseOrderReactivateLinkedDocs`
+  (`OrderReactivationGuard`, same rule as the `hasLinkedDocuments` flag that hides the action in the
+  UI); a lookup that cannot run fails closed with 500.
+- **Advertised**: `MCP_CONFIG.actions.valuesByStatus` is the same list (`DR` -> CO, `IP` -> CO,
+  `CO` -> RE, `VO`/`CL` -> none) and `PurchaseOrderHeaderHandler.unavailableActions` reports every
+  other value with the purchase order's own reason.
+- The handler is bound by `@NeoExtension(spec = "purchase-order", entity = "header")`; its
+  `Java_Qualifier` and the `javaQualifier` in `decisions.json` were removed together.

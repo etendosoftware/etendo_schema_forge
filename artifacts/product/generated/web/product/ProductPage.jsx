@@ -12,6 +12,7 @@ import ProductStockDefaultsWatcher from '@/windows/custom/product/ProductStockDe
 import { AttachmentsTab } from '@/components/attachments';
 import ProductCostBanner from '@/windows/custom/product/ProductCostBanner';
 import ProductPriceBar from '@/windows/custom/product/ProductPriceBar';
+import ProductMovementsTab from '@/windows/custom/product/ProductMovementsTab';
 import catalogs from './mockCatalogs';
 import ProductGallery from '@/windows/custom/product/ProductGallery';
 import ProductSidebar from '@/windows/custom/product/ProductSidebar';
@@ -362,6 +363,14 @@ export const api = {
       "url": "/sws/neo/product/transactions/selectors/uOM"
     },
     {
+      "entity": "transactions",
+      "field": "etgoWarehouse",
+      "column": "EM_Etgo_Warehouse_ID",
+      "reference": "Warehouse",
+      "inputMode": "selector",
+      "url": "/sws/neo/product/transactions/selectors/etgoWarehouse"
+    },
+    {
       "entity": "productCharacteristic",
       "field": "characteristic",
       "column": "M_Characteristic_ID",
@@ -571,12 +580,12 @@ export default function ProductPage({ windowName, recordId, ...props }) {
         compactSidebarPadding
         whiteFormBackground
         autoSaveOnBlur
-        sidebarClassName="w-[320px] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle"
+        sidebarClassName="w-[320px] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle has-[[data-product-sidebar-collapsed=true]]:w-12 has-[[data-product-sidebar-collapsed=true]]:pr-0 has-[[data-product-sidebar-collapsed=true]]:overflow-hidden"
         tabsBarPaddingX="px-2"
         toolbarPaddingX="px-2"
         contentBg="bg-card"
         formCardPadding="px-2"
-        customTabs={[{ key: 'pricing', labelKey: 'price', Component: ProductPriceBar, placement: 'tab', tabOrder: 100 }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Product", config: {} } }]}
+        customTabs={[{ key: 'pricing', labelKey: 'price', Component: ProductPriceBar, placement: 'tab', tabOrder: 100 }, { key: 'movements', labelKey: 'productMovements', Component: ProductMovementsTab, placement: 'tab', tabOrder: 800 }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Product", config: {} } }]}
         headerContent={(data) => <ProductCostBanner data={data} />}
         requiredHeaderFields={requiredHeaderFields}
         labelOverrides={labelOverrides}

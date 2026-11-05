@@ -15,6 +15,8 @@ import {
   parseBackendError,
   translateBackendErrorResponse,
   translateBackendErrorBody,
+  translateImportRefusal,
+  isImportRefusalCode,
   translateQuotaRefusalBody,
   quotaRefusalFields,
 } from '../backendErrors.js';
@@ -769,6 +771,70 @@ describe('translateBackendErrorBody', () => {
   }
 });
 
+describe('bank bounce-pair refusals (ETP-5581)', () => {
+  // com.etendoerp.go BankBounceErrors / StatementLineDiscard: each coded refusal carries its
+  // English AD_MESSAGE key in error.messageKeys; the SPA translates it with translateBackendErrorBody.
+  const KEYED = [
+    ['LINE_DISCARDED', 'ETGO_StatementLineDiscarded', 'backendError.bankLineDiscarded',
+      'This bank statement line is discarded, so it cannot be reconciled. Restore it first.'],
+    ['BOUNCE_SUGGESTIONS_OFF', 'ETGO_BounceSuggestionsOff', 'backendError.bounceSuggestionsOff',
+      'Bounce suggestions are not enabled for this account.'],
+    ['SIGN_MISMATCH', 'ETGO_BounceSignMismatch', 'backendError.bounceSignMismatch',
+      'The two lines of a bounce must have opposite signs: one takes the money out and the other brings it back.'],
+    ['AMOUNT_MISMATCH', 'ETGO_BounceAmountMismatch', 'backendError.bounceAmountMismatch',
+      'The two lines of a bounce must have exactly the same amount.'],
+    ['HAS_PAYMENT', 'ETGO_BounceHasPayment', 'backendError.bounceHasPayment',
+      'One of the lines is the bank movement of a payment registered in Etendo. Discarding it would leave that payment without its bank movement, so this bounce cannot be discarded.'],
+    ['LINE_NOT_PENDING', 'ETGO_BounceLineNotPending', 'backendError.bounceLineNotPending',
+      'One of the lines is not pending reconciliation: its bank statement is in draft, it is part of a partially reconciled line, or another suggestion already uses it.'],
+    ['DISCARD_NOT_ALLOWED', 'ETGO_BounceDiscardNotAllowed', 'backendError.bounceDiscardNotAllowed',
+      'This bounce cannot be discarded. Both lines must be unreconciled lines imported from the bank, and the later one must be dated at most 60 days after the earlier one.'],
+  ];
+
+  for (const [code, messageKey, localeKey, english] of KEYED) {
+    it(`routes ${messageKey} (${code}) to ${localeKey}`, () => {
+      const body = { error: { code, message: english, messageKeys: [messageKey] } };
+      assert.equal(translateBackendErrorBody(body, (k) => `translated:${k}`, 'fallback'), `translated:${localeKey}`);
+    });
+  }
+
+  it('routes each refusal to its own locale key', () => {
+    const keys = KEYED.map(([code, messageKey]) => translateBackendErrorBody(
+      { error: { code, message: 'x', messageKeys: [messageKey] } }, (k) => `translated:${k}`, 'f'));
+    assert.equal(new Set(keys).size, KEYED.length);
+  });
+
+  it('maps the LINE_DISCARDED English sentence by text, for the paths that forward only the message', () => {
+    const [, , localeKey, english] = KEYED[0];
+    assert.equal(translateBackendError(english, (k) => `translated:${k}`), `translated:${localeKey}`);
+    assert.equal(translateBackendError(`  ${english}  `, (k) => `translated:${k}`), `translated:${localeKey}`);
+  });
+
+  it('does not map the other bounce sentences by text (they are routed by key only)', () => {
+    for (const [, , , english] of KEYED.slice(1)) {
+      assert.equal(translateBackendError(english, (k) => `translated:${k}`), english);
+    }
+  });
+
+  for (const locale of ['en_US', 'es_ES', 'es_AR']) {
+    it(`resolves every refusal to a non-empty ${locale} translation`, () => {
+      const json = JSON.parse(readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'));
+      const t = localeTranslator(locale);
+      for (const [code, messageKey, localeKey, english] of KEYED) {
+        const out = translateBackendErrorBody({ error: { code, message: english, messageKeys: [messageKey] } }, t, 'f');
+        assert.equal(out, json.genericLabels[localeKey], `${locale}.${localeKey}`);
+        assert.ok(out.trim(), `${locale}.${localeKey} is blank`);
+        if (locale !== 'en_US') {
+          assert.notEqual(out, english, `${locale}.${localeKey} is untranslated`);
+          // The product wording is "rechazo" (bancario), never "rebote" nor "devolución".
+          assert.doesNotMatch(out, /devoluci/i, `${locale}.${localeKey} says devolución`);
+          assert.doesNotMatch(out, /rebote/i, `${locale}.${localeKey} says rebote`);
+        }
+      }
+    });
+  }
+});
+
 describe('translateBackendError — legacy "Account could not be found" text, new EN wording (ETP-5175)', () => {
   const es = localeTranslator('es_ES');
 
@@ -1394,6 +1460,14 @@ describe('translateBackendError — country/IBAN validation (ETP-4896)', () => {
         assert.equal(translateBackendError(spanishProse, es), spanishProse);
       });
     });
+  });
+
+  // ETP-5684 — a post/unpost refused for a role without Show Accounting Fields (403).
+  it('ETGO_AccountingAccessDenied: maps the accounting refusal by key', () => {
+    const ui = fakeUiTranslator({ 'backendError.accountingAccessDenied': 'Tu rol no puede ver la contabilidad' });
+    const body = { success: false, message: 'Access denied to accounting for current role',
+      messageKeys: ['ETGO_AccountingAccessDenied'] };
+    assert.equal(translateBackendErrorBody(body, ui, 'fallback'), 'Tu rol no puede ver la contabilidad');
   });
 });
 
@@ -4431,5 +4505,133 @@ describe('translateBackendError — draft invoice already exists (ETP-5714)', ()
     }
     const ar = readFileSync(new URL('../../locales/es_AR.json', import.meta.url), 'utf8');
     assert.ok(ar.includes('Confirmala o eliminala antes de generar otra'));
+  });
+
+  // ETP-5828 — the sales order's "Generar factura" answers 400 with this sentence when its draft
+  // invoices already hold everything left (OrderDocumentAvailability.draftCoversInvoiceReason).
+  const coversEs = fakeUiTranslator({
+    'backendError.draftInvoiceCoversPending': 'La factura borrador {docs} ya cubre lo que queda por facturar. Confírmala o elimínala en lugar de generar otra.',
+    'backendError.draftInvoiceCoversPendingUnnamed': 'Una factura borrador ya cubre lo que queda por facturar. Confírmala o elimínala en lugar de generar otra.',
+  });
+  const covers = (docs) => `A draft invoice (${docs}) already covers what is left to invoice; complete or delete it instead of creating another one.`;
+  // DRAFT_COVERS_INVOICE_UNNAMED: no covering draft is readable by the role, so no numbers at all.
+  const coversUnnamed = 'A draft invoice already covers what is left to invoice; complete or delete it instead of creating another one.';
+
+  for (const [label, message, expected] of [
+    ['numbered drafts keep their numbers', covers('FV-1, FV-2'),
+      'La factura borrador FV-1, FV-2 ya cubre lo que queda por facturar. Confírmala o elimínala en lugar de generar otra.'],
+    ['the unnamed sentence gets its own sentence', coversUnnamed,
+      'Una factura borrador ya cubre lo que queda por facturar. Confírmala o elimínala en lugar de generar otra.'],
+    ['empty parentheses stay untouched', covers(''), covers('')],
+  ]) {
+    it(`translates the draft-covers 400 from the { status, message } body — ${label}`, () => {
+      assert.equal(translateBackendErrorBody({ status: 'error', message }, coversEs, 'Error (400)'), expected);
+    });
+  }
+
+  it('ships backendError.draftInvoiceCoversPending with {docs} and its unnamed form in en_US, es_ES and es_AR (es_AR in voseo)', () => {
+    for (const loc of ['en_US', 'es_ES', 'es_AR']) {
+      const flat = readFileSync(new URL(`../../locales/${loc}.json`, import.meta.url), 'utf8');
+      assert.ok(flat.match(/"backendError\.draftInvoiceCoversPending":\s*"[^"]*\{docs\}/), `${loc} lost {docs}`);
+      assert.ok(flat.match(/"backendError\.draftInvoiceCoversPendingUnnamed":\s*"[^"{]+"/), `${loc} lacks the unnamed sentence`);
+    }
+    const ar = readFileSync(new URL('../../locales/es_AR.json', import.meta.url), 'utf8');
+    assert.ok(ar.includes('Confirmala o eliminala en lugar de generar otra'));
+  });
+});
+
+// Line-import action refusals (ETP-6002): `{ error: { code, message, product, requested, pending } }`
+// from DocumentLineImport / InvoiceGlobalDiscountRule. The code picks the SPA sentence; the server's
+// English `message` must never reach the user.
+describe('translateImportRefusal / isImportRefusalCode — line-import refusals (ETP-6002)', () => {
+  const loadLabels = (locale) => JSON.parse(
+    readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'),
+  ).genericLabels;
+  const esLabels = loadLabels('es_ES');
+  const es = fakeUiTranslator(esLabels);
+  const FALLBACK = 'No se pudieron importar las líneas';
+  const DETAILS = { product: 'Fernet', requested: 9, pending: 2 };
+  const refusal = (code, details = DETAILS) => ({
+    error: { status: 409, code, message: `English prose for ${code}`, ...details },
+  });
+
+  // code -> i18n key. `globalDiscountConflict` is the one code outside the `import*` prefix.
+  const MAPPED = [
+    ['importTargetNotDraft', 'backendError.importTargetNotDraft'],
+    ['importSourceNotCompleted', 'backendError.importSourceNotCompleted'],
+    ['importBusinessPartnerMismatch', 'backendError.importBusinessPartnerMismatch'],
+    ['importCurrencyMismatch', 'backendError.importCurrencyMismatch'],
+    ['importDirectionMismatch', 'backendError.importDirectionMismatch'],
+    ['importQuantityExceedsPending', 'backendError.importQuantityExceedsPending'],
+    ['importLineNotInDocument', 'backendError.importLineNotInDocument'],
+    ['importNothingPending', 'backendError.importNothingPending'],
+    ['importInvalidLine', 'backendError.importInvalidLine'],
+    ['importDocumentNotFound', 'backendError.importDocumentNotFound'],
+    ['importPriceListRequired', 'backendError.importPriceListRequired'],
+    ['importQuantityNotHonoured', 'backendError.importQuantityNotHonoured'],
+    ['importNoStorageBin', 'backendError.importNoStorageBin'],
+    ['globalDiscountConflict', 'backendError.importGlobalDiscountConflict'],
+  ];
+  const NOTHING_PENDING_ON_LINE = 'backendError.importQuantityNothingPendingOnLine';
+
+  for (const [code, key] of MAPPED) {
+    it(`${code} renders ${key} with its details, never the server prose`, () => {
+      const expected = esLabels[key]
+        .replace('{product}', 'Fernet').replace('{requested}', '9').replace('{pending}', '2');
+      const result = translateImportRefusal(refusal(code), es, FALLBACK);
+      assert.equal(result, expected);
+      assert.doesNotMatch(result, /English prose|\{(product|requested|pending)\}/);
+      assert.equal(isImportRefusalCode(code), true);
+    });
+  }
+
+  it('importQuantityExceedsPending with pending 0 (number or string) uses the nothing-pending sentence', () => {
+    for (const pending of [0, '0']) {
+      assert.equal(
+        translateImportRefusal(refusal('importQuantityExceedsPending', { ...DETAILS, pending }), es, FALLBACK),
+        'No se pueden importar 9 de Fernet: no queda nada pendiente en esta línea '
+          + '(las cantidades ya incluidas en documentos en borrador cuentan como usadas).',
+        `pending=${JSON.stringify(pending)}`,
+      );
+    }
+  });
+
+  it('an unmapped import* code falls back to the given message, not to the English prose', () => {
+    assert.equal(isImportRefusalCode('importSomethingNew'), true);
+    assert.equal(translateImportRefusal(refusal('importSomethingNew'), es, FALLBACK), FALLBACK);
+  });
+
+  it('a mapped code whose key is missing from the locale, or with no translator, falls back', () => {
+    assert.equal(translateImportRefusal(refusal('importTargetNotDraft'), fakeUiTranslator({}), FALLBACK), FALLBACK);
+    assert.equal(translateImportRefusal(refusal('importTargetNotDraft'), undefined, FALLBACK), FALLBACK);
+  });
+
+  it('isImportRefusalCode is false outside the family', () => {
+    for (const code of ['important', 'draftInvoiceExists', 'stale_record', '', undefined, null, 42]) {
+      assert.equal(isImportRefusalCode(code), false, String(code));
+    }
+  });
+
+  it('a non-import body is translated exactly as translateBackendErrorBody does', () => {
+    const t = fakeUiTranslator({
+      'backendError.draftInvoiceExists': 'El pedido ya tiene una factura en borrador ({docs}). Confírmala o elimínala antes de generar otra.',
+    });
+    const body = { error: { status: 409, code: 'draftInvoiceExists', message: 'This order already has a draft invoice (INV-9).' } };
+    const result = translateImportRefusal(body, t, FALLBACK);
+    assert.equal(result, 'El pedido ya tiene una factura en borrador (INV-9). Confírmala o elimínala antes de generar otra.');
+    assert.equal(result, translateBackendErrorBody(body, t, FALLBACK));
+  });
+
+  it('every mapped key exists in en_US and es_ES; the quantity sentences keep their placeholders', () => {
+    const keys = [...MAPPED.map(([, key]) => key), NOTHING_PENDING_ON_LINE];
+    for (const locale of ['en_US', 'es_ES']) {
+      const labels = loadLabels(locale);
+      for (const key of keys) {
+        assert.equal(typeof labels[key], 'string', `${locale}: ${key}`);
+        assert.ok(labels[key].trim().length > 0, `${locale}: ${key} is empty`);
+      }
+      assert.match(labels['backendError.importQuantityExceedsPending'], /\{requested\}.*\{product\}.*\{pending\}/, locale);
+      assert.match(labels[NOTHING_PENDING_ON_LINE], /\{requested\}.*\{product\}/, locale);
+    }
   });
 });

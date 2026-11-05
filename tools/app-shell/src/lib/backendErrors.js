@@ -212,6 +212,12 @@ const BACKEND_ERROR_MAP = {
   // ETP-5471: create/import on a bank-connected account (BankStatementsHandler + the generic
   // financial-account statement entities).
   'This account is synchronized with the bank; statements cannot be created or imported manually.': 'backendError.statementBankConnectedNotCreatable',
+  // ETP-5581: com.etendoerp.go AD_MESSAGE ETGO_StatementLineDiscarded (409 LINE_DISCARDED), the
+  // refusal to reconcile a discarded line. Its key route is in BACKEND_ERROR_KEY_MAP; this text
+  // entry serves the reconcile paths that forward only the message (the split panel's
+  // reconcileGroup / reconcileDifference toasts, the automatch per-group failures). English-only
+  // AD message, so the text is a stable contract.
+  'This bank statement line is discarded, so it cannot be reconciled. Restore it first.': 'backendError.bankLineDiscarded',
   // Price list (PriceListHeaderHandler) validation messages
   'A tariff marked as default cannot be deactivated.': 'backendError.priceListCannotDeactivateDefault',
   'There is already an asset category with this name.': 'backendError.assetGroupNameDuplicate',
@@ -250,6 +256,11 @@ const BACKEND_ERROR_MAP = {
   // AD_Message/i18n involvement, so it always renders in Spanish regardless of session
   // locale (ETP-4831 case 2, inverse symptom of the invoice-line skeleton below).
   'No hay líneas a facturar en este pedido': 'backendError.noLinesToInvoice',
+  // OrderDocumentAvailability.DRAFT_COVERS_INVOICE_UNNAMED (com.etendoerp.go — ETP-5828): the
+  // draft-covers 400 when no covering draft is readable by the role (another organization), so
+  // the sentence carries no numbers; the numbered form is matchDraftInvoiceCoversPending.
+  'A draft invoice already covers what is left to invoice; complete or delete it instead of creating another one.':
+    'backendError.draftInvoiceCoversPendingUnnamed',
   // ETP-5712: the backend answers 409 `returnInvoiceAlreadyExists` with exactly this sentence when
   // the return already has a non-voided rectificative invoice and the request does not carry
   // `allowDuplicate:true` (one per return, like the screen, which hides its button). ETP-5381 had
@@ -522,6 +533,20 @@ const BACKEND_ERROR_KEY_MAP = {
   ETGO_FinAccCountryRequired: 'backendError.countryRequired',
   ETGO_FinAccInvalidCountry: 'backendError.invalidCountry',
   ETGO_FinAccIbanRequiresCountry: 'backendError.countryIban',
+  // ETP-5684 — NeoAccountingAccessPolicy (com.etendoerp.go): a post/unpost from a role without
+  // Show Accounting Fields. The SPA hides those actions, so this reaches only a stale screen.
+  ETGO_AccountingAccessDenied: 'backendError.accountingAccessDenied',
+  // ETP-5581 — the coded refusals of the bank bounce-pair actions (com.etendoerp.go
+  // BankBounceErrors / StatementLineDiscard: discardPair, restorePair and the bounce-pair groups of
+  // applySuggestions), each with its short `code` and this AD_MESSAGE in `error.messageKeys`.
+  // English-only AD messages, so this map is where they become Spanish.
+  ETGO_StatementLineDiscarded: 'backendError.bankLineDiscarded',
+  ETGO_BounceSuggestionsOff: 'backendError.bounceSuggestionsOff',
+  ETGO_BounceSignMismatch: 'backendError.bounceSignMismatch',
+  ETGO_BounceAmountMismatch: 'backendError.bounceAmountMismatch',
+  ETGO_BounceHasPayment: 'backendError.bounceHasPayment',
+  ETGO_BounceLineNotPending: 'backendError.bounceLineNotPending',
+  ETGO_BounceDiscardNotAllowed: 'backendError.bounceDiscardNotAllowed',
 };
 
 // ETP-5360 — a message that IS still an untranslated `@Key@` token (or carries some) is its own
@@ -881,8 +906,8 @@ function translateQuotaExceeded(quota, t) {
   // Every classified QUOTA_EXCEEDED passes here, so this is where the quota banner hears about it
   // (one shared re-read of the environment list; deduplicated, see `announceQuotaRefusal`).
   announceQuotaRefusal(quota);
-  // Same label as the quota banner and the /account row: the catalog name, else the key.
-  const resource = quotaResourceLabel(quota);
+  // Same label as the quota banner and the /account row: translated, else the catalog name.
+  const resource = quotaResourceLabel(quota, t);
   if (!resource) return resolveLocaleKey(t, 'backendError.quotaExceededGeneric');
   const usage = quotaUsageText(quota, t);
   return usage
@@ -1187,6 +1212,24 @@ function matchDraftInvoiceExists(msg) {
     return null;
   }
   const docs = msg.slice(DRAFT_INVOICE_EXISTS_PREFIX.length, -DRAFT_INVOICE_EXISTS_SUFFIX.length);
+  return docs ? { docs } : null;
+}
+
+// OrderDocumentAvailability.draftCoversInvoiceReason (com.etendoerp.go — ETP-5828): "Generar
+// factura" on a sales order whose draft invoices already hold everything left to invoice answers
+// 400 "A draft invoice (D1, D2) already covers what is left to invoice; complete or delete it
+// instead of creating another one." — the same sentence as the MCP's availableNow:false advice.
+// The draft numbers are one opaque {docs} param between the fixed prefix and suffix (never a
+// regex), kept in step with DRAFT_COVERS_INVOICE_PREFIX / _SUFFIX. Read by the bulk "Generar
+// factura" (BulkOrderMoreMenu), which no longer pre-skips orders with a draft invoice.
+const DRAFT_INVOICE_COVERS_PREFIX = 'A draft invoice (';
+const DRAFT_INVOICE_COVERS_SUFFIX = ') already covers what is left to invoice; complete or delete it instead of creating another one.';
+
+function matchDraftInvoiceCoversPending(msg) {
+  if (!msg.startsWith(DRAFT_INVOICE_COVERS_PREFIX) || !msg.endsWith(DRAFT_INVOICE_COVERS_SUFFIX)) {
+    return null;
+  }
+  const docs = msg.slice(DRAFT_INVOICE_COVERS_PREFIX.length, -DRAFT_INVOICE_COVERS_SUFFIX.length);
   return docs ? { docs } : null;
 }
 
@@ -1634,6 +1677,7 @@ const PARAMETERIZED_MATCHERS = [
   [matchReturnReasonTooLong, 'backendError.returnReasonTooLong'],
   [matchReturnInvoiceWithoutAmount, 'backendError.returnInvoiceWithoutAmount'],
   [matchDraftInvoiceExists, 'backendError.draftInvoiceExists'],
+  [matchDraftInvoiceCoversPending, 'backendError.draftInvoiceCoversPending'],
   [matchOrderNotFound, 'backendError.orderNotFound'],
   [matchShipmentNotFound, 'backendError.shipmentNotFound'],
   [matchAccountAlreadyExists, 'backendError.accountAlreadyExists'],
@@ -1778,6 +1822,73 @@ function translateByCode(msg, t, code) {
  * @param {string|null|undefined} code failure code, see `extractBackendErrorCode`
  * @returns {boolean} whether to show the "already exists" message
  */
+// ETP-6002 — refusals of the declared line-import actions (`importOrderLines`, and the other
+// `import*Lines` actions built on `DocumentLineImport`): `{error:{code, message, ...details}}`, where
+// the message is English prose built by the server. The code is the identity, so the SPA renders
+// it in its own locale, interpolating the details it carries (`product`, `requested`, `pending`).
+// These codes mirror DocumentLineImport.ERROR_* and InvoiceGlobalDiscountRule in com.etendoerp.go;
+// a code added there and not here falls back to the caller's generic message, never to English.
+const IMPORT_REFUSAL_KEYS = {
+  importTargetNotDraft: 'backendError.importTargetNotDraft',
+  importSourceNotCompleted: 'backendError.importSourceNotCompleted',
+  importBusinessPartnerMismatch: 'backendError.importBusinessPartnerMismatch',
+  importCurrencyMismatch: 'backendError.importCurrencyMismatch',
+  importDirectionMismatch: 'backendError.importDirectionMismatch',
+  importQuantityExceedsPending: 'backendError.importQuantityExceedsPending',
+  importLineNotInDocument: 'backendError.importLineNotInDocument',
+  importNothingPending: 'backendError.importNothingPending',
+  importInvalidLine: 'backendError.importInvalidLine',
+  importDocumentNotFound: 'backendError.importDocumentNotFound',
+  importPriceListRequired: 'backendError.importPriceListRequired',
+  importQuantityNotHonoured: 'backendError.importQuantityNotHonoured',
+  importNoStorageBin: 'backendError.importNoStorageBin',
+  globalDiscountConflict: 'backendError.importGlobalDiscountConflict',
+};
+
+function importRefusalKey(code, details) {
+  // "nothing is pending on this line" is the same code with pending 0: its own sentence.
+  if (code === 'importQuantityExceedsPending' && Number(details?.pending) === 0) {
+    return 'backendError.importQuantityNothingPendingOnLine';
+  }
+  return IMPORT_REFUSAL_KEYS[code];
+}
+
+/**
+ * True when `code` belongs to a line-import action refusal (see IMPORT_REFUSAL_KEYS), mapped or
+ * not: an `import*` code is the family's, so an unmapped one still gets the generic fallback.
+ *
+ * @param {string|undefined} code failure code, see `extractBackendErrorCode`
+ * @returns {boolean}
+ */
+export function isImportRefusalCode(code) {
+  return typeof code === 'string'
+    && (Object.hasOwn(IMPORT_REFUSAL_KEYS, code) || /^import[A-Z]/.test(code));
+}
+
+/**
+ * Translates the refusal body of a line-import action (ETP-6002). A known code renders its own
+ * sentence with the details it carries; an unknown import code renders `fallback` (the server
+ * text is English); any other body goes through `translateBackendErrorBody`.
+ *
+ * @param {object|null|undefined} body parsed JSON error body
+ * @param {function} t the `ui` function from `useUI()`
+ * @param {string} fallback generic, already translated message
+ * @returns {string} the message to show
+ */
+export function translateImportRefusal(body, t, fallback) {
+  const code = extractBackendErrorCode(body);
+  if (!isImportRefusalCode(code)) return translateBackendErrorBody(body, t, fallback);
+  const details = body?.error && typeof body.error === 'object' ? body.error : {};
+  const key = importRefusalKey(code, details);
+  if (!key || typeof t !== 'function') return fallback;
+  const translated = t(key, {
+    product: details.product ?? '',
+    requested: details.requested ?? '',
+    pending: details.pending ?? '',
+  });
+  return translated && translated !== key ? translated : fallback;
+}
+
 export function isDuplicateConflict(status, code) {
   return status === 409 && (!code || code === 'duplicate_key');
 }

@@ -166,7 +166,7 @@ export function resolveDir(spec, { etendoRoot, repoRoot = REPO_ROOT, env = proce
   return join(etendoRoot, spec.name);
 }
 
-function readEtendoRoot(env) {
+export function readEtendoRoot(env) {
   if (env.ETENDO_ROOT) return resolve(REPO_ROOT, env.ETENDO_ROOT);
   const dotenv = join(REPO_ROOT, '.env');
   if (existsSync(dotenv)) {
@@ -239,7 +239,7 @@ async function checkRoot(etendoRoot, { policy, fetchFirst, only, explicitRoot, m
   for (const r of rows) {
     const declared = conf ? declaredBranch(conf, r.spec, r.dir) : null;
     if (!r.present) {
-      const level = declared || !r.spec.optional ? 'ERROR' : 'INFO';
+      const level = declared || !r.spec.optional ? 'ERROR' : r.spec.kind === 'epic' ? 'WARN' : 'INFO';
       const why = declared ? `declared in worktree.conf (${declared.branch}) but not present at ${r.dir}` : `not cloned at ${r.dir}`;
       results.push({ spec: r.spec, branch: '-', findings: [{ level, msg: why }] });
       continue;

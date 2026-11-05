@@ -45,13 +45,24 @@ api_key_env = "OPENAI_API_KEY"
 temperature = 0
 
 [run]
-max_steps = 25
+# Tool-loop turns per attempt, the same for every platform. 50 since 2026-11-02 (was 25): at 25 four
+# Etendo probes ended at the cap mid-task; the cost of the extra steps is read from the tokens, which
+# decide before calls (rule 2).
+max_steps = 50
+
+# Whether the agent may send feedback through a platform's own tool. Off for comparisons: the
+# system prompt makes the agent's final report the only report, so a feedback call does not add a
+# turn to one platform only. Turn it on (or `make mcp-test FEEDBACK=1`) for a battery whose purpose
+# is to collect that product feedback.
+feedback_tools = false
 
 # Per tool call, how much of the RESULT body is stored in the run file. Results
-# are recorded so a failure is diagnosable from runs/ alone; the cap exists
-# because one `etendo_discover` answer is ~79 KB. The true size is always kept as
-# `resultBytes`, truncated or not.
-max_result_chars = 20000
+# are recorded so a failure is diagnosable from runs/ alone. Recording only: the
+# agent always sees the whole answer. 200000 keeps every answer seen so far whole
+# (the largest in the 2 Nov okr sweep was ~98 KB; at 20000, 11 % were cut — the
+# biggest, the ones worth reading when looking for savings). The true size is
+# always kept as `resultBytes`, truncated or not.
+max_result_chars = 200000
 
 # Attempts in flight per target (D44) — read by `make mcp-compare` ONLY
 # (default 4). `make mcp-test` ignores it and stays sequential unless
@@ -96,14 +107,15 @@ url  = "https://go.staging.etendo.cloud/mcp"
 auth = "oauth"
 platform = "etendo-go"
 
-# The reference for `make mcp-compare TARGETS=local,holded` (plan §5.2). Decided
-# (plan §9): the Holded API key as a bearer first. UNVERIFIED against the live
-# server as of 2026-10-14 — if Holded rejects it, switch to `auth = "oauth"`
-# (drop token_env) and record which one worked here.
+# The reference for `make mcp-compare TARGETS=local,holded` (plan §5.2). OAuth,
+# like Etendo Go (decided 2026-10-23, supersedes plan §9 decision 7). Verified
+# against the live server on 2026-10-23: the 401 points at
+# https://app.holded.com, which advertises PKCE S256, public clients and
+# dynamic registration. Holded ignores `scope` and grants no refresh_token, so
+# an expired token means `make mcp-login TARGET=holded` again.
 [targets.holded]
 url  = "https://mcp.holded.com/mcp"
-auth = "bearer"
-token_env = "MCP_TEST_TARGET_HOLDED_TOKEN"
+auth = "oauth"
 platform = "holded"
 
 # A target you already hold a token for. No credentials in config: the token

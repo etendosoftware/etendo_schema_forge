@@ -177,3 +177,7 @@ treatment.
 The bespoke `AccountTreeView` uses the existing personal-view contract for `chart-of-accounts` / `elementValue`. Account code, indentation and expansion stay structural; customizable data columns preserve selection, keyboard opening and navigation, including when Name is hidden.
 
 The full app-shell `npm run test:all` suite and `npm run build` passed. Browser smoke covered Sales Order only, not this grid; authenticated preference persistence and human QA remain pending. See [the bespoke-grid inventory](../bespoke-grid-views.md) for verification boundaries.
+
+## Chart of accounts over MCP — ETP-5852
+
+An agent lists and reads accounts without `parentId` (the client has one chart, `MCP_CONFIG.parent.optionalFor`), and its filters now apply: MCP reads skip `ChartOfAccountsHandler`'s native SQL, which reads only the SPA's `criteria`. `entities.elementValue.agentPrompt` explains that a create takes `parentId` = the row's `accountingElement` and that the 8-digit `searchKey` places the subaccount, as "Nueva subcuenta" does. The SPA is unchanged. Feedback M-135.

@@ -1,8 +1,8 @@
-import { useCallback, useMemo, useState } from 'react';
-import { useApiFetch } from '@/auth/useApiFetch.js';
-import { useNeoResource, getApiBase } from './useNeoResource';
+import { useMemo } from 'react';
+import { useNeoResource } from './useNeoResource';
+import { RECONCILIATION_BASE_PATH, useReconciliationPost } from './useReconciliationPost.js';
 
-const BASE_PATH = '/sws/neo/bank-reconciliation';
+const BASE_PATH = RECONCILIATION_BASE_PATH;
 
 /**
  * Builds a query string from a flat params object, skipping null/undefined/empty
@@ -18,71 +18,32 @@ function buildQuery(params) {
 }
 
 /**
- * Shared POST hook for reconciliation actions. Deduplicates the fetch pattern
- * across reconcileGroup, applySuggestions, and any future POST actions.
- *
- * @param {string} action - The action query-param value.
- * @returns {{ post: (payload: object) => Promise<object>, loading: boolean, error: Error|null }}
+ * Shared POST hook for reconciliation actions. The implementation lives in
+ * `useReconciliationPost.js` (see there for why); this alias keeps the call sites below short.
  */
-function useNeoPost(action) {
-  const apiFetch = useApiFetch(getApiBase());
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  const post = useCallback(async (payload) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await apiFetch(`${BASE_PATH}?action=${action}`, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-
-      let json = null;
-      try { json = await res.json(); } catch { json = null; }
-
-      if (!res.ok) {
-        const message = json?.error?.message || `HTTP ${res.status}`;
-        const err = new Error(message);
-        err.status = json?.error?.status ?? res.status;
-        // Structured error bodies in this API carry more than a message: `code` (e.g.
-        // GL_ITEM_REQUIRED, which tells the panel to ask for an accounting concept and retry) and
-        // `remainderLineId` (which tells it to retarget a 409 at the pending sub-line). Dropping
-        // them left callers with nothing but a toast, unable to act on a failure the server had
-        // already diagnosed.
-        err.body = json;
-        err.code = json?.code ?? null;
-        throw err;
-      }
-      return json?.response?.data ?? {};
-    } catch (err) {
-      setError(err);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, [apiFetch, action]);
-
-  return { post, loading, error };
-}
+const useNeoPost = useReconciliationPost;
 
 /**
  * Lists the pending statement lines for a financial account (left panel).
  *
  * GET /sws/neo/bank-reconciliation?action=pendingLines&accountId={id}
- *   optional filters: dateFrom, dateTo, q
+ *   optional filters: dateFrom, dateTo, q, status
  *
  * Response: { response: { data: { lines: [...], total, counts } } }
  *
+ * `status` is sent only for `discarded` (ETP-5581): that request answers ONLY the discarded lines,
+ * and its `counts` carry only `discarded`, so a caller that shows the other filters keeps the
+ * counts of its default request. Every other filter is applied client-side.
+ *
  * @param {string|null} accountId
- * @param {{ dateFrom?: string, dateTo?: string, q?: string }} [filters]
+ * @param {{ dateFrom?: string, dateTo?: string, q?: string, status?: string }} [filters]
  * @returns {{ lines: Array<object>, total: number, counts: object, loading: boolean, error: Error|null, reload: () => void }}
  */
 export function usePendingStatementLines(accountId, filters = {}) {
-  const { dateFrom, dateTo, q } = filters;
+  const { dateFrom, dateTo, q, status } = filters;
 
   const path = accountId
-    ? `${BASE_PATH}${buildQuery({ action: 'pendingLines', accountId, dateFrom, dateTo, q })}`
+    ? `${BASE_PATH}${buildQuery({ action: 'pendingLines', accountId, dateFrom, dateTo, q, status })}`
     : null;
 
   const mapPayload = useMemo(
@@ -99,7 +60,7 @@ export function usePendingStatementLines(accountId, filters = {}) {
 
   const { data, loading, error, reload } = useNeoResource({
     path,
-    deps: [accountId, dateFrom, dateTo, q],
+    deps: [accountId, dateFrom, dateTo, q, status],
     mapPayload,
     label: 'usePendingStatementLines',
   });
@@ -225,6 +186,10 @@ export function useReconcileDifference() {
 /**
  * Fetches an automatch preview for a financial account (GET, no mutations).
  *
+ * ETP-5581 — the answer may also carry bounce pairs next to the transaction groups, told apart by
+ * their `kind`; a group with no `kind` is a transaction group. Both kinds are passed through as
+ * they come: the contract-ui helper `splitAutoMatchGroups` documents the shapes and splits them.
+ *
  * @param {string|null} accountId
  * @returns {{ groups: Array<object>, kpis: object, loading: boolean, error: Error|null, reload: () => void }}
  */
@@ -262,6 +227,8 @@ export function useAutoMatch(accountId) {
 
 /**
  * Applies accepted automatch suggestion groups (POST, commits transactions + reconciliations).
+ * A bounce-pair group discards a bounce pair in the same call (ETP-5581); its result entry carries
+ * the same `kind`.
  *
  * @returns {{ apply: (payload: object) => Promise<object>, loading: boolean, error: Error|null }}
  */

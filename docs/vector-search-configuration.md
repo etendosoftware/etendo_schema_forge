@@ -130,6 +130,19 @@ Opened from a searchable window, the palette starts scoped to that window's targ
 (`CommandPalette.jsx:286-289`, `tools/app-shell/src/lib/vectorSearchConfig.js:42-45`). The scope pill
 is removable; removing it searches every target.
 
+### Text fallback in the MCP (ETP-5848)
+
+`etendo_vector_search` does not depend on the embeddings alone. When the provider fails or its key
+is not configured (`422 VECTOR_EMBEDDING_OPERATION_FAILED`), or the semantic search runs and matches
+nothing, the tool searches the same targets by text (`McpVectorTextFallback`): for each target it
+runs `etendo_list` on the spec of the same name, with `contains` on each **content** column of the
+target's source, through the router — so the role, the window filter of the spec and the scopes
+apply as on any read. A value equal to the query scores 1, one that starts with it 0.9, any other
+match 0.75. The answer has the semantic shape plus `mode:"lexical"` and `fallbackReason`
+(`embedding_unavailable` / `no_semantic_matches`); each match carries `matchType:"lexical"` and no
+`distance`. Any other error (a refused target, a broken configuration) is returned as it is. The
+palette of the SPA does **not** fall back: without embeddings it still shows no records.
+
 ---
 
 ## Ownership

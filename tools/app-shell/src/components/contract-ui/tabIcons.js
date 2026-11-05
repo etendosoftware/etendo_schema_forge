@@ -1,4 +1,4 @@
-import { List, Shield, Users, Landmark, MapPin, ReceiptText } from 'lucide-react';
+import { List, Shield, Users, Landmark, MapPin, ReceiptText, ArrowLeftRight } from 'lucide-react';
 import { AttachmentIcon } from '@/components/attachments/AttachmentIcon';
 import { PricingIcon, WarehouseProductsIcon } from '@/components/ui/custom-icons';
 
@@ -15,6 +15,8 @@ export const TAB_ICONS = {
   'custom:attachments': AttachmentIcon,
   'custom:sif': Shield,
   'custom:pricing': PricingIcon,
+  // Product's Movements tab (ETP-5889). The same two arrows the financial account's Movements tab uses.
+  'custom:movements': ArrowLeftRight,
   'products': WarehouseProductsIcon,
   // Business-partner tabs (Contacts window, ETP-5600 Figma).
   'contact': Users,

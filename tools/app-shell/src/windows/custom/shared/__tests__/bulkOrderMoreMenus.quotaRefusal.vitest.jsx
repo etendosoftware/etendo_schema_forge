@@ -22,6 +22,7 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key, params = {}) => {
     if (key === 'backendError.quotaExceeded') return `Límite del plan alcanzado: ${params.resource}`;
     if (key === 'processExecuted') return '{ok} ok, {failed} failed';
+    if (key === 'backendError.draftInvoiceCoversPending') return `La factura borrador ${params.docs} ya cubre lo pendiente`;
     return key;
   },
 }));
@@ -38,6 +39,13 @@ vi.mock('@/auth/api.js', async (importOriginal) => ({
 
 vi.mock('@/lib/observability/health-events.js', () => ({ trackDocumentCreated: vi.fn() }));
 
+// The real toast, observed: a mixed run's toast shows only counts, so the per-row failure messages
+// are read from the result handed to it.
+vi.mock('@/hooks/useBulkActionToast', async (importOriginal) => {
+  const real = await importOriginal();
+  return { ...real, showBulkActionToast: vi.fn(real.showBulkActionToast) };
+});
+
 vi.mock('@/components/ui/dropdown-menu.jsx', () => ({
   DropdownMenu: ({ children }) => <>{children}</>,
   DropdownMenuTrigger: ({ children }) => <>{children}</>,
@@ -48,6 +56,7 @@ vi.mock('@/components/ui/dropdown-menu.jsx', () => ({
 }));
 
 import { toast } from 'sonner';
+import { showBulkActionToast } from '@/hooks/useBulkActionToast';
 import BulkOrderMoreMenu from '@generated/sales-order/custom/BulkOrderMoreMenu';
 import BulkPurchaseOrderMoreMenu from '@generated/purchase-order/custom/BulkPurchaseOrderMoreMenu';
 
@@ -150,5 +159,63 @@ describe.each([
       expect(toast.error).toHaveBeenCalledWith('0 ok, 2 failed');
       expect(toast.error.mock.calls[0]).toHaveLength(1);
     });
+  });
+});
+
+// ETP-5828 — the sales bulk "Generar factura" no longer pre-skips an order with a draft invoice:
+// the backend invoices what is left net of its drafts, and one whose drafts already hold
+// everything left answers the draft-covers 400, shown translated as that row's failure.
+describe('BulkOrderMoreMenu — createDraftInvoice leaves the draft rule to the backend (ETP-5828)', () => {
+  const COVERS = 'A draft invoice (FV1) already covers what is left to invoice; '
+    + 'complete or delete it instead of creating another one.';
+  const URL = (id, action) => `/sws/neo/sales-order/header/${id}/action/${action}`;
+
+  // One mixed run. `hasDraft` is what the removed checkDraftInvoice pre-check would have answered:
+  // the route below still answers it `exists: true` for those rows, so a returning pre-check would
+  // skip them client-side and drop their POST.
+  const ROWS = [
+    { id: 'so-a', status: 'CO', hasDraft: false, post: { ok: true }, failure: null },
+    { id: 'so-b', status: 'CO', hasDraft: true, post: { ok: true }, failure: null },
+    { id: 'so-c', status: 'CO', hasDraft: true, post: { ok: false, status: 400, body: { status: 'error', message: COVERS } },
+      failure: 'La factura borrador FV1 ya cubre lo pendiente' },
+    { id: 'so-d', status: 'DR', hasDraft: false, post: null, failure: 'soBulkOrderNotCompleted' },
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('posts every completed order, translates the draft-covers refusal and never pre-checks draft invoices', async () => {
+    const byId = Object.fromEntries(ROWS.map((r) => [r.id, r]));
+    mockApiFetch.mockImplementation((url, init = {}) => {
+      const [, id, action] = String(url).match(/\/header\/([^/]+)\/action\/(\w+)/) ?? [];
+      if (action === 'checkDraftInvoice') {
+        return Promise.resolve(jsonResponse({ response: { data: { exists: byId[id].hasDraft } } }));
+      }
+      if (init.method === 'POST') {
+        const { ok, status, body } = byId[id].post;
+        return Promise.resolve(ok
+          ? jsonResponse({ response: { data: { id: `inv-${id}` } } })
+          : jsonResponse(body, { ok: false, status }));
+      }
+      return Promise.resolve(jsonResponse({ response: { data: [] } }));
+    });
+    const refresh = vi.fn();
+    const rows = ROWS.map((r) => ({ id: r.id, documentNo: r.id.toUpperCase(), documentStatus: r.status }));
+    render(<BulkOrderMoreMenu selectedRows={rows} clearSelection={vi.fn()} token="tok"
+      apiBaseUrl="/sws/neo/sales-order" refresh={refresh} />);
+    fireEvent.click(screen.getByText(/^soBulkCreateInvoices/));
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+
+    const urls = mockApiFetch.mock.calls.map(([u]) => String(u));
+    expect(urls.some((u) => u.includes('/action/checkDraftInvoice'))).toBe(false);
+    expect(urls).toEqual(ROWS.filter((r) => r.post).map((r) => URL(r.id, 'createDraftInvoice')));
+    expect(mockApiFetch.mock.calls.every(([, init]) => init?.method === 'POST')).toBe(true);
+
+    expect(showBulkActionToast).toHaveBeenCalledWith(expect.any(Function), {
+      ok: ROWS.filter((r) => !r.failure).length,
+      failed: ROWS.filter((r) => r.failure).map((r) => ({ documentNo: r.id.toUpperCase(), message: r.failure })),
+    });
+    expect(toast.warning).toHaveBeenCalledWith('2 ok, 2 failed');
   });
 });

@@ -10,11 +10,13 @@ import { cn } from '@/lib/utils';
  * own private badge with its own palette and only ever labelled rule matches, so an exact suggestion
  * and a within-tolerance one were indistinguishable there.
  *
- * @param {{ kind?: string, label?: string }} props `kind` picks the palette and the default text;
- *   `label` overrides only the text, for the cases that need a value appended (the modal's
- *   "Por regla: {nombre}"). An unknown kind falls back to the neutral "pending" styling.
+ * @param {{ kind?: string, label?: string, 'data-testid'?: string }} props `kind` picks the palette
+ *   and the default text; `label` overrides only the text, for the cases that need a value appended
+ *   (the modal's "Por regla: {nombre}"). An unknown kind falls back to the neutral "pending"
+ *   styling. `data-testid` is forwarded to the pill: it used to be dropped, so the ids every caller
+ *   passes never reached the DOM. Nothing else is spread, so the rendering is unchanged.
  */
-export function StatusBadge({ kind, label }) {
+export function StatusBadge({ kind, label, 'data-testid': testId }) {
   const ui = useUI();
   // Figma badge palette: grey / blue / amber / red / green (all full pills).
   const map = {
@@ -25,10 +27,18 @@ export function StatusBadge({ kind, label }) {
     pending: { labelKey: 'financeReconcileBadgePending', cls: 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]' },
     invoice: { labelKey: 'financeReconcileBadgeInvoice', cls: 'bg-[var(--status-warning-bg)] text-[var(--status-warning-fg)]' },
     partial: { labelKey: 'financeReconcileBadgePartial', cls: 'bg-[var(--status-warning-bg)] text-[var(--status-warning-fg)]' },
+    // ETP-5581 — a line of a possible bounce pair (the `bounce` line state), and in the bounce-pair
+    // panel the outgoing lines a bounce may reverse. Amber: something to review, like a rule match.
+    bounce: { labelKey: 'financeReconcileBadgeBounce', cls: 'bg-[var(--status-warning-bg)] text-[var(--status-warning-fg)]' },
+    bounceOriginal: { labelKey: 'financeReconcileBadgeBounceOriginal', cls: 'bg-[var(--status-warning-bg)] text-[var(--status-warning-fg)]' },
+    // ETP-5581 — a discarded line: out of the reconciliation, nothing left to do. Muted grey.
+    discarded: { labelKey: 'financeReconcileBadgeDiscarded', cls: 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]' },
   };
   const cfg = map[kind] ?? map.pending;
   return (
-    <span className={cn('inline-flex h-6 items-center rounded-full px-2 py-0.5 text-xs font-normal', cfg.cls)}>
+    <span
+      className={cn('inline-flex h-6 items-center rounded-full px-2 py-0.5 text-xs font-normal', cfg.cls)}
+      data-testid={testId}>
       {label ?? ui(cfg.labelKey)}
     </span>
   );

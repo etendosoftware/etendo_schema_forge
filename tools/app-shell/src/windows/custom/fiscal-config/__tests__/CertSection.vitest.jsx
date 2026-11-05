@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-config/CertSection.jsx
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // --- Mocks ----------------------------------------------------------------
@@ -230,5 +231,35 @@ describe('CertSection — modal upload flow', () => {
     await waitFor(() => {
       expect(screen.getByText('fiscal.cert.replace')).toBeInTheDocument();
     });
+  });
+});
+
+// ETP-5831 — one certificate per organization, shown in the SII, TicketBAI and VERI*FACTU
+// sections: a replacement from one section is reported upwards and re-read by the others.
+describe('CertSection — shared certificate (ETP-5831)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useApiFetch).mockReturnValue(mockApiFetch);
+  });
+
+  it('reports a replacement through onUploaded', async () => {
+    mockApiFetch.mockResolvedValue(makeJsonResponse({ exists: true, validTo: '2027-07-01' }));
+    const onUploaded = vi.fn();
+    render(<CertSection {...BASE_PROPS} onUploaded={onUploaded} />);
+    fireEvent.click(await screen.findByText('fiscal.cert.replace'));
+    fireEvent.click(screen.getByText('upload-modal'));
+    expect(onUploaded).toHaveBeenCalledWith({ name: 'cert.pfx', validTo: '2026-01-01' });
+  });
+
+  it('re-reads the certificate when refreshKey changes', async () => {
+    mockApiFetch.mockResolvedValue(makeJsonResponse({ exists: false }));
+    const { rerender } = render(<CertSection {...BASE_PROPS} refreshKey={0} />);
+    await screen.findByText('fiscal.cert.dropzone.drag');
+    expect(mockApiFetch).toHaveBeenCalledTimes(1);
+
+    mockApiFetch.mockResolvedValue(makeJsonResponse({ exists: true, validTo: '2027-07-01' }));
+    rerender(<CertSection {...BASE_PROPS} refreshKey={1} />);
+    expect(await screen.findByText('fiscal.cert.replace')).toBeInTheDocument();
+    expect(mockApiFetch).toHaveBeenCalledTimes(2);
   });
 });

@@ -175,6 +175,7 @@
   },
   "entities": {
     "businessPartner": {
+      "agentPrompt": "A new contact has no billing preferences of its own: price list, payment terms, payment method, financial account and blocking, for sales and for purchases. The ones you send on create are saved; the others stay empty until you set them with etendo_update, as in the app.",
       "fields": {
         "tbaiIssimplifiedinv": {
           "visibility": "editable",
@@ -219,7 +220,7 @@
           "searchable": true,
           "section": "principal",
           "order": 2,
-          "publicApi": { "exposed": true, "name": "name", "type": "passthrough", "handlerId": null, "required": true }
+          "publicApi": { "exposed": true, "name": "name", "required": true }
         },
         "etgoFirstname": {
           "visibility": "editable",
@@ -261,7 +262,8 @@
           "grid": false,
           "section": "principal",
           "order": 1,
-          "publicApi": { "exposed": true, "name": "searchKey", "type": "passthrough", "handlerId": null, "readOnly": true }
+          "publicApi": { "exposed": true, "name": "searchKey", "readOnly": true },
+          "agentPrompt": "The contact's number, assigned automatically on create as in the app (the same value as etgoIdentifier). Do not send it when creating a contact: a value you send is replaced by the number and the answer says so in searchKeyNote. To find a contact, filter by name or taxID."
         },
         "businessPartnerCategory": {
           "visibility": "editable",
@@ -284,7 +286,7 @@
           "visibility": "editable",
           "section": "principal",
           "order": 7,
-          "publicApi": { "exposed": true, "name": "taxId", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "taxId" }
         },
         "oBTIKVIESStatus": {
           "visibility": "readOnly",
@@ -357,7 +359,7 @@
           "section": "principal",
           "order": 9,
           "inputPrefix": "https://",
-          "publicApi": { "exposed": true, "name": "web", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "web" }
         },
         "etgoEmail": {
           "visibility": "editable",
@@ -366,7 +368,8 @@
           "label": "Email",
           "section": "principal",
           "order": 10,
-          "publicApi": { "exposed": true, "name": "email", "type": "passthrough", "handlerId": null }
+          "agentPrompt": "#REF#agent-prompts/contacts/business-partner.etgo-email.md",
+          "publicApi": { "exposed": true, "name": "email" }
         },
         "etgoPhone": {
           "visibility": "editable",
@@ -375,7 +378,7 @@
           "label": "Phone",
           "section": "principal",
           "order": 11,
-          "publicApi": { "exposed": true, "name": "phone", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "phone" }
         },
         "creditLimit": {
           "visibility": "editable",
@@ -536,7 +539,7 @@
       },
       "fields": {
         "name": {
-          "publicApi": { "exposed": true, "name": "name", "type": "passthrough", "handlerId": null },
+          "publicApi": { "exposed": true, "name": "name" },
           "visibility": "editable",
           "grid": true,
           "searchable": true,
@@ -547,7 +550,7 @@
           "section": "principal"
         },
         "shipToAddress": {
-          "publicApi": { "exposed": true, "name": "shipToAddress", "type": "passthrough", "handlerId": null },
+          "publicApi": { "exposed": true, "name": "shipToAddress" },
           "visibility": "editable",
           "grid": true,
           "section": "principal",
@@ -557,7 +560,7 @@
           }
         },
         "invoiceToAddress": {
-          "publicApi": { "exposed": true, "name": "invoiceToAddress", "type": "passthrough", "handlerId": null },
+          "publicApi": { "exposed": true, "name": "invoiceToAddress" },
           "visibility": "editable",
           "grid": true,
           "section": "principal",
@@ -567,28 +570,28 @@
           }
         },
         "phone": {
-          "publicApi": { "exposed": true, "name": "phone", "type": "passthrough", "handlerId": null },
+          "publicApi": { "exposed": true, "name": "phone" },
           "visibility": "editable",
           "grid": false,
           "section": "other"
         },
         "active": {
-          "publicApi": { "exposed": true, "name": "active", "type": "passthrough", "handlerId": null },
+          "publicApi": { "exposed": true, "name": "active" },
           "visibility": "readOnly",
           "grid": false,
           "section": "other"
         },
         "locationAddress": {
-          "publicApi": { "exposed": true, "name": "locationAddress", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "locationAddress" }
         },
         "alternativePhone": {
-          "publicApi": { "exposed": true, "name": "alternativePhone", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "alternativePhone" }
         },
         "fax": {
-          "publicApi": { "exposed": true, "name": "fax", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "fax" }
         },
         "taxLocation": {
-          "publicApi": { "exposed": true, "name": "taxLocation", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "taxLocation" }
         }
       },
       "javaQualifier": "contactsLocationAddressHandler"
@@ -617,7 +620,8 @@
           "grid": true,
           "searchable": true,
           "section": "principal",
-          "columnWidth": 320
+          "columnWidth": 320,
+          "agentPrompt": "#REF#agent-prompts/contacts/contact.email.md"
         },
         "phone": {
           "visibility": "editable",
@@ -752,7 +756,8 @@
           "labels": {
             "en_US": "Receivables Account",
             "es_ES": "Cuenta a Cobrar"
-          }
+          },
+          "agentPrompt": "An accounting combination id (an Etendo account record), not the chart-of-accounts elementValue id: find it with etendo_selectors on this field, searching by account number (for example 430)."
         },
         "customerPrepayment": {
           "lookup": true,
@@ -763,7 +768,8 @@
           "labels": {
             "en_US": "Prepayment Account",
             "es_ES": "Cuenta de Anticipos"
-          }
+          },
+          "agentPrompt": "An accounting combination id (an Etendo account record), not the chart-of-accounts elementValue id: find it with etendo_selectors on this field, searching by account number (for example 430)."
         }
       }
     },
@@ -782,7 +788,8 @@
           "labels": {
             "en_US": "Liability Account",
             "es_ES": "Cuenta a Pagar"
-          }
+          },
+          "agentPrompt": "An accounting combination id (an Etendo account record), not the chart-of-accounts elementValue id: find it with etendo_selectors on this field, searching by account number (for example 430)."
         },
         "vendorPrepayment": {
           "lookup": true,
@@ -793,7 +800,8 @@
           "labels": {
             "en_US": "Prepayment Account",
             "es_ES": "Cuenta de Anticipos"
-          }
+          },
+          "agentPrompt": "An accounting combination id (an Etendo account record), not the chart-of-accounts elementValue id: find it with etendo_selectors on this field, searching by account number (for example 430)."
         }
       }
     },

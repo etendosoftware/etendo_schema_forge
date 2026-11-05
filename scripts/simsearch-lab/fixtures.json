@@ -1,0 +1,27 @@
+{
+  "corpus": {
+    "uom_syn": ["Meter", "Cubic Meter", "Square Meter", "Kilometer", "Millimeter", "Centimeter", "Meter per Second"],
+    "tax_syn": ["IVA Normal", "IVA Normal ISP", "IVA Normal Servicios", "IVA Reducido", "IVA Superreducido", "IVA Exento", "IVA Normal 21%"],
+    "bp_syn": ["ACME INCORPORATED", "ACME", "Acmeco Trading", "Globex Corporation", "Initech", "Initech Solutions Ltd"],
+    "bp_syn2": ["ACME INCORPORATED", "Globex Corporation", "Initech Solutions Ltd"],
+    "prod_syn": ["Servicio de desarrollo y mantenimiento web", "Mantenimiento", "Hosting web", "Desarrollo web a medida", "Licencia anual"]
+  },
+  "queries": [
+    {"entity": "uom_syn",  "q": "Meter",             "expect": ["Meter"],                 "cls": "exact_competitors"},
+    {"entity": "uom_syn",  "q": "meter",             "expect": ["Meter"],                 "cls": "exact_competitors"},
+    {"entity": "uom_syn",  "q": "Cubic Meter",       "expect": ["Cubic Meter"],           "cls": "exact_competitors"},
+    {"entity": "tax_syn",  "q": "IVA Normal",        "expect": ["IVA Normal"],            "cls": "exact_competitors"},
+    {"entity": "tax_syn",  "q": "iva normal",        "expect": ["IVA Normal"],            "cls": "exact_competitors"},
+    {"entity": "tax_syn",  "q": "IVA Normal ISP",    "expect": ["IVA Normal ISP"],        "cls": "exact_competitors"},
+    {"entity": "tax_syn",  "q": "IVA Reducido",      "expect": ["IVA Reducido"],          "cls": "exact_nocompetitors"},
+    {"entity": "bp_syn",   "q": "ACME",              "expect": ["ACME"],                  "cls": "exact_competitors"},
+    {"entity": "bp_syn",   "q": "Initech",           "expect": ["Initech"],               "cls": "exact_competitors"},
+    {"entity": "bp_syn",   "q": "Globex",            "expect": ["Globex Corporation"],    "cls": "partial"},
+    {"entity": "bp_syn2",  "q": "ACME",              "expect": ["ACME INCORPORATED"],     "cls": "partial"},
+    {"entity": "bp_syn2",  "q": "Initech Solutions", "expect": ["Initech Solutions Ltd"], "cls": "partial"},
+    {"entity": "prod_syn", "q": "Mantenimiento Web", "expect": ["Servicio de desarrollo y mantenimiento web"], "cls": "partial"},
+    {"entity": "prod_syn", "q": "Hosting",           "expect": ["Hosting web"],           "cls": "partial"},
+    {"entity": "tax_syn",  "q": "IVA Exentoo",       "expect": ["IVA Exento"],            "cls": "typo"},
+    {"entity": "uom_syn",  "q": "Kilometre",         "expect": ["Kilometer"],             "cls": "typo"}
+  ]
+}

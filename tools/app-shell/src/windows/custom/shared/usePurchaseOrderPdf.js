@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useUI } from '@/i18n';
 import { buildOrderData, buildDocumentPdfLabels, useDocumentPdf } from './documentPdf.js';
+import { PURCHASE_ORDER_PDF_LABEL_KEYS, resolveLabelKeys } from './printableSources.js';
 
 /**
  * Label overrides as a plain function of `ui`, so the print flow
@@ -10,18 +11,9 @@ import { buildOrderData, buildDocumentPdfLabels, useDocumentPdf } from './docume
  * @param {(key: string) => string} ui
  */
 export function buildPurchaseOrderPdfLabels(ui) {
-  return buildDocumentPdfLabels(ui, {
-    title:           ui('purchaseOrderPdfTitle'),
-    documentNo:      ui('purchaseOrderPdfDocumentNo'),
-    documentSection: ui('purchaseOrderPdfSection'),
-    date:            ui('orderPdfDate'),
-    colQty:          ui('orderPdfColQty'),
-    // ETP-5300 (Lea's QA comment) — shared DOCUMENT_TEMPLATE defaults to
-    // "Cliente" (buildDocumentPdfLabels), but `customerName` here is the
-    // business partner on a PURCHASE order, i.e. the vendor, not a customer.
-    customerSection: ui('purchaseOrderPdfCustomerSection'),
-    customer:        ui('purchaseOrderPdfCustomer'),
-  });
+  // Key map in printableSources.js, which the build also publishes for the server-side
+  // render (ETP-6013) — one definition, so the two cannot drift.
+  return buildDocumentPdfLabels(ui, resolveLabelKeys(ui, PURCHASE_ORDER_PDF_LABEL_KEYS));
 }
 
 export function usePurchaseOrderPdf(orderId, apiBaseUrl, token, currencyData = null, cacheConfig = null) {
@@ -32,5 +24,5 @@ export function usePurchaseOrderPdf(orderId, apiBaseUrl, token, currencyData = n
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [currencyData?.exchangeRate, currencyData?.orgCurrencyCode],
   );
-  return useDocumentPdf(orderId, apiBaseUrl, token, buildPurchaseOrderData, labels, cacheConfig);
+  return useDocumentPdf(orderId, apiBaseUrl, token, buildPurchaseOrderData, labels, cacheConfig, 'purchase-order');
 }

@@ -446,6 +446,8 @@ The kebab content has no save handle, so it cannot flush pending header edits it
 
 **Real examples:** `goods-shipment` (cancel), `payment-in` (reverse via `columnName`), `sales-invoice` (duplicate, cancel), `sales-order` (reactivate via `documentAction: "RE"`).
 
+**Gotcha — a hand-written Radix `DropdownMenu` that opens a `Dialog` must be `modal={false}` (ETP-5831, dev server only).** In `make dev`, `@radix-ui/react-dialog` is pre-bundled by Vite while `@radix-ui/react-dropdown-menu` is served raw through the excluded `app-shell-core`, so each loads its own copy of `@radix-ui/react-dismissable-layer`. A modal menu sets `pointer-events: none` on `<body>`; the dialog's copy saves that lock as the "original" value and restores it on close, and the page stays frozen until a reload. A non-modal menu never takes the lock. Production builds bundle a single copy and are not affected. Reference: the org-bar kebab in `fiscal-config/FiscalConfigPage.jsx` ("Cambiar SIF"). Root fix deferred, see `docs/feedback.md` (ETP-5831).
+
 #### Posting actions follow "Show Accounting Fields" (ETP-5684)
 
 Contabilizar / Descontabilizar are hidden from every role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins always have it). **You declare nothing for this.** The three action renderers drop any descriptor whose `neoAction` (form kebab, row kebab) or `value` (bulk toolbar) is `post` or `unpost`:
@@ -456,9 +458,9 @@ Contabilizar / Descontabilizar are hidden from every role whose `capabilities.sh
 | `RowQuickActions.jsx` | row kebab (`rowQuickActions` menu entries, incl. hand-rolled ones in a window's `index.jsx`) |
 | `BulkDocumentAction.jsx` | bulk toolbar, whichever builder produced the list (`buildPostActions`, a window's own builder) |
 
-All three call `filterPostingActions(actions, capabilities)` from `tools/app-shell/src/lib/capabilityVisibility.js`. It keys on the generic posting action that `DocumentPostingService` serves for every document — a structural contract, not an entity name — and ignores `key`, which is a free label. The gate fails closed, so a component test without an `AuthProvider` loses Post/Unpost: grant the capability with `src/test/capabilitiesSafeMock.js` (see its header). Reactivate's `preUnpost` calls `unpost` directly, not through a menu, so it is unaffected.
+All three call `filterPostingActions(actions, capabilities)` from `tools/app-shell/src/lib/capabilityVisibility.js`. It keys on the generic posting action that `DocumentPostingService` serves for every document — a structural contract, not an entity name — and ignores `key`, which is a free label. The gate fails closed, so a component test without an `AuthProvider` loses Post/Unpost: grant the capability with `src/test/capabilitiesSafeMock.js` (see its header). Reactivating a posted document never calls `unpost` from the SPA: the server un-posts inside the reactivation (see *Reactivating a posted document* below).
 
-The posting **status** (the `posted` field) is NOT automatic: declare `"visibleWhenCapability": "showAccountingFields"` on it in `decisions.json`, and on any hand-written `posted` list column (`visibleWhenCapability: ACCOUNTING_CAPABILITY`). `ListView` then also drops the column from the advanced filter, the sort popover and the export, and strips a restored filter or sort on it. `tools/app-shell/test/accounting-capability-guard.test.js` fails the build on an ungated `posted` in either place. Hand-rolled financial-account surfaces gate themselves (movements dot + sort segment + kebab, reconciliations column/filter/sort, reconciled-transactions modal, payment timeline "Asiento contabilizado"). Confirm-dialog warnings about removing the accounting entry are kept on purpose: they describe a consequence of an action the user is allowed to take.
+The posting **status** (the `posted` field, and the bulk-posting module's `etblkpAccountingstatus` / `EM_Etblkp_Accountingstatus`) is NOT automatic: declare `"visibleWhenCapability": "showAccountingFields"` on it in `decisions.json`, and on any hand-written list column (`visibleWhenCapability: ACCOUNTING_CAPABILITY`). `ListView` then also drops the column from the advanced filter, the sort popover and the export, and strips a restored filter or sort on it. On a **form** the generator writes the gate on the field line and `EntityForm` hides it at render time only — the field stays registered, so save exclusions and the required gate still know it — and `DetailView` re-probes its "Others" tab when the capability map changes (ETP-5684). `tools/app-shell/test/accounting-capability-guard.test.js` fails the build on an ungated status column in `decisions.json`, in any resolved `contract.json` (form or grid, which catches a field the raw default shows without a decisions entry), or in a hand-written column. Hand-rolled financial-account surfaces gate themselves (movements dot + sort segment + kebab, reconciliations column/filter/sort, reconciled-transactions modal, payment timeline "Asiento contabilizado"). Confirm-dialog warnings about removing the accounting entry are kept on purpose: they describe a consequence of an action the user is allowed to take.
 
 #### Dynamic process-button captions — `processOverrides.<proc>.labelToggle`
 
@@ -568,7 +570,7 @@ For the five sales documents (`sales-quotation`, `sales-order`, `sales-invoice`,
 
 Payments (cobros) are deliberately **not** related documents: no sales or purchase order/invoice lists its payments as chips (functional decision, ETP-5527 / ETP-5539). Do not add a payments source to a definition.
 
-The definition always reads the **detail** record: `linkedShipments`, `sourceInvoice`, `originInvoices` and the goods-shipment `linked*` fields are injected by the backend handlers on the detail GET only, so a list row is not enough.
+The definition always reads the **detail** record: `linkedShipments`, `originInvoices`, `rectifyingInvoices` and the goods-shipment `linked*` fields are injected by the backend handlers on the detail GET only, so a list row is not enough.
 
 `RelatedDocumentsCard` (`tools/app-shell/src/windows/custom/shared/preview-cards/`) gained two optional props:
 
@@ -1289,41 +1291,31 @@ that button read as if pressing it would mark the selected documents as
 completed. `accept` is a new key in all three locales; `done` was deliberately
 left alone because `RecordCreateModal.jsx` still uses it.
 
-#### `preUnpostActions` — replaying the detail kebab's "unpost first" rule in bulk
+#### Reactivating a posted document — the un-post runs on the server (ETP-5684)
 
-Some document actions must **reverse the record's accounting before they run**.
-The rule is declared per window in `decisions.json` as `preUnpost: true` on a
-`menuActions` entry (today: `sales-invoice`, `purchase-invoice`, `amortization`),
-and it is implemented once, in `tools/app-shell/src/lib/preUnpost.js`:
+Core refuses to reactivate a posted invoice (`C_INVOICE_POST` raises
+`@InvoiceDocumentPosted@`, "Factura contabilizada"), and an amortization only
+un-processes while `Posted<>'Y'`. Reactivating one of those therefore has to
+reverse its accounting first. From ETP-5302 to ETP-5684 the SPA did that itself:
+a `preUnpost: true` flag on the `menuActions` entry, a `preUnpostActions` prop on
+`BulkDocumentAction`, and a shared `runPreUnpost` helper sent `unpost` before the
+reactivation from the detail kebab, the row kebab and the bulk bar.
 
-| Export | Contract |
-|---|---|
-| `isPosted(row)` | `true` only for `posted === 'Y'` / `true`. The AD *Posted status* domain also carries `T`, `E`, `D`, `p`, `i` — **none of which mean "posted"** |
-| `runPreUnpost({ recordId, record, enabled, execute })` | → `{ ran, success, message }`. `ran: false` means the step did not apply (not enabled, or the record was not posted) and callers treat that as success |
+**That mechanism is gone.** Since ETP-5684, `unpost` needs the
+`showAccountingFields` capability, which a Sales or Purchasing role does not have,
+while reactivating stays theirs to do. The un-post is now a step of the
+reactivation on the server (`ReactivationUnpost` in com.etendoerp.go, called by
+the sales/purchase invoice and amortization handlers right before the reactivation
+process runs), for REST and MCP alike. Every SPA surface sends the reactivation
+alone: `documentAction: 'RE'` for invoices, the `Processed` button for
+amortizations. A refused un-post comes back as the reactivation's own error.
 
-It is a plain module, **deliberately not a hook**, because `BulkDocumentAction`
-is reached from the `bulkActions` slot, which `ListView` invokes as a flat
-function call (the ETP-5209 constraint above).
-
-Both call sites now go through it: `DetailMoreActionsMenu.jsx` (which had the
-rule inlined, and duplicated across its two branches — observable behaviour
-unchanged) and `BulkDocumentAction`'s new `preUnpostActions` prop:
-
-```jsx
-<BulkDocumentAction {...props} labelKey="process" preUnpostActions={['RE']} />
-```
-
-Each row then runs *unpost → document action*. A failed unpost **aborts that
-row** — a document still carrying its accounting entries is never reactivated —
-and the row is reported with the translated backend message like any other
-failure.
-
-**It is opt-in per window on purpose.** Invoices need it: Core's
-`C_INVOICE_POST` raises `@InvoiceDocumentPosted@` ("Factura contabilizada") if
-`RE` arrives while `Posted='Y'`. Orders must **not** have it: `C_ORDER_POST1` has
-no posted-state guard on its `RE` branch at all, so unposting there would be a
-gratuitous accounting reversal for no functional gain. Do not "harmonise" this by
-applying `preUnpostActions={['RE']}` to every window that offers `RE`.
+Do **not** reintroduce a client-side `unpost` before a reactivation: it is refused
+with a 403 (`ETGO_AccountingAccessDenied`) for exactly the roles that need to
+reactivate. The posted predicate the invoice windows still gate their standalone
+*Descontabilizar* on is `isPosted(row)` in `tools/app-shell/src/lib/postedStatus.js`
+(`true` only for `posted === 'Y'` / `true`; the AD *Posted status* domain also
+carries `T`, `E`, `D`, `p`, `i`, none of which mean "posted").
 
 #### `buildUnpostActions` / `unpostRowFilter` — the bulk "Descontabilizar" pair
 
@@ -1346,11 +1338,11 @@ window whose detail kebab also declares a standalone *Descontabilizar*
 (`menuActions` entry with `action: "unpost"`) should mount the unpost pair — a
 window must not grow the action in the bulk bar only. ETP-5302 shipped with
 `sales-invoice` and `purchase-invoice` deliberately excluded (invoice unposting
-lived only *inside* Reactivate, via `preUnpost`); **ETP-5692 reversed that**:
+lived only *inside* Reactivate); **ETP-5692 reversed that**:
 both invoice windows now declare the `unpost` menu action, offer it in the row
 kebab (`buildInvoiceRowQuickActions`) and mount a bulk unpost button, so an
-invoice can be unposted and stay Completed. Reactivate keeps its own `preUnpost`
-step. The invoice button uses its own pair, `buildInvoiceUnpostActions` /
+invoice can be unposted and stay Completed. Reactivate still reverses the
+accounting itself, on the server since ETP-5684. The invoice button uses its own pair, `buildInvoiceUnpostActions` /
 `invoiceUnpostRowFilter` in `windows/custom/shared/useInvoiceWindow.js`, which
 also requires status `CO` (a non-Completed row is rejected with
 `bulkRowNotCompleted` and counted as skipped — like every row filter, the reason is
@@ -3216,6 +3208,57 @@ fine: the backend computes the rate on create from the reference date whenever i
 **Refusals.** The save and complete refusals carry their identity (`ETGO_ExchangeRateMissingOnSave`
 / `ETGO_ExchangeRateMissingOnComplete` + params) and are composed in the UI locale by
 `backendErrors.js` — see `docs/i18n-guide.md`, mechanism 3.
+
+### 23. «Import from …» popups — `ImportLinesModal` (ETP-5828 Figma)
+
+`tools/app-shell/src/components/contract-ui/ImportLinesModal.jsx` is the ONE shell of every
+«Importar desde …» / «Añadir desde …» popup (orders, shipments, receipts, returns, source
+invoices, in invoices, shipments, receipts and the return windows). It is not a `decisions.json`
+option: a window's `custom/` modal renders it with its own `fetchDocuments` / `fetchLines` /
+`getDocDisplay` and either `submitImport` (one server action, preferred) or
+`linesEndpoint` + `buildLineBody` (one POST per line).
+
+**Layout (Figma «Pop Up Añadir desde pedido», node 2702-6462).** A FIXED 800 × 648 dialog, centred
+(it never resizes or moves); title + business partner; a search box with a
+«Seleccionar todo / Deseleccionar todo» button (`ImportLinesModal__selectAll`, acts on the
+documents the search leaves visible and only on lines that can still be imported); document rows
+with the shared round `RowExpandToggle` (ETP-5593, sized 24 × 24 through `className`), a checkbox (indeterminate on a partial selection), number, date, an
+adornment slot and the amount; an expanded document shows a bordered lines table with a master
+checkbox and a −/+ quantity stepper (`NumberStepperInput`, bounded by the line's available
+quantity, typed values still validated on blur); the footer has the selection hint and the
+«Cancelar» / primary pills.
+
+**Optional props added by ETP-5828** (all default to the previous behaviour):
+
+| Prop | Effect |
+|---|---|
+| `renderSelectionPanel(selection)` | Renders the fixed-height notice area under the list (`ImportLinesModal__selectionPanelSlot`). Return an `<ImportNotice tone="neutral"\|"warning" title body control? />` (exported from the same file); `null` shows the neutral «Información de importación» notice. Without the prop there is no notice area. |
+| `selectedDocumentsKey` | i18n key such as `importOrdersSelectedCount` («{count} pedido(s)»): the footer reads «**N pedido(s)** seleccionado(s)» and the import button counts DOCUMENTS with a selected line instead of lines. |
+| `importButtonKey` | i18n key of the primary button (default `importSelected`; `{count}` receives `" (N)"` or `""`). |
+
+**The notice box (Figma «Alert»).** The slot is 92 px: a 12 px gap and an 80 px alert (padding 16,
+gap 4, radius 0 8 8 0, 2 px left bar), a 24 × 24 icon box with a 20 px Phosphor icon (`InfoIcon` /
+`WarningIcon`, the Figma's own set) or the control (the 36 × 20 switch) in that 24 px row, and a
+text column (padding 0 8, Inter 14/24, title 500, body 400). Neutral: bg `#F3F5F9`, bar and icon
+`#C7CBD3`, title `foreground`, body `#6B7280`. Warning: bg `--status-warning-bg` (#FFF9EB), bar
+`#FFC233`, icon `#C28800`, title and body `--status-warning-fg` (#8A6100). Colours are literal where
+no token has the identical value. Only ONE body line fits: a longer title or body is truncated with
+the full text in its `title` attribute — the box never grows. Keep notice texts within ~668 px of
+Inter 14 (~95 characters).
+
+**Document row total.** The row shows the plain sum of what its lines' «Importe» cells show (unit
+price × current quantity; `_lineNetAmount` only for a line without a unit price), so row and lines
+always add up; there is no total override.
+
+Removed by ETP-5828: `getDocTotal`, `selectionPanelMinHeight` (the notice area now always has its fixed height)
+and `getSelectionHint` (the footer follows the design). Stable test ids: `import-lines-modal`,
+`import-lines-search`, `ImportLinesModal__docRow` / `__lineRow` (with `data-selected`),
+`__linesMasterCheckbox`, `__qtyInput` (the stepper's input), `__selectionHint`, `__import`,
+`__cancel`, `__close`, `__neutralNotice`.
+
+The invoice order import is the reference consumer: `windows/custom/shared/InvoiceOrderImportModal.jsx`
+(one component, `direction="sales"|"purchase"`), with the global-discount notice from
+`useOrderGlobalDiscountImport.jsx`. See `docs/generated-custom-windows/sales-invoice.md`.
 
 ## Decision tree: which option to use?
 

@@ -26,7 +26,8 @@ import {
   environmentTrialDaysKey, isProductiveEnvironment, isPurchaseSourceDemo,
 } from '@/lib/environmentPresentation.js';
 import { useLogout } from '@/auth/useLogout.js';
-import { formatCurrency } from '@/lib/formatCurrency.js';
+import { formatCurrency, formatGroupedNumber } from '@/lib/formatCurrency.js';
+import { quotaResourceLabel, quotaUnitLabel } from '@/lib/planQuotas.js';
 
 /** Billing interval as the catalog spells it, mapped to the i18n key that phrases the price. */
 const PRICE_LABEL_KEYS = { month: 'upgradePlanPriceMonthly', year: 'upgradePlanPriceYearly' };
@@ -47,12 +48,68 @@ function formatPlanPrice(ui, plan) {
   return key ? ui(key, { amount }) : amount;
 }
 
-const PRODUCTIVE_FEATURES = [
-  'upgradeProductiveFeatureSeparate',
-  'upgradeProductiveFeatureContacts',
-  'upgradeProductiveFeatureProducts',
-  'upgradeProductiveFeatureKeepsFree',
-];
+/** Billing interval as the catalog spells it, mapped to the i18n key of its toggle option. */
+const INTERVAL_LABEL_KEYS = { month: 'upgradePlanIntervalMonthly', year: 'upgradePlanIntervalYearly' };
+
+/** Catalog `highlight` value to the i18n key of its badge; anything else shows no badge. */
+const HIGHLIGHT_LABEL_KEYS = { popular: 'upgradePlanHighlightPopular', recommended: 'upgradePlanHighlightRecommended' };
+
+/**
+ * A plan amount as the storefront writes it: whole amounts without decimals ("11 €"), anything
+ * else with two ("9,17 €"). Still `formatCurrency`, only the fraction digits change.
+ */
+function formatPlanAmount(currency, value) {
+  const whole = Number.isInteger(Number(value));
+  return formatCurrency(currency, value, whole
+    ? { minimumFractionDigits: 0, maximumFractionDigits: 0 }
+    : undefined);
+}
+
+/**
+ * The months a yearly plan saves over twelve monthly payments, when every yearly plan of the
+ * catalog saves the same whole number of them (its monthly counterpart shares its name). Null when
+ * they disagree, do not pair up or save nothing: the banner then stays hidden rather than state a
+ * saving the catalog does not back.
+ */
+function yearlySavingsMonths(plans) {
+  const monthlyByName = new Map(plans
+    .filter(plan => plan.billingInterval === 'month')
+    .map(plan => [plan.name, Number(plan.displayPrice)]));
+  const savings = new Set();
+  for (const plan of plans.filter(p => p.billingInterval === 'year')) {
+    const monthly = monthlyByName.get(plan.name);
+    // No monthly counterpart (undefined), an unreadable price (NaN) or a free one: no saving.
+    if (monthly === undefined || Number.isNaN(monthly) || monthly <= 0) return null;
+    savings.add(Math.round(12 - Number(plan.displayPrice) / monthly));
+  }
+  const [months] = savings;
+  return savings.size === 1 && months > 0 ? months : null;
+}
+
+/**
+ * The feature list of a plan card: its quotas as the catalog states them (a seat count, or an
+ * amount per subscription year), then what every plan includes, with API access where the plan
+ * carries it. A plan with no quotas is unlimited, so it simply lists no amounts.
+ */
+function planFeatures(ui, plan) {
+  const quotas = Array.isArray(plan.quotas) ? plan.quotas : [];
+  const amount = quota => formatGroupedNumber(quota.includedQty);
+  const features = quotas.filter(quota => quota.kind !== 'seats').map(quota => ({
+    key: `quota-${quota.resourceKey}`,
+    label: ui('upgradePlanFeaturePerYear', {
+      amount: amount(quota), unit: quotaUnitLabel(quota, ui) || quotaResourceLabel(quota, ui),
+    }),
+  }));
+  features.push({ key: 'all', label: ui('upgradePlanFeatureAllFeatures') });
+  if (plan.includesApi) features.push({ key: 'api', label: ui('upgradePlanFeatureApi') });
+  features.push({ key: 'mcp', label: ui('upgradePlanFeatureMcp') });
+  quotas.filter(quota => quota.kind === 'seats').forEach(quota => features.push({
+    key: `quota-${quota.resourceKey}`,
+    label: ui(Number(quota.includedQty) === 1 ? 'upgradePlanFeatureSeatsOne' : 'upgradePlanFeatureSeats',
+      { amount: amount(quota) }),
+  }));
+  return features;
+}
 
 /** Backend step name to i18n key. */
 const STEP_LABELS = {
@@ -296,47 +353,66 @@ async function resumeCheckoutProvisioning({
 /**
  * One purchasable plan on the Plan step (ETP-5049).
  *
- * Everything this card says about the plan — name, description, price — is the catalog entry
- * (`GET /sws/go/plans`), so a plan added to ETGO_PLAN appears here with no frontend change and a
- * renamed or repriced one is never contradicted by a static translation. The feature list is not
- * per plan: it describes what every purchase creates (a separate productive environment), whichever
- * plan pays for it, so it is the same on every card.
+ * Everything this card says about the plan — name, price, quotas, API access, highlight — is the
+ * catalog entry (`GET /sws/go/plans`), so a plan added to ETGO_PLAN appears here with no frontend
+ * change and a renamed or repriced one is never contradicted by a static translation. Only the
+ * features every plan shares (all functions, MCP) are fixed copy.
+ *
+ * A yearly plan leads with its monthly equivalent and states the single yearly payment below it,
+ * as the storefront does; a monthly plan leads with its monthly price.
  *
  * The card holds a plan KEY only. The provider price behind it never reaches the browser; the
  * checkout resolves it server-side from the key.
  */
 function PlanCard({ plan, selected, onSelect, ui }) {
+  const recommended = plan.highlight === 'recommended';
+  const highlightKey = HIGHLIGHT_LABEL_KEYS[plan.highlight];
+  const yearly = plan.billingInterval === 'year';
+  const headline = yearly
+    ? formatCurrency(plan.currency, Number(plan.displayPrice) / 12)
+    : formatPlanAmount(plan.currency, plan.displayPrice);
+  const muted = recommended ? 'text-background/70' : 'text-muted-foreground';
+  let border = 'border-border';
+  if (selected) border = 'border-2 border-primary shadow-lg';
   return (
     <Card
-      className={selected
-        ? 'flex w-full flex-col border-2 border-primary bg-card shadow-lg'
-        : 'flex w-full flex-col border-border bg-card'}
+      className={`flex w-full flex-col ${border} ${recommended ? 'bg-foreground text-background' : 'bg-card'}`}
       data-selected={selected ? 'true' : 'false'}
+      data-highlight={plan.highlight || undefined}
       data-testid={`upgrade-plan-card-${plan.planKey}`}
     >
       <CardHeader className="space-y-4 p-6" data-testid="CardHeader__58bad7">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <CardTitle className="text-xl" data-testid="upgrade-plan-name">{plan.name}</CardTitle>
-            {plan.description && (
-              <p className="mt-2 text-sm text-muted-foreground" data-testid="upgrade-plan-description">
-                {plan.description}
-              </p>
+          <CardTitle className="text-2xl font-medium" data-testid="upgrade-plan-name">{plan.name}</CardTitle>
+          <div className="flex shrink-0 flex-wrap justify-end gap-1">
+            {highlightKey && (
+              <Badge variant="secondary" data-testid="upgrade-plan-highlight">{ui(highlightKey)}</Badge>
+            )}
+            {selected && (
+              <Badge variant="secondary" data-testid="upgrade-plan-selected-badge">
+                {ui('upgradePlanSelectedBadge')}
+              </Badge>
             )}
           </div>
-          {selected && (
-            <Badge variant="secondary" data-testid="upgrade-plan-selected-badge">
-              {ui('upgradePlanSelectedBadge')}
-            </Badge>
+        </div>
+        <div>
+          <p className="text-4xl font-semibold tracking-tight" data-testid="upgrade-plan-price">
+            {headline}
+            {yearly && <span className={`font-normal ${muted}`}>{ui('upgradePlanPerMonthSuffix')}</span>}
+          </p>
+          {/* An interval the catalog grows later gets no note rather than a wrong "monthly". */}
+          {(yearly || plan.billingInterval === 'month') && (
+            <p className={`mt-2 text-xs ${muted}`} data-testid="upgrade-plan-price-note">
+              {yearly
+                ? ui('upgradePlanYearlyNote', { amount: formatPlanAmount(plan.currency, plan.displayPrice) })
+                : ui('upgradePlanMonthlyNote')}
+            </p>
           )}
         </div>
-        <p className="text-3xl font-bold tracking-tight" data-testid="upgrade-plan-price">
-          {formatPlanPrice(ui, plan)}
-        </p>
         <Button
           type="button"
-          variant={selected ? 'default' : 'outline'}
-          className="w-full"
+          variant={selected || recommended ? 'default' : 'outline'}
+          className={`w-full ${recommended && !selected ? 'bg-background text-foreground hover:bg-background/90' : ''}`}
           aria-pressed={selected}
           onClick={onSelect}
           data-testid="upgrade-plan-select"
@@ -345,14 +421,14 @@ function PlanCard({ plan, selected, onSelect, ui }) {
           <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />
         </Button>
       </CardHeader>
-      <CardContent className="border-t p-6" data-testid="CardContent__58bad7">
-        <ul className="space-y-3 text-sm">
-          {PRODUCTIVE_FEATURES.map(key => (
-            <li key={key} className="flex items-start gap-2">
+      <CardContent className="flex-1 p-6 pt-0" data-testid="CardContent__58bad7">
+        <ul className="space-y-3 text-sm" data-testid="upgrade-plan-features">
+          {planFeatures(ui, plan).map(feature => (
+            <li key={feature.key} className="flex items-start gap-2">
               <Check
-                className="mt-0.5 h-4 w-4 shrink-0 text-primary"
+                className={`mt-0.5 h-4 w-4 shrink-0 ${recommended ? 'text-background' : 'text-primary'}`}
                 data-testid="Check__58bad7" />
-              <span>{ui(key)}</span>
+              <span>{feature.label}</span>
             </li>
           ))}
         </ul>
@@ -570,11 +646,28 @@ function PlanCatalogStatus({ state, plans, onRetry, onSignInAgain, ui }) {
 }
 
 /**
- * Step 1 — the plan chooser (ETP-5049): one card per catalog plan, selectable. Choosing a card
- * selects its key and moves on to the add-ons; a single plan is preselected by the catalog lookup
- * (the v1 catalog is one flat monthly subscription), so its card is already highlighted.
+ * Step 1 — the plan chooser (ETP-5049): one card per catalog plan of the billing interval picked in
+ * the Monthly/Yearly toggle, selectable. Choosing a card selects its key and moves on to the
+ * add-ons; a single plan is preselected by the catalog lookup, so its card is already highlighted.
+ *
+ * The toggle appears only when the catalog sells more than one interval, and opens on the interval
+ * of the plan already chosen (a return from the next steps), monthly otherwise.
  */
 function PlanCatalog({ state, plans, selectedPlanKey, onSelect, onRetry, onSignInAgain, ui }) {
+  // Known intervals in their natural order (monthly, yearly), any other after them.
+  const rank = value => {
+    const index = Object.keys(INTERVAL_LABEL_KEYS).indexOf(value);
+    return index < 0 ? Number.MAX_SAFE_INTEGER : index;
+  };
+  const intervals = [...new Set(plans.map(plan => plan.billingInterval || ''))]
+    .sort((a, b) => rank(a) - rank(b));
+  const selectedInterval = plans.find(plan => plan.planKey === selectedPlanKey)?.billingInterval;
+  const [pickedInterval, setPickedInterval] = useState(null);
+  let interval = pickedInterval;
+  if (!intervals.includes(interval)) {
+    interval = intervals.includes(selectedInterval) ? selectedInterval : intervals[0];
+  }
+
   if (state !== 'ready' || plans.length === 0) {
     return (
       <PlanCatalogStatus
@@ -586,24 +679,63 @@ function PlanCatalog({ state, plans, selectedPlanKey, onSelect, onRetry, onSignI
         data-testid="PlanCatalogStatus__58bad7" />
     );
   }
-  // One card does not stretch across a three-column grid: it keeps a card's width.
-  const columns = { 1: 'max-w-md', 2: 'md:grid-cols-2' }[plans.length] || 'md:grid-cols-3';
+  const shown = plans.filter(plan => (plan.billingInterval || '') === interval);
+  const savedMonths = interval === 'year' ? yearlySavingsMonths(plans) : null;
+  // One card does not stretch across a wide grid: it keeps a card's width.
+  const columns = { 1: 'max-w-md', 2: 'md:grid-cols-2', 3: 'md:grid-cols-3' }[shown.length]
+    || 'md:grid-cols-2 xl:grid-cols-4';
   return (
-    <div
-      role="group"
-      aria-label={ui('upgradePlanChoiceLabel')}
-      className={`grid gap-5 ${columns}`}
-      data-testid="upgrade-plan-catalog"
-    >
-      {plans.map(plan => (
-        <PlanCard
-          key={plan.planKey}
-          plan={plan}
-          selected={plan.planKey === selectedPlanKey}
-          onSelect={() => onSelect(plan.planKey)}
-          ui={ui}
-          data-testid="PlanCard__58bad7" />
-      ))}
+    <div className="space-y-5">
+      {intervals.length > 1 && (
+        <div
+          role="radiogroup"
+          aria-label={ui('upgradePlanIntervalLabel')}
+          className="grid grid-cols-2 gap-1 rounded-full border bg-muted p-1"
+          data-testid="upgrade-plan-interval"
+        >
+          {intervals.map(value => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={value === interval}
+              onClick={() => setPickedInterval(value)}
+              className={value === interval
+                ? 'rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background'
+                : 'rounded-full px-4 py-2 text-sm text-muted-foreground hover:text-foreground'}
+              data-testid={`upgrade-plan-interval-${value}`}
+            >
+              {INTERVAL_LABEL_KEYS[value] ? ui(INTERVAL_LABEL_KEYS[value]) : value}
+            </button>
+          ))}
+        </div>
+      )}
+      {savedMonths && (
+        <div className="flex flex-wrap items-center justify-center gap-3 rounded-xl bg-primary/10 px-4 py-3 text-sm"
+          data-testid="upgrade-plan-yearly-banner">
+          <Badge variant="outline" className="bg-background" data-testid="Badge__58bad7">{ui('upgradePlanYearlyBadge', { months: savedMonths })}</Badge>
+          <span>{ui('upgradePlanYearlyBanner', { paid: 12 - savedMonths })}</span>
+        </div>
+      )}
+      <div
+        role="group"
+        aria-label={ui('upgradePlanChoiceLabel')}
+        className={`grid gap-5 ${columns}`}
+        data-testid="upgrade-plan-catalog"
+      >
+        {shown.map(plan => (
+          <PlanCard
+            key={plan.planKey}
+            plan={plan}
+            selected={plan.planKey === selectedPlanKey}
+            onSelect={() => onSelect(plan.planKey)}
+            ui={ui}
+            data-testid="PlanCard__58bad7" />
+        ))}
+      </div>
+      <p className="text-xs text-muted-foreground" data-testid="upgrade-plan-footnote">
+        {ui('upgradePlanFootnote')}
+      </p>
     </div>
   );
 }

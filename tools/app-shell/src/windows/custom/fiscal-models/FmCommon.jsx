@@ -1,4 +1,6 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
+import { Info } from 'lucide-react';
 import { useUI } from '@/i18n';
 import './fiscal-models.css';
 
@@ -84,6 +86,71 @@ export function KpiWidget({ icon, iconColor, label, badge, badgeBg, badgeColor, 
         </span>
       </div>
     </div>
+  );
+}
+
+// ── Hover info tooltip (ETP-5725 follow-up) ──────────────────────
+// Shared by FmModel349Page.jsx's "Totales por clave" info icon and FmListPage.jsx's
+// "Rectificaciones" column — ONE show/hide mechanism (hover state + `Info` icon + a dark
+// tooltip box), not two copies that drift apart.
+//
+// Portaled to `document.body` (ETP-5725, fixing a real bug found on "Totales por clave"):
+// a non-portaled tooltip is confined to whatever LOCAL stacking context its anchor happens
+// to sit in. "Totales por clave"'s anchor used to live inside `.fm-349-totals`, a
+// `position: sticky` element with no explicit z-index — but per the CSS Positioned Layout
+// spec, `position: sticky` creates its OWN stacking context regardless of z-index, so
+// anything inside it (including the old tooltip's own `z-index: 500`) can only ever win a
+// z-index comparison against OTHER CHILDREN of that same context, never against a SIBLING
+// stacking context that sets an explicit z-index — which is exactly what the filter row
+// right above it does (`zIndex: 15`, FmModel349Page.jsx's operators filter bar). No z-index
+// value inside `.fm-349-totals` could ever beat that sibling, so the tooltip rendered with
+// its top half hidden underneath the filter row (confirmed against the CSS: `.fm-349-totals`
+// — `fiscal-models.css` — sets `position: sticky` with no z-index of its own, and the filter
+// row is a true sibling with an explicit, higher-precedence stacking context).
+//
+// Rather than chasing a bigger z-index across every sticky ancestor this icon might ever
+// sit inside — the list's "Rectificaciones" cell is a SECOND, structurally different
+// ancestor shape (a plain, non-sticky `<td>`), proof the fix needs to generalize rather than
+// patch one call site — this portals the tooltip box out to `document.body`, a true sibling
+// of every other top-level layer in the app, where it no longer participates in either
+// ancestor's stacking context at all. Position is computed from the anchor's own
+// `getBoundingClientRect()` on hover (`position: fixed` in `.fm-info-tooltip__box`, so it
+// tracks the anchor correctly even inside a scrolling/sticky container) rather than relying
+// on `position: absolute` + a DOM-tree-relative offset, which a portal breaks by definition.
+export function FmInfoTooltip({ text, size = 12, iconColor = 'var(--fm-fg-3)', 'data-testid': testId }) {
+  const [show, setShow] = React.useState(false);
+  const [coords, setCoords] = React.useState(null);
+  const anchorRef = React.useRef(null);
+
+  const place = () => {
+    const rect = anchorRef.current?.getBoundingClientRect();
+    if (rect) setCoords({ left: rect.left + rect.width / 2, top: rect.top });
+  };
+
+  return (
+    <span
+      ref={anchorRef}
+      className="fm-info-tooltip__anchor"
+      onMouseEnter={() => { place(); setShow(true); }}
+      onMouseLeave={() => setShow(false)}
+      data-testid={testId}
+    >
+      <Info
+        size={size}
+        strokeWidth={1.75}
+        style={{ color: iconColor, cursor: 'help' }}
+        data-testid={testId ? `${testId}-icon` : undefined} />
+      {show && coords && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fm-info-tooltip__box"
+          style={{ left: coords.left, top: coords.top }}
+          data-testid={testId ? `${testId}-tooltip` : undefined}
+        >
+          {text}
+        </div>,
+        document.body,
+      )}
+    </span>
   );
 }
 
