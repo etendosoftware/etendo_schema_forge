@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useMenuLabel, useUI } from '@/i18n';
 import { statusLabel as resolveStatusLabel } from '@/lib/statusBadge.js';
 import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
@@ -160,9 +160,18 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
     setSendModalClosing(false);
     setShowSendModal(true);
   };
+  // The close animation's timer is cleared on unmount: if it fired after the preview is gone it
+  // would set state on an unmounted component (and, in tests, after jsdom is torn down).
+  const closeTimerRef = useRef(null);
+  useEffect(() => () => clearTimeout(closeTimerRef.current), []);
   const closeEmailModal = () => {
     setSendModalClosing(true);
-    setTimeout(() => { setShowSendModal(false); setSendModalClosing(false); }, 300);
+    clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => {
+      closeTimerRef.current = null;
+      setShowSendModal(false);
+      setSendModalClosing(false);
+    }, 300);
   };
 
   // ── Tabs ────────────────────────────────────────────────────────────────────
