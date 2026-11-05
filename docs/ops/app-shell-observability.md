@@ -693,6 +693,16 @@ cannot replay support activity into customer analytics. Native RUM flag values,
 monitoring identity and company grouping continue with the `support_session`
 marker; logout during pending identity replay restores that marker after reset.
 
+`session_started` captures an in-memory session ownership epoch before awaiting
+flag retargeting. Logout, account reset, or a company/user transition invalidates
+that epoch, including a return to the same identity fields. A superseded call
+cannot restore the old company's analytics grouping or emit its delayed session
+start; it also stops before flushing if ownership changes during event delivery.
+Repeated publication of the same identity or enrichment of the company name does
+not invalidate a current session. A flag-provider outage alone does not suppress
+a valid session event: session ownership, rather than flag availability, controls
+analytics attribution.
+
 Code and unit tests establish this emission contract. Confirm receipt in the
 selected Mixpanel project and Datadog environment after deployment before using
 these events as evidence of an operational improvement.

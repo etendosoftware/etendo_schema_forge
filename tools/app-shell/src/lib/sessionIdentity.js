@@ -17,6 +17,7 @@
  */
 
 let current = {};
+let identityEpoch = 0;
 
 function definedEntries(identity) {
   return Object.fromEntries(
@@ -35,7 +36,9 @@ export function setSessionIdentity({ username, clientId, clientName } = {}) {
   const next = definedEntries({ username, clientId, clientName });
   const clientChanged = next.clientId !== undefined && next.clientId !== current.clientId;
   const base = clientChanged ? definedEntries({ ...current, clientName: undefined }) : current;
-  current = { ...base, ...next };
+  const updated = { ...base, ...next };
+  if (updated.username !== current.username || updated.clientId !== current.clientId) identityEpoch += 1;
+  current = updated;
 }
 
 /** Returns a copy of the signed-in identity; `{}` when nobody is signed in. */
@@ -43,7 +46,13 @@ export function getSessionIdentity() {
   return { ...current };
 }
 
-/** Forgets the signed-in identity. Called on every logout. */
+/** Captures session ownership across awaits, including a logout/relogin with identical fields. */
+export function getSessionIdentityEpoch() {
+  return identityEpoch;
+}
+
+/** Forgets the signed-in identity. Every reset invalidates pending work, even when already empty. */
 export function clearSessionIdentity() {
+  identityEpoch += 1;
   current = {};
 }

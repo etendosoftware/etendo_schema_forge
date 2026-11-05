@@ -1,7 +1,7 @@
 // @covers tools/app-shell/src/lib/observability/health-events.js
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { OpenFeature, TypedInMemoryProvider } from '@openfeature/web-sdk';
-import { setFeatureFlagContext } from '@/lib/flags/bootstrap.js';
+import { clearAccountIdentity, setFeatureFlagContext } from '@/lib/flags/bootstrap.js';
 
 // ── Module mocks (must be hoisted before any import of the module under test) ──
 
@@ -11,6 +11,7 @@ vi.mock('@/lib/observability.js', () => ({
   group: vi.fn(),
   groupSet: vi.fn().mockResolvedValue(undefined),
   identify: vi.fn().mockResolvedValue(undefined),
+  reset: vi.fn().mockResolvedValue(undefined),
 }));
 
 // ── Imports ────────────────────────────────────────────────────────────────────
@@ -459,5 +460,123 @@ describe('trackSessionStarted and the session identity (ETP-5455)', () => {
     await trackSessionStarted({ username: 'ana', clientId: 'client-9' });
 
     expect(groupSet).not.toHaveBeenCalledWith('account_id', 'client-9', { $name: 'Stale Tenant' });
+  });
+});
+
+
+describe('session-start telemetry across asynchronous identity changes', () => {
+  function deferred() {
+    let resolve;
+    const promise = new Promise(done => { resolve = done; });
+    return { promise, resolve };
+  }
+
+  async function delayCompanyA() {
+    const started = deferred();
+    const response = deferred();
+    const provider = new TypedInMemoryProvider({});
+    provider.onContextChange = vi.fn(async (_old, context) => {
+      if (context.clientId === 'company-a') {
+        started.resolve();
+        await response.promise;
+      }
+    });
+    await OpenFeature.setProviderAndWait(provider);
+    return { started, response };
+  }
+
+  const starts = () => track.mock.calls.filter(([name]) => name === 'session_started');
+
+  afterEach(async () => {
+    track.mockResolvedValue(undefined);
+    await OpenFeature.clearProviders();
+    await OpenFeature.clearContexts();
+  });
+
+  it('does not restore grouping or emit a session start after logout during flag resolution', async () => {
+    const { started, response } = await delayCompanyA();
+    const pending = trackSessionStarted({ username: 'admin', clientId: 'company-a', clientName: 'Old Company' });
+    await started.promise;
+    await clearAccountIdentity();
+    response.resolve();
+    await pending;
+
+    expect(group).not.toHaveBeenCalled();
+    expect(groupSet).not.toHaveBeenCalled();
+    expect(starts()).toEqual([]);
+    expect(flush).not.toHaveBeenCalled();
+  });
+
+  it('reports only the new company when its context overtakes the previous company', async () => {
+    const { started, response } = await delayCompanyA();
+    const pending = trackSessionStarted({ username: 'admin', clientId: 'company-a', clientName: 'Old Company' });
+    await started.promise;
+    await trackSessionStarted({ username: 'admin', clientId: 'company-b', clientName: 'Current Company' });
+    response.resolve();
+    await pending;
+
+    expect(group.mock.calls).toEqual([['account_id', 'company-b']]);
+    expect(groupSet.mock.calls).toEqual([['account_id', 'company-b', { $name: 'Current Company' }]]);
+    expect(starts()).toEqual([['session_started', { account_id: 'company-b' }]]);
+    expect(flush).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not adopt a new login epoch even when it restores the same user and company', async () => {
+    const { started, response } = await delayCompanyA();
+    const oldStart = trackSessionStarted({ username: 'admin', clientId: 'company-a', clientName: 'Old Name' });
+    await started.promise;
+    await clearAccountIdentity();
+    const newStart = trackSessionStarted({ username: 'admin', clientId: 'company-a', clientName: 'Current Name' });
+    response.resolve();
+    await Promise.all([oldStart, newStart]);
+
+    expect(group).toHaveBeenCalledTimes(1);
+    expect(groupSet).toHaveBeenCalledWith('account_id', 'company-a', { $name: 'Current Name' });
+    expect(groupSet).toHaveBeenCalledTimes(1);
+    expect(starts()).toHaveLength(1);
+    expect(flush).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects an earlier company epoch after an A to B to A transition', async () => {
+    const { started, response } = await delayCompanyA();
+    const oldStart = trackSessionStarted({ username: 'admin', clientId: 'company-a' });
+    await started.promise;
+    setSessionIdentity({ username: 'admin', clientId: 'company-b' });
+    setSessionIdentity({ username: 'admin', clientId: 'company-a' });
+    response.resolve();
+    await oldStart;
+
+    expect(group).not.toHaveBeenCalled();
+    expect(starts()).toEqual([]);
+    expect(flush).not.toHaveBeenCalled();
+  });
+
+  it('still reports a current valid session when the flag provider cannot resolve its context', async () => {
+    const provider = new TypedInMemoryProvider({});
+    provider.onContextChange = vi.fn(async () => { throw new Error('provider unavailable'); });
+    await OpenFeature.setProviderAndWait(provider);
+    await trackSessionStarted({ username: 'admin', clientId: 'company-a' });
+
+    expect(group).toHaveBeenCalledWith('account_id', 'company-a');
+    expect(starts()).toEqual([['session_started', { account_id: 'company-a' }]]);
+    expect(flush).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not flush the replaced session after its session-start delivery yields', async () => {
+    const started = deferred();
+    const response = deferred();
+    track.mockImplementation(async name => {
+      if (name === 'session_started') {
+        started.resolve();
+        await response.promise;
+      }
+    });
+    const pending = trackSessionStarted({ username: 'admin', clientId: 'company-a' });
+    await started.promise;
+    await clearAccountIdentity();
+    response.resolve();
+    await pending;
+
+    expect(flush).not.toHaveBeenCalled();
   });
 });
