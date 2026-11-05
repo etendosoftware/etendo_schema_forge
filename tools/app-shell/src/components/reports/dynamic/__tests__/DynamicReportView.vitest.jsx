@@ -279,6 +279,16 @@ describe('DynamicReportView — split, errors and exports', () => {
     expect(body.params._display_orgId).toBe('Spain');
   });
 
+  it('an export with no resolvable org name sends no org display and still downloads', async () => {
+    renderView();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    fireEvent.click(screen.getByTestId('DynamicReportView__export-pdf'));
+    await waitFor(() => expect(apiFetchMock.mock.calls.some(([u]) => u.endsWith('/render'))).toBe(true));
+    const [, init] = apiFetchMock.mock.calls.find(([u]) => u.endsWith('/render'));
+    expect(JSON.parse(init.body).params._display_orgId).toBeUndefined();
+    await waitFor(() => expect(globalThis.URL.createObjectURL).toHaveBeenCalled());
+  });
+
   it('a fully collapsed export sends "none", never the blank value core reads as not sent', async () => {
     renderView();
     await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
@@ -392,6 +402,40 @@ describe('DynamicReportView — drill-down (F9)', () => {
     expect(JSON.parse(calls.at(-1)[1].body).limit).toBeUndefined();
     expect(screen.queryByTestId('DynamicDrillPanel__capped')).toBeNull();
     expect(screen.getByTestId('DynamicDrillPanel__debit')).toBeInTheDocument();
+  });
+
+  const cappedLedger = () => {
+    ledgerAnswer = ({ limit }) => ({ ...LEDGER, rows: Array.from({ length: limit ?? LEDGER_LINE_CAP + 40 }, (_, i) => ({ ...LEDGER.rows[0], fact_acct_group_id: `G${i}` })) });
+  };
+  const ledgerLimits = () => apiFetchMock.mock.calls.filter(([u]) => u.endsWith('/report-general-ledger/query')).map(([, init]) => JSON.parse(init.body).limit);
+
+  it('the ledger stays full after opening an entry and coming back to the account', async () => {
+    cappedLedger();
+    await openLedger();
+    await waitFor(() => expect(screen.getAllByTestId('DynamicDrillPanel__ledgerRow')).toHaveLength(LEDGER_LINE_CAP));
+    fireEvent.click(screen.getByTestId('DynamicDrillPanel__loadAll'));
+    await waitFor(() => expect(screen.getAllByTestId('DynamicDrillPanel__ledgerRow')).toHaveLength(LEDGER_LINE_CAP + 40));
+    fireEvent.click(screen.getAllByTestId('DynamicDrillPanel__openEntry')[0]);
+    await screen.findAllByTestId('DynamicDrillPanel__entryRow');
+    fireEvent.click(screen.getByTestId('DynamicDrillPanel__crumb-account'));
+    await waitFor(() => expect(screen.getAllByTestId('DynamicDrillPanel__ledgerRow')).toHaveLength(LEDGER_LINE_CAP + 40));
+    expect(screen.queryByTestId('DynamicDrillPanel__capped')).toBeNull();
+    expect(screen.getByTestId('DynamicDrillPanel__debit')).toBeInTheDocument();
+    expect(ledgerLimits().at(-1)).toBeUndefined();
+  });
+
+  it('closing the panel and reopening the account caps the ledger again', async () => {
+    cappedLedger();
+    await openLedger();
+    await waitFor(() => expect(screen.getAllByTestId('DynamicDrillPanel__ledgerRow')).toHaveLength(LEDGER_LINE_CAP));
+    fireEvent.click(screen.getByTestId('DynamicDrillPanel__loadAll'));
+    await waitFor(() => expect(screen.getAllByTestId('DynamicDrillPanel__ledgerRow')).toHaveLength(LEDGER_LINE_CAP + 40));
+    fireEvent.click(screen.getByTestId('DynamicDrillPanel__crumb-report'));
+    await waitFor(() => expect(screen.queryByTestId('DynamicDrillPanel')).toBeNull());
+    fireEvent.click(screen.getByTestId('DynamicReportTable__ledger'));
+    await waitFor(() => expect(screen.getAllByTestId('DynamicDrillPanel__ledgerRow')).toHaveLength(LEDGER_LINE_CAP));
+    expect(ledgerLimits().at(-1)).toBe(LEDGER_LINE_CAP + 1);
+    expect(screen.getByTestId('DynamicDrillPanel__capped')).toBeInTheDocument();
   });
 
   it('a ledger of exactly the cap is complete: no hint, every sum shown', async () => {

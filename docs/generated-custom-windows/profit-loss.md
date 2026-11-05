@@ -62,7 +62,7 @@ Production read replica, the client with the most accounting lines (9.2k lines i
 - Split by contact, product or organization: 22–30 ms.
 - Operands query: 2–4 ms.
 
-Almost all of the tree's time is the scan of the client's `fact_acct` lines through the `fact_acct_account` index with `ad_isorgincluded` evaluated on each line (about 14 µs per line). The period is applied inside the sums, not as a filter, so the cost follows the client's total number of lines, not the period's. At that rate a client with 100k lines would take about 1.5 s. No index was added.
+Almost all of the tree's time is the scan of the client's `fact_acct` lines through the `fact_acct_account` index with `ad_isorgincluded` evaluated on each line (about 14 µs per line). This is the Profit & Loss tree query; the General Ledger and Journal Entries drill-downs resolve the org tree once over `ad_org` instead. The period is applied inside the sums, not as a filter, so the cost follows the client's total number of lines, not the period's. At that rate a client with 100k lines would take about 1.5 s. No index was added.
 
 ## Gap assessment
 - One accounting schema per run.
@@ -81,7 +81,8 @@ Interactive view (flag `dynamic-reports` on):
 8. Pick **Mismo período del año anterior**: Comparado, Var. and Var. % appear, coloured by trend.
 9. Pick **Desglosar cuentas por → Contacto**, expand all and open a leaf account's split: the parts add up to the account.
 10. Click a leaf account's name: the ledger's closing balance moves by the account's amount; open a line, then **Abrir documento**.
-11. Export to PDF with some rows expanded: the PDF shows the same rows as the screen.
+11. Open the ledger of an account with more than 500 lines in the period: only the opening balance shows, with the cap note and **Cargar todas las líneas (puede tardar)**; click it: every line loads and the totals come back.
+12. Export to PDF with some rows expanded: the PDF shows the same rows as the screen, and its header names the organization, Contacto and Producto, not their ids.
 
 ## Automated evidence
 - `tools/app-shell/test/report-profit-loss-account-tree.test.js`: contract shape, SQL, templates, and the ETP-6080 additions (optional year clause, dimension filters, hidden params, trend opt-in, `splitQuery` predicates).
@@ -89,4 +90,5 @@ Interactive view (flag `dynamic-reports` on):
 - Core `cli/test/report-query.test.js` and `report-grouping.test.js`: the query answer equals the render at every account level, expansion, variation and the split.
 - `tools/app-shell/src/components/reports/dynamic/__tests__/`: the interactive view (`DynamicReportView.vitest.jsx`: opening period, folding, comparison, chips, split, errors, exports, drill-down, telemetry, translation parity), `dynamicDates.vitest.js` (periods, run in Madrid and Buenos Aires), `reportTree.vitest.js`, `drillDown.vitest.js`, `useReportQuery.vitest.js`.
 - `e2e/tests/flows/accounting/dynamic-profit-loss.mocked.spec.js`: the old viewer with the flag off; with it on (Vite started with `VITE_FEATURE_FLAGS='{"dynamic-reports":true}'` and `E2E_DYNAMIC_REPORTS_FLAG=on`, otherwise skipped), the first query with no button, folding with no request, a period shortcut, and the drill-down to the ledger, the entry and the document tab.
+- Core `cli/test/report-auth.test.js` (`assertReportAccess`: governed, 403, 502, older module not enforced) and Go `SFMyReportAccessTest` (`governed` in every answer). `DynamicReportView.vitest.jsx` also covers the 500-line ledger cap and the drill steps hidden by report access.
 - `tools/app-shell/src/pages/__tests__/ReportViewerPage.dynamicSwitch.vitest.jsx` (flag switch) and `ReportViewerPage.networkError.vitest.jsx` (translated `ORG_ACCESS_DENIED` in the old viewer).
