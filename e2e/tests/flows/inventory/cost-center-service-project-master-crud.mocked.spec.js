@@ -162,8 +162,13 @@ for (const { spec, entity } of WINDOWS) {
       const saveBtn = page.getByTestId('action-save');
       await expect(saveBtn).toBeEnabled({ timeout: 10_000 });
 
+      // Match the exact create path, not a prefix: the form also POSTs to
+      // `/sws/neo/${spec}/${entity}/evaluate-display`, which shares the prefix
+      // and, under parallel load, can fire after the Save click and be captured
+      // instead of the create request (its body carries no `active`).
+      const createPath = `/sws/neo/${spec}/${entity}`;
       const postReqPromise = page.waitForRequest(
-        (r) => r.url().includes(`/sws/neo/${spec}/${entity}`) && r.method() === 'POST',
+        (r) => r.method() === 'POST' && new URL(r.url()).pathname.endsWith(createPath),
         { timeout: 10_000 },
       );
       await saveBtn.click();
