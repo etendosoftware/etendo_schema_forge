@@ -136,7 +136,9 @@ Centralizing here eliminates the "forgot to clear on this path" class of bug: wi
 
 `OnboardingPage.jsx` currently handles four public auth/onboarding states before the protected app loads:
 
-1. **Register** -- create the platform account.
+1. **Register** -- create the platform account with name and email; no password since ETP-6081. The welcome mail carries a
+   one-time login link, and the account creates a password later through "Forgot password?" (see
+   `com.etendoerp.go/docs/onboarding-flow.md` → *Sign-up without a password*).
 2. **Login** -- sign in with an existing platform account using local credentials or a configured SSO provider.
 3. **Pre-create setup** -- a two-step onboarding wizard collects the user profile and initial company data before environment creation starts.
 4. **Creation progress modal** -- while `/sws/go/onboarding` runs, the UI switches to a centered modal-style progress state (20% / 50% / 80% / 100%) over a blurred application background until the new environment is ready.

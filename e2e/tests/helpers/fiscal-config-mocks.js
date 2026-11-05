@@ -24,6 +24,10 @@
  * registration order, so these specific routes must win over the catch-all).
  */
 
+import { FISCAL_SYSTEM_CATALOG } from '../../../tools/app-shell/src/windows/custom/fiscal-config/__tests__/fiscalSystemCatalog.fixture.js';
+
+export { FISCAL_SYSTEM_CATALOG };
+
 export function responseData(data) {
   return JSON.stringify({ response: { data } });
 }
@@ -88,4 +92,90 @@ export async function installFiscalProfileMocks(page, profile, { territory = 'GI
       body: responseData(verifactuRecord ? [verifactuRecord] : []),
     });
   });
+}
+
+// ── Organization fiscal actions (ETP-6053) ────────────────────────────────────
+//
+// The Fiscal Configuration window reads the territory × system rules from
+// `GET /sii-config/siiConfiguration/{orgId}/action/fiscalSystemCatalog` and activates a
+// billing system with `POST …/action/configureFiscalSystem` (the server builds the
+// records). Without the catalog mock the generic `**/sws/**` stub answers an empty
+// body: the manual screen then offers no system and the "Estado" panel shows no
+// territory. Both routes end in `/action/<name>` — two segments past the org id — so
+// they are matched with a `*` per segment (see the e2e guide's glob gotcha).
+
+const ACTION_ROUTE = '**/sws/neo/sii-config/siiConfiguration/*/action/';
+
+/**
+ * Answer the fiscal catalog. Must be called AFTER `login(page)`.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {{ catalog?: object, errorMessage?: string|null }} [options] - `errorMessage`
+ *   makes the read fail with a NEO error body (HTTP 500).
+ */
+export async function installFiscalCatalogMock(page, { catalog = FISCAL_SYSTEM_CATALOG, errorMessage = null } = {}) {
+  await page.route(`${ACTION_ROUTE}fiscalSystemCatalog**`, async (route) => {
+    if (errorMessage) {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { message: errorMessage, status: 500 } }),
+      });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: responseData(catalog) });
+  });
+}
+
+/** NEO's raw English refusal for a role without access to the spec — never shown to the user. */
+export const NEO_ACCESS_DENIED_MESSAGE = 'Access denied to spec for current role';
+
+/** The record systems each activated system creates. */
+const RECORD_SYSTEMS = { SII: ['SII'], TBAI: ['TBAI'], 'SII+TBAI': ['SII', 'TBAI'], VERIFACTU: ['VERIFACTU'] };
+
+/**
+ * Answer `configureFiscalSystem`. Must be called AFTER `login(page)`.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {{ ids?: Record<string, string>, refusal?: string|null, forbidden?: boolean, onCreate?: Function }} [options]
+ *   `ids` maps a record system (SII / TBAI / VERIFACTU) to the id the action reports;
+ *   `refusal` makes the action refuse with that message (HTTP 409); `forbidden` makes it answer
+ *   NEO's generic role refusal (HTTP 403, {@link NEO_ACCESS_DENIED_MESSAGE}, no `messageKeys`);
+ *   `onCreate(body)` runs after a successful activation (e.g. to make the config lists return
+ *   the new record).
+ * @returns {Promise<Array<object>>} the parsed request bodies, in call order
+ */
+export async function installConfigureFiscalSystemMock(page, { ids = {}, refusal = null, forbidden = false, onCreate = null } = {}) {
+  const bodies = [];
+  await page.route(`${ACTION_ROUTE}configureFiscalSystem**`, async (route) => {
+    const body = JSON.parse(route.request().postData() || '{}');
+    bodies.push(body);
+    if (forbidden) {
+      await route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { message: NEO_ACCESS_DENIED_MESSAGE, status: 403 } }),
+      });
+      return;
+    }
+    if (refusal) {
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { message: refusal, status: 409 } }),
+      });
+      return;
+    }
+    const created = (RECORD_SYSTEMS[body.system] ?? []).map(system => ({
+      system,
+      id: ids[system] ?? `e2e-${system.toLowerCase()}-created`,
+    }));
+    onCreate?.(body);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ response: { data: { system: body.system, territory: body.territory ?? null, created } } }),
+    });
+  });
+  return bodies;
 }

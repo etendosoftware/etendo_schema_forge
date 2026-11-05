@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/pages/OnboardingPage.jsx
 import { test, expect } from '@playwright/test';
 import { randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -134,14 +135,21 @@ test.describe('Onboarding — Register new user (integration)', () => {
     // STEP 1: Navigate to onboarding and fill registration form
     // ═══════════════════════════════════════════════════════════════════════
 
+    // ETP-6081: the form asks for no password, but the integration specs downstream sign in with
+    // the credentials written below. The register API still takes an optional password, so it is
+    // added to the request the form sends: the account is created through the real UI and backend,
+    // and keeps a password to sign in with.
+    await page.unroute('**/sws/go/session/register');
+    await page.route('**/sws/go/session/register', async (route) => {
+      const sent = JSON.parse(route.request().postData() || '{}');
+      await route.continue({ postData: JSON.stringify({ ...sent, password: userPassword }) });
+    });
     await goToRegister(page);
     await expect(page.getByRole('heading', { name: /crea tu cuenta gratis/i })).toBeVisible();
 
     await page.locator('#reg-name').fill(userName);
     await slow(page);
     await page.locator('#reg-email').fill(userEmail);
-    await slow(page);
-    await page.locator('#reg-password').fill(userPassword);
     await slow(page);
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -284,13 +292,11 @@ test.describe('Onboarding — Register new user (integration)', () => {
   test('shows error when registering with an already used email', async ({ page, context }) => {
     const suffix = uniqueSuffix();
     const email = `e2e-dup-${suffix}@test-onboarding.com`;
-    const password = `E2e-${suffix}-Pass!99`;
 
     // First registration — should succeed
     await goToRegister(page);
     await page.locator('#reg-name').fill('Dup User');
     await page.locator('#reg-email').fill(email);
-    await page.locator('#reg-password').fill(password);
     await page.getByTestId('action-register-submit').click();
     // ETP-4798: this test is about the SECOND registration being refused, so it only needs the
     // first one to have gone through. Either landing screen proves that, and accepting both keeps
@@ -306,7 +312,6 @@ test.describe('Onboarding — Register new user (integration)', () => {
     await goToRegister(page);
     await page.locator('#reg-name').fill('Dup User Again');
     await page.locator('#reg-email').fill(email);
-    await page.locator('#reg-password').fill(password);
     await slow(page);
     await page.getByTestId('action-register-submit').click();
 
@@ -328,7 +333,6 @@ test.describe('Onboarding — Register new user (integration)', () => {
     const suffix = uniqueSuffix();
     const userName = `E2E ProvFail ${suffix}`;
     const userEmail = `e2e-provfail-${suffix}@test-onboarding.com`;
-    const userPassword = `E2e-${suffix}-Pass!99`;
 
     // Register a real user against the backend
     await goToRegister(page);
@@ -336,7 +340,6 @@ test.describe('Onboarding — Register new user (integration)', () => {
 
     await page.locator('#reg-name').fill(userName);
     await page.locator('#reg-email').fill(userEmail);
-    await page.locator('#reg-password').fill(userPassword);
     await page.getByTestId('action-register-submit').click();
 
     await passEmailConfirmationWall(page, request, userEmail);
