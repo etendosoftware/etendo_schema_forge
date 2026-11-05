@@ -55,23 +55,47 @@ const INVOICE_HEADER = {
   'currency$_identifier': 'EUR',
 };
 
+// ETP-6099: the popup reads the invoice's availableShipments / availableShipmentLines actions
+// (rows in the action contract's shape, `detail: true`).
 const SHIPMENT = {
   id: SHIPMENT_ID,
   documentNo: 'SHIP-MOCK-001',
-  documentStatus: 'CO',
+  date: '2026-05-01',
   businessPartner: BP_ID,
   'businessPartner$_identifier': 'Test Client',
-  movementDate: '2026-05-01',
-  invoiced: false,
+  currency: 'eur-1',
+  pendingLines: 1,
+  order: null,
+  orderDocumentNo: null,
+  amount: 20,
 };
 
 const SHIP_LINE = {
   id: SHIP_LINE_ID,
+  lineNo: 10,
   product: 'prod-001',
   'product$_identifier': 'Test Product',
+  uOM: 'uom-1',
+  pendingQuantity: 2,
   movementQuantity: 2,
-  salesOrderLine: null,
+  orderLine: null,
+  orderLineDiscount: 0,
+  importedHere: false,
+  invoicedElsewhere: false,
 };
+
+/** The invoice's availableShipments / availableShipmentLines actions (POST reads). */
+async function routeShipmentActions(page, lines) {
+  await page.route(`**/sws/neo/sales-invoice/header/${INVOICE_ID}/action/availableShipment*`, async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    const isLines = route.request().url().endsWith('/availableShipmentLines');
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ response: { data: isLines ? lines : [SHIPMENT], hasMore: false, nextOffset: null } }),
+    });
+  });
+}
 
 /**
  * Install mocks for the invoice detail + import flow.
@@ -108,25 +132,8 @@ async function installMocks(page) {
     });
   });
 
-  // Goods-shipment list — ImportFromShipmentModal.fetchDocuments
-  await page.route('**/sws/neo/goods-shipment/goodsShipment{/**,}**', async (route) => {
-    if (route.request().method() !== 'GET') return route.fallback();
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ response: { data: [SHIPMENT] } }),
-    });
-  });
-
-  // Goods-shipment lines — ImportFromShipmentModal.fetchLines
-  await page.route('**/sws/neo/goods-shipment/goodsShipmentLine{/**,}**', async (route) => {
-    if (route.request().method() !== 'GET') return route.fallback();
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ response: { data: [SHIP_LINE] } }),
-    });
-  });
+  // ImportFromShipmentModal.fetchDocuments / fetchLines
+  await routeShipmentActions(page, [SHIP_LINE]);
 }
 
 test.describe('Sales Invoice — import from shipment no-reload', () => {
@@ -233,21 +240,12 @@ test.describe('Sales Invoice — import from shipment no-reload', () => {
 // ---------------------------------------------------------------------------
 
 const ORDER_LINE_ID = 'order-line-discount-001';
+// The action row carries the order line and its discount (ETP-6099: no order-line GET).
 const SHIP_LINE_WITH_ORDER = {
+  ...SHIP_LINE,
   id: 'ship-line-disc-001',
-  product: 'prod-001',
-  'product$_identifier': 'Test Product',
-  movementQuantity: 2,
-  salesOrderLine: ORDER_LINE_ID,
-};
-const ORDER_LINE_WITH_DISCOUNT = {
-  id: ORDER_LINE_ID,
-  product: 'prod-001',
-  orderedQuantity: 2,
-  listPrice: 23,
-  unitPrice: 20.7,
-  discount: 10,
-  lineGrossAmount: 45.54,
+  orderLine: ORDER_LINE_ID,
+  orderLineDiscount: 10,
 };
 
 test.describe('Sales Invoice — import from shipment discount carry-over', () => {
@@ -277,35 +275,8 @@ test.describe('Sales Invoice — import from shipment discount carry-over', () =
       });
     });
 
-    // Shipment list
-    await page.route('**/sws/neo/goods-shipment/goodsShipment{/**,}**', async (route) => {
-      if (route.request().method() !== 'GET') return route.fallback();
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ response: { data: [SHIPMENT] } }),
-      });
-    });
-
-    // Shipment lines — line WITH a salesOrderLine reference
-    await page.route('**/sws/neo/goods-shipment/goodsShipmentLine{/**,}**', async (route) => {
-      if (route.request().method() !== 'GET') return route.fallback();
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ response: { data: [SHIP_LINE_WITH_ORDER] } }),
-      });
-    });
-
-    // Sales order line — returns 10% discount
-    await page.route(`**/sws/neo/sales-order/lines/${ORDER_LINE_ID}`, async (route) => {
-      if (route.request().method() !== 'GET') return route.fallback();
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ response: { data: [ORDER_LINE_WITH_DISCOUNT] } }),
-      });
-    });
+    // Shipment list + lines — the line references an order line with a 10% discount
+    await routeShipmentActions(page, [SHIP_LINE_WITH_ORDER]);
 
     // Capture the POST that creates the invoice line
     await page.route('**/sws/neo/sales-invoice/lines', async (route) => {
@@ -395,22 +366,29 @@ const SRC_INVOICE_HEADER = {
   'currency$_identifier': 'EUR',
 };
 
+// What the rectificative's `availableOriginInvoices` action lists (ETP-6099): the server already
+// keeps the customer's completed, non-rectificative invoices in the invoice's currency. `amount`
+// (detail) = Σ unitPrice × |qty| over all its lines, the imported one included.
 const SOURCE_INVOICE_DOC = {
   id: SOURCE_INVOICE_ID,
   documentNo: 'SRC-INV-001',
-  documentStatus: 'CO',
   businessPartner: BP_ID,
   'businessPartner$_identifier': 'Test Client',
-  invoiceDate: '2026-04-01',
+  date: '2026-04-01',
   currency: 'eur-1',
+  pendingLines: 1,
+  amount: 65,
 };
 
 // Already imported into SRC_INVOICE_HEADER — must appear grayed out in the picker.
 const SOURCE_LINE_1_IMPORTED = {
   id: SRC_LINE_1_ID,
+  lineNo: 10,
   product: 'prod-a',
   'product$_identifier': 'Producto Origen A',
   invoicedQuantity: 2,
+  pendingQuantity: 0,
+  importedHere: true,
   unitPrice: 10,
   lineNetAmount: 20,
 };
@@ -420,21 +398,15 @@ const SOURCE_LINE_1_IMPORTED = {
 // returns), so the test can assert the rectificativa's own line does NOT re-post it (ETP-6002).
 const SOURCE_LINE_2_AVAILABLE = {
   id: SRC_LINE_2_ID,
+  lineNo: 20,
   product: 'prod-b',
   'product$_identifier': 'Producto Origen B',
   invoicedQuantity: 3,
+  pendingQuantity: 3,
+  importedHere: false,
   unitPrice: 15,
   lineNetAmount: 45,
   salesOrderLine: ORDER_LINE_ID,
-};
-
-// Current invoice's own existing line — its sourceInvoiceLineId points back at
-// SRC_LINE_1_ID, which is how fetchDocuments builds the alreadyImported set.
-const EXISTING_LINE_LINKING_SOURCE_1 = {
-  id: 'existing-line-1',
-  product: 'prod-a',
-  sourceInvoiceLineId: SRC_LINE_1_ID,
-  invoicedQuantity: -2,
 };
 
 // Classifies a `.../{entity}/header...` request URL as the plain 'detail' GET/PATCH
@@ -467,11 +439,30 @@ function isPlainLinesPath(url) {
 }
 
 async function installSourceInvoiceMocks(page, state) {
-  // Header: detail GET, currency-lookup GET (same URL), candidate-list GET, and any
-  // header PATCH — captured so the test can assert none of them carries `originInvoices`.
+  // Header: detail GET, the popup's read actions (ETP-6099: availableOriginInvoices for the
+  // candidates, availableOriginInvoiceLines for the source's lines, the already-imported one marked
+  // `importedHere`), and any header PATCH — captured so the test can assert none of them carries
+  // `originInvoices`.
   await page.route('**/sws/neo/sales-invoice/header{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
+    const { pathname } = new URL(url);
+    if (req.method() === 'POST' && pathname.endsWith(`/header/${SRC_INVOICE_ID2}/action/availableOriginInvoices`)) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [SOURCE_INVOICE_DOC], hasMore: false } }),
+      });
+      return;
+    }
+    if (req.method() === 'POST' && pathname.endsWith(`/header/${SRC_INVOICE_ID2}/action/availableOriginInvoiceLines`)) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [SOURCE_LINE_1_IMPORTED, SOURCE_LINE_2_AVAILABLE], hasMore: false } }),
+      });
+      return;
+    }
     const kind = classifyHeaderRequest(url, SRC_INVOICE_ID2);
     if (req.method() === 'PATCH') {
       if (kind !== 'detail') return route.fallback();
@@ -493,20 +484,10 @@ async function installSourceInvoiceMocks(page, state) {
       });
       return;
     }
-    if (kind === 'list') {
-      // fetchDocuments' candidate-invoices lookup.
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ response: { data: [SOURCE_INVOICE_DOC] } }),
-      });
-      return;
-    }
     route.fallback();
   });
 
-  // Lines: detail view's own (empty) fetch, modal fetchDocuments' own-lines lookup
-  // (for alreadyImported detection), the source invoice's own lines (fetchLines), and POST.
+  // Lines: detail view's own (empty) fetch and the import's line POST.
   await page.route('**/sws/neo/sales-invoice/lines{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
@@ -522,25 +503,7 @@ async function installSourceInvoiceMocks(page, state) {
       return;
     }
     if (req.method() !== 'GET') return route.fallback();
-    if (url.includes(`parentId=${SOURCE_INVOICE_ID}`)) {
-      // fetchLines(docId=SOURCE_INVOICE_ID) — the source invoice's own lines.
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ response: { data: [SOURCE_LINE_1_IMPORTED, SOURCE_LINE_2_AVAILABLE] } }),
-      });
-      return;
-    }
     if (url.includes(`parentId=${SRC_INVOICE_ID2}`)) {
-      if (url.includes('_endRow=200')) {
-        // Modal fetchDocuments' own-lines lookup — builds alreadyImportedSourceLineIds.
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ response: { data: [EXISTING_LINE_LINKING_SOURCE_1] } }),
-        });
-        return;
-      }
       // Detail view's own lines fetch — empty so LinesEmptyState (and its import button) renders.
       await route.fulfill({
         status: 200,

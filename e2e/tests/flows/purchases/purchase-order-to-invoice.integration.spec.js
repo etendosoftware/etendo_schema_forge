@@ -252,7 +252,7 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
         'Modal title should say "Importar desde pedido"',
       ).toBeVisible({ timeout: 5_000 });
 
-      // Wait for eager-loading of PO lines
+      // Wait for the order list (ETP-6099: the lines are read when the order is expanded)
       await waitForLoadingIndicatorsGone(page, { timeout: 30_000 }).catch(() => {});
       await slow(page);
     });

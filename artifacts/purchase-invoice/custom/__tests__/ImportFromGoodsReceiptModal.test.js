@@ -1,3 +1,5 @@
+// @covers artifacts/purchase-invoice/custom/ImportFromGoodsReceiptModal.jsx
+// @covers tools/app-shell/src/windows/custom/shared/importActionClient.js
 import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { join, dirname } from 'node:path';
@@ -7,22 +9,17 @@ import {
   apiFetchToGlobalFetch,
 } from '../../../_test-support/loadCustomModule.js';
 import { orderLineApiKey } from '../../../_test-support/contractApiKey.js';
+import { listAll, listLines, newestCreatedFirst } from '../../../../tools/app-shell/src/windows/custom/shared/importActionClient.js';
+import { pricingContextOf } from '../../../../tools/app-shell/src/windows/custom/shared/invoiceImportPricing.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// The REAL production helpers, evaluated straight out of the .jsx — not a copy.
-// See artifacts/_test-support/loadCustomModule.js (ETP-5381).
 const { helpers, source: src } = loadCustomModule(
   join(__dirname, '..', 'ImportFromGoodsReceiptModal.jsx'),
-  // The prelude calls `moduleApiFetch` (imported from '@/auth/api.js', a
-  // binding the loader strips); the stub forwards to `globalThis.fetch`,
-  // which is what the mocks below install.
-  { moduleApiFetch: apiFetchToGlobalFetch },
+  { moduleApiFetch: apiFetchToGlobalFetch, listAll, listLines, pricingContextOf, newestCreatedFirst },
 );
-const { fetchDocuments, buildLineBody } = helpers;
+const { fetchDocuments, fetchLines, buildLineBody } = helpers;
 
-// The invoice-line -> order-line FK key, read from the generated contract
-// (ETGO_SF_FIELD.java_qualifier for C_INVOICELINE.C_OrderLine_ID).
 const ORDER_LINE_FK = orderLineApiKey('purchase-invoice');
 
 describe('ImportFromGoodsReceiptModal — source shape', () => {
@@ -36,11 +33,10 @@ describe('ImportFromGoodsReceiptModal — source shape', () => {
     assert.match(src, /<ImportLinesModal[\s\S]*\{\.\.\.props\}/);
   });
 
-  it('fetches goods receipts and existing invoice lines in parallel', () => {
-    assert.match(src, /Promise\.all/);
-    assert.match(src, /goods-receipt\/goodsReceipt/);
-    assert.match(src, /purchase-invoice\/lines\?parentId=/);
-    assert.match(src, /purchase-invoice\/header\/\$\{invoiceId\}/);
+  it('lists goods receipts through the invoice availableReceipts action, covered ones included', () => {
+    assert.match(src, /action: 'availableReceipts', params: \{ includeCovered: true, detail: true \}/);
+    assert.match(src, /eagerLoadLines=\{false\}/);
+    assert.match(src, /isDocumentCovered=\{isReceiptCovered\}/);
   });
 
   it('wires the goods-receipt-specific i18n keys including the currency empty state', () => {
@@ -52,22 +48,19 @@ describe('ImportFromGoodsReceiptModal — source shape', () => {
     assert.match(src, /titleKey="importFromGoodsReceipt"/);
   });
 
-  it('fetches receipt lines on expand with callout price enrichment', () => {
-    assert.match(src, /fetchLines/);
-    assert.match(src, /goods-receipt\/goodsReceiptLine\?parentId=/);
-    assert.match(src, /resolveLinePrice/);
+  it('reads receipt lines on expand through availableReceiptLines and prices on expand and at import', () => {
+    assert.match(src, /action: 'availableReceiptLines', params: \{ receiptId: docId, includeCovered: true, detail: true \}/);
+    assert.match(src, /const fetchLines[\s\S]*resolveLinePrice/);
+    assert.match(src, /const buildLineBody[\s\S]*resolveLinePrice/);
   });
 
   it('injects fetch/build callbacks so the shared modal can drive line selection', () => {
-    assert.match(src, /fetchDocuments=\{fetchDocuments\}/);
-    assert.match(src, /fetchLines=\{fetchLines\}/);
+    assert.match(src, /fetchDocuments=\{handlers\.fetchDocuments\}/);
+    assert.match(src, /fetchLines=\{handlers\.fetchLines\}/);
     assert.match(src, /getDocDisplay=\{getDocDisplay\}/);
     assert.match(src, /buildLineBody=\{buildLineBody\}/);
   });
 
-  // ETP-5381: the sales side had drifted to `cOrderlineId`, a key absent from
-  // the spec, which NeoFieldFilter.filterRecord drops silently. The purchase
-  // side was always correct — this guard keeps it that way.
   it('never mentions the non-existent cOrderlineId key', () => {
     assert.doesNotMatch(src, /cOrderlineId/);
   });
@@ -81,15 +74,30 @@ function mockResSingle(ok, item) {
   return { ok, json: async () => ({ response: { data: item ? [item] : [] } }) };
 }
 
-function installFetch({ receipts = [], invLines = [], invoiceHeader = {}, orders = {} }) {
-  globalThis.fetch = mock.fn(async (url) => {
-    if (url.includes('/goods-receipt/goodsReceipt?')) return mockRes(true, receipts);
-    if (url.includes('/purchase-invoice/lines?parentId=')) return mockRes(true, invLines);
+/**
+ * ETP-6099 — the fixtures are the receipts and orders as stored; this mock plays the server's
+ * `availableReceipts` (completed, the invoice partner's, not invoiced, in the invoice's currency —
+ * a receipt's currency being its order's here) and the receipt read the popup makes only to tell a
+ * currency-emptied list apart. com.etendoerp.go covers the real rule.
+ */
+function installFetch({ receipts = [], receiptLines = [], invoiceHeader = {}, orders = {}, bpId = 'bp1' }) {
+  const currencyOf = (r) => (r.salesOrder ? orders[r.salesOrder]?.currency : invoiceHeader.currency) || null;
+  const candidates = receipts.filter(r => r.documentStatus === 'CO' && r.businessPartner === bpId && r.invoiced !== true);
+  globalThis.fetch = mock.fn(async (url, options) => {
+    if (url.endsWith('/action/availableReceipts')) {
+      const listed = candidates.filter(r => !invoiceHeader.currency || currencyOf(r) === invoiceHeader.currency);
+      return { ok: true, json: async () => ({ response: { hasMore: false, data: listed.map(r => ({ ...r, date: r.movementDate, pendingLines: 1 })) } }) };
+    }
+    if (url.endsWith('/action/availableReceiptLines')) {
+      assert.equal(JSON.parse(options.body).includeCovered, true);
+      return mockRes(true, receiptLines);
+    }
+    if (url.includes('/goods-receipt/goodsReceipt?criteria=')) {
+      return mockRes(true, candidates.filter(r => currencyOf(r) && currencyOf(r) !== invoiceHeader.currency));
+    }
     if (url.includes('/purchase-invoice/lines/selectors/')) return { ok: true, json: async () => ({ items: [] }) };
     if (url.includes('/purchase-invoice/lines/callout')) return { ok: false, json: async () => ({}) };
     if (url.includes('/purchase-invoice/header/')) return mockResSingle(true, invoiceHeader);
-    const orderMatch = url.match(/\/purchase-order\/header\/([^/?]+)/);
-    if (orderMatch) return mockResSingle(true, orders[orderMatch[1]] || null);
     throw new Error(`Unexpected fetch: ${url}`);
   });
 }
@@ -200,22 +208,43 @@ describe('ImportFromGoodsReceiptModal — fetchDocuments filtering', () => {
   });
 });
 
-describe('ImportFromGoodsReceiptModal — duplicate detection via the order line FK', () => {
+describe('ImportFromGoodsReceiptModal — lines shown on expand', () => {
   afterEach(() => {
     mock.reset();
   });
 
-  it('builds the already-imported order line set from the spec API key', async () => {
-    installFetch({ invLines: [{ id: 'il1', goodsShipmentLine: 'rl1', [ORDER_LINE_FK]: 'ol1' }] });
-    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
-    assert.ok(result.sharedContext.alreadyImportedOrderLines.has('ol1'));
+  const row = (over) => ({
+    id: 'rl1', lineNo: 10, product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1',
+    movementQuantity: 5, pendingQuantity: 5, orderLine: 'ol1', orderLineDiscount: 10,
+    importedHere: false, invoicedElsewhere: false, ...over,
+  });
+  const linesOf = async (rows) => {
+    installFetch({ receiptLines: rows });
+    return fetchLines({ base: '/b', headers: {}, docId: 'r1', sharedContext: { invoiceId: 'inv1' } });
+  };
+
+  it('offers the pending quantity and carries the order line under the spec key and its discount', async () => {
+    const [line] = await linesOf([row({ pendingQuantity: 3 })]);
+    assert.equal(line._maxQty, 3);
+    assert.equal(line._alreadyImported, false);
+    assert.equal(line[ORDER_LINE_FK], 'ol1');
+    assert.equal(line._orderDiscount, 10);
+    assert.equal(line._productName, 'Widget');
+    assert.equal(line._uOM, 'u1');
   });
 
-  it('ignores the legacy cOrderlineId key, which NEO never returns', async () => {
-    installFetch({ invLines: [{ id: 'il1', goodsShipmentLine: 'rl1', cOrderlineId: 'ol9' }] });
-    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
-    assert.equal(result.sharedContext.alreadyImportedOrderLines.has('ol9'), false);
-  });
+  const cases = [
+    { name: 'a line this invoice already holds is greyed at its received quantity', over: { importedHere: true, pendingQuantity: 0 }, imported: true, max: 5 },
+    { name: 'a line invoiced elsewhere is still offered on the purchase side', over: { invoicedElsewhere: true }, imported: false, max: 5 },
+    { name: 'a line with nothing left is greyed', over: { pendingQuantity: 0 }, imported: true, max: 5 },
+  ];
+  for (const c of cases) {
+    it(c.name, async () => {
+      const [line] = await linesOf([row(c.over)]);
+      assert.equal(line._alreadyImported, c.imported);
+      assert.equal(line._maxQty, c.max);
+    });
+  }
 });
 
 describe('ImportFromGoodsReceiptModal — buildLineBody order line FK (ETP-5381)', () => {
@@ -233,11 +262,6 @@ describe('ImportFromGoodsReceiptModal — buildLineBody order line FK (ETP-5381)
     headers: {},
   });
 
-  // ETP-5381 REGRESSION GUARD (purchase side — the reference implementation).
-  // Posting the FK under a key the spec does not declare makes NeoFieldFilter
-  // drop it silently (HTTP 200, line created, C_OrderLine_ID NULL), which keeps
-  // the match table empty and skips `UPDATE C_ORDERLINE SET QtyInvoiced`,
-  // leaving the order invoiceable forever. Keep the working side working.
   it('sends the receipt line source order line under the spec API key for C_OrderLine_ID', async () => {
     installFetch({});
     const body = await buildLineBody(buildArgs({
