@@ -163,3 +163,46 @@ guía de la ventana actualizada.
 2. Fase 1 y fase 2 en paralelo: son archivos distintos.
 3. Fase 3.
 4. Fase 4, de a una entidad, midiendo cada una.
+
+## Estado (5 de noviembre, noche)
+
+Hecho en GO (`modules/com.etendoerp.go`, rama `feature/ETP-5848`, commits `848ec2fc0` y
+`383338e83`, sin pushear; tests unitarios de las clases tocadas en verde):
+
+- **0.1**: preferencia `ETGO_Context7Token` cargada en la base local; `docs` responde.
+  `q-financial-reports` re-corrida: Etendo Win por tokens (KR 62,9 %).
+- **1.1**: `FinancialAccountAccountingHandler` acepta `parentId` como id de la cuenta.
+- **1.2**: el aviso de PDF faltante limita el reintento a uno y dice que volver a preguntar o
+  volver a completar el documento no lo genera.
+- **1.3**: la descripción de `openClose` dice que abrir o cerrar un período lo decide el usuario. El
+  aviso de `PeriodNotAvailable` ya lo decía y el agente lo ignoró (e-closed-period a2 #17-#23):
+  queda por ver si alcanza con el texto o hace falta una confirmación explícita.
+- **2 (filtros)**: el diagnóstico cambió el arreglo.
+  - `commercialName`: la propiedad existe y se llama `name2`; el error listaba 20 nombres en orden
+    alfabético y la cortaba. Ahora el error pone primero los nombres que comparten una palabra con
+    el que pidió el agente (`McpRoutingException.closestFirst`).
+  - `businessPartner` en `bp-location`: ese spec es la dirección postal (`C_Location`), no la del
+    cliente; el camino correcto es `contacts/locationAddress` con `parentId`. No es un filtro que
+    falte.
+  - Precio de un producto en una tarifa: las líneas de pedido y factura ya toman el precio solas
+    (`McpLinePriceInjector`); el agente lo busca igual.
+  - `warehouse` en `warehouse`: el contenido del almacén está en `warehouse/binContents`.
+- **3.1**: la descripción de `etendo_create` dice que los campos que apuntan a otro registro
+  aceptan el nombre y que `etendo_defaults` es opcional (el servidor completa los obligatorios).
+
+Encontrado al revisar, queda pendiente:
+
+- **3.2** (`whoami`): el MCP no manda instrucciones de servidor en `initialize`; agregarlas es un
+  cambio de diseño, no de texto.
+- **3.3** (sobrepago): el schema de `registerPayment` ya explica `overpaymentAction`. La fuga real
+  es otra: el agente registra con `process: draft`, la respuesta del borrador dice
+  `creditGenerated: 0` (el crédito se genera al confirmar), cree que el excedente se perdió, borra
+  el cobro y prueba de nuevo (f-overpay a1 #14-#18). Mejora: que la respuesta del borrador diga
+  qué va a pasar al confirmar.
+- `docs` sin Context7: no hay índice local para responder; con la clave cargada deja de fallar.
+- `posted` en `physical-inventory`: el agente la eligió sin que se pidiera; es una acción común a
+  los documentos, no conviene ocultarla en una sola ventana.
+
+Para medir: desplegar en el Tomcat local (`local-env up` en `.worktrees/ETP-5848`, reinicia
+Tomcat) y re-correr `f-bank-account-transfer`, `f-order-direct-invoice`,
+`w-draft-order-edit-delete`, `f-physical-inventory`, `e-ambiguous-customer` y las 7 de fuga.
