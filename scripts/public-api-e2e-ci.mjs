@@ -35,8 +35,9 @@ const CORE_PACKAGE_PATH = 'packages/api-gateway-core';
 const DEFAULT_CORE_REPO = 'git@github.com:etendosoftware/schema_forge_core.git';
 const INSTALL_STAMP = join(GATEWAY_DIR, 'node_modules', '.public-api-e2e-ci-core');
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
-const FULL_CAPABILITIES = ['public-api:read', 'public-api:write'];
-const READONLY_CAPABILITIES = ['public-api:read'];
+/** Capabilities of the two keys the run creates: `process` lets the suite run business actions. */
+export const FULL_CAPABILITIES = ['public-api:read', 'public-api:write', 'public-api:process'];
+export const READONLY_CAPABILITIES = ['public-api:read'];
 const HEALTH_TIMEOUT_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 30_000;
 const DEFAULT_RUN_TIMEOUT_MINUTES = 30;

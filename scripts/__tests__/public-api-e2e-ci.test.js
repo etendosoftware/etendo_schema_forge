@@ -2,7 +2,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  childEnv, CookieJar, keyName, leftoverKeys, runTimeoutMinutes, pickEnvironment, pinnedCoreVersion, reporterNodeOptions, resolveCredentials,
+  childEnv, CookieJar, FULL_CAPABILITIES, READONLY_CAPABILITIES, keyName, leftoverKeys, runTimeoutMinutes, pickEnvironment, pinnedCoreVersion, reporterNodeOptions, resolveCredentials,
   resolveNeoBaseUrl, retryOn401, setCookiePairs,
 } from '../public-api-e2e-ci.mjs';
 
@@ -13,6 +13,13 @@ const headersWith = (cookies) => {
 };
 
 describe('public-api-e2e-ci helpers', () => {
+  describe('key capabilities', () => {
+    it('gives the full key read, write and process (business actions), the other key read only', () => {
+      assert.deepEqual(FULL_CAPABILITIES, ['public-api:read', 'public-api:write', 'public-api:process']);
+      assert.deepEqual(READONLY_CAPABILITIES, ['public-api:read']);
+    });
+  });
+
   describe('retryOn401', () => {
     const scripted = (...statuses) => {
       const calls = { count: 0 };
