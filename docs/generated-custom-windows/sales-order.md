@@ -831,7 +831,7 @@ The printed order uses the organization's saved design (variant, color, font, te
 
 ## Cancelling a line — ETP-5852
 
-`lines.agentPrompt`: a single line of a booked order cannot be cancelled; reactivate and edit while there are no linked documents, otherwise close the order (CL). Feedback M-123.
+`lines.agentPrompt`: a single line of a booked order cannot be cancelled; reactivate and edit while there are no linked documents, otherwise the order can be neither reactivated nor closed (CL is refused with 400, ETP-6108) and any correction goes through the linked documents (shipments or invoices). Feedback M-123.
 
 ## Agent prompt on the business partner — ETP-5852
 

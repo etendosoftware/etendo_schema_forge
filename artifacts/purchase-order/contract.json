@@ -1370,7 +1370,6 @@
             }
           }
         ],
-        "javaQualifier": "purchaseOrderHeaderHandler",
         "draftMode": {
           "enabled": true,
           "processField": "documentAction",
@@ -3703,8 +3702,7 @@
             "visibility": "readOnly",
             "required": false
           }
-        ],
-        "javaQualifier": "purchaseOrderHeaderHandler"
+        ]
       },
       "lines": {
         "tableName": "C_OrderLine",
