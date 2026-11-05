@@ -36,8 +36,9 @@ function SplitRows({ split, compare, depth, ui }) {
     return <tr><td colSpan={colSpan} className="px-3 py-1.5 text-muted-foreground text-xs" style={pad}>{ui('noResults')}</td></tr>;
   }
   return split.rows.map((part) => (
+    // The split SQL coalesces a missing name to '', not null.
     <tr key={part.node_id ?? '∅'} className="text-muted-foreground" data-testid="DynamicReportTable__splitRow">
-      <td className="px-3 py-1.5 text-xs" style={pad}>{part.name ?? ui('dynamicReportSplitNone')}</td>
+      <td className="px-3 py-1.5 text-xs" style={pad}>{part.name || ui('dynamicReportSplitNone')}</td>
       <td className="px-3 py-1.5 text-right tabular-nums text-xs">{amount(part.amount)}</td>
       {compare && (
         <>
@@ -103,7 +104,7 @@ export default function DynamicReportTable({ rows, compare, expanded, onToggle, 
                   {onOpenLedger && canSplit(row) && row.value ? (
                     <button
                       type="button"
-                      className="text-left hover:underline hover:text-primary"
+                      className="text-left text-primary underline decoration-primary/30 underline-offset-4 hover:decoration-primary"
                       onClick={() => onOpenLedger(row)}
                       data-testid="DynamicReportTable__ledger"
                     >

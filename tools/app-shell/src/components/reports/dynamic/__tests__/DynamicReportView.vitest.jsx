@@ -90,7 +90,8 @@ function route(url, init) {
   if (url.endsWith('/report-journal-entries/query')) return Promise.resolve(json(entryAnswer));
   if (url.endsWith('/query')) {
     const { params } = JSON.parse(init.body);
-    if (params.splitBy) return Promise.resolve(json({ kind: 'split', rows: [{ node_id: 'O1', name: 'Spain', amount: 600, amount_ref: 0 }, { node_id: null, name: null, amount: 400, amount_ref: 0 }] }));
+    // As the split SQL answers it: a part with no dimension has name '' (COALESCE), not null.
+    if (params.splitBy) return Promise.resolve(json({ kind: 'split', rows: [{ node_id: 'O1', name: 'Spain', amount: 600, amount_ref: 0 }, { node_id: null, name: '', amount: 400, amount_ref: 0 }] }));
     return Promise.resolve(queryAnswer(params));
   }
   return Promise.reject(new Error(`unexpected ${url}`));
