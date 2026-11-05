@@ -94,11 +94,6 @@ export function buildMovementsQuery({ productId, filters = {}, sort = MOVEMENTS_
   return `/transactions?${params.toString()}`;
 }
 
-/** Total movements of the product, whatever the filters: one row is requested, only `totalRows` is read. */
-export function buildMovementsCountQuery(productId) {
-  return `/transactions?parentId=${encodeURIComponent(productId)}&_startRow=0&_endRow=0`;
-}
-
 // Source-document kind -> label key. A return keeps the base movement type and is told apart by the
 // IsReturn flag of its document type; the backend resolves that into `etgoDocKind`.
 const KIND_LABELS = {
@@ -164,4 +159,17 @@ export function signedQuantity(value, formatNumber) {
   if (quantity > 0) return `+${text}`;
   if (quantity < 0) return `−${text}`;
   return text;
+}
+
+const PROCESS_TIME = /^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):([0-5]\d)/;
+
+/**
+ * `HH:mm` of the movement's `etgoProcessTime` (`YYYY-MM-DDTHH:mm:ss`, already the wall clock, no zone).
+ * Read straight from the string: no `Date`, no `Intl`, no zone math, so a `Z`/offset suffix is ignored,
+ * never applied. Null when the value is absent or malformed, so the cell shows no second line.
+ */
+export function formatProcessTime(raw) {
+  if (typeof raw !== 'string') return null;
+  const match = PROCESS_TIME.exec(raw);
+  return match ? `${match[1]}:${match[2]}` : null;
 }

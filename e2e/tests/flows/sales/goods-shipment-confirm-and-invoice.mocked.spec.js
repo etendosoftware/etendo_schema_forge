@@ -1,7 +1,7 @@
 // @covers artifacts/goods-shipment/custom/GoodsShipmentActions.jsx
 // @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
 // @covers tools/app-shell/src/lib/backendErrors.js
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 
 /**
@@ -614,7 +614,7 @@ test.describe('Goods Shipment — Crear Factura refused by the plan quota (ETP-5
       resolvedPriceListId: 'pl-001',
     });
 
-    await login(page);
+    await login(page, { awaitEnvironmentListRead: true });
     await installGoodsShipmentMock(page, [shipment]);
 
     // The shared environment list, counted apart from the "Mis empresas" details read.

@@ -3,9 +3,9 @@
 import {
   DEFAULT_MOVEMENTS_PERIOD,
   MOVEMENTS_DEFAULT_SORT,
-  buildMovementsCountQuery,
   buildMovementsCriteria,
   buildMovementsQuery,
+  formatProcessTime,
   isMovementsSortKey,
   isStorableProduct,
   resolveMovementType,
@@ -162,13 +162,6 @@ describe('productMovements (ETP-5889)', () => {
     });
   });
 
-  it('counts every movement of the product with a single-row request, ignoring any filter', () => {
-    const { params, criteria } = parse(buildMovementsCountQuery('p1'));
-    expect(params.get('parentId')).toBe('p1');
-    expect(params.get('_endRow')).toBe('0');
-    expect(criteria).toEqual([]);
-  });
-
   describe('resolveMovementType', () => {
     const type = (row) => resolveMovementType(row);
 
@@ -225,6 +218,30 @@ describe('productMovements (ETP-5889)', () => {
       expect(signedQuantity(0, format)).toBe('0');
       expect(signedQuantity(null, format)).toBe('—');
       expect(signedQuantity('abc', format)).toBe('—');
+    });
+  });
+
+  describe('formatProcessTime (movement time of day under the date)', () => {
+    it.each([
+      ['2026-11-03T16:21:43', '16:21'],
+      ['2026-11-03T09:05:07', '09:05'],
+      ['2026-11-03T00:00:00', '00:00'],
+      ['2026-11-03T23:59:59', '23:59'],
+    ])('reads HH:mm straight from %s', (raw, expected) => {
+      expect(formatProcessTime(raw)).toBe(expected);
+    });
+
+    it.each([[undefined], [null], [''], ['2026-11-03'], ['garbage'], ['2026-11-03T9:5'], ['2026-11-03T24:00:00'], ['2026-11-03T12:60:00'], [1234]])(
+      'returns null for %s', (raw) => {
+        expect(formatProcessTime(raw)).toBeNull();
+      });
+
+    it('ignores a Z or offset suffix instead of shifting it, and never builds a Date', () => {
+      const spy = vi.spyOn(globalThis, 'Date');
+      expect(formatProcessTime('2026-11-03T16:21:43Z')).toBe('16:21');
+      expect(formatProcessTime('2026-11-03T16:21:43+02:00')).toBe('16:21');
+      expect(spy).not.toHaveBeenCalled();
+      spy.mockRestore();
     });
   });
 });
