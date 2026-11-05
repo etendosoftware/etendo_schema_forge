@@ -20362,6 +20362,7 @@
     "onboardingTermsUnavailable": "We could not load the terms and conditions.",
     "onboardingTermsRetry": "Retry",
     "onboardingTermsClose": "Close",
+    "onboardingMarketingConsent": "I agree to receive commercial communications and promotional material from Etendo by email.",
     "onboardingPhoneLabel": "Phone",
     "onboardingOptionalHint": "(optional)",
     "onboardingPhonePrefixLabel": "Phone prefix",

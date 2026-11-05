@@ -19751,6 +19751,7 @@
     "onboardingTermsUnavailable": "No pudimos cargar los términos y condiciones.",
     "onboardingTermsRetry": "Reintentar",
     "onboardingTermsClose": "Cerrar",
+    "onboardingMarketingConsent": "Acepto recibir comunicaciones comerciales y material promocional de Etendo por correo electrónico.",
     "onboardingPhoneLabel": "Teléfono",
     "onboardingOptionalHint": "(opcional)",
     "onboardingPhonePrefixLabel": "Prefijo telefónico",
