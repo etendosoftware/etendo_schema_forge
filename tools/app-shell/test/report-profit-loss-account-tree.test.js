@@ -716,6 +716,25 @@ describe('profit-loss SQL — reads only the lines its periods can count (ETP-60
     assert.match(open, /fa\.dateacct >= '2026-01-01'::date OR \('true' = 'true'\s*\)/);
   });
 
+  it('aggregates the facts once, never once per tree node', () => {
+    // Estimated at ~1 row, the planner could nest the aggregate under the tree join and rerun it
+    // per node (production, year only: 62 ms → 8.7 ms once materialized).
+    assert.ok(SQL.includes(' facts AS MATERIALIZED ( SELECT'));
+  });
+
+  it('adds one index-friendly date range covering both periods when comparing', () => {
+    const cmp = { ...NO_YEAR, compareTo: 'true', fromReferenceDate: '2025-01-01', toReferenceDate: '2025-12-31' };
+    for (const sql of [SQL, CONTRACT.sql.splitQuery]) {
+      const where = facts(apply(sql, cmp));
+      assert.match(where, /fa\.dateacct >= LEAST\('2026-01-01'::date, '2025-01-01'::date\)/);
+      assert.match(where, /fa\.dateacct <= GREATEST\('2026-12-31'::date, '2025-12-31'::date\)/);
+      // Not comparing, or a blank side: the range is off and no placeholder is left.
+      assert.doesNotMatch(facts(apply(sql, NO_YEAR)), /LEAST|GREATEST/);
+      assert.match(facts(apply(sql, { ...cmp, compareTo: 'false' })), /'false' <> 'true' OR/);
+      assert.doesNotMatch(facts(apply(sql, { ...NO_YEAR, compareTo: 'true' })), /__[A-Z]+__|LEAST|GREATEST/);
+    }
+  });
+
   it('drops every bound when nothing limits the period (old viewer, no dates)', () => {
     const where = facts(apply(SQL, { acctSchemaId: 'S1', orgId: 'O1', compareTo: 'false' }));
     assert.doesNotMatch(where, /dateacct/);

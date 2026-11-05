@@ -73,7 +73,7 @@ Those numbers predate the 2026-11-05 rewrite. Before it, almost all of the tree'
 | 1 year vs the previous one | 136–225 ms | 14–19 ms |
 | 1 month | 136–387 ms | 4 ms |
 
-The cost now follows the lines inside the period(s) shown, not the client's whole history, so a tenant with many years posted pays only for the year on screen. Over the SSM tunnel every query took about 265 ms either way: that is the round trip, not the query. The data is still small (few clients, little history), so these figures show the shape of the gain, not a load limit.
+A second pass (independent review, same day) found two gaps in that claim and fixed them: (1) estimated at about one row, the facts aggregate could be re-run once per tree node (production, year only: 62 → 8.7 ms), so the CTE is now `facts AS MATERIALIZED`; (2) with a comparison, the OR-shaped bounds could not use the date index and read the schema's whole history, so a single range covering both periods (`LEAST`/`GREATEST`, strippable) was added to the tree and the split (production, a month vs the same month last year: 11.5 → 4.7 ms). Identical rows on local (12 combinations) and production (6 periods, tree and split). What still grows with the number of tenants: `fact_acct` has no index scoped by schema/client and date, so a period scan also reads other tenants' lines in that period; tracked as a separate ticket. Over the SSM tunnel every query took about 265 ms either way: that is the round trip, not the query. The data is still small (few clients, little history), so these figures show the shape of the gain, not a load limit.
 
 ## Gap assessment
 - One accounting schema per run.
