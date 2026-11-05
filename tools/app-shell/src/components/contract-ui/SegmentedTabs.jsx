@@ -5,7 +5,11 @@
  * Must not import lucide icons — custom-window tests mock `lucide-react` with a narrow icon set.
  *
  * @param {object} props
- * @param {Array<{key:string, label:string, testId:string}>} props.items
+ * Optional per-item counter (ETP-6049): `count` (a number) renders a small badge after the label;
+ * `countLabel` is its accessible text (already translated, e.g. "12 documents"). An item without
+ * `count` renders exactly as before, and so does `count: null` (e.g. while the number loads).
+ *
+ * @param {Array<{key:string, label:string, testId:string, count?:number|null, countLabel?:string, countTestId?:string}>} props.items
  * @param {number} props.active index of the active item
  * @param {(index:number)=>void} props.onChange
  * @param {string} props.ariaLabel accessible name of the group (already translated)
@@ -27,6 +31,20 @@ export default function SegmentedTabs({ items, active, onChange, ariaLabel }) {
           ].join(' ')}
         >
           {item.label}
+          {item.count != null && (
+            <>
+              {/* The badge is decorative; screen readers get `countLabel` (or the bare number)
+                  as visually hidden text, so the tab reads e.g. "Pendientes, 12 documentos". */}
+              <span
+                aria-hidden="true"
+                className="ml-1.5 inline-flex min-w-5 items-center justify-center rounded-md border border-[hsl(var(--border-control))] px-1.5 text-xs font-medium leading-5 tabular-nums text-muted-foreground"
+                data-testid={item.countTestId}
+              >
+                {item.count}
+              </span>
+              <span className="sr-only">{`, ${item.countLabel ?? item.count}`}</span>
+            </>
+          )}
         </button>
       ))}
     </div>

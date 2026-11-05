@@ -30,6 +30,9 @@ import { cn } from '@/lib/utils';
  * @param {number} [props.lines] ETP-5510 — max visible lines before the ellipsis (default 1).
  *   Above 1 the text wraps and is clamped with `line-clamp`; "clipped" is then measured on
  *   height (`scrollHeight > clientHeight`) instead of width.
+ * @param {number} [props.tabIndex] ETP-6049 — pass `0` to make the text reachable with the
+ *   keyboard, so a clipped value also reveals its tooltip on focus (Radix opens on focus only for a
+ *   focusable trigger). Omitted ⇒ not focusable, exactly as before.
  */
 // Inline style (not a `line-clamp-N` class) so any `lines` value works without Tailwind having
 // to see the literal class name at build time.
@@ -40,7 +43,7 @@ function clampStyle(lines) {
   });
 }
 
-export function TruncatedText({ text, className, delayDuration = 200, lines = 1, 'data-testid': testId }) {
+export function TruncatedText({ text, className, delayDuration = 200, lines = 1, tabIndex, 'data-testid': testId }) {
   const ref = useRef(null);
   const [open, setOpen] = useState(false);
 
@@ -65,7 +68,7 @@ export function TruncatedText({ text, className, delayDuration = 200, lines = 1,
         data-testid="Tooltip__TruncatedText">
         <TooltipTrigger asChild data-testid="TooltipTrigger__TruncatedText">
           <span ref={ref} className={cn(lines > 1 ? 'block w-full whitespace-normal break-words' : 'block w-full truncate', className)}
-            style={lines > 1 ? clampStyle(lines) : undefined} data-testid={testId}>
+            style={lines > 1 ? clampStyle(lines) : undefined} tabIndex={tabIndex} data-testid={testId}>
             {text}
           </span>
         </TooltipTrigger>

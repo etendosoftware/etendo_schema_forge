@@ -43,6 +43,7 @@ This folder is the entry point for documentation that describes how generated an
 | [purchase-invoice.md](purchase-invoice.md) | Custom purchase-invoice flow |
 | [return-to-vendor-shipment.md](return-to-vendor-shipment.md) | Generated return-to-vendor-shipment flow |
 | [matched-purchase-invoices.md](matched-purchase-invoices.md) | Read-only receipt-invoice link consultation window |
+| [invoice-inbox.md](invoice-inbox.md) | Custom Invoice Inbox ("Bandeja de facturas", ETP-6049, capability `invoiceInbox`) — upload supplier invoices (drop or pick, one request per file, progress tray) and follow them in a status-filtered list with counters; rows still being read refresh themselves. Review panel (ETP-6050) and Confirm/Discard (ETP-6051) not included |
 
 ## Inventory
 
