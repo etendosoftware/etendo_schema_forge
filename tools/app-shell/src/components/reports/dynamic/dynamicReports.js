@@ -8,3 +8,6 @@ export const DYNAMIC_REPORT_IDS = Object.freeze(new Set(['profit-loss']));
 export function opensDynamicView(reportId, flagOn) {
   return Boolean(flagOn) && DYNAMIC_REPORT_IDS.has(reportId);
 }
+
+/** Result reports, whose tree adds up to income − expenses: they get the KPI strip on top. */
+export const RESULT_REPORT_IDS = Object.freeze(new Set(['profit-loss']));

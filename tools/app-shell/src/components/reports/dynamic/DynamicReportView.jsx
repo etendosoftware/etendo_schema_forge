@@ -8,6 +8,9 @@ import { formatCalendarDate, todayCalendarISO } from '@/lib/dateOnly.js';
 import { buildReportFilename } from '@/pages/ReportViewerPage.jsx';
 import DynamicReportPanel from './DynamicReportPanel.jsx';
 import DynamicReportTable from './DynamicReportTable.jsx';
+import DynamicReportKpis from './DynamicReportKpis.jsx';
+import { RESULT_REPORT_IDS } from './dynamicReports.js';
+import { reportKpis } from './reportVisuals.js';
 import DynamicDrillPanel from './DynamicDrillPanel.jsx';
 import { ENTRY_REPORT_ID, LEDGER_REPORT_ID } from './drillDown.js';
 import { useReportQuery } from './useReportQuery.js';
@@ -106,6 +109,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   // applied to every result, so rows a new filter brings in follow the base.
   const [fold, setFold] = useState(() => ({ base: 'level', flipped: new Set() }));
   const expandedSet = useMemo(() => foldExpansion(rows, fold, state.level), [rows, fold, state.level]);
+  const kpis = useMemo(() => (RESULT_REPORT_IDS.has(report.id) ? reportKpis(rows) : null), [report.id, rows]);
   const shown = useMemo(() => visibleRows(rows, expandedSet), [rows, expandedSet]);
   const refold = (base) => setFold({ base, flipped: new Set() });
   const toggleRow = (id) => {
@@ -259,6 +263,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
             {(noSchema || (data && !rows.length)) && <p className="text-sm text-muted-foreground" data-testid="DynamicReportView__empty">{ui('noResults')}</p>}
             {rows.length > 0 && (
               <div className={loading ? 'opacity-60 transition-opacity' : undefined}>
+                {kpis && <DynamicReportKpis kpis={kpis} compare={compare} />}
                 <DynamicReportTable
                   rows={shown}
                   compare={compare}

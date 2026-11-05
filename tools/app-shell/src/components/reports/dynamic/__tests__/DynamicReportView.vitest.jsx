@@ -210,7 +210,11 @@ describe('DynamicReportView — comparison and chips', () => {
     await waitFor(() => expect(queries().at(-1)).toMatchObject({ compareTo: 'true', fromReferenceDate: '2025-07-01', toReferenceDate: '2025-11-03' }));
     await waitFor(() => expect(screen.getAllByTestId('DynamicReportTable__variation')).toHaveLength(2));
     expect(screen.getAllByTestId('DynamicReportTable__variationPct')[0]).toHaveTextContent('25,00 %');
-    expect(screen.getAllByTestId('DynamicReportTable__variation')[0].className).toContain('status-success-fg');
+    expect(screen.getAllByTestId('DynamicReportTable__variation')[0].className).toContain('status-success');
+    // Headline figures over the top-level line only (1000 now, 800 compared): income up is good news.
+    expect(screen.getByTestId('DynamicReportKpis__incomeValue')).toHaveTextContent('1.000,00');
+    expect(screen.getByTestId('DynamicReportKpis__incomeTrend').className).toContain('status-success');
+    expect(screen.getByTestId('DynamicReportKpis__marginValue')).toHaveTextContent('100,00 %');
     expect(screen.getByTestId('DynamicReportView__chip-compare')).toBeInTheDocument();
   });
 
