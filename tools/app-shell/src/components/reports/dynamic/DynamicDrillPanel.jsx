@@ -93,7 +93,12 @@ function Ledger({ params, sign, locale, dateText, onOpenEntry, session, allLines
         aria-label={ui('dynamicReportSearchLines')}
         data-testid="DynamicDrillPanel__search"
       />
-      <Status loading={loading} error={error} errorCode={errorCode} empty={!shown.length} />
+      <Status
+        loading={loading}
+        error={error}
+        errorCode={errorCode}
+        empty={!shown.length}
+        data-testid="Status__7ed12e" />
       {shown.length > 0 && (
         <table className="w-full text-sm">
           <thead>
@@ -149,7 +154,12 @@ function Entry({ params, locale, accountValue, session }) {
   };
   return (
     <div className="flex flex-col gap-3" data-testid="DynamicDrillPanel__entry">
-      <Status loading={loading} error={error} errorCode={errorCode} empty={!rows.length} />
+      <Status
+        loading={loading}
+        error={error}
+        errorCode={errorCode}
+        empty={!rows.length}
+        data-testid="Status__7ed12e" />
       {rows.length > 0 && (
         <>
           <p className="text-xs text-muted-foreground">{rows[0].document_type}</p>
@@ -183,7 +193,7 @@ function Entry({ params, locale, accountValue, session }) {
               onClick={openDocument}
               data-testid="DynamicDrillPanel__openDocument"
             >
-              <ExternalLink className="w-4 h-4" />{ui('dynamicReportOpenDocument')}
+              <ExternalLink className="w-4 h-4" data-testid="ExternalLink__7ed12e" />{ui('dynamicReportOpenDocument')}
             </Button>
           ) : (
             <p className="text-xs text-muted-foreground" data-testid="DynamicDrillPanel__noDocument">{ui('dynamicReportNoDocument')}</p>
@@ -217,14 +227,17 @@ export default function DynamicDrillPanel({ reportTitle, account, queryParams, s
   ].filter(Boolean);
 
   return (
-    <Sheet open={Boolean(account)} onOpenChange={(open) => !open && close()}>
+    <Sheet
+      open={Boolean(account)}
+      onOpenChange={(open) => !open && close()}
+      data-testid="Sheet__7ed12e">
       <SheetContent side="right" className="w-[90vw] sm:max-w-2xl flex flex-col overflow-y-auto" data-testid="DynamicDrillPanel">
-        <SheetTitle className="text-base">{crumbs[crumbs.length - 1].label}</SheetTitle>
-        <SheetDescription asChild>
+        <SheetTitle className="text-base" data-testid="SheetTitle__7ed12e">{crumbs[crumbs.length - 1].label}</SheetTitle>
+        <SheetDescription asChild data-testid="SheetDescription__7ed12e">
           <nav aria-label={ui('dynamicReportDrillPath')} className="flex flex-wrap items-center gap-1 text-xs">
             {crumbs.map((c, i) => (
               <span key={c.key} className="inline-flex items-center gap-1">
-                {i > 0 && <ChevronRight className="w-3 h-3" />}
+                {i > 0 && <ChevronRight className="w-3 h-3" data-testid="ChevronRight__7ed12e" />}
                 {c.go
                   ? <button type="button" className="hover:underline" onClick={c.go} data-testid={`DynamicDrillPanel__crumb-${c.key}`}>{c.label}</button>
                   : <span aria-current="page" data-testid={`DynamicDrillPanel__crumb-${c.key}`}>{c.label}</span>}
@@ -232,8 +245,23 @@ export default function DynamicDrillPanel({ reportTitle, account, queryParams, s
             ))}
           </nav>
         </SheetDescription>
-        {account && !entry && <Ledger params={ledger} sign={account?.sign} locale={locale} dateText={dateText} onOpenEntry={canOpenEntry ? setEntry : null} session={session} allLines={allLines} onLoadAll={() => setAllLines(true)} />}
-        {entry && <Entry key={entry.id} params={entryQuery} locale={locale} accountValue={account.value} session={session} />}
+        {account && !entry && <Ledger
+          params={ledger}
+          sign={account?.sign}
+          locale={locale}
+          dateText={dateText}
+          onOpenEntry={canOpenEntry ? setEntry : null}
+          session={session}
+          allLines={allLines}
+          onLoadAll={() => setAllLines(true)}
+          data-testid="Ledger__7ed12e" />}
+        {entry && <Entry
+          key={entry.id}
+          params={entryQuery}
+          locale={locale}
+          accountValue={account.value}
+          session={session}
+          data-testid="Entry__7ed12e" />}
       </SheetContent>
     </Sheet>
   );

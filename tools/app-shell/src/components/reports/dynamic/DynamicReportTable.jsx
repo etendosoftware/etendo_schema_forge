@@ -21,7 +21,7 @@ function VariationCells({ row }) {
     <>
       <td className={cn(NUM, TREND_CLASS[row.trend])} data-testid="DynamicReportTable__variation">{amount(row.variationAmount)}</td>
       <td className={NUM} data-testid="DynamicReportTable__variationPct">
-        {row.variationPct != null && moved !== 0 && <TrendPill trend={row.trend} up={moved > 0}>{pct(row.variationPct)}</TrendPill>}
+        {row.variationPct != null && moved !== 0 && <TrendPill trend={row.trend} up={moved > 0} data-testid="TrendPill__2e8fe9">{pct(row.variationPct)}</TrendPill>}
       </td>
     </>
   );
@@ -67,11 +67,11 @@ function SplitRows({ split, compare, depth, ui }) {
     // The split SQL coalesces a missing name to '', not null.
     <tr key={part.node_id ?? '∅'} className="text-muted-foreground text-xs" data-testid="DynamicReportTable__splitRow">
       <td className="px-3 py-1.5" style={pad}>{part.name || ui('dynamicReportSplitNone')}</td>
-      <AmountCell value={part.amount} share={shares[i]} />
+      <AmountCell value={part.amount} share={shares[i]} data-testid="AmountCell__2e8fe9" />
       {compare && (
         <>
           <td className={cn(NUM, REF)}>{amount(part.amount_ref)}</td>
-          <VariationCells row={part} />
+          <VariationCells row={part} data-testid="VariationCells__2e8fe9" />
         </>
       )}
     </tr>
@@ -135,7 +135,9 @@ export default function DynamicReportTable({ rows, compare, expanded, onToggle, 
                       onClick={() => (row.hasChildren ? onToggle(row.node_id) : onToggleSplit(row))}
                       data-testid={row.hasChildren ? 'DynamicReportTable__toggle' : 'DynamicReportTable__splitToggle'}
                     >
-                      <ChevronRight className={cn('w-3.5 h-3.5 transition-transform', (row.hasChildren ? open : split) && 'rotate-90')} />
+                      <ChevronRight
+                        className={cn('w-3.5 h-3.5 transition-transform', (row.hasChildren ? open : split) && 'rotate-90')}
+                        data-testid="ChevronRight__2e8fe9" />
                     </button>
                   ) : <span className="w-5 h-5 shrink-0" />}
                   {onOpenLedger && canSplit(row) && row.value ? (
@@ -150,15 +152,24 @@ export default function DynamicReportTable({ rows, compare, expanded, onToggle, 
                   ) : <span>{name}</span>}
                 </div>
               </td>
-              <AmountCell value={row.amount} share={shares.get(row.node_id)} />
+              <AmountCell
+                value={row.amount}
+                share={shares.get(row.node_id)}
+                data-testid="AmountCell__2e8fe9" />
               {compare && (
                 <>
                   <td className={cn(NUM, REF)}>{amount(row.amount_ref)}</td>
-                  <VariationCells row={row} />
+                  <VariationCells row={row} data-testid="VariationCells__2e8fe9" />
                 </>
               )}
             </tr>,
-            split && <SplitRows key={`${row.node_id}-split`} split={split} compare={compare} depth={row.depth} ui={ui} />,
+            split && <SplitRows
+              key={`${row.node_id}-split`}
+              split={split}
+              compare={compare}
+              depth={row.depth}
+              ui={ui}
+              data-testid="SplitRows__2e8fe9" />,
           ];
         })}
       </tbody>

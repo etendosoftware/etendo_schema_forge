@@ -203,7 +203,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
               onClick={() => exportAs(format)}
               data-testid={`DynamicReportView__export-${format}`}
             >
-              {exporting === format ? <Loader2 className="w-4 h-4 animate-spin" /> : <Icon className="w-4 h-4" />}
+              {exporting === format ? <Loader2 className="w-4 h-4 animate-spin" data-testid="Loader2__c51cea" /> : <Icon className="w-4 h-4" data-testid="Icon__c51cea" />}
               {text}
             </Button>
           ))}
@@ -229,7 +229,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
           label={label}
           sectionLabel={sectionLabel}
           noFiscalYear={Boolean(opening?.noFiscalYear)}
-        />
+          data-testid="DynamicReportPanel__c51cea" />
 
         <main className="flex-1 min-w-0 overflow-auto p-4">
           <div className="bg-card rounded-xl border border-border/40 p-6">
@@ -250,7 +250,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
                       onClick={() => userChange(c.clear)}
                       data-testid={`DynamicReportView__chipRemove-${c.key}`}
                     >
-                      <X className="w-3 h-3" />
+                      <X className="w-3 h-3" data-testid="X__c51cea" />
                     </button>
                   )}
                 </span>
@@ -264,7 +264,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
             {(noSchema || (data && !rows.length)) && <p className="text-sm text-muted-foreground" data-testid="DynamicReportView__empty">{ui('noResults')}</p>}
             {rows.length > 0 && (
               <div className={loading ? 'opacity-60 transition-opacity' : undefined}>
-                {kpis && <DynamicReportKpis kpis={kpis} compare={compare} />}
+                {kpis && <DynamicReportKpis kpis={kpis} compare={compare} data-testid="DynamicReportKpis__c51cea" />}
                 <DynamicReportTable
                   rows={shown}
                   compare={compare}
@@ -274,13 +274,20 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
                   splits={splits}
                   onToggleSplit={toggleSplit}
                   onOpenLedger={canOpen(LEDGER_REPORT_ID) ? setDrillAccount : null}
-                />
+                  data-testid="DynamicReportTable__c51cea" />
               </div>
             )}
           </div>
         </main>
       </div>
-      <DynamicDrillPanel reportTitle={title} account={drillAccount} queryParams={queryParams} session={telemetry.session} canOpenEntry={canOpen(ENTRY_REPORT_ID)} onClose={() => setDrillAccount(null)} />
+      <DynamicDrillPanel
+        reportTitle={title}
+        account={drillAccount}
+        queryParams={queryParams}
+        session={telemetry.session}
+        canOpenEntry={canOpen(ENTRY_REPORT_ID)}
+        onClose={() => setDrillAccount(null)}
+        data-testid="DynamicDrillPanel__c51cea" />
     </div>
   );
 }

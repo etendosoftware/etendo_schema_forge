@@ -43,7 +43,7 @@ export default function DynamicReportPanel({
         <p className="text-xs text-muted-foreground mt-1">{ui('dynamicReportLiveHint')}</p>
       </div>
 
-      <Section title={sectionLabel('periodo')}>
+      <Section title={sectionLabel('periodo')} data-testid="Section__f52339">
         <div className="grid grid-cols-2 gap-2">
           <label className="text-xs">{label('dateFrom')}
             <DateField value={state.dateFrom} onChange={(v) => onChange({ dateFrom: v })} data-testid="DynamicReportPanel__dateFrom" />
@@ -82,7 +82,7 @@ export default function DynamicReportPanel({
         {noFiscalYear && <p className="text-xs text-muted-foreground" data-testid="DynamicReportPanel__noFiscalYear">{ui('dynamicReportNoFiscalYear')}</p>}
       </Section>
 
-      <Section title={ui('filters')}>
+      <Section title={ui('filters')} data-testid="Section__f52339">
         {orgs.length > 1 && (
           <label className="text-xs">{label('orgId')}
             <select className={selectClass} value={state.orgId} onChange={(e) => onChange({ orgId: e.target.value })} data-testid="DynamicReportPanel__org">
@@ -106,7 +106,7 @@ export default function DynamicReportPanel({
         ))}
       </Section>
 
-      <Section title={sectionLabel('agrupacion')}>
+      <Section title={sectionLabel('agrupacion')} data-testid="Section__f52339">
         <label className="text-xs">{label('accountLevel')}
           <select className={selectClass} value={state.level} onChange={(e) => onLevel(e.target.value)} data-testid="DynamicReportPanel__level">
             {levelOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -124,7 +124,7 @@ export default function DynamicReportPanel({
         </label>
       </Section>
 
-      <Section title={sectionLabel('comparacion')}>
+      <Section title={sectionLabel('comparacion')} data-testid="Section__f52339">
         <select className={selectClass} value={state.compare} onChange={(e) => onChange({ compare: e.target.value })} aria-label={label('compareTo')} data-testid="DynamicReportPanel__compare">
           {COMPARISONS.map(([value, key]) => <option key={value} value={value}>{ui(key)}</option>)}
         </select>

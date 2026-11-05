@@ -17,17 +17,17 @@ export default function DynamicReportBadge({ className }) {
   const label = `${ui('dynamicReportBadge')}: ${ui('dynamicReportBadgeHint')}`;
   return (
     <TooltipProvider>
-      <Tooltip delayDuration={200}>
-        <TooltipTrigger asChild>
+      <Tooltip delayDuration={200} data-testid="Tooltip__f5d762">
+        <TooltipTrigger asChild data-testid="TooltipTrigger__f5d762">
           <span
             className={cn('inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary shrink-0', className)}
             aria-label={label}
             data-testid="DynamicReportBadge"
           >
-            <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+            <Sparkles className="w-3.5 h-3.5" aria-hidden="true" data-testid="Sparkles__f5d762" />
           </span>
         </TooltipTrigger>
-        <TooltipContent>{label}</TooltipContent>
+        <TooltipContent data-testid="TooltipContent__f5d762">{label}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );

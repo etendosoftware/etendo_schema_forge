@@ -173,7 +173,9 @@ function ReportCard({ report, onRun, interactive = false }) {
       className={cn('relative flex flex-col items-stretch w-full p-1 rounded-xl border border-border bg-card shadow-sm hover:border-primary/30 hover:shadow-md transition-all text-left overflow-hidden', interactive && DYNAMIC_REPORT_CARD_CLASS)}
     >
       <ReportCardPreview reportId={report.id} data-testid="ReportCardPreview__3c998a" />
-      {interactive && <DynamicReportBadge className="absolute top-2.5 right-2.5 bg-card shadow-sm" />}
+      {interactive && <DynamicReportBadge
+        className="absolute top-2.5 right-2.5 bg-card shadow-sm"
+        data-testid="DynamicReportBadge__3c998a" />}
       <div className="flex flex-col items-stretch gap-1 p-3">
         <div className="flex items-center gap-2">
           <h3 className="text-base font-medium text-foreground min-w-0 flex-1">
@@ -1874,7 +1876,7 @@ function ReportListRow({ report, onRun, locale, interactive = false }) {
       className="w-full flex items-center gap-3 px-3 py-2.5 border-b border-border-subtle hover:bg-muted/40 transition-colors text-left"
     >
       <span className="flex-1 min-w-0 text-sm font-medium text-foreground truncate">{reportTitle}</span>
-      {interactive && <DynamicReportBadge />}
+      {interactive && <DynamicReportBadge data-testid="DynamicReportBadge__3c998a" />}
       <div className="flex gap-2 flex-wrap shrink-0">
         {/* Same 'html' exclusion as ReportCard's badge row (ETP-5013) — a real,
             still-rendered output, just not advertised as downloadable here. */}
@@ -2139,7 +2141,11 @@ export default function ReportViewerPage() {
 
   if (selectedReport && opensDynamicView(selectedReport.id, dynamicReportsOn)) {
     return (
-      <Suspense fallback={<Loader2 className="w-5 h-5 m-auto animate-spin text-muted-foreground" />}>
+      <Suspense
+        fallback={<Loader2
+          className="w-5 h-5 m-auto animate-spin text-muted-foreground"
+          data-testid="Loader2__3c998a" />}
+        data-testid="Suspense__3c998a">
         <DynamicReportView
           report={selectedReport}
           onBack={clearReport}
