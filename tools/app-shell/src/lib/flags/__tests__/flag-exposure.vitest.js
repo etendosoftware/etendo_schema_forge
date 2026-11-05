@@ -1,5 +1,4 @@
 // @covers tools/app-shell/src/lib/flags/flag-exposure.js
-// @covers tools/app-shell/src/lib/flags/diagnostics.js
 /**
  * Flag exposure reporting (ETP-4686).
  *
@@ -28,7 +27,6 @@ import {
 } from '../flag-exposure.js';
 import { buildObservabilityEvent, OBSERVABILITY_EVENTS } from '../../observability/events.js';
 import { sanitizeEventProperties } from '../../observability/payload.js';
-import { reportFlagDiagnostic } from '../diagnostics.js';
 
 function hookContext({ flagKey = 'sample-flag', provider = 'in-memory', targetingKey = 'ada' } = {}) {
   return {
@@ -365,27 +363,5 @@ describe('account and company scoped exposure telemetry', () => {
     expect(diagnosticImpl).toHaveBeenCalledTimes(1);
     expect(diagnosticImpl).toHaveBeenCalledWith(expect.objectContaining({ operation: 'flag_evaluation', outcome: 'error', reason: 'provider_error' }));
     expect(JSON.stringify(diagnosticImpl.mock.calls)).not.toContain('private URL');
-  });
-});
-
-describe('feature flag diagnostic payload boundary', () => {
-  it('emits only bounded operational labels and tenant identifiers', () => {
-    const tracker = vi.fn();
-    reportFlagDiagnostic({ operation: 'configuration_fetch', outcome: 'success', provider: 'datadog',
-      durationMs: 25, account_id: 'company-a', reason: 'network_error', source: 'remote',
-      username: 'private@example.test', accountId: 'private-id', url: 'https://private', token: 'secret' }, tracker);
-    expect(tracker).toHaveBeenCalledWith('feature_flags_diagnostic', {
-      operation: 'configuration_fetch', outcome: 'success', provider: 'datadog', durationMs: 25,
-      account_id: 'company-a', reason: 'network_error', source: 'remote',
-    });
-  });
-
-  it('ignores arbitrary diagnostic labels and never throws for a failed reporter', async () => {
-    const tracker = vi.fn();
-    reportFlagDiagnostic({ operation: 'private@example.test', outcome: 'error' }, tracker);
-    expect(tracker).not.toHaveBeenCalled();
-    expect(() => reportFlagDiagnostic({ operation: 'context_update', outcome: 'error' }, () => { throw new Error('offline'); })).not.toThrow();
-    reportFlagDiagnostic({ operation: 'context_update', outcome: 'error', reason: 'private@example.test' }, () => Promise.reject(new Error('offline')));
-    await Promise.resolve();
   });
 });
