@@ -14,7 +14,8 @@ export const ENTRY_REQUIRED_PARAMS = Object.freeze(['orgId', 'acctSchemaId', 'fa
 /**
  * The ledger of one account under the view's period and filters. `accountId` (the tree's node id,
  * a leaf account = `fact_acct.account_id`) lets the SQL use the account index instead of reading
- * the client's whole history through the account code; the code bounds stay for the export header.
+ * the client's whole history through the account code. The code bounds are redundant with it (one
+ * schema = one chart) and kept so the request still means the same to a General Ledger without `accountId`.
  */
 export function ledgerParams(queryParams, row) {
   const { acctSchemaId, orgId, dateFrom, dateTo, bPartnerId, productId } = queryParams;
