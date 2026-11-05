@@ -8,12 +8,38 @@ const topLevel = (rows) => {
   return rows.filter((r) => !r.isFormula && (!r.parentId || !ids.has(r.parentId)));
 };
 
-function totals(lines, key) {
+const isAccount = (r) => /^\d/.test(r?.value ?? '');
+
+/**
+ * The pieces the headline figures add up: the first account level under each line (an account whose
+ * parent is a heading), plus the top-level lines with no account under them.
+ * shortcut: income/expense by Spanish PGC group (7 / 6), the chart this product's P&L is built on;
+ * any other account, and a line with no accounts, goes by its own sign — give the contract an
+ * explicit mapping when another chart needs it.
+ */
+function kpiPieces(rows) {
+  const byId = new Map(rows.map((r) => [r.node_id, r]));
+  const topOf = (r) => {
+    let cur = r;
+    while (cur.parentId && byId.has(cur.parentId)) cur = byId.get(cur.parentId);
+    return cur;
+  };
+  const accounts = rows.filter((r) => isAccount(r) && !isAccount(byId.get(r.parentId)) && !topOf(r).isFormula);
+  const covered = new Set(accounts.map((r) => topOf(r).node_id));
+  const group = (r) => ({ 7: 'income', 6: 'expense' }[r.value[0]] ?? null);
+  return [
+    ...accounts.map((r) => ({ row: r, kind: group(r) })),
+    ...topLevel(rows).filter((r) => !covered.has(r.node_id)).map((r) => ({ row: r, kind: null })),
+  ];
+}
+
+function totals(pieces, key) {
   let income = 0;
   let expenses = 0;
-  for (const r of lines) {
-    const v = Number(r[key]) || 0;
-    if (v > 0) income += v;
+  for (const { row, kind } of pieces) {
+    const v = Number(row[key]) || 0;
+    // A credit on an expense account (a refund) lowers expenses; it is not income.
+    if (kind === 'income' || (!kind && v > 0)) income += v;
     else expenses -= v;
   }
   const result = income - expenses;
@@ -21,15 +47,13 @@ function totals(lines, key) {
 }
 
 /**
- * Ingresos / Gastos / Resultado / Margen from the top-level lines of a result report. Amounts are
- * already shown with the sign the reader expects (revenue +, expenses −), so a positive top line is
- * income and a negative one an expense; the formula subtotals are skipped (they would count twice).
- * shortcut: a line is income or expense by its own sign in each period; a report whose lines flip
- * sign between periods would move them between cards — fine for P&L, revisit for other reports.
+ * Ingresos / Gastos / Resultado del ejercicio / Margen of a result report. Amounts come signed as
+ * the reader expects (income +, expense −), so Resultado = Ingresos − Gastos is the sum of the
+ * lines; the formula subtotals are skipped (they would count twice).
  */
 export function reportKpis(rows = []) {
-  const lines = topLevel(rows);
-  return { current: totals(lines, 'amount'), ref: totals(lines, 'amount_ref') };
+  const pieces = kpiPieces(rows);
+  return { current: totals(pieces, 'amount'), ref: totals(pieces, 'amount_ref') };
 }
 
 /**

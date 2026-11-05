@@ -61,7 +61,10 @@ async function installMocks(page) {
   await page.route('**/sws/report-selectors/**', (route) => route.fulfill(json({ items: [] })));
   await page.route('**/sws/report-selectors/acctschema**', (route) => route.fulfill(json({ items: [{ id: 'AS1', name: 'Spain GAAP' }] })));
   await page.route('**/sws/report-selectors/year**', (route) => route.fulfill(json({
-    items: [{ id: 'Y1', name: String(year), startDate: `${year}-01-01`, endDate: `${year}-12-31` }],
+    items: [
+      { id: 'Y1', name: String(year), startDate: `${year}-01-01`, endDate: `${year}-12-31` },
+      { id: 'Y0', name: String(year - 1), startDate: `${year - 1}-01-01`, endDate: `${year - 1}-12-31` },
+    ],
   })));
   await page.route('**/api/reports/*/query', (route) => {
     const id = route.request().url().split('/api/reports/')[1].split('/')[0];
@@ -106,8 +109,8 @@ test.describe('Profit & Loss — interactive view (ETP-6080)', () => {
     await expect(page.getByTestId('DynamicReportTable__row')).toHaveCount(1);
     expect(queries['profit-loss']).toHaveLength(sent);
 
-    // 12 meses, not Mes: in January "this month" equals the opening period and sends nothing.
-    await page.getByTestId('DynamicReportPanel__shortcut-last12').click();
+    // Last year, not Mes: in January "this month" equals the opening period and sends nothing.
+    await page.getByTestId('DynamicReportPanel__year').selectOption('Y0');
     await expect.poll(() => queries['profit-loss'].length).toBeGreaterThan(sent);
     expect(queries['profit-loss'].at(-1).dateFrom.slice(0, 4)).toBe(String(new Date().getFullYear() - 1));
   });

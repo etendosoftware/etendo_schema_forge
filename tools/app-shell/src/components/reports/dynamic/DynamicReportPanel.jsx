@@ -8,7 +8,6 @@ const SHORTCUTS = [
   ['month', 'dynamicReportMonth'],
   ['quarter', 'dynamicReportQuarter'],
   ['year', 'dynamicReportYear'],
-  ['last12', 'dynamicReportLast12'],
 ];
 const COMPARISONS = [
   ['', 'dynamicReportNoComparison'],

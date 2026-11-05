@@ -33,12 +33,11 @@ export function pickedYearPeriod(year, today) {
   return { dateFrom: year.startDate, dateTo: contains ? today : year.endDate };
 }
 
-/** Month / quarter to date, and the last 12 months ending today. The fiscal year is `openingPeriod`. */
+/** Month / quarter to date. The fiscal year is `openingPeriod`. */
 export function shortcutPeriod(kind, today) {
-  const [y, m, d] = parts(today);
+  const [y, m] = parts(today);
   if (kind === 'month') return { dateFrom: iso(y, m, 1), dateTo: today };
   if (kind === 'quarter') return { dateFrom: iso(y, m - (m % 3), 1), dateTo: today };
-  if (kind === 'last12') return { dateFrom: iso(y - 1, m, d + 1), dateTo: today };
   throw new Error(`Unknown period shortcut: ${kind}`);
 }
 
@@ -55,7 +54,7 @@ export function matchingShortcut(period, years, today) {
   if (!period?.dateFrom || period.dateTo !== today) return null;
   const year = yearContaining(years, today);
   if (year && period.dateFrom === year.startDate) return 'year';
-  return ['month', 'quarter', 'last12'].find((k) => shortcutPeriod(k, today).dateFrom === period.dateFrom) || null;
+  return ['month', 'quarter'].find((k) => shortcutPeriod(k, today).dateFrom === period.dateFrom) || null;
 }
 
 /** One calendar year back; 29 February becomes 28 February (§19.2: no day offsets). */

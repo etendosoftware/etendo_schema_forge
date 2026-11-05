@@ -27,6 +27,35 @@ describe('reportKpis', () => {
   });
 });
 
+describe('reportKpis by account group', () => {
+  // As the real P&L: headings P.G.x, accounts under them, subaccounts under those.
+  const PGC = [
+    { node_id: 'PG1', parentId: null, value: 'P.G.1', amount: 17248, amount_ref: 100 },
+    { node_id: '700', parentId: 'PG1', value: '700', amount: 17248, amount_ref: 100 },
+    { node_id: '7000', parentId: '700', value: '7000', amount: 17248, amount_ref: 100 },
+    { node_id: 'PG4', parentId: null, value: 'P.G.4', amount: -4499, amount_ref: -50 },
+    { node_id: '600', parentId: 'PG4', value: '600', amount: -4499, amount_ref: -50 },
+    // An expense line in credit this period (a refund): it lowers expenses, it is not income.
+    { node_id: 'PG7', parentId: null, value: 'P.G.7', amount: 10, amount_ref: -20 },
+    { node_id: '623', parentId: 'PG7', value: '623', amount: 10, amount_ref: -20 },
+    // A line with both groups: each account goes to its own side.
+    { node_id: 'PG12', parentId: null, value: 'P.G.12', amount: 5, amount_ref: 0 },
+    { node_id: '678', parentId: 'PG12', value: '678', amount: -15, amount_ref: 0 },
+    { node_id: '778', parentId: 'PG12', value: '778', amount: 20, amount_ref: 0 },
+    // A line with no accounts listed goes by its sign.
+    { node_id: 'PG2', parentId: null, value: 'P.G.2', amount: 7, amount_ref: 0 },
+    { node_id: 'PGA', parentId: null, value: 'P.G.A', amount: 12759, amount_ref: 30, isFormula: true },
+  ];
+
+  it('counts the first account level by group 7 / 6, never a subaccount twice', () => {
+    const { current, ref } = reportKpis(PGC);
+    expect(current.income).toBe(17248 + 20 + 7);
+    expect(current.expenses).toBe(4499 - 10 + 15);
+    expect(current.result).toBe(17248 - 4499 + 10 + 5 + 7);
+    expect(ref).toMatchObject({ income: 100, expenses: 70, result: 30 });
+  });
+});
+
 describe('kpiTrend', () => {
   it('reads growth as good news except for expenses', () => {
     expect(kpiTrend('income', 2, 1)).toBe('improves');

@@ -50,12 +50,11 @@ for (const tz of ['Europe/Madrid', 'America/Argentina/Buenos_Aires']) {
       expect(matchingYear({ dateFrom: '2026-07-01', dateTo: today }, undefined, today)).toBeNull();
     });
 
-    it('month, quarter and last 12 months end today', () => {
+    it('month and quarter end today; there is no rolling 12-month shortcut', () => {
       expect(shortcutPeriod('month', '2026-11-03')).toEqual({ dateFrom: '2026-11-01', dateTo: '2026-11-03' });
       expect(shortcutPeriod('quarter', '2026-11-03')).toEqual({ dateFrom: '2026-10-01', dateTo: '2026-11-03' });
       expect(shortcutPeriod('quarter', '2026-03-31').dateFrom).toBe('2026-01-01');
-      expect(shortcutPeriod('last12', '2026-11-03')).toEqual({ dateFrom: '2025-11-04', dateTo: '2026-11-03' });
-      expect(shortcutPeriod('last12', '2026-12-31').dateFrom).toBe('2026-01-01');
+      expect(() => shortcutPeriod('last12', '2026-11-03')).toThrow(/Unknown period shortcut/);
     });
 
     it('names the shortcut a period matches', () => {
