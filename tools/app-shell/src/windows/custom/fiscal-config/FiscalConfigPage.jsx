@@ -61,6 +61,15 @@ function resolvePageTitle(ui, profileLabel) {
   return profileLabel ? `${ui('fiscal.title')} ${profileLabel}` : ui('fiscal.title');
 }
 
+/**
+ * Why "Añadir SII" failed, for the error banner. A role the backend does not let run the action at
+ * all gets our own sentence, never the generic English "Access denied to spec" text.
+ */
+function addSiiFailureReason(err, ui) {
+  if (isFiscalAccessDenied(err)) return ui('fiscal.err.noPermission');
+  return err instanceof Error ? err.message : String(err);
+}
+
 function resolveRenderProfile(addingComplementary, effectiveProfile) {
   return addingComplementary ? 'sii+tbai' : effectiveProfile;
 }
@@ -212,11 +221,7 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
       setComplementaryRecord(created);
       setAddingComplementary('sii');
     } catch (err) {
-      // A role the backend does not let run the action at all gets our own sentence, never the
-      // generic English "Access denied to spec" text.
-      const reason = isFiscalAccessDenied(err) ? ui('fiscal.err.noPermission')
-        : (err instanceof Error ? err.message : String(err));
-      setAddingComplementaryError(ui('fiscal.addComplementary.err.createFailed', { error: reason }));
+      setAddingComplementaryError(ui('fiscal.addComplementary.err.createFailed', { error: addSiiFailureReason(err, ui) }));
     } finally {
       setCreatingComplementary(false);
     }
