@@ -66,12 +66,12 @@ export default function DynamicReportKpis({ kpis, compare }) {
   const ui = useUI();
   const { current: c, ref: r } = kpis;
   const resultTone = c.result > 0
-    ? 'border-accent-highlight bg-accent-highlight/25'
-    : c.result < 0 ? 'border-destructive/40 bg-destructive/5' : null;
+    ? 'border-border/60 bg-card shadow-[inset_3px_0_0_hsl(var(--accent-highlight))]'
+    : c.result < 0 ? 'border-border/60 bg-card shadow-[inset_3px_0_0_hsl(var(--destructive))]' : null;
   return (
     <TooltipProvider>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5" data-testid="DynamicReportKpis">
-        <Kpi id="income" label={ui('dynamicReportKpiIncome')} hint={ui('dynamicReportKpiIncomeHint')} value={c.income} refValue={r.income} compare={compare} tone="border-primary/30 bg-primary/5" />
+        <Kpi id="income" label={ui('dynamicReportKpiIncome')} hint={ui('dynamicReportKpiIncomeHint')} value={c.income} refValue={r.income} compare={compare} />
         <Kpi id="expenses" label={ui('dynamicReportKpiExpenses')} hint={ui('dynamicReportKpiExpensesHint')} value={c.expenses} refValue={r.expenses} compare={compare} />
         <Kpi id="result" label={ui('dynamicReportKpiResult')} hint={ui('dynamicReportKpiResultHint')} value={c.result} refValue={r.result} compare={compare} tone={resultTone} />
         <Kpi id="margin" label={ui('dynamicReportKpiMargin')} hint={ui('dynamicReportKpiMarginHint')} value={c.margin} refValue={r.margin} compare={compare} percent />

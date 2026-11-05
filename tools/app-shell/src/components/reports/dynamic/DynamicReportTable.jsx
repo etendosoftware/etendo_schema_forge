@@ -31,12 +31,12 @@ function VariationCells({ row }) {
 function AmountCell({ value, share, className }) {
   const negative = Number(value) < 0;
   return (
-    <td className={cn(NUM, negative && 'text-destructive/90', className)}>
+    <td className={cn(NUM, className)}>
       {amount(value)}
       {share > 0 && (
-        <span className="mt-1 ml-auto block h-1 w-24 rounded-full bg-muted" aria-hidden="true">
+        <span className="mt-1 ml-auto block h-0.5 w-20 rounded-full bg-muted" aria-hidden="true">
           <span
-            className={cn('ml-auto block h-full rounded-full', negative ? 'bg-[var(--ai-accent)]' : 'bg-primary/70')}
+            className={cn('ml-auto block h-full rounded-full', negative ? 'bg-[var(--ai-accent)] opacity-60' : 'bg-primary/40')}
             style={{ width: `${Math.max(4, Math.round(share * 100))}%` }}
             data-testid="DynamicReportTable__bar"
           />
@@ -65,7 +65,7 @@ function SplitRows({ split, compare, depth, ui }) {
   const shares = splitShares(split.rows);
   return split.rows.map((part, i) => (
     // The split SQL coalesces a missing name to '', not null.
-    <tr key={part.node_id ?? '∅'} className="text-muted-foreground text-xs bg-accent-highlight/10" data-testid="DynamicReportTable__splitRow">
+    <tr key={part.node_id ?? '∅'} className="text-muted-foreground text-xs" data-testid="DynamicReportTable__splitRow">
       <td className="px-3 py-1.5" style={pad}>{part.name || ui('dynamicReportSplitNone')}</td>
       <AmountCell value={part.amount} share={shares[i]} />
       {compare && (
@@ -86,11 +86,11 @@ function SplitRows({ split, compare, depth, ui }) {
 export default function DynamicReportTable({ rows, compare, expanded, onToggle, splitBy, splits, onToggleSplit, onOpenLedger }) {
   const ui = useUI();
   const shares = useMemo(() => rowShares(rows), [rows]);
-  const th = 'px-3 py-2.5 font-semibold uppercase tracking-wide';
+  const th = 'px-3 py-2.5 font-medium uppercase tracking-wide';
   return (
     <table className="w-full border-collapse text-sm" data-testid="DynamicReportTable">
       <thead>
-        <tr className="text-xs text-primary bg-primary/5 border-b-2 border-primary/20">
+        <tr className="text-xs text-muted-foreground bg-muted/40 border-b border-border">
           <th scope="col" className={cn(th, 'text-left rounded-tl-lg')}>{ui('dynamicReportConcept')}</th>
           <th scope="col" className={cn(th, 'text-right', !compare && 'rounded-tr-lg')}>{ui('dynamicReportAmount')}</th>
           {compare && (
@@ -114,10 +114,10 @@ export default function DynamicReportTable({ rows, compare, expanded, onToggle, 
               className={cn(
                 'border-b border-border/40 transition-colors hover:bg-primary/[0.03]',
                 row.elementlevel === 'E' && 'font-semibold',
-                // Section band: a top-level line opens a block of the report.
-                row.depth === 0 && !row.isFormula && 'bg-primary/[0.04] shadow-[inset_3px_0_0_hsl(var(--primary)/0.5)]',
-                // Subtotal (A. RESULTADO DE EXPLOTACIÓN…): the lime of the palette, ruled above.
-                row.isFormula && 'bg-accent-highlight/20 font-semibold border-t-2 border-t-accent-highlight shadow-[inset_3px_0_0_hsl(var(--accent-highlight))]',
+                // Section mark: a top-level line opens a block of the report.
+                row.depth === 0 && !row.isFormula && 'shadow-[inset_2px_0_0_hsl(var(--primary)/0.35)]',
+                // Subtotal (A. RESULTADO DE EXPLOTACIÓN…): muted, ruled above, a lime edge.
+                row.isFormula && 'bg-muted/40 font-semibold border-t border-t-border shadow-[inset_2px_0_0_hsl(var(--accent-highlight))]',
               )}
               data-testid="DynamicReportTable__row"
               data-node-id={row.node_id}
