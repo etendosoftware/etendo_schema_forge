@@ -815,6 +815,8 @@ export function getMethod(isNew) {
  * diff, so the key was omitted and the server overwrote the retyped date. Sending it states the
  * user's choice explicitly. A key only the callout touched (not retyped) that ends equal to
  * stored is still NOT sent. `calloutTouchedKeysRef` is optional; null keeps the plain diff.
+ * A custom panel that echoes a value through onChange after a callout also counts as a retype
+ * and resends the value; that is harmless, since it is the value the record already holds.
  */
 export function buildPatchPayload(editing, selected, formFieldsRef, userChangedKeysRef, calloutAppliedKeysRef, contractFields = null, calloutTouchedKeysRef = null) {
     const isFieldExcluded = formFieldsRef && userChangedKeysRef
@@ -1402,8 +1404,9 @@ export function useEntity(entity, childEntity, {
     const calloutAppliedKeysRef = useRef(new Set());
     // ETP-5840 CP-B1: keys a callout response wrote since the last save. Unlike
     // calloutAppliedKeysRef, a later user edit does NOT remove the key — this records that the
-    // callout happened, not who wrote last. Cleared after every successful save, so it only
-    // affects the save right after a callout + retype sequence. See buildPatchPayload.
+    // callout happened, not who wrote last. A successful save removes the keys its body carried
+    // (performSave), so it only affects the save right after a callout + retype sequence.
+    // See buildPatchPayload.
     const calloutTouchedKeysRef = useRef(new Set());
     // `initialData` behind a ref so `handleNew` keeps a stable identity. It is read only at
     // the moment handleNew runs, and putting it in that callback's dependency array would
@@ -2278,6 +2281,9 @@ export function useEntity(entity, childEntity, {
             contractFields,
             calloutTouchedKeysRef,
         });
+        // ETP-5840 CP-B1: the callout-touched keys this body actually carries, snapshotted NOW.
+        // Only these are forgotten on success — see the res.ok branch.
+        const travelledCalloutTouchedKeys = Object.keys(payload).filter(k => calloutTouchedKeysRef.current.has(k));
         try {
             // getUrl already returns the full ${apiBaseUrl}/... path, so baseUrl: ''
             // keeps it from being prefixed a second time. NEO Headless expects flat field
@@ -2286,9 +2292,12 @@ export function useEntity(entity, childEntity, {
             // filters missed gets dropped and the save retried once the backend names it.
             const res = await saveWithReadOnlyFieldRetry(apiFetch, url, method, payload);
             if (res.ok) {
-                // ETP-5840 CP-B1: the callout + retype case has now travelled; it must not
-                // keep forcing the key into later saves of this same visit.
-                calloutTouchedKeysRef.current.clear();
+                // ETP-5840 CP-B1: a callout-touched key that travelled in this body must not keep
+                // forcing itself into later saves of this same visit, so it is forgotten here.
+                // Deliberately NOT clear(): a callout + retype that happened while this save was
+                // in flight was not in this body, and clearing the whole set would make the next
+                // save omit it again — the very bug this set exists to prevent.
+                travelledCalloutTouchedKeys.forEach(k => calloutTouchedKeysRef.current.delete(k));
                 const data = await res.json();
                 const saved = normalizeRecord(data?.response?.data?.[0] ?? data, entity);
                 const resolvedSaved = await resolveSavedRecordAfterSave(saved, {
