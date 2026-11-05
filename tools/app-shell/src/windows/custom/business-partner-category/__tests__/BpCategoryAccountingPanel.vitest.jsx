@@ -1,19 +1,22 @@
 // @covers artifacts/business-partner-category/custom/BpCategoryAccountingPanel.jsx
 // @covers artifacts/business-partner-category/custom/bpCategoryContactTypes.js
-// @covers tools/app-shell/src/components/contract-ui/SectionShell.jsx
 /**
- * Contact category — Accounting tab. The category's single C_BP_Group_Acct row is laid out as one
- * SectionShell per checked contact type (Customers, Vendor/Creditor), each holding one shared
- * AccountSelect per account, fed by that field's NEO selector. A section follows the header's type
- * checkbox LIVE (the unsaved editing record); an unchecked type's section is hidden and its stored
- * values are never cleared. Each account pick is PATCHed on its own and tells the user when the
- * category already has contacts.
+ * Contact category — Accounting tab. One muted card per contact type (Customer, Vendor/Creditor)
+ * is ALWAYS drawn, headed by that type's checkbox; a checked card lists one shared AccountSelect
+ * per account of the category's single C_BP_Group_Acct row, fed by that field's NEO selector, and
+ * an unchecked card collapses to its header without clearing its stored values. With no type
+ * checked an info alert sits above the cards. The type checkboxes are the header fields: they read
+ * the live editing record (`data`) and write through the header form's callbacks (`formBridge` of
+ * the window context). The tab badge (`onCountChange`) is the number of checked types. Each
+ * account pick is PATCHed on its own and tells the user when the category already has contacts.
  *
- * The shared AccountSelect, SectionShell and useAccountSelectorPages are the REAL ones (imported
- * one by one instead of through the heavy barrel): only the network, i18n and toasts are mocked.
+ * The shared AccountSelect and useAccountSelectorPages are the REAL ones (imported one by one
+ * instead of through the heavy barrel), as are the window context and SquareCheckbox: only the
+ * network, i18n and toasts are mocked.
  */
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Calculator } from '@phosphor-icons/react';
 
 const mocks = vi.hoisted(() => ({
   apiFetch: vi.fn(),
@@ -32,13 +35,16 @@ vi.mock('@generated/business-partner-category/custom/useAssociatedContactsNotice
 }));
 vi.mock('@/components/contract-ui', async () => {
   const { AccountSelect } = await import('@/components/contract-ui/AccountSelect.jsx');
-  const { SectionShell } = await import('@/components/contract-ui/SectionShell.jsx');
   const { useAccountSelectorPages } = await import('@/components/contract-ui/useAccountSelectorPages.js');
-  return { AccountSelect, SectionShell, useAccountSelectorPages };
+  return { AccountSelect, useAccountSelectorPages };
 });
 
 import BpCategoryAccountingPanel from '@generated/business-partner-category/custom/BpCategoryAccountingPanel.jsx';
-import { accountSelectorUrl, resolveAccountSections } from '@generated/business-partner-category/custom/bpCategoryContactTypes.js';
+import { BpCategoryWindowContext } from '@generated/business-partner-category/custom/bpCategoryWindowContext.js';
+import {
+  accountSelectorUrl, contactTypeBaseFilter, countCheckedTypes, resolveAccountSections,
+} from '@generated/business-partner-category/custom/bpCategoryContactTypes.js';
+import { resolveTabIcon } from '@/components/contract-ui/tabIcons.js';
 
 const API_BASE = '/sws/neo/business-partner-category';
 const ACCT_ROW = {
@@ -75,8 +81,27 @@ const BOTH = { etgoIscustomer: true, etgoIsvendor: true };
 const trigger = (key) => screen.getByTestId(`field-bp-category-acct-${key}`);
 const patchCalls = () => mocks.apiFetch.mock.calls.filter(([, opts]) => opts?.method === 'PATCH');
 const selectorCalls = () => mocks.apiFetch.mock.calls.filter(([url]) => url.includes('/selectors/'));
+const card = (key) => screen.getByTestId(`bp-category-accounts-${key}`);
+const accountSelectsIn = (el) => within(el).queryAllByTestId(/^bp-category-acct-/);
 
-describe('resolveAccountSections', () => {
+/**
+ * Mounts the panel inside the window context the wrapper provides, with a header-form bridge.
+ * Returns the bridge callbacks and a `rerenderPanel(data, extra)` that keeps the same context.
+ */
+function renderInWindow(data, extra = {}) {
+  const form = { onChange: vi.fn(), onFieldBlur: vi.fn() };
+  const windowState = { formBridge: { current: form } };
+  const tree = (d, e) => (
+    <BpCategoryWindowContext.Provider value={windowState}>
+      <BpCategoryAccountingPanel {...props(d, e)} />
+    </BpCategoryWindowContext.Provider>
+  );
+  const { rerender } = render(tree(data, extra));
+  return { form, rerenderPanel: (d, e = extra) => rerender(tree(d, e)) };
+}
+
+// countCheckedTypes (the Accounting tab badge) is the number of checked sections of the same record.
+describe('resolveAccountSections / countCheckedTypes', () => {
   const shape = ({ noType, sections }) => ({ noType, sections: sections.map((s) => s.key) });
 
   it.each([
@@ -87,6 +112,7 @@ describe('resolveAccountSections', () => {
     ['no record yet', null, true, []],
   ])('%s', (_label, record, noType, sections) => {
     expect(shape(resolveAccountSections(record))).toEqual({ noType, sections });
+    expect(countCheckedTypes(record)).toBe(sections.length);
   });
 });
 
@@ -99,6 +125,27 @@ describe('accountSelectorUrl', () => {
   });
 });
 
+describe('contactTypeBaseFilter', () => {
+  const decode = (filter) => JSON.parse(decodeURIComponent(filter.replace(/^criteria=/, '')));
+
+  it.each([
+    ['customer', 'etgoIscustomer'],
+    ['vendor', 'etgoIsvendor'],
+  ])('%s -> a server-side criteria on %s = Y', (code, fieldName) => {
+    const filter = contactTypeBaseFilter(code);
+    expect(filter).toMatch(/^criteria=/);
+    expect(decode(filter)).toEqual([{ fieldName, operator: 'equals', value: 'Y' }]);
+  });
+
+  it.each([
+    ['all contacts (null)', null],
+    ['undefined', undefined],
+    ['an unknown code', 'employee'],
+  ])('%s -> no filter', (_label, code) => {
+    expect(contactTypeBaseFilter(code)).toBeNull();
+  });
+});
+
 describe('BpCategoryAccountingPanel', () => {
   beforeEach(() => {
     mocks.apiFetch.mockReset();
@@ -106,17 +153,20 @@ describe('BpCategoryAccountingPanel', () => {
     mocks.toastError.mockReset();
   });
 
-  it('renders one section per checked type, the first one without the divider', async () => {
+  it.each([
+    ['both checked', BOTH, 'true', 'true'],
+    ['customer only', { etgoIscustomer: true, etgoIsvendor: false }, 'true', 'false'],
+    ['neither', { etgoIscustomer: 'N', etgoIsvendor: 'N' }, 'false', 'false'],
+  ])('always draws both type cards, data-checked following the record (%s)', async (_label, data, customer, vendor) => {
     installApi();
-    render(<BpCategoryAccountingPanel {...props(BOTH)} />);
-    const customer = await screen.findByTestId('bp-category-accounts-customer');
-    const vendor = screen.getByTestId('bp-category-accounts-vendor');
-
-    expect(within(customer).getByText('bpCategoryCustomersSection')).toBeInTheDocument();
-    expect(within(customer).getByText('bpCategoryCustomersSectionSubtitle')).toBeInTheDocument();
-    expect(within(vendor).getByText('bpCategoryVendorsSection')).toBeInTheDocument();
-    expect(customer.className).not.toMatch(/\bborder-t\b/);
-    expect(vendor.className).toMatch(/\bborder-t\b/);
+    render(<BpCategoryAccountingPanel {...props(data)} />);
+    await waitFor(() => expect(mocks.apiFetch).toHaveBeenCalled());
+    expect(card('customer')).toHaveAttribute('data-checked', customer);
+    expect(card('vendor')).toHaveAttribute('data-checked', vendor);
+    expect(within(card('customer')).getByTestId('field-etgoIscustomer').checked).toBe(customer === 'true');
+    expect(within(card('vendor')).getByTestId('field-etgoIsvendor').checked).toBe(vendor === 'true');
+    // The info alert is there exactly while no type is checked.
+    expect(screen.queryByTestId('bp-category-accounts-no-type') !== null).toBe(customer === 'false' && vendor === 'false');
   });
 
   // The two vendor accounts are renamed in this tab only (a `useUI` key); every other account, and
@@ -141,35 +191,85 @@ describe('BpCategoryAccountingPanel', () => {
     expect(screen.queryByTestId(`field-bp-category-acct-${key}-clear`) === null).toBe(required);
   });
 
-  it('follows the unsaved header type checkboxes, keeping the hidden section values, without reloading', async () => {
+  it('an unchecked card collapses to its header and gets its values back when re-checked, without reloading', async () => {
     installApi();
-    const { rerender } = render(<BpCategoryAccountingPanel {...props({ etgoIscustomer: true, etgoIsvendor: false })} />);
+    const { rerenderPanel } = renderInWindow({ etgoIscustomer: true, etgoIsvendor: false });
 
-    expect(await screen.findByTestId('bp-category-accounts-customer')).toBeInTheDocument();
-    expect(screen.queryByTestId('bp-category-accounts-vendor')).toBeNull();
+    expect(await screen.findByTestId('bp-category-acct-customerReceivablesNo')).toBeInTheDocument();
+    expect(accountSelectsIn(card('vendor'))).toHaveLength(0);
 
-    rerender(<BpCategoryAccountingPanel {...props({ etgoIscustomer: false, etgoIsvendor: true })} />);
-    expect(screen.queryByTestId('bp-category-accounts-customer')).toBeNull();
+    rerenderPanel({ etgoIscustomer: false, etgoIsvendor: true });
+    expect(card('customer')).toBeInTheDocument();
+    expect(accountSelectsIn(card('customer'))).toHaveLength(0);
     expect(trigger('vendorLiability')).toHaveTextContent('400 - Proveedores');
 
-    rerender(<BpCategoryAccountingPanel {...props(BOTH)} />);
+    rerenderPanel(BOTH);
     expect(trigger('customerReceivablesNo')).toHaveTextContent('430 - Clientes');
     expect(mocks.apiFetch).toHaveBeenCalledTimes(1);
     expect(mocks.apiFetch.mock.calls[0][0]).toMatch(/^\/accounting\?parentId=G-1&/);
   });
 
+  it('no type checked: an info alert sits above the two cards', async () => {
+    installApi();
+    render(<BpCategoryAccountingPanel {...props({ etgoIscustomer: false, etgoIsvendor: false })} />);
+    const alert = await screen.findByTestId('bp-category-accounts-no-type');
+    expect(alert).toHaveTextContent('bpCategoryNoTypeAccounts');
+    expect(alert.compareDocumentPosition(card('customer')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(accountSelectsIn(screen.getByTestId('bp-category-accounting-panel'))).toHaveLength(0);
+  });
+
   it.each([
-    ['no type checked', { etgoIscustomer: false, etgoIsvendor: false }, {}, null, 'bp-category-accounts-no-type'],
-    ['a category not saved yet', { etgoIscustomer: true }, { isNew: true, recordId: null }, null, 'bp-category-accounts-save-first'],
-    ['the accounting row cannot be read', { etgoIscustomer: true }, {}, { ok: false, json: async () => ({}) }, 'bp-category-accounts-load-error'],
-    ['the category has no accounting row', { etgoIscustomer: true }, {}, listResponse([]), 'bp-category-accounts-no-row'],
-  ])('explains instead of showing accounts when %s', async (_label, data, extra, response, testId) => {
+    ['a category not saved yet', { isNew: true, recordId: null }, null, 'bp-category-accounts-save-first'],
+    ['the accounting row cannot be read', {}, { ok: false, json: async () => ({}) }, 'bp-category-accounts-load-error'],
+    ['the category has no accounting row', {}, listResponse([]), 'bp-category-accounts-no-row'],
+  ])('the checked card explains instead of showing accounts when %s', async (_label, extra, response, testId) => {
     mocks.apiFetch.mockResolvedValue(response ?? listResponse([ACCT_ROW]));
-    render(<BpCategoryAccountingPanel {...props(data, extra)} />);
-    expect(await screen.findByTestId(testId)).toBeInTheDocument();
-    expect(screen.queryByTestId('bp-category-accounting-panel')).toBeNull();
+    render(<BpCategoryAccountingPanel {...props({ etgoIscustomer: true, etgoIsvendor: false }, extra)} />);
+    const message = await within(card('customer')).findByTestId(testId);
+    expect(message).toBeInTheDocument();
+    expect(accountSelectsIn(card('customer'))).toHaveLength(0);
+    // The unchecked card stays a bare header: the message belongs to the checked one only.
+    expect(within(card('vendor')).queryByTestId(testId)).toBeNull();
     // A category that does not exist yet has no accounting row to read.
     if (extra.isNew) expect(mocks.apiFetch).not.toHaveBeenCalled();
+  });
+
+  // The type checkboxes ARE the header fields: a toggle is the form's own onChange (field, flipped
+  // value, AD column), then its blur hook — the same autosave as a checkbox of the form.
+  it.each([
+    ['checking Customer', { etgoIscustomer: false, etgoIsvendor: true }, 'etgoIscustomer', true, 'EM_Etgo_Iscustomer'],
+    ['unchecking Vendor/Creditor', BOTH, 'etgoIsvendor', false, 'EM_Etgo_Isvendor'],
+  ])('%s writes through the header form bridge', async (_label, data, field, next, column) => {
+    installApi();
+    const { form } = renderInWindow(data);
+    fireEvent.click(screen.getByTestId(`field-${field}`));
+    expect(form.onChange).toHaveBeenCalledTimes(1);
+    expect(form.onChange).toHaveBeenCalledWith(field, next, column);
+    await waitFor(() => expect(form.onFieldBlur).toHaveBeenCalledWith(field));
+  });
+
+  it('read-only role: the type checkboxes are disabled and never write', async () => {
+    installApi();
+    const { form } = renderInWindow(BOTH, { editing: false });
+    const box = screen.getByTestId('field-etgoIscustomer');
+    expect(box).toBeDisabled();
+    fireEvent.click(box);
+    expect(form.onChange).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['neither', { etgoIscustomer: 'N', etgoIsvendor: 'N' }, 0],
+    ['one', { etgoIscustomer: 'Y', etgoIsvendor: 'N' }, 1],
+    ['both', BOTH, 2],
+  ])('reports the checked-type count to the tab badge (%s)', async (_label, data, count) => {
+    installApi();
+    const onCountChange = vi.fn();
+    render(<BpCategoryAccountingPanel {...props(data, { onCountChange })} />);
+    await waitFor(() => expect(onCountChange).toHaveBeenLastCalledWith(count));
+  });
+
+  it('gives its tab the calculator icon instead of the generic one', () => {
+    expect(resolveTabIcon('customLines', BpCategoryAccountingPanel.tabIcon)).toBe(Calculator);
   });
 
   it('each account searches its own field selector, paged and by query', async () => {
