@@ -20,6 +20,7 @@ import { formatMonthYearLabel } from '@etendosoftware/app-shell-core/lib/dateMas
  * value shape used by both DateRangePopover and DateRangePopoverContent:
  *   - null                                  → All time (no constraint)
  *   - { presetId: 'today'|'yesterday'|'last7'|'last30'|'last12m' }
+ *     (+ 'last3m'|'last6m' when a caller opts in through `extraPresets`)
  *   - { from: Date, to: Date }              → Custom range
  */
 
@@ -29,24 +30,48 @@ import { formatMonthYearLabel } from '@etendosoftware/app-shell-core/lib/dateMas
 // Re-mounts each time the popover opens, so internal drafts start fresh.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Presets every consumer gets, in display order.
+const DEFAULT_PRESETS = [
+  { id: 'today',     labelKey: 'dateRangeToday' },
+  { id: 'yesterday', labelKey: 'dateRangeYesterday' },
+  { id: 'last7',     labelKey: 'dateRangeLast7Days' },
+  { id: 'last30',    labelKey: 'dateRangeLast30Days' },
+  { id: 'last12m',   labelKey: 'dateRangeLast12Months' },
+  { id: 'allTime',   labelKey: 'dateRangeAllTime' },
+];
+
+// Opt-in presets (`extraPresets` prop), each with the id it is inserted before so the list stays
+// chronological. Ids that are not here are ignored.
+const OPT_IN_PRESETS = [
+  { id: 'last3m', labelKey: 'dateRangeLast3Months', before: 'last12m' },
+  { id: 'last6m', labelKey: 'dateRangeLast6Months', before: 'last12m' },
+];
+
+/** Preset list for a popover: the default one, plus the opted-in extras in chronological order. */
+export function resolvePresets(extraPresets) {
+  if (!extraPresets?.length) return DEFAULT_PRESETS;
+  const extras = OPT_IN_PRESETS.filter((p) => extraPresets.includes(p.id));
+  return DEFAULT_PRESETS.flatMap((preset) => [
+    ...extras.filter((p) => p.before === preset.id),
+    preset,
+  ]);
+}
+
 /**
  * @param {{
  *   value: null | { presetId: string } | { from: Date, to: Date };
  *   onChange: (v: null | { presetId: string } | { from: Date, to: Date }) => void;
  *   onClose: () => void;
+ *   extraPresets?: Array<'last3m'|'last6m'>;
  * }} props
  */
-export function DateRangePopoverContent({ value, onChange, onClose }) {
+export function DateRangePopoverContent({ value, onChange, onClose, extraPresets }) {
   const ui = useUI();
 
-  const datePresets = useMemo(() => ([
-    { id: 'today',     label: ui('dateRangeToday') },
-    { id: 'yesterday', label: ui('dateRangeYesterday') },
-    { id: 'last7',     label: ui('dateRangeLast7Days') },
-    { id: 'last30',    label: ui('dateRangeLast30Days') },
-    { id: 'last12m',   label: ui('dateRangeLast12Months') },
-    { id: 'allTime',   label: ui('dateRangeAllTime') },
-  ]), [ui]);
+  const datePresets = useMemo(
+    () => resolvePresets(extraPresets).map(({ id, labelKey }) => ({ id, label: ui(labelKey) })),
+    [ui, extraPresets],
+  );
 
   const activePresetId = value && 'presetId' in value ? value.presetId : null;
   const isCustom = !!value && 'from' in value && 'to' in value;
@@ -191,9 +216,10 @@ export function DateRangePopoverContent({ value, onChange, onClose }) {
  *   value: null | { presetId: string } | { from: Date, to: Date };
  *   onChange: (v: null | { presetId: string } | { from: Date, to: Date }) => void;
  *   placeholder?: string;
+ *   extraPresets?: Array<'last3m'|'last6m'>; // opt-in: adds "Last 3 / 6 months" before "Last 12 months"
  * }} props
  */
-export function DateRangePopover({ value, onChange, placeholder }) {
+export function DateRangePopover({ value, onChange, placeholder, extraPresets }) {
   const ui = useUI();
   const { locale: appLocale } = useLocaleSwitch();
   const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
@@ -222,6 +248,7 @@ export function DateRangePopover({ value, onChange, placeholder }) {
           value={value}
           onChange={onChange}
           onClose={() => setOpen(false)}
+          extraPresets={extraPresets}
           data-testid="DateRangePopoverContent__482ed1" />
       </PopoverContent>
     </Popover>
@@ -238,6 +265,8 @@ export function computeTriggerLabel(value, placeholder, ui, bcpLocale) {
       yesterday: ui('dateRangeYesterday'),
       last7: ui('dateRangeLast7Days'),
       last30: ui('dateRangeLast30Days'),
+      last3m: ui('dateRangeLast3Months'),
+      last6m: ui('dateRangeLast6Months'),
       last12m: ui('dateRangeLast12Months'),
       // "All time" normally reaches here as `value === null` (see
       // handlePresetSelect), which falls through to the tail return below. This

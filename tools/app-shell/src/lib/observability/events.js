@@ -66,6 +66,11 @@ const OBSERVABILITY_PROPERTY_VALUES = Object.freeze({
   USERNAME: 'username',
   VALUE: 'value',
   VARIANT: 'variant',
+  // ETP-5581 — bounce suggestions of the automatch modal: counts of pairs and how the modal opened.
+  PAIRS_SHOWN: 'pairs_shown',
+  PAIRS_PRESELECTED: 'pairs_preselected',
+  PAIRS_CHECKED_AT_CLOSE: 'pairs_checked_at_close',
+  AUTO_OPENED: 'auto_opened',
 });
 
 function defineEvent(name, { channels = [], properties = [] } = {}) {
@@ -110,6 +115,23 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
       OBSERVABILITY_PROPERTY_KEYS.VARIANT,
       OBSERVABILITY_PROPERTY_KEYS.PROVIDER,
       OBSERVABILITY_PROPERTY_KEYS.USERNAME,
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.VALUE,
+      OBSERVABILITY_PROPERTY_KEYS.REASON,
+      OBSERVABILITY_PROPERTY_KEYS.ERROR_CODE,
+    ],
+  }),
+  FEATURE_FLAGS_DIAGNOSTIC: defineEvent('feature_flags_diagnostic', {
+    channels: [OBSERVABILITY_CHANNELS.RUM, OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.OPERATION,
+      OBSERVABILITY_PROPERTY_KEYS.OUTCOME,
+      OBSERVABILITY_PROPERTY_KEYS.PROVIDER,
+      OBSERVABILITY_PROPERTY_KEYS.DURATION_MS,
+      OBSERVABILITY_PROPERTY_KEYS.REASON,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.FLAG_KEY,
     ],
   }),
   // --- generic import (ETP-5676) --------------------------------------------
@@ -267,6 +289,29 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
       OBSERVABILITY_PROPERTY_KEYS.SOURCE,
       OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
       OBSERVABILITY_PROPERTY_KEYS.TYPE,
+    ],
+  }),
+  // ETP-5581 — the bounce suggestions of the bank-reconciliation automatch modal (KPI "suggestions
+  // closed without deciding", roadmap #15). `viewed`: once per opening of the modal with at least
+  // one bounce pair; `dismissed`: that opening closed without applying (best effort — a closed tab
+  // says nothing). Counts and a boolean only, plus the tenant: never a line id, amount,
+  // counterparty or statement text.
+  BOUNCE_SUGGESTIONS_VIEWED: defineEvent('bounce_suggestions_viewed', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.PAIRS_SHOWN,
+      OBSERVABILITY_PROPERTY_KEYS.PAIRS_PRESELECTED,
+      OBSERVABILITY_PROPERTY_KEYS.AUTO_OPENED,
+    ],
+  }),
+  BOUNCE_SUGGESTIONS_DISMISSED: defineEvent('bounce_suggestions_dismissed', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.PAIRS_SHOWN,
+      OBSERVABILITY_PROPERTY_KEYS.PAIRS_CHECKED_AT_CLOSE,
+      OBSERVABILITY_PROPERTY_KEYS.AUTO_OPENED,
     ],
   }),
   // ETP-5889 — one event per activation of the product Movements tab. `source` says how the user

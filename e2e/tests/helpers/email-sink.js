@@ -54,9 +54,12 @@ export function verificationTokenFromEmail(message) {
   if (typeof link !== 'string') {
     throw new Error('welcome email did not contain a data.link');
   }
-  const token = new URL(link).searchParams.get('verifyToken');
+  // ETP-6081: the welcome now mails the one-time login link (?loginToken=). Its token is stored as
+  // the confirmation token too, so either parameter confirms the address.
+  const params = new URL(link).searchParams;
+  const token = params.get('loginToken') || params.get('verifyToken');
   if (!token) {
-    throw new Error(`welcome email link carried no verifyToken: ${link}`);
+    throw new Error(`welcome email link carried no loginToken or verifyToken: ${link}`);
   }
   return token;
 }

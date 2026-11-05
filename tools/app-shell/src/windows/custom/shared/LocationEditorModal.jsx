@@ -1,11 +1,12 @@
 import {useState, useEffect, useMemo, useRef} from 'react';
 import {useUnsavedChangesGuard} from '@/hooks/useUnsavedChangesGuard.js';
-import {X, Loader2, Search, ChevronDown, Check} from 'lucide-react';
+import {X, Loader2, Search, ChevronDown, Check, Info, Lock} from 'lucide-react';
 import {useUI} from '@/i18n';
 import {toast} from 'sonner';
 import {SquareCheckbox} from './SquareCheckbox';
 import RequiredMark from '@/components/ui/required-mark.jsx';
 import {CopyButton} from '@/components/ui/copy-button.jsx';
+import {TONE_STYLES} from '@/components/ui/status-tag-tokens.js';
 import {
     DEFAULT_COUNTRY_LIMIT,
     DEFAULT_COUNTRY_QUERY,
@@ -46,6 +47,82 @@ const STREET_NAME_MAX_LENGTH = 70;
 const BUILDING_NUMBER_MAX_LENGTH = 16;
 const BUILDING_NAME_MAX_LENGTH = 35;
 
+// ETP-5806 follow-up (UX redesign) — Number is no longer mandatory. When the user leaves it
+// empty, this literal is used as the effective number both in the composed preview
+// (`composeAddressLines`) and in the save payload (`buildSavePayload`), matching the Spanish
+// addressing convention for "sin número". It is NOT translated — it is the same abbreviation
+// used in both locales (see `buildingNumberEmptyPlaceholder` in the locale files, used only
+// for the input's placeholder, not for this composed value).
+const EMPTY_BUILDING_NUMBER_FALLBACK = 's/n';
+
+/**
+ * Resolves the `buildingNumber` save value (ETP-5806 follow-up): structured mode only, and
+ * an empty Number is persisted as "s/n" ONLY once a street is present (matching the composed
+ * preview); with no street yet, an empty Number stays null rather than forcing the fallback.
+ */
+function resolveBuildingNumberForSave(structuredAddressEnabled, form) {
+    if (!structuredAddressEnabled) return null;
+    const hasStreet = (form.streetName || '').trim() !== '';
+    if (hasStreet) return form.buildingNumber.trim() || EMPTY_BUILDING_NUMBER_FALLBACK;
+    return form.buildingNumber.trim() || null;
+}
+
+// ETP-5806 follow-up — the resulting-address preview badge has exactly 3 states (legacy / auto /
+// complete); keyed lookup instead of nested ternaries so adding a state never means touching 4
+// near-identical conditionals at once.
+const ADDRESS_PREVIEW_BADGE_BY_STATE = {
+    legacy: {
+        key: 'addressPreviewLegacyBadge',
+        color: 'var(--status-neutral-fg)',
+        background: 'var(--status-neutral-bg)',
+        border: 'var(--status-neutral-border)',
+    },
+    complete: {
+        key: 'addressPreviewCompleteBadge',
+        color: 'var(--status-success-fg)',
+        background: 'var(--status-success-bg)',
+        border: 'var(--status-success-border)',
+    },
+    auto: {
+        key: 'addressPreviewAutoBadge',
+        color: 'var(--status-info-fg)',
+        background: 'var(--status-info-bg)',
+        border: 'var(--status-info-border)',
+    },
+};
+
+/**
+ * One row of the legacy-address banner's "old text" readout (ETP-5806 follow-up): a sub-label,
+ * a locked pill with the truncated value, and a copy button. `testId` is reused as the base for
+ * the copy button's id (`${testId}-copy`) — callers pass the existing
+ * `location-legacy-banner-address{1,2}` ids unchanged.
+ */
+function LegacyAddressLineRow({ label, value, testId }) {
+    return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', flexShrink: 0, minWidth: 140 }}>
+                {label}
+            </span>
+            <span
+                data-testid={testId}
+                style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '2px 10px', borderRadius: 9999,
+                    border: '1px solid hsl(var(--border-subtle))',
+                    background: 'hsl(var(--card))', fontSize: 12, color: 'hsl(var(--foreground))',
+                    maxWidth: '100%', minWidth: 0, overflow: 'hidden',
+                }}
+            >
+                <Lock size={12} style={{ color: 'hsl(var(--muted-foreground))', flexShrink: 0 }} data-testid="Lock__927831" />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {value}
+                </span>
+            </span>
+            <CopyButton value={value} data-testid={`${testId}-copy`} />
+        </div>
+    );
+}
+
 /** Concatenates two parts with `sep` only when BOTH are non-empty — mirrors Java's `append`. */
 function appendPart(base, sep, part) {
     if (!base) return part;
@@ -64,8 +141,19 @@ function appendPart(base, sep, part) {
  */
 function composeAddressLines(streetName, buildingNumber, buildingName) {
     const street = (streetName || '').trim();
-    const number = (buildingNumber || '').trim();
     const name = (buildingName || '').trim();
+    // ETP-5806 follow-up (bug fix) — a composed address line always needs a street as its
+    // base, exactly like the backend (StructuredAddressComposer never composes a line without
+    // one). Without this early return, an empty street + a typed Number ("1") produced
+    // address1 = "1" (via appendPart treating the falsy `street` as "nothing before, return
+    // the part"), which flipped the badge to "Completado" with no street ever entered.
+    if (!street) {
+        return {address1: '', address2: ''};
+    }
+    // Number is optional; an empty one composes as "s/n" rather than being dropped, so the
+    // preview (and the saved value, see `buildSavePayload`) shows a number component once a
+    // street is present.
+    const number = (buildingNumber || '').trim() || EMPTY_BUILDING_NUMBER_FALLBACK;
 
     const streetAndNumber = appendPart(street, ', ', number);
     const wholeAddress = appendPart(streetAndNumber, ' - ', name);
@@ -83,20 +171,25 @@ function composeAddressLines(streetName, buildingNumber, buildingName) {
 }
 
 /**
- * Whether a record has free-text Address1/Address2 but none of the 3 structured fields filled in.
+ * Whether a record has free-text Address1/Address2 but neither `streetName` nor
+ * `buildingNumber` filled in. `buildingName` is deliberately NOT part of `hasStructured`
+ * (QA gap found during ETP-5806 testing, fixed): it's an optional field that can hold an
+ * "orphan" value — set on a record whose address was never actually broken down — without
+ * that meaning the address is structured, so it must not mask real legacy text sitting in
+ * `address`/`address2`.
  *
  * Two callers, same test (ETP-5806, widened by ETP-5654 round 2):
  *   - EDIT mode: an EXISTING record loaded from the backend — "legacy" in the sense that it
  *     predates the structured fields and was never migrated.
  *   - CREATE mode: the seed patch applied by `applyInitialSeed` (e.g. OCR'd vendor address). A
- *     seed never carries the 3 structured fields (see `pickSeedText`), so this is true exactly
+ *     seed never carries the structured fields (see `pickSeedText`), so this is true exactly
  *     when the seed carried free-text `address` — i.e. "unstructured", not "legacy", but the same
  *     banner applies: the user must still fill Street/Number to be able to save.
  *   A brand-new, UNSEEDED address has every field empty and must NOT trigger this — empty is not
  *   unstructured, just unfilled yet.
  */
 function isLegacyAddressRecord(loaded) {
-    const hasStructured = Boolean(loaded.streetName || loaded.buildingNumber || loaded.buildingName);
+    const hasStructured = Boolean(loaded.streetName || loaded.buildingNumber);
     const hasLegacyText = Boolean(loaded.address || loaded.address2);
     return !hasStructured && hasLegacyText;
 }
@@ -264,14 +357,16 @@ async function resolveCountryOption({apiFetch, selectorBase, buildParams, prefer
 }
 
 /**
- * Save gating (ETP-5103, widened by ETP-5806): Street, Number, City and Country are the
- * mandatory fields (stricter than Classic, where the 3 SEPA fields are optional — a product
- * decision), and a save in flight or an in-progress initial load blocks too.
+ * Save gating (ETP-5103, widened by ETP-5806, loosened by the ETP-5806 follow-up UX redesign):
+ * Street, City and Country are the mandatory fields (stricter than Classic, where the 3 SEPA
+ * fields are optional — a product decision); Number is NOT mandatory — an empty one composes
+ * as "s/n" (see `composeAddressLines`/`buildSavePayload`) rather than blocking Save. A save in
+ * flight or an in-progress initial load blocks too.
  *
  * Module-level so the modal body stays flat — a chain of `||` inside the component
  * counts against its cognitive complexity, which is already at its budget.
  */
-function isSaveBlocked({saving, initialLoading, structuredAddressEnabled, address, streetName, buildingNumber, city, country}) {
+function isSaveBlocked({saving, initialLoading, structuredAddressEnabled, address, streetName, city, country}) {
     if (saving || initialLoading) return true;
     // ETP-5806 — `structured-address-for-sepa` (backend-only flag, TTL 2026-11-15) off: legacy mandatory
     // fields are just the free-text address line and country, matching pre-ETP-5806 behavior.
@@ -280,7 +375,6 @@ function isSaveBlocked({saving, initialLoading, structuredAddressEnabled, addres
         return country === '';
     }
     if (streetName.trim() === '') return true;
-    if (buildingNumber.trim() === '') return true;
     if (city.trim() === '') return true;
     return country === '';
 }
@@ -532,6 +626,10 @@ export default function LocationEditorModal({
     // ETP-5806 — true for an EXISTING record that has free-text Address1/Address2 but none of
     // the 3 structured fields; drives the legacy-address warning banner.
     const [isLegacyAddress, setIsLegacyAddress] = useState(false);
+    // ETP-5806 follow-up — lets the user dismiss the legacy-address banner once they have
+    // copied what they needed into Street/Number/Building Name. Reset on every modal open
+    // (see the reset block below) so it never carries over into the next record.
+    const [legacyBannerDismissed, setLegacyBannerDismissed] = useState(false);
     const [countryPickerOpen, setCountryPickerOpen] = useState(false);
     const [countryQuery, setCountryQuery] = useState('');
     const [regionPickerOpen, setRegionPickerOpen] = useState(false);
@@ -612,7 +710,6 @@ export default function LocationEditorModal({
         structuredAddressEnabled,
         address: form.address,
         streetName: form.streetName,
-        buildingNumber: form.buildingNumber,
         city: form.city,
         country: form.country,
     });
@@ -638,6 +735,7 @@ export default function LocationEditorModal({
         baselineRef.current = EMPTY_FORM;
         setAttemptedSave(false);
         setIsLegacyAddress(false);
+        setLegacyBannerDismissed(false);
         const seedPatch = applyInitialSeed({initialValues, rowId: bplLinkId, setForm, baselineRef});
         // ETP-5654 round 2 — a CREATE seeded with OCR free text (address) but no structured
         // breakdown shows the same banner an EDIT of a legacy record does (see
@@ -1095,9 +1193,12 @@ export default function LocationEditorModal({
             // own legacy branch (streetName blank, which `saveDisabled` never lets through here).
             addressLine1: addressLine1 || null,
             addressLine2: addressLine2 || null,
-            streetName: structuredAddressEnabled ? (form.streetName || null) : null,
-            buildingNumber: structuredAddressEnabled ? (form.buildingNumber || null) : null,
-            buildingName: structuredAddressEnabled ? (form.buildingName || null) : null,
+            streetName: structuredAddressEnabled ? (form.streetName.trim() || null) : null,
+            // ETP-5806 follow-up — Number is optional; an empty one is persisted as "s/n"
+            // (see EMPTY_BUILDING_NUMBER_FALLBACK / composeAddressLines) so the stored value
+            // matches what the preview showed, rather than persisting an empty string.
+            buildingNumber: resolveBuildingNumberForSave(structuredAddressEnabled, form),
+            buildingName: structuredAddressEnabled ? (form.buildingName.trim() || null) : null,
             postalCode: form.postalCode || null,
             cityName: form.city || null,
             country: form.country || null,
@@ -1268,36 +1369,70 @@ export default function LocationEditorModal({
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
                             {/* ETP-5806 — legacy-address banner: an EXISTING record with free-text
-                                Address1/Address2 but no structured breakdown. The old text is kept
-                                read-only as reference (never editable again) with a Copy button;
-                                Save stays disabled until Street and Number are filled in below. */}
-                            {structuredAddressEnabled && isLegacyAddress && (
+                                Address1/Address2 but no structured breakdown. Save stays disabled
+                                until Street and Number are filled in below.
+
+                                ETP-5806 follow-up round 2 — the old Línea 1/2 text is surfaced
+                                HERE, fixed, so the user can copy either line at any point while
+                                filling Street/Number/Building Name. `isLegacyAddress` is seeded
+                                once when the modal opens/loads (see the `useEffect`s calling
+                                `setIsLegacyAddress`) and never flips back to false while the user
+                                types, so gating this banner on `isLegacyAddress` alone already
+                                makes it persistent — no extra "has the user finished pasting"
+                                state needed. Do NOT reintroduce a condition on
+                                form.streetName/buildingNumber/buildingName here: that was the bug
+                                — as soon as the user pasted the old first line into Calle, the
+                                second line vanished from the (then reactive) preview before they
+                                had a chance to copy it. */}
+                            {structuredAddressEnabled && isLegacyAddress && !legacyBannerDismissed && (
                                 <div
                                     data-testid="location-legacy-address-banner"
                                     style={{
                                         display: 'flex', flexDirection: 'column', gap: 8,
                                         padding: '10px 12px', borderRadius: 8,
-                                        border: '1px solid hsl(var(--warning, 38 92% 50%) / .4)',
-                                        background: 'hsl(var(--warning, 38 92% 50%) / .08)',
+                                        border: `1px solid ${TONE_STYLES.info.color}33`,
+                                        background: TONE_STYLES.info.background,
                                     }}
                                 >
-                                    <div style={{ fontSize: 13, color: 'hsl(var(--foreground))' }}>
-                                        {ui('legacyAddressWarning')}
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))' }}>
-                                                {ui('legacyAddressOldTextLabel')}
-                                            </div>
-                                            <div style={{ fontSize: 13, color: 'hsl(var(--foreground))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                {[form.address, form.address2].filter(Boolean).join(', ')}
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                                            <Info
+                                                size={16}
+                                                style={{ color: TONE_STYLES.info.color, flexShrink: 0, marginTop: 1 }}
+                                                data-testid="Info__location-legacy-banner" />
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                                <div style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
+                                                    {ui('legacyAddressBannerTitle')}
+                                                </div>
+                                                <div style={{ fontSize: 13, color: 'hsl(var(--foreground))' }}>
+                                                    {ui('legacyAddressWarning')}
+                                                </div>
                                             </div>
                                         </div>
-                                        <CopyButton
-                                            value={[form.address, form.address2].filter(Boolean).join(', ')}
-                                            data-testid="location-legacy-address-copy"
-                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setLegacyBannerDismissed(true)}
+                                            aria-label={ui('close')}
+                                            data-testid="location-legacy-banner-dismiss"
+                                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, flexShrink: 0, display: 'flex', alignItems: 'center' }}
+                                        >
+                                            <X size={14} style={{ color: 'hsl(var(--text-disabled))' }} data-testid="X__location-legacy-banner-dismiss" />
+                                        </button>
                                     </div>
+                                    <LegacyAddressLineRow
+                                        label={ui('legacyAddressOldTextLabel')}
+                                        value={form.address}
+                                        testId="location-legacy-banner-address1"
+                                        data-testid="LegacyAddressLineRow__927831"
+                                    />
+                                    {Boolean(form.address2) && (
+                                        <LegacyAddressLineRow
+                                            label={ui('legacyAddressOldTextLabel2')}
+                                            value={form.address2}
+                                            testId="location-legacy-banner-address2"
+                                            data-testid="LegacyAddressLineRow__927831"
+                                        />
+                                    )}
                                 </div>
                             )}
 
@@ -1318,11 +1453,8 @@ export default function LocationEditorModal({
                             {/* Número + Nombre del edificio en grid */}
                             <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 12 }}>
                                 <div>
-                                    <div style={FIELD_LABEL}>{ui('buildingNumberLabel')}<RequiredMark data-testid="RequiredMark__927831" /></div>
-                                    <input type="text" maxLength={BUILDING_NUMBER_MAX_LENGTH} value={form.buildingNumber} onChange={e => setField('buildingNumber', e.target.value)} data-testid="location-field-buildingNumber" style={INPUT} />
-                                    {attemptedSave && form.buildingNumber.trim() === '' && (
-                                        <div style={FIELD_ERROR}>{ui('fieldRequiredMessage')}</div>
-                                    )}
+                                    <div style={FIELD_LABEL}>{ui('buildingNumberLabel')}</div>
+                                    <input type="text" maxLength={BUILDING_NUMBER_MAX_LENGTH} value={form.buildingNumber} onChange={e => setField('buildingNumber', e.target.value)} placeholder={ui('buildingNumberEmptyPlaceholder')} data-testid="location-field-buildingNumber" style={INPUT} />
                                 </div>
                                 <div>
                                     <div style={FIELD_LABEL}>{ui('buildingNameLabel')}</div>
@@ -1335,23 +1467,94 @@ export default function LocationEditorModal({
                                 backend applies on save) and shown here read-only as a preview.
                                 Both rows are ALWAYS visible (Primera línea / Segunda línea), each
                                 with its own sub-label, "—" when empty — matching the design's
-                                "alta vacía" state. Do not collapse this back into one line. */}
+                                "alta vacía" state. Do not collapse this back into one line.
+
+                                ETP-5806 follow-up round 2 — while the record is still a legacy
+                                address AND the composed Primera línea isn't ready yet (Calle+Número
+                                not both complete), this section shows the OLD free-text Línea 1/2
+                                instead of the (still incomplete) composed preview, with the
+                                "Anterior" badge — read-only, no copy button here. Copying the old
+                                text now happens from the fixed banner above
+                                (`location-legacy-address-banner`), which stays visible regardless
+                                of what the user has typed, so there is no reason to duplicate the
+                                copy action here. As soon as composedAddress.address1 stops being
+                                empty (Calle+Número complete — the same condition that already
+                                drives the "Completado" badge below), the preview jumps straight to
+                                the normal composed behavior: a legacy record goes directly from
+                                "Anterior" to "Completado", with no intermediate "Automático" state.
+                                Deliberately NOT gated on
+                                form.streetName/buildingNumber/buildingName: that was the previous
+                                bug — the old second line disappeared from here the instant the user
+                                pasted the old first line into Calle, before they could copy it. */}
+                            {(() => {
+                                const showingLegacyPreview = isLegacyAddress && !composedAddress.address1;
+                                const line1 = showingLegacyPreview ? (form.address || '') : composedAddress.address1;
+                                const line2 = showingLegacyPreview ? (form.address2 || '') : composedAddress.address2;
+                                let addressPreviewState;
+                                if (showingLegacyPreview) addressPreviewState = 'legacy';
+                                else if (composedAddress.address1) addressPreviewState = 'complete';
+                                else addressPreviewState = 'auto';
+                                const {
+                                    key: badgeKey,
+                                    color: badgeColor,
+                                    background: badgeBackground,
+                                    border: badgeBorder,
+                                } = ADDRESS_PREVIEW_BADGE_BY_STATE[addressPreviewState];
+                                return (
                             <div>
-                                <div style={FIELD_LABEL}>{ui('resultingAddressLabel')}</div>
                                 <div
                                     data-testid="location-resulting-address-preview"
                                     style={{ ...INPUT, display: 'flex', flexDirection: 'column', justifyContent: 'center', height: 'auto', minHeight: 40, background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))', gap: 6, paddingTop: 8, paddingBottom: 8 }}
                                 >
-                                    <div style={{ display: 'flex', gap: 8 }}>
-                                        <span style={{ fontSize: 12, minWidth: 100, flexShrink: 0, color: 'hsl(var(--muted-foreground))' }}>{ui('addressLine1Label')}</span>
-                                        <span data-testid="location-resulting-address1">{composedAddress.address1 || '—'}</span>
+                                    <div style={{ ...FIELD_LABEL, fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 2 }}>
+                                        <span>{ui('resultingAddressLabel')}</span>
+                                        {/* ETP-5806 follow-up — "Automático" by default, "Completado" once
+                                            Street+Number already compose a Primera línea (composedAddress.address1
+                                            non-empty), "Anterior" (neutral tone, no check) while showing the
+                                            old legacy text. Deliberately NOT gated on Segunda línea: the building
+                                            name is optional and sometimes doesn't even reach the second line.
+                                            Custom pill (not StatusTag, which has no border/icon support) so
+                                            "Completado" can carry a check icon and a darker border, matching
+                                            the design — same --status-success-… / --status-info-… / --status-neutral-…
+                                            CSS vars FiscalStatusBadge.jsx already uses for this exact bordered-pill look. */}
+                                        <span
+                                            data-testid="location-address-preview-badge"
+                                            style={{
+                                                display: 'inline-flex', alignItems: 'center', gap: 4,
+                                                padding: '2px 8px', borderRadius: 99, fontSize: 11, fontWeight: 500, lineHeight: '18px',
+                                                color: badgeColor,
+                                                background: badgeBackground,
+                                                border: `1px solid ${badgeBorder}`,
+                                            }}
+                                        >
+                                            {!showingLegacyPreview && composedAddress.address1 && <Check size={11} style={{ flexShrink: 0 }} data-testid="Check__927831" />}
+                                            {ui(badgeKey)}
+                                        </span>
                                     </div>
-                                    <div style={{ display: 'flex', gap: 8 }}>
+                                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                        <span style={{ fontSize: 12, minWidth: 100, flexShrink: 0, color: 'hsl(var(--muted-foreground))' }}>{ui('addressLine1Label')}</span>
+                                        <span
+                                            data-testid="location-resulting-address1"
+                                            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '2px 10px', borderRadius: 9999, border: '1px solid hsl(var(--border-subtle))', background: 'hsl(var(--card))', fontSize: 12, color: 'hsl(var(--foreground))' }}
+                                        >
+                                            <Lock size={12} style={{ color: 'hsl(var(--muted-foreground))', flexShrink: 0 }} data-testid="Lock__927831" />
+                                            {line1 || '—'}
+                                        </span>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                         <span style={{ fontSize: 12, minWidth: 100, flexShrink: 0, color: 'hsl(var(--muted-foreground))' }}>{ui('addressLine2Label')}</span>
-                                        <span data-testid="location-resulting-address2">{composedAddress.address2 || '—'}</span>
+                                        <span
+                                            data-testid="location-resulting-address2"
+                                            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '2px 10px', borderRadius: 9999, border: '1px solid hsl(var(--border-subtle))', background: 'hsl(var(--card))', fontSize: 12, color: 'hsl(var(--foreground))' }}
+                                        >
+                                            <Lock size={12} style={{ color: 'hsl(var(--muted-foreground))', flexShrink: 0 }} data-testid="Lock__927831" />
+                                            {line2 || '—'}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
+                                );
+                            })()}
                             </>
                             ) : (
                             <>
@@ -1444,7 +1647,9 @@ export default function LocationEditorModal({
                                 the AD's IsShipTo/IsBillTo labels, so the rename stays scoped to this modal
                                 instead of relabeling every other screen that reads those AD labels. */}
                             {showAddressTypeCheckboxes && (
-                            <div style={{ display: 'flex', gap: 24, paddingTop: 4 }}>
+                            <div>
+                                <div style={FIELD_LABEL}>{ui('addressUsageSectionLabel')}</div>
+                                <div style={{ display: 'flex', gap: 24, paddingTop: 4 }}>
                                 <SquareCheckbox
                                     label={ui('shippingAddressLabel')}
                                     checked={form.shipToAddress}
@@ -1455,6 +1660,7 @@ export default function LocationEditorModal({
                                     checked={form.invoiceToAddress}
                                     onChange={val => setField('invoiceToAddress', val)}
                                     data-testid="SquareCheckbox__location-invoicing" />
+                                </div>
                             </div>
                             )}
 

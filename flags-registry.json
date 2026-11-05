@@ -1620,7 +1620,7 @@
     },
     {
       "id": "invoice-inbox",
-      "description": "Invoice Inbox (epic ETP-6046; ETP-6047 flag and upload, ETP-6048 background reading): incoming supplier documents uploaded, run through OCR and turned into purchase invoices. Backend-only flag for now, evaluated per account. Off refuses the inbox upload endpoint before any OCR work is enqueued; the background worker that reads each accepted document (OCR, matching, validation) is only reachable through that upload. The ETGO_INCOMING_DOCUMENT table and the Invoice Inbox window ship unconditionally: the flag gates behaviour, not schema.",
+      "description": "Invoice Inbox (epic ETP-6046; ETP-6047 flag and upload, ETP-6048 background reading): incoming supplier documents uploaded, run through OCR and turned into purchase invoices. Backend-only flag for now, evaluated per account. Off refuses the inbox upload endpoint before any OCR work is enqueued, every read of the invoice-inbox spec and the discard action (ETP-6049) (403 feature_disabled); the background worker that reads each accepted document (OCR, matching, validation) is only reachable through that upload. The ETGO_INCOMING_DOCUMENT table and the Invoice Inbox window ship unconditionally: the flag gates behaviour, not schema.",
       "owner": "ivanrobledofutit",
       "jira": "ETP-6047",
       "created": "2026-11-02",
@@ -1628,20 +1628,55 @@
         "key": "invoice-inbox",
         "defaultValue": false,
         "ttl": "2027-01-31",
-        "ttlNote": "PROVISIONAL, pending confirmation with product (epic ETP-6046). Retirement means the inbox ships to everyone: unwrap the upload endpoint toggle point(s) that call InvoiceInboxFlag, delete InvoiceInboxFlag.java and its test, delete FLAG_INVOICE_INBOX from GoFeatureFlags, remove the com.etendoerp.go docs section and configuration-table row, delete the hosted Datadog setting, and (once ETP-6049 adds it) the INVOICE_INBOX key in flag-keys.js with its toggle points; delete the flag object, keep this entry. Retirement does NOT remove the background worker (InvoiceInboxProcessor, InvoiceInboxWorkStore), the stalled-row sweeper (InvoiceInboxSweeperStartup), the validator and status policy, the matchers, or the shared OCR changes (total_amount in ocr-config.json, retryable OcrUnavailableException, TaxIdNormalizer, vendor tax id lookups): they ship permanently.",
+        "ttlNote": "PROVISIONAL, pending confirmation with product (epic ETP-6046). Retirement means the inbox ships to everyone: unwrap the upload endpoint toggle point(s) that call InvoiceInboxFlag and remove the flag gate from InvoiceInboxHeaderHandler (the handler STAYS: it serves the discard action), delete InvoiceInboxFlag.java and its test, delete FLAG_INVOICE_INBOX from GoFeatureFlags, remove the com.etendoerp.go docs section and configuration-table row, delete the hosted Datadog setting, remove the invoiceInbox capability from SFWindowAccessMap (INVOICE_INBOX constant and its put) together with InvoiceInboxFlag.isEnabledFor, and in the SPA drop the capability key from the menu.json item, the capability check in windows/custom/invoice-inbox/index.jsx and INVOICE_INBOX_CAPABILITY from lib/capabilityVisibility.js (the window access check stays); delete the flag object, keep this entry. Retirement does NOT remove the background worker (InvoiceInboxProcessor, InvoiceInboxWorkStore), the stalled-row sweeper (InvoiceInboxSweeperStartup), the validator and status policy, the matchers, or the shared OCR changes (total_amount in ocr-config.json, retryable OcrUnavailableException, TaxIdNormalizer, vendor tax id lookups): they ship permanently.",
         "symbols": [
           "invoice-inbox",
           "FLAG_INVOICE_INBOX",
-          "InvoiceInboxFlag"
+          "InvoiceInboxFlag",
+          "invoiceInbox",
+          "INVOICE_INBOX_CAPABILITY"
         ],
-        "$symbolsComment": "Backend-only flag: no key in flag-keys.js yet (ETP-6049 adds INVOICE_INBOX when there is UI). ETGO_FLAG_INVOICE_INBOX is the local env arm and is not listed as a symbol: it is only spelled in docs and javadoc. The backend is the only evaluator."
+        "$symbolsComment": "Backend-only flag: no key in flag-keys.js, on purpose (docs/feature-flags.md, backend-only flags). The frontend trail is the capability name: since ETP-6049 the browser reads capabilities.invoiceInbox off SFWindowAccessMap (INVOICE_INBOX_CAPABILITY in lib/capabilityVisibility.js, the capability key of the menu.json item). ETGO_FLAG_INVOICE_INBOX is the local env arm and is not listed as a symbol: it is only spelled in docs and javadoc. The backend is the only evaluator.",
+        "capability": {
+          "field": "invoiceInbox",
+          "sources": [
+            "com.etendoerp.go SFWindowAccessMap webhook response (capabilities.invoiceInbox, ETP-6049) -- InvoiceInboxFlag.isEnabledFor(account email) evaluated per account with the tenant as clientId, admins included"
+          ]
+        }
       },
-      "$gatingComment": "ONE evaluator, the backend (InvoiceInboxFlag), evaluated at REQUEST ENTRY. Targeted PER ACCOUNT: FeatureFlagContext.forAccount(<ETGO_ACCOUNT email of the request user, via GoAccountResolver.currentAccountEmail()>).with(clientId); the targeting key, `Email` and lowercase `email` carry the account. Datadog rules are written on the lowercase `email` attribute only (never identifier, percentage or tenant attribute), because the web client and the backend use different targeting keys. With no resolvable account the context carries clientId only and the default stays off; never throws. The asynchronous OCR worker has no OBContext user, so it must NOT re-evaluate the flag; off-request callers use InvoiceInboxFlag.isEnabled(accountEmail, clientId) with values captured at request entry. Local: etendo.go.flags.invoice-inbox / ETGO_FLAG_INVOICE_INBOX (Tomcat restart). Hosted rollout: create the boolean setting `invoice-inbox` (default false) in Datadog Experimental/Production BEFORE targeting anyone. The toggle point is InvoiceInboxUploadEndpoint (POST /sws/neo/invoice-inbox/upload), which refuses with 403 feature_disabled before reading the multipart. ETP-6048 adds no second evaluator: everything it added is only REACHABLE through that gated upload. The worker (InvoiceInboxProcessor, which the upload endpoint feeds through InvoiceInboxProcessor.submit) and the sweeper never evaluate the flag by design: a PROCESSING row exists only because the flag was on at upload, so turning the flag off does NOT stop rows already queued or processing. Pieces that run REGARDLESS of the flag (removal cost and blast radius): (a) InvoiceInboxSweeperStartup, a SessionAwareStartup that runs at every startup and every 2 minutes and scans etgo_incoming_document for stalled PROCESSING rows, a no-op when the table has none; (b) the SHARED OCR schema ocr/ocr-config.json gained total_amount (number|null, in required), which also changes the schema served by GET /sws/neo/ocrconfig to the SPA 'Extraer y completar' of /purchase-invoice and to the MCP: verified manually and by the 577 SPA vitests, no behavior change; (c) shared OCR client changes: OcrUnavailableException.retryable (the old constructor stays retryable) and CopilotOcrServiceClient classifying HTTP failures through HttpStatusException; (d) ReceiverTaxIdCheck now delegates to the new TaxIdNormalizer; (e) PurchaseInvoiceOcrLookups has new vendorsByTaxId and vendorTaxId, organizationTaxId now reads through OBDal.getInstance(), and selector failures log WARN, while OcrLookups gained default methods vendorsByTaxId and vendorTaxId; (f) three new columns on ETGO_INCOMING_DOCUMENT (PROCESSING_ATTEMPTS, PROCESSING_LEASE, PROCESSED_AT) ship unconditionally: the flag gates behaviour, not schema.",
+      "$gatingComment": "ONE evaluator, the backend (InvoiceInboxFlag), evaluated at REQUEST ENTRY. Targeted PER ACCOUNT: FeatureFlagContext.forAccount(<ETGO_ACCOUNT email of the request user, via GoAccountResolver.currentAccountEmail()>).with(clientId); the targeting key, `Email` and lowercase `email` carry the account. Datadog rules are written on the lowercase `email` attribute only (never identifier, percentage or tenant attribute), because the web client and the backend use different targeting keys. With no resolvable account the context carries clientId only and the default stays off; never throws. The asynchronous OCR worker has no OBContext user, so it must NOT re-evaluate the flag; off-request callers use InvoiceInboxFlag.isEnabled(accountEmail, clientId) with values captured at request entry. Local: etendo.go.flags.invoice-inbox / ETGO_FLAG_INVOICE_INBOX (Tomcat restart). Hosted rollout: create the boolean setting `invoice-inbox` (default false) in Datadog Experimental/Production BEFORE targeting anyone. Toggle points: (1) InvoiceInboxUploadEndpoint (POST /sws/neo/invoice-inbox/upload), which refuses with 403 feature_disabled before reading the multipart; (2) since ETP-6049, SFWindowAccessMap publishes the same evaluation as capabilities.invoiceInbox, read by the SPA in two places only: the menu item (menu.json capability key) and the page guard (windows/custom/invoice-inbox/index.jsx). Still ONE evaluator: the browser never evaluates the flag. The capability is NOT access control by itself, but the API is gated too: (3) InvoiceInboxHeaderHandler, an @NeoExtension(spec=invoice-inbox, entity=header) pre-hook, refuses EVERY request on the spec (REST list/getById and MCP etendo_list/etendo_get, same NeoExtensionDispatcher READ surface) with the same 403 feature_disabled when the flag is off; flag on it returns null and the default handling runs, except for the discard action (POST .../header/{id}/action/discard, ETP-6049), which the same handle serves AFTER the flag check, so the action is behind the same gate with no second evaluation point; the page itself also requires the window access. A flag change reaches the SPA on the next access-map load. ETP-6048 adds no second evaluator: everything it added is only REACHABLE through that gated upload. The worker (InvoiceInboxProcessor, which the upload endpoint feeds through InvoiceInboxProcessor.submit) and the sweeper never evaluate the flag by design: a PROCESSING row exists only because the flag was on at upload, so turning the flag off does NOT stop rows already queued or processing. Pieces that run REGARDLESS of the flag (removal cost and blast radius): (a) InvoiceInboxSweeperStartup, a SessionAwareStartup that runs at every startup and every 2 minutes and scans etgo_incoming_document for stalled PROCESSING rows, a no-op when the table has none; (b) the SHARED OCR schema ocr/ocr-config.json gained total_amount (number|null, in required), which also changes the schema served by GET /sws/neo/ocrconfig to the SPA 'Extraer y completar' of /purchase-invoice and to the MCP: verified manually and by the 577 SPA vitests, no behavior change; (c) shared OCR client changes: OcrUnavailableException.retryable (the old constructor stays retryable) and CopilotOcrServiceClient classifying HTTP failures through HttpStatusException; (d) ReceiverTaxIdCheck now delegates to the new TaxIdNormalizer; (e) PurchaseInvoiceOcrLookups has new vendorsByTaxId and vendorTaxId, organizationTaxId now reads through OBDal.getInstance(), and selector failures log WARN, while OcrLookups gained default methods vendorsByTaxId and vendorTaxId; (f) three new columns on ETGO_INCOMING_DOCUMENT (PROCESSING_ATTEMPTS, PROCESSING_LEASE, PROCESSED_AT) ship unconditionally: the flag gates behaviour, not schema.",
       "paths": {
-        "frontend": [],
+        "frontend": [
+          "tools/app-shell/src/windows/custom/invoice-inbox/index.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxPage.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxToolbar.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxTable.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxCells.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxDropZone.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxDragOverlay.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxUploadTray.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxSelectionBar.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxRowActions.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxDiscardDialog.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxFilters.js",
+          "tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxApi.js",
+          "tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxMessages.js",
+          "tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxUploadPolicy.js",
+          "tools/app-shell/src/windows/custom/invoice-inbox/useInvoiceInboxList.js",
+          "tools/app-shell/src/windows/custom/invoice-inbox/useInvoiceInboxUpload.js",
+          "tools/app-shell/src/windows/custom/invoice-inbox/useInvoiceInboxDiscard.js",
+          "tools/app-shell/src/windows/custom/invoice-inbox/useProcessingRowsPoll.js",
+          "tools/app-shell/src/windows/custom/invoice-inbox/useInboxFileDrop.js",
+          "tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxUploadLog.js",
+          "tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxUploadResult.js",
+          "tools/app-shell/src/windows/custom/invoice-inbox/useInvoiceInboxUploadResult.js",
+          "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxUploadResult.jsx"
+        ],
         "backend": [
           "src/com/etendoerp/go/schemaforge/InvoiceInboxFlag.java",
           "src/com/etendoerp/go/schemaforge/InvoiceInboxUploadEndpoint.java",
+          "src/com/etendoerp/go/schemaforge/InvoiceInboxHeaderHandler.java",
+          "src/com/etendoerp/go/schemaforge/InvoiceInboxDiscard.java",
           "src/com/etendoerp/go/schemaforge/InvoiceInboxIntake.java",
           "src/com/etendoerp/go/schemaforge/InvoiceInboxMessages.java",
           "src/com/etendoerp/go/schemaforge/InvoiceInboxProcessor.java",
@@ -1657,7 +1692,7 @@
           "src/com/etendoerp/go/startup/InvoiceInboxSweeperStartup.java"
         ]
       },
-      "$pathsComment": "Owned code only. GoFeatureFlags.java is framework. The ONE toggle point is InvoiceInboxUploadEndpoint (the flag check at the top of handle(), at request entry); InvoiceInboxIntake and InvoiceInboxMessages are the endpoint's per-file work and texts. Shared code that only delegates, listed for removal cost: NeoBuiltInEndpointHandler.java (the one `invoice-inbox` / `upload` / POST branch, which stays after retirement because it is the route), NeoServlet.java (maxRequestSize 210 MB, stays). Also a touch point (shared, removal cost none): src/com/etendoerp/go/roles/TemplateRoleWindowAccess.java and src-util/modulescript/.../EnsureSystemRoleTemplatesScript.java carry the Invoice Inbox window grant (full for Compras and Financiero); the grant stays after retirement. NeoAttachmentPolicy.java holds the 210 MB request constants and stays. ETP-6048 owned files are the worker (InvoiceInboxProcessor, InvoiceInboxWorkStore), the validator and status policy (InvoiceInboxValidator, InvoiceInboxStatusPolicy, InvoiceInboxSummary), the matchers and tax id normalizer under schemaforge/ocr/, and InvoiceInboxSweeperStartup under startup/. They carry no flag check of their own: the only toggle point stays InvoiceInboxUploadEndpoint, which also hands each accepted row to InvoiceInboxProcessor.submit. Shared files ETP-6048 touched (NOT owned, they stay after retirement, listed for removal cost): ocr/ocr-config.json, ocr/OcrLookups.java, ocr/OcrUnavailableException.java, ocr/CopilotOcrServiceClient.java, ocr/ReceiverTaxIdCheck.java, schemaforge/PurchaseInvoiceOcrLookups.java, schemaforge/NeoAttachmentsHelper.java (new copyMainAttachmentToTemp), schemaforge/InvoiceInboxIntake.java (processingAttempts starts at 0).",
+      "$pathsComment": "Owned code only. Frontend (ETP-6049): the invoice-inbox custom window; the page ships with the feature and stays after flag retirement (only the capability check in index.jsx is a toggle point). Shared SPA files the flag merely touches, not listed: menu.json (the Purchases item with accessWindowId + capability), lib/capabilityVisibility.js (INVOICE_INBOX_CAPABILITY), windows/registry.js (customLoaders entry), components/contract-ui/SegmentedTabs.jsx (optional count), the three locale files; backend SFWindowAccessMap.java (capability) is shared too. GoFeatureFlags.java is framework. The ONE toggle point is InvoiceInboxUploadEndpoint (the flag check at the top of handle(), at request entry); InvoiceInboxIntake and InvoiceInboxMessages are the endpoint's per-file work and texts. Shared code that only delegates, listed for removal cost: NeoBuiltInEndpointHandler.java (the one `invoice-inbox` / `upload` / POST branch, which stays after retirement because it is the route), NeoServlet.java (maxRequestSize 210 MB, stays). Also a touch point (shared, removal cost none): src/com/etendoerp/go/roles/TemplateRoleWindowAccess.java and src-util/modulescript/.../EnsureSystemRoleTemplatesScript.java carry the Invoice Inbox window grant (full for Compras and Financiero); the grant stays after retirement. NeoAttachmentPolicy.java holds the 210 MB request constants and stays. ETP-6048 owned files are the worker (InvoiceInboxProcessor, InvoiceInboxWorkStore), the validator and status policy (InvoiceInboxValidator, InvoiceInboxStatusPolicy, InvoiceInboxSummary), the matchers and tax id normalizer under schemaforge/ocr/, and InvoiceInboxSweeperStartup under startup/. They carry no flag check of their own: the only toggle point stays InvoiceInboxUploadEndpoint, which also hands each accepted row to InvoiceInboxProcessor.submit. Shared files ETP-6048 touched (NOT owned, they stay after retirement, listed for removal cost): ocr/ocr-config.json, ocr/OcrLookups.java, ocr/OcrUnavailableException.java, ocr/CopilotOcrServiceClient.java, ocr/ReceiverTaxIdCheck.java, schemaforge/PurchaseInvoiceOcrLookups.java, schemaforge/NeoAttachmentsHelper.java (new copyMainAttachmentToTemp), schemaforge/InvoiceInboxIntake.java (processingAttempts starts at 0).",
       "testSpecs": {
         "$testSpecsComment": "Backend specs are tester-go's. All are written and pass: the gate, the upload endpoint (toggle point), the intake, the messages, the shared specs and one DB-backed integration test (WeldBaseTest: the attachment manager is resolved through the Weld static bean manager, absent under a plain OBBaseTest). The environment-variable spelling of the local arm cannot be set from the JVM, so only the property is tested. ETP-6048 specs are written and pass in the same way; the work-store, inbox-duplicates and vendor-tax-id integration tests are DB-backed (WeldBaseTest).",
         "unit": [
@@ -1785,26 +1820,72 @@
             "root": "backend",
             "path": "src-test/src/com/etendoerp/go/schemaforge/ocr/OcrSanitizerTest.java",
             "note": "Shared spec, extended (ETP-6048): the packaged schema keeps a printed total (number or numeric string), reads a missing total as null, and a hostile total becomes null."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/invoiceInboxFilters.test.js",
+            "expected": true,
+            "note": "ETP-6049 (tester-functional, node --test): criteria per tab, all = two streams ERROR then rest, withAllCount/workCount, isSelectableRow, buildListQuery (_noCount=false only for counters, _extraProperties otherwise, -created sort)."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/invoiceInboxUploadPolicy.test.js",
+            "expected": true,
+            "note": "ETP-6049 (tester-functional, node --test): 21 files blocked, mixed formats split, empty and over 10 MB refused, upper-case extensions accepted, selectionWarnings keys one/many with file names."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/invoiceInboxApi.test.js",
+            "expected": true,
+            "note": "ETP-6049 (tester-functional): fetchNextPage walks stream A then B across pages without overlap, over-fetch of one row decides more; fetchCounts sends _noCount=false; uploadInboxFile maps 200 accepted/rejected and non-2xx error.code, sends one FormData part files with timeout 0. To extend (ETP-6049 discard): discardInboxDocument posts to /header/{encoded id}/action/discard with no body and timeout 0, maps 200 to discarded and a non-2xx answer to failed with error.code and httpStatus, lets NetworkError propagate."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/useInvoiceInboxUpload.vitest.js",
+            "expected": true,
+            "note": "ETP-6049 (tester-functional): one request per file, concurrency 2, done/total, rejected reason by code, queue stopped on org_not_allowed/feature_disabled/access_denied, NetworkError message, onAccepted per delivered file."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/useProcessingRowsPoll.vitest.js",
+            "expected": true,
+            "note": "ETP-6049 (tester-functional, fake timers): polls only with PROCESSING ids, backoff 3 s to 30 s, reset on change and resetKey, gives up after 15 min, paused while document hidden."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/InvoiceInboxPage.vitest.jsx",
+            "expected": true,
+            "note": "ETP-6049 (tester-functional): route guard (capability off or tier none -> access denied), page meta title and work counter, tab change clears selection, cells (linked / extracted / no data vendor, duplicate icon hidden on CONFIRMED, PROCESSING placeholders, error reason by code), selection bar buttons disabled, empty states. To update (ETP-6049 discard): Discard enabled and Confirm disabled; discard flow OK -> toast, list and counters reloaded, selection empty; partial -> warning; double click -> one batch; row trash opens the dialog with count 1; DISCARDED row shows Descartada el {date}."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/useInvoiceInboxDiscard.vitest.js",
+            "expected": true,
+            "note": "ETP-6049 discard (tester-functional): runDiscardQueue sends one request per row, at most 3 in flight; 409/404/org_not_allowed fail only that row; feature_disabled, code-less 403 and NetworkError stop the rest (notSent); discardToast success one/many, partial warning, error, reason stopping/common/generic; the hook filters non-selectable rows, exposes running and refuses a second batch while running, stops sending after unmount."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/InvoiceInboxDiscardDialog.vitest.jsx",
+            "expected": true,
+            "note": "ETP-6049 discard (tester-functional): title for 1 and N, body without a 30-day purge text, focus on Cancel at open, running locks Escape/outside/Cancel and shows the spinner."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/InvoiceInboxRowActions.vitest.jsx",
+            "expected": true,
+            "note": "ETP-6049 discard (tester-functional): PROCESSING renders nothing; CONFIRMED/DISCARDED render edit and kebab without trash; PENDING_REVIEW/ERROR/READY render the trash, which calls onDiscard(row); edit and kebab are aria-disabled, call nothing and show the coming-soon tooltip."
+          }
+        ],
+        "e2e": [
+          {
+            "root": "frontend",
+            "path": "e2e/tests/flows/purchases/invoice-inbox-upload-and-status.mocked.spec.js",
+            "expected": true,
+            "note": "ETP-6049 (tester-functional): menu entry with the capability, upload of two mocked files (X of N), more than 20 refused with no request, PROCESSING row turning PENDING_REVIEW through polling, counters, empty tab, batch bar with Confirm disabled. To extend (discard): select 2 -> dialog -> confirm -> two POST .../action/discard -> toast -> counters; a partial batch with a mocked 409; the row trash on hover. File names here are proposals; the tester may extend existing files per docs/testing/test-reuse-policy.md and update these paths."
           }
         ]
       },
       "deferredItems": [
-        {
-          "id": "web-key-with-ui",
-          "kind": "scope",
-          "note": "No key in tools/app-shell/src/lib/flags/flag-keys.js on purpose. Story ETP-6049 adds INVOICE_INBOX when the inbox has a UI. Web client and backend use different targeting keys, so the Datadog rules must be written on the lowercase `email` attribute only.",
-          "refs": [
-            "ETP-6049"
-          ]
-        },
-        {
-          "id": "neo-spec-and-role-access",
-          "kind": "scope",
-          "note": "The NEO spec and the role access matrix of the Invoice Inbox window (see ETP-4878) are not part of this flag change.",
-          "refs": [
-            "ETP-4878"
-          ]
-        },
         {
           "id": "ttl-to-confirm",
           "kind": "precondition",
@@ -2009,6 +2090,182 @@
           }
         ]
       }
+    },
+    {
+      "id": "bank-bounce-suggestions",
+      "description": "Automatic bounce-pair suggestions in the bank reconciliation of PSD2-synced financial accounts in Etendo. A bounce is an outgoing bank-statement line plus the line that reverses it (same amount, opposite sign). With the flag on, the backend auto-match detects candidate pairs, the auto-match modal shows them in a 'Rechazos bancarios' section and they can be reviewed in the reconciliation panel; accepting a pair logically discards BOTH statement lines (EM_PSD2_IS_DISCARDED) and links them as a pair, and discard and restore always act on the pair. Honouring lines that are already discarded is gated too (option 2, ETP-5581): with the flag on they are excluded from the pending lists, auto-match and reconciliation (only while unmatched; a reconciled line counts as reconciled) and count as resolved; with it off Etendo behaves as before ETP-5581 and a discarded line is a plain pending line, with two declared exceptions that are not gated: the SQL-stored counters (FIN_Financial_Account.EM_ETGO_Pending_Count and FIN_BankStatement.EM_ETGO_Discarded_Count / EM_ETGO_Status; see deferredItems pending-counter-not-gated) and the statement-edit identity fix (a recreated line keeps its PSD2 transaction id and discard flag, BankStatementLineSet), which changes nothing visible with the flag off.",
+      "owner": "Agustin-Calderon",
+      "jira": "ETP-5581",
+      "created": "2026-11-02",
+      "flag": {
+        "key": "bank-bounce-suggestions",
+        "defaultValue": false,
+        "ttl": "2026-12-31",
+        "ttlNote": "PLACEHOLDER, not a commitment: end of the current quarter (Q4 2026), set on day one before any implementation exists. Revisit it once the first account is targeted, rather than letting it drift.",
+        "symbols": [
+          "bank-bounce-suggestions",
+          "BANK_BOUNCE_SUGGESTIONS",
+          "FLAG_BANK_BOUNCE_SUGGESTIONS",
+          "ETGO_FLAG_BANK_BOUNCE_SUGGESTIONS",
+          "etendo.go.flags.bank-bounce-suggestions",
+          "BankBounceSuggestionsFlag",
+          "bouncePair",
+          "bouncePairs",
+          "StatementLineFilter",
+          "discardedCount",
+          "BankBounceKpiTelemetry",
+          "dismissPair",
+          "bounceDecisions"
+        ],
+        "$symbolsComment": "Backend-only flag: nothing in the browser evaluates it, no key is declared in flag-keys.js, and none must be added -- the SPA reacts to what the backend answers. The constant is GoFeatureFlags.FLAG_BANK_BOUNCE_SUGGESTIONS and its one evaluator BankBounceSuggestionsFlag (com.etendoerp.go): retiring the flag is a grep for that class. The property and env-var spellings are listed because a grep for the bare key misses Openbravo.properties and the ECS task definition. The SPA's only trail is the backend answer it renders, which never names the flag: the autoMatch groups with kind: \"bouncePair\" (and kpis.bouncePairs), the bouncePair annotation and counts.bounce of pendingLines, and discardedCount of the statements list. StatementLineFilter is the backend switch for discarded lines. BankBounceKpiTelemetry (ETP-5581 part 3) is the bounce-pair KPI emitter (Mixpanel events backend_bank_bounce_pair_decided / _restored / backend_bank_bounce_suggestions_applied); dismissPair is the KPI-only panel action and bounceDecisions the applySuggestions body key the SPA sends for the shown-but-not-applied pairs -- both names appear in the SPA too. Per-account enablement leaves NO grep trail in either repo: it is a targeting rule in the backend's hosted control plane (Datadog Feature Flags, ConfigCat as the fallback)."
+      },
+      "$gatingComment": "Backend implemented by ETP-5581 part 1 (evaluator: BankBounceSuggestionsFlag; toggle points in ReconciliationHandler.buildAutoMatch, buildPendingLines and applySuggestions, in BankBouncePairService.discardPair, restorePair and dismissPair (ETP-5581 part 3: the KPI-only 'No es un rechazo', 403 with the flag off, writes nothing), in every caller of StatementLineFilter (pendingLines, loadPendingLines, the LINE_DISCARDED guards of reconcileGroup / ReconciliationFlowSupport.prepareGroup / ReconciliationDifferenceSupport / ReconciliationLineTargetSupport, the statement-lines marker in BankStatementsHandler) and in BankStatementsHandler.loadStatements; the bounce-pair KPI events (BankBounceKpiTelemetry, ETP-5581 part 3) are flag-owned and only reached with the flag on: applySuggestions builds the call's Detection only when the flag is on and hands ModalDecisions.NONE otherwise, discardPair / dismissPair / restorePair emit after their own flag check. The generic changes made alongside (environment and $insert_id on every backend event, MixpanelNeoTelemetrySink / NeoTelemetryEvent, and the allowlist keys in NeoTelemetryService) are NOT flag-owned and stay on retirement; each action entry evaluates BankBounceSuggestionsFlag.isEnabled() ONCE and hands the boolean down, StatementLineFilter and the guards take it as a parameter and never read the flag); SPA implemented by ETP-5581 part 2, which never evaluates the flag: it renders the kind bouncePair groups, the bounce line state and counts.bounce only when the backend answers them. restorePair is gated like discardPair (403 BOUNCE_SUGGESTIONS_OFF): with the flag off nothing is honoured, so there is nothing to undo here, and Classic's PSD2 Restore button still works. ONE evaluator, the backend (com.etendoerp.go). Targeted PER ACCOUNT: FeatureFlagContext.forAccount(<ETGO_ACCOUNT email of the request user>), the email resolved the way PortalLinkPolicy#currentAccountEmail does (GoAccountResolver.currentAccountEmail(), admin mode, null on failure), the same shape as bp-portal-link. No account, no email or a failed lookup means the flag is OFF, never on. Default false: no account gets suggestions until a targeting rule on the hosted control plane names its email. GATED: bounce-pair detection in the auto-match answer (and therefore the 'Rechazos bancarios' section and the pair review in the reconciliation panel, which only render what the backend answers) accepting and restoring a pair, and honouring already-discarded lines at all (their exclusion from pendingLines and auto-match, counts.discarded, status=discarded, the 409 LINE_DISCARDED guards, the discarded marker of the statement lines, discardedCount and the discarded-as-resolved status of the statements list). With the flag on, only an UNMATCHED discarded line counts as discarded. NOT GATED, because they are stored and computed where no per-account flag is visible: FIN_Financial_Account.EM_ETGO_Pending_Count (ETGO_ACCOUNT_PENDING_COUNT, the Por conciliar column, its filter, the Conciliacion tab badge and the sidebar count) and FIN_BankStatement.EM_ETGO_Discarded_Count / EM_ETGO_Status (persistence events) -- see deferredItems pending-counter-not-gated. Not gated either, on purpose: a statement edit keeps the PSD2 transaction id and discard flag of a recreated line (BankStatementLineSet), which preserves PSD2's own data and changes nothing visible with the flag off. Local: etendo.go.flags.bank-bounce-suggestions / ETGO_FLAG_BANK_BOUNCE_SUGGESTIONS (Tomcat restart). DECLARED EXCEPTION (user decision): the MCP's declared actions are static, so etendo_schema / etendo_discover list discardPair, restorePair and pendingLines' status=discarded option even with the flag off; they answer 403 / are ignored exactly as on REST (com.etendoerp.go docs/neo-headless.md, section 4.12.9 'REST and MCP on the bounce-pair surface with bank-bounce-suggestions off').",
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/components/contract-ui/bouncePairs.js",
+          "tools/app-shell/src/components/contract-ui/AutoMatchBounceSection.jsx",
+          "tools/app-shell/src/components/contract-ui/BouncePairPanel.jsx",
+          "tools/app-shell/src/components/contract-ui/useBouncePairReview.jsx",
+          "tools/app-shell/src/hooks/useAutoMatchReview.js",
+          "tools/app-shell/src/hooks/useBouncePairActions.js",
+          "tools/app-shell/src/lib/bounceSuggestionsTelemetry.js"
+        ],
+        "backend": [
+          "src/com/etendoerp/go/schemaforge/BankBounceSuggestionsFlag.java",
+          "src/com/etendoerp/go/schemaforge/BankBounceDetector.java",
+          "src/com/etendoerp/go/schemaforge/BankBounceLineText.java",
+          "src/com/etendoerp/go/schemaforge/BankBouncePaymentGuard.java",
+          "src/com/etendoerp/go/schemaforge/BankBounceSuggestions.java",
+          "src/com/etendoerp/go/schemaforge/BankBouncePairService.java",
+          "src/com/etendoerp/go/schemaforge/BankBounceErrors.java",
+          "src/com/etendoerp/go/schemaforge/StatementLineFilter.java",
+          "src/com/etendoerp/go/schemaforge/BankBounceKpiTelemetry.java"
+        ]
+      },
+      "$pathsComment": "Backend owned files added with ETP-5581 part 1 (backend); frontend owned files added with ETP-5581 part 2 (SPA): the bounce-pair helpers, the modal section, the panel and their hooks (the review banner, BounceReviewBanner.jsx, was owned too and was removed in the post-review round: \"Revisar en el panel\" now just closes the modal). StatementLineFilter.java (the GO side of APRM's BankStatementLineFilterHook) became OWNED with option 2 (ETP-5581): it now holds the flag-gated handling of discarded lines (the Discards view and the methods that take the evaluated flag) and exists only for this feature. NOT owned: StatementLineDiscard.java (PSD2 discard column coupling and the LINE_DISCARDED body), because unconditional code reads its primitives too (BankStatementLineSet keeps the PSD2 transaction id of a recreated line; BankStatementAggregates maintains the stored discarded count); in the SPA the extracted shared piece useReconciliationPost.js (AutoMatchSelectBox.jsx, extracted at the same time, was later removed: the modal now uses the shared Checkbox), and the discarded-line rendering in shared files, which shows only what the backend sends and so nothing with the flag off (the Descartadas filter, the statements PARTIAL pill counting discardedCount, the Descartada tag in the statement lines), plus the line id sent on statement edit, which is unconditional. Original day-one note: no owned code existed yet, and the file layout was not decided. Each owned file is added here as the code lands. The scorer silently skips a declared path that does not exist (no coverage, no warning), so a guessed path that never materialises would stay in the registry unnoticed while the real file went unattributed. Shared touch points, NEVER owned (they exist for every reconciliation and only hold toggle points): ReconciliationHandler.java, ReconciliationHandlerSupport.java, AutoMatchSupport.java, ReconciliationFlowSupport.java, ReconciliationDifferenceSupport.java, ReconciliationLineTargetSupport.java and BankStatementsHandler.java in com.etendoerp.go; ReconciliationSplitPanel.jsx and AutoMatchSuggestionModal.jsx in the SPA. GoFeatureFlags.java is framework. The EM_PSD2_IS_DISCARDED column belongs to the PSD2 module, which is not a registry root. ETP-5581 part 3 (KPI reporting) added one owned frontend file, lib/bounceSuggestionsTelemetry.js (the bounce_suggestions_viewed / _dismissed wrapper, which exists only for this feature); the event catalog (lib/observability/events.js) and the payload policy (lib/observability/payload.js) it extends are shared and NOT owned.",
+      "testSpecs": {
+        "$testSpecsComment": "Every path below exists and holds its cases (ETP-5581 parts 1 and 2); none is provisional any more. Backend specs are tester-go's, frontend specs tester-functional's; each note says whether the file was New, Extended (reuse-first) or Folded into an existing suite, and what it covers. A path is listed only once the file holds the cases, because an existing file would score as present before its cases are written.",
+        "unit": [
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/BankBounceSuggestionsFlagTest.java",
+            "expected": true,
+            "note": "Covered (ETP-5581 part 1): the ETGO_ACCOUNT email reaches the provider context through the real GoFeatureFlags into a capturing provider, as targeting key and as Email/email attributes, with the account resolved for real by GoAccountResolver over mocked OBContext/OBDal; a targeted account reads true and a non-targeted one false; no OBContext, no user, no account, a null email, a failed account query or a failure reading the user read false and hand the provider no identity; unset, non-boolean and failing provider read false; the key is bank-bounce-suggestions."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/BankBounceDetectorTest.java",
+            "expected": true,
+            "note": "Covered (ETP-5581 part 1): each signal (pis_link on the outflow's last description token, return_text on the bounce line only, counterparty after normalization, blank names never equal) and their priority; the confidence rules (high: same-day wording, PIS link within tolerance, PIS link plus wording; review: later-day wording, PIS link alone weeks later, counterparty alone); the window (0 and 60 days in, 61 out, a bounce before its original out); only opposite sign and the exact amount pair, same sign, different or zero amount never pair, no signal never pairs; each line in at most one pair; same-day roles (wording wins whatever the sign, else the PIS-linked outflow is the original, else the outflow); an ambiguous group is one review pair with no original and its candidates closest first; an original without an ERP payment is preferred and a pair whose only original has one is not proposed; only PSD2 lines outside a match group are candidates (toStatementLine), load reads PSD2 payments, open movements and schedule counts and runs no query without candidates, detectQuietly answers empty on a failed read. Excluding pending/discarded lines is the caller's (loadPendingLines), covered in ReconciliationHandlerTest."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/ReconciliationHandlerBounceSuggestionsTest.java",
+            "expected": true,
+            "note": "Covered (ETP-5581 part 1): the bounce plan (only high pairs reserve lines, a review pair only when none of its lines or candidates is taken, high first, flag off is Plan.NONE with no detection); autoMatch with the flag on (high-pair lines never suggested to a transaction, kind:transaction on existing groups, the bouncePair group shape, ambiguous pairs with candidates, groupsFound and telemetry count transaction groups only, kpis.bouncePairs) and off (no detection, no kind, kpis exactly as before, output equal to flag-on-without-pairs minus kind/bouncePairs); panel/modal agreement (same bounce lines and groupKeys, counts, reserved rows unclassified) and the bouncePair annotation for the original, bounce and candidate roles; applySuggestions (bounce groups first in a mixed batch, a line in two groups 409, unknown kind 400, flag off 403 BOUNCE_SUGGESTIONS_OFF per bounce group with nothing written, telemetry without the bounce groups). Discarded lines, excluded with the flag on and plain pending lines with it off: see ReconciliationHandlerTest."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/AutoMatchSuggestionModal.bounces.vitest.jsx",
+            "expected": true,
+            "note": "Covered (ETP-5581 part 2): flag-off parity (groups without kind, no kpis.bouncePairs: no section, no bounce KPI, the original label, footer, payload and toast); the section below the groups with its count and KPI (pairs still offered); original left / bounce right, an ambiguous pair shows its first candidate and every candidate date; one tag per row (Confianza alta, or Revisar with the short reason: late N days, N salidas posibles); default checks (high checked, review unchecked, ambiguous disabled with its aria-label and click-proof); toggling; 'Revisar en el panel' only with onReviewPair and only on pairs to review, called with the group; the pairs select-all (never the ambiguous pair, disabled when only ambiguous pairs, leaves the transaction groups alone); dismissedPairKeys hide rows, count and KPI (the whole section when all are dismissed); pairs-only hides the transaction block, nothing at all keeps the empty state; footer and label variants (link+discard, link only, discard only with two lines a pair, none selected with a disabled apply); payload order (transaction groups first, then pairs, one applySuggestions call); toasts: success (reconciled + discarded, pairs only), partial (warning whose description is ETGO_BounceHasPayment translated), all failed (translated ETGO_BounceSuggestionsOff; unkeyed message passed through), and the pre-ETP-5581 partial toast when no pair was sent; the host-owned selection prop (read, toggle, setMany, payload). Post-review round: 'Revisar en el panel' is the shared outline Button as a pill; a transaction group's checkbox is named after its statement line. KPI reporting (ETP-5581 part 3): applySuggestions carries bounceDecisions only when pairs are shown (absent without pairs, empty when every shown pair is applied): a shown pair not applied is unchecked (a preselected one unchecked by the user included), sent_to_panel when it is in sentToPanelKeys, a sent pair checked again is applied and not reported, dismissed pairs are not reported; bounce_suggestions_viewed once per opening with pairs_shown / pairs_preselected / auto_opened, again on a new opening, also when the pairs land after the modal opened, never without pairs or while closed; bounce_suggestions_dismissed on Cancelar, Abrir conciliacion and the Dialog close (X / Esc / backdrop, through a stubbed Dialog) with pairs_checked_at_close, never on an apply, on Revisar en el panel or without pairs."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/BankBouncePairServiceTest.java",
+            "expected": true,
+            "note": "Covered (ETP-5581 part 1): discardPair sets EM_PSD2_IS_DISCARDED=Y and the PSD2 button in sync on BOTH lines, links each to the other and stores one discard time, signal and confidence on both (pis_link/high whichever line is named first; no signal -> review; 60 days accepted); every coded refusal in the code's order (LINE_DISCARDED incl. a hook-excluded line, DISCARD_NOT_ALLOWED for reconciled / not PSD2 / PSD2 columns missing, LINE_NOT_PENDING, SIGN_MISMATCH, AMOUNT_MISMATCH, DISCARD_NOT_ALLOWED outside the 60-day window, HAS_PAYMENT) and the request errors, each writing nothing; flag off -> 403 BOUNCE_SUGGESTIONS_OFF reading and writing nothing; a discarded line that is reconciled counts as reconciled (DISCARD_NOT_ALLOWED, not LINE_DISCARDED). restorePair, gated by the flag since option 2 (flag off -> 403 BOUNCE_SUGGESTIONS_OFF, nothing read or restored): restores both lines and clears the four link columns, a lone discarded line restores alone, a plain line is a 200 no-op, a counterpart in another account is left alone, refusals write nothing. Renamed from BankBouncePairDiscardTest (it covers the whole BankBouncePairService). Alex review round: both lines locked FOR UPDATE in id order (Session.refresh with PESSIMISTIC_WRITE) after the ownership check and before validation, on discardPair and restorePair; restorePair restores a line alone when its counterpart does not point back; applyPairs loads and detects once for all pairs of a call; discardPair and restorePair read the flag once; stored confidence is high only for the exact pair detection proposed as high (an ambiguous pair resolved in the panel and a pair detection did not propose are stored review, with the detection's signal). Extended (ETP-5581 part 3, repro/contract tests of the developer): nested KpiEvents -- discardPair of a proposed high pair emits discarded/preselected/surface panel with no record data; a chosen candidate of an ambiguous pair is chosen_among_alternatives/review; a 409 on a proposed pair emits failed and a 400 nothing; dismissPair writes nothing, emits unchecked from the bounce alone or a chosen candidate, nothing for an unpaired line, 400 without statementLineId, 403 with the flag off; restorePair of a linked pair emits restored with the stored signal/confidence and days_since_decided, a lone line nothing; the modal (applyPairs + ModalDecisions) emits one decision per applied pair and per bounceDecisions entry (unknown key, unknown decision, repeat and applied key ignored) plus the summary, preselection_changed on an unchecked high pair, a repeated pair as failed; flag off sends nothing; an MCP call is channel mcp."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/BankBounceLineTextTest.java",
+            "expected": true,
+            "note": "Covered (ETP-5581 part 1), port of the parked ReturnLineTextTest without its learnedForm cases: normalize (accents, umlauts, blank); the bounce vocabulary (every word, the Santander accent, inflected long words, short words only as whole tokens, no match inside another token, an ordinary transfer is not a bounce); lastToken (end-to-end id, trailing punctuation, blank); sameCounterparty (normalized names, empty names never match)."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/BankBouncePaymentGuardTest.java",
+            "expected": true,
+            "note": "Covered (ETP-5581 part 1): attribution (a payment found through the PIS link even with another amount; a single fitting movement within tolerance; outside tolerance or opposite sign gives none; a payment claimed by another line's PIS link excluded; a contested movement or two fitting movements give CANNOT_ATTRIBUTE); ambiguousPayment (3 attempts / 1 payment / 2 pairs is safe, 2 outflows / 2 payments / 1 bounce is ambiguous and gives HAS_PAYMENT); containedInLargerPayment (a larger multi-invoice movement of the same counterparty, or any when the line names none; not a single-invoice, smaller, opposite-sign, out-of-tolerance, other-counterparty or PIS-claimed one; never a line with its own payment); blocker (null without payments, HAS_PAYMENT on either side, a PIS-linked original blocks)."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/ReconciliationSplitPanel.bounces.vitest.jsx",
+            "expected": true,
+            "note": "Covered (ETP-5581 part 2), with a fake usePendingStatementLines that reloads on a filter change: flag off offers neither entry and sends no status param, a Classic discarded line offers Descartadas only; the Posible rechazo badge, the bounce and discarded entries with their counts, bounce lines counted under Pendientes and the Posibles rechazos filter; the bounce panel replaces the candidates (useCandidateOperations gets a null line id, a plain line still gets its own); the original of a high pair (source, bounce row and badge, high notice with the signal, net, discardPair body); the bounce of an ambiguous pair (radios, nothing preselected, choose notice, discard disabled), choosing by radio or row, then discardPair {original, bounce} -> success toast, reload and onReconcileSuccess; a coded refusal toasts the translated ETGO_BounceHasPayment and does not reload, a bodiless one the action fallback; 'No es un rechazo' locally (lines back to pending, counts moved) and through the bounceReview prop (onDismiss with the groupKey, its dismissedKeys read back); the Descartadas filter (status=discarded, the default answer's counts kept, back to Pendientes drops the param), a paired discarded line (counterpart row and badge, discard date notice, Restaurar par, no dismiss/discard), restore of 2 lines vs 1 (Par restaurado vs Linea restaurada, Restaurar linea and the alone notice), a translated restore refusal; read-only disables Descartar par and Restaurar par and keeps 'No es un rechazo'; the focus request (filter to bounce, search cleared, line selected and scrolled into view, consumed once; widening to any date once; giving up when the line is not there). Post-review round: a second 'Revisar en el panel' with the lines loaded and the filter already on Posibles rechazos selects the line (the request effect depends on focus; selectLine is stable); while Descartadas is active at any date the request waits for the reload instead of giving up on the discarded lines; after a restore on Descartadas the default counts are re-read (a failed re-read keeps the last ones, no error); the restore failure toast names a single line for a line discarded alone; each candidate radio is named by its date, amount and bank reference. KPI reporting (ETP-5581 part 3): No es un rechazo also posts dismissPair with the selected line and the other line of the pair (the chosen original of an ambiguous pair; no counterpart while none is chosen); a rejected or a synchronously throwing dismissPair changes nothing on screen and shows no error; under the read-only tier the pair is hidden and nothing is posted."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/bouncePairs.test.js",
+            "expected": true,
+            "note": "New (ETP-5581 part 2, node:test; no test covered bouncePairs.js): group classification and split (no kind is a transaction group, order kept); selectable / default-checked (high checked, review unchecked, ambiguous or a pair missing a line never); the applySuggestions payload; originals of a plain and an ambiguous pair; daysBetween (timestamps read by their date, null on a missing date, and the same counts under UTC, Buenos Aires, Kiritimati, Madrid and Los Angeles across DST, each in a child process); the bounceReason matrix (high with each signal and with an unknown one, never high when ambiguous; ambiguous with more than one candidate, the candidate role and a single candidate -> check; counterparty only; late N days for wording or a payment link; same day or unknown date -> check; no signals -> check); pairNet; pendingLinesStatusParam; isBounceReviewLine; dismissal of lines and counts (lines back to pending, counts moved, never negative, the same reference when nothing changes); bouncePanelModel for the original, candidate and bounce roles (plain, ambiguous unchosen, chosen, unknown chosen id) and for a discarded line paired, with a missing counterpart and alone; summarizeApplyResults. KPI reporting (ETP-5581 part 3): BOUNCE_DECISIONS_KEY / BOUNCE_DECISION, bounceDecisions (not-checked pairs, sent_to_panel vs unchecked, only groupKey and decision, tolerant of a missing set or key), withBounceDecisions (key only with shown pairs, body not mutated) and dismissPairPayload (counterpart omitted while none is chosen, null without a line)."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/hooks/__tests__/useAutoMatchReview.vitest.jsx",
+            "expected": true,
+            "note": "New (ETP-5581 part 2; no test covered useAutoMatchReview.js), rewritten in the post-review round when the review banner and its state were removed: selection defaults, toggle against the default (ambiguous ignored) and setMany; reset on every reload, choices kept while the groups do not reload; startReview only focuses the bounce line, with an increasing seq, and ignores a group without one; no reviewing / endReview / remaining any more; consumeFocus; the checks kept after 'Revisar en el panel' while nothing reloads and reset on a reload; dismiss (repeated or empty key ignored) and clearDismissed; a missing groups array; active=false drops the focus and the dismissals. KPI reporting (ETP-5581 part 3): startReview records the pair in sentToPanelKeys once (never a group without a bounce line); the set is kept while the suggestions do not reload and forgotten on a reload or when the reconciliation turns inactive; re-checking a pair (toggle or the pairs select-all) forgets it, unchecking does not, an ambiguous pair stays sent."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/hooks/__tests__/useReconciliation.vitest.jsx",
+            "expected": true,
+            "note": "Extended (reuse-first: the shared reconciliation hooks suite, real AuthProvider session) for ETP-5581 part 2: useReconciliationPost keeps the bank-reconciliation base path and posts ?action=<action> with the JSON body; useDiscardPair and useRestorePair post discardPair / restorePair with their bodies and the bearer token, and expose err.status, err.code and err.body (error.messageKeys) of a coded 409, code null when the body has none; usePendingStatementLines sends status=discarded and refetches when it changes. Post-review round: usePendingLineCounts GETs the default pendingLines answer (no status) for the date range with the bearer token and returns its counts, null without counts, and rejects on a non-ok answer. KPI reporting (ETP-5581 part 3): useDismissPair posts dismissPair with its body and the bearer token, and rejects on a coded refusal for the caller to swallow."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/lib/__tests__/bounceSuggestionsTelemetry.vitest.js",
+            "expected": true,
+            "note": "New (ETP-5581 part 3; lib/bounceSuggestionsTelemetry.js is a new unit, find-tests found no test for it): the two events reach the tracker with account_id from the session, the pair counts and auto_opened, and nothing else (the user, a groupKey, a line id or an amount passed by a caller are dropped); no account when nobody is signed in, auto_opened coerced to a boolean; an out-of-range count is dropped; a rejecting or throwing tracker never reaches the caller. A second describe un-mocks the real shared tracker (lib/observability.js with fake providers): nothing reaches any provider during a support session (ETP-5351), and the event reaches Mixpanel with the declared properties once the session ends."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/financial-account/__tests__/index.interactions.vitest.jsx",
+            "expected": true,
+            "note": "Extended (reuse-first: the account detail wiring suite) for ETP-5581 part 2, rewritten when the review banner was removed: default checks; 'Revisar en el panel' closes the modal, hands the panel the bounce line and shows no banner and no way back; a pair dismissed in the panel is hidden in the modal; the Automatch button reopens the cached suggestions with the checks kept (no forced reload) and keeps the dismissals, while a reload of the suggestions resets the checks; the modal never reopens on its own after 'Revisar en el panel'; closing it shows no banner; leaving the tab drops the focus and the dismissals; the header refresh clears them; the panel consumes the focus request. KPI reporting (ETP-5581 part 3): the modal gets autoOpened true when the automatch opened it on entering the tab and false from the Automatch button; Revisar en el panel puts the pair in sentToPanelKeys, kept when the Automatch button reopens the modal, forgotten when the pair is checked again or the suggestions reload."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/StatementLineFilterTest.java",
+            "expected": true,
+            "note": "Covered (ETP-5581; the class became owned with option 2): with no hook nothing is excluded and nothing is queried; with a hook its condition, parameters, account and usage reach the queries, excludedLineIds answers the account's unmatched lines the hook rejects, an excluded line answers the coded 409 LINE_DISCARDED, markDiscarded marks every listed row once per account and never fails the listing, and the Discards view splits, answers status=discarded and puts counts.discarded; with bank-bounce-suggestions off nothing is honoured, hook or not: hql is empty and asks no hook, isExcluded/discardedLineError answer false/null with no query, markDiscarded puts no marker and reads nothing, and Discards keeps every row, ignores status=discarded and adds no count; the pure row helpers (splitRows, markRows, discardedLinesData)."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/ReconciliationHandlerTest.java",
+            "expected": true,
+            "note": "Folded into the existing ReconciliationHandlerTest (reuse-first; replaces the provisional AutoMatchSupportDiscardedLinesTest.java, never created). Gated by the flag since option 2, covered (ETP-5581): with the flag on, pendingLines leaves hook-excluded (discarded) lines out of lines, total and the state counts and reports counts.discarded, and status=discarded lists only them, state discarded, with bounceLink (counterpart, signal, confidence, discardedAt) or null for a line discarded alone; with the flag off they are plain pending lines in lines, total and the counts, there is no counts.discarded and status=discarded is ignored; flag off adds no counts.bounce, bouncePair or kind and runs no detection; loadPendingLines appends (flag on) the hooks' AUTO_MATCH_CANDIDATES HQL condition and parameters to an OBQuery that keeps the client/org/active filter, and adds none without a hook or an owned account (the two earlier loadPendingLines tests rewritten from OBCriteria to OBQuery). The 409 LINE_DISCARDED before any write is in ReconciliationRefusedWriteTest (reconcileGroup, prepareGroup), ReconciliationDifferenceSupportTest (reconcileDifference) and ReconciliationLineTargetSupportTest (the heal in resolveForMatch)."
+          }
+        ],
+        "e2e": [
+          {
+            "root": "frontend",
+            "path": "e2e/tests/flows/finance/reconciliation-bounce-suggestions.mocked.spec.js",
+            "expected": true,
+            "note": "Covered (ETP-5581 part 2), mocked: autoMatch with one transaction group plus a high, a review and an ambiguous pair auto-opens the modal with high checked, review unchecked and ambiguous disabled; 'Revisar en el panel' on the ambiguous pair closes the modal, shows no banner and no way back, moves the filter to Posibles rechazos and selects the bounce line; choosing the original and 'Descartar par' POSTs discardPair {financialAccountId, statementLineId: the chosen original, counterpartLineId: the bounce} and the modal does not reopen; the Automatch button reopens the modal on the same suggestions with the checks kept and Apply sends ONE applySuggestions with the transaction group first and both checked pairs; Descartadas asks pendingLines?status=discarded and 'Restaurar par' POSTs restorePair; flag off: no section, no Rechazos bancarios text, the original payload, no bounce/discarded filter entries and no status param. Run against plain make dev with E2E_USE_MOCK=1. KPI reporting (ETP-5581 part 3): the reopen-and-apply case asserts bounceDecisions [bp-amb sent_to_panel]; No es un rechazo posts dismissPair with the selected line and the other one, and a 500 from it changes nothing on screen (no error toast); a pair sent to the panel, then checked and unchecked again in the reopened modal, is reported unchecked; under the read-only tier the modal never opens and No es un rechazo posts nothing. The bounce_suggestions_viewed / _dismissed Mixpanel cases (viewed per opening auto vs button, dismissed on Esc, backdrop and Abrir conciliacion, none on an apply) run ONLY against a bundle built with E2E_TELEMETRY=configured (fake Mixpanel config, requests to the Mixpanel host intercepted); in the default mocked run they are skipped, so the events are guarded in CI by the Vitest suites, not by this spec."
+          }
+        ]
+      },
+      "deferredItems": [
+        {
+          "id": "pending-counter-not-gated",
+          "kind": "open",
+          "note": "Option 2 (ETP-5581) gates every Java read of discarded lines, but three values are computed in SQL or in persistence events, which cannot see a per-account, per-request flag, and keep leaving discarded lines out whatever the flag says: FIN_Financial_Account.EM_ETGO_Pending_Count (stored computed column, function ETGO_ACCOUNT_PENDING_COUNT, watched column EM_PSD2_Is_Discarded) and FIN_BankStatement.EM_ETGO_Discarded_Count / EM_ETGO_Status. The statements list re-derives its status with the flag off, so only the account counter is visible. AND THEREFORE: turning the flag off for an account that already discarded pairs shows its Por conciliar column, its filter, the Conciliacion tab badge and the sidebar count LOWER than the reconciliation panel (e.g. 47 against 49) until the flag is turned back on or the lines are restored in Classic -- approved by the user as a known limitation for the flag's lifetime, no data-fix. On a KILL the change to ETGO_ACCOUNT_PENDING_COUNT must be reverted (count every unmatched line again, drop the EM_PSD2_Is_Discarded watched column) and the counter rebuilt with ad_scd_rebuild; that restores the old counter without a data-fix. On SHIP (feature for everyone) the limitation disappears, because the flag can no longer be off. Not marked acceptedDebt: that needs an explicit decision recorded here by the team.",
+          "refs": [
+            "com.etendoerp.go docs/neo-headless.md — section 'Discarded lines and bounce pairs (ETP-5581)', paragraphs 'Not gated: the stored counters' and 'Known limitation, accepted for the flag's lifetime'",
+            "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md — section '`bank-bounce-suggestions` (ETP-5581)', paragraph 'What it does not gate: the stored counters' and the TTL / kill note",
+            "com.etendoerp.go src-db/database/model/functions/ETGO_ACCOUNT_PENDING_COUNT.xml — the em_psd2_is_discarded predicate of the bank branch"
+          ]
+        },
+        {
+          "id": "hosted-flag-setting-missing",
+          "kind": "precondition",
+          "note": "The hosted control plane (Datadog Feature Flags, ConfigCat as the fallback) has no boolean setting bank-bounce-suggestions yet, in any environment, and an undefined key resolves to the false default. AND THEREFORE: nobody can be targeted and no pilot can start until the setting is created (default false) in each environment where accounts are to be targeted; until then 'off for everyone' is indistinguishable from 'deliberately off'. The local property arm cannot replace it on a shared environment, because it is inert while a hosted arm is selected and has no per-account notion.",
+          "refs": [
+            "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md — section '`bank-bounce-suggestions` (ETP-5581) — backend-only, per account, off by default', paragraph 'Rollout prerequisite'"
+          ]
+        }
+      ]
     }
   ]
 }

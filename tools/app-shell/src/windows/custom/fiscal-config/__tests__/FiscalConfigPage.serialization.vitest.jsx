@@ -59,6 +59,11 @@ vi.mock('../useFiscalConfig.js', () => ({
 vi.mock('../../fiscal-monitor/useDebugMode.js', () => ({ useDebugMode: () => false }));
 vi.mock('../useCertExpiry.js', () => ({ useCertExpiry: () => ({ daysLeft: null }) }));
 vi.mock('../useFiscalTestMode.js', () => ({ useFiscalTestMode: () => ({ forceTestMode: false }) }));
+// ETP-6053 — the page reads the backend fiscal catalog; this suite is about the save order only.
+vi.mock('../useFiscalCatalog.js', async () => {
+  const { FISCAL_SYSTEM_CATALOG } = await import('./fiscalSystemCatalog.fixture.js');
+  return { useFiscalCatalog: () => ({ catalog: FISCAL_SYSTEM_CATALOG, error: null, loading: false }) };
+});
 vi.mock('../fiscalConfig.utils.js', async (importActual) => ({
   ...(await importActual()),
   detectProfile: vi.fn(() => 'sii+tbai'),

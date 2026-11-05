@@ -729,3 +729,55 @@ describe('report-api.js — year selector (mirrors ReportSelectorsServlet.buildY
     assert.doesNotMatch(yearBlock, /o\.c_calendar_id = c\.c_calendar_id AND o\.ad_org_id/);
   });
 });
+
+describe('report-api.js — document report tenant client scoping (ETP-6089)', () => {
+  it('passes header, lines, and taxes queries through applyPlaceholders with session.clientId', () => {
+    const docStart = PLUGIN_SRC.indexOf("if (contract.type === 'document' && contract.sql?.header)");
+    assert.ok(docStart >= 0, 'document branch must exist in fetchReportData');
+    const docEnd = PLUGIN_SRC.indexOf('\n  // SQL query: either inline in contract', docStart);
+    const docBranch = PLUGIN_SRC.slice(docStart, docEnd);
+
+    assert.doesNotMatch(docBranch, /function replacePlaceholders|const replace =/,
+      'inline parameter replacement functions must be replaced with applyPlaceholders');
+    assert.match(docBranch, /const clientId = session\.clientId;/);
+    assert.match(docBranch, /const headerSql = applyPlaceholders\(contract\.sql\.header, \{\s*clientId,\s*params,\s*contract,\s*locale\s*\}\);/);
+    assert.match(docBranch, /applyPlaceholders\(contract\.sql\.lines, \{\s*clientId,\s*params,\s*contract,\s*locale\s*\}\)/);
+    assert.match(docBranch, /applyPlaceholders\(contract\.sql\.taxes, \{\s*clientId,\s*params,\s*contract,\s*locale\s*\}\)/);
+  });
+
+  it('scopes all 8 print-* document report contracts with ad_client_id and validates cross-tenant isolation', async () => {
+    const printReports = [
+      'print-sales-order',
+      'print-sales-invoice',
+      'print-sales-quotation',
+      'print-purchase-order',
+      'print-goods-shipment',
+      'print-payment-in',
+      'print-return-material-receipt',
+      'print-return-to-vendor-shipment',
+    ];
+
+    const { loadReportCli } = await import('../vite-plugins/report-cli.js');
+    const { applyPlaceholders } = await loadReportCli('report-sql');
+
+    for (const reportId of printReports) {
+      const contractPath = join(fileURLToPath(new URL('../../../artifacts', import.meta.url)), reportId, 'report-contract.json');
+      const contract = JSON.parse(readFileSync(contractPath, 'utf8'));
+
+      assert.match(contract.sql.header, /AND \w+\.ad_client_id = '__CLIENT_ID__'/);
+      assert.match(contract.sql.lines, /AND \w+\.ad_client_id = '__CLIENT_ID__'/);
+      if (contract.sql.taxes) {
+        assert.match(contract.sql.taxes, /AND \w+\.ad_client_id = '__CLIENT_ID__'/);
+      }
+
+      const tenantA = 'CLIENTA123';
+      const tenantB = 'CLIENTB456';
+      const sqlA = applyPlaceholders(contract.sql.header, { clientId: tenantA, params: { documentId: 'DOC1' } });
+      const sqlB = applyPlaceholders(contract.sql.header, { clientId: tenantB, params: { documentId: 'DOC1' } });
+
+      assert.ok(sqlA.includes(`'${tenantA}'`));
+      assert.ok(sqlB.includes(`'${tenantB}'`));
+      assert.notEqual(sqlA, sqlB);
+    }
+  });
+});

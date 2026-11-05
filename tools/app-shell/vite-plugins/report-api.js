@@ -276,15 +276,8 @@ async function fetchReportData(reportId, { limit, session, params = {}, locale }
     });
 
     try {
-      function replacePlaceholders(sql) {
-        let q = sql;
-        for (const [key, value] of Object.entries(params)) {
-          if (value) q = q.replace(new RegExp(`__${key.toUpperCase()}__`, 'g'), String(value).replace(/'/g, "''"));
-        }
-        return q;
-      }
-
-      const headerSql = replacePlaceholders(contract.sql.header);
+      const clientId = session.clientId;
+      const headerSql = applyPlaceholders(contract.sql.header, { clientId, params, contract, locale });
       // Keep branding generic for document contracts: existing reports use
       // `org` as the organization alias, while newer contracts may expose
       // `org_logo_id` explicitly. The fallback lets older print artifacts opt
@@ -293,7 +286,7 @@ async function fetchReportData(reportId, { limit, session, params = {}, locale }
         ? headerSql
         : headerSql.replace(/^SELECT\s+/i,
           'SELECT (SELECT oi.your_company_document_image FROM ad_orginfo oi WHERE oi.ad_org_id = org.ad_org_id) AS org_logo_id, ');
-      const linesSql = replacePlaceholders(contract.sql.lines);
+      const linesSql = applyPlaceholders(contract.sql.lines, { clientId, params, contract, locale });
 
       const headerResult = await pool.query(brandedHeaderSql);
       const header = await hydrateDocumentBranding(headerResult.rows[0] || {}, {
@@ -306,7 +299,7 @@ async function fetchReportData(reportId, { limit, session, params = {}, locale }
 
       let taxes = [];
       if (contract.sql.taxes) {
-        const taxesSql = replacePlaceholders(contract.sql.taxes);
+        const taxesSql = applyPlaceholders(contract.sql.taxes, { clientId, params, contract, locale });
         const taxResult = await pool.query(taxesSql);
         taxes = taxResult.rows;
       }

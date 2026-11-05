@@ -24,6 +24,10 @@ vi.mock('@/i18n', () => ({
 // imports directly and crashed the moment the banner mounted ("No 'Copy' export
 // is defined on the 'lucide-react' mock") — found while extending this suite for
 // ETP-5806 (uncaught exception on every test that reached `isLegacyAddress`).
+// ETP-5806 follow-up (round 2): the redesigned legacy banner and the resulting-address
+// preview badge also render `Info` and `Lock` directly from lucide-react — missing either
+// one crashes the whole suite the moment the component mounts ("No 'Info'/'Lock' export is
+// defined on the 'lucide-react' mock"), the same failure mode `Copy` had above.
 vi.mock('lucide-react', () => ({
   X: (props) => <span data-testid="icon-x" {...props} />,
   Loader2: (props) => <span data-testid="loader" {...props} />,
@@ -31,6 +35,8 @@ vi.mock('lucide-react', () => ({
   ChevronDown: (props) => <span data-testid="icon-chevron" {...props} />,
   Check: (props) => <span data-testid="icon-check" {...props} />,
   Copy: (props) => <span data-testid="icon-copy" {...props} />,
+  Info: (props) => <span data-testid="icon-info" {...props} />,
+  Lock: (props) => <span data-testid="icon-lock" {...props} />,
 }));
 
 vi.mock('sonner', () => ({
@@ -691,6 +697,75 @@ describe('LocationEditorModal', () => {
     });
   });
 
+  // ---------------------------------------------------------------------------
+  // buildSavePayload — trims text fields and defaults Number to "s/n" (ETP-5806 follow-up)
+  // ---------------------------------------------------------------------------
+
+  describe('buildSavePayload — trimming and Number fallback (ETP-5806 follow-up)', () => {
+    function mockSpainSave() {
+      global.fetch = vi.fn((url, opts) => {
+        if (url.includes('/locationAddress') && !url.includes('selectors') && opts?.method === 'POST') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ response: { status: 0, data: [{ id: 'new-loc-trim' }] } }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [SPAIN_OPTION], hasMore: false }) });
+      });
+    }
+
+    async function savedBody() {
+      fireEvent.click(saveButton());
+      let postCall;
+      await vi.waitFor(() => {
+        postCall = global.fetch.mock.calls.find(([, opts]) => opts?.method === 'POST');
+        expect(postCall).toBeDefined();
+      });
+      return JSON.parse(postCall[1].body);
+    }
+
+    it('trims leading/trailing whitespace off Street, Number and Building name before saving', async () => {
+      mockSpainSave();
+      renderModal();
+      typeStreetName('  Calle Mayor  ');
+      typeBuildingNumber('  100  ');
+      fireEvent.change(buildingNameInput(), { target: { value: '  Nave A  ' } });
+      typeCity(CITY_VALUE);
+      await selectSpain();
+
+      const body = await savedBody();
+      expect(body.streetName).toBe('Calle Mayor');
+      expect(body.buildingNumber).toBe('100');
+      expect(body.buildingName).toBe('Nave A');
+    });
+
+    it('persists buildingNumber as "s/n" when Street is filled and Number is left empty', async () => {
+      mockSpainSave();
+      renderModal();
+      typeStreetName(STREET_VALUE);
+      typeCity(CITY_VALUE);
+      await selectSpain();
+      expect(buildingNumberInput()).toHaveValue('');
+
+      const body = await savedBody();
+      expect(body.buildingNumber).toBe('s/n');
+      expect(body.buildingNumber).not.toBe('');
+      expect(body.buildingNumber).not.toBeNull();
+    });
+
+    it('persists buildingNumber as "s/n" when Number is whitespace-only', async () => {
+      mockSpainSave();
+      renderModal();
+      typeStreetName(STREET_VALUE);
+      typeBuildingNumber('   ');
+      typeCity(CITY_VALUE);
+      await selectSpain();
+
+      const body = await savedBody();
+      expect(body.buildingNumber).toBe('s/n');
+    });
+  });
+
   it('allows typing in postal code and city fields', () => {
     renderModal();
     fireEvent.change(postalCodeInput(), { target: { value: '28001' } });
@@ -765,6 +840,122 @@ describe('LocationEditorModal', () => {
       typeBuildingNumber('s/n');
       expect(address1()).toHaveTextContent('Calle Mayor, s/n');
     });
+
+    // ETP-5806 follow-up — repro for the bug fixed by composeAddressLines' early return:
+    // a composed line was never allowed to exist without a street as its base. Before the
+    // fix, an empty Street with a typed Number alone composed address1 = "1" (via
+    // `appendPart` treating the falsy street as "nothing before, return the part"), which
+    // showed a "complete" address with no street at all. kind=repro, test-reuse-policy.md
+    // point 6 exception (the bug was found and already fixed in this change).
+    it('composes nothing when Street is empty, no matter what Number or Building name carry (regression)', () => {
+      renderModal();
+      typeBuildingNumber('1');
+      fireEvent.change(buildingNameInput(), { target: { value: 'Nave A' } });
+
+      expect(address1()).toHaveTextContent('—');
+      expect(address2()).toHaveTextContent('—');
+    });
+
+    it('composes nothing when Street is whitespace-only, even with Number and Building name filled (regression)', () => {
+      renderModal();
+      typeStreetName('   ');
+      typeBuildingNumber('1');
+      fireEvent.change(buildingNameInput(), { target: { value: 'Nave A' } });
+
+      expect(address1()).toHaveTextContent('—');
+      expect(address2()).toHaveTextContent('—');
+    });
+
+    // ETP-5806 follow-up (UX redesign) — Number is optional: an UNTOUCHED (empty) Number
+    // composes as the literal "s/n" fallback once a street is present, matching the save
+    // payload (see `buildSavePayload` below).
+    it('falls back to "s/n" as the effective number when Street is filled and Number is left empty', () => {
+      renderModal();
+      typeStreetName('Calle Mayor');
+      expect(buildingNumberInput()).toHaveValue('');
+
+      expect(address1()).toHaveTextContent('Calle Mayor, s/n');
+    });
+
+    it('falls back to "s/n" when Number is whitespace-only too', () => {
+      renderModal();
+      typeStreetName('Calle Mayor');
+      typeBuildingNumber('   ');
+
+      expect(address1()).toHaveTextContent('Calle Mayor, s/n');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Editing a record whose buildingNumber is already the persisted "s/n" fallback
+  // (ETP-5806 follow-up, QA gap — distinct from the CREATE repro at L837-841: here the
+  // value arrives from the GET-by-id response, not typed by hand).
+  // ---------------------------------------------------------------------------
+
+  describe('editing a record whose buildingNumber is already persisted as "s/n" (ETP-5806 follow-up)', () => {
+    function mockSavedSlashNRecord(rowId) {
+      global.fetch = vi.fn((url, opts) => {
+        if (url.includes(`/locationAddress/${rowId}`) && (!opts?.method || opts.method === 'GET')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              response: {
+                data: [{
+                  id: rowId,
+                  streetName: 'Calle Mayor',
+                  buildingNumber: 's/n',
+                  city: 'Madrid',
+                  country: 'ES',
+                  'country$_identifier': 'Spain',
+                }],
+              },
+            }),
+          });
+        }
+        if (url.includes(`/locationAddress/${rowId}`) && opts?.method === 'PUT') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ response: { data: [{ id: rowId, name: 'Updated Location' }] } }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [SPAIN_OPTION], hasMore: false }) });
+      });
+    }
+
+    it('shows the real persisted "s/n" value in the Number input, not empty', async () => {
+      mockSavedSlashNRecord('loc-sn-1');
+      renderModal({ rowId: 'loc-sn-1' });
+
+      await vi.waitFor(() => expect(streetNameInput()).toHaveValue('Calle Mayor'));
+      expect(buildingNumberInput()).toHaveValue('s/n');
+    });
+
+    it('computes the resulting-address preview correctly from the already-persisted "s/n" without mangling it', async () => {
+      mockSavedSlashNRecord('loc-sn-2');
+      renderModal({ rowId: 'loc-sn-2' });
+
+      await vi.waitFor(() => expect(streetNameInput()).toHaveValue('Calle Mayor'));
+      expect(screen.getByTestId('location-resulting-address1')).toHaveTextContent('Calle Mayor, s/n');
+    });
+
+    it('resends "s/n" unchanged in the PUT payload when Number is saved untouched', async () => {
+      mockSavedSlashNRecord('loc-sn-3');
+      renderModal({ rowId: 'loc-sn-3' });
+
+      await vi.waitFor(() => expect(streetNameInput()).toHaveValue('Calle Mayor'));
+      await vi.waitFor(() => expectSaveAllowed());
+
+      fireEvent.click(saveButton());
+
+      let putCall;
+      await vi.waitFor(() => {
+        putCall = global.fetch.mock.calls.find(([, opts]) => opts?.method === 'PUT');
+        expect(putCall).toBeDefined();
+      });
+
+      const body = JSON.parse(putCall[1].body);
+      expect(body.buildingNumber).toBe('s/n');
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -814,6 +1005,52 @@ describe('LocationEditorModal', () => {
       expect(screen.queryByTestId('location-legacy-address-banner')).not.toBeInTheDocument();
     });
 
+    // QA gap, fixed — `isLegacyAddressRecord`'s `hasStructured` check used to treat a
+    // non-empty `buildingName` ALONE as "structured", even with Street and Number both
+    // empty, so a record with real legacy text in `address`/`address2` was never flagged
+    // as legacy and that text was invisible everywhere in the UI. `buildingName` is an
+    // optional field that can hold an "orphan" value without the address actually being
+    // broken down, so `hasStructured` now only looks at `streetName`/`buildingNumber` —
+    // the two fields that genuinely indicate a real structured breakdown. This test now
+    // pins the FIXED behavior: the record IS flagged as legacy.
+    it('flags a record as legacy when only buildingName is set and address/address2 carry real legacy text', async () => {
+      global.fetch = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            response: {
+              data: [{
+                id: 'loc-partial',
+                buildingName: 'Edificio Vista Alegre',
+                address: 'Calle Mayor 12',
+                country: 'ES',
+                'country$_identifier': 'Spain',
+              }],
+            },
+            items: [],
+            hasMore: false,
+          }),
+        }),
+      );
+
+      renderModal({ rowId: 'loc-partial' });
+
+      await screen.findByText('locationSelectorTitle');
+      await vi.waitFor(() => expect(buildingNameInput()).toHaveValue('Edificio Vista Alegre'));
+
+      // The banner now appears, since `address` carries real legacy text and neither
+      // streetName nor buildingNumber is filled in.
+      expect(screen.getByTestId('location-legacy-address-banner')).toBeInTheDocument();
+
+      // Street is empty, so composeAddressLines' early return leaves the composed preview
+      // empty — but since the record is now correctly flagged as legacy, the preview falls
+      // back to showing the OLD free-text lines (Línea 1 from `address`, Línea 2 empty since
+      // `address2` wasn't seeded) with the "Anterior" badge.
+      expect(screen.getByTestId('location-resulting-address1')).toHaveTextContent('Calle Mayor 12');
+      expect(screen.getByTestId('location-resulting-address2')).toHaveTextContent('—');
+      expect(screen.getByTestId('location-address-preview-badge')).toHaveTextContent('addressPreviewLegacyBadge');
+    });
+
     it('shows the banner on CREATE when seeded with unstructured OCR text (ETP-5654 round 2)', async () => {
       global.fetch = vi.fn(() =>
         Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [SPAIN_OPTION], hasMore: false }) }),
@@ -825,7 +1062,12 @@ describe('LocationEditorModal', () => {
       expect(banner).toHaveTextContent('Calle OCR 99');
     });
 
-    it('renders a Copy button inside the banner that copies the old text and toasts success', async () => {
+    // ETP-5806 follow-up round 2 — the single `location-legacy-address-copy` button was
+    // replaced by one copy button PER old line (`location-legacy-banner-address1-copy` /
+    // `-address2-copy`), each copying only its own line instead of the old joined
+    // "address, address2" string. Rewritten (not deleted — test-reuse-policy.md point 2)
+    // to guard the current contract; the old testid no longer exists in the source.
+    it('copies ONLY Línea 1 from its own copy button when there is no Línea 2', async () => {
       vi.mocked(toast.success).mockClear();
       const writeText = vi.fn().mockResolvedValue(undefined);
       Object.defineProperty(navigator, 'clipboard', {
@@ -845,11 +1087,152 @@ describe('LocationEditorModal', () => {
 
       renderModal({ rowId: 'loc-legacy' });
 
-      const copyBtn = await screen.findByTestId('location-legacy-address-copy');
+      const copyBtn = await screen.findByTestId('location-legacy-banner-address1-copy');
+      // No Línea 2 copy button when address2 is empty.
+      expect(screen.queryByTestId('location-legacy-banner-address2-copy')).not.toBeInTheDocument();
       fireEvent.click(copyBtn);
 
       await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith('Old Street 12'));
       expect(toast.success).toHaveBeenCalledWith('copied');
+    });
+
+    it('offers a separate copy button for Línea 2 when the legacy record has a second line', async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText }, configurable: true, writable: true,
+      });
+
+      global.fetch = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            response: { data: [{ id: 'loc-legacy-2', address: 'Old Street 12', address2: 'Floor 3B', country: 'ES', 'country$_identifier': 'Spain' }] },
+            items: [],
+            hasMore: false,
+          }),
+        }),
+      );
+
+      renderModal({ rowId: 'loc-legacy-2' });
+
+      const copyBtn2 = await screen.findByTestId('location-legacy-banner-address2-copy');
+      fireEvent.click(copyBtn2);
+
+      await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith('Floor 3B'));
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Legacy-address banner — persistence and dismiss (ETP-5806 follow-up round 2)
+  // ---------------------------------------------------------------------------
+
+  describe('legacy-address banner — persistence and dismiss (ETP-5806 follow-up round 2)', () => {
+    function mockLegacyRecord(rowId = 'loc-legacy-persist') {
+      global.fetch = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            response: { data: [{ id: rowId, address: 'Old Street 12', country: 'ES', 'country$_identifier': 'Spain' }] },
+            items: [],
+            hasMore: false,
+          }),
+        }),
+      );
+    }
+
+    // Regression: a previous version hid the banner as soon as the user touched
+    // Street/Number/Building name (gated on those fields instead of on `isLegacyAddress`
+    // alone), which made the old text disappear before the user had a chance to copy it.
+    it('stays visible after typing into Street, Number and Building name', async () => {
+      mockLegacyRecord();
+      renderModal({ rowId: 'loc-legacy-persist' });
+
+      await screen.findByTestId('location-legacy-address-banner');
+
+      typeStreetName('Calle Mayor');
+      typeBuildingNumber('5');
+      fireEvent.change(buildingNameInput(), { target: { value: 'Nave A' } });
+
+      expect(screen.getByTestId('location-legacy-address-banner')).toBeInTheDocument();
+    });
+
+    it('hides when the dismiss button is clicked', async () => {
+      mockLegacyRecord();
+      renderModal({ rowId: 'loc-legacy-persist' });
+
+      await screen.findByTestId('location-legacy-address-banner');
+
+      fireEvent.click(screen.getByTestId('location-legacy-banner-dismiss'));
+
+      expect(screen.queryByTestId('location-legacy-address-banner')).not.toBeInTheDocument();
+    });
+
+    it('reappears after the modal is reopened for the same record (dismiss does not persist)', async () => {
+      mockLegacyRecord();
+      const { rerender, props } = renderModal({ rowId: 'loc-legacy-persist' });
+
+      await screen.findByTestId('location-legacy-address-banner');
+      fireEvent.click(screen.getByTestId('location-legacy-banner-dismiss'));
+      expect(screen.queryByTestId('location-legacy-address-banner')).not.toBeInTheDocument();
+
+      // Close and reopen the same modal instance.
+      rerender(<LocationEditorModal {...props} open={false} />);
+      rerender(<LocationEditorModal {...props} open={true} />);
+
+      await screen.findByTestId('location-legacy-address-banner');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Resulting-address preview — legacy fallback and badges (ETP-5806 follow-up round 2)
+  // ---------------------------------------------------------------------------
+
+  describe('resulting-address preview — legacy fallback and badges (ETP-5806 follow-up round 2)', () => {
+    function mockLegacyRecord(rowId) {
+      global.fetch = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            response: { data: [{ id: rowId, address: 'Old Street 12', address2: 'Floor 3B', country: 'ES', 'country$_identifier': 'Spain' }] },
+            items: [],
+            hasMore: false,
+          }),
+        }),
+      );
+    }
+
+    const badge = () => screen.getByTestId('location-address-preview-badge');
+    const previewAddress1 = () => screen.getByTestId('location-resulting-address1');
+
+    it('shows the OLD address lines with the "legacy" badge while Street/Number are not yet complete', async () => {
+      mockLegacyRecord('loc-legacy-preview');
+      renderModal({ rowId: 'loc-legacy-preview' });
+
+      await screen.findByTestId('location-legacy-address-banner');
+
+      expect(previewAddress1()).toHaveTextContent('Old Street 12');
+      expect(badge()).toHaveTextContent('addressPreviewLegacyBadge');
+    });
+
+    it('switches to the COMPOSED address and the "complete" badge once Street+Number are filled, skipping any intermediate "automatic" state', async () => {
+      mockLegacyRecord('loc-legacy-preview-2');
+      renderModal({ rowId: 'loc-legacy-preview-2' });
+
+      await screen.findByTestId('location-legacy-address-banner');
+      expect(badge()).toHaveTextContent('addressPreviewLegacyBadge');
+
+      typeStreetName('Calle Mayor');
+      typeBuildingNumber('5');
+
+      expect(previewAddress1()).toHaveTextContent('Calle Mayor, 5');
+      expect(badge()).toHaveTextContent('addressPreviewCompleteBadge');
+      // Never "addressPreviewAutoBadge" for a legacy record: straight legacy → complete.
+      expect(badge()).not.toHaveTextContent('addressPreviewAutoBadge');
+    });
+
+    it('shows the "automatic" badge (not "legacy") for a brand-new, non-legacy record with nothing typed', () => {
+      renderModal();
+      expect(badge()).toHaveTextContent('addressPreviewAutoBadge');
     });
   });
 
@@ -871,23 +1254,28 @@ describe('LocationEditorModal', () => {
     // The button is now gated with `aria-disabled` instead (see its own comment),
     // so the click DOES register, `handleSave` sets `attemptedSave` and still
     // refuses to save (`saveDisabled` guard), and the message becomes visible.
-    it('shows fieldRequiredMessage under every empty mandatory field after clicking Save', () => {
+    // ETP-5806 follow-up (UX redesign) — rewritten (test-reuse-policy.md point 2): Number is no
+    // longer mandatory, so it no longer renders a `fieldRequiredMessage` nor counts towards the
+    // click-Save inline-error count. Only Street, City and Country remain mandatory.
+    it('shows fieldRequiredMessage under every empty mandatory field after clicking Save (Street, City, Country — NOT Number)', () => {
       renderModal();
       expect(screen.queryByText('fieldRequiredMessage')).not.toBeInTheDocument();
 
       fireEvent.click(saveButton());
 
-      // One message per empty mandatory field: Street, Number, City, Country.
-      expect(screen.getAllByText('fieldRequiredMessage')).toHaveLength(4);
+      // One message per empty mandatory field: Street, City, Country. Number is optional
+      // (ETP-5806 follow-up) and never shows this message, however empty it is left.
+      expect(screen.getAllByText('fieldRequiredMessage')).toHaveLength(3);
     });
 
-    it('marks Street, Number, City and Country as mandatory, and no other field', () => {
+    // ETP-5806 follow-up (UX redesign) — rewritten (test-reuse-policy.md point 2): Number lost
+    // its `RequiredMark` asterisk when it stopped being mandatory.
+    it('marks Street, City and Country as mandatory, but NOT Number or any other field', () => {
       renderModal();
       expect(hasRequiredMark('streetNameLabel')).toBe(true);
-      expect(hasRequiredMark('buildingNumberLabel')).toBe(true);
       expect(hasRequiredMark('cityLabel')).toBe(true);
       expect(hasRequiredMark('countryLabel')).toBe(true);
-      for (const label of ['buildingNameLabel', 'postalCodeLabel', 'regionLabel']) {
+      for (const label of ['buildingNumberLabel', 'buildingNameLabel', 'postalCodeLabel', 'regionLabel']) {
         expect(hasRequiredMark(label)).toBe(false);
       }
     });
@@ -918,6 +1306,43 @@ describe('LocationEditorModal', () => {
 
       typeStreetName('   ');
       expectSaveBlocked();
+    });
+
+    // ETP-5806 follow-up (UX redesign) — extension: Number is no longer part of the save
+    // gate. Street + City + Country alone must enable Save, with Number left untouched.
+    it('allows saving with Street, City and Country filled and Number left empty', async () => {
+      global.fetch = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [SPAIN_OPTION], hasMore: false }) }),
+      );
+      renderModal();
+      typeStreetName();
+      typeCity();
+      await selectSpain();
+      expect(buildingNumberInput()).toHaveValue('');
+
+      expectSaveAllowed();
+    });
+
+    // Street remains mandatory even when Number, City and Country are all filled in —
+    // Number becoming optional must not loosen any OTHER field's gate.
+    it('still blocks save when Street is empty, even with Number, City and Country filled', async () => {
+      global.fetch = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [SPAIN_OPTION], hasMore: false }) }),
+      );
+      renderModal();
+      typeBuildingNumber();
+      typeCity();
+      await selectSpain();
+
+      expectSaveBlocked();
+    });
+
+    it('never shows fieldRequiredMessage under Number after a save attempt, even left empty', () => {
+      renderModal();
+      fireEvent.click(saveButton());
+      // The 3 messages are under Street/City/Country; Number's own error slot was removed.
+      const numberField = buildingNumberInput().closest('div');
+      expect(numberField?.textContent).not.toContain('fieldRequiredMessage');
     });
   });
 
