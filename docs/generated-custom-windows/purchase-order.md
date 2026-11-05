@@ -182,7 +182,7 @@ See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#
 - `origin/develop:artifacts/purchase-order/generated/web/purchase-order/HeaderPage.jsx` at `36f10538` proves `hideSaveStatuses={['CO','CL','VO']}` on the detail page.
 - `e2e/tests/flows/purchase-order-create.spec.js` provides browser-level checks for the new-order `Save` / `Save draft` / `Cancel` controls, order-line-tab visibility before first save, and cancel-to-list navigation.
 - `e2e/tests/flows/purchase-order-partner-address-bug.spec.js` provides browser-level evidence that the partner-address selector is expected to enable and offer vendor locations after business-partner selection.
-- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/PurchaseOrderHeaderHandler.java` extends `AbstractOrderHeaderHandler` and is the CDI bean registered as `purchaseOrderHeaderHandler`. Its inherited `afterHandle()` appends `hasLinkedDocuments` to every GET response record (single and batch), and since ETP-5295 also `needsPrimaryDoc` (the receipt, for this window) and `needsInvoiceDoc`, computed with the detail form's own formula — pending quantity/amount AND no draft document already covering it — which the frontend reads through `tools/app-shell/src/windows/custom/shared/orderPendingDocs.js`. As of ETP-5315 this field is consumed by all three Reactivate surfaces on the purchase-order frontend — the detail-view `window.menuActions` gate, `useOrderWindow`'s row-hover `menuActions` builder, and `PurchaseOrderReactivateBulkAction`'s `rowFilter` — no backend work was needed since the field was already computed for both order windows by this shared handler; only the frontend consumption had been removed as part of ETP-4011.
+- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/PurchaseOrderHeaderHandler.java` extends `AbstractOrderHeaderHandler` and is bound to `purchase-order/header` by `@NeoExtension(spec = "purchase-order", entity = "header")` (ETP-6108; it used to be the `purchaseOrderHeaderHandler` `Java_Qualifier`, cleared in the same change). Its inherited `afterHandle()` appends `hasLinkedDocuments` to every GET response record (single and batch), and since ETP-5295 also `needsPrimaryDoc` (the receipt, for this window) and `needsInvoiceDoc`, computed with the detail form's own formula — pending quantity/amount AND no draft document already covering it — which the frontend reads through `tools/app-shell/src/windows/custom/shared/orderPendingDocs.js`. As of ETP-5315 this field is consumed by all three Reactivate surfaces on the purchase-order frontend — the detail-view `window.menuActions` gate, `useOrderWindow`'s row-hover `menuActions` builder, and `PurchaseOrderReactivateBulkAction`'s `rowFilter` — no backend work was needed since the field was already computed for both order windows by this shared handler; only the frontend consumption had been removed as part of ETP-4011.
 - `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/AbstractOrderHeaderHandler.java` — shared base class; contains all `afterHandle()` logic including the batch IN query used on list responses to avoid N+1 DB calls.
 - Evidence reviewed for this document:
   - `tools/app-shell/src/menu.json`
@@ -297,10 +297,11 @@ Booking a draft order over MCP:
     etendo_action { spec: "purchase-order", entity: "header", id: "<orderId>",
                  action: "documentAction", parameters: { docAction: "CO" } }
 
-Flow encoded in the prompt: `DR -> CO` books, `DR -> VO` voids, `CO -> RE` reactivates it back to
-`DR`, but only while the order has no linked documents (no receipt or invoice generated from it) —
-the UI hides Reactivate in that case and the process will reject it — and `CO -> CL` closes pending
-quantities. **This window now has a Reactivate menu action** (`window.menuActions` in
+Flow encoded in the prompt (ETP-6108, same allow-list as `sales-order`): `DR -> CO` and
+`IP -> CO` book, `CO -> RE` reactivates it back to `DR`, but only while the order has no linked
+documents (no receipt or invoice generated from it) — the UI hides Reactivate in that case and the
+pre-hook refuses it. Close (`CL`), Void (`VO`) and Prepare (`PR`) are not offered by the window and
+are refused with 400 in every status. **This window now has a Reactivate menu action** (`window.menuActions` in
 `decisions.json`, added by ETP-5315), matching `sales-order`'s own conditional Reactivate.
 
 This runs `PurchaseOrderHeaderHandler` exactly as the UI does — including the pre-CO
@@ -642,9 +643,10 @@ A refusal because the document's date has no open accounting period (`PeriodNotA
 ## Which actions apply now, and what the values mean over MCP — ETP-5714
 
 - `etendo_schema(spec, entity, view:"actions", id:<purchase order id>)` says `availableNow` / `unavailableReason` per action for that
-  record, and `availableValuesNow` for `documentAction`: a draft takes `CO`, `VO` or `PR`; a completed order takes `CL` or `RE`.
-  `RE` is reported unavailable (`unavailableValues`) while the order has linked shipments, receipts or invoices, the rule
-  behind the UI's `hasLinkedDocuments` flag. Advice only: nothing is blocked by it.
+  record, and `availableValuesNow` for `documentAction`: a draft or in-progress order takes `CO`; a completed order takes `RE`.
+  `RE` is reported unavailable (`unavailableValues`) while the order has linked receipts or invoices, the rule
+  behind the UI's `hasLinkedDocuments` flag. Every other value is reported under `unavailableValues` with its reason and is
+  refused by the pre-hook (see "Only the document actions the window offers run" below).
 - `createGoodsReceipt` and `createPurchaseInvoice` applies to a completed order only.
 - The classic *Cancel and Replace* buttons (and, on the purchase order, *Pick from Receipt*) are hidden from agents with a reason:
   they are multi-step classic flows with no MCP equivalent. To change a completed order, reactivate it, edit it and complete it again.
@@ -697,8 +699,39 @@ Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.41 and the ETP
 
 ## Cancelling a line — ETP-5852
 
-`lines.agentPrompt`: a single line of a booked order cannot be cancelled; reactivate and edit while there are no linked documents, otherwise close the order (CL). Feedback M-123.
+`lines.agentPrompt`: a single line of a booked order cannot be cancelled; reactivate and edit while there are no linked documents, otherwise the order can be neither reactivated nor closed (CL is refused with 400, ETP-6108) and any correction goes through the linked documents (receipts or invoices). Feedback M-123.
 
 ## Agent prompt on the business partner — ETP-5852
 
 `businessPartner.agentPrompt`: names can repeat; agents tell partners apart by reading `searchKey` and `taxID` from `contacts/businessPartner` with an `id in [...]` filter. Feedback M-191.
+
+### Only the document actions the window offers run — ETP-6108
+
+Over MCP, `etendo_action` with `docAction: "CL"` closed a completed purchase order (ordered quantity
+and totals zeroed), which the Purchase Order window never offers. The `DocAction` button is now an
+**allow-list** per stored `documentStatus`, identical to the sales order's (`OrderDocActionPolicy`,
+shared by both handlers):
+
+| Status | Accepted | Where the UI sends it |
+|---|---|---|
+| `DR` | `CO` | Confirmar (form, row action, bulk bar) |
+| `IP` | `CO` | Treated like sales; it could not be reproduced on screen |
+| `CO` | `RE` (and `CO`, a no-op) | Reactivar, only without linked receipts or invoices. `CO` is let through only for the bulk bar's mixed selections (`DocActionIdempotency` answers "already applied") |
+| any other | nothing | — |
+
+- `PurchaseOrderHeaderHandler.handle()` decides on the **effective** value (root `docAction` when the
+  DAL accepts it, else the stored one) through `DocActionRefusalGuard.refuseUnlessAllowed`; a
+  request with nothing to run is refused, an unknown id answers 404, an unreadable status 500.
+  REST single, REST batch and MCP all reach it.
+- **Refusal**: HTTP 400 with `messageKeys` `ETGO_PurchaseOrderCloseNotOffered` (CL),
+  `ETGO_PurchaseOrderVoidNotOffered` (VO) or `ETGO_PurchaseOrderActionNotOffered` (any other
+  value), English / Spanish. `RE` on a draft goes on to `DocActionReactivationRule`'s 422
+  `ETGO_ReactivateOnlyCompleted`, as on sales.
+- **Reactivate with linked documents** is refused with 400 `ETGO_PurchaseOrderReactivateLinkedDocs`
+  (`OrderReactivationGuard`, same rule as the `hasLinkedDocuments` flag that hides the action in the
+  UI); a lookup that cannot run fails closed with 500.
+- **Advertised**: `MCP_CONFIG.actions.valuesByStatus` is the same list (`DR` -> CO, `IP` -> CO,
+  `CO` -> RE, `VO`/`CL` -> none) and `PurchaseOrderHeaderHandler.unavailableActions` reports every
+  other value with the purchase order's own reason.
+- The handler is bound by `@NeoExtension(spec = "purchase-order", entity = "header")`; its
+  `Java_Qualifier` and the `javaQualifier` in `decisions.json` were removed together.
