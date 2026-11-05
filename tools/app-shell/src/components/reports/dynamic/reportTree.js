@@ -47,10 +47,15 @@ export function expandAll(rows) {
  * user flipped since. Recomputed for every result, so a row that first appears after a filter
  * change follows the base instead of showing folded.
  */
+function baseExpansion(rows, parents, base, level) {
+  if (base === 'all') return parents;
+  if (base === 'none') return [];
+  return expansionForLevel(rows, level);
+}
+
 export function foldExpansion(rows, { base, flipped }, level) {
   const parents = parentIds(rows);
-  const expanded = base === 'all' ? parents : base === 'none' ? new Set() : expansionForLevel(rows, level);
-  const out = new Set(expanded);
+  const out = new Set(baseExpansion(rows, parents, base, level));
   for (const id of flipped) {
     if (!parents.has(id)) continue;
     if (out.has(id)) out.delete(id); else out.add(id);

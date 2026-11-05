@@ -27,13 +27,30 @@ export function TrendPill({ trend, up, children, testId }) {
   );
 }
 
+function kpiText(v, percent) {
+  if (v == null) return '—';
+  return percent ? `${fmt(v)} %` : fmt(v);
+}
+
+/** The change against the compared period: points for a percentage, a relative % otherwise. */
+function kpiDelta(value, refValue, percent) {
+  if (value == null || refValue == null || value === refValue) return null;
+  if (percent) return `${fmt(value - refValue)} pp`;
+  if (!refValue) return null;
+  return `${fmt(((value - refValue) / Math.abs(refValue)) * 100)} %`;
+}
+
+function resultTone(result) {
+  if (result > 0) return 'border-border/60 bg-card shadow-[inset_3px_0_0_hsl(var(--accent-highlight))]';
+  if (result < 0) return 'border-border/60 bg-card shadow-[inset_3px_0_0_hsl(var(--destructive))]';
+  return null;
+}
+
 function Kpi({ id, label, hint, value, refValue, compare, percent, tone }) {
   const ui = useUI();
   const trend = kpiTrend(id, value, refValue);
-  const text = (v) => (v == null ? '—' : percent ? `${fmt(v)} %` : fmt(v));
-  const delta = compare && value != null && refValue != null && value !== refValue
-    ? (percent ? `${fmt(value - refValue)} pp` : (refValue ? `${fmt(((value - refValue) / Math.abs(refValue)) * 100)} %` : null))
-    : null;
+  const text = (v) => kpiText(v, percent);
+  const delta = compare ? kpiDelta(value, refValue, percent) : null;
   return (
     <div className={cn('rounded-xl border p-4 flex flex-col gap-1', tone || 'border-border/60 bg-card')} data-testid={`DynamicReportKpis__${id}`}>
       <span className="flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -71,9 +88,6 @@ function Kpi({ id, label, hint, value, refValue, compare, percent, tone }) {
 export default function DynamicReportKpis({ kpis, compare }) {
   const ui = useUI();
   const { current: c, ref: r } = kpis;
-  const resultTone = c.result > 0
-    ? 'border-border/60 bg-card shadow-[inset_3px_0_0_hsl(var(--accent-highlight))]'
-    : c.result < 0 ? 'border-border/60 bg-card shadow-[inset_3px_0_0_hsl(var(--destructive))]' : null;
   return (
     <TooltipProvider>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5" data-testid="DynamicReportKpis">
@@ -100,7 +114,7 @@ export default function DynamicReportKpis({ kpis, compare }) {
           value={c.result}
           refValue={r.result}
           compare={compare}
-          tone={resultTone}
+          tone={resultTone(c.result)}
           data-testid="Kpi__5cc5db" />
         <Kpi
           id="margin"

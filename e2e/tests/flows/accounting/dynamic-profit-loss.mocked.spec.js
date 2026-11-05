@@ -1,4 +1,5 @@
 import { test, expect } from '../../helpers/test.js';
+import { readFileSync } from 'node:fs';
 import { login } from '../../helpers/auth.js';
 
 // @covers tools/app-shell/src/components/reports/dynamic/DynamicReportView.jsx
@@ -22,7 +23,8 @@ import { login } from '../../helpers/auth.js';
  *   E2E_USE_MOCK=1 BASE_URL=http://localhost:3105 E2E_DYNAMIC_REPORTS_FLAG=on \
  *     npx playwright test tests/flows/accounting/dynamic-profit-loss.mocked.spec.js --project=mocked
  *
- * The manifest is the dev server's real one (the real contract). `login()` already grants
+ * The catalog entry is built from the real contract, as the dev server's `listReports()` does,
+ * because the pre-push preview build serves no `/api/reports`. `login()` already grants
  * `profit-loss` in `myreportaccess`. Routes are installed AFTER `login()` so they beat its
  * generic `/sws/**` stub. Run against plain `npx vite` / `make dev`, never `make dev-mock`.
  */
@@ -52,12 +54,27 @@ const ENTRY = {
   ],
 };
 
+const CONTRACT = JSON.parse(readFileSync(new URL('../../../../artifacts/profit-loss/report-contract.json', import.meta.url), 'utf8'));
+const MANIFEST = [{
+  id: CONTRACT.reportId,
+  title: CONTRACT.title,
+  type: CONTRACT.type,
+  category: CONTRACT.category || 'other',
+  orientation: CONTRACT.orientation,
+  outputs: CONTRACT.outputs,
+  parameters: CONTRACT.parameters || [],
+  sections: CONTRACT.sections || [],
+}];
+
 const json = (body) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 
 async function installMocks(page) {
   const queries = { 'profit-loss': [], 'report-general-ledger': [], 'report-journal-entries': [] };
   const year = new Date().getFullYear();
   // Playwright tries the last registered route first: the catch-all goes before the specific ones.
+  await page.route('**/api/reports', (route) => (route.request().method() === 'GET'
+    ? route.fulfill(json(MANIFEST))
+    : route.fallback()));
   await page.route('**/sws/report-selectors/**', (route) => route.fulfill(json({ items: [] })));
   await page.route('**/sws/report-selectors/acctschema**', (route) => route.fulfill(json({ items: [{ id: 'AS1', name: 'Spain GAAP' }] })));
   await page.route('**/sws/report-selectors/year**', (route) => route.fulfill(json({

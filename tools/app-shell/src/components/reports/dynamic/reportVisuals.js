@@ -62,8 +62,8 @@ export function reportKpis(rows = []) {
  */
 export function kpiTrend(key, current, ref) {
   if (current == null || ref == null || current === ref) return null;
-  const grew = current > ref;
-  return (key === 'expenses' ? !grew : grew) ? 'improves' : 'worsens';
+  const good = key === 'expenses' ? current < ref : current > ref;
+  return good ? 'improves' : 'worsens';
 }
 
 /**

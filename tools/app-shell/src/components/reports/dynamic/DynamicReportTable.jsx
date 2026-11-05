@@ -78,6 +78,45 @@ function SplitRows({ split, compare, depth, ui }) {
   ));
 }
 
+/** Chevron that folds a parent row, or shows the split parts of a leaf account. */
+function RowToggle({ row, name, open, split, splittable, onToggle, onToggleSplit }) {
+  const ui = useUI();
+  if (!row.hasChildren && !splittable) return <span className="w-5 h-5 shrink-0" />;
+  const parent = Boolean(row.hasChildren);
+  let label = ui('dynamicReportShowSplit', { name });
+  if (parent) label = ui(open ? 'dynamicReportCollapseRow' : 'dynamicReportExpandRow', { name });
+  const rotated = parent ? open : Boolean(split);
+  return (
+    <button
+      type="button"
+      className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted"
+      aria-expanded={rotated}
+      aria-label={label}
+      onClick={() => (parent ? onToggle(row.node_id) : onToggleSplit(row))}
+      data-testid={parent ? 'DynamicReportTable__toggle' : 'DynamicReportTable__splitToggle'}
+    >
+      <ChevronRight
+        className={cn('w-3.5 h-3.5 transition-transform', rotated && 'rotate-90')}
+        data-testid="ChevronRight__2e8fe9" />
+    </button>
+  );
+}
+
+/** A leaf account's name opens its ledger (F9); any other row's name is plain text. */
+function RowName({ row, name, onOpenLedger }) {
+  if (!(onOpenLedger && canSplit(row) && row.value)) return <span>{name}</span>;
+  return (
+    <button
+      type="button"
+      className="text-left text-primary underline decoration-primary/30 underline-offset-4 hover:decoration-primary"
+      onClick={() => onOpenLedger(row)}
+      data-testid="DynamicReportTable__ledger"
+    >
+      {name}
+    </button>
+  );
+}
+
 /**
  * ETP-6080 — the account tree: one row per visible node, a chevron to fold it, and with a split
  * dimension chosen, a split toggle on every leaf account that lists its parts underneath. A leaf
@@ -124,32 +163,16 @@ export default function DynamicReportTable({ rows, compare, expanded, onToggle, 
             >
               <td className="px-3 py-1.5">
                 <div className="flex items-center gap-1" style={{ paddingLeft: `${row.depth * 16}px` }}>
-                  {row.hasChildren || splittable ? (
-                    <button
-                      type="button"
-                      className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted"
-                      aria-expanded={row.hasChildren ? open : Boolean(split)}
-                      aria-label={row.hasChildren
-                        ? ui(open ? 'dynamicReportCollapseRow' : 'dynamicReportExpandRow', { name })
-                        : ui('dynamicReportShowSplit', { name })}
-                      onClick={() => (row.hasChildren ? onToggle(row.node_id) : onToggleSplit(row))}
-                      data-testid={row.hasChildren ? 'DynamicReportTable__toggle' : 'DynamicReportTable__splitToggle'}
-                    >
-                      <ChevronRight
-                        className={cn('w-3.5 h-3.5 transition-transform', (row.hasChildren ? open : split) && 'rotate-90')}
-                        data-testid="ChevronRight__2e8fe9" />
-                    </button>
-                  ) : <span className="w-5 h-5 shrink-0" />}
-                  {onOpenLedger && canSplit(row) && row.value ? (
-                    <button
-                      type="button"
-                      className="text-left text-primary underline decoration-primary/30 underline-offset-4 hover:decoration-primary"
-                      onClick={() => onOpenLedger(row)}
-                      data-testid="DynamicReportTable__ledger"
-                    >
-                      {name}
-                    </button>
-                  ) : <span>{name}</span>}
+                  <RowToggle
+                    row={row}
+                    name={name}
+                    open={open}
+                    split={split}
+                    splittable={splittable}
+                    onToggle={onToggle}
+                    onToggleSplit={onToggleSplit}
+                    data-testid="RowToggle__2e8fe9" />
+                  <RowName row={row} name={name} onOpenLedger={onOpenLedger} data-testid="RowName__2e8fe9" />
                 </div>
               </td>
               <AmountCell
