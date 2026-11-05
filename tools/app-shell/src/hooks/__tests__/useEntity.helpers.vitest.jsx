@@ -1844,6 +1844,41 @@ describe('useEntity helpers', () => {
       expect(isUserAuthoredKey('description', userChangedKeysRef, calloutAppliedKeysRef)).toBe(true);
     });
 
+    // ETP-5840 CP-B1 — the invoice-date callout moved accountingDate, the user typed the stored
+    // value back. No diff, so the key used to be omitted and the backend (which replays the
+    // callout when invoiceDate changes without accountingDate) overwrote the retyped date.
+    // Matched pair: the first pins the retyped key travels, the second that a key ONLY the
+    // callout touched and that ends equal to stored still does not.
+    const invoiceDatePatch = (overrides) => buildSavePayload({
+      isNew: false,
+      selected: { id: '1', invoiceDate: '2026-09-09', accountingDate: '2026-09-09' },
+      editing: { id: '1', invoiceDate: '2026-11-04', accountingDate: '2026-09-09' },
+      entity: 'invoice',
+      apiBaseUrl: '/sws/neo/sales-invoice',
+      backendDefaultKeysRef: emptyRef(),
+      formFieldsRef: formFieldsRefWith([{ key: 'invoiceDate' }, { key: 'accountingDate' }]),
+      calloutTouchedKeysRef: { current: new Set(['accountingDate']) },
+      ...overrides,
+    });
+
+    it('sends a callout-touched key the user retyped back to its stored value', () => {
+      const payload = invoiceDatePatch({
+        userChangedKeysRef: { current: new Set(['invoiceDate', 'accountingDate']) },
+        // the retype reclaimed the key (handleChange deletes it on a non-callout write)
+        calloutAppliedKeysRef: emptyRef(),
+      });
+      expect(payload).toEqual({ invoiceDate: '2026-11-04', accountingDate: '2026-09-09' });
+    });
+
+    it('does not send a key only the callout touched when it ends equal to stored', () => {
+      const payload = invoiceDatePatch({
+        userChangedKeysRef: { current: new Set(['invoiceDate', 'accountingDate']) },
+        // last write was the callout's — not user-authored
+        calloutAppliedKeysRef: { current: new Set(['accountingDate']) },
+      });
+      expect(payload).toEqual({ invoiceDate: '2026-11-04' });
+    });
+
     // The case that actually broke the Purchase Order confirm, and that formFieldsRef alone
     // cannot catch: `priceIncludesTax` is declared readOnly in the generated OrderForm but sits
     // in `section: 'other'`, so no mounted EntityForm registers it and the registry reads it as
