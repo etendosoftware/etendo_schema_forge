@@ -447,10 +447,10 @@ function SurveyManager() {
 // AuthProvider's `onSessionChange` rather than only into the explicit logout paths, because
 // the automatic 401 auto-logout inside the shared request helper does not go through them:
 // after the raw-`fetch` sweep, ANY of ~290 call sites can be the one that discovers the
-// expired session. Reacting to the session losing its token covers every path at once, and
+// expired session. A normalized empty session marks logout; cookie sessions have no token.
 // `useLogout` stays as the explicit clear-then-logout choke point for the UI entry points.
 function clearSessionScopedState(session) {
-  if (!session?.token) {
+  if (!session?.token && !session?.username && !session?.clientId) {
     clearStoredDateRange();
     // ETP-5202 — the cached account identity (`sf_account_id` / `sf_account_email`) is not part
     // of the core's session storage, so nothing else clears it. Leaving it behind on a shared
