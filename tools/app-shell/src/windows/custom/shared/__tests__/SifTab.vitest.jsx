@@ -1444,6 +1444,23 @@ describe('SifTab', () => {
       render(<SifTab {...makeProps({ data: { documentStatus: 'DR', etvfacInvType: 'F1' }, onChange })} />);
       expect(onChange).not.toHaveBeenCalledWith('etvfacReverseinvtype', expect.anything());
     });
+
+    // A re-read (fetchById) hands over a NEW data object carrying the server-stored reverse type
+    // (SalesRectificativeFiscalDefaults copies it from the document type). The client must keep it.
+    it('never writes I when a re-read payload echoes the server-stored reverse type S', () => {
+      const onChange = vi.fn();
+      const reRead = () => makeProps({
+        data: { documentStatus: 'DR', etvfacInvType: 'R1', etvfacReverseinvtype: 'S' },
+        onChange,
+      });
+      const { rerender } = render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', etvfacInvType: 'F1' },
+        onChange,
+      })} />);
+      rerender(<SifTab {...reRead()} />);
+      rerender(<SifTab {...reRead()} />);
+      expect(onChange).not.toHaveBeenCalledWith('etvfacReverseinvtype', expect.anything());
+    });
   });
 
   // ── aeatsiiClaveTipo/aeatsiiClaveTipoFc auto-set-to-R effect (ETP-4783, scoped
@@ -1508,6 +1525,36 @@ describe('SifTab', () => {
       expect(onChange).toHaveBeenCalledWith('aeatsiiClaveTipo', 'F1');
       rerender(<SifTab {...props('F1')} />);
       expect(onChange).not.toHaveBeenCalledWith('aeatsiiClaveTipo', 'R');
+    });
+
+    it('sales: a type picked on one record does not block the R default on the next record', () => {
+      const onChange = vi.fn();
+      const props = (recordId, claveTipo) => makeProps({
+        recordId,
+        data: { documentStatus: 'DR', isRectificative: true, aeatsiiClaveTipo: claveTipo },
+        onChange,
+      });
+      const { rerender } = render(<SifTab {...props('inv-A', 'R')} />);
+      fireEvent.click(screen.getByTestId('mock-select-option-F1'));
+      rerender(<SifTab {...props('inv-A', 'F1')} />);
+      expect(onChange).not.toHaveBeenCalledWith('aeatsiiClaveTipo', 'R');
+
+      rerender(<SifTab {...props('inv-B', 'F1')} />);
+      expect(onChange).toHaveBeenLastCalledWith('aeatsiiClaveTipo', 'R');
+    });
+
+    it('sales: sets R when isRectificative flips from false to true on the same record', () => {
+      const onChange = vi.fn();
+      const props = (isRectificative) => makeProps({
+        data: { documentStatus: 'DR', isRectificative, aeatsiiClaveTipo: 'F1' },
+        onChange,
+      });
+      const { rerender } = render(<SifTab {...props(false)} />);
+      expect(onChange).not.toHaveBeenCalledWith('aeatsiiClaveTipo', 'R');
+
+      rerender(<SifTab {...props(true)} />);
+      const rCalls = onChange.mock.calls.filter(([f, v]) => f === 'aeatsiiClaveTipo' && v === 'R');
+      expect(rCalls).toHaveLength(1);
     });
 
     // ETP-5745 CP-10 — the corrected behavior under test.
