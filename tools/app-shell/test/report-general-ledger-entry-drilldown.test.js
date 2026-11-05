@@ -200,9 +200,10 @@ describe('report-general-ledger — rendered date link output (ETP-5013)', () =>
 // org with ad_isorgincluded (a parent covers its children, like Classic), so a
 // ledger opened from a parent-org P&L row must too, or its total differs from
 // the amount the user clicked. Every query that filters by org counts, the
-// GL opening balance included.
+// GL opening balance included. The tree is resolved once over ad_org, not once
+// per fact_acct line (the same orgs, far fewer calls); org 0 belongs to client 0.
 describe('General Ledger / Journal Entries — org scope includes child orgs (ETP-6080)', () => {
-  const TREE = "('__ORGID__' = '' OR ad_isorgincluded(fa.ad_org_id, '__ORGID__', fa.ad_client_id) <> -1)";
+  const TREE = "('__ORGID__' = '' OR fa.ad_org_id IN (SELECT o.ad_org_id FROM ad_org o WHERE o.ad_client_id IN ('__CLIENT_ID__', '0') AND ad_isorgincluded(o.ad_org_id, '__ORGID__', '__CLIENT_ID__') <> -1))";
   for (const [label, sql] of [
     ['General Ledger query', GL_CONTRACT.sql.query],
     ['General Ledger openingQuery', GL_CONTRACT.sql.openingQuery],
@@ -211,6 +212,7 @@ describe('General Ledger / Journal Entries — org scope includes child orgs (ET
     it(`${label} filters the org through ad_isorgincluded, never an exact match`, () => {
       assert.ok(sql.includes(TREE), sql);
       assert.doesNotMatch(sql, /fa\.ad_org_id = '__ORGID__'/);
+      assert.doesNotMatch(sql, /ad_isorgincluded\(fa\./, 'never once per fact_acct line');
     });
   }
 });
