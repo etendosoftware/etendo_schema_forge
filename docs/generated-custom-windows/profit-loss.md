@@ -64,7 +64,16 @@ Production read replica, the client with the most accounting lines (9.2k lines i
 - Split by contact, product or organization: 22–30 ms.
 - Operands query: 2–4 ms.
 
-Those numbers predate the 2026-11-05 rewrite. Before it, almost all of the tree's time was the scan of every `fact_acct` line the client ever posted, with `ad_isorgincluded` evaluated on each (about 14 µs per line): the period lived only inside the sums, so the cost followed the client's history, not the period. The tree and split queries now (1) resolve the org tree once over `ad_org` (`fa.ad_org_id IN (SELECT … FROM ad_org …)`, as General Ledger and Journal Entries do) and (2) keep in the `WHERE` only the lines that can fall in the current period or, when comparing, the compared one, written as blank-strippable clauses (`AND ('__DATEFROM__' = '' OR … OR (<compared period>))`) so a blank date, year or reference date opens that side instead of leaving a placeholder. The `SUM(CASE …)` still decides which period a line counts in, so the answer is unchanged: checked identical on 12 parameter combinations (dates, years, both, open compared period, all orgs, a contact filter) for the tree and the split. Guarded in `report-profit-loss-account-tree.test.js`. Production timing of the rewrite: see the ETP-6080 work log.
+Those numbers predate the 2026-11-05 rewrite. Before it, almost all of the tree's time was the scan of every `fact_acct` line the client ever posted, with `ad_isorgincluded` evaluated on each (about 14 µs per line): the period lived only inside the sums, so the cost followed the client's history, not the period. The tree and split queries now (1) resolve the org tree once over `ad_org` (`fa.ad_org_id IN (SELECT … FROM ad_org …)`, as General Ledger and Journal Entries do) and (2) keep in the `WHERE` only the lines that can fall in the current period or, when comparing, the compared one, written as blank-strippable clauses (`AND ('__DATEFROM__' = '' OR … OR (<compared period>))`) so a blank date, year or reference date opens that side instead of leaving a placeholder. The `SUM(CASE …)` still decides which period a line counts in, so the answer is unchanged: checked identical on 12 parameter combinations (dates, years, both, open compared period, all orgs, a contact filter) for the tree and the split. Guarded in `report-profit-loss-account-tree.test.js`. Production, measured 2026-11-05 on the read replica: same client as above (11.6k lines over 2019–2021, the largest on the instance; the rest have under 1k), all orgs, server execution time (`EXPLAIN ANALYZE`, 3 runs). Old vs new SQL returned identical rows for the tree and the split in every case.
+
+| Period | Before | After |
+|---|---|---|
+| 3 years | 141–187 ms | 22–28 ms |
+| 1 year | 134–153 ms | 7–8 ms |
+| 1 year vs the previous one | 136–225 ms | 14–19 ms |
+| 1 month | 136–387 ms | 4 ms |
+
+The cost now follows the lines inside the period(s) shown, not the client's whole history, so a tenant with many years posted pays only for the year on screen. Over the SSM tunnel every query took about 265 ms either way: that is the round trip, not the query. The data is still small (few clients, little history), so these figures show the shape of the gain, not a load limit.
 
 ## Gap assessment
 - One accounting schema per run.
