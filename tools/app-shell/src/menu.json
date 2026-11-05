@@ -168,6 +168,13 @@
           "windowId": "107"
         },
         {
+          "name": "invoice-inbox",
+          "label": "Invoice Inbox",
+          "favname": "Invoice Inbox",
+          "accessWindowId": "81AC659E93504927B459E0CAE80CE923",
+          "capability": "invoiceInbox"
+        },
+        {
           "name": "report-viewer-purchases",
           "label": "Reports",
           "favname": "Purchases Reports",
