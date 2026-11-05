@@ -684,6 +684,44 @@ describe('profit-loss SQL — the year clause is optional (ETP-6080)', () => {
   });
 });
 
+describe('profit-loss SQL — reads only the lines its periods can count (ETP-6080)', () => {
+  // The period used to live only inside the SUM(CASE ...): every line the client ever posted was
+  // read and org-checked on each query. The WHERE now keeps a line only when it can fall in the
+  // current period or, when comparing, in the compared one; the CASEs still decide which.
+  const facts = (sql) => sql.slice(sql.indexOf(' FROM fact_acct fa WHERE'), sql.indexOf(' GROUP BY', sql.indexOf(' FROM fact_acct fa WHERE')));
+
+  it('checks the org tree once over ad_org, never per fact_acct line', () => {
+    for (const sql of [SQL, CONTRACT.sql.splitQuery]) {
+      assert.doesNotMatch(sql, /ad_isorgincluded\(fa\./);
+      assert.ok(sql.includes("fa.ad_org_id IN (SELECT o.ad_org_id FROM ad_org o WHERE o.ad_client_id IN ('__CLIENT_ID__', '0')"));
+    }
+  });
+
+  it('bounds the lines by the period when not comparing', () => {
+    for (const sql of [SQL, CONTRACT.sql.splitQuery]) {
+      const where = facts(apply(sql, NO_YEAR));
+      assert.match(where, /fa\.dateacct >= '2026-01-01'::date OR \('false' = 'true'/);
+      assert.match(where, /fa\.dateacct <= '2026-12-31'::date OR \('false' = 'true'/);
+      assert.doesNotMatch(where, /__[A-Z]+__/);
+    }
+  });
+
+  it('keeps the compared period lines, and opens a side the compared period leaves blank', () => {
+    const cmp = { ...NO_YEAR, compareTo: 'true', fromReferenceDate: '2025-01-01', toReferenceDate: '2025-12-31' };
+    const where = facts(apply(SQL, cmp));
+    assert.match(where, /fa\.dateacct >= '2026-01-01'::date OR \('true' = 'true'\s+AND \('2025-01-01' = '' OR fa\.dateacct >= '2025-01-01'::date\)/);
+    // No reference dates: the blank clauses strip away, leaving an always-true compared period.
+    const open = facts(apply(SQL, { ...NO_YEAR, compareTo: 'true' }));
+    assert.doesNotMatch(open, /__[A-Z]+__/);
+    assert.match(open, /fa\.dateacct >= '2026-01-01'::date OR \('true' = 'true'\s*\)/);
+  });
+
+  it('drops every bound when nothing limits the period (old viewer, no dates)', () => {
+    const where = facts(apply(SQL, { acctSchemaId: 'S1', orgId: 'O1', compareTo: 'false' }));
+    assert.doesNotMatch(where, /dateacct/);
+  });
+});
+
 describe('profit-loss — business partner / product filters (ETP-6080)', () => {
   for (const [name, column] of [['bPartnerId', 'c_bpartner_id'], ['productId', 'm_product_id']]) {
     it(`${name} is an optional multi-select search in "dimensiones", filtering fa.${column}`, () => {
