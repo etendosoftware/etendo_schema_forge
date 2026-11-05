@@ -1366,9 +1366,8 @@ describe('SifTab', () => {
       expect(onChange).toHaveBeenCalledTimes(1);
       expect(onChange).toHaveBeenCalledWith('etvfacInvType', 'F1');
 
-      // Guard (`vfInvTypeDefaultedRef`) must not re-fire for the same record on
-      // a re-render, even though data.etvfacInvType is still empty (onChange is
-      // a no-op mock here, so it never actually gets written into `data`).
+      // A plain re-render with the same (still empty) value must not re-fire: the effect
+      // depends on the value, not on renders (ETP-5747 removed the per-record ref guard).
       rerender(<SifTab {...makeProps({ data: { documentStatus: 'DR' }, onChange })} />);
       expect(onChange).toHaveBeenCalledTimes(1);
     });
@@ -1383,6 +1382,67 @@ describe('SifTab', () => {
       const onChange = vi.fn();
       render(<SifTab {...makeProps({ data: { documentStatus: 'CO' }, onChange })} />);
       expect(onChange).not.toHaveBeenCalled();
+    });
+
+    // ETP-5747 repro: a forced re-read (fetchById after "Importar desde factura origen") puts the
+    // stored NULL back; the per-record guard had already fired, so the default never returned.
+    it('re-applies F1 after a re-read of the record empties etvfacInvType again', () => {
+      const onChange = vi.fn();
+      const props = (invType) => makeProps({ data: { documentStatus: 'DR', etvfacInvType: invType }, onChange });
+      const { rerender } = render(<SifTab {...props(null)} />);
+      rerender(<SifTab {...props('F1')} />);
+      rerender(<SifTab {...props(null)} />);
+      const f1Calls = onChange.mock.calls.filter(([f, v]) => f === 'etvfacInvType' && v === 'F1');
+      expect(f1Calls).toHaveLength(2);
+    });
+
+    it('never overrides the rectificative type the server copied from the document type', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', etvfacInvType: 'R1', etvfacReverseinvtype: 'I' },
+        onChange,
+      })} />);
+      expect(onChange).not.toHaveBeenCalledWith('etvfacInvType', expect.anything());
+    });
+  });
+
+  // ── etvfacReverseinvtype auto-default effect (ETP-4783, ETP-5747) ───────────
+
+  describe('etvfacReverseinvtype auto-default effect (ETP-4783, ETP-5747)', () => {
+    beforeEach(() => {
+      mockFiscalConfig('verifactu');
+    });
+
+    const reverseProps = (onChange, reverseType) => makeProps({
+      data: { documentStatus: 'DR', etvfacInvType: 'R1', etvfacReverseinvtype: reverseType },
+      onChange,
+    });
+
+    it('sets I when the invoice type is rectificative and the reverse type is blank', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...reverseProps(onChange, null)} />);
+      expect(onChange).toHaveBeenCalledWith('etvfacReverseinvtype', 'I');
+    });
+
+    it('re-applies I after a re-read of the record empties it again', () => {
+      const onChange = vi.fn();
+      const { rerender } = render(<SifTab {...reverseProps(onChange, null)} />);
+      rerender(<SifTab {...reverseProps(onChange, 'I')} />);
+      rerender(<SifTab {...reverseProps(onChange, null)} />);
+      const iCalls = onChange.mock.calls.filter(([f, v]) => f === 'etvfacReverseinvtype' && v === 'I');
+      expect(iCalls).toHaveLength(2);
+    });
+
+    it('never overwrites a reverse type that is already stored', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...reverseProps(onChange, 'S')} />);
+      expect(onChange).not.toHaveBeenCalledWith('etvfacReverseinvtype', expect.anything());
+    });
+
+    it('does nothing for a non-rectificative invoice type', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', etvfacInvType: 'F1' }, onChange })} />);
+      expect(onChange).not.toHaveBeenCalledWith('etvfacReverseinvtype', expect.anything());
     });
   });
 

@@ -117,8 +117,6 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
   const dateReadOnly = !isDraft || isProcessed;
   const siiFieldReadOnly = isSentToSii || isProcessed;
 
-  const vfInvTypeDefaultedRef = useRef(null);
-  const vfReverseTypeRef = useRef(null);
   // ETP-5747: the record id the user explicitly picked an SII invoice type for (see setSiiType).
   const siiTypeUserChoiceRef = useRef(null);
 
@@ -146,11 +144,15 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
   // state the first time the Verifactu panel is shown for a draft record with no
   // existing value. Scoped to this single field only — see task notes for why the
   // other new fields don't need this treatment.
+  //
+  // ETP-5747: no one-shot guard — a forced re-read of the record (fetchById, e.g. after
+  // "Importar desde factura origen") replaces pending edits with the stored NULL, and the default
+  // must come back. It only ever fills a BLANK value, so it never overrides a user choice nor the
+  // R* type the server copies from the document type (SalesRectificativeFiscalDefaults), and it
+  // cannot loop (once set, the value is no longer blank).
   useEffect(() => {
     if (!showVerifactu || !isDraft || !recordId) return;
-    if (vfInvTypeDefaultedRef.current === recordId) return;
     if (data?.etvfacInvType) return; // already has a value — never clobber
-    vfInvTypeDefaultedRef.current = recordId;
     onChange?.('etvfacInvType', 'F1');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showVerifactu, isDraft, recordId, data?.etvfacInvType, onChange]);
@@ -189,17 +191,19 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
   // the UI. When the Verifactu invoice type is rectificative (R1–R5) the field must
   // always be persisted as 'I' (Por Diferencias) — the only valid value. We write it
   // into the shared editing state so the batch save picks it up automatically.
-  // Keyed on recordId + vfInvType so a type change within the same record re-fires.
+  //
+  // ETP-5747: fills a BLANK value only, with no one-shot guard (it used to be keyed on
+  // recordId + vfInvType and wrote 'I' even over a stored value). A forced re-read drops the
+  // pending 'I' and it comes back; a value already stored (by the server default, which takes the
+  // document type's reverse type, or by Classic) is never overwritten; and it cannot loop.
   useEffect(() => {
     if (!showVerifactu || !isDraft || !recordId) return;
     const vfInvType = data?.etvfacInvType;
     if (typeof vfInvType !== 'string' || !vfInvType.startsWith('R')) return;
-    const key = `${recordId}:${vfInvType}`;
-    if (vfReverseTypeRef.current === key) return;
-    vfReverseTypeRef.current = key;
+    if (data?.etvfacReverseinvtype) return; // already has a value — never clobber
     onChange?.('etvfacReverseinvtype', 'I');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showVerifactu, isDraft, recordId, data?.etvfacInvType, onChange]);
+  }, [showVerifactu, isDraft, recordId, data?.etvfacInvType, data?.etvfacReverseinvtype, onChange]);
 
   // ETP-5745 CP-11: "Tipo de factura rectificativa" (aeatsiiTipoRectif) is hidden from the SII
   // panel — the UI only ever lets the user pick "Motivo de rectificación" (aeatsiiMotivoRectif),
