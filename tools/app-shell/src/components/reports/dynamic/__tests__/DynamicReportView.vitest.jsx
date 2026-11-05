@@ -161,6 +161,16 @@ describe('DynamicReportView — opening (§19)', () => {
     await waitFor(() => expect(queries()).toHaveLength(1));
     fireEvent.change(screen.getByTestId('DynamicReportPanel__year'), { target: { value: 'Y25' } });
     await waitFor(() => expect(queries().at(-1)).toMatchObject({ dateFrom: '2025-07-01', dateTo: '2026-06-30' }));
+    // The selector keeps the year; a shortcut that leaves the year clears it.
+    expect(screen.getByTestId('DynamicReportPanel__year')).toHaveValue('Y25');
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__shortcut-month'));
+    await waitFor(() => expect(screen.getByTestId('DynamicReportPanel__year')).toHaveValue(''));
+  });
+
+  it('opens with the current fiscal year shown in the selector', async () => {
+    renderView();
+    await waitFor(() => expect(queries()).toHaveLength(1));
+    expect(screen.getByTestId('DynamicReportPanel__year')).toHaveValue('Y26');
   });
 });
 

@@ -17,7 +17,7 @@ import { useReportQuery } from './useReportQuery.js';
 import { useReportDefaults } from './useReportDefaults.js';
 import { useAccountSplit } from './useAccountSplit.js';
 import { REPORT_EVENTS, filterTypeOf, useReportTelemetry } from './reportTelemetry.js';
-import { comparisonPeriod, matchingShortcut, openingPeriod, pickedYearPeriod, shortcutPeriod } from './dynamicDates.js';
+import { comparisonPeriod, matchingShortcut, matchingYear, openingPeriod, pickedYearPeriod, shortcutPeriod } from './dynamicDates.js';
 import { expandedNodeIdsParam, foldExpansion, visibleRows } from './reportTree.js';
 
 const EXPORTS = [
@@ -221,6 +221,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
           onCollapseAll={() => { groupToggled('collapse_all'); refold('none'); }}
           onReset={reset}
           shortcut={shortcut}
+          yearId={matchingYear(state, defaults.years, today)?.id}
           years={defaults.years}
           orgs={orgs}
           splitDimensions={splitDimensions}

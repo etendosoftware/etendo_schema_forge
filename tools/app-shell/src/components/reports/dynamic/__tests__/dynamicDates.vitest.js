@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/components/reports/dynamic/dynamicDates.js
 import {
-  comparisonPeriod, matchingShortcut, openingPeriod, pickedYearPeriod, previousPeriod,
+  comparisonPeriod, matchingShortcut, matchingYear, openingPeriod, pickedYearPeriod, previousPeriod,
   samePeriodLastYear, shortcutPeriod, yearContaining,
 } from '../dynamicDates.js';
 
@@ -39,6 +39,15 @@ for (const tz of ['Europe/Madrid', 'America/Argentina/Buenos_Aires']) {
     it('a year picked by hand: a closed one fills its range, the current one stops at today', () => {
       expect(pickedYearPeriod(JULY_CALENDAR[2], '2026-11-03')).toEqual({ dateFrom: '2025-07-01', dateTo: '2026-06-30' });
       expect(pickedYearPeriod(JULY_CALENDAR[1], '2026-11-03')).toEqual({ dateFrom: '2026-07-01', dateTo: '2026-11-03' });
+    });
+
+    it('names the year a period is exactly, for the year selector', () => {
+      const today = '2026-11-03';
+      expect(matchingYear({ dateFrom: '2025-07-01', dateTo: '2026-06-30' }, JULY_CALENDAR, today)?.id).toBe(JULY_CALENDAR[2].id);
+      expect(matchingYear({ dateFrom: '2026-07-01', dateTo: today }, JULY_CALENDAR, today)?.id).toBe(JULY_CALENDAR[1].id);
+      expect(matchingYear({ dateFrom: '2026-07-01', dateTo: '2026-10-31' }, JULY_CALENDAR, today)).toBeNull();
+      expect(matchingYear({ dateFrom: '2026-11-01', dateTo: today }, JULY_CALENDAR, today)).toBeNull();
+      expect(matchingYear({ dateFrom: '2026-07-01', dateTo: today }, undefined, today)).toBeNull();
     });
 
     it('month, quarter and last 12 months end today', () => {

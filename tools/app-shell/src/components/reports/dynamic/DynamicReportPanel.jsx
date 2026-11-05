@@ -34,7 +34,7 @@ function Section({ title, children }) {
  */
 export default function DynamicReportPanel({
   state, onChange, onShortcut, onPickYear, onLevel, onExpandAll, onCollapseAll, onReset,
-  shortcut, years, orgs, splitDimensions, levelOptions, label, sectionLabel, noFiscalYear,
+  shortcut, yearId, years, orgs, splitDimensions, levelOptions, label, sectionLabel, noFiscalYear,
 }) {
   const ui = useUI();
   return (
@@ -71,7 +71,7 @@ export default function DynamicReportPanel({
           <label className="text-xs">{ui('dynamicReportFiscalYear')}
             <select
               className={selectClass}
-              value=""
+              value={yearId ?? ''}
               onChange={(e) => onPickYear(years.find((y) => y.id === e.target.value))}
               data-testid="DynamicReportPanel__year"
             >

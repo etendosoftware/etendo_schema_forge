@@ -42,6 +42,14 @@ export function shortcutPeriod(kind, today) {
   throw new Error(`Unknown period shortcut: ${kind}`);
 }
 
+/** The fiscal year the period is exactly (as `pickedYearPeriod` fills it), so the selector can show it; else null. */
+export function matchingYear(period, years, today) {
+  return (years || []).find((y) => {
+    const { dateFrom, dateTo } = pickedYearPeriod(y, today);
+    return period?.dateFrom === dateFrom && period?.dateTo === dateTo;
+  }) || null;
+}
+
 /** Which shortcut (if any) the period matches, so the panel can show it as selected. */
 export function matchingShortcut(period, years, today) {
   if (!period?.dateFrom || period.dateTo !== today) return null;
