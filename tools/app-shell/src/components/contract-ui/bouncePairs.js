@@ -341,8 +341,9 @@ export function withDismissedPairs(lines, dismissedKeys) {
   const out = lines.map((line) => {
     if (line?.state !== BOUNCE_STATE || !dismissedKeys.has(line.bouncePair?.groupKey)) return line;
     changed = true;
-    const { bouncePair: _dropped, ...rest } = line;
-    return { ...rest, state: 'pending' };
+    const rest = { ...line, state: 'pending' };
+    delete rest.bouncePair;
+    return rest;
   });
   return changed ? out : lines;
 }
