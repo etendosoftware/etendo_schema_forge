@@ -515,7 +515,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     }
   };
 
-  const registerInvitationAccount = async ({ name: accountName, email: accountEmail, password: accountPassword }) => {
+  const registerInvitationAccount = async ({ name: accountName, email: accountEmail, password: accountPassword, termsVersion }) => {
     // ETP-5022: anonymous registration (pre-login); on401: 'ignore' keeps the
     // domain error handling below instead of an automatic logout.
     const res = await apiFetch('/sws/go/company-invitations/register-and-accept', {
@@ -529,6 +529,8 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
         token: token.trim(),
         name: accountName.trim(),
         password: accountPassword,
+        // ETP-6081 — the terms version the register screen showed, recorded on the new account.
+        ...(termsVersion ? { termsVersion } : {}),
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -695,6 +697,9 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
           emailReadOnly
           registerHandler={registerInvitationAccount}
           onRegistered={handleInvitationRegistered}
+          // ETP-6081: the invitee joins a company; the sign-up phone is not asked here.
+          askPhone={false}
+          askPassword
           data-testid="RegisterStep__fa3cd9" />
       </div>
     );
