@@ -9,7 +9,7 @@
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/useInvoiceInboxDiscard.js
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxDiscardDialog.jsx
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxRowActions.jsx
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 
 /**
