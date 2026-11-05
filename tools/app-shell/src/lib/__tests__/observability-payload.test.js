@@ -194,6 +194,39 @@ describe('observability payload normalization', () => {
     assert.deepEqual(sanitizeEventProperties({ status: ['opened'], tags: ['a'] }), {});
   });
 
+  // Bounce suggestions of the automatch modal: three pair counts and how the modal opened.
+  it('keeps the bounce pair counts inside 0..1e6 and auto_opened as a boolean', () => {
+    assert.deepEqual(
+      sanitizeEventProperties({
+        pairs_shown: 0,
+        pairs_preselected: 1000000,
+        pairs_checked_at_close: 2,
+        auto_opened: false,
+      }),
+      { pairs_shown: 0, pairs_preselected: 1000000, pairs_checked_at_close: 2, auto_opened: false }
+    );
+    assert.deepEqual(sanitizeEventProperties({ auto_opened: true }), { auto_opened: true });
+  });
+
+  it('drops a bounce pair count out of range or not a number, and a non-boolean auto_opened', () => {
+    for (const key of ['pairs_shown', 'pairs_preselected', 'pairs_checked_at_close']) {
+      for (const value of [-1, 1000001, Number.POSITIVE_INFINITY, Number.NaN, '3', true, null]) {
+        assert.deepEqual(sanitizeEventProperties({ [key]: value }), {}, `${key}=${String(value)}`);
+      }
+    }
+    for (const value of ['true', 1, 0, 'false', null]) {
+      assert.deepEqual(sanitizeEventProperties({ auto_opened: value }), {}, `auto_opened=${String(value)}`);
+    }
+  });
+
+  it('drops a fractional bounce pair count: the counts are integers', () => {
+    for (const key of ['pairs_shown', 'pairs_preselected', 'pairs_checked_at_close']) {
+      for (const value of [2.5, 0.1, 999999.9]) {
+        assert.deepEqual(sanitizeEventProperties({ [key]: value }), {}, `${key}=${String(value)}`);
+      }
+    }
+  });
+
   it('gives the denylist priority over the allowlist', () => {
     assert.deepEqual(
       sanitizeEventProperties({

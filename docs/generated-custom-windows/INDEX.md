@@ -62,6 +62,7 @@ This folder is the entry point for documentation that describes how generated an
 |------|-------------|
 | [payment-in.md](payment-in.md) | Generated payment-in flow with related documents and payment actions |
 | [payment-out.md](payment-out.md) | Custom payment-out flow with related documents and multiple child surfaces |
+| [financial-account.md](financial-account.md) | Financial account detail: Movimientos, Conciliación (split panel, automatch, bounce pairs and discarded lines since ETP-5581), Extractos importados, cash close and Reconciliaciones |
 | [financial-accounts-page.md](financial-accounts-page.md) | Cuentas landing page (ETP-4095) + offline account create / edit / archive (ETP-4096) |
 | [financial-account-management.md](financial-account-management.md) | Financial account create / edit / archive, bank connection, `financial-account` spec endpoint and MCP access (ETP-4096 onwards; split out of `financial-account.md`) |
 | [bank-reconciliation.md](bank-reconciliation.md) | Legacy placeholder; superseded by `financial-account.md` (kept hidden in menu.json until T8) |

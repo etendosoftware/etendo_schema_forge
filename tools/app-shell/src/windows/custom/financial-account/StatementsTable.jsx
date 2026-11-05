@@ -153,6 +153,8 @@ function formatMoney(amount, currency) {
 //   PENDING    → neutral (no lines reconciled yet)
 //   PARTIAL    → warning (some lines reconciled)
 //   RECONCILED → success (all lines reconciled)
+// "Reconciled" here means RESOLVED: since ETP-5581 a discarded line (only ever part of a bounce
+// pair) counts as resolved, exactly as the backend derives the status from matched + discarded.
 // ─────────────────────────────────────────────────────────────────────────────
 const STATUS_TO_TONE = {
   DRAFT: 'neutral',
@@ -544,7 +546,9 @@ function StatementRow({
         <span>
           <StatusPill
             status={s.status}
-            matched={s.matchedCount ?? 0}
+            // ETP-5581 — discarded lines are resolved too (`discardedCount`, disjoint from
+            // `matchedCount`), so "Parcial 3/4" agrees with the status the backend derived.
+            matched={(Number(s.matchedCount) || 0) + (Number(s.discardedCount) || 0)}
             total={s.lineCount ?? 0}
             ui={ui}
             data-testid="StatusPill__3acaeb" />
