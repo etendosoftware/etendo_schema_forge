@@ -231,8 +231,9 @@ test.describe('Onboarding — Full registration flow', () => {
     // capabilities-on session instead of a fresh register).
     await expect(page.locator('label[for="address"]')).toContainText(/opcional/i);
 
-    // Sector dropdown visible
-    await expect(page.locator('#sector')).toBeVisible();
+    // ETP-6082: the business sector is asked at sign-up; the company step asks it only of an
+    // account that has none (an SSO sign-up), which this mocked session is not.
+    await expect(page.locator('#sector')).toHaveCount(0);
 
     // Click "Atrás" — goes back to profile step with data preserved
     await page.getByRole('button', { name: /atr[aá]s|back/i }).click();

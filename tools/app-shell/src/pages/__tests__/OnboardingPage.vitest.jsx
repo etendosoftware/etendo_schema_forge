@@ -619,9 +619,6 @@ describe('OnboardingPage', () => {
     fireEvent.change(await screen.findByLabelText(/streetNameLabel/), {
       target: { value: 'Secret Street 123' },
     });
-    fireEvent.change(screen.getByLabelText(/onboardingSectorLabel/), {
-      target: { value: 'services' },
-    });
     fireEvent.click(screen.getByText('back'));
 
     expect(track).toHaveBeenCalledWith('onboarding_setup_step_back', {
