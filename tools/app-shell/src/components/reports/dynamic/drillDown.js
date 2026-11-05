@@ -3,6 +3,11 @@
  * `/query`) → one journal entry (Journal Entries `/query`) → the entry's document.
  */
 export const LEDGER_REPORT_ID = 'report-general-ledger';
+/**
+ * Ledger lines loaded before the user asks for all (ETP-6080 W2). Production, Nov 2026: p99 324 and
+ * max 661 lines per account and year, so the cap is hit by under 1% of account-years.
+ */
+export const LEDGER_LINE_CAP = 500;
 export const ENTRY_REPORT_ID = 'report-journal-entries';
 export const ENTRY_REQUIRED_PARAMS = Object.freeze(['orgId', 'acctSchemaId', 'factAcctGroupId']);
 

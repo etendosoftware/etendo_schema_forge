@@ -11,7 +11,7 @@ import { reportDocumentUrl } from '@/components/reports/reportDocumentUrl.js';
 import { useReportQuery } from './useReportQuery.js';
 import { REPORT_EVENTS, resultOf, startReportTiming, trackReportEvent } from './reportTelemetry.js';
 import {
-  ENTRY_REPORT_ID, ENTRY_REQUIRED_PARAMS, LEDGER_REPORT_ID, entryDocument, entryParams, filterLedgerRows,
+  ENTRY_REPORT_ID, ENTRY_REQUIRED_PARAMS, LEDGER_LINE_CAP, LEDGER_REPORT_ID, entryDocument, entryParams, filterLedgerRows,
   ledgerParams, ledgerSummary, sqlDateDay,
 } from './drillDown.js';
 
@@ -47,12 +47,16 @@ function Status({ loading, error, errorCode, empty }) {
   return null;
 }
 
-function Ledger({ params, sign, locale, dateText, onOpenEntry, session }) {
+function Ledger({ params, sign, locale, dateText, onOpenEntry, session, allLines, onLoadAll }) {
   const ui = useUI();
   const [search, setSearch] = useState('');
-  const { data, loading, error, errorCode, settled } = useReportQuery(LEDGER_REPORT_ID, params, { locale });
+  // One line past the cap tells a capped ledger from one that has exactly the cap.
+  const limit = allLines ? undefined : LEDGER_LINE_CAP + 1;
+  const { data, loading, error, errorCode, settled } = useReportQuery(LEDGER_REPORT_ID, params, { locale, limit });
   useDrillTiming(session, 'ledger', settled, errorCode);
-  const rows = data?.rows ?? [];
+  const loaded = data?.rows ?? [];
+  const capped = !allLines && loaded.length > LEDGER_LINE_CAP;
+  const rows = useMemo(() => (capped ? loaded.slice(0, LEDGER_LINE_CAP) : loaded), [capped, loaded]);
   const summary = useMemo(() => ledgerSummary(rows, data?.openingRows, sign), [rows, data, sign]);
   const shown = useMemo(() => filterLedgerRows(rows, search), [rows, search]);
   const totals = [
@@ -61,7 +65,7 @@ function Ledger({ params, sign, locale, dateText, onOpenEntry, session }) {
     ['credit', 'dynamicReportCredit', summary.credit],
     ['closing', 'dynamicReportClosing', summary.closing],
     ['movement', 'dynamicReportMovement', summary.movement],
-  ];
+  ].filter(([key]) => !capped || key === 'opening'); // the sums of a capped ledger would be wrong
   return (
     <div className="flex flex-col gap-3 min-h-0" data-testid="DynamicDrillPanel__ledger">
       {data && (
@@ -73,6 +77,14 @@ function Ledger({ params, sign, locale, dateText, onOpenEntry, session }) {
             </div>
           ))}
         </dl>
+      )}
+      {capped && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground" data-testid="DynamicDrillPanel__capped">
+          <span>{ui('dynamicReportLedgerCapped', { count: LEDGER_LINE_CAP })}</span>
+          <Button variant="outline" className="h-7 text-xs" disabled={loading} onClick={onLoadAll} data-testid="DynamicDrillPanel__loadAll">
+            {ui('dynamicReportLoadAllLines')}
+          </Button>
+        </div>
       )}
       <Input
         value={search}
@@ -192,10 +204,11 @@ export default function DynamicDrillPanel({ reportTitle, account, queryParams, s
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   const [entry, setEntry] = useState(null);
+  const [allLines, setAllLines] = useState(false);
   const dateText = (raw) => (raw ? formatCalendarDate(sqlDateDay(raw), locale.replace('_', '-')) : '');
   const ledger = useMemo(() => account && ledgerParams(queryParams, account), [account, queryParams]);
   const entryQuery = useMemo(() => entry && entryParams(queryParams, entry.id), [entry, queryParams]);
-  const close = () => { setEntry(null); onClose(); };
+  const close = () => { setEntry(null); setAllLines(false); onClose(); };
 
   const crumbs = [
     { key: 'report', label: reportTitle, go: close },
@@ -219,7 +232,7 @@ export default function DynamicDrillPanel({ reportTitle, account, queryParams, s
             ))}
           </nav>
         </SheetDescription>
-        {account && !entry && <Ledger params={ledger} sign={account?.sign} locale={locale} dateText={dateText} onOpenEntry={canOpenEntry ? setEntry : null} session={session} />}
+        {account && !entry && <Ledger params={ledger} sign={account?.sign} locale={locale} dateText={dateText} onOpenEntry={canOpenEntry ? setEntry : null} session={session} allLines={allLines} onLoadAll={() => setAllLines(true)} />}
         {entry && <Entry key={entry.id} params={entryQuery} locale={locale} accountValue={account.value} session={session} />}
       </SheetContent>
     </Sheet>

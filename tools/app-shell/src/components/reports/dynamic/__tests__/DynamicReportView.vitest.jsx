@@ -31,6 +31,7 @@ vi.mock('@/pages/ReportViewerPage.jsx', () => ({
 }));
 
 import DynamicReportView from '../DynamicReportView.jsx';
+import { LEDGER_LINE_CAP } from '../drillDown.js';
 
 const REPORT = {
   id: 'profit-loss',
@@ -61,6 +62,7 @@ const json = (body, { ok = true, status = 200 } = {}) => ({ ok, status, json: ()
 let years;
 let queryAnswer;
 let entryAnswer;
+let ledgerAnswer;
 // pg sends a SQL date as the server's local midnight in UTC: 15 September in Madrid.
 const LEDGER = {
   kind: 'rows',
@@ -84,7 +86,7 @@ function route(url, init) {
   if (url.includes('/report-selectors/acctschema')) return Promise.resolve(json({ items: [{ id: 'S1', name: 'Schema' }] }));
   if (url.includes('/report-selectors/year')) return Promise.resolve(json({ items: years }));
   if (url.endsWith('/render')) return Promise.resolve({ ok: true, status: 200, blob: () => Promise.resolve(new Blob(['x'])) });
-  if (url.endsWith('/report-general-ledger/query')) return Promise.resolve(json(LEDGER));
+  if (url.endsWith('/report-general-ledger/query')) return Promise.resolve(json(ledgerAnswer(JSON.parse(init.body))));
   if (url.endsWith('/report-journal-entries/query')) return Promise.resolve(json(entryAnswer));
   if (url.endsWith('/query')) {
     const { params } = JSON.parse(init.body);
@@ -103,6 +105,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date(2026, 10, 3, 12));
   years = JULY_YEARS;
   entryAnswer = ENTRY;
+  ledgerAnswer = () => LEDGER;
   queryAnswer = (params) => json({ kind: 'tree', rows: params.compareTo === 'true' ? withVariation(TREE) : TREE });
   apiFetchMock.mockReset();
   trackMock.mockReset();
@@ -264,7 +267,7 @@ describe('DynamicReportView — split, errors and exports', () => {
   });
 
   it('PDF export renders what the screen shows: same filters, level and expanded rows', async () => {
-    renderView();
+    renderView({ roleOrgs: [{ id: 'O1', name: 'Spain' }] });
     await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
     fireEvent.click(screen.getByTestId('DynamicReportView__export-pdf'));
     await waitFor(() => expect(apiFetchMock.mock.calls.some(([u]) => u.endsWith('/render'))).toBe(true));
@@ -272,6 +275,8 @@ describe('DynamicReportView — split, errors and exports', () => {
     const body = JSON.parse(init.body);
     expect(body).toMatchObject({ format: 'pdf', locale: 'es_ES' });
     expect(body.params).toMatchObject({ dateFrom: '2026-07-01', accountLevel: 'C', expandedNodeIds: 'E1' });
+    // The exported header names the org, not its id.
+    expect(body.params._display_orgId).toBe('Spain');
   });
 
   it('a fully collapsed export sends "none", never the blank value core reads as not sent', async () => {
@@ -368,6 +373,33 @@ describe('DynamicReportView — drill-down (F9)', () => {
     fireEvent.click((await screen.findAllByTestId('DynamicDrillPanel__openEntry'))[0]);
     expect(await screen.findByTestId('DynamicDrillPanel__noDocument')).toBeInTheDocument();
     expect(screen.queryByTestId('DynamicDrillPanel__openDocument')).toBeNull();
+  });
+
+  it('caps the ledger, hides the sums a capped ledger would get wrong, and loads every line on request', async () => {
+    const line = (i) => ({ ...LEDGER.rows[0], fact_acct_group_id: `G${i}` });
+    ledgerAnswer = ({ limit }) => ({ ...LEDGER, rows: Array.from({ length: limit ?? LEDGER_LINE_CAP + 40 }, (_, i) => line(i)) });
+    await openLedger();
+    await waitFor(() => expect(screen.getAllByTestId('DynamicDrillPanel__ledgerRow')).toHaveLength(LEDGER_LINE_CAP));
+    expect(JSON.parse(apiFetchMock.mock.calls.find(([u]) => u.endsWith('/report-general-ledger/query'))[1].body).limit).toBe(LEDGER_LINE_CAP + 1);
+    expect(screen.getByTestId('DynamicDrillPanel__capped')).toBeInTheDocument();
+    expect(screen.getByTestId('DynamicDrillPanel__opening')).toBeInTheDocument();
+    expect(screen.queryByTestId('DynamicDrillPanel__debit')).toBeNull();
+    expect(screen.queryByTestId('DynamicDrillPanel__movement')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('DynamicDrillPanel__loadAll'));
+    await waitFor(() => expect(screen.getAllByTestId('DynamicDrillPanel__ledgerRow')).toHaveLength(LEDGER_LINE_CAP + 40));
+    const calls = apiFetchMock.mock.calls.filter(([u]) => u.endsWith('/report-general-ledger/query'));
+    expect(JSON.parse(calls.at(-1)[1].body).limit).toBeUndefined();
+    expect(screen.queryByTestId('DynamicDrillPanel__capped')).toBeNull();
+    expect(screen.getByTestId('DynamicDrillPanel__debit')).toBeInTheDocument();
+  });
+
+  it('a ledger of exactly the cap is complete: no hint, every sum shown', async () => {
+    ledgerAnswer = () => ({ ...LEDGER, rows: Array.from({ length: LEDGER_LINE_CAP }, (_, i) => ({ ...LEDGER.rows[0], fact_acct_group_id: `G${i}` })) });
+    await openLedger();
+    await waitFor(() => expect(screen.getAllByTestId('DynamicDrillPanel__ledgerRow')).toHaveLength(LEDGER_LINE_CAP));
+    expect(screen.queryByTestId('DynamicDrillPanel__capped')).toBeNull();
+    expect(screen.getByTestId('DynamicDrillPanel__movement')).toBeInTheDocument();
   });
 
   it('the report crumb closes the panel', async () => {

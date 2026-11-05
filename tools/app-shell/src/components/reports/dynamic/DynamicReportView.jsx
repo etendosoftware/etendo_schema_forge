@@ -133,6 +133,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   };
   const reset = () => { setState(initialState(selectedOrgId, opening, defaultLevel)); refold('level'); };
 
+  const orgName = orgs.find((o) => o.id === state.orgId)?.name;
   const [exporting, setExporting] = useState(null);
   const [exportError, setExportError] = useState(null);
   const exportAs = async (format) => {
@@ -146,7 +147,15 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
         body: JSON.stringify({
           format,
           locale,
-          params: { ...queryParams, accountLevel: state.level, expandedNodeIds: expandedNodeIdsParam(expandedSet) },
+          params: {
+            ...queryParams,
+            accountLevel: state.level,
+            expandedNodeIds: expandedNodeIdsParam(expandedSet),
+            // The exported header names the filters, not their ids (report-filters.js reads `_display_*`).
+            _display_orgId: orgName,
+            _display_bPartnerId: state._display_bPartnerId,
+            _display_productId: state._display_productId,
+          },
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -163,7 +172,6 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   };
 
   const fmt = (d) => (d ? formatCalendarDate(d, locale.replace('_', '-')) : '');
-  const orgName = orgs.find((o) => o.id === state.orgId)?.name;
   const chips = [
     { key: 'period', label: ui('dynamicReportPeriodChip'), value: `${fmt(state.dateFrom)} – ${fmt(state.dateTo)}` },
     orgName && { key: 'org', label: label('orgId'), value: orgName },

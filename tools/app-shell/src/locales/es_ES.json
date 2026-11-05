@@ -26323,6 +26323,8 @@
     "dynamicReportClosing": "Saldo final",
     "dynamicReportMovement": "Movimiento del período",
     "dynamicReportSearchLines": "Buscar líneas",
+    "dynamicReportLedgerCapped": "Se muestran las primeras {count} líneas. Los totales necesitan todas las líneas.",
+    "dynamicReportLoadAllLines": "Cargar todas las líneas (puede tardar)",
     "dynamicReportDate": "Fecha",
     "dynamicReportDescription": "Descripción",
     "dynamicReportEntry": "Asiento",

@@ -45,8 +45,11 @@ export function filterTypeOf(patch) {
  *
  * `settled` is `useReportQuery`'s counter: it moves once per answered request, never on abort.
  */
+// randomUUID needs a secure context (https or localhost); a plain-http host falls back.
+const newSessionId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`);
+
 export function useReportTelemetry(reportId, { source, paramsKey, settled, errorCode }) {
-  const session = useMemo(() => ({ specName: reportId, reportSessionId: crypto.randomUUID() }), [reportId]);
+  const session = useMemo(() => ({ specName: reportId, reportSessionId: newSessionId() }), [reportId]);
   const opened = useRef(null);
   const marked = useRef(null);
   const pending = useRef(null);
