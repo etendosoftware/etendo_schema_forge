@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Calculator, Info } from 'lucide-react';
+import { Info } from 'lucide-react';
+import { Calculator } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { AccountSelect, useAccountSelectorPages } from '@/components/contract-ui';
 import { useUI, useLabel } from '@/i18n';
@@ -222,5 +223,8 @@ export default function BpCategoryAccountingPanel({ recordId, data, apiBaseUrl, 
   );
 }
 
-// Icon of this tab in DetailView's tab strip (`CustomLines.tabIcon`, see tabIcons.js).
+// Icon of this tab in DetailView's tab strip (`CustomLines.tabIcon`, see tabIcons.js): the Phosphor
+// calculator of the Figma, default `regular` weight. The strip renders every tab icon with
+// `className="h-4 w-4"`, which a Phosphor icon honours like a Lucide one (the classes size its svg
+// and it draws in `currentColor`), so it matches the other tab icons with no extra props.
 BpCategoryAccountingPanel.tabIcon = Calculator;
