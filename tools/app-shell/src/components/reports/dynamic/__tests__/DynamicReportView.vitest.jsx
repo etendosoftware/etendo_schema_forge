@@ -215,6 +215,8 @@ describe('DynamicReportView — comparison and chips', () => {
     expect(screen.getByTestId('DynamicReportKpis__incomeValue')).toHaveTextContent('1.000,00');
     expect(screen.getByTestId('DynamicReportKpis__incomeTrend').className).toContain('status-success');
     expect(screen.getByTestId('DynamicReportKpis__marginValue')).toHaveTextContent('100,00 %');
+    // Each card names how it is computed, for the hover tooltip and screen readers.
+    expect(screen.getByTestId('DynamicReportKpis__marginInfo')).toHaveAttribute('aria-label', expect.stringMatching(/\S/));
     expect(screen.getByTestId('DynamicReportView__chip-compare')).toBeInTheDocument();
   });
 

@@ -1,4 +1,7 @@
-import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Info } from 'lucide-react';
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { cn } from '@/lib/utils';
@@ -24,7 +27,7 @@ export function TrendPill({ trend, up, children, testId }) {
   );
 }
 
-function Kpi({ id, label, value, refValue, compare, percent, tone }) {
+function Kpi({ id, label, hint, value, refValue, compare, percent, tone }) {
   const ui = useUI();
   const trend = kpiTrend(id, value, refValue);
   const text = (v) => (v == null ? '—' : percent ? `${fmt(v)} %` : fmt(v));
@@ -33,7 +36,17 @@ function Kpi({ id, label, value, refValue, compare, percent, tone }) {
     : null;
   return (
     <div className={cn('rounded-xl border p-4 flex flex-col gap-1', tone || 'border-border/60 bg-card')} data-testid={`DynamicReportKpis__${id}`}>
-      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+        <Tooltip delayDuration={200}>
+          <TooltipTrigger asChild>
+            <button type="button" className="rounded-full hover:text-foreground" aria-label={hint} data-testid={`DynamicReportKpis__${id}Info`}>
+              <Info className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-xs normal-case tracking-normal font-normal">{hint}</TooltipContent>
+        </Tooltip>
+      </span>
       <span className="text-2xl font-semibold tabular-nums" data-testid={`DynamicReportKpis__${id}Value`}>{text(value)}</span>
       {compare && (
         <span className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -56,11 +69,13 @@ export default function DynamicReportKpis({ kpis, compare }) {
     ? 'border-accent-highlight bg-accent-highlight/25'
     : c.result < 0 ? 'border-destructive/40 bg-destructive/5' : null;
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5" data-testid="DynamicReportKpis">
-      <Kpi id="income" label={ui('dynamicReportKpiIncome')} value={c.income} refValue={r.income} compare={compare} tone="border-primary/30 bg-primary/5" />
-      <Kpi id="expenses" label={ui('dynamicReportKpiExpenses')} value={c.expenses} refValue={r.expenses} compare={compare} />
-      <Kpi id="result" label={ui('dynamicReportKpiResult')} value={c.result} refValue={r.result} compare={compare} tone={resultTone} />
-      <Kpi id="margin" label={ui('dynamicReportKpiMargin')} value={c.margin} refValue={r.margin} compare={compare} percent />
-    </div>
+    <TooltipProvider>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5" data-testid="DynamicReportKpis">
+        <Kpi id="income" label={ui('dynamicReportKpiIncome')} hint={ui('dynamicReportKpiIncomeHint')} value={c.income} refValue={r.income} compare={compare} tone="border-primary/30 bg-primary/5" />
+        <Kpi id="expenses" label={ui('dynamicReportKpiExpenses')} hint={ui('dynamicReportKpiExpensesHint')} value={c.expenses} refValue={r.expenses} compare={compare} />
+        <Kpi id="result" label={ui('dynamicReportKpiResult')} hint={ui('dynamicReportKpiResultHint')} value={c.result} refValue={r.result} compare={compare} tone={resultTone} />
+        <Kpi id="margin" label={ui('dynamicReportKpiMargin')} hint={ui('dynamicReportKpiMarginHint')} value={c.margin} refValue={r.margin} compare={compare} percent />
+      </div>
+    </TooltipProvider>
   );
 }
