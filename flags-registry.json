@@ -1130,9 +1130,11 @@
           "BpCategoryAccountingPanel",
           "BpCategoryTable",
           "ContactTypeField",
+          "ContactTypeQuickFilter",
+          "DefaultAssignmentField",
           "windows/custom/business-partner-category"
         ],
-        "$symbolsComment": "Frontend toggle points that never name the key: the registry.js line that loads the window wrapper (windows/custom/business-partner-category), the decisions.json/generated references to BpCategoryTable and ContactTypeField, and the contactVendorCreditor locale key. contactCategoryTypeEnabled is the descriptor's toggle point; useContactCreateTypeGate the create popups' one. FLAG_CONTACT_CATEGORY_TYPE is the backend constant in GoFeatureFlags (framework)."
+        "$symbolsComment": "Frontend toggle points that never name the key: the registry.js line that loads the window wrapper (windows/custom/business-partner-category), the decisions.json/generated reference to BpCategoryTable (whose ToolbarQuickFilter static is ContactTypeQuickFilter), the DefaultAssignmentField / ContactTypeField renderers the wrapper swaps in, and the contactVendorCreditor locale key. contactCategoryTypeEnabled is the descriptor's toggle point; useContactCreateTypeGate the create popups' one. FLAG_CONTACT_CATEGORY_TYPE is the backend constant in GoFeatureFlags (framework)."
       },
       "paths": {
         "frontend": [
@@ -1152,7 +1154,7 @@
           "src/com/etendoerp/go/schemaforge/handlers/ContactTypeTelemetry.java"
         ]
       },
-      "$pathsComment": "Owned code only. Shared toggle points (removal cost): ContactsBusinessPartnerForm.jsx (category sync), BillingPreferencesForm.jsx (label), contactsImportDescriptor.js (both import variants side by side), useCreateContactModal.jsx and copilot/ocr/CreateContactModalAdapter.jsx (owned by lookup-create-contact; they call useContactCreateTypeGate), lookupCreateTargets.js (createOmitUntouched), registry.js (window wrapper), both decisions.json files (ContactTypeField, BpCategoryTable, hiddenWhenFlag on customer/vendor) and the locales. Generic capabilities added by ETP-5791 are NOT owned and stay when the flag goes: importFlagGates.js (hiddenWhenFlag), useFeatureFlags/readFeatureFlag (lib/flags, framework), RecordCreateModal validateBeforeCreate/omitUntouched, EntityForm customRenderer ownsLabel/onFieldChange/onCommit, gateDetailTab CustomLines gating, SectionShell/useAccountSelectorPages, backendErrors mappings. Backend: BusinessPartnerHandler.java is a touch point (shared handler that calls ContactTypeRules); GoFeatureFlags.java is framework.",
+      "$pathsComment": "Owned code only. Shared toggle points (removal cost): ContactsBusinessPartnerForm.jsx (category sync), BillingPreferencesForm.jsx (label), contactsImportDescriptor.js (both import variants side by side), useCreateContactModal.jsx and copilot/ocr/CreateContactModalAdapter.jsx (owned by lookup-create-contact; they call useContactCreateTypeGate), lookupCreateTargets.js (createOmitUntouched), registry.js (window wrapper), both decisions.json files (BpCategoryTable, hiddenWhenFlag on customer/vendor) and the locales. Generic capabilities added by ETP-5791 are NOT owned and stay when the flag goes: importFlagGates.js (hiddenWhenFlag), useFeatureFlags/readFeatureFlag (lib/flags, framework), RecordCreateModal validateBeforeCreate/omitUntouched, EntityForm customRenderer ownsLabel/onFieldChange/onCommit, gateDetailTab CustomLines gating, the CustomLines `tabIcon` static (resolveTabIcon icon argument), SectionShell/useAccountSelectorPages, backendErrors mappings. Backend: BusinessPartnerHandler.java is a touch point (shared handler that calls ContactTypeRules); GoFeatureFlags.java is framework.",
       "testSpecs": {
         "unit": [
           {

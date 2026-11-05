@@ -1207,7 +1207,9 @@ export function buildInitialTabs(p) {
     entries.push({ tab: linesTab, ...computeLinesEntryKey(p.detailTabOrder, p.detailTabIndex, secondaryEntries) });
   } else if (p.CustomLines) {
     entries.push({
-      tab: { key: 'customLines', label: p.customLinesLabel, count: p.customLinesCount ?? null },
+      // `icon`: the CustomLines component's optional static `tabIcon` (ETP-5791); absent ⇒ the
+      // icon resolves from the key as before (resolveTabIcon).
+      tab: { key: 'customLines', label: p.customLinesLabel, count: p.customLinesCount ?? null, icon: p.CustomLines.tabIcon ?? null },
       weight: LINES_DEFAULT_WEIGHT,
       insertionIndex: -0.5,
     });
