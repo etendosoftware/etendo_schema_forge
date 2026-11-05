@@ -9,7 +9,7 @@ Show the result of a period (revenue, expenses and the profit or loss they add u
 - Filter by one or more business partners (**Contacto**) and products (**Producto**) in the **Dimensiones** section (ETP-6080). Both are optional multi-select popups; empty means no filter.
 - Choose the account level (Heading / Account / Breakdown / Subaccount) and whether to show only accounts with value.
 - Render the report inline as HTML preview and download it as PDF, XLSX, or CSV. XLSX and CSV share the Balance Sheet's flat grid (see `balance-sheet.md`).
-- With the `dynamic-reports` flag on, use the interactive view instead: live filters, an on-screen tree, comparison, splits by dimension and a drill-down to the ledger, the entry and the document (see *Interactive view* below).
+- With the `dynamic-reports` flag on, the report's card (and list row) in *Informes* carries an **Interactivo** tag and a soft primary glow (`DynamicReportBadge.jsx`; only reports in `DYNAMIC_REPORT_IDS`). Use the interactive view instead: live filters, an on-screen tree, comparison, splits by dimension and a drill-down to the ledger, the entry and the document (see *Interactive view* below).
 
 ## Interaction model
 - Route: `/report-viewer?report=profit-loss`. The old viewer also reads parameters from the URL (`&dateFrom=…`) and runs the report; the interactive view ignores them and opens on its own defaults (accepted: nothing in the app builds such links for this report).

@@ -26085,6 +26085,8 @@
     "dynamicReportClosing": "Closing balance",
     "dynamicReportMovement": "Period movement",
     "dynamicReportSearchLines": "Search lines",
+    "dynamicReportBadge": "Interactive",
+    "dynamicReportBadgeHint": "Live filters, foldable tree and drill-down to the entry",
     "dynamicReportLedgerCapped": "Showing the first {count} lines. Totals need every line.",
     "dynamicReportLoadAllLines": "Load all lines (may take a while)",
     "dynamicReportDate": "Date",

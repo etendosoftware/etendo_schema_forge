@@ -1,5 +1,6 @@
 // @covers tools/app-shell/src/pages/ReportViewerPage.jsx
 // @covers tools/app-shell/src/components/reports/dynamic/dynamicReports.js
+// @covers tools/app-shell/src/components/reports/dynamic/DynamicReportBadge.jsx
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { DYNAMIC_REPORT_IDS, opensDynamicView } from '@/components/reports/dynamic/dynamicReports.js';
 
@@ -95,6 +96,31 @@ describe('ReportViewerPage — how the dynamic view was opened (F10 source)', ()
     render(<ReportViewerPage />);
     fireEvent.click(await screen.findByText('Profit & Loss'));
     expect(await screen.findByTestId('DynamicReportView')).toHaveAttribute('data-source', 'menu');
+  });
+});
+
+describe('ReportViewerPage — the catalog marks interactive reports', () => {
+  beforeEach(() => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: () => Promise.resolve(REPORTS) });
+    mockSearchParams = new URLSearchParams('category=finance');
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('flag on: only the report with an interactive view carries the tag', async () => {
+    mockFlagOn = true;
+    render(<ReportViewerPage />);
+    await screen.findByText('Balance Sheet');
+    const tags = screen.getAllByTestId('DynamicReportBadge');
+    expect(tags).toHaveLength(1);
+    expect(tags[0].closest('button')).toHaveTextContent('Profit & Loss');
+    expect(tags[0]).toHaveTextContent('dynamicReportBadge');
+  });
+
+  it('flag off: no report carries the tag', async () => {
+    mockFlagOn = false;
+    render(<ReportViewerPage />);
+    await screen.findByText('Balance Sheet');
+    expect(screen.queryByTestId('DynamicReportBadge')).toBeNull();
   });
 });
 

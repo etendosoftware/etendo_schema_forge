@@ -19,6 +19,8 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { fetchMyReportAccess } from '@/lib/rolesApi.js';
 import { useFeatureFlag, DYNAMIC_REPORTS } from '@/lib/flags';
 import { opensDynamicView } from '@/components/reports/dynamic/dynamicReports.js';
+import { cn } from '@/lib/utils';
+import DynamicReportBadge, { DYNAMIC_REPORT_CARD_CLASS } from '@/components/reports/dynamic/DynamicReportBadge.jsx';
 import { reportDocumentUrl } from '@/components/reports/reportDocumentUrl.js';
 // Etendo context path prefix (e.g. "/etendo" in production, "" in local dev where
 // Vite proxies /sws/* directly). Same logic as auth/api.js detectBaseUrl().
@@ -162,13 +164,13 @@ function ReportCardPreview({ reportId }) {
 // literals in application UI): card surface + border, muted frame, and
 // foreground/muted-foreground text, all resolved from the current theme
 // instead of Figma's light-mode-only colors.
-function ReportCard({ report, onRun }) {
+function ReportCard({ report, onRun, interactive = false }) {
   const { locale } = useLocaleSwitch();
   const reportTitle = report.title?.[locale] || report.title?.en_US || report.title?.es_ES || report.id;
   return (
     <button
       onClick={() => onRun(report)}
-      className="flex flex-col items-stretch w-full p-1 rounded-xl border border-border bg-card shadow-sm hover:border-primary/30 hover:shadow-md transition-all text-left overflow-hidden"
+      className={cn('flex flex-col items-stretch w-full p-1 rounded-xl border border-border bg-card shadow-sm hover:border-primary/30 hover:shadow-md transition-all text-left overflow-hidden', interactive && DYNAMIC_REPORT_CARD_CLASS)}
     >
       <ReportCardPreview reportId={report.id} data-testid="ReportCardPreview__3c998a" />
       <div className="flex flex-col items-stretch gap-1 p-3">
@@ -176,6 +178,7 @@ function ReportCard({ report, onRun }) {
           <h3 className="text-base font-medium text-foreground min-w-0 flex-1">
             <TruncatedText text={reportTitle} data-testid="ReportCard__title" />
           </h3>
+          {interactive && <DynamicReportBadge />}
         </div>
         <div className="flex gap-2 flex-wrap pt-1">
           {/* 'html' is filtered out here only — it's still a real entry in
@@ -1863,7 +1866,7 @@ const CATEGORY_LABELS = {
 // Deliberately just Reporte + Formato: unlike a real AD window's list, a
 // report has no secondary identifiers (SKU, category, stock...) worth a
 // column, so the mockup this was built from drops "Tipo" too.
-function ReportListRow({ report, onRun, locale }) {
+function ReportListRow({ report, onRun, locale, interactive = false }) {
   const reportTitle = report.title?.[locale] || report.title?.en_US || report.title?.es_ES || report.id;
   return (
     <button
@@ -1871,6 +1874,7 @@ function ReportListRow({ report, onRun, locale }) {
       className="w-full flex items-center gap-3 px-3 py-2.5 border-b border-border-subtle hover:bg-muted/40 transition-colors text-left"
     >
       <span className="flex-1 min-w-0 text-sm font-medium text-foreground truncate">{reportTitle}</span>
+      {interactive && <DynamicReportBadge />}
       <div className="flex gap-2 flex-wrap shrink-0">
         {/* Same 'html' exclusion as ReportCard's badge row (ETP-5013) — a real,
             still-rendered output, just not advertised as downloadable here. */}
@@ -1886,6 +1890,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
   const tMenu = useMenuLabel();
   const ui = useUI();
   const { toggleFavorite, isFavorite } = useFavorites();
+  const dynamicReportsOn = useFeatureFlag(DYNAMIC_REPORTS);
   const favKey = categoryFilter ? `report-viewer?category=${categoryFilter}` : 'report-viewer';
   const favActive = isFavorite(favKey);
   // Same list/gallery switch as the Product window (ListView.jsx's ViewToggle,
@@ -1962,6 +1967,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
                 <ReportListRow
                   key={r.id}
                   report={r}
+                  interactive={opensDynamicView(r.id, dynamicReportsOn)}
                   onRun={selectReport}
                   locale={locale}
                   data-testid="ReportListRow__3c998a" />
@@ -1986,6 +1992,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
                 <ReportCard
                   key={r.id}
                   report={r}
+                  interactive={opensDynamicView(r.id, dynamicReportsOn)}
                   onRun={selectReport}
                   data-testid="ReportCard__3c998a" />
               ))}
