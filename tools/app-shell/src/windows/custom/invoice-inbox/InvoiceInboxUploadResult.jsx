@@ -67,7 +67,7 @@ function DismissButton({ ui, onDismiss }) {
       className="flex h-7 w-7 flex-none items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
       data-testid="invoice-inbox-result-dismiss"
     >
-      <X className="h-4 w-4" aria-hidden="true" />
+      <X className="h-4 w-4" aria-hidden="true" data-testid="X__6b19e6" />
     </button>
   );
 }
@@ -126,7 +126,7 @@ export default function InvoiceInboxUploadResult({ result }) {
             {hint && <div className="text-xs text-muted-foreground" data-testid="invoice-inbox-result-hint">{hint}</div>}
             <DetailLines summary={summary} ui={ui} data-testid="DetailLines__6b19e6" />
           </div>
-          {summary.pending === 0 && <DismissButton ui={ui} onDismiss={result.dismiss} />}
+          {summary.pending === 0 && <DismissButton ui={ui} onDismiss={result.dismiss} data-testid="DismissButton__6b19e6" />}
         </div>
       )}
     </section>
