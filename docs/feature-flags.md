@@ -51,12 +51,11 @@ Mixpanel is an optional analytics destination.
 
 The provider posts the OpenFeature evaluation context to Datadog's flag CDN
 (`ff-cdn.<site>`) and receives the assignments precomputed for that context. It
-refetches on every context change (sign-in, `refreshAccountIdentity`, logout) and
+refetches when the normalized evaluation context changes (sign-in, account/company switch or logout); identical settled or in-flight context publications are deduplicated and
 emits `ConfigurationChanged`, which `useFeatureFlag` already rereads on. **It does
 not poll**: a dashboard change reaches an open tab on its next context change or
 reload, not within a poll interval as with ConfigCat. The last configuration is
-cached in IndexedDB per client token and served as `STALE` while a fetch is
-pending.
+cached in IndexedDB per client token and used as a `STALE` fallback only when the network fails and the cached context matches. Reads are guarded against assignments accepted for a different context: a failed company/account switch or logout cannot expose the previous account's flag values. Same-context cached assignments remain usable.
 
 Datadog flag environments map one to one to `VITE_APP_ENV`. Only **Experimental**
 and **Production** are enabled in Datadog today; a build whose environment is
@@ -77,10 +76,10 @@ Leaving both on would record each flag twice in RUM, under the raw key
 into the evaluation context.
 
 **Data sent to Datadog.** The browser POSTs the whole evaluation context —
-`targetingKey`/`accountId`, the lowercase `email` and the AD_Client `account_id` —
+`targetingKey` (trimmed original-case email), the opaque `accountId`, the lowercase `email`, ConfigCat-compatible `Email`, and the AD_Client under `clientId` plus its legacy `account_id` alias —
 to Datadog's flag CDN (`ff-cdn.datadoghq.eu`) to get its assignments, and the
 exposure and evaluation-telemetry events go to Datadog's intake. The backend
-(`GoFeatureFlags`, com.etendoerp.go) sends the same attributes. This is accepted
+(`GoFeatureFlags`, com.etendoerp.go) shares the email targeting key, `email`/`Email` attributes and `clientId`; the browser keeps its additional opaque account and legacy analytics attributes. This is accepted
 under the same Datadog data processing as our logs and RUM. Note the difference
 from ConfigCat, which downloads the rules and evaluates in the client: with
 Datadog the context, account email included, leaves the client.
@@ -120,19 +119,32 @@ the next microtask to account for OpenFeature provider installation ordering.
 
 ## Identity and privacy
 
-`buildEvaluationContext` takes the authenticated platform `accountId` as
-`targetingKey`; an ERP username is a temporary fallback. `account_id` is the
-AD_Client tenant ID, a different identity. The current account email remains an
-explicit targeting attribute where supplied by the session, not an analytics
-profile. Datadog RUM auto-enrichment is disabled for flag context so it cannot
-silently merge old analytics identity into flag evaluations.
+`buildEvaluationContext` uses the trimmed original-case account email as
+`targetingKey`, matching backend `FeatureFlagContext.forAccount`. Lowercase `email`
+and original-case `Email` support targeting rules on Datadog and ConfigCat.
+`accountId` remains the opaque platform account ID. `clientId` and the compatibility
+alias `account_id` both identify the AD_Client company, a different identity.
+An ERP username is a temporary fallback until the account email is known.
 
-`refreshAccountIdentity` resolves `/sws/neo/session` with authenticated request
-headers, caches platform account fields, updates OpenFeature and assigns the
-opaque account ID to observability user identity and client ID to analytics
-account identity. Logout clears cached/in-memory identity and evaluation context.
-A generation and identity snapshot guard ignores a session response that completes
-after logout or a direct account/tenant switch.
+`useAccountIdentity` consumes the authenticated `account` from `useAuth()` instead
+of looking it up again. Changing company retains the same account and publishes
+one updated context. A real account switch clears the prior account first, even
+when the ERP username and company are unchanged. Token rotation does not resolve
+an already resolved identity again. An unresolved legacy lookup can retry when its
+credential changes. Unresolved cookie and legacy contexts also receive at most two
+automatic retries (after 500 ms and 1500 ms), cancelled on identity change or unmount;
+successful contexts never poll. A legacy session without a complete account uses
+`refreshAccountIdentity` and `/sws/neo/session`; incomplete authoritative accounts
+cannot inherit another account's cached email.
+
+Stored account fields are not proof of which account owns a cookie session.
+Bootstrap and session telemetry do not restore unverified account cache data.
+An authoritative account or validated session lookup owns cache replacement;
+a different cached owner triggers cleanup first. Cookie sessions without a bearer
+token remain valid. Only a normalized empty session clears the account on logout.
+Generation, identity snapshot and AbortSignal guards discard stale lookups,
+including an A-to-B-to-A company change. Provider `Error` and `Stale` events also
+refresh mounted flag hooks; a same-context stale configuration is retained.
 
 Do not target rules on secrets or rely on browser flags for entitlement. The
 browser client token and evaluated assignments are visible to the browser.

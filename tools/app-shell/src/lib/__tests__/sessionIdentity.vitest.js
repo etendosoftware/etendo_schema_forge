@@ -1,8 +1,10 @@
+// @covers tools/app-shell/src/lib/sessionIdentity.js
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   clearSessionIdentity,
   getSessionIdentity,
+  getSessionIdentityEpoch,
   setSessionIdentity,
 } from '../sessionIdentity.js';
 
@@ -65,5 +67,44 @@ describe('sessionIdentity', () => {
     getSessionIdentity().clientId = 'tampered';
 
     expect(getSessionIdentity().clientId).toBe('client-1');
+  });
+});
+
+
+describe('session identity epochs for asynchronous ownership', () => {
+  afterEach(() => clearSessionIdentity());
+
+  it('keeps repeated publication and client-name enrichment in the same epoch', () => {
+    setSessionIdentity({ username: 'ana', clientId: 'company-a' });
+    const epoch = getSessionIdentityEpoch();
+    setSessionIdentity({ username: 'ana', clientId: 'company-a', clientName: 'Current Name' });
+    setSessionIdentity({ username: 'ana', clientId: 'company-a' });
+    expect(getSessionIdentityEpoch()).toBe(epoch);
+    expect(getSessionIdentity().clientName).toBe('Current Name');
+  });
+
+  it('invalidates the previous company epoch even when switching back to the same fields', () => {
+    setSessionIdentity({ username: 'ana', clientId: 'company-a' });
+    const epoch = getSessionIdentityEpoch();
+    setSessionIdentity({ username: 'ana', clientId: 'company-b' });
+    setSessionIdentity({ username: 'ana', clientId: 'company-a' });
+    expect(getSessionIdentityEpoch()).toBeGreaterThan(epoch);
+    expect(getSessionIdentity()).toEqual({ username: 'ana', clientId: 'company-a' });
+  });
+
+  it('invalidates the previous login even when the same user and company return', () => {
+    setSessionIdentity({ username: 'ana', clientId: 'company-a' });
+    const epoch = getSessionIdentityEpoch();
+    clearSessionIdentity();
+    setSessionIdentity({ username: 'ana', clientId: 'company-a' });
+    expect(getSessionIdentityEpoch()).toBeGreaterThan(epoch);
+  });
+
+  it('invalidates pending work for a reset of an already empty session', () => {
+    clearSessionIdentity();
+    const epoch = getSessionIdentityEpoch();
+    clearSessionIdentity();
+    expect(getSessionIdentityEpoch()).toBeGreaterThan(epoch);
+    expect(getSessionIdentity()).toEqual({});
   });
 });

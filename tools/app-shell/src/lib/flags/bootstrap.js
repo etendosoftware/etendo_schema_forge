@@ -5,7 +5,8 @@ import { createFlagExposureHook, resetExposureCache } from './flag-exposure.js';
 import { reset, identify, group } from '../observability.js';
 import { loadDatadogFlags } from '../observability/sdk.js';
 import { authHeaders, apiFetch } from '@etendosoftware/app-shell-core/auth/api';
-import { clearSessionIdentity, getSessionIdentity } from '../sessionIdentity.js';
+import { clearSessionIdentity, getSessionIdentity, setSessionIdentity } from '../sessionIdentity.js';
+import { reportFlagDiagnostic } from './diagnostics.js';
 /**
  * Feature-flag bootstrap.
  *
@@ -53,14 +54,19 @@ const ACCOUNT_EMAIL_KEY = 'sf_account_email';
  */
 let identityGeneration = 0;
 let identityResetBarrier = Promise.resolve();
+let pendingContextUpdate;
+let verifiedAccount;
 
 /** Serializes provider cleanup so a new identity cannot be assigned over a pending reset. */
 export function waitForIdentityReset() {
   return identityResetBarrier;
 }
 
-export function clearAccountIdentity(storage = globalThis.localStorage) {
+export function clearAccountIdentity(storage = globalThis.localStorage, reason = 'logout') {
   identityGeneration += 1;
+  pendingContextUpdate = undefined;
+  verifiedAccount = undefined;
+  reportFlagDiagnostic({ operation: 'context_update', outcome: 'started', reason });
   resetExposureCache();
   clearSessionIdentity();
   const cleared = identityResetBarrier.then(() => Promise.allSettled([
@@ -102,9 +108,8 @@ export function readSessionContext(storage = globalThis.localStorage) {
 /**
  * Builds the OpenFeature evaluation context.
  *
- * `accountId` is the ETGO_ACCOUNT the backend also targets on, so it takes the
- * targeting key when present; `username` (the environment's ERP admin name)
- * only stands in until the session exposes an account. `email` is the
+ * The trimmed original-case account email matches the backend targeting key.
+ * `username` only stands in until a complete account is available. `email` is the
  * explicit account attribute remote targeting rules can read; it is trimmed and
  * lowercased because Datadog's ONE_OF/MATCHES rules compare case-sensitively
  * against lowercase values (ETP-5751). The targeting key is left as-is.
@@ -115,7 +120,9 @@ export function readSessionContext(storage = globalThis.localStorage) {
  */
 export function buildEvaluationContext({ username, clientId, accountId, accountEmail } = {}) {
   const context = {};
-  const targetingKey = accountId || username;
+  // Backend FeatureFlagContext.forAccount uses the trimmed, original-case email.
+  const accountKey = typeof accountEmail === 'string' ? accountEmail.trim() : '';
+  const targetingKey = accountKey || username;
   if (targetingKey) {
     context.targetingKey = targetingKey;
   }
@@ -125,9 +132,11 @@ export function buildEvaluationContext({ username, clientId, accountId, accountE
   const email = typeof accountEmail === 'string' ? accountEmail.trim().toLowerCase() : '';
   if (email) {
     context.email = email;
+    context.Email = accountKey;
   }
   if (clientId) {
     context.account_id = clientId;
+    context.clientId = clientId;
   }
   return context;
 }
@@ -244,16 +253,66 @@ export function buildDatadogFlagOptions(env) {
   };
 }
 
-async function createDatadogFlagProvider(env, loader) {
+/** A hosted assignment is valid only for the context that fetched it. */
+function guardContextAssignments(provider) {
+  let acceptedSignature;
+  let requestGeneration = 0;
+  for (const method of ['initialize', 'onContextChange']) {
+    if (typeof provider[method] !== 'function') continue;
+    const apply = provider[method].bind(provider);
+    provider[method] = async (...args) => {
+      const generation = ++requestGeneration;
+      const context = (method === 'initialize' ? args[0] : args[1]) ?? {};
+      const result = await apply(...args);
+      if (generation === requestGeneration && provider.status !== 'ERROR' && provider.status !== 'FATAL') {
+        acceptedSignature = contextSignature(context);
+      }
+      return result;
+    };
+  }
+  for (const method of ['resolveBooleanEvaluation', 'resolveNumberEvaluation', 'resolveStringEvaluation', 'resolveObjectEvaluation']) {
+    if (typeof provider[method] !== 'function') continue;
+    const resolve = provider[method].bind(provider);
+    provider[method] = (key, fallback, context = {}, ...rest) => {
+      if (contextSignature(context) !== acceptedSignature) {
+        return { value: fallback, reason: 'ERROR', errorCode: 'PROVIDER_NOT_READY',
+          errorMessage: 'Assignments are unavailable for the current evaluation context' };
+      }
+      return resolve(key, fallback, context, ...rest);
+    };
+  }
+  return provider;
+}
+
+async function createDatadogFlagProvider(env, loader, fetchOverride) {
   const { DatadogProvider, withTimeout: withFetchTimeout } = await loader();
   // raw-fetch-ok: the SDK's own request to Datadog's flag endpoint, not an Etendo API call.
-  const fetchImpl = typeof globalThis.fetch === 'function' ? globalThis.fetch.bind(globalThis) : undefined;
+  const fetchImpl = fetchOverride ?? (typeof globalThis.fetch === 'function' ? globalThis.fetch.bind(globalThis) : undefined);
+  const boundedFetch = fetchImpl ? withFetchTimeout(fetchImpl, DATADOG_FETCH_TIMEOUT_MS) : undefined;
+  const diagnosticFetch = boundedFetch ? async (...args) => {
+    const started = Date.now();
+    reportFlagDiagnostic({ operation: 'configuration_fetch', outcome: 'started', provider: DATADOG_PROVIDER_NAME });
+    try {
+      const response = await boundedFetch(...args);
+      reportFlagDiagnostic({ operation: 'configuration_fetch', outcome: response.ok ? 'success' : 'error',
+        provider: DATADOG_PROVIDER_NAME, durationMs: Date.now() - started, reason: response.ok ? undefined : 'network_error' });
+      return response;
+    } catch (error) {
+      const cancelled = args[1]?.signal?.aborted;
+      let reason = 'network_error';
+      if (cancelled) reason = 'superseded';
+      else if (error?.name === 'TimeoutError') reason = 'timeout';
+      reportFlagDiagnostic({ operation: 'configuration_fetch', outcome: cancelled ? 'cancelled' : 'error',
+        provider: DATADOG_PROVIDER_NAME, durationMs: Date.now() - started, reason });
+      throw error;
+    }
+  } : undefined;
   const provider = new DatadogProvider({
     ...buildDatadogFlagOptions(env),
-    ...(fetchImpl ? { flagConfigurationFetch: withFetchTimeout(fetchImpl, DATADOG_FETCH_TIMEOUT_MS) } : {}),
+    ...(diagnosticFetch ? { flagConfigurationFetch: diagnosticFetch } : {}),
   });
   provider.metadata = { ...(provider.metadata || {}), name: DATADOG_PROVIDER_NAME };
-  return provider;
+  return guardContextAssignments(provider);
 }
 
 async function createConfigCatFlagProvider(env, logger, loader) {
@@ -274,13 +333,14 @@ export async function createFlagProvider({ env = import.meta.env, logger = conso
   // it is a provider SDK like any other and `lib/observability/sdk.js` is its one home
   // (ETP-4578). The seam stays a default parameter, so tests still pass their own loader.
   datadogLoader = loadDatadogFlags,
+  datadogFetch,
 } = {}) {
   const overrides = parseFlagConfig(env.VITE_FEATURE_FLAGS, logger);
   if (Object.keys(overrides).length > 0) {
     return new TypedInMemoryProvider(buildInMemoryConfiguration(overrides));
   }
   const remote = resolveRemoteFlagProvider(env, logger);
-  if (remote === 'datadog') return createDatadogFlagProvider(env, datadogLoader);
+  if (remote === 'datadog') return createDatadogFlagProvider(env, datadogLoader, datadogFetch);
   if (remote === 'configcat') return createConfigCatFlagProvider(env, logger, loader);
   return new TypedInMemoryProvider(buildInMemoryConfiguration());
 }
@@ -307,7 +367,12 @@ export async function initFeatureFlags({
   storage = globalThis.localStorage,
 } = {}) {
   try {
-    await OpenFeature.setContext(buildEvaluationContext(readSessionContext(storage)));
+    const initialIdentity = readSessionContext(storage);
+    // Cached account data is not proof of the cookie's current account. Until
+    // auth restores a session, initialize anonymously rather than target a prior user.
+    await OpenFeature.setContext(buildEvaluationContext(
+      verifiedAccount ? initialIdentity : { username: initialIdentity.username, clientId: initialIdentity.clientId }
+    ));
 
     // Registered before the provider so the earliest evaluations are counted.
     OpenFeature.addHooks(createFlagExposureHook());
@@ -329,25 +394,127 @@ export async function initFeatureFlags({
  * Re-targets flag evaluation after the user signs in, so bucketing follows the
  * real identity instead of the anonymous one captured at startup.
  *
- * The cached account identity is merged in, so a reload targets correctly
- * before `refreshAccountIdentity` has answered.
+ * Only account fields already verified for this session may be reused.
+ * Explicit account fields replace cached ownership, including absent fields.
  */
+function contextSignature(context) {
+  return JSON.stringify(Object.entries(context).sort(([a], [b]) => a.localeCompare(b)));
+}
+
+function accountOwnerChanged(identity, cached) {
+  return Boolean(
+    (identity.accountId && cached.accountId && identity.accountId !== cached.accountId) ||
+    (!identity.accountId && identity.accountEmail && cached.accountEmail && identity.accountEmail !== cached.accountEmail)
+  );
+}
+
+function isProviderUsable() {
+  const status = OpenFeature.getProviderStatus();
+  return status !== 'ERROR' && status !== 'FATAL';
+}
+
+function isCurrentContext(generation, signature) {
+  return generation === identityGeneration && contextSignature(OpenFeature.getContext()) === signature && isProviderUsable();
+}
+
+function isVerifiedCache(identity, cached) {
+  return verifiedAccount && verifiedAccount.username === identity.username &&
+    cached.accountId === verifiedAccount.accountId && cached.accountEmail === verifiedAccount.accountEmail &&
+    OpenFeature.getContext().accountId === verifiedAccount.accountId;
+}
+
+function persistAccountCache(storage, { accountId, accountEmail }) {
+  try {
+    if (accountId) storage?.setItem(ACCOUNT_ID_KEY, accountId);
+    else storage?.removeItem(ACCOUNT_ID_KEY);
+    if (accountEmail) storage?.setItem(ACCOUNT_EMAIL_KEY, accountEmail);
+    else storage?.removeItem(ACCOUNT_EMAIL_KEY);
+  } catch { /* Targeting remains available when persistent storage is blocked. */ }
+}
+
+function readFlagAccount(identity, storage) {
+  let cached = readSessionContext(storage);
+  const authoritative = Object.hasOwn(identity, 'accountId') || Object.hasOwn(identity, 'accountEmail');
+  if (!authoritative && !isVerifiedCache(identity, cached)) {
+    // An environment/session event cannot attest which account owns old storage.
+    cached = {};
+  }
+  return { cached, authoritative, changedAccount: authoritative && accountOwnerChanged(identity, cached) };
+}
+
+function prepareFlagContext(identity, storage, { cached, authoritative }) {
+  const accountId = authoritative ? identity.accountId : cached.accountId;
+  const accountEmail = authoritative ? identity.accountEmail : cached.accountEmail;
+  const context = buildEvaluationContext({ ...identity, accountId, accountEmail });
+  if (authoritative) {
+    verifiedAccount = { username: identity.username, accountId, accountEmail };
+    // Explicit account fields replace cached ownership, including absent fields.
+    persistAccountCache(storage, { accountId, accountEmail });
+  }
+  return context;
+}
+
+function reportContextUpdate(identity, provider, properties) {
+  reportFlagDiagnostic({ operation: 'context_update', provider: provider.metadata?.name,
+    account_id: identity.clientId, ...properties });
+}
+
+async function applyFlagContext(context, generation, signature, provider, identity) {
+  const started = Date.now();
+  reportContextUpdate(identity, provider, { outcome: 'started', reason: 'context_changed' });
+  const update = { provider, signature, promise: OpenFeature.setContext(context) };
+  pendingContextUpdate = update;
+  try {
+    await update.promise;
+    if (generation === identityGeneration && pendingContextUpdate === update) {
+      const failed = OpenFeature.getProviderStatus() === 'ERROR';
+      reportContextUpdate(identity, provider, { outcome: failed ? 'error' : 'success',
+        durationMs: Date.now() - started, reason: failed ? 'provider_error' : 'context_changed' });
+    }
+    return isCurrentContext(generation, signature);
+  } finally {
+    if (pendingContextUpdate === update) pendingContextUpdate = undefined;
+  }
+}
+
+async function updateFlagContext({ context, generation }, identity) {
+  const signature = contextSignature(context);
+  const provider = OpenFeature.getProvider();
+  const matchesCurrent = contextSignature(OpenFeature.getContext()) === signature;
+  if (matchesCurrent && pendingContextUpdate?.provider === provider && pendingContextUpdate.signature === signature) {
+    reportContextUpdate(identity, provider, { outcome: 'deduplicated', reason: 'inflight' });
+    await pendingContextUpdate.promise;
+    return isCurrentContext(generation, signature);
+  }
+  if (matchesCurrent && !pendingContextUpdate && isProviderUsable()) {
+    reportContextUpdate(identity, provider, { outcome: 'deduplicated', reason: 'settled' });
+    return true;
+  }
+  return applyFlagContext(context, generation, signature, provider, identity);
+}
+
 export async function setFeatureFlagContext(
-  { username, clientId, accountId, accountEmail } = {},
+  identity = {},
   logger = console,
   storage = globalThis.localStorage
 ) {
+  let generation = identityGeneration;
   try {
-    const cached = readSessionContext(storage);
-    await OpenFeature.setContext(
-      buildEvaluationContext({
-        username,
-        clientId,
-        accountId: accountId || cached.accountId,
-        accountEmail: accountEmail || cached.accountEmail,
-      })
-    );
+    await waitForIdentityReset();
+    if (generation !== identityGeneration) return;
+    const account = readFlagAccount(identity, storage);
+    if (account.changedAccount) {
+      const sessionIdentity = getSessionIdentity();
+      await clearAccountIdentity(storage, 'account_changed');
+      if (identityGeneration !== generation + 1) return;
+      generation = identityGeneration;
+      setSessionIdentity(sessionIdentity);
+      account.cached = {};
+    }
+    const context = prepareFlagContext(identity, storage, account);
+    return await updateFlagContext({ context, generation }, identity);
   } catch (error) {
+    reportFlagDiagnostic({ operation: 'context_update', outcome: 'error', reason: 'provider_error' });
     logger.warn('[flags] Could not update evaluation context', error);
   }
 }
@@ -361,65 +528,81 @@ export async function setFeatureFlagContext(
  * become reliable once this has run. Fire-and-forget: a failure leaves the
  * previous context in place rather than dropping the user out of their bucket.
  */
+function isCurrentIdentity(guard) {
+  const current = getSessionIdentity();
+  return !guard.signal?.aborted && guard.generation === identityGeneration &&
+    guard.snapshot.username === current.username && guard.snapshot.clientId === current.clientId;
+}
+
+async function requestAccountIdentity({ token, apiBase, fetchImpl, signal, expectedAccountId }, guard) {
+  await waitForIdentityReset();
+  if (!isCurrentIdentity(guard)) return;
+  const res = await fetchImpl(`${apiBase}/sws/neo/session`, {
+    baseUrl: '', headers: authHeaders(token), ...(signal ? { signal } : {}),
+  });
+  if (!res?.ok) {
+    reportFlagDiagnostic({ operation: 'identity_resolution', outcome: 'error', reason: 'network_error' });
+    return;
+  }
+  const session = await res.json();
+  if (!isCurrentIdentity(guard)) {
+    reportFlagDiagnostic({ operation: 'identity_resolution', outcome: 'stale', reason: 'superseded' });
+    return;
+  }
+  const accountId = session?.accountId || undefined;
+  const accountEmail = session?.accountEmail || undefined;
+  if ((!accountId && !accountEmail) || (expectedAccountId && expectedAccountId !== accountId)) {
+    reportFlagDiagnostic({ operation: 'identity_resolution', outcome: 'error', reason: 'missing_identity' });
+    return;
+  }
+  return { accountId, accountEmail };
+}
+
+function mayAdoptOwnerReset(receipt, guard, account, flagsResolved) {
+  const current = getSessionIdentity();
+  return receipt.expectedOwnerReset && identityGeneration === receipt.expectedGeneration && flagsResolved &&
+    !guard.signal?.aborted && current.username === guard.snapshot.username &&
+    current.clientId === guard.snapshot.clientId && OpenFeature.getContext().accountId === account.accountId &&
+    OpenFeature.getContext().email === (account.accountEmail?.trim().toLowerCase() || undefined);
+}
+
+async function acceptAccountContext(account, guard, logger, storage) {
+  const { username, clientId } = getSessionIdentity();
+  const expectedOwnerReset = accountOwnerChanged(account, readSessionContext(storage));
+  const receipt = { expectedOwnerReset, expectedGeneration: guard.generation + (expectedOwnerReset ? 1 : 0) };
+  const flagsResolved = await setFeatureFlagContext({ username, clientId, ...account }, logger, storage);
+  // Transfer only the exact epoch belonging to this setter's intentional owner reset.
+  if (mayAdoptOwnerReset(receipt, guard, account, flagsResolved)) guard.generation = receipt.expectedGeneration;
+  return flagsResolved;
+}
+
+async function publishResolvedAccount(account, flagsResolved, guard) {
+  if (!isCurrentIdentity(guard)) return;
+  // Reset may start after context acceptance, or while a telemetry SDK yields.
+  await waitForIdentityReset();
+  if (!isCurrentIdentity(guard)) return;
+  if (account.accountId) await identify(account.accountId);
+  await waitForIdentityReset();
+  if (!isCurrentIdentity(guard)) return;
+  if (guard.snapshot.clientId) await group('account_id', guard.snapshot.clientId);
+  reportFlagDiagnostic({ operation: 'identity_resolution', outcome: 'success' });
+  return { ...account, flagsResolved };
+}
+
 export async function refreshAccountIdentity(
-  { token, apiBase = '', fetchImpl = apiFetch, logger = console, storage = globalThis.localStorage } = {}
+  { token, apiBase = '', fetchImpl = apiFetch, logger = console, storage = globalThis.localStorage, signal, expectedAccountId } = {}
 ) {
-  const generation = identityGeneration;
-  const snapshot = getSessionIdentity();
-  const stillCurrent = () => {
-    const current = getSessionIdentity();
-    return generation === identityGeneration && snapshot.username === current.username &&
-      snapshot.clientId === current.clientId;
-  };
+  const guard = { generation: identityGeneration, snapshot: getSessionIdentity(), signal };
   if (typeof fetchImpl !== 'function') return undefined;
+  reportFlagDiagnostic({ operation: 'identity_resolution', outcome: 'started', source: 'session' });
   try {
-    await waitForIdentityReset();
-    if (!stillCurrent()) return undefined;
-    const res = await fetchImpl(`${apiBase}/sws/neo/session`, {
-      baseUrl: '',
-      headers: authHeaders(token),
-    });
-    if (!res?.ok) return undefined;
-    const session = await res.json();
-    if (!stillCurrent()) return undefined;
-    const accountId = session?.accountId || undefined;
-    const accountEmail = session?.accountEmail || undefined;
-    if (!accountId && !accountEmail) return undefined;
-
-    try {
-      if (accountId) storage?.setItem(ACCOUNT_ID_KEY, accountId);
-      if (accountEmail) storage?.setItem(ACCOUNT_EMAIL_KEY, accountEmail);
-    } catch {
-      // A storage failure only costs the cache, not the targeting below.
-    }
-
-    const { username, clientId } = getSessionIdentity();
-    await setFeatureFlagContext(
-      {
-        username,
-        clientId,
-        accountId,
-        accountEmail,
-      },
-      logger,
-      storage
-    );
-    if (!stillCurrent()) return undefined;
-    // A logout can begin after the context update. Wait for its provider reset
-    // to settle immediately before publishing the profile, then re-check the
-    // generation so stale telemetry cannot race the new identity.
-    await waitForIdentityReset();
-    if (!stillCurrent()) return undefined;
-    if (accountId) await identify(accountId);
-    // `identify` may yield to a provider SDK. Logout or an account switch can
-    // happen during that await; never let the stale request restore the old
-    // tenant grouping after the identity has changed.
-    await waitForIdentityReset();
-    if (!stillCurrent()) return undefined;
-    if (clientId) await group('account_id', clientId);
-    return { accountId, accountEmail };
+    const account = await requestAccountIdentity({ token, apiBase, fetchImpl, signal, expectedAccountId }, guard);
+    if (!account || !isCurrentIdentity(guard)) return undefined;
+    const flagsResolved = await acceptAccountContext(account, guard, logger, storage);
+    return await publishResolvedAccount(account, flagsResolved, guard);
   } catch (error) {
-    logger.warn('[flags] Could not resolve the account identity for targeting', error);
+    reportFlagDiagnostic({ operation: 'identity_resolution', outcome: signal?.aborted ? 'cancelled' : 'error', reason: signal?.aborted ? 'superseded' : 'network_error' });
+    if (!signal?.aborted) logger.warn('[flags] Could not resolve the account identity for targeting', error);
     return undefined;
   }
 }
