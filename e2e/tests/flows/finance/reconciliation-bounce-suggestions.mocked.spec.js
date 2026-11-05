@@ -6,7 +6,7 @@
 // @covers tools/app-shell/src/windows/custom/financial-account/index.jsx
 // @covers tools/app-shell/src/hooks/useBouncePairActions.js
 // @covers tools/app-shell/src/lib/bounceSuggestionsTelemetry.js
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 
 /**

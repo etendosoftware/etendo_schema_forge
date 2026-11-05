@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/AutoMatchSuggestionModal.jsx
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 
