@@ -1,23 +1,24 @@
-// The fiscal territories and systems the Fiscal Configuration window talks about: their logic
-// flags and their translated display strings. Shared by the onboarding wizard and the status
-// summary of an existing configuration (ETP-5831), so both name a territory / Hacienda / system
-// the same way.
+// The fiscal territories and systems the Fiscal Configuration window talks about: the order and
+// questions of the onboarding wizard and their translated display strings. Shared by the wizard
+// and the status summary of an existing configuration (ETP-5831), so both name a territory /
+// Hacienda / system the same way.
+//
+// Presentation only (ETP-6053): which systems a territory allows and the values its records
+// carry (SII flags and tax type, TicketBAI territory, VERI*FACTU tax type) come from the backend
+// catalog (`useFiscalCatalog` → `fiscalSystemCatalog`), never from here.
 
-// ── Data (IDs and logic flags — display strings resolved via ui() inside component) ───
+// ── Data (IDs and wizard questions — display strings resolved via ui() inside component) ───
 
+// `regime` groups the territory screen; `askNational` / `askVolume` decide which sub-question
+// the wizard asks. Ceuta/Melilla asks nothing: the catalog allows it VERI*FACTU only.
 export const TERRITORY_META = {
-  navarra:  { id: 'navarra',  regime: 'sii_foral', askNational: false, askVolume: false, taxtype: 'IVA',  tbaiTerritory: null,       guipuzcoa: null },
-  alava:    { id: 'alava',    regime: 'tbai',       askNational: true,  askVolume: false, taxtype: null,   tbaiTerritory: 'ARABA',    guipuzcoa: null },
-  bizkaia:  { id: 'bizkaia',  regime: 'tbai',       askNational: true,  askVolume: false, taxtype: null,   tbaiTerritory: 'BIZKAIA',  guipuzcoa: null },
-  gipuzkoa: { id: 'gipuzkoa', regime: 'tbai',       askNational: true,  askVolume: false, taxtype: null,   tbaiTerritory: 'GIPUZKOA', guipuzcoa: 'Y'  },
-  baleares: { id: 'baleares', regime: 'siiver',     askNational: false, askVolume: true,  taxtype: 'IVA',  tbaiTerritory: null,       guipuzcoa: null },
-  canarias: { id: 'canarias', regime: 'siiver',     askNational: false, askVolume: true,  taxtype: 'IGIC', tbaiTerritory: null,       guipuzcoa: null },
-  // askVolume: false — unlike baleares/canarias, Ceuta/Melilla's IPSI tax scheme has no
-  // SII billing-volume threshold to ask about: SII cannot represent an IPSI taxpayer at
-  // all (AEATSII_CONFIG.taxtype only defines IVA/IGIC — see getAllowedSystemsForTerritory
-  // in fiscalConfig.utils.js, ETP-5272 point 4), so VERIFACTU is the only applicable
-  // system regardless of volume and the sub-question would be moot.
-  ceuta:    { id: 'ceuta',    regime: 'siiver',     askNational: false, askVolume: false, taxtype: 'IPSI', tbaiTerritory: null,       guipuzcoa: null },
+  navarra:  { id: 'navarra',  regime: 'sii_foral', askNational: false, askVolume: false },
+  alava:    { id: 'alava',    regime: 'tbai',       askNational: true,  askVolume: false },
+  bizkaia:  { id: 'bizkaia',  regime: 'tbai',       askNational: true,  askVolume: false },
+  gipuzkoa: { id: 'gipuzkoa', regime: 'tbai',       askNational: true,  askVolume: false },
+  baleares: { id: 'baleares', regime: 'siiver',     askNational: false, askVolume: true  },
+  canarias: { id: 'canarias', regime: 'siiver',     askNational: false, askVolume: true  },
+  ceuta:    { id: 'ceuta',    regime: 'siiver',     askNational: false, askVolume: false },
 };
 
 export const TERRITORY_GROUP_META = [

@@ -1,6 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
-import { isProductionEnvironment, isEtendoTrue } from './fiscalConfig.utils.js';
+import { isProductionEnvironment, territoryOfRecords } from './fiscalConfig.utils.js';
 
 /**
  * The fiscal configuration status card: a success band ("{system} activo") over a list of
@@ -74,22 +74,6 @@ const PROFILE_SYSTEM = {
   verifactu: 'VERIFACTU',
 };
 
-const TBAI_TERRITORY = { ARABA: 'alava', BIZKAIA: 'bizkaia', GIPUZKOA: 'gipuzkoa' };
-// VERI*FACTU `tAXType` codes (VERIFACTU_TAX_TYPE_OPTIONS): 01 IVA, 02 IPSI, 03 IGIC.
-const VERIFACTU_TAX_TERRITORY = { '01': 'baleares', '02': 'ceuta', '03': 'canarias' };
-
-function resolveTerritoryId({ sii, tbai, verifactu }) {
-  const tbaiTerritory = TBAI_TERRITORY[String(tbai?.etsgSifTerritory ?? '').toUpperCase()];
-  if (tbaiTerritory) return tbaiTerritory;
-  if (sii) {
-    if (isEtendoTrue(sii.navarra)) return 'navarra';
-    if (isEtendoTrue(sii.guipuzcoa)) return 'gipuzkoa';
-    return String(sii.taxtype ?? '').toUpperCase() === 'IGIC' ? 'canarias' : 'baleares';
-  }
-  if (verifactu) return VERIFACTU_TAX_TERRITORY[verifactu.tAXType] ?? null;
-  return null;
-}
-
 // NEO serves the `Created` audit column as `created` (NeoFieldFilter AUDIT_PROP_TO_API_KEY); the
 // DAL name `creationDate` is accepted too, for a caller that hands over a raw DAL record.
 const createdOf = (record) => record?.created ?? record?.creationDate ?? null;
@@ -105,12 +89,14 @@ function earliestCreation(records) {
 /**
  * What the status panel shows for a stored configuration — pure, exported for tests.
  *
- * @param {{ profile: string, siiRecord?: object, tbaiRecord?: object, verifactuRecord?: object }} input
+ * @param {{ profile: string, siiRecord?: object, tbaiRecord?: object, verifactuRecord?: object,
+ *   catalog?: object|null }} input - `catalog` is the backend's `fiscalSystemCatalog` (ETP-6053),
+ *   which names the values each territory's records carry; without it the territory is unknown.
  * @returns {null | { system: 'SII'|'TBAI'|'SII+TBAI'|'VERIFACTU', territoryId: string|null,
  *   nationalSii: boolean, isProduction: boolean, activatedAt: Date|null }}
  *   null for a profile without an active configuration (unconfigured, conflict, unknown).
  */
-export function deriveConfiguredStatus({ profile, siiRecord = null, tbaiRecord = null, verifactuRecord = null }) {
+export function deriveConfiguredStatus({ profile, siiRecord = null, tbaiRecord = null, verifactuRecord = null, catalog = null }) {
   const system = PROFILE_SYSTEM[profile];
   if (!system) return null;
   const records = { sii: siiRecord, tbai: tbaiRecord, verifactu: verifactuRecord };
@@ -119,7 +105,7 @@ export function deriveConfiguredStatus({ profile, siiRecord = null, tbaiRecord =
   }[system];
   return {
     system,
-    territoryId: resolveTerritoryId(records),
+    territoryId: territoryOfRecords(catalog, records),
     nationalSii: Boolean(siiRecord),
     isProduction: isProductionEnvironment(system, records),
     activatedAt: earliestCreation(used),

@@ -55,3 +55,25 @@ export function readOrderPendingDocs(record) {
     needsInvoiceDoc: readAnnotatedFlag(record?.[NEEDS_INVOICE_DOC]),
   };
 }
+
+/**
+ * ETP-5828 — the amount "Generar factura" would invoice now, annotated by the backend on the
+ * SALES order's single-record GET only (`SalesOrderHeaderHandler#pendingInvoiceAmount`: the
+ * action's own quantities — net of draft invoices, shipment-scoped — priced like the invoice).
+ * Not on list rows, not on purchase orders.
+ */
+export const PENDING_INVOICE_AMOUNT = 'pendingInvoiceAmount';
+
+/**
+ * Read the pending-invoice amount annotation off an order record.
+ *
+ * @param {object} [record]
+ * @returns {number|undefined} the amount, or `undefined` when the record does not carry it (a
+ *   list row, a purchase order, a legacy backend) — the caller keeps its own derivation then.
+ */
+export function readPendingInvoiceAmount(record) {
+  const raw = record?.[PENDING_INVOICE_AMOUNT];
+  if (raw === null || raw === undefined || raw === '') return undefined;
+  const amount = Number(raw);
+  return Number.isFinite(amount) ? amount : undefined;
+}

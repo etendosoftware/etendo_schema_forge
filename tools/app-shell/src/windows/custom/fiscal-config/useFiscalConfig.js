@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { detectProfile, activeOrNull, isActiveRecord } from './fiscalConfig.utils.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
-import { todayCalendarISO } from '@/lib/dateOnly.js';
 import { parseAdoptionDate } from '@/windows/custom/shared/fiscalTargets.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { configureFiscalSystem, fetchCreatedRecords } from './fiscalSystemApi.js';
 
 // Confirmed from artifacts/*/contract.json → backendContract.window.primaryEntity
 const SII_ENTITY      = 'siiConfiguration';
@@ -156,46 +156,35 @@ export function useFiscalConfig(orgId, apiBaseUrl) {
   useEffect(() => { load(); }, [load]);
 
   /**
-   * POSTs a minimal record for the complementary system (sii or tbai) under
-   * the current org. Returns the created record (first item in response.data).
-   * Throws on HTTP error.
+   * "Añadir SII": adds SII to the organization's existing TicketBAI through the backend's
+   * `configureFiscalSystem` action (ETP-6053) — the same call, rules and records as the wizard
+   * and agents. Only SII can be added on top of another system (TicketBAI), so no system argument.
+   * No territory is sent: the server takes the TicketBAI's, derives every SII value from it, and
+   * refuses (in the request language) what the wizard would refuse.
    *
-   * @param {'sii'|'tbai'} system
-   * @param {string} adOrgId
-   * @returns {Promise<object|null>}
+   * Returns the created record and puts it in this hook's state (records + profile), so whatever
+   * derives from them — page title, "Estado" panel — shows the combined configuration at once.
+   * Throws with the server's message on refusal, or a `FiscalAccessDeniedError` when the role may
+   * not run the action at all.
+   *
+   * @param {string} orgId
+   * @returns {Promise<object|null>} the created SII record
    */
-  async function createComplementary(system, adOrgId) {
-    // tbai-config/header  or  sii-config/siiConfiguration
-    const specPath = system === 'tbai'
-      ? `/tbai-config/${TBAI_ENTITY}`
-      : `/sii-config/${SII_ENTITY}`;
-
-    // For SII, include the same defaults the onboarding wizard sets so the record
-    // is fully operational from the start (ETP-4783: fix for "Añadir SII" button
-    // when TBAI is already configured — the wizard path sets these, but the
-    // complementary POST skipped them, leaving the record with empty/false defaults).
-    // ETP-5700 — the LOCAL calendar day, not the UTC one (toISOString), which in
-    // Spain between 00:00 and 01:00/02:00 is still yesterday.
-    const today = todayCalendarISO();
-    const body = system === 'sii'
-      ? {
-          adOrgId,
-          acogidaAlSII:      'Y',   // In SII System
-          fechaAcogidaSII:   today, // In SII System Date
-          monitordate:       today, // From date display in SII Monitor
-          entornoDeProduccin: 'Y',  // Production Environment
-          adjuntarArchivosXML: 'Y', // Attach XML Files
-        }
-      : { adOrgId };
-
-    const res = await apiFetch(specPath, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
-    const json = await res.json().catch(() => null);
-    return json?.response?.data?.[0] ?? null;
+  async function createComplementary(orgId) {
+    const outcome = await configureFiscalSystem(apiFetch, orgId, { system: 'SII' });
+    const records = await fetchCreatedRecords(apiFetch, outcome?.created);
+    const created = records.sii ?? null;
+    // The record is stored and active from this moment, so the configuration IS the combined
+    // one now: put it in the state and re-detect the profile, as a reload would. Without this the
+    // title and the "Estado" panel kept showing the single system until the page was reloaded
+    // (ETP-6053). Not a refetch: that would flip `loading` and unmount the tab being edited.
+    if (created) {
+      setState(s => {
+        const next = { ...s, siiRecord: created };
+        return { ...next, profile: detectProfile(next.siiRecord, next.tbaiRecord, next.verifactuRecord) };
+      });
+    }
+    return created;
   }
 
   return { ...state, refetch: load, createComplementary };

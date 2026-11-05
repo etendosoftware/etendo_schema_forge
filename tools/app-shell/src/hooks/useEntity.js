@@ -805,8 +805,20 @@ export function getMethod(isNew) {
  * Keeps the create path's escape hatch, with the same correction: a value the app deliberately
  * forced through (a custom panel calling onChange) is never swallowed silently, but a value a
  * CALLOUT applied does not count as user-authored — see isUserAuthoredKey.
+ *
+ * ETP-5840 CP-B1 — the one case where a value EQUAL to `selected[key]` is still sent: the key
+ * is in `calloutTouchedKeysRef` (a callout wrote it since the last save) AND the user then
+ * authored it by hand (isUserAuthoredKey). Reason: the backend replays the invoice-date
+ * callout for API clients (com.etendoerp.go `mirrorInvoiceDateOnUpdate`) — when invoiceDate
+ * changes and accountingDate is ABSENT from the body, it copies invoiceDate into it. A user who
+ * let the form callout move accountingDate and then typed the stored value back ends with no
+ * diff, so the key was omitted and the server overwrote the retyped date. Sending it states the
+ * user's choice explicitly. A key only the callout touched (not retyped) that ends equal to
+ * stored is still NOT sent. `calloutTouchedKeysRef` is optional; null keeps the plain diff.
+ * A custom panel that echoes a value through onChange after a callout also counts as a retype
+ * and resends the value; that is harmless, since it is the value the record already holds.
  */
-export function buildPatchPayload(editing, selected, formFieldsRef, userChangedKeysRef, calloutAppliedKeysRef, contractFields = null) {
+export function buildPatchPayload(editing, selected, formFieldsRef, userChangedKeysRef, calloutAppliedKeysRef, contractFields = null, calloutTouchedKeysRef = null) {
     const isFieldExcluded = formFieldsRef && userChangedKeysRef
         ? buildPatchFieldExclusion(formFieldsRef, editing, contractFields)
         : null;
@@ -827,7 +839,9 @@ export function buildPatchPayload(editing, selected, formFieldsRef, userChangedK
         // "the caller chose this number", which suppresses its own re-numbering (ETP-5274).
         if (isSequencePlaceholder(value)) continue;
         if (isFieldExcluded && isFieldExcluded(key, userChangedKeysRef, calloutAppliedKeysRef)) continue;
-        if (value !== selected[key]) payload[key] = value;
+        if (value !== selected[key] || isRetypedAfterCallout(key, userChangedKeysRef, calloutAppliedKeysRef, calloutTouchedKeysRef)) {
+            payload[key] = value;
+        }
     }
     return payload;
 }
@@ -904,6 +918,15 @@ export function isUserAuthoredKey(key, userChangedKeysRef, calloutAppliedKeysRef
 }
 
 /**
+ * ETP-5840 CP-B1 — a callout wrote this key since the last save and the user then retyped it.
+ * See buildPatchPayload for why such a key travels even when it equals the stored value.
+ */
+function isRetypedAfterCallout(key, userChangedKeysRef, calloutAppliedKeysRef, calloutTouchedKeysRef) {
+    if (!calloutTouchedKeysRef?.current?.has(key)) return false;
+    return isUserAuthoredKey(key, userChangedKeysRef, calloutAppliedKeysRef);
+}
+
+/**
  * ETP-5537 — builds the create-time field-exclusion predicate that replaces the old
  * per-window allowlist (`CONTACTS_PRECREATE_BILLING_FIELDS`).
  *
@@ -966,9 +989,10 @@ export function buildSavePayload({
     formFieldsRef,
     calloutAppliedKeysRef,
     contractFields,
+    calloutTouchedKeysRef = null,
 }) {
     if (!isNew && selected) {
-        return buildPatchPayload(editing, selected, formFieldsRef, userChangedKeysRef, calloutAppliedKeysRef, contractFields);
+        return buildPatchPayload(editing, selected, formFieldsRef, userChangedKeysRef, calloutAppliedKeysRef, contractFields, calloutTouchedKeysRef);
     }
 
     const payload = {};
@@ -1378,6 +1402,12 @@ export function useEntity(entity, childEntity, {
     // RESPONSE rather than by the user. `handleChange` is the single entry point for both, so
     // without this the two are indistinguishable — see handleChange's `origin` option.
     const calloutAppliedKeysRef = useRef(new Set());
+    // ETP-5840 CP-B1: keys a callout response wrote since the last save. Unlike
+    // calloutAppliedKeysRef, a later user edit does NOT remove the key — this records that the
+    // callout happened, not who wrote last. A successful save removes the keys its body carried
+    // (performSave), so it only affects the save right after a callout + retype sequence.
+    // See buildPatchPayload.
+    const calloutTouchedKeysRef = useRef(new Set());
     // `initialData` behind a ref so `handleNew` keeps a stable identity. It is read only at
     // the moment handleNew runs, and putting it in that callback's dependency array would
     // rebuild handleNew on every render for any caller passing an object literal — which
@@ -1915,6 +1945,7 @@ export function useEntity(entity, childEntity, {
     const clearUserChangedKey = useCallback((key) => {
         userChangedKeysRef.current.delete(key);
         calloutAppliedKeysRef.current.delete(key);
+        calloutTouchedKeysRef.current.delete(key);
     }, []);
 
     const handleSelect = useCallback((row, { force = false } = {}) => {
@@ -1926,6 +1957,7 @@ export function useEntity(entity, childEntity, {
         neutralizePendingDefaults();
         userChangedKeysRef.current = new Set();
         calloutAppliedKeysRef.current = new Set();
+        calloutTouchedKeysRef.current = new Set();
         // ETP-5034: a record is being handed to us directly (list row click) — any
         // not-found state from a previous route is stale, and an in-flight fetchById for the
         // PREVIOUS record must not land on top of the one we are selecting now.
@@ -1958,6 +1990,7 @@ export function useEntity(entity, childEntity, {
         // dropping a seeded legacy-looking FK id out of the POST payload.
         userChangedKeysRef.current = new Set(Object.keys(seed));
         calloutAppliedKeysRef.current = new Set();
+        calloutTouchedKeysRef.current = new Set();
         setFieldErrors({});
         // ETP-5034: the creation route must never inherit a previous route's not-found state,
         // nor let an in-flight fetchById resolve into the empty creation form.
@@ -2046,8 +2079,10 @@ export function useEntity(entity, childEntity, {
      * genuine user edit and reclaims the key.
      */
     const handleChange = useCallback((field, value, { origin } = {}) => {
-        if (origin === 'callout') calloutAppliedKeysRef.current.add(field);
-        else calloutAppliedKeysRef.current.delete(field);
+        if (origin === 'callout') {
+            calloutAppliedKeysRef.current.add(field);
+            calloutTouchedKeysRef.current.add(field);
+        } else calloutAppliedKeysRef.current.delete(field);
         userChangedKeysRef.current.add(field);
         setEditing(prev => ({ ...prev, [field]: value }));
         // ETP-3894: clear the field-level error as soon as the user touches the field.
@@ -2115,6 +2150,7 @@ export function useEntity(entity, childEntity, {
             // leaving them would keep scoping format validation to fields nobody touched.
             userChangedKeysRef.current.clear();
             calloutAppliedKeysRef.current.clear();
+            calloutTouchedKeysRef.current.clear();
             setSaveError(null);
             setFieldErrors({});
             // Belt and braces: sonner already dismisses a toast when its action is clicked, but
@@ -2243,7 +2279,11 @@ export function useEntity(entity, childEntity, {
             formFieldsRef,
             calloutAppliedKeysRef,
             contractFields,
+            calloutTouchedKeysRef,
         });
+        // ETP-5840 CP-B1: the callout-touched keys this body actually carries, snapshotted NOW.
+        // Only these are forgotten on success — see the res.ok branch.
+        const travelledCalloutTouchedKeys = Object.keys(payload).filter(k => calloutTouchedKeysRef.current.has(k));
         try {
             // getUrl already returns the full ${apiBaseUrl}/... path, so baseUrl: ''
             // keeps it from being prefixed a second time. NEO Headless expects flat field
@@ -2252,6 +2292,12 @@ export function useEntity(entity, childEntity, {
             // filters missed gets dropped and the save retried once the backend names it.
             const res = await saveWithReadOnlyFieldRetry(apiFetch, url, method, payload);
             if (res.ok) {
+                // ETP-5840 CP-B1: a callout-touched key that travelled in this body must not keep
+                // forcing itself into later saves of this same visit, so it is forgotten here.
+                // Deliberately NOT clear(): a callout + retype that happened while this save was
+                // in flight was not in this body, and clearing the whole set would make the next
+                // save omit it again — the very bug this set exists to prevent.
+                travelledCalloutTouchedKeys.forEach(k => calloutTouchedKeysRef.current.delete(k));
                 const data = await res.json();
                 const saved = normalizeRecord(data?.response?.data?.[0] ?? data, entity);
                 const resolvedSaved = await resolveSavedRecordAfterSave(saved, {
