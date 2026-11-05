@@ -838,3 +838,23 @@ The printed order uses the organization's saved design (variant, color, font, te
 ## Agent prompt on the business partner — ETP-5852
 
 `businessPartner.agentPrompt`: names can repeat; agents tell partners apart by reading `searchKey` and `taxID` from `contacts/businessPartner` with an `id in [...]` filter. Feedback M-191.
+
+## Public API — complete action — ETP-6157
+
+`decisions.json` opts the window into the public API's `complete` action
+(`window.publicApi.actions: ["complete"]`), so the manifest (`public-api/base.v1.json`) declares
+`POST /api/v1/sales-order/{id}/actions/complete`. It is the only action the window publishes. The gateway sends
+`{"docAction": "CO"}` to `POST /sws/neo/sales-order/header/{id}/action/documentAction`, the same document action as
+the window's confirm button, and answers the order re-read with `document_status` `CO`.
+
+- The API key needs `public-api:process`; a key without it gets `403`.
+- The order needs a payment method, which it inherits from its contact; without one Etendo refuses with
+  `422 business_rule`. **Known limitation:** a contact created through the API has no payment method and the
+  API cannot set one yet (no published contact payment-method fields, no payment-method lookup). Until a
+  follow-up (ETP-6160) publishes selector lookups, the caller must set `payment_method` on the order to an id it already
+  knows.
+- Completing an order that is already `CO` answers `200` with `meta.alreadyApplied: true` and runs nothing.
+- A `PATCH` or `DELETE` on the completed order answers `422`; no public action reopens or voids it.
+
+Evidence: `gateway/e2e/support/orders.ts` (`complete action`), shared by the sales and purchase order flows.
+Contract: `docs/public-api.md` §4.2.1.
