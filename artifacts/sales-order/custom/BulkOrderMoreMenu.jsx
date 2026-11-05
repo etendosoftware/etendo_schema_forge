@@ -42,21 +42,6 @@ import { translateBackendErrorBody, translateQuotaRefusalBody } from '@/lib/back
 const COMPLETED = 'CO';
 const DRAFT = 'DR';
 
-// Reuses the existing checkDraftInvoice NeoHandler endpoint that returns
-// { exists, count, id?, documentNo? } for a single sales-order ID. On a network
-// error the check fails open (lets the create call proceed) — matching the
-// "fail-open" pattern in OrderCreateInvoice.jsx.
-async function hasDraftInvoice(orderId, apiBaseUrl) {
-  try {
-    const res = await moduleApiFetch(`${apiBaseUrl}/header/${orderId}/action/checkDraftInvoice`);
-    if (!res.ok) return false;
-    const data = (await res.json())?.response?.data;
-    return Boolean(data?.exists);
-  } catch {
-    return false;
-  }
-}
-
 // No checkDraftShipment endpoint exists yet, so we query the goods-shipment
 // entity directly filtered by salesOrder — same pattern used in
 // OrderCreateInvoice.jsx for the single-record flow.
@@ -87,16 +72,14 @@ async function runBulkOrderAction({ rows, action, apiBaseUrl, token, ui }) {
         );
       }
 
-      // Skip orders that already have a DR invoice/shipment to avoid generating
-      // duplicate drafts. Orders with only CO documents and pending qty/amount
-      // proceed; the backend handler then rejects with "no pending lines" for
-      // fully-fulfilled orders, which we surface as the row failure message.
-      const alreadyHasDraft = isInvoice
-        ? await hasDraftInvoice(row.id, apiBaseUrl)
-        : await hasDraftShipment(row.id, apiBaseUrl);
-      if (alreadyHasDraft) {
-        const messageKey = isInvoice ? 'soBulkOrderHasDraftInvoice' : 'soBulkOrderHasDraftShipment';
-        throw new Error(ui(messageKey).replace('{documentNo}', row.documentNo || row.id));
+      // Skip orders that already have a DR shipment to avoid generating duplicate drafts.
+      // ETP-5828 — invoices are NOT pre-skipped any more: the backend is the source of truth and
+      // invoices what is pending net of the order's draft invoices. An order whose drafts hold only
+      // part of it is invoiced for the rest; one whose drafts hold everything left is refused with
+      // the translated "a draft invoice … already covers what is left" sentence, and a fully
+      // invoiced one with "no lines to invoice", both surfaced as the row failure message.
+      if (!isInvoice && await hasDraftShipment(row.id, apiBaseUrl)) {
+        throw new Error(ui('soBulkOrderHasDraftShipment').replace('{documentNo}', row.documentNo || row.id));
       }
 
       const res = await moduleApiFetch(`${apiBaseUrl}/header/${row.id}/action/${action}`, {
@@ -110,8 +93,8 @@ async function runBulkOrderAction({ rows, action, apiBaseUrl, token, ui }) {
         // a multi-row summary can still name it (useBulkActionToast).
         const quotaText = translateQuotaRefusalBody(err, ui);
         if (quotaText) throw Object.assign(new Error(quotaText), { quotaRefusal: true });
-        // ETP-5714: read error.message too and translate it (the 409 draftInvoiceExists refusal
-        // arrives as { error: { code, message } } with the draft numbers in the sentence).
+        // ETP-5714: read error.message too and translate it. ETP-5828: the draft-covers 400 arrives
+        // as { status, message } with the draft numbers in the sentence (backendErrors.js).
         throw new Error(translateBackendErrorBody(err, ui, `Error (${res.status})`));
       }
       trackDocumentCreated(isInvoice ? 'sales-invoice' : 'goods-shipment');

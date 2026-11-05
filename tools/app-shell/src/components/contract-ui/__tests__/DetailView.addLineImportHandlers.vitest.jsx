@@ -209,6 +209,7 @@ const StubEmptyState = ({ onAddLine, onSave }) => (
   <div data-testid="stub-empty-state">
     <button type="button" data-testid="stub-add-line" onClick={onAddLine}>Add</button>
     <button type="button" data-testid="stub-import" onClick={async () => { lastImportResult = await onSave('order'); }}>Import</button>
+    <button type="button" data-testid="stub-import-skip-clean" onClick={async () => { lastImportResult = await onSave('order', { skipSaveWhenClean: true }); }}>Import (skip clean)</button>
   </div>
 );
 
@@ -267,6 +268,25 @@ describe('DetailView handleAddLineClick / handleImportClick (real callbacks)', (
       await user.click(screen.getByTestId('stub-import'));
       await waitFor(() => expect(mockHook.handleSave).toHaveBeenCalledTimes(1));
       expect(mockNavigate).not.toHaveBeenCalled();
+    });
+
+    // ETP-5828 — opt-in per caller (the sales invoice's «Importar desde pedido»): an existing
+    // record with no header edits opens the popup without the save + re-read; with edits it saves.
+    it.each([
+      ['clean header: no save, still opens', false, 0],
+      ['dirty header: saves as before', true, 1],
+    ])('handleImportClick with skipSaveWhenClean — %s', async (_name, dirty, saves) => {
+      mockHook.isDirtyHeader = dirty;
+      try {
+        const user = userEvent.setup();
+        renderDetailView();
+        await user.click(await screen.findByTestId('stub-import-skip-clean'));
+        await waitFor(() => expect(lastImportResult).toBe(true));
+        expect(mockHook.handleSave).toHaveBeenCalledTimes(saves);
+        expect(mockNavigate).not.toHaveBeenCalled();
+      } finally {
+        mockHook.isDirtyHeader = false;
+      }
     });
   });
 
