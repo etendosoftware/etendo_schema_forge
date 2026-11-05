@@ -19,6 +19,8 @@ import { useFiscalConfig } from './useFiscalConfig.js';
 import { detectProfile } from './fiscalConfig.utils.js';
 import { useCertExpiry } from './useCertExpiry.js';
 import { useFiscalTestMode } from './useFiscalTestMode.js';
+import { useFiscalCatalog } from './useFiscalCatalog.js';
+import { isFiscalAccessDenied } from './fiscalSystemApi.js';
 import { useDebugMode } from '../fiscal-monitor/useDebugMode.js';
 import CertExpiryBanner from './CertExpiryBanner.jsx';
 import OnboardingWizard from './OnboardingWizard.jsx';
@@ -57,6 +59,15 @@ function resolveEffectiveProfile(mockOverride, profile) {
 
 function resolvePageTitle(ui, profileLabel) {
   return profileLabel ? `${ui('fiscal.title')} ${profileLabel}` : ui('fiscal.title');
+}
+
+/**
+ * Why "Añadir SII" failed, for the error banner. A role the backend does not let run the action at
+ * all gets our own sentence, never the generic English "Access denied to spec" text.
+ */
+function addSiiFailureReason(err, ui) {
+  if (isFiscalAccessDenied(err)) return ui('fiscal.err.noPermission');
+  return err instanceof Error ? err.message : String(err);
 }
 
 function resolveRenderProfile(addingComplementary, effectiveProfile) {
@@ -188,13 +199,16 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
   // when active, the whole window becomes read-only (no new SIF activation is
   // allowed outside a production environment). Fails open on fetch error.
   const { forceTestMode } = useFiscalTestMode(apiBaseUrl);
+  // ETP-6053 — the territory × system rules come from the backend; the status panel reads which
+  // territory the stored records belong to from them.
+  const { catalog: fiscalCatalog } = useFiscalCatalog(apiBaseUrl, orgId);
 
   const siiRef       = useRef(null);
   const tbaiRef      = useRef(null);
   const verifactuRef = useRef(null);
 
-  // "Add complementary SIF" — only when real API data (not mock), org selected,
-  // and profile is singly sii or tbai (not already combined or verifactu).
+  // "Add SII" — only when real API data (not mock), org selected, and the profile is TicketBAI
+  // alone: SII is the only system that can be added on top of another one.
   const canAddComplementary = !mockOverride && !!orgId && !forceTestMode &&
     effectiveProfile === 'tbai';
 
@@ -203,14 +217,11 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
     setCreatingComplementary(true);
     setAddingComplementaryError(null);
     try {
-      const system = effectiveProfile === 'sii' ? 'tbai' : 'sii';
-      const created = await createComplementary(system, orgId);
+      const created = await createComplementary(orgId);
       setComplementaryRecord(created);
-      setAddingComplementary(system);
+      setAddingComplementary('sii');
     } catch (err) {
-      setAddingComplementaryError(
-        ui('fiscal.addComplementary.err.createFailed', { error: err instanceof Error ? err.message : String(err) })
-      );
+      setAddingComplementaryError(ui('fiscal.addComplementary.err.createFailed', { error: addSiiFailureReason(err, ui) }));
     } finally {
       setCreatingComplementary(false);
     }
@@ -309,6 +320,7 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
   // derived from the stored records (deriveConfiguredStatus); no link to the submission history.
   const configuredStatus = deriveConfiguredStatus({
     profile: effectiveProfile, siiRecord: effectiveSii, tbaiRecord: effectiveTbai, verifactuRecord: effectiveVerifactu,
+    catalog: fiscalCatalog,
   });
   // What each tab of the SII + TicketBAI layout edits: the stored record, or the complementary one
   // while it is being added.

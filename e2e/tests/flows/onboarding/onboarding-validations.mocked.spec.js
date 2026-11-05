@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/pages/OnboardingPage.jsx
 import { test, expect } from '../../helpers/test.js';
 import { declareNoSession } from '../../helpers/auth.js';
 
@@ -147,23 +148,10 @@ test.describe('Onboarding — Full registration flow', () => {
     await expect(page.getByRole('heading', { name: /crea tu cuenta gratis/i })).toBeVisible();
     await expect(page.locator('#reg-name')).toBeVisible();
     await expect(page.locator('#reg-email')).toBeVisible();
-    await expect(page.locator('#reg-password')).toBeVisible();
+    // ETP-6081: the sign-up asks for no password.
+    await expect(page.locator('#reg-password')).toHaveCount(0);
     await expect(page.getByTestId('action-register-submit')).toBeVisible();
     await expect(page.getByTestId('action-switch-to-login')).toBeVisible();
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // PART 2: Password visibility toggle
-    // ═══════════════════════════════════════════════════════════════════════
-
-    const passwordInput = page.locator('#reg-password');
-    await passwordInput.fill('MySecret123!');
-    await expect(passwordInput).toHaveAttribute('type', 'password');
-
-    await page.getByRole('button', { name: /mostrar|show/i }).click();
-    await expect(passwordInput).toHaveAttribute('type', 'text');
-
-    await page.getByRole('button', { name: /ocultar|hide/i }).click();
-    await expect(passwordInput).toHaveAttribute('type', 'password');
 
     // ═══════════════════════════════════════════════════════════════════════
     // PART 3: Successful registration — advance to profile step
@@ -171,8 +159,6 @@ test.describe('Onboarding — Full registration flow', () => {
 
     await page.locator('#reg-name').fill('QA User');
     await page.locator('#reg-email').fill(`qa-reg-${ts}@example.com`);
-    await passwordInput.clear();
-    await passwordInput.fill(`Qa-${ts}-Pass!42`);
     await page.getByTestId('action-register-submit').click();
 
     await expect(page.getByText(/vamos a dejar todo listo/i)).toBeVisible({ timeout: 5_000 });
@@ -301,7 +287,6 @@ test.describe('Onboarding — Login & password recovery flow', () => {
 
     await page.locator('#reg-name').fill('QA User');
     await page.locator('#reg-email').fill('existing@example.com');
-    await page.locator('#reg-password').fill('Qa-test-Pass!42');
     await page.getByTestId('action-register-submit').click();
 
     // Error message shown
