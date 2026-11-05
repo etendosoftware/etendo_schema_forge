@@ -221,6 +221,10 @@
       "name": "matched-purchase-invoices",
       "windowId": "107",
       "menuName": "Matched Purchase Invoices"
+    },
+    {
+      "name": "invoice-inbox",
+      "windowId": "81AC659E93504927B459E0CAE80CE923"
     }
   ]
 }

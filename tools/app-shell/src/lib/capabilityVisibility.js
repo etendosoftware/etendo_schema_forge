@@ -40,6 +40,14 @@ export const ACCOUNTING_CAPABILITY = 'showAccountingFields';
  */
 export const PRODUCT_MOVEMENTS_CAPABILITY = 'productMovements';
 
+/**
+ * ETP-6049 — the capability that switches on the Invoice Inbox (menu entry and page). Served by
+ * `SFWindowAccessMap` as `capabilities.invoiceInbox`: the backend evaluates the per-account feature
+ * flag `invoice-inbox` (the same evaluator that gates the upload endpoint) and the browser never
+ * does. Fails closed. The menu item reads the same key through `menu.json` → `"capability"`.
+ */
+export const INVOICE_INBOX_CAPABILITY = 'invoiceInbox';
+
 // The generic posting actions served by `DocumentPostingService` for every
 // postable document. A structural contract, not an entity name.
 const POSTING_ACTIONS = new Set(['post', 'unpost']);

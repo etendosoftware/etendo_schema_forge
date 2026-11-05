@@ -322,6 +322,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
     isProcessed,
     getVal,
     getDateVal,
+    setSiiType,
   } = useSifFieldPatcher({ data, recordId, token, apiBaseUrl, onChange, locked: accessReadOnly });
   const apiFetch = useApiFetch(apiBaseUrl);
 
@@ -530,7 +531,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
               data-testid="Field__b99c8b">
               <Select
                 value={getVal(siiTypeField) || undefined}
-                onValueChange={val => onChange?.(siiTypeField, val)}
+                onValueChange={setSiiType}
                 disabled={siiFieldReadOnly}
                 data-testid="Select__b99c8b">
                 <SelectTrigger id="sif-siiType" data-testid="SelectTrigger__b99c8b">
