@@ -108,7 +108,7 @@ This folder is the entry point for documentation that describes how generated an
 | [tax-category.md](tax-category.md) | Generated tax-category catalog window (groups tax rates; ETP-4249) |
 | [business-partner-category.md](business-partner-category.md) | Generated business-partner-category master/detail flow behind a thin wrapper; contact type + accounts by type behind the `contact-category-type` flag (ETP-5791) |
 | [user.md](user.md) | Generated user window — multi-role template composition with a live permission-preview matrix (ETP-4906) and defaults dependencies |
-| [fiscal-config.md](fiscal-config.md) | Custom fiscal configuration window — onboarding wizard (SII/TBAI/Verifactu) and ongoing config maintenance |
+| [fiscal-config.md](fiscal-config.md) | Custom fiscal configuration window — onboarding wizard (SII/TBAI/Verifactu) and ongoing config maintenance; SIF activation through the backend `fiscalSystemCatalog` / `configureFiscalSystem` actions on `sii-config` (ETP-6053) |
 | [fiscal-models.md](fiscal-models.md) | Custom fiscal models window — declaration list and per-model detail pages (303, 349) with auto-compute and file generation |
 | [fiscal-monitor.md](fiscal-monitor.md) | Custom fiscal monitor window — real-time invoice submission status for SII, TBAI, and Verifactu |
 | [not-posted-documents.md](not-posted-documents.md) | Custom cross-document posting window — aggregates all unposted documents, single-row and bulk Post actions |
