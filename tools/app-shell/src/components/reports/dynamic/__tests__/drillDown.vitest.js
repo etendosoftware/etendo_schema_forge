@@ -9,10 +9,10 @@ const VIEW = {
 };
 
 describe('drillDown', () => {
-  it('the ledger: the account code as both bounds, the view filters, no comparison', () => {
+  it('the ledger: the account id, the code as both bounds, the view filters, no comparison', () => {
     expect(ledgerParams(VIEW, { node_id: 'N700', value: '700' })).toEqual({
       acctSchemaId: 'S1', orgId: 'O1', dateFrom: '2026-07-01', dateTo: '2026-11-03', bPartnerId: 'B1', productId: '',
-      fromAccountId: '700', toAccountId: '700',
+      accountId: 'N700', fromAccountId: '700', toAccountId: '700',
     });
   });
 

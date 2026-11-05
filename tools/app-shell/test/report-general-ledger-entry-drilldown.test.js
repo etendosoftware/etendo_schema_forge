@@ -81,6 +81,26 @@ describe('report-journal-entries — factAcctGroupId drill-down parameter (ETP-5
 // Both the grouped-by-dimension branch (.dim-group/.acct-card) and the flat
 // branch render their own date <td>, so the link has to be present in BOTH or
 // the feature silently disappears whenever the user toggles grouping.
+describe('report-general-ledger — accountId drill-down parameter (ETP-6080)', () => {
+  // The interactive P&L opens one leaf account's ledger. Filtering by the code alone goes through the
+  // c_elementvalue join and reads the client's whole history (production opening: 21 → 7 ms by id).
+  const param = (GL_CONTRACT.parameters || []).find((p) => p.name === 'accountId');
+
+  it('is a hidden, optional text parameter, translated in both locales', () => {
+    assert.ok(param, 'accountId not declared');
+    assert.equal(param.type, 'text');
+    assert.equal(param.hidden, true);
+    assert.ok(!param.required);
+    assert.ok(param.label.en_US && param.label.es_ES);
+  });
+
+  it('filters fact_acct.account_id in the ledger and its opening, blank = no filter', () => {
+    for (const kind of ['query', 'openingQuery']) {
+      assert.ok(GL_CONTRACT.sql[kind].includes("AND ('__ACCOUNTID__' = '' OR fa.account_id = '__ACCOUNTID__')"), kind);
+    }
+  });
+});
+
 const DATE_LINK_LINES = GL_TEMPLATE_SRC
   .split('\n')
   .filter((line) => line.includes('gl-entry-drilldown'));

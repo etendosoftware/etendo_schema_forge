@@ -365,7 +365,7 @@ describe('DynamicReportView — drill-down (F9)', () => {
     await waitFor(() => expect(queriesTo('report-general-ledger')).toHaveLength(1));
     expect(queriesTo('report-general-ledger')[0]).toEqual({
       acctSchemaId: 'S1', orgId: 'O1', dateFrom: '2026-07-01', dateTo: '2026-11-03', bPartnerId: '', productId: '',
-      fromAccountId: '700', toAccountId: '700',
+      accountId: 'S1', fromAccountId: '700', toAccountId: '700',
     });
     expect(await screen.findByTestId('DynamicDrillPanel__opening')).toHaveTextContent('-200,00');
     expect(screen.getByTestId('DynamicDrillPanel__debit')).toHaveTextContent('50,00');

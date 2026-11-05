@@ -12,12 +12,13 @@ export const ENTRY_REPORT_ID = 'report-journal-entries';
 export const ENTRY_REQUIRED_PARAMS = Object.freeze(['orgId', 'acctSchemaId', 'factAcctGroupId']);
 
 /**
- * The ledger of one account under the view's period and filters. The General Ledger compares
- * against the account code (`ev.value`), not the tree's node id, so both bounds are the row's value.
+ * The ledger of one account under the view's period and filters. `accountId` (the tree's node id,
+ * a leaf account = `fact_acct.account_id`) lets the SQL use the account index instead of reading
+ * the client's whole history through the account code; the code bounds stay for the export header.
  */
 export function ledgerParams(queryParams, row) {
   const { acctSchemaId, orgId, dateFrom, dateTo, bPartnerId, productId } = queryParams;
-  return { acctSchemaId, orgId, dateFrom, dateTo, bPartnerId, productId, fromAccountId: row.value, toAccountId: row.value };
+  return { acctSchemaId, orgId, dateFrom, dateTo, bPartnerId, productId, accountId: row.node_id, fromAccountId: row.value, toAccountId: row.value };
 }
 
 /**
