@@ -530,6 +530,14 @@ export function applyCalloutFieldUpdates(updates, ctx) {
     if (isStaleCalloutResponse(key, dispatchSnapshot, fieldGenerationRef)) {
       continue;
     }
+    // ETP-6148 — a SUGGESTED value (`{ value, suggested: true }`, e.g. the remittance name
+    // proposed from the due date) only fills a field the user has never touched in this form
+    // session. Unlike the collateral guard below, this skip does not require a current value:
+    // a field the user cleared on purpose stays empty. Forced (non-suggested) values are
+    // unaffected and keep every rule below.
+    if (entry?.suggested === true && userTouchedRef.current.has(key)) {
+      continue;
+    }
     // Skip empty callout values if the field already has a non-empty value
     // (e.g., callout clears warehouse but defaults already set it)
     const currentVal = data[key];

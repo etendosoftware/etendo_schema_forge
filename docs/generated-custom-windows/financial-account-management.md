@@ -1229,6 +1229,81 @@ redirects there) with active accounts in two currencies, e.g. EUR + USD under an
 
   Unchanged by this: `SaltEdgeAccountLinkHelper.populateBankIBANField` still reconciles a linked account's country against the IBAN Salt Edge returns and surfaces a mismatch as a **warning toast** (via `data.warning`) rather than blocking — that path now only matters for already-linked accounts, and no change was made to that helper.
 
+### «Admite remesas» — SEPA remittances (ETP-6148)
+
+The account gets one new check, «Admite remesas»:
+
+| Key | Column | Type | Declared in `decisions.json` |
+|---|---|---|---|
+| `eTGOAllowRemittance` | `EM_ETGO_Allow_Remittance` | boolean, default `N` | `editable`, `form: false`, `grid: false`, `visibleWhenCapability: "sepaRemittances"`, `label: "Allow Remittances"` |
+
+- **Not in the generated form or grid.** The UI edits the check in the custom `EditAccountModal`
+  (see "SEPA remittances setting" below). It is a plain field of the generic `PUT`/`PATCH` on
+  `/sws/neo/financial-account/account/{id}`; there is no separate action endpoint.
+- **Turning it on** requires a Bank account with a valid IBAN (same check as
+  `FinancialAccountCountrySupport.validateIbanCountryPair`). It also links both remittance payment
+  methods (collection and payment) to the account. They are provisioned per client the first time a
+  client enables remittances. `FinancialAccountHandler` does both.
+- **With the flag off**, a body that **changes** `eTGOAllowRemittance` is refused with 403 `feature_disabled`. A body that echoes the stored value passes.
+- **The SEPA creditor identifier is not part of this task** and is not stored on the account. It is
+  computed when the SEPA XML is built, from the organization tax ID (NIF) and the remittance type's
+  `Creditor_Business_Code` parameter, default `000`.
+- The remittance window that uses these accounts is described in [remittance.md](remittance.md).
+
+#### SEPA remittances setting in «Editar cuenta» (ETP-6148)
+
+- **Where.** A «Remesas SEPA» section (`RemittanceSettingsSection`,
+  `data-testid="remittance-settings-section"`) in the **General** tab, after the Reconciliation
+  settings and before the GL item difference. It uses the same section pattern as those two; there
+  is no new tab.
+- **When it shows.** Only when the role has the `sepaRemittances` capability
+  (`useHasCapability(SEPA_REMITTANCES_CAPABILITY)`) **and** the account is a Bank account. It reads
+  the pending Type selection (`fields.isBankType`), so the section disappears as soon as the Type is
+  changed away from Bank in the same edit.
+- **Controls.** A switch «Admite remesas» (`data-testid="edit-account-allow-remittance"`) and a
+  short help line (`edit-account-allow-remittance-hint`): turning it on requires a valid IBAN and
+  enables the remittance payment methods on the account.
+- **Initial value.** `account.allowRemittance` from the `financial-accounts-page` payload.
+  `FinancialAccountsPageHandler` adds that key only while the `sepa-remittances` flag is on for the
+  request's account; with the flag off the key is absent, the payload is unchanged, and the section
+  is hidden anyway. See [financial-accounts-page.md](financial-accounts-page.md) → Backend contract.
+- **Save.** `useRemittanceSetting` keeps a snapshot. When the switch differs from it, the setting is
+  dirty and `persistAccountEdits` adds `allowRemittance` to the `PUT`. `useAccountMutations`
+  maps it to `eTGOAllowRemittance`. It is sent only when dirty and only while the section shows:
+  `persistAll` passes `remittance: null` otherwise, the same as the reconciliation settings on a
+  Cash account.
+- **Refusals** go through the modal's usual `translateBackendError` path (`backendErrors.js`
+  `BACKEND_ERROR_KEY_MAP`):
+
+  | Backend | Status | UI text (es_ES) |
+  |---|---|---|
+  | `ETGO_RemittanceAccountNotBank` | 400 | backendError.remittanceAccountNotBank — «Solo las cuentas bancarias pueden admitir remesas.» |
+  | `ETGO_RemittanceAccountIbanRequired` | 400 | backendError.remittanceAccountIbanRequired — «Para admitir remesas, la cuenta necesita un IBAN válido.» |
+  | `ETGO_SepaRemittancesDisabled` (`feature_disabled`) | 403 | backendError.sepaRemittancesDisabled — «Las remesas SEPA no están habilitadas en tu cuenta.» |
+  | `ETGO_RemittanceAccountHasOpenRemittances` | 422 | not mapped, on purpose. Its text carries the open count and the backend sends no `messageParams`, so the backend's own sentence (already in the request language) is shown. |
+
+#### Transaction status: remittance codes (ETP-6148)
+
+The Remittance module adds two codes to the payment status list (the AD reference shared by
+`FIN_Finacc_Transaction.Status` and `FIN_Payment.Status`), so the transaction status enum now has
+11 codes.
+
+- **`enumValues` for all 11 codes.** `decisions.json` → `entities.transaction.fields.status`
+  declares every code, in AD order, with its genericLabels key as `name`: `statusRpap`,
+  `statusRpae`, `statusRpvoid`, `statusRemSent`, `statusPpm`, `statusRpr`, `statusRemCancel`,
+  `statusRdnc`, `statusPwnc`, `statusRppc` and `statusEtgoerr`.
+  - The grid column already used these keys.
+  - The override also makes the read-only form select resolve them (`tMenu`) in every locale. Before it, the select showed the AD names that have no es_ES translation: «Remitted», «Settled in Remittance» and «Payment Error».
+  - An override replaces the whole list, so a new code in the list has to be added here too.
+- **`REM_SENT`** («Remesado» / «Remitted», key `statusRemSent`) and **`REM_CANCEL`** («Liquidado en
+  remesa» / «Settled in remittance», key `statusRemCancel`) are in the global catalog of
+  `lib/statusBadge.js`. The codes are unique, so they belong there.
+  - `statusLabel` maps each code to its key.
+  - `getStatusTone` gives `REM_SENT` the **warning** tone (sent, waiting for the bank) and `REM_CANCEL` the **success** tone (settled).
+  - The same entries cover Payment In / Payment Out, whose hand-written status column (`PaymentHeaderTableBase`) has no entry for these codes.
+- Not covered: the Movements tab badge (`movementStatusConfig.js`) has no entry for either code, so it
+  shows no badge for them.
+
 Server-side IBAN/country validation helpers live in `FinancialAccountCountrySupport` (`com.etendoerp.go`), extracted out of `FinancialAccountHandler` to keep it under Sonar's method-count ceiling — same rationale as `FinancialAccountDeleteSupport`.
 
 **MCP hook parity (ETP-4239, runtime change):** `McpToolRouter` now resolves the entity's `NeoHandler` (annotation first, `Java_Qualifier` as fallback, through `NeoExtensionDispatcher`) and runs `handle()` (pre, may mutate the body) / `afterHandle()` (post) around `etendo_create` / `etendo_update` / `etendo_delete` — previously MCP writes bypassed ALL entity hooks (no validation, no derivation). This applies to every W spec, not just financial-account.
@@ -1494,6 +1569,11 @@ financeAccountsArchiveSuccess        "Account archived"
 financeAccountsArchiveOpenRecon      "Cannot archive an account with open reconciliations"
 financeAccountsMenuEdit              "Edit account"
 financeAccountsMenuArchive           "Archive account"
+financeAccountsRemittanceSection     "SEPA remittances"                (ETP-6148)
+financeAccountsRemittanceAllow       "Allows remittances"              (ETP-6148)
+financeAccountsRemittanceAllowHint   "Turning it on requires a valid IBAN and enables the remittance payment methods on this account." (ETP-6148)
+backendError.remittanceAccountNotBank, backendError.remittanceAccountIbanRequired,
+backendError.sepaRemittancesDisabled                                   (ETP-6148, see the refusals table above)
 ```
 
 ## Not implemented yet (follow-up tasks)

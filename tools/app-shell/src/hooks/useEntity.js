@@ -25,6 +25,7 @@ import {
     CONTACTS_TAX_ID_KEY_FIELD,
 } from '@/components/contract-ui/contactsFieldValidation.js';
 import { clampNumericFieldMax, getNumericFieldError, numericFieldToastId, trackSaveBlockToast, dismissSaveBlockToasts } from '@/lib/numericValidation.js';
+import { dateFieldToastId, getDateFieldError } from '@/lib/dateFieldValidation.js';
 import { getReadOnly, getVisible, getMissingRequiredFields, mergeValidationFields } from '@/lib/requiredFields.js';
 import { useFormValidity, fieldsSignature } from '@/hooks/useFormValidity.js';
 import { detectBlockingBpCondition } from '@/lib/blockingBpConditions.js';
@@ -672,6 +673,23 @@ export function getNumericFieldViolation(fields, editing) {
     for (const f of fields) {
         if (isReadOnly(f) || !isVisible(f)) continue;
         const err = getNumericFieldError(f, editing?.[f.key]);
+        if (err) return { key: f.key, errorKey: err.key, errorParams: err.params };
+    }
+    return null;
+}
+
+// ETP-6148 — generic `minDate` hard save-block for date fields, same shape and surface as
+// getNumericFieldViolation (all registered, visible, editable fields). `loaded` is the record
+// as it was loaded (null on create): a value equal to the loaded one passes even when it is
+// already in the past, so only a NEW date earlier than `minDate` blocks the save. A no-op for
+// every field that declares no `minDate`.
+export function getDateFieldViolation(fields, editing, loaded) {
+    const isReadOnly = getReadOnly(editing);
+    const isVisible = getVisible(editing);
+    const original = editing?.id ? loaded : null;
+    for (const f of fields) {
+        if (!f?.minDate || isReadOnly(f) || !isVisible(f)) continue;
+        const err = getDateFieldError(f, editing?.[f.key], original?.[f.key]);
         if (err) return { key: f.key, errorKey: err.key, errorParams: err.params };
     }
     return null;
@@ -2208,6 +2226,18 @@ export function useEntity(entity, childEntity, {
                 setIsSaving,
                 numericFieldToastId(numericViolation.key),
                 numericViolation.errorParams,
+            );
+        }
+        // ETP-6148 — `minDate` on date fields; same stable toast id as EntityForm's commit toast.
+        const dateViolation = getDateFieldViolation(allFormFields, clampedEditing, selected);
+        if (dateViolation) {
+            return reportInvalidFormatField(
+                dateViolation.errorKey,
+                ui,
+                setSaveError,
+                setIsSaving,
+                dateFieldToastId(dateViolation.key),
+                dateViolation.errorParams,
             );
         }
         // Format validation (email/website/phone) is scoped to fields the user

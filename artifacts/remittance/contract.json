@@ -1,0 +1,2483 @@
+{
+  "version": "0.15.0",
+  "generatedAt": "2026-11-05T18:53:39.346Z",
+  "updatedAt": "2026-11-06T16:32:52.571Z",
+  "checksum": "a7777403773374cb",
+  "frontendContract": {
+    "window": {
+      "id": "FF8080812E71F7C7012E71FD0499001B",
+      "name": "Remittance",
+      "primaryEntity": "remittance",
+      "category": "finance",
+      "agentPrompt": "SEPA remittances (Etendo table REM_Remittance): a batch of customer collections (SEPA CORE direct debit) or vendor payments (SEPA credit transfer) that the company sends to its bank in one file. Only available when the account has the sepa-remittances feature enabled; otherwise every call answers 403 feature_disabled. The `remittance` entity is the header: create it with name (max 60 characters), financialAccount (only accounts with \"Allow Remittances\" are accepted), remittanceType (its name says whether it is a collection or a payment remittance; only types whose SEPA scheme is enabled on the chosen account are accepted) and dueDate (the date the bank charges or credits the remittance). documentNo, transactionDate and the document type are assigned by the server, and remittanceStatus (PE Pending, PR Processed, CT/PT Collected/Paid, CP/PP partially, AN Voided) is set by the remittance processes and never written. A processed remittance cannot be edited. The `lines` entity is read-only: each line is one due item (paymentScheduleDetail, whose identifier shows the invoice, due date and amount) or payment (payment) of the remittance with its amount; lines cannot be created, edited or deleted through this spec yet, and the Classic remittance processes (select payments, process remittance, create remittance file) are not exposed.",
+      "hidePrint": true,
+      "customComponents": {
+        "bottomSection": "RemittanceBottomPanel",
+        "subHeader": "RemittanceStatusBanner",
+        "processConfirmModal": "RemittanceProcessConfirmModal"
+      },
+      "processOverrides": {
+        "selectpayments": {
+          "exclude": true
+        },
+        "createLinesFrom": {
+          "exclude": true
+        },
+        "getFile": {
+          "exclude": true
+        },
+        "processRemittance": {
+          "exclude": true
+        },
+        "process": {
+          "add": true,
+          "label": "process",
+          "style": "positive",
+          "displayLogicRaw": "@Processed@='N'",
+          "requiresLines": true,
+          "params": [
+            {
+              "key": "grouping",
+              "type": "select",
+              "label": "remittanceGrouping",
+              "required": true,
+              "defaultValue": "P",
+              "options": [
+                {
+                  "value": "P",
+                  "label": "remittanceGroupingNone"
+                },
+                {
+                  "value": "GGPD",
+                  "label": "remittanceGroupingByBpAndDueDate"
+                }
+              ]
+            }
+          ],
+          "_note": "ETP-6148 — «Procesar»: RemittanceHeaderHandler action `process` (runs REM's REMRemittanceProcess). The params dialog asks the grouping (default P «Sin agrupar», GGPD «Agrupar por cliente y vencimiento») and posts it as fieldValues.grouping. Only while unprocessed and with lines."
+        },
+        "reactivate": {
+          "add": true,
+          "label": "reactivate",
+          "style": "primary-danger",
+          "displayLogicRaw": "@Processed@='Y'",
+          "_note": "ETP-6148 — «Reactivar»: RemittanceHeaderHandler action `reactivate` (deletes the payments the process created; the remittance becomes editable again). Danger style, so DetailView asks for confirmation through customComponents.processConfirmModal (RemittanceProcessConfirmModal)."
+        },
+        "selectInvoicesAndOrders": {
+          "exclude": true
+        }
+      },
+      "detailEntity": "lines",
+      "summaryFields": [],
+      "detailSortBy": "lineNo asc",
+      "listSortBy": "transactionDate desc",
+      "labelOverrides": {
+        "es_ES": {
+          "Datetrx": "Fecha",
+          "REM_Remittance_Type_ID": "Tipo de remesa",
+          "Name": "Nombre",
+          "FIN_Financial_Account_ID": "Cuenta",
+          "Duedate": "Fecha de cargo/abono",
+          "Remittance_Status": "Estado",
+          "DocumentNo": "Nº documento",
+          "Line": "Línea",
+          "FIN_Payment_Scheduledetail_ID": "Vencimiento",
+          "FIN_Payment_ID": "Pago",
+          "Amount": "Importe",
+          "Currency": "Moneda"
+        },
+        "es_AR": {
+          "Datetrx": "Fecha",
+          "REM_Remittance_Type_ID": "Tipo de remesa",
+          "Name": "Nombre",
+          "FIN_Financial_Account_ID": "Cuenta",
+          "Duedate": "Fecha de cargo/abono",
+          "Remittance_Status": "Estado",
+          "DocumentNo": "Nº documento",
+          "Line": "Línea",
+          "FIN_Payment_Scheduledetail_ID": "Vencimiento",
+          "FIN_Payment_ID": "Pago",
+          "Amount": "Importe",
+          "Currency": "Moneda"
+        },
+        "en_US": {
+          "Datetrx": "Date",
+          "REM_Remittance_Type_ID": "Remittance Type",
+          "Name": "Name",
+          "FIN_Financial_Account_ID": "Account",
+          "Duedate": "Charge / Credit Date",
+          "Remittance_Status": "Status",
+          "DocumentNo": "Document No.",
+          "Line": "Line",
+          "FIN_Payment_Scheduledetail_ID": "Due Item",
+          "FIN_Payment_ID": "Payment",
+          "Amount": "Amount",
+          "Currency": "Currency"
+        }
+      },
+      "titleField": "name",
+      "subsetFilters": [
+        {
+          "label": "remittanceTabAll"
+        },
+        {
+          "label": "remittanceTabCollections",
+          "filter": "criteria=%5B%7B%22fieldName%22%3A%22remittanceType%24paymentMethod%24payinAllow%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%5D"
+        },
+        {
+          "label": "remittanceTabPayments",
+          "filter": "criteria=%5B%7B%22fieldName%22%3A%22remittanceType%24paymentMethod%24payoutAllow%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%5D"
+        }
+      ],
+      "statusEnumLabels": {
+        "PE": "remittanceStatusPe",
+        "PR": "remittanceStatusPr",
+        "CT": "remittanceStatusCt",
+        "PT": "remittanceStatusPt",
+        "CP": "remittanceStatusCp",
+        "PP": "remittanceStatusPp",
+        "AN": "remittanceStatusAn"
+      },
+      "rowQuickActions": {
+        "actions": {
+          "duplicate": {
+            "show": false
+          },
+          "email": {
+            "show": false
+          }
+        }
+      },
+      "sendDocument": {
+        "enabled": false
+      },
+      "layoutType": "default"
+    },
+    "entities": {
+      "remittance": {
+        "tableName": "REM_Remittance",
+        "tabId": "FF8080812E71F7C7012E71FE49BB0021",
+        "tabName": "Remittance",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "documentNo",
+            "apiKey": "documentNo",
+            "column": "DocumentNo",
+            "label": "Document No.",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "derivation": {
+              "type": "sequence",
+              "source": "documentType.sequence"
+            },
+            "section": "principal",
+            "seq": 5,
+            "gridOrder": 1,
+            "validation": {
+              "maxLength": 30
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
+            }
+          },
+          {
+            "name": "remittanceType",
+            "apiKey": "remittanceType",
+            "column": "REM_Remittance_Type_ID",
+            "label": "Remittance Type",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "REM_Remittance_Type",
+            "inputMode": "dependent",
+            "dependsOn": {
+              "field": "financialAccount",
+              "filterKey": "FIN_Financial_Account_ID"
+            },
+            "section": "principal",
+            "seq": 20,
+            "gridOrder": 3,
+            "columnWidth": 260,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            },
+            "callout": {
+              "className": "org.openbravo.module.remittance.ad_callouts.REM_RemittanceType_FinAccount"
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
+            }
+          },
+          {
+            "name": "transactionDate",
+            "apiKey": "transactionDate",
+            "column": "Datetrx",
+            "label": "Transaction Date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "@#Date@"
+            },
+            "defaultValue": "@#Date@",
+            "section": "principal",
+            "seq": 50,
+            "gridOrder": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
+            }
+          },
+          {
+            "name": "dueDate",
+            "apiKey": "dueDate",
+            "column": "Duedate",
+            "label": "Expected Date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "@#Date@"
+            },
+            "defaultValue": "@#Date@",
+            "section": "principal",
+            "seq": 30,
+            "gridOrder": 6,
+            "minDate": "today",
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
+            }
+          },
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "label": "Name",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "section": "principal",
+            "seq": 40,
+            "gridOrder": 2,
+            "grow": true,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
+            }
+          },
+          {
+            "name": "financialAccount",
+            "apiKey": "financialAccount",
+            "column": "FIN_Financial_Account_ID",
+            "label": "Financial Account",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "Financial_Account",
+            "inputMode": "selector",
+            "section": "principal",
+            "seq": 10,
+            "gridOrder": 4,
+            "columnWidth": 290,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
+            }
+          },
+          {
+            "name": "processed",
+            "apiKey": "processed",
+            "column": "Processed",
+            "label": "Processed",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "false"
+            },
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
+          },
+          {
+            "name": "remittanceStatus",
+            "apiKey": "remittanceStatus",
+            "column": "Remittance_Status",
+            "label": "Status",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "PE"
+            },
+            "columnType": "status",
+            "enumValues": [
+              {
+                "value": "PE",
+                "name": "remittanceStatusPe"
+              },
+              {
+                "value": "PR",
+                "name": "remittanceStatusPr"
+              },
+              {
+                "value": "CT",
+                "name": "remittanceStatusCt"
+              },
+              {
+                "value": "PT",
+                "name": "remittanceStatusPt"
+              },
+              {
+                "value": "CP",
+                "name": "remittanceStatusCp"
+              },
+              {
+                "value": "PP",
+                "name": "remittanceStatusPp"
+              },
+              {
+                "value": "AN",
+                "name": "remittanceStatusAn"
+              }
+            ],
+            "defaultValue": "PE",
+            "section": "principal",
+            "seq": 70,
+            "enumVariants": {
+              "PE": "neutral",
+              "PR": "info",
+              "CT": "success",
+              "PT": "success",
+              "CP": "warning",
+              "PP": "warning",
+              "AN": "destructive"
+            },
+            "gridOrder": 7,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
+          }
+        ],
+        "searchableFields": [],
+        "computedFields": [
+          {
+            "name": "documentNo",
+            "derivation": {
+              "type": "sequence",
+              "source": "documentType.sequence"
+            }
+          },
+          {
+            "name": "transactionDate",
+            "derivation": {
+              "type": "computed",
+              "source": "@#Date@"
+            }
+          },
+          {
+            "name": "dueDate",
+            "derivation": {
+              "type": "computed",
+              "source": "@#Date@"
+            }
+          },
+          {
+            "name": "processed",
+            "derivation": {
+              "type": "computed",
+              "source": "false"
+            }
+          },
+          {
+            "name": "remittanceStatus",
+            "derivation": {
+              "type": "computed",
+              "source": "PE"
+            }
+          }
+        ]
+      },
+      "lines": {
+        "tableName": "REM_RemittanceLine",
+        "tabId": "FF8080812E71F7C7012E7202F3240031",
+        "tabName": "Lines",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "lineNo",
+            "apiKey": "lineNo",
+            "column": "Line",
+            "label": "Line No.",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "derivation": {
+              "type": "lookup",
+              "source": "SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM REM_REMITTANCELINE WHERE REM_REMITTANCE_ID=@REM_REMITTANCE_ID@"
+            },
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM REM_REMITTANCELINE WHERE REM_REMITTANCE_ID=@REM_REMITTANCE_ID@",
+            "validation": {
+              "maxLength": 12
+            }
+          },
+          {
+            "name": "payment",
+            "apiKey": "payment",
+            "column": "FIN_Payment_ID",
+            "label": "Payment",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "reference": "Payment",
+            "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "paymentScheduleDetail",
+            "apiKey": "paymentScheduleDetail",
+            "column": "FIN_Payment_Scheduledetail_ID",
+            "label": "Due Item",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "reference": "Payment_Scheduledetail",
+            "inputMode": "search",
+            "gridOrder": 1,
+            "grow": true,
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "amount",
+            "apiKey": "amount",
+            "column": "Amount",
+            "label": "Amount",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "0"
+            },
+            "defaultValue": "0",
+            "gridOrder": 2,
+            "currencyField": "currency",
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
+          },
+          {
+            "name": "currency",
+            "apiKey": "currency",
+            "column": "Currency",
+            "label": "Currency",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 10
+            }
+          }
+        ],
+        "searchableFields": [],
+        "computedFields": [
+          {
+            "name": "lineNo",
+            "derivation": {
+              "type": "lookup",
+              "source": "SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM REM_REMITTANCELINE WHERE REM_REMITTANCE_ID=@REM_REMITTANCE_ID@"
+            }
+          },
+          {
+            "name": "amount",
+            "derivation": {
+              "type": "computed",
+              "source": "0"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "backendContract": {
+    "window": {
+      "id": "FF8080812E71F7C7012E71FD0499001B",
+      "name": "Remittance",
+      "primaryEntity": "remittance",
+      "category": "finance",
+      "agentPrompt": "SEPA remittances (Etendo table REM_Remittance): a batch of customer collections (SEPA CORE direct debit) or vendor payments (SEPA credit transfer) that the company sends to its bank in one file. Only available when the account has the sepa-remittances feature enabled; otherwise every call answers 403 feature_disabled. The `remittance` entity is the header: create it with name (max 60 characters), financialAccount (only accounts with \"Allow Remittances\" are accepted), remittanceType (its name says whether it is a collection or a payment remittance; only types whose SEPA scheme is enabled on the chosen account are accepted) and dueDate (the date the bank charges or credits the remittance). documentNo, transactionDate and the document type are assigned by the server, and remittanceStatus (PE Pending, PR Processed, CT/PT Collected/Paid, CP/PP partially, AN Voided) is set by the remittance processes and never written. A processed remittance cannot be edited. The `lines` entity is read-only: each line is one due item (paymentScheduleDetail, whose identifier shows the invoice, due date and amount) or payment (payment) of the remittance with its amount; lines cannot be created, edited or deleted through this spec yet, and the Classic remittance processes (select payments, process remittance, create remittance file) are not exposed.",
+      "hidePrint": true,
+      "customComponents": {
+        "bottomSection": "RemittanceBottomPanel",
+        "subHeader": "RemittanceStatusBanner",
+        "processConfirmModal": "RemittanceProcessConfirmModal"
+      },
+      "processOverrides": {
+        "selectpayments": {
+          "exclude": true
+        },
+        "createLinesFrom": {
+          "exclude": true
+        },
+        "getFile": {
+          "exclude": true
+        },
+        "processRemittance": {
+          "exclude": true
+        },
+        "process": {
+          "add": true,
+          "label": "process",
+          "style": "positive",
+          "displayLogicRaw": "@Processed@='N'",
+          "requiresLines": true,
+          "params": [
+            {
+              "key": "grouping",
+              "type": "select",
+              "label": "remittanceGrouping",
+              "required": true,
+              "defaultValue": "P",
+              "options": [
+                {
+                  "value": "P",
+                  "label": "remittanceGroupingNone"
+                },
+                {
+                  "value": "GGPD",
+                  "label": "remittanceGroupingByBpAndDueDate"
+                }
+              ]
+            }
+          ],
+          "_note": "ETP-6148 — «Procesar»: RemittanceHeaderHandler action `process` (runs REM's REMRemittanceProcess). The params dialog asks the grouping (default P «Sin agrupar», GGPD «Agrupar por cliente y vencimiento») and posts it as fieldValues.grouping. Only while unprocessed and with lines."
+        },
+        "reactivate": {
+          "add": true,
+          "label": "reactivate",
+          "style": "primary-danger",
+          "displayLogicRaw": "@Processed@='Y'",
+          "_note": "ETP-6148 — «Reactivar»: RemittanceHeaderHandler action `reactivate` (deletes the payments the process created; the remittance becomes editable again). Danger style, so DetailView asks for confirmation through customComponents.processConfirmModal (RemittanceProcessConfirmModal)."
+        },
+        "selectInvoicesAndOrders": {
+          "exclude": true
+        }
+      },
+      "detailEntity": "lines",
+      "summaryFields": [],
+      "detailSortBy": "lineNo asc",
+      "listSortBy": "transactionDate desc",
+      "labelOverrides": {
+        "es_ES": {
+          "Datetrx": "Fecha",
+          "REM_Remittance_Type_ID": "Tipo de remesa",
+          "Name": "Nombre",
+          "FIN_Financial_Account_ID": "Cuenta",
+          "Duedate": "Fecha de cargo/abono",
+          "Remittance_Status": "Estado",
+          "DocumentNo": "Nº documento",
+          "Line": "Línea",
+          "FIN_Payment_Scheduledetail_ID": "Vencimiento",
+          "FIN_Payment_ID": "Pago",
+          "Amount": "Importe",
+          "Currency": "Moneda"
+        },
+        "es_AR": {
+          "Datetrx": "Fecha",
+          "REM_Remittance_Type_ID": "Tipo de remesa",
+          "Name": "Nombre",
+          "FIN_Financial_Account_ID": "Cuenta",
+          "Duedate": "Fecha de cargo/abono",
+          "Remittance_Status": "Estado",
+          "DocumentNo": "Nº documento",
+          "Line": "Línea",
+          "FIN_Payment_Scheduledetail_ID": "Vencimiento",
+          "FIN_Payment_ID": "Pago",
+          "Amount": "Importe",
+          "Currency": "Moneda"
+        },
+        "en_US": {
+          "Datetrx": "Date",
+          "REM_Remittance_Type_ID": "Remittance Type",
+          "Name": "Name",
+          "FIN_Financial_Account_ID": "Account",
+          "Duedate": "Charge / Credit Date",
+          "Remittance_Status": "Status",
+          "DocumentNo": "Document No.",
+          "Line": "Line",
+          "FIN_Payment_Scheduledetail_ID": "Due Item",
+          "FIN_Payment_ID": "Payment",
+          "Amount": "Amount",
+          "Currency": "Currency"
+        }
+      },
+      "titleField": "name",
+      "subsetFilters": [
+        {
+          "label": "remittanceTabAll"
+        },
+        {
+          "label": "remittanceTabCollections",
+          "filter": "criteria=%5B%7B%22fieldName%22%3A%22remittanceType%24paymentMethod%24payinAllow%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%5D"
+        },
+        {
+          "label": "remittanceTabPayments",
+          "filter": "criteria=%5B%7B%22fieldName%22%3A%22remittanceType%24paymentMethod%24payoutAllow%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%5D"
+        }
+      ],
+      "statusEnumLabels": {
+        "PE": "remittanceStatusPe",
+        "PR": "remittanceStatusPr",
+        "CT": "remittanceStatusCt",
+        "PT": "remittanceStatusPt",
+        "CP": "remittanceStatusCp",
+        "PP": "remittanceStatusPp",
+        "AN": "remittanceStatusAn"
+      },
+      "rowQuickActions": {
+        "actions": {
+          "duplicate": {
+            "show": false
+          },
+          "email": {
+            "show": false
+          }
+        }
+      },
+      "sendDocument": {
+        "enabled": false
+      }
+    },
+    "entities": {
+      "remittance": {
+        "tableName": "REM_Remittance",
+        "tabId": "FF8080812E71F7C7012E71FE49BB0021",
+        "tabName": "Remittance",
+        "fields": [
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "documentType",
+            "apiKey": "documentType",
+            "column": "C_Doctype_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "documentNo",
+            "apiKey": "documentNo",
+            "column": "DocumentNo",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "remittanceType",
+            "apiKey": "remittanceType",
+            "column": "REM_Remittance_Type_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "transactionDate",
+            "apiKey": "transactionDate",
+            "column": "Datetrx",
+            "type": "date",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "dueDate",
+            "apiKey": "dueDate",
+            "column": "Duedate",
+            "type": "date",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "chargedate",
+            "apiKey": "chargedate",
+            "column": "Chargedate",
+            "type": "date",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "financialAccount",
+            "apiKey": "financialAccount",
+            "column": "FIN_Financial_Account_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "singlePayment",
+            "apiKey": "singlePayment",
+            "column": "SinglePayment",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "payment",
+            "apiKey": "payment",
+            "column": "FIN_Payment_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "selectpayments",
+            "apiKey": "selectpayments",
+            "column": "Selectpayments",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "createLinesFrom",
+            "apiKey": "createLinesFrom",
+            "column": "Createfrom",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "getFile",
+            "apiKey": "getFile",
+            "column": "Getfile",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "processRemittance",
+            "apiKey": "processRemittance",
+            "column": "Process_Remittance",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "posted",
+            "apiKey": "posted",
+            "column": "Posted",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "selectInvoicesAndOrders",
+            "apiKey": "selectInvoicesAndOrders",
+            "column": "selectInvoicesAndOrders",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "processed",
+            "apiKey": "processed",
+            "column": "Processed",
+            "type": "boolean",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "processNow",
+            "apiKey": "processNow",
+            "column": "Processing",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "REM_Remittance_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "Createdby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "Updatedby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "remittanceStatus",
+            "apiKey": "remittanceStatus",
+            "column": "Remittance_Status",
+            "type": "enum",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "eTARAutomaticprocess",
+            "apiKey": "eTARAutomaticprocess",
+            "column": "EM_Etar_Automaticprocess",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          }
+        ]
+      },
+      "lines": {
+        "tableName": "REM_RemittanceLine",
+        "tabId": "FF8080812E71F7C7012E7202F3240031",
+        "tabName": "Lines",
+        "fields": [
+          {
+            "name": "lineNo",
+            "apiKey": "lineNo",
+            "column": "Line",
+            "type": "integer",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "invoice",
+            "apiKey": "invoice",
+            "column": "C_Invoice_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "invoicePaymentSchedule",
+            "apiKey": "invoicePaymentSchedule",
+            "column": "FIN_Payment_Schedule_Invoice",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "remittance",
+            "apiKey": "remittance",
+            "column": "REM_Remittance_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "order",
+            "apiKey": "order",
+            "column": "C_Order_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "orderPaymentInPlan",
+            "apiKey": "orderPaymentInPlan",
+            "column": "fin_payment_sched_ord_v_id",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "payment",
+            "apiKey": "payment",
+            "column": "FIN_Payment_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "paymentScheduleDetail",
+            "apiKey": "paymentScheduleDetail",
+            "column": "FIN_Payment_Scheduledetail_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "amount",
+            "apiKey": "amount",
+            "column": "Amount",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "currency",
+            "apiKey": "currency",
+            "column": "Currency",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "origstatus",
+            "apiKey": "origstatus",
+            "column": "Origstatus",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "status",
+            "apiKey": "status",
+            "column": "Status",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "displayedAccount",
+            "apiKey": "displayedAccount",
+            "column": "Displayedaccount",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "displayedAccount2",
+            "apiKey": "displayedAccount2",
+            "column": "Displayedaccount",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "REM_Remittanceline_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "Createdby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "Updatedby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      }
+    },
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/remittance",
+        "entity": "remittance",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/remittance/:id",
+        "entity": "remittance",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/remittance",
+        "entity": "remittance",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/remittance/:id",
+        "entity": "remittance",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/remittance/:id",
+        "entity": "remittance",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/lines",
+        "entity": "lines",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/lines/:id",
+        "entity": "lines",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/lines",
+        "entity": "lines",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/lines/:id",
+        "entity": "lines",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/lines/:id",
+        "entity": "lines",
+        "supportedFilters": []
+      }
+    ],
+    "processEndpoints": []
+  },
+  "apiPrediction": {
+    "specName": "remittance",
+    "baseUrl": "/sws/neo/remittance",
+    "crud": {
+      "remittance": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/remittance/remittance",
+        "detailUrl": "/sws/neo/remittance/remittance/{id}",
+        "supportedFilters": []
+      },
+      "lines": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": true,
+        "listUrl": "/sws/neo/remittance/lines",
+        "detailUrl": "/sws/neo/remittance/lines/{id}",
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID",
+          "DELETE"
+        ]
+      }
+    },
+    "selectors": [
+      {
+        "entity": "remittance",
+        "field": "remittanceType",
+        "column": "REM_Remittance_Type_ID",
+        "reference": "REM_Remittance_Type",
+        "inputMode": "dependent",
+        "url": "/sws/neo/remittance/remittance/selectors/remittanceType",
+        "context": {
+          "required": [
+            {
+              "param": "FIN_Financial_Account_ID",
+              "source": "field",
+              "field": "financialAccount"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "remittance",
+        "field": "financialAccount",
+        "column": "FIN_Financial_Account_ID",
+        "reference": "Financial_Account",
+        "inputMode": "selector",
+        "url": "/sws/neo/remittance/remittance/selectors/financialAccount"
+      },
+      {
+        "entity": "lines",
+        "field": "payment",
+        "column": "FIN_Payment_ID",
+        "reference": "Payment",
+        "inputMode": "search",
+        "url": "/sws/neo/remittance/lines/selectors/payment"
+      },
+      {
+        "entity": "lines",
+        "field": "paymentScheduleDetail",
+        "column": "FIN_Payment_Scheduledetail_ID",
+        "reference": "Payment_Scheduledetail",
+        "inputMode": "search",
+        "url": "/sws/neo/remittance/lines/selectors/paymentScheduleDetail"
+      }
+    ],
+    "actions": [
+      {
+        "entity": "remittance",
+        "field": "selectpayments",
+        "column": "Selectpayments",
+        "url": "/sws/neo/remittance/remittance/{id}/action/selectpayments",
+        "processId": "C88AB6CBA1694000AFF5706A31B08AE1",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "remittance",
+        "field": "createLinesFrom",
+        "column": "Createfrom",
+        "url": "/sws/neo/remittance/remittance/{id}/action/createLinesFrom",
+        "processId": "FF8080812E7CD815012E7CE8F7260045",
+        "processType": "classic"
+      },
+      {
+        "entity": "remittance",
+        "field": "getFile",
+        "column": "Getfile",
+        "url": "/sws/neo/remittance/remittance/{id}/action/getFile",
+        "processId": "FF8080812EB06FB0012EB072D2A2000A",
+        "processType": "classic"
+      },
+      {
+        "entity": "remittance",
+        "field": "processRemittance",
+        "column": "Process_Remittance",
+        "url": "/sws/neo/remittance/remittance/{id}/action/processRemittance",
+        "processId": "FF8080812E77C0AF012E77C585600014",
+        "processType": "classic"
+      },
+      {
+        "entity": "remittance",
+        "field": "posted",
+        "column": "Posted",
+        "url": "/sws/neo/remittance/remittance/{id}/action/posted"
+      },
+      {
+        "entity": "remittance",
+        "field": "selectInvoicesAndOrders",
+        "column": "selectInvoicesAndOrders",
+        "url": "/sws/neo/remittance/remittance/{id}/action/selectInvoicesAndOrders",
+        "processId": "99E532BA0306450A839F5DE238375238",
+        "processType": "obuiapp"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "finance"
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "Datetrx": "Fecha",
+        "REM_Remittance_Type_ID": "Tipo de remesa",
+        "Name": "Nombre",
+        "FIN_Financial_Account_ID": "Cuenta",
+        "Duedate": "Fecha de cargo/abono",
+        "Remittance_Status": "Estado",
+        "DocumentNo": "Nº documento",
+        "Line": "Línea",
+        "FIN_Payment_Scheduledetail_ID": "Vencimiento",
+        "FIN_Payment_ID": "Pago",
+        "Amount": "Importe",
+        "Currency": "Moneda"
+      },
+      "es_AR": {
+        "Datetrx": "Fecha",
+        "REM_Remittance_Type_ID": "Tipo de remesa",
+        "Name": "Nombre",
+        "FIN_Financial_Account_ID": "Cuenta",
+        "Duedate": "Fecha de cargo/abono",
+        "Remittance_Status": "Estado",
+        "DocumentNo": "Nº documento",
+        "Line": "Línea",
+        "FIN_Payment_Scheduledetail_ID": "Vencimiento",
+        "FIN_Payment_ID": "Pago",
+        "Amount": "Importe",
+        "Currency": "Moneda"
+      },
+      "en_US": {
+        "Datetrx": "Date",
+        "REM_Remittance_Type_ID": "Remittance Type",
+        "Name": "Name",
+        "FIN_Financial_Account_ID": "Account",
+        "Duedate": "Charge / Credit Date",
+        "Remittance_Status": "Status",
+        "DocumentNo": "Document No.",
+        "Line": "Line",
+        "FIN_Payment_Scheduledetail_ID": "Due Item",
+        "FIN_Payment_ID": "Payment",
+        "Amount": "Amount",
+        "Currency": "Currency"
+      }
+    }
+  },
+  "testManifest": {
+    "tests": [
+      {
+        "id": "t-action-endpoint-remittance-createLinesFrom",
+        "category": "action-endpoint",
+        "entity": "remittance",
+        "field": "createLinesFrom",
+        "runner": "node",
+        "description": "Action endpoint for 'createLinesFrom' in remittance should exist"
+      },
+      {
+        "id": "t-action-endpoint-remittance-getFile",
+        "category": "action-endpoint",
+        "entity": "remittance",
+        "field": "getFile",
+        "runner": "node",
+        "description": "Action endpoint for 'getFile' in remittance should exist"
+      },
+      {
+        "id": "t-action-endpoint-remittance-posted",
+        "category": "action-endpoint",
+        "entity": "remittance",
+        "field": "posted",
+        "runner": "node",
+        "description": "Action endpoint for 'posted' in remittance should exist"
+      },
+      {
+        "id": "t-action-endpoint-remittance-processRemittance",
+        "category": "action-endpoint",
+        "entity": "remittance",
+        "field": "processRemittance",
+        "runner": "node",
+        "description": "Action endpoint for 'processRemittance' in remittance should exist"
+      },
+      {
+        "id": "t-action-endpoint-remittance-selectInvoicesAndOrders",
+        "category": "action-endpoint",
+        "entity": "remittance",
+        "field": "selectInvoicesAndOrders",
+        "runner": "node",
+        "description": "Action endpoint for 'selectInvoicesAndOrders' in remittance should exist"
+      },
+      {
+        "id": "t-action-endpoint-remittance-selectpayments",
+        "category": "action-endpoint",
+        "entity": "remittance",
+        "field": "selectpayments",
+        "runner": "node",
+        "description": "Action endpoint for 'selectpayments' in remittance should exist"
+      },
+      {
+        "id": "t-crud-flags-lines",
+        "category": "crud-flags",
+        "entity": "lines",
+        "runner": "node",
+        "description": "CRUD flags for 'lines' should all be booleans"
+      },
+      {
+        "id": "t-crud-flags-remittance",
+        "category": "crud-flags",
+        "entity": "remittance",
+        "runner": "node",
+        "description": "CRUD flags for 'remittance' should all be booleans"
+      },
+      {
+        "id": "t-default-value-type-lines-amount",
+        "category": "default-value-type",
+        "entity": "lines",
+        "field": "amount",
+        "runner": "node",
+        "description": "Default value for 'amount' in lines should be a string"
+      },
+      {
+        "id": "t-default-value-type-lines-lineNo",
+        "category": "default-value-type",
+        "entity": "lines",
+        "field": "lineNo",
+        "runner": "node",
+        "description": "Default value for 'lineNo' in lines should be a string"
+      },
+      {
+        "id": "t-default-value-type-remittance-dueDate",
+        "category": "default-value-type",
+        "entity": "remittance",
+        "field": "dueDate",
+        "runner": "node",
+        "description": "Default value for 'dueDate' in remittance should be a string"
+      },
+      {
+        "id": "t-default-value-type-remittance-processed",
+        "category": "default-value-type",
+        "entity": "remittance",
+        "field": "processed",
+        "runner": "node",
+        "description": "Default value for 'processed' in remittance should be a string"
+      },
+      {
+        "id": "t-default-value-type-remittance-remittanceStatus",
+        "category": "default-value-type",
+        "entity": "remittance",
+        "field": "remittanceStatus",
+        "runner": "node",
+        "description": "Default value for 'remittanceStatus' in remittance should be a string"
+      },
+      {
+        "id": "t-default-value-type-remittance-transactionDate",
+        "category": "default-value-type",
+        "entity": "remittance",
+        "field": "transactionDate",
+        "runner": "node",
+        "description": "Default value for 'transactionDate' in remittance should be a string"
+      },
+      {
+        "id": "t-field-presence-lines-amount",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "amount",
+        "runner": "node",
+        "description": "Field 'amount' should be present in lines"
+      },
+      {
+        "id": "t-field-presence-lines-currency",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "currency",
+        "runner": "node",
+        "description": "Field 'currency' should be present in lines"
+      },
+      {
+        "id": "t-field-presence-lines-lineNo",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "lineNo",
+        "runner": "node",
+        "description": "Field 'lineNo' should be present in lines"
+      },
+      {
+        "id": "t-field-presence-lines-payment",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "payment",
+        "runner": "node",
+        "description": "Field 'payment' should be present in lines"
+      },
+      {
+        "id": "t-field-presence-lines-paymentScheduleDetail",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "paymentScheduleDetail",
+        "runner": "node",
+        "description": "Field 'paymentScheduleDetail' should be present in lines"
+      },
+      {
+        "id": "t-field-presence-remittance-documentNo",
+        "category": "field-presence",
+        "entity": "remittance",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Field 'documentNo' should be present in remittance"
+      },
+      {
+        "id": "t-field-presence-remittance-dueDate",
+        "category": "field-presence",
+        "entity": "remittance",
+        "field": "dueDate",
+        "runner": "node",
+        "description": "Field 'dueDate' should be present in remittance"
+      },
+      {
+        "id": "t-field-presence-remittance-financialAccount",
+        "category": "field-presence",
+        "entity": "remittance",
+        "field": "financialAccount",
+        "runner": "node",
+        "description": "Field 'financialAccount' should be present in remittance"
+      },
+      {
+        "id": "t-field-presence-remittance-name",
+        "category": "field-presence",
+        "entity": "remittance",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be present in remittance"
+      },
+      {
+        "id": "t-field-presence-remittance-processed",
+        "category": "field-presence",
+        "entity": "remittance",
+        "field": "processed",
+        "runner": "node",
+        "description": "Field 'processed' should be present in remittance"
+      },
+      {
+        "id": "t-field-presence-remittance-remittanceStatus",
+        "category": "field-presence",
+        "entity": "remittance",
+        "field": "remittanceStatus",
+        "runner": "node",
+        "description": "Field 'remittanceStatus' should be present in remittance"
+      },
+      {
+        "id": "t-field-presence-remittance-remittanceType",
+        "category": "field-presence",
+        "entity": "remittance",
+        "field": "remittanceType",
+        "runner": "node",
+        "description": "Field 'remittanceType' should be present in remittance"
+      },
+      {
+        "id": "t-field-presence-remittance-transactionDate",
+        "category": "field-presence",
+        "entity": "remittance",
+        "field": "transactionDate",
+        "runner": "node",
+        "description": "Field 'transactionDate' should be present in remittance"
+      },
+      {
+        "id": "t-field-type-lines-amount",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "amount",
+        "runner": "node",
+        "description": "Field 'amount' should have type 'number' in lines"
+      },
+      {
+        "id": "t-field-type-lines-currency",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "currency",
+        "runner": "node",
+        "description": "Field 'currency' should have type 'string' in lines"
+      },
+      {
+        "id": "t-field-type-lines-lineNo",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "lineNo",
+        "runner": "node",
+        "description": "Field 'lineNo' should have type 'number' in lines"
+      },
+      {
+        "id": "t-field-type-lines-payment",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "payment",
+        "runner": "node",
+        "description": "Field 'payment' should have type 'string' in lines"
+      },
+      {
+        "id": "t-field-type-lines-paymentScheduleDetail",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "paymentScheduleDetail",
+        "runner": "node",
+        "description": "Field 'paymentScheduleDetail' should have type 'string' in lines"
+      },
+      {
+        "id": "t-field-type-remittance-documentNo",
+        "category": "field-type",
+        "entity": "remittance",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Field 'documentNo' should have type 'string' in remittance"
+      },
+      {
+        "id": "t-field-type-remittance-dueDate",
+        "category": "field-type",
+        "entity": "remittance",
+        "field": "dueDate",
+        "runner": "node",
+        "description": "Field 'dueDate' should have type 'string' in remittance"
+      },
+      {
+        "id": "t-field-type-remittance-financialAccount",
+        "category": "field-type",
+        "entity": "remittance",
+        "field": "financialAccount",
+        "runner": "node",
+        "description": "Field 'financialAccount' should have type 'string' in remittance"
+      },
+      {
+        "id": "t-field-type-remittance-name",
+        "category": "field-type",
+        "entity": "remittance",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should have type 'string' in remittance"
+      },
+      {
+        "id": "t-field-type-remittance-processed",
+        "category": "field-type",
+        "entity": "remittance",
+        "field": "processed",
+        "runner": "node",
+        "description": "Field 'processed' should have type 'boolean' in remittance"
+      },
+      {
+        "id": "t-field-type-remittance-remittanceStatus",
+        "category": "field-type",
+        "entity": "remittance",
+        "field": "remittanceStatus",
+        "runner": "node",
+        "description": "Field 'remittanceStatus' should have type 'string' in remittance"
+      },
+      {
+        "id": "t-field-type-remittance-remittanceType",
+        "category": "field-type",
+        "entity": "remittance",
+        "field": "remittanceType",
+        "runner": "node",
+        "description": "Field 'remittanceType' should have type 'string' in remittance"
+      },
+      {
+        "id": "t-field-type-remittance-transactionDate",
+        "category": "field-type",
+        "entity": "remittance",
+        "field": "transactionDate",
+        "runner": "node",
+        "description": "Field 'transactionDate' should have type 'string' in remittance"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-remittance-documentNo",
+        "category": "readonlylogic-evaluable",
+        "entity": "remittance",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Read-only logic for 'documentNo' in remittance should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-remittance-dueDate",
+        "category": "readonlylogic-evaluable",
+        "entity": "remittance",
+        "field": "dueDate",
+        "runner": "node",
+        "description": "Read-only logic for 'dueDate' in remittance should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-remittance-financialAccount",
+        "category": "readonlylogic-evaluable",
+        "entity": "remittance",
+        "field": "financialAccount",
+        "runner": "node",
+        "description": "Read-only logic for 'financialAccount' in remittance should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-remittance-name",
+        "category": "readonlylogic-evaluable",
+        "entity": "remittance",
+        "field": "name",
+        "runner": "node",
+        "description": "Read-only logic for 'name' in remittance should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-remittance-remittanceType",
+        "category": "readonlylogic-evaluable",
+        "entity": "remittance",
+        "field": "remittanceType",
+        "runner": "node",
+        "description": "Read-only logic for 'remittanceType' in remittance should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-remittance-transactionDate",
+        "category": "readonlylogic-evaluable",
+        "entity": "remittance",
+        "field": "transactionDate",
+        "runner": "node",
+        "description": "Read-only logic for 'transactionDate' in remittance should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-valid-remittance-documentNo",
+        "category": "readonlylogic-valid",
+        "entity": "remittance",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Read-only logic for 'documentNo' in remittance should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-remittance-dueDate",
+        "category": "readonlylogic-valid",
+        "entity": "remittance",
+        "field": "dueDate",
+        "runner": "node",
+        "description": "Read-only logic for 'dueDate' in remittance should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-remittance-financialAccount",
+        "category": "readonlylogic-valid",
+        "entity": "remittance",
+        "field": "financialAccount",
+        "runner": "node",
+        "description": "Read-only logic for 'financialAccount' in remittance should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-remittance-name",
+        "category": "readonlylogic-valid",
+        "entity": "remittance",
+        "field": "name",
+        "runner": "node",
+        "description": "Read-only logic for 'name' in remittance should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-remittance-remittanceType",
+        "category": "readonlylogic-valid",
+        "entity": "remittance",
+        "field": "remittanceType",
+        "runner": "node",
+        "description": "Read-only logic for 'remittanceType' in remittance should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-remittance-transactionDate",
+        "category": "readonlylogic-valid",
+        "entity": "remittance",
+        "field": "transactionDate",
+        "runner": "node",
+        "description": "Read-only logic for 'transactionDate' in remittance should be valid JS"
+      },
+      {
+        "id": "t-rule-declared-C-Doctype-Remittances",
+        "category": "rule-declared",
+        "rule": "C_Doctype - Remittances",
+        "runner": "node",
+        "description": "Rule 'C_Doctype - Remittances' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Create-Remittance-File",
+        "category": "rule-declared",
+        "rule": "Create Remittance File",
+        "runner": "node",
+        "description": "Rule 'Create Remittance File' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Posted",
+        "category": "rule-declared",
+        "rule": "Posted",
+        "runner": "node",
+        "description": "Rule 'Posted' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Process-Remittance",
+        "category": "rule-declared",
+        "rule": "Process Remittance",
+        "runner": "node",
+        "description": "Rule 'Process Remittance' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Protest-Remittance",
+        "category": "rule-declared",
+        "rule": "Protest Remittance",
+        "runner": "node",
+        "description": "Rule 'Protest Remittance' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Protest-Undo",
+        "category": "rule-declared",
+        "rule": "Protest Undo",
+        "runner": "node",
+        "description": "Rule 'Protest Undo' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-REM-Instruction-BPAccount-C-Bpartner-ID",
+        "category": "rule-declared",
+        "rule": "REM_Instruction_BPAccount_C_Bpartner_ID",
+        "runner": "node",
+        "description": "Rule 'REM_Instruction_BPAccount_C_Bpartner_ID' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-REM-Remittance-AD-Client-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "REM_Remittance-AD_Client_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'REM_Remittance-AD_Client_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-REM-Remittance-AD-Org-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "REM_Remittance-AD_Org_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'REM_Remittance-AD_Org_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-REM-Remittance-C-Doctype-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "REM_Remittance-C_Doctype_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'REM_Remittance-C_Doctype_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-REM-Remittance-Chargedate-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "REM_Remittance-Chargedate-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'REM_Remittance-Chargedate-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-REM-Remittance-Datetrx-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "REM_Remittance-Datetrx-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'REM_Remittance-Datetrx-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-REM-Remittance-DocumentNo-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "REM_Remittance-DocumentNo-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'REM_Remittance-DocumentNo-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-REM-Remittance-Duedate-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "REM_Remittance-Duedate-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'REM_Remittance-Duedate-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-REM-Remittance-EM-Etar-Automaticprocess-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "REM_Remittance-EM_Etar_Automaticprocess-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'REM_Remittance-EM_Etar_Automaticprocess-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-REM-Remittance-FIN-Financial-Account-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "REM_Remittance-FIN_Financial_Account_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'REM_Remittance-FIN_Financial_Account_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-REM-Remittance-FIN-Payment-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "REM_Remittance-FIN_Payment_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'REM_Remittance-FIN_Payment_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-REM-Remittance-REM-Remittance-Type-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "REM_Remittance-REM_Remittance_Type_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'REM_Remittance-REM_Remittance_Type_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-REM-Remittance-SinglePayment-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "REM_Remittance-SinglePayment-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'REM_Remittance-SinglePayment-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-REM-RemittanceLine-Cancel-DateAcct-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "REM_RemittanceLine_Cancel-DateAcct-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'REM_RemittanceLine_Cancel-DateAcct-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-REM-RemittanceLine-Cancel-FIN-Payment-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "REM_RemittanceLine_Cancel-FIN_Payment_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'REM_RemittanceLine_Cancel-FIN_Payment_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-REM-RemittanceLine-Cancel-Line-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "REM_RemittanceLine_Cancel-Line-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'REM_RemittanceLine_Cancel-Line-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-REM-RemittanceLine-Return-DateAcct-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "REM_RemittanceLine_Return-DateAcct-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'REM_RemittanceLine_Return-DateAcct-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-REM-RemittanceLine-Return-FIN-Payment-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "REM_RemittanceLine_Return-FIN_Payment_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'REM_RemittanceLine_Return-FIN_Payment_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-REM-RemittanceLine-Return-Line-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "REM_RemittanceLine_Return-Line-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'REM_RemittanceLine_Return-Line-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-REM-RemittanceType-FinAccount-REM-Remittance-Type-ID",
+        "category": "rule-declared",
+        "rule": "REM_RemittanceType_FinAccount_REM_Remittance_Type_ID",
+        "runner": "node",
+        "description": "Rule 'REM_RemittanceType_FinAccount_REM_Remittance_Type_ID' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-remittance-Bank-Instructions-EM-OBSEPAD-SeqTp-displayLogic",
+        "category": "rule-declared",
+        "rule": "remittance-Bank Instructions-EM_OBSEPAD_SeqTp-displayLogic",
+        "runner": "node",
+        "description": "Rule 'remittance-Bank Instructions-EM_OBSEPAD_SeqTp-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Remittance-printed",
+        "category": "rule-declared",
+        "rule": "Remittance printed",
+        "runner": "node",
+        "description": "Rule 'Remittance printed' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-remittance-Protested-Posted-displayLogic",
+        "category": "rule-declared",
+        "rule": "remittance-Protested-Posted-displayLogic",
+        "runner": "node",
+        "description": "Rule 'remittance-Protested-Posted-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-remittance-Protested-Undo-displayLogic",
+        "category": "rule-declared",
+        "rule": "remittance-Protested-Undo-displayLogic",
+        "runner": "node",
+        "description": "Rule 'remittance-Protested-Undo-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-remittance-Remittance-Chargedate-displayLogic",
+        "category": "rule-declared",
+        "rule": "remittance-Remittance-Chargedate-displayLogic",
+        "runner": "node",
+        "description": "Rule 'remittance-Remittance-Chargedate-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-remittance-Remittance-Createfrom-displayLogic",
+        "category": "rule-declared",
+        "rule": "remittance-Remittance-Createfrom-displayLogic",
+        "runner": "node",
+        "description": "Rule 'remittance-Remittance-Createfrom-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-remittance-Remittance-FIN-Payment-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "remittance-Remittance-FIN_Payment_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'remittance-Remittance-FIN_Payment_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-remittance-Remittance-Getfile-displayLogic",
+        "category": "rule-declared",
+        "rule": "remittance-Remittance-Getfile-displayLogic",
+        "runner": "node",
+        "description": "Rule 'remittance-Remittance-Getfile-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-remittance-Remittance-Posted-displayLogic",
+        "category": "rule-declared",
+        "rule": "remittance-Remittance-Posted-displayLogic",
+        "runner": "node",
+        "description": "Rule 'remittance-Remittance-Posted-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-remittance-Remittance-selectInvoicesAndOrders-displayLogic",
+        "category": "rule-declared",
+        "rule": "remittance-Remittance-selectInvoicesAndOrders-displayLogic",
+        "runner": "node",
+        "description": "Rule 'remittance-Remittance-selectInvoicesAndOrders-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-remittance-Remittance-Selectpayments-displayLogic",
+        "category": "rule-declared",
+        "rule": "remittance-Remittance-Selectpayments-displayLogic",
+        "runner": "node",
+        "description": "Rule 'remittance-Remittance-Selectpayments-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-remittance-Settled-Posted-displayLogic",
+        "category": "rule-declared",
+        "rule": "remittance-Settled-Posted-displayLogic",
+        "runner": "node",
+        "description": "Rule 'remittance-Settled-Posted-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-remittance-Settled-Undo-displayLogic",
+        "category": "rule-declared",
+        "rule": "remittance-Settled-Undo-displayLogic",
+        "runner": "node",
+        "description": "Rule 'remittance-Settled-Undo-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Select-Invoices-and-Orders",
+        "category": "rule-declared",
+        "rule": "Select Invoices and Orders",
+        "runner": "node",
+        "description": "Rule 'Select Invoices and Orders' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Select-Orders-or-Invoices",
+        "category": "rule-declared",
+        "rule": "Select Orders or Invoices",
+        "runner": "node",
+        "description": "Rule 'Select Orders or Invoices' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Select-Payments-Pick-and-Edit",
+        "category": "rule-declared",
+        "rule": "Select Payments Pick and Edit",
+        "runner": "node",
+        "description": "Rule 'Select Payments Pick and Edit' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Settle-Undo",
+        "category": "rule-declared",
+        "rule": "Settle Undo",
+        "runner": "node",
+        "description": "Rule 'Settle Undo' (process) should be declared"
+      },
+      {
+        "id": "t-selector-endpoint-lines-payment",
+        "category": "selector-endpoint",
+        "entity": "lines",
+        "field": "payment",
+        "runner": "node",
+        "description": "Selector endpoint for 'payment' in lines should exist"
+      },
+      {
+        "id": "t-selector-endpoint-lines-paymentScheduleDetail",
+        "category": "selector-endpoint",
+        "entity": "lines",
+        "field": "paymentScheduleDetail",
+        "runner": "node",
+        "description": "Selector endpoint for 'paymentScheduleDetail' in lines should exist"
+      },
+      {
+        "id": "t-selector-endpoint-remittance-financialAccount",
+        "category": "selector-endpoint",
+        "entity": "remittance",
+        "field": "financialAccount",
+        "runner": "node",
+        "description": "Selector endpoint for 'financialAccount' in remittance should exist"
+      },
+      {
+        "id": "t-selector-endpoint-remittance-remittanceType",
+        "category": "selector-endpoint",
+        "entity": "remittance",
+        "field": "remittanceType",
+        "runner": "node",
+        "description": "Selector endpoint for 'remittanceType' in remittance should exist"
+      },
+      {
+        "id": "t-system-field-lines-active",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-client",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-createdBy",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-creationDate",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-displayedAccount",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "displayedAccount",
+        "runner": "node",
+        "description": "System field 'displayedAccount' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-displayedAccount2",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "displayedAccount2",
+        "runner": "node",
+        "description": "System field 'displayedAccount2' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-id",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-invoice",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "invoice",
+        "runner": "node",
+        "description": "System field 'invoice' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-invoicePaymentSchedule",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "invoicePaymentSchedule",
+        "runner": "node",
+        "description": "System field 'invoicePaymentSchedule' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-order",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "order",
+        "runner": "node",
+        "description": "System field 'order' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-orderPaymentInPlan",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "orderPaymentInPlan",
+        "runner": "node",
+        "description": "System field 'orderPaymentInPlan' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-organization",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-origstatus",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "origstatus",
+        "runner": "node",
+        "description": "System field 'origstatus' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-remittance",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "remittance",
+        "runner": "node",
+        "description": "System field 'remittance' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-status",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "status",
+        "runner": "node",
+        "description": "System field 'status' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-updated",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-updatedBy",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-remittance-active",
+        "category": "system-field",
+        "entity": "remittance",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for remittance"
+      },
+      {
+        "id": "t-system-field-remittance-chargedate",
+        "category": "system-field",
+        "entity": "remittance",
+        "field": "chargedate",
+        "runner": "node",
+        "description": "System field 'chargedate' should exist in backend but not frontend for remittance"
+      },
+      {
+        "id": "t-system-field-remittance-client",
+        "category": "system-field",
+        "entity": "remittance",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for remittance"
+      },
+      {
+        "id": "t-system-field-remittance-createdBy",
+        "category": "system-field",
+        "entity": "remittance",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for remittance"
+      },
+      {
+        "id": "t-system-field-remittance-createLinesFrom",
+        "category": "system-field",
+        "entity": "remittance",
+        "field": "createLinesFrom",
+        "runner": "node",
+        "description": "System field 'createLinesFrom' should exist in backend but not frontend for remittance"
+      },
+      {
+        "id": "t-system-field-remittance-creationDate",
+        "category": "system-field",
+        "entity": "remittance",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for remittance"
+      },
+      {
+        "id": "t-system-field-remittance-documentType",
+        "category": "system-field",
+        "entity": "remittance",
+        "field": "documentType",
+        "runner": "node",
+        "description": "System field 'documentType' should exist in backend but not frontend for remittance"
+      },
+      {
+        "id": "t-system-field-remittance-eTARAutomaticprocess",
+        "category": "system-field",
+        "entity": "remittance",
+        "field": "eTARAutomaticprocess",
+        "runner": "node",
+        "description": "System field 'eTARAutomaticprocess' should exist in backend but not frontend for remittance"
+      },
+      {
+        "id": "t-system-field-remittance-getFile",
+        "category": "system-field",
+        "entity": "remittance",
+        "field": "getFile",
+        "runner": "node",
+        "description": "System field 'getFile' should exist in backend but not frontend for remittance"
+      },
+      {
+        "id": "t-system-field-remittance-id",
+        "category": "system-field",
+        "entity": "remittance",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for remittance"
+      },
+      {
+        "id": "t-system-field-remittance-organization",
+        "category": "system-field",
+        "entity": "remittance",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for remittance"
+      },
+      {
+        "id": "t-system-field-remittance-payment",
+        "category": "system-field",
+        "entity": "remittance",
+        "field": "payment",
+        "runner": "node",
+        "description": "System field 'payment' should exist in backend but not frontend for remittance"
+      },
+      {
+        "id": "t-system-field-remittance-posted",
+        "category": "system-field",
+        "entity": "remittance",
+        "field": "posted",
+        "runner": "node",
+        "description": "System field 'posted' should exist in backend but not frontend for remittance"
+      },
+      {
+        "id": "t-system-field-remittance-processNow",
+        "category": "system-field",
+        "entity": "remittance",
+        "field": "processNow",
+        "runner": "node",
+        "description": "System field 'processNow' should exist in backend but not frontend for remittance"
+      },
+      {
+        "id": "t-system-field-remittance-processRemittance",
+        "category": "system-field",
+        "entity": "remittance",
+        "field": "processRemittance",
+        "runner": "node",
+        "description": "System field 'processRemittance' should exist in backend but not frontend for remittance"
+      },
+      {
+        "id": "t-system-field-remittance-selectInvoicesAndOrders",
+        "category": "system-field",
+        "entity": "remittance",
+        "field": "selectInvoicesAndOrders",
+        "runner": "node",
+        "description": "System field 'selectInvoicesAndOrders' should exist in backend but not frontend for remittance"
+      },
+      {
+        "id": "t-system-field-remittance-selectpayments",
+        "category": "system-field",
+        "entity": "remittance",
+        "field": "selectpayments",
+        "runner": "node",
+        "description": "System field 'selectpayments' should exist in backend but not frontend for remittance"
+      },
+      {
+        "id": "t-system-field-remittance-singlePayment",
+        "category": "system-field",
+        "entity": "remittance",
+        "field": "singlePayment",
+        "runner": "node",
+        "description": "System field 'singlePayment' should exist in backend but not frontend for remittance"
+      },
+      {
+        "id": "t-system-field-remittance-updated",
+        "category": "system-field",
+        "entity": "remittance",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for remittance"
+      },
+      {
+        "id": "t-system-field-remittance-updatedBy",
+        "category": "system-field",
+        "entity": "remittance",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for remittance"
+      },
+      {
+        "id": "t-visibility-lines",
+        "category": "visibility",
+        "entity": "lines",
+        "runner": "node",
+        "description": "Entity 'lines' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-visibility-remittance",
+        "category": "visibility",
+        "entity": "remittance",
+        "runner": "node",
+        "description": "Entity 'remittance' should only expose visible fields in frontend"
+      }
+    ],
+    "summary": {
+      "total": 138,
+      "byCategory": {
+        "action-endpoint": 6,
+        "crud-flags": 2,
+        "default-value-type": 6,
+        "field-presence": 13,
+        "field-type": 13,
+        "readonlylogic-evaluable": 6,
+        "readonlylogic-valid": 6,
+        "rule-declared": 43,
+        "selector-endpoint": 4,
+        "system-field": 37,
+        "visibility": 2
+      },
+      "byRunner": {
+        "node": 138,
+        "junit": 0
+      }
+    }
+  }
+}

@@ -1471,6 +1471,112 @@ describe('translateBackendError — country/IBAN validation (ETP-4896)', () => {
   });
 });
 
+// ETP-6148 — the «Admite remesas» refusals of a financial account (FinancialAccountRemittanceSupport
+// / SepaRemittancesFlag in com.etendoerp.go), mapped by key through the real locales. The 422
+// open-remittances refusal is deliberately NOT mapped: its text embeds the count and the backend
+// sends no messageParams, so it reaches the user as the backend wrote it.
+describe('translateBackendError — SEPA remittance refusals of a financial account (ETP-6148)', () => {
+  const KEYED = [
+    ['ETGO_RemittanceAccountNotBank', 'backendError.remittanceAccountNotBank'],
+    ['ETGO_RemittanceAccountIbanRequired', 'backendError.remittanceAccountIbanRequired'],
+    ['ETGO_SepaRemittancesDisabled', 'backendError.sepaRemittancesDisabled'],
+    // RemittanceHeaderHandler: a new or changed due date earlier than today (422), the safety
+    // net behind the dueDate field's `minDate`.
+    ['ETGO_RemittanceDueDatePast', 'backendError.remittanceDueDatePast'],
+    // RemittanceHeaderHandler: a write on a processed remittance, and the «Seleccionar desde
+    // factura» refusals (availableDueItems / selectDueItems, 422).
+    ['ETGO_RemittanceProcessedNotEditable', 'backendError.remittanceProcessedNotEditable'],
+    ['ETGO_RemittanceTypeOrAccountMissing', 'backendError.remittanceTypeOrAccountMissing'],
+    ['ETGO_RemittanceDueItemsRequired', 'backendError.remittanceDueItemsRequired'],
+    ['ETGO_RemittanceDueItemNotAvailable', 'backendError.remittanceDueItemNotAvailable'],
+    // «Procesar» / «Reactivar» refusals with a fixed sentence (422).
+    ['ETGO_RemittanceAlreadyProcessed', 'backendError.remittanceAlreadyProcessed'],
+    ['ETGO_RemittanceNoLines', 'backendError.remittanceNoLines'],
+    ['ETGO_RemittanceNotProcessed', 'backendError.remittanceNotProcessed'],
+  ];
+  // The *Failed refusals embed the cause (REM's own text) as `{0}` and the backend sends no
+  // messageParams, so their sentences take `{detail}`: without it the key route yields and the
+  // backend text, already in the request language and carrying the cause, is shown.
+  const DETAIL_KEYED = [
+    ['ETGO_RemittanceDueItemsSelectionFailed', 'backendError.remittanceDueItemsSelectionFailed'],
+    ['ETGO_RemittanceProcessFailed', 'backendError.remittanceProcessFailed'],
+    ['ETGO_RemittanceReactivateFailed', 'backendError.remittanceReactivateFailed'],
+  ];
+  const LOCALES = ['en_US', 'es_ES', 'es_AR'];
+  const labels = Object.fromEntries(LOCALES.map((loc) => [
+    loc, JSON.parse(readFileSync(new URL(`../../locales/${loc}.json`, import.meta.url), 'utf8')).genericLabels,
+  ]));
+
+  it('has every key, non-empty, in en_US, es_ES and es_AR', () => {
+    for (const loc of LOCALES) {
+      for (const [, uiKey] of [...KEYED, ...DETAIL_KEYED]) {
+        assert.ok(typeof labels[loc][uiKey] === 'string' && labels[loc][uiKey].trim(), `${loc} is missing ${uiKey}`);
+      }
+    }
+  });
+
+  it('translates the Spanish locales instead of copying the English sentence', () => {
+    for (const [, uiKey] of [...KEYED, ...DETAIL_KEYED]) {
+      assert.notEqual(labels.es_ES[uiKey], labels.en_US[uiKey], `es_ES ${uiKey}`);
+      assert.notEqual(labels.es_AR[uiKey], labels.en_US[uiKey], `es_AR ${uiKey}`);
+    }
+  });
+
+  for (const [messageKey, uiKey] of DETAIL_KEYED) {
+    it(`${messageKey}: every locale sentence takes a {detail} param`, () => {
+      for (const loc of LOCALES) assert.match(labels[loc][uiKey], /\{detail\}/, `${loc} ${uiKey}`);
+    });
+
+    it(`${messageKey}: without messageParams.detail, shows the backend text (cause included)`, () => {
+      const prose = 'No se pudo procesar: el vencimiento 1001 ya está pagado.';
+      for (const loc of LOCALES) {
+        assert.equal(translateBackendError(prose, localeTranslator(loc), { messageKeys: [messageKey] }), prose, loc);
+        assert.equal(
+          translateBackendError(prose, localeTranslator(loc), { messageKeys: [messageKey], messageParams: { other: 'x' } }),
+          prose, loc,
+        );
+      }
+      const body = { error: { status: 422, message: prose, messageKeys: [messageKey] } };
+      assert.equal(translateBackendErrorBody(body, localeTranslator('es_ES'), 'fallback'), prose);
+    });
+
+    it(`${messageKey}: with messageParams.detail, renders the locale sentence around it`, () => {
+      for (const loc of LOCALES) {
+        const out = translateBackendError('raw', localeTranslator(loc), {
+          messageKeys: [messageKey], messageParams: { detail: 'CAUSE-42' },
+        });
+        assert.equal(out, labels[loc][uiKey].replace('{detail}', 'CAUSE-42'), loc);
+        assert.doesNotMatch(out, /\{detail\}/);
+      }
+    });
+  }
+
+  for (const [messageKey, uiKey] of KEYED) {
+    it(`${messageKey}: maps by key in every locale, whatever language the prose is in`, () => {
+      for (const loc of LOCALES) {
+        const t = localeTranslator(loc);
+        assert.equal(translateBackendError('Some English prose.', t, { messageKeys: [messageKey] }), labels[loc][uiKey], loc);
+        assert.equal(translateBackendError('Un texto en castellano.', t, { messageKeys: [messageKey] }), labels[loc][uiKey], loc);
+      }
+    });
+
+    it(`${messageKey}: reads the key out of the NEO error body`, () => {
+      const body = { error: { status: 400, message: 'raw', messageKeys: [messageKey] } };
+      assert.equal(translateBackendErrorBody(body, localeTranslator('es_ES'), 'fallback'), labels.es_ES[uiKey]);
+    });
+  }
+
+  it('the 422 open-remittances refusal keeps the backend text, count included', () => {
+    const message = 'No se puede desactivar: la cuenta tiene 3 remesas abiertas.';
+    const body = { error: { status: 422, message, messageKeys: ['ETGO_RemittanceAccountHasOpenRemittances'] } };
+    assert.equal(translateBackendErrorBody(body, localeTranslator('es_ES'), 'fallback'), message);
+    assert.equal(
+      translateBackendError(message, localeTranslator('en_US'), { messageKeys: ['ETGO_RemittanceAccountHasOpenRemittances'] }),
+      message,
+    );
+  });
+});
+
 // ETP-4891 follow-up: PSD2_IBANAutoFillFailed (com.etendoerp.psd2) — that module ships ~108
 // AD_MESSAGE rows with no real es_ES AD_MESSAGE_TRL (the trl row is a verbatim copy of the
 // English text), so Core resolves the same English string regardless of session locale. `%0` is

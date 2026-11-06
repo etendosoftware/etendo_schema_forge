@@ -92,6 +92,10 @@ function toDalBody(payload) {
     body.writeofflimit = (raw === '' || raw == null) ? null : Number(raw);
   }
   if ('glItemDifferenceId' in payload) body.aprmGlitemDiff = payload.glItemDifferenceId || null;
+  // ETP-6148 — «Admite remesas» (EM_ETGO_Allow_Remittance). The DAL property drops the "EM_"
+  // prefix, the same as the tolerances above. Sent only when it changed in the edit modal: with
+  // the sepa-remittances flag off, FinancialAccountHandler refuses any body that changes it (403).
+  if ('allowRemittance' in payload) body.eTGOAllowRemittance = payload.allowRemittance === true;
   // The record version as it was READ, echoed back verbatim so NeoCrudHandler's optimistic-locking
   // check (ETP-5073/DOC-04) can tell a concurrent edit from ours; without it every PUT is refused
   // with `missing_updated`. Deliberately the caller's value and never a fresh re-read here: a

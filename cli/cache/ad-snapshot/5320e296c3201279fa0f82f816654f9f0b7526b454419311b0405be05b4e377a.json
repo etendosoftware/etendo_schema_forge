@@ -217,7 +217,7 @@
       ]
     },
     "2f22ba4790bcdcf783b1573c321c1f35b01b170c50ad5e9ab9e0d33f72120f75": {
-      "checksum": "8d6f8ffbb550de7fe8e1a9ffac23e95c6893e9f6982f0e0852f768dc3bc8cd5d",
+      "checksum": "d9e280c1f517badaa082bbfd8a46e3e4c1ae106b22e653eb542fb277700140bf",
       "params": [
         "123"
       ],
@@ -340,6 +340,22 @@
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Estado VIES",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "EM_Obsepad_Mandate_Date",
+          "displaylogic": "@IsCustomer@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Mandate Date of Signature",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "EM_Obsepad_Mandate_Identifier",
+          "displaylogic": "@IsCustomer@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Mandate Identification",
           "readonlylogic": null
         },
         {

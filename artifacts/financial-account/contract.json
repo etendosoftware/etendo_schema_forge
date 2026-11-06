@@ -1,8 +1,8 @@
 {
-  "version": "0.5.0",
+  "version": "0.10.0",
   "generatedAt": "2026-09-29T12:00:08.872Z",
-  "updatedAt": "2026-10-29T13:31:32.607Z",
-  "checksum": "844a2794b4c3c099",
+  "updatedAt": "2026-11-05T21:50:02.811Z",
+  "checksum": "56d27bee7da360aa",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -822,6 +822,29 @@
             }
           },
           {
+            "name": "eTGOAllowRemittance",
+            "apiKey": "eTGOAllowRemittance",
+            "column": "EM_ETGO_Allow_Remittance",
+            "label": "Allow Remittances",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "visibleWhenCapability": "sepaRemittances",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
+          },
+          {
             "name": "pSD2LastSyncDate",
             "apiKey": "pSD2LastSyncDate",
             "column": "EM_PSD2_Last_Sync_Date",
@@ -903,6 +926,13 @@
             "derivation": {
               "type": "computed",
               "source": "3"
+            }
+          },
+          {
+            "name": "eTGOAllowRemittance",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
             }
           }
         ]
@@ -986,66 +1016,47 @@
             "enumValues": [
               {
                 "value": "RPAP",
-                "name": "Awaiting Payment",
-                "labels": {
-                  "es_ES": "A Pagar"
-                }
+                "name": "statusRpap"
               },
               {
                 "value": "RPAE",
-                "name": "Awaiting Execution",
-                "labels": {
-                  "es_ES": "A Ejecutar"
-                }
+                "name": "statusRpae"
               },
               {
                 "value": "RPVOID",
-                "name": "Void",
-                "labels": {
-                  "es_ES": "Anulado"
-                }
+                "name": "statusRpvoid"
+              },
+              {
+                "value": "REM_SENT",
+                "name": "statusRemSent"
               },
               {
                 "value": "PPM",
-                "name": "Payment Made",
-                "labels": {
-                  "es_ES": "Pagado"
-                }
+                "name": "statusPpm"
               },
               {
                 "value": "RPR",
-                "name": "Payment Received",
-                "labels": {
-                  "es_ES": "Cobrado"
-                }
+                "name": "statusRpr"
+              },
+              {
+                "value": "REM_CANCEL",
+                "name": "statusRemCancel"
               },
               {
                 "value": "RDNC",
-                "name": "Deposited not Cleared",
-                "labels": {
-                  "es_ES": "Cobro depositado"
-                }
+                "name": "statusRdnc"
               },
               {
                 "value": "PWNC",
-                "name": "Withdrawn not Cleared",
-                "labels": {
-                  "es_ES": "Pago reintegrado"
-                }
+                "name": "statusPwnc"
               },
               {
                 "value": "RPPC",
-                "name": "Payment Cleared",
-                "labels": {
-                  "es_ES": "Conciliado"
-                }
+                "name": "statusRppc"
               },
               {
                 "value": "ETGOERR",
-                "name": "Payment Error",
-                "labels": {
-                  "es_ES": "Payment Error"
-                }
+                "name": "statusEtgoerr"
               }
             ],
             "defaultValue": "'RPAP'",
@@ -2726,6 +2737,52 @@
             "validation": {
               "maxLength": 2000
             }
+          },
+          {
+            "name": "pSD2DiscardLine",
+            "apiKey": "pSD2DiscardLine",
+            "column": "EM_PSD2_Discard_Line",
+            "label": "Discard / Restore",
+            "type": "button",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "validation": {
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@FIN_FinAcc_Transaction_ID@='' & @EM_PSD2_Transaction_Identifier@!''",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "pSD2IsDiscarded",
+            "apiKey": "pSD2IsDiscarded",
+            "column": "EM_PSD2_Is_Discarded",
+            "label": "Discarded",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [],
@@ -2756,6 +2813,20 @@
             "derivation": {
               "type": "computed",
               "source": "0"
+            }
+          },
+          {
+            "name": "pSD2DiscardLine",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "pSD2IsDiscarded",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
             }
           }
         ],
@@ -3834,6 +3905,14 @@
             "required": true
           },
           {
+            "name": "eTGOAllowRemittance",
+            "apiKey": "eTGOAllowRemittance",
+            "column": "EM_ETGO_Allow_Remittance",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
             "name": "updated",
             "apiKey": "updated",
             "column": "Updated",
@@ -4687,6 +4766,14 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "eTGODiscardedCount",
+            "apiKey": "eTGODiscardedCount",
+            "column": "EM_ETGO_Discarded_Count",
+            "type": "integer",
+            "visibility": "system",
+            "required": false
           }
         ],
         "javaQualifier": "bankStatementEntityHandler"
@@ -4902,6 +4989,54 @@
             "column": "Updatedby",
             "type": "foreignKey",
             "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "eTGOBounceConfidence",
+            "apiKey": "eTGOBounceConfidence",
+            "column": "EM_ETGO_Bounce_Confidence",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "eTGOBounceDiscarded",
+            "apiKey": "eTGOBounceDiscarded",
+            "column": "EM_ETGO_Bounce_Discarded",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "eTGOBouncePairLine",
+            "apiKey": "eTGOBouncePairLine",
+            "column": "EM_ETGO_Bounce_Pair_Line_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "eTGOBounceSignal",
+            "apiKey": "eTGOBounceSignal",
+            "column": "EM_ETGO_Bounce_Signal",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "pSD2DiscardLine",
+            "apiKey": "pSD2DiscardLine",
+            "column": "EM_PSD2_Discard_Line",
+            "type": "button",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "pSD2IsDiscarded",
+            "apiKey": "pSD2IsDiscarded",
+            "column": "EM_PSD2_Is_Discarded",
+            "type": "boolean",
+            "visibility": "readOnly",
             "required": true
           }
         ],
@@ -6198,6 +6333,14 @@
         "processType": "obuiapp"
       },
       {
+        "entity": "bankStatementLines",
+        "field": "pSD2DiscardLine",
+        "column": "EM_PSD2_Discard_Line",
+        "url": "/sws/neo/financial-account/bankStatementLines/{id}/action/pSD2DiscardLine",
+        "processId": "4CE3F562002C459E860C97E5C3E44FF9",
+        "processType": "obuiapp"
+      },
+      {
         "entity": "reconciliations",
         "field": "aPRMPrintDetailed",
         "column": "EM_APRM_PrintDetailed",
@@ -6376,6 +6519,14 @@
         "field": "psd2RefreshConnections",
         "runner": "node",
         "description": "Action endpoint for 'psd2RefreshConnections' in account should exist"
+      },
+      {
+        "id": "t-action-endpoint-bankStatementLines-pSD2DiscardLine",
+        "category": "action-endpoint",
+        "entity": "bankStatementLines",
+        "field": "pSD2DiscardLine",
+        "runner": "node",
+        "description": "Action endpoint for 'pSD2DiscardLine' in bankStatementLines should exist"
       },
       {
         "id": "t-action-endpoint-importedBankStatements-aPRMProcessBankStatement",
@@ -6579,6 +6730,14 @@
         "description": "Default value for 'default' in account should be a string"
       },
       {
+        "id": "t-default-value-type-account-eTGOAllowRemittance",
+        "category": "default-value-type",
+        "entity": "account",
+        "field": "eTGOAllowRemittance",
+        "runner": "node",
+        "description": "Default value for 'eTGOAllowRemittance' in account should be a string"
+      },
+      {
         "id": "t-default-value-type-account-eTGOAmountTolerance",
         "category": "default-value-type",
         "entity": "account",
@@ -6641,6 +6800,22 @@
         "field": "dramount",
         "runner": "node",
         "description": "Default value for 'dramount' in bankStatementLines should be a string"
+      },
+      {
+        "id": "t-default-value-type-bankStatementLines-pSD2DiscardLine",
+        "category": "default-value-type",
+        "entity": "bankStatementLines",
+        "field": "pSD2DiscardLine",
+        "runner": "node",
+        "description": "Default value for 'pSD2DiscardLine' in bankStatementLines should be a string"
+      },
+      {
+        "id": "t-default-value-type-bankStatementLines-pSD2IsDiscarded",
+        "category": "default-value-type",
+        "entity": "bankStatementLines",
+        "field": "pSD2IsDiscarded",
+        "runner": "node",
+        "description": "Default value for 'pSD2IsDiscarded' in bankStatementLines should be a string"
       },
       {
         "id": "t-default-value-type-bankStatementLines-transactionDate",
@@ -7009,6 +7184,14 @@
         "field": "fINBankrevaluationlossAcct",
         "runner": "node",
         "description": "Display logic for 'fINBankrevaluationlossAcct' in accountingConfiguration should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-bankStatementLines-pSD2DiscardLine",
+        "category": "displaylogic-evaluable",
+        "entity": "bankStatementLines",
+        "field": "pSD2DiscardLine",
+        "runner": "node",
+        "description": "Display logic for 'pSD2DiscardLine' in bankStatementLines should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-clearedItems-ndDimension",
@@ -7419,6 +7602,14 @@
         "description": "Display logic for 'fINBankrevaluationlossAcct' in accountingConfiguration should be valid JS"
       },
       {
+        "id": "t-displaylogic-valid-bankStatementLines-pSD2DiscardLine",
+        "category": "displaylogic-valid",
+        "entity": "bankStatementLines",
+        "field": "pSD2DiscardLine",
+        "runner": "node",
+        "description": "Display logic for 'pSD2DiscardLine' in bankStatementLines should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-clearedItems-ndDimension",
         "category": "displaylogic-valid",
         "entity": "clearedItems",
@@ -7755,6 +7946,14 @@
         "description": "Field 'description' should be present in account"
       },
       {
+        "id": "t-field-presence-account-eTGOAllowRemittance",
+        "category": "field-presence",
+        "entity": "account",
+        "field": "eTGOAllowRemittance",
+        "runner": "node",
+        "description": "Field 'eTGOAllowRemittance' should be present in account"
+      },
+      {
         "id": "t-field-presence-account-eTGOAmountTolerance",
         "category": "field-presence",
         "entity": "account",
@@ -8041,6 +8240,22 @@
         "field": "gLItem",
         "runner": "node",
         "description": "Field 'gLItem' should be present in bankStatementLines"
+      },
+      {
+        "id": "t-field-presence-bankStatementLines-pSD2DiscardLine",
+        "category": "field-presence",
+        "entity": "bankStatementLines",
+        "field": "pSD2DiscardLine",
+        "runner": "node",
+        "description": "Field 'pSD2DiscardLine' should be present in bankStatementLines"
+      },
+      {
+        "id": "t-field-presence-bankStatementLines-pSD2IsDiscarded",
+        "category": "field-presence",
+        "entity": "bankStatementLines",
+        "field": "pSD2IsDiscarded",
+        "runner": "node",
+        "description": "Field 'pSD2IsDiscarded' should be present in bankStatementLines"
       },
       {
         "id": "t-field-presence-bankStatementLines-referenceNo",
@@ -8619,6 +8834,14 @@
         "description": "Field 'description' should have type 'string' in account"
       },
       {
+        "id": "t-field-type-account-eTGOAllowRemittance",
+        "category": "field-type",
+        "entity": "account",
+        "field": "eTGOAllowRemittance",
+        "runner": "node",
+        "description": "Field 'eTGOAllowRemittance' should have type 'boolean' in account"
+      },
+      {
         "id": "t-field-type-account-eTGOAmountTolerance",
         "category": "field-type",
         "entity": "account",
@@ -8905,6 +9128,22 @@
         "field": "gLItem",
         "runner": "node",
         "description": "Field 'gLItem' should have type 'string' in bankStatementLines"
+      },
+      {
+        "id": "t-field-type-bankStatementLines-pSD2DiscardLine",
+        "category": "field-type",
+        "entity": "bankStatementLines",
+        "field": "pSD2DiscardLine",
+        "runner": "node",
+        "description": "Field 'pSD2DiscardLine' should have type 'string' in bankStatementLines"
+      },
+      {
+        "id": "t-field-type-bankStatementLines-pSD2IsDiscarded",
+        "category": "field-type",
+        "entity": "bankStatementLines",
+        "field": "pSD2IsDiscarded",
+        "runner": "node",
+        "description": "Field 'pSD2IsDiscarded' should have type 'boolean' in bankStatementLines"
       },
       {
         "id": "t-field-type-bankStatementLines-referenceNo",
@@ -10079,6 +10318,13 @@
         "description": "Rule 'Connect Account' (process) should be declared"
       },
       {
+        "id": "t-rule-declared-Discard-Restore-Bank-Statement-Line",
+        "category": "rule-declared",
+        "rule": "Discard / Restore Bank Statement Line",
+        "runner": "node",
+        "description": "Rule 'Discard / Restore Bank Statement Line' (process) should be declared"
+      },
+      {
         "id": "t-rule-declared-Disconnect-Connection",
         "category": "rule-declared",
         "rule": "Disconnect Connection",
@@ -10770,6 +11016,13 @@
         "rule": "financial-account-Bank Connections-Reconnect_Conn-displayLogic",
         "runner": "node",
         "description": "Rule 'financial-account-Bank Connections-Reconnect_Conn-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-financial-account-Bank-Statement-Lines-EM-PSD2-Discard-Line-displayLogic",
+        "category": "rule-declared",
+        "rule": "financial-account-Bank Statement Lines-EM_PSD2_Discard_Line-displayLogic",
+        "runner": "node",
+        "description": "Rule 'financial-account-Bank Statement Lines-EM_PSD2_Discard_Line-displayLogic' (displayLogic) should be declared"
       },
       {
         "id": "t-rule-declared-financial-account-Cleared-items-C-Project-ID-displayLogic",
@@ -12145,6 +12398,38 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for bankStatementLines"
       },
       {
+        "id": "t-system-field-bankStatementLines-eTGOBounceConfidence",
+        "category": "system-field",
+        "entity": "bankStatementLines",
+        "field": "eTGOBounceConfidence",
+        "runner": "node",
+        "description": "System field 'eTGOBounceConfidence' should exist in backend but not frontend for bankStatementLines"
+      },
+      {
+        "id": "t-system-field-bankStatementLines-eTGOBounceDiscarded",
+        "category": "system-field",
+        "entity": "bankStatementLines",
+        "field": "eTGOBounceDiscarded",
+        "runner": "node",
+        "description": "System field 'eTGOBounceDiscarded' should exist in backend but not frontend for bankStatementLines"
+      },
+      {
+        "id": "t-system-field-bankStatementLines-eTGOBouncePairLine",
+        "category": "system-field",
+        "entity": "bankStatementLines",
+        "field": "eTGOBouncePairLine",
+        "runner": "node",
+        "description": "System field 'eTGOBouncePairLine' should exist in backend but not frontend for bankStatementLines"
+      },
+      {
+        "id": "t-system-field-bankStatementLines-eTGOBounceSignal",
+        "category": "system-field",
+        "entity": "bankStatementLines",
+        "field": "eTGOBounceSignal",
+        "runner": "node",
+        "description": "System field 'eTGOBounceSignal' should exist in backend but not frontend for bankStatementLines"
+      },
+      {
         "id": "t-system-field-bankStatementLines-eTGOMatchGroup",
         "category": "system-field",
         "entity": "bankStatementLines",
@@ -12391,6 +12676,14 @@
         "field": "documentType",
         "runner": "node",
         "description": "System field 'documentType' should exist in backend but not frontend for importedBankStatements"
+      },
+      {
+        "id": "t-system-field-importedBankStatements-eTGODiscardedCount",
+        "category": "system-field",
+        "entity": "importedBankStatements",
+        "field": "eTGODiscardedCount",
+        "runner": "node",
+        "description": "System field 'eTGODiscardedCount' should exist in backend but not frontend for importedBankStatements"
       },
       {
         "id": "t-system-field-importedBankStatements-eTGOLineCount",
@@ -12971,25 +13264,25 @@
       }
     ],
     "summary": {
-      "total": 867,
+      "total": 886,
       "byCategory": {
-        "action-endpoint": 28,
+        "action-endpoint": 29,
         "crud-flags": 7,
-        "default-value-type": 33,
-        "displaylogic-evaluable": 51,
-        "displaylogic-valid": 51,
-        "field-presence": 108,
-        "field-type": 108,
+        "default-value-type": 36,
+        "displaylogic-evaluable": 52,
+        "displaylogic-valid": 52,
+        "field-presence": 111,
+        "field-type": 111,
         "readonlylogic-evaluable": 33,
         "readonlylogic-valid": 33,
-        "rule-declared": 226,
+        "rule-declared": 228,
         "searchable-filters": 2,
         "selector-endpoint": 35,
-        "system-field": 145,
+        "system-field": 150,
         "visibility": 7
       },
       "byRunner": {
-        "node": 867,
+        "node": 886,
         "junit": 0
       }
     }

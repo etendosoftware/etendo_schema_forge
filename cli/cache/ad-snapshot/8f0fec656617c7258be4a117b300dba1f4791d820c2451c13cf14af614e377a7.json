@@ -1898,7 +1898,7 @@
       ]
     },
     "2f22ba4790bcdcf783b1573c321c1f35b01b170c50ad5e9ab9e0d33f72120f75": {
-      "checksum": "c441ad95f832051629328a0778e484698e94f8b1ee3fc5e8fe0f5b877336e8cd",
+      "checksum": "791ab1ffd1883bbc6fd7c6e36682323e7cb6c03e1093ec0e5837e8da57510ef4",
       "params": [
         "123"
       ],
@@ -3066,6 +3066,18 @@
           "ad_table_id": "291",
           "columnname": "Is_Customer_Consent",
           "position": "97"
+        },
+        {
+          "ad_column_id": "5E1AABB6995F427CABADDB978D831B3A",
+          "ad_table_id": "291",
+          "columnname": "EM_Obsepad_Mandate_Identifier",
+          "position": "99"
+        },
+        {
+          "ad_column_id": "845872C29D244FCEBC1F7364A029E739",
+          "ad_table_id": "291",
+          "columnname": "EM_Obsepad_Mandate_Date",
+          "position": "100"
         },
         {
           "ad_column_id": "9E6D73B6EE0544BC8202FF883986CD23",

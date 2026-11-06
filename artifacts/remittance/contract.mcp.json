@@ -1,0 +1,438 @@
+{
+  "version": "0.14.0",
+  "generatedAt": "2026-11-05T18:53:39.346Z",
+  "updatedAt": "2026-11-06T15:49:40.281Z",
+  "contractChecksum": "a7777403773374cb",
+  "apiPrediction": {
+    "specName": "remittance",
+    "baseUrl": "/sws/neo/remittance",
+    "crud": {
+      "remittance": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/remittance/remittance",
+        "detailUrl": "/sws/neo/remittance/remittance/{id}",
+        "supportedFilters": []
+      },
+      "lines": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": true,
+        "listUrl": "/sws/neo/remittance/lines",
+        "detailUrl": "/sws/neo/remittance/lines/{id}",
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID",
+          "DELETE"
+        ]
+      }
+    },
+    "selectors": [
+      {
+        "entity": "remittance",
+        "field": "remittanceType",
+        "column": "REM_Remittance_Type_ID",
+        "reference": "REM_Remittance_Type",
+        "inputMode": "dependent",
+        "url": "/sws/neo/remittance/remittance/selectors/remittanceType",
+        "context": {
+          "required": [
+            {
+              "param": "FIN_Financial_Account_ID",
+              "source": "field",
+              "field": "financialAccount"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "remittance",
+        "field": "financialAccount",
+        "column": "FIN_Financial_Account_ID",
+        "reference": "Financial_Account",
+        "inputMode": "selector",
+        "url": "/sws/neo/remittance/remittance/selectors/financialAccount"
+      },
+      {
+        "entity": "lines",
+        "field": "payment",
+        "column": "FIN_Payment_ID",
+        "reference": "Payment",
+        "inputMode": "search",
+        "url": "/sws/neo/remittance/lines/selectors/payment"
+      },
+      {
+        "entity": "lines",
+        "field": "paymentScheduleDetail",
+        "column": "FIN_Payment_Scheduledetail_ID",
+        "reference": "Payment_Scheduledetail",
+        "inputMode": "search",
+        "url": "/sws/neo/remittance/lines/selectors/paymentScheduleDetail"
+      }
+    ],
+    "actions": [
+      {
+        "name": "selectpayments",
+        "actionType": "paymentAction",
+        "entity": "remittance",
+        "column": "Selectpayments",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/remittance/remittance/{id}/action/selectpayments",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "C88AB6CBA1694000AFF5706A31B08AE1",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "createLinesFrom",
+        "actionType": "createFrom",
+        "entity": "remittance",
+        "column": "Createfrom",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/remittance/remittance/{id}/action/createLinesFrom",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "FF8080812E7CD815012E7CE8F7260045",
+        "processType": "classic"
+      },
+      {
+        "name": "getFile",
+        "actionType": "utilityAction",
+        "entity": "remittance",
+        "column": "Getfile",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/remittance/remittance/{id}/action/getFile",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "FF8080812EB06FB0012EB072D2A2000A",
+        "processType": "classic"
+      },
+      {
+        "name": "processRemittance",
+        "actionType": "utilityAction",
+        "entity": "remittance",
+        "column": "Process_Remittance",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/remittance/remittance/{id}/action/processRemittance",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "FF8080812E77C0AF012E77C585600014",
+        "processType": "classic"
+      },
+      {
+        "name": "posted",
+        "actionType": "documentAction",
+        "entity": "remittance",
+        "column": "Posted",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/remittance/remittance/{id}/action/posted",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ]
+      },
+      {
+        "name": "selectInvoicesAndOrders",
+        "actionType": "utilityAction",
+        "entity": "remittance",
+        "column": "selectInvoicesAndOrders",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/remittance/remittance/{id}/action/selectInvoicesAndOrders",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "99E532BA0306450A839F5DE238375238",
+        "processType": "obuiapp"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "finance"
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "Datetrx": "Fecha",
+        "REM_Remittance_Type_ID": "Tipo de remesa",
+        "Name": "Nombre",
+        "FIN_Financial_Account_ID": "Cuenta",
+        "Duedate": "Fecha de cargo/abono",
+        "Remittance_Status": "Estado",
+        "DocumentNo": "Nº documento",
+        "Line": "Línea",
+        "FIN_Payment_Scheduledetail_ID": "Vencimiento",
+        "FIN_Payment_ID": "Pago",
+        "Amount": "Importe",
+        "Currency": "Moneda"
+      },
+      "es_AR": {
+        "Datetrx": "Fecha",
+        "REM_Remittance_Type_ID": "Tipo de remesa",
+        "Name": "Nombre",
+        "FIN_Financial_Account_ID": "Cuenta",
+        "Duedate": "Fecha de cargo/abono",
+        "Remittance_Status": "Estado",
+        "DocumentNo": "Nº documento",
+        "Line": "Línea",
+        "FIN_Payment_Scheduledetail_ID": "Vencimiento",
+        "FIN_Payment_ID": "Pago",
+        "Amount": "Importe",
+        "Currency": "Moneda"
+      },
+      "en_US": {
+        "Datetrx": "Date",
+        "REM_Remittance_Type_ID": "Remittance Type",
+        "Name": "Name",
+        "FIN_Financial_Account_ID": "Account",
+        "Duedate": "Charge / Credit Date",
+        "Remittance_Status": "Status",
+        "DocumentNo": "Document No.",
+        "Line": "Line",
+        "FIN_Payment_Scheduledetail_ID": "Due Item",
+        "FIN_Payment_ID": "Payment",
+        "Amount": "Amount",
+        "Currency": "Currency"
+      }
+    }
+  },
+  "formState": {
+    "entities": {
+      "remittance": {
+        "fields": {
+          "documentNo": {
+            "readOnly": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "remittanceType": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "transactionDate": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@#Date@"
+          },
+          "dueDate": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@#Date@"
+          },
+          "name": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "financialAccount": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "processed": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
+          "remittanceStatus": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "PE"
+          }
+        }
+      },
+      "lines": {
+        "fields": {
+          "lineNo": {
+            "readOnly": true,
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM REM_REMITTANCELINE WHERE REM_REMITTANCE_ID=@REM_REMITTANCE_ID@"
+          },
+          "payment": {
+            "readOnly": true
+          },
+          "paymentScheduleDetail": {
+            "readOnly": true
+          },
+          "amount": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "0"
+          },
+          "currency": {
+            "readOnly": true
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage remittance financial records.",
+    "whenToUse": [
+      "Use for remittance management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "remittanceType",
+        "dueDate",
+        "name",
+        "financialAccount"
+      ],
+      "recommendedOrder": [
+        "createHeader"
+      ]
+    },
+    "selectorContexts": [
+      {
+        "entity": "remittance",
+        "field": "remittanceType",
+        "context": {
+          "required": [
+            {
+              "param": "FIN_Financial_Account_ID",
+              "source": "field",
+              "field": "financialAccount"
+            }
+          ]
+        }
+      }
+    ],
+    "actions": [
+      "createLinesFrom",
+      "posted"
+    ],
+    "workflow": [
+      "Create draft header with required fields",
+      "Validate form state",
+      "Complete the document"
+    ],
+    "edgeCases": [
+      "Payment amount exceeds remaining balance",
+      "Payment method is not configured for the business partner",
+      "Invoice is already fully paid",
+      "Source document has no valid lines to copy",
+      "Target entity already has linked records",
+      "Required reference data is missing (price list, warehouse, etc.)",
+      "Required context is missing",
+      "User lacks permission",
+      "Record is in an incompatible state",
+      "Document is already completed or closed"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "remittanceType",
+          "dueDate",
+          "name",
+          "financialAccount"
+        ]
+      },
+      {
+        "operation": "completeDocument",
+        "description": "Validate form state and run the document lifecycle action when the draft is complete.",
+        "action": "createLinesFrom"
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": [],
+    "agentPrompt": "SEPA remittances (Etendo table REM_Remittance): a batch of customer collections (SEPA CORE direct debit) or vendor payments (SEPA credit transfer) that the company sends to its bank in one file. Only available when the account has the sepa-remittances feature enabled; otherwise every call answers 403 feature_disabled. The `remittance` entity is the header: create it with name (max 60 characters), financialAccount (only accounts with \"Allow Remittances\" are accepted), remittanceType (its name says whether it is a collection or a payment remittance; only types whose SEPA scheme is enabled on the chosen account are accepted) and dueDate (the date the bank charges or credits the remittance). documentNo, transactionDate and the document type are assigned by the server, and remittanceStatus (PE Pending, PR Processed, CT/PT Collected/Paid, CP/PP partially, AN Voided) is set by the remittance processes and never written. A processed remittance cannot be edited. The `lines` entity is read-only: each line is one due item (paymentScheduleDetail, whose identifier shows the invoice, due date and amount) or payment (payment) of the remittance with its amount; lines cannot be created, edited or deleted through this spec yet, and the Classic remittance processes (select payments, process remittance, create remittance file) are not exposed."
+  },
+  "checksum": "bf897da5325929d5"
+}

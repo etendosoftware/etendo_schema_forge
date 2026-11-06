@@ -1,0 +1,380 @@
+{
+  "$schema": "decisions-v2",
+  "window": {
+    "agentPrompt": "#REF#agent-prompts/remittance/spec.md",
+    "category": "finance",
+    "name": "Remittance",
+    "detailEntity": "lines",
+    "titleField": "name",
+    "statusEnumLabels": {
+      "PE": "remittanceStatusPe",
+      "PR": "remittanceStatusPr",
+      "CT": "remittanceStatusCt",
+      "PT": "remittanceStatusPt",
+      "CP": "remittanceStatusCp",
+      "PP": "remittanceStatusPp",
+      "AN": "remittanceStatusAn"
+    },
+    "listSortBy": "transactionDate desc",
+    "detailSortBy": "lineNo asc",
+    "customComponents": {
+      "bottomSection": "RemittanceBottomPanel",
+      "subHeader": "RemittanceStatusBanner",
+      "processConfirmModal": "RemittanceProcessConfirmModal"
+    },
+    "subsetFilters": [
+      {
+        "label": "remittanceTabAll"
+      },
+      {
+        "label": "remittanceTabCollections",
+        "filter": "criteria=%5B%7B%22fieldName%22%3A%22remittanceType%24paymentMethod%24payinAllow%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%5D"
+      },
+      {
+        "label": "remittanceTabPayments",
+        "filter": "criteria=%5B%7B%22fieldName%22%3A%22remittanceType%24paymentMethod%24payoutAllow%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%5D"
+      }
+    ],
+    "hidePrint": true,
+    "summaryFields": [],
+    "sendDocument": {
+      "enabled": false
+    },
+    "rowQuickActions": {
+      "actions": {
+        "duplicate": {
+          "show": false
+        },
+        "email": {
+          "show": false
+        }
+      }
+    },
+    "processOverrides": {
+      "selectpayments": {
+        "exclude": true
+      },
+      "createLinesFrom": {
+        "exclude": true
+      },
+      "getFile": {
+        "exclude": true
+      },
+      "processRemittance": {
+        "exclude": true
+      },
+      "process": {
+        "add": true,
+        "label": "process",
+        "style": "positive",
+        "displayLogicRaw": "@Processed@='N'",
+        "requiresLines": true,
+        "params": [
+          {
+            "key": "grouping",
+            "type": "select",
+            "label": "remittanceGrouping",
+            "required": true,
+            "defaultValue": "P",
+            "options": [
+              { "value": "P", "label": "remittanceGroupingNone" },
+              { "value": "GGPD", "label": "remittanceGroupingByBpAndDueDate" }
+            ]
+          }
+        ],
+        "_note": "ETP-6148 — «Procesar»: RemittanceHeaderHandler action `process` (runs REM's REMRemittanceProcess). The params dialog asks the grouping (default P «Sin agrupar», GGPD «Agrupar por cliente y vencimiento») and posts it as fieldValues.grouping. Only while unprocessed and with lines."
+      },
+      "reactivate": {
+        "add": true,
+        "label": "reactivate",
+        "style": "primary-danger",
+        "displayLogicRaw": "@Processed@='Y'",
+        "_note": "ETP-6148 — «Reactivar»: RemittanceHeaderHandler action `reactivate` (deletes the payments the process created; the remittance becomes editable again). Danger style, so DetailView asks for confirmation through customComponents.processConfirmModal (RemittanceProcessConfirmModal)."
+      },
+      "selectInvoicesAndOrders": {
+        "exclude": true
+      }
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "Datetrx": "Fecha",
+        "REM_Remittance_Type_ID": "Tipo de remesa",
+        "Name": "Nombre",
+        "FIN_Financial_Account_ID": "Cuenta",
+        "Duedate": "Fecha de cargo/abono",
+        "Remittance_Status": "Estado",
+        "DocumentNo": "Nº documento",
+        "Line": "Línea",
+        "FIN_Payment_Scheduledetail_ID": "Vencimiento",
+        "FIN_Payment_ID": "Pago",
+        "Amount": "Importe",
+        "Currency": "Moneda"
+      },
+      "es_AR": {
+        "Datetrx": "Fecha",
+        "REM_Remittance_Type_ID": "Tipo de remesa",
+        "Name": "Nombre",
+        "FIN_Financial_Account_ID": "Cuenta",
+        "Duedate": "Fecha de cargo/abono",
+        "Remittance_Status": "Estado",
+        "DocumentNo": "Nº documento",
+        "Line": "Línea",
+        "FIN_Payment_Scheduledetail_ID": "Vencimiento",
+        "FIN_Payment_ID": "Pago",
+        "Amount": "Importe",
+        "Currency": "Moneda"
+      },
+      "en_US": {
+        "Datetrx": "Date",
+        "REM_Remittance_Type_ID": "Remittance Type",
+        "Name": "Name",
+        "FIN_Financial_Account_ID": "Account",
+        "Duedate": "Charge / Credit Date",
+        "Remittance_Status": "Status",
+        "DocumentNo": "Document No.",
+        "Line": "Line",
+        "FIN_Payment_Scheduledetail_ID": "Due Item",
+        "FIN_Payment_ID": "Payment",
+        "Amount": "Amount",
+        "Currency": "Currency"
+      }
+    }
+  },
+  "discardPatterns": [
+    "EM_*"
+  ],
+  "entities": {
+    "remittance": {
+      "fields": {
+        "transactionDate": {
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 5,
+          "form": true,
+          "section": "principal",
+          "seq": 50,
+          "reason": "ETP-6148 — 'Fecha' (Datetrx): the remittance date. Mandatory, but never typed by the user: NeoMandatoryDefaultsService injects the AD default (@#Date@, today) on create, and the remittance handler may set it explicitly."
+        },
+        "remittanceType": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 3,
+          "columnWidth": 260,
+          "form": true,
+          "section": "principal",
+          "seq": 20,
+          "required": true,
+          "dependsOn": {
+            "field": "financialAccount",
+            "filterKey": "FIN_Financial_Account_ID"
+          },
+          "reason": "ETP-6148 — 'Tipo de remesa' (REM_Remittance_Type_ID). Its identifier already reads 'Remesa de cobro' / 'Remesa de pago', so it covers both the direction (collection/payment) and the SEPA scheme in the list without a derived column. Cascades on financialAccount: the selector request carries FIN_Financial_Account_ID and the remittance handler only offers the types whose SEPA scheme is enabled on that account."
+        },
+        "name": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 2,
+          "grow": true,
+          "form": true,
+          "section": "principal",
+          "seq": 40,
+          "required": true,
+          "readOnlyLogic": "@Processed@='Y'",
+          "reason": "ETP-6148 — 'Nombre' (Name). Mandatory, max 60 characters (validated by the remittance handler). The AD field has no read-only logic, so readOnlyLogic @Processed@='Y' locks it on a processed remittance like the other header fields; the remittance handler already refuses that edit (422 ETGO_RemittanceProcessedNotEditable)."
+        },
+        "financialAccount": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 4,
+          "columnWidth": 290,
+          "form": true,
+          "section": "principal",
+          "seq": 10,
+          "required": true,
+          "reason": "ETP-6148 — 'Cuenta' (FIN_Financial_Account_ID). The selector is served by the remittance handler and only offers accounts with EM_ETGO_Allow_Remittance = Y. Placed first in the form because remittanceType depends on it. List: columnWidth 290 fits a typical account name («Cuenta Remesa ETP-6148 - EUR»); `name` absorbs the leftover width (grow), not the account or the type (user decision 2026-11-06)."
+        },
+        "dueDate": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 6,
+          "form": true,
+          "section": "principal",
+          "seq": 30,
+          "required": true,
+          "minDate": "today",
+          "reason": "ETP-6148 — 'Fecha de cargo/abono' (Duedate): the date the bank charges (collection) or credits (payment) the remittance. minDate today: the picker disables past days and a typed past date blocks the save (only a NEW value is checked, so an existing remittance with a past date still opens and saves); RemittanceHeaderHandler refuses the same with 422 ETGO_RemittanceDueDatePast."
+        },
+        "remittanceStatus": {
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 7,
+          "form": false,
+          "section": "principal",
+          "seq": 70,
+          "columnType": "status",
+          "label": "Status",
+          "enumValues": [
+            { "value": "PE", "name": "remittanceStatusPe" },
+            { "value": "PR", "name": "remittanceStatusPr" },
+            { "value": "CT", "name": "remittanceStatusCt" },
+            { "value": "PT", "name": "remittanceStatusPt" },
+            { "value": "CP", "name": "remittanceStatusCp" },
+            { "value": "PP", "name": "remittanceStatusPp" },
+            { "value": "AN", "name": "remittanceStatusAn" }
+          ],
+          "enumVariants": {
+            "PE": "neutral",
+            "PR": "info",
+            "CT": "success",
+            "PT": "success",
+            "CP": "warning",
+            "PP": "warning",
+            "AN": "destructive"
+          },
+          "reason": "ETP-6148 — 'Estado' (Remittance_Status, DAL property remittanceStatus, list REM_RemittanceStatus: PE, PR, CT, PT, CP, PP, AN). A column of the remittance module itself (added in ETP-6148 on feature/ETP-6148; the remittance PR must be merged and its module built before this change is deployed), set by REM's own processes; never written by the user. form:false: the header shows the status only as the top-bar pill (statusField), not as a form field. enumValues points every code at an i18n key (genericLabels remittanceStatusPe…An), because the AD list ships English names only and the read-only form select would otherwise show 'Pending' in Spanish; window.statusEnumLabels does the same for the detail status pill. enumVariants gives the grid badge and the status quick filter their per-code tones (PE neutral, PR info, CT/PT success, CP/PP warning, AN destructive); the codes are too ambiguous across windows for the global getStatusTone catalog."
+        },
+        "documentNo": {
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 1,
+          "form": true,
+          "section": "principal",
+          "seq": 5,
+          "reason": "ETP-6148 — «Nº documento» (DocumentNo): assigned by the server from the REM_REM document type sequence; shown, never typed. First list column (a real column: sorts and filters on the server) and first header field, by user decision (2026-11-06)."
+        },
+        "documentType": {
+          "visibility": "system",
+          "derivation": "fromConfig",
+          "reason": "ETP-6148 — C_Doctype_ID, the client's REM_REM document type. Mandatory; resolved server-side (AD default @SQL ... DocBaseType = 'REM_REM', or the remittance handler defaults)."
+        },
+        "processed": {
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false,
+          "reason": "ETP-6148 — kept in the payload (not shown) because every header field's readOnlyLogic is @Processed@='Y': a processed remittance is locked."
+        },
+        "chargedate": {
+          "visibility": "discarded",
+          "reason": "ETP-6148 — Classic 'Discount Date', only meaningful for discount (consolidated) remittance types, which Etendo GO does not offer."
+        },
+        "singlePayment": {
+          "visibility": "discarded",
+          "reason": "ETP-6148 — Classic technical flag (one payment per remittance); NOT NULL with DB default 'N'."
+        },
+        "payment": {
+          "visibility": "discarded",
+          "reason": "ETP-6148 — the single payment generated by Classic when singlePayment = Y; not used."
+        },
+        "selectpayments": {
+          "visibility": "discarded",
+          "reason": "ETP-6148 — Classic process button, out of scope (selection of due items is a later task). Discarded so NEO and MCP do not expose the action; processOverrides excludes it too."
+        },
+        "createLinesFrom": {
+          "visibility": "discarded",
+          "reason": "ETP-6148 — Classic process button, out of scope."
+        },
+        "getFile": {
+          "visibility": "discarded",
+          "reason": "ETP-6148 — Classic 'Create Remittance File', out of scope (the SEPA XML is built by another team)."
+        },
+        "processRemittance": {
+          "visibility": "discarded",
+          "reason": "ETP-6148 — Classic 'Process Remittance', out of scope (status transitions are a later task)."
+        },
+        "selectInvoicesAndOrders": {
+          "visibility": "discarded",
+          "reason": "ETP-6148 — Classic process button, out of scope."
+        },
+        "posted": {
+          "visibility": "discarded",
+          "reason": "ETP-6148 — accounting button; remittance types are provisioned with ISPOSTINGALLOWED = N."
+        }
+      }
+    },
+    "lines": {
+      "methods": [
+        "GET",
+        "GETBYID",
+        "DELETE"
+      ],
+      "_methodsNote": "ETP-6148 — lines are added only through «Seleccionar desde factura» (no POST/PUT/PATCH, every field readOnly, so DetailView shows no add-line area and no edit). DELETE enables the generic line delete (row trash icon + selection bar); DetailView hides it on a processed remittance (lockWhenProcessed) and RemittanceLinesHandler refuses it there too.",
+      "fields": {
+        "lineNo": {
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false,
+          "reason": "ETP-6148 — 'Línea' (Line). Hidden from the Lines tab by user decision (2026-11-06); kept readOnly (still served) because the lines keep their default order by line number."
+        },
+        "paymentScheduleDetail": {
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 1,
+          "grow": true,
+          "form": false,
+          "label": "Due Item",
+          "reason": "ETP-6148 — 'Vencimiento' (FIN_Payment_Scheduledetail_ID). TEMPORARY first column (user decision 2026-11-06) until the generic Classic property-path fields land: its AD identifier reads «due date - installment amount - line amount». The target is separate Factura / Cliente / Vencimiento fields through property paths. It grows because it always has a value."
+        },
+        "payment": {
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false,
+          "reason": "ETP-6148 — 'Pago' (FIN_Payment_ID). Hidden on the Lines tab (user decision 2026-11-06, option a): a line created from an invoice due amount has no payment until the remittance is processed, and the grid cannot hide a column based on the header's processed state. Still served."
+        },
+        "amount": {
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 2,
+          "currencyField": "currency",
+          "reason": "ETP-6148 — 'Importe'. currencyField names the line's own text currency (REM's SQL-logic Currency, e.g. EUR), which resolveRowCurrency accepts as a plain ISO code, so the cell reads «53,24 €» with the line currency."
+        },
+        "invoice": {
+          "visibility": "discarded",
+          "reason": "ETP-6148 — AD_Field property path paymentScheduleDetail.invoicePaymentSchedule.invoice (anchor FIN_Payment_Schedule.C_Invoice_ID). Not supported end to end (checked for ETP-6148): the extractor ignores AD_Field.Property and emits the anchor column of the joined table (here C_Invoice_ID) as a flat key; push-to-neo only matches columns of REM_RemittanceLine, so the field is skipped; NeoFieldFilter resolves fields with getPropertyByColumnName on RemittanceLine, so NEO never serves it. Enabling it would render an always-empty, unfilterable column."
+        },
+        "invoicePaymentSchedule": {
+          "visibility": "discarded",
+          "reason": "ETP-6148 — AD_Field property path paymentScheduleDetail.invoicePaymentSchedule (anchor FIN_Payment_ScheduleDetail.FIN_Payment_Schedule_Invoice; its identifier is the due date and amount). Not supported end to end (checked for ETP-6148): the extractor ignores AD_Field.Property and emits the anchor column of the joined table (here FIN_Payment_Schedule_Invoice) as a flat key; push-to-neo only matches columns of REM_RemittanceLine, so the field is skipped; NeoFieldFilter resolves fields with getPropertyByColumnName on RemittanceLine, so NEO never serves it. Enabling it would render an always-empty, unfilterable column."
+        },
+        "order": {
+          "visibility": "discarded",
+          "reason": "ETP-6148 — AD_Field property path paymentScheduleDetail.orderPaymentSchedule.order; remittances of orders are not offered. Not supported end to end (checked for ETP-6148): the extractor ignores AD_Field.Property and emits the anchor column of the joined table (here C_Order_ID) as a flat key; push-to-neo only matches columns of REM_RemittanceLine, so the field is skipped; NeoFieldFilter resolves fields with getPropertyByColumnName on RemittanceLine, so NEO never serves it. Enabling it would render an always-empty, unfilterable column."
+        },
+        "orderPaymentInPlan": {
+          "visibility": "discarded",
+          "reason": "ETP-6148 — virtual (SQL logic) column of the order payment plan; payment-plan fields are hidden from the Lines tab and remittances of orders are not offered."
+        },
+        "currency": {
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false,
+          "reason": "ETP-6148 — 'Moneda' (Currency): REM's virtual SQL-logic column on REM_RemittanceLine. Not a column of its own any more: the amount is formatted with it (amount.currencyField). Still served."
+        },
+        "origstatus": {
+          "visibility": "discarded",
+          "reason": "ETP-6148 — Classic technical column (payment status before remitting)."
+        },
+        "status": {
+          "visibility": "discarded",
+          "reason": "ETP-6148 — AD_Field property path payment.status (anchor FIN_Payment.Status). Not supported end to end (checked for ETP-6148): the extractor ignores AD_Field.Property and emits the anchor column of the joined table (here Status) as a flat key; push-to-neo only matches columns of REM_RemittanceLine, so the field is skipped; NeoFieldFilter resolves fields with getPropertyByColumnName on RemittanceLine, so NEO never serves it. Enabling it would render an always-empty, unfilterable column."
+        },
+        "displayedAccount": {
+          "visibility": "discarded",
+          "reason": "ETP-6148 — AD_Field property path ...eTABAMBankaccount.displayedAccount (anchor C_BP_BankAccount.Displayedaccount). Not supported end to end (checked for ETP-6148): the extractor ignores AD_Field.Property and emits the anchor column of the joined table (here Displayedaccount) as a flat key; push-to-neo only matches columns of REM_RemittanceLine, so the field is skipped; NeoFieldFilter resolves fields with getPropertyByColumnName on RemittanceLine, so NEO never serves it. Enabling it would render an always-empty, unfilterable column."
+        },
+        "displayedAccount2": {
+          "visibility": "discarded",
+          "reason": "ETP-6148 — AD_Field property path ...eTABAMBankaccount.displayedAccount (anchor C_BP_BankAccount.Displayedaccount). Not supported end to end (checked for ETP-6148): the extractor ignores AD_Field.Property and emits the anchor column of the joined table (here Displayedaccount) as a flat key; push-to-neo only matches columns of REM_RemittanceLine, so the field is skipped; NeoFieldFilter resolves fields with getPropertyByColumnName on RemittanceLine, so NEO never serves it. Enabling it would render an always-empty, unfilterable column."
+        }
+      }
+    },
+    "bankInstructions": {
+      "exclude": true
+    },
+    "settled": {
+      "exclude": true
+    },
+    "protested": {
+      "exclude": true
+    }
+  }
+}

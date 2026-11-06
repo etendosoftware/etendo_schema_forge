@@ -35,6 +35,7 @@ vi.mock('sonner', () => ({
 
 vi.mock('../BillingPreferencesForm', () => ({ default: () => <div data-testid="billing-form" /> }));
 vi.mock('../FiscalDefaultsSection', () => ({ default: () => <div data-testid="fiscal-defaults-section" /> }));
+vi.mock('../SepaMandateSection', () => ({ default: () => <div data-testid="sepa-mandate-section" /> }));
 
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import {

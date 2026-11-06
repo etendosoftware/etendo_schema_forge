@@ -533,6 +533,37 @@ const BACKEND_ERROR_KEY_MAP = {
   ETGO_FinAccCountryRequired: 'backendError.countryRequired',
   ETGO_FinAccInvalidCountry: 'backendError.invalidCountry',
   ETGO_FinAccIbanRequiresCountry: 'backendError.countryIban',
+  // ETP-6148 — the «Admite remesas» refusals of a financial account (com.etendoerp.go
+  // FinancialAccountRemittanceSupport / SepaRemittancesFlag). Deliberately NOT here:
+  // ETGO_RemittanceAccountHasOpenRemittances (422). Its text embeds the open-remittance count, and
+  // the backend sends no `messageParams`, so a mapped sentence would either show a raw `{count}`
+  // or drop the number. The backend already answers it in the request language, so it reaches the
+  // user as is, through the plain-message fallback.
+  ETGO_RemittanceAccountNotBank: 'backendError.remittanceAccountNotBank',
+  ETGO_RemittanceAccountIbanRequired: 'backendError.remittanceAccountIbanRequired',
+  ETGO_SepaRemittancesDisabled: 'backendError.sepaRemittancesDisabled',
+  // ETP-6148 — RemittanceHeaderHandler: a new or changed «Fecha de cargo/abono» earlier than
+  // today (422). The SPA blocks it first through the field's `minDate`; this is the safety net.
+  ETGO_RemittanceDueDatePast: 'backendError.remittanceDueDatePast',
+  // ETP-6148 — «Seleccionar desde factura» refusals (RemittanceHeaderHandler availableDueItems /
+  // selectDueItems, 422). ETGO_RemittanceDueItemsSelectionFailed embeds the cause as `{0}` and the
+  // backend sends no `messageParams`, so its sentence takes a `{detail}` param: while the param is
+  // absent the key route yields (UNFILLED_PARAM) and the backend's own text, already in the request
+  // language and carrying the cause, is shown instead.
+  ETGO_RemittanceProcessedNotEditable: 'backendError.remittanceProcessedNotEditable',
+  ETGO_RemittanceTypeOrAccountMissing: 'backendError.remittanceTypeOrAccountMissing',
+  ETGO_RemittanceDueItemsRequired: 'backendError.remittanceDueItemsRequired',
+  ETGO_RemittanceDueItemNotAvailable: 'backendError.remittanceDueItemNotAvailable',
+  ETGO_RemittanceDueItemsSelectionFailed: 'backendError.remittanceDueItemsSelectionFailed',
+  // ETP-6148 — «Procesar» / «Reactivar» (RemittanceHeaderHandler process / reactivate, 422). The
+  // two *Failed keys carry REM's own text as `{0}` with no `messageParams`, so their sentences
+  // take `{detail}`: without the param the key route yields and REM's text, already in the
+  // request language, is shown (same rule as SelectionFailed above).
+  ETGO_RemittanceAlreadyProcessed: 'backendError.remittanceAlreadyProcessed',
+  ETGO_RemittanceNoLines: 'backendError.remittanceNoLines',
+  ETGO_RemittanceProcessFailed: 'backendError.remittanceProcessFailed',
+  ETGO_RemittanceNotProcessed: 'backendError.remittanceNotProcessed',
+  ETGO_RemittanceReactivateFailed: 'backendError.remittanceReactivateFailed',
   // ETP-5684 — NeoAccountingAccessPolicy (com.etendoerp.go): a post/unpost from a role without
   // Show Accounting Fields. The SPA hides those actions, so this reaches only a stale screen.
   ETGO_AccountingAccessDenied: 'backendError.accountingAccessDenied',

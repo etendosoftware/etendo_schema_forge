@@ -1,0 +1,465 @@
+# Remittance
+
+"Remesas" in Spanish. Epic ETP-3504; this guide covers ETP-6148 (SEPA remittances foundation).
+Backend: `com.etendoerp.go`, the remittance handlers bound by `@NeoExtension(spec = "remittance", …)`
+and the feature flag `sepa-remittances` (`docs/feature-flags.md`).
+
+## Intent
+
+A remittance groups customer collections (SEPA CORE direct debit) or vendor payments (SEPA credit
+transfer) that the company sends to its bank in one file. The window reuses the Classic remittance
+model and processes of `org.openbravo.module.remittance` (REM): AD window "Remittance"
+(`FF8080812E71F7C7012E71FD0499001B`), header tab `REM_Remittance`, lines tab `REM_RemittanceLine`.
+
+The design rule is to reuse the Classic columns and add as little as possible. Etendo GO adds no
+column to the remittance tables. The status is the remittance module's own column
+`REM_REMITTANCE.REMITTANCE_STATUS` (AD column `Remittance_Status`, DAL property `remittanceStatus`).
+It was added in ETP-6148 on `feature/ETP-6148` of `org.openbravo.module.remittance` and is set by
+REM's own processes. The module version is bumped when the module is published, not in the feature
+branch. `com.etendoerp.go`'s `module.remittance` floor is raised to that version in the same
+release. The full order is the `release-order` item of `flags-registry.json`.
+
+This task ships the list, the header form and the read-only lines, with the status that REM's
+processes maintain. Lines are added only through «Seleccionar desde factura» (see below).
+
+Not in this task:
+- selecting payments or orders into a remittance;
+- the SEPA XML file, settlement and returns (the Classic buttons are hidden; processing and
+  reactivating are Etendo GO actions, see «Procesar» / «Reactivar» below);
+- the structured address.
+
+## Access gate
+
+The window is behind the per-account flag `sepa-remittances`, published to the SPA as the
+capability `sepaRemittances` (`SEPA_REMITTANCES_CAPABILITY` in `lib/capabilityVisibility.js`):
+
+| Axis | Source | Where it is checked |
+|---|---|---|
+| Rollout (per account) | `capabilities.sepaRemittances` from `SFWindowAccessMap`, the backend evaluation of the flag | menu entry `capability`, route guard `windows/custom/remittance/index.jsx` |
+| Role | `windowAccess['FF8080812E71F7C7012E71FD0499001B']` | menu entry `accessWindowId`, route guard |
+| API | the remittance handlers | `403 feature_disabled` with the flag off, on REST, batch and MCP |
+
+The Financiero role template gets the window through `TemplateRoleWindowAccess`.
+
+Wiring:
+- **Menu** (`menu.json`): group Finance (Finanzas / Tesorería), right after Cuentas
+  (`financial-account`). Item `remittance`, label `Remittance` (menu label «Remesas» in Spanish),
+  `accessWindowId: "FF8080812E71F7C7012E71FD0499001B"`, `capability: "sepaRemittances"`. The
+  sidebar shows it only when both are granted. The reviewed navigation baseline
+  (`windows/__tests__/navigationExpectations.js`) lists it with the same two gates.
+- **Registry** (`windows/registry.js`): `customLoaders.remittance` loads the route guard, so
+  `sf-validate-pipeline` F3 is satisfied.
+- **Route guard** (`windows/custom/remittance/index.jsx`, `RemittanceRoute`): a copy of the
+  invoice-inbox guard. It shows `ListProgressBar` (`data-testid="remittance-access-loading"`)
+  while the access maps load (`accessLoaded === false`). It shows `AccessDeniedMessage` when the
+  capability is missing or the window tier is `none`; that screen does not reveal whether the
+  feature exists. Otherwise it mounts the generated window
+  (`@generated/remittance/generated/web/remittance/index.jsx`). The generated page still applies
+  its own `useWindowAccess` check (read-only tier, `WindowAccessGuard`).
+
+## Data architecture
+
+- NEO spec `remittance` (`artifacts/remittance/decisions.json`, `category: "finance"`, default
+  layout), registered in `cli/config/regen-windows.json`. Agent prompt:
+  `agent-prompts/remittance/spec.md`.
+- Entity `remittance` (header, `REM_Remittance`): every method.
+- Entity `lines` (`REM_RemittanceLine`): `methods: ["GET", "GETBYID"]` and `readOnly: true`. Create,
+  update and delete answer 405, from NEO and from the lines handler.
+- Tabs `Bank Instructions`, `Settled` and `Protested` are `exclude: true`, so their
+  `ETGO_SF_ENTITY` rows have `ISINCLUDED = 'N'`. The window has no Accounting tab.
+- `discardPatterns: ["EM_*"]`. No remittance field is an exception: the status is a REM column, not an `EM_*` one.
+
+### List
+
+| Order | Key | Column | Label (es_ES) | Notes |
+|---|---|---|---|---|
+| 1 | `documentNo` | `DocumentNo` | Nº documento | first column, by user decision (2026-11-06) |
+| 2 | `name` | `Name` | Nombre | detail title (`titleField`); `grow: true`, absorbs the leftover width |
+| 3 | `remittanceType` | `REM_Remittance_Type_ID` | Tipo de remesa | its name ("Remesa de cobro" / "Remesa de pago") gives both the direction and the SEPA scheme; `columnWidth: 260` («Remesa de cobro (adeudo SEPA)» fits) |
+| 4 | `financialAccount` | `FIN_Financial_Account_ID` | Cuenta | `columnWidth: 290`, enough for a typical account name |
+| 5 | `transactionDate` | `Datetrx` | Fecha | default order `transactionDate desc` |
+| 6 | `dueDate` | `Duedate` | Fecha de cargo/abono | |
+| 7 | `remittanceStatus` | `Remittance_Status` | Estado | `columnType: "status"` |
+
+Column order and widths are a user decision (2026-11-06, Holded-inspired).
+- A plain list gives exactly one column the leftover width (`withImplicitGrowColumn`,
+  `lib/linesColumnWidth.js`). Undeclared, that was the first descriptive non-code column,
+  `remittanceType`: it grew to about 520px while the account was cut at its 192px selector default.
+- `grow` on `name` makes it the absorber. `columnWidth` sizes the type and the account, and every
+  other column keeps its type width.
+- **Truncation tooltip: known limits, left as is (user decision, 2026-11-06).** The generic cell
+  (`renderDefaultCell` in `DataTable.cellRenderers.jsx`) has two limits:
+  - only a value longer than 30 characters gets the `TruncatedText` tooltip;
+  - a non-`grow` column caps that text at 200px.
+
+  The generic DataTable is unchanged. The widths above fit the usual values.
+
+Every column is a real AD column, so it sorts and filters on the server. Labels come from
+`window.labelOverrides` (`es_ES`, `es_AR`, `en_US`).
+
+**Tabs «Todas / Cobros / Pagos».** `window.subsetFilters`, the segmented control above the list:
+
+| Tab (key) | es_ES / en_US | Criteria |
+|---|---|---|
+| `remittanceTabAll` | Todas / All | none (default) |
+| `remittanceTabCollections` | Cobros / Collections | `remittanceType$paymentMethod$payinAllow equals true` |
+| `remittanceTabPayments` | Pagos / Payments | `remittanceType$paymentMethod$payoutAllow equals true` |
+
+- `REM_Remittance` has no direction column; the direction is the remittance type's payment method.
+  No new column is added.
+- NEO passes `criteria` through to core's `AdvancedQueryBuilder`, which resolves the two-step `$`
+  path into joins. developer-1 confirmed this by reading the code; the live check is still pending.
+- The value is a real boolean `true`. NEO's `Y`/`N` rewrite does not resolve dotted paths.
+- A Classic payment method with both directions on would make its remittances show under both
+  tabs. The provisioned SEPA methods have one direction each.
+
+### Header form
+
+| Key | Visibility | Notes |
+|---|---|---|
+| `financialAccount` | editable, required | first editable field (after `documentNo`). The handler's selector only offers accounts with «Admite remesas» on (`EM_ETGO_Allow_Remittance = 'Y'`) |
+| `remittanceType` | editable, required | `dependsOn: { field: "financialAccount", filterKey: "FIN_Financial_Account_ID" }`. The selector request carries the chosen account, and the handler only offers the types whose payment method is linked to it |
+| `dueDate` | editable, required | the date the bank charges or credits the remittance. `"minDate": "today"`: the picker disables past days, and a typed past date is refused with «La fecha no puede ser anterior a hoy.» (`fieldMinDateError`); the save is blocked too. Only a new value is checked, so a saved remittance with a past date still opens. The backend refuses the same with 422 `ETGO_RemittanceDueDatePast`, translated through `backendErrors.js` (`backendError.remittanceDueDatePast`) |
+| `name` | editable, required | at most 60 characters, checked by the handler. The AD field has no read-only logic, so `decisions.json` adds `readOnlyLogic: "@Processed@='Y'"`, the same lock as the other header fields; the handler already refuses the edit (422 `ETGO_RemittanceProcessedNotEditable`) |
+| `transactionDate` | readOnly | mandatory. `NeoMandatoryDefaultsService` injects the AD default `@#Date@` on create |
+| `documentNo` | readOnly, first field | «Nº documento», from the `REM_REM` document type sequence |
+| `remittanceStatus` | readOnly, `form: false` | set by REM's processes, never written by the user. Not a form field: the header shows it only as the top-bar status pill (`statusField`, auto-detected by the generator from the entity fields, so it does not need the form). It is still served by NEO and shown as the list column |
+| `documentType` | system | `C_Doctype_ID`, the client's `REM_REM` document type (AD default or handler) |
+| `processed` | readOnly, `form: false` | stays in the payload because every editable header field has `readOnlyLogic` `@Processed@='Y'` (`financialAccount`, `remittanceType` and `dueDate` from the AD, `name` from `decisions.json`) |
+
+Discarded: `chargedate` (discount date), `singlePayment`, `payment`, `posted`, and the Classic
+buttons `selectpayments`, `createLinesFrom`, `getFile`, `processRemittance` and
+`selectInvoicesAndOrders`. A discarded field has `ISINCLUDED = 'N'`, so NEO and MCP answer 404 for
+its action. `processOverrides` also excludes those buttons from the detail view, so the generated
+`processes` array is empty. Print, Send document, and the Duplicate / Email row actions are off.
+`summaryFields: []` stops the summary strip from repeating the read-only fields.
+
+### Lines (no add or edit; delete while pending)
+
+| Order | Key | Column | Label (es_ES) |
+|---|---|---|---|
+| 1 | `paymentScheduleDetail` | `FIN_Payment_Scheduledetail_ID` | Vencimiento |
+| 2 | `amount` | `Amount` | Importe (formatted with the line currency) |
+
+The column set is a user decision (2026-11-06).
+- **Vencimiento is temporary.** `paymentScheduleDetail` is the first column and the growing one
+  (`grow: true`), because it always has a value. Its AD identifier reads «due date - installment
+  amount - line amount», e.g. «02-11-2026 - 53.24 - 53.24». The target is separate Factura /
+  Cliente / Vencimiento fields through the generic Classic property-path work, a separate task
+  (`lines-invoice-order-columns` in `flags-registry.json`).
+- **Importe carries the currency** («53,24 €»). `amount.currencyField: "currency"` names REM's
+  virtual SQL-logic column `REM_GETREMLINECURRENCY(REM_RemittanceLine_ID)`. NEO serves it as a
+  plain text code, and `resolveRowCurrency` (`lib/rowCurrency.js`, opt-in through
+  `currencyField`) accepts that 3-letter code when the field has no `$_identifier` twin. Moneda
+  (`currency`) is therefore no longer a column (`grid: false`), but it is still served.
+- **Pago is hidden** (`payment`, `grid: false`, still served). A line created from an invoice due
+  amount has no payment until the remittance is processed. The lines grid cannot hide a column
+  based on the header's `processed` state: it only hides the accounting-dimension keys
+  (`lineHiddenColumns`).
+- `lineNo` (`Line`) is not shown (`grid: false`, `form: false`), but it is still served. Lines are
+  ordered by `window.detailSortBy: "lineNo asc"`. The AD Lines tab declares no
+  `HQL_OrderBy_Clause`, so without it NEO would order by id.
+- The Lines tab offers no column sort or filter for any column: DetailView passes no `onSort` to
+  the lines table. The MCP list path does handle computed columns (ETP-5705).
+- **Footer.** The lines total reads «Total (1 línea)» (`remittanceLinesTotalOne`) or «Total (N
+  líneas)» (`remittanceLinesTotal`). The footer's top border is `hsl(var(--border-subtle))`. The
+  old `var(--color-border-tertiary, hsl(var(--foreground)))` fell back to a near-black line,
+  because that token is not defined.
+
+Discarded:
+- the AD_Field property paths (see below). Invoice and order are not shown, which is
+  `lines-invoice-order-columns` in `flags-registry.json`;
+- the SQL-logic column `orderPaymentInPlan` (order payment plan);
+- `origstatus`.
+
+#### Classic property-path fields: not supported
+
+The Classic Lines tab shows the invoice, the payment plan and the payment status through AD_Field
+`Property` paths. These fields are not columns of `REM_RemittanceLine`. The AD has no property-path
+field for the business partner.
+
+| Field | `AD_Field.Property` | Anchor column (another table) |
+|---|---|---|
+| `invoice` | `paymentScheduleDetail.invoicePaymentSchedule.invoice` | `FIN_Payment_Schedule.C_Invoice_ID` |
+| `invoicePaymentSchedule` | `paymentScheduleDetail.invoicePaymentSchedule` (due date + amount) | `FIN_Payment_ScheduleDetail.FIN_Payment_Schedule_Invoice` |
+| `order` | `paymentScheduleDetail.orderPaymentSchedule.order` | `FIN_Payment_Schedule.C_Order_ID` |
+| `status` | `payment.status` | `FIN_Payment.Status` |
+| `displayedAccount`, `displayedAccount2` | `…eTABAMBankaccount.displayedAccount` | `C_BP_BankAccount.Displayedaccount` |
+
+The user approved enabling them (read-only). They were tried and reverted because they fail at
+three points of the pipeline:
+
+1. **Extractor.** `extract-fields.js` selects `f.Property` but never uses it. Each field is emitted as
+   its anchor column, with a flat key (`invoice`, `C_Invoice_ID`). The generated `LinesTable` then
+   reads `row.invoice`.
+2. **Push.** `push-to-neo` `upsertSingleField` only matches `ETGO_SF_FIELD` rows of the entity's own
+   table, `REM_RemittanceLine`. These fields are therefore skipped silently: no row, no error.
+3. **NEO.** `NeoFieldFilter.resolveProperty` resolves a field with
+   `getPropertyByColumnName(<anchor column>)` on `RemittanceLine`. No such property exists, so NEO
+   never serializes a value.
+
+The result would be an always-empty column that cannot be filtered or sorted. That is exactly the
+fictitious-column pattern the list-column rule forbids.
+
+Two supported routes, both outside a window-config change:
+- **`_extraProperties`.** NEO serves dotted paths on GET when the caller asks for them, and
+  `NeoFieldFilter.includeRequestedExtraProperties` allowlists them as
+  `paymentScheduleDetail$invoicePaymentSchedule$invoice$_identifier`. The generated `DetailView`
+  never sends that parameter, so this needs a `window.customLinesComponent`, the way invoice-inbox
+  requests `businessPartner.taxID`. Those cells are still not filterable on the server.
+- **A generator and NEO feature** that maps `AD_Field.Property` to a served, filterable key. This is
+  a Schema Forge Developer task in `schema_forge_core` and `com.etendoerp.go`.
+
+### «Procesar» / «Reactivar», status banner and lines total
+
+**Header actions**, declared in `window.processOverrides` as `add` entries. They are the generic
+header process buttons (DetailView `processes`), running `hook.handleProcess`, which POSTs
+`/remittance/{id}/action/<name>` with `{ fieldValues }`.
+
+| Entry | Button | Visible | Asks | Backend |
+|---|---|---|---|---|
+| `process` | «Procesar», primary (`positive`) | `@Processed@='N'` and `requiresLines` | the grouping, through the generic `ProcessParamDialog`: `grouping` select, default `P` «Sin agrupar», or `GGPD` «Agrupar por cliente y vencimiento» | `process` → `{ status, message }` |
+| `reactivate` | «Reactivar», `primary-danger` | `@Processed@='Y'` | a confirmation, because it deletes the payments the process created: `customComponents.processConfirmModal` → `RemittanceProcessConfirmModal` | `reactivate` → `{ status, message }` |
+
+- **Success:** `handleProcessSuccess` toasts (`processCompleted` / `reactivateCompleted`) and
+  force-reads the header and the lines. Processed makes the document read-only, which hides line
+  delete and «Seleccionar desde factura»; reactivating restores them.
+- **Refusals** are translated through `backendErrors.js`: `ETGO_RemittanceAlreadyProcessed`,
+  `ETGO_RemittanceNoLines`, `ETGO_RemittanceProcessFailed`, `ETGO_RemittanceNotProcessed` and
+  `ETGO_RemittanceReactivateFailed`. The two `*Failed` sentences take `{detail}`; without
+  `messageParams` the key route yields and REM's text is shown.
+- **Body shape:** both contracts must be `withFieldValuesBody()`, so that `grouping` is read from
+  `fieldValues` and `{fieldValues:{}}` is accepted. This was requested from developer-1.
+
+**Status banner.** `window.customComponents.subHeader: "RemittanceStatusBanner"` in `decisions.json`.
+The generator turns it into DetailView's `headerContent` prop,
+`headerContent={(data) => <RemittanceStatusBanner data={data} />}` in `RemittancePage.jsx`, so
+the banner renders as the first child of the detail content, under the top bar. It is the shared
+`InfoBanner`. It is not dismissible, and it shows one sentence per status:
+
+| Status | Tone | Message key |
+|---|---|---|
+| `PE` | info | `remittanceBannerPending` |
+| `PR` | info | `remittanceBannerProcessed` |
+| `CT` / `PT` | success | `remittanceBannerCollected` / `remittanceBannerPaid` |
+| `CP` / `PP` | warning | `remittanceBannerPartiallyCollected` / `remittanceBannerPartiallyPaid` |
+| `AN` | danger | `remittanceBannerVoided` |
+
+**Lines total.** The panel renders «Total ({count} líneas) 1.202,30 €» (`remittanceLinesTotal`, with
+`formatCurrency` in the lines' `currency`).
+- `fetchLinesTotal` reads every line, not just the loaded page: `GET /lines?parentId={id}&_summary={"amount":"sum","id":"count"}`.
+- That is core's grid summary, answering one `response.data[0]` row `{ amount, id, isGridSummary }`.
+- If that row is missing or unreadable, it sums the loaded lines.
+- It is re-read whenever the lines change.
+
+### «Seleccionar desde factura» (adding lines)
+
+**Removing a line** uses the generic lines delete, the same as other windows: a trash icon on the row,
+or row selection plus the delete bar. `entities.lines.methods` is `["GET","GETBYID","DELETE"]`, so
+the contract has `delete: true` and `ETGO_SF_ENTITY.ISDELETE = 'Y'`. DetailView hides it on a
+processed remittance: `isDocumentReadOnly` derives from `processed` (`lockWhenProcessed`), and
+RemittanceLinesHandler refuses the DELETE there too. There is no custom per-line «×» (user
+decision). POST/PUT/PATCH stay off and every line field is read-only, so DetailView shows no
+add-line area and no edit. The custom empty state passes `canAddLine={false}`, so no «+ Añadir
+línea» appears.
+
+Lines cannot be created or edited directly. They come from
+the invoice due items, one row per installment, picked in a modal. This replaces Classic's OBUIAPP
+process «Select Invoices and Orders» (`REMSelectInvoicesAndOrders`) for invoices only.
+
+**Where.** `window.customComponents.bottomSection` → `artifacts/remittance/custom/RemittanceBottomPanel.jsx`:
+- **No lines yet:** the panel's static `linesEmptyState` shows the button inside the lines empty
+  state (`action-select-due-items-empty-state`). A new remittance is saved first (`onSave`), and the
+  picker re-opens after the save through `forceOpen`. On success it calls the empty state's
+  `onRefresh`, which re-reads the header and the lines.
+- **With lines:** DetailView hides its add-line area because lines are read-only, so the panel draws
+  the trigger itself (`remittance-lines-footer` / `action-select-due-items`), following the
+  panel-rendered pattern in `docs/ui-customization.md`. The bottomSection contract has no refresh
+  callback, so on success it reloads the page, the same as the return-material-receipt panel.
+- **When it shows:** both entry points require the remittance to be not processed and to have a
+  remittance type and a financial account (`canSelectDueItems`). The with-lines trigger also
+  requires a saved record and is hidden on a read-only window or document.
+
+**Picker.** `SelectDueItemsModal.jsx` reuses the shared `components/contract-ui/InvoicePickerModal.jsx`.
+- It uses the picker's optional props: `getRowDate` (due date), `getRowAmount` (outstanding
+  amount), `isRowLocked`, `selectAll` and the window's own i18n keys. Every default keeps the
+  rectificative-invoice behaviour unchanged.
+- Each row shows the invoice number, the contact, the due date and the outstanding amount in its
+  currency (`formatCurrency`, `formatCalendarDate`).
+- It is multi-select with «Seleccionar todo», a search by invoice or contact, and infinite scroll.
+- A due item already in this remittance arrives with `alreadyInRemittance: true` and renders
+  checked and disabled (`data-locked`). It is never sent again.
+
+**Backend contract.** `remittanceDueItemsApi.js` calls both actions through `useApiFetch(apiBaseUrl)`,
+and RemittanceHeaderHandler serves them:
+
+| Action | Body | Answer (`response.data`) |
+|---|---|---|
+| `POST /remittance/{id}/action/availableDueItems` | `{ search, page, pageSize }`, with `page` 1-based (`FIRST_PAGE`; the action defaults to 1) and `pageSize` 20 (the action defaults to 50, max 200) | `{ items: [{ id, documentNo, businessPartner, dueDate, outstandingAmount, currency, alreadyInRemittance }], total }` |
+| `POST /remittance/{id}/action/selectDueItems` | `{ ids }` | `{ created, message }`. A refusal is a 422 with `messageKeys` |
+
+Which due items are offered (direction, account, organization, outstanding amount, not already in an
+open remittance) is decided by the backend, following Classic's `REMSelectInvoicesAndOrders`.
+
+**Messages.** On success a toast shows `remittanceDueItemsAdded` (`{count}` = `created`). A refusal is
+translated through `backendErrors.js`, using `messageKeys` first and falling back to
+`remittanceDueItemsAddError` / `remittanceDueItemsLoadError`. New keys: `remittanceSelectFromInvoices`,
+`remittanceSelectDueItemsTitle`, `remittanceSearchDueItems`, `remittanceNoDueItems`,
+`remittanceDueItemsSelectedCount`, `remittanceAddDueItems`, `remittanceDueItemsAdded`,
+`remittanceDueItemsAddError`, `remittanceDueItemsLoadError` and `remittanceLinesEmptyDescription`.
+
+### Status (`Remittance_Status`, reference `REM_RemittanceStatus`)
+
+| Code | en_US | es_ES |
+|---|---|---|
+| `PE` | Pending | Pendiente |
+| `PR` | Processed | Procesada |
+| `CT` / `PT` | Fully collected / Fully paid | Cobrada total / Pagada total |
+| `CP` / `PP` | Partially collected / Partially paid | Cobrada parcial / Pagada parcial |
+| `AN` | Voided | Anulada |
+
+REM's own processes set the value (`org.openbravo.module.remittance`, `feature/ETP-6148`). Etendo GO has no observer for it and never writes it. Settlement and return rows update it through `REM_SettleProtest`. A writer that inserts `REM_REMITTANCELINE_CANCEL` / `REM_REMITTANCELINE_RETURN` rows without going through it leaves the status stale (see the `status-bypassed-by-sql` item in `flags-registry.json`).
+
+**Existing remittances are not backfilled** (accepted by the user on 2026-11-06). A remittance that
+existed before the column gets the default `PE` and keeps it until one of REM's processes (process,
+reactivate, settle, return or their undo) refreshes it.
+- It shows «Pendiente» in the list, the detail pill and the status filter.
+- If its type is one Etendo GO provisioned, it counts as open (`PE`, `PR`, `CP`, `PP`). So the
+  account cannot turn «Admite remesas» off or be archived (422
+  `ETGO_RemittanceAccountHasOpenRemittances`).
+
+Tracked as `existing-remittances-not-backfilled` in `flags-registry.json`.
+
+**Labels.** The AD list ships English names only, so `decisions.json` points every code at an i18n
+key: `remittanceStatus.enumValues` (`{ value, name: "remittanceStatusPe" }` … `remittanceStatusAn`) and
+`window.statusEnumLabels` (same map). The keys live in `genericLabels` of `en_US`, `es_ES` and
+`es_AR`. They reach the grid badge, the status quick filter, the advanced filter and the detail
+status pill. The status is not a form field (`form: false`). Without the override the detail pill
+showed the raw code.
+
+**Tones.** `remittanceStatus.enumVariants` declares the per-code tones:
+
+| Code | Tone |
+|---|---|
+| `PE` | neutral |
+| `PR` | info |
+| `CT`, `PT` | success |
+| `CP`, `PP` | warning |
+| `AN` | destructive |
+
+The generator already emits `enumVariants` on the column. A `status` column honours it through
+`resolveStatusTone(code, col.enumVariants)` (`lib/statusToneOverride.js`), in the grid cell
+(`DataTable.cellRenderers.jsx`) and in the "All statuses" quick-filter pill (`ListFilterBar.jsx`).
+These codes are ambiguous across windows (`PR`, `AN`, `CP`), so they are not added to the global
+`getStatusTone` catalog.
+
+Not covered, both need `schema_forge_core`:
+- **The detail status pill is still neutral.** `DetailView` → `DocumentStatusPill` accepts a `tone`,
+  but the generator emits only `statusEnumLabels` for the page, with no per-code tone. It needs a
+  generator-emitted page prop (for example `statusEnumVariants` built from the status field's
+  `enumVariants`), and `DetailView` passing `resolveStatusTone(...)` to the pill.
+- **Filter order.** None of the codes is in `STATUS_ORDER`, so the status filter lists them
+  alphabetically (AN, CP, CT, PE, PP, PR, PT). That catalog must stay identical to the core copy
+  (`statusBadge.coreParity.test.js`).
+
+### SEPA creditor identifier
+
+It is not stored, neither on the account nor on the remittance, and it is not shown. It is computed
+when the SEPA XML is built:
+- the organization tax ID (NIF);
+- plus the `Creditor_Business_Code` parameter of the remittance type, default `000`.
+
+The XML belongs to another team.
+
+## Ticket fields not covered by a Classic column
+
+These need a new column, which the scope rules out, or a later task. None was invented:
+
+| Ticket field | Status |
+|---|---|
+| List "Tipo" (collection / payment) | covered by the `remittanceType` name |
+| List "Nº de documentos" and "Total" | **not covered**. Both are aggregates of the lines; there is no Classic column |
+| Header SEPA scheme | covered by the `remittanceType` name. There is no separate field |
+| Header creditor identifier | left out (computed at XML time, see above) |
+| Line due date | in the `paymentScheduleDetail` identifier (payment plan due date and amount) |
+| Line invoice number | **not covered**. It is not in either identifier, and the Classic `invoice` property-path field is not supported (see "Classic property-path fields") |
+| Line business partner | **not covered**. It is only in the `payment` identifier, which stays empty until the line is processed. Classic has no property-path field for it |
+| Line status | **not covered**. Neither identifier carries a status, and the Classic `payment.status` property-path field is not supported |
+
+## Selectors and callout
+
+- `financialAccount`: `GET /sws/neo/remittance/remittance/selectors/financialAccount`, filtered in
+  the remittance header handler's `handle()`. It does not use a `SelectorContextPolicy`, because
+  that would also filter every other financial-account selector.
+- `remittanceType`: `GET /sws/neo/remittance/remittance/selectors/remittanceType?FIN_Financial_Account_ID=<id>`
+  (`dependsOn.filterKey`). The account also travels in the selector context
+  (`source: field, field: financialAccount`).
+- The Classic callout `REM_RemittanceType_FinAccount` runs when `REM_Remittance_Type_ID` changes.
+  Whether it overwrites the chosen account has to be checked; if it does, the handler overrides it.
+
+## Files
+
+- `artifacts/remittance/decisions.json`, generated output under `artifacts/remittance/generated/web/remittance/`.
+- `agent-prompts/remittance/spec.md`.
+- `cli/config/regen-windows.json` (entry `remittance`).
+- `tools/app-shell/src/windows/custom/remittance/index.jsx` (route guard), `windows/registry.js`
+  (`customLoaders.remittance`), `menu.json` (Finance, after `financial-account`).
+- `tools/app-shell/src/lib/statusToneOverride.js` (per-column status tones).
+- `artifacts/remittance/custom/RemittanceBottomPanel.jsx`, `SelectDueItemsModal.jsx` and
+  `remittanceDueItemsApi.js` («Seleccionar desde factura»), and the optional row props of
+  `components/contract-ui/InvoicePickerModal.jsx`.
+- i18n: `genericLabels.remittanceStatusPe` … `remittanceStatusAn` in `locales/{en_US,es_ES,es_AR}.json`.
+
+### Test ids
+
+| Element | `data-testid` |
+|---|---|
+| Access maps loading (route guard) | `remittance-access-loading` |
+| Access-denied screen | the shared `AccessDeniedMessage` |
+| Status badge in the grid | `StatusTag__eb5261`, with `data-tone` carrying the tone |
+| Status options in the quick filter | `StatusTag__filter-option` |
+| «Seleccionar desde factura», empty state / with lines | `action-select-due-items-empty-state` / `action-select-due-items` |
+| Lines footer (trigger + total) | `remittance-lines-footer` |
+| Lines total | `remittance-lines-total`, `-label`, `-amount` |
+| Status banner | `remittance-status-banner` (`data-status` = the code) |
+| «Procesar» / «Reactivar» | the generic process buttons; grouping dialog `process-param-label-grouping`; the reactivate confirmation is the shared `ConfirmDialog` (`components/OAuth2ClientDialog.jsx`), which takes no `data-testid` of its own: target its `DialogContent__4aea7f` / `Button__4aea7f`, or the dialog role and its title |
+| Due-item picker | `remittance-due-items-picker-modal`, `-search`, `-list`, `-option-{id}` (`data-locked`), `-select-all`, `-apply` |
+
+## Regeneration
+
+```bash
+make regen ONLY=financial-account,remittance PUSH_TO_NEO=1
+# then, in the Etendo root:
+./gradlew export.database
+```
+
+Push only to a database whose `org.openbravo.module.remittance` already has `REM_REMITTANCE.REMITTANCE_STATUS` (the merged and built ETP-6148 change), and whose `REM_*` tables carry no `EM_ETGO_*` column.
+A push creates `ETGO_SF_FIELD` rows that point to the `AD_COLUMN` rows of the spec's tables.
+
+## Manual verification
+
+Prerequisites: the `sepa-remittances` flag on, the spec pushed, and at least one bank account with
+«Admite remesas» on.
+
+1. With the flag off, there is no menu entry, `/remittance` shows the access-denied screen, and
+   `GET /sws/neo/remittance/remittance` answers 403. With the flag on, «Remesas» appears in
+   Finanzas right after Cuentas. A role without the Remittance window grant sees neither the entry
+   nor the page.
+2. The list shows Fecha, Tipo de remesa, Nombre, Cuenta, Fecha de cargo/abono and Estado. Every
+   column sorts and appears in "Filtro por condicionales".
+3. In a new remittance, Cuenta only offers accounts with «Admite remesas». Tipo de remesa is empty
+   until an account is chosen, and then only offers the types linked to that account.
+4. After saving, Fecha is today, Nº documento is filled in (first field, and first list column) and Estado is Pendiente (a neutral
+   badge in the grid; «Pendiente» in the form and the detail pill).
+   In Fecha de cargo/abono, past days are disabled in the calendar. A typed past date reverts
+   and shows the message «La fecha no puede ser anterior a hoy».
+5. There are no Classic process buttons in the detail view. A pending remittance with lines shows
+   «Procesar», which asks for the grouping («Sin agrupar» by default). A processed remittance
+   shows «Reactivar», which asks for confirmation. After either one the banner, the lines and
+   the actions update.
+6. On a processed remittance, the header fields are locked.
+7. The Líneas tab has no add or edit. While the remittance is pending, a line can be deleted with
+   the trash icon or by selecting it; once processed, delete is gone. «Seleccionar desde factura» opens
+   the due-item picker. Rows already in the remittance are checked and disabled. Confirming adds
+   the lines, shows a toast with the count, and refreshes the lines.
+8. English and Spanish: no untranslated text.

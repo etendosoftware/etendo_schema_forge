@@ -4,6 +4,9 @@ import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { Checkbox } from '@/components/ui/checkbox';
 
+// Stable default for `isRowLocked`, so the locked-id memo does not recompute on every render.
+const NEVER_LOCKED = () => false;
+
 /**
  * Modal for choosing the invoice(s) a rectificative invoice corrects.
  *
@@ -31,6 +34,20 @@ import { Checkbox } from '@/components/ui/checkbox';
  *     on top of another modal, which is the return-document case; the walkthrough overlay owns 70
  *     and must stay above (ETP-5108).
  * @param pageSize rows per batch — the initial render and the size of each scroll-triggered append.
+ *
+ * <p><b>Other row kinds (ETP-6148).</b> Every addition below is optional, and its default keeps
+ * the invoice behaviour above unchanged. They let a caller list rows that are not invoices, such as
+ * the remittance's due items (one row per installment):
+ * @param getRowDate (row) => the date shown next to the label. Default `invoiceDate`.
+ * @param getRowAmount (row) => the amount on the right. Default the grand total.
+ * @param isRowLocked (row) => true for a row that is already applied (for example, a due item
+ *     already in this remittance). It renders checked and disabled, cannot be toggled, and is never
+ *     sent through `onApply`.
+ * @param selectAll show a «select all» checkbox above the list in `multiple` mode. It toggles
+ *     every rendered row that is not locked.
+ * @param titleKey / searchPlaceholderKey / emptyKey / selectedCountKey / applyKey / selectAllKey
+ *     i18n keys for the window's own wording. Defaults: the rectificative-invoice keys (and
+ *     `confirm` / `selectAll`).
  */
 export default function InvoicePickerModal({
   invoices = [],
@@ -49,6 +66,16 @@ export default function InvoicePickerModal({
   onSearchChange,
   onReachBottom,
   loadingMore = false,
+  getRowDate = (inv) => inv.invoiceDate,
+  getRowAmount,
+  isRowLocked = NEVER_LOCKED,
+  selectAll = false,
+  searchPlaceholderKey = 'rectSearchInvoice',
+  emptyKey = 'rectNoInvoices',
+  selectedCountKey = 'rectifySelectedCount',
+  applyKey = 'confirm',
+  selectAllKey = 'selectAll',
+  titleKey = 'rectPickerTitle',
 }) {
   const ui = useUI();
   const [localSearch, setLocalSearch] = useState('');
@@ -69,6 +96,8 @@ export default function InvoicePickerModal({
 
   const toggleDraft = (id) =>
     setDraft(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
+  // ETP-6148 — a locked row (already applied) is shown checked but never enters the draft.
+  const lockedIds = useMemo(() => new Set(invoices.filter(isRowLocked).map(inv => inv.id)), [invoices, isRowLocked]);
 
   const label = (inv) => inv.documentNo || inv._identifier || inv.id;
   // `businessPartner$_identifier` FIRST, and not the other way round: rows coming from the NEO
@@ -77,7 +106,7 @@ export default function InvoicePickerModal({
   // rectifiableInvoices action have no `$_identifier` and put the name in `businessPartner`, which
   // is why both are read at all.
   const partner = (inv) => inv['businessPartner$_identifier'] || inv.businessPartner || '';
-  const amount = (inv) => inv.grandTotalAmount ?? inv.grandTotalAmt;
+  const amount = getRowAmount ?? ((inv) => inv.grandTotalAmount ?? inv.grandTotalAmt);
 
   // ETP-5381: infinite scroll, not truncation. This used to `slice(0, maxVisible)` at 5 and print a
   // "+N more — refine the search" hint, which made every invoice past the fifth reachable ONLY by
@@ -127,6 +156,7 @@ export default function InvoicePickerModal({
   const fmtAmt = (inv) => formatCurrency(currencyCode(inv), amount(inv));
 
   const activate = (inv) => {
+    if (lockedIds.has(inv.id)) return;
     if (multiple) {
       toggleDraft(inv.id);
       return;
@@ -136,18 +166,22 @@ export default function InvoicePickerModal({
   };
 
   const invoiceRow = (inv) => {
-    const checked = multiple && draft.includes(inv.id);
+    const locked = lockedIds.has(inv.id);
+    const checked = multiple && (locked || draft.includes(inv.id));
     return (
       <div
         key={inv.id}
         role="button"
-        tabIndex={0}
+        tabIndex={locked ? -1 : 0}
+        aria-disabled={locked ? 'true' : undefined}
         data-testid={`${idPrefix}-option-${inv.id}`}
         data-selected={checked ? 'true' : 'false'}
+        data-locked={locked ? 'true' : undefined}
         onClick={() => activate(inv)}
         onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(inv); } }}
         style={{
-          display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', cursor: locked ? 'default' : 'pointer',
+          opacity: locked ? 0.6 : 1,
           borderBottom: '0.5px solid hsl(var(--border) / 0.3)',
           // The same neutral grey the row already uses on hover, not the informational blue: the
           // black tick is what signals selection, so tinting the row as well read as a status
@@ -170,15 +204,16 @@ export default function InvoicePickerModal({
           // the real-user path would only be provable in Playwright — this way it is unit-testable.
           <Checkbox
             checked={checked}
+            disabled={locked}
             onClick={e => e.stopPropagation()}
-            onChange={() => toggleDraft(inv.id)}
+            onChange={() => { if (!locked) toggleDraft(inv.id); }}
             className="shrink-0"
             data-testid="Checkbox__fba652" />
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{label(inv)}</span>
-            <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>{fmtDate(inv.invoiceDate)}</span>
+            <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>{fmtDate(getRowDate(inv))}</span>
             {inv.suggested && (
               <span
                 data-testid={`${idPrefix}-suggested-${inv.id}`}
@@ -203,7 +238,7 @@ export default function InvoicePickerModal({
   if (loading) {
     listBody = <p style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', padding: '24px 0', textAlign: 'center' }}>{ui('loading')}</p>;
   } else if (pageRows.length === 0) {
-    listBody = <p data-testid={`${idPrefix}-no-matches`} style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', padding: '24px 0', textAlign: 'center' }}>{ui('rectNoInvoices')}</p>;
+    listBody = <p data-testid={`${idPrefix}-no-matches`} style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', padding: '24px 0', textAlign: 'center' }}>{ui(emptyKey)}</p>;
   } else {
     listBody = pageRows.map(invoiceRow);
   }
@@ -222,7 +257,7 @@ export default function InvoicePickerModal({
         style={{ width: 580, maxWidth: '92vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))', boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--border))' }}
       >
         <div style={{ padding: '14px 16px', borderBottom: '2px solid hsl(var(--border))', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{title || ui('rectPickerTitle')}</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{title || ui(titleKey)}</span>
           <button type="button" onClick={onClose} aria-label={ui('cancel')} style={{ fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }}>&times;</button>
         </div>
         <div style={{ padding: '10px 16px 0' }}>
@@ -237,11 +272,32 @@ export default function InvoicePickerModal({
               setLocalSearch(e.target.value);
               setVisibleCount(pageSize);
             }}
-            placeholder={ui('rectSearchInvoice')} autoFocus
+            placeholder={ui(searchPlaceholderKey)} autoFocus
             data-testid={`${idPrefix}-search`}
             style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, padding: '7px 10px', border: '0.5px solid hsl(var(--border))', borderRadius: 6, outline: 'none', color: 'hsl(var(--foreground))' }}
           />
         </div>
+        {multiple && selectAll && (() => {
+          const selectable = pageRows.filter(inv => !lockedIds.has(inv.id)).map(inv => inv.id);
+          const allSelected = selectable.length > 0 && selectable.every(id => draft.includes(id));
+          const toggleAll = () => setDraft(prev => (allSelected
+            ? prev.filter(id => !selectable.includes(id))
+            : [...new Set([...prev, ...selectable])]));
+          return (
+            <label
+              data-testid={`${idPrefix}-select-all`}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 16px 0', fontSize: 12, color: 'hsl(var(--muted-foreground))', cursor: selectable.length ? 'pointer' : 'default' }}
+            >
+              <Checkbox
+                checked={allSelected}
+                disabled={selectable.length === 0}
+                onChange={toggleAll}
+                className="shrink-0"
+                data-testid="Checkbox__select-all" />
+              {ui(selectAllKey)}
+            </label>
+          );
+        })()}
         <div
           data-testid={`${idPrefix}-list`}
           onScroll={onListScroll}
@@ -262,7 +318,7 @@ export default function InvoicePickerModal({
         <div style={{ display: 'flex', justifyContent: multiple ? 'space-between' : 'flex-end', alignItems: 'center', gap: 8, background: 'hsl(var(--muted))', borderTop: '1px solid hsl(var(--border))', padding: '10px 16px' }}>
           {multiple && (
             <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>
-              {ui('rectifySelectedCount', { count: draft.length })}
+              {ui(selectedCountKey, { count: draft.length })}
             </span>
           )}
           <div style={{ display: 'flex', gap: 8 }}>
@@ -277,7 +333,7 @@ export default function InvoicePickerModal({
                 className="bg-[hsl(var(--foreground))] text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))]"
                 style={{ fontSize: 13, fontWeight: 500, padding: '5px 14px', borderRadius: 6, border: 'none', cursor: 'pointer' }}
               >
-                {ui('confirm')}
+                {ui(applyKey)}
               </button>
             )}
           </div>

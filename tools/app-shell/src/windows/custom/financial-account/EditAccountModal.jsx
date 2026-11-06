@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ConfirmDialog } from '@/components/OAuth2ClientDialog';
 import { useUI, useLocaleSwitch } from '@/i18n';
@@ -32,6 +33,7 @@ import {
   extractBackendMessageParams,
 } from '@/lib/backendErrors.js';
 import { validateIbanForCountry, countryLacksIbanConfig } from '@/lib/countryIban.js';
+import { SEPA_REMITTANCES_CAPABILITY } from '@/lib/capabilityVisibility.js';
 import { formatCalendarDate, calendarISODaysAgo } from '@/lib/dateOnly.js';
 import { useSplitButtonDropdown } from './useSplitButtonDropdown';
 import BankConnectionDeleteConfirmModal from './BankConnectionDeleteConfirmModal';
@@ -297,7 +299,7 @@ async function copyIbanToClipboard(account, ui) {
  */
 async function persistAccountEdits({
   account, fields, settings, reconciliation, glItemDifference, accounting, updateAccount,
-  saveImportSettings, saveAccountingConfiguration,
+  saveImportSettings, saveAccountingConfiguration, remittance = null,
 }) {
   const updates = {};
   if (fields.nameDirty) updates.name = fields.name.trim();
@@ -318,6 +320,9 @@ async function persistAccountEdits({
   // '' clears the limit back to "unset"; the mutation maps it to null.
   if (reconciliation?.writeoffDirty) updates.writeoffLimit = reconciliation.writeoffLimit;
   if (glItemDifference?.dirty) updates.glItemDifferenceId = glItemDifference.value?.id || '';
+  // ETP-6148 — null when the section is not shown (no capability, or not a Bank account), so a
+  // toggle left changed before switching the Type away from Bank is never sent.
+  if (remittance?.dirty) updates.allowRemittance = remittance.value;
   if (Object.keys(updates).length > 0) {
     // The version this form was opened on. Added alongside the changed fields, never instead of
     // the emptiness gate above, so an untouched form still issues no PUT at all.
@@ -1012,6 +1017,49 @@ function GlItemDifferenceSection({ ui, glItemDifference, first = false }) {
 }
 
 // ---------------------------------------------------------------------------
+// SEPA remittances setting (ETP-6148) — «Admite remesas», FIN_Financial_Account.
+// EM_ETGO_Allow_Remittance. Read from `account.allowRemittance`, which the financial-accounts-page
+// payload carries only while the sepa-remittances flag is on (the same flag behind the
+// capability that shows this section). Turning it on is validated and provisioned server-side
+// (Bank type + valid IBAN, remittance payment methods linked); turning it off is refused while the
+// account has open remittances. The UI only reports those refusals (see backendErrors.js).
+// ---------------------------------------------------------------------------
+
+function useRemittanceSetting(open, account) {
+  const [value, setValue] = useState(false);
+  const [snapshot, setSnapshot] = useState(false);
+
+  useEffect(() => {
+    if (!open || !account) return;
+    const initial = account.allowRemittance === true;
+    setValue(initial);
+    setSnapshot(initial);
+  }, [open, account]);
+
+  return { value, setValue, dirty: value !== snapshot };
+}
+
+function RemittanceSettingsSection({ ui, remittance }) {
+  return (
+    <div className="mt-6 border-b border-[hsl(var(--border-subtle))] pb-4" data-testid="remittance-settings-section">
+      <p className="text-sm font-medium text-[hsl(var(--foreground))] mb-3">
+        {ui('financeAccountsRemittanceSection')}
+      </p>
+      <label className="inline-flex cursor-pointer items-center gap-2 text-sm leading-6 text-[hsl(var(--foreground))]">
+        <Switch
+          checked={remittance.value}
+          onCheckedChange={(checked) => remittance.setValue(checked === true)}
+          data-testid="edit-account-allow-remittance" />
+        {ui('financeAccountsRemittanceAllow')}
+      </label>
+      <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]" data-testid="edit-account-allow-remittance-hint">
+        {ui('financeAccountsRemittanceAllowHint')}
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Accounting configuration hook + section (ETP-4530 — Accounting tab)
 // ---------------------------------------------------------------------------
 
@@ -1254,6 +1302,12 @@ export function EditAccountModal({
   const recon = useReconciliationSettings(open, account);
   const glItemDifference = useGlItemDifference(open, account);
   const accounting = useAccountingConfiguration(open, account);
+  const remittance = useRemittanceSetting(open, account);
+  // ETP-6148 — the SEPA remittances section: the sepaRemittances capability (the per-account
+  // sepa-remittances flag, evaluated server-side) AND a Bank account, read off the pending Type
+  // selection so the section follows a Type change made in this same edit.
+  const canSeeRemittances = useHasCapability(SEPA_REMITTANCES_CAPABILITY);
+  const showRemittance = canSeeRemittances && fields.isBankType;
   // ETP-4530 — the Accounting tab is only reachable for roles granted this capability (resolved
   // server-side, admin roles always pass). Fails closed to `false` until the capabilities map
   // loads, so it can flip false → true shortly after the modal mounts, or true → false mid-session
@@ -1300,7 +1354,7 @@ export function EditAccountModal({
   const dirty = fields.nameDirty || fields.typeDirty || fields.ibanDirty || fields.currencyDirty
     || fields.countryDirty || fields.swiftDirty
     || bankConnection.settingsDirty || (!isCash && recon.dirty) || glItemDifference.dirty
-    || accounting.dirty;
+    || accounting.dirty || (showRemittance && remittance.dirty);
   // What makes the form unsavable, independently of whether anything changed. Split out of
   // `canSave` because "Sincronizar ahora" needs the same verdict without the `dirty`/`saving`
   // terms: it must refuse to sync a form it cannot persist rather than sync stale dates.
@@ -1327,6 +1381,7 @@ export function EditAccountModal({
         updateAccount,
         saveImportSettings,
         saveAccountingConfiguration,
+        remittance: showRemittance ? remittance : null,
       });
     } finally {
       setSaving(false);
@@ -1492,6 +1547,13 @@ export function EditAccountModal({
                     recon={recon}
                     data-testid="ReconciliationSettingsSection__73027d" />
                 </>
+              ) : null}
+
+              {showRemittance ? (
+                <RemittanceSettingsSection
+                  ui={ui}
+                  remittance={remittance}
+                  data-testid="RemittanceSettingsSection__73027d" />
               ) : null}
 
               <GlItemDifferenceSection

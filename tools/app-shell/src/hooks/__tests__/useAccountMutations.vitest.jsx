@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/hooks/useAccountMutations.js
 import { renderHook, act } from '@testing-library/react';
 
 import { AuthProvider } from '@/auth/AuthContext.jsx';
@@ -352,6 +353,40 @@ describe('useAccountMutations', () => {
     const body = JSON.parse(init.body);
     expect(body).not.toHaveProperty('eTGODateTolerance');
     expect(body).not.toHaveProperty('eTGOAmountTolerance');
+  });
+
+  // ETP-6148 — «Admite remesas» (EM_ETGO_Allow_Remittance): the DAL property drops the "EM_"
+  // prefix like the tolerances above, and the value is coerced to a strict boolean.
+  it.each([
+    [true, true],
+    [false, false],
+    ['true', false],
+    [1, false],
+    [null, false],
+  ])('updateAccount maps allowRemittance %j to eTGOAllowRemittance %j', async (given, sent) => {
+    globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-1' }]));
+
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
+    await act(async () => {
+      await result.current.updateAccount('acc-1', { allowRemittance: given });
+    });
+
+    const [, init] = findFetchCall(`${ENTITY_URL}/acc-1`);
+    expect(JSON.parse(init.body)).toEqual({ eTGOAllowRemittance: sent });
+  });
+
+  it('updateAccount omits eTGOAllowRemittance when allowRemittance is not in the payload', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-1' }]));
+
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
+    await act(async () => {
+      await result.current.updateAccount('acc-1', { name: 'Renamed' });
+    });
+
+    const [, init] = findFetchCall(`${ENTITY_URL}/acc-1`);
+    const body = JSON.parse(init.body);
+    expect(body).not.toHaveProperty('eTGOAllowRemittance');
+    expect(body).not.toHaveProperty('allowRemittance');
   });
 
   it('updateAccount URL-encodes the account id', async () => {

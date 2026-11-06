@@ -1818,3 +1818,29 @@ The OKR O2 sweep (`docs/mcp-evaluation/okr-o2-sweep-analysis.md`, H4) found an a
 The agentic docs served by the `docs` tool (`etendo-go-docs/agentic/contacts/index.md`) carry the same field map for customers and vendors.
 
 **Verify:** `etendo_schema(spec: "contacts", view: "create")` lists `etgoEmail` with that `agentPrompt`; re-run the okr probe `w-customer-crud` and compare its calls with the sweep (25).
+
+## ETP-6148 — Customer SEPA mandate (behind `sepa-remittances`)
+
+A customer's SEPA direct-debit mandate is edited in the **Financial** tab, in a **Mandato SEPA** section right after the SIF defaults. It reuses the two columns the OBSEPAD module (`org.openbravo.sepa.iso20022.coredirectdebit.customertobank`) adds to `C_BPartner`; Etendo GO adds no column.
+
+| UI label (es_ES) | Field | Column | Notes |
+|---|---|---|---|
+| ID de mandato | `obsepadMandateIdentifier` | `EM_Obsepad_Mandate_Identifier` (NVARCHAR 35) | Max 35 characters. Placeholder: the tax ID is used if left blank |
+| Fecha de firma | `obsepadMandateDate` | `EM_Obsepad_Mandate_Date` (Date) | Help line: the creation date is used if left blank |
+
+**When it shows.** Only for a customer (`data.customer`) and only while the account has the `sepaRemittances` capability (`SEPA_REMITTANCES_CAPABILITY`, published by `SFWindowAccessMap` from the per-account flag `sepa-remittances`). Fails closed. Rule: the exported `shouldShowSepaMandate({ capabilities, isCustomer })` in `tools/app-shell/src/windows/custom/contacts/SepaMandateSection.jsx`. The section reuses `FiscalDefaultsSection`'s layout and rides the panel's `onChange`, so the values are saved with the record by the header **Guardar**, like the SIF defaults.
+
+**decisions.json.** On `businessPartner`, both fields are `visibility: editable`, `form: false`, `grid: false`, `visibleWhenCapability: sepaRemittances`: the generated form never renders them, `SepaMandateSection` is their only editor. On `customer`, `vendorCreditor` and `employee` (other tabs over the same `C_BPartner` row) they are `discarded`, so the mandate has one write path, the one whose customization applies the flag.
+
+**Server defaults (`BusinessPartnerHandler` → `ContactSepaMandateDefaults`, com.etendoerp.go).** On a CRUD create or update, REST and MCP alike:
+- *Flag on and the contact is (or becomes) a customer:* a mandate ID that ends up blank takes the contact's `taxID`; a signature date that ends up empty takes the contact's creation date (`Created`), today on a create. "Ends up" is the value the body sends when it sends the key, otherwise the persisted one, so an existing customer whose mandate was never filled gets it on its next save. A value the caller sends always wins. `IsCustomer` defaults to `Y` in AD, so a create that does not send `customer` counts as a customer.
+- *Flag off:* both keys are dropped from the write body, silently: never persisted, never rejected. Same contract as `structured-address-for-sepa` on the address (`BpLocationHandler`), chosen over a 403 because the MCP schema still advertises the two fields while the flag is off, and a 403 would refuse the whole contact save for two stray keys.
+- A non-customer is left alone; on an instance without OBSEPAD (the DAL model has no `obsepadMandateIdentifier`) the rule is a no-op.
+
+**Binding (ETP-6148).** `BusinessPartnerHandler` moved from `@Named("businessPartnerHandler")` + `ETGO_SF_ENTITY.Java_Qualifier` to `@NeoExtension(spec = "contacts", entity = "businessPartner")`. The row's `JAVA_QUALIFIER` and the `javaQualifier` of `entities.businessPartner` in `decisions.json` / `contract.json` are gone. No behaviour changed: every hook the class answers (`handle`, `afterHandle`, `serverResolvedCreateFields`, `createUnsetFields`, `resolveServerCreateFields`) already had an annotation-aware reader.
+
+**Manual check.**
+1. Flag off for the account: the section does not appear; a `PATCH /sws/neo/contacts/businessPartner/{id}` carrying `obsepadMandateIdentifier` saves the rest and leaves the mandate untouched.
+2. Flag on: create a customer with a tax ID and no mandate: the saved record has mandate ID = tax ID and signature date = today. Type another ID and date: they are kept.
+3. Flag on, an existing customer with an empty mandate: edit any field and save: the mandate takes the tax ID and the creation date.
+4. A vendor-only contact: no section, and nothing is defaulted.

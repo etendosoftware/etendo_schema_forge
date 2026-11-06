@@ -9,6 +9,7 @@ import { ArrowUpRight, Loader2, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLabel, useLocaleSwitch, useMenuLabel, useUI } from '@/i18n';
 import { clampNumericFieldMax, getNumericFieldError, numericFieldToastId, trackSaveBlockToast } from '@/lib/numericValidation.js';
+import { dateFieldToastId, getDateFieldError } from '@/lib/dateFieldValidation.js';
 import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 import { NUMERIC_FIELD_TYPES, TWO_DECIMAL_FIELD_TYPES } from '@/lib/numericFieldTypes.js';
 import { getContactsTextFieldError, getContactsTaxIdError, filterContactsInputValue } from './contactsFieldValidation.js';
@@ -804,12 +805,34 @@ function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlu
  * box, bounded by the field's `min` / `max`). Not combined with `calloutOn: 'blur'`, whose
  * deferred input wins.
  */
+/**
+ * ETP-6148 — the values the date fields with a `minDate` had when the current record was
+ * first rendered, so the `minDate` check only refuses a NEW value: an existing record
+ * whose date is already in the past keeps opening and saving its other fields. Re-captured
+ * whenever the record id changes; a new record (no id) has no loaded values.
+ */
+function useLoadedMinDateValues(data, fields) {
+  const ref = useRef({ id: undefined, values: {} });
+  const id = data?.id;
+  if (ref.current.id !== id) {
+    const values = {};
+    if (id) {
+      for (const f of fields) {
+        if (f.type === 'date' && f.minDate) values[f.key] = data?.[f.key];
+      }
+    }
+    ref.current = { id, values };
+  }
+  return ref.current.values;
+}
+
 export function EntityForm({ entity, windowName, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false, onFieldBlur, savingField = null, labelOverrides, registerFields, fieldErrors, optionalSuffix = false, trailing, renderAsFragment = false, navigate, initialRows, documentDateField, variant = 'default', gap }) {
   const compact = variant === 'compact';
   const t = useLabel(labelOverrides ?? api?.labelOverrides);
   const tMenu = useMenuLabel();
   const ui = useUI();
   const { locale } = useLocaleSwitch();
+  const loadedMinDateValues = useLoadedMinDateValues(data, fields);
   const effectiveSelectorContext = useMemo(() => selectorContext ?? {}, [selectorContext]);
   const capabilities = useCapabilitiesSafe();
   const visibleBaseFields = fields.filter(f => !excludeFields.includes(f.key));
@@ -1248,6 +1271,20 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
   };
 
   // Date field (DateField wrapper).
+  // ETP-6148 — `minDate` feedback. DateField (app-shell-core) disables earlier days and
+  // refuses an earlier typed date itself, reporting it through `onMinDateRejected`; a value
+  // that does reach onChange (an older core without `minDate`, or a pasted value) is checked
+  // on commit too. DateField commits through onChange right before its onBlur, so the
+  // committed value is checked here rather than off the stale `data`. Same stable toast id as
+  // the useEntity save gate, so commit-then-Save shows one toast.
+  const validateDateOnCommit = (f, iso) => {
+    const err = getDateFieldError(f, iso, loadedMinDateValues[f.key], { locale });
+    if (!err) return;
+    const toastId = dateFieldToastId(f.key);
+    toast.error(ui(err.key, err.params), { id: toastId });
+    trackSaveBlockToast(toastId);
+  };
+
   const renderDateField = (f, label, isReadOnly) => (
     <div key={f.key} className={LABEL_GAP}>
       <Label
@@ -1261,10 +1298,15 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
         name={f.key}
         data-testid={`field-${f.key}`}
         value={data?.[f.key] ?? ''}
-        onChange={(iso) => onChange?.(f.key, iso, f.column)}
+        onChange={(iso) => {
+          validateDateOnCommit(f, iso);
+          onChange?.(f.key, iso, f.column);
+        }}
         onBlur={() => onFieldBlur?.(f.key)}
         disabled={isReadOnly || savingField === f.key}
         required={f.required && !isReadOnly}
+        minDate={f.minDate}
+        onMinDateRejected={(iso) => validateDateOnCommit(f, iso)}
       />
     </div>
   );

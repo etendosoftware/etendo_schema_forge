@@ -313,7 +313,7 @@
       ]
     },
     "2f22ba4790bcdcf783b1573c321c1f35b01b170c50ad5e9ab9e0d33f72120f75": {
-      "checksum": "3882b1a82bb0e1de836c3f5c2adf223256e4cdaa08f2a9d050e557226212db8b",
+      "checksum": "78236804557a1bbebb62ec9fc5e35fc4ad6517bd4320c70214d6f7d7d5129e09",
       "params": [
         "123"
       ],
@@ -828,6 +828,30 @@
           "displaylogic": "@IsCustomer@='Y'",
           "field_id": "9DADE14ACAF441DEB4E2B7966FB704B1",
           "name": "Incoterms ( SO )",
+          "readonlylogic": null,
+          "tab_id": "223",
+          "tab_name": "Customer",
+          "table_id": "291",
+          "table_name": "C_BPartner"
+        },
+        {
+          "column_id": "5E1AABB6995F427CABADDB978D831B3A",
+          "columnname": "EM_Obsepad_Mandate_Identifier",
+          "displaylogic": "@IsCustomer@='Y'",
+          "field_id": "337121047F234ACABF1615E8C5497B5D",
+          "name": "Mandate Identification",
+          "readonlylogic": null,
+          "tab_id": "223",
+          "tab_name": "Customer",
+          "table_id": "291",
+          "table_name": "C_BPartner"
+        },
+        {
+          "column_id": "845872C29D244FCEBC1F7364A029E739",
+          "columnname": "EM_Obsepad_Mandate_Date",
+          "displaylogic": "@IsCustomer@='Y'",
+          "field_id": "869A6908616D429F96580C6AAE5301DE",
+          "name": "Mandate Date of Signature",
           "readonlylogic": null,
           "tab_id": "223",
           "tab_name": "Customer",

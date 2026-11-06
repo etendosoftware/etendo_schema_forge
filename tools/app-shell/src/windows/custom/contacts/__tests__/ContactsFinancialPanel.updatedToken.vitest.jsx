@@ -22,6 +22,7 @@ vi.mock('lucide-react', () => ({
 
 vi.mock('../BillingPreferencesForm', () => ({ default: () => <div data-testid="billing-form" /> }));
 vi.mock('../FiscalDefaultsSection', () => ({ default: () => <div data-testid="fiscal-defaults-section" /> }));
+vi.mock('../SepaMandateSection', () => ({ default: () => <div data-testid="sepa-mandate-section" /> }));
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import {
