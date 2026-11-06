@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
+import { joinWithConjunction } from '@/lib/backendErrors.js';
 import { useUI } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
@@ -65,6 +66,19 @@ export function missingRectificationSystems(data, { showSii, showTbai, showVerif
   }
   return missing;
 }
+
+// ETP-5745 CP-23: the SIF field that actually carries each system's rectification motive/code —
+// used to name the PRECISE field in the heads-up toast, since the three systems don't share one
+// concept: SII has a dedicated "Motivo de rectificación" field, TicketBAI a dedicated "Código de
+// Factura Rectificativa" field, but VERI*FACTU has neither — its "Tipo de Factura" field folds
+// the motive INTO the type code (R1-R5), so telling the user to complete a "motivo" there is
+// simply wrong. Reuses the SAME locale keys each field's own <Field label> already uses
+// (SifTab.jsx), so the toast never drifts from what the user actually sees on the tab.
+export const SYSTEM_FIELD_LABEL_KEYS = {
+  SII: 'sifDataTabs.field.rectificationReason',
+  TicketBAI: 'sifDataTabs.field.tbaiReverseinvoicecode',
+  Verifactu: 'sifDataTabs.field.vfInvoiceType',
+};
 
 // ETP-4783: SII rectification reason (EM_Aeatsii_Motivo_Rectif) — only shown on rectificative invoices.
 export const SII_MOTIVO_RECTIF_OPTIONS = [
@@ -217,8 +231,8 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPurchaseInvoice, showSii, isDraft, recordId, data?.isRectificative, siiTypeField, onChange]);
 
-  // ETP-5745 CP-14/CP-16: non-blocking heads-up when the invoice becomes rectificative AND at
-  // least one active fiscal system still needs its own rectification code/motive — none of
+  // ETP-5745 CP-14/CP-16/CP-23: non-blocking heads-up when the invoice becomes rectificative AND
+  // at least one active fiscal system still needs its own rectification code/motive — none of
   // SII's Motivo, TicketBAI's Código or VERI*FACTU's rectificative code are auto-picked (that
   // is a fiscal judgement call, never guessed on the user's behalf — see
   // RectificationFiscalCodeGuard.java, which BLOCKS completion for exactly the same set of
@@ -229,15 +243,25 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
   // `isRectificative` is the fix for a reactivated (RE) invoice whose codes were already filled
   // in before it was completed — `isRectificative` alone stayed true forever, so the toast kept
   // firing on every reactivation even though there was nothing left to complete.
+  //
+  // CP-23: the description now names the PRECISE field of each still-missing system (via
+  // SYSTEM_FIELD_LABEL_KEYS), joined with the same locale-aware conjunction
+  // (`joinWithConjunction`, shared with the backend's own 422 translator) the blocking message
+  // already uses — "Motivo de rectificación (SII) y Código de Factura Rectificativa (TicketBAI)"
+  // — instead of one generic "motivo/código" that was flatly wrong for VERI*FACTU (its field has
+  // no separate "motivo" at all, see SYSTEM_FIELD_LABEL_KEYS' own comment).
   useEffect(() => {
     if (isPurchaseInvoice) return;
     if (!isDraft || !recordId) return;
     if (!data?.isRectificative) return;
-    if (missingRectificationSystems(data, { showSii, showTbai, showVerifactu }).length === 0) return;
+    const missing = missingRectificationSystems(data, { showSii, showTbai, showVerifactu });
+    if (missing.length === 0) return;
     if (rectifCodeToastRef.current === recordId) return;
     rectifCodeToastRef.current = recordId;
+    const fields = joinWithConjunction(
+      missing.map(system => `${ui(SYSTEM_FIELD_LABEL_KEYS[system])} (${system})`), ui);
     toast.warning(ui('sifDataTabs.toast.rectificationCodeRequired.title'), {
-      description: ui('sifDataTabs.toast.rectificationCodeRequired.description'),
+      description: ui('sifDataTabs.toast.rectificationCodeRequired.description', { fields }),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPurchaseInvoice, isDraft, recordId, data?.isRectificative, data?.aeatsiiMotivoRectif,
