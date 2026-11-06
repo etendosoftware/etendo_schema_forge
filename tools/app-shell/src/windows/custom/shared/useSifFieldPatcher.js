@@ -169,14 +169,27 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
   // state the first time the Verifactu panel is shown for a draft record with no
   // existing value. Scoped to this single field only — see task notes for why the
   // other new fields don't need this treatment.
+  //
+  // ETP-5745 CP-22: excludes a rectificative invoice. The doc-type callout
+  // (InvoiceCalloutHelper#applyVerifactuInvTypeFromDocType) now deliberately CLEARS
+  // etvfacInvType to '' the instant the document becomes rectificative — the same visual
+  // "something needs your attention" signal SII's Clave (→ 'R') and TicketBAI's Código
+  // field (appears) already give. Without this exclusion, THIS effect would immediately
+  // see that now-blank value and stamp 'F1' right back over it, since '' is falsy and
+  // `vfInvTypeDefaultedRef` was never set for this record (the field already held 'F1'
+  // from the AD_Column default at create time, so the guard above never had reason to run
+  // before). 'F1' is exactly the non-rectificative code this UX change exists to get the
+  // user to replace with a real R1-R5 choice, so re-stamping it here would silently defeat
+  // the whole point.
   useEffect(() => {
     if (!showVerifactu || !isDraft || !recordId) return;
+    if (data?.isRectificative) return;
     if (vfInvTypeDefaultedRef.current === recordId) return;
     if (data?.etvfacInvType) return; // already has a value — never clobber
     vfInvTypeDefaultedRef.current = recordId;
     onChange?.('etvfacInvType', 'F1');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showVerifactu, isDraft, recordId, data?.etvfacInvType, onChange]);
+  }, [showVerifactu, isDraft, recordId, data?.isRectificative, data?.etvfacInvType, onChange]);
 
   // ETP-4783: When SII is configured and the selected document type is rectificative
   // (isRectificative injected by AbstractInvoiceHeaderHandler.enrichIsRectificative),
