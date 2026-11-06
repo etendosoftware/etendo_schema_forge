@@ -201,9 +201,9 @@ function ReportCard({ report, onRun, interactive = false }) {
 function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams = {}, value, valueLabel }) {
   const apiFetch = useApiFetch(ETENDO_BASE);
 
-  const loadPage = useCallback((q, off, signal) => {
+  const loadPage = useCallback((q, off, signal, opts) => {
     const extra = Object.entries(extraParams).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
-    const params = `q=${encodeURIComponent(q)}&limit=${SEARCH_POPUP_PAGE_SIZE}&offset=${off}${extra ? '&' + extra : ''}`;
+    const params = `q=${encodeURIComponent(q)}&limit=${opts?.limit ?? SEARCH_POPUP_PAGE_SIZE}&offset=${off}${extra ? '&' + extra : ''}`;
     return apiFetch(`/sws/report-selectors/${selector}?${params}`, { signal })
       .then(r => {
         if (!r.ok) throw new Error(`Report selector request failed: ${r.status}`);

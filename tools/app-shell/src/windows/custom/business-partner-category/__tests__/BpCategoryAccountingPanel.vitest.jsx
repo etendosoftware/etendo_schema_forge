@@ -39,6 +39,7 @@ vi.mock('@/components/contract-ui', async () => {
   return { AccountSelect, useAccountSelectorPages };
 });
 
+import { LOCATE_WALK_PAGE_SIZE } from '@/components/contract-ui/selectorSelection.js';
 import BpCategoryAccountingPanel from '@generated/business-partner-category/custom/BpCategoryAccountingPanel.jsx';
 import { BpCategoryWindowContext } from '@generated/business-partner-category/custom/bpCategoryWindowContext.js';
 import {
@@ -280,7 +281,8 @@ describe('BpCategoryAccountingPanel', () => {
 
     const [firstUrl, firstOpts] = selectorCalls()[0];
     expect(firstUrl).toMatch(new RegExp(`^${API_BASE}/accounting/selectors/WriteOff_Acct\\?`));
-    expect(firstUrl).toContain('limit=30');
+    // The account already holds a value, so the first page is the bigger locate page (ETP-6103).
+    expect(firstUrl).toContain(`limit=${LOCATE_WALK_PAGE_SIZE}`);
     expect(firstUrl).toContain('offset=0');
     expect(firstUrl).not.toContain('q=');
     expect(firstOpts).toEqual(expect.objectContaining({ baseUrl: '' }));
