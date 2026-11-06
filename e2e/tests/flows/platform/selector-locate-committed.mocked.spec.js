@@ -114,10 +114,10 @@ test.describe('Account picker — locating the committed value (real layout)', (
       .map((f) => `t=${f.t} rows=${f.rows} visible=${f.visibleRows} overflowY=${f.overflowY} scrollH=${f.scrollHeight} scrollTop=${f.scrollTop} sel=${f.selected} centreOffset=${f.centreOffset}`);
     console.log(`REQUESTS ${JSON.stringify(selectorRequests)}\nTIMELINE (${frames.length} frames)\n${timeline.join('\n')}`);
 
-    // Requests: 100-row pages (the picker's own size is 30); the walk's last page is trimmed to the
-    // walk total of 6 x 30 = 180 rows, so the second page asks for 80.
+    // Requests: a 100-row first page (the picker's own size is 30), then the rest of the 1000-row
+    // walk total in one request: 900 rows asked, the remaining 200 returned.
     expect(selectorRequests.map((r) => r.offset)).toEqual([0, 100]);
-    expect(selectorRequests.map((r) => r.limit)).toEqual([100, 80]);
+    expect(selectorRequests.map((r) => r.limit)).toEqual([100, 900]);
 
     // Rows were laid out (so they could be measured) but invisible before the reveal.
     expect(firstVisible).toBeGreaterThan(0);
