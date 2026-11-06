@@ -59,6 +59,7 @@
     "readOnlyResources": "entities.<entity>.publicApi.readOnly in decisions.json",
     "readOnlyFields": "fields.<field>.publicApi.readOnly or entities.<entity>.publicApi.readOnlyFields in decisions.json",
     "inputFields": "entities.<entity>.publicApi.inputFields in decisions.json",
+    "lookups": "entities.<entity>.fields.<field>.publicApi.lookup in decisions.json (top-level resources only)",
     "failClosed": true
   },
   "entities": {
@@ -131,6 +132,38 @@
           },
           "reference": null
         },
+        "payment_method": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "paymentMethod",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "PaymentMethod",
+          "lookup": {
+            "selector": "paymentMethod",
+            "type": "payment-method",
+            "context": {
+              "FIN_ISRECEIPT": "Y"
+            }
+          }
+        },
+        "purchase_payment_method": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "pOPaymentMethod",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "PaymentMethod",
+          "lookup": {
+            "selector": "pOPaymentMethod",
+            "type": "payment-method",
+            "context": {
+              "FIN_ISRECEIPT": "N"
+            }
+          }
+        },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
@@ -169,7 +202,7 @@
       },
       "source": {
         "artifact": "contacts",
-        "contractVersion": "0.7.0",
+        "contractVersion": "0.8.0",
         "backendEntity": true
       }
     },
@@ -375,7 +408,7 @@
       },
       "source": {
         "artifact": "contacts",
-        "contractVersion": "0.7.0",
+        "contractVersion": "0.8.0",
         "backendEntity": true
       }
     },
@@ -500,7 +533,7 @@
       },
       "source": {
         "artifact": "contacts",
-        "contractVersion": "0.7.0",
+        "contractVersion": "0.8.0",
         "backendEntity": true
       }
     },
@@ -2885,7 +2918,14 @@
           "dataType": {
             "type": "string"
           },
-          "reference": "PaymentMethod"
+          "reference": "PaymentMethod",
+          "lookup": {
+            "selector": "paymentMethod",
+            "type": "payment-method",
+            "context": {
+              "IsSOTrx": "N"
+            }
+          }
         },
         "payment_terms": {
           "sourceVisibility": "editable",
@@ -2973,7 +3013,16 @@
           "reference": null
         }
       },
-      "processes": [],
+      "processes": [
+        {
+          "action": "complete",
+          "method": "POST",
+          "path": "/header/:id/action/documentAction",
+          "body": {
+            "docAction": "CO"
+          }
+        }
+      ],
       "functional": {
         "functionalName": "Purchase Order",
         "functionalSummary": "This window should let a buyer prepare a supplier order, maintain its commercial header and line details, confirm it, and then follow the downstream procurement flow through receipts, purchase invoices, and payments.",
@@ -2990,7 +3039,7 @@
       },
       "source": {
         "artifact": "purchase-order",
-        "contractVersion": "0.56.0",
+        "contractVersion": "0.57.0",
         "backendEntity": true
       }
     },
@@ -3132,7 +3181,7 @@
       },
       "source": {
         "artifact": "purchase-order",
-        "contractVersion": "0.56.0",
+        "contractVersion": "0.57.0",
         "backendEntity": true
       }
     },
@@ -4260,7 +4309,14 @@
           "dataType": {
             "type": "string"
           },
-          "reference": "PaymentMethod"
+          "reference": "PaymentMethod",
+          "lookup": {
+            "selector": "paymentMethod",
+            "type": "payment-method",
+            "context": {
+              "IsSOTrx": "Y"
+            }
+          }
         },
         "payment_terms": {
           "sourceVisibility": "editable",
@@ -4353,7 +4409,16 @@
           "reference": null
         }
       },
-      "processes": [],
+      "processes": [
+        {
+          "action": "complete",
+          "method": "POST",
+          "path": "/header/:id/action/documentAction",
+          "body": {
+            "docAction": "CO"
+          }
+        }
+      ],
       "functional": {
         "functionalName": "Sales Order",
         "functionalSummary": "This window should let a user create, review, confirm, and manage sales orders from one workspace. The primary outcome is turning a customer request into an order whose lines, fulfillment progress, invoicing progress, and related commercial documents remain visible from the order itself.",
@@ -4370,7 +4435,7 @@
       },
       "source": {
         "artifact": "sales-order",
-        "contractVersion": "0.39.0",
+        "contractVersion": "0.40.0",
         "backendEntity": true
       }
     },
@@ -4512,7 +4577,7 @@
       },
       "source": {
         "artifact": "sales-order",
-        "contractVersion": "0.39.0",
+        "contractVersion": "0.40.0",
         "backendEntity": true
       }
     },

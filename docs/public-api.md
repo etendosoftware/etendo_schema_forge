@@ -90,12 +90,13 @@ Per-field key at `entities.<entity>.fields.<field>.publicApi`:
 | `exposed` | boolean | Only the exact value `true` opts the field in. In a curated entity, absent, `false` or any other value means the field is not exposed. In a non-curated entity it has no effect (see [Default exposure](#default-exposure-window-form)). |
 | `name` | string | Requested public field name. The manifest generator derives the final public name from it (see [Name derivation](#name-derivation)). |
 | `readOnly` | boolean | `true` publishes the field `out` (read-only) even when the window edits it. |
+| `lookup` | `true` or `{ "context": { "<param>": "<value>" } }` | Publishes `GET /api/v1/<resource>/lookups/<field>`, the field's valid values ([4.2.2](#422-lookups)). Top-level resources, published reference fields only; read by the manifest generator straight from `decisions.json`. |
 
 A public field is its NEO value under a public name: nothing transforms it. The keys `type` and `handlerId` of an earlier format promised custom field handlers that were never implemented; the manifest generator refuses them, naming the field.
 
 Examples in the repository:
 
-- `artifacts/contacts/decisions.json` (entity `businessPartner`): `name`, `searchKey`, `taxId`, `web`, `email`, `phone`.
+- `artifacts/contacts/decisions.json` (entity `businessPartner`): `name`, `searchKey`, `taxId`, `web`, `email`, `phone`, `paymentMethod`, `pOPaymentMethod` (the last two with a lookup).
 - `artifacts/product/decisions.json` (entity `product`): `searchKey`, `name`, `category` (internal `productCategory`), `description`, `salePrice` (internal `eTGOSalePrice`), `stock` (internal `eTGOStock`).
 
 Pipeline handling: `resolve-curated.js` copies `publicApi` as a whitelisted decision property
@@ -123,7 +124,7 @@ Some fields are never published, whether curated or derived. The manifest lists 
 | `accountNo`, `bankName`, `displayedAccount`, `iBAN`, `swiftCode` | Bank account identifiers of a business partner. |
 | `etblkpAccountingstatus`, `etblkpBulkposting` | Accounting bulk-posting fields; accounting is outside the public API scope. |
 
-To configure what a window publishes (fields, read-only, input-only fields, actions) step by step, see
+To configure what a window publishes (fields, read-only, input-only fields, actions, lookups) step by step, see
 [Public API configuration](public-api-configuration.md).
 
 ### Name derivation
@@ -220,6 +221,7 @@ The route table is fixed controller code; resource and child lookup use the mani
 | GET, POST | `/api/v1/{parent}/{parentId}/{child}` | Child collection; the GET takes the same query parameters as a list.  `parentId` is sent upstream as the query parameter `parentId`; on POST it is also set in the body as `parentId`. |
 | GET, PUT, PATCH, DELETE | `/api/v1/{parent}/{parentId}/{child}/{id}` | Child item. PUT and PATCH require `If-Match` on versioned resources. |
 | POST | `/api/v1/{resource}/{id}/actions/{action}` | Run a business action on a record ([4.2.1](#421-business-actions)). Top-level resources only. |
+| GET | `/api/v1/{resource}/lookups/{field}` | List the valid values of a reference field ([4.2.2](#422-lookups)). Top-level resources only. |
 
 - A resource that has a `parent` in the manifest is not reachable at top level: `404 Child resource must be addressed through its master: <name>`.
 - An unknown resource returns `404 Unknown public entity: <name>`; an unknown child path returns `404 Unknown child resource: <parent>/<child>`.
@@ -236,15 +238,70 @@ The route table is fixed controller code; resource and child lookup use the mani
   `{"docAction": "<processValue>"}` to `POST /sws/neo/{specName}{path}`. In v1 `complete` is the only
   public action: declared `processEndpoints` are not exposed. Fiscal monitors and child resources
   declare none.
+- **Published today.** `sales-order` and `purchase-order` publish `complete`
+  (`POST /api/v1/sales-order/{id}/actions/complete`, `POST /api/v1/purchase-order/{id}/actions/complete`); no
+  other resource publishes an action. Completing runs the same document process as the application's
+  confirm button, so it moves the order from `document_status` `DR` to `CO`.
 - **Request.** No body is needed; a body is accepted and ignored in v1. An action the resource does not declare, or a child resource, answers `404`.
 - **Permission.** The key needs `public-api:process`. A key with only `public-api:write` is refused by Etendo with `403`.
-- **Response.** `200` with the record re-read after the action (the normal single-record document, so `documentStatus` shows the new state) plus `meta.message` with Etendo's message. If the record was already in the target status, `meta.alreadyApplied` is `true` and nothing was run again, so retrying is safe. If the action succeeded but the re-read failed, the answer is still `200` with only `meta` and `meta.hint` ("read the record to see its current state"); a committed action is never reported as an error. The re-read is a plain `GET` of the same record, so it needs `public-api:read`: a process-only key always gets the hint.
+- **Response.** `200` with the record re-read after the action (the normal single-record document, so `document_status` shows the new state) plus `meta.message` with Etendo's message. If the record was already in the target status, `meta.alreadyApplied` is `true` and nothing was run again, so retrying is safe. If the action succeeded but the re-read failed, the answer is still `200` with only `meta` and `meta.hint` ("read the record to see its current state"); a committed action is never reported as an error. The re-read is a plain `GET` of the same record, so it needs `public-api:read`: a process-only key always gets the hint.
 - **Refusals.** A document rule that refuses the action (for example completing an empty order) passes through with Etendo's status and message (`422`, `403`, ...).
+- **Orders need a payment method.** Etendo completes an order only when it has a payment method; otherwise the action answers `422 business_rule` ("the payment method field is required") and the order stays `DR`. The order inherits its payment method from its contact when it is created: a sales order takes the contact's `payment_method`, a purchase order its `purchase_payment_method`. A contact created through the API has none, so the flow with no id known beforehand is: list the valid values with the lookup ([4.2.2](#422-lookups)) `GET /api/v1/contacts/lookups/payment_method` (or `purchase_payment_method`), set the id on the contact with a `PATCH` (with `If-Match`), create the order, complete it. Setting `payment_method` on the order itself (on create or with a `PATCH`) works as well; `GET /api/v1/{sales-order|purchase-order}/lookups/payment_method` lists its valid values.
+- **A completed order is closed to writes.** A `PATCH` and a `DELETE` on a completed order answer `422` and change nothing; the API publishes no action to reopen or void it.
 - **Synchronous.** The action completes within the request; there is no status endpoint in v1. If the connection fails or times out the answer is `502` with `meta.hint` ("The action may have been applied. Read the record before retrying."); read the record before retrying. The ids `.` and `..` are refused with `404`.
 
 Upstream mapping: the gateway calls
 `{NEO_BASE_URL}/sws/neo/{specName}/{entityName}[/{id}][?parentId=...]` with the token from the
 guard. Example: `GET /api/v1/contacts/ABC` calls `GET /sws/neo/contacts/businessPartner/ABC`.
+
+#### 4.2.2 Lookups
+
+`GET /api/v1/{resource}/lookups/{field}` lists the values a reference field accepts (its valid ids
+and their labels), the same ones the application offers in that field's selector. A caller uses it
+to find an id it cannot know beforehand, for example a payment method.
+
+- **Declared lookups.** A field publishes a lookup when its window declares
+  `publicApi.lookup` on it in `decisions.json` ([Public API configuration](public-api-configuration.md));
+  the generator puts it on the manifest field as `lookup: { selector, type, context }`. Only
+  top-level resources and published reference fields can have one; anything else fails the
+  generation. A field without a lookup, a field that is not published and a child resource answer
+  `404` (code `unknown_lookup` for a field of the resource), and nothing is sent to Etendo.
+- **Published today.** All four list payment methods (`type` `payment-method`):
+
+  | Route | Field | Fixed context sent to Etendo |
+  |-------|-------|------------------------------|
+  | `GET /api/v1/sales-order/lookups/payment_method` | The sales order's payment method | `IsSOTrx=Y` |
+  | `GET /api/v1/purchase-order/lookups/payment_method` | The purchase order's payment method | `IsSOTrx=N` |
+  | `GET /api/v1/contacts/lookups/payment_method` | The contact's payment method as a customer | `FIN_ISRECEIPT=Y` |
+  | `GET /api/v1/contacts/lookups/purchase_payment_method` | The contact's payment method as a vendor | `FIN_ISRECEIPT=N` |
+
+  Each lists the tenant's active payment methods, the same list the app offers in that field. The
+  fixed context is forwarded to the field's selector; whether it narrows the list depends on that
+  field's validation rule, as in the app. Integrators must not rely on the list being filtered by
+  sales or purchase.
+- **Query.** Only `filter[search]` (values whose label contains the text, case-insensitive, at most
+  255 characters), `page[number]` and `page[size]` (default 50, maximum 100). **Any other parameter
+  is refused with `400`** (`invalid_query_parameter`, `source.parameter` names it) before anything
+  is sent to Etendo. The caller never sends selector context: the context is fixed in the manifest.
+- **Permission.** A read: the key needs `public-api:read`. A key without access to the window gets
+  Etendo's `403`, passed through.
+- **Response.** `200` with a collection: `{ "data": [{ "type": "payment-method", "id": "...", "attributes": { "label": "..." } }], "meta": { "page": { "number", "size", "total" } }, "links": { ... } }`,
+  the same pagination members as a list ([4.10](#410-list-queries-pagination-sorting-and-filtering)).
+  The values are not a published resource: `type` names what they are, and `id` is what the field takes.
+- **Failures.** A `401` from Etendo drops the cached token, as on any route. A lookup Etendo does
+  not know (its `404`), no answer, or an answer without `items` is a `502`: the manifest and Etendo
+  disagree, it is not the caller's fault.
+
+Upstream mapping: `GET {NEO_BASE_URL}/sws/neo/{specName}/{entityName}/selectors/{selector}?limit={size}&offset={(number-1)*size}[&q={search}]&{context}`.
+Example: `GET /api/v1/sales-order/lookups/payment_method?filter[search]=trans` calls
+`GET /sws/neo/sales-order/header/selectors/paymentMethod?limit=50&offset=0&q=trans&IsSOTrx=Y`. The
+selector answers `{ items: [{ id, label }], totalCount, hasMore }`, scoped to the tenant of the key.
+
+The route is declared before the child-list route (`/{parent}/{parentId}/{child}`), which would
+otherwise take `{resource}/lookups/{field}`. As a result, a child list whose parent id is literally
+`lookups` is not reachable; record ids are generated UUIDs, so this does not happen in practice. As
+hygiene, the generator and the validator also refuse a child resource whose path segment is
+`lookups`, so the two kinds of route stay visibly apart.
 
 ### 4.3 Fields and fail-closed filtering
 
@@ -376,7 +433,7 @@ Every failure is an error document, built from Etendo's answer when Etendo refus
 
 #### Running the end-to-end suite
 
-`gateway/e2e/` holds an end-to-end suite that drives a **running** gateway over HTTP (`node:test` plus global `fetch`). It is not part of `npm test` and not part of the deploy gate. One file per flow: `contacts` (with its location address), `product`, `sales-order` and `purchase-order` (header plus lines), and `errors` (the JSON:API error contract). Each flow creates a record, reads it, lists it, `PATCH`es it with the `If-Match` of the read, checks `412` for a stale ETag and `428` for a missing one, deletes it and checks `404` afterwards. Every successful response body is also validated with Ajv against the schema of its operation in the gateway's own `/api/openapi.json`, so a drift between the document and the real answers fails the run with the path and the schema error.
+`gateway/e2e/` holds an end-to-end suite that drives a **running** gateway over HTTP (`node:test` plus global `fetch`). It is not part of `npm test` and not part of the deploy gate. One file per flow: `contacts` (with its location address), `product`, `sales-order` and `purchase-order` (header plus lines), and `errors` (the JSON:API error contract). Each flow creates a record, reads it, lists it, `PATCH`es it with the `If-Match` of the read, checks `412` for a stale ETag and `428` for a missing one, deletes it and checks `404` afterwards. The order flows (`gateway/e2e/support/orders.ts`, shared by both orders) then follow an integrator's flow with no id known beforehand: an order for the new contact (no payment method) is refused with `422` and stays `DR`, and an undeclared action answers `404 unknown_action`; the payment-method lookup of the contact (`payment_method` for sales, `purchase_payment_method` for purchases) and of the order list a value (an empty list fails with a message naming the missing tenant setup), `filter[search]` finds it by its label, and an undeclared lookup answers `404 unknown_lookup`; the value is set on the contact with `If-Match`; a new order inherits it; completing it answers `200` with `document_status` `CO`, a second call answers `meta.alreadyApplied`, and a `PATCH` and a `DELETE` on the completed order answer `422`. Every successful response body is also validated with Ajv against the schema of its operation in the gateway's own `/api/openapi.json`, so a drift between the document and the real answers fails the run with the path and the schema error.
 
 ```bash
 export PUBLIC_API_BASE_URL=http://localhost:4399
@@ -385,9 +442,9 @@ export PUBLIC_API_KEY_READONLY='<clientId>:<secret>'   # optional: enables the 4
 make public-api-e2e                                    # or: cd gateway && npm run test:e2e
 ```
 
-- The key needs `public-api:read` and `public-api:write` (deletes included) over the published windows. The test tenant needs at least one warehouse (the orders use it).
+- The key needs `public-api:read`, `public-api:write` (deletes included) and `public-api:process` (the order flows complete an order; without it the `complete` call answers `403`) over the published windows. The test tenant needs at least one warehouse (the orders use it) and at least one active payment method (the order flows find it through the lookups; a tenant created by the onboarding has them).
 - **Localhost guard.** The suite writes and deletes records, so it refuses to start (every file fails with a clear message) when the host of `PUBLIC_API_BASE_URL` is not `localhost` or `127.0.0.1`. `PUBLIC_API_E2E_ALLOW_REMOTE=1` lifts the guard; use it only against a disposable environment, never production.
-- **Data hygiene.** Every record carries a per-run prefix `e2e-<timestamp>-<random>` in its name or search key. An `after` hook deletes whatever the run created, newest first, even when a test failed; a record it could not delete is printed to stderr.
+- **Data hygiene.** Every record carries a per-run prefix `e2e-<timestamp>-<random>` in its name or search key. An `after` hook deletes whatever the run created, newest first, even when a test failed; a record it could not delete is printed to stderr. A completed order cannot be deleted, so a run that completes orders leaves, per order flow, the completed order and its line, and the contact (with its address) and product the order uses, which their references keep from being deleted (`409`). All of them carry the run prefix. Every complete run therefore leaves, per order flow, one completed order with its line, one contact with its address, and one product; the draft orders are deleted.
 - **Rate limit.** The gateway allows 100 requests per key per 60 s by default ([4.11](#411-rate-limiting)); the client waits for `Retry-After` and retries on `429`, so a full run takes a little longer than its request count suggests. Raise `PUBLIC_API_RATE_LIMIT` on the local gateway to run faster.
 - Locally, creating a contact can answer `502` when the tenant lacks the `EM_Etgo_Identifier` sequence; the failure message says so.
 
@@ -763,6 +820,10 @@ Testable statements derived from this document, each linked to its section.
 - [ ] `PUT` or `PATCH` with the current ETag succeeds and returns an `ETag` equal to the updated record's `meta.etag` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
 - [ ] Sending `updated` in a write body returns `400` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
 - [ ] `DELETE` succeeds without `If-Match` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
+- [ ] `GET /api/v1/{resource}/lookups/{field}` of a declared lookup calls `/sws/neo/{spec}/{entity}/selectors/{selector}` with `limit`, `offset`, `q` and only the manifest's fixed context, and answers `data` items of the lookup `type` with `attributes.label` plus `meta.page` and `links` ([4.2.2](#422-lookups))
+- [ ] A lookup with any parameter other than `filter[search]`, `page[number]`, `page[size]` returns `400`; an undeclared lookup returns `404 unknown_lookup`; neither reaches Etendo ([4.2.2](#422-lookups))
+- [ ] A lookup Etendo answers with `404` returns `502`; a `403` passes through; a `401` evicts the cached token ([4.2.2](#422-lookups))
+- [ ] `publicApi.lookup` on a child resource, on an unpublished field or on a field without a reference makes the generator throw; a child path segment `lookups` is refused ([4.2.2](#422-lookups))
 
 ### Key management ([5](#5-api-key-management-contract-oauth2api-keys))
 - [ ] Update and rotate responses contain the `key` object fields (`id`, `name`, `clientId`, `capabilities`, `isActive`); rotate adds `clientSecret` and `tokensRevoked` ([5.2](#52-endpoints))

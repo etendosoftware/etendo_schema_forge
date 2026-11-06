@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0",
+  "version": "0.8.0",
   "generatedAt": "2026-09-20T18:16:41.258Z",
-  "updatedAt": "2026-11-02T22:48:26.037Z",
-  "checksum": "279e307ad19abaf0",
+  "updatedAt": "2026-11-06T12:57:10.282Z",
+  "checksum": "c0b2b95dc21d1946",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -1395,6 +1395,14 @@
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_PaymentMethod_FinAccount"
             },
+            "publicApi": {
+              "exposed": true,
+              "lookup": {
+                "context": {
+                  "FIN_ISRECEIPT": "Y"
+                }
+              }
+            },
             "displayLogic": {
               "raw": "record.customer",
               "evaluable": true,
@@ -1524,6 +1532,14 @@
             },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_PaymentMethod_FinAccount"
+            },
+            "publicApi": {
+              "exposed": true,
+              "lookup": {
+                "context": {
+                  "FIN_ISRECEIPT": "N"
+                }
+              }
             },
             "displayLogic": {
               "raw": "record.vendor",

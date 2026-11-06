@@ -300,6 +300,35 @@ test('declares one POST path per top-level action and none for children', () => 
   assert.equal(paths['/api/v1/businessPartner/{id}'] && Object.keys(paths).some((p) => p.startsWith('/api/v1/businessPartner/{id}/actions')), false);
 });
 
+test('declares one GET path per top-level lookup, with search and page parameters, and points the field at it', () => {
+  const withLookups = structuredClone(schema) as any;
+  withLookups.entities.product.fields.category = {
+    publicApi: true, direction: 'inout', internalPath: 'productCategory', dataType: { type: 'string' }, reference: 'ProductCategory',
+    lookup: { selector: 'productCategory', type: 'product-category', context: { IsSOTrx: 'Y' } },
+  };
+  withLookups.entities.child = {
+    publicApi: true, specName: 'product', operations: ['GET', 'LIST'],
+    fields: { uom: { publicApi: true, direction: 'inout', internalPath: 'uOM', reference: 'UOM', lookup: { selector: 'uOM', type: 'uom', context: {} } } },
+    parent: { resource: 'product', pathSegment: 'lines', foreignKey: 'p' },
+  };
+  const paths = buildPerEntityOpenApiPaths(withLookups);
+  assert.deepEqual(Object.keys(paths).filter((p) => p.includes('/lookups/')), ['/api/v1/product/lookups/category']);
+  const lookup = (paths['/api/v1/product/lookups/category'] as any).get;
+  assert.equal(lookup.operationId, 'lookup_product_category');
+  assert.deepEqual(lookup.security, [{ bearerAuth: [] }]);
+  assert.deepEqual(lookup.parameters.map((p: any) => p.name), ['filter[search]', 'page[number]', 'page[size]']);
+  assert.equal(lookup.parameters.find((p: any) => p.name === 'page[size]').schema.maximum, 100);
+  assert.doesNotMatch(JSON.stringify(lookup), /IsSOTrx/, 'the fixed context is not a caller parameter');
+  assert.ok(lookup.responses['400'] && lookup.responses['403'] && lookup.responses['404'] && lookup.responses['429']);
+  const item = lookup.responses['200'].content['application/vnd.api+json'].schema.properties.data.items;
+  assert.deepEqual(item.properties.type.enum, ['product-category']);
+  assert.ok(item.properties.attributes.properties.label);
+  assert.ok(lookup.responses['200'].content['application/vnd.api+json'].schema.properties.links);
+  const resource = (paths['/api/v1/product/{id}'] as any).get.responses['200'].content['application/vnd.api+json'].schema.properties.data;
+  assert.match(resource.properties.attributes.properties.category.description, /GET \/api\/v1\/product\/lookups\/category/);
+  assert.equal(resource.properties.attributes.properties.name.description, undefined);
+});
+
 test('a list operation documents page, sort and one filter per readable filterable field', () => {
   const rich = structuredClone(schema) as any;
   rich.entities.product.fields.active = { publicApi: true, direction: 'inout', internalPath: 'isActive', dataType: { type: 'boolean' } };

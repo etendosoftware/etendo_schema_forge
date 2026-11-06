@@ -1,6 +1,8 @@
 // @covers scripts/generate-base-public-api-manifest.mjs
+// @covers scripts/validate-base-public-api-manifest.mjs
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,6 +16,7 @@ import {
   exposurePolicyOf,
   isLinesEntity,
   isPublicField,
+  lookupOf,
   neverExposedFields,
   publicFieldName,
   publicFunctionalText,
@@ -647,5 +650,122 @@ describe('assertNoFieldMapping — removed publicApi type/handlerId keys', () =>
       }
     }
     assert.ok(checked > 0);
+  });
+});
+
+describe('buildEntity — lookups declared in decisions.json', () => {
+  const fields = [
+    { name: 'paymentMethod', visibility: 'editable', form: true, type: 'foreignKey', reference: 'PaymentMethod' },
+    { name: 'description', visibility: 'editable', form: true, type: 'string' },
+    { name: 'secretMethod', visibility: 'system', form: true, type: 'foreignKey', reference: 'PaymentMethod' },
+  ];
+  const policyFor = (fieldDecisions) => exposurePolicyOf({ entities: { header: { fields: fieldDecisions } } }, 'header');
+  const buildWith = (fieldDecisions, { parent = null, entityName = 'header' } = {}) => buildEntity({
+    specName: 'sales-order', entityName, contract: contractFor('sales-order', fields, { entityName }), functional,
+    parent, rawEntity: null, policy: exposurePolicyOf({ entities: { [entityName]: { fields: fieldDecisions } } }, entityName),
+  });
+
+  it('attaches the selector, the JSON:API type of the reference and the fixed context to the published field', () => {
+    const entity = buildWith({ paymentMethod: { publicApi: { lookup: { context: { IsSOTrx: 'Y' } } } } });
+    assert.deepEqual(entity.fields.payment_method.lookup, { selector: 'paymentMethod', type: 'payment-method', context: { IsSOTrx: 'Y' } });
+    assert.equal(entity.fields.description.lookup, undefined);
+  });
+
+  it('accepts lookup: true as a lookup without context, and publishes none when it is absent or false', () => {
+    assert.deepEqual(buildWith({ paymentMethod: { publicApi: { lookup: true } } }).fields.payment_method.lookup.context, {});
+    assert.equal(buildWith({ paymentMethod: { publicApi: { lookup: false } } }).fields.payment_method.lookup, undefined);
+    assert.equal(buildWith({}).fields.payment_method.lookup, undefined);
+    assert.equal(policyFor({}).lookups.size, 0);
+  });
+
+  it('refuses a malformed lookup declaration', () => {
+    for (const lookup of ['yes', [], { context: [] }, { context: { IsSOTrx: true } }, { context: { 'bad name': 'Y' } }, { params: {} }]) {
+      assert.throws(() => lookupOf({ publicApi: { lookup } }, 'header.paymentMethod'), /header\.paymentMethod: publicApi\.lookup must be/);
+    }
+  });
+
+  it('refuses a context key the gateway sets itself: q, limit or offset', () => {
+    for (const name of ['q', 'limit', 'offset']) {
+      assert.throws(() => lookupOf({ publicApi: { lookup: { context: { [name]: '1' } } } }, 'header.paymentMethod'),
+        new RegExp(`header\\.paymentMethod: publicApi\\.lookup context cannot use "${name}"`));
+    }
+    assert.deepEqual(lookupOf({ publicApi: { lookup: { context: { Limit: 'x' } } } }, 'h.f').context, { Limit: 'x' }, 'only the exact names are reserved');
+  });
+
+  it('fails closed on a field that is not published', () => {
+    assert.throws(() => buildWith({ secretMethod: { publicApi: { lookup: true } } }), /sales-order\/header\.secretMethod: .*does not publish/);
+    assert.throws(() => buildWith({ unknownField: { publicApi: { lookup: true } } }), /does not publish/);
+  });
+
+  it('fails closed on a field that is not a reference', () => {
+    assert.throws(() => buildWith({ description: { publicApi: { lookup: true } } }), /needs a reference field/);
+  });
+
+  it('fails closed on a child resource', () => {
+    const parent = { resource: 'sales-order', entityName: 'header', foreignKey: 'salesOrder' };
+    assert.throws(() => buildWith({ paymentMethod: { publicApi: { lookup: true } } }, { parent, entityName: 'lines' }), /only supported on top-level resources/);
+  });
+
+  it('refuses a child resource whose path segment would be "lookups"', () => {
+    const parent = { resource: 'sales-order', entityName: 'header', foreignKey: 'salesOrder' };
+    assert.throws(() => buildWith({}, { parent, entityName: 'lookups' }), /kept for lookups/);
+  });
+});
+
+describe('validate-base-public-api-manifest — lookup shape', () => {
+  let root;
+  const validator = new URL('../validate-base-public-api-manifest.mjs', import.meta.url).pathname;
+  const field = (extra = {}) => ({ sourceVisibility: 'editable', direction: 'inout', internalPath: 'paymentMethod', dataType: { type: 'string' }, reference: 'PaymentMethod', ...extra });
+  const manifestWith = (paymentMethod, parent) => ({
+    entities: {
+      'sales-order': { publicApi: true, operations: ['GET', 'LIST'], fields: { id: { internalPath: 'id' }, payment_method: paymentMethod }, ...(parent ? { parent } : {}) },
+    },
+  });
+  const run = (manifest) => {
+    const path = join(root, `manifest-${Math.random().toString(36).slice(2)}.json`);
+    writeFileSync(path, JSON.stringify(manifest));
+    try {
+      return { ok: true, output: execFileSync(process.execPath, [validator, path], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) };
+    } catch (error) {
+      return { ok: false, output: String(error.stderr) };
+    }
+  };
+
+  before(() => { root = mkdtempSync(join(tmpdir(), 'public-api-validator-')); });
+  after(() => rmSync(root, { recursive: true, force: true }));
+
+  it('accepts a well-formed lookup and counts it', () => {
+    const result = run(manifestWith(field({ lookup: { selector: 'paymentMethod', type: 'payment-method', context: { IsSOTrx: 'Y' } } })));
+    assert.equal(result.ok, true, result.output);
+    assert.match(result.output, /1 lookups/);
+  });
+
+  it('rejects a lookup without selector, with a bad type, a bad context or no reference', () => {
+    const cases = [
+      [field({ lookup: { type: 'payment-method', context: {} } }), /selector is missing/],
+      [field({ lookup: { selector: 'paymentMethod', type: 'PaymentMethod', context: {} } }), /type must be kebab-case/],
+      [field({ lookup: { selector: 'paymentMethod', type: 'payment-method', context: { IsSOTrx: 1 } } }), /context must be an object of string values/],
+      [field({ reference: null, lookup: { selector: 'paymentMethod', type: 'payment-method', context: {} } }), /needs a reference field/],
+      [field({ lookup: true }), /lookup must be an object/],
+    ];
+    for (const [value, message] of cases) {
+      const result = run(manifestWith(value));
+      assert.equal(result.ok, false);
+      assert.match(result.output, message);
+    }
+  });
+
+  it('rejects a lookup whose context uses q, limit or offset', () => {
+    for (const name of ['q', 'limit', 'offset']) {
+      const result = run(manifestWith(field({ lookup: { selector: 'paymentMethod', type: 'payment-method', context: { [name]: '1' } } })));
+      assert.equal(result.ok, false, name);
+      assert.match(result.output, new RegExp(`context cannot use reserved parameter "${name}"`));
+    }
+  });
+
+  it('rejects a lookup on a child resource', () => {
+    const result = run(manifestWith(field({ lookup: { selector: 'paymentMethod', type: 'payment-method', context: {} } }), { resource: 'sales-order', foreignKey: 'x', pathSegment: 'lines' }));
+    assert.equal(result.ok, false);
+    assert.match(result.output, /not supported on a child resource/);
   });
 });

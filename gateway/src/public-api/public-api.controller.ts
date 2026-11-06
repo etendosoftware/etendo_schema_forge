@@ -43,7 +43,7 @@ import {
   missingFieldsException,
   type JsonApiError,
 } from './json-api-http.ts';
-import { neoListParams, pagination, parseListQuery, type ListQuery } from './json-api-query.ts';
+import { neoListParams, neoLookupParams, pagination, parseListQuery, parseLookupQuery, type ListQuery } from './json-api-query.ts';
 import { mapAttributes, mapRelationships, resolveResourceObject } from './json-api-request.ts';
 
 /** A public action declared in the manifest's `processes`. */
@@ -103,6 +103,14 @@ export function versionFromIfMatch(ifMatch: string | undefined): string {
   return version;
 }
 
+/** A lookup declared on a manifest field: the NEO selector, the JSON:API type of its values, the fixed context. */
+type PublicApiLookup = { selector: string; type: string; context?: Record<string, string> };
+
+/** A lookup that is not declared: 404 without calling Etendo. */
+function unknownLookup(entityName: string, field: string): NotFoundException {
+  return new NotFoundException({ statusCode: 404, error: 'Not Found', code: 'unknown_lookup', message: `Unknown lookup ${field} for ${entityName}` });
+}
+
 /** A validated list query plus the root-relative path its pagination links are built on. */
 type ListRequest = { query: ListQuery; basePath: string };
 
@@ -137,6 +145,61 @@ export class PublicApiController {
     this.assertTopLevel(entityName);
     this.assertOperation(entityName, 'GET');
     return this.forward(entityName, req, 'GET', undefined, undefined, undefined, undefined, this.listRequest(entityName, `/api/v1/${entityName}`, query));
+  }
+
+  /**
+   * Lists the valid values of a reference field declared as a lookup in the manifest
+   * (`fields.<field>.lookup`), through the NEO selector the application uses. Top-level
+   * resources only. Declared BEFORE listChild: Nest matches routes in declaration order and
+   * `:parentName/:parentId/:childName` would otherwise capture `{resource}/lookups/{field}`.
+   */
+  @Get(':entityName/lookups/:field')
+  async lookup(
+    @Param('entityName') entityName: string,
+    @Param('field') field: string,
+    @Req() req: PublicApiKeyRequest,
+    @Query() query: Record<string, unknown> = {},
+  ) {
+    this.assertTopLevel(entityName);
+    const entity = this.entityOrThrow(entityName);
+    const published = Object.hasOwn(entity.fields, field)
+      ? (entity.fields[field] as PublicApiField & { lookup?: PublicApiLookup })
+      : undefined;
+    const lookup = published?.lookup;
+    if (!lookup?.selector || !lookup.type) throw unknownLookup(entityName, field);
+    const parsed = parseLookupQuery(query);
+    const params = neoLookupParams(parsed, lookup.context ?? {});
+    const url = `${this.neoBaseUrl}/sws/neo/${entity.specName}/${entity.entityName ?? entityName}/selectors/${encodeURIComponent(lookup.selector)}?${params.join('&')}`;
+    let response: Response;
+    try {
+      response = await this.fetchImpl(url, { method: 'GET', headers: { Authorization: `Bearer ${req.neoJwt}` } });
+    } catch {
+      throw badGateway('Etendo did not answer the lookup request. Retry later.');
+    }
+    if (!response.ok) {
+      if (response.status === 401) req.evictNeoJwt?.();
+      // The manifest declares a lookup Etendo does not know: a configuration drift, not the caller's fault.
+      if (response.status === 404) throw badGateway('Etendo does not serve this lookup.');
+      throw upstreamException(response.status, await response.json().catch(() => null));
+    }
+    const answer = (await response.json().catch(() => null)) as { items?: unknown; totalCount?: unknown } | null;
+    if (!Array.isArray(answer?.items)) throw badGateway('Etendo answered the lookup without items.');
+    const items = (answer.items as Array<Record<string, unknown> | null>)
+      .filter((item): item is Record<string, unknown> => item !== null && typeof item === 'object' && item.id !== undefined && item.id !== null)
+      .slice(0, parsed.pageSize);
+    const reported = answer.totalCount;
+    // A totalCount below what this page already shows (or not a count) cannot be trusted: omit meta.page.total and links.last rather than publish a wrong one.
+    const total = typeof reported === 'number' && Number.isSafeInteger(reported) && reported >= (items.length ? parsed.startRow + items.length : 0)
+      ? reported
+      : undefined;
+    return {
+      data: items.map((item) => ({
+        type: lookup.type,
+        id: String(item.id),
+        attributes: { label: typeof item.label === 'string' ? item.label : null },
+      })),
+      ...pagination(`/api/v1/${entityName}/lookups/${encodeURIComponent(field)}`, parsed, items.length, total),
+    };
   }
 
   @Get(':parentName/:parentId/:childName')

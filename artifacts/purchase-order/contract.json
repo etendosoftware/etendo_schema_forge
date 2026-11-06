@@ -1,8 +1,8 @@
 {
-  "version": "0.56.0",
+  "version": "0.57.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-11-05T13:33:52.314Z",
-  "checksum": "417ce8d06cfbcc06",
+  "updatedAt": "2026-11-06T12:57:33.390Z",
+  "checksum": "eb35510769613dc4",
   "frontendContract": {
     "window": {
       "id": "181",
@@ -338,6 +338,13 @@
               "cascadeParams": [
                 "IsSOTrx"
               ]
+            },
+            "publicApi": {
+              "lookup": {
+                "context": {
+                  "IsSOTrx": "N"
+                }
+              }
             },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",

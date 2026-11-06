@@ -451,7 +451,8 @@
           "reference": "PaymentMethod",
           "inputMode": "selector",
           "section": "principal",
-          "displayLogic": "record.vendor"
+          "displayLogic": "record.vendor",
+          "publicApi": { "exposed": true, "lookup": { "context": { "FIN_ISRECEIPT": "N" } } }
         },
         "pOPaymentTerms": {
           "visibility": "editable",
@@ -498,7 +499,8 @@
           "reference": "PaymentMethod",
           "inputMode": "selector",
           "section": "principal",
-          "displayLogic": "record.customer"
+          "displayLogic": "record.customer",
+          "publicApi": { "exposed": true, "lookup": { "context": { "FIN_ISRECEIPT": "Y" } } }
         },
         "paymentTerms": {
           "visibility": "editable",
