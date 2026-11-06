@@ -121,16 +121,30 @@ describe('AccountSelect', () => {
     expect(await screen.findByTestId('acct-select-popup-empty')).toHaveTextContent('noResults');
   });
 
-  it('an optional field can be cleared (onChange(null)); a required one cannot', () => {
+  // ETP-5791 — the × sits inside the field's border: trigger and clear are sibling buttons of the
+  // one bordered wrapper (no nested <button>), so clicking × clears without opening the popup.
+  it('an optional field with a value is cleared by an × inside the field, without opening the popup', () => {
     const onChange = vi.fn();
-    const { unmount } = render(
-      <AccountSelect value="acc-572" options={OPTIONS} onChange={onChange} data-testid="acct-select" />,
-    );
-    fireEvent.click(screen.getByTestId('field-acct-select-clear'));
-    expect(onChange).toHaveBeenCalledWith(null);
-    unmount();
+    render(<AccountSelect value="acc-572" options={OPTIONS} onChange={onChange} data-testid="acct-select" />);
+    const trigger = screen.getByTestId('field-acct-select');
+    const clear = screen.getByTestId('field-acct-select-clear');
 
-    render(<AccountSelect value="acc-572" required options={OPTIONS} data-testid="acct-select" />);
+    expect(clear.parentElement).toBe(trigger.parentElement);
+    expect(clear.parentElement.className).toMatch(/\bborder\b/);
+    expect(trigger.className).not.toMatch(/\bborder\b/);
+    expect(trigger).not.toContainElement(clear);
+
+    fireEvent.click(clear);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith(null);
+    expect(screen.queryByTestId('acct-select-popup')).toBeNull();
+  });
+
+  it.each([
+    ['required', { value: 'acc-572', required: true }],
+    ['empty', { value: null }],
+  ])('offers no × when the field is %s', (_label, props) => {
+    render(<AccountSelect options={OPTIONS} data-testid="acct-select" {...props} />);
     expect(screen.queryByTestId('field-acct-select-clear')).toBeNull();
   });
 

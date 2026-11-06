@@ -2720,6 +2720,14 @@
       "label": "Mostrar columna",
       "description": "Columna que se va a mostrar"
     },
+    "EM_Etgo_Iscustomer": {
+      "label": "Cliente",
+      "description": "Los contactos nuevos de esta categoría son clientes."
+    },
+    "EM_Etgo_Isvendor": {
+      "label": "Proveedor/Acreedor",
+      "description": "Los contactos nuevos de esta categoría son proveedores o acreedores."
+    },
     "V_Liability_Acct": {
       "label": "Pasivo del proveedor",
       "description": "Número de cuenta del Libro Mayor utilizado para anotar las transacciones con este tercero."
@@ -16620,6 +16628,18 @@
     }
   },
   "genericLabels": {
+    "bpCategoryContactType": "Tipo de contacto",
+    "bpCategoryContactTypeHint": "(Lo heredan solo los contactos nuevos)",
+    "bpCategoryVendorLiability": "Pasivo del proveedor/acreedor",
+    "bpCategoryVendorPrepayment": "Pagos por adelantado del proveedor/acreedor",
+    "bpCategoryNoTypeAccounts": "Seleccioná Cliente o Proveedor/Acreedor para configurar sus cuentas contables.",
+    "bpCategoryAccountingSetupTitle": "Configuración contable",
+    "bpCategoryAccountsSaveFirst": "Guardá la categoría para configurar sus cuentas contables.",
+    "bpCategoryNoAccountingRow": "Esta categoría no tiene configuración contable.",
+    "bpCategoryAccountsLoadError": "No se pudieron cargar las cuentas contables de la categoría. Volvé a intentarlo.",
+    "bpCategorySavedWithContacts": "Categoría guardada. Tiene contactos asociados: los cambios no los modifican y solo se aplicarán a los contactos nuevos.",
+    "bpCategoryDefaultAssignment": "Asignación predeterminada",
+    "bpCategoryAllContacts": "Todos los contactos",
     "invoiceInboxDropTitle": "Arrastrá tus facturas acá o",
     "invoiceInboxDropSelect": "seleccionalas",
     "invoiceInboxDropHint": "PDF, JPG o PNG · hasta 20 archivos por carga",
@@ -19926,6 +19946,13 @@
     "onboardingPhonePrefixPlaceholder": "Prefijo",
     "onboardingPhonePlaceholder": "Número de teléfono",
     "onboardingPhoneInvalid": "Ingresá un número de teléfono válido.",
+    "onboardingBusinessSectorLabel": "Sector de actividad",
+    "onboardingBusinessSectorPlaceholder": "Elegí tu sector",
+    "onboardingBusinessSectorIndustry": "Industria",
+    "onboardingBusinessSectorDistribution": "Distribución y logística",
+    "onboardingBusinessSectorServices": "Servicios",
+    "onboardingBusinessSectorStartups": "Startups y tecnología",
+    "onboardingBusinessSectorOther": "Otro",
     "onboardingCountrySpain": "España",
     "onboardingBusinessTypeLabel": "Tipo de negocio",
     "onboardingBusinessTypeCompany": "Empresa",
@@ -19939,15 +19966,10 @@
     "onboardingFiscalIdPlaceholder": "12345678Z",
     "onboardingAddressLabel": "Dirección",
     "onboardingAddressPlaceholder": "Av. Corrientes 1234",
-    "onboardingSectorLabel": "Sector",
     "onboardingSampleDataLabel": "Incluir datos de prueba para explorar el sistema",
     "onboardingSampleDataHelp": "Vamos a cargar contactos, productos, pedidos, facturas y remitos ficticios para que pruebes la aplicación con datos. No lo marques si vas a usar este entorno de forma real.",
     "onboardingPreparingSampleDataDescription": "Cargando datos de prueba...",
     "onboardingSampleDataWarning": "Tu entorno está listo, pero no pudimos cargar los datos de prueba. Podés empezar con tus propios datos.",
-    "onboardingSectorTechnology": "Tecnología",
-    "onboardingSectorServices": "Servicios",
-    "onboardingSectorCommerce": "Comercio",
-    "onboardingSectorManufacturing": "Industria",
     "onboardingStarting": "Empezando...",
     "onboardingStartAction": "Empezar",
     "onboardingSuccessTitle": "Tu cuenta ya está en marcha",

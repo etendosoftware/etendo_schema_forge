@@ -1130,9 +1130,11 @@
           "BpCategoryAccountingPanel",
           "BpCategoryTable",
           "ContactTypeField",
+          "ContactTypeQuickFilter",
+          "DefaultAssignmentField",
           "windows/custom/business-partner-category"
         ],
-        "$symbolsComment": "Frontend toggle points that never name the key: the registry.js line that loads the window wrapper (windows/custom/business-partner-category), the decisions.json/generated references to BpCategoryTable and ContactTypeField, and the contactVendorCreditor locale key. contactCategoryTypeEnabled is the descriptor's toggle point; useContactCreateTypeGate the create popups' one. FLAG_CONTACT_CATEGORY_TYPE is the backend constant in GoFeatureFlags (framework)."
+        "$symbolsComment": "Frontend toggle points that never name the key: the registry.js line that loads the window wrapper (windows/custom/business-partner-category), the decisions.json/generated reference to BpCategoryTable (whose ToolbarQuickFilter static is ContactTypeQuickFilter), the DefaultAssignmentField / ContactTypeField renderers the wrapper swaps in, and the contactVendorCreditor locale key. contactCategoryTypeEnabled is the descriptor's toggle point; useContactCreateTypeGate the create popups' one. FLAG_CONTACT_CATEGORY_TYPE is the backend constant in GoFeatureFlags (framework)."
       },
       "paths": {
         "frontend": [
@@ -1152,7 +1154,7 @@
           "src/com/etendoerp/go/schemaforge/handlers/ContactTypeTelemetry.java"
         ]
       },
-      "$pathsComment": "Owned code only. Shared toggle points (removal cost): ContactsBusinessPartnerForm.jsx (category sync), BillingPreferencesForm.jsx (label), contactsImportDescriptor.js (both import variants side by side), useCreateContactModal.jsx and copilot/ocr/CreateContactModalAdapter.jsx (owned by lookup-create-contact; they call useContactCreateTypeGate), lookupCreateTargets.js (createOmitUntouched), registry.js (window wrapper), both decisions.json files (ContactTypeField, BpCategoryTable, hiddenWhenFlag on customer/vendor) and the locales. Generic capabilities added by ETP-5791 are NOT owned and stay when the flag goes: importFlagGates.js (hiddenWhenFlag), useFeatureFlags/readFeatureFlag (lib/flags, framework), RecordCreateModal validateBeforeCreate/omitUntouched, EntityForm customRenderer ownsLabel/onFieldChange/onCommit, gateDetailTab CustomLines gating, SectionShell/useAccountSelectorPages, backendErrors mappings. Backend: BusinessPartnerHandler.java is a touch point (shared handler that calls ContactTypeRules); GoFeatureFlags.java is framework.",
+      "$pathsComment": "Owned code only. Shared toggle points (removal cost): ContactsBusinessPartnerForm.jsx (category sync), BillingPreferencesForm.jsx (label), contactsImportDescriptor.js (both import variants side by side), useCreateContactModal.jsx and copilot/ocr/CreateContactModalAdapter.jsx (owned by lookup-create-contact; they call useContactCreateTypeGate), lookupCreateTargets.js (createOmitUntouched), registry.js (window wrapper), both decisions.json files (BpCategoryTable, hiddenWhenFlag on customer/vendor) and the locales. Generic capabilities added by ETP-5791 are NOT owned and stay when the flag goes: importFlagGates.js (hiddenWhenFlag), useFeatureFlags/readFeatureFlag (lib/flags, framework), RecordCreateModal validateBeforeCreate/omitUntouched, EntityForm customRenderer ownsLabel/onFieldChange/onCommit, gateDetailTab CustomLines gating, the CustomLines `tabIcon` static (resolveTabIcon icon argument), SectionShell/useAccountSelectorPages, backendErrors mappings. Backend: BusinessPartnerHandler.java is a touch point (shared handler that calls ContactTypeRules); GoFeatureFlags.java is framework.",
       "testSpecs": {
         "unit": [
           {
@@ -1166,6 +1168,14 @@
           {
             "root": "frontend",
             "path": "tools/app-shell/src/windows/custom/business-partner-category/__tests__/useAssociatedContactsNotice.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/business-partner-category/__tests__/ContactTypeQuickFilter.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/business-partner-category/__tests__/DefaultAssignmentField.vitest.jsx"
           },
           {
             "root": "frontend",
@@ -1188,12 +1198,12 @@
           {
             "root": "frontend",
             "path": "tools/app-shell/src/windows/custom/business-partner-category/__tests__/index.vitest.jsx",
-            "note": "Window wrapper: flag OFF excludes etgoIscustomer (and its gate) and keeps the generated Accounting table; ON passes CustomLines={BpCategoryAccountingPanel} with DetailTable={null}."
+            "note": "Window wrapper: flag OFF excludes etgoIscustomer (and its gate), keeps the generated fields, Accounting table and list. ON passes CustomLines={BpCategoryAccountingPanel} with DetailTable={null}, excludes etgoIscustomer only with the accounting capability (without it the header keeps ContactTypeField), reorders the header (default before description, DefaultAssignmentField), hosts the saved-with-contacts notice on the principal form only, and turns the quick-filter value into the list baseFilter."
           },
           {
             "root": "frontend",
             "path": "tools/app-shell/src/windows/custom/business-partner-category/__tests__/BpCategoryTable.vitest.jsx",
-            "note": "List columns per flag state (OFF: searchKey, name; ON: name, etgoIscustomer, etgoIsvendor, default)."
+            "note": "List columns per flag state (OFF: the generated table, searchKey, name; ON: the wrapper own DataTable columns name, etgoIscustomer, etgoIsvendor, default, each on its AD column, searchKey declared but hidden)."
           },
           {
             "root": "frontend",
@@ -2012,6 +2022,84 @@
           ]
         }
       ]
+    },
+    {
+      "id": "dynamic-reports",
+      "description": "Interactive accounting reports (Profit & Loss first; Balance Sheet and Trial Balance join when their stories land): the report applies each filter change on its own, folds and expands the account tree, compares periods with variation columns, splits an account by organization / contact / product and drills down to the ledger, the entry and the document in a side panel. Data comes from POST /api/reports/:id/query, which runs the report contract's SQL and checks the role's organization access on its own. Visual gating only: off, ReportViewerPage renders today's viewer unchanged; the /query route and the /render org check are not gated by this flag.",
+      "owner": "Gremiger",
+      "jira": "ETP-6080",
+      "created": "2026-11-03",
+      "flag": {
+        "key": "dynamic-reports",
+        "defaultValue": false,
+        "ttl": "2027-03-31",
+        "ttlNote": "PLACEHOLDER: end of Q1 2027, after Balance Sheet (ETP-6079) and Trial Balance migrate to the dynamic view; the owner sets the real date when rollout starts.",
+        "symbols": [
+          "dynamic-reports",
+          "DYNAMIC_REPORTS",
+          "reports/dynamic",
+          "DynamicReportView",
+          "useReportQuery",
+          "DYNAMIC_REPORT_IDS",
+          "opensDynamicView",
+          "pickedReportId",
+          "reportSessionId",
+          "REPORT_DRILLDOWN"
+        ]
+      },
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/components/reports/dynamic/"
+        ],
+        "backend": []
+      },
+      "$pathsComment": "Owned code only: the dynamic view and its query hook. ReportViewerPage.jsx (the one switch, plus the PopupMultiSelector and buildReportFilename exports the view reuses), flag-keys.js, the observability event catalog and the locale files are shared toggle points. The /query route (core report-query.js, dev engine report-api.js), the contract changes and the export templates serve every caller and are not gated.",
+      "deferredItems": [
+        {
+          "id": "view-imports-from-report-page",
+          "kind": "cosmetic",
+          "note": "DynamicReportPanel and DynamicReportView import PopupMultiSelector and buildReportFilename from ReportViewerPage.jsx: a circular import (the page lazy-loads the view, the view imports the page), and a page file that exports non-components loses Vite fast refresh. Works at runtime because the page module is already loaded when the lazy chunk runs. And therefore: retiring the flag by deletion would leave those two exports behind for nothing, and shipping it would keep a view that depends on the old viewer's file. Fix: move both to components/reports/ and import them from there in both viewers. Deferred by the user in the F6–F12 self-review (2026-11-03): keep ETP-6080 focused.",
+          "refs": [
+            "tools/app-shell/src/pages/ReportViewerPage.jsx — export function PopupMultiSelector, export function buildReportFilename",
+            "tools/app-shell/src/components/reports/dynamic/DynamicReportPanel.jsx — import from '@/pages/ReportViewerPage.jsx'"
+          ]
+        }
+      ],
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/pages/__tests__/ReportViewerPage.dynamicSwitch.vitest.jsx",
+            "note": "The flag switch: on opens the dynamic view for a listed report only; off keeps the old viewer."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/reports/dynamic/__tests__/useReportQuery.vitest.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/reports/dynamic/__tests__/DynamicReportView.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/reports/dynamic/__tests__/dynamicDates.vitest.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/reports/dynamic/__tests__/reportTree.vitest.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/reports/dynamic/__tests__/drillDown.vitest.js"
+          }
+        ],
+        "e2e": [
+          {
+            "root": "frontend",
+            "path": "e2e/tests/flows/accounting/dynamic-profit-loss.mocked.spec.js"
+          }
+        ]
+      }
     },
     {
       "id": "bank-bounce-suggestions",

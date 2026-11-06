@@ -364,7 +364,7 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 - `bottomSection`: `payment-in` (`PaymentBottomPanel`), `sales-invoice` (`InvoiceBottomPanel`)
 - `sidePanel`: `payment-in` (`PaymentActivityPanel`)
 - `newRecordComponent`: `payment-in` (`NewPaymentModal`), `chart-of-accounts` (`NewSubAccountCreateModal`, ETP-5593 — reads the tree's selected row from `chartOfAccountsTreeStore.js`, see `docs/generated-custom-windows/chart-of-accounts.md`)
-- `headerTable`: `sales-invoice` (`InvoiceHeaderTable`), `user` (`UserHeaderTable`, ETP-4906 — swaps in a role-chips cell + toolbar role filter, see `docs/generated-custom-windows/user.md`); `chart-of-accounts` (`AccountTreeView`, a self-fetching tree whose controls are its `ToolbarQuickFilter` static slot, ETP-5593, see `docs/generated-custom-windows/chart-of-accounts.md`); `business-partner-category` (`BpCategoryTable`, ETP-5791 — wraps the generated table and hides columns by the `contact-category-type` flag through `hiddenColumns`, see `docs/generated-custom-windows/business-partner-category.md`)
+- `headerTable`: `sales-invoice` (`InvoiceHeaderTable`), `user` (`UserHeaderTable`, ETP-4906 — swaps in a role-chips cell + toolbar role filter, see `docs/generated-custom-windows/user.md`); `chart-of-accounts` (`AccountTreeView`, a self-fetching tree whose controls are its `ToolbarQuickFilter` static slot, ETP-5593, see `docs/generated-custom-windows/chart-of-accounts.md`); `business-partner-category` (`BpCategoryTable`, ETP-5791 — flag `contact-category-type` off: wraps the generated table and hides the flag-only columns through `hiddenColumns`; on: declares its own columns (fixed widths, one `grow` column) and a contact-type `ToolbarQuickFilter` whose value the window wrapper passes to ListView as `baseFilter`, see `docs/generated-custom-windows/business-partner-category.md`)
 
 **`subHeader` is the slot for a page-wide notice** (ETP-5245). Use it when the message belongs to the whole record rather than to one field: a blocking warning, a state explanation, a "this record is locked because…" strip. The generator emits it as `DetailView`'s `headerContent` prop, so it renders above the form, above the primary-tab content, and at full content width — the same place the built-in credit-limit / BP-on-hold banner (`BlockingBpBanner.jsx`) occupies. The component receives only `data` (the current record), so any other state it needs must be derived from the record or fetched by the component itself. Return `null` to render nothing — the slot has no visibility gate of its own. Pair it with the shared `InfoBanner` primitive (`@/components/InfoBanner`) rather than a bespoke box, and pick the tone deliberately: `info` (blue) for a notice, `warning` (amber) when the condition also blocks an action, `danger` for an error. If the notice must also **prevent saving**, keep the banner and the save gate reading one shared predicate (product puts it in `lib/productCostRequirement.js`, consumed by both `ProductCostBanner.jsx` and `useEntity.js`) so the two can never disagree.
 
@@ -3579,6 +3579,14 @@ with a tab of that key gets the same icon. Current entries include `custom:attac
 `custom:pricing`, `products`, and the business-partner tabs `contact`, `bankAccount`, `locationAddress`,
 `customerAccounting`, `vendorAccounting`. The map lives outside `DetailView.jsx` because that file is
 under the no-growth guardrail (`.claude/hooks/check-detailview-growth.mjs`).
+
+**Per-window icon for the `CustomLines` tab — `tabIcon` static (ETP-5791).** The tab a
+`CustomLines` component replaces has the key `customLines` in EVERY window, so a `TAB_ICONS` entry
+would change all of them. Instead the component may declare its own icon:
+`MyLinesPanel.tabIcon = Calculator` (any icon component). `buildInitialTabs` copies it onto the tab
+object (`tab.icon`) and `resolveTabIcon(tabKey, icon)` prefers it over the key lookup, in the tab
+button, the width probe and the "More" menu. Without the static the tab resolves exactly as before.
+Reference: `business-partner-category`'s `BpCategoryAccountingPanel` (calculator icon).
 
 ---
 
