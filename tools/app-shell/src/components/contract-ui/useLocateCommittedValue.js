@@ -128,20 +128,19 @@ export function useLocateCommittedValue({
     const panel = dropdownRef.current;
     const el = panel?.querySelector(`[data-option-index="${selectedIndex}"]`);
     if (!el) return;
-    if (centerOptionInPanel(panel, el) || !hasMore) {
-      centeredRef.current = true;
-      setReleased(true);
-    } else if (paged && canFetch && loading) {
+    if (!centerOptionInPanel(panel, el) && hasMore && paged && canFetch) {
       // A page is in flight: stay held; `settledFetches` re-runs this once it has landed.
-    } else if (paged && canFetch && !stalled() && loadedRows < maxRows) {
-      // Among the last loaded rows: it can only be centred once more rows exist below it. The value
-      // is already found, so one page of the picker's own size is enough, not the rest of the walk.
-      requestNextPage(pageSize);
-    } else {
-      // Page cap reached or the list stopped growing: keep it where it is, never hold forever.
-      centeredRef.current = true;
-      setReleased(true);
+      if (loading) return;
+      if (!stalled() && loadedRows < maxRows) {
+        // Among the last loaded rows: it can only be centred once more rows exist below it. The value
+        // is already found, so one page of the picker's own size is enough, not the rest of the walk.
+        requestNextPage(pageSize);
+        return;
+      }
     }
+    // Centred, nothing more to load, page cap reached or the list stopped growing: never hold forever.
+    centeredRef.current = true;
+    setReleased(true);
   }, [open, selectedIndex, centreBlocked, layoutKey, renderedCount, hasMore, loading, settledFetches, loadedRows, paged, canFetch, rows, pageSize, maxRows, walkLimit, fetchPage, offsetRef, dropdownRef, interactedRef]);
 
   return { locating };

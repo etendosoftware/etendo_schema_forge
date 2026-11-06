@@ -9,7 +9,7 @@ import {
   resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor, hasCommittedValue, pinSearchTerms, firstPageLimit,
 } from './selectorSelection.js';
 import { useLocateCommittedValue } from './useLocateCommittedValue.js';
-import { LocatingNotice } from './LocatingNotice.jsx';
+import { LocatingNotice, locatingOverflowClass } from './LocatingNotice.jsx';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
 import { createQueryKey, useOptionalDataCache } from '@etendosoftware/app-shell-core/data';
 import { needsSelectorRevalidation } from '@/lib/selectorRevalidation.js';
@@ -1296,7 +1296,7 @@ export function CreatableSearchSelect({
           id={`options-${field.key}`}
           role="listbox"
           data-testid={`options-${field.key}`}
-          className={`bg-card border rounded-md shadow-lg ${locating ? 'overflow-hidden' : 'overflow-auto'}`}
+          className={`bg-card border rounded-md shadow-lg ${locatingOverflowClass(locating)}`}
           style={dropdownStyle}
           data-open-up={openUp ? 'true' : 'false'}
           // Radix Dialog (react-remove-scroll) locks body scroll while open by attaching a

@@ -9,7 +9,7 @@ import {
   resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor, pinSearchTerms, firstPageLimit,
 } from './selectorSelection.js';
 import { useLocateCommittedValue } from './useLocateCommittedValue.js';
-import { LocatingNotice } from './LocatingNotice.jsx';
+import { LocatingNotice, locatingOverflowClass, locatingRowsClass } from './LocatingNotice.jsx';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 // Page size for the server-side search's paginated fetches (initial load, search, and
@@ -699,7 +699,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           id={`inline-options-${field.key}`}
           role="listbox"
           data-testid={`inline-add-options-${field.key}`}
-          className={`bg-card border rounded-md shadow-lg ${locating ? 'overflow-hidden' : 'overflow-auto'}`}
+          className={`bg-card border rounded-md shadow-lg ${locatingOverflowClass(locating)}`}
           style={dropdownStyle}
           data-open-up={openUp ? 'true' : 'false'}
           data-inline-add-portal="true"
@@ -761,7 +761,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
                 ))}
               </div>
             )}
-            <div className={locating ? 'invisible' : undefined}>
+            <div className={locatingRowsClass(locating)}>
             {filtered.map((opt, index) => {
               // ETP-5846 — TWO INDEPENDENT per-row states, deliberately never derived from one
               // another:

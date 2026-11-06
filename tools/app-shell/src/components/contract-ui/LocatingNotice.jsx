@@ -14,4 +14,14 @@ export function LocatingNotice({ "data-testid": testId }) {
   );
 }
 
+/** Scroll class of a picker's listbox: locked while the list is held, so hidden rows cannot scroll. */
+export function locatingOverflowClass(locating) {
+  return locating ? 'overflow-hidden' : 'overflow-auto';
+}
+
+/** Class of the rows of a held list: laid out (so the value can be centred) but not painted. */
+export function locatingRowsClass(locating) {
+  return locating ? 'invisible' : undefined;
+}
+
 export default LocatingNotice;
