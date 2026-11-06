@@ -32,17 +32,21 @@ export const OrderImportLoadError = ImportLoadError;
  * ETP-5828 (speed): the server path also LISTS through the invoice's actions — `availableOrders`
  * for the orders and one `availableOrderLines` per order for the lines, price and pending — instead
  * of the company-wide order list and two requests per order, and neither read re-reads the invoice.
- * ETP-6099: BOTH directions list that way now; `importVia` only decides how the selection is
- * imported. The `availableOrderLines` row carries every field `buildOrderInvoiceLineBody` reads
- * (listPrice, grossUnitPrice, tax, description, …), so the client import needs no order-lines GET.
+ * ETP-6099: BOTH directions list that way now (purchases with `pendingBasis: 'classic'`, so their
+ * pending rule is unchanged); `importVia` only decides how the selection is imported. The
+ * `availableOrderLines` row carries every field `buildOrderInvoiceLineBody` reads (listPrice,
+ * grossUnitPrice, tax, description, …), so the client import needs no order-lines GET.
  */
 
 /**
  * Per-direction configuration: the specs it reads, the i18n keys it shows, and HOW it imports.
  *
- * Both directions LIST through the invoice's `availableOrders` / `availableOrderLines` actions
- * (pending = ordered − invoiced − what draft invoices hold, ETP-6099 for purchases). `importVia`
- * is the one switch of the IMPORT (the popup looks the same either way):
+ * Both directions LIST through the invoice's `availableOrders` / `availableOrderLines` actions.
+ * `pendingBasis` picks the pending rule the actions apply: absent (sales) = ordered − invoiced −
+ * what draft invoices hold; `'classic'` (purchases, ETP-6099 product decision) = the rule the
+ * purchase popup had before it listed through the actions, ordered − invoiced with no draft
+ * deduction — so purchases list exactly as before. `importVia` is the one switch of the IMPORT
+ * (the popup looks the same either way):
  *  - `'server'`: ONE `importOrderLines` call that also carries the global discount (see the
  *    header comment);
  *  - `'client'`: one `POST {invoiceSpec}/lines` per selected line built by
@@ -64,6 +68,7 @@ export const INVOICE_ORDER_IMPORT = Object.freeze({
   }),
   purchase: Object.freeze({
     importVia: 'client',
+    pendingBasis: 'classic',
     invoiceSpec: 'purchase-invoice',
     orderSpec: 'purchase-order',
     titleKey: 'importFromPurchaseOrder',
@@ -82,6 +87,9 @@ export function invoiceOrderImportConfig(direction) {
 }
 
 const rowsOf = async (res) => (await res.json())?.response?.data || [];
+
+/** The read-action params the direction's pending rule adds (none on sales: its bodies stay as they were). */
+const pendingBasisParams = (config) => (config.pendingBasis ? { pendingBasis: config.pendingBasis } : {});
 
 // ETP-6099: the one creation-date sort lives in the shared client; re-exported under the same
 // name for this module's importers (the source-invoice popups and their tests).
@@ -102,16 +110,20 @@ export async function fetchOrderDocuments({ apiFetch, config, base, bpId, invoic
   const [rows, invLinesRes, headerRes] = await Promise.all([
     // ETP-5828 — lists through the invoice's own `availableOrders` (the partner's completed orders
     // in the invoice's currency with something pending, drafts counted); ETP-6099: purchases too,
-    // instead of the company-wide order list filtered here. `listAll` reads every page (follows
+    // instead of the company-wide order list filtered here, with `pendingBasis: 'classic'` (no
+    // draft deduction, the rule their popup had). `listAll` reads every page (follows
     // nextOffset while hasMore) and rejects with OrderImportLoadError on a refusal.
-    // `includeCovered` also brings the orders whose pending is entirely held by draft invoices,
-    // at pendingLines 0, for the popup to hide (`isOrderCovered`) without reading their lines.
+    // `includeCovered` also brings the orders with nothing left (on sales, also those entirely held
+    // by draft invoices), at pendingLines 0, for the popup to hide (`isOrderCovered`) without
+    // reading their lines.
     // Purchases also ask `detail` for the row's `creationDate`: their popup listed newest CREATED
     // first, the action answers newest by order date (sales already answers by creation date and
     // keeps its request as it was).
     listAll({
       apiFetch, base, spec: config.invoiceSpec, targetId: invoiceId, action: 'availableOrders',
-      params: { includeCovered: true, ...(config.importVia === 'client' ? { detail: true } : {}) },
+      params: {
+        includeCovered: true, ...(config.importVia === 'client' ? { detail: true } : {}), ...pendingBasisParams(config),
+      },
     }).then(newestCreatedFirst),
     apiFetch(`${base}/${config.invoiceSpec}/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`),
     apiFetch(`${base}/${config.invoiceSpec}/header/${invoiceId}`),
@@ -205,8 +217,9 @@ async function listedOrders({ apiFetch, config, base, bpId, invoiceCurrency, row
 
 /**
  * The order's lines, each capped at what the import still accepts. ETP-5828 — ONE
- * `availableOrderLines` call per order brings every line the popup shows with its pending (drafts
- * counted, this invoice included), price and product, the lines with nothing left included at 0
+ * `availableOrderLines` call per order brings every line the popup shows with its pending (sales:
+ * drafts counted, this invoice included; purchases: `pendingBasis: 'classic'`, ordered − invoiced),
+ * price and product, the lines with nothing left included at 0
  * (`includeCovered`) so the popup still greys them out. It replaced the order lines GET + pending
  * POST pair (ETP-6099: on purchases too, which read the order lines GET and took ordered −
  * invoiced). Lines in `lineNo` order, as the GET listed.
@@ -219,7 +232,10 @@ export async function fetchOrderLines({ apiFetch, config, base, docId, sharedCon
     // `detail` adds the order-line columns the CLIENT import builds its line body from (listPrice,
     // grossUnitPrice, tax, description, …); the server import does not need them, so sales keeps
     // its request as it was.
-    params: { orderId: docId, includeCovered: true, ...(config.importVia === 'client' ? { detail: true } : {}) },
+    params: {
+      orderId: docId, includeCovered: true, ...(config.importVia === 'client' ? { detail: true } : {}),
+      ...pendingBasisParams(config),
+    },
   });
   return rows.map(r => orderLineRow(r, Number(r.pendingQuantity) || 0, sharedContext));
 }

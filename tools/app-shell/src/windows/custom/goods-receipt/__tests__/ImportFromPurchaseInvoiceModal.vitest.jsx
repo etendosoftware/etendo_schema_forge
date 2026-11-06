@@ -64,7 +64,7 @@ describe('ImportFromPurchaseInvoiceModal — fetchDocuments', () => {
 
     globalThis.fetch = vi.fn((url, opts) => {
       if (url === `${ACTION}/availableInvoices`) {
-        expect(JSON.parse(opts.body)).toMatchObject({ includeCovered: true });
+        expect(JSON.parse(opts.body)).toMatchObject({ includeCovered: true, pendingBasis: 'classic' });
         return Promise.resolve(jsonRes([
           { id: 'i1', documentNo: 'FC-1', date: '2026-01-10', businessPartner: 'bp-1', pendingLines: 1 }, // has unlinked line -> shown
           { id: 'i2', documentNo: 'FC-2', date: '2026-01-09', businessPartner: 'bp-1', pendingLines: 0 }, // all linked -> hidden
@@ -93,16 +93,18 @@ describe('ImportFromPurchaseInvoiceModal — fetchDocuments', () => {
 describe('ImportFromPurchaseInvoiceModal — fetchLines', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('maps the server pending (0 when already linked) and drops lines not invoiced in a positive quantity', async () => {
+  // Classic pending (product decision, the rule before ETP-6099): linked ? 0 : invoiced, no draft
+  // deduction, and no «in draft» note — the old popup always said «ya importada».
+  it('maps the server classic pending (0 when already linked) and drops lines not invoiced in a positive quantity', async () => {
     render(<ImportFromPurchaseInvoiceModal invoiceId="receipt-1" bpId="bp-1" base={base} headers={headers} />);
     const { fetchLines } = captured;
     globalThis.fetch = vi.fn((url, opts) => {
       expect(url).toBe(`${ACTION}/availableInvoiceLines`);
-      expect(JSON.parse(opts.body)).toEqual({ invoiceId: 'i1', includeCovered: true, detail: true });
+      expect(JSON.parse(opts.body)).toEqual({ pendingBasis: 'classic', invoiceId: 'i1', includeCovered: true, detail: true });
       return Promise.resolve(jsonRes([
         { id: 'l1', lineNo: 10, invoicedQuantity: 4, pendingQuantity: 4, linked: false, 'product$_identifier': 'Bolt' },
-        { id: 'l2', lineNo: 20, invoicedQuantity: 2, pendingQuantity: 0, linked: true, inDraftDocuments: [] }, // already linked -> maxQty 0
-        { id: 'l4', lineNo: 40, invoicedQuantity: 3, pendingQuantity: 0, linked: false, inDraftDocuments: ['GR-7'] }, // held by another draft
+        { id: 'l2', lineNo: 20, invoicedQuantity: 2, pendingQuantity: 0, linked: true, inDraftDocuments: ['GR-7'] }, // already linked -> maxQty 0
+        { id: 'l4', lineNo: 40, invoicedQuantity: 3, pendingQuantity: 3, linked: false, inDraftDocuments: ['GR-7'] }, // held by another draft: offered in full
         { id: 'l3', lineNo: 30, invoicedQuantity: 0, pendingQuantity: 0, linked: false }, // filtered out
       ]));
     });
@@ -115,11 +117,13 @@ describe('ImportFromPurchaseInvoiceModal — fetchLines', () => {
     expect(l1._productName).toBe('Bolt');
     expect(l1._inDraftShipments).toBeUndefined();
     const l4 = lines.find((l) => l.id === 'l4');
-    expect(l4._alreadyImported).toBe(true);
-    expect(l4._inDraftShipments).toEqual(['GR-7']); // the draft note, not «ya importada»
+    expect(l4._maxQty).toBe(3);
+    expect(l4._alreadyImported).toBe(false);
+    expect(l4._inDraftShipments).toBeUndefined();
     const l2 = lines.find((l) => l.id === 'l2');
     expect(l2._maxQty).toBe(0);
     expect(l2._alreadyImported).toBe(true);
+    expect(l2._inDraftShipments).toBeUndefined(); // «ya importada», never the draft note
   });
 
   it('returns [] when the lines request fails', async () => {

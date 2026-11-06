@@ -2,18 +2,20 @@ import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { apiFetch as moduleApiFetch } from '@/auth/api.js';
 import useImportLoadFailureToast from '@/windows/custom/shared/useImportLoadFailureToast.js';
-import { draftDocumentsOf, fetchInOutDocuments, fetchInOutLines, isCoveredDocument, pendingOf, zeroDocumentTotal } from '@/windows/custom/shared/inOutImport.js';
+import { fetchInOutDocuments, fetchInOutLines, isCoveredDocument, pendingOf, zeroDocumentTotal } from '@/windows/custom/shared/inOutImport.js';
 
 // ETP-6099 — the invoices and their lines come from the receipt's own read actions
 // (`availableInvoices` / `availableInvoiceLines`, inOutImport.js): completed invoices of the
 // vendor with a non-negative total, in the receipt's currency, newest created first, each line with
-// the server's pending, which keeps this popup's rule (product decision): 0 once the invoice line is
-// linked to a receipt line, otherwise its invoiced quantity minus what draft receipts (this one
-// included) already hold; the quantity already received is NOT deducted. The covered invoices (`pendingLines: 0`) are listed too and
-// hidden by `isDocumentCovered`. Replaced: the company-wide invoice list (500), the receipt header
+// the server's pending under `pendingBasis: 'classic'` (product decision), which keeps this popup's
+// rule from before it read the actions: 0 once the invoice line is linked to a receipt line,
+// otherwise its full invoiced quantity — draft receipts are NOT deducted, so a line another draft
+// receipt holds is offered in full, with no «in draft» note (the old popup showed none). The covered
+// invoices (`pendingLines: 0`) are listed too and hidden by `isDocumentCovered`. Replaced: the company-wide invoice list (500), the receipt header
 // and the lines of EVERY candidate invoice read at open to drop the fully linked ones.
 const ENTITY = 'goodsReceipt'; // the header entity of the action URLs
 const SPEC = 'goods-receipt';
+const CLASSIC_PENDING = Object.freeze({ pendingBasis: 'classic' }); // both reads
 
 const CURRENCY_PROBE = Object.freeze({
   sourceHeader: 'purchase-invoice/header',
@@ -22,7 +24,7 @@ const CURRENCY_PROBE = Object.freeze({
 
 const fetchDocuments = ({ base, bpId, invoiceId: receiptId }) => fetchInOutDocuments({
   apiFetch: moduleApiFetch, base, spec: SPEC, entity: ENTITY, targetId: receiptId, bpId,
-  action: 'availableInvoices', dateKey: 'invoiceDate', currencyProbe: CURRENCY_PROBE,
+  action: 'availableInvoices', dateKey: 'invoiceDate', currencyProbe: CURRENCY_PROBE, params: CLASSIC_PENDING,
 });
 
 const toInvoiceLine = (l) => {
@@ -32,8 +34,6 @@ const toInvoiceLine = (l) => {
     _productName: l['product$_identifier'] || l.id,
     _maxQty: pending,
     _alreadyImported: pending === 0,
-    // A line held by another draft receipt names it («en albarán: …») instead of «ya importada».
-    _inDraftShipments: draftDocumentsOf(l),
   };
 };
 
@@ -41,7 +41,7 @@ const toInvoiceLine = (l) => {
 const fetchLines = async ({ base, docId, sharedContext }) => {
   const rows = await fetchInOutLines({
     apiFetch: moduleApiFetch, base, spec: SPEC, entity: ENTITY, targetId: sharedContext?.targetId,
-    action: 'availableInvoiceLines', params: { invoiceId: docId },
+    action: 'availableInvoiceLines', params: { ...CLASSIC_PENDING, invoiceId: docId },
   });
   return rows.filter(l => Number(l.invoicedQuantity) > 0).map(toInvoiceLine);
 };

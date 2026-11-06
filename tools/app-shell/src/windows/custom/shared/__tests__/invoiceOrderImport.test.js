@@ -82,14 +82,16 @@ describe('invoice order import — one popup, two directions', () => {
         [`/b/${invoice}/header/inv1/action/availableOrders`, `/b/${invoice}/lines`, `/b/${invoice}/header/inv1`,
           `/b/${invoice}/header/inv1/action/availableOrderLines`]);
       assert.equal(lines[0]._maxQty, 1);
-      // Only the client import builds its line body from the row, so only it asks for `detail`.
+      // Only the client import builds its line body from the row, so only it asks for `detail`;
+      // only purchases ask the pre-ETP-6099 pending rule (`pendingBasis: 'classic'`, no draft
+      // deduction) — the sales bodies stay byte-identical.
       // Purchases also ask `detail` on the list, for the creationDate their popup sorted by.
       assert.deepEqual(bodies.find(([u]) => u.endsWith('/availableOrders'))[1], direction === 'purchase'
-        ? { limit: MAX_LISTED_ORDERS, includeCovered: true, detail: true }
+        ? { limit: MAX_LISTED_ORDERS, includeCovered: true, detail: true, pendingBasis: 'classic' }
         : { limit: MAX_LISTED_ORDERS, includeCovered: true });
       const linesBody = bodies.find(([u]) => u.endsWith('/availableOrderLines'))[1];
       assert.deepEqual(linesBody, direction === 'purchase'
-        ? { orderId: 'o1', includeCovered: true, detail: true }
+        ? { orderId: 'o1', includeCovered: true, detail: true, pendingBasis: 'classic' }
         : { orderId: 'o1', includeCovered: true });
     });
   }

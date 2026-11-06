@@ -94,13 +94,15 @@ async function excludedOnlyByCurrency({ apiFetch, base, spec, entity, targetId, 
  * the popup listed in another order than the action (e.g. `newestCreatedFirst` from importActionClient.js). `entity` is the target's header entity
  * in the NEO path (`goodsShipment` / `goodsReceipt`), named by the popup.
  *
+ * `params` adds keys to the action body (e.g. `{ pendingBasis: 'classic' }`); none by default.
+ *
  * @returns {Promise<{ documents: object[], sharedContext: { targetId: string }, excludedByCurrency: boolean }>}
  */
 export async function fetchInOutDocuments({
-  apiFetch, base, spec, entity, targetId, bpId, action, dateKey, currencyProbe, order = (rows) => rows,
+  apiFetch, base, spec, entity, targetId, bpId, action, dateKey, currencyProbe, order = (rows) => rows, params = {},
 }) {
   const rows = await listAll({
-    apiFetch, base, spec, targetId, action, entity, params: { includeCovered: true, detail: true },
+    apiFetch, base, spec, targetId, action, entity, params: { includeCovered: true, detail: true, ...params },
   });
   const documents = order(rows.map(r => ({ ...r, [dateKey]: r.date, documentStatus: 'CO' })));
   const excludedByCurrency = documents.length === 0

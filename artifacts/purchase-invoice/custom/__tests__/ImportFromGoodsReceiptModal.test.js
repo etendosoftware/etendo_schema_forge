@@ -34,7 +34,7 @@ describe('ImportFromGoodsReceiptModal — source shape', () => {
   });
 
   it('lists goods receipts through the invoice availableReceipts action, covered ones included', () => {
-    assert.match(src, /action: 'availableReceipts', params: \{ includeCovered: true, detail: true \}/);
+    assert.match(src, /action: 'availableReceipts', params: \{ \.\.\.CLASSIC_PENDING, includeCovered: true, detail: true \}/);
     assert.match(src, /eagerLoadLines=\{false\}/);
     assert.match(src, /isDocumentCovered=\{isReceiptCovered\}/);
   });
@@ -49,7 +49,7 @@ describe('ImportFromGoodsReceiptModal — source shape', () => {
   });
 
   it('reads receipt lines on expand through availableReceiptLines and prices on expand and at import', () => {
-    assert.match(src, /action: 'availableReceiptLines', params: \{ receiptId: docId, includeCovered: true, detail: true \}/);
+    assert.match(src, /action: 'availableReceiptLines', params: \{ \.\.\.CLASSIC_PENDING, receiptId: docId, includeCovered: true, detail: true \}/);
     assert.match(src, /const fetchLines[\s\S]*resolveLinePrice/);
     assert.match(src, /const buildLineBody[\s\S]*resolveLinePrice/);
   });
@@ -77,24 +77,31 @@ function mockResSingle(ok, item) {
 /**
  * ETP-6099 — the fixtures are the receipts and orders as stored; this mock plays the server's
  * `availableReceipts` (completed, the invoice partner's, not invoiced, in the invoice's currency —
- * a receipt's currency being its order's here) and the receipt read the popup makes only to tell a
- * currency-emptied list apart. com.etendoerp.go covers the real rule.
+ * a receipt's currency being its order's here) and the reads the popup makes only to tell a
+ * currency-emptied list apart: the supplier's completed receipts (server-filtered by partner and
+ * status) and each backing order's header. `listNothing` makes the action list nothing whatever
+ * the fixtures say, to reach that empty-list check on its own. com.etendoerp.go covers the real rule.
  */
-function installFetch({ receipts = [], receiptLines = [], invoiceHeader = {}, orders = {}, bpId = 'bp1' }) {
+function installFetch({ receipts = [], receiptLines = [], invoiceHeader = {}, orders = {}, bpId = 'bp1', listNothing = false }) {
   const currencyOf = (r) => (r.salesOrder ? orders[r.salesOrder]?.currency : invoiceHeader.currency) || null;
   const candidates = receipts.filter(r => r.documentStatus === 'CO' && r.businessPartner === bpId && r.invoiced !== true);
   globalThis.fetch = mock.fn(async (url, options) => {
     if (url.endsWith('/action/availableReceipts')) {
-      const listed = candidates.filter(r => !invoiceHeader.currency || currencyOf(r) === invoiceHeader.currency);
+      // Product decision: the popup keeps the pre-ETP-6099 pending rule (no draft deduction).
+      assert.equal(JSON.parse(options.body).pendingBasis, 'classic');
+      const listed = listNothing ? [] : candidates.filter(r => !invoiceHeader.currency || currencyOf(r) === invoiceHeader.currency);
       return { ok: true, json: async () => ({ response: { hasMore: false, data: listed.map(r => ({ ...r, date: r.movementDate, pendingLines: 1 })) } }) };
     }
     if (url.endsWith('/action/availableReceiptLines')) {
       assert.equal(JSON.parse(options.body).includeCovered, true);
+      assert.equal(JSON.parse(options.body).pendingBasis, 'classic');
       return mockRes(true, receiptLines);
     }
     if (url.includes('/goods-receipt/goodsReceipt?criteria=')) {
-      return mockRes(true, candidates.filter(r => currencyOf(r) && currencyOf(r) !== invoiceHeader.currency));
+      return mockRes(true, receipts.filter(r => r.documentStatus === 'CO' && r.businessPartner === bpId));
     }
+    const orderId = url.match(/\/purchase-order\/header\/([^/?]+)$/)?.[1];
+    if (orderId) return mockResSingle(!!orders[orderId], orders[orderId]);
     if (url.includes('/purchase-invoice/lines/selectors/')) return { ok: true, json: async () => ({ items: [] }) };
     if (url.includes('/purchase-invoice/lines/callout')) return { ok: false, json: async () => ({}) };
     if (url.includes('/purchase-invoice/header/')) return mockResSingle(true, invoiceHeader);
@@ -180,6 +187,35 @@ describe('ImportFromGoodsReceiptModal — fetchDocuments filtering', () => {
     assert.equal(!!result.excludedByCurrency, false);
   });
 
+  // The empty-list notice follows the old popup's rule: the ORDER's currency counts, and a
+  // receipt without an order is never «in another currency».
+  const emptyCases = [
+    { name: 'a receipt without an order keeps the notice off even next to an other-currency one',
+      receipts: [
+        { id: 'r1', documentStatus: 'CO', businessPartner: 'bp1', invoiced: false, salesOrder: 'po1' },
+        { id: 'r2', documentStatus: 'CO', businessPartner: 'bp1', invoiced: false, salesOrder: null },
+      ], expected: false },
+    { name: 'only other-currency orders (an invoiced receipt ignored) turn the notice on',
+      receipts: [
+        { id: 'r1', documentStatus: 'CO', businessPartner: 'bp1', invoiced: false, salesOrder: 'po1' },
+        { id: 'r2', documentStatus: 'CO', businessPartner: 'bp1', invoiced: true, salesOrder: null },
+      ], expected: true },
+    { name: 'an order in the invoice currency keeps the notice off',
+      receipts: [{ id: 'r3', documentStatus: 'CO', businessPartner: 'bp1', invoiced: false, salesOrder: 'po2' }],
+      expected: false },
+  ];
+  for (const c of emptyCases) {
+    it(`empty list: ${c.name}`, async () => {
+      installFetch({
+        receipts: c.receipts, listNothing: true, invoiceHeader: { currency: 'USD' },
+        orders: { po1: { id: 'po1', currency: 'EUR' }, po2: { id: 'po2', currency: 'USD' } },
+      });
+      const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+      assert.equal(result.documents.length, 0);
+      assert.equal(result.excludedByCurrency, c.expected);
+    });
+  }
+
   it('does not filter by currency when the invoice currency is falsy', async () => {
     installFetch({
       receipts: [{ id: 'r1', documentStatus: 'CO', businessPartner: 'bp1', invoiced: false, salesOrder: 'po1' }],
@@ -223,9 +259,10 @@ describe('ImportFromGoodsReceiptModal — lines shown on expand', () => {
     return fetchLines({ base: '/b', headers: {}, docId: 'r1', sharedContext: { invoiceId: 'inv1' } });
   };
 
-  it('offers the pending quantity and carries the order line under the spec key and its discount', async () => {
-    const [line] = await linesOf([row({ pendingQuantity: 3 })]);
-    assert.equal(line._maxQty, 3);
+  // Classic pending (as before ETP-6099): the full movement quantity, whatever draft invoices hold.
+  it('offers the full received quantity and carries the order line under the spec key and its discount', async () => {
+    const [line] = await linesOf([row()]);
+    assert.equal(line._maxQty, 5);
     assert.equal(line._alreadyImported, false);
     assert.equal(line[ORDER_LINE_FK], 'ol1');
     assert.equal(line._orderDiscount, 10);

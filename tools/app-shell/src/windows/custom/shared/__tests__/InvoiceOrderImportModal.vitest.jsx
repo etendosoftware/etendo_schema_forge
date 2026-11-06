@@ -188,7 +188,8 @@ describe.each([
 });
 
 // Client path (importVia 'client'): purchases while MCP-2 is open. Since ETP-6099 they LIST like
-// sales (availableOrders + one availableOrderLines per order, pending with drafts); the import is
+// sales (availableOrders + one availableOrderLines per order), asking the pre-ETP-6099 pending rule
+// (`pendingBasis: 'classic'`: ordered − invoiced, no draft deduction); the import is
 // still one line POST each, then the header % PATCHed from the browser. Same popup, same notice
 // and toasts as sales.
 describe('InvoiceOrderImportModal (purchase, client path)', () => {
@@ -259,6 +260,10 @@ describe('InvoiceOrderImportModal (purchase, client path)', () => {
     await waitFor(() => expect(onSuccess).toHaveBeenCalled());
 
     expect(importActionCalls()).toEqual([]);
+    // Both reads ask the classic pending rule (product decision: purchases list as before).
+    const readBody = (action) => JSON.parse(calls(([url]) => url.endsWith(`/action/${action}`))[0][1].body);
+    expect(readBody('availableOrders')).toMatchObject({ pendingBasis: 'classic' });
+    expect(readBody('availableOrderLines')).toMatchObject({ orderId: 'PO-A', pendingBasis: 'classic' });
     expect(linePosts()).toHaveLength(1);
     expect(JSON.parse(linePosts()[0][1].body)).toMatchObject({
       parentId: 'inv-1', product: 'p1', invoicedQuantity: 2, unitPrice: 50, salesOrderLine: 'PO-A-l1',
