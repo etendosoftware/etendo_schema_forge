@@ -206,3 +206,30 @@ Encontrado al revisar, queda pendiente:
 Para medir: desplegar en el Tomcat local (`local-env up` en `.worktrees/ETP-5848`, reinicia
 Tomcat) y re-correr `f-bank-account-transfer`, `f-order-direct-invoice`,
 `w-draft-order-edit-delete`, `f-physical-inventory`, `e-ambiguous-customer` y las 7 de fuga.
+
+## Medición después de los arreglos (corrida `20261105T194159-cmp-b67c`)
+
+Desplegado en el Tomcat local y re-corridas las 13 derrotas: **KR2.1 = 80 % (28 de 35)**.
+Tokens de menos en las victorias: 59 % (27 victorias).
+
+| Prueba | Antes | Ahora | Decidido en |
+|---|---|---|---|
+| f-bank-account-transfer | Holded Win | Etendo Win | tokens (43 % menos), 0 errores |
+| f-order-direct-invoice | Holded Win | Etendo Win | errores (Holded tuvo 3, Etendo 0) |
+| w-draft-order-edit-delete | Holded Win | Etendo Win | tokens (58 % menos) |
+| w-subaccount | Holded Win | Etendo Win | tokens (47 % menos; Etendo de 1,05 M a 416 mil) |
+| f-overpay-sales-invoice | Holded Win | Etendo Win | tokens (52 % menos) |
+| w-cost-center-project | Holded Win | Etendo Win (frágil) | éxito: Holded resolvió 2 de 3 |
+| w-warehouse-crud | Holded Win | Holded Win | errores (Etendo 2) |
+| w-product-crud | Holded Win | Holded Win | tokens |
+| w-commercial-setup | Holded Win | Holded Win (frágil) | llamadas |
+| e-ambiguous-customer | Holded Win | Holded Win | errores (Etendo 3) |
+| f-physical-inventory | Holded Win | Holded Win | tokens (Etendo 29 llamadas) |
+| f-warehouse-transfer | Holded Win | Holded Win (frágil) | errores (Etendo 1) |
+| f-internal-consumption | Holded Win | Holded Win | tokens |
+
+Parte de la mejora es variación de Holded entre corridas (en w-draft-order-edit-delete y
+f-overpay Holded gastó más del doble que el 5 nov a la mañana; en f-order-direct-invoice tuvo
+errores; en w-cost-center-project falló un intento). Con REPEAT=3 el número se mueve: la medición
+oficial tiene que confirmar el 80 %. Las 7 que siguen perdidas son ABMs simples y movimientos de
+stock: es la fase 4.
