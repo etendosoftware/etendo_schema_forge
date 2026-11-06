@@ -143,9 +143,9 @@ carries the higher figure). Almost all of them are record-ID counters and intern
 user opening this window has no reason to touch, so the full list would have been no shorter a path
 to the invoice series than the Classic window was.
 
-`DocumentSequenceHandler.applyListScope` narrows a list GET to the caller's own client and to
-these seven, by name (seven before ETP-5285, five after it, six since ETP-5364, seven again since
-ETP-5837 — a different seventh):
+`DocumentSequenceHandler.readPredicates` narrows every list read (REST and MCP) to the caller's
+own client and to these seven, by name (seven before ETP-5285, five after it, six since ETP-5364,
+seven since ETP-5837):
 
 | `AD_Sequence.Name` | Series | Prefix | Start |
 |---|---|---|---|
@@ -160,7 +160,7 @@ ETP-5837 — a different seventh):
 The allowlist is a **product decision** and lives in `VISIBLE_SEQUENCE_NAMES`; adding a sequence
 to the product means adding its name there. Every one was verified to exist, by this exact name,
 **exactly once per organization**, in a provisioned client — `AP Invoice` since ETP-5364 shipped
-its row in the dataset, the other five since before. `Quotation` (ETP-5837) is the sales
+its row in the dataset, the others since before. `Quotation` (ETP-5837) is the sales
 quotation series.
 
 **Four names were dropped by ETP-5285** — `AP Payment`, `AR Receipt`, `MM Shipment` and
@@ -299,25 +299,25 @@ still makes the applied value non-deterministic. And it is fixed on the tenant p
 GOClient sample client still holds one copy of each by design, because that is where its counters
 come from.
 
-**Injected as criteria, not filtered out of the response.** The pre-hook shares its `NeoContext`
-with the default CRUD that runs after it, so appending clauses to the request's `criteria`
-parameter means the narrowed query is the one that executes — paging, sorting and the total count
-stay honest. Filtering the response instead would have returned "page 1 of ~145" and thrown most
-of it away, so the first page could legitimately have come back empty. Top-level criteria clauses
-are ANDed, so a filter the user typed still applies; it is narrowed, not replaced.
+**A read predicate, not filtered out of the response.** The scope is declared through
+`NeoHandler#readPredicates`, which NEO ANDs into the list query of every channel (REST list, its
+count/export and `?_distinct=`, and MCP `etendo_list`), so paging, sorting and the total count stay
+honest and a filter the user typed still applies. Until ETP-5837 it was a `criteria` param injected
+from the pre-hook, which only the REST list read — MCP returned every sequence of the tenant.
 
-**Tenant scoping.** An explicit `client equals <session client>` clause is added alongside. It is
+**Tenant scoping.** An explicit `e.client.id = <session client>` predicate is added alongside. It is
 redundant today — the instance has no sequences at client `0`, so DAL's readable-clients filter
 already yields tenant-only rows — but stated so that a module which later ships System-level
 sequences cannot leak them into a tenant's window.
 
-**List only.** A GET by id is left unscoped: these are the tenant's own records and the point is
-a shorter list, not access control, so a deep link into a sequence the list does not show still
-resolves.
+**Not only the list (ETP-5837).** A read or write by id (GET, PUT, PATCH, DELETE) of a sequence
+outside the allowlist or of another client answers 404, on every channel. Nothing in the app links
+to a hidden sequence by id.
 
 ## Prefix validation (Spanish localizations)
 
-`DocumentSequenceHandler` (`Java_Qualifier` `document-sequence` on the `sequence` entity) rejects
+`DocumentSequenceHandler` (bound via `@NeoExtension` to the `document-sequence` spec, `sequence`
+entity) rejects
 a prefix the Spanish fiscal localizations would refuse, **on write**:
 
 | Rule | Rejects |
@@ -434,6 +434,12 @@ two code paths writing the same rows. See
    count(*) > 1;` and confirm it returns **zero rows**. On a tenant provisioned before ETP-5364
    the same query returns ~96 `DocumentNo_*` names, which is the pre-existing state, not a
    regression.
+16. ETP-5837, through the MCP: `etendo_list document-sequence` must return **exactly the seven
+   rows** of step 1 (six or the unprefixed quotation on an older tenant, as described there) —
+   never the tenant's full sequence table. Then take the id of a sequence the window does not
+   show (e.g. a `DocumentNo_*` row, from SQL) and confirm `etendo_update` on it answers **404**,
+   as does `etendo_get` on the same id. The REST equivalent is
+   `GET`/`PUT /sws/neo/document-sequence/sequence/<hidden id>` → 404.
 
 ## Automated evidence
 
@@ -446,19 +452,24 @@ two code paths writing the same rows. See
 - `artifacts/document-sequence/decisions.json` classifies the 26 extracted fields (five visible
   after ETP-5285) and maps the seven series names to i18n keys via `enumValues`, declares `entities.sequence.methods: ["GET","GETBYID","PUT","PATCH"]` (no POST,
   no DELETE), sets `window.titleField: "name"`, `window.hideCreate` / `window.hideDeleteButton` /
-  `entities.sequence.hideDelete`, and sets `entities.sequence.javaQualifier: "document-sequence"`.
+  `entities.sequence.hideDelete`. It sets no `javaQualifier`: since ETP-5837 the handler is bound
+  by `@NeoExtension(spec = "document-sequence", entity = "sequence")` on
+  `DocumentSequenceHandler`, and the `ETGO_SF_ENTITY` row carries no `Java_Qualifier`.
 - `cli/test/document-sequence.contract.test.js`, which used to pin the method allowlist, the
   visible fields and the `enumValues` against `VISIBLE_SEQUENCE_NAMES`, was removed by
   `Issue #1658`; nothing in this repo checks the `enumValues` list against the Java allowlist any
   more, so keep the two in sync by hand — these are `AD_Sequence.Name` values and a mismatch
   shows the raw English name, or hides the row, with no error anywhere.
-- `artifacts/document-sequence/contract.json` carries that qualifier through to both the frontend
-  and backend entity sections; the pipeline generated 70 contract tests, all passing at
-  onboarding time.
+- `artifacts/document-sequence/contract.json` carries no `javaQualifier` in either the frontend
+  or backend entity section (removed by ETP-5837); the pipeline generated 70 contract tests, all
+  passing at onboarding time.
 - `DocumentSequenceHandlerTest` (`com.etendoerp.go`) covers the four prefix rules, their order,
   the guards that stop the handler before the country lookup, and — since ETP-5285, updated by
   ETP-5364 and ETP-5837 — the exact seven-name allowlist, the four names that must stay out of it, the presence
-  of the purchase-invoice series, and the guard that keeps every `DocumentNo_*` name out.
+  of the purchase-invoice series, and the guard that keeps every `DocumentNo_*` name out. Since
+  ETP-5837 it also pins the list scope as `readPredicates` (`readPredicatesScopeByName`), that a list
+  GET is not short-circuited, and the 404 on an update of a hidden sequence
+  (`refusesUpdateOfHiddenSequence`).
 
 ## Onboarding — ETP-5190
 

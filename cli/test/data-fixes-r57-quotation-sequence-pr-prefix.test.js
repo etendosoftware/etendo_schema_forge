@@ -1,7 +1,7 @@
 // @covers cli/src/data-fixes/sql/20261106T120000Z__R57-quotation-sequence-pr-prefix.sql
 import { describe, it } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseFix, parseFixTimestamp, inlineParams } from '../src/data-fixes/parse-fix.js';
@@ -20,7 +20,8 @@ import { parseFix, parseFixTimestamp, inlineParams } from '../src/data-fixes/par
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIX_FILE = '20261106T120000Z__R57-quotation-sequence-pr-prefix.sql';
 const FIX_ID = basename(FIX_FILE, '.sql');
-const rawText = readFileSync(join(__dirname, '..', 'src', 'data-fixes', 'sql', FIX_FILE), 'utf8');
+const SQL_DIR = join(__dirname, '..', 'src', 'data-fixes', 'sql');
+const rawText = readFileSync(join(SQL_DIR, FIX_FILE), 'utf8');
 const fix = parseFix(rawText, FIX_ID);
 
 /** Drop `--` comment lines and collapse whitespace: the header prose quotes SQL it does not run. */
@@ -45,9 +46,23 @@ describe('R57 data-fix — header and catalog position', () => {
     assert.ok(fix.report && fix.report.length > 0);
   });
 
-  it('sorts after the newest fix it was authored against', () => {
-    assert.ok(parseFixTimestamp(FIX_ID).getTime()
-      > parseFixTimestamp('20261028T120000Z__R51-etgo-survey-config-seed').getTime());
+  it('sorts strictly after the newest other fix in the catalog dated before it', () => {
+    // Read from sql/ rather than hard-coding a fix id: a hard-coded neighbour can name a file
+    // that is not even in this branch, and then the test proves nothing. Fixes dated AFTER R57
+    // are legitimate successors and are excluded, so the test keeps holding as the catalog grows;
+    // what it rejects is a file sharing R57's timestamp or R57 being re-dated behind its base.
+    const r57 = parseFixTimestamp(FIX_ID).getTime();
+    const others = readdirSync(SQL_DIR)
+      .filter(f => f.endsWith('.sql') && f !== FIX_FILE)
+      .map(f => ({ f, ts: parseFixTimestamp(basename(f, '.sql'))?.getTime() }))
+      .filter(x => Number.isFinite(x.ts));
+    assert.ok(others.length > 0, 'the catalog must hold other timestamped fixes');
+    assert.ok(!others.some(x => x.ts === r57), 'no other fix may share R57\'s timestamp');
+    const newestBefore = others.filter(x => x.ts < r57).sort((a, b) => b.ts - a.ts)[0];
+    assert.ok(newestBefore, 'R57 must not be the oldest fix in the catalog');
+    assert.ok(r57 > newestBefore.ts, `R57 must sort after ${newestBefore.f}`);
+    // R57's own base: the newest fix shipped when it was authored must be behind it.
+    assert.ok(r57 > parseFixTimestamp('20261027T120100Z__R53-tax-intracom-2pct-rate').getTime());
   });
 });
 
@@ -118,14 +133,60 @@ describe('R57 data-fix — quotation renumbering', () => {
     assert.equal((sqlApply.match(/ad_enable_triggers\(\)/g) || []).length, 1);
   });
 
-  it('the @check mirrors the renumber guards, so a blocked row cannot keep it firing', () => {
+  it('the @check quotation branch mirrors the renumber guards, so a blocked row cannot keep it firing', () => {
+    // Asserted on the second UNION branch alone: the first branch (unprefixed sequence) must not
+    // be what satisfies these, or a check that renumbers non-PR series would still pass.
+    const branches = sqlCheck.split(/\bUNION ALL\b/);
+    assert.equal(branches.length, 2, '@check is two UNION ALL branches');
+    const quotationBranch = branches[1];
+    assert.match(quotationBranch, /FROM c_order o\b/);
     for (const guard of [/s\.prefix = 'PR'/, /o\.documentno ~ '\^\[0-9\]\+\$'/, /o2\.documentno = 'PR' \|\| o\.documentno/]) {
-      assert.match(sqlCheck, guard);
+      assert.match(quotationBranch, guard);
     }
   });
 
   it('touches no other document table and no other column of C_Order', () => {
     assert.doesNotMatch(sqlApply, /\b(?:UPDATE|DELETE FROM|INSERT INTO) (?!ad_sequence\b|c_order\b)\w+/i);
     assert.doesNotMatch(sqlApply, /c_file/i);
+  });
+});
+
+describe('R57 data-fix — @report lists every case the fix leaves to an operator', () => {
+  const branches = sqlReport.split(/\bUNION ALL\b/).map(s => s.trim());
+  /** The single report branch whose detail text matches `detail`. */
+  const branchFor = (detail) => {
+    const hits = branches.filter(b => detail.test(b));
+    assert.equal(hits.length, 1, `exactly one @report branch must emit ${detail}`);
+    return hits[0];
+  };
+
+  it('is four UNION ALL branches', () => {
+    assert.equal(branches.length, 4);
+  });
+
+  it('reports a quotation sequence left unprefixed because another doctype shares it', () => {
+    const b = branchFor(/'quotation sequence NOT prefixed: also used by a non-quotation doctype'/);
+    assert.match(b, /NULLIF\(btrim\(s\.prefix\), ''\) IS NULL/);
+  });
+
+  it('reports a quotation sequence that kept a tenant-configured prefix other than PR', () => {
+    const b = branchFor(/'quotation sequence kept its own prefix ' \|\| s\.prefix \|\| ' \(quotations not renumbered\)'/);
+    assert.match(b, /NULLIF\(btrim\(s\.prefix\), ''\) IS NOT NULL/);
+    assert.match(b, /s\.prefix <> 'PR'/);
+  });
+
+  it('reports a PR-series quotation not renumbered, saying whether the PR form was taken or the number is not digits-only', () => {
+    const b = branchFor(/'quotation ' \|\| o\.documentno \|\| ' \(' \|\| o\.c_order_id \|\| '\) NOT renumbered: '/);
+    assert.match(b, /WHEN o\.documentno ~ '\^\[0-9\]\+\$' THEN 'PR' \|\| o\.documentno \|\| ' already exists'/);
+    assert.match(b, /ELSE 'number is not digits-only' END/);
+    assert.match(b, /s\.prefix = 'PR'/);
+    assert.match(b, /o\.documentno NOT LIKE 'PR%'/);
+  });
+
+  it('reports a renumbered quotation at or above the sequence currentnext, casting only a PR+digits number', () => {
+    const b = branchFor(/' is at\/above the sequence CURRENTNEXT '/);
+    assert.match(b, /s\.prefix = 'PR'/);
+    assert.match(b,
+      /CASE WHEN o\.documentno ~ '\^PR\[0-9\]\+\$' THEN substr\(o\.documentno, 3\)::numeric >= s\.currentnext ELSE false END/);
   });
 });

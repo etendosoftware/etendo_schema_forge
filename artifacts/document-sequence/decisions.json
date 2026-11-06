@@ -25,7 +25,6 @@
   },
   "entities": {
     "sequence": {
-      "javaQualifier": "document-sequence",
       "methods": [
         "GET",
         "GETBYID",

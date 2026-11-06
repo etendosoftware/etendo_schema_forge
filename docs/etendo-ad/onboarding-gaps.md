@@ -2894,6 +2894,34 @@ PDF (`C_File`, `EM_ETGO_IsPreviewMain='Y'`) self-heals: R57 moves `C_Order.Updat
 the server-side render both see the file as stale and re-render it, under the new name, on the next
 open. The email send log is history and is left as is.
 
+**Operator action — a renumbered quotation at or above `CURRENTNEXT`.** When R57's `@report` (the
+`detail` of its `APPLIED` ledger row) lists a renumbered quotation at or above its sequence's
+`CURRENTNEXT`, the operator must raise that sequence's `CURRENTNEXT` above the highest existing
+`PR` number by hand, or the series will issue that number a second time. R57 never moves
+`CURRENTNEXT` itself (none on the local DB: GOClient's highest quotation was `1000023` against
+`CURRENTNEXT` `1000024`).
+
+**Two quotation series in one client both number `PR1000000…`.** A tenant with more than one
+quotation doctype (F&B International Group has two, each with its own `Quotation` sequence at
+`CURRENTNEXT` `1000000`) ends with two independent series under the same `PR` prefix, so once both
+are used the client holds two quotations numbered `PR1000000`. That is NOT a duplicate inside a
+doctype — R57's guard is per doctype — and R57 does not report it: the fix was already `APPLIED` on
+the local DB when this was raised, so its body is frozen, and the condition is a property of the
+dataset (two doctypes), not of the fix. Find them with:
+
+```sql
+SELECT s.ad_client_id, s.prefix, count(DISTINCT s.ad_sequence_id) AS series
+FROM ad_sequence s
+JOIN c_doctype dt ON dt.docnosequence_id = s.ad_sequence_id
+  AND dt.ad_client_id = s.ad_client_id
+  AND dt.docbasetype = 'SOO' AND dt.docsubtypeso = 'OB'
+GROUP BY s.ad_client_id, s.prefix
+HAVING count(DISTINCT s.ad_sequence_id) > 1;
+```
+
+Whether such a tenant should keep both quotation doctypes, or give one of them its own prefix from
+"Secuencia de documentos", is a per-tenant decision.
+
 **CUT not bumped** (`ONBOARDING_PROVISIONED_THROUGH`): a newborn tenant is born with `PR` and holds
 no quotation, so `R57`'s `@check` returns 0 rows for it and the runner records
 `SKIPPED_NOT_NEEDED`.
