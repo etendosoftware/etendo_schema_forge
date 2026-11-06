@@ -1164,8 +1164,10 @@ export function ListView({
   // selectionBarRightActions consumer that runs its own delete loop but still
   // wants the same reselect-only-the-failed-rows behavior (see
   // `reselectFailed` passed into selectionBarRightActions further down).
-  const applyBulkDeleteOutcome = useCallback((succeeded, failed) => {
-    if (succeeded.length > 0) hook.refresh();
+  // ETP-6143 — `outcomeUnknown`: a bulk-delete job whose result could not be read may have
+  // deleted any of the rows, so refetch and (failed is empty) clear the selection.
+  const applyBulkDeleteOutcome = useCallback((succeeded, failed, { outcomeUnknown } = {}) => {
+    if (succeeded.length > 0 || outcomeUnknown) hook.refresh();
     if (failed.length === 0) {
       clearSelection();
     } else {

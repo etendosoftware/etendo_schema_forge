@@ -670,7 +670,7 @@ describe('useBatchDeleteDialog — server-side bulk delete with progress (ETP-61
     expect(deleteOneFn).toHaveBeenCalledTimes(1);
   });
 
-  it('a bulkDeleteFn that rejects reports every record failed and still closes the dialog', async () => {
+  it('a bulkDeleteFn that rejects reports an unknown outcome, not a failure, and closes the dialog', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     const bulkDeleteFn = vi.fn(async () => { throw new Error('network down'); });
     const onOutcome = vi.fn();
@@ -679,7 +679,12 @@ describe('useBatchDeleteDialog — server-side bulk delete with progress (ETP-61
     act(() => { screen.getByText('Bulk').click(); });
     fireEvent.click(screen.getByTestId('batch-delete-confirm'));
 
-    await waitFor(() => expect(onOutcome).toHaveBeenCalledWith([], ['a', 'b']));
+    // The job may still be running on the server: nothing is claimed deleted OR failed, and the
+    // host is told to refetch instead of keeping a selection that may already be gone.
+    await waitFor(() => expect(onOutcome).toHaveBeenCalledWith([], [], { outcomeUnknown: true }));
+    const { toast } = await import('sonner');
+    expect(toast.warning).toHaveBeenCalledWith(expect.stringContaining('bulkDeleteOutcomeUnknown'));
+    expect(toast.error).not.toHaveBeenCalled();
     expect(screen.queryByText('Delete records')).not.toBeInTheDocument();
     consoleError.mockRestore();
   });

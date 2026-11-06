@@ -39,6 +39,8 @@ import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
  *   - all succeeded  → host clears the selection.
  *   - partial failure → host keeps only the failed items selected.
  *   - all failed      → host leaves the selection untouched.
+ *   - outcome unknown (ETP-6143, bulk path only) → `onOutcome([], [], { outcomeUnknown: true })`:
+ *     the host re-fetches and clears the selection.
  * The host is expected to re-fetch its list (when at least one item
  * succeeded) inside `onOutcome` — that naturally drops the deleted items and
  * leaves the failed ones in place, no manual list surgery needed here.
@@ -53,16 +55,30 @@ import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
  */
 /**
  * ETP-6143 — runs a whole selection through `bulkDeleteFn` (ONE request, server-paced) and never
- * rejects, like `runBatchDelete`: a thrown transport error becomes every item's failure, so the
- * outcome toast still fires and the host keeps the selection to retry.
+ * rejects, like `runBatchDelete`. A rejection is NOT a confirmed failure: the job may have been
+ * accepted and still be running on the server (e.g. `useBatch` gave up after five failed status
+ * polls), so it answers `{ outcomeUnknown: true }` instead of marking every item failed. The
+ * caller then refreshes rather than keeping a selection that may already be deleted.
  */
 async function runBulkDelete(items, bulkDeleteFn, onProgress) {
   try {
     return await bulkDeleteFn(items, { onProgress });
   } catch (err) {
-    console.error('[useBatchDeleteDialog] bulk delete failed', err);
-    return { succeeded: [], failed: [...items], errors: items.map(() => err) };
+    console.error('[useBatchDeleteDialog] bulk delete outcome unknown', err);
+    return { succeeded: [], failed: [], errors: [], outcomeUnknown: true };
   }
+}
+
+/**
+ * ETP-6143 — the single toast for a settled batch. An unknown outcome gets its own warning: the
+ * three-outcome counters would claim a result nobody has confirmed.
+ */
+function toastOutcome(ui, outcome, total) {
+  if (outcome.outcomeUnknown) {
+    toast.warning(ui('bulkDeleteOutcomeUnknown', { count: total }));
+    return;
+  }
+  toastBatchDeleteOutcome(ui, { ...outcome, total });
 }
 
 export function useBatchDeleteDialog({
@@ -118,14 +134,17 @@ export function useBatchDeleteDialog({
     try {
       // ETP-5758 — the dialog stays OPEN (and read-only, see DeleteConfirmDialog) while every
       // DELETE runs; it closes only once the whole batch has settled.
-      const { succeeded, failed, errors } = useBulk
+      const outcome = useBulk
         ? await runBulkDelete(items, runBulk, ({ processed, total }) => {
           setProgress({ processed: processed ?? 0, total: total || items.length });
         })
         : await runBatchDelete(items, runOne);
-      toastBatchDeleteOutcome(ui, { succeeded, failed, errors, total: items.length });
+      toastOutcome(ui, outcome, items.length);
       setPending(null);
-      report?.(succeeded, failed);
+      // ETP-6143 — the third argument tells the host the result is unknown (some, all or none
+      // of the items may be gone): it must refetch and drop the selection, not retry it.
+      if (outcome.outcomeUnknown) report?.([], [], { outcomeUnknown: true });
+      else report?.(outcome.succeeded, outcome.failed);
     } catch (err) {
       // `runBatchDelete` never rejects, so this is the host's `onOutcome` (or the toast) throwing
       // — e.g. a cache update on a hook that is gone. Without this the click handler ended in an

@@ -789,9 +789,45 @@ multi-record delete goes through the generic hook:
 | `DetailView` lines bulk delete — primary lines (classic toolbar **and** inlineEditable toolbar) and every secondary table tab | ONE `useBatchDeleteDialog` per DetailView; each request carries its own `deleteOneFn` (`buildChildRowDeleteFn` in `lib/batchDelete.js`) and `onOutcome`, testids `lines-bulk-delete-*` |
 | `amortization` lines table, `assets` Amortización panel | `useBatchDeleteDialog` directly, testids `batch-delete-*` |
 
-`requestBatchDelete(items, { deleteOneFn, onOutcome })` — the optional second
+`requestBatchDelete(items, { deleteOneFn, bulkDeleteFn, onOutcome })` — the optional second
 argument overrides the hook-level functions for that request only, which is how
 one DetailView dialog serves the primary lines and every secondary tab.
+
+**Server-side bulk delete with progress (ETP-6143).** `useBatchDeleteDialog` also accepts a
+`bulkDeleteFn(items, { onProgress })` that deletes the whole selection in ONE request. It is used
+only for two or more items, and only when the request did not override `deleteOneFn` (a
+per-request `deleteOneFn` targets another endpoint). `useBulkRowDelete` supplies one whenever its
+`apiBaseUrl` is a spec URL (`${getNeoBaseUrl()}/<spec>`, the shape `getSpecBaseUrl` builds;
+`specFromBaseUrl` in `lib/neoBaseUrl.js` is its strict inverse):
+
+- The selection is sent as one asynchronous `POST /sws/neo/batch` job with one
+  `{ spec, entity, method: 'DELETE', recordId }` operation per row (`buildBulkDeleteOperations`
+  in `lib/batchDelete.js`), through `useBatch` with `async: true`. The server deletes the rows
+  one at a time, each in its own transaction, so a refused row never blocks the others, and it
+  caps concurrent jobs per user and per client (a `429` is waited out and resubmitted).
+- While the job runs, the hook polls `GET /sws/neo/batch/jobs/{jobId}` every 750 ms
+  (`BULK_DELETE_POLL_INTERVAL_MS`) and the locked dialog shows *"Eliminando {processed} de
+  {total} registros…"* (`bulkDeleteProgressMessage`) plus a progress bar
+  (`<scope>-progress`, `role="progressbar"`).
+- The finished job is mapped back per row (`outcomeFromBulkDeleteEnvelope`) into the same
+  three-outcome contract and toast as the per-row path. A refused row keeps the server's status
+  and message, so a one-row reason still reaches the toast.
+- Once at least one row may have been deleted, the caches that depend on the spec are marked
+  stale exactly as a per-row `DELETE` through `useApiFetch` would do
+  (`invalidateAfterWrite` with `{apiBaseUrl}/{entity}`). This keeps, for example, the contact
+  selectors from offering a deleted contact. The batch POST names no spec, so without this the
+  dependants were never invalidated.
+- **Unknown outcome.** If the job's status cannot be read (five consecutive failed polls, or the
+  connection dropping after the job was accepted), the job may still be running on the server. The
+  rows are then **not** reported as failed. The dialog shows the `bulkDeleteOutcomeUnknown`
+  warning, and the host receives `onOutcome([], [], { outcomeUnknown: true })`. `ListView` and
+  `ListModalWindow` respond by refetching and clearing the selection, so rows that may already be
+  deleted are not left selected for a retry.
+- **Fallback to per-row DELETEs:** a single selected row, a base URL that is not a spec URL, or a
+  request that overrides `deleteOneFn`.
+- **Deployment requirement:** the backend must support `DELETE` operations in `/sws/neo/batch`
+  (com.etendoerp.go, `docs/neo-headless.md` §4.3.7, ETP-6143). Ship both changes together. An
+  older backend rejects every DELETE operation and the dialog reports every row as failed.
 
 **The in-progress state lives in `DeleteConfirmDialog` (ETP-5758).** After the
 user confirms, the dialog does **not** close: the destructive button turns into
@@ -906,8 +942,9 @@ no configuration needed):**
   check-before-navigate/close rule.
 
 **Bulk-delete outcome contract — exactly ONE toast per outcome (never one per
-row):** `useBulkRowDelete` issues one `DELETE` per selected row in parallel
-(`Promise.allSettled`), then reports a single combined toast:
+row):** `useBulkRowDelete` deletes the selection, either with one `DELETE` per row in parallel
+(`Promise.allSettled`) or as one server-side batch job for a spec URL with two or more rows
+(ETP-6143, see above). Either way it reports a single combined toast:
 
 | Outcome | Toast | i18n key |
 |---------|-------|----------|

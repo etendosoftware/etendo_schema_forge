@@ -17582,6 +17582,7 @@
     "bulkDeleteAllSucceeded": "{count} registros eliminados correctamente.",
     "bulkDeletePartialFailure": "{succeeded} de {total} registros eliminados. {failed} no pudieron eliminarse.",
     "bulkDeleteAllFailed": "No se pudo eliminar ninguno de los {count} registros seleccionados.",
+    "bulkDeleteOutcomeUnknown": "No se pudo confirmar el resultado del borrado de {count} registros; puede seguir procesándose. La lista se actualizó.",
     "edit": "Editar",
     "print": "Imprimir",
     "preview": "Vista Previa",

@@ -17351,6 +17351,7 @@
     "bulkDeleteAllSucceeded": "{count} record(s) deleted successfully.",
     "bulkDeletePartialFailure": "{succeeded} of {total} record(s) deleted. {failed} could not be deleted.",
     "bulkDeleteAllFailed": "None of the {count} selected record(s) could be deleted.",
+    "bulkDeleteOutcomeUnknown": "The result of deleting {count} records could not be confirmed; it may still be running. The list was refreshed.",
     "edit": "Edit",
     "print": "Print",
     "preview": "Preview",

@@ -6,6 +6,8 @@ import { useBatchDeleteDialog } from '@/hooks/useBatchDeleteDialog.jsx';
 import { useBatch } from '@/components/copilot/ocr/ingest/useBatch.js';
 import { buildBulkDeleteOperations, outcomeFromBulkDeleteEnvelope } from '@/lib/batchDelete.js';
 import { specFromBaseUrl } from '@/lib/neoBaseUrl.js';
+import { invalidateAfterWrite } from '@/lib/crossSpecCacheInvalidation.js';
+import { useOptionalDataCache } from '@etendosoftware/app-shell-core/data';
 
 /** ETP-6143 — how often a running bulk-delete job is polled for its progress. */
 export const BULK_DELETE_POLL_INTERVAL_MS = 750;
@@ -30,7 +32,10 @@ export const BULK_DELETE_POLL_INTERVAL_MS = 750;
  * selected, the rows are deleted by ONE asynchronous `/sws/neo/batch` job (one DELETE operation
  * per row) instead of N parallel requests: the server paces the deletes, each row is its own
  * transaction, and the dialog shows the job's progress. Any other base URL, or a single row, keeps
- * the per-row DELETE described below.
+ * the per-row DELETE described below. Once rows may have been deleted, the caches that depend on
+ * the spec are invalidated exactly as the per-row DELETE did. A job whose result cannot be read
+ * (its status polls keep failing) is reported as an unknown outcome: the host refetches and clears
+ * the selection instead of treating every row as failed (see `useBatchDeleteDialog`).
  *
  * On confirm: issues one DELETE per row (in parallel), then reports back via
  * `onSuccess(succeededRows, failedRows)` so the host can update its own
@@ -68,19 +73,37 @@ export function useBulkRowDelete({ apiBaseUrl, entity = 'header', token, onSucce
 
   const { runBatch } = useBatch({ token });
   const spec = specFromBaseUrl(apiBaseUrl);
-  const bulkDeleteFn = useMemo(() => (spec
-    ? async (rows, { onProgress } = {}) => {
-      const envelope = await runBatch(buildBulkDeleteOperations(rows, { spec, entity }), {
-        async: true,
-        onlyReturnIds: true,
-        pollIntervalMs: BULK_DELETE_POLL_INTERVAL_MS,
-        onProgress: ({ processedRows, totalRows }) => {
-          onProgress?.({ processed: processedRows, total: totalRows });
-        },
-      });
-      return outcomeFromBulkDeleteEnvelope(rows, envelope);
-    }
-    : undefined), [spec, entity, runBatch]);
+  // ETP-6143 — the per-row DELETEs went through `useApiFetch`, which marks the caches that depend
+  // on the written spec stale (`crossSpecCacheInvalidation.js`, e.g. contacts → selector pages).
+  // The batch POST and its status GETs name no spec, so the same invalidation is applied here,
+  // as if a DELETE had been sent to `{apiBaseUrl}/{entity}`, once something may have been deleted.
+  const cache = useOptionalDataCache()?.cache ?? null;
+  const bulkDeleteFn = useMemo(() => {
+    if (!spec) return undefined;
+    const invalidateDependents = () => {
+      if (cache) invalidateAfterWrite(cache, { url: `${apiBaseUrl}/${entity}`, method: 'DELETE' });
+    };
+    return async (rows, { onProgress } = {}) => {
+      let envelope;
+      try {
+        envelope = await runBatch(buildBulkDeleteOperations(rows, { spec, entity }), {
+          async: true,
+          onlyReturnIds: true,
+          pollIntervalMs: BULK_DELETE_POLL_INTERVAL_MS,
+          onProgress: ({ processedRows, totalRows }) => {
+            onProgress?.({ processed: processedRows, total: totalRows });
+          },
+        });
+      } catch (err) {
+        // Unknown outcome: the job may have deleted rows before its status stopped answering.
+        invalidateDependents();
+        throw err;
+      }
+      const outcome = outcomeFromBulkDeleteEnvelope(rows, envelope);
+      if (outcome.succeeded.length > 0) invalidateDependents();
+      return outcome;
+    };
+  }, [spec, entity, runBatch, cache, apiBaseUrl]);
 
   const { requestBatchDelete, batchDeleteDialog, deleting } = useBatchDeleteDialog({
     deleteOneFn,

@@ -73,6 +73,12 @@ const { runBatchMock } = vi.hoisted(() => ({ runBatchMock: vi.fn() }));
 vi.mock('@/components/copilot/ocr/ingest/useBatch.js', () => ({
   useBatch: () => ({ runBatch: runBatchMock }),
 }));
+// ETP-6143 — a stand-in record cache, so the bulk path's cross-spec invalidation can be observed.
+const { cacheMock } = vi.hoisted(() => ({ cacheMock: { invalidate: vi.fn() } }));
+vi.mock('@etendosoftware/app-shell-core/data', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useOptionalDataCache: () => ({ cache: cacheMock }),
+}));
 
 vi.mock('@/hooks/useEntity', () => ({
   extractErrorMessage: async (res) => {
@@ -812,5 +818,60 @@ describe('useBulkRowDelete — one async batch job for a spec URL (ETP-6143)', (
     ]);
     expect(options.async).toBe(true);
     expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  function renderBulk(apiBaseUrl, onSuccess) {
+    function TestComponent() {
+      const { requestBulkDelete, bulkDeleteDialog } = useBulkRowDelete({
+        apiBaseUrl, entity: 'header', token: 't', onSuccess,
+      });
+      return (
+        <>
+          <button onClick={() => requestBulkDelete([{ id: 'r1' }, { id: 'r2' }])}>Bulk</button>
+          {bulkDeleteDialog}
+        </>
+      );
+    }
+    render(<TestComponent />);
+    act(() => { screen.getByText('Bulk').click(); });
+    fireEvent.click(screen.getByTestId('bulk-delete-confirm'));
+  }
+
+  it('marks the caches that depend on the spec stale once rows were deleted', async () => {
+    runBatchMock.mockResolvedValue({ committed: true, operations: [] });
+    const onSuccess = vi.fn();
+    renderBulk('/sws/neo/contacts', onSuccess);
+
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledWith([{ id: 'r1' }, { id: 'r2' }], []));
+    expect(cacheMock.invalidate).toHaveBeenCalledWith({ entity: 'selector' });
+  });
+
+  it('leaves the caches alone when the job deleted nothing', async () => {
+    runBatchMock.mockResolvedValue({
+      committed: false,
+      partial: true,
+      rows: [
+        { ids: ['del-0'], committed: false, error: { status: 409, message: 'In use' } },
+        { ids: ['del-1'], committed: false, error: { status: 409, message: 'In use' } },
+      ],
+    });
+    const onSuccess = vi.fn();
+    renderBulk('/sws/neo/contacts', onSuccess);
+
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledWith([], [{ id: 'r1' }, { id: 'r2' }]));
+    expect(cacheMock.invalidate).not.toHaveBeenCalled();
+  });
+
+  it('reports an unreadable job as an unknown outcome, not as every row failing', async () => {
+    runBatchMock.mockRejectedValue(new Error('Batch job status failed (502)'));
+    const onSuccess = vi.fn();
+    renderBulk('/sws/neo/contacts', onSuccess);
+
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledWith([], [], { outcomeUnknown: true }));
+    const { toast } = await import('sonner');
+    expect(toast.warning).toHaveBeenCalledWith('bulkDeleteOutcomeUnknown');
+    expect(toast.error).not.toHaveBeenCalled();
+    // The job may have deleted rows before its status stopped answering.
+    expect(cacheMock.invalidate).toHaveBeenCalledWith({ entity: 'selector' });
   });
 });
