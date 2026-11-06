@@ -116,14 +116,15 @@ export async function fetchOrderDocuments({ apiFetch, config, base, bpId, invoic
     // `includeCovered` also brings the orders with nothing left (on sales, also those entirely held
     // by draft invoices), at pendingLines 0, for the popup to hide (`isOrderCovered`) without
     // reading their lines.
-    // Purchases also ask `detail` for the row's `creationDate`: their popup listed newest CREATED
-    // first, the action answers newest by order date (sales already answers by creation date and
-    // keeps its request as it was).
+    // Both directions ask `detail`: it brings the row's `creationDate` (purchases listed newest
+    // CREATED first, their action answers newest by order date) and makes `pendingLines` / `amount`
+    // count only the lines the popup leaves selectable — not those already on THIS invoice
+    // (`_alreadyImported`). Pending is quantity-based, so without it a sales order whose remaining
+    // lines are all on this invoice was listed and only emptied once expanded (the lines load
+    // lazily, ETP-6099); with it, it comes at pendingLines 0 and `isOrderCovered` hides it at open.
     listAll({
       apiFetch, base, spec: config.invoiceSpec, targetId: invoiceId, action: 'availableOrders',
-      params: {
-        includeCovered: true, ...(config.importVia === 'client' ? { detail: true } : {}), ...pendingBasisParams(config),
-      },
+      params: { includeCovered: true, detail: true, ...pendingBasisParams(config) },
     }).then(newestCreatedFirst),
     apiFetch(`${base}/${config.invoiceSpec}/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`),
     apiFetch(`${base}/${config.invoiceSpec}/header/${invoiceId}`),

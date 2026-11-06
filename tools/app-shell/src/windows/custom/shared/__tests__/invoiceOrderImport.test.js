@@ -82,13 +82,15 @@ describe('invoice order import — one popup, two directions', () => {
         [`/b/${invoice}/header/inv1/action/availableOrders`, `/b/${invoice}/lines`, `/b/${invoice}/header/inv1`,
           `/b/${invoice}/header/inv1/action/availableOrderLines`]);
       assert.equal(lines[0]._maxQty, 1);
-      // Only the client import builds its line body from the row, so only it asks for `detail`;
-      // only purchases ask the pre-ETP-6099 pending rule (`pendingBasis: 'classic'`, no draft
-      // deduction) — the sales bodies stay byte-identical.
-      // Purchases also ask `detail` on the list, for the creationDate their popup sorted by.
+      // Both directions ask `detail` on the list: the creationDate purchases sort by, and a
+      // pendingLines that leaves out the lines already on this invoice (so an order with nothing
+      // selectable is hidden at open, as before the lines loaded lazily). Only purchases ask the
+      // pre-ETP-6099 pending rule (`pendingBasis: 'classic'`, no draft deduction).
       assert.deepEqual(bodies.find(([u]) => u.endsWith('/availableOrders'))[1], direction === 'purchase'
         ? { limit: MAX_LISTED_ORDERS, includeCovered: true, detail: true, pendingBasis: 'classic' }
-        : { limit: MAX_LISTED_ORDERS, includeCovered: true });
+        : { limit: MAX_LISTED_ORDERS, includeCovered: true, detail: true });
+      // Only the client import builds its line body from the row, so only it asks `detail` on the
+      // lines; the sales lines body stays as it was.
       const linesBody = bodies.find(([u]) => u.endsWith('/availableOrderLines'))[1];
       assert.deepEqual(linesBody, direction === 'purchase'
         ? { orderId: 'o1', includeCovered: true, detail: true, pendingBasis: 'classic' }
@@ -176,7 +178,8 @@ describe('invoice order import (sales) — fetchDocuments lists through availabl
     assert.equal(url, '/b/sales-invoice/header/inv1/action/availableOrders');
     assert.equal(opts.method, 'POST');
     assert.equal(opts.refreshVersion, false);
-    assert.deepEqual(JSON.parse(opts.body), { limit: MAX_LISTED_ORDERS, includeCovered: true });
+    // `detail`: pendingLines leaves out the lines already on this invoice (ETP-6099).
+    assert.deepEqual(JSON.parse(opts.body), { limit: MAX_LISTED_ORDERS, includeCovered: true, detail: true });
     assert.equal(globalThis.fetch.mock.calls.some(c => String(c.arguments[0]).includes('/sales-order/header')), false,
       'a non-empty list never reads the order GET');
     assert.deepEqual(result.documents.map(d => [d.id, d.orderDate, d.documentNo]),

@@ -64,7 +64,7 @@ describe.each([
         if (ordersRes) return ordersRes;
         return ok(orders.map(o => ({
           id: o.id, documentNo: o.id, businessPartner: 'bp-1', 'businessPartner$_identifier': 'BP 1',
-          currency: 'EUR', globalDiscount: o.pct, date: '2026-10-30', pendingLines: 1, amount: 100,
+          currency: 'EUR', globalDiscount: o.pct, date: '2026-10-30', pendingLines: o.pendingLines ?? 1, amount: 100,
         })));
       }
       if (url.includes(`/${invoiceSpec}/lines?parentId=`)) return ok([]);
@@ -106,6 +106,19 @@ describe.each([
   const importCalls = () => mockApiFetch.mock.calls.filter(([url]) => url.endsWith('/action/importOrderLines'));
   const writeCalls = () => mockApiFetch.mock.calls.filter(([url, opts]) => (
     opts?.method === 'PATCH' || (opts?.method === 'POST' && !url.includes('/action/'))));
+
+  // ETP-6099 — the lines load only when an order is opened, so the popup hides at open, from the
+  // availableOrders row, an order whose remaining lines are all on this invoice. It asks `detail`,
+  // under which the server leaves those lines out of pendingLines (pending is quantity-based, so a
+  // line partly on this invoice still has some left); such an order comes at 0 and is not shown.
+  it('lists with detail and hides at open an order with nothing selectable', async () => {
+    renderModal({ orders: [{ id: 'SO-A', pct: 0 }, { id: 'SO-B', pct: 0, pendingLines: 0 }] });
+    expect(await screen.findByText('SO-A')).toBeInTheDocument();
+    expect(screen.queryByText('SO-B')).toBeNull();
+    const [, opts] = mockApiFetch.mock.calls.find(([url]) => url.endsWith('/action/availableOrders'));
+    expect(JSON.parse(opts.body)).toMatchObject({ includeCovered: true, detail: true });
+    expect(mockApiFetch.mock.calls.filter(([url]) => url.endsWith('/action/availableOrderLines'))).toHaveLength(0);
+  });
 
   it('carries a single order %: tag, undiscounted row total, toggle in the notice area, ONE import call and the carried toast', async () => {
     const orders = [{ id: 'SO-A', pct: 10 }];
