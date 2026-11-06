@@ -10,7 +10,8 @@ function required(name: string): string {
   if (!value) {
     throw new Error(
       `[public-api e2e] ${name} is not set. Required: PUBLIC_API_BASE_URL (e.g. http://localhost:4399) ` +
-        'and PUBLIC_API_KEY (<clientId>:<clientSecret>, a key with read, write and delete rights). ' +
+        'and PUBLIC_API_KEY (<clientId>:<clientSecret>, a key with public-api:read, public-api:write and ' +
+        'public-api:process: the order flows complete an order). ' +
         'Optional: PUBLIC_API_KEY_READONLY (enables the 403 test), PUBLIC_API_E2E_ALLOW_REMOTE=1.',
     );
   }
