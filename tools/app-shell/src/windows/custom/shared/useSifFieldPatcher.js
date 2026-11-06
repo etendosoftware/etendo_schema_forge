@@ -38,6 +38,34 @@ export const VERIFACTU_INV_TYPE_OPTIONS = [
   { value: 'R5', labelKey: 'sifDataTabs.option.vfR5' },
 ];
 
+// ETP-5745 CP-16: which active fiscal system(s) still need their own rectification code/motive
+// on a rectificative invoice — the CLIENT-SIDE mirror of
+// `RectificationFiscalCodeGuard.missingSystems` (com.etendoerp.go), so the toast only fires while
+// there is something left to fill in (e.g. never again after a reactivation of an invoice whose
+// codes were already completed). Kept in sync with that guard's three checks:
+//   - SII: `aeatsiiMotivoRectif` blank.
+//   - TicketBAI (only when active for the org): `tbaiReverseinvoicecode` blank.
+//   - VERI*FACTU (only when active for the org): `etvfacInvType` still a non-rectificative code
+//     (blank or F*, not R1-R5).
+// Exported so a future test can cover it directly without mounting the hook.
+export function missingRectificationSystems(data, { showSii, showTbai, showVerifactu }) {
+  const missing = [];
+  if (showSii && !data?.aeatsiiMotivoRectif) {
+    missing.push('SII');
+  }
+  if (showTbai && !data?.tbaiReverseinvoicecode) {
+    missing.push('TicketBAI');
+  }
+  if (showVerifactu) {
+    const vfInvType = data?.etvfacInvType;
+    const isRectificativeCode = typeof vfInvType === 'string' && vfInvType.startsWith('R');
+    if (!isRectificativeCode) {
+      missing.push('Verifactu');
+    }
+  }
+  return missing;
+}
+
 // ETP-4783: SII rectification reason (EM_Aeatsii_Motivo_Rectif) — only shown on rectificative invoices.
 export const SII_MOTIVO_RECTIF_OPTIONS = [
   { value: 'R1', labelKey: 'sifDataTabs.option.siiMotivoR1' },
@@ -176,27 +204,31 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPurchaseInvoice, showSii, isDraft, recordId, data?.isRectificative, siiTypeField, onChange]);
 
-  // ETP-5745 CP-14: non-blocking heads-up when the invoice becomes rectificative — none of
+  // ETP-5745 CP-14/CP-16: non-blocking heads-up when the invoice becomes rectificative AND at
+  // least one active fiscal system still needs its own rectification code/motive — none of
   // SII's Motivo, TicketBAI's Código or VERI*FACTU's rectificative code are auto-picked (that
   // is a fiscal judgement call, never guessed on the user's behalf — see
-  // RectificationFiscalCodeGuard.java, which BLOCKS completion when any active system's own
-  // code is still blank). This toast only warns early, in the same place the structural 'R'
-  // default above already fires, so the user finds out before hitting Confirm instead of after.
-  // Sales-only, same scope as the structural defaults; gated on any fiscal system actually
-  // being configured for the invoice's org (not SII-only, since the message points at the SIF
-  // tab in general). Fires once per record.
+  // RectificationFiscalCodeGuard.java, which BLOCKS completion for exactly the same set of
+  // systems). This toast only warns early, so the user finds out before hitting Confirm instead
+  // of after.
+  //
+  // CP-16: gating on `missingRectificationSystems(...).length` rather than bare
+  // `isRectificative` is the fix for a reactivated (RE) invoice whose codes were already filled
+  // in before it was completed — `isRectificative` alone stayed true forever, so the toast kept
+  // firing on every reactivation even though there was nothing left to complete.
   useEffect(() => {
     if (isPurchaseInvoice) return;
     if (!isDraft || !recordId) return;
     if (!data?.isRectificative) return;
-    if (!showSii && !showTbai && !showVerifactu) return;
+    if (missingRectificationSystems(data, { showSii, showTbai, showVerifactu }).length === 0) return;
     if (rectifCodeToastRef.current === recordId) return;
     rectifCodeToastRef.current = recordId;
     toast.warning(ui('sifDataTabs.toast.rectificationCodeRequired.title'), {
       description: ui('sifDataTabs.toast.rectificationCodeRequired.description'),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPurchaseInvoice, isDraft, recordId, data?.isRectificative, showSii, showTbai, showVerifactu, ui]);
+  }, [isPurchaseInvoice, isDraft, recordId, data?.isRectificative, data?.aeatsiiMotivoRectif,
+      data?.tbaiReverseinvoicecode, data?.etvfacInvType, showSii, showTbai, showVerifactu, ui]);
 
   // ETP-4783: "Tipo de Factura Rectificativa" (etvfacReverseinvtype) is hidden from
   // the UI. When the Verifactu invoice type is rectificative (R1–R5) the field must
