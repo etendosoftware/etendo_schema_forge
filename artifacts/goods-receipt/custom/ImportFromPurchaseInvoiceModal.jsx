@@ -1,84 +1,49 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { apiFetch as moduleApiFetch } from '@/auth/api.js';
+import useImportLoadFailureToast from '@/windows/custom/shared/useImportLoadFailureToast.js';
+import { fetchInOutDocuments, fetchInOutLines, isCoveredDocument, pendingOf, zeroDocumentTotal } from '@/windows/custom/shared/inOutImport.js';
 
-function enrichLines(lines) {
-  return lines
-    .map(l => {
-      const qty = Number(l.invoicedQuantity) || 0;
-      const alreadyLinked = !!l.goodsShipmentLine;
-      return {
-        ...l,
-        _productName: l['product$_identifier'] || l.id,
-        _maxQty: alreadyLinked ? 0 : qty,
-        _alreadyImported: alreadyLinked,
-      };
-    })
-    .filter(l => Number(l.invoicedQuantity) > 0);
-}
+// ETP-6099 — the invoices and their lines come from the receipt's own read actions
+// (`availableInvoices` / `availableInvoiceLines`, inOutImport.js): completed invoices of the
+// vendor with a non-negative total, in the receipt's currency, newest created first, each line with
+// the server's pending under `pendingBasis: 'classic'` (product decision), which keeps this popup's
+// rule from before it read the actions: 0 once the invoice line is linked to a receipt line,
+// otherwise its full invoiced quantity — draft receipts are NOT deducted, so a line another draft
+// receipt holds is offered in full, with no «in draft» note (the old popup showed none). The covered
+// invoices (`pendingLines: 0`) are listed too and hidden by `isDocumentCovered`. Replaced: the company-wide invoice list (500), the receipt header
+// and the lines of EVERY candidate invoice read at open to drop the fully linked ones.
+const ENTITY = 'goodsReceipt'; // the header entity of the action URLs
+const SPEC = 'goods-receipt';
+const CLASSIC_PENDING = Object.freeze({ pendingBasis: 'classic' }); // both reads
 
-const fetchDocuments = async ({ base, bpId, invoiceId: receiptId }) => {
-  const [res, headerRes] = await Promise.all([
-    moduleApiFetch(`${base}/purchase-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
-    moduleApiFetch(`${base}/goods-receipt/goodsReceipt/${receiptId}`),
-  ]);
-  if (!res.ok) return { documents: [], sharedContext: { linesCache: {} } };
+const CURRENCY_PROBE = Object.freeze({
+  sourceHeader: 'purchase-invoice/header',
+  isCandidate: (o) => Number(o.grandTotalAmount ?? 0) >= 0,
+});
 
-  let receiptCurrency = null;
-  if (headerRes.ok) {
-    receiptCurrency = (await headerRes.json())?.response?.data?.[0]?.etgoCurrency || null;
-  }
+const fetchDocuments = ({ base, bpId, invoiceId: receiptId }) => fetchInOutDocuments({
+  apiFetch: moduleApiFetch, base, spec: SPEC, entity: ENTITY, targetId: receiptId, bpId,
+  action: 'availableInvoices', dateKey: 'invoiceDate', currencyProbe: CURRENCY_PROBE, params: CLASSIC_PENDING,
+});
 
-  const all = (await res.json())?.response?.data || [];
-  const statusAndBpCandidates = all.filter(o =>
-    o.documentStatus === 'CO'
-    && o.businessPartner === bpId
-    && Number(o.grandTotalAmount ?? 0) >= 0
-  );
-  const candidates = receiptCurrency
-    ? statusAndBpCandidates.filter(o => o.currency === receiptCurrency)
-    : statusAndBpCandidates;
-  const excludedByCurrency = !!receiptCurrency
-    && candidates.length === 0
-    && statusAndBpCandidates.length > 0;
-
-  const lineResults = await Promise.all(
-    candidates.map(async inv => {
-      try {
-        const r = await moduleApiFetch(
-          `${base}/purchase-invoice/lines?parentId=${inv.id}&_startRow=0&_endRow=200`,
-          {},
-        );
-        return { id: inv.id, lines: r.ok ? (await r.json())?.response?.data || [] : [] };
-      } catch {
-        return { id: inv.id, lines: [] };
-      }
-    }),
-  );
-
-  const linesCache = {};
-  lineResults.forEach(r => { linesCache[r.id] = r.lines; });
-
-  const documents = candidates.filter(inv => {
-    const lines = linesCache[inv.id] || [];
-    return lines.some(l => !l.goodsShipmentLine && Number(l.invoicedQuantity) > 0);
-  });
-
-  return { documents, sharedContext: { linesCache }, excludedByCurrency };
+const toInvoiceLine = (l) => {
+  const pending = pendingOf(l);
+  return {
+    ...l,
+    _productName: l['product$_identifier'] || l.id,
+    _maxQty: pending,
+    _alreadyImported: pending === 0,
+  };
 };
 
+// Only lines invoiced in a positive quantity are received from here.
 const fetchLines = async ({ base, docId, sharedContext }) => {
-  const cached = sharedContext?.linesCache?.[docId];
-  if (cached) return enrichLines(cached);
-  try {
-    const res = await moduleApiFetch(
-      `${base}/purchase-invoice/lines?parentId=${docId}&_startRow=0&_endRow=200`,
-      {},
-    );
-    return res.ok ? enrichLines((await res.json())?.response?.data || []) : [];
-  } catch {
-    return [];
-  }
+  const rows = await fetchInOutLines({
+    apiFetch: moduleApiFetch, base, spec: SPEC, entity: ENTITY, targetId: sharedContext?.targetId,
+    action: 'availableInvoiceLines', params: { ...CLASSIC_PENDING, invoiceId: docId },
+  });
+  return rows.filter(l => Number(l.invoicedQuantity) > 0).map(toInvoiceLine);
 };
 
 const getDocDisplay = (doc) => ({
@@ -101,6 +66,7 @@ export default function ImportFromPurchaseInvoiceModal(props) {
   // (an invoice importing shipment lines), and resolveApiUrl only skips a prefix that
   // matches - so a configured base doubles it and 404s.
   const apiFetch = useApiFetch('');
+  const loaders = useImportLoadFailureToast(fetchDocuments, fetchLines);
   return (
     <ImportLinesModal
       {...props}
@@ -112,8 +78,11 @@ export default function ImportFromPurchaseInvoiceModal(props) {
       noCurrencyMatchMessageKey="noPurchaseInvoicesMatchReceiptCurrency"
       successMessageKey="linesImportedFromPurchaseInvoice"
       showPriceColumns={false}
-      fetchDocuments={fetchDocuments}
-      fetchLines={fetchLines}
+      fetchDocuments={loaders.fetchDocuments}
+      fetchLines={loaders.fetchLines}
+      eagerLoadLines={false}
+      isDocumentCovered={isCoveredDocument}
+      getDocumentTotal={zeroDocumentTotal}
       getDocDisplay={getDocDisplay}
       buildLineBody={buildLineBody}
     />
