@@ -153,6 +153,10 @@ export default function ImportLinesModal({
   getSuccessToast,       // ({ count, importedDocIds, afterImportResult, partial, ...selection }) => { message, variant? } | null
                          // `partial` = some line imports failed: the modal shows its own warning and
                          // ALSO shows whatever this returns (e.g. a failed follow-up write).
+  isDocumentCovered,     // (doc) => boolean: true hides the document as fully imported from its own row,
+                         // lines not needed (for eagerLoadLines={false}); all hidden → allImportedMessageKey
+  getDocumentTotal,      // (doc) => number | null: the row total while the document's lines are NOT
+                         // loaded; once loaded (or null/undefined, or no prop) the sum of its lines
 }) {
   if (!linesEndpoint && !submitImport) {
     throw new Error('ImportLinesModal: linesEndpoint prop is required unless submitImport is provided');
@@ -226,6 +230,7 @@ export default function ImportLinesModal({
 
   const filtered = useMemo(() => {
     const visible = documents.filter(d => {
+      if (isDocumentCovered?.(d)) return false;
       const lines = docLines[d.id];
       if (!lines || lines.length === 0) return true;
       return lines.some(l => !l._alreadyImported);
@@ -233,7 +238,7 @@ export default function ImportLinesModal({
     if (!search.trim()) return visible;
     const q = search.toLowerCase();
     return visible.filter(d => (d.documentNo || '').toLowerCase().includes(q));
-  }, [documents, docLines, search]);
+  }, [documents, docLines, search, isDocumentCovered]);
 
   // Documents owning at least one selected line, in list order. Recomputed on every selection
   // change so callers can react live (see `renderSelectionPanel`).
@@ -632,9 +637,13 @@ export default function ImportLinesModal({
     // The plain sum of what the lines show; a line without a unit price (its cell shows «-»)
     // contributes the caller's `_lineNetAmount`, as before.
     const docTotalSign = negativeQuantity ? -1 : 1;
-    const docTotal = lines.length > 0
+    const linesTotal = lines.length > 0
       ? lines.reduce((sum, l) => sum + (lineAmountOf(l) ?? (l._lineNetAmount || 0) * docTotalSign), 0)
       : null;
+    // Loaded lines always win (the total follows quantity edits); the document's own total only
+    // stands in while its lines are not loaded yet.
+    const docOwnTotal = docLines[doc.id] === undefined ? getDocumentTotal?.(doc) : undefined;
+    const docTotal = Number.isFinite(docOwnTotal) ? docOwnTotal : linesTotal;
     return (
       <div key={doc.id} data-testid="ImportLinesModal__document" data-doc-id={doc.id}>
         <div

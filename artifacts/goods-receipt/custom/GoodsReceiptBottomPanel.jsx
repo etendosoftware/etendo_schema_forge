@@ -5,6 +5,7 @@ import { LinesBottomSection } from '@/components/contract-ui';
 import RelatedDocuments from '@/windows/custom/goods-receipt/RelatedDocuments';
 import ImportFromPurchaseOrderModal from './ImportFromPurchaseOrderModal';
 import ImportFromPurchaseInvoiceModal from './ImportFromPurchaseInvoiceModal';
+import { IMPORT_SAVE_OPTIONS } from '@/windows/custom/shared/importSaveOptions.js';
 
 export default function GoodsReceiptBottomPanel(props) {
   return <LinesBottomSection {...props} relatedDocuments={RelatedDocuments} showTotals={false} />;
@@ -29,7 +30,7 @@ function GoodsReceiptLinesEmptyState({ data, onAddLine, canAddLine = true, recor
 
   const handleImportClick = async (openFn, modalType) => {
     if (onSave) {
-      const ok = await onSave(modalType);
+      const ok = await onSave(modalType, IMPORT_SAVE_OPTIONS);
       if (!ok) return;
     }
     openFn(true);
@@ -118,7 +119,7 @@ const GoodsReceiptLineActions = forwardRef(function GoodsReceiptLineActions(
 
   const openOrderModal = async () => {
     if (onSave) {
-      const ok = await onSave('order');
+      const ok = await onSave('order', IMPORT_SAVE_OPTIONS);
       if (!ok) return;
     }
     setShowImportOrderModal(true);
@@ -126,7 +127,7 @@ const GoodsReceiptLineActions = forwardRef(function GoodsReceiptLineActions(
 
   const openInvoiceModal = async () => {
     if (onSave) {
-      const ok = await onSave('invoice');
+      const ok = await onSave('invoice', IMPORT_SAVE_OPTIONS);
       if (!ok) return;
     }
     setShowImportInvoiceModal(true);

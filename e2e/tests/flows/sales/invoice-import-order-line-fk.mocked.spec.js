@@ -27,13 +27,17 @@ import { login } from '../../helpers/auth.js';
  *   - purchase-invoice (`ImportFromPurchaseOrderModal`) — the same unified popup (ETP-5828) on its
  *     client path (`importVia: 'client'`, until QA decides MCP-2): still one
  *     `POST /purchase-invoice/lines` per line, carrying the FK as `salesOrderLine` (the spec's
- *     java_qualifier).
+ *     java_qualifier). Since ETP-6099 it LISTS like sales (availableOrders + one
+ *     availableOrderLines with `detail: true` per order, whose row carries the order-line columns
+ *     the line body copies), asking `pendingBasis: 'classic'` — the pre-ETP-6099 pending rule,
+ *     ordered − invoiced with no draft deduction (product decision).
  *
  * What this spec locks, per window:
  *   1. The FK of the selected order line reaches the server under the key that window's
  *      contract reads, and the dead `cOrderlineId` key is sent nowhere.
- *   2. sales-invoice only: no per-line `POST /lines` is sent, and the quantity sent is the
- *      server's `pendingQuantity` (2), not ordered − invoiced computed locally (3).
+ *   2. sales-invoice: no per-line `POST /lines` is sent, and the quantity sent is the server's
+ *      `pendingQuantity` (2, drafts counted), not ordered − invoiced (3). purchase-invoice: the
+ *      quantity sent is the server's CLASSIC pending, ordered − invoiced (3), as before ETP-6099.
  *
  * Routing notes
  * -------------
@@ -166,9 +170,10 @@ function buildFixtures({ invoiceSpec, orderSpec, documentType }) {
         tax: 'tax-1',
       },
     ],
-    // What `.../action/availableOrderLines` answers (sales-invoice only). Line 2 has
-    // pendingQuantity 2 while ordered − invoiced is 3: the posted quantity tells which one the
-    // modal used. The purchase modal never calls this endpoint and keeps ordered − invoiced.
+    // What `.../action/availableOrderLines` answers (both windows since ETP-6099) under the
+    // default rule. Line 2 has pendingQuantity 2 (drafts counted) while ordered − invoiced is 3,
+    // which is what the mock answers to `pendingBasis: 'classic'`: the posted quantity tells which
+    // rule the modal asked for.
     pendingByLine: [
       { id: orderLine1Id, pendingQuantity: 4 },
       { id: orderLine2Id, pendingQuantity: 2 },
@@ -255,7 +260,17 @@ async function installMocks(page, cfg, { existingInvoiceLines = [], state }) {
         return {
           id: p.id, lineNo: (i + 1) * 10, product: line.product,
           'product$_identifier': line['product$_identifier'], uOM: line.uOM,
-          pendingQuantity: p.pendingQuantity, unitPrice: line.unitPrice,
+          // `pendingBasis: 'classic'` (purchases): ordered − invoiced, no draft deduction.
+          pendingQuantity: body.pendingBasis === 'classic'
+            ? Math.max(0, line.orderedQuantity - line.invoicedQuantity)
+            : p.pendingQuantity,
+          unitPrice: line.unitPrice, discount: 0,
+          // `detail: true` (the purchase client import, ETP-6099): the order-line columns the line
+          // body copies.
+          ...(body.detail ? {
+            listPrice: line.listPrice, grossUnitPrice: 0, tax: line.tax, description: null,
+            orderedQuantity: line.orderedQuantity, invoicedQuantity: line.invoicedQuantity,
+          } : {}),
         };
       });
     } else {
@@ -296,7 +311,8 @@ async function installMocks(page, cfg, { existingInvoiceLines = [], state }) {
   await page.route(`**/sws/neo/${invoiceSpec}/lines/**`, invoiceLinesHandler);
   await page.route(`**/sws/neo/${invoiceSpec}/lines**`, invoiceLinesHandler);
 
-  // Order header list — the modal's candidate-documents lookup.
+  // Order header list — only read when availableOrders lists nothing (the «none in this currency»
+  // fallback); kept so an unexpected read still gets the right shape.
   const orderHeaderHandler = async (route) => {
     const req = route.request();
     if (req.method() !== 'GET') return route.fallback();
@@ -309,20 +325,6 @@ async function installMocks(page, cfg, { existingInvoiceLines = [], state }) {
   };
   await page.route(`**/sws/neo/${orderSpec}/header/**`, orderHeaderHandler);
   await page.route(`**/sws/neo/${orderSpec}/header**`, orderHeaderHandler);
-
-  // Order lines — the modal's fetchLines for the expanded order.
-  const orderLinesHandler = async (route) => {
-    const req = route.request();
-    if (req.method() !== 'GET') return route.fallback();
-    if (!isPlainLinesPath(req.url())) return route.fallback();
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ response: { data: orderLines } }),
-    });
-  };
-  await page.route(`**/sws/neo/${orderSpec}/lines/**`, orderLinesHandler);
-  await page.route(`**/sws/neo/${orderSpec}/lines**`, orderLinesHandler);
 }
 
 // ---------------------------------------------------------------------------
@@ -387,7 +389,10 @@ for (const win of WINDOWS) {
 
         // The orders and the pending quantities came from the server (ETP-5828: listed through
         // availableOrders, lines in ONE availableOrderLines per order, covered ones included).
-        expect(state.actionCalls.some((c) => c.name === 'availableOrders')).toBe(true);
+        // `detail` (ETP-6099): pendingLines leaves out the lines already on this invoice, so an
+        // order with nothing selectable is hidden at open; the lines body stays without it.
+        expect(state.actionCalls.filter((c) => c.name === 'availableOrders').map((c) => c.body))
+          .toContainEqual(expect.objectContaining({ includeCovered: true, detail: true }));
         expect(state.actionCalls.filter((c) => c.name === 'availableOrderLines').map((c) => c.body))
           .toContainEqual({ orderId, includeCovered: true });
 
@@ -406,6 +411,16 @@ for (const win of WINDOWS) {
         const posted = state.postBodies[0];
         // The FK the backend actually persists (spec java_qualifier for C_OrderLine_ID).
         expect(posted.salesOrderLine).toBe(orderLine2Id);
+        // ETP-6099: listed through the actions with the classic pending rule (product decision),
+        // so the quantity is ordered − invoiced (3) as before, not the drafts-counted 2; the body
+        // is built from the detailed availableOrderLines row (no order-lines GET).
+        expect(state.actionCalls.filter((c) => c.name === 'availableOrders').map((c) => c.body))
+          .toContainEqual(expect.objectContaining({ pendingBasis: 'classic' }));
+        expect(state.actionCalls.filter((c) => c.name === 'availableOrderLines').map((c) => c.body))
+          .toContainEqual({ orderId, includeCovered: true, detail: true, pendingBasis: 'classic' });
+        expect(Number(posted.invoicedQuantity)).toBe(3);
+        expect(posted.tax).toBe('tax-1');
+        expect(Number(posted.listPrice)).toBe(20);
         // The dead key must not be present at all — NeoFieldFilter would drop it silently,
         // so sending it "just in case" is indistinguishable from not sending the FK.
         expect(Object.hasOwn(posted, 'cOrderlineId')).toBe(false);
