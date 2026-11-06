@@ -48,12 +48,16 @@ function renderName(row) {
   );
 }
 
+// No `label`: every header is the translated AD label of the column (`t(col.column)`, the same
+// resolution DataTable, the advanced filter and the sort popover use first), so the headers read
+// exactly as in the generated flag-off table — Identificador, Nombre, Cliente, Proveedor/Acreedor,
+// Valor por defecto — in every locale.
 const FLAG_ON_COLUMNS = [
-  { key: 'searchKey', column: 'Value', type: 'string', label: 'Search Key', required: true, maxLength: 40 },
-  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true, maxLength: 60, minWidth: NAME_WIDTH_PX, render: renderName },
-  { key: 'etgoIscustomer', column: 'EM_Etgo_Iscustomer', type: 'boolean', label: 'Customer', ...YES_NO_BADGE, required: true, minWidth: TYPE_BADGE_WIDTH_PX },
-  { key: 'etgoIsvendor', column: 'EM_Etgo_Isvendor', type: 'boolean', label: 'Vendor/Creditor', ...YES_NO_BADGE, required: true, minWidth: TYPE_BADGE_WIDTH_PX },
-  { key: 'default', column: 'IsDefault', type: 'boolean', label: 'Default', ...YES_NO_BADGE, required: true, grow: true },
+  { key: 'searchKey', column: 'Value', type: 'string', required: true, maxLength: 40 },
+  { key: 'name', column: 'Name', type: 'string', required: true, maxLength: 60, minWidth: NAME_WIDTH_PX, render: renderName },
+  { key: 'etgoIscustomer', column: 'EM_Etgo_Iscustomer', type: 'boolean', ...YES_NO_BADGE, required: true, minWidth: TYPE_BADGE_WIDTH_PX },
+  { key: 'etgoIsvendor', column: 'EM_Etgo_Isvendor', type: 'boolean', ...YES_NO_BADGE, required: true, minWidth: TYPE_BADGE_WIDTH_PX },
+  { key: 'default', column: 'IsDefault', type: 'boolean', ...YES_NO_BADGE, required: true, grow: true },
 ];
 const FLAG_ON_FILTERS = ['searchKey', 'name'];
 
