@@ -436,6 +436,18 @@ gateway-dev-local-core: ## Start the gateway dev server against the linked local
 public-api-e2e: ## Run the public API end-to-end suite against a RUNNING gateway (PUBLIC_API_BASE_URL, PUBLIC_API_KEY; localhost only)
 	cd gateway && npm run test:e2e
 
+# Unattended form used by the full Jenkins pipelines (docs/public-api.md §4.9). The install step
+# packs api-gateway-core from the schema_forge_core tag pinned in package.json (it is not
+# published); the run step signs in to NEO, mints two API keys, starts the gateway, runs the
+# suite and always cleans up. Environment variables: scripts/public-api-e2e-ci.mjs.
+.PHONY: public-api-e2e-ci-install
+public-api-e2e-ci-install: ## Install + build gateway/ with api-gateway-core from the pinned core tag (PUBLIC_API_CORE_DIR or a git clone)
+	node scripts/public-api-e2e-ci.mjs install
+
+.PHONY: public-api-e2e-ci
+public-api-e2e-ci: ## Sign in to NEO, create API keys, start the gateway and run the e2e suite (NEO_BASE_URL, PUBLIC_API_E2E_CREDENTIALS_FILE)
+	node scripts/public-api-e2e-ci.mjs run
+
 .PHONY: docs-api-sync
 docs-api-sync: ## Copy the running gateway OpenAPI contract into the Docusaurus portal
 	cd docs-api && npm run sync:openapi

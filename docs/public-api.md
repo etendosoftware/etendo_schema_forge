@@ -376,7 +376,7 @@ Every failure is an error document, built from Etendo's answer when Etendo refus
 
 #### Running the end-to-end suite
 
-`gateway/e2e/` holds an end-to-end suite that drives a **running** gateway over HTTP (`node:test` plus global `fetch`). It is not part of `npm test` and not part of the deploy gate. One file per flow: `contacts` (with its location address), `product`, `sales-order` and `purchase-order` (header plus lines), and `errors` (the JSON:API error contract). Each flow creates a record, reads it, lists it, `PATCH`es it with the `If-Match` of the read, checks `412` for a stale ETag and `428` for a missing one, deletes it and checks `404` afterwards. Every successful response body is also validated with Ajv against the schema of its operation in the gateway's own `/api/openapi.json`, so a drift between the document and the real answers fails the run with the path and the schema error.
+`gateway/e2e/` holds an end-to-end suite that drives a **running** gateway over HTTP (`node:test` plus global `fetch`). It is not part of `npm test` and not part of the deploy gate; the full CI pipelines run it unattended through `make public-api-e2e-ci` (below). One file per flow: `contacts` (with its location address), `product`, `sales-order` and `purchase-order` (header plus lines), and `errors` (the JSON:API error contract). Each flow creates a record, reads it, lists it, `PATCH`es it with the `If-Match` of the read, checks `412` for a stale ETag and `428` for a missing one, deletes it and checks `404` afterwards. Every successful response body is also validated with Ajv against the schema of its operation in the gateway's own `/api/openapi.json`, so a drift between the document and the real answers fails the run with the path and the schema error.
 
 ```bash
 export PUBLIC_API_BASE_URL=http://localhost:4399
@@ -390,6 +390,40 @@ make public-api-e2e                                    # or: cd gateway && npm r
 - **Data hygiene.** Every record carries a per-run prefix `e2e-<timestamp>-<random>` in its name or search key. An `after` hook deletes whatever the run created, newest first, even when a test failed; a record it could not delete is printed to stderr.
 - **Rate limit.** The gateway allows 100 requests per key per 60 s by default ([4.11](#411-rate-limiting)); the client waits for `Retry-After` and retries on `429`, so a full run takes a little longer than its request count suggests. Raise `PUBLIC_API_RATE_LIMIT` on the local gateway to run faster.
 - Locally, creating a contact can answer `502` when the tenant lacks the `EM_Etgo_Identifier` sequence; the failure message says so.
+
+#### Running the suite unattended (CI)
+
+`make public-api-e2e-ci` runs the same suite with no key prepared by hand. It needs a running NEO and an Etendo GO account (email and password) whose own environment has a warehouse and the `EM_Etgo_Identifier` sequence, which a tenant created through onboarding has. `scripts/public-api-e2e-ci.mjs` then:
+
+1. signs in with `POST /sws/go/session`, lists `GET /sws/go/environments` and enters the one the account owns (`relationship: OWNER`, else the first) with `POST /sws/go/session/environment` (the SPA's cookie session: the session cookie, the `X-Go-CSRF` token of each answer, and the NEO's own origin as `Origin`, which the same-origin rule always allows);
+2. deletes the active keys named `e2e-ci-*` that a cancelled or crashed run left behind (an owner may hold 10 active keys, [5.4](#54-limits-and-constraints)), then creates two keys through `POST /oauth2/api-keys` ([5.2](#52-endpoints)), named `e2e-ci-<run id>-full` (`public-api:read`, `public-api:write`, `public-api:process`, so business actions can run) and `e2e-ci-<run id>-readonly` (`public-api:read`), so the `403` test runs too. A `409` on create says the remaining keys belong to someone else;
+3. starts the built gateway (`gateway/dist/main.js`) on a free `127.0.0.1` port against that NEO, with `PUBLIC_API_RATE_LIMIT=100000` so the throttle never slows the run, and waits for `/healthz`;
+4. runs `npm run test:e2e` with `PUBLIC_API_BASE_URL`, `PUBLIC_API_KEY` and `PUBLIC_API_KEY_READONLY` set, adding a JUnit reporter through `NODE_OPTIONS`;
+5. always (failure and `SIGINT`/`SIGTERM` included) stops the suite's whole process group, then the gateway, deletes both keys and closes the session, and exits with the suite's status (`1` when the setup failed, `130`/`143` when interrupted).
+
+The first request after signing in (`GET /sws/go/environments`) and the first after entering the environment (`GET /oauth2/api-keys`) are retried on `401` only, up to 3 times 500 ms apart: GO currently answers those two session calls before the new session is committed, so the next request can briefly see it as invalid. This is a temporary workaround, removed once ETP-6152 fixes the session commit; no other request retries.
+
+It prints the key ids, never a password, cookie, CSRF token or secret. The gateway and the suite get a minimal environment: `PATH`, `HOME`, the temp/locale variables, `CI`, `NODE_*`, `npm_config_*` (either case) and `PUBLIC_API_*` (minus the sign-in account), plus what the script sets for them; other CI secrets in the caller's environment do not reach them.
+
+| Variable | Meaning |
+|----------|---------|
+| `NEO_BASE_URL` | NEO to test, default `http://localhost:8080/etendo`. A host other than `localhost`/`127.0.0.1` is refused unless `PUBLIC_API_E2E_ALLOW_REMOTE=1` |
+| `PUBLIC_API_E2E_CREDENTIALS_FILE` | JSON `{ "email", "password" }`, the shape Playwright's onboarding setup writes to `e2e/.auth-credentials*.json` |
+| `PUBLIC_API_E2E_EMAIL`, `PUBLIC_API_E2E_PASSWORD` | the account given directly instead (they win over the file) |
+| `PUBLIC_API_E2E_RESULTS_DIR` | where `junit.xml` and `gateway.log` go, default `gateway/e2e-results/` (gitignored); `PUBLIC_API_E2E_JUNIT=0` skips the JUnit file |
+| `PUBLIC_API_E2E_GATEWAY_PORT` | fixed gateway port instead of a free one |
+| `PUBLIC_API_E2E_TIMEOUT_MINUTES` | overall limit of the run, default `30`; when it is reached the script stops the suite and the gateway, deletes the keys and exits `124` |
+
+The gateway must be built first: `make public-api-e2e-ci-install` installs `gateway/` and builds it with `@etendosoftware/api-gateway-core` taken from the `schema_forge_core` tag pinned in `package.json` (the package is not published; it is packed from source by `scripts/lib/pack-gateway-core.mjs`, the same helper the gateway tests of `deploy-public-api.yml` use; the `Dockerfile` repeats those steps inside its build stage). The source is exported from `PUBLIC_API_CORE_DIR` when it points at a local `schema_forge_core` clone that has the tag (read-only, the working tree is not touched), and cloned from `PUBLIC_API_CORE_REPO` otherwise (SSH by default). A second call with the same pin only rebuilds `gateway/` (seconds).
+
+```bash
+make public-api-e2e-ci-install
+PUBLIC_API_E2E_CREDENTIALS_FILE=e2e/.auth-credentials.json make public-api-e2e-ci
+```
+
+**Isolation from the Playwright integration suite.** The full pipelines run this in a lane parallel to the Playwright integration suite, on the same Tomcat: the lane builds the gateway while Playwright builds its bundle and onboards, waits until onboarding has written the credentials of its **second** account (`e2e/.auth-credentials-2.json`; `e2e/onboarding-accounts.json` asks for two; only a file newer than the lane's start counts, so a reused workspace cannot supply a previous run's account), runs the suite with them and publishes `junit.xml` plus `gateway.log`. The whole lane, the core clone and `npm install` included, is bounded at 45 minutes; the script is given the time left as `PUBLIC_API_E2E_TIMEOUT_MINUTES`, so it normally stops first and still deletes its keys. The integration specs work in the first account's tenant; the second tenant is only touched by the cross-client invitation spec, which creates users and invitations there, not the contacts, products and orders this suite writes. That spec also invites the second account into the first tenant, which is why the script enters the environment the account owns rather than simply the first one listed. A separate tenant shares no records, document sequences or warehouses with the browser specs, and every record of this suite also carries its `e2e-<timestamp>-<random>` prefix.
+
+**When the lane runs.** A push build (for example `main` or a `mergeblock/*` cut) always runs it. A pull request build runs it only when `git diff --name-only origin/<target>...HEAD` in the repository that triggered the build touches the public API: in `etendo_schema_forge`, any path under `gateway/` or `public-api/`, `scripts/public-api-e2e-ci.mjs`, `scripts/lib/pack-gateway-core.mjs`, `package.json`, `package-lock.json` or `Makefile`; in `com.etendoerp.go`, any path that is not under `docs/` or `src-test/` and does not end in `.md`. Otherwise the lane logs `Public API E2E skipped: no public API change in this PR` and is reported as skipped, not failed. A build from any other repository, or a diff that cannot be computed, runs the lane.
 
 ### 4.10 List queries: pagination, sorting and filtering
 

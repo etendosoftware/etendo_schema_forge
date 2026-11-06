@@ -45,6 +45,9 @@ on:
       # file are filtered out in "Resolve what this run does".
       - 'package.json'
       - '.github/workflows/deploy-public-api.yml'
+      # The gateway tests' install sequence. Not part of the image, so a push that only changes
+      # it builds and deploys nothing ("Resolve what this run does"); a PR runs the tests with it.
+      - 'scripts/lib/pack-gateway-core.mjs'
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
@@ -52,6 +55,7 @@ on:
       - 'public-api/**'
       - 'package.json'
       - '.github/workflows/deploy-public-api.yml'
+      - 'scripts/lib/pack-gateway-core.mjs'
   workflow_dispatch:
     inputs:
       redeploy_tag:
@@ -178,21 +182,18 @@ jobs:
       # test suite is a gate on both PRs and main. The core package is packed
       # from the pinned checkout exactly as the Dockerfile does, so the tests
       # run against the same api-gateway-core the image will contain.
-      # gateway/ has no lockfile, hence `npm install` (not `npm ci`), and
-      # --no-save: gateway/package.json is COPYed into the image and must not
-      # end up pointing at a local tarball.
+      # scripts/lib/pack-gateway-core.mjs is the shared pack + install sequence
+      # (the CI e2e run uses it too). gateway/ has no lockfile, hence
+      # `npm install` (not `npm ci`), and --no-save: gateway/package.json is
+      # COPYed into the image and must not end up pointing at a local tarball.
       - name: Gateway tests
         if: steps.plan.outputs.build == 'true'
         run: |
           set -euo pipefail
-          CORE_PKG=.schema_forge_core/packages/api-gateway-core
-          npm install --include=dev --prefix "$CORE_PKG"
-          npm install --include=dev --no-save --prefix "$CORE_PKG" @types/node
-          npm run build --prefix "$CORE_PKG"
-          (cd "$CORE_PKG" && npm pack --pack-destination "$RUNNER_TEMP")
+          node scripts/lib/pack-gateway-core.mjs \
+            .schema_forge_core/packages/api-gateway-core gateway "$RUNNER_TEMP"
 
           cd gateway
-          npm install --include=dev --no-save "$RUNNER_TEMP"/etendosoftware-api-gateway-core-*.tgz
           npm test
           rm -rf node_modules "$RUNNER_TEMP"/etendosoftware-api-gateway-core-*.tgz
           # The image build must see the committed tree, not test leftovers.
