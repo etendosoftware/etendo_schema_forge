@@ -26,8 +26,8 @@ import {
  * - ETP-6103, the hold: while the committed value is being located and centred the hook returns
  *   `locating: true`. The caller then keeps its rows laid out but invisible (they must keep layout so
  *   the centring can measure them), hides its scrollbar and shows `<LocatingNotice/>`. The hold ends
- *   when the value is centred (a value among the last loaded rows stays held until one more page
- *   lands or the list ends; a page that adds no rows twice in a row also ends it, whatever `hasMore` says), when it cannot be found (the ETP-5846 pin takes over), when a page
+ *   when the value is centred (a value among the last loaded rows stays held until one more page,
+ *   of the picker's own size, lands or the list ends; a page that adds no rows twice in a row also ends it, whatever `hasMore` says), when it cannot be found (the ETP-5846 pin takes over), when a page
  *   fails or the list ends, when the user types or presses a key, and on close. It never starts
  *   before the first page has landed (the caller's own loading state covers that) nor when there is
  *   no committed value. Centring and release happen in a layout effect, so the first painted frame
@@ -83,9 +83,9 @@ export function useLocateCommittedValue({
   };
   const stalled = () => settledWithoutRows() && lastRequestRef.current.strikes >= 1;
   // A loader whose in-flight guard swallowed the call returns false: that is not a request.
-  const requestNextPage = () => {
+  const requestNextPage = (limit = walkLimit) => {
     const strikes = settledWithoutRows() ? lastRequestRef.current.strikes + 1 : 0;
-    if (fetchPage('', offsetRef.current, { limit: walkLimit }) === false) return;
+    if (fetchPage('', offsetRef.current, { limit }) === false) return;
     lastRequestRef.current = { loaded: loadedRows, settled: settledFetches, strikes };
   };
   const maxRows = locateMaxRows(pageSize, largePages);
@@ -134,8 +134,9 @@ export function useLocateCommittedValue({
     } else if (paged && canFetch && loading) {
       // A page is in flight: stay held; `settledFetches` re-runs this once it has landed.
     } else if (paged && canFetch && !stalled() && loadedRows < maxRows) {
-      // Among the last loaded rows: it can only be centred once more rows exist below it.
-      requestNextPage();
+      // Among the last loaded rows: it can only be centred once more rows exist below it. The value
+      // is already found, so one page of the picker's own size is enough, not the rest of the walk.
+      requestNextPage(pageSize);
     } else {
       // Page cap reached or the list stopped growing: keep it where it is, never hold forever.
       centeredRef.current = true;

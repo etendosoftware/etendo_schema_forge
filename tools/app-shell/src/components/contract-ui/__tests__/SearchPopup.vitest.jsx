@@ -340,6 +340,8 @@ describe('SearchPopup — committed value (ETP-5948)', () => {
     renderPopup({ loadPage, value: 'acc-98', valueLabel: 'Account 0098' });
     // acc-98 is among the last rows of the 100-row first page: it cannot be centred yet.
     await waitFor(() => expect(loadPage.mock.calls.filter((c) => c[1] > 0)).toHaveLength(1));
+    // It is already found: the extra page only needs rows below it, not the rest of the walk.
+    expect(listCalls(loadPage)).toEqual([[0, 100], [100, SEARCH_POPUP_PAGE_SIZE]]);
     const option = screen.getByTestId('search-popup-option-acc-98');
     expect(screen.getByTestId('search-popup-locating')).toBeInTheDocument();
     expect(option).toHaveClass('invisible');
