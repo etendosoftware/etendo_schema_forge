@@ -81,8 +81,13 @@ export function describeOrderFlow(kind: 'sales-order' | 'purchase-order'): void 
     });
 
     // Runs last: a completed order cannot be deleted, so it outlives the run (see cleanupCreated).
+    // The integrator's flow, with no id known beforehand: look a payment method up, set it on the
+    // contact, create an order (it inherits it) and complete it.
     describe('complete action', () => {
       let draft: LifecycleSpec;
+      let completable: LifecycleSpec;
+      let paymentMethodId = '';
+      const contactField = CONTACT_PAYMENT_FIELD[kind];
 
       it('refuses to complete an order without a payment method: 422, and it stays a draft', async () => {
         const header = await createDraftOrder(kind, { contactId, addressId, warehouseId });
@@ -104,52 +109,85 @@ export function describeOrderFlow(kind: 'sales-order' | 'purchase-order'): void 
         expectErrorDocument(await api('POST', `${kind}/${draft.id}/actions/void`), 404, 'unknown_action');
       });
 
-      it('completes the order once it has a payment method: 200, and it reads back with document_status CO',
-        NEEDS_PAYMENT_METHOD,
-        async () => {
-          const { etag } = await readWithEtag(itemPath(draft));
-          expectStatus(await patch(draft, { payment_method: PAYMENT_METHOD_ID }, etag), 200);
+      it('looks a payment method up on the contact and on the order, and an undeclared lookup is 404 unknown_lookup', async () => {
+        const contactLookup = await api('GET', `contacts/lookups/${contactField}?page[size]=100`);
+        expectStatus(contactLookup, 200);
+        const values: Array<{ type: string; id: string; attributes: { label: string | null } }> = contactLookup.json.data;
+        assert.ok(values.length > 0, EMPTY_LOOKUP);
+        for (const value of values) {
+          assert.equal(value.type, 'payment-method');
+          assert.equal(typeof value.id, 'string');
+        }
+        const [first] = values;
+        paymentMethodId = first.id;
 
-          const res = await api('POST', `${kind}/${draft.id}/actions/complete`);
-          expectStatus(res, 200);
-          assert.equal(res.json.data.id, draft.id, 'the answer is the order re-read after the action');
-          assert.equal(res.json.data.attributes.document_status, 'CO', 'the answer shows the new status');
-          assert.notEqual(res.json.meta?.alreadyApplied, true, 'the first completion really ran');
+        const orderLookup = await api('GET', `${kind}/lookups/payment_method?page[size]=100`);
+        expectStatus(orderLookup, 200);
+        assert.ok(orderLookup.json.data.some((value: { id: string }) => value.id === paymentMethodId),
+          `the ${kind} lookup offers the payment method the contact lookup offered`);
 
-          const reread = await api('GET', itemPath(draft));
-          expectStatus(reread, 200);
-          assert.equal(reread.json.data.attributes.document_status, 'CO');
-        });
+        if (first.attributes.label) {
+          const searched = await api('GET', `${kind}/lookups/payment_method?filter[search]=${encodeURIComponent(first.attributes.label)}`);
+          expectStatus(searched, 200);
+          assert.ok(searched.json.data.some((value: { id: string }) => value.id === paymentMethodId), 'filter[search] by its label finds it');
+        }
 
-      it('completing it again answers 200 with meta.alreadyApplied', NEEDS_PAYMENT_METHOD, async () => {
-        const res = await api('POST', `${kind}/${draft.id}/actions/complete`);
+        expectErrorDocument(await api('GET', `${kind}/lookups/payment_terms`), 404, 'unknown_lookup');
+      });
+
+      it('sets the payment method on the contact with If-Match, and a new order inherits it', async () => {
+        assert.ok(paymentMethodId, 'the lookup test must run first');
+        const contact: LifecycleSpec = { collection: 'contacts', type: 'contacts', id: contactId, firstPatch: {}, secondPatch: {} };
+        const { etag } = await readWithEtag(itemPath(contact));
+        const updated = await patch(contact, { [contactField]: paymentMethodId }, etag);
+        expectStatus(updated, 200);
+        assert.equal(updated.json.data.attributes[contactField], paymentMethodId, `the contact reads back its ${contactField}`);
+
+        const header = await createDraftOrder(kind, { contactId, addressId, warehouseId });
+        await createRecord(
+          `${kind}/${header.id}/lines`,
+          resource(`${kind}-lines`, { ordered_quantity: 1, list_price: 10, discount: 0 }, { product: ['product', productId] }),
+        );
+        completable = { collection: kind, type: kind, id: header.id, firstPatch: { order_date: '2026-10-15' }, secondPatch: {} };
+        assert.equal(header.data.attributes.payment_method, paymentMethodId, 'the order inherits the payment method of its contact');
+      });
+
+      it('completes the order: 200, and it reads back with document_status CO', async () => {
+        const res = await api('POST', `${kind}/${completable.id}/actions/complete`);
+        expectStatus(res, 200);
+        assert.equal(res.json.data.id, completable.id, 'the answer is the order re-read after the action');
+        assert.equal(res.json.data.attributes.document_status, 'CO', 'the answer shows the new status');
+        assert.notEqual(res.json.meta?.alreadyApplied, true, 'the first completion really ran');
+
+        const reread = await api('GET', itemPath(completable));
+        expectStatus(reread, 200);
+        assert.equal(reread.json.data.attributes.document_status, 'CO');
+      });
+
+      it('completing it again answers 200 with meta.alreadyApplied', async () => {
+        const res = await api('POST', `${kind}/${completable.id}/actions/complete`);
         expectStatus(res, 200);
         assert.equal(res.json.meta?.alreadyApplied, true);
         assert.equal(res.json.data.attributes.document_status, 'CO');
       });
 
-      it('a PATCH and a DELETE on the completed order are refused and leave it unchanged',
-        NEEDS_PAYMENT_METHOD,
-        async () => {
-          const { etag } = await readWithEtag(itemPath(draft));
-          expectErrorDocument(await patch(draft, draft.firstPatch, etag), COMPLETED_WRITE_STATUS);
-          expectErrorDocument(await api('DELETE', itemPath(draft)), COMPLETED_WRITE_STATUS);
-          const { res } = await readWithEtag(itemPath(draft));
-          assert.equal(res.json.data.attributes.document_status, 'CO');
-          assert.notEqual(String(res.json.data.attributes.order_date), '2026-10-15', 'the refused PATCH did not land');
-        });
+      it('a PATCH and a DELETE on the completed order are refused and leave it unchanged', async () => {
+        const { etag } = await readWithEtag(itemPath(completable));
+        expectErrorDocument(await patch(completable, completable.firstPatch, etag), COMPLETED_WRITE_STATUS);
+        expectErrorDocument(await api('DELETE', itemPath(completable)), COMPLETED_WRITE_STATUS);
+        const { res } = await readWithEtag(itemPath(completable));
+        assert.equal(res.json.data.attributes.document_status, 'CO');
+        assert.notEqual(String(res.json.data.attributes.order_date), '2026-10-15', 'the refused PATCH did not land');
+      });
     });
   });
 }
 
-/**
- * Etendo completes an order only with a payment method, and the public API publishes no resource
- * that lists them (nor the contact's payment method), so the suite takes one from the environment.
- */
-const PAYMENT_METHOD_ID = process.env.PUBLIC_API_E2E_PAYMENT_METHOD_ID?.trim() || undefined;
-const NO_PAYMENT_METHOD = 'set PUBLIC_API_E2E_PAYMENT_METHOD_ID (a payment method id of the tenant) to complete an order';
-/** Skips a test that completes an order when no payment method is configured. */
-const NEEDS_PAYMENT_METHOD = { skip: PAYMENT_METHOD_ID ? false : NO_PAYMENT_METHOD };
+/** The contact field an order of each kind inherits its payment method from. */
+const CONTACT_PAYMENT_FIELD = { 'sales-order': 'payment_method', 'purchase-order': 'purchase_payment_method' } as const;
+
+const EMPTY_LOOKUP = 'the payment-method lookup answered no value: the test tenant needs at least one active payment method '
+  + '(the lookup lists the same payment methods the app offers)';
 
 /** Status the API answers to a write on a completed order (Etendo's own document rule). */
 const COMPLETED_WRITE_STATUS = 422;

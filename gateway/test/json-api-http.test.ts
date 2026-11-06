@@ -189,8 +189,13 @@ const schema: PublicApiSchema = {
       fields: {
         id: { publicApi: true, direction: 'out', internalPath: 'id', dataType: { type: 'string' } },
         name: { publicApi: true, direction: 'inout', internalPath: 'name', dataType: { type: 'string' } },
+        category: {
+          publicApi: true, direction: 'inout', internalPath: 'productCategory', dataType: { type: 'string' }, reference: 'ProductCategory',
+          lookup: { selector: 'productCategory', type: 'product-category', context: { IsSOTrx: 'Y' } },
+        } as any,
       },
-    },
+      processes: [{ action: 'complete', method: 'POST', path: '/product/:id/action/documentAction', body: { docAction: 'CO' } }],
+    } as any,
   },
 };
 
@@ -202,11 +207,13 @@ const fakeTokenExchange = {
 
 let neoStatus = 200;
 const neoUrls: string[] = [];
+const neoRequests: Array<{ url: string; method?: string; body?: string }> = [];
 let neoBody: unknown = { response: { data: [{ id: 'p-1', name: 'Widget' }] } };
 const realFetch = globalThis.fetch;
 globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
   if (String(url).startsWith('http://neo.local')) {
     neoUrls.push(String(url));
+    neoRequests.push({ url: String(url), method: init?.method, body: typeof init?.body === 'string' ? init.body : undefined });
     return new Response(neoBody === null ? null : JSON.stringify(neoBody), { status: neoStatus });
   }
   return realFetch(url, init);
@@ -384,6 +391,47 @@ test('HTTP: a bad query is a 400 JSON:API error with source.parameter and never 
     assert.equal(result.json.errors[0].code, 'invalid_query_parameter');
   }
   assert.deepEqual(neoUrls, []);
+});
+
+test('HTTP: a lookup is routed before the child-list route and reaches the NEO selector with only its declared context', async () => {
+  neoStatus = 200;
+  neoBody = { items: [{ id: 'c-1', label: 'Food' }], columns: [], totalCount: 1, hasMore: false };
+  neoUrls.length = 0;
+  const result = await call('/api/v1/product/lookups/category?filter[search]=fo&page[size]=10');
+  assert.equal(result.status, 200);
+  assert.equal(result.type, 'application/vnd.api+json');
+  assert.deepEqual(neoUrls, ['http://neo.local/etendo/sws/neo/product/product/selectors/productCategory?limit=10&offset=0&q=fo&IsSOTrx=Y']);
+  assert.deepEqual(result.json.data, [{ type: 'product-category', id: 'c-1', attributes: { label: 'Food' } }]);
+  assert.deepEqual(result.json.meta, { page: { number: 1, size: 10, total: 1 } });
+});
+
+test('HTTP: a lookup refuses a caller parameter with 400 and an undeclared lookup with 404 unknown_lookup, never reaching NEO', async () => {
+  neoUrls.length = 0;
+  for (const path of ['/api/v1/product/lookups/category?IsSOTrx=N', '/api/v1/product/lookups/category?AD_Client_ID=x', '/api/v1/product/lookups/category?q=x']) {
+    const result = await call(path);
+    assert.equal(result.status, 400, path);
+    assert.equal(result.json.errors[0].code, 'invalid_query_parameter', path);
+  }
+  const undeclared = await call('/api/v1/product/lookups/name');
+  assert.equal(undeclared.status, 404);
+  assert.equal(undeclared.json.errors[0].code, 'unknown_lookup');
+  assert.deepEqual(neoUrls, []);
+});
+
+test('HTTP: an action ignores the request body and sends Etendo only the declared body', async () => {
+  neoStatus = 200;
+  neoBody = { message: 'Done', response: { data: [{ id: 'p-1', name: 'Widget' }] } };
+  neoRequests.length = 0;
+  const result = await call('/api/v1/product/p-1/actions/complete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/vnd.api+json' },
+    body: JSON.stringify({ docAction: 'VO', data: { type: 'product', attributes: { docAction: 'VO' } } }),
+  });
+  assert.equal(result.status, 200);
+  const action = neoRequests.find((request) => request.url.includes('/action/'));
+  assert.equal(action?.url, 'http://neo.local/etendo/sws/neo/product/product/p-1/action/documentAction');
+  assert.equal(action?.method, 'POST');
+  assert.deepEqual(JSON.parse(action?.body ?? 'null'), { docAction: 'CO' });
 });
 
 // ---- Rate limit per API key -------------------------------------------------

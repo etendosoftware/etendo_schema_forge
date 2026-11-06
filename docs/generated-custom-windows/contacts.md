@@ -1818,3 +1818,25 @@ The OKR O2 sweep (`docs/mcp-evaluation/okr-o2-sweep-analysis.md`, H4) found an a
 The agentic docs served by the `docs` tool (`etendo-go-docs/agentic/contacts/index.md`) carry the same field map for customers and vendors.
 
 **Verify:** `etendo_schema(spec: "contacts", view: "create")` lists `etgoEmail` with that `agentPrompt`; re-run the okr probe `w-customer-crud` and compare its calls with the sweep (25).
+
+## Public API — payment methods and their lookups — ETP-6160
+
+`decisions.json` publishes the contact's payment methods through the public API, both writable (`inout`):
+`payment_method` (internal `paymentMethod`, the one a sales order inherits) and `purchase_payment_method`
+(internal `pOPaymentMethod`, the one a purchase order inherits). Each declares a lookup, so the manifest publishes:
+
+| Route | Field | Fixed context |
+|-------|-------|---------------|
+| `GET /api/v1/contacts/lookups/payment_method` | Payment method as a customer | `FIN_ISRECEIPT=Y` |
+| `GET /api/v1/contacts/lookups/purchase_payment_method` | Payment method as a vendor | `FIN_ISRECEIPT=N` |
+
+Each lists the tenant's active payment methods, the same list the app offers: the values come from the same
+selectors as the contact form (`/sws/neo/contacts/businessPartner/selectors/...`). The fixed context is forwarded to
+the field's selector; whether it narrows the list depends on that field's validation rule, as in the app. Integrators
+must not rely on the list being filtered by sales or purchase.
+An integrator looks a value up, sets it with a `PATCH` (with `If-Match`) and every order created afterwards for the
+contact inherits it, which lets the order be completed through the API.
+
+The window itself is unchanged: `publicApi` only affects the public API manifest.
+
+Evidence: `gateway/e2e/support/orders.ts`, `gateway/test/public-api-manifest.test.ts`. Contract: `docs/public-api.md` §4.2.2.

@@ -265,6 +265,61 @@ export function parseListQuery(entity: PublicApiEntity, query: Record<string, un
   };
 }
 
+/** A validated lookup query: a page plus the optional search text. */
+export interface LookupQuery extends ListQuery {
+  search?: string;
+}
+
+/**
+ * Validates the query of a lookup (`GET /api/v1/{resource}/lookups/{field}`): only
+ * `page[number]`, `page[size]` and `filter[search]`. Anything else is a 400, so no caller
+ * parameter can reach NEO's selector as validation context.
+ */
+export function parseLookupQuery(query: Record<string, unknown> | undefined): LookupQuery {
+  const raw = query ?? {};
+  for (const key of Object.keys(raw)) {
+    if (key !== 'page' && key !== 'filter') {
+      throw invalidQueryParameter(key, `Unknown query parameter "${key}". Supported: page[number], page[size], filter[search].`);
+    }
+  }
+  const page = parsePage(raw.page);
+  const linkParams: Array<[string, string]> = [];
+  let search: string | undefined;
+  if (raw.filter !== undefined) {
+    if (!isRecord(raw.filter)) throw invalidQueryParameter('filter', 'Use filter[search]=<text>.');
+    for (const key of Object.keys(raw.filter)) {
+      if (key !== 'search') throw invalidQueryParameter(`filter[${key}]`, 'A lookup can only be filtered with filter[search]=<text>.');
+    }
+    const value = raw.filter.search;
+    if (!text(value)) throw invalidQueryParameter('filter[search]', 'filter[search] must be a single text value.');
+    if (value.length > MAX_TEXT_LENGTH) throw invalidQueryParameter('filter[search]', `filter[search] must not be longer than ${MAX_TEXT_LENGTH} characters.`);
+    if (value !== '') {
+      search = value;
+      linkParams.push(['filter[search]', value]);
+    }
+  }
+  const startRow = (page.number - 1) * page.size;
+  return {
+    pageNumber: page.number,
+    pageSize: page.size,
+    startRow,
+    endRow: startRow + page.size - 1,
+    linkParams,
+    ...(search === undefined ? {} : { search }),
+  };
+}
+
+/**
+ * The query string NEO's selector endpoint receives for a lookup (no leading `?`): `limit`,
+ * `offset`, `q` and the lookup's fixed context, which comes from the manifest, never from the caller.
+ */
+export function neoLookupParams(query: LookupQuery, context: Record<string, string> = {}): string[] {
+  const params = [`limit=${query.pageSize}`, `offset=${query.startRow}`];
+  if (query.search !== undefined) params.push(`q=${encodeURIComponent(query.search)}`);
+  for (const [name, value] of Object.entries(context)) params.push(`${encodeURIComponent(name)}=${encodeURIComponent(value)}`);
+  return params;
+}
+
 /** The query string NEO receives for a list read (no leading `?`), values percent-encoded. */
 export function neoListParams(query: ListQuery): string[] {
   const params = [`_startRow=${query.startRow}`, `_endRow=${query.endRow}`];

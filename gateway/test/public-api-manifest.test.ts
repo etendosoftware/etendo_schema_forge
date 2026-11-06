@@ -13,7 +13,9 @@ test('publishes only explicitly curated fields for Contacts and Product', () => 
     'email',
     'id',
     'name',
+    'payment_method',
     'phone',
+    'purchase_payment_method',
     'search_key',
     'tax_id',
     'updated',
@@ -29,6 +31,20 @@ test('publishes only explicitly curated fields for Contacts and Product', () => 
     'stock',
     'updated',
   ]);
+});
+
+test('publishes the payment-method lookups with the context of each side', () => {
+  const lookups = Object.fromEntries(Object.entries(manifest.entities).flatMap(([resource, entity]: [string, any]) =>
+    Object.entries(entity.fields).filter(([, field]: [string, any]) => field.lookup).map(([name, field]: [string, any]) => [`${resource}.${name}`, field.lookup])));
+  assert.deepEqual(lookups, {
+    'contacts.payment_method': { selector: 'paymentMethod', type: 'payment-method', context: { FIN_ISRECEIPT: 'Y' } },
+    'contacts.purchase_payment_method': { selector: 'pOPaymentMethod', type: 'payment-method', context: { FIN_ISRECEIPT: 'N' } },
+    'purchase-order.payment_method': { selector: 'paymentMethod', type: 'payment-method', context: { IsSOTrx: 'N' } },
+    'sales-order.payment_method': { selector: 'paymentMethod', type: 'payment-method', context: { IsSOTrx: 'Y' } },
+  });
+  for (const name of ['payment_method', 'purchase_payment_method']) {
+    assert.equal(manifest.entities.contacts.fields[name].direction, 'inout', `contacts.${name} is writable`);
+  }
 });
 
 test('does not publish Contacts child tabs without explicit public API curation', () => {
