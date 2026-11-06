@@ -46,6 +46,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | N7 | Initial dataset configuration | `AP Invoice` ships with stock Openbravo's `IsDocNoControlled='N'` and no sequence (107 of 107 doctypes), so a purchase invoice takes its proposed number from the shared, per-doctype-agnostic `DocumentNo_C_Invoice` fallback and the tenant has no `FC` series to configure — the sixth series ETP-5285 named and could not ship | **Preventive only, dataset-only, no new service.** `GOClient/AD_SEQUENCE.xml` ships an `AP Invoice` sequence (prefix `FC`, 1000000) and `GOClient/C_DOCTYPE.xml` flips the `AP Invoice` doctype to `ISDOCNOCONTROLLED='Y'` pointing at it; `DocumentSequenceHandler.VISIBLE_SEQUENCE_NAMES` grows to six. Corrective data-fix (`R39-ap-invoice-fc-series`) creates the sequence and flips the doctype on already-onboarded tenants — **decision REVERSED on 2026-09-22**, see the detail section: the retrofit starts a numbering series over documents numbered by the fallback counter, accepted because no tenant is productive and going productive creates a NEW tenant born correct. CUT deliberately NOT bumped — a newborn tenant is born correct, so `R39`'s `@check` returns 0 rows for it | ETP-5364 |
 | N8 | Initial dataset configuration | Every `DocumentNo_*` sequence exists **twice** per tenant — 9888 surplus `AD_Sequence` rows across 103 of 125 clients. Openbravo's `InitialClientSetup` creates the 97 `DocumentNo_<table>` rows for a new client, and the GO dataset then imported 96 of the same names again from `GOClient/AD_SEQUENCE.xml` as fresh rows. Numbering survives by accident (`ad_sequence_doc` increments every row matching the name and reads one back non-`STRICT`), but 140 pairs have already diverged, and editing one of a pair makes the applied value non-deterministic | **Preventive only.** A new `TableCounterSequenceFilter` in `OnboardingDatasetNormalizer` drops the 96 colliding rows at IMPORT time; the source `GOClient/AD_SEQUENCE.xml` stays complete, because `install.source` seeds the GOClient sample client from it wholesale and never runs `InitialClientSetup` — deleting them there would leave the sample client unable to number a document, with no dangling FK to announce it. Same source/import split as N4b. **No corrective data-fix by decision** — the 103 existing tenants keep both copies. CUT deliberately NOT bumped: a newborn tenant is born correct and there is no fix to skip | ETP-5364 |
 | N9 | Initial dataset configuration | Three document series carry an internal, ticket-tagged `DESCRIPTION` — both rectificativas ship ETP-4737's `"ETP-4737: sequence for the unified ... rectificative invoice"` and the new purchase-invoice series briefly shipped `"ETP-5364: sequence ..."`. `artifacts/document-sequence/decisions.json` declares `description` as an **editable, grid-visible** column of the "Secuencia de documentos" window, so that engineering note is copy the tenant reads next to its own series | Both fronts closed: preventive is dataset-only (`GOClient/AD_SEQUENCE.xml` drops the `<DESCRIPTION>` element on all three rows); corrective data-fix (`R39-document-sequence-clear-descriptions`) nulls it on already-onboarded tenants. The text reaches a tenant by TWO routes — the dataset and `R17-rectificativa-doctype-sequence`, which is immutable and already applied — so the fix matches by NAME, and only on `description LIKE 'ETP-%'` so a tenant-authored description survives. CUT deliberately NOT bumped | ETP-5364 |
+| N10 | Initial dataset configuration | The sales-quotation series (`AD_Sequence` `Quotation`, referenced by the `SOO`/`OB` doctype's `DocNoSequence_ID`) ships with NO prefix, so quotations are numbered `1000000…` — the same digits as every other series before N6 — and the series was not on the "Secuencia de documentos" allowlist, so a tenant could not set one | Both fronts closed: preventive is dataset-only (`GOClient/AD_SEQUENCE.xml` sets `PREFIX=PR` on the `Quotation` row; `Quotation` joins `VISIBLE_SEQUENCE_NAMES`); corrective data-fix (`R57-quotation-sequence-pr-prefix`) sets `PR` on already-onboarded tenants **only where the prefix is empty**, and — by product decision — renumbers their existing quotations `1000000` → `PR1000000`. CUT deliberately NOT bumped — a newborn tenant is born with `PR` and holds no quotation, so `R57`'s `@check` returns 0 rows for it | ETP-5837 |
 | P1 | Scheduled processes | A GO-onboarded tenant has NO scheduled "Costing Background process" (`AD_PROCESS_REQUEST`, `CostingBackground`), so product costs are never calculated automatically — `M_Transaction.iscostcalculated` stays `'N'` forever unless an operator launches the process by hand. NOT the same as J1 (which was the missing `M_Costing_Rule`): here the rule exists and is validated, the engine that consumes it is simply never scheduled | **Split across two PRs.** Corrective only in ETP-5245: data-fix (`R36`) backfills already-onboarded tenants. The preventive half (an onboarding service; the `AD_PROCESS_REQUEST` dataset table is and must stay excluded) is closed by a **separate PR authored by someone else** — ETP-5245 touches `com.etendoerp.go` not at all. CUT deliberately NOT bumped: with no preventive front in this PR a newborn tenant is still born broken and must keep seeing `R36`; once the other PR lands, `R36`'s `@check` self-heals to 0 | ETP-5245 (corrective) + a separate PR (preventive) |
 | P2 | Scheduled processes | The costing schedule created by P1 runs every **5 minutes**, so a freshly onboarded user waits up to 5 minutes before their movements are costed; and some tenants carry more than one active `SCH` row for the process, so it fires twice. Target invariant: **exactly one active scheduled `CostingBackground` request per client, every 30 seconds** | Both fronts closed. Preventive: `OnboardingCostingScheduleService` builds the row as `frequency='1'` + `SECONDLY_INTERVAL=30` (the shape GOClient has run by hand since 2026-04-08). Corrective: **NOT a `.sql`** — a SQL `UPDATE` cannot change a live Quartz trigger, so it is `OnboardingCostingScheduleService#realignCadence`, run over every tenant by `CostingCadenceStartup` on application boot (the module's own deploy provides that boot, so no operator action is needed), plus the `SFCostingCadence` webhook as a per-tenant escape hatch. Re-arms the survivor with `OBScheduler.reschedule(...)`, unschedules the extras | ETP-5370 |
 | O1 | SII / Fiscal Master Data | The "Causa de exencion" (exemption cause) selector on the invoice SIF/SII tab was empty for every tenant except GOClient and one other tenant that had already received a private copy via `R17-sii-cause-exemption` (ETP-4751) — `AEATSII_CAUSE_EXEMPTION` had no `ad_client_id='0'` rows at all | **Redesigned mid-flight** (2026-09-25) from a per-tenant onboarding-dataset addition to SIX SHARED SYSTEM ROWS: preventive is `modules/com.etendoerp.go/src-db/database/sourcedata/AEATSII_CAUSE_EXEMPTION.xml` (module system data, `ad_client_id='0'`, loaded independently of any tenant's onboarding run — no `OnboardingDatasetDefinition.INCLUDED_TABLES` entry); corrective is `R40-aeatsii-cause-exemption-catalog`, run once against the System pseudo-tenant (`--client 0`), never swept per-tenant. CUT not applicable — the fix targets the System client, which the watermark mechanism does not cover | ETP-5481 |
@@ -2855,6 +2856,47 @@ keeps the regression guard that no allowlisted name starts with `DocumentNo_`.
 
 **CUT not bumped** (`ONBOARDING_PROVISIONED_THROUGH`), for both N7 and N8: neither gap has a
 corrective fix for a newborn tenant to skip, so there is nothing for the constant to gate.
+
+### N10 — The sales-quotation series has no prefix (ETP-5837, 2026-11-06)
+
+**Symptom.** Quotations are numbered `1000000`, `1000001`… with no prefix, so a quotation number is
+indistinguishable from any other document number, and the "Secuencia de documentos" window did not
+list the series at all, so the tenant could not give it one.
+
+**Where it lives.** Every tenant has a quotation doctype (`C_DocType`, `DocBaseType='SOO'`,
+`DocSubTypeSO='OB'`, name `Quotation`) whose `DocNoSequence_ID` points at its own `AD_Sequence`
+`Quotation` (mask `#######`, no prefix, no suffix). Some tenants carry more than one quotation
+doctype, each with its own sequence (F&B International Group has two).
+
+| Front | Deliverable |
+|---|---|
+| Preventive | Dataset-only, no new service. `GOClient/AD_SEQUENCE.xml` sets `PREFIX=PR` on the `Quotation` row; `DocumentSequenceHandler.VISIBLE_SEQUENCE_NAMES` gains `Quotation` so the window lists it |
+| Corrective | `cli/src/data-fixes/sql/20261106T120000Z__R57-quotation-sequence-pr-prefix.sql` — sets `PR` on each quotation-only sequence whose prefix is NULL/blank, then renumbers that tenant's existing quotations `'PR' \|\| documentno` |
+
+**Existing quotations are renumbered — a product decision (2026-11-06).** Unlike R38, which only
+prefixed the series, R57 also rewrites `C_Order.DocumentNo` on the tenant's existing quotations, in
+every status. A quotation is not a fiscal document (no SII/TicketBAI/VeriFactu record, never
+posted), so this has no tax-reporting consequence. Guards:
+
+- the sequence is found through the doctype, never by name, and is skipped when another doctype
+  also uses it;
+- a prefix the tenant configured is never overwritten, and that tenant's quotations are left alone;
+- only digits-only numbers are renumbered (also the idempotency guard), and a number whose `PR`
+  form already exists in the same doctype is skipped — `C_Order.DocumentNo` has no unique
+  constraint, so the fix guards against duplicates itself; skipped rows go to `@report`;
+- the `C_Order` update runs between `ad_disable_triggers()` / `ad_enable_triggers()`, because
+  `C_ORDER_CHK_RESTRINCTIONS_TRG` raises `@20501@` when `DocumentNo` changes on a processed order.
+
+**No second copy of the number survives.** The number is not copied as text anywhere that needs
+fixing: converted orders and invoices hold FKs only, no printable prints an order/quotation number,
+no stored computed column or vector-search source reads `C_Order.DocumentNo`. The cached quotation
+PDF (`C_File`, `EM_ETGO_IsPreviewMain='Y'`) self-heals: R57 moves `C_Order.Updated`, so the SPA and
+the server-side render both see the file as stale and re-render it, under the new name, on the next
+open. The email send log is history and is left as is.
+
+**CUT not bumped** (`ONBOARDING_PROVISIONED_THROUGH`): a newborn tenant is born with `PR` and holds
+no quotation, so `R57`'s `@check` returns 0 rows for it and the runner records
+`SKIPPED_NOT_NEEDED`.
 
 ## P — Scheduled Processes
 

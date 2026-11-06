@@ -49,6 +49,10 @@
               "name": "documentSequenceSalesOrder"
             },
             {
+              "value": "Quotation",
+              "name": "documentSequenceSalesQuotation"
+            },
+            {
               "value": "AR Invoice",
               "name": "documentSequenceSalesInvoice"
             },
