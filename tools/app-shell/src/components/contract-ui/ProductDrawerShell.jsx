@@ -376,7 +376,7 @@ export default function ProductDrawerShell({
                   </div>
                 )}
 
-                {locating && !loading && <LocatingNotice testId="product-search-locating" />}
+                {locating && !loading && <LocatingNotice data-testid="product-search-locating" />}
                 {hasResults && <div className={locating ? 'invisible' : undefined}>{body}</div>}
 
                 {/* A failed "load more" keeps the rows already shown and offers a retry below them. */}

@@ -310,7 +310,7 @@ function SearchSelectOptionsPanel({
       {loading && (
         <div className="px-3 py-2 text-xs text-muted-foreground">{ui('loading')}</div>
       )}
-      {locating && !loading && <LocatingNotice testId={`options-${field.key}-locating`} />}
+      {locating && !loading && <LocatingNotice data-testid={`options-${field.key}-locating`} />}
       {!loading && filteredOptions.map((opt, index) => {
         // ETP-5903 — two independent per-row states, as in InlineSearchCombo (ETP-5846):
         // `aria-selected` + check icon + bold label = the COMMITTED value; `data-highlighted` +

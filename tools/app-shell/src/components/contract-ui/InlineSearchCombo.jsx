@@ -737,7 +737,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
               shrink-to-fit sizing inflates the panel to ~2x its content width in Chrome — see
               CreatableSearchSelect's identical comment for the full root cause. */}
           <div className="min-w-full w-max">
-            {locating && <LocatingNotice testId={`inline-add-options-${field.key}-locating`} />}
+            {locating && <LocatingNotice data-testid={`inline-add-options-${field.key}-locating`} />}
             {/* ETP-5005 — first-page skeleton. Shown only while nothing is displayable yet, so
                 it never replaces options the user can already act on: once the first page lands
                 (or the local catalog has entries) the list below takes over. Three rows rather

@@ -5,7 +5,7 @@ import { useUI } from '@/i18n';
  * located and centred (see `useLocateCommittedValue`). Zero-height and sticky, so it overlays the
  * hidden rows without taking layout space and stays in view if the panel scrolls.
  */
-export function LocatingNotice({ testId }) {
+export function LocatingNotice({ "data-testid": testId }) {
   const ui = useUI();
   return (
     <div className="sticky top-0 h-0 z-10" role="status" aria-live="polite" data-testid={testId}>

@@ -256,7 +256,7 @@ export function SearchPopup({
           />
         </div>
         <div className={`flex-1 py-1 ${locating ? 'overflow-hidden' : 'overflow-auto'}`} role="listbox" aria-label={title} ref={listRef}>
-          {locating && !loading && <LocatingNotice testId={`${dataTestId}-locating`} />}
+          {locating && !loading && <LocatingNotice data-testid={`${dataTestId}-locating`} />}
           {loading && <div className="flex justify-center py-6 text-muted-foreground text-xs">{ui('loading')}</div>}
           {!loading && error && options.length === 0 && (
             <div className="flex flex-col items-center gap-2 py-6 text-xs" data-testid={`${dataTestId}-error`}>
