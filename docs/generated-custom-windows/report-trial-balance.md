@@ -24,7 +24,7 @@ Show one row per account with opening balance, period debit, period credit, and 
 - `dateFrom` defaults to the first day of the previous month (`__FIRST_OF_PREV_MONTH__`); `dateTo` defaults to today (`__TODAY__`).
 - Optional account-range filters (`fromAccountId`, `toAccountId`) live in the primary section and depend on `acctSchemaId` so the account selector filters to accounts of the chosen schema.
 - Dimension filters (business partner, product, project) live in the `dimensions` sidebar section as multi-select popups.
-- Each account row supports drill-down: clicking the account in the HTML render dispatches a `trial-balance-drilldown` postMessage that opens the General Ledger report (`report-general-ledger`) scoped to that account — see `ReportViewerPage.jsx` `handler` for the wiring.
+- Each account row supports drill-down: clicking the account in the HTML render dispatches a `trial-balance-drilldown` postMessage that opens the General Ledger report (`report-general-ledger`) scoped to that account — see `ReportViewerPage.jsx` `handler` for the wiring. The General Ledger is checked on its own (ETP-6080): a role with Trial Balance but no General Ledger tier in the Roles matrix gets *No tienes acceso a este informe* in the drill-down dialog.
 
 ## Gap assessment
 - The report keeps "Trial Balance" as the English title — the standard IFRS/accounting term; no alternative spelling is exposed.
