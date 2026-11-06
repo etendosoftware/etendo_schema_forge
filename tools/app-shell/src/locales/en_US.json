@@ -21603,6 +21603,8 @@
     "sifDataTabs.toast.exemptionCauseRequired.description": "This invoice contains exempt taxes. Indicate an exemption cause in the SIF tab.",
     "sifDataTabs.toast.exemptionCauseModified.title": "Exemption cause modified.",
     "sifDataTabs.toast.exemptionCauseModified.description": "The default exemption cause has been selected in the invoice header selector.",
+    "sifDataTabs.toast.rectificationCodeRequired.title": "Rectification reason required",
+    "sifDataTabs.toast.rectificationCodeRequired.description": "This is a rectificative invoice. Complete the rectification reason/code in the SIF tab before confirming.",
     "sifDataTabs.field.rectificationReason": "Rectification reason",
     "sifDataTabs.option.siiMotivoR1": "R1 - Founded error",
     "sifDataTabs.option.siiMotivoR2": "R2 - Competition",

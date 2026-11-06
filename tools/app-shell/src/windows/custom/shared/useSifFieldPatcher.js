@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
@@ -121,6 +122,7 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
   const vfReverseTypeRef = useRef(null);
   const siiRectifTypeRef = useRef(null);
   const siiTipoRectifDefaultedRef = useRef(null);
+  const rectifCodeToastRef = useRef(null);
 
   function getVal(key) {
     return data?.[key] ?? '';
@@ -173,6 +175,28 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
     onChange?.(siiTypeField, 'R');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPurchaseInvoice, showSii, isDraft, recordId, data?.isRectificative, siiTypeField, onChange]);
+
+  // ETP-5745 CP-14: non-blocking heads-up when the invoice becomes rectificative — none of
+  // SII's Motivo, TicketBAI's Código or VERI*FACTU's rectificative code are auto-picked (that
+  // is a fiscal judgement call, never guessed on the user's behalf — see
+  // RectificationFiscalCodeGuard.java, which BLOCKS completion when any active system's own
+  // code is still blank). This toast only warns early, in the same place the structural 'R'
+  // default above already fires, so the user finds out before hitting Confirm instead of after.
+  // Sales-only, same scope as the structural defaults; gated on any fiscal system actually
+  // being configured for the invoice's org (not SII-only, since the message points at the SIF
+  // tab in general). Fires once per record.
+  useEffect(() => {
+    if (isPurchaseInvoice) return;
+    if (!isDraft || !recordId) return;
+    if (!data?.isRectificative) return;
+    if (!showSii && !showTbai && !showVerifactu) return;
+    if (rectifCodeToastRef.current === recordId) return;
+    rectifCodeToastRef.current = recordId;
+    toast.warning(ui('sifDataTabs.toast.rectificationCodeRequired.title'), {
+      description: ui('sifDataTabs.toast.rectificationCodeRequired.description'),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPurchaseInvoice, isDraft, recordId, data?.isRectificative, showSii, showTbai, showVerifactu, ui]);
 
   // ETP-4783: "Tipo de Factura Rectificativa" (etvfacReverseinvtype) is hidden from
   // the UI. When the Verifactu invoice type is rectificative (R1–R5) the field must
