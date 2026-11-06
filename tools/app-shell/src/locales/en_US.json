@@ -26246,6 +26246,7 @@
     "backToList": "Back to the list",
     "documentSequencePurchaseOrder": "Purchase Order",
     "documentSequenceSalesOrder": "Sales Order",
+    "documentSequenceSalesQuotation": "Sales Quotation",
     "documentSequenceSalesInvoice": "Sales Invoice",
     "documentSequenceSalesCorrectiveInvoice": "Corrective Sales Invoice",
     "documentSequencePurchaseInvoice": "Purchase Invoice",

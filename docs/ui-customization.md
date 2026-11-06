@@ -3246,9 +3246,32 @@ no token has the identical value. Only ONE body line fits: a longer title or bod
 the full text in its `title` attribute — the box never grows. Keep notice texts within ~668 px of
 Inter 14 (~95 characters).
 
+**Lazy lines and server-listed documents (ETP-6099).** A popup that lists its documents through a
+server read action (`availableOrders`, `availableShipments`, `availableReceipts`, …) passes
+`eagerLoadLines={false}` so a document's lines are read only when it is expanded or selected, not
+one lines call per document at opening. Two optional props make that work without the lines:
+
+| Prop | Effect |
+|---|---|
+| `isDocumentCovered(doc)` | `true` hides the document from its own row as fully imported, without reading its lines (e.g. the action's `pendingLines === 0`). When every document is hidden, `allImportedMessageKey` is shown. |
+| `getDocumentTotal(doc)` | The row total while the document's lines are NOT loaded (e.g. the action row's `amount`). Once the lines are loaded, or when it returns `null`/a non-number, the row falls back to the sum of its lines. |
+
+The shared helpers for these popups live in `tools/app-shell/src/windows/custom/shared/`:
+`importActionClient.js` (calls the read actions with `refreshVersion: false`; `listAll` follows
+`nextOffset`; `newestCreatedFirst` re-sort; `describeLoadFailure` turns a refused read into a
+message), `inOutImport.js` (goods shipment / goods receipt listings, `isCoveredDocument`,
+`pendingDocumentTotal`), `invoiceImportPricing.js` (the invoice header and product selector read
+once per popup, to price shipment/receipt lines on expand and at import),
+`useImportLoadFailureToast.js` (wraps `fetchDocuments` / `fetchLines` so a refused read shows a
+toast and an empty list) and `importSaveOptions.js` (the frozen
+`IMPORT_SAVE_OPTIONS`, `{ skipSaveWhenClean: true }`, passed to DetailView's `handleImportClick`).
+Per-window behaviour: the sales-invoice, purchase-invoice, goods-shipment and goods-receipt guides
+under `docs/generated-custom-windows/`.
+
 **Document row total.** The row shows the plain sum of what its lines' «Importe» cells show (unit
 price × current quantity; `_lineNetAmount` only for a line without a unit price), so row and lines
-always add up; there is no total override.
+always add up once the lines are loaded. The only override is `getDocumentTotal` above, which
+stands in while the lines are not loaded yet.
 
 Removed by ETP-5828: `getDocTotal`, `selectionPanelMinHeight` (the notice area now always has its fixed height)
 and `getSelectionHint` (the footer follows the design). Stable test ids: `import-lines-modal`,
