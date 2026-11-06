@@ -1,10 +1,10 @@
 // @covers artifacts/sales-invoice/custom/ImportFromShipmentModal.jsx
 // @covers artifacts/sales-invoice/custom/InvoiceBottomPanel.jsx
 // @covers artifacts/sales-invoice/custom/ImportFromSourceInvoiceModal.jsx
+// @covers tools/app-shell/src/components/contract-ui/ImportLinesModal.jsx
 import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 import { t } from '../../helpers/i18n.js';
-import { clickLastCheckbox } from '../../helpers/selectors.js';
 
 /**
  * Sales Invoice — Import from Shipment: no page-reload after success (mocked).
@@ -98,6 +98,30 @@ async function routeShipmentActions(page, lines) {
 }
 
 /**
+ * Selects one shipment line in the import popup once its row is rendered, and waits for the
+ * selection to take.
+ *
+ * Since ETP-6099 the popup loads a shipment's lines lazily, on expand: one
+ * `availableShipmentLines` read, then the pricing context (header GET + product selector) and two
+ * callouts per line, and only then are the line rows rendered. Waiting on the product NAME is not
+ * enough: the catch-all selector stub of login() makes the header's «Dirección» chip read
+ * «Test Product» too, so `getByText(/Test Product/).first()` resolved on the header form before the
+ * lines arrived, the "last checkbox" was then the document's own one (which only expands an
+ * unloaded document, it selects nothing) and the import button stayed disabled. The wait is scoped
+ * to the popup's line row of this line id instead, and the click is checked through the row's
+ * `data-selected`.
+ */
+async function selectImportLine(page, lineId) {
+  const lineRow = page.locator(`[data-testid="ImportLinesModal__lineRow"][data-line-id="${lineId}"]`);
+  await expect(lineRow).toBeVisible({ timeout: 10_000 });
+  await expect(lineRow).toContainText('Test Product');
+  // Native click, as clickLastCheckbox() does: the Checkbox's visual target is occluded by its
+  // decorative wrapper, which fails Playwright's pointer hit test.
+  await lineRow.getByRole('checkbox').evaluate((el) => el.click());
+  await expect(lineRow).toHaveAttribute('data-selected', 'true');
+}
+
+/**
  * Install mocks for the invoice detail + import flow.
  * Must be called AFTER login() so specific routes win over the catch-all.
  */
@@ -159,12 +183,8 @@ test.describe('Sales Invoice — import from shipment no-reload', () => {
     // Expand the shipment to load its lines
     await shipmentRow.click();
 
-    // Wait for lines to load inside the modal
-    const lineRow = page.getByText(/Test Product/i).first();
-    await expect(lineRow).toBeVisible({ timeout: 5_000 });
-
-    // ETP-4299: ImportLinesModal no longer auto-selects lines — click the checkbox.
-    await clickLastCheckbox(page);
+    // ETP-4299: ImportLinesModal no longer auto-selects lines — select it once it is loaded.
+    await selectImportLine(page, SHIP_LINE_ID);
 
     // Click the import button
     const importSelectedBtn = page.getByRole('button', { name: /Import.*selected|Importar.*seleccionadas/i });
@@ -217,10 +237,9 @@ test.describe('Sales Invoice — import from shipment no-reload', () => {
 
     await expect(page.getByText(/SHIP-MOCK-001/i).first()).toBeVisible({ timeout: 5_000 });
     await page.getByText(/SHIP-MOCK-001/i).first().click();
-    await expect(page.getByText(/Test Product/i).first()).toBeVisible({ timeout: 5_000 });
 
-    // ETP-4299: ImportLinesModal no longer auto-selects lines — click the checkbox.
-    await clickLastCheckbox(page);
+    // ETP-4299: ImportLinesModal no longer auto-selects lines — select it once it is loaded.
+    await selectImportLine(page, SHIP_LINE_ID);
 
     const importSelectedBtn = page.getByRole('button', { name: /Import.*selected|Importar.*seleccionadas/i });
     await expect(importSelectedBtn).toBeEnabled({ timeout: 3_000 });
@@ -299,10 +318,9 @@ test.describe('Sales Invoice — import from shipment discount carry-over', () =
 
     await expect(page.getByText(/SHIP-MOCK-001/i).first()).toBeVisible({ timeout: 5_000 });
     await page.getByText(/SHIP-MOCK-001/i).first().click();
-    await expect(page.getByText(/Test Product/i).first()).toBeVisible({ timeout: 5_000 });
 
-    // ETP-4299: ImportLinesModal no longer auto-selects lines — click the checkbox.
-    await clickLastCheckbox(page);
+    // ETP-4299: ImportLinesModal no longer auto-selects lines — select it once it is loaded.
+    await selectImportLine(page, SHIP_LINE_WITH_ORDER.id);
 
     const importSelectedBtn = page.getByRole('button', { name: /Import.*selected|Importar.*seleccionadas/i });
     await expect(importSelectedBtn).toBeEnabled({ timeout: 3_000 });
