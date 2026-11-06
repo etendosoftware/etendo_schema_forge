@@ -29,6 +29,10 @@ is the single source of the protocol; this file does not repeat it. The non-nego
   it. **New class** only with a one-line justification naming the class you considered.
 - `@covers <fully.qualified.Class>` in the Javadoc of every test class you create or modify.
 - Name classes by behavior, never by ticket (`Etp1234Test.java` is forbidden).
+- Every **new** test class goes in its cell file, `src-test/cells/<cell>.txt` in
+  `com.etendoerp.go`, in the same change: the cell of the functional area the test exercises
+  (the second line of each file says what it covers), sorted, `*IntegrationTest` under
+  `integración (BD)`. `.github/workflows/test-cells.yml` fails the PR on a test class of no cell.
 - Every test asserts something observable. "No exception was thrown" is only an assertion when
   that is the contract — then say so with `assertDoesNotThrow` or a `verify(...)`.
 - A correct test that fails unexpectedly against the source means **stop and escalate**; a failing
@@ -260,7 +264,8 @@ work or the class name.
    `OBMessageUtils`, …), its error handling.
 3. **Choose Mockito or integration** — per `<test_strategy>`.
 4. **Write the cases** — in the existing class when extending; add or update `@covers` in the
-   class Javadoc.
+   class Javadoc. A new class also goes in its `src-test/cells/<cell>.txt`
+   (`python3 scripts/check-test-cells.py` in `com.etendoerp.go` checks it).
 5. **Run them** — `./gradlew test --tests "<FQN>"` from the Etendo root.
 6. **Handle failures:**
    - The **test** is wrong (bad stub, unclosed `MockedStatic`, wrong matcher) → fix the test and re-run.
@@ -278,7 +283,7 @@ work or the class name.
 
    ```
    Extended: N · Rewritten: N · New: N
-   New classes: <path> — <justification>
+   New classes: <path> — <justification> — cell: <cell>
    ```
 
 </workflow>

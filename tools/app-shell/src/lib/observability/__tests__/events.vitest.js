@@ -14,6 +14,20 @@ const ALLOWED_PROPERTIES = new Set(Object.values(OBSERVABILITY_PROPERTY_KEYS));
 const SNAKE_CASE_EVENT_NAME = /^[a-z0-9]+(?:_[a-z0-9]+)*$/;
 
 describe('observability event catalog', () => {
+  it('defines the four interactive-report events (ETP-6080) with their properties', () => {
+    const base = ['specName', 'reportSessionId'];
+    expect(OBSERVABILITY_EVENTS.REPORT_OPENED).toMatchObject({ name: 'report_opened', properties: [...base, 'source', 'outcome', 'durationMs', 'errorCode'] });
+    expect(OBSERVABILITY_EVENTS.REPORT_FILTER_APPLIED).toMatchObject({ name: 'report_filter_applied', properties: [...base, 'type', 'outcome', 'durationMs', 'errorCode'] });
+    expect(OBSERVABILITY_EVENTS.REPORT_GROUP_TOGGLED).toMatchObject({ name: 'report_group_toggled', properties: [...base, 'type', 'outcome'] });
+    expect(OBSERVABILITY_EVENTS.REPORT_DRILLDOWN).toMatchObject({ name: 'report_drilldown', properties: [...base, 'type', 'outcome', 'durationMs', 'errorCode'] });
+    // The timed ones go through startTiming(), which needs the timing channel.
+    for (const key of ['REPORT_OPENED', 'REPORT_FILTER_APPLIED', 'REPORT_DRILLDOWN']) {
+      expect(OBSERVABILITY_EVENTS[key].channels).toContain(OBSERVABILITY_CHANNELS.TIMING);
+    }
+    expect(buildObservabilityEvent(OBSERVABILITY_EVENTS.REPORT_GROUP_TOGGLED, { specName: 'profit-loss', reportSessionId: 's1', type: 'expand', outcome: 'success', name: 'Ventas' }).properties)
+      .toEqual({ specName: 'profit-loss', reportSessionId: 's1', type: 'expand', outcome: 'success' });
+  });
+
   it('uses snake_case names for every event', () => {
     for (const event of OBSERVABILITY_EVENT_LIST) {
       expect(event.name).toMatch(SNAKE_CASE_EVENT_NAME);

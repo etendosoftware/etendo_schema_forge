@@ -83,6 +83,14 @@ export const CONTACT_CATEGORY_TYPE = 'contact-category-type';
 export const DOC_TEMPLATE_SELECTION = 'doc-template-selection';
 
 /**
+ * ETP-6080 — interactive accounting reports. On: Profit & Loss opens the dynamic view (filters apply
+ * on change, the tree folds, variation columns, per-account split, side-panel drill-down). Off:
+ * today's ReportViewerPage, byte for byte. Visual gating only: the `/query` route and the `/render`
+ * organization check enforce access on their own, whatever this flag says.
+ */
+export const DYNAMIC_REPORTS = 'dynamic-reports';
+
+/**
  * Telemetry kill switches (ETP-4578, D2). They are "kill" flags: `true` STOPS telemetry, so the
  * safe default is `false` (today's shipped behaviour: providers run as configured). They are
  * read by `observability/killSwitch.js`, never rendered by the UI, and are excluded from flag
@@ -115,6 +123,7 @@ export const FLAG_DEFAULTS = Object.freeze({
   [GRID_COLUMN_VIEWS]: false,
   [CONTACT_CATEGORY_TYPE]: false,
   [DOC_TEMPLATE_SELECTION]: false,
+  [DYNAMIC_REPORTS]: false,
   [TELEMETRY_KILL_ALL]: false,
   ...Object.fromEntries(Object.values(TELEMETRY_KILL_PROVIDER_FLAGS).map((key) => [key, false])),
 });

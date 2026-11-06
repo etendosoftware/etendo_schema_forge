@@ -77,6 +77,20 @@ export function pickMessage(node) {
     return pickMessageFromObject(node);
 }
 
+// ETP-6140 — `pickMessage` of a NEO `error` node, minus its machine code: the flat code string
+// itself, or the `code` key of the nested object (which `pickMessageFromObject` would otherwise
+// return when the object has no message).
+function pickReadableError(node, code) {
+    if (!code) return pickMessage(node);
+    if (node === code) return null;
+    if (node && typeof node === 'object' && !Array.isArray(node)) {
+        const rest = { ...node };
+        delete rest.code;
+        return pickMessage(rest);
+    }
+    return pickMessage(node);
+}
+
 /**
  * Extract a human-readable error message from a NEO Headless error response.
  */
@@ -264,8 +278,13 @@ export async function extractErrorMessage(res, ui) {
         };
 
 
+        // ETP-6140 — the error code (flat IMP-5 `{error:"stale_record", message}` or nested
+        // `{error:{code, message}}`) is a discriminator for the caller, not text for the user:
+        // it is skipped while a readable message exists and only shown as the last resort.
+        const errorCode = extractBackendErrorCode(data);
+
         // NEO Headless top-level error: { error: { message, status } }
-        const neoError = pickMessage(data?.error);
+        const neoError = pickReadableError(data?.error, errorCode);
         if (neoError) return normalizeServerError(neoError) || neoError;
 
         // Etendo JsonDataService wraps errors in response.error
@@ -282,6 +301,8 @@ export async function extractErrorMessage(res, ui) {
         if (data?.response?.status === -4) {
             return translate('validationError', 'Validation error');
         }
+
+        if (errorCode) return normalizeServerError(errorCode) || errorCode;
     } catch { /* body not JSON */
     }
     return `${translate('error', 'Error')} ${res.status}`;
