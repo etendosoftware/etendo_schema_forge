@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/hooks/useBulkRowDelete.jsx
 import { renderHook, act } from '@testing-library/react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -34,6 +35,7 @@ vi.mock('@/i18n', () => ({
       bulkDeleteAllFailed: 'None of the {count} selected record(s) could be deleted.',
       bulkDeleteInProgress: 'Deleting…',
       bulkDeleteInProgressMessage: 'Deleting {count} record(s). This may take a few seconds.',
+      bulkDeleteProgressMessage: 'Deleting {processed} of {total} records…',
       // ETP-5111 — the two account-delete blocker sentences the tests below exercise. Present so
       // the reason assertion goes through the REAL translation path (`translateAccountDeleteBlocked`
       // recognises the "Cannot delete this account. " prefix and answers with ONE generic
@@ -65,6 +67,13 @@ vi.mock('@/auth/api', () => ({
 // message was never shown to anyone; now that a single-record failure surfaces the message
 // verbatim, an unfaithful mock here would hide what the user actually reads. Every pre-existing
 // test below supplies `body.message`, so this only affects the message-less case.
+// ETP-6143 — the server-side bulk path goes through `useBatch`; a spec-shaped base URL selects it.
+// Every other test here uses a non-spec base URL, so they never reach this mock.
+const { runBatchMock } = vi.hoisted(() => ({ runBatchMock: vi.fn() }));
+vi.mock('@/components/copilot/ocr/ingest/useBatch.js', () => ({
+  useBatch: () => ({ runBatch: runBatchMock }),
+}));
+
 vi.mock('@/hooks/useEntity', () => ({
   extractErrorMessage: async (res) => {
     try {
@@ -759,3 +768,49 @@ describe('useBulkRowDelete — generic dialog wrapper (ETP-5758)', () => {
   });
 });
 
+
+describe('useBulkRowDelete — one async batch job for a spec URL (ETP-6143)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    globalThis.fetch = vi.fn();
+  });
+
+  it('sends ONE async batch of DELETE operations instead of a DELETE per row', async () => {
+    runBatchMock.mockImplementation(async (ops, { onProgress }) => {
+      onProgress({ processedRows: 1, totalRows: 2 });
+      return {
+        committed: false,
+        partial: true,
+        rows: [
+          { ids: ['del-0'], committed: true },
+          { ids: ['del-1'], committed: false, error: { status: 409, message: 'In use' } },
+        ],
+      };
+    });
+    const onSuccess = vi.fn();
+    function TestComponent() {
+      const { requestBulkDelete, bulkDeleteDialog } = useBulkRowDelete({
+        apiBaseUrl: '/sws/neo/product', entity: 'header', token: 't', onSuccess,
+      });
+      return (
+        <>
+          <button onClick={() => requestBulkDelete([{ id: 'r1' }, { id: 'r2' }])}>Bulk</button>
+          {bulkDeleteDialog}
+        </>
+      );
+    }
+    render(<TestComponent />);
+    act(() => { screen.getByText('Bulk').click(); });
+    fireEvent.click(screen.getByTestId('bulk-delete-confirm'));
+
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledWith([{ id: 'r1' }], [{ id: 'r2' }]));
+    expect(runBatchMock).toHaveBeenCalledTimes(1);
+    const [ops, options] = runBatchMock.mock.calls[0];
+    expect(ops).toEqual([
+      { id: 'del-0', spec: 'product', entity: 'header', method: 'DELETE', recordId: 'r1' },
+      { id: 'del-1', spec: 'product', entity: 'header', method: 'DELETE', recordId: 'r2' },
+    ]);
+    expect(options.async).toBe(true);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+});

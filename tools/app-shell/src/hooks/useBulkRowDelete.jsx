@@ -1,8 +1,14 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUI } from '@/i18n';
 import { extractErrorMessage } from '@/hooks/useEntity';
 import { useBatchDeleteDialog } from '@/hooks/useBatchDeleteDialog.jsx';
+import { useBatch } from '@/components/copilot/ocr/ingest/useBatch.js';
+import { buildBulkDeleteOperations, outcomeFromBulkDeleteEnvelope } from '@/lib/batchDelete.js';
+import { specFromBaseUrl } from '@/lib/neoBaseUrl.js';
+
+/** ETP-6143 — how often a running bulk-delete job is polled for its progress. */
+export const BULK_DELETE_POLL_INTERVAL_MS = 750;
 
 /**
  * Grid multi-select bulk delete — same styled confirm modal `useRowDelete`
@@ -19,6 +25,12 @@ import { useBatchDeleteDialog } from '@/hooks/useBatchDeleteDialog.jsx';
  *     wire as the "Delete selected" toolbar action's onClick.
  *   - bulkDeleteDialog: JSX node the host must render once.
  *   - deleting: true while the batch is in flight (disable the trigger button).
+ *
+ * ETP-6143 — when `apiBaseUrl` is a spec URL (`getSpecBaseUrl` shape) and two or more rows are
+ * selected, the rows are deleted by ONE asynchronous `/sws/neo/batch` job (one DELETE operation
+ * per row) instead of N parallel requests: the server paces the deletes, each row is its own
+ * transaction, and the dialog shows the job's progress. Any other base URL, or a single row, keeps
+ * the per-row DELETE described below.
  *
  * On confirm: issues one DELETE per row (in parallel), then reports back via
  * `onSuccess(succeededRows, failedRows)` so the host can update its own
@@ -54,8 +66,25 @@ export function useBulkRowDelete({ apiBaseUrl, entity = 'header', token, onSucce
       return row;
     }), [apiFetch, entity, ui]);
 
+  const { runBatch } = useBatch({ token });
+  const spec = specFromBaseUrl(apiBaseUrl);
+  const bulkDeleteFn = useMemo(() => (spec
+    ? async (rows, { onProgress } = {}) => {
+      const envelope = await runBatch(buildBulkDeleteOperations(rows, { spec, entity }), {
+        async: true,
+        onlyReturnIds: true,
+        pollIntervalMs: BULK_DELETE_POLL_INTERVAL_MS,
+        onProgress: ({ processedRows, totalRows }) => {
+          onProgress?.({ processed: processedRows, total: totalRows });
+        },
+      });
+      return outcomeFromBulkDeleteEnvelope(rows, envelope);
+    }
+    : undefined), [spec, entity, runBatch]);
+
   const { requestBatchDelete, batchDeleteDialog, deleting } = useBatchDeleteDialog({
     deleteOneFn,
+    bulkDeleteFn,
     onOutcome: onSuccess,
     testIdScope: 'bulk-delete',
   });
