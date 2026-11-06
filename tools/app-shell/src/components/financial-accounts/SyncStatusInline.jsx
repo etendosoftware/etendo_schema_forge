@@ -3,6 +3,7 @@ import { useUI } from '@/i18n';
 import { ACCOUNT_TYPE } from './tokens';
 import { canConnectToSaltEdge } from './saltEdgeEligibility.js';
 import { LastSyncLabel } from './LastSyncLabel.jsx';
+import { useBankSyncStatus } from '@/windows/custom/financial-account/BankSyncContext.jsx';
 
 /**
  * Inline secondary line under the account name.
@@ -16,9 +17,15 @@ import { LastSyncLabel } from './LastSyncLabel.jsx';
  *   underlined "Conectar banco" CTA per Figma — inert in T1.
  * - `windowReadOnly` (ETP-5457, the window's "read-only" access tier): connecting a bank is a
  *   write, so that CTA is not rendered at all. The status lines above are unaffected.
+ * - ETP-6154: while a bank sync of a connected account runs, the line says so ("Sincronización en
+ *   curso, por favor espere…") instead of the last-sync age, which is about to change. Read from
+ *   the window's shared BankSyncContext; `syncing` overrides it for a host rendered OUTSIDE that
+ *   provider — the detail header, which reaches the page chrome through `useSetPageMeta`.
  */
-export function SyncStatusInline({ account, onConnect, windowReadOnly = false }) {
+export function SyncStatusInline({ account, onConnect, windowReadOnly = false, syncing }) {
   const ui = useUI();
+  const shared = useBankSyncStatus(account?.id);
+  const inProgress = syncing ?? shared.syncing;
 
   if (!account || account.type === ACCOUNT_TYPE.CASH) {
     return null;
@@ -29,6 +36,19 @@ export function SyncStatusInline({ account, onConnect, windowReadOnly = false })
       <span className="inline-flex items-center gap-1 text-xs text-[var(--status-warning-fg)]">
         <AlertTriangle className="h-3 w-3" data-testid="AlertTriangle__8e9c56" />
         {ui('financeAccountsSyncPending')}
+      </span>
+    );
+  }
+
+  if (account.bankConnected === true && inProgress) {
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))]"
+        aria-live="polite"
+        data-testid={`account-sync-in-progress-${account.id}`}
+      >
+        <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-[hsl(var(--muted-foreground))]" aria-hidden="true" />
+        {ui('financeAccountsBankSyncInProgress')}
       </span>
     );
   }

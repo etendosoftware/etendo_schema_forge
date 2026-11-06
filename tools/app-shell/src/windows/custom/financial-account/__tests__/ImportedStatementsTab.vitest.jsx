@@ -1,5 +1,5 @@
 // @covers tools/app-shell/src/windows/custom/financial-account/ImportedStatementsTab.jsx
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // uiMock is a vi.fn() (not a plain arrow) so a single test below can override its
@@ -36,8 +36,9 @@ vi.mock('@/hooks/useStatementActions', () => ({
 
 // useBankConnectionActions calls useAuth internally; stub it so no AuthProvider is needed.
 const bankSync = vi.fn();
+const bankSyncStatus = vi.fn();
 vi.mock('@/hooks/useBankConnectionActions', () => ({
-  useBankConnectionActions: () => ({ sync: bankSync }),
+  useBankConnectionActions: () => ({ sync: bankSync, syncStatus: bankSyncStatus }),
 }));
 
 // Capture the confirm dialog props so we can assert which action was requested.
@@ -196,6 +197,7 @@ vi.mock('../ManualStatementModal', () => ({
 // tab no longer pre-computes a reason to disable the trash with. Its own describe block went with
 // it; the replacement coverage is "the trigger is enabled and the backend explains the refusal".
 import { ImportedStatementsTab } from '../ImportedStatementsTab.jsx';
+import { BankSyncProvider, useBankSync, BANK_SYNC_POLL_INTERVAL_MS } from '../BankSyncContext.jsx';
 
 const ACCOUNT = { id: 'acc-1', currencyIso: 'USD' };
 const NOW = new Date();
@@ -1118,5 +1120,121 @@ describe('ImportedStatementsTab', () => {
       await user.click(screen.getByTestId('toolbar-refresh'));
       expect(reloadFn).toHaveBeenCalled();
     });
+  });
+});
+
+// ETP-6154 — the sync goes through the window's shared BankSyncContext: the toolbar button follows
+// the shared state (a sync started from the list or the Edit modal disables it too), no second
+// request leaves while one runs, and the statements reload once the sync is really over.
+describe('ImportedStatementsTab — shared bank-sync state', () => {
+  const CONNECTED = { id: 'acc-1', currencyIso: 'USD', bankConnected: true };
+  const sibling = {};
+  function OtherEntryPoint() {
+    sibling.bankSync = useBankSync();
+    return null;
+  }
+
+  let finishSync;
+  beforeEach(() => {
+    statementsRef.value = STATEMENTS;
+    loadingRef.value = false;
+    reloadFn.mockReset();
+    bankSync.mockReset();
+    bankSync.mockImplementation(() => new Promise((resolve) => { finishSync = resolve; }));
+    bankSyncStatus.mockReset();
+    bankSyncStatus.mockResolvedValue({});
+    [toastSuccess, toastError, toastWarning, toastInfo].forEach((fn) => fn.mockReset());
+    uiMock.mockReset();
+    uiMock.mockImplementation((key) => key);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('marks the toolbar as syncing while its own sync runs, and clears it when it ends', async () => {
+    render(<ImportedStatementsTab account={CONNECTED} />);
+    expect(screen.getByTestId('stub-toolbar')).toHaveAttribute('data-syncing', 'false');
+
+    await act(async () => { fireEvent.click(screen.getByTestId('toolbar-sync')); });
+    expect(screen.getByTestId('stub-toolbar')).toHaveAttribute('data-syncing', 'true');
+    expect(reloadFn).not.toHaveBeenCalled();
+
+    await act(async () => { finishSync({ status: 'OK' }); });
+    expect(screen.getByTestId('stub-toolbar')).toHaveAttribute('data-syncing', 'false');
+    expect(reloadFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends no second request when the button is clicked again while syncing', async () => {
+    render(<ImportedStatementsTab account={CONNECTED} />);
+
+    await act(async () => { fireEvent.click(screen.getByTestId('toolbar-sync')); });
+    await act(async () => { fireEvent.click(screen.getByTestId('toolbar-sync')); });
+
+    expect(bankSync).toHaveBeenCalledTimes(1);
+  });
+
+  it('a sync that fails shows the error and reloads nothing', async () => {
+    bankSync.mockRejectedValue(new Error('Bank down'));
+    const onSynced = vi.fn();
+    render(<ImportedStatementsTab account={CONNECTED} onSynced={onSynced} />);
+
+    await act(async () => { fireEvent.click(screen.getByTestId('toolbar-sync')); });
+
+    expect(toastError).toHaveBeenCalledWith('Bank down');
+    expect(reloadFn).not.toHaveBeenCalled();
+    expect(onSynced).not.toHaveBeenCalled();
+    expect(screen.getByTestId('stub-toolbar')).toHaveAttribute('data-syncing', 'false');
+  });
+
+  it('follows a sync another entry point started: syncing, and its own click sends nothing', async () => {
+    render(
+      <BankSyncProvider>
+        <OtherEntryPoint />
+        <ImportedStatementsTab account={CONNECTED} />
+      </BankSyncProvider>,
+    );
+
+    await act(async () => { sibling.bankSync.startSync('acc-1'); });
+    expect(screen.getByTestId('stub-toolbar')).toHaveAttribute('data-syncing', 'true');
+
+    await act(async () => { fireEvent.click(screen.getByTestId('toolbar-sync')); });
+    expect(bankSync).toHaveBeenCalledTimes(1);
+    expect(toastInfo).not.toHaveBeenCalled();
+
+    await act(async () => { finishSync({ status: 'OK' }); });
+    expect(screen.getByTestId('stub-toolbar')).toHaveAttribute('data-syncing', 'false');
+  });
+
+  it('reloads and calls onSynced only when a sync the bridge left running (IN_PROGRESS) ends', async () => {
+    vi.useFakeTimers();
+    bankSync.mockResolvedValue({ status: 'IN_PROGRESS' });
+    bankSyncStatus
+      .mockResolvedValueOnce({ 'acc-1': { inProgress: true } })
+      .mockResolvedValueOnce({ 'acc-1': { inProgress: false, lastSyncDate: new Date(Date.now() + 1000).toISOString() } });
+    const onSynced = vi.fn();
+    render(<ImportedStatementsTab account={CONNECTED} onSynced={onSynced} />);
+
+    await act(async () => { fireEvent.click(screen.getByTestId('toolbar-sync')); });
+    expect(toastInfo).toHaveBeenCalledWith('financeAccountsBankSyncInProgress');
+    expect(screen.getByTestId('stub-toolbar')).toHaveAttribute('data-syncing', 'true');
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(BANK_SYNC_POLL_INTERVAL_MS); });
+    expect(reloadFn).not.toHaveBeenCalled();
+    expect(onSynced).not.toHaveBeenCalled();
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(BANK_SYNC_POLL_INTERVAL_MS); });
+    expect(reloadFn).toHaveBeenCalledTimes(1);
+    expect(onSynced).toHaveBeenCalledTimes(1);
+    expect(toastSuccess).toHaveBeenCalledWith('financeAccountsBankConnectionSyncDone');
+    expect(screen.getByTestId('stub-toolbar')).toHaveAttribute('data-syncing', 'false');
+  });
+
+  it('does not sync under the read-only tier', async () => {
+    render(<ImportedStatementsTab account={CONNECTED} windowReadOnly />);
+
+    await act(async () => { fireEvent.click(screen.getByTestId('toolbar-sync')); });
+
+    expect(bankSync).not.toHaveBeenCalled();
   });
 });

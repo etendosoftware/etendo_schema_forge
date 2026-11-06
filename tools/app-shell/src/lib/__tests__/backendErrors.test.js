@@ -3936,6 +3936,79 @@ describe('extractBackendErrorCode (ETP-5782)', () => {
   });
 });
 
+// ── PSD2 bank sync: the client timeout sentinel and the lock refusal code ──────────
+describe('translateBackendError — PSD2 bank sync sentinels and codes', () => {
+  const LOCALES = ['en_US', 'es_ES', 'es_AR'];
+  const readLabels = (locale) => JSON.parse(
+    readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8')).genericLabels;
+
+  it('maps the BANK_CONNECTION_TIMEOUT sentinel to the timeout label, never the raw token', () => {
+    const es = fakeUiTranslator({ financeAccountsBankConnectionTimeout: 'El banco no respondió a tiempo.' });
+    assert.equal(translateBackendError('BANK_CONNECTION_TIMEOUT', es), 'El banco no respondió a tiempo.');
+  });
+
+  it('translates BANK_SYNC_LOCK_UNAVAILABLE by its code alone, whatever prose the server sent', () => {
+    for (const locale of LOCALES) {
+      const labels = readLabels(locale);
+      const t = (key) => labels[key] ?? key;
+      assert.equal(
+        translateBackendError('Could not acquire the sync lock for account X', t, { code: 'BANK_SYNC_LOCK_UNAVAILABLE' }),
+        labels['backendError.bankSyncLockUnavailable'],
+        locale,
+      );
+    }
+  });
+
+  it('translates BANK_SYNC_DUPLICATE_CHECK_FAILED by its code alone, English or server-translated prose', () => {
+    for (const locale of LOCALES) {
+      const labels = readLabels(locale);
+      const t = (key) => labels[key] ?? key;
+      for (const prose of [
+        'Could not verify whether 3 transactions were already imported; they were skipped.',
+        'No se pudo verificar si 3 movimientos ya estaban importados.',
+      ]) {
+        assert.equal(
+          translateBackendError(prose, t, { code: 'BANK_SYNC_DUPLICATE_CHECK_FAILED' }),
+          labels['backendError.bankSyncDuplicateCheckFailed'],
+          `${locale}: ${prose}`,
+        );
+      }
+    }
+  });
+
+  it('a message BACKEND_ERROR_MAP knows word for word keeps its own translation over the duplicate-check code', () => {
+    const labels = readLabels('es_ES');
+    const t = (key) => labels[key] ?? key;
+    const known = 'No active bank connection found for financial account %s. Connect the account first.';
+    assert.equal(
+      translateBackendError(known, t, { code: 'BANK_SYNC_DUPLICATE_CHECK_FAILED' }),
+      labels['backendError.psd2NoActiveConnection'],
+    );
+  });
+
+  it('keeps the server prose when the lock label is missing (guard)', () => {
+    const prose = 'Could not acquire the sync lock';
+    assert.equal(translateBackendError(prose, (k) => k, { code: 'BANK_SYNC_LOCK_UNAVAILABLE' }), prose);
+  });
+
+  for (const key of [
+    'financeAccountsBankSyncTooltip',
+    'financeAccountsBankSyncInProgress',
+    'backendError.bankSyncLockUnavailable',
+    'backendError.bankSyncDuplicateCheckFailed',
+  ]) {
+    it(`ships ${key} in every locale, translated in the Spanish ones`, () => {
+      const en = readLabels('en_US')[key];
+      assert.ok(typeof en === 'string' && en.trim(), `en_US.${key}`);
+      for (const locale of ['es_ES', 'es_AR']) {
+        const text = readLabels(locale)[key];
+        assert.ok(typeof text === 'string' && text.trim(), `${locale}.${key}`);
+        assert.notEqual(text, en, `${locale}.${key} is untranslated`);
+      }
+    });
+  }
+});
+
 // ── ETP-5693: posting-account refusals on accounting fields, translated by identity ──
 describe('translateBackendError — posting-account refusals (ETP-5693)', () => {
   const es = localeTranslator('es_ES');
