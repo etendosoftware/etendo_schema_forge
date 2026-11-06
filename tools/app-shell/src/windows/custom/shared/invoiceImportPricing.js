@@ -25,7 +25,8 @@ export async function loadPricingContext({ apiFetch, base, spec, invoiceId }) {
   const productAuxMap = {};
   try {
     const priceListId = invoiceHeader.priceList;
-    const selectorUrl = `${base}/${spec}/lines/selectors/M_Product_ID?limit=500&offset=0${priceListId ? `&priceList=${encodeURIComponent(priceListId)}` : ''}`;
+    const priceListParam = priceListId ? '&priceList=' + encodeURIComponent(priceListId) : '';
+    const selectorUrl = `${base}/${spec}/lines/selectors/M_Product_ID?limit=500&offset=0${priceListParam}`;
     const selectorRes = await apiFetch(selectorUrl);
     if (selectorRes.ok) {
       const selData = await selectorRes.json();
