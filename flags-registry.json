@@ -2024,6 +2024,84 @@
       ]
     },
     {
+      "id": "dynamic-reports",
+      "description": "Interactive accounting reports (Profit & Loss first; Balance Sheet and Trial Balance join when their stories land): the report applies each filter change on its own, folds and expands the account tree, compares periods with variation columns, splits an account by organization / contact / product and drills down to the ledger, the entry and the document in a side panel. Data comes from POST /api/reports/:id/query, which runs the report contract's SQL and checks the role's organization access on its own. Visual gating only: off, ReportViewerPage renders today's viewer unchanged; the /query route and the /render org check are not gated by this flag.",
+      "owner": "Gremiger",
+      "jira": "ETP-6080",
+      "created": "2026-11-03",
+      "flag": {
+        "key": "dynamic-reports",
+        "defaultValue": false,
+        "ttl": "2027-03-31",
+        "ttlNote": "PLACEHOLDER: end of Q1 2027, after Balance Sheet (ETP-6079) and Trial Balance migrate to the dynamic view; the owner sets the real date when rollout starts.",
+        "symbols": [
+          "dynamic-reports",
+          "DYNAMIC_REPORTS",
+          "reports/dynamic",
+          "DynamicReportView",
+          "useReportQuery",
+          "DYNAMIC_REPORT_IDS",
+          "opensDynamicView",
+          "pickedReportId",
+          "reportSessionId",
+          "REPORT_DRILLDOWN"
+        ]
+      },
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/components/reports/dynamic/"
+        ],
+        "backend": []
+      },
+      "$pathsComment": "Owned code only: the dynamic view and its query hook. ReportViewerPage.jsx (the one switch, plus the PopupMultiSelector and buildReportFilename exports the view reuses), flag-keys.js, the observability event catalog and the locale files are shared toggle points. The /query route (core report-query.js, dev engine report-api.js), the contract changes and the export templates serve every caller and are not gated.",
+      "deferredItems": [
+        {
+          "id": "view-imports-from-report-page",
+          "kind": "cosmetic",
+          "note": "DynamicReportPanel and DynamicReportView import PopupMultiSelector and buildReportFilename from ReportViewerPage.jsx: a circular import (the page lazy-loads the view, the view imports the page), and a page file that exports non-components loses Vite fast refresh. Works at runtime because the page module is already loaded when the lazy chunk runs. And therefore: retiring the flag by deletion would leave those two exports behind for nothing, and shipping it would keep a view that depends on the old viewer's file. Fix: move both to components/reports/ and import them from there in both viewers. Deferred by the user in the F6–F12 self-review (2026-11-03): keep ETP-6080 focused.",
+          "refs": [
+            "tools/app-shell/src/pages/ReportViewerPage.jsx — export function PopupMultiSelector, export function buildReportFilename",
+            "tools/app-shell/src/components/reports/dynamic/DynamicReportPanel.jsx — import from '@/pages/ReportViewerPage.jsx'"
+          ]
+        }
+      ],
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/pages/__tests__/ReportViewerPage.dynamicSwitch.vitest.jsx",
+            "note": "The flag switch: on opens the dynamic view for a listed report only; off keeps the old viewer."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/reports/dynamic/__tests__/useReportQuery.vitest.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/reports/dynamic/__tests__/DynamicReportView.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/reports/dynamic/__tests__/dynamicDates.vitest.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/reports/dynamic/__tests__/reportTree.vitest.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/reports/dynamic/__tests__/drillDown.vitest.js"
+          }
+        ],
+        "e2e": [
+          {
+            "root": "frontend",
+            "path": "e2e/tests/flows/accounting/dynamic-profit-loss.mocked.spec.js"
+          }
+        ]
+      }
+    },
+    {
       "id": "bank-bounce-suggestions",
       "description": "Automatic bounce-pair suggestions in the bank reconciliation of PSD2-synced financial accounts in Etendo. A bounce is an outgoing bank-statement line plus the line that reverses it (same amount, opposite sign). With the flag on, the backend auto-match detects candidate pairs, the auto-match modal shows them in a 'Rechazos bancarios' section and they can be reviewed in the reconciliation panel; accepting a pair logically discards BOTH statement lines (EM_PSD2_IS_DISCARDED) and links them as a pair, and discard and restore always act on the pair. Honouring lines that are already discarded is gated too (option 2, ETP-5581): with the flag on they are excluded from the pending lists, auto-match and reconciliation (only while unmatched; a reconciled line counts as reconciled) and count as resolved; with it off Etendo behaves as before ETP-5581 and a discarded line is a plain pending line, with two declared exceptions that are not gated: the SQL-stored counters (FIN_Financial_Account.EM_ETGO_Pending_Count and FIN_BankStatement.EM_ETGO_Discarded_Count / EM_ETGO_Status; see deferredItems pending-counter-not-gated) and the statement-edit identity fix (a recreated line keeps its PSD2 transaction id and discard flag, BankStatementLineSet), which changes nothing visible with the flag off.",
       "owner": "Agustin-Calderon",

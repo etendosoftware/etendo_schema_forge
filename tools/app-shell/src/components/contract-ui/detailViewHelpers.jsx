@@ -2257,7 +2257,9 @@ export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
       secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, previous);
       const msg = await extractErrorMessage(res);
       toast.error(msg || ui('networkError'));
-      throw new Error(msg || 'PATCH failed');
+      // ETP-6140 — the throw only stops InlineLinesPanel from claiming the row was saved; the
+      // user was already told by the toast above (see inlineLineUpdateHandlers.js).
+      throw Object.assign(new Error(msg || 'PATCH failed'), { userNotified: true });
     }
   } : undefined;
 }

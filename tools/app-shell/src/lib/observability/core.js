@@ -31,8 +31,11 @@ function isProviderEnabled(provider) {
 
 // ETP-5351 — RUM global-context marker of a support session (see providers/datadog.js).
 const SUPPORT_SESSION_KEY = 'support_session';
+// ETP-6080 — the report funnel key: a random UUID per report session (36 chars, under the
+// gateway's opaque-value scrub), not a login session or a user.
+const REPORT_SESSION_KEY = 'reportSessionId';
 /** Approved keys the gateway exempts from its sensitive-key-NAME rule (`session` in the name). */
-export const TRUSTED_CONTEXT_KEYS = [SUPPORT_SESSION_KEY];
+export const TRUSTED_CONTEXT_KEYS = [SUPPORT_SESSION_KEY, REPORT_SESSION_KEY];
 
 function isAnalyticsProvider(provider) {
   return provider?.analytics === true;
