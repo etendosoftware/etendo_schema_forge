@@ -3631,6 +3631,83 @@ describe('translateBackendError — invoice reactivate fiscal-rectified refusal 
   });
 });
 
+// ── ETP-5745 CP-19/CP-23: rectification fiscal-code-required refusal (RectificationFiscalCodeGuard)
+// — `messageParams.systems` is a raw array of ACTIVE fiscal systems still missing their own
+// rectification code/motive, joined with the SAME locale-aware conjunction as fiscalSystem above
+// (the backend's own `message` field is deliberately plain English prose — the wire contract for
+// MCP/scripts; the SPA never shows it, it renders this localized sentence instead).
+describe('translateBackendError — rectification fiscal-code-required refusal (ETP-5745)', () => {
+  const es = localeTranslator('es_ES');
+  const en = localeTranslator('en_US');
+  const KEY = 'ETGO_InvoiceRectificationCodeRequired';
+
+  it('renders the key in es_ES and en_US, never the raw key or the backend prose', () => {
+    const prose = 'Select a rectification reason/code in the SIF tab for SII.';
+    const esText = translateBackendError(prose, es, { messageKeys: [KEY], messageParams: { systems: ['SII'] } });
+    const enText = translateBackendError(prose, en, { messageKeys: [KEY], messageParams: { systems: ['SII'] } });
+    assert.notEqual(esText, 'backendError.rectificationCodeRequired');
+    assert.notEqual(enText, 'backendError.rectificationCodeRequired');
+    assert.notEqual(esText, enText);
+  });
+
+  it('names a single missing system with no conjunction needed', () => {
+    const text = translateBackendError('ignored', es, { messageKeys: [KEY], messageParams: { systems: ['Verifactu'] } });
+    assert.match(text, /Verifactu/);
+  });
+
+  it('joins a 2-element systems array with the real es_ES/en_US conjunction, not a comma', () => {
+    const params = { systems: ['SII', 'TicketBAI'] };
+    const esText = translateBackendError('ignored', es, { messageKeys: [KEY], messageParams: params });
+    const enText = translateBackendError('ignored', en, { messageKeys: [KEY], messageParams: params });
+    assert.match(esText, /SII y TicketBAI/);
+    assert.match(enText, /SII and TicketBAI/);
+    assert.doesNotMatch(esText, /SII, TicketBAI/);
+  });
+
+  it('joins a 3-element systems array with no Oxford comma before the conjunction', () => {
+    const params = { systems: ['SII', 'TicketBAI', 'Verifactu'] };
+    const esText = translateBackendError('ignored', es, { messageKeys: [KEY], messageParams: params });
+    const enText = translateBackendError('ignored', en, { messageKeys: [KEY], messageParams: params });
+    assert.match(esText, /SII, TicketBAI y Verifactu/);
+    assert.match(enText, /SII, TicketBAI and Verifactu/);
+  });
+
+  it('keeps the backend prose when the locale has no entry for the key', () => {
+    const prose = 'raw backend prose';
+    assert.equal(translateBackendError(prose, (k) => k, {
+      messageKeys: [KEY], messageParams: { systems: ['SII'] },
+    }), prose);
+  });
+});
+
+// ── ETP-5745 CP-26: a non-rectificative invoice with a stray VERI*FACTU R1-R5 code BLOCKS
+// completion instead of being silently corrected (reverted from the original CP-20 behavior).
+// No dynamic messageParams — a single fixed sentence naming one field on one system, resolved
+// through the generic BACKEND_ERROR_KEY_MAP route (not a dedicated composer).
+describe('translateBackendError — Verifactu invoice type not rectificative (ETP-5745 CP-26)', () => {
+  const es = localeTranslator('es_ES');
+  const en = localeTranslator('en_US');
+  const KEY = 'ETGO_InvoiceVerifactuInvTypeNotRectificative';
+
+  it('renders the key in es_ES and en_US, never the raw key or the backend prose', () => {
+    const prose = 'The VERI*FACTU invoice type cannot be a rectification code (R1-R5) on an '
+      + 'invoice that is not rectificative. Fix it in the SIF tab before confirming.';
+    const esText = translateBackendError(prose, es, { messageKeys: [KEY] });
+    const enText = translateBackendError(prose, en, { messageKeys: [KEY] });
+    assert.notEqual(esText, 'backendError.verifactuInvTypeNotRectificative');
+    assert.notEqual(enText, 'backendError.verifactuInvTypeNotRectificative');
+    assert.notEqual(esText, prose);
+    assert.notEqual(esText, enText);
+    assert.match(esText, /Verifactu|VERI\*FACTU/i);
+    assert.match(esText, /rectificaci/i);
+  });
+
+  it('keeps the backend prose when the locale has no entry for the key', () => {
+    const prose = 'raw backend prose';
+    assert.equal(translateBackendError(prose, (k) => k, { messageKeys: [KEY] }), prose);
+  });
+});
+
 // ── translateByMessageKey messageParams forwarding — no regression on param-less keys ──
 //
 // translateByMessageKey now forwards messageParams to t(key, params) for EVERY keyed message,
