@@ -2620,21 +2620,24 @@ rectificative invoice. User-facing behavior after the fix:
 **Completion is blocked, never silently fixed, when a required code is missing.** A rectificative
 invoice (its DocType has `em_etsg_isrectificative = 'Y'`) can only be completed once every fiscal
 system that is actually **active for the organization** has its own code/motive filled in. Trying
-to complete with one or more missing shows a blocking error naming exactly which field(s) are
-missing — e.g. "Para finalizar esta factura rectificativa se necesita informar el Motivo de
-rectificación (SII) y el campo tbaiReverseinvoicecode (TicketBAI)." A system that is not configured
-for the org (no SII enrollment, no TicketBAI config, no VERI\*FACTU config) is never counted as
-missing — an org that only runs VERI\*FACTU is never blocked on SII/TBAI fields it doesn't use.
-Enforced server-side in `RectificationFiscalCodeGuard`, reachable from every channel (UI, MCP,
-batch) since it hooks `AbstractInvoiceHeaderHandler#completeInvoiceIfNeeded` before
+to complete with one or more missing shows a blocking error naming exactly which SYSTEM(S) are
+missing — e.g. "Debe seleccionar un motivo/código de rectificación en la solapa SIF para SII y
+TicketBAI." (the message names the systems, not the field names — field-level precision is the
+toast's job, below). A system that is not configured for the org (no SII enrollment, no TicketBAI
+config, no VERI\*FACTU config) is never counted as missing — an org that only runs VERI\*FACTU is
+never blocked on SII/TBAI fields it doesn't use. Enforced server-side in
+`RectificationFiscalCodeGuard`, reachable from every channel (UI, MCP, batch) since it hooks
+`AbstractInvoiceHeaderHandler#completeInvoiceIfNeeded` before
 `InvoiceCompletionService.completeInvoice` runs.
 
 **Early heads-up toast in the SIF tab.** Before the user even tries to complete, the SIF tab (via
-`useSifFieldPatcher`) shows a one-time warning toast listing the same missing fields for the same
-active-systems set, so the gap is visible while still editing instead of only at the blocking
-completion attempt. The toast fires once per record and never re-fires once every active system's
-field is filled (it previously re-fired forever on a reactivated rectificative invoice whose codes
-were already set — fixed by gating on "any active system still missing its value", not on
+`useSifFieldPatcher`) shows a one-time warning toast naming the precise missing FIELD (by its real
+translated label, not the technical column name) per missing active system — e.g. "Complete Motivo
+de rectificación (SII) y Código de Factura Rectificativa (TicketBAI) en la solapa SIF antes de
+confirmar." — so the gap is visible while still editing instead of only at the blocking completion
+attempt. The toast fires once per record and never re-fires once every active system's field is
+filled (it previously re-fired forever on a reactivated rectificative invoice whose codes were
+already set — fixed by gating on "any active system still missing its value", not on
 `isRectificative` alone).
 
 **No system auto-picks a motive or code.** Earlier behavior auto-set TicketBAI's `tbaiReverseinvoicecode`
@@ -2655,8 +2658,18 @@ never fix it silently" for anything the guard can detect at completion time. The
 clear-on-revert above is unaffected: that is an immediate, visible UI reset while editing, not a
 silent background correction at save time.
 
-**"Rectificaciones" tab visibility is unaffected by this pass** — it already only shows for
-rectificative invoices; this pass only hardened the field-level validation around it.
+**"Rectificaciones" tab now hides itself for a non-rectificative invoice that is merely the
+TARGET of someone else's rectification.** `ReversedInvoicesPanel` is a `renderTab: false` custom
+component, so the AD tab's own `decisions.json` `displayLogic` (`@isRectificative@='true'`) never
+reaches the generated `HeaderPage`'s tab-visibility wiring — no display-logic evaluation runs for a
+custom-component tab at all. Before this fix, a plain invoice that happened to be the TARGET of
+someone else's rectification (the "incoming" row CP-12's `rectifyingInvoices` added) still showed
+this tab, with the rectificativa displayed as if IT were the "Factura original" of the plain
+invoice — backwards. The panel now reports its own visibility via `onVisibilityChange` (the same opt-out
+every other `'tab'`-placement custom component uses), hiding for an invoice the backend has
+confirmed is NOT rectificative (`data.isRectificative === false`); an unsaved record whose
+`isRectificative` has not been enriched yet still keeps the tab, so starting a new "Factura
+Rectificativa" and linking its original before the first save still works.
 
 Fix spans `com.etendoerp.go`'s `RectificationFiscalCodeGuard`, `InvoiceCalloutHelper`,
 `SalesRectificativeFiscalDefaults`, `InvoiceCompletionService`, and `NeoDefaultsService`
@@ -2664,8 +2677,10 @@ Fix spans `com.etendoerp.go`'s `RectificationFiscalCodeGuard`, `InvoiceCalloutHe
 now gated to mandatory columns only), and this repo's `detailViewHelpers.jsx`
 (`isRectificationCascadeTarget` cascade-exemption for the two guards in `applyCalloutFieldUpdates`
 that otherwise silently drop a legitimate backend reset), `useSifFieldPatcher.js`
-(`missingRectificationSystems`), and `backendErrors.js` (`translateRectificationCodeRequired`,
-plus the `ETGO_InvoiceVerifactuInvTypeNotRectificative` key). New message keys on the Java side:
+(`missingRectificationSystems`), `backendErrors.js` (`translateRectificationCodeRequired`,
+plus the `ETGO_InvoiceVerifactuInvTypeNotRectificative` key), and
+`tools/app-shell/src/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx` (the
+`onVisibilityChange` tab-hiding fix above). New message keys on the Java side:
 `ETGO_InvoiceRectificationCodeRequired`, `ETGO_InvoiceVerifactuInvTypeNotRectificative` — see
 `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` for the full messageKeys/messageParams
 reference.
