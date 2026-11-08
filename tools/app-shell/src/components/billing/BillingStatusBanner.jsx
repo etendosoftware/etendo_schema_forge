@@ -10,16 +10,19 @@ import {
   paymentGraceWarning,
   paymentGraceWarningDismissKey,
 } from '@/lib/environmentPresentation.js';
+import { useSubscriptionPagePath, useSubscriptionPath } from '@/lib/myCompanies/subscriptionPath.js';
+import { MY_COMPANIES_SOURCES } from '@/lib/myCompanies/telemetry.js';
 
 const BANNER_DATE = { day: 'numeric', month: 'long', year: 'numeric' };
 
-// `/account` is where "Update payment" leads: its Subscription section already shows the grace
+// The subscription page is where "Update payment" leads (`/account`, or "Mis empresas" with the
+// `my-companies-page` flag on — ETP-6060): its Subscription section already shows the grace
 // countdown next to the portal button, so the banner would only repeat it and link to itself.
 // `/upgrade` is a full-screen overlay (`fixed inset-0 z-50`) drawn over the layout: the banner
 // would be invisible under it yet still in the accessibility tree, an unseen `role="alert"`.
-const HIDDEN_ON_PATHS = ['/account', '/upgrade'];
-function isHiddenOnPath(pathname) {
-  return HIDDEN_ON_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+function isHiddenOnPath(pathname, subscriptionPage) {
+  return [subscriptionPage, '/upgrade']
+    .some((path) => pathname === path || pathname.startsWith(`${path}/`));
 }
 
 // sessionStorage can be missing or throw (private window, blocked site data). A dismissal is a
@@ -50,6 +53,9 @@ function writeDismissed(key) {
  * the payment portal); anyone else is told to contact their administrator, with no CTA. In the
  * last days before the block it turns destructive and cannot be dismissed; before that it can be
  * dismissed for the browser session, per client and grace window.
+ *
+ * When the environment's `accessEnforced` is false (the kill switch, `open-and-notable-topics.md`
+ * §4.17) the warning is `neutral`: "payment overdue" with no block date, never escalated.
  */
 export function BillingStatusBanner() {
   const ui = useUI();
@@ -61,12 +67,20 @@ export function BillingStatusBanner() {
   const warning = paymentGraceWarning(environment);
   const dismissKey = paymentGraceWarningDismissKey(currentClientId, environment?.graceEndsAt);
   const [dismissedKey, setDismissedKey] = useState(null);
+  const subscriptionPage = useSubscriptionPagePath();
+  const ctaPath = useSubscriptionPath(currentClientId, MY_COMPANIES_SOURCES.BILLING_BANNER);
 
-  if (!warning || isHiddenOnPath(pathname)) return null;
+  if (!warning || isHiddenOnPath(pathname, subscriptionPage)) return null;
   const dismissible = !warning.escalated;
   if (dismissible && (dismissedKey === dismissKey || readDismissed(dismissKey))) return null;
 
-  const date = formatCalendarDate(warning.graceEndsAt, locale, BANNER_DATE);
+  // ETP-5051 / §4.17 — with enforcement switched off for this tenant there is no block date to
+  // announce: the neutral sentence says only that the payment is overdue.
+  const message = warning.neutral
+    ? ui('billingPaymentOverdueBanner')
+    : ui('billingPaymentFailedBanner', {
+      date: formatCalendarDate(warning.graceEndsAt, locale, BANNER_DATE),
+    });
   const dismiss = () => {
     writeDismissed(dismissKey);
     setDismissedKey(dismissKey);
@@ -87,7 +101,7 @@ export function BillingStatusBanner() {
         <Button
           type="button"
           size="sm"
-          onClick={() => navigate('/account')}
+          onClick={() => navigate(ctaPath)}
           data-testid="billing-status-banner-cta"
         >
           {ui('billingUpdatePaymentCta')}
@@ -95,7 +109,7 @@ export function BillingStatusBanner() {
       ) : null}
     >
       <span data-testid="billing-status-banner-message">
-        {ui('billingPaymentFailedBanner', { date })}
+        {message}
       </span>
       {!warning.canPay && (
         <span className="ml-1" data-testid="billing-status-banner-member-hint">

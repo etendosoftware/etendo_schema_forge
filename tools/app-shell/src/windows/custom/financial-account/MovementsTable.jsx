@@ -1,3 +1,4 @@
+import { FinancialGridView, FinancialTableRow as TableRow } from './FinancialGridView.jsx';
 import { Fragment, useState, useEffect } from 'react';
 import { ArrowUpRight, ArrowLeftRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -12,7 +13,6 @@ import {
   Table,
   TableHeader,
   TableBody,
-  TableRow,
   TableHead,
   TableCell,
 } from '@/components/ui/table';
@@ -656,6 +656,16 @@ function computeMovementRowClassName({ selected, highlighted, expanded, rowCanEx
   ].filter(Boolean).join(' ');
 }
 
+
+const PERSONAL_COLUMNS = [
+  { key: 'expand', gridConfigurable: false },
+  { key: 'select', gridConfigurable: false },
+  ...CONTRACT_COLUMNS.map((col) => ({ ...col, key: col.name, labelKey: MOVEMENT_CELL_RENDERERS[col.name]?.labelKey })),
+  { key: 'amount', labelKey: 'financeAccountMovementsColAmount' },
+  { key: 'balance', labelKey: 'financeAccountMovementsColBalance' },
+  { key: 'actions', gridConfigurable: false },
+];
+
 export function MovementsTable({
   movements, loading, enabledDimensions = [], selectedIds, onSelectionChange,
   highlightTxnId = null, onReload, onEdit, accountCurrencyId = null,
@@ -816,70 +826,77 @@ export function MovementsTable({
     : 'transition-opacity duration-200';
 
   return (
-    <TooltipProvider data-testid="TooltipProvider__ae5a16">
-      {/* TruncatedText needs a bounded table layout so its span can measure actual clipping.
-          The minimum keeps structural/status/amount columns usable; narrower viewports scroll
-          horizontally instead of squeezing them until their controls disappear. */}
-      <Table className={`table-fixed min-w-[1280px] ${dimWhileRefreshing}`} data-testid="Table__ae5a16">
-        <TableHeader data-testid="TableHeader__ae5a16">
-          <TableRow
-            className="h-10 [&_th]:text-xs [&_th]:font-semibold [&_th]:leading-4 [&_th]:text-[hsl(var(--foreground))]"
-            data-testid="TableRow__ae5a16">
-            <TableHead className="w-10" data-testid="TableHead__ae5a16" />
-            <TableHead className="w-10" data-testid="TableHead__ae5a16">
-              <Checkbox
-                checked={allSelected}
-                indeterminate={someSelected}
-                onChange={handleSelectAll}
-                data-testid="Checkbox__ae5a16" />
-            </TableHead>
-            {CONTRACT_COLUMNS.map((col) => {
-              const renderer = MOVEMENT_CELL_RENDERERS[col.name];
-              return (
-                <TableHead key={col.name} data-testid="TableHead__ae5a16">
-                  {renderer?.parts ? (
-                    <SortableHeaderSegments
-                      parts={visibleParts(renderer, capabilities).map((part) => ({ key: part.key, label: ui(part.labelKey) }))}
-                      activeKey={sortKey}
-                      direction={sortDirection}
-                      onSort={onSort}
-                      data-testid="SortableHeaderSegments__ae5a16" />
-                  ) : (
-                    <SortableHeaderLabel
-                      label={renderer ? ui(renderer.labelKey) : col.label}
-                      sortKey={col.name}
-                      activeKey={sortKey}
-                      direction={sortDirection}
-                      onSort={onSort}
-                      data-testid="SortableHeaderLabel__ae5a16" />
-                  )}
-                </TableHead>
-              );
+    <FinancialGridView
+      spec="financial-account"
+      entity="transaction"
+      columns={PERSONAL_COLUMNS}
+      data={movements}
+      data-testid="FinancialGridView__ae5a16">
+      <TooltipProvider data-testid="TooltipProvider__ae5a16">
+        {/* TruncatedText needs a bounded table layout so its span can measure actual clipping.
+            The minimum keeps structural/status/amount columns usable; narrower viewports scroll
+            horizontally instead of squeezing them until their controls disappear. */}
+        <Table className={`table-fixed min-w-[1280px] ${dimWhileRefreshing}`} data-testid="Table__ae5a16">
+          <TableHeader data-testid="TableHeader__ae5a16">
+            <TableRow header
+              className="h-10 [&_th]:text-xs [&_th]:font-semibold [&_th]:leading-4 [&_th]:text-[hsl(var(--foreground))]"
+              data-testid="TableRow__ae5a16">
+              <TableHead className="w-10" data-testid="TableHead__ae5a16" />
+              <TableHead className="w-10" data-testid="TableHead__ae5a16">
+                <Checkbox
+                  checked={allSelected}
+                  indeterminate={someSelected}
+                  onChange={handleSelectAll}
+                  data-testid="Checkbox__ae5a16" />
+              </TableHead>
+              {CONTRACT_COLUMNS.map((col) => {
+                const renderer = MOVEMENT_CELL_RENDERERS[col.name];
+                return (
+                  <TableHead key={col.name} data-testid="TableHead__ae5a16">
+                    {renderer?.parts ? (
+                      <SortableHeaderSegments
+                        parts={visibleParts(renderer, capabilities).map((part) => ({ key: part.key, label: ui(part.labelKey) }))}
+                        activeKey={sortKey}
+                        direction={sortDirection}
+                        onSort={onSort}
+                        data-testid="SortableHeaderSegments__ae5a16" />
+                    ) : (
+                      <SortableHeaderLabel
+                        label={renderer ? ui(renderer.labelKey) : col.label}
+                        sortKey={col.name}
+                        activeKey={sortKey}
+                        direction={sortDirection}
+                        onSort={onSort}
+                        data-testid="SortableHeaderLabel__ae5a16" />
+                    )}
+                  </TableHead>
+                );
+              })}
+              <TableHead className="text-right" data-testid="TableHead__ae5a16">
+                <SortableHeaderLabel
+                  label={ui('financeAccountMovementsColAmount')}
+                  sortKey="amount"
+                  activeKey={sortKey}
+                  direction={sortDirection}
+                  onSort={onSort}
+                  align="right"
+                  data-testid="SortableHeaderLabel__ae5a16" />
+              </TableHead>
+              {/* No onSort: the running balance only means anything in the backend's own order. */}
+              <TableHead className="text-right" data-testid="TableHead__ae5a16">{ui('financeAccountMovementsColBalance')}</TableHead>
+              <TableHead className="w-10" data-testid="TableHead__ae5a16" />
+            </TableRow>
+          </TableHeader>
+          <TableBody data-testid="TableBody__ae5a16">
+            {renderBody({
+              loading,
+              movements,
+              ui,
+              renderRow,
             })}
-            <TableHead className="text-right" data-testid="TableHead__ae5a16">
-              <SortableHeaderLabel
-                label={ui('financeAccountMovementsColAmount')}
-                sortKey="amount"
-                activeKey={sortKey}
-                direction={sortDirection}
-                onSort={onSort}
-                align="right"
-                data-testid="SortableHeaderLabel__ae5a16" />
-            </TableHead>
-            {/* No onSort: the running balance only means anything in the backend's own order. */}
-            <TableHead className="text-right" data-testid="TableHead__ae5a16">{ui('financeAccountMovementsColBalance')}</TableHead>
-            <TableHead className="w-10" data-testid="TableHead__ae5a16" />
-          </TableRow>
-        </TableHeader>
-        <TableBody data-testid="TableBody__ae5a16">
-          {renderBody({
-            loading,
-            movements,
-            ui,
-            renderRow,
-          })}
-        </TableBody>
-      </Table>
-    </TooltipProvider>
+          </TableBody>
+        </Table>
+      </TooltipProvider>
+    </FinancialGridView>
   );
 }

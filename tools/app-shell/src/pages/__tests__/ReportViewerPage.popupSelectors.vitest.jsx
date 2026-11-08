@@ -79,8 +79,15 @@ vi.mock('@/components/layout/FavoritesContext', () => ({
   }),
 }));
 
+// Exposes what the product filter hands the drawer (ETP-5948); it renders whether open or not.
 vi.mock('@/components/contract-ui/ProductSearchDrawer.jsx', () => ({
-  default: () => null,
+  default: (props) => (
+    <div
+      data-testid="product-drawer-props"
+      data-value={props.value ?? ''}
+      data-selected-ids={(props.selectedIds ?? []).join(',')}
+    />
+  ),
 }));
 
 vi.mock('@/components/ui/button', () => ({
@@ -187,6 +194,26 @@ describe('ReportViewerPage — popup-single selector (SelectorPopup)', () => {
     });
     // Only one "Cash" node remains — the popup list item is gone.
     expect(screen.getAllByText('Cash')).toHaveLength(1);
+  });
+
+  // ETP-6103 — the real loader must pass the walk's page size through, or every report popup
+  // still walks 30 rows at a time behind the hold.
+  it('asks the report selector for 100 rows when the popup opens on a committed value', async () => {
+    const user = userEvent.setup();
+    mockSearchParams = new URLSearchParams({ report: 'report-1', acctId: 'a2', _display_acctId: 'Bank' });
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(POPUP_REPORT));
+      return Promise.resolve(makeSelectorResponse([{ id: 'a1', name: 'Cash' }, { id: 'a2', name: 'Bank' }]));
+    });
+
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('Account')).toBeInTheDocument());
+    await user.click(screen.getByText('Bank'));
+
+    await waitFor(() => expect(globalThis.fetch.mock.calls.some(([u]) => String(u).includes('/sws/report-selectors/account'))).toBe(true));
+    const url = globalThis.fetch.mock.calls.map(([u]) => String(u)).find((u) => u.includes('/sws/report-selectors/account'));
+    expect(url).toContain('limit=100');
+    expect(url).toContain('offset=0');
   });
 
   it('shows noResults when the popup search returns nothing', async () => {
@@ -364,6 +391,31 @@ describe('ReportViewerPage — popup-single selector (SelectorPopup)', () => {
       expect(capturedUrl).toBeTruthy();
     });
     expect(capturedUrl).toContain('selectedAcctSchemaId=SCHEMA-1');
+  });
+});
+
+describe('ReportViewerPage — product filter drawer (ETP-5948)', () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  const productReport = (multi) => ({
+    ...BASE_REPORT,
+    parameters: [{ name: 'productId', type: 'search', selector: 'product', multi, label: { en_US: 'Product' } }],
+  });
+
+  it.each([
+    ['single-select opens on the chosen product', false, 'P-7'],
+    ['multi-select marks its picks through selectedIds instead', true, ''],
+  ])('%s', async (_label, multi, expectedValue) => {
+    mockSearchParams = new URLSearchParams({ report: 'report-1', productId: 'P-7' });
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(productReport(multi)));
+      return Promise.resolve(makeSelectorResponse([]));
+    });
+
+    render(<ReportViewerPage />);
+
+    const drawer = await screen.findByTestId('product-drawer-props');
+    expect(drawer).toHaveAttribute('data-value', expectedValue);
   });
 });
 

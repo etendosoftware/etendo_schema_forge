@@ -2,12 +2,19 @@
 
 Measures real consumption per tenant per day, in **shadow mode**: it charges nothing, enforces
 nothing, and writes to no business table. It exists so that ETP-5046 (resource limits) and
-ETP-5051 (overage) have real numbers to reason about before anyone is billed from them.
+ETP-5051 (plan quotas) have real numbers to reason about before anyone is billed from them.
+
+> **Extended by ETP-5051.** Plan quotas read what this page measures: the stored daily usage (a
+> quota's `aggregate` source) or a live count with the same catalog rule (`live`), combined over
+> the subscription year (whatever the billing interval) by `ETGO_BILLING_RESOURCE.AGGREGATION`.
+> Where quotas are enforced and where they are only reported, the extensibility ladder, how an
+> operator caps a resource and the accepted limits: `modules/com.etendoerp.go/docs/plan-quotas.md`.
+> The usage job is now schedulable (§7.1), and the first stock counter, seats, is deployed (§4).
 
 Implementation lives in `modules/com.etendoerp.go/src/com/etendoerp/go/usage/`. The design
 document is `modules/com.etendoerp.go/docs/plans/2026-09-15-etp-5050-usage-measurement-design.md`;
 this page is the summary of what the branch actually delivers, and of the one design problem
-that is still open.
+it left open, since decided (§4).
 
 ---
 
@@ -75,10 +82,11 @@ the day was open is the number that stands.
 Finality is evaluated **per tenant**, because the preference can be overridden per tenant. The
 scan uses the maximum across tenants; each row's flag uses that tenant's own window.
 
-## 4. The stock resource problem (open)
+## 4. The stock resource problem (decided)
 
-This is the significant unresolved issue in the design, and it decides how `activeUsers` and
-`productiveEnvironments` can be implemented at all.
+This was the significant unresolved issue in the design, and it decides how users and
+`productiveEnvironments` can be implemented at all. It was decided on 2026-09-28 (*What was
+decided* below); users are now counted as **seats** by `TenantSeatCounter` (ETP-5051).
 
 ### Flow versus stock
 
@@ -133,11 +141,39 @@ A stock resource has to solve it at the source, and the options are:
 
 Note that `productiveEnvironments` is specified in the ticket as `Client` by `creationDate`,
 which is option 3 by accident: it counts clients *created* that day, a flow, while the billable
-quantity is a stock. With no rollup in this task the difference does not yet bite, but storing a
-flow under a stock's name would make every later reading of it wrong.
+quantity is a stock. The ETP-5050 design made it a daily snapshot of the active clients (strategy
+`S`) instead; no counter for it is deployed yet.
 
-**Decision still owed:** the data source for `activeUsers`, and which of the three options above
-applies to it. `AD_SESSION` is explicitly ruled out.
+### What was decided
+
+**Option 2** (Sebastián Barrozo, 2026-09-28): record the current value from when measurement is
+enabled, and never backfill earlier dates. `AD_SESSION` is explicitly ruled out. The register
+entry is `modules/com.etendoerp.go/docs/open-and-notable-topics.md` §1.1.
+
+**Users are counted as seats** (ETP-5051). `TenantSeatCounter`, `@Named("tenantSeats")`, is the
+first production `UsageResourceCounter`. A **seat** is an active `AD_User` of the tenant that is
+the owner (`EM_ETGO_IS_OWNER`) or has an `ETGO_INVITATION` that is not `REVOKED`:
+
+- a **pending** invitation already takes its seat; a **revoked** one does not;
+- bootstrap users, the client admin and business-partner contacts have neither, so they never
+  count;
+- `ETGO_ACCOUNT` is deliberately **not** the source: it is global (client 0, one row per email)
+  and only created when an invitation is accepted, so an admin could invite without limit.
+
+**How the stock behaves.** Every call returns **today's** value, dated at the start of the
+requested range — one entry per tenant. A live quota asks once over its window and gets today's
+seats. The usage job asks per day, so each day it recomputes (the settling window, or a backfill)
+gets today's value: the service does not yet write the current day only, which is the
+implementation still owed in the register (§1.1). Give a stock resource aggregation `last`, so a
+quota reads the newest day; `sum` would add the same seats up once per day, and `max` would keep a
+freed seat for the rest of the window.
+
+**Setup is operator configuration, nothing is seeded:** a Billing Resource row with counting mode
+`S` and Strategy Qualifier `tenantSeats`, then a `block` quota on each plan that should cap seats.
+That quota is refused at user create, and at the reactivation of a user who would count as a
+seat once active (owner, or an invitation not revoked); reactivating any other user is never
+refused. The same seat rule (`SEAT_CONDITION`) serves the tenant count and that per-user check
+(`modules/com.etendoerp.go/docs/plan-quotas.md` §2.1, worked example §4.6).
 
 ## 5. Save-time validation
 
@@ -226,6 +262,34 @@ so that route always runs the settling window. A scheduled request can carry the
 
 Re-running any range is safe and produces identical rows.
 
+### 7.1 Scheduling it (ETP-5051)
+
+The job can now run on a schedule, but nothing schedules it until an operator turns it on:
+
+- **The flag.** `usage-aggregation-schedule` (backend-only, **off by default**) gates every
+  scheduled run. A request with timing *Schedule* that fires while the flag is off does no work
+  and ends as an **ERROR** in Process Monitor. A launch from the menu, or a Process Request run
+  immediately or once later, is never gated.
+- **The Process Request.** Production is never restarted, so there an operator turns the flag on
+  **and** creates the request in the same step: **Billing Resource Usage Aggregation**, client
+  System, timing *Schedule*, every two hours. On environments that restart,
+  `UsageAggregationScheduleStartup` plants that System request at the next restart once the flag
+  is on, and never re-plants one an operator unscheduled.
+- **The cadence.** `etendo.go.usage.schedule.interval.minutes` /
+  `ETGO_USAGE_SCHEDULE_INTERVAL_MINUTES`, default **120** minutes, at least 15 — one cadence for
+  every resource. It is read when the request is planted; changing it later means editing the
+  request too. Each run covers the settling window plus the sealing day (§3).
+- **The lag WARN.** `[USAGE-LAG]`, at most once an hour, when the last successful run in
+  `ETGO_USAGE_RUN_LOG` finished more than **twice the cadence** ago (four hours by default) or
+  never. It is checked when a scheduled run starts and when a quota report reads the stored
+  aggregate, never on a create. A run that counted nothing for any tenant writes no run-log row
+  (§6), so an installation with no usage at all reads as "never ran".
+
+Flag reference: `modules/com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md` §1
+(`usage-aggregation-schedule`); go-live constraint: `modules/com.etendoerp.go/docs/open-and-notable-topics.md`
+§2.11. Each run
+still commits per resource-day; one transaction per tenant is ETP-5905.
+
 ## 8. Verified behaviour
 
 - **Counts are right.** A full backfill produced 308 counted invoices against exactly 308 posted
@@ -238,11 +302,16 @@ Re-running any range is safe and produces identical rows.
 
 ## 9. Deliberately not done
 
-- **Rollup of any kind** — no SUM or MAX over a period, no would-have-billed figure, no price.
+- **A would-have-billed figure or a price** — nothing here computes money. (The period rollup is
+  no longer missing: since ETP-5051 a plan quota combines the days of a subscription period with
+  the resource's `AGGREGATION`, `sum` / `max` / `last`; see `modules/com.etendoerp.go/docs/plan-quotas.md`
+  §4.1.)
 - **Late changes** after the settling window are not counted.
 - **API/MCP request volume** — needs instrumentation, not a query.
-- **A nightly schedule** — the process exists and runs on demand; nothing schedules it yet.
 - **Seeded catalog rows** — the catalog ships empty.
+- **A schedule** — no longer missing: since ETP-5051 the job runs on a schedule once an operator
+  turns it on (the `usage-aggregation-schedule` flag plus the Process Request, every two hours by
+  default, with a lag WARN). See §7.1.
 
 ## 10. AD defects worth remembering
 

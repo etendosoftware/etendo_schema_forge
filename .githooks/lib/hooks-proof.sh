@@ -68,8 +68,10 @@ hooks_patchid_of_commit() {
 }
 
 # patch-id of the currently staged diff (index vs HEAD) — the would-be commit's diff.
+# Plumbing (diff-index), like hooks_patchid_of_commit's diff-tree: porcelain `git diff` honours
+# user config such as diff.mnemonicPrefix (c/ i/ instead of a/ b/), which changes the patch-id.
 hooks_patchid_staged() {
-  git diff --cached 2>/dev/null | git patch-id --stable 2>/dev/null | awk '{print $1; exit}'
+  git diff-index -p --cached HEAD 2>/dev/null | git patch-id --stable 2>/dev/null | awk '{print $1; exit}'
 }
 
 # Record that the pre-commit checks passed for the currently staged tree.

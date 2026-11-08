@@ -1,6 +1,15 @@
+const gridBoundary = await vi.hoisted(async () => (await import('@/test/gridViewTestDoubles.jsx')).createGridBoundary());
+vi.mock('@/lib/flags', async () => (await import('@/test/gridViewTestDoubles.jsx')).gridFlagsMock(() => gridBoundary.enabled));
+vi.mock('@/hooks/useGridView.js', async () => (await import('@/test/gridViewTestDoubles.jsx')).gridViewHookMock(gridBoundary));
+vi.mock('@/components/contract-ui/GridViewControls.jsx', async () => (await import('@/test/gridViewTestDoubles.jsx')).gridViewControlsMock());
+import { resetGridBoundary } from '@/test/gridViewTestDoubles.jsx';
+
+beforeEach(() => resetGridBoundary(gridBoundary));
+
 // @covers tools/app-shell/src/windows/custom/organization/Modelo390IdentitySection.jsx
 // @covers tools/app-shell/src/windows/custom/organization/RepresentantesLegalesSection.jsx
 // @covers tools/app-shell/src/windows/custom/organization/representanteLegal.js
+// @covers tools/app-shell/src/windows/custom/organization/RepresentativeTableFrame.jsx
 //
 // The "Representante legal / Modelo 390" section of the Organization window. What must hold:
 // "Persona física" switches between the natural-person fields (page form) and the legal
@@ -94,6 +103,47 @@ describe('Modelo390IdentitySection — Persona física toggle', () => {
 
     fireEvent.click(screen.getByTestId('Modelo390IdentitySection__isPerson'));
     expect(await screen.findByTestId('RepresentantesLegalesSection__root')).toBeInTheDocument();
+  });
+
+  // ETP-5831 CP-16 — the natural-person fields use the representatives grid's table format, as a
+  // single editable row with no way to add a second one.
+  it('renders the natural-person fields as ONE row of the representatives table, with no add button', () => {
+    mockFetch([]);
+    render(<Harness initial={{ aeat390Isperson: true, aeat390Firstname: 'Ana' }} />);
+
+    const person = screen.getByTestId('Modelo390IdentitySection__personFields');
+    const table = within(person).getByRole('table');
+    expect(within(table).getAllByRole('columnheader').map(th => th.textContent)).toEqual([
+      'orgRepFirstNameLabel *', 'orgRepLastname1Label *', 'orgRepLastname2Label', 'org390RepNifLabel', 'org390RepNameLabel',
+    ]);
+    const bodyRows = table.querySelectorAll('tbody tr');
+    expect(bodyRows).toHaveLength(1);
+    for (const field of ['aeat390Firstname', 'aeat390Surname1', 'aeat390Surname2', 'aeat390RepNif', 'aeat390RepName']) {
+      expect(within(bodyRows[0]).getByTestId(`Modelo390IdentitySection__${field}`)).toBeInTheDocument();
+    }
+    expect(within(bodyRows[0]).getByTestId('Modelo390IdentitySection__aeat390Firstname')).toHaveValue('Ana');
+    // Labelled by its column header, so the inputs keep an accessible name.
+    expect(screen.getByLabelText(/orgRepFirstNameLabel/)).toBe(within(bodyRows[0]).getByTestId('Modelo390IdentitySection__aeat390Firstname'));
+    // Same visual shell as the representatives grid, and no way to add a second row.
+    expect(table.closest('[data-testid="RepresentativeTableFrame__person390"]')).not.toBeNull();
+    expect(screen.queryByTestId('RepresentantesLegalesSection__addButton')).not.toBeInTheDocument();
+    expect(within(person).queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('shows a field error inside its cell of the natural-person row', () => {
+    mockFetch([]);
+    render(
+      <Modelo390IdentitySection
+        form={{ aeat390Isperson: true }}
+        fieldErrors={{ aeat390Surname1: 'fieldRequired' }}
+        onFieldChange={() => {}}
+        apiBaseUrl={API_BASE_URL}
+        orgId={ORG_ID} />
+    );
+    const error = screen.getByTestId('Modelo390IdentitySection__error-aeat390Surname1');
+    expect(error).toHaveTextContent('fieldRequired');
+    expect(error.closest('td')).toBe(screen.getByTestId('Modelo390IdentitySection__aeat390Surname1').closest('td'));
+    expect(screen.getByTestId('Modelo390IdentitySection__aeat390Surname1')).toHaveAttribute('aria-invalid', 'true');
   });
 
   it('caps the natural-person inputs at the AD column lengths', () => {
@@ -341,5 +391,44 @@ describe('representanteLegal — Modelo 390 identity rules (classic AD_OrgInfo c
     expect(buildRepresentativePayload({ taxID: 'x-1234567-l' }).taxID).toBe('X1234567L');
     expect(activeRepresentatives([{ id: 1 }, { id: 2, active: false }, { id: 3, active: 'N' }, { id: 4, active: 'Y' }])
       .map(r => r.id)).toEqual([1, 4]);
+  });
+});
+
+describe('RepresentantesLegalesSection personal columns', () => {
+  it('keeps line/390 markers and edit/delete actions fixed when data columns move or hide', async () => {
+    gridBoundary.enabled = true;
+    gridBoundary.active = true;
+    gridBoundary.keys = ['notaryName', 'firstName'];
+    gridBoundary.widths = { firstName: 260 };
+    mockFetch([{ id: 'r10', lineNo: 10, taxID: '12345678Z', firstName: 'Ana', lastname1: 'Garcia', powerDate: '2026-01-15', notaryName: 'Notary 1' }]);
+    render(<Harness />);
+    const row = await screen.findByTestId('RepresentantesLegalesSection__row-r10');
+    expect(row.children).toHaveLength(4);
+    expect(within(row.children[0]).getByTestId('RepresentantesLegalesSection__included')).toBeInTheDocument();
+    expect(row.children[1]).toHaveTextContent('Notary 1');
+    expect(row.children[2]).toHaveTextContent('Ana Garcia');
+    expect(within(row.children[3]).getByTestId('RepresentantesLegalesSection__edit')).toBeInTheDocument();
+    expect(within(row.children[3]).getByTestId('RepresentantesLegalesSection__delete')).toBeInTheDocument();
+    const headers = screen.getAllByRole('columnheader');
+    expect(headers).toHaveLength(4);
+    expect(headers[2]).toHaveStyle({ width: '260px' });
+    fireEvent.click(within(row).getByTestId('RepresentantesLegalesSection__edit'));
+    expect(screen.getByTestId('RepresentantesLegalesSection__input-taxID')).toHaveValue('12345678Z');
+    expect(screen.getByTestId('RepresentantesLegalesSection__input-firstName')).toHaveValue('Ana');
+    fireEvent.change(screen.getByTestId('RepresentantesLegalesSection__input-firstName'), { target: { value: 'Eva' } });
+    fireEvent.click(screen.getByTestId('RepresentantesLegalesSection__save'));
+    await waitFor(() => expect(global.fetch.mock.calls.some(([, options]) => options.method === 'PATCH'
+      && JSON.parse(options.body).firstName === 'Eva')).toBe(true));
+    expect(gridBoundary.last).toMatchObject({ spec: 'organization', entity: 'representanteLegal', enabled: true });
+  });
+
+  it('uses the original complete grid while personal preferences have not loaded', async () => {
+    gridBoundary.enabled = true;
+    gridBoundary.keys = ['firstName'];
+    mockFetch([]);
+    render(<Harness />);
+    const empty = await screen.findByTestId('RepresentantesLegalesSection__empty');
+    expect(screen.getAllByRole('columnheader')).toHaveLength(6);
+    expect(empty).toHaveAttribute('colspan', '6');
   });
 });

@@ -43,6 +43,7 @@ This folder is the entry point for documentation that describes how generated an
 | [purchase-invoice.md](purchase-invoice.md) | Custom purchase-invoice flow |
 | [return-to-vendor-shipment.md](return-to-vendor-shipment.md) | Generated return-to-vendor-shipment flow |
 | [matched-purchase-invoices.md](matched-purchase-invoices.md) | Read-only receipt-invoice link consultation window |
+| [invoice-inbox.md](invoice-inbox.md) | Custom Invoice Inbox ("Bandeja de facturas", ETP-6049, capability `invoiceInbox`) — upload supplier invoices (drop or pick, one request per file, progress tray) and follow them in a status-filtered list with counters; rows still being read refresh themselves. Review panel (ETP-6050) and Confirm/Discard (ETP-6051) not included |
 
 ## Inventory
 
@@ -62,6 +63,7 @@ This folder is the entry point for documentation that describes how generated an
 |------|-------------|
 | [payment-in.md](payment-in.md) | Generated payment-in flow with related documents and payment actions |
 | [payment-out.md](payment-out.md) | Custom payment-out flow with related documents and multiple child surfaces |
+| [financial-account.md](financial-account.md) | Financial account detail: Movimientos, Conciliación (split panel, automatch, bounce pairs and discarded lines since ETP-5581), Extractos importados, cash close and Reconciliaciones |
 | [financial-accounts-page.md](financial-accounts-page.md) | Cuentas landing page (ETP-4095) + offline account create / edit / archive (ETP-4096) |
 | [financial-account-management.md](financial-account-management.md) | Financial account create / edit / archive, bank connection, `financial-account` spec endpoint and MCP access (ETP-4096 onwards; split out of `financial-account.md`) |
 | [bank-reconciliation.md](bank-reconciliation.md) | Legacy placeholder; superseded by `financial-account.md` (kept hidden in menu.json until T8) |
@@ -93,6 +95,7 @@ This folder is the entry point for documentation that describes how generated an
 |------|-------------|
 | [balance-sheet.md](balance-sheet.md) | Contract-driven financial report — point-in-time assets, liabilities, and owner equity by accounting schema and year |
 | [report-journal-entries.md](report-journal-entries.md) | Contract-driven journal book — entries grouped with debit/credit lines for a date range with dimension filters |
+| [profit-loss.md](profit-loss.md) | Contract-driven financial report — the period result as Classic's account-report tree, with contact/product filters and comparison; behind `dynamic-reports`, an interactive view with live filters, splits and a ledger/entry/document drill-down |
 | [report-trial-balance.md](report-trial-balance.md) | Contract-driven trial balance — opening/period/closing balances per account with General Ledger drill-down |
 
 ## Settings
@@ -102,12 +105,12 @@ This folder is the entry point for documentation that describes how generated an
 | [organization.md](organization.md) | Custom organization-settings window (ETP-4749) — flattens the Classic Organization/Information AD tabs (window 110) into one tabless screen: identity, fiscal data, and contact details, plus the Certificado digital, IAE and Modelo 390 sections shown only when a fiscal configuration that uses them is active (ETP-5831) |
 | [document-sequence.md](document-sequence.md) | Document numbering window (ETP-5190, AD window 112) — prefix/suffix/next-number per sequence, with the Spanish localization prefix rules enforced on write; target of the First Steps invoicing step |
 | [price-list.md](price-list.md) | Custom price-list flow with product-price workspace |
-| [payment-term.md](payment-term.md) | Generated payment-term maintenance window |
+| [payment-term.md](payment-term.md) | Generated `list-modal` payment-term catalog (grid + compact create/edit popup, no detail view; `/payment-term/<id>` opens the popup): name + days only, key and month offset derived server-side, rename syncs translations (ETP-5978) |
 | [tax.md](tax.md) | Generated tax-rate maintenance window |
 | [tax-category.md](tax-category.md) | Generated tax-category catalog window (groups tax rates; ETP-4249) |
-| [business-partner-category.md](business-partner-category.md) | Generated business-partner-category master/detail flow behind a thin wrapper; contact type + accounts by type behind the `contact-category-type` flag (ETP-5791) |
+| [business-partner-category.md](business-partner-category.md) | Generated business-partner-category master/detail flow behind a thin wrapper; contact type + accounts by type (Accounting tab), list type columns and contact-type quick filter behind the `contact-category-type` flag (ETP-5791) |
 | [user.md](user.md) | Generated user window — multi-role template composition with a live permission-preview matrix (ETP-4906) and defaults dependencies |
-| [fiscal-config.md](fiscal-config.md) | Custom fiscal configuration window — onboarding wizard (SII/TBAI/Verifactu) and ongoing config maintenance |
+| [fiscal-config.md](fiscal-config.md) | Custom fiscal configuration window — onboarding wizard (SII/TBAI/Verifactu) and ongoing config maintenance; SIF activation through the backend `fiscalSystemCatalog` / `configureFiscalSystem` actions on `sii-config` (ETP-6053) |
 | [fiscal-models.md](fiscal-models.md) | Custom fiscal models window — declaration list and per-model detail pages (303, 349) with auto-compute and file generation |
 | [fiscal-monitor.md](fiscal-monitor.md) | Custom fiscal monitor window — real-time invoice submission status for SII, TBAI, and Verifactu |
 | [not-posted-documents.md](not-posted-documents.md) | Custom cross-document posting window — aggregates all unposted documents, single-row and bulk Post actions |

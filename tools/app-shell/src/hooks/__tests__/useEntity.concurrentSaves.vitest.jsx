@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/hooks/useEntity.js
 import { renderHook, act } from '@testing-library/react';
 import { useEntity } from '../useEntity';
 
@@ -156,5 +157,82 @@ describe('useEntity — overlapping saves of one record (ETP-5081)', () => {
 
     expect(patches).toHaveLength(2);
     expect(patches[1].name).toBe('Two');
+  });
+});
+
+describe('useEntity — a callout-touched field the user retyped to the stored value', () => {
+  const record = { id: 'inv-1', invoiceDate: '2026-11-01', accountingDate: '2026-11-01', updated: 'v1' };
+
+  beforeEach(() => {
+    globalThis.fetch = vi.fn();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // Each PATCH body is recorded; `answers` decides per call whether it succeeds and whether it
+  // waits on a gate first. Calls beyond `answers` succeed immediately.
+  function installPatchMock(answers = []) {
+    const patches = [];
+    globalThis.fetch.mockImplementation(async (url, opts) => {
+      if (url.includes('/defaults')) return { ok: true, json: async () => ({ defaults: {} }) };
+      if (opts?.method === 'PATCH' || opts?.method === 'PUT') {
+        const answer = answers[patches.length] ?? { ok: true };
+        patches.push(JSON.parse(opts.body));
+        if (answer.gate) await answer.gate.promise;
+        if (!answer.ok) {
+          return { ok: false, status: 500, json: async () => ({ error: { message: 'boom' } }) };
+        }
+        return { ok: true, json: async () => ({ response: { data: [{ ...record, updated: 'v2' }] } }) };
+      }
+      return { ok: true, json: async () => ({ response: { data: [] } }) };
+    });
+    return patches;
+  }
+
+  function renderEntity() {
+    return renderHook(() => useEntity('header', null, { ...baseOpts, skipListFetch: true }));
+  }
+
+  function calloutThenRetype(result) {
+    act(() => { result.current.handleChange('accountingDate', '2026-11-20', { origin: 'callout' }); });
+    act(() => { result.current.handleChange('accountingDate', record.accountingDate); });
+  }
+
+  it.each([
+    { outcome: 'succeeds', firstOk: true, secondCarriesIt: false },
+    { outcome: 'fails', firstOk: false, secondCarriesIt: true },
+  ])('sends it in the PATCH, and the next save resends it only if the first one $outcome', async ({ firstOk, secondCarriesIt }) => {
+    const patches = installPatchMock([{ ok: firstOk }]);
+    const { result } = renderEntity();
+    act(() => { result.current.handleSelect(record); });
+    calloutThenRetype(result);
+
+    await act(async () => { await result.current.handleSave({ silent: true }); });
+    await act(async () => { await result.current.handleSave({ silent: true }); });
+
+    expect(patches[0]).toHaveProperty('accountingDate', record.accountingDate);
+    expect(patches).toHaveLength(2);
+    if (secondCarriesIt) expect(patches[1]).toHaveProperty('accountingDate', record.accountingDate);
+    else expect(patches[1]).not.toHaveProperty('accountingDate');
+  });
+
+  it('keeps a callout + retype made while an unrelated save is in flight for the next save', async () => {
+    const gate = deferred();
+    const patches = installPatchMock([{ ok: true, gate }]);
+    const { result } = renderEntity();
+    act(() => { result.current.handleSelect(record); });
+    act(() => { result.current.handleChange('invoiceDate', '2026-11-02'); });
+
+    let first;
+    await act(async () => { first = result.current.handleSave({ silent: true }); });
+    calloutThenRetype(result);
+    await act(async () => { gate.resolve(); await first; });
+    await act(async () => { await result.current.handleSave({ silent: true }); });
+
+    expect(patches[0]).not.toHaveProperty('accountingDate');
+    expect(patches[1]).toHaveProperty('accountingDate', record.accountingDate);
   });
 });

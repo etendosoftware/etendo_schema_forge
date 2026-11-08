@@ -1,3 +1,5 @@
+// @covers artifacts/goods-shipment/custom/GoodsShipmentBottomPanel.jsx
+// @covers tools/app-shell/src/windows/custom/shared/importSaveOptions.js
 // Regression tests for ETP-5066: on Sales Goods Shipment (Albarán de Venta),
 // clicking "Añadir desde Factura" (import from invoice) opened the ORDER
 // import modal on the first invocation instead of the invoice one.
@@ -81,15 +83,15 @@ describe('ShipmentLinesEmptyState (ETP-5066)', () => {
     vi.clearAllMocks();
   });
 
-  it('forwards "order" to onSave when "Añadir desde pedido" (importFromSalesOrder) is clicked', async () => {
+  it('forwards "order" to onSave when "Añadir desde pedido" (addFromSalesOrder) is clicked', async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(true);
     render(<ShipmentLinesEmptyState {...BASE_PROPS} onSave={onSave} />);
 
-    await user.click(screen.getByText('importFromSalesOrder'));
+    await user.click(screen.getByText('addFromSalesOrder'));
 
     expect(onSave).toHaveBeenCalledTimes(1);
-    expect(onSave).toHaveBeenCalledWith('order');
+    expect(onSave).toHaveBeenCalledWith('order', { skipSaveWhenClean: true });
   });
 
   it('forwards "invoice" to onSave when "Añadir desde Factura" (importFromSalesInvoice) is clicked', async () => {
@@ -100,21 +102,25 @@ describe('ShipmentLinesEmptyState (ETP-5066)', () => {
     await user.click(screen.getByText('importFromSalesInvoice'));
 
     expect(onSave).toHaveBeenCalledTimes(1);
-    expect(onSave).toHaveBeenCalledWith('invoice');
+    expect(onSave).toHaveBeenCalledWith('invoice', { skipSaveWhenClean: true });
   });
 
   it('opens the INVOICE modal (not order) when forceOpen="invoice"', () => {
-    render(<ShipmentLinesEmptyState {...BASE_PROPS} forceOpen="invoice" onForceOpenHandled={vi.fn()} />);
+    const onSave = vi.fn().mockResolvedValue(true);
+    render(<ShipmentLinesEmptyState {...BASE_PROPS} forceOpen="invoice" onSave={onSave} onForceOpenHandled={vi.fn()} />);
 
     expect(screen.getByTestId('mock-invoice-modal')).toBeInTheDocument();
     expect(screen.queryByTestId('mock-order-modal')).not.toBeInTheDocument();
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   it('opens the ORDER modal when forceOpen="order" (regression guard for the other branch)', () => {
-    render(<ShipmentLinesEmptyState {...BASE_PROPS} forceOpen="order" onForceOpenHandled={vi.fn()} />);
+    const onSave = vi.fn().mockResolvedValue(true);
+    render(<ShipmentLinesEmptyState {...BASE_PROPS} forceOpen="order" onSave={onSave} onForceOpenHandled={vi.fn()} />);
 
     expect(screen.getByTestId('mock-order-modal')).toBeInTheDocument();
     expect(screen.queryByTestId('mock-invoice-modal')).not.toBeInTheDocument();
+    expect(onSave).not.toHaveBeenCalled();
   });
 });
 
@@ -133,7 +139,7 @@ describe('ShipmentLineActions (ETP-5066 — same class of bug)', () => {
     });
 
     expect(onSave).toHaveBeenCalledTimes(1);
-    expect(onSave).toHaveBeenCalledWith('order');
+    expect(onSave).toHaveBeenCalledWith('order', { skipSaveWhenClean: true });
     expect(screen.getByTestId('mock-order-modal')).toBeInTheDocument();
     expect(screen.queryByTestId('mock-invoice-modal')).not.toBeInTheDocument();
   });
@@ -148,22 +154,26 @@ describe('ShipmentLineActions (ETP-5066 — same class of bug)', () => {
     });
 
     expect(onSave).toHaveBeenCalledTimes(1);
-    expect(onSave).toHaveBeenCalledWith('invoice');
+    expect(onSave).toHaveBeenCalledWith('invoice', { skipSaveWhenClean: true });
     expect(screen.getByTestId('mock-invoice-modal')).toBeInTheDocument();
     expect(screen.queryByTestId('mock-order-modal')).not.toBeInTheDocument();
   });
 
   it('opens the INVOICE modal (not order) when forceOpen="invoice" on mount', () => {
-    render(<ShipmentLineActions {...BASE_PROPS} forceOpen="invoice" onForceOpenHandled={vi.fn()} />);
+    const onSave = vi.fn().mockResolvedValue(true);
+    render(<ShipmentLineActions {...BASE_PROPS} forceOpen="invoice" onSave={onSave} onForceOpenHandled={vi.fn()} />);
 
     expect(screen.getByTestId('mock-invoice-modal')).toBeInTheDocument();
     expect(screen.queryByTestId('mock-order-modal')).not.toBeInTheDocument();
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   it('opens the ORDER modal when forceOpen="order" on mount (regression guard for the other branch)', () => {
-    render(<ShipmentLineActions {...BASE_PROPS} forceOpen="order" onForceOpenHandled={vi.fn()} />);
+    const onSave = vi.fn().mockResolvedValue(true);
+    render(<ShipmentLineActions {...BASE_PROPS} forceOpen="order" onSave={onSave} onForceOpenHandled={vi.fn()} />);
 
     expect(screen.getByTestId('mock-order-modal')).toBeInTheDocument();
     expect(screen.queryByTestId('mock-invoice-modal')).not.toBeInTheDocument();
+    expect(onSave).not.toHaveBeenCalled();
   });
 });

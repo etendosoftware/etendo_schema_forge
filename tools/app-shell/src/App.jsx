@@ -40,6 +40,8 @@ import { apiFetch } from '@/auth/api.js';
 import { clearStoredDateRange } from '@/components/dashboard/DashboardDateRangeContext.jsx';
 import { clearAccountIdentity } from '@/lib/flags/bootstrap.js';
 import { detectBasePath, getNeoBaseUrl } from '@/lib/neoBaseUrl.js';
+import { withSupportModeCapabilities } from '@/lib/supportSession.js';
+import { useSupportSessionSync } from '@/hooks/useSupportSessionSync.js';
 // ETP-4300: the full locale dictionaries are no longer bundled eagerly. Only the
 // active locale's sliced "core" (the dict minus the per-window `fields` monolith)
 // is lazy-loaded below; per-window field labels ride each window's lazy chunk (see
@@ -317,7 +319,8 @@ export async function fetchWindowAccess(session) {
     // Already in flight (started above, in parallel) — `.catch()` there means this
     // never rejects, so no separate try/catch is needed here.
     const menuAccess = await resolveMenuAccessWithoutBlocking(menuAccessPromise);
-    return { ...payload, menuAccess };
+    // ETP-5351 — a support session is never the owner; see withSupportModeCapabilities.
+    return withSupportModeCapabilities({ ...payload, menuAccess });
   } catch {
     // Deliberately NOT clearing the decision on network errors — the last server-confirmed block must survive transient failures.
     return null;
@@ -417,6 +420,13 @@ function ServiceWorkerManager() {
   return null;
 }
 
+// ETP-5351 — reads `supportSession` off /me for the session AuthProvider holds. See
+// hooks/useSupportSessionSync.js.
+function SupportSessionSync() {
+  useSupportSessionSync();
+  return null;
+}
+
 function SurveyManager() {
   const { activeSurvey, handleScoreSelected, handleRespond, handleClose, handleDismiss } = useSurveyEngine();
   if (!activeSurvey) return null;
@@ -437,10 +447,10 @@ function SurveyManager() {
 // AuthProvider's `onSessionChange` rather than only into the explicit logout paths, because
 // the automatic 401 auto-logout inside the shared request helper does not go through them:
 // after the raw-`fetch` sweep, ANY of ~290 call sites can be the one that discovers the
-// expired session. Reacting to the session losing its token covers every path at once, and
+// expired session. A normalized empty session marks logout; cookie sessions have no token.
 // `useLogout` stays as the explicit clear-then-logout choke point for the UI entry points.
 function clearSessionScopedState(session) {
-  if (!session?.token) {
+  if (!session?.token && !session?.username && !session?.clientId) {
     clearStoredDateRange();
     // ETP-5202 — the cached account identity (`sf_account_id` / `sf_account_email`) is not part
     // of the core's session storage, so nothing else clears it. Leaving it behind on a shared
@@ -538,6 +548,7 @@ export default function App() {
         <ObservabilityRouteTracker data-testid="ObservabilityRouteTracker__ecaf3f" />
         <ListStateRouteGuard data-testid="ListStateRouteGuard__ecaf3f" />
         <ServiceWorkerManager data-testid="ServiceWorkerManager__ecaf3f" />
+        <SupportSessionSync data-testid="SupportSessionSync__ecaf3f" />
         <AppStoreKeyWatcher data-testid="AppStoreKeyWatcher__ecaf3f" />
         <SurveyManager data-testid="SurveyManager__ecaf3f" />
         <LocaleChangeConfirmDialog

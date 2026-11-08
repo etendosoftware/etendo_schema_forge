@@ -5,6 +5,7 @@ import {
 import { useLogout } from '@/auth/useLogout.js';
 import { useOptionalDataCache } from '@etendosoftware/app-shell-core/data';
 import { invalidateAfterWrite } from '@/lib/crossSpecCacheInvalidation.js';
+import { announceRecordWrite } from '@/lib/planQuotas.js';
 
 /**
  * The app's authenticated `fetch`: the core helper bound to this session, with the same
@@ -71,12 +72,12 @@ export function useApiFetch(baseUrl) {
 
   return useMemo(() => {
     const request = createApiFetch(baseUrl, getToken, logout, apiSessionScope);
-    if (!cache) return request;
     // ETP-5525 — a successful write to a child document (e.g. a shipment or invoice) marks the
     // cached records of the specs derived from it (the parent order) stale, so the next
     // client-side arrival refetches instead of serving pre-write annotations. The dependency
-    // map and the matching live in crossSpecCacheInvalidation.js; the response is returned
-    // untouched.
+    // map and the matching live in crossSpecCacheInvalidation.js. ETP-6060 — a successful NEO
+    // write is also announced, so the plan-quota banner re-reads the environment list. The
+    // response is returned untouched.
     return async (path, options = {}) => {
       const res = await request(path, options);
       if (res?.ok) {
@@ -84,7 +85,9 @@ export function useApiFetch(baseUrl) {
         // segments matter for spec matching, and the spec is always in the path, so the real
         // base is never needed here. Do not "fix" this to mirror core.
         const prefix = options.baseUrl !== undefined ? options.baseUrl : baseUrl;
-        invalidateAfterWrite(cache, { url: `${prefix ?? ''}${path}`, method: options.method });
+        const written = { url: `${prefix ?? ''}${path}`, method: options.method };
+        if (cache) invalidateAfterWrite(cache, written);
+        announceRecordWrite(written);
       }
       return res;
     };

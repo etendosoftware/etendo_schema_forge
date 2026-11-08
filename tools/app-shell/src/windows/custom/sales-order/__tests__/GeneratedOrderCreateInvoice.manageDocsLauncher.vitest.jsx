@@ -1,3 +1,4 @@
+// @covers artifacts/sales-order/custom/OrderCreateInvoice.jsx
 /**
  * Rules-of-Hooks regression for `ManageDocsLauncher` (ETP-5295) — sales-order twin.
  *
@@ -36,12 +37,19 @@
  * "pending shipment", on both surfaces that carry their own copy of that derivation.
  */
 
-import { render, screen, act, waitFor } from '@testing-library/react';
+import { render, screen, act, waitFor, fireEvent } from '@testing-library/react';
 
 // ── Mocks (before the import under test) ─────────────────────────────────────────────────
 
+// Keys echo back, except the plan-quota sentence (ETP-5051): an echoed key reads as "not
+// translated", so the translator would fall back and the quota path could not be observed.
+// The pending-invoice subtitle (ETP-5828) echoes its amount so the figure shown can be observed.
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key, params = {}) => {
+    if (key === 'backendError.quotaExceeded') return `Límite del plan alcanzado: ${params.resource}`;
+    if (key === 'soAmountPendingInvoice') return `${key}:${params.pending}`;
+    return key;
+  },
   useMenuLabel: () => (key) => key,
 }));
 
@@ -84,7 +92,9 @@ vi.mock('@/lib/observability/health-events.js', () => ({
   trackTransactionPosted: vi.fn(),
   trackDocumentCreated: vi.fn(),
 }));
-vi.mock('@/lib/formatCurrency.js', () => ({
+// Partial: the plan-quota sentence (ETP-5051) formats its counts with the real `formatGroupedNumber`.
+vi.mock('@/lib/formatCurrency.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   formatCurrency: (_currency, value) => `${Number(value || 0).toFixed(2)} €`,
 }));
 
@@ -109,13 +119,17 @@ const baseProps = {
   token: 'tok',
 };
 
-/** Builds a `fetch` mock that answers the three lookups by URL shape, in any call order. */
-function mockFetch({ shipments = [], orderLines = [], invoices = [] } = {}) {
+/**
+ * Builds a `fetch` mock that answers the lookups by URL shape, in any call order; `header` is the
+ * record the launcher's single-record GET returns (ETP-5828), none by default.
+ */
+function mockFetch({ shipments = [], orderLines = [], invoices = [], header = null } = {}) {
   return vi.fn((url) => {
     let data = [];
     if (url.includes('goods-shipment')) data = shipments;
     else if (url.includes('/lines?')) data = orderLines;
     else if (url.includes('action/listInvoices')) data = invoices;
+    else if (url.endsWith('/header/so-launcher-1') && header) data = [header];
     return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data } }) });
   });
 }
@@ -236,13 +250,13 @@ describe('ManageDocsLauncher — Rules-of-Hooks regression (ETP-5295)', () => {
   });
 });
 
-async function renderLauncher({ orderLines, grandTotalAmount }) {
-  globalThis.fetch = mockFetch({ shipments: [], orderLines, invoices: [] });
+async function renderLauncher({ orderLines, grandTotalAmount, header = null, ...record }) {
+  globalThis.fetch = mockFetch({ shipments: [], orderLines, invoices: [], header });
   await act(async () => {
     render(
       <ManageDocsLauncher
         {...baseProps}
-        data={ORDER({ grandTotalAmount })}
+        data={ORDER({ grandTotalAmount, ...record })}
         onClose={vi.fn()}
         onCreated={vi.fn()}
       />,
@@ -317,5 +331,81 @@ describe('Local pending fallback ignores the Total Discount line (ETP-5525)', ()
     expect(await screen.findByText('soManageInvoice')).toBeInTheDocument();
     expect(screen.queryByText('soManageShipmentAndInvoice')).not.toBeInTheDocument();
     expect(screen.queryByText('soManageShipment')).not.toBeInTheDocument();
+  });
+});
+
+// ETP-5828 — the invoice card's «X € pendientes de facturar» is what «Generar factura» would
+// invoice now: the backend's `pendingInvoiceAmount` (single-record GET, net of draft invoices,
+// shipment-scoped, global discount applied) when the record carries it; otherwise the old
+// derivation, order total − completed invoices.
+describe('CreateDocsModal — the pending-to-invoice figure (ETP-5828)', () => {
+  const INVOICE_ONLY = { orderLines: [{ orderedQuantity: 10, deliveredQuantity: 10 }], grandTotalAmount: 500 };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.each([
+    ['the backend annotation', { pendingInvoiceAmount: 38.12 }, 'soAmountPendingInvoice:38.12 €'],
+    ['a zero annotation is still the annotation', { pendingInvoiceAmount: 0 }, 'soAmountPendingInvoice:0.00 €'],
+    ['no annotation: total − completed invoices', {}, 'soAmountPendingInvoice:500.00 €'],
+    // The list row carries no annotation; the launcher reads it off the single-record GET.
+    ['the single-record GET annotation, from the list kebab',
+      { header: { id: 'so-launcher-1', pendingInvoiceAmount: 38.12 } }, 'soAmountPendingInvoice:38.12 €'],
+    ['a single-record GET without it: the fallback',
+      { header: { id: 'so-launcher-1' } }, 'soAmountPendingInvoice:500.00 €'],
+  ])('shows %s', async (_label, record, expected) => {
+    await renderLauncher({ ...INVOICE_ONLY, ...record });
+
+    expect(screen.getByText(expected)).toBeInTheDocument();
+  });
+});
+
+// ETP-5051 — the invoice step of CreateDocsModal can be refused by the plan quota (403
+// QUOTA_EXCEEDED). The inline error reads as the translated quota sentence, not "Error (403)" nor
+// the backend prose; any other refusal shows its backend message exactly as before.
+describe('CreateDocsModal — a refused invoice step (ETP-5051)', () => {
+  const INVOICE_ONLY = { orderLines: [{ orderedQuantity: 10, deliveredQuantity: 10 }], grandTotalAmount: 500 };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function createRefusedWith(status, body) {
+    await renderLauncher(INVOICE_ONLY);
+    const lookups = globalThis.fetch;
+    globalThis.fetch = vi.fn((url, opts) => (String(url).includes('/action/createDraftInvoice')
+      ? Promise.resolve({ ok: false, status, json: () => Promise.resolve(body) })
+      : lookups(url, opts)));
+    fireEvent.click(screen.getByTestId('sales-order-manage-docs-submit'));
+    await waitFor(() => expect(globalThis.fetch.mock.calls.some(([u]) => String(u).includes('/action/createDraftInvoice'))).toBe(true));
+  }
+
+  it('shows the translated quota sentence for a 403 QUOTA_EXCEEDED', async () => {
+    const onCreated = vi.fn();
+    await createRefusedWith(403, {
+      error: {
+        code: 'QUOTA_EXCEEDED', status: 403, message: 'Quota exceeded: Sales invoices (100/100)',
+        quota: { resourceKey: 'CREATE_DOCS_INVOICES', resourceName: 'Sales invoices', includedQty: 100, consumed: 100, verdict: 'DENY' },
+      },
+    });
+
+    expect(await screen.findByText('Límite del plan alcanzado: Sales invoices')).toBeInTheDocument();
+    expect(screen.queryByText('Error (403)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Quota exceeded: Sales invoices (100/100)')).not.toBeInTheDocument();
+    expect(onCreated).not.toHaveBeenCalled();
+    expect(screen.getByTestId('sales-order-manage-docs-modal')).toBeInTheDocument();
+  });
+
+  it('keeps the backend message of any other refusal', async () => {
+    await createRefusedWith(409, { error: { status: 409, message: 'Business partner on hold' } });
+
+    expect(await screen.findByText('Business partner on hold')).toBeInTheDocument();
+  });
+
+  it('keeps "Error (<status>)" for a refusal with no message', async () => {
+    await createRefusedWith(502, null);
+
+    expect(await screen.findByText('Error (502)')).toBeInTheDocument();
   });
 });

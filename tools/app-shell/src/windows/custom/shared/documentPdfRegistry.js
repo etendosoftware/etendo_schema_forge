@@ -33,6 +33,7 @@
  * this map keeps rendering its `print-*` artifact, exactly as before.
  */
 import { renderDocumentPdf, renderDocumentHtml, buildOrderData } from './documentPdf.js';
+import { loadDocTemplateConfig } from './docTemplateConfig.js';
 import { buildInvoiceData, buildInvoicePdfLabels } from './useInvoicePdf.js';
 import { buildSalesOrderPdfLabels } from './useOrderPdf.js';
 import { buildPurchaseOrderPdfLabels } from './usePurchaseOrderPdf.js';
@@ -47,6 +48,12 @@ import {
   generateReturnReceiptPdf, generateReturnReceiptHtml, getReturnReceiptPdfLabels,
 } from '@/windows/custom/return-material-receipt/useReturnReceiptPdf.js';
 
+/** The document's data and the organization's template choice, if it saved one (ETP-5988). */
+async function withTemplateConfig(docType, build, id, base, token) {
+  const d = await build(id, base, token);
+  return [d, await loadDocTemplateConfig(docType, base, token)];
+}
+
 /**
  * Entry for a commercial document: shared DOCUMENT_TEMPLATE, built by `build` and
  * labelled by `labels`.
@@ -58,13 +65,13 @@ import {
  * The builders expect the base URL with its last segment stripped, exactly as
  * `useDocumentPdf` hands it to them.
  */
-function commercial(build, labels) {
+function commercial(docType, build, labels) {
   const strip = (apiBaseUrl) => (apiBaseUrl || '').replace(/\/[^/]+$/, '');
   return {
     pdf: (id, apiBaseUrl, token, ui) =>
-      build(id, strip(apiBaseUrl), token).then((d) => renderDocumentPdf({ ...d, labels: labels(ui) })),
+      withTemplateConfig(docType, build, id, strip(apiBaseUrl), token).then(([d, cfg]) => renderDocumentPdf({ ...d, labels: labels(ui) }, cfg)),
     html: (id, apiBaseUrl, token, ui) =>
-      build(id, strip(apiBaseUrl), token).then((d) => renderDocumentHtml({ ...d, labels: labels(ui) })),
+      withTemplateConfig(docType, build, id, strip(apiBaseUrl), token).then(([d, cfg]) => renderDocumentHtml({ ...d, labels: labels(ui) }, cfg)),
   };
 }
 
@@ -82,10 +89,10 @@ function movement(pdfFn, htmlFn, labels) {
 /** @type {Record<string, { pdf: Function, html: Function }>} */
 export const DOCUMENT_PDF_REGISTRY = {
   // Commercial — shared DOCUMENT_TEMPLATE
-  'sales-invoice':   commercial(buildInvoiceData, buildInvoicePdfLabels),
-  'sales-order':     commercial((id, b, t) => buildOrderData('sales-order', id, b, t, null), buildSalesOrderPdfLabels),
-  'purchase-order':  commercial((id, b, t) => buildOrderData('purchase-order', id, b, t, null), buildPurchaseOrderPdfLabels),
-  'sales-quotation': commercial((id, b, t) => buildQuotationData(id, b, t, null), buildQuotationPdfLabels),
+  'sales-invoice':   commercial('sales-invoice', buildInvoiceData, buildInvoicePdfLabels),
+  'sales-order':     commercial('sales-order', (id, b, t) => buildOrderData('sales-order', id, b, t, null), buildSalesOrderPdfLabels),
+  'purchase-order':  commercial('purchase-order', (id, b, t) => buildOrderData('purchase-order', id, b, t, null), buildPurchaseOrderPdfLabels),
+  'sales-quotation': commercial('sales-quotation', (id, b, t) => buildQuotationData(id, b, t, null), buildQuotationPdfLabels),
 
   // Movement — quantities and a receiver signature, no prices
   'goods-shipment':            movement(generateShipmentPdf, generateShipmentHtml, getShipmentPdfLabels),

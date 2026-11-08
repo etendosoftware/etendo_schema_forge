@@ -1,4 +1,13 @@
-import { render, screen } from '@testing-library/react';
+import { gridViewColumnId } from '@/hooks/useGridView.js';
+import { getContractGridColumns } from '@/components/financial-accounts/contractColumns';
+
+// Exercise personal views through the real shared hook; only the session/API boundary is mocked.
+const personalGrid = vi.hoisted(() => ({ enabled: false, apiFetch: vi.fn() }));
+vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => personalGrid.apiFetch }));
+vi.mock('@/lib/flags', () => ({ GRID_COLUMN_VIEWS: 'grid-column-views', useFeatureFlag: () => personalGrid.enabled }));
+
+// @covers tools/app-shell/src/windows/custom/financial-account/StatementLinesInline.jsx
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -278,6 +287,53 @@ describe('StatementLinesInline', () => {
     });
   });
 
+  // ETP-5581 — `discarded` is sent on the lines of `bank-statements?action=lines` only with the
+  // `bank-bounce-suggestions` flag on; with it off the key is absent. A discarded line is out of
+  // the reconciliation, so neither pending nor matched.
+  describe('discarded lines (ETP-5581)', () => {
+    function renderLine(line) {
+      linesMock.mockReturnValue({
+        lines: [{ id: 'l1', date: '2026-05-06T00:00:00Z', description: '', amount: -50, ...line }],
+        loading: false,
+      });
+      render(<StatementLinesInline statementId="s1" />);
+    }
+
+    it('renders a grey "Descartada" tag instead of "sin conciliar" for a discarded line', () => {
+      renderLine({ matched: false, reconcileStatus: 'PENDING', discarded: true });
+      expect(screen.getByTestId('status-neutral')).toHaveTextContent('financeAccountStatementLinesStatusDiscarded');
+      expect(screen.queryByText('financeAccountStatementLinesStatusUnmatched')).not.toBeInTheDocument();
+    });
+
+    it('also reads a discarded line without reconcileStatus (matched fallback)', () => {
+      renderLine({ matched: false, discarded: true });
+      expect(screen.getByText('financeAccountStatementLinesStatusDiscarded')).toBeInTheDocument();
+    });
+
+    it('keeps the reconciled pill of a reconciled line even if it carries discarded', () => {
+      renderLine({ matched: true, reconcileStatus: 'RECONCILED', discarded: true });
+      expect(screen.getByText('financeAccountStatementLinesStatusReconciled')).toBeInTheDocument();
+      expect(screen.queryByText('financeAccountStatementLinesStatusDiscarded')).not.toBeInTheDocument();
+    });
+
+    it('keeps the partial pill of a partially reconciled line', () => {
+      renderLine({ matched: false, reconcileStatus: 'PARTIAL', discarded: true, pendingAmount: 10 });
+      expect(screen.getByText('financeAccountStatementLinesStatusPartial')).toBeInTheDocument();
+    });
+
+    it('flag off (no discarded key at all): a plain unmatched line, no "Descartada" tag', () => {
+      renderLine({ matched: false, reconcileStatus: 'PENDING' });
+      expect(screen.getByText('financeAccountStatementLinesStatusUnmatched')).toBeInTheDocument();
+      expect(screen.queryByText('financeAccountStatementLinesStatusDiscarded')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('status-neutral')).not.toBeInTheDocument();
+    });
+
+    it('reads discarded:false as a plain unmatched line', () => {
+      renderLine({ matched: false, reconcileStatus: 'PENDING', discarded: false });
+      expect(screen.getByText('financeAccountStatementLinesStatusUnmatched')).toBeInTheDocument();
+    });
+  });
+
   describe('Transacción column', () => {
     it('shows no chip (—) when the line has no reconciled transactions', () => {
       linesMock.mockReturnValue({
@@ -345,5 +401,34 @@ describe('StatementLinesInline', () => {
       expect(headerFor('financeAccountStatementLinesColDate').className).not.toContain('text-right');
       expect(headerFor('financeAccountStatementLinesColMatched').className).not.toContain('text-right');
     });
+  });
+});
+
+describe('StatementLinesInline — personal column views', () => {
+  beforeEach(() => {
+    personalGrid.enabled = true;
+    const column = getContractGridColumns('bankStatementLines').find((item) => item.name === 'description');
+    personalGrid.apiFetch.mockReset().mockResolvedValue({ ok: true, status: 200, json: async () => ({
+      version: 1, surface: 'list', columns: [
+        { id: gridViewColumnId({ ...column, key: 'description' }), visible: false },
+        { id: 'list:field:txns', visible: false, order: -1 },
+        { id: 'list:field:matched', visible: false, order: -2 },
+      ],
+    }) });
+    linesMock.mockReturnValue({ lines: [{
+      id: 'personal-line', date: '2026-05-06', description: 'hidden-personal-description', amount: 100,
+      matched: true, txns: [{ documentNo: 'TXN-001', amount: 100, transactionId: 'txn-001' }],
+    }], loading: false });
+  });
+  afterEach(() => { personalGrid.enabled = false; });
+
+  it('keeps reconciliation status and transaction actions while hiding a data column', async () => {
+    render(<StatementLinesInline statementId="statement-A" />);
+    await waitFor(() => expect(screen.getByTestId('grid-view-columns-trigger')).toBeEnabled());
+    expect(personalGrid.apiFetch).toHaveBeenCalledWith('/sws/neo/grid-views/financial-account/bankStatementLines', { baseUrl: '' });
+    expect(screen.queryByText('hidden-personal-description')).toBeNull();
+    expect(screen.getByText('financeAccountStatementLinesStatusReconciled')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('statement-line-txn-personal-line'));
+    expect(screen.getByTestId('txn-modal')).toHaveAttribute('data-doc', 'TXN-001');
   });
 });

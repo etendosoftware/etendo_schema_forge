@@ -152,15 +152,16 @@ describe('WarehouseProductsTab', () => {
       expect(screen.getByText('Box')).toBeInTheDocument();
     });
 
-    it('calls formatCurrency for products with valuation > 0', () => {
+    it('calls formatCurrency for products with a numeric valuation', () => {
       render(<WarehouseProductsTab {...defaultProps} />);
       expect(formatCurrency).toHaveBeenCalledWith('USD', 1500);
     });
 
-    it('shows — for products with zero valuation', () => {
+    it('formats a real 0 valuation instead of showing the placeholder', () => {
       render(<WarehouseProductsTab {...defaultProps} />);
-      // p2 has valuation 0, so formatCurrency is NOT called for it and '—' is displayed
-      expect(formatCurrency).not.toHaveBeenCalledWith('USD', 0);
+      // p2 has valuation 0 (a real value): formatCurrency IS called with 0
+      expect(formatCurrency).toHaveBeenCalledWith('USD', 0);
+      expect(screen.getAllByText('USD:0').length).toBeGreaterThanOrEqual(1);
     });
 
     it('renders formatted valuation output from formatCurrency', () => {
@@ -173,10 +174,11 @@ describe('WarehouseProductsTab', () => {
       expect(formatCurrency).toHaveBeenCalledWith('USD', 150);
     });
 
-    it('shows — for products with zero/falsy cost', () => {
+    it('formats a real 0 cost and shows no placeholder when no value is null', () => {
       render(<WarehouseProductsTab {...defaultProps} />);
-      // p2 has cost 0, so formatCurrency is NOT called for it
-      expect(formatCurrency).not.toHaveBeenCalledWith('USD', 0);
+      // p2 has cost 0 and valuation 0: both cells render the formatted zero, never '—'
+      expect(screen.getAllByText('USD:0')).toHaveLength(2);
+      expect(screen.queryByText('—')).not.toBeInTheDocument();
     });
 
     it('renders formatted cost output from formatCurrency', () => {
@@ -241,7 +243,7 @@ describe('WarehouseProductsTab', () => {
       expect(screen.getByText('—')).toBeInTheDocument();
     });
 
-    it('renders — for both uom and cost when both are falsy', () => {
+    it('renders — for uom and for the missing cost when both are absent', () => {
       useWarehouseStock.mockReturnValue({
         loading: false,
         error: null,
@@ -287,6 +289,49 @@ describe('WarehouseProductsTab', () => {
       expect(screen.getByText('USD:100')).toBeInTheDocument();
       expect(screen.getByText('USD:300')).toBeInTheDocument();
       expect(screen.getAllByText('—')).toHaveLength(2);
+    });
+
+    it('renders a real 0 cost and 0 valuation as formatted values, not the placeholder', () => {
+      useWarehouseStock.mockReturnValue({
+        loading: false,
+        error: null,
+        products: [{ id: 'p1', label: 'Zero Cost Item', uom: 'Each', valuation: 0, qty: 7, cost: 0 }],
+      });
+      render(<WarehouseProductsTab {...defaultProps} />);
+      expect(screen.queryByText('—')).not.toBeInTheDocument();
+      expect(formatCurrency).toHaveBeenCalledTimes(2);
+      expect(formatCurrency).toHaveBeenCalledWith('USD', 0);
+      expect(screen.getAllByText('USD:0')).toHaveLength(2);
+    });
+
+    it('renders only the null cell as placeholder when just one of cost / valuation is null', () => {
+      useWarehouseStock.mockReturnValue({
+        loading: false,
+        error: null,
+        products: [{ id: 'p1', label: 'Half Item', uom: 'Each', valuation: null, qty: 7, cost: 12 }],
+      });
+      render(<WarehouseProductsTab {...defaultProps} />);
+      expect(screen.getAllByText('—')).toHaveLength(1);
+      expect(screen.getByText('USD:12')).toBeInTheDocument();
+      expect(formatCurrency).toHaveBeenCalledTimes(1);
+    });
+
+    it('handles a mixed list: no cost, real zero and real cost', () => {
+      useWarehouseStock.mockReturnValue({
+        loading: false,
+        error: null,
+        products: [
+          { id: 'p1', label: 'No Cost Item', uom: 'Each', valuation: null, qty: 7, cost: null },
+          { id: 'p2', label: 'Zero Item', uom: 'Each', valuation: 0, qty: 2, cost: 0 },
+          { id: 'p3', label: 'Costed Item', uom: 'Each', valuation: 300, qty: 3, cost: 100 },
+        ],
+      });
+      render(<WarehouseProductsTab {...defaultProps} />);
+      expect(screen.getAllByText('—')).toHaveLength(2);
+      expect(screen.getAllByText('USD:0')).toHaveLength(2);
+      expect(screen.getByText('USD:100')).toBeInTheDocument();
+      expect(screen.getByText('USD:300')).toBeInTheDocument();
+      expect(formatCurrency).toHaveBeenCalledTimes(4);
     });
   });
 });

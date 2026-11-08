@@ -1,3 +1,6 @@
+import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
+import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
+import { renderGridViewCells } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -101,6 +104,30 @@ export default function AmortizationLinesTable({
   const location = useLocation();
   const apiFetch = useApiFetch(apiBaseUrl);
   const [lines, setLines] = useState([]);
+
+  const gridColumns = useMemo(() => [
+    { key: 'asset', column: 'A_Asset_ID', label: t('A_Asset_ID'), sourceIndex: 2, required: true },
+    { key: 'amortizationPercentage', column: 'Amortization_Percentage', label: t('Amortization_Percentage'), sourceIndex: 3 },
+    { key: 'amortizationAmount', column: 'Amortizationamt', label: t('Amortizationamt'), sourceIndex: 4, required: true },
+  ], [ui, t]);
+  const gridSpec = 'amortization';
+  const { gridView, gridColumnViews } = useFlaggedGridView({
+    spec: gridSpec, entity: 'lines', columns: gridColumns, data: lines,
+    enabled: Boolean(gridSpec), apiBaseUrl,
+  });
+  // Structural cells stay outside the personal view; existing editors and actions
+  // retain their handlers and React keys when data cells move.
+  const renderGridCells = (fragment) => (gridColumnViews && gridSpec
+    ? renderGridViewCells(fragment, { gridView, gridColumns, ui, leading: 2, trailing: 1 })
+    : fragment);
+  const gridControls = gridColumnViews && gridSpec ? (
+    <GridViewControls
+      gridView={gridView}
+      gridColumns={gridColumns}
+      ui={ui}
+      data-testid="GridViewControls__fecdcf" />
+  ) : null;
+
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [editingLineId, setEditingLineId] = useState(null);
@@ -387,10 +414,12 @@ export default function AmortizationLinesTable({
 
   return (
     <div className="flex-1 min-w-0" data-testid="inline-lines-panel">
-      <table className="w-full">
+      {gridControls}
+          <table className="w-full" style={gridView.active && gridView.columns.some((column) => column.gridUserWidthPx != null) ? { tableLayout: 'fixed' } : undefined}>
+          {gridView.active && gridView.columns.some((column) => column.gridUserWidthPx != null) && <colgroup><col style={{ width: 40 }} /><col style={{ width: 40 }} />{gridView.columns.map((column) => <col key={column.key} style={{ width: column.gridUserWidthPx }} />)}<col style={{ width: 128 }} /></colgroup>}
         {/* header — matches inlineEditable: sticky top-0 z-20 bg-card */}
         <thead className="sticky top-0 z-20 bg-card">
-          <tr className="border-b border-border/40">
+          <tr className="border-b border-border/40">{renderGridCells(<>
             <th className="h-10 w-10 p-2 align-middle" />
             <th className="h-10 w-10 px-3 pr-0 align-middle">
               <Checkbox
@@ -421,18 +450,18 @@ export default function AmortizationLinesTable({
                 3 buttons (was 2) and needs the extra room so it stays inside its
                 own column instead of spilling over the Amount column on hover. */}
             <th className="h-10 w-32 px-2" />
-          </tr>
+          </>)}</tr>
         </thead>
 
         <tbody>
           {loading ? (
-            <tr>
+            <tr>{renderGridCells(<>
               <td colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
                 <Loader2
                   className="h-4 w-4 animate-spin inline mr-1.5"
                   data-testid="Loader2__fecdcf" />
               </td>
-            </tr>
+            </>)}</tr>
           ) : (
             <>
               {lines.map(line => {
@@ -449,7 +478,7 @@ export default function AmortizationLinesTable({
                       data-row-id={line.id}
                       className={`relative transition-colors h-12 group/row border-b border-border/30 cursor-pointer ${isSelected ? 'bg-primary/5' : 'hover:bg-muted/50'}`}
                       onClick={() => !isEditing && setExpandedId(isExpanded ? null : line.id)}
-                    >
+                    >{renderGridCells(<>
                       {/* expand toggle — circular icon button (matches financial-account MovementsTable) */}
                       <td className="w-10 p-2 align-middle">
                         <RowExpandToggle
@@ -578,10 +607,10 @@ export default function AmortizationLinesTable({
                           </div>
                         )}
                       </td>
-                    </tr>
+                    </>)}</tr>
                     {/* ── dimension expand ── */}
                     {isExpanded && (
-                      <tr className="border-b border-border/30">
+                      <tr className="border-b border-border/30">{renderGridCells(<>
                         <td colSpan={6} className="bg-card px-10 pb-5 pt-3">
                           {line['organization$_identifier'] && (
                             <div className="mb-4 grid grid-cols-4 gap-4">
@@ -604,7 +633,7 @@ export default function AmortizationLinesTable({
                             labelOverrides={api?.labelOverrides}
                             data-testid="DimensionGrid__fecdcf" />
                         </td>
-                      </tr>
+                      </>)}</tr>
                     )}
                   </React.Fragment>
                 );
@@ -612,7 +641,7 @@ export default function AmortizationLinesTable({
 
               {/* ── inline add-line draft row (Sales Order InlineAddRow pattern) ── */}
               {addingLine && (
-                <tr ref={addRowRef} data-testid="inline-add-row" className="bg-status-info/50 border-t-2 border-primary/20">
+                <tr ref={addRowRef} data-testid="inline-add-row" className="bg-status-info/50 border-t-2 border-primary/20">{renderGridCells(<>
                   <td className="w-10 p-2 align-middle" aria-hidden="true" />
                   <td className="px-3 pr-0" aria-hidden="true" />
                   <td className="py-1 px-2 align-middle">
@@ -653,7 +682,7 @@ export default function AmortizationLinesTable({
                   <td className="px-2 text-center text-muted-foreground align-middle">
                     {saving === 'new' ? <Loader2 className="h-4 w-4 animate-spin inline" data-testid="Loader2__fecdcf" /> : '—'}
                   </td>
-                </tr>
+                </>)}</tr>
               )}
             </>
           )}

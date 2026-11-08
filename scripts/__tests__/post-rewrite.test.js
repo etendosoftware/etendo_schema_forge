@@ -90,6 +90,18 @@ describe('post-rewrite', () => {
     assert.ok(sealIsValid());
   });
 
+  it('stays silent after a rebase whatever prefixes the user\'s diff config prints', () => {
+    ok('config', 'diff.mnemonicPrefix', 'true');
+    ok('config', 'diff.noprefix', 'true');
+    ok('checkout', '-q', '-b', 'feature');
+    commit('b.txt', 'feature\n', 'Feature ETP-1234: Add a feature file');
+    ok('checkout', '-q', 'main');
+    commit('a.txt', 'one on main\n', 'Feature ETP-1234: Change the first file on main');
+    ok('checkout', '-q', 'feature');
+    assert.doesNotMatch(ok('rebase', 'main').stderr, new RegExp(WARNING));
+    assert.ok(sealIsValid());
+  });
+
   it('warns when a rebase resolves a conflict, naming the base to re-seal from', () => {
     const { stderr } = conflictingRebase();
     assert.match(stderr, new RegExp(WARNING));

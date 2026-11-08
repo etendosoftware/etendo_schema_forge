@@ -80,90 +80,75 @@
           "sourceVisibility": "editable",
           "direction": "out",
           "internalPath": "searchKey",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "name": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "name",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": null,
-          "handlerId": null
+          "required": true
         },
         "tax_id": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "taxID",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "web": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "etgoWeb",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "email": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "etgoEmail",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "phone": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "etgoPhone",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -184,7 +169,7 @@
       },
       "source": {
         "artifact": "contacts",
-        "contractVersion": "0.4.0",
+        "contractVersion": "0.7.0",
         "backendEntity": true
       }
     },
@@ -206,189 +191,164 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "locationAddress",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Location",
-          "handlerId": null
+          "reference": "Location"
         },
         "phone": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "phone",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "alternative_phone": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "alternativePhone",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "name": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "name",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "fax": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "fax",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "ship_to_address": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "shipToAddress",
-          "type": "passthrough",
           "dataType": {
             "type": "boolean"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "invoice_to_address": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "invoiceToAddress",
-          "type": "passthrough",
           "dataType": {
             "type": "boolean"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "active": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "active",
-          "type": "passthrough",
           "dataType": {
             "type": "boolean"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "tax_location": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "taxLocation",
-          "type": "passthrough",
           "dataType": {
             "type": "boolean"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "address_line1": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "addressLine1",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "address_line2": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "addressLine2",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "city_name": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "cityName",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "postal_code": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "postalCode",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "country": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "country",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "region_name": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "regionName",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
+        },
+        "country_code": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "countryCode",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -415,7 +375,7 @@
       },
       "source": {
         "artifact": "contacts",
-        "contractVersion": "0.4.0",
+        "contractVersion": "0.7.0",
         "backendEntity": true
       }
     },
@@ -437,101 +397,83 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "firstName",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "last_name": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "lastName",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "email": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "email",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "phone": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "phone",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "position": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "position",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "comments": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "comments",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "active": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "active",
-          "type": "passthrough",
           "dataType": {
             "type": "boolean"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -558,7 +500,7 @@
       },
       "source": {
         "artifact": "contacts",
-        "contractVersion": "0.4.0",
+        "contractVersion": "0.7.0",
         "backendEntity": true
       }
     },
@@ -580,102 +522,84 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "name",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "movement_date": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "movementDate",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "posted": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "posted",
-          "type": "passthrough",
           "dataType": {
             "type": "boolean"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "project": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "project",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Project",
-          "handlerId": null
+          "reference": "Project"
         },
         "cost_center": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "costCenter",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Costcenter",
-          "handlerId": null
+          "reference": "Costcenter"
         },
         "processed": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "processed",
-          "type": "passthrough",
           "dataType": {
             "type": "boolean"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "document_no": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "documentNo",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -718,24 +642,20 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "lineNo",
-          "type": "passthrough",
           "dataType": {
             "type": "integer",
             "format": "int32"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "product": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "product",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "Product",
-          "handlerId": null,
           "relationship": {
             "resource": "product",
             "cardinality": "one",
@@ -746,79 +666,66 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "description",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "movement_quantity": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "movementQuantity",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "uom": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "uOM",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "UOM",
-          "handlerId": null
+          "reference": "UOM"
         },
         "storage_bin": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "storageBin",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Locator",
-          "handlerId": null
+          "reference": "Locator"
         },
         "new_storage_bin": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "newStorageBin",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Locator",
-          "handlerId": null
+          "reference": "Locator"
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -867,12 +774,10 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "warehouse",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "Warehouse",
-          "handlerId": null,
           "relationship": {
             "resource": "warehouse",
             "cardinality": "one",
@@ -883,12 +788,10 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "businessPartner",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "BusinessPartner",
-          "handlerId": null,
           "relationship": {
             "resource": "contacts",
             "cardinality": "one",
@@ -899,136 +802,112 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "partnerAddress",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "BusinessPartnerLocation",
-          "handlerId": null
+          "reference": "BusinessPartnerLocation"
         },
         "movement_date": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "movementDate",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "order_reference": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "orderReference",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "description": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "description",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "document_status": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "documentStatus",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "posted": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "posted",
-          "type": "passthrough",
           "dataType": {
             "type": "boolean"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "project": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "project",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Project",
-          "handlerId": null
+          "reference": "Project"
         },
         "costcenter": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "costcenter",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "CostCenter",
-          "handlerId": null
+          "reference": "CostCenter"
         },
         "invoice_status": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "invoiceStatus",
-          "type": "passthrough",
           "dataType": {
             "type": "integer",
             "format": "int32"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "currency": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "etgoCurrency",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Currency",
-          "handlerId": null
+          "reference": "Currency"
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -1071,12 +950,10 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "product",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "Product",
-          "handlerId": null,
           "relationship": {
             "resource": "product",
             "cardinality": "one",
@@ -1087,79 +964,67 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "movementQuantity",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "uom": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "uOM",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "UOM",
-          "handlerId": null
+          "reference": "UOM"
         },
         "order_quantity": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "orderQuantity",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "project": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "project",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Project",
-          "handlerId": null
+          "reference": "Project"
         },
         "costcenter": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "costcenter",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "CostCenter",
-          "handlerId": null
+          "reference": "CostCenter"
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -1208,23 +1073,19 @@
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "documentNo",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "warehouse": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "warehouse",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "Warehouse",
-          "handlerId": null,
           "relationship": {
             "resource": "warehouse",
             "cardinality": "one",
@@ -1235,12 +1096,10 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "businessPartner",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "BusinessPartner",
-          "handlerId": null,
           "relationship": {
             "resource": "contacts",
             "cardinality": "one",
@@ -1251,113 +1110,93 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "partnerAddress",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "BusinessPartnerLocation",
-          "handlerId": null
+          "reference": "BusinessPartnerLocation"
         },
         "description": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "description",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "movement_date": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "movementDate",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "document_status": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "documentStatus",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "posted": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "posted",
-          "type": "passthrough",
           "dataType": {
             "type": "boolean"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "project": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "project",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Project",
-          "handlerId": null
+          "reference": "Project"
         },
         "costcenter": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "costcenter",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Costcenter",
-          "handlerId": null
+          "reference": "Costcenter"
         },
         "currency": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "etgoCurrency",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Currency",
-          "handlerId": null
+          "reference": "Currency"
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -1378,7 +1217,7 @@
       },
       "source": {
         "artifact": "goods-shipment",
-        "contractVersion": "0.5.0",
+        "contractVersion": "0.6.0",
         "backendEntity": true
       }
     },
@@ -1400,12 +1239,10 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "product",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "Product",
-          "handlerId": null,
           "relationship": {
             "resource": "product",
             "cardinality": "one",
@@ -1416,90 +1253,76 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "movementQuantity",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "uom": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "uOM",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "UOM",
-          "handlerId": null
+          "reference": "UOM"
         },
         "description": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "description",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "order_quantity": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "orderQuantity",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "project": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "project",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Project",
-          "handlerId": null
+          "reference": "Project"
         },
         "costcenter": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "costcenter",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Costcenter",
-          "handlerId": null
+          "reference": "Costcenter"
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -1526,7 +1349,7 @@
       },
       "source": {
         "artifact": "goods-shipment",
-        "contractVersion": "0.5.0",
+        "contractVersion": "0.6.0",
         "backendEntity": true
       }
     },
@@ -1548,58 +1371,48 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "movementDate",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "name": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "name",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "posted": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "posted",
-          "type": "passthrough",
           "dataType": {
             "type": "boolean"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -1641,24 +1454,20 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "lineNo",
-          "type": "passthrough",
           "dataType": {
             "type": "integer",
             "format": "int32"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "product": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "product",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "Product",
-          "handlerId": null,
           "relationship": {
             "resource": "product",
             "cardinality": "one",
@@ -1669,57 +1478,48 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "movementQuantity",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "uom": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "uOM",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "UOM",
-          "handlerId": null
+          "reference": "UOM"
         },
         "storage_bin": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "storageBin",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Locator",
-          "handlerId": null
+          "reference": "Locator"
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -1763,34 +1563,28 @@
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "invoiceLine",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "InvoiceLine",
-          "handlerId": null
+          "reference": "InvoiceLine"
         },
         "goods_shipment_line": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "goodsShipmentLine",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "InOutLine",
-          "handlerId": null
+          "reference": "InOutLine"
         },
         "product": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "product",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "Product",
-          "handlerId": null,
           "relationship": {
             "resource": "product",
             "cardinality": "one",
@@ -1801,69 +1595,58 @@
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "quantity",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "transaction_date": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "transactionDate",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "processed": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "processed",
-          "type": "passthrough",
           "dataType": {
             "type": "boolean"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "posted": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "posted",
-          "type": "passthrough",
           "dataType": {
             "type": "boolean"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -1894,24 +1677,20 @@
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -1945,35 +1724,29 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "movementDate",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "name": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "name",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "warehouse": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "warehouse",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "Warehouse",
-          "handlerId": null,
           "relationship": {
             "resource": "warehouse",
             "cardinality": "one",
@@ -1984,68 +1757,56 @@
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "posted",
-          "type": "passthrough",
           "dataType": {
             "type": "boolean"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "project": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "project",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Project",
-          "handlerId": null
+          "reference": "Project"
         },
         "cost_center": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "costCenter",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Costcenter",
-          "handlerId": null
+          "reference": "Costcenter"
         },
         "processed": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "processed",
-          "type": "passthrough",
           "dataType": {
             "type": "boolean"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -2088,24 +1849,20 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "lineNo",
-          "type": "passthrough",
           "dataType": {
             "type": "integer",
             "format": "int32"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "product": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "product",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "Product",
-          "handlerId": null,
           "relationship": {
             "resource": "product",
             "cardinality": "one",
@@ -2116,102 +1873,88 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "description",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "quantity_order_book": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "quantityOrderBook",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "quantity_count": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "quantityCount",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "uom": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "uOM",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "UOM",
-          "handlerId": null
+          "reference": "UOM"
         },
         "book_quantity": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "bookQuantity",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "cost": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "cost",
-          "type": "passthrough",
           "dataType": {
             "type": "number",
             "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "qtydiff": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "etgoQtydiff",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -2260,34 +2003,30 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "searchKey",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": null,
-          "handlerId": null
+          "required": true
         },
         "name": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "name",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": null,
-          "handlerId": null
+          "required": true
         },
         "category": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "productCategory",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "ProductCategory",
-          "handlerId": null,
           "relationship": {
             "resource": "product-category",
             "cardinality": "one",
@@ -2298,59 +2037,49 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "description",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "sale_price": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "eTGOSalePrice",
-          "type": "passthrough",
           "dataType": {
             "type": "number",
             "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "stock": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "eTGOStock",
-          "type": "passthrough",
           "dataType": {
             "type": "number",
             "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -2371,7 +2100,7 @@
       },
       "source": {
         "artifact": "product",
-        "contractVersion": "0.15.0",
+        "contractVersion": "0.18.0",
         "backendEntity": true
       }
     },
@@ -2389,60 +2118,50 @@
           "sourceVisibility": "editable",
           "direction": "out",
           "internalPath": "cost",
-          "type": "passthrough",
           "dataType": {
             "type": "number",
             "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "starting_date": {
           "sourceVisibility": "editable",
           "direction": "out",
           "internalPath": "startingDate",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "ending_date": {
           "sourceVisibility": "editable",
           "direction": "out",
           "internalPath": "endingDate",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -2469,7 +2188,7 @@
       },
       "source": {
         "artifact": "product",
-        "contractVersion": "0.15.0",
+        "contractVersion": "0.18.0",
         "backendEntity": true
       }
     },
@@ -2491,79 +2210,65 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "searchKey",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "name": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "name",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "description": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "description",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "default": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "default",
-          "type": "passthrough",
           "dataType": {
             "type": "boolean"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "active": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "active",
-          "type": "passthrough",
           "dataType": {
             "type": "boolean"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -2601,46 +2306,38 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "transactionDocument",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "DocumentType",
-          "handlerId": null
+          "reference": "DocumentType"
         },
         "document_no": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "documentNo",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "invoice_date": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "invoiceDate",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "business_partner": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "businessPartner",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "BusinessPartner",
-          "handlerId": null,
           "relationship": {
             "resource": "contacts",
             "cardinality": "one",
@@ -2651,216 +2348,178 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "partnerAddress",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "BusinessPartnerLocation",
-          "handlerId": null
+          "reference": "BusinessPartnerLocation"
         },
         "price_list": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "priceList",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "PriceList",
-          "handlerId": null
+          "reference": "PriceList"
         },
         "accounting_date": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "accountingDate",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "payment_terms": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "paymentTerms",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "PaymentTerm",
-          "handlerId": null
+          "reference": "PaymentTerm"
         },
         "payment_method": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "paymentMethod",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "PaymentMethod",
-          "handlerId": null
+          "reference": "PaymentMethod"
         },
         "order_reference": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "orderReference",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "document_status": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "documentStatus",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "grand_total_amount": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "grandTotalAmount",
-          "type": "passthrough",
           "dataType": {
             "type": "number",
             "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "currency": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "currency",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Currency",
-          "handlerId": null
+          "reference": "Currency"
         },
         "outstanding_amount": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "outstandingAmount",
-          "type": "passthrough",
           "dataType": {
             "type": "number",
             "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "posted": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "posted",
-          "type": "passthrough",
           "dataType": {
             "type": "boolean"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "project": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "project",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Project",
-          "handlerId": null
+          "reference": "Project"
         },
         "costcenter": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "costcenter",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "CostCenter",
-          "handlerId": null
+          "reference": "CostCenter"
         },
         "aeatsii_estado": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "aeatsiiEstado",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "tbai_status": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "eTGOTbaiStatus",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "delivery_status": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "eTGODeliveryStatus",
-          "type": "passthrough",
           "dataType": {
             "type": "integer",
             "format": "int32"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "due_date": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "eTGODueDate",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -2880,7 +2539,7 @@
       },
       "source": {
         "artifact": "purchase-invoice",
-        "contractVersion": "0.5.0",
+        "contractVersion": "0.8.0",
         "backendEntity": true
       }
     },
@@ -2902,12 +2561,10 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "product",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "Product",
-          "handlerId": null,
           "relationship": {
             "resource": "product",
             "cardinality": "one",
@@ -2918,125 +2575,105 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "description",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "invoiced_quantity": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "invoicedQuantity",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "list_price": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "listPrice",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "discount": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "etgoDiscount",
-          "type": "passthrough",
           "dataType": {
             "type": "number",
             "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "tax": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "tax",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Tax",
-          "handlerId": null
+          "reference": "Tax"
         },
         "uom": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "uOM",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "UOM",
-          "handlerId": null
+          "reference": "UOM"
         },
         "gross_amount": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "grossAmount",
-          "type": "passthrough",
           "dataType": {
             "type": "number",
             "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "project": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "project",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Project",
-          "handlerId": null
+          "reference": "Project"
         },
         "costcenter": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "costcenter",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "CostCenter",
-          "handlerId": null
+          "reference": "CostCenter"
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -3062,7 +2699,7 @@
       },
       "source": {
         "artifact": "purchase-invoice",
-        "contractVersion": "0.5.0",
+        "contractVersion": "0.8.0",
         "backendEntity": true
       }
     },
@@ -3080,69 +2717,58 @@
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "currency",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Currency",
-          "handlerId": null
+          "reference": "Currency"
         },
         "to_currency": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "toCurrency",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Currency",
-          "handlerId": null
+          "reference": "Currency"
         },
         "rate": {
           "sourceVisibility": "editable",
           "direction": "out",
           "internalPath": "rate",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "foreign_amount": {
           "sourceVisibility": "editable",
           "direction": "out",
           "internalPath": "foreignAmount",
-          "type": "passthrough",
           "dataType": {
             "type": "number",
             "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -3168,7 +2794,7 @@
       },
       "source": {
         "artifact": "purchase-invoice",
-        "contractVersion": "0.5.0",
+        "contractVersion": "0.8.0",
         "backendEntity": true
       }
     },
@@ -3190,12 +2816,10 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "businessPartner",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "BusinessPartner",
-          "handlerId": null,
           "relationship": {
             "resource": "contacts",
             "cardinality": "one",
@@ -3206,58 +2830,48 @@
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "documentNo",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "order_date": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "orderDate",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "partner_address": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "partnerAddress",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "BusinessPartnerLocation",
-          "handlerId": null
+          "reference": "BusinessPartnerLocation"
         },
         "scheduled_delivery_date": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "scheduledDeliveryDate",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "warehouse": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "warehouse",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "Warehouse",
-          "handlerId": null,
           "relationship": {
             "resource": "warehouse",
             "cardinality": "one",
@@ -3268,115 +2882,95 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "paymentMethod",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "PaymentMethod",
-          "handlerId": null
+          "reference": "PaymentMethod"
         },
         "payment_terms": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "paymentTerms",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "PaymentTerm",
-          "handlerId": null
+          "reference": "PaymentTerm"
         },
         "price_list": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "priceList",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "PriceList",
-          "handlerId": null
+          "reference": "PriceList"
         },
         "document_status": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "documentStatus",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "grand_total_amount": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "grandTotalAmount",
-          "type": "passthrough",
           "dataType": {
             "type": "number",
             "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "currency": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "currency",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Currency",
-          "handlerId": null
+          "reference": "Currency"
         },
         "deliv_status_purchase": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "eTGODelivStatusPurchase",
-          "type": "passthrough",
           "dataType": {
             "type": "integer",
             "format": "int32"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "invoice_status": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "eTGOInvoiceStatus",
-          "type": "passthrough",
           "dataType": {
             "type": "integer",
             "format": "int32"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -3396,7 +2990,7 @@
       },
       "source": {
         "artifact": "purchase-order",
-        "contractVersion": "0.55.0",
+        "contractVersion": "0.56.0",
         "backendEntity": true
       }
     },
@@ -3418,12 +3012,10 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "product",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "Product",
-          "handlerId": null,
           "relationship": {
             "resource": "product",
             "cardinality": "one",
@@ -3434,103 +3026,87 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "description",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "ordered_quantity": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "orderedQuantity",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "list_price": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "listPrice",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "discount": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "discount",
-          "type": "passthrough",
           "dataType": {
             "type": "number",
             "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "tax": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "tax",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Tax",
-          "handlerId": null
+          "reference": "Tax"
         },
         "line_gross_amount": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "lineGrossAmount",
-          "type": "passthrough",
           "dataType": {
             "type": "number",
             "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "uom": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "uOM",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "UOM",
-          "handlerId": null
+          "reference": "UOM"
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -3556,115 +3132,7 @@
       },
       "source": {
         "artifact": "purchase-order",
-        "contractVersion": "0.55.0",
-        "backendEntity": true
-      }
-    },
-    "purchase-order-lineTax": {
-      "publicName": "purchase-order-lineTax",
-      "specName": "purchase-order",
-      "entityName": "lineTax",
-      "publicApi": true,
-      "operations": [
-        "GET",
-        "LIST"
-      ],
-      "fields": {
-        "line_no": {
-          "sourceVisibility": "readOnly",
-          "direction": "out",
-          "internalPath": "lineNo",
-          "type": "passthrough",
-          "dataType": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "reference": null,
-          "handlerId": null
-        },
-        "tax": {
-          "sourceVisibility": "readOnly",
-          "direction": "out",
-          "internalPath": "tax",
-          "type": "passthrough",
-          "dataType": {
-            "type": "string"
-          },
-          "reference": "Tax",
-          "handlerId": null
-        },
-        "taxable_amount": {
-          "sourceVisibility": "readOnly",
-          "direction": "out",
-          "internalPath": "taxableAmount",
-          "type": "passthrough",
-          "dataType": {
-            "type": "number",
-            "format": "double"
-          },
-          "reference": null,
-          "handlerId": null
-        },
-        "tax_amount": {
-          "sourceVisibility": "readOnly",
-          "direction": "out",
-          "internalPath": "taxAmount",
-          "type": "passthrough",
-          "dataType": {
-            "type": "number",
-            "format": "double"
-          },
-          "reference": null,
-          "handlerId": null
-        },
-        "id": {
-          "sourceVisibility": "system",
-          "direction": "out",
-          "internalPath": "id",
-          "type": "passthrough",
-          "dataType": {
-            "type": "string"
-          },
-          "reference": null,
-          "handlerId": null
-        },
-        "updated": {
-          "sourceVisibility": "system",
-          "direction": "out",
-          "internalPath": "updated",
-          "type": "passthrough",
-          "dataType": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "reference": null,
-          "handlerId": null
-        }
-      },
-      "processes": [],
-      "parent": {
-        "resource": "purchase-order",
-        "entityName": "header",
-        "foreignKey": "salesOrder",
-        "pathSegment": "line-tax"
-      },
-      "functional": {
-        "functionalName": "Purchase Order — Line Tax",
-        "functionalSummary": "This window should let a buyer prepare a supplier order, maintain its commercial header and line details, confirm it, and then follow the downstream procurement flow through receipts, purchase invoices, and payments.",
-        "functionalCapabilities": [
-          "Create a purchase order for a selected vendor with the key commercial header data: vendor, vendor address, order date, scheduled delivery date, payment method, payment terms, and price list.",
-          "Start a new unsaved order with visible `Save`, `Save draft`, and `Cancel` controls while the order-line tab is already available before the first save.",
-          "Add and maintain order lines with at least product, description, ordered quantity, net list price, discount, tax, and the resulting line gross amount.",
-          "Review purchase progress from the order itself through reception status, invoice status, related receipts, related purchase invoices, and linked payments.",
-          "Confirm a draft order and, from the confirmation flow or later follow-up actions, create the operational documents that fulfill it.",
-          "Clone an existing order, and — once confirmed (`CO`) — send the document from the top bar.",
-          "Copy a direct link to a record — from the list selection bar when exactly one row is selected, or from the record detail view once the record is saved."
-        ],
-        "functionalDoc": "docs/generated-custom-windows/purchase-order.md"
-      },
-      "source": {
-        "artifact": "purchase-order",
-        "contractVersion": "0.55.0",
+        "contractVersion": "0.56.0",
         "backendEntity": true
       }
     },
@@ -3686,35 +3154,29 @@
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "documentNo",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "movement_date": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "movementDate",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "business_partner": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "businessPartner",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "BusinessPartner",
-          "handlerId": null,
           "relationship": {
             "resource": "contacts",
             "cardinality": "one",
@@ -3725,12 +3187,10 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "warehouse",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "Warehouse",
-          "handlerId": null,
           "relationship": {
             "resource": "warehouse",
             "cardinality": "one",
@@ -3741,80 +3201,66 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "partnerAddress",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "BusinessPartnerLocation",
-          "handlerId": null
+          "reference": "BusinessPartnerLocation"
         },
         "document_status": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "documentStatus",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "posted": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "posted",
-          "type": "passthrough",
           "dataType": {
             "type": "boolean"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "invoice_status": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "invoiceStatus",
-          "type": "passthrough",
           "dataType": {
             "type": "integer",
             "format": "int32"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "source_shipment_doc_no": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "sourceShipmentDocNo",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -3854,24 +3300,20 @@
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "lineNo",
-          "type": "passthrough",
           "dataType": {
             "type": "integer",
             "format": "int32"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "product": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "product",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "Product",
-          "handlerId": null,
           "relationship": {
             "resource": "product",
             "cardinality": "one",
@@ -3882,79 +3324,67 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "movementQuantity",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "uom": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "uOM",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "UOM",
-          "handlerId": null
+          "reference": "UOM"
         },
         "sales_order_line": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "salesOrderLine",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "OrderLine",
-          "handlerId": null
+          "reference": "OrderLine"
         },
         "description": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "description",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "order_quantity": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "orderQuantity",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -4000,23 +3430,19 @@
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "documentNo",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "business_partner": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "businessPartner",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "BusinessPartner",
-          "handlerId": null,
           "relationship": {
             "resource": "contacts",
             "cardinality": "one",
@@ -4027,35 +3453,29 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "partnerAddress",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "BusinessPartnerLocation",
-          "handlerId": null
+          "reference": "BusinessPartnerLocation"
         },
         "movement_date": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "movementDate",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "warehouse": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "warehouse",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "Warehouse",
-          "handlerId": null,
           "relationship": {
             "resource": "warehouse",
             "cardinality": "one",
@@ -4066,69 +3486,57 @@
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "documentStatus",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "posted": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "posted",
-          "type": "passthrough",
           "dataType": {
             "type": "boolean"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "invoice_status": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "invoiceStatus",
-          "type": "passthrough",
           "dataType": {
             "type": "integer",
             "format": "int32"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "source_receipt_doc_no": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "sourceReceiptDocNo",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -4144,7 +3552,7 @@
       },
       "source": {
         "artifact": "return-to-vendor-shipment",
-        "contractVersion": "0.6.0",
+        "contractVersion": "0.7.0",
         "backendEntity": true
       }
     },
@@ -4166,24 +3574,20 @@
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "lineNo",
-          "type": "passthrough",
           "dataType": {
             "type": "integer",
             "format": "int32"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "product": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "product",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "Product",
-          "handlerId": null,
           "relationship": {
             "resource": "product",
             "cardinality": "one",
@@ -4194,68 +3598,58 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "movementQuantity",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "uom": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "uOM",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "UOM",
-          "handlerId": null
+          "reference": "UOM"
         },
         "description": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "description",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "order_quantity": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "orderQuantity",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -4277,7 +3671,7 @@
       },
       "source": {
         "artifact": "return-to-vendor-shipment",
-        "contractVersion": "0.6.0",
+        "contractVersion": "0.7.0",
         "backendEntity": true
       }
     },
@@ -4299,46 +3693,38 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "transactionDocument",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "DocumentType",
-          "handlerId": null
+          "reference": "DocumentType"
         },
         "document_no": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "documentNo",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "invoice_date": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "invoiceDate",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "business_partner": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "businessPartner",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "BusinessPartner",
-          "handlerId": null,
           "relationship": {
             "resource": "contacts",
             "cardinality": "one",
@@ -4349,216 +3735,178 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "partnerAddress",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "BusinessPartnerLocation",
-          "handlerId": null
+          "reference": "BusinessPartnerLocation"
         },
         "payment_terms": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "paymentTerms",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "PaymentTerm",
-          "handlerId": null
+          "reference": "PaymentTerm"
         },
         "payment_method": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "paymentMethod",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "PaymentMethod",
-          "handlerId": null
+          "reference": "PaymentMethod"
         },
         "document_status": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "documentStatus",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "grand_total_amount": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "grandTotalAmount",
-          "type": "passthrough",
           "dataType": {
             "type": "number",
             "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "currency": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "currency",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Currency",
-          "handlerId": null
+          "reference": "Currency"
         },
         "posted": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "posted",
-          "type": "passthrough",
           "dataType": {
             "type": "boolean"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "outstanding_amount": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "outstandingAmount",
-          "type": "passthrough",
           "dataType": {
             "type": "number",
             "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "price_list": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "priceList",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "PriceList",
-          "handlerId": null
+          "reference": "PriceList"
         },
         "accounting_date": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "accountingDate",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "project": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "project",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Project",
-          "handlerId": null
+          "reference": "Project"
         },
         "costcenter": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "costcenter",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Costcenter",
-          "handlerId": null
+          "reference": "Costcenter"
         },
         "etvfac_invoice_status": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "etvfacInvoiceStatus",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "aeatsii_estado": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "aeatsiiEstado",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "tbai_status": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "eTGOTbaiStatus",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "delivery_status": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "eTGODeliveryStatus",
-          "type": "passthrough",
           "dataType": {
             "type": "integer",
             "format": "int32"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "due_date": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "eTGODueDate",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -4579,7 +3927,7 @@
       },
       "source": {
         "artifact": "sales-invoice",
-        "contractVersion": "0.92.0",
+        "contractVersion": "0.94.0",
         "backendEntity": true
       }
     },
@@ -4601,12 +3949,10 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "product",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "Product",
-          "handlerId": null,
           "relationship": {
             "resource": "product",
             "cardinality": "one",
@@ -4617,125 +3963,105 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "description",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "invoiced_quantity": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "invoicedQuantity",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "list_price": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "listPrice",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "discount": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "etgoDiscount",
-          "type": "passthrough",
           "dataType": {
             "type": "number",
             "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "tax": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "tax",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Tax",
-          "handlerId": null
+          "reference": "Tax"
         },
         "uom": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "uOM",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "UOM",
-          "handlerId": null
+          "reference": "UOM"
         },
         "gross_amount": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "grossAmount",
-          "type": "passthrough",
           "dataType": {
             "type": "number",
             "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "project": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "project",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Project",
-          "handlerId": null
+          "reference": "Project"
         },
         "costcenter": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "costcenter",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Costcenter",
-          "handlerId": null
+          "reference": "Costcenter"
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -4762,7 +4088,7 @@
       },
       "source": {
         "artifact": "sales-invoice",
-        "contractVersion": "0.92.0",
+        "contractVersion": "0.94.0",
         "backendEntity": true
       }
     },
@@ -4780,69 +4106,58 @@
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "currency",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Currency",
-          "handlerId": null
+          "reference": "Currency"
         },
         "to_currency": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "toCurrency",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Currency",
-          "handlerId": null
+          "reference": "Currency"
         },
         "rate": {
           "sourceVisibility": "editable",
           "direction": "out",
           "internalPath": "rate",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "foreign_amount": {
           "sourceVisibility": "editable",
           "direction": "out",
           "internalPath": "foreignAmount",
-          "type": "passthrough",
           "dataType": {
             "type": "number",
             "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -4869,7 +4184,7 @@
       },
       "source": {
         "artifact": "sales-invoice",
-        "contractVersion": "0.92.0",
+        "contractVersion": "0.94.0",
         "backendEntity": true
       }
     },
@@ -4891,35 +4206,29 @@
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "documentNo",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "order_date": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "orderDate",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "business_partner": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "businessPartner",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "BusinessPartner",
-          "handlerId": null,
           "relationship": {
             "resource": "contacts",
             "cardinality": "one",
@@ -4930,56 +4239,46 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "partnerAddress",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "BusinessPartnerLocation",
-          "handlerId": null
+          "reference": "BusinessPartnerLocation"
         },
         "price_list": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "priceList",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "PriceList",
-          "handlerId": null
+          "reference": "PriceList"
         },
         "payment_method": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "paymentMethod",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "PaymentMethod",
-          "handlerId": null
+          "reference": "PaymentMethod"
         },
         "payment_terms": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "paymentTerms",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "PaymentTerm",
-          "handlerId": null
+          "reference": "PaymentTerm"
         },
         "warehouse": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "warehouse",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "Warehouse",
-          "handlerId": null,
           "relationship": {
             "resource": "warehouse",
             "cardinality": "one",
@@ -4990,82 +4289,68 @@
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "documentStatus",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "grand_total_amount": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "grandTotalAmount",
-          "type": "passthrough",
           "dataType": {
             "type": "number",
             "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "currency": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "currency",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Currency",
-          "handlerId": null
+          "reference": "Currency"
         },
         "delivery_status": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "eTGODeliveryStatus",
-          "type": "passthrough",
           "dataType": {
             "type": "integer",
             "format": "int32"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "invoice_status": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "eTGOInvoiceStatus",
-          "type": "passthrough",
           "dataType": {
             "type": "integer",
             "format": "int32"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -5085,7 +4370,7 @@
       },
       "source": {
         "artifact": "sales-order",
-        "contractVersion": "0.38.0",
+        "contractVersion": "0.39.0",
         "backendEntity": true
       }
     },
@@ -5107,12 +4392,10 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "product",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "Product",
-          "handlerId": null,
           "relationship": {
             "resource": "product",
             "cardinality": "one",
@@ -5123,103 +4406,87 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "description",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "ordered_quantity": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "orderedQuantity",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "list_price": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "listPrice",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "discount": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "discount",
-          "type": "passthrough",
           "dataType": {
             "type": "number",
             "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "tax": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "tax",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Tax",
-          "handlerId": null
+          "reference": "Tax"
         },
         "line_gross_amount": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "lineGrossAmount",
-          "type": "passthrough",
           "dataType": {
             "type": "number",
             "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "uom": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "uOM",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "UOM",
-          "handlerId": null
+          "reference": "UOM"
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -5245,7 +4512,7 @@
       },
       "source": {
         "artifact": "sales-order",
-        "contractVersion": "0.38.0",
+        "contractVersion": "0.39.0",
         "backendEntity": true
       }
     },
@@ -5267,57 +4534,47 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "currency",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Currency",
-          "handlerId": null
+          "reference": "Currency"
         },
         "price_list": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "priceList",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "PriceList",
-          "handlerId": null
+          "reference": "PriceList"
         },
         "document_no": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "documentNo",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "order_date": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "orderDate",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "business_partner": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "businessPartner",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "BusinessPartner",
-          "handlerId": null,
           "relationship": {
             "resource": "contacts",
             "cardinality": "one",
@@ -5328,114 +4585,94 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "partnerAddress",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "BusinessPartnerLocation",
-          "handlerId": null
+          "reference": "BusinessPartnerLocation"
         },
         "valid_until": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "validUntil",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "payment_method": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "paymentMethod",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Paymentmethod",
-          "handlerId": null
+          "reference": "Paymentmethod"
         },
         "payment_terms": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "paymentTerms",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "PaymentTerm",
-          "handlerId": null
+          "reference": "PaymentTerm"
         },
         "reject_reason": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "rejectReason",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Reject_Reason",
-          "handlerId": null
+          "reference": "Reject_Reason"
         },
         "document_status": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "documentStatus",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "grand_total_amount": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "grandTotalAmount",
-          "type": "passthrough",
           "dataType": {
             "type": "number",
             "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "description": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "description",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -5455,7 +4692,7 @@
       },
       "source": {
         "artifact": "sales-quotation",
-        "contractVersion": "0.30.0",
+        "contractVersion": "0.31.0",
         "backendEntity": true
       }
     },
@@ -5477,12 +4714,10 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "product",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
           "reference": "Product",
-          "handlerId": null,
           "relationship": {
             "resource": "product",
             "cardinality": "one",
@@ -5493,103 +4728,87 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "description",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "ordered_quantity": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "orderedQuantity",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "list_price": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "listPrice",
-          "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "discount": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "discount",
-          "type": "passthrough",
           "dataType": {
             "type": "number",
             "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "tax": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "tax",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Tax",
-          "handlerId": null
+          "reference": "Tax"
         },
         "line_gross_amount": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "lineGrossAmount",
-          "type": "passthrough",
           "dataType": {
             "type": "number",
             "format": "double"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "uom": {
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "uOM",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "UOM",
-          "handlerId": null
+          "reference": "UOM"
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -5615,7 +4834,7 @@
       },
       "source": {
         "artifact": "sales-quotation",
-        "contractVersion": "0.30.0",
+        "contractVersion": "0.31.0",
         "backendEntity": true
       }
     },
@@ -5634,24 +4853,20 @@
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -5682,24 +4897,20 @@
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],
@@ -5733,68 +4944,56 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "searchKey",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "name": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "name",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "description": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "description",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "location_address": {
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "locationAddress",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": "Location",
-          "handlerId": null
+          "reference": "Location"
         },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "id",
-          "type": "passthrough",
           "dataType": {
             "type": "string"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         },
         "updated": {
           "sourceVisibility": "system",
           "direction": "out",
           "internalPath": "updated",
-          "type": "passthrough",
           "dataType": {
             "type": "string",
             "format": "date-time"
           },
-          "reference": null,
-          "handlerId": null
+          "reference": null
         }
       },
       "processes": [],

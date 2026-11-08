@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/listModalCells.jsx
 // Unit tests for the generic list-modal cell-renderer registry
 // (listModalCells.jsx). Each cellType is exercised in isolation; the deep UI
 // deps (Switch) and resolveIdentifier are mocked so the renderers can run in
@@ -279,5 +280,141 @@ describe('ListModalCell — toggle read-only gating (ETP-4950)', () => {
       <ListModalCell row={row} col={col} tMenu={tMenu} onToggle={onToggle} savingToggle />,
     );
     expect(screen.getByTestId(TOGGLE_ID)).toBeDisabled();
+  });
+});
+
+// A plain boolean column (no `toggle`, no `cellType`) used to fall through to DefaultCell, which
+// returned the raw `true`/`false` — React renders a boolean child as NOTHING, so every row showed
+// an empty cell (and a `badge: true` column never drew its badge).
+describe('ListModalCell — boolean column', () => {
+  const ui = (key) => key;
+
+  it('renders Yes/No text for a plain boolean column', () => {
+    const col = { key: 'isDefault', type: 'boolean' };
+    const { rerender } = render(
+      <ListModalCell row={{ id: 'r1', isDefault: true }} col={col} tMenu={tMenu} ui={ui} />,
+    );
+    expect(screen.getByText('yes')).toBeInTheDocument();
+    rerender(<ListModalCell row={{ id: 'r1', isDefault: 'N' }} col={col} tMenu={tMenu} ui={ui} />);
+    expect(screen.getByText('no')).toBeInTheDocument();
+  });
+
+  it('renders a badge with the locale-resolved badgeLabels when badge is set', () => {
+    const col = {
+      key: 'isDefault',
+      type: 'boolean',
+      badge: true,
+      badgeLabels: { true: { es_ES: 'Sí', en_US: 'Yes' }, false: { es_ES: 'No', en_US: 'No' } },
+    };
+    render(
+      <ListModalCell row={{ id: 'r1', isDefault: true }} col={col} tMenu={tMenu} ui={ui} locale="es_ES" />,
+    );
+    expect(screen.getByText('Sí')).toBeInTheDocument();
+  });
+
+  it('falls back to the yes/no labels for a badge without badgeLabels', () => {
+    const col = { key: 'isDefault', type: 'boolean', badge: true };
+    render(<ListModalCell row={{ id: 'r1', isDefault: false }} col={col} tMenu={tMenu} ui={ui} />);
+    expect(screen.getByText('no')).toBeInTheDocument();
+  });
+
+  it('without badge renders plain text, not a Tag', () => {
+    const col = { key: 'isDefault', type: 'boolean', badgeLabels: { true: 'Sí' } };
+    render(<ListModalCell row={{ id: 'r1', isDefault: true }} col={col} tMenu={tMenu} ui={ui} locale="es_ES" />);
+    const label = screen.getByText('Sí');
+    expect(label.classList.contains('tag')).toBe(false);
+    expect(label.classList.contains('status-tag')).toBe(false);
+  });
+
+  // Tag-palette variants that have a StatusTag tone render as StatusTag (the list badge tokens).
+  it('defaults the badge to the success StatusTag for true and the neutral one for false', () => {
+    const col = { key: 'isDefault', type: 'boolean', badge: true };
+    const { rerender } = render(
+      <ListModalCell row={{ id: 'r1', isDefault: true }} col={col} tMenu={tMenu} ui={ui} />,
+    );
+    expect(screen.getByText('yes')).toHaveClass('status-tag', 'status-tag--success');
+    rerender(<ListModalCell row={{ id: 'r1', isDefault: false }} col={col} tMenu={tMenu} ui={ui} />);
+    expect(screen.getByText('no')).toHaveClass('status-tag', 'status-tag--neutral');
+  });
+
+  it('maps badgeVariants to the StatusTag tone per branch', () => {
+    const col = { key: 'isDefault', type: 'boolean', badge: true, badgeVariants: { true: 'red', false: 'green' } };
+    const { rerender } = render(
+      <ListModalCell row={{ id: 'r1', isDefault: 'Y' }} col={col} tMenu={tMenu} ui={ui} />,
+    );
+    expect(screen.getByText('yes')).toHaveClass('status-tag', 'status-tag--destructive');
+    rerender(<ListModalCell row={{ id: 'r1', isDefault: 'N' }} col={col} tMenu={tMenu} ui={ui} />);
+    expect(screen.getByText('no')).toHaveClass('status-tag', 'status-tag--success');
+  });
+
+  it('maps yellow and blue to the warning and info tones', () => {
+    const col = { key: 'isDefault', type: 'boolean', badge: true, badgeVariants: { true: 'yellow', false: 'blue' } };
+    const { rerender } = render(
+      <ListModalCell row={{ id: 'r1', isDefault: true }} col={col} tMenu={tMenu} ui={ui} />,
+    );
+    expect(screen.getByText('yes')).toHaveClass('status-tag--warning');
+    rerender(<ListModalCell row={{ id: 'r1', isDefault: false }} col={col} tMenu={tMenu} ui={ui} />);
+    expect(screen.getByText('no')).toHaveClass('status-tag--info');
+  });
+
+  it('keeps the plain Tag for a variant without a StatusTag tone', () => {
+    const col = { key: 'isDefault', type: 'boolean', badge: true, badgeVariants: { true: 'purple' } };
+    render(<ListModalCell row={{ id: 'r1', isDefault: true }} col={col} tMenu={tMenu} ui={ui} />);
+    const badge = screen.getByText('yes');
+    expect(badge).toHaveClass('tag', 'tag--purple');
+    expect(badge).not.toHaveClass('status-tag');
+  });
+
+  it('accepts a plain-string badgeLabels entry', () => {
+    const col = { key: 'isDefault', type: 'boolean', badge: true, badgeLabels: { true: 'Default', false: 'Other' } };
+    render(<ListModalCell row={{ id: 'r1', isDefault: 'true' }} col={col} tMenu={tMenu} ui={ui} locale="es_ES" />);
+    expect(screen.getByText('Default')).toBeInTheDocument();
+  });
+
+  it('falls back to the en_US entry when the locale has none', () => {
+    const col = { key: 'isDefault', type: 'boolean', badge: true, badgeLabels: { false: { en_US: 'Not default' } } };
+    render(<ListModalCell row={{ id: 'r1', isDefault: 'false' }} col={col} tMenu={tMenu} ui={ui} locale="es_ES" />);
+    expect(screen.getByText('Not default')).toBeInTheDocument();
+  });
+
+  it('uses the generic yes/no label for the branch badgeLabels does not declare', () => {
+    const col = { key: 'isDefault', type: 'boolean', badge: true, badgeLabels: { true: 'Sí' } };
+    render(<ListModalCell row={{ id: 'r1', isDefault: false }} col={col} tMenu={tMenu} ui={ui} locale="es_ES" />);
+    expect(screen.getByText('no')).toBeInTheDocument();
+  });
+
+  it('renders an em-dash for a value that is neither true nor false', () => {
+    const col = { key: 'isDefault', type: 'boolean', badge: true };
+    const { container, rerender } = render(
+      <ListModalCell row={{ id: 'r1', isDefault: null }} col={col} tMenu={tMenu} ui={ui} />,
+    );
+    expect(container.textContent).toBe(EM_DASH);
+    rerender(<ListModalCell row={{ id: 'r1' }} col={{ key: 'isDefault', type: 'boolean' }} tMenu={tMenu} ui={ui} />);
+    expect(container.textContent).toBe(EM_DASH);
+  });
+
+  it('keeps the inline toggle for a boolean column that declares toggle', () => {
+    const col = { key: 'active', type: 'boolean', toggle: true, badge: true };
+    render(<ListModalCell row={{ id: 'r1', active: true }} col={col} tMenu={tMenu} ui={ui} />);
+    expect(screen.getByTestId('list-modal-toggle-active-r1')).toBeInTheDocument();
+    expect(screen.queryByText('yes')).toBeNull();
+  });
+});
+
+// The list-modal row can open its edit modal on click (templateConfig.rowClickEdit); flipping
+// the inline toggle must not bubble up to that row handler.
+describe('ListModalCell — toggle click isolation', () => {
+  it('does not propagate the toggle click to the row', () => {
+    const onRowClick = vi.fn();
+    const onToggle = vi.fn();
+    const col = { key: 'active', cellType: 'toggle' };
+    render(
+      <div onClick={onRowClick} role="presentation">
+        <ListModalCell row={{ id: 'r1', active: false }} col={col} tMenu={tMenu} onToggle={onToggle} />
+      </div>,
+    );
+    fireEvent.click(screen.getByTestId('list-modal-toggle-active-r1'));
+    expect(onToggle).toHaveBeenCalledWith({ id: 'r1', active: false }, col, true);
+    expect(onRowClick).not.toHaveBeenCalled();
   });
 });

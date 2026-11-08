@@ -1,6 +1,9 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { apiFetch as moduleApiFetch } from '@/auth/api.js';
+import { listAll, listLines } from '@/windows/custom/shared/importActionClient.js';
+import useImportLoadFailureToast from '@/windows/custom/shared/useImportLoadFailureToast.js';
+import { newestCreatedFirst } from '@/windows/custom/shared/invoiceOrderImport.js';
 
 /**
  * Import invoice lines from a completed, plain "Factura" (FAC subtype) sales
@@ -15,12 +18,11 @@ import { apiFetch as moduleApiFetch } from '@/auth/api.js';
  *
  * Source filtering: per the ticket's acceptance criteria ("el filtro
  * Importar desde Factura origen muestra solo facturas de Tipo Factura"),
- * candidates are restricted server-side to the plain-invoice ARI category
- * AND excluded from the rectificative flag — the exact same criteria used
- * for the merged "Facturas" subset filter in decisions.json (see the
- * `invoicesTab` entry's `_note` for the full discriminator rationale). This
- * is a real backend list-query filter (not the GET-by-ID-only
- * `arInvoiceSubtype` enrichment), so it is safe to apply here too.
+ * candidates are the customer's completed, NON-rectificative invoices in the
+ * invoice's currency — since ETP-6099 decided by the `availableOriginInvoices`
+ * action (the same rule the MCP gets). The «other currency» fallback below
+ * still uses the ARI-category / not-rectificative list criteria, the same as
+ * the merged "Facturas" subset filter in decisions.json (`invoicesTab`).
  *
  * Sign convention (ETP-4737, resolved with product/Vale): importing from a
  * source invoice models reversing/correcting it, so lines are ALWAYS
@@ -32,77 +34,101 @@ import { apiFetch as moduleApiFetch } from '@/auth/api.js';
  * choice in the popup by design — if a positive correction is intended, the
  * user edits the line by hand after import.
  *
- * After import, this modal PATCHes the header's `originInvoices` virtual
- * field (`AbstractInvoiceHeaderHandler#persistOriginInvoice`) with the FULL
- * set of ids imported in this run, so the rectificativa stays linked to
- * EVERY source invoice it was imported from — not just the last one
- * (ETP-4919: importing from a second source invoice used to silently drop
- * the link to the first, both because of the `size !== 1` guard removed
- * below and because the backend used to delete-then-single-create). Same
- * mechanism as purchase-invoice, surfaced back on GET via
- * `enrichOriginInvoice`/`originInvoices`.
+ * Origin link (ETP-6002): this modal no longer PATCHes the header. Each line
+ * POST carries `sourceInvoiceLineId`, and the backend (`SalesInvoiceLineHandler`
+ * → `SalesRectificativeLineLinkSupport`) writes the `C_Invoice_Reverse` row to
+ * that line's invoice in the same transaction as the line, deduplicated, so the
+ * rectificativa ends up linked to EVERY source invoice it was imported from
+ * (ETP-4919). The old header PATCH always failed with 409 `stale_record`
+ * (creating the lines moves the header's `updated`) and its result was ignored.
+ * Surfaced back on GET via `enrichOriginInvoice`/`originInvoices`.
+ * purchase-invoice still links through its header PATCH.
  *
  * Duplicate detection: each imported line carries `sourceInvoiceLineId` (the source
  * C_InvoiceLine id) in its POST body, persisted by `InvoiceLineHandler#persistSourceInvoiceLine`
  * into `EM_ETGO_Source_Invoiceline_ID` — a self-referencing FK on C_InvoiceLine (same
  * pattern as `BOM_Parent_ID`). Surfaced back on GET as the same key
- * (`enrichSourceInvoiceLineId`), so `fetchDocuments` can build the already-imported set and
- * `fetchLines` marks matching source lines `_alreadyImported`, blocking re-selection.
+ * (`enrichSourceInvoiceLineId`). Since ETP-6099 the server reads that link: an
+ * `availableOriginInvoiceLines` row says `importedHere`, and `fetchLines` marks it
+ * `_alreadyImported`, blocking re-selection.
  */
 
+const SPEC = 'sales-invoice';
+
+/**
+ * ETP-6099 (speed): the candidates come from THIS invoice's `availableOriginInvoices` action
+ * (com.etendoerp.go `ImportOriginInvoiceLinesHandler`, the one the MCP calls): the customer's
+ * completed, non-rectificative invoices in the invoice's currency, newest created first (re-sorted
+ * by the row's `creationDate`, the action answers by invoice date), every page read. `detail` adds
+ * the row `amount` (the doc total), and `includeCovered` also brings the ones whose lines are all
+ * imported here (pendingLines 0), which the row hides as it did when it read every invoice and
+ * their lines. It replaced the company-wide 500-invoice GET, this invoice's lines GET and its
+ * header GET.
+ */
 const fetchDocuments = async ({ base, bpId, invoiceId }) => {
-  const facOnlyCriteria = encodeURIComponent(JSON.stringify([
-    { fieldName: 'transactionDocument$documentCategory', operator: 'equals', value: 'ARI' },
-    { fieldName: 'transactionDocument$etsgIsRectificative', operator: 'notEqual', value: true },
-  ]));
-  const [invRes, invLinesRes, headerRes] = await Promise.all([
-    moduleApiFetch(`${base}/sales-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc&criteria=${facOnlyCriteria}`),
-    moduleApiFetch(`${base}/sales-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`),
-    moduleApiFetch(`${base}/sales-invoice/header/${invoiceId}`),
-  ]);
-
-  const alreadyImportedSourceLineIds = new Set();
-  if (invLinesRes.ok) {
-    const invLines = (await invLinesRes.json())?.response?.data || [];
-    invLines.forEach(il => { if (il.sourceInvoiceLineId) alreadyImportedSourceLineIds.add(il.sourceInvoiceLineId); });
-  }
-
-  let invoiceCurrency = null;
-  if (headerRes.ok) {
-    invoiceCurrency = (await headerRes.json())?.response?.data?.[0]?.currency || null;
-  }
-
-  let documents = [];
-  let excludedByCurrency = false;
-  if (invRes.ok) {
-    const all = (await invRes.json())?.response?.data || [];
-    const candidates = all.filter(inv =>
-      inv.documentStatus === 'CO'
-      && inv.businessPartner === bpId
-      && inv.id !== invoiceId,
-    );
-    documents = invoiceCurrency ? candidates.filter(inv => inv.currency === invoiceCurrency) : candidates;
-    excludedByCurrency = !!invoiceCurrency && documents.length === 0 && candidates.length > 0;
-  }
-  return { documents, sharedContext: { alreadyImportedSourceLineIds }, excludedByCurrency };
+  const rows = await listAll({
+    apiFetch: moduleApiFetch, base, spec: SPEC, targetId: invoiceId,
+    action: 'availableOriginInvoices', params: { includeCovered: true, detail: true },
+  }).then(newestCreatedFirst);
+  const documents = rows.map(r => ({ ...r, invoiceDate: r.date, documentStatus: 'CO' }));
+  const excludedByCurrency = documents.length === 0
+    && await onlyOtherCurrencies({ base, bpId, invoiceId });
+  return { documents, sharedContext: { invoiceId }, excludedByCurrency };
 };
 
+/**
+ * Only when the action lists nothing: does the customer have plain (FAC) completed invoices in
+ * ANOTHER currency? That keeps the «no invoices in this currency» message apart from «no
+ * invoices». The invoice's currency is read here only, and a failed read just says no.
+ */
+const onlyOtherCurrencies = async ({ base, bpId, invoiceId }) => {
+  const criteria = encodeURIComponent(JSON.stringify([
+    { fieldName: 'transactionDocument$documentCategory', operator: 'equals', value: 'ARI' },
+    { fieldName: 'transactionDocument$etsgIsRectificative', operator: 'notEqual', value: true },
+    { fieldName: 'businessPartner', operator: 'equals', value: bpId },
+    { fieldName: 'documentStatus', operator: 'equals', value: 'CO' },
+  ]));
+  try {
+    const [invRes, headerRes] = await Promise.all([
+      moduleApiFetch(`${base}/${SPEC}/header?_startRow=0&_endRow=500&_sortBy=creationDate desc&criteria=${criteria}`),
+      moduleApiFetch(`${base}/${SPEC}/header/${invoiceId}`),
+    ]);
+    if (!invRes.ok || !headerRes.ok) return false;
+    const invoiceCurrency = (await headerRes.json())?.response?.data?.[0]?.currency || null;
+    if (!invoiceCurrency) return false;
+    const candidates = (await invRes.json())?.response?.data || [];
+    return candidates.some(inv => inv.id !== invoiceId && inv.currency !== invoiceCurrency);
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * One `availableOriginInvoiceLines` call per source invoice; `detail` adds the price, quantity
+ * and `importedHere` keys the popup reads. `includeCovered` brings the lines
+ * already imported here at pendingQuantity 0 with `importedHere`; they are shown (greyed) with the
+ * source line's own quantity, as before. The row carries the prices, discount, tax and UoM
+ * `buildLineBody` copies, so no source-lines GET is needed.
+ */
 const fetchLines = async ({ base, docId, sharedContext }) => {
-  const res = await moduleApiFetch(`${base}/sales-invoice/lines?parentId=${docId}&_startRow=0&_endRow=200`);
-  if (!res.ok) return [];
-  const json = await res.json();
-  const lines = json?.response?.data || [];
-  const { alreadyImportedSourceLineIds } = sharedContext;
+  const invoiceId = sharedContext?.invoiceId;
+  if (!invoiceId) return [];
+  const lines = await listLines({
+    apiFetch: moduleApiFetch, base, spec: SPEC, targetId: invoiceId,
+    action: 'availableOriginInvoiceLines', params: { invoiceId: docId, includeCovered: true, detail: true },
+  });
   return lines.map(l => {
     const qty = Number(l.invoicedQuantity) || 0;
     const unitPrice = Number(l.unitPrice) || 0;
+    const imported = !!l.importedHere;
     return {
       ...l,
+      etgoDiscount: l.discount ?? l.etgoDiscount,
       _productName: l['product$_identifier'] || l.id,
-      _maxQty: Math.abs(qty),
+      _maxQty: imported ? Math.abs(qty) : (Number(l.pendingQuantity) || 0),
       _unitPrice: unitPrice,
       _lineNetAmount: Number(l.lineNetAmount) || (unitPrice * qty),
-      _alreadyImported: !!alreadyImportedSourceLineIds?.has(l.id),
+      _alreadyImported: imported,
     };
   });
 };
@@ -111,6 +137,14 @@ const getDocDisplay = (doc) => ({
   docNo: doc.documentNo || doc.id,
   date: doc.invoiceDate,
 });
+
+// ETP-6099 — the lines are read only when an invoice is opened (`eagerLoadLines` off), so the row
+// decides from the `availableOriginInvoices` row: an invoice with nothing left to import is hidden,
+// and the row total is its `amount` (unit price × |quantity| over all its lines, the ones already
+// imported here included, as the loaded lines added up), negated like the quantities shown.
+// Without an `amount` (older backend) the modal sums the loaded lines.
+const isDocumentCovered = (doc) => doc.pendingLines != null && Number(doc.pendingLines) === 0;
+const getDocumentTotal = (doc) => (doc.amount == null ? null : -Math.abs(Number(doc.amount)));
 
 const buildLineBody = async ({ line, qty, invoiceId, lineNo }) => {
   const unitPrice = Number(line.unitPrice) || 0;
@@ -133,29 +167,22 @@ const buildLineBody = async ({ line, qty, invoiceId, lineNo }) => {
     tax: line.tax || null,
     uOM: line.uOM || null,
     lineNo,
-    // ETP-5381: the key MUST be the spec's java_qualifier for C_OrderLine_ID. NeoFieldFilter
-    // drops any key absent from the spec silently (200, line created, FK NULL), and without
-    // C_OrderLine_ID the invoice never reaches C_INVOICE_POST's MatchSO block (no M_MATCHSO row)
-    // nor its `UPDATE C_ORDERLINE SET QtyInvoiced` — so the order stays invoiceable forever.
-    salesOrderLine: line.salesOrderLine || null,
+    // ETP-6002 (as ETP-5729 for the return path): NO salesOrderLine. The source line's order line
+    // is where the SOURCE invoice came from, not this rectificative. On the negative line,
+    // C_INVOICE_POST would subtract it from C_OrderLine.QtyInvoiced (the returned quantity turns
+    // invoiceable again) and match the rectificative to the order's shipment (M_MatchSI), a
+    // transitive relation. The rectificative is tied to the invoice it rectifies by
+    // C_Invoice_Reverse, through sourceInvoiceLineId. The server also drops it on every channel
+    // (SalesRectificativeLineLinkSupport#dropOrderLineOnRectificativeCopy).
     sourceInvoiceLineId: line.id,
   };
 };
 
-const afterImport = async ({ importedDocIds, base, invoiceId }) => {
-  // ETP-4919: importing from a second (or third...) source invoice must not lose the link to
-  // the ones already imported — send the FULL set, not just guard on exactly one.
-  if (importedDocIds.size === 0) return;
-  try {
-    await moduleApiFetch(`${base}/sales-invoice/header/${invoiceId}`, {
-      method: 'PATCH',
-      
-      body: JSON.stringify({ originInvoices: [...importedDocIds] }),
-    });
-  } catch {
-    // best-effort — the lines are already imported regardless of this link.
-  }
-};
+// No afterImport: the rectificative's C_Invoice_Reverse link to the source invoice is written by
+// the backend when each line is created with sourceInvoiceLineId (ETP-6002,
+// SalesRectificativeLineLinkSupport in com.etendoerp.go). The header PATCH that used to do it
+// carried the `updated` token read before the import; creating the lines recalculates the header
+// totals, so it always came back 409 stale_record and the link was never written.
 
 export default function ImportFromSourceInvoiceModal(props) {
   // ETP-4576 - the credential belongs to apiFetch, not to the component.
@@ -163,6 +190,9 @@ export default function ImportFromSourceInvoiceModal(props) {
   // (an invoice importing shipment lines), and resolveApiUrl only skips a prefix that
   // matches - so a configured base doubles it and 404s.
   const apiFetch = useApiFetch('');
+  // ETP-6099 — a refused read is told (describeLoadFailure toast) and the list shows what an empty
+  // answer shows, like the order import.
+  const handlers = useImportLoadFailureToast(fetchDocuments, fetchLines);
   return (
     <ImportLinesModal
       {...props}
@@ -174,11 +204,13 @@ export default function ImportFromSourceInvoiceModal(props) {
       noCurrencyMatchMessageKey="noSourceInvoicesMatchCurrency"
       successMessageKey="linesImportedFromSourceInvoice"
       negativeQuantity
-      fetchDocuments={fetchDocuments}
-      fetchLines={fetchLines}
+      fetchDocuments={handlers.fetchDocuments}
+      fetchLines={handlers.fetchLines}
       getDocDisplay={getDocDisplay}
+      eagerLoadLines={false}
+      isDocumentCovered={isDocumentCovered}
+      getDocumentTotal={getDocumentTotal}
       buildLineBody={buildLineBody}
-      afterImport={afterImport}
     />
   );
 }

@@ -3223,3 +3223,77 @@ realizar esta acción."), because that is the one the new read-only gating surfa
 
 **Lesson:** when adding a `backendError.*` key, add it to es_AR too. A guardrail test comparing the
 `backendError.*` sets of es_ES and es_AR would stop the gap from growing.
+
+---
+
+## [2026-10-28] ETP-5978 — Two `make regen` quirks found while regenerating payment-term (known, not fixed)
+
+**Component:** `sf-regen-all` (`cli/src/regen-all.js` in `schema_forge_core`), driven by `make regen`.
+
+### 1. `SKIP_EXTRACT=1` still reads the DB
+
+**Symptom:** `make regen ONLY=<window> SKIP_EXTRACT=1` (seen with `LOCAL_CORE=1`) still logs
+`[F1a] Extracting fields...` / `[F1b] Extracting rules...` and rewrites `schema-raw.json` /
+`rules-raw.json` from the live DB, although `make regen-help` describes the flag as "Skip the DB
+extraction step (reuse existing schema-raw.json)". Already noticed, and not chased, in the
+`dimensionsPanel` regen entry above.
+
+**Root cause:** not specific to `LOCAL_CORE`. `--skip-extract` only guards step F0 (the raw CSV dump
+into `raw-query-results/`). F1a (`extract-fields.js`) and F1b (`extract-rules.js`) always open a DB
+pool. The published `@etendosoftware/schema-forge-cli` (0.3.84) has the same code.
+
+**Workaround (not fixed):** to keep the DB out of the run, use `FROM_CACHE=1`, which reads the
+cached AD snapshot the same way CI's offline check does. Otherwise review the `schema-raw.json` /
+`rules-raw.json` diff before committing. A local DB with incomplete data can change them without
+any warning.
+
+### 2. The contract version moves on a regen that changes no content
+
+**Symptom:** regenerating a window with no new decisions change still bumps the minor `version`
+(and `updatedAt`) of `contract.mcp.json`. Commit `9c64f814c` ("Sync payment-term MCP contract
+version") was nothing but that bump. Across ETP-5978's regens payment-term went from `0.8.0` to
+`0.12.0` (`contract.json`), and the two files do not always land on the same number in the working
+tree.
+
+**Root cause:** not diagnosed. Start with `splitWindowContractArtifacts()` in
+`cli/src/generate-contract.js`, where the MCP contract takes its version from `contract.version`,
+as called from `regen-all.js`.
+
+**Workaround (not fixed):** before committing, check that a regen diff on `contract.mcp.json` is
+version / `updatedAt` / checksum only. Treat `make regen-check ONLY=<window> FROM_CACHE=1` (what the
+pre-push hook and CI's offline drift check compute) as the authoritative result, and commit what it
+produces.
+
+## [2026-11-02] ETP-5831 — Two known gaps left open (root fix deferred)
+
+### 1. Dev server loads `@radix-ui/react-dismissable-layer` twice (page freeze after a menu → dialog)
+
+**Symptom:** in `make dev` only, confirming "Cambiar SIF" in Fiscal Configuration left
+`pointer-events: none` on `<body>`; the wizard appeared but nothing responded until a full reload.
+Production builds are not affected.
+
+**Root cause:** `@radix-ui/react-dialog` is pre-bundled by Vite (something in `src/` imports it
+directly, e.g. via `FileLightbox`), while `@radix-ui/react-dropdown-menu` is served raw through
+`@etendosoftware/app-shell-core`, which `tools/app-shell/vite.config.js` excludes from
+`optimizeDeps`. The two therefore load separate copies of `@radix-ui/react-dismissable-layer`, each
+with its own layer stack. The modal menu locked the body, the dialog saved that lock as the
+"original" value and restored it on close.
+
+**Workaround (in place):** the fiscal-config kebab is `DropdownMenu modal={false}`, so it never takes
+the lock. Any other hand-written menu that opens a dialog needs the same (see
+`docs/ui-customization.md` → kebab menu gotcha). Covered by TC2 in
+`e2e/tests/flows/fiscal/fiscal-config.mocked.spec.js`.
+
+**Root fix (deferred by the user to another ticket):** add the `@radix-ui/*` packages to
+`optimizeDeps.include` in `tools/app-shell/vite.config.js`, so dev resolves a single copy.
+
+### 2. `FiscalDefaultsSection` reads the full fiscal config on every contact view (QA F-3)
+
+**Symptom:** none visible; a cost. Contacts → Financiero now gates its "Valores por Defecto SIF"
+blocks on the active SIF of the selected organization (see `generated-custom-windows/contacts.md`
+→ "ETP-5831 (CP-20) — SIF-gated blocks"), and reads it through `useFiscalConfig`, which fetches the
+three fiscal config entities (SII, TicketBAI, VERI\*FACTU) each time a contact's Financial tab is
+mounted. There is no cache shared across contacts.
+
+**Status:** accepted for now, deferred. A shared, org-keyed cache (or a single lightweight
+"active SIF" read) would remove the repeated requests.

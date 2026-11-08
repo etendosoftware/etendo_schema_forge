@@ -109,17 +109,25 @@ export function AccountSelect({
   const borderClass = error
     ? 'border-[hsl(var(--destructive))]'
     : 'border-[hsl(var(--border-control))] hover:bg-[hsl(var(--field-hover))]';
+  const clearable = !required && !!value;
 
+  // ETP-5791 — the clear "×" sits INSIDE the field's border, at its right end, like the clear of
+  // the shared FK chip (SelectorChip). The border, background, radius, height and focus ring live
+  // on this wrapper (focus-within: either button focused shows the ring), and the trigger and the
+  // clear are two sibling buttons inside it, so there is no nested <button> and clicking the × never
+  // opens the popup.
   return (
     <div data-testid={dataTestId}>
       {labelRow}
-      <div className="flex items-center gap-1">
+      <div
+        className={`flex h-9 min-w-0 items-center rounded-lg border bg-card text-sm focus-within:ring-2 focus-within:ring-primary ${borderClass}`}
+      >
         <button
           type="button"
           onClick={() => setOpen(true)}
           data-testid={`field-${fieldKey}`}
           title={selectedLabel || undefined}
-          className={`flex-1 min-w-0 flex items-center gap-2 h-9 px-3 rounded-lg border bg-card text-sm text-left focus:outline-none focus:ring-2 focus:ring-primary ${borderClass}`}
+          className={`flex h-full min-w-0 flex-1 items-center gap-2 rounded-lg bg-transparent pl-3 ${clearable ? 'pr-1' : 'pr-3'} text-left focus:outline-none`}
         >
           <Search
             className="h-4 w-4 text-muted-foreground shrink-0"
@@ -129,15 +137,15 @@ export function AccountSelect({
             ? <span className="flex-1 truncate text-[hsl(var(--foreground))]">{selectedLabel}</span>
             : <span className="flex-1 truncate text-muted-foreground">{placeholderText}</span>}
         </button>
-        {!required && value && (
+        {clearable && (
           <button
             type="button"
             aria-label={ui('clear')}
             onClick={() => onChange?.(null)}
             data-testid={`field-${fieldKey}-clear`}
-            className="h-9 w-7 flex items-center justify-center shrink-0 text-muted-foreground hover:text-[hsl(var(--destructive))]"
+            className="flex h-full w-8 shrink-0 items-center justify-center rounded-r-lg text-[hsl(var(--text-disabled))] transition-colors hover:text-foreground focus:outline-none focus-visible:text-foreground"
           >
-            <X className="h-3.5 w-3.5" aria-hidden="true" data-testid="X__a001bd" />
+            <X className="h-4 w-4" aria-hidden="true" data-testid="X__a001bd" />
           </button>
         )}
       </div>
@@ -147,6 +155,8 @@ export function AccountSelect({
         onClose={() => setOpen(false)}
         onSelect={(item) => { onChange?.(item.id, item.name); setOpen(false); }}
         loadPage={loadPage}
+        value={value}
+        valueLabel={selectedLabel}
         title={popupTitle || label || placeholderText}
         data-testid={`${fieldKey}-popup`}
       />

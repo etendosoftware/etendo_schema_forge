@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 
 /**
  * Company user invitation accepted through Google SSO (mocked) — ETP-4960.

@@ -20,8 +20,10 @@ import { useAccountSelectorPages } from './useAccountSelectorPages.js';
  * @param {string} props.selectorUrl — the field's NEO selector endpoint
  * @param {object} [props.selectorContext] — extra query params (parent context) for every request
  * @param {string} [props.title]
+ * @param {string} [props.value] — the field's committed id, marked and located on open (ETP-5948)
+ * @param {string} [props.valueLabel] — its label, used to pin it when it is not located
  */
-export default function AccountLookupPopup({ open, onClose, onSelect, selectorUrl, selectorContext, title }) {
+export default function AccountLookupPopup({ open, onClose, onSelect, selectorUrl, selectorContext, title, value, valueLabel }) {
   const loadPage = useAccountSelectorPages(selectorUrl, selectorContext);
 
   return (
@@ -30,6 +32,8 @@ export default function AccountLookupPopup({ open, onClose, onSelect, selectorUr
       onClose={onClose}
       onSelect={onSelect}
       loadPage={loadPage}
+      value={value}
+      valueLabel={valueLabel}
       title={title}
       data-testid="account-lookup-popup"
     />

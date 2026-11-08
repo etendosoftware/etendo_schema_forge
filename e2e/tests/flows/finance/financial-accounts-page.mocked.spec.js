@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/components/financial-accounts/AccountsSidebar/index.jsx
 // @covers artifacts/financial-account/custom/AccountsHeaderTable.jsx
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 import { openAccountRowMenu } from '../../helpers/financial-account-helpers.js';
 
@@ -438,9 +438,11 @@ test.describe('Financial Accounts list — Cuentas', () => {
 /**
  * Bulk "Delete selected" — ETP-4656 (Gap 1), E2E smoke.
  *
- * There is no hard-delete endpoint for financial accounts: bulk delete issues the exact same
- * `DELETE /sws/neo/financial-account/account/{id}` the single-row "Archivar" kebab action
- * already uses (soft-archive, IsActive='N').
+ * There is no hard-delete endpoint for financial accounts: every account delete is the same
+ * soft-archive (IsActive='N') the single-row "Archivar" kebab action uses. ETP-6143: a selection
+ * of two or more rows no longer sends one `DELETE /sws/neo/financial-account/account/{id}` per row
+ * — it sends ONE asynchronous `POST /sws/neo/batch` (one `method:"DELETE"` operation per row) and
+ * polls `GET /sws/neo/batch/jobs/{jobId}` for the per-row outcome, so both are mocked below.
  *
  * This runs entirely through the GENERIC ListView path — `useBulkRowDelete` behind ListView's
  * standardized selection bar — not the bespoke `BulkDeleteSelectionBar` + `useBatchDeleteDialog`
@@ -539,6 +541,53 @@ test.describe('Financial Accounts — bulk delete selection bar (ETP-4656)', () 
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({ response: { data: [{ id }] } }),
+      });
+    });
+
+    // ETP-6143 — the bulk path: one async batch job instead of a DELETE per row. The submit
+    // answers 202 with a job id; the status read applies failIds per operation, exactly as the
+    // per-row mock above does, and reports the job finished.
+    let submittedOps = [];
+    await page.route('**/sws/neo/batch**', async (route) => {
+      const req = route.request();
+      if (req.method() === 'POST') {
+        submittedOps = JSON.parse(req.postData() || '{}').operations || [];
+        await route.fulfill({
+          status: 202,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            jobId: 'job-1', state: 'QUEUED', totalRows: submittedOps.length, totalOps: submittedOps.length,
+          }),
+        });
+        return;
+      }
+      const rows = submittedOps.map((op, index) => {
+        if (deleteState.failIds.has(op.recordId)) {
+          return { index, ids: [op.id], committed: false, error: { status: 500, message: 'boom' } };
+        }
+        archivedIds.add(op.recordId);
+        return {
+          index,
+          ids: [op.id],
+          committed: true,
+          operations: [{ id: op.id, ok: true, method: 'DELETE', recordId: op.recordId }],
+        };
+      });
+      const committedRows = rows.filter((r) => r.committed).length;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          jobId: 'job-1',
+          state: committedRows === rows.length ? 'SUCCEEDED' : 'PARTIAL',
+          done: true,
+          totalRows: rows.length,
+          totalOps: rows.length,
+          processedRows: rows.length,
+          committedRows,
+          failedRows: rows.length - committedRows,
+          rows,
+        }),
       });
     });
 

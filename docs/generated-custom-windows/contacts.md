@@ -16,7 +16,7 @@ The Contacts window should let users maintain a shared business-partner master r
 - Start from an empty state when the tenant has **no contacts at all**: a file drop zone, a title and subtitle, **"Pídeselo a Copilot"**, **"Nuevo contacto"**, and a banner whose **"Ver guía"** link starts the guided tutorial for creating a contact (ETP-5600, details below).
 - Inline-edit a contact directly from the list by hovering a row and clicking the pencil icon. The active row's editable cells become inputs without navigating to the detail view.
 - Delete a single contact from the list by hovering a row and clicking the trash icon; a confirmation dialog appears before the DELETE is sent. If the record has associated elements the API error message is shown as a toast.
-- Select multiple contacts with checkboxes and use the selection bar to bulk-delete them. All selected rows are deleted in parallel, so a record that cannot be deleted (e.g. it has associated elements) does not block the others from being deleted. Exactly one outcome toast is shown: a success toast when every row was deleted, an error toast when none were, or a single warning toast reporting how many were deleted and how many were not on a partial failure. On a partial failure the rows that failed stay selected/checked so the user can retry; rows that succeeded are deselected and the list refetches. While the deletes run, the confirmation dialog stays open and read-only (Cancel/Delete disabled, Esc and click-outside ignored) and the selection bar's delete button is disabled, so a second batch cannot be launched over the same rows (ETP-5758). Error messages are shown translated to Spanish, including a specific "cannot be deleted because it has associated records" message for FK-violation failures.
+- Select multiple contacts with checkboxes and use the selection bar to bulk-delete them. Two or more selected rows are deleted by one server-side batch job (ETP-6143), one row at a time and each in its own transaction, and the confirmation dialog shows *"Eliminando N de M registros…"* with a progress bar while it runs. A record that cannot be deleted (e.g. it has associated elements) therefore does not block the others from being deleted. A single row is deleted with a plain `DELETE`. If the job's result cannot be confirmed, a warning toast says so, the list refetches and the selection is cleared. Exactly one outcome toast is shown: a success toast when every row was deleted, an error toast when none were, or a single warning toast reporting how many were deleted and how many were not on a partial failure. On a partial failure the rows that failed stay selected/checked so the user can retry; rows that succeeded are deselected and the list refetches. While the deletes run, the confirmation dialog stays open and read-only (Cancel/Delete disabled, Esc and click-outside ignored) and the selection bar's delete button is disabled, so a second batch cannot be launched over the same rows (ETP-5758). Error messages are shown translated to Spanish, including a specific "cannot be deleted because it has associated records" message for FK-violation failures.
 - Open a detail view with a General tab for the core record and a Financial tab for billing and credit preferences.
 - Add and maintain child people in the Person area.
 - Add and maintain bank accounts in the Bank Account area.
@@ -77,7 +77,9 @@ The Contacts window should let users maintain a shared business-partner master r
 - The payment method fields also carry a payment-method callout in the contract, so account-related behavior reacts to payment-method choice.
 - In the Location modal, country is required; choosing a country clears the region, reloads region options through country-filtered selectors, and keeps country/region option loading paginated behind searchable pickers.
 - New locations default shipping address and invoicing address to true, and the modal creates or updates the business-partner location plus underlying location data through the same `locationAddress` endpoint.
-- **Structured address fields (ETP-5806), gated behind `structured-address-for-sepa`.** This is a backend-only flag (TTL 2026-11-15, see `docs/feature-flags.md` and `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md`); the modal never evaluates it itself, it reads `capabilities.structuredAddressForSepa` (off `SFWindowAccessMap`, surfaced on `AuthContext` at role-selection time). **While off** (default pre-launch), the modal renders exactly the pre-ETP-5806 single-line editor: a free-text Address line, City, Country, Region, and Save is blocked only on a blank address or country — none of the behavior below applies, and the 3 structured fields are never rendered, requested or sent. **While on**, the modal no longer asks for Address Line 1/2 directly. It asks for **Calle** (Street, mandatory), **Número** (Number, mandatory), **Nombre de edificio** (Building Name, optional) and the existing City/Country/Region. Address Line 1/2 are read-only, computed client-side as a live preview (`composeAddressLines` in `LocationEditorModal.jsx`, a local port of `app-shell-core`'s canonical `locationAddress.js` — see "Known gaps" below) and recomputed/persisted server-side by `ContactsLocationAddressHandler` through `StructuredAddressComposer` (`com.etendoerp.go`), the exact algorithm Classic's `LocationSEPA.java::fillAddressLines` uses: everything fits on line 1 up to 60 characters, overflow moves to line 2. Save is blocked (button disabled) until Street, Number, City and Country are all filled; the inline "Este campo es obligatorio" messages only appear after a first failed save attempt, never on a freshly opened create form. An **existing address created before this change** (free-text Address1/Address2, none of the 3 structured fields filled) shows a legacy-address warning banner with the old free text as reference and a Copy button, and the same banner appears on a NEW address seeded from OCR free text (see `initialValues` below) until the user fills in the structured fields.
+- **Structured address fields (ETP-5806), gated behind `structured-address-for-sepa`.** This is a backend-only flag (TTL 2026-11-15, see `docs/feature-flags.md` and `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md`); the modal never evaluates it itself, it reads `capabilities.structuredAddressForSepa` (off `SFWindowAccessMap`, surfaced on `AuthContext` at role-selection time). **While off** (default pre-launch), the modal renders exactly the pre-ETP-5806 single-line editor: a free-text Address line, City, Country, Region, and Save is blocked only on a blank address or country — none of the behavior below applies, and the 3 structured fields are never rendered, requested or sent. **While on**, the modal no longer asks for Address Line 1/2 directly. It asks for **Calle** (Street, mandatory), **Número** (Number, optional — auto-filled with "s/n" if left blank once Street has content), **Nombre de edificio** (Building Name, optional) and the existing City/Country/Region. Address Line 1/2 are read-only, computed client-side as a live preview (`composeAddressLines` in `LocationEditorModal.jsx`, a local port of `app-shell-core`'s canonical `locationAddress.js` — see "Known gaps" below) and recomputed/persisted server-side by `ContactsLocationAddressHandler` through `StructuredAddressComposer` (`com.etendoerp.go`), the exact algorithm Classic's `LocationSEPA.java::fillAddressLines` uses: everything fits on line 1 up to 60 characters, overflow moves to line 2. Save is blocked (button disabled) until Street, City and Country are all filled — Number is no longer part of this gate, since it is auto-completed with "s/n" when left empty; the inline "Este campo es obligatorio" messages only appear after a first failed save attempt, never on a freshly opened create form. An **existing address created before this change** (free-text Address1/Address2, none of the 3 structured fields filled) shows a legacy-address warning banner with the old free text as reference and a Copy button, and the same banner appears on a NEW address seeded from OCR free text (see `initialValues` below) until the user fills in the structured fields.
+
+**The "s/n" fallback is applied by the backend too (ETP-5806 follow-up), not just by this modal.** `ContactsLocationAddressHandler` resolves the same fallback server-side via `StructuredAddressComposer.effectiveBuildingNumber`, so a caller that bypasses this UI entirely — an MCP `etendo_create`/`etendo_update`, or a direct REST call — and omits `buildingNumber` with `streetName` present no longer gets a `400 Missing required field: buildingNumber`. The contract is the same on every channel; see `com.etendoerp.go/docs/neo-headless.md` §4.12.9.
 - `LocationEditorModal` accepts an optional `initialValues` prop (`{ address, postalCode, city, countryName }`, ETP-5654) that prefills a NEW address only (ignored when editing). The Copilot OCR "Crear nuevo contacto" popup supplies it through `initialChildData`, and the modal opens automatically right after the contact's first save (the user reviews it and presses Guardar; nothing is created automatically); the country name is resolved against the selector and falls back to España, Región is never seeded, and the prefill does not count as an unsaved edit. Other callers omit it and behave as before. Since ETP-5806, an OCR-seeded `address` only fills the free-text reference shown by the legacy-address banner above — it does **not** fill Street/Number, so the user still has to break the OCR'd text down into the structured fields before Save unblocks. Reference: `docs/ui-customization.md` §19b.
 - **Known gap, accepted as technical debt:** `LocationEditorModal.jsx`'s `composeAddressLines` is currently a private, duplicated copy of the canonical implementation published from `schema_forge_core` (`@etendosoftware/app-shell-core/lib/locationAddress.js`). The duplication exists because this repo still consumes `app-shell-core` as a published package (see `docs/repo-topology.md`) and no new version carrying `locationAddress.js` had shipped as of this change. Resolve by importing the published helper once `schema_forge_core` is merged and a new `app-shell-core` version is released and bumped here — do not "fix" this by editing only one copy.
 - No optimistic-locking/concurrent-edit protection exists on this modal's save path (`ContactsLocationAddressHandler`): two users editing the same address at the same time can silently overwrite each other's change. Accepted limitation of this ticket, not addressed here.
@@ -423,9 +425,9 @@ pending manual verification (steps below) rather than a follow-up ticket.
 
 | Classic field | Go field (camelCase) | Entity | Where it lives in Go |
 |---|---|---|---|
-| "Clave por Defecto" | `aeatsiiDefaultsiikey` | `customer` | Toggle in the Financial tab → **Default fiscal values** section, "SII" sub-block, `FiscalDefaultsSection.jsx` — shown only when `data.customer` is true (see part 3 below) |
+| "Clave por Defecto" | `aeatsiiDefaultsiikey` | `customer` | Toggle in the Financial tab → **Default fiscal values** section, "SII" sub-block, `FiscalDefaultsSection.jsx` — shown only when SII is active for the organization AND `data.customer` is true (ETP-5831, see "SIF-gated blocks" below) |
 | "Clave tipo factura" | `aeatsiiSiikeylist` | `customer` | Enum selector (`R`/`F1`/`F2`/`F4`) in the same "SII" sub-block, visible only when `aeatsiiDefaultsiikey` is checked |
-| "Factura Simplificada" | `tbaiIssimplifiedinv` | `businessPartner` | Toggle in the "TicketBAI" sub-block, `FiscalDefaultsSection.jsx` — always shown, unconditional (see part 3 below) |
+| "Factura Simplificada" | `tbaiIssimplifiedinv` | `businessPartner` | Toggle in the "TicketBAI" sub-block, `FiscalDefaultsSection.jsx` — shown only when TicketBAI is active for the organization (ETP-5831, see "SIF-gated blocks" below) |
 
 **SII (`aeatsiiDefaultsiikey` / `aeatsiiSiikeylist`):** both fields were already `editable`
 and already pushed to NEO from earlier work — only the UI wiring was missing. **Correction
@@ -504,6 +506,9 @@ and all Contacts vitest suites (`BillingPreferencesForm.vitest.jsx`,
 
 ## ETP-4784 (part 3) — Simplified back to Classic parity, no "SII/TBAI active" gating
 
+> **Superseded by ETP-5831 (CP-20)** — see "SIF-gated blocks" right after this section. Kept
+> for the history of the decision.
+
 Parts 3 and 4 of this ticket (see git history for the discarded intermediate design)
 explored gating the "SII"/"TicketBAI" blocks on whether the contact's organization actually
 had SII/TicketBAI configured — first by fetching and filtering the `sii-config`/`tbai-config`
@@ -544,6 +549,34 @@ custom-component revert. Verified with `npx vitest run src/windows/custom/contac
 Contacts suites pass; `FiscalDefaultsSection.vitest.jsx` rewritten to cover: SII block
 visible/hidden by `data.customer`, TicketBAI block always visible, and both toggles' wiring
 to `onChange`).
+
+## ETP-5831 (CP-20) — SIF-gated blocks
+
+QA (ETP-5831 CP-20) reported the section offering SII and TicketBAI options to tenants where
+those SIF are not active. Product decision (this ticket): **each option depends on its own SIF
+being active for the organization**, deliberately departing from Classic's AD DisplayLogic (part
+3 above). `FiscalDefaultsSection.jsx` now reads the organization's active fiscal configuration
+through the existing `useFiscalConfig(orgId, apiBaseUrl)` (`fiscal-config/useFiscalConfig.js` —
+the same reader the invoice windows and the Organization window's fiscal sections use; no new
+reader). `orgId` is the organization selected in the top-nav (`useAuth().selectedOrg`), the same
+source as the invoice lists' SIF columns: a business partner usually lives at org `*`, which never
+carries a SIF config. `ContactsFinancialPanel.jsx` now passes `apiBaseUrl` down.
+
+The rule is the exported pure `resolveFiscalDefaultsBlocks({ fiscal, isCustomer })`:
+
+- **"SII" block** (`aeatsiiDefaultsiikey` + `aeatsiiSiikeylist`) — an active SII config
+  (`siiRecord`) **and** `data.customer` true (the customer gate is unchanged).
+- **"TicketBAI" block** (`tbaiIssimplifiedinv`) — an active TicketBAI config (`tbaiRecord`).
+- **VERI\*FACTU** — the section has no VERI\*FACTU-specific option, so nothing to gate.
+- **Neither block → no section at all**: the component returns `null`, title, description and
+  divider included. The divider (`<hr>`) moved from `ContactsFinancialPanel.jsx` into the
+  section for that reason, so a hidden section leaves no stray rule.
+- **Fail closed, no flash:** until `useFiscalConfig` has settled (a resolved `profile` or an
+  `error` — it starts at `loading: false, profile: null`), and after a failed read, no block is
+  shown. Same "settled" rule as `organization/useFiscalSectionVisibility.js`.
+
+Hidden is not stripped: hiding a block never clears the stored values; they reappear when the SIF
+is activated again.
 
 ## ETP-4784 (part 4) — SII fields silently discarded on save (fix)
 
@@ -1485,6 +1518,7 @@ the report filters use for "Desde la cuenta") instead of a dropdown that cut lon
 popup is titled with the translated field label, shows each `"<code> - <name>"` in full, searches
 by code or name and lists **posting accounts only** (`PostingAccountCombinationSelectorPolicy` in
 `com.etendoerp.go` hides summary headings).
+Reopening the popup on a field that already holds an account opens on that account: it is marked with a check and centred, and arrows start from it (ETP-5948, see `docs/ui-customization.md`).
 
 ## ETP-5758 — Bulk delete uses ListView's generic action
 
@@ -1684,3 +1718,103 @@ With a `read-only` tier on Contactos:
 - **`/contacts/new` by URL** redirects to the list.
 
 Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.
+
+## ETP-5824 — Missing postal code and TicketBAI: completion block + address warning
+
+**Problem.** For a contact **not** flagged as *Factura simplificada* (`tbaiIssimplifiedinv = N`,
+the default for contacts created from GO), TicketBAI requires a postal code and address line 1 on
+the invoice partner address, and a tax ID on the contact. The check only ran while the TicketBAI XML was being built, after
+the invoice had already been completed. The invoice was completed but never sent, the error only
+went to the TicketBAI sync log (and Datadog, `tbai-tercero-sin-codigo-postal`), and the user got
+no feedback.
+
+**Backend (com.smf.ticketbai) — completion is blocked.** `ProcessInvoiceTbaiHook.preProcess` now
+runs the same rules (`XMLUtils.findRecipientDataError`) before an invoice is completed (`CO`). It
+returns an error, so the document stays in draft and the user sees `TBAI_EmptyPostalCode` /
+`TBAI_EmptyDir` / `TBAI_EmptyNifCode` (checked in that order; only the first failure is
+reported). A value made only of spaces counts as missing (a postal code `' '` used to slip
+through), and an invoice with no partner address at all is reported as a missing postal code.
+These three messages exist only in Spanish (the module's base language is `es_ES`), so a user on
+an English UI sees them in Spanish; an English translation needs a translation module and is out
+of scope for ETP-5824. The check applies when all of these hold:
+- it is a sales invoice;
+- the invoice organization resolves a TicketBAI configuration up the organization tree;
+- the invoice date is not earlier than the TicketBAI system date.
+
+The hook also runs the check on a void (`RC`), but that only matters in Classic: GO offers no void
+for TicketBAI invoices, by design. In Classic, this means an invoice that this bug left completed but never
+sent cannot be voided until the partner address is fixed: the reversal invoice is sent to
+TicketBAI and needs the recipient block.
+
+It does **not** depend on *auto-send*: an invoice sent later, with the send button or by the
+background process, fails just the same. Auto-send still decides only whether postProcess sends
+the invoice right away; that decision now also resolves the configuration by the invoice's
+organization, not the client. The same check still runs while the XML is built, as a last line of
+defence.
+
+**Address modal — non-blocking warning.** `LocationEditorModal` in `'bpartner'` mode (its
+default) shows the note wherever it is opened with a business partner: the Contactos *Dirección*
+tab, the invoice "+ Añadir dirección" picker (`PartnerAddressPicker`, sales and purchase invoice),
+and the fiscal monitor's contact detail (`ContactDetailModal`). The note is shown only for
+**customers**, because only sales invoices are blocked: a supplier-only contact (for example, an
+address added from the purchase invoice picker) never sees it, and a contact that is both customer
+and supplier does. The modal shows an inline note under *Código postal*
+(`data-testid="location-postalCode-tbai-warning"`, key `tbaiPostalCodeMissingWarning`) when all of
+these hold:
+- the contact is a customer (`/contacts/businessPartner/{bpId}` → `customer`, AD `IsCustomer`);
+- the contact is not simplified invoice (same record → `tbaiIssimplifiedinv`);
+- TicketBAI is in use: at least one ACTIVE `tbai-config/header` row is readable by the user;
+- the postal code is empty or only spaces.
+
+Why "TicketBAI is in use" and not the contact's organization: neither spec gives the browser an
+organization to match on. The contacts record has no organization field, and the `tbai-config`
+list ignores an `organization` parameter. A GO tenant normally has a single legal organization, so
+the simple criterion is right in practice. The note is advisory; the hard guarantee is the
+completion block above, which resolves the invoice's organization up the tree.
+
+The note disappears as soon as a postal code is typed. **It never blocks the save**: the postal code
+is not part of the save gate (address line 1 + country with the `structured-address-for-sepa` flag
+off, ETP-5103; street, city + country with it on, ETP-5806). The `'location'` mode (Warehouse) has no business
+partner and never asks for this data. A contact that is not a customer, or is simplified, never
+triggers the configuration lookup. If a lookup fails, or the record does not carry the customer or
+simplified flag, the note stays hidden. Logic:
+`tools/app-shell/src/windows/custom/shared/tbaiPostalCodeWarning.js`.
+
+**Manual check.**
+1. In a tenant with TicketBAI configured, open a customer contact with *Factura simplificada* off.
+   Add an address without a postal code (or with only spaces): the note appears, and Guardar still
+   works.
+2. Type a postal code: the note disappears.
+3. Create a sales invoice for that contact using the address without a postal code (or with a
+   postal code of only spaces), and complete it. Completion is refused with the postal code
+   message, and the invoice stays in draft.
+4. From a purchase invoice, use "+ Añadir dirección" on a supplier-only contact (not a customer)
+   and leave the postal code empty: no note appears.
+
+## Contact searchKey over MCP — ETP-5852
+
+As in the app (whose form does not show it), a contact's `searchKey` is its number (`etgoIdentifier`). `etendo_schema(view:"create")` lists it as optional, `serverDefaulted` (`BusinessPartnerHandler#serverResolvedCreateFields`), and the placeholder the save needs is put before MCP's mandatory pre-check (`resolveServerCreateFields`), so a create without it is no longer refused. A value the agent sends is still replaced by the number, and the answer says so in `searchKeyNote`. Field `agentPrompt` tells agents not to send it. Feedback M-107.
+
+## Contact address name over MCP — ETP-5852
+
+An address created over MCP without `name` gets the name the address editor gives (city and address line, else region and country, else "Location"), not the AD default ".". Feedback M-168.
+
+## Agent prompts on accounting accounts — ETP-5852
+
+The account fields of `customerAccounting` and `vendorAccounting` tell agents they take an accounting combination id, found with `etendo_selectors` by account number, not a chart-of-accounts `elementValue` id. Feedback M-129.
+
+## Billing preferences of a new contact over MCP — ETP-5852
+
+As in the app, a new contact is saved without billing preferences (`priceList`, `paymentTerms`, `paymentMethod`, `account`, `customerBlocking` and their purchase twins): the form fills them in after the contact exists. Over MCP a value the agent itself sends on create is now kept (it was dropped without a word); the defaults pass still does not fill them. `etendo_schema(view:"create")` no longer marks them `serverDefaulted` and `etendo_defaults` no longer offers them (`BusinessPartnerHandler#createUnsetFields`). The entity `agentPrompt` says so. REST and the app are unchanged. Feedback M-106.
+
+## Where a contact's email goes, for agents — ETP-5848
+
+The OKR O2 sweep (`docs/mcp-evaluation/okr-o2-sweep-analysis.md`, H4) found an agent spending 20 calls of a 25-call "add this customer with their email" deciding between `businessPartner.etgoEmail`, a `contact` row and a user. Three agent-facing texts now settle it, with no change of behavior:
+
+- the spec prompt (`agent-prompts/contacts/spec.md`) says the contact itself is `businessPartner`, with its name, tax ID, email (`etgoEmail`), phone and website, and that `contact` holds the people who work for it;
+- `businessPartner.etgoEmail` (`agent-prompts/contacts/business-partner.etgo-email.md`): the contact's own address, the one documents are sent to;
+- `contact.email` (`agent-prompts/contacts/contact.email.md`): a person's email, not the contact's.
+
+The agentic docs served by the `docs` tool (`etendo-go-docs/agentic/contacts/index.md`) carry the same field map for customers and vendors.
+
+**Verify:** `etendo_schema(spec: "contacts", view: "create")` lists `etgoEmail` with that `agentPrompt`; re-run the okr probe `w-customer-crud` and compare its calls with the sweep (25).

@@ -8,9 +8,9 @@ Business Partner Category lets users maintain the category master record used to
 
 Users should be able to:
 
-- browse contact categories (columns depend on the `contact-category-type` flag, see below)
-- open a category and maintain its header fields: Search Key, Name, Description, Default, and — with the flag on — the **contact type** (Customer and/or Vendor/Creditor — at least one is required)
-- view and edit the category's accounts from the Accounting tab — with the flag on grouped by contact type: Customers (receivables, prepayment, write-off) and Vendor/Creditor (liability, prepayment) — see *Contact type — ETP-5791* below
+- browse contact categories (columns depend on the `contact-category-type` flag, see below) and, with the flag on, narrow the list to customer or vendor/creditor categories with the contact-type quick filter
+- open a category and maintain its header fields: Search Key, Name, Description, Default
+- with the flag on, set the **contact type** (Customer and/or Vendor/Creditor — at least one is required) and the accounts of each type from the Accounting tab: Cliente (receivables, prepayment, write-off) and Proveedor/Acreedor (liability, prepayment) — see *Contact type — ETP-5791* below
 
 > **Feature flag `contact-category-type` (ETP-5791, default OFF).** Everything under *Contact type —
 > ETP-5791* is shown only while the flag is on. With the flag **off** the window looks and behaves
@@ -24,9 +24,9 @@ Users should be able to:
 
 - **Route:** `/business-partner-category`, `/business-partner-category/:recordId`
 - **Visibility:** visible in the **Settings** menu as **Business Partner Category** (EN) / **Categoría de Contacto** (ES) (AD window ID `192`)
-- **Implementation type:** generated window behind a thin wrapper — `registry.js` points to `tools/app-shell/src/windows/custom/business-partner-category/index.jsx` (ETP-5791), which renders the generated entry point and is the toggle point of the `contact-category-type` flag for the record view: it passes a `Form` that excludes `etgoIscustomer` (and its required-gate entry) while the flag is off, and, while it is on, `DetailTable={null}` + `CustomLines={BpCategoryAccountingPanel}`. The list's columns are gated by the `customComponents.headerTable` component `BpCategoryTable`. Custom components live in `artifacts/business-partner-category/custom/`
+- **Implementation type:** generated window behind a thin wrapper — `registry.js` points to `tools/app-shell/src/windows/custom/business-partner-category/index.jsx` (ETP-5791), which renders the generated entry point and is the toggle point of the `contact-category-type` flag for the record view: it passes a `Form` that excludes `etgoIscustomer` (and its required-gate entry) — always with the flag off, and with the flag on unless the role lacks "Show Accounting Fields" — and, while the flag is on, the Figma field order + `DefaultAssignmentField`, `DetailTable={null}` + `CustomLines={BpCategoryAccountingPanel}`, and the list's contact-type `baseFilter`. It also provides the window context (`custom/bpCategoryWindowContext.js`) that links the header form, the Accounting panel and the list quick filter. The list's columns are gated by the `customComponents.headerTable` component `BpCategoryTable`. Custom components live in `artifacts/business-partner-category/custom/`
 - **Window shape:** master + detail; `businessPartnerCategory` is the header entity (table `C_BP_Group`) and `accounting` is the detail entity (table `C_BP_Group_Acct`), rendered by the generated inline grid (flag off) or by the custom `BpCategoryAccountingPanel` (flag on)
-- **List behavior:** `decisions.json` declares every column (Search Key, Name, Customer, Vendor/Creditor, Default; `gridOrder` 1–5) and `BpCategoryTable` hides them through `hiddenColumns`: flag **off** → Search Key, Name (as before ETP-5791); flag **on** → Name, Customer, Vendor/Creditor, Default (Yes/No badges, real AD columns, so all four filter and sort)
+- **List behavior:** `decisions.json` declares every column (Search Key, Name, Customer, Vendor/Creditor, Default; `gridOrder` 1–5). Flag **off** → `BpCategoryTable` renders the generated table and hides the three flag-only columns through `hiddenColumns`: Search Key, Name (as before ETP-5791). Flag **on** → see *List* under *Contact type — ETP-5791*
 - **Record behavior:** opening a category record renders a detail view with the category header form plus the **Accounting** tab (generated grid with the flag off, the custom panel with the flag on)
 - **Accounting tab behavior (flag off — the generated grid):** shows one row per accounting schema. Each row exposes 20 ValidCombination FK selectors (`Customer Receivables No.`, `Customer Prepayment`, `Vendor Liability`, `Vendor Prepayment`, `Write-off`, `Write-off Revenue`, plus 15 secondary GL accounts covering non-invoiced receipts/receivables/revenue, payment discount expense/revenue, realized/unrealized gain/loss, unearned revenue, vendor service liability, and doubtful/bad-debt accounts). `Customer Receivables No.`, `Write-off`, and `Vendor Liability` are mandatory (`ismandatory=Y` in the AD). The five primary columns (`customerReceivablesNo`, `customerPrepayment`, `vendorLiability`, `vendorPrepayment`, `writeoff`) share the available width via `grow: true`; the remaining GL accounts are added as ordinary editable columns without `grow`.
 - An **Attachments** tab is available in the detail tab strip (standard `AttachmentsTab` wiring, same as other generated master/detail windows).
@@ -72,14 +72,16 @@ Flag `contact-category-type` **off** (default):
 
 Flag **on** (`VITE_FEATURE_FLAGS={"contact-category-type":true}` locally, or the remote control plane):
 
-1. Open `/business-partner-category` from the Settings menu: the list shows Nombre, Cliente, Proveedor/Acreedor and Valor por defecto (Sí/No badges), no Identificador column, and each column filters and sorts.
-2. Open an existing category: the form shows Search Key, Name, Default and the "Tipo de contacto * (lo heredan solo los contactos nuevos)" group in the first two rows, and Description behind "Mostrar más datos".
-3. Create a category: both type checkboxes start unchecked; saving with neither shows "Debe marcarse al menos un tipo de contacto: Cliente o Proveedor/Acreedor".
-4. On the Accounting tab, check/uncheck Cliente and Proveedor/Acreedor (before saving): the matching section appears/disappears; with neither, the "Marca Cliente o Proveedor/Acreedor…" message shows. Re-checking a type shows its previous account values.
-5. Change an account in a visible section: it saves on selection; the hidden section's mandatory accounts do not block it.
-6. Save a category that has contacts (toolbar Save, or ticking a type checkbox on an existing category): only the info toast "Categoría guardada. Tiene contactos asociados…" remains — no green "Registro guardado" stacked behind it. A category without contacts shows only "Registro guardado".
-7. With a role without "Show Accounting Fields", the Accounting tab is absent.
-8. Open the **Attachments** tab and confirm file upload, download, and delete work as expected.
+1. Open `/business-partner-category` from the Settings menu: the list shows Nombre (semibold, 240px), Cliente, Proveedor/Acreedor (158px each, Sí/No badges) and Valor por defecto, no Identificador column, the columns are not stretched, and each column filters and sorts.
+2. Open the quick filter left of "Filtros": "Todos los contactos" is checked. Pick "Cliente": only categories with Cliente = Sí remain (Cliente/Proveedor included), and the request carries `criteria` `etgoIscustomer equals Y`. Same for "Proveedor/Acreedor". Back to "Todos los contactos" lists everything.
+3. Open an existing category: row 1 is Identificador | Nombre | "Asignación predeterminada" + "Valor por defecto"; row 2 is Descripción. No type checkboxes in the header.
+4. The Accounting tab shows a calculator icon and a badge with the number of checked types (0/1/2). Its left column reads "Tipo de contacto *" and "(Lo heredan solo los contactos nuevos)".
+5. Uncheck/check Cliente and Proveedor/Acreedor: a checked card shows its accounts 3 per row, an unchecked one collapses to its header, re-checking shows the previous values; with neither checked the blue "Configuración contable" alert appears above the cards and the backend refuses the save with "Debe marcarse al menos un tipo de contacto…" (the toggle rolls back).
+6. Create a category: on the Accounting tab both cards start unchecked and can be checked before saving; a checked card says "Guarda la categoría para configurar sus cuentas contables."; saving with neither type shows the backend error; after saving, the selects appear.
+7. Change an account in a checked card: it saves on selection; the unchecked card's mandatory accounts do not block it.
+8. Save a category that has contacts (toolbar Save, or ticking a type checkbox on an existing category): only the info toast "Categoría guardada. Tiene contactos asociados…" remains — no green "Registro guardado" stacked behind it, and it appears once. A category without contacts shows only "Registro guardado".
+9. With a role without "Show Accounting Fields", the Accounting tab is absent and the header shows the full-width "Tipo de contacto *" group instead, so the type can still be set.
+10. Open the **Attachments** tab and confirm file upload, download, and delete work as expected.
 
 ## Automated evidence
 
@@ -118,6 +120,7 @@ the report filters use for "Desde la cuenta") instead of a dropdown that cut lon
 popup is titled with the translated field label, shows each `"<code> - <name>"` in full, searches
 by code or name and lists **posting accounts only** (`PostingAccountCombinationSelectorPolicy` in
 `com.etendoerp.go` hides summary headings).
+Reopening the popup on a field that already holds an account opens on that account: it is marked with a check and centred, and arrows start from it (ETP-5948, see `docs/ui-customization.md`).
 
 ## Contact type — ETP-5791
 
@@ -131,72 +134,106 @@ A category now defines whether its contacts are **Customer**, **Vendor/Creditor*
 refuses a category saved with neither (`messageKeys: ["ETGO_BPGroupContactTypeRequired"]`). The
 flags are copied into a contact when the contact is created; they never change existing contacts.
 
-**Header — "Tipo de contacto".** `etgoIscustomer` declares `customRenderer: "ContactTypeField"`
-(`span: 4`). The component has `ownsLabel = true`, so it draws the legend "Tipo de contacto *
-(lo heredan solo los contactos nuevos)" and the two checkboxes "Cliente" / "Proveedor/Acreedor";
-both are the shared `SquareCheckbox` (`windows/custom/shared/SquareCheckbox.jsx`), so they look
-like the generic "Valor por defecto" checkbox of the same form (square `border-primary` box with a
-check mark), are keyboard-toggled with Space and are dimmed and inert when the form is read-only
-(`disabled`). It writes `etgoIsvendor` (declared `form: false`) through EntityForm's `onFieldChange`. A new
-category starts with both unchecked. On an existing record each toggle autosaves (`onCommit`,
-the window's `autoSaveOnBlur`); unchecking the last type is refused by the backend and the error
-toast reads "Debe marcarse al menos un tipo de contacto: Cliente o Proveedor/Acreedor"
-(`lib/backendErrors.js` maps `ETGO_BPGroupContactTypeRequired`, and the contact-side
-`ETGO_BPartnerContactTypeRequired`), and the toggle rolls back.
+**Design (Figma "Etendo-AI-2026", node 2670-14516).** The flag-on window follows the designer's
+frames: list "Categoría de Contacto Tabla" / "Filtro Cliente", form "Form View Categoría de
+contacto" (no type, only Cliente, both types).
 
-**Header layout.** The form holds Search Key, Name, Description (`textarea`, `span: 2`) and
-Default, then the full-width (`span: 4`) "Tipo de contacto" group. **Description** was briefly
-removed from the form during ETP-5791 (it is not in the design prototype); the PM decided it
-stays, unconditionally (not behind the flag), exactly as before ETP-5791. The shared header form
-shows only its first 2 rows before the "Mostrar más datos" toggle (`initialRows={2}`, ETP-5513),
-and on overflow it moves the required fields first (`partitionInitialRows`): with the flag on,
-Search Key, Name and Default fill row 1, the "Tipo de contacto" group row 2, and Description goes
-behind the toggle. With the flag off the four fields fit in two rows and no toggle appears.
+**List.** `BpCategoryTable` declares its own columns while the flag is on (the generated literal
+cannot carry flag-only layout): **Nombre** (semibold, fixed 240px) | **Cliente** | **Proveedor/Acreedor**
+(Sí/No badges — `badge` + `badgeVariants` green/neutral, i.e. `StatusTag`; fixed 158px) | **Valor por
+defecto** (badge, the single `grow` column, so it absorbs the leftover width and the other columns are
+not stretched). Identificador stays declared but hidden, so the advanced filter still offers it. Every
+column is the real AD column (`Name`, `EM_Etgo_Iscustomer`, `EM_Etgo_Isvendor`, `IsDefault`): all of
+them filter and sort server-side. Row hover, the sticky edit/delete actions and the row height are the
+standard list ones (`rowQuickActions`). The literal must stay in step with `decisions.json`.
+
+**Contact-type quick filter.** Left of "Filtros": a single-select dropdown (the shared
+`DistinctValuesFilter` without its search box, check mark on the active option) with "Todos los
+contactos" (default) / "Cliente" / "Proveedor/Acreedor" (the AD labels of the two columns). It is
+`BpCategoryTable.ToolbarQuickFilter` (`custom/ContactTypeQuickFilter.jsx`); its value lives in the
+window wrapper's context (`custom/bpCategoryWindowContext.js`), and the wrapper passes it to ListView as
+`baseFilter` (`contactTypeBaseFilter` in `custom/bpCategoryContactTypes.js`):
+`criteria=[{fieldName: "etgoIscustomer"|"etgoIsvendor", operator: "equals", value: "Y"}]`, so the
+filtering is **server-side** and "Cliente" also lists the categories that are both. The value is window
+state, not URL or saved-preset state: it survives opening a record and coming back (same wrapper
+instance), not a page reload.
+
+**Header form.** Row 1: Identificador | Nombre | "Asignación predeterminada" (caption) with the
+"Valor por defecto" checkbox | (empty); row 2: Descripción (`textarea`, `span: 2`). The wrapper passes
+the generated fields in that order and swaps the `default` field's renderer for
+`custom/DefaultAssignmentField.jsx` (the same field and write path, the shared `SquareCheckbox`,
+plus the caption the generic checkbox lacks). The contact type is **not** in the header — it moved to
+the Accounting tab. **Description** stays unconditionally (PM decision, as before ETP-5791). With the
+flag off the form is the generated one (Search Key, Name, Description, Default).
+
+*Fallback for a role without "Show Accounting Fields":* the Accounting tab is hidden for such a role
+(`detailVisibleWhenCapability`), and it must still be able to set a type (the backend refuses a
+category with none). So, with the flag on and no capability, the header keeps the full-width "Tipo de
+contacto *" group (`custom/ContactTypeField.jsx`, the pre-Figma header group) and the gate exclusion of
+`etgoIscustomer` is dropped. `ContactTypeField` is no longer declared in `decisions.json`: the wrapper
+sets it as the `customRenderer` of `etgoIscustomer` for that case only.
 
 **Accounting tab — `BpCategoryAccountingPanel`.** Passed by the window wrapper as `CustomLines`
 (label `customLinesLabel: "Accounting"`, with `DetailTable={null}` so it replaces the generated
 grid) while the flag is on — not declared in `decisions.json`, so the generated grid stays
-available with the flag off. It loads the category's single `C_BP_Group_Acct` row
-(`accounting?parentId=<id>`) and shows two sections. **They look and behave like the account
-tabs of the Esquema contable window** (PO decision, "Valores por defecto" / "Cuentas generales"),
-built from the same shared components, not a look-alike: each section is a `SectionShell` card
-(title + grey subtitle on the left, hairline rule between sections) holding a 1/2/3-column grid
-of `AccountSelect` fields (label with the red required `*`, a search button showing
-`"<code> - <name>"` that opens the centered `SearchPopup`, an ✕ to clear an optional account).
-Section subtitles: `bpCategoryCustomersSectionSubtitle` / `bpCategoryVendorsSectionSubtitle`.
+available with the flag off. The tab shows a **calculator icon** (the panel's static `tabIcon`, see
+`docs/ui-customization.md` → *Bottom tab-strip icons*) and its **badge is the number of contact types
+checked** (0, 1 or 2, through `onCountChange`), not a row count.
 
-| Section | Accounts |
-|---|---|
-| Clientes | Recibos de clientes (`customerReceivablesNo`), Prepago del cliente (`customerPrepayment`), Cancelaciones (`writeoff`) |
-| Proveedor/Acreedor | Pasivo del proveedor/acreedor (`vendorLiability`), Pagos por adelantado del proveedor/acreedor (`vendorPrepayment`) |
+- Layout: a left column (148px) with "Tipo de contacto *" and the hint "(Lo heredan solo los
+  contactos nuevos)", and a right column with one muted card per type (`bg-muted`, radius 8px,
+  padding 12px): **Cliente** and **Proveedor/Acreedor**, each headed by its type checkbox
+  (`SquareCheckbox`, the AD labels `EM_Etgo_Iscustomer` / `EM_Etgo_Isvendor`).
+- A **checked** card lists its accounts, 3 per row, each an `AccountSelect` (label above, red `*`
+  when mandatory, the centered account `SearchPopup`):
 
-- Each section follows its header checkbox **live**, before saving: the panel reads DetailView's
-  editing record (`data`).
-- The section of an unchecked type is **hidden**; with no type checked the tab shows "Marca
-  Cliente o Proveedor/Acreedor para configurar sus cuentas contables.". Values are never cleared.
-- Hiding the unchecked section is the confirmed behaviour (PO decision): the ticket's read-only /
-  padlock wording was superseded by the design, so there is no read-only variant
-  (`resolveAccountSections` in `custom/bpCategoryContactTypes.js` returns only the checked
-  sections).
+  | Card | Accounts |
+  |---|---|
+  | Cliente | Recibos de clientes (`customerReceivablesNo`), Prepago del cliente (`customerPrepayment`), Cancelaciones (`writeoff`) |
+  | Proveedor/Acreedor | Pasivo del proveedor/acreedor (`vendorLiability`), Pagos por adelantado del proveedor/acreedor (`vendorPrepayment`) |
+
+  The Figma labels the second vendor account "Prepago del cliente": a copy-paste slip in the
+  design; the ticket's label is kept.
+- An **unchecked** card collapses to its header; its stored account values are kept and come back
+  when it is re-checked (`resolveAccountSections` returns only the checked sections; nothing is
+  cleared). Hiding instead of a read-only variant is the confirmed PO behaviour.
+- With **no type checked**, an info alert sits above the two cards: "**Configuración contable**
+  Selecciona Cliente o Proveedor/Acreedor para configurar sus cuentas contables."
+  (`bpCategoryAccountingSetupTitle` + `bpCategoryNoTypeAccounts`; the Figma info colours `#EBEFFF` /
+  `#2B48BC` are literal, as in the order global-discount tag, because no token resolves to them).
+- **The type checkboxes are the header fields** `etgoIscustomer` / `etgoIsvendor`. The panel reads
+  DetailView's editing record (`data`) and writes through the header form's own callbacks
+  (`onChange` + the deferred `onFieldBlur`, handed over by the form wrapper through the window
+  context's `formBridge`), so a toggle behaves exactly like the former header checkbox: on an
+  existing record it autosaves (`autoSaveOnBlur`); unchecking the last type is refused by the backend
+  with "Debe marcarse al menos un tipo de contacto: Cliente o Proveedor/Acreedor"
+  (`ETGO_BPGroupContactTypeRequired`, `lib/backendErrors.js`) and the toggle rolls back; it is
+  dimmed and inert when the window is read-only (`editing === false`).
+- **New (unsaved) category:** the type cards are fully usable before the first save (the types are
+  header fields and are saved with the category); a checked card shows "Guarda la categoría para
+  configurar sus cuentas contables." in place of its selects, because the accounts live on the
+  `C_BP_Group_Acct` row the backend creates with the category. After the first save the selects
+  appear.
 - Account catalog: each `AccountSelect` is fed by the field's own NEO selector
   (`<apiBaseUrl>/accounting/selectors/<column>`, the endpoint the generic `lookupDrawer:
   'account'` popup uses) through `loadPage={useAccountSelectorPages(url)}`, so search and paging
-  are server-side and only **posting accounts** are listed (`PostingAccountCombinationSelectorPolicy`,
-  the same rule `PostingAccountCombinations` applies to the Esquema contable catalog). The
-  selected label is the row's `<key>$_identifier`. No backend change.
+  are server-side and only **posting accounts** are listed (`PostingAccountCombinationSelectorPolicy`).
+  The selected label is the row's `<key>$_identifier`. No backend change.
 - Each account is PATCHed on its own (an optional one cleared with ✕ PATCHes `null`; a refused
-  PATCH shows the error toast and restores the previous value). The mandatory accounts of a hidden section never take part in a save: the row is
-  created by `c_bp_group_trg` with the accounting schema defaults (verified on the shared DB: all
-  739 `C_BP_Group_Acct` rows have receivables, write-off and vendor liability filled).
-- A new (unsaved) category shows "Guarda la categoría para configurar sus cuentas contables.".
-- The tab stays gated by `detailVisibleWhenCapability: "showAccountingFields"` — the gate now
-  also covers a `CustomLines` tab (`gateDetailTab`).
-- The 16 secondary GL accounts of `C_BP_Group_Acct` are no longer shown in the UI; their values
-  are untouched.
+  PATCH shows the error toast and restores the previous value). The mandatory accounts of an
+  unchecked type never take part in a save: the row is created by `c_bp_group_trg` with the
+  accounting schema defaults (verified on the shared DB: all 739 `C_BP_Group_Acct` rows have
+  receivables, write-off and vendor liability filled). A load error or a category without an
+  accounting row shows its message inside the checked card.
+- The tab stays gated by `detailVisibleWhenCapability: "showAccountingFields"` — the gate also
+  covers a `CustomLines` tab (`gateDetailTab`).
+- The 16 secondary GL accounts of `C_BP_Group_Acct` are not shown in the UI; their values are
+  untouched.
 
 **"Saved with associated contacts" notice.** After a category is saved — toolbar Save or
-autosave, detected as a change of the record's `updated` token — or after an account is changed
-in the panel, the window reads one row of `contacts/businessPartner` filtered by
+autosave (including a type toggle in the Accounting tab), detected as a change of the record's
+`updated` token by the header form wrapper (its `principal` instance only, so one save toasts once) —
+or after an account is changed in the panel, the window reads one row of `contacts/businessPartner` filtered by
 `businessPartnerCategory`. If there is one, an info toast says "Categoría guardada. Tiene
 contactos asociados: los cambios no los modifican y solo se aplicarán a los contactos nuevos."
 (`custom/useAssociatedContactsNotice.js`). The notice **replaces** the generic "Registro guardado"

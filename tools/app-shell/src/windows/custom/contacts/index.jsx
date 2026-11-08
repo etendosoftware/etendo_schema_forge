@@ -9,6 +9,7 @@ import ContactsBusinessPartnerForm from './ContactsBusinessPartnerForm';
 import ContactsSummaryWidget from './ContactsSummaryWidget';
 import { useUI } from '@/i18n';
 import { useChromelessEmbed } from '@/lib/embeddedWindow.js';
+import { useSupportSession } from '@/hooks/useSupportSession.js';
 /* eslint-disable react/prop-types */
 
 const CONTACTS_WRAPPER = 'flex-1 min-h-0 flex flex-col [&_tr[data-empty-state]]:hidden [&_button[role=checkbox]]:h-full contacts-rows';
@@ -40,6 +41,8 @@ function renderContactsHeaderSummary(data) {
 
 export default function ContactsWindow(props) {
   const ui = useUI();
+  // Support mode: the backend answers 403 to contact create/delete (ETP-5351); hide those entry points.
+  const { isSupportMode } = useSupportSession();
   /*
    * ETP-5332 — this window is also mounted inside the "Nuevo contacto" create popup
    * (`RecordCreateModal` → `EmbeddedWindowRoute`). The balance/income/expense summary
@@ -69,13 +72,18 @@ export default function ContactsWindow(props) {
            // ETP-5758 — bulk delete is ListView's generic "Delete selected" action
            // (useBulkRowDelete): its confirm dialog stays open and read-only until the
            // batch settles, so the window no longer renders a delete of its own and must
-           // not set `hideBulkDelete`. NOTE: this whole object REPLACES — not merges with — the
+           // not set `hideBulkDelete` (except in support mode, ETP-5351). NOTE: this whole object REPLACES — not merges with — the
            // generated page's own `listViewOptions={{hidePrint,hideCounter,hideLink}}`
            // (same last-prop-wins JSX precedence SUBSET_FILTERS above relies on), so it must
            // keep repeating those flags — keep this in sync if BusinessPartnerPage's
            // generated defaults ever change.
-           listViewOptions={{ hidePrint: true, hideCounter: true, hideLink: true }}
-           enableSecondaryRowDelete={true}
+           listViewOptions={{ hidePrint: true, hideCounter: true, hideLink: true, ...(isSupportMode && { hideBulkDelete: true }) }}
+           hideCreate={isSupportMode}
+           hideDeleteButton={isSupportMode}
+           rowQuickActions={{ hideDeleteButton: isSupportMode }}
+           // The import dialog creates contacts too; outside support mode the spread leaves the generated config untouched; in support mode `import: { enabled: false }` REPLACES it.
+           {...(isSupportMode && { import: { enabled: false } })}
+           enableSecondaryRowDelete={!isSupportMode}
            headerContent={chromeless ? undefined : renderContactsHeaderSummary}
            // ETP-5600: Save stays the primary (filled) button on existing contacts too.
            primarySave={true}

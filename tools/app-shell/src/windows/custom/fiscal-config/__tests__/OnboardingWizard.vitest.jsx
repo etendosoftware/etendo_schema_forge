@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-config/OnboardingWizard.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-config/fiscalSystemApi.js
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // --- Mocks ----------------------------------------------------------------
@@ -15,8 +17,18 @@ vi.mock('@/components/ui/button', () => ({
   ),
 }));
 
+// ETP-6053 — the wizard talks to the organization's fiscal actions through apiFetch. One stable
+// function per test (the real useApiFetch is memoized), answered by `createBackend()` below.
+const backend = vi.hoisted(() => ({ fetch: null }));
 vi.mock('@/auth/useApiFetch.js', () => ({
-  useApiFetch: vi.fn(() => vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }))),
+  useApiFetch: vi.fn(() => backend.fetch),
+}));
+
+// The territory × system rules come from the backend catalog (useFiscalCatalog has its own suite);
+// each test sets what the hook returns.
+const catalogState = vi.hoisted(() => ({ value: { catalog: null, error: null, loading: false } }));
+vi.mock('../useFiscalCatalog.js', () => ({
+  useFiscalCatalog: vi.fn(() => catalogState.value),
 }));
 
 vi.mock('@/auth/AuthContext.jsx', () => ({
@@ -32,17 +44,6 @@ vi.mock('@/components/related-documents/helpers.js', () => ({
   neoBase: (url) => url?.replace(/\/[^/]+$/, '') ?? '',
 }));
 
-// ETP-5027: spread the real module so isProductionEnvironment keeps its real
-// behaviour — the applied-summary environment row is derived from it.
-vi.mock('../fiscalConfig.utils.js', async (importOriginal) => ({
-  ...(await importOriginal()),
-  buildOnboardingPayloads: vi.fn(() => ({})),
-  getFiscalRecordId: vi.fn(() => null),
-  getAllowedSystemsForTerritory: vi.fn(() => ['SII', 'TBAI', 'VERIFACTU']),
-  getCertificateContext: vi.fn(() => null),
-  resolveSystem: vi.fn(() => null),
-}));
-
 vi.mock('../SiiSection.jsx', () => ({ default: () => <div data-testid="sii-section" /> }));
 vi.mock('../TbaiSection.jsx', () => ({ default: () => <div data-testid="tbai-section" /> }));
 vi.mock('../VerifactuSection.jsx', () => ({ default: () => <div data-testid="verifactu-section" /> }));
@@ -56,11 +57,60 @@ vi.mock('sonner', () => ({
 // --- Import under test ----------------------------------------------------
 
 import OnboardingWizard from '../OnboardingWizard.jsx';
-import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
-import { buildOnboardingPayloads, getAllowedSystemsForTerritory } from '../fiscalConfig.utils.js';
+import { useFiscalCatalog } from '../useFiscalCatalog.js';
+import { FISCAL_SYSTEM_CATALOG } from './fiscalSystemCatalog.fixture.js';
 
 // --- Helpers --------------------------------------------------------------
+
+const ACTION_PATH = '/sii-config/siiConfiguration/org-1/action/configureFiscalSystem';
+
+function jsonResponse(body, { ok = true, status = 200 } = {}) {
+  return Promise.resolve({
+    ok,
+    status,
+    statusText: ok ? 'OK' : 'Error',
+    json: () => Promise.resolve(body),
+    text: () => Promise.resolve(JSON.stringify(body)),
+  });
+}
+
+const RECORD_SYSTEMS = { SII: ['SII'], TBAI: ['TBAI'], 'SII+TBAI': ['SII', 'TBAI'], VERIFACTU: ['VERIFACTU'] };
+
+/**
+ * A fake NEO for the wizard: `configureFiscalSystem` creates the records of the asked system (or
+ * refuses with `refusal`), and each record reads back by id.
+ */
+function createBackend({ refusal = null } = {}) {
+  return vi.fn((path, opts = {}) => {
+    if (path.includes('/action/configureFiscalSystem')) {
+      if (refusal) return jsonResponse({ error: { message: refusal, status: 409 } }, { ok: false, status: 409 });
+      const { system, territory } = JSON.parse(opts.body);
+      const created = (RECORD_SYSTEMS[system] ?? []).map(s => ({ system: s, id: `${s.toLowerCase()}-rec-1` }));
+      return jsonResponse({ response: { data: { system, territory, created } } });
+    }
+    const m = /^\/(sii|tbai|verifactu)-config\/[^/]+\/([^/?]+)$/.exec(path);
+    if (m) return jsonResponse({ response: { data: [{ id: m[2] }] } });
+    return jsonResponse({});
+  });
+}
+
+function actionCalls() {
+  return backend.fetch.mock.calls.filter(([path]) => path.includes('/action/configureFiscalSystem'));
+}
+
+function actionBody() {
+  const calls = actionCalls();
+  expect(calls).toHaveLength(1);
+  expect(calls[0][0]).toBe(ACTION_PATH);
+  expect(calls[0][1].method).toBe('POST');
+  return JSON.parse(calls[0][1].body);
+}
+
+beforeEach(() => {
+  backend.fetch = createBackend();
+  catalogState.value = { catalog: FISCAL_SYSTEM_CATALOG, error: null, loading: false };
+});
 
 function renderWizard(overrides = {}) {
   const defaults = {
@@ -365,8 +415,10 @@ describe('OnboardingWizard — createRecords flow', () => {
     });
   });
 
-  it('back button in DetailScreen goes to AppliedScreen (ETP-4783: records already created, cannot go back to wizard)', async () => {
-    renderWizard();
+  // ETP-4783: the records already exist, so "Cancelar" never goes back into the wizard. Since
+  // ETP-5831 (no applied screen) it hands over to the page, which shows the configured view.
+  it('cancel in DetailScreen hands over to the page instead of going back into the wizard', async () => {
+    const { props } = renderWizard();
     fireEvent.click(screen.getByText('fiscal.territory.navarra'));
     fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
     fireEvent.click(screen.getByText('fiscal.onboarding.confirm.btn'));
@@ -375,7 +427,7 @@ describe('OnboardingWizard — createRecords flow', () => {
     });
     fireEvent.click(screen.getByText('fiscal.cancel'));
     expect(screen.queryByText('fiscal.onboarding.confirm.title')).not.toBeInTheDocument();
-    expect(screen.getByText('fiscal.onboarding.goHome')).toBeInTheDocument();
+    expect(props.onComplete).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -405,11 +457,12 @@ describe('OnboardingWizard — ManualScreen', () => {
     expect(screen.getByText('fiscal.onboarding.continue')).toBeDisabled();
   });
 
-  it('shows system options after selecting a territory', () => {
+  it('shows the catalog system options after selecting a territory', () => {
     navigateToManual();
-    fireEvent.click(screen.getByText('fiscal.territory.navarra'));
-    expect(screen.getByText('SII')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('fiscal.territory.alava'));
     expect(screen.getByText('TicketBAI')).toBeInTheDocument();
+    expect(screen.getByText('SII + TicketBAI')).toBeInTheDocument();
+    expect(screen.queryByText('VERI*FACTU')).not.toBeInTheDocument();
   });
 
   it('continue is disabled after selecting territory but not system', () => {
@@ -457,48 +510,67 @@ describe('OnboardingWizard — ManualScreen', () => {
   });
 });
 
-describe('OnboardingWizard — ManualScreen territory restriction (ETP-5272 point 4)', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
+// ETP-6053 — the manual screen offers exactly the systems the backend catalog allows for the
+// picked territory (ETP-5272 point 4: Ceuta/Melilla is VERI*FACTU only).
+describe('OnboardingWizard — ManualScreen offers the catalog systems per territory', () => {
+  const SYSTEM_LABELS = { SII: 'SII', TBAI: 'TicketBAI', 'SII+TBAI': 'SII + TicketBAI', VERIFACTU: 'VERI*FACTU' };
+  const TERRITORY_LABELS = {
+    navarra: 'fiscal.territory.navarra', alava: 'fiscal.territory.alava', bizkaia: 'fiscal.territory.bizkaia',
+    gipuzkoa: 'fiscal.territory.gipuzkoa', baleares: 'fiscal.territory.espania',
+    canarias: 'fiscal.territory.canarias', ceuta: 'fiscal.territory.ceuta',
+  };
 
   function navigateToManual() {
     renderWizard();
     fireEvent.click(screen.getByText('fiscal.onboarding.territory.prefer.manual.link'));
   }
 
-  it('ceuta/melilla only offers VERI*FACTU — SII is not rendered as an option', () => {
-    vi.mocked(getAllowedSystemsForTerritory).mockImplementation((territory) => {
-      if (territory === 'ceuta') return ['VERIFACTU'];
-      return ['SII', 'TBAI', 'VERIFACTU'];
-    });
+  it.each(FISCAL_SYSTEM_CATALOG.territories.map(t => [t.territory, t.systems]))(
+    '%s offers exactly %j',
+    (territory, systems) => {
+      navigateToManual();
+      fireEvent.click(screen.getByText(TERRITORY_LABELS[territory]));
+      for (const [id, label] of Object.entries(SYSTEM_LABELS)) {
+        if (systems.includes(id)) expect(screen.getByText(label)).toBeInTheDocument();
+        else expect(screen.queryByText(label)).not.toBeInTheDocument();
+      }
+    },
+  );
+
+  it('follows the catalog it is given, not a local table', () => {
+    catalogState.value = {
+      catalog: { territories: [{ territory: 'navarra', systems: ['VERIFACTU'] }] },
+      error: null,
+      loading: false,
+    };
     navigateToManual();
-    fireEvent.click(screen.getByText('fiscal.territory.ceuta'));
+    fireEvent.click(screen.getByText('fiscal.territory.navarra'));
     expect(screen.getByText('VERI*FACTU')).toBeInTheDocument();
     expect(screen.queryByText('SII')).not.toBeInTheDocument();
   });
 
-  it('canarias (SII-supported territory) still offers both SII and VERI*FACTU — no regression', () => {
-    vi.mocked(getAllowedSystemsForTerritory).mockImplementation((territory) => {
-      if (territory === 'ceuta') return ['VERIFACTU'];
-      if (territory === 'canarias') return ['SII', 'VERIFACTU'];
-      return ['SII', 'TBAI', 'VERIFACTU'];
-    });
+  it('offers no system while the catalog is not loaded, so Continue stays disabled', () => {
+    catalogState.value = { catalog: null, error: null, loading: true };
     navigateToManual();
-    fireEvent.click(screen.getByText('fiscal.territory.canarias'));
-    expect(screen.getByText('SII')).toBeInTheDocument();
-    expect(screen.getByText('VERI*FACTU')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('fiscal.territory.navarra'));
+    for (const label of Object.values(SYSTEM_LABELS)) {
+      expect(screen.queryByText(label)).not.toBeInTheDocument();
+    }
+    expect(screen.getByText('fiscal.onboarding.continue')).toBeDisabled();
   });
 });
 
-describe('OnboardingWizard — AppliedScreen', () => {
+// ETP-5831 — the "Configuración aplicada" screen is gone: once the detail save succeeds the
+// wizard hands over to the page (onComplete), which re-reads the config and shows the configured
+// view with its "Estado" panel. Nothing of the wizard's own summary is rendered.
+describe('OnboardingWizard — after saving the details', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  async function navigateToApplied(overrides = {}) {
+  async function saveDetails(overrides = {}) {
     const result = renderWizard(overrides);
-    // Use manual path so manualSystem='SII' bypasses the resolveSystem mock (which returns null)
+    // Manual path: navarra + SII.
     fireEvent.click(screen.getByText('fiscal.onboarding.territory.prefer.manual.link'));
     fireEvent.click(screen.getByText('fiscal.territory.navarra'));
     fireEvent.click(screen.getByText('SII'));
@@ -507,142 +579,212 @@ describe('OnboardingWizard — AppliedScreen', () => {
     await waitFor(() => {
       expect(screen.getByText('fiscal.save')).toBeInTheDocument();
     });
-    // handleSaveDetail: system='SII', siiRef.current is null (SiiSection not rendered),
-    // optional-chaining returns undefined, onApplied() fires → step='applied'
-    fireEvent.click(screen.getByText('fiscal.save'));
-    await waitFor(() => {
-      expect(screen.getByText('fiscal.onboarding.applied.title')).toBeInTheDocument();
-    });
+    // handleSaveDetail: system='SII', siiRef.current is null (SiiSection mocked), so the save
+    // resolves at once and the wizard hands over.
+    fireEvent.click(screen.getByTestId('OnboardingWizard__detailSaveButton'));
     return result;
   }
 
-  it('shows applied title after saving details', async () => {
-    await navigateToApplied();
-    expect(screen.getByText('fiscal.onboarding.applied.title')).toBeInTheDocument();
+  it('calls onComplete so the page re-reads the stored config', async () => {
+    const { props } = await saveDetails();
+    await waitFor(() => expect(props.onComplete).toHaveBeenCalledTimes(1));
   });
 
-  it('shows applied subtitle', async () => {
-    await navigateToApplied();
-    expect(screen.getByText('fiscal.onboarding.applied.subtitle')).toBeInTheDocument();
+  it('never renders an applied / summary screen of its own', async () => {
+    await saveDetails();
+    await waitFor(() => expect(screen.queryByText('fiscal.onboarding.applied.title')).not.toBeInTheDocument());
+    expect(screen.queryByTestId('FiscalStatusSummary__applied')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('FiscalStatusSummary__panel')).not.toBeInTheDocument();
   });
 
-  it('shows goHome button in applied screen', async () => {
-    await navigateToApplied();
-    expect(screen.getByText('fiscal.onboarding.goHome')).toBeInTheDocument();
-  });
-
-  it('shows viewConfig button in applied screen', async () => {
-    await navigateToApplied();
-    expect(screen.getByText('fiscal.onboarding.viewConfig')).toBeInTheDocument();
-  });
-
-  it('calls onGoHome when goHome button is clicked in applied screen', async () => {
-    const { props } = await navigateToApplied();
-    fireEvent.click(screen.getByText('fiscal.onboarding.goHome'));
-    expect(props.onGoHome).toHaveBeenCalled();
-  });
-
-  it('calls onComplete when viewConfig button is clicked in applied screen', async () => {
-    const { props } = await navigateToApplied();
-    fireEvent.click(screen.getByText('fiscal.onboarding.viewConfig'));
-    expect(props.onComplete).toHaveBeenCalled();
-  });
-
-  it('shows applied territory row', async () => {
-    await navigateToApplied();
-    expect(screen.getByText('fiscal.onboarding.applied.row.territory')).toBeInTheDocument();
-  });
-
-  it('shows applied system row', async () => {
-    await navigateToApplied();
-    expect(screen.getByText('fiscal.onboarding.applied.row.system')).toBeInTheDocument();
-  });
-
-  it('shows nextsteps title', async () => {
-    await navigateToApplied();
-    expect(screen.getByText('fiscal.onboarding.nextsteps.title')).toBeInTheDocument();
+  it('does not double-submit: a second click while the save is in flight is ignored', async () => {
+    const { props } = renderWizard();
+    fireEvent.click(screen.getByText('fiscal.onboarding.territory.prefer.manual.link'));
+    fireEvent.click(screen.getByText('fiscal.territory.navarra'));
+    fireEvent.click(screen.getByText('SII'));
+    fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
+    fireEvent.click(screen.getByText('fiscal.onboarding.confirm.btn'));
+    const save = await screen.findByTestId('OnboardingWizard__detailSaveButton');
+    fireEvent.click(save);
+    fireEvent.click(save);
+    await waitFor(() => expect(props.onComplete).toHaveBeenCalled());
+    expect(props.onComplete).toHaveBeenCalledTimes(1);
   });
 });
 
 
-describe('OnboardingWizard — createRecords API calls', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
+// ETP-6053 — Confirm activates the system with the organization's configureFiscalSystem action:
+// the wizard sends only the resolved system and the territory, the server builds the records.
+describe('OnboardingWizard — confirm calls configureFiscalSystem', () => {
+  const continueBtn = () => screen.getByText('fiscal.onboarding.continue');
+
+  /** Territory path: pick the card, answer the sub-questions (labels, in order), confirm. */
+  async function confirmPath(territoryLabel, answers = []) {
+    renderWizard();
+    fireEvent.click(screen.getByText(territoryLabel));
+    fireEvent.click(continueBtn());
+    if (answers.length) {
+      for (const answer of answers) fireEvent.click(screen.getByText(answer));
+      fireEvent.click(continueBtn());
+    }
+    fireEvent.click(screen.getByTestId('OnboardingWizard__confirmActivateButton'));
+    await waitFor(() => expect(screen.getByText('fiscal.save')).toBeInTheDocument());
+  }
+
+  const ONLY_TBAI = 'fiscal.onboarding.subq.tbai.label';
+  const ALSO_SII = 'fiscal.onboarding.subq.sii.label';
+  const HIGH = 'fiscal.onboarding.subq.obligation.yes.label';
+  const LOW = 'fiscal.onboarding.subq.obligation.no.label';
+  const LOW_SII = 'fiscal.onboarding.subq.sii.vol.label';
+  const LOW_VERIFACTU = 'fiscal.onboarding.subq.verifactu.label';
+
+  it.each([
+    ['Navarra', 'fiscal.territory.navarra', [], { system: 'SII', territory: 'navarra' }],
+    ['Álava, TicketBAI only', 'fiscal.territory.alava', [ONLY_TBAI], { system: 'TBAI', territory: 'alava' }],
+    ['Álava, also national SII', 'fiscal.territory.alava', [ALSO_SII], { system: 'SII+TBAI', territory: 'alava' }],
+    ['Bizkaia, TicketBAI only', 'fiscal.territory.bizkaia', [ONLY_TBAI], { system: 'TBAI', territory: 'bizkaia' }],
+    ['Bizkaia, also national SII', 'fiscal.territory.bizkaia', [ALSO_SII], { system: 'SII+TBAI', territory: 'bizkaia' }],
+    ['Gipuzkoa, TicketBAI only', 'fiscal.territory.gipuzkoa', [ONLY_TBAI], { system: 'TBAI', territory: 'gipuzkoa' }],
+    ['Gipuzkoa, also national SII', 'fiscal.territory.gipuzkoa', [ALSO_SII], { system: 'SII+TBAI', territory: 'gipuzkoa' }],
+    ['Baleares, high volume', 'fiscal.territory.espania', [HIGH], { system: 'SII', territory: 'baleares' }],
+    ['Baleares, low volume choosing SII', 'fiscal.territory.espania', [LOW, LOW_SII], { system: 'SII', territory: 'baleares' }],
+    ['Baleares, low volume choosing VERI*FACTU', 'fiscal.territory.espania', [LOW, LOW_VERIFACTU], { system: 'VERIFACTU', territory: 'baleares' }],
+    ['Canarias, high volume', 'fiscal.territory.canarias', [HIGH], { system: 'SII', territory: 'canarias' }],
+    ['Canarias, low volume choosing VERI*FACTU', 'fiscal.territory.canarias', [LOW, LOW_VERIFACTU], { system: 'VERIFACTU', territory: 'canarias' }],
+    ['Ceuta / Melilla (no sub-question, VERI*FACTU only)', 'fiscal.territory.ceuta', [], { system: 'VERIFACTU', territory: 'ceuta' }],
+  ])('%s → %j', async (_label, territoryLabel, answers, expected) => {
+    await confirmPath(territoryLabel, answers);
+    expect(actionBody()).toEqual(expected);
   });
 
-  it('calls the API when buildOnboardingPayloads returns an sii payload', async () => {
-    const mockFetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
-    vi.mocked(useApiFetch).mockReturnValue(mockFetch);
-    vi.mocked(buildOnboardingPayloads).mockReturnValue({ sii: { orgField: 'x' } });
+  it.each([
+    ['fiscal.territory.navarra', 'SII', { system: 'SII', territory: 'navarra' }],
+    ['fiscal.territory.alava', 'SII + TicketBAI', { system: 'SII+TBAI', territory: 'alava' }],
+    ['fiscal.territory.ceuta', 'VERI*FACTU', { system: 'VERIFACTU', territory: 'ceuta' }],
+    ['fiscal.territory.canarias', 'VERI*FACTU', { system: 'VERIFACTU', territory: 'canarias' }],
+  ])('manual path %s + %s → %j', async (territoryLabel, systemLabel, expected) => {
+    renderWizard();
+    fireEvent.click(screen.getByText('fiscal.onboarding.territory.prefer.manual.link'));
+    fireEvent.click(screen.getByText(territoryLabel));
+    fireEvent.click(screen.getByText(systemLabel));
+    fireEvent.click(continueBtn());
+    fireEvent.click(screen.getByTestId('OnboardingWizard__confirmActivateButton'));
+    await waitFor(() => expect(screen.getByText('fiscal.save')).toBeInTheDocument());
+    expect(actionBody()).toEqual(expected);
+  });
 
+  it('never POSTs a config record itself — the only write is the action', async () => {
+    await confirmPath('fiscal.territory.alava', [ALSO_SII]);
+    const posts = backend.fetch.mock.calls.filter(([, opts]) => opts?.method === 'POST');
+    expect(posts.map(([path]) => path)).toEqual([ACTION_PATH]);
+  });
+
+  it('reads back every created record and mounts its detail section', async () => {
+    await confirmPath('fiscal.territory.alava', [ALSO_SII]);
+    const reads = backend.fetch.mock.calls.map(([path]) => path).filter(p => !p.includes('/action/'));
+    expect(reads).toEqual(['/sii-config/siiConfiguration/sii-rec-1', '/tbai-config/header/tbai-rec-1']);
+    expect(screen.getByTestId('sii-section')).toBeInTheDocument();
+    expect(screen.getByTestId('tbai-section')).toBeInTheDocument();
+  });
+
+  it('mounts the VERI*FACTU section for a VERI*FACTU activation', async () => {
+    await confirmPath('fiscal.territory.ceuta');
+    expect(screen.getByTestId('verifactu-section')).toBeInTheDocument();
+    expect(screen.queryByTestId('sii-section')).not.toBeInTheDocument();
+  });
+
+  it('shows the backend refusal message on the confirm step and stays there', async () => {
+    backend.fetch = createBackend({ refusal: 'Ya hay un sistema de facturación activo para esta organización.' });
     renderWizard();
     fireEvent.click(screen.getByText('fiscal.territory.navarra'));
-    fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
-    fireEvent.click(screen.getByText('fiscal.onboarding.confirm.btn'));
+    fireEvent.click(continueBtn());
+    const confirm = screen.getByTestId('OnboardingWizard__confirmActivateButton');
+    fireEvent.click(confirm);
 
-    await waitFor(() => {
-      expect(screen.getByText('fiscal.save')).toBeInTheDocument();
-    });
-    expect(mockFetch).toHaveBeenCalledWith(
-      expect.stringContaining('sii-config'),
-      expect.objectContaining({ method: 'POST' }),
-    );
+    const message = await screen.findByText('Ya hay un sistema de facturación activo para esta organización.');
+    // The confirm screen's own error line (the action buttons sit in its footer).
+    expect(message.tagName).toBe('P');
+    expect(message).toHaveClass('text-destructive');
+    expect(screen.getByText('fiscal.onboarding.confirm.title')).toBeInTheDocument();
+    expect(screen.queryByText('fiscal.save')).not.toBeInTheDocument();
+    expect(screen.getByTestId('OnboardingWizard__confirmActivateButton')).not.toBeDisabled();
   });
 
-  it('calls the API when buildOnboardingPayloads returns a tbai payload', async () => {
-    const mockFetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
-    vi.mocked(useApiFetch).mockReturnValue(mockFetch);
-    vi.mocked(buildOnboardingPayloads).mockReturnValue({ tbai: { orgField: 'x' } });
-
-    renderWizard();
-    fireEvent.click(screen.getByText('fiscal.territory.alava'));
-    fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
-    fireEvent.click(screen.getByText('fiscal.onboarding.subq.tbai.label'));
-    fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
-    fireEvent.click(screen.getByText('fiscal.onboarding.confirm.btn'));
-
-    await waitFor(() => {
-      expect(screen.getByText('fiscal.save')).toBeInTheDocument();
-    });
-    expect(mockFetch).toHaveBeenCalledWith(
-      expect.stringContaining('tbai-config'),
-      expect.objectContaining({ method: 'POST' }),
-    );
-  });
-
-  it('calls the API when buildOnboardingPayloads returns a verifactu payload', async () => {
-    const mockFetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
-    vi.mocked(useApiFetch).mockReturnValue(mockFetch);
-    vi.mocked(buildOnboardingPayloads).mockReturnValue({ verifactu: { orgField: 'x' } });
-
+  it('shows a network failure message the same way', async () => {
+    backend.fetch = vi.fn(() => Promise.reject(new Error('Network error')));
     renderWizard();
     fireEvent.click(screen.getByText('fiscal.territory.navarra'));
-    fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
-    fireEvent.click(screen.getByText('fiscal.onboarding.confirm.btn'));
+    fireEvent.click(continueBtn());
+    fireEvent.click(screen.getByTestId('OnboardingWizard__confirmActivateButton'));
 
-    await waitFor(() => {
-      expect(screen.getByText('fiscal.save')).toBeInTheDocument();
-    });
-    expect(mockFetch).toHaveBeenCalledWith(
-      expect.stringContaining('verifactu-config'),
-      expect.objectContaining({ method: 'POST' }),
-    );
+    expect(await screen.findByText('Network error')).toBeInTheDocument();
   });
 
-  it('shows error message when API call fails during createRecords', async () => {
-    vi.mocked(buildOnboardingPayloads).mockReturnValue({ sii: { orgField: 'x' } });
-    vi.mocked(useApiFetch).mockReturnValue(
-      vi.fn(() => Promise.reject(new Error('Network error'))),
-    );
-
+  it('shows fiscal.err.noPermission, never NEO\'s raw English denial, on a 403 without messageKeys', async () => {
+    const RAW = 'Access denied to spec for current role';
+    backend.fetch = vi.fn((path) => (path.includes('/action/configureFiscalSystem')
+      ? jsonResponse({ error: { message: RAW, status: 403 } }, { ok: false, status: 403 })
+      : jsonResponse({})));
     renderWizard();
     fireEvent.click(screen.getByText('fiscal.territory.navarra'));
-    fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
-    fireEvent.click(screen.getByText('fiscal.onboarding.confirm.btn'));
+    fireEvent.click(continueBtn());
+    fireEvent.click(screen.getByTestId('OnboardingWizard__confirmActivateButton'));
 
-    await waitFor(() => {
-      expect(screen.getByText('Network error')).toBeInTheDocument();
-    });
+    const message = await screen.findByText('fiscal.err.noPermission');
+    expect(message).toHaveClass('text-destructive');
+    expect(screen.queryByText(RAW)).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(RAW);
+    expect(screen.getByText('fiscal.onboarding.confirm.title')).toBeInTheDocument();
+  });
+
+  it('shows the server message of a 403 that carries messageKeys (the action worded it)', async () => {
+    const KEYED = 'No tiene permiso de escritura en VERI*FACTU.';
+    backend.fetch = vi.fn((path) => (path.includes('/action/configureFiscalSystem')
+      ? jsonResponse({ error: { message: KEYED, status: 403, messageKeys: ['fiscal.noWrite'] } }, { ok: false, status: 403 })
+      : jsonResponse({})));
+    renderWizard();
+    fireEvent.click(screen.getByText('fiscal.territory.navarra'));
+    fireEvent.click(continueBtn());
+    fireEvent.click(screen.getByTestId('OnboardingWizard__confirmActivateButton'));
+
+    expect(await screen.findByText(KEYED)).toBeInTheDocument();
+    expect(screen.queryByText('fiscal.err.noPermission')).not.toBeInTheDocument();
+  });
+});
+
+// ETP-6053 — a catalog that cannot be read is said, not silently turned into an empty choice.
+describe('OnboardingWizard — fiscal catalog', () => {
+  it('reads the catalog for the selected organization', () => {
+    renderWizard();
+    expect(useFiscalCatalog).toHaveBeenCalledWith('/api/fiscal-config', 'org-1');
+  });
+
+  it('shows the catalog-load error banner when the catalog fails to load', () => {
+    catalogState.value = { catalog: null, error: 'Could not read the fiscal system catalog.', loading: false };
+    renderWizard();
+    const banner = screen.getByTestId('OnboardingWizard__catalogErrorBanner');
+    expect(banner).toHaveTextContent('fiscal.catalog.err.load');
+  });
+
+  it('shows fiscal.err.noPermission in the banner when the role may not read the catalog', () => {
+    const RAW = 'Access denied to spec for current role';
+    catalogState.value = { catalog: null, error: RAW, forbidden: true, loading: false };
+    renderWizard();
+    const banner = screen.getByTestId('OnboardingWizard__catalogErrorBanner');
+    expect(banner).toHaveTextContent('fiscal.err.noPermission');
+    expect(banner).not.toHaveTextContent('fiscal.catalog.err.load');
+    expect(document.body).not.toHaveTextContent(RAW);
+  });
+
+  it('shows no catalog-load banner while the catalog loads or once it is loaded', () => {
+    catalogState.value = { catalog: null, error: null, loading: true };
+    const { unmount } = renderWizard();
+    expect(screen.queryByTestId('OnboardingWizard__catalogErrorBanner')).not.toBeInTheDocument();
+    unmount();
+
+    catalogState.value = { catalog: FISCAL_SYSTEM_CATALOG, error: null, loading: false };
+    renderWizard();
+    expect(screen.queryByTestId('OnboardingWizard__catalogErrorBanner')).not.toBeInTheDocument();
   });
 });
 
@@ -736,65 +878,9 @@ describe('OnboardingWizard — renderPageHead helper', () => {
   });
 });
 
-describe('OnboardingWizard — AppliedScreen environment row (ETP-5027)', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  // Walks the manual path up to the applied summary for the given system,
-  // with createRecords returning `record` as the created config row.
-  async function navigateToAppliedFor({ systemLabel, payloadKey, record }) {
-    buildOnboardingPayloads.mockReturnValue({ [payloadKey]: {} });
-    useApiFetch.mockReturnValue(vi.fn(() => Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({ response: { data: [record] } }),
-    })));
-    renderWizard();
-    fireEvent.click(screen.getByText('fiscal.onboarding.territory.prefer.manual.link'));
-    fireEvent.click(screen.getByText('fiscal.territory.navarra'));
-    fireEvent.click(screen.getByText(systemLabel));
-    fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
-    fireEvent.click(screen.getByText('fiscal.onboarding.confirm.btn'));
-    await waitFor(() => {
-      expect(screen.getByText('fiscal.save')).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByText('fiscal.save'));
-    await waitFor(() => {
-      expect(screen.getByText('fiscal.onboarding.applied.title')).toBeInTheDocument();
-    });
-  }
-
-  it('shows the sandbox label when VERI*FACTU runs in the developer environment', async () => {
-    await navigateToAppliedFor({ systemLabel: 'VERI*FACTU', payloadKey: 'verifactu', record: { isDevEnv: 'Y' } });
-    expect(screen.getByText('fiscal.onboarding.applied.env.sandbox')).toBeInTheDocument();
-    expect(screen.queryByText('fiscal.onboarding.applied.env.production')).not.toBeInTheDocument();
-  });
-
-  it('shows the production label when VERI*FACTU runs in production', async () => {
-    await navigateToAppliedFor({ systemLabel: 'VERI*FACTU', payloadKey: 'verifactu', record: { isDevEnv: 'N' } });
-    expect(screen.getByText('fiscal.onboarding.applied.env.production')).toBeInTheDocument();
-    expect(screen.queryByText('fiscal.onboarding.applied.env.sandbox')).not.toBeInTheDocument();
-  });
-
-  it('falls back to the sandbox label when the environment flag is missing', async () => {
-    await navigateToAppliedFor({ systemLabel: 'VERI*FACTU', payloadKey: 'verifactu', record: {} });
-    expect(screen.getByText('fiscal.onboarding.applied.env.sandbox')).toBeInTheDocument();
-  });
-
-  it('shows the production label when SII is in the production environment', async () => {
-    await navigateToAppliedFor({ systemLabel: 'SII', payloadKey: 'sii', record: { entornoDeProduccin: 'Y' } });
-    expect(screen.getByText('fiscal.onboarding.applied.env.production')).toBeInTheDocument();
-  });
-
-  it('shows the sandbox label when SII is not in the production environment', async () => {
-    await navigateToAppliedFor({ systemLabel: 'SII', payloadKey: 'sii', record: { entornoDeProduccin: 'N' } });
-    expect(screen.getByText('fiscal.onboarding.applied.env.sandbox')).toBeInTheDocument();
-  });
-});
-
 // ETP-5272 follow-up — the onboarding/setup wizard is the ONLY path that
-// performs a first-time fiscal-system ACTIVATION (createRecords() POSTs the
-// sii-config/tbai-config/verifactu-config record on the confirm step), which
+// performs a first-time fiscal-system ACTIVATION (createRecords() calls the
+// configureFiscalSystem action on the confirm step, ETP-6053), which
 // is exactly what "Fuerza SII/TicketBAI/VeriFactu a modo prueba" exists to
 // block — there is no carve-out for first-time setup in the requirement.
 describe('OnboardingWizard — forceTestMode (ETP-5272 follow-up)', () => {
@@ -850,9 +936,7 @@ describe('OnboardingWizard — forceTestMode (ETP-5272 follow-up)', () => {
   });
 
   it('clicking the confirm button never calls the API when forceTestMode is true', async () => {
-    const mockFetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
-    vi.mocked(useApiFetch).mockReturnValue(mockFetch);
-    vi.mocked(buildOnboardingPayloads).mockReturnValue({ sii: { orgField: 'x' } });
+    const mockFetch = backend.fetch;
 
     navigateToConfirmViaNavarra({ forceTestMode: true });
     fireEvent.click(screen.getByTestId('OnboardingWizard__confirmActivateButton'));
@@ -863,31 +947,17 @@ describe('OnboardingWizard — forceTestMode (ETP-5272 follow-up)', () => {
     expect(screen.queryByText('fiscal.save')).not.toBeInTheDocument();
   });
 
-  it('clicking the confirm button still creates records when forceTestMode is false (no regression)', async () => {
-    const mockFetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
-    vi.mocked(useApiFetch).mockReturnValue(mockFetch);
-    vi.mocked(buildOnboardingPayloads).mockReturnValue({ sii: { orgField: 'x' } });
-
+  it('clicking the confirm button still activates the system when forceTestMode is false (no regression)', async () => {
     navigateToConfirmViaNavarra({ forceTestMode: false });
     fireEvent.click(screen.getByTestId('OnboardingWizard__confirmActivateButton'));
 
     await waitFor(() => {
       expect(screen.getByText('fiscal.save')).toBeInTheDocument();
     });
-    expect(mockFetch).toHaveBeenCalledWith(
-      expect.stringContaining('sii-config'),
-      expect.objectContaining({ method: 'POST' }),
-    );
+    expect(actionBody()).toEqual({ system: 'SII', territory: 'navarra' });
   });
 
   it('disables the detail-screen Save button when forceTestMode is true (defense-in-depth for a mid-session flip)', async () => {
-    const mockFetch = vi.fn(() => Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({ response: { data: [{ id: 'sii-1' }] } }),
-    }));
-    vi.mocked(useApiFetch).mockReturnValue(mockFetch);
-    vi.mocked(buildOnboardingPayloads).mockReturnValue({ sii: { orgField: 'x' } });
-
     // Reach the detail screen while unlocked (the only way to get past the
     // confirm gate), then re-render with forceTestMode=true to simulate the
     // preference flipping on while the wizard is still open on the detail step.

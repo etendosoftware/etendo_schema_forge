@@ -1,9 +1,11 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-monitor/SiiMonitorSection.jsx
 // ETP-4784 correction #3: the "Exportar" CSV re-fetches the invoice list
 // independently of the on-screen state, so it must replicate the same
 // header/SiiData `motivo` fallback used by the on-screen "Motivo error"
 // column — otherwise a row that shows a reason on screen (because it came
 // from the SiiData sub-table) exports with an empty Error cell.
 
+import { allIconsAs } from '@/test/lucideIconMock.js';
 const invoiceRow = (overrides = {}) => ({
   id: 'inv-1',
   invoiceDate: '2026-01-10',
@@ -31,7 +33,7 @@ vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => currentApiFetch }));
 vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u }));
 vi.mock('@/lib/formatAmount.js', () => ({ formatAmount: (v) => String(v ?? '') }));
-vi.mock('lucide-react', () => ({ FileUp: () => null, FileDown: () => null }));
+vi.mock('lucide-react', async (importOriginal) => allIconsAs(() => null, importOriginal));
 vi.mock('@/components/ui/checkbox', () => ({
   Checkbox: ({ checked, onChange }) => <input type="checkbox" checked={!!checked} onChange={onChange ?? (() => {})} />,
 }));

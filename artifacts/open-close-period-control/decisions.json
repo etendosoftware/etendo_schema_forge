@@ -84,7 +84,8 @@
             "P": "red",
             "M": "orange"
           },
-          "gridOrder": 1
+          "gridOrder": 1,
+          "agentPrompt": "The period's state: O open, C closed, P permanently closed, N never opened, M mixed (document categories in different states). This is the field that decides whether documents can be posted in the period. Read-only: change it with the openClose action."
         },
         "calendar": {
           "grid": false,
@@ -130,7 +131,8 @@
           "form": true,
           "visibility": "editable",
           "processId": "167",
-          "processType": "classic"
+          "processType": "classic",
+          "agentPrompt": "Button, not a state: its value is the action the button offers next (O open, C close, P close permanently, N no action), so it reads the opposite of the period's state. Read the period's state from status. Run it with etendo_action action:\"openClose\"."
         },
         "active": {
           "visibility": "discarded"
@@ -200,7 +202,8 @@
           "form": true,
           "visibility": "editable",
           "processId": "168",
-          "processType": "classic"
+          "processType": "classic",
+          "agentPrompt": "Button, not a state: its value is the action the button offers next (O open, C close, P close permanently, N no action), so it reads the opposite of the period's state. Read the period's state from status. Run it with etendo_action action:\"openClose\"."
         },
         "calendar": {
           "visibility": "discarded"

@@ -9,6 +9,7 @@ import mcpRetryProxy from './vite-plugins/mcp-proxy.js';
 import singleCoreInstancePlugin from './vite-plugins/single-core-instance.js';
 import appsSpikePlugin from './vite-plugins/apps-spike.js';
 import sliceLabelsPlugin from './vite-plugins/slice-labels.js';
+import printablesPublishPlugin from './vite-plugins/printables-publish.js';
 
 // Read ETENDO_URL from .env.local for the dev proxy and report API (not exposed to client)
 function readEnvFile() {
@@ -158,6 +159,9 @@ export default defineConfig(({ mode }) => {
   // environment its own pair so several SPAs run side by side (docs/local-env-plugin.md).
   const SPA_PORT = Number(process.env.SPA_PORT) || 3100;
   const BFF_PORT = Number(process.env.BFF_PORT) || 3400;
+  // Opt-in: bind the dev server to another interface (e.g. VITE_HOST=0.0.0.0 to reach it by the LAN
+  // address). Unset, vite keeps its default (localhost only), so nothing is exposed by accident.
+  const SPA_HOST = env.VITE_HOST || process.env.VITE_HOST || '';
   // Origin only (no path) — `vite preview` proxies the built bundle's *relative*
   // VITE_API_BASE (e.g. "/etendo") verbatim to Tomcat, so the target here must not
   // duplicate the context path already baked into the request.
@@ -238,6 +242,8 @@ export default defineConfig(({ mode }) => {
     react(),
     singleCoreInstancePlugin(),
     sliceLabelsPlugin(),
+    // ETP-6013 — dist/printables/<document>.json for the server-side document render.
+    printablesPublishPlugin(),
     schemaApiPlugin(),
     reportApiPlugin({ etendoUrl: ETENDO_URL, jsreportUrl: JSREPORT_URL }),
     mcpWellKnownPlugin(),
@@ -368,6 +374,7 @@ export default defineConfig(({ mode }) => {
     // resolve and then 403, so the dev profile fails at request time rather than
     // at config time. Only widened when LOCAL_CORE is set.
     ...(LOCAL_CORE ? { fs: { allow: [resolve(__dirname, '../..'), CORE_REPO] } } : {}),
+    ...(SPA_HOST ? { host: SPA_HOST } : {}),
     port: SPA_PORT,
     // Fail loudly instead of silently drifting to 3101/3102/... when 3100 is already
     // taken (e.g. a leftover `preview` or a stale dev server from another checkout) —

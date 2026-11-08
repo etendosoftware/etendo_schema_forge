@@ -19,6 +19,7 @@ import DocumentStatusPill from './DocumentStatusPill.jsx';
 import { BlockingBpBanner } from './BlockingBpBanner.jsx';
 import { resolveOnSelectMappings } from './DataTable.jsx';
 import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
+import { evalTabVisible } from './evalTabVisible.js';
 import { NUMERIC_FIELD_TYPES } from '@/lib/numericFieldTypes.js';
 import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 import {apiFetch} from '@/auth/api.js';
@@ -634,9 +635,11 @@ export function applyOneComboEntry(key, combo, ctx) {
   const userHasValue = currentVal !== '' && currentVal != null;
   if (userTouchedRef.current.has(key) && userHasValue) return;
   appliedFields.set(key, selectedVal);
-  hook.handleChange(key, selectedVal);
+  // ETP-5888: a combo is a callout response like any other field — same `origin` as
+  // applyCalloutFieldUpdates, so neither the value nor its label reads as a user edit.
+  hook.handleChange(key, selectedVal, { origin: 'callout' });
   if (selectedLabel) {
-    hook.handleChange(key + '$_identifier', selectedLabel);
+    hook.handleChange(key + '$_identifier', selectedLabel, { origin: 'callout' });
   }
   bumpFieldGeneration(key, fieldGenerationRef);
 }
@@ -1221,7 +1224,7 @@ export function buildInitialTabs(p) {
       // in DetailView keep working. A filtered-out tab never appears in the nav
       // strip and the deep-link handler's `tabs.findIndex(...)` naturally no-ops
       // for it (see the `openSecondaryTab` effect in DetailView.jsx).
-      if (!isCapabilityVisible(p.capabilities, st.visibleWhenCapability)) return null;
+      if (!isSecondaryTabVisible(st, p.capabilities, p.tabRecord, p.tabCtx)) return null;
       const secondaryChildCount = !st.isFormTab ? (p.secondaryHooks[i]?.children?.length ?? null) : null;
       const childCount = st.Panel ? (p.panelCounts[st.key] ?? null) : secondaryChildCount;
       const label = (st.labelKey && p.ui(st.labelKey)) || st.label;
@@ -1240,7 +1243,9 @@ export function buildInitialTabs(p) {
     entries.push({ tab: linesTab, ...computeLinesEntryKey(p.detailTabOrder, p.detailTabIndex, secondaryEntries) });
   } else if (p.CustomLines) {
     entries.push({
-      tab: { key: 'customLines', label: p.customLinesLabel, count: p.customLinesCount ?? null },
+      // `icon`: the CustomLines component's optional static `tabIcon` (ETP-5791); absent ⇒ the
+      // icon resolves from the key as before (resolveTabIcon).
+      tab: { key: 'customLines', label: p.customLinesLabel, count: p.customLinesCount ?? null, icon: p.CustomLines.tabIcon ?? null },
       weight: LINES_DEFAULT_WEIGHT,
       insertionIndex: -0.5,
     });
@@ -1345,10 +1350,24 @@ export function renderExtraActionButtons(extraActions, data, hook, saveBtnCls) {
   ));
 }
 
-// ETP-5648: a capability-hidden tab gets no entity key, so its hook never fetches it.
-export function getSecondaryTabEntityKey(secondaryTabs, index, capabilities) {
+/**
+ * A secondary tab shows only when its capability gate AND its record gate agree. The record gate
+ * (`visibleWhen(record, ctx)`, decisions.json `visibleWhenLogic`) reads the live header record,
+ * so it never depends on the record being saved.
+ */
+export function isSecondaryTabVisible(st, capabilities, record, ctx) {
+  return isCapabilityVisible(capabilities, st?.visibleWhenCapability) && evalTabVisible(st, record, ctx);
+}
+
+/** Session-level facts the generated `visibleWhen` predicates read as `ctx[...]`. */
+export function buildTabVisibilityContext({ orgCurrencyId, orgCurrencyCode }) {
+  return { OrgCurrencyId: orgCurrencyId ?? null, OrgCurrencyCode: orgCurrencyCode ?? null };
+}
+
+// ETP-5648: a hidden (capability- or record-gated) tab gets no entity key, so its hook never fetches it.
+export function getSecondaryTabEntityKey(secondaryTabs, index, capabilities, vis) {
   const tab = secondaryTabs[index];
-  if (tab?.isFormTab || tab?.Panel || !isCapabilityVisible(capabilities, tab?.visibleWhenCapability)) return null;
+  if (tab?.isFormTab || tab?.Panel || !isSecondaryTabVisible(tab, capabilities, vis?.record, vis?.ctx)) return null;
   return tab?.key ?? null;
 }
 
@@ -1799,9 +1818,13 @@ export function resolveStatusPrefix(key, translate) {
   return key ? translate(key) : undefined;
 }
 
+// ETP-5888: the label rides the same callout response as its value, so it carries the same
+// `origin: 'callout'`. Without it the label alone read as a user edit, and an untouched new
+// record whose opening callout returned an FK (purchase invoice: transactionDocument) counted
+// as having unsaved changes.
 export function handleEntryIdentifierChange(entry, hook, key, api, catalogs) {
   if (entry._identifier) {
-    hook.handleChange(key + '$_identifier', entry._identifier);
+    hook.handleChange(key + '$_identifier', entry._identifier, { origin: 'callout' });
   } else if (entry.value && api?.selectors) {
     // Callout returned an ID without _identifier — resolve from loaded catalogs
     const sel = api.selectors.find(s => s.field === key);
@@ -1809,7 +1832,7 @@ export function handleEntryIdentifierChange(entry, hook, key, api, catalogs) {
       const options = getCatalogOptions(catalogs, sel.entity, sel);
       const match = Array.isArray(options) && options.find(o => o.id === entry.value);
       if (match) {
-        hook.handleChange(key + '$_identifier', match.label || match.name || match._identifier);
+        hook.handleChange(key + '$_identifier', match.label || match.name || match._identifier, { origin: 'callout' });
       }
     }
   }
@@ -2270,7 +2293,9 @@ export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
       secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, previous);
       const msg = await extractErrorMessage(res);
       toast.error(msg || ui('networkError'));
-      throw new Error(msg || 'PATCH failed');
+      // ETP-6140 — the throw only stops InlineLinesPanel from claiming the row was saved; the
+      // user was already told by the toast above (see inlineLineUpdateHandlers.js).
+      throw Object.assign(new Error(msg || 'PATCH failed'), { userNotified: true });
     }
   } : undefined;
 }
@@ -2753,6 +2778,17 @@ export function computeIsDirty(hook, addingLine, addingSecondaryLine, lineEdits,
       || Object.values(addingSecondaryLine).some(Boolean)
       || (lineEdits != null && Object.keys(lineEdits).length > 0)
       || (additionalDirtyState === true);
+}
+
+/**
+ * ETP-5888: the dirtiness the unsaved-changes guard publishes — {@link computeIsDirty} with the
+ * header part reduced to what the user edited (`hook.hasUserHeaderEdits`), so an untouched new
+ * record no longer prompts on every way out. Falls back to `isDirtyHeader` for a hook that does
+ * not expose the user-edit signal (a custom window passing its own).
+ */
+export function computeIsDirtyForGuard(hook, addingLine, addingSecondaryLine, lineEdits, additionalDirtyState) {
+  const isDirtyHeader = hook.hasUserHeaderEdits ?? hook.isDirtyHeader;
+  return computeIsDirty({ isDirtyHeader }, addingLine, addingSecondaryLine, lineEdits, additionalDirtyState);
 }
 
 export function resolveHideMoreMenu(hideMoreMenu, data) {

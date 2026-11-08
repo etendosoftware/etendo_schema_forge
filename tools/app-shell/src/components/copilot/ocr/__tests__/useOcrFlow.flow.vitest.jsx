@@ -50,7 +50,13 @@ vi.mock('@/auth/useApiFetch.js', () => ({
 }));
 
 vi.mock('@/i18n', () => ({
-  useUI: () => (key, vars) => (vars ? `${key}|${JSON.stringify(vars)}` : key),
+  // A param-less key that has a translation must resolve to something OTHER than the key:
+  // `translateBackendError` treats "returned the key" as "no translation" and falls back to the
+  // backend's prose. `backendError.quotaCheckFailed` (ETP-5051) is such a key.
+  useUI: () => (key, vars) => {
+    if (vars) return `${key}|${JSON.stringify(vars)}`;
+    return key === 'backendError.quotaCheckFailed' ? `translated:${key}` : key;
+  },
   useLabel: () => (key) => key,
   useMenuLabel: () => (key) => key,
 }));
@@ -1144,6 +1150,146 @@ describe('useOcrFlow — full flow', () => {
         ok: 0,
         failed: [{ reason: 'invoice date is mandatory' }],
       });
+    });
+
+    // A plan-quota refusal inside the batch envelope (`error.detail.error`, code QUOTA_EXCEEDED):
+    // the toast reads `message`, the translated sentence built from the quota, while `reason` and
+    // the flow result keep the backend text.
+    it('toasts the translated quota sentence when the batch is refused by a plan quota', async () => {
+      const user = userEvent.setup();
+      const quota = {
+        resourceKey: 'POSTED_PURCHASE_INVOICES',
+        resourceName: 'Purchase invoices',
+        unitLabel: 'Inv',
+        includedQty: 50,
+        consumed: 50,
+        verdict: 'DENY',
+        period: 'month',
+      };
+      const prose = 'Quota exceeded: Purchase invoices (50/50 Inv)';
+      H.runBatch.mockResolvedValue({
+        committed: false,
+        error: {
+          message: prose,
+          detail: { error: { message: prose, status: 403, code: 'QUOTA_EXCEEDED', quota } },
+        },
+        failedAt: { id: 'inv' },
+      });
+
+      renderFlow();
+      await fireOcr({ vendor_name: 'Acme' });
+      await user.click(await screen.findByTestId('review-submit'));
+
+      await waitFor(() => expect(readResult()).toEqual({
+        committed: false,
+        error: prose,
+        failedAt: { id: 'inv' },
+      }));
+      expect(H.showResult).toHaveBeenCalledTimes(1);
+      const [{ ok, failed }] = H.showResult.mock.calls[0];
+      expect(ok).toBe(0);
+      expect(failed).toHaveLength(1);
+      expect(failed[0].reason).toBe(prose);
+      expect(failed[0].message).toMatch(/^backendError\.quotaExceeded\|/);
+      expect(JSON.parse(failed[0].message.slice('backendError.quotaExceeded|'.length)))
+        .toEqual({
+          resource: 'Purchase invoices',
+          usage: `quotaUsage|${JSON.stringify({ consumed: '50', included: '50', unit: 'Inv' })}`,
+        });
+    });
+
+    // A failed quota check inside the batch envelope (`error.detail.error`, 500 QUOTA_CHECK_FAILED):
+    // nothing was saved, and the toast reads the translated sentence instead of the English prose
+    // or the generic "action failed"; `reason` and the flow result keep the backend text.
+    it('toasts the translated sentence when the batch quota check itself failed', async () => {
+      const user = userEvent.setup();
+      const prose = 'The quota check failed; nothing was saved. Try again.';
+      H.runBatch.mockResolvedValue({
+        committed: false,
+        error: {
+          message: prose,
+          detail: { error: { message: prose, status: 500, code: 'QUOTA_CHECK_FAILED' } },
+        },
+        failedAt: { id: 'inv' },
+      });
+
+      renderFlow();
+      await fireOcr({ vendor_name: 'Acme' });
+      await user.click(await screen.findByTestId('review-submit'));
+
+      await waitFor(() => expect(readResult()).toEqual({
+        committed: false,
+        error: prose,
+        failedAt: { id: 'inv' },
+      }));
+      expect(H.showResult).toHaveBeenCalledTimes(1);
+      expect(H.showResult).toHaveBeenCalledWith({
+        ok: 0,
+        failed: [{ reason: prose, message: 'translated:backendError.quotaCheckFailed' }],
+      });
+    });
+
+    it('recognises the failed quota check by its code even when the envelope prose differs', async () => {
+      const user = userEvent.setup();
+      H.runBatch.mockResolvedValue({
+        committed: false,
+        error: {
+          message: 'Internal error',
+          detail: { error: { message: 'Internal error', status: 500, code: 'QUOTA_CHECK_FAILED' } },
+        },
+        failedAt: { id: 'inv' },
+      });
+
+      renderFlow();
+      await fireOcr({ vendor_name: 'Acme' });
+      await user.click(await screen.findByTestId('review-submit'));
+
+      await waitFor(() => expect(H.showResult).toHaveBeenCalledWith({
+        ok: 0,
+        failed: [{ reason: 'Internal error', message: 'translated:backendError.quotaCheckFailed' }],
+      }));
+    });
+
+    it('adds no translated message to any other 500 batch failure', async () => {
+      const user = userEvent.setup();
+      H.runBatch.mockResolvedValue({
+        committed: false,
+        error: {
+          message: 'Unexpected failure while saving',
+          detail: { error: { message: 'Unexpected failure while saving', status: 500, code: 'INTERNAL_ERROR' } },
+        },
+        failedAt: { id: 'inv' },
+      });
+
+      renderFlow();
+      await fireOcr({ vendor_name: 'Acme' });
+      await user.click(await screen.findByTestId('review-submit'));
+
+      await waitFor(() => expect(H.showResult).toHaveBeenCalledWith({
+        ok: 0,
+        failed: [{ reason: 'Unexpected failure while saving' }],
+      }));
+    });
+
+    it('adds no translated message to a batch failure that is not a quota refusal', async () => {
+      const user = userEvent.setup();
+      H.runBatch.mockResolvedValue({
+        committed: false,
+        error: {
+          message: 'Access denied to spec for current role',
+          detail: { error: { status: 403, code: 'ACCESS_DENIED', message: 'Access denied to spec for current role' } },
+        },
+        failedAt: { id: 'inv' },
+      });
+
+      renderFlow();
+      await fireOcr({ vendor_name: 'Acme' });
+      await user.click(await screen.findByTestId('review-submit'));
+
+      await waitFor(() => expect(H.showResult).toHaveBeenCalledWith({
+        ok: 0,
+        failed: [{ reason: 'Access denied to spec for current role' }],
+      }));
     });
 
     it('falls back to the failed operation id when the backend sends no message', async () => {

@@ -31,8 +31,9 @@ vi.mock('@/i18n', () => ({
   useMenuLabel: () => (key) => key,
 }));
 
+// The query string is kept so the ETP-5948 walk tests can answer by `offset` / `q`.
 vi.mock('@/lib/buildUrlWithParams.js', () => ({
-  buildUrlWithParams: (url) => url,
+  buildUrlWithParams: (url, params) => (params ? `${url}?${new URLSearchParams(params)}` : url),
 }));
 
 // ETP-5254 — RecordCreateModal has its own suite (RecordCreateModal.vitest.jsx). Here it is
@@ -57,6 +58,7 @@ vi.mock('../RecordCreateModal.jsx', () => ({
 }));
 
 import ProductDrawerShell, { synthesizeCreatedItem } from '../ProductDrawerShell.jsx';
+import { mockGeometry, ROW_H, PANEL_H } from './selectorTestGeometry.js';
 
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
@@ -626,5 +628,292 @@ describe('synthesizeCreatedItem', () => {
       standardPrice: 0,
       _aux: { _UOM: null, _PSTD: '0', _PLIM: '0' },
     });
+  });
+});
+
+// ETP-5948 — the ETP-5903 reopen behaviour in the shell: walk the pages to the committed value
+// (cap 6, counted in RAW rows), centre it, pin it otherwise; a failed page or a new search stops it.
+describe('ProductDrawerShell — committed value (ETP-5948)', () => {
+  const PAGE = 30;
+  const row = (n) => ({ id: `p-${n}`, label: `Product ${n}` });
+  // Answers by URL: `q` = the pin lookup, otherwise a page at `offset`.
+  function routedFetch({ total, lookup = [], failAt, hold = {} }) {
+    mockFetch.mockImplementation((url) => {
+      if (url.includes('/image/')) return Promise.resolve({ ok: false });
+      if (url.includes('product/product')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) });
+      }
+      const params = new URL(url).searchParams;
+      if (params.has('q')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: lookup }) });
+      const offset = Number(params.get('offset'));
+      if (hold[offset]) return hold[offset];
+      if (offset === failAt) return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) });
+      const items = Array.from({ length: Math.max(0, Math.min(PAGE, total - offset)) }, (_, i) => row(offset + i));
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ items, hasMore: offset + PAGE < total }) });
+    });
+  }
+  const selectorCalls = () => mockFetch.mock.calls.map(([url]) => url).filter((u) => u.includes('/selectors/'));
+  const listOffsets = () => selectorCalls().map((u) => new URL(u).searchParams)
+    .filter((p) => !p.has('q')).map((p) => Number(p.get('offset')));
+  const lookups = () => selectorCalls().filter((u) => new URL(u).searchParams.has('q'));
+
+  // A variant that reports the committed row the way the real ones do.
+  const markingVariant = (ctx) => {
+    const selectedIndex = ctx.results.findIndex((r) => r.id === ctx.value);
+    return {
+      body: (
+        <ul>
+          {ctx.results.map((item, i) => (
+            <li key={item.id}>
+              <button type="button" data-option-index={i} data-testid={`opt-${item.id}`}
+                aria-selected={i === selectedIndex} onClick={() => ctx.select(item)}>{item.label}</button>
+            </li>
+          ))}
+        </ul>
+      ),
+      footerCount: ctx.results.length,
+      hasResults: ctx.results.length > 0,
+      selectedIndex,
+    };
+  };
+  const renderShell = (props = {}) => render(
+    <ProductDrawerShell {...BASE_PROPS} useVariant={markingVariant} onClose={vi.fn()} onSelect={vi.fn()} {...props} />,
+  );
+
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('walks forward to the page that holds the value, with no lookup', async () => {
+    routedFetch({ total: 200 });
+    renderShell({ value: 'p-75', valueLabel: 'Product 75' });
+
+    await waitFor(() => expect(screen.getByTestId('opt-p-75')).toHaveAttribute('aria-selected', 'true'));
+    expect(listOffsets()).toEqual([0, 30, 60]);
+    expect(lookups()).toHaveLength(0);
+  });
+
+  it('stops at the page cap, then pins the value on top through a label lookup', async () => {
+    routedFetch({ total: 1000, lookup: [{ id: 'p-900', label: 'Product 900' }, { id: 'p-9000', label: 'Product 9000' }] });
+    renderShell({ value: 'p-900', valueLabel: 'Product 900' });
+
+    await waitFor(() => expect(screen.getByTestId('opt-p-900')).toHaveAttribute('aria-selected', 'true'));
+    expect(listOffsets()).toEqual([0, 30, 60, 90, 120, 150]);
+    expect(lookups()).toHaveLength(1);
+    expect(new URL(lookups()[0]).searchParams.get('q')).toBe('Product 900');
+    // Pinned on top, and only the id-equal row (q is a LIKE match).
+    expect(screen.getAllByRole('button').find((b) => b.dataset.testid?.startsWith('opt-'))).toHaveAttribute('data-testid', 'opt-p-900');
+    expect(screen.queryByTestId('opt-p-9000')).toBeNull();
+  });
+
+  it('retries the pin with the code segment when the full "code - name" label finds nothing', async () => {
+    routedFetch({ total: 1000 });
+    const paged = mockFetch.getMockImplementation();
+    mockFetch.mockImplementation((url) => {
+      const q = url.includes('/selectors/') ? new URL(url).searchParams.get('q') : null;
+      if (q === 'P900') return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [{ id: 'p-900', label: 'P900 - Product 900' }] }) });
+      if (q != null) return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [] }) });
+      return paged(url);
+    });
+    renderShell({ value: 'p-900', valueLabel: 'P900 - Product 900' });
+
+    await waitFor(() => expect(screen.getByTestId('opt-p-900')).toHaveAttribute('aria-selected', 'true'));
+    expect(lookups().map((u) => new URL(u).searchParams.get('q'))).toEqual(['P900 - Product 900', 'P900']);
+  });
+
+  it('counts raw rows for the cap when the transform drops duplicates', async () => {
+    routedFetch({ total: 1000 });
+    // Keeps 1 row in 3: six raw pages show only 60 rows, but cost no more than six requests.
+    renderShell({ value: 'p-900', valueLabel: 'Product 900', fetchConfig: { transform: (items) => items.filter((_, i) => i % 3 === 0) } });
+
+    await waitFor(() => expect(lookups()).toHaveLength(1));
+    expect(listOffsets()).toEqual([0, 30, 60, 90, 120, 150]);
+  });
+
+  it('stops walking when a page fails, instead of re-requesting it', async () => {
+    routedFetch({ total: 1000, failAt: 60, lookup: [{ id: 'p-900', label: 'Product 900' }] });
+    renderShell({ value: 'p-900', valueLabel: 'Product 900' });
+
+    await waitFor(() => expect(lookups()).toHaveLength(1));
+    expect(listOffsets()).toEqual([0, 30, 60]);
+  });
+
+  it('drops a walk page that lands after the user typed a search', async () => {
+    let releasePage1;
+    const hold = { 30: new Promise((resolve) => { releasePage1 = resolve; }) };
+    routedFetch({ total: 1000, hold });
+    renderShell({ value: 'p-900', valueLabel: 'Product 900' });
+    await waitFor(() => expect(listOffsets()).toContain(30));
+
+    // The user types; the typed search answers through the lookup branch (it carries q).
+    fireEvent.change(screen.getByTestId('product-search-input'), { target: { value: 'Product 5' } });
+    await waitFor(() => expect(lookups().length).toBeGreaterThan(0));
+    releasePage1({ ok: true, json: () => Promise.resolve({ items: [row(30)], hasMore: true }) });
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByTestId('opt-p-30')).toBeNull();
+  });
+
+  it('never decides on the previous open rows when reopened', async () => {
+    routedFetch({ total: 200 });
+    const props = { value: 'p-75', valueLabel: 'Product 75' };
+    const { rerender } = renderShell(props);
+    await waitFor(() => expect(screen.getByTestId('opt-p-75')).toHaveAttribute('aria-selected', 'true'));
+
+    rerender(<ProductDrawerShell {...BASE_PROPS} useVariant={markingVariant} onClose={vi.fn()} onSelect={vi.fn()} {...props} open={false} />);
+    mockFetch.mockClear();
+    rerender(<ProductDrawerShell {...BASE_PROPS} useVariant={markingVariant} onClose={vi.fn()} onSelect={vi.fn()} {...props} />);
+
+    await waitFor(() => expect(screen.getByTestId('opt-p-75')).toHaveAttribute('aria-selected', 'true'));
+    expect(listOffsets()).toEqual([0, 30, 60]);
+    expect(lookups()).toHaveLength(0);
+  });
+
+  it('does not walk without a value', async () => {
+    routedFetch({ total: 200 });
+    renderShell();
+    await screen.findByTestId('opt-p-0');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(listOffsets()).toEqual([0]);
+  });
+});
+
+// ETP-6103 — the hold while locating the committed value, and the walk's own page size.
+describe('ProductDrawerShell — the hold while locating (ETP-6103)', () => {
+  // The drawer's list has no role: its panel is the flex-1 overflow container around the rows.
+  const isPanel = (el) => /(^| )flex-1( |$)/.test(el.className?.toString() ?? '') && /overflow-(hidden|y-auto)/.test(el.className.toString());
+  let restoreGeometry;
+  beforeEach(() => { vi.clearAllMocks(); restoreGeometry = mockGeometry({ isPanel }); });
+  afterEach(() => restoreGeometry());
+
+  const TOTAL = 300;
+  const PAGE = 30;
+  const row = (n) => ({ id: `p-${n}`, label: `Product ${n}` });
+  const deferred = () => { let resolve; const promise = new Promise((r) => { resolve = r; }); return { promise, resolve }; };
+  const NOTICE = 'product-search-locating';
+  const isHidden = (el) => el.closest('.invisible') !== null;
+  // `onPage(offset, page)` may return a promise to delay / fail that page.
+  function pagedFetch(onPage) {
+    mockFetch.mockImplementation((url) => {
+      if (url.includes('/image/')) return Promise.resolve({ ok: false });
+      if (url.includes('product/product')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) });
+      const offset = Number(new URL(url).searchParams.get('offset'));
+      const page = () => {
+        const items = Array.from({ length: Math.max(0, Math.min(PAGE, TOTAL - offset)) }, (_, i) => row(offset + i));
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ items, hasMore: offset + PAGE < TOTAL }) });
+      };
+      return onPage?.(offset, page) ?? page();
+    });
+  }
+  const listParams = () => mockFetch.mock.calls.map(([u]) => u).filter((u) => u.includes('/selectors/'))
+    .map((u) => new URL(u).searchParams).filter((p) => !p.has('q'));
+  const offsets = () => listParams().map((p) => Number(p.get('offset')));
+  const variant = (ctx) => {
+    const selectedIndex = ctx.results.findIndex((r) => r.id === ctx.value);
+    return {
+      body: (
+        <ul>
+          {ctx.results.map((item, i) => (
+            <li key={item.id}>
+              <button type="button" data-option-index={i} data-testid={`opt-${item.id}`} aria-selected={i === selectedIndex} onClick={() => ctx.select(item)}>{item.label}</button>
+            </li>
+          ))}
+        </ul>
+      ),
+      footerCount: ctx.results.length, hasResults: ctx.results.length > 0, selectedIndex,
+    };
+  };
+  const shell = (props = {}) => <ProductDrawerShell {...BASE_PROPS} useVariant={variant} onClose={vi.fn()} onSelect={vi.fn()} value="p-28" valueLabel="Product 28" {...props} />;
+  // p-28 is among the last rows of the first 30-row page: it cannot be centred until page 2 lands.
+  async function renderHeld(onPage) {
+    pagedFetch(onPage);
+    const view = render(shell());
+    await waitFor(() => expect(offsets()).toContain(30));
+    return view;
+  }
+  const centred = (el) => Math.abs(el.getBoundingClientRect().top - (PANEL_H - ROW_H) / 2) < 2;
+
+  it('shows the notice with the rows invisible while locating, then releases them centred', async () => {
+    const page2 = deferred();
+    await renderHeld((offset, page) => (offset === 30 ? page2.promise.then(page) : undefined));
+    expect(screen.getByTestId(NOTICE)).toBeInTheDocument();
+    expect(isHidden(screen.getByTestId('opt-p-28'))).toBe(true);
+
+    page2.resolve();
+    await waitFor(() => expect(screen.queryByTestId(NOTICE)).toBeNull());
+    expect(isHidden(screen.getByTestId('opt-p-28'))).toBe(false);
+    expect(screen.getByTestId('opt-p-28')).toHaveAttribute('aria-selected', 'true');
+    expect(centred(screen.getByTestId('opt-p-28'))).toBe(true);
+  });
+
+  it('keeps its own page size during the walk (largePages: false)', async () => {
+    const page2 = deferred();
+    await renderHeld((offset, page) => (offset === 30 ? page2.promise.then(page) : undefined));
+    page2.resolve();
+    await waitFor(() => expect(screen.queryByTestId(NOTICE)).toBeNull());
+    const limits = listParams().map((p) => p.get('limit'));
+    expect(limits.length).toBeGreaterThan(1);
+    expect(new Set(limits)).toEqual(new Set([String(PAGE)]));
+  });
+
+  it('releases the hold when the page fails', async () => {
+    const page2 = deferred();
+    await renderHeld((offset) => (offset === 30
+      ? page2.promise.then(() => ({ ok: false, status: 500, json: () => Promise.resolve({}) })) : undefined));
+    expect(screen.getByTestId(NOTICE)).toBeInTheDocument();
+    page2.resolve();
+    await waitFor(() => expect(screen.queryByTestId(NOTICE)).toBeNull());
+    expect(isHidden(screen.getByTestId('opt-p-28'))).toBe(false);
+  });
+
+  it('leaves no stuck hold when closed and reopened during the hold', async () => {
+    const stale = deferred();
+    let first = true;
+    const onPage = (offset, page) => {
+      if (offset !== 30 || !first) return undefined;
+      first = false;
+      return stale.promise.then(page);
+    };
+    const { rerender } = await renderHeld(onPage);
+    rerender(shell({ open: false }));
+    rerender(shell());
+    stale.resolve();
+    await waitFor(() => expect(screen.queryByTestId('opt-p-28')).not.toBeNull());
+    await waitFor(() => expect(isHidden(screen.getByTestId('opt-p-28'))).toBe(false));
+    expect(screen.queryByTestId(NOTICE)).toBeNull();
+    expect(screen.getByTestId('opt-p-28')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('ends the hold on a key press', async () => {
+    const page2 = deferred();
+    await renderHeld((offset, page) => (offset === 30 ? page2.promise.then(page) : undefined));
+    fireEvent.keyDown(screen.getByTestId('product-search-input'), { key: 'ArrowDown' });
+    page2.resolve();
+    await waitFor(() => expect(screen.queryByTestId(NOTICE)).toBeNull());
+    expect(isHidden(screen.getByTestId('opt-p-28'))).toBe(false);
+  });
+
+  it('ends the hold when the user types', async () => {
+    const page2 = deferred();
+    await renderHeld((offset, page) => (offset === 30 ? page2.promise.then(page) : undefined));
+    fireEvent.change(screen.getByTestId('product-search-input'), { target: { value: 'Product' } });
+    await waitFor(() => expect(screen.queryByTestId(NOTICE)).toBeNull());
+    page2.resolve();
+  });
+
+  // doFetch returns false when its in-flight guard swallows a call: that is not an empty page, so
+  // the walk must neither give up nor lose its place.
+  it('keeps walking when a walk call is swallowed by the in-flight guard', async () => {
+    const page2 = deferred();
+    await renderHeld((offset, page) => (offset === 30 ? page2.promise.then(page) : undefined));
+    // The page stays in flight across several renders / settles: the walk re-runs and is swallowed.
+    fireEvent.change(screen.getByTestId('product-search-input'), { target: { value: '' } });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(offsets().filter((o) => o === 30)).toHaveLength(1);
+
+    page2.resolve();
+    await waitFor(() => expect(screen.queryByTestId(NOTICE)).toBeNull());
+    expect(screen.getByTestId('opt-p-28')).toHaveAttribute('aria-selected', 'true');
+    expect(centred(screen.getByTestId('opt-p-28'))).toBe(true);
+    // Found in the second page: the swallowed calls added no request and ended nothing early.
+    expect(offsets()).toEqual([0, 30]);
   });
 });

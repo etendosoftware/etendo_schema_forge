@@ -1,3 +1,5 @@
+import { getContractGridColumns } from '@/components/financial-accounts/contractColumns';
+import { FinancialGridView, FinancialTableRow as TableRow } from '../FinancialGridView.jsx';
 import { AlertTriangle, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useUI, useLocaleSwitch } from '@/i18n';
@@ -8,7 +10,6 @@ import {
   TableCell,
   TableHead,
   TableHeader,
-  TableRow,
 } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
@@ -101,6 +102,12 @@ function MovementRow({ movement, checked, onToggle, currency, bcpLocale }) {
   );
 }
 
+const PERSONAL_COLUMNS = [
+  { key: 'select', gridConfigurable: false },
+  ...[['transactionDate', 'Date'], ['businessPartner', 'Contact'], ['documentNo', 'PaymentRef'], ['description', 'Description'], ['amount', 'Amount']]
+    .map(([key, label]) => ({ ...getContractGridColumns('transaction').find((column) => column.name === key), key, labelKey: `financeAccountCashCloseCol${label}` })),
+];
+
 export function CashCloseMovementsPanel({
   movements, visible, marked, currency, loading,
   hideCleared, onHideClearedChange, hideAfter, onHideAfterChange,
@@ -168,11 +175,17 @@ export function CashCloseMovementsPanel({
       </div>
       {/* Tabla */}
       <div className="flex-1 overflow-y-auto [&>div]:overflow-visible">
+        <FinancialGridView
+          spec="financial-account"
+          entity="transaction"
+          columns={PERSONAL_COLUMNS}
+          data={visible}
+          data-testid="FinancialGridView__64d56f">
         <Table data-testid="cash-close-table">
           <TableHeader data-testid="TableHeader__64d56f">
             {/* Same header treatment as the Movements grid: sentence case, semibold, foreground
                 colour, no fill — not the uppercase small-caps on grey used elsewhere. */}
-            <TableRow
+            <TableRow header
               className="h-10 [&_th]:text-xs [&_th]:font-semibold [&_th]:leading-4 [&_th]:text-[hsl(var(--foreground))]"
               data-testid="TableRow__64d56f">
               {/* Select-all lives here rather than in the filter bar: sitting directly above the
@@ -228,6 +241,7 @@ export function CashCloseMovementsPanel({
             ))}
           </TableBody>
         </Table>
+        </FinancialGridView>
 
         {!loading && hiddenCount > 0 ? (
           <p

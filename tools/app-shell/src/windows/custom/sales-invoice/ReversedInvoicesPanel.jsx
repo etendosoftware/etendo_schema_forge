@@ -1,3 +1,6 @@
+import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
+import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
+import { renderGridViewCells } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { ChevronDown, FileText, Loader2, Plus, Search, Trash2, Info } from 'lucide-react';
 import { useUI, useLabel, useLocaleSwitch } from '@/i18n';
@@ -700,6 +703,16 @@ function ExpandedForm({
   );
 }
 
+/** The invoice spec whose reversed-invoices grid view is stored, or null outside the two supported specs. */
+function reversedInvoicesGridSpec(apiBaseUrl) {
+  return apiBaseUrl?.match(/\/sws\/neo\/(sales-invoice|purchase-invoice)\/?$/)?.[1] ?? null;
+}
+
+/** Cells per row (expand toggle + data columns + actions); the Modelo 349 column adds one. */
+function reversedInvoicesRowColSpan(model349Active) {
+  return model349Active ? 7 : 6;
+}
+
 // ── ReversedInvoicesPanel ─────────────────────────────────────────────────────
 export default function ReversedInvoicesPanel({
   recordId: recordIdProp,
@@ -725,6 +738,48 @@ export default function ReversedInvoicesPanel({
   const saveErrorMessage = err => (isNetworkError(err) ? err.message : ui('rectSaveError'));
 
   const [lines, setLines] = useState([]);
+
+  // Modelo 349 gating: the "Modelo 349" grid column (header + badge cells) and the "Correctiva
+  // del 349" checkbox (with its dependent AEAT-349 fields) are Modelo-349-specific and stay hidden
+  // unless 349 is active in the Fiscal Models catalog (ETP-5831 CP-14). Read through the shared
+  // `useFiscalModelsCatalog`: `{}` or a failed read means no model active, so both are
+  // fail-closed (hidden) until the catalog confirms 349 === true, never visible-then-hidden.
+  // Re-read on `token` change, as before.
+  const { activeModels, loaded: catalogLoaded } = useFiscalModelsCatalog(apiBaseUrl, token);
+  const model349Active = catalogLoaded && isModelActive(activeModels, '349');
+  // Cells per row (expand toggle + data columns + actions) — the full-width rows span them all.
+  const rowColSpan = reversedInvoicesRowColSpan(model349Active);
+
+  const gridColumns = useMemo(() => [
+    { key: 'reversedInvoice', column: 'Reversed_C_Invoice_ID', label: ui('rectColOriginalInvoice'), sourceIndex: 1, required: true },
+    // The original invoice's figures, parsed from its _identifier: `reversed*` keys so they are not
+    // mistaken for the rectificativa's own invoiceDate/documentNo/grandTotalAmount fields (F19).
+    { key: 'reversedInvoiceDate', label: ui('rectColDate'), sourceIndex: 2 },
+    { key: 'reversedDocumentNo', label: ui('rectColDocument'), sourceIndex: 3 },
+    // `sourceIndex` is the cell's position in the row fragment, which omits the 349 cell when the
+    // model is inactive — hence the shifted index of the total.
+    ...(model349Active
+      ? [{ key: 'aEAT349IsCorrective', column: 'EM_AEAT349_IsCorrective', label: ui('rectColModel349'), sourceIndex: 4 }]
+      : []),
+    { key: 'reversedGrandTotalAmount', label: ui('rectColTotal'), sourceIndex: model349Active ? 5 : 4 },
+  ], [ui, model349Active]);
+  const gridSpec = reversedInvoicesGridSpec(apiBaseUrl);
+  const { gridView, gridColumnViews } = useFlaggedGridView({
+    spec: gridSpec, entity: 'reversedInvoices', columns: gridColumns, data: lines,
+    enabled: Boolean(gridSpec), apiBaseUrl,
+  });
+  const gridEnabled = gridColumnViews && Boolean(gridSpec);
+  const renderGridCells = (fragment) => (gridEnabled
+    ? renderGridViewCells(fragment, { gridView, gridColumns, ui, leading: 1, trailing: 1 })
+    : fragment);
+  const gridControls = gridEnabled ? (
+    <GridViewControls
+      gridView={gridView}
+      gridColumns={gridColumns}
+      ui={ui}
+      data-testid="GridViewControls__4395d6" />
+  ) : null;
+
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [pendingEdits, setPendingEdits] = useState({});
@@ -745,14 +800,6 @@ export default function ReversedInvoicesPanel({
 
   // Track whether data has been fetched at least once
   const fetchedRef = useRef(false);
-
-  // "Correctiva del 349" gating: the checkbox (and its dependent AEAT-349 fields) is
-  // Modelo-349-specific and stays hidden unless 349 is active in the Fiscal Models catalog.
-  // Read through the shared `useFiscalModelsCatalog` (ETP-5831): `{}` or a failed read means no
-  // model active, so the panel is fail-closed (hidden) until the catalog confirms 349 === true,
-  // never visible-then-hidden. Re-read on `token` change, as before.
-  const { activeModels, loaded: catalogLoaded } = useFiscalModelsCatalog(apiBaseUrl, token);
-  const model349Active = catalogLoaded && isModelActive(activeModels, '349');
 
   // On unsaved records the route passes recordId='new' — treat it as no record
   // so add/fetch stay disabled until the invoice is saved (a rectification row
@@ -1077,32 +1124,34 @@ export default function ReversedInvoicesPanel({
 
   return (
     <div className="flex-1 min-w-0" data-testid="reversed-invoices-panel">
+      {gridControls}
       {/* ── table ── */}
       {(lines.length > 0 || loading || addingLine) && (
-        <table className="w-full">
+        <table className="w-full" style={gridView.active && gridView.columns.some((column) => column.gridUserWidthPx != null) ? { tableLayout: 'fixed' } : undefined}>
+          {gridView.active && gridView.columns.some((column) => column.gridUserWidthPx != null) && <colgroup><col style={{ width: 40 }} />{gridView.columns.map((column) => <col key={column.key} style={{ width: column.gridUserWidthPx }} />)}<col style={{ width: 40 }} /></colgroup>}
           <thead className="sticky top-0 z-20 bg-card">
-            <tr className="border-b border-border/40">
+            <tr className="border-b border-border/40">{renderGridCells(<>
               {/* expand toggle placeholder */}
               <th className="h-10 w-10 px-3" />
               <th className="h-10 px-3 text-left text-xs font-semibold text-foreground">{ui('rectColOriginalInvoice')}</th>
               <th className="h-10 px-3 text-left text-xs font-semibold text-foreground">{ui('rectColDate')}</th>
               <th className="h-10 px-3 text-left text-xs font-semibold text-foreground">{ui('rectColDocument')}</th>
-              <th className="h-10 px-3 text-left text-xs font-semibold text-foreground">{ui('rectColModel349')}</th>
+              {model349Active && <th className="h-10 px-3 text-left text-xs font-semibold text-foreground">{ui('rectColModel349')}</th>}
               <th className="h-10 px-3 text-right text-xs font-semibold text-foreground">{ui('rectColTotal')}</th>
               <th className="h-10 w-10 px-2" />
-            </tr>
+            </>)}</tr>
           </thead>
 
           <tbody>
             {loading && (
-              <tr>
-                <td colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
+              <tr>{renderGridCells(<>
+                <td colSpan={rowColSpan} className="py-10 text-center text-sm text-muted-foreground">
                   <Loader2
                     className="h-4 w-4 animate-spin inline mr-1.5"
                     data-testid="Loader2__4395d6" />
                   {ui('loading')}
                 </td>
-              </tr>
+              </>)}</tr>
             )}
 
             {!loading && lines.map(line => {
@@ -1128,7 +1177,7 @@ export default function ReversedInvoicesPanel({
                     className={`relative border-b border-border/30 group/row transition-colors cursor-pointer hover:bg-muted/30 ${isExpanded ? 'bg-muted/20' : ''}`}
                     onClick={() => setExpandedId(isExpanded ? null : line.id)}
                     style={{ height: 48 }}
-                  >
+                  >{renderGridCells(<>
                     {/* expand chevron */}
                     <td className="px-3 align-middle" onClick={e => e.stopPropagation()}>
                       <button
@@ -1153,10 +1202,12 @@ export default function ReversedInvoicesPanel({
                       <div className="text-sm font-medium text-foreground">{docNo}</div>
                       <div className="text-xs text-muted-foreground">{docTypeLabel}</div>
                     </td>
-                    {/* Modelo 349 */}
-                    <td className="px-3 align-middle">
-                      <CorrectivaBadge corrective={corrective} data-testid="CorrectivaBadge__4395d6" />
-                    </td>
+                    {/* Modelo 349 — only while 349 is active (see model349Active) */}
+                    {model349Active && (
+                      <td className="px-3 align-middle">
+                        <CorrectivaBadge corrective={corrective} data-testid="CorrectivaBadge__4395d6" />
+                      </td>
+                    )}
                     {/* Total */}
                     <td className="px-3 align-middle text-right">
                       <span className="text-sm font-semibold text-foreground">{totalDisplay}</span>
@@ -1178,11 +1229,11 @@ export default function ReversedInvoicesPanel({
                         </button>
                       )}
                     </td>
-                  </tr>
+                  </>)}</tr>
                   {/* expanded form */}
                   {isExpanded && (
-                    <tr>
-                      <td colSpan={7} className="p-0">
+                    <tr>{renderGridCells(<>
+                      <td colSpan={rowColSpan} className="p-0">
                         <ExpandedForm
                           // ExpandedForm always reads the `reversedInvoice`/`reversedInvoice$_identifier`
                           // fields to render "Factura original". For an incoming row those point at
@@ -1205,7 +1256,7 @@ export default function ReversedInvoicesPanel({
                           aeatSaving={aeatSavingId === line.id}
                           data-testid="ExpandedForm__4395d6" />
                       </td>
-                    </tr>
+                    </>)}</tr>
                   )}
                 </React.Fragment>
               );
@@ -1213,8 +1264,8 @@ export default function ReversedInvoicesPanel({
 
             {/* draft new-line row — auto-expanded */}
             {addingLine && (
-              <tr>
-                <td colSpan={7} className="p-0">
+              <tr>{renderGridCells(<>
+                <td colSpan={rowColSpan} className="p-0">
                   <div ref={addRowRef}>
                     <ExpandedForm
                       lineData={newLine}
@@ -1238,7 +1289,7 @@ export default function ReversedInvoicesPanel({
                       data-testid="ExpandedForm__4395d6" />
                   </div>
                 </td>
-              </tr>
+              </>)}</tr>
             )}
           </tbody>
         </table>

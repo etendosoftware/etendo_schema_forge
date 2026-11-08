@@ -48,6 +48,16 @@ describe('AccountLookupPopup', () => {
     expect(opts).toEqual(expect.objectContaining({ baseUrl: '' }));
   });
 
+  // ETP-5948 — the lookup field's committed value is forwarded and marked.
+  it('marks the field value forwarded by the lookup trigger', async () => {
+    mockApiFetch.mockReturnValue(jsonResponse({ items: ITEMS, hasMore: false }));
+    render(
+      <AccountLookupPopup open onClose={vi.fn()} onSelect={vi.fn()} selectorUrl={SELECTOR_URL}
+        title="Account" value="vc-2" valueLabel={ITEMS[1]._identifier} />,
+    );
+    expect(await screen.findByTestId('account-lookup-popup-option-vc-2')).toHaveAttribute('aria-selected', 'true');
+  });
+
   it('hands the raw selector item to onSelect (the caller reads _identifier from it)', async () => {
     mockApiFetch.mockReturnValue(jsonResponse({ items: ITEMS, hasMore: false }));
     const onSelect = vi.fn();
@@ -97,6 +107,22 @@ describe('useAccountSelectorPages', () => {
     const [url] = mockApiFetch.mock.calls[0];
     expect(url).toContain('q=430');
     expect(url).toContain('offset=30');
+  });
+
+  // ETP-6103 — the loader serves the page size the popup asks for (the locate walk uses 100).
+  it('sends the requested limit, and the popup asks for 100 rows on a committed value', async () => {
+    mockApiFetch.mockReturnValue(jsonResponse({ items: ITEMS, hasMore: false }));
+    const { result } = renderHook(() => useAccountSelectorPages(SELECTOR_URL));
+    await result.current('', 0, undefined, { limit: 80 });
+    expect(mockApiFetch.mock.calls[0][0]).toContain('limit=80');
+
+    mockApiFetch.mockClear();
+    render(
+      <AccountLookupPopup open onClose={vi.fn()} onSelect={vi.fn()} selectorUrl={SELECTOR_URL}
+        value="vc-2" valueLabel={ITEMS[1]._identifier} title="Account" />,
+    );
+    await screen.findByText(ITEMS[1]._identifier);
+    expect(mockApiFetch.mock.calls[0][0]).toContain('limit=100');
   });
 
   it('rejects on a non-2xx answer so the popup can show its error state', async () => {

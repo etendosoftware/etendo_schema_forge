@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/components/contract-ui/saveGateAttempts.js
+// @covers tools/app-shell/src/components/contract-ui/saveActions.jsx
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ETP-5278 — the existing-record toolbar Save of a window with `onAfterExistingSave` defers its
@@ -15,10 +16,11 @@ vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() },
 }));
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { toast } from 'sonner';
 import { showSaveSuccessToast } from '@/hooks/useEntity';
-import { renderSaveActions, handlePostSaveNavigation } from '../saveActions.jsx';
+import { renderSaveActions, handlePostSaveNavigation, isFormCalculating } from '../saveActions.jsx';
+import { registerPending } from '@/lib/formPendingWork.js';
 import { subscribeSaveGateAttempts, notifySaveGateAttempt } from '../saveGateAttempts.js';
 
 const ui = (key) => key;
@@ -149,6 +151,92 @@ describe('existing-record Save — saveBusy (ETP-5278)', () => {
   });
 });
 
+
+// ETP-5680 follow-up — Save while a custom form component still has a result in flight (the
+// product watcher's `/defaults?productType=` request). The scope is `hook.handleChange`.
+describe('Save while the form is calculating', () => {
+  const withScope = (overrides = {}) => {
+    const params = existingRecordParams(overrides);
+    params.hook.handleChange = () => {};
+    return params;
+  };
+  const newRecord = (overrides = {}) => withScope({ isNew: true, isDocumentReadOnly: false, isProcessed: false, ...overrides });
+
+  it('disables the existing-record Save with the spinner and the calculating tooltip, then re-enables it', () => {
+    const params = withScope();
+    render(<>{renderSaveActions(params)}</>);
+    expect(screen.getByTestId('action-save')).not.toBeDisabled();
+
+    let release;
+    act(() => { release = registerPending(params.hook.handleChange); });
+    const button = screen.getByTestId('action-save');
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('title', 'saveCalculating');
+    expect(screen.getByTestId('Loader2__fa3275')).toBeInTheDocument();
+
+    act(() => release());
+    expect(screen.getByTestId('action-save')).not.toBeDisabled();
+    expect(screen.queryByTestId('Loader2__fa3275')).not.toBeInTheDocument();
+  });
+
+  it('gates the new-record Save the same way', () => {
+    const params = newRecord();
+    render(<>{renderSaveActions(params)}</>);
+    let release;
+    act(() => { release = registerPending(params.hook.handleChange); });
+    expect(screen.getByTestId('action-save')).toBeDisabled();
+    expect(screen.getByTestId('Loader2__fa3275')).toBeInTheDocument();
+    act(() => release());
+    expect(screen.getByTestId('action-save')).not.toBeDisabled();
+  });
+
+  it('gates both draftMode buttons (Save Draft and Confirm)', () => {
+    const params = withScope({ draftMode: { enabled: true, label: 'process' } });
+    render(<>{renderSaveActions(params)}</>);
+    let release;
+    act(() => { release = registerPending(params.hook.handleChange); });
+    expect(screen.getByTestId('action-save-draft')).toBeDisabled();
+    expect(screen.getByTestId('action-save')).toBeDisabled();
+    act(() => release());
+    expect(screen.getByTestId('action-save')).not.toBeDisabled();
+  });
+
+  it('stays disabled until every pending registration is released', () => {
+    const params = withScope();
+    render(<>{renderSaveActions(params)}</>);
+    let releaseA; let releaseB;
+    act(() => { releaseA = registerPending(params.hook.handleChange); releaseB = registerPending(params.hook.handleChange); });
+    act(() => releaseA());
+    expect(screen.getByTestId('action-save')).toBeDisabled();
+    act(() => releaseB());
+    expect(screen.getByTestId('action-save')).not.toBeDisabled();
+  });
+
+  it('keeps an existing gate reason instead of the calculating one', () => {
+    const params = withScope({ saveGate: { blocked: true, title: 'saveMissingRequired' } });
+    render(<>{renderSaveActions(params)}</>);
+    act(() => { registerPending(params.hook.handleChange); });
+    expect(screen.getByTestId('action-save')).toHaveAttribute('title', 'saveMissingRequired');
+  });
+
+  it('ignores pending work of another form instance and an unrelated change', () => {
+    const params = withScope();
+    render(<>{renderSaveActions(params)}</>);
+    act(() => { registerPending(() => {}); });
+    expect(screen.getByTestId('action-save')).not.toBeDisabled();
+    expect(screen.queryByTestId('Loader2__fa3275')).not.toBeInTheDocument();
+  });
+
+  it('isFormCalculating reads the same scope for non-component callers (auto-save on blur)', () => {
+    const hook = { handleChange: () => {} };
+    expect(isFormCalculating(hook)).toBe(false);
+    const release = registerPending(hook.handleChange);
+    expect(isFormCalculating(hook)).toBe(true);
+    release();
+    expect(isFormCalculating(hook)).toBe(false);
+    expect(isFormCalculating(undefined)).toBe(false);
+  });
+});
 
 // ETP-5513 — a blocked Save/Confirm is disabled, so it can never be clicked; hovering,
 // focusing or pressing it reports the fields it is blocked on, so the header form can

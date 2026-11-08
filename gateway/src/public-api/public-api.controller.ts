@@ -415,7 +415,19 @@ export class PublicApiController {
     return path && record ? toEtag(record[path]) : undefined;
   }
 
-  private toJsonApiResource(entityName: string, record: Record<string, unknown>, id?: string) {
+  /**
+   * Where a record is served: `/api/v1/{resource}/{id}`, or for a child resource its nested route
+   * `/api/v1/{parent}/{parentId}/{pathSegment}/{id}` — the child's own name is no route (ETP-6012).
+   */
+  private selfLink(entityName: string, resourceId: string, parentId?: string): string {
+    const parent = (this.entityOrThrow(entityName) as PublicApiEntity & { parent?: { resource: string; pathSegment: string } }).parent;
+    const id = encodeURIComponent(resourceId);
+    return parent && parentId
+      ? `/api/v1/${parent.resource}/${encodeURIComponent(parentId)}/${parent.pathSegment}/${id}`
+      : `/api/v1/${entityName}/${id}`;
+  }
+
+  private toJsonApiResource(entityName: string, record: Record<string, unknown>, id?: string, parentId?: string) {
     const entity = this.entityOrThrow(entityName);
     const etag = this.etagOf(entityName, record);
     const filtered = filterOutboundRecord(entity, record);
@@ -444,7 +456,7 @@ export class PublicApiController {
       ...(resourceId === undefined || resourceId === null ? {} : { id: String(resourceId) }),
       attributes,
       ...(Object.keys(relationships).length ? { relationships } : {}),
-      ...(resourceId === undefined || resourceId === null ? {} : { links: { self: `/api/v1/${entityName}/${encodeURIComponent(String(resourceId))}` } }),
+      ...(resourceId === undefined || resourceId === null ? {} : { links: { self: this.selfLink(entityName, String(resourceId), parentId) } }),
       ...(etag ? { meta: { etag } } : {}),
     };
   }
@@ -454,8 +466,8 @@ export class PublicApiController {
    * response is a single resource object, even though NeoServlet wraps a
    * single record in a one-element array.
    */
-  private toJsonApi(entityName: string, data: unknown, id: string | undefined, single: boolean, method: string) {
-    if (!single) return { data: asRecords(data).map((record) => this.toJsonApiResource(entityName, record)) };
+  private toJsonApi(entityName: string, data: unknown, id: string | undefined, single: boolean, method: string, parentId?: string) {
+    if (!single) return { data: asRecords(data).map((record) => this.toJsonApiResource(entityName, record, undefined, parentId)) };
     const records = asRecords(data);
     if (records.length > 1) throw badGateway('Etendo answered several records for a single-record request.');
     if (records.length === 0) {
@@ -463,7 +475,7 @@ export class PublicApiController {
       if (method === 'GET') throw new NotFoundException('The record does not exist');
       throw badGateway('Etendo answered without the written record.');
     }
-    return { data: this.toJsonApiResource(entityName, records[0], id) };
+    return { data: this.toJsonApiResource(entityName, records[0], id, parentId) };
   }
 
   /**
@@ -473,7 +485,7 @@ export class PublicApiController {
    * for lies past the end, the datasource rewinds and answers the FIRST page
    * (its `startRow` is then not the one requested): that is an empty page here.
    */
-  private toListDocument(entityName: string, data: unknown, envelope: { startRow?: unknown; totalRows?: unknown } | undefined, list: ListRequest) {
+  private toListDocument(entityName: string, data: unknown, envelope: { startRow?: unknown; totalRows?: unknown } | undefined, list: ListRequest, parentId?: string) {
     const { query, basePath } = list;
     let records = asRecords(data);
     const answeredStart = typeof envelope?.startRow === 'number' ? envelope.startRow : query.startRow;
@@ -484,13 +496,13 @@ export class PublicApiController {
       ? reported
       : undefined;
     return {
-      data: records.map((record) => this.toJsonApiResource(entityName, record)),
+      data: records.map((record) => this.toJsonApiResource(entityName, record, undefined, parentId)),
       ...pagination(basePath, query, records.length, total),
     };
   }
 
   /** The document for a successful NeoServlet answer (status already known to be 2xx). */
-  private async toSuccessDocument(response: Response, entityName: string, method: string, id?: string, res?: HeaderSink, list?: ListRequest) {
+  private async toSuccessDocument(response: Response, entityName: string, method: string, id?: string, res?: HeaderSink, list?: ListRequest, parentId?: string) {
     // DELETE answers 204 without a body whatever Etendo returned on success.
     if (method === 'DELETE') return undefined;
     if (response.status === 204) {
@@ -500,8 +512,8 @@ export class PublicApiController {
     }
     const json = (await response.json()) as { response?: { data?: unknown; startRow?: unknown; totalRows?: unknown } };
     const data = json.response && 'data' in json.response ? json.response.data : json;
-    if (list && method === 'GET' && id === undefined) return this.toListDocument(entityName, data, json.response, list);
-    const document = this.toJsonApi(entityName, data, id, !(method === 'GET' && id === undefined), method);
+    if (list && method === 'GET' && id === undefined) return this.toListDocument(entityName, data, json.response, list, parentId);
+    const document = this.toJsonApi(entityName, data, id, !(method === 'GET' && id === undefined), method, parentId);
     // A single-record answer (read, create, update) carries the new version in the ETag header.
     const single = document.data;
     const etag = !Array.isArray(single) ? (single as { meta?: { etag?: string } }).meta?.etag : undefined;
@@ -556,6 +568,6 @@ export class PublicApiController {
       if (response.status === 401) req.evictNeoJwt?.();
       throw (response.status === 400 ? missingFieldsException(entity, upstream) : undefined) ?? upstreamException(response.status, upstream);
     }
-    return this.toSuccessDocument(response, entityName, method, id, res, list);
+    return this.toSuccessDocument(response, entityName, method, id, res, list, parentId);
   }
 }

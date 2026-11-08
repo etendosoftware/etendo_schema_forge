@@ -15,7 +15,7 @@ import {
 import MovementLifecycleConfirmModal from './MovementLifecycleConfirmModal';
 import { DeleteConfirmDialog } from '@/components/contract-ui/DeleteConfirmDialog.jsx';
 import { resolveMovementDeleteBlock, resolveMovementReactivateBlock, movementHasUndoableState } from './movementActionEligibility.js';
-import { translateBackendError, extractBackendMessageKeys } from '@/lib/backendErrors.js';
+import { translateBackendError, extractBackendMessageKeys, extractBackendMessageParams } from '@/lib/backendErrors.js';
 import { documentPeriodDate, periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -38,8 +38,9 @@ async function callTransactionAction(apiFetch, url, token) {
   const nested = body?.response?.data?.[0];
   const message = nested?.message ?? body?.response?.message ?? body?.message;
   const messageKeys = extractBackendMessageKeys(nested) ?? extractBackendMessageKeys(body);
+  const messageParams = extractBackendMessageParams(nested) ?? extractBackendMessageParams(body);
   const success = res.ok && (nested?.success ?? body?.success ?? true);
-  return { success, message, messageKeys };
+  return { success, message, messageKeys, messageParams };
 }
 
 /**
@@ -210,12 +211,12 @@ export function MovementRowKebab({ movement, onReload, onEdit, windowReadOnly })
     if (busy) return;
     setPosting(true);
     try {
-      const { success, message, messageKeys } = await callTransactionAction(apiFetch, POST_URL(movement.id), token);
+      const { success, message, messageKeys, messageParams } = await callTransactionAction(apiFetch, POST_URL(movement.id), token);
       if (success) {
         toast.success(ui('documentPosted'));
         onReload?.();
       } else {
-        toastRefusal(translateBackendError(message, ui, { messageKeys }) || ui('financeAccountMovementsRowPostError'),
+        toastRefusal(translateBackendError(message, ui, { messageKeys, messageParams }) || ui('financeAccountMovementsRowPostError'),
           messageKeys);
       }
     } catch {

@@ -1,9 +1,10 @@
 // @covers artifacts/sales-invoice/custom/ImportFromShipmentModal.jsx
 // @covers artifacts/sales-invoice/custom/InvoiceBottomPanel.jsx
-import { test, expect } from '@playwright/test';
+// @covers artifacts/sales-invoice/custom/ImportFromSourceInvoiceModal.jsx
+// @covers tools/app-shell/src/components/contract-ui/ImportLinesModal.jsx
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 import { t } from '../../helpers/i18n.js';
-import { clickLastCheckbox } from '../../helpers/selectors.js';
 
 /**
  * Sales Invoice — Import from Shipment: no page-reload after success (mocked).
@@ -54,23 +55,71 @@ const INVOICE_HEADER = {
   'currency$_identifier': 'EUR',
 };
 
+// ETP-6099: the popup reads the invoice's availableShipments / availableShipmentLines actions
+// (rows in the action contract's shape, `detail: true`).
 const SHIPMENT = {
   id: SHIPMENT_ID,
   documentNo: 'SHIP-MOCK-001',
-  documentStatus: 'CO',
+  date: '2026-05-01',
   businessPartner: BP_ID,
   'businessPartner$_identifier': 'Test Client',
-  movementDate: '2026-05-01',
-  invoiced: false,
+  currency: 'eur-1',
+  pendingLines: 1,
+  order: null,
+  orderDocumentNo: null,
+  amount: 20,
 };
 
 const SHIP_LINE = {
   id: SHIP_LINE_ID,
+  lineNo: 10,
   product: 'prod-001',
   'product$_identifier': 'Test Product',
+  uOM: 'uom-1',
+  pendingQuantity: 2,
   movementQuantity: 2,
-  salesOrderLine: null,
+  orderLine: null,
+  orderLineDiscount: 0,
+  importedHere: false,
+  invoicedElsewhere: false,
 };
+
+/** The invoice's availableShipments / availableShipmentLines actions (POST reads). */
+async function routeShipmentActions(page, lines) {
+  await page.route(`**/sws/neo/sales-invoice/header/${INVOICE_ID}/action/availableShipment*`, async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    const isLines = route.request().url().endsWith('/availableShipmentLines');
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ response: { data: isLines ? lines : [SHIPMENT], hasMore: false, nextOffset: null } }),
+    });
+  });
+}
+
+/**
+ * Selects one shipment line in the import popup once its row is rendered, and waits for the
+ * selection to take.
+ *
+ * Since ETP-6099 the popup loads a shipment's lines lazily, on expand: one
+ * `availableShipmentLines` read, then the pricing context (header GET + product selector) and two
+ * callouts per line, and only then are the line rows rendered. Waiting on the product NAME is not
+ * enough: the catch-all selector stub of login() makes the header's «Dirección» chip read
+ * «Test Product» too, so `getByText(/Test Product/).first()` resolved on the header form before the
+ * lines arrived, the "last checkbox" was then the document's own one (which only expands an
+ * unloaded document, it selects nothing) and the import button stayed disabled. The wait is scoped
+ * to the popup's line row of this line id instead, and the click is checked through the row's
+ * `data-selected`.
+ */
+async function selectImportLine(page, lineId) {
+  const lineRow = page.locator(`[data-testid="ImportLinesModal__lineRow"][data-line-id="${lineId}"]`);
+  await expect(lineRow).toBeVisible({ timeout: 10_000 });
+  await expect(lineRow).toContainText('Test Product');
+  // Native click, as clickLastCheckbox() does: the Checkbox's visual target is occluded by its
+  // decorative wrapper, which fails Playwright's pointer hit test.
+  await lineRow.getByRole('checkbox').evaluate((el) => el.click());
+  await expect(lineRow).toHaveAttribute('data-selected', 'true');
+}
 
 /**
  * Install mocks for the invoice detail + import flow.
@@ -107,25 +156,8 @@ async function installMocks(page) {
     });
   });
 
-  // Goods-shipment list — ImportFromShipmentModal.fetchDocuments
-  await page.route('**/sws/neo/goods-shipment/goodsShipment{/**,}**', async (route) => {
-    if (route.request().method() !== 'GET') return route.fallback();
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ response: { data: [SHIPMENT] } }),
-    });
-  });
-
-  // Goods-shipment lines — ImportFromShipmentModal.fetchLines
-  await page.route('**/sws/neo/goods-shipment/goodsShipmentLine{/**,}**', async (route) => {
-    if (route.request().method() !== 'GET') return route.fallback();
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ response: { data: [SHIP_LINE] } }),
-    });
-  });
+  // ImportFromShipmentModal.fetchDocuments / fetchLines
+  await routeShipmentActions(page, [SHIP_LINE]);
 }
 
 test.describe('Sales Invoice — import from shipment no-reload', () => {
@@ -151,12 +183,8 @@ test.describe('Sales Invoice — import from shipment no-reload', () => {
     // Expand the shipment to load its lines
     await shipmentRow.click();
 
-    // Wait for lines to load inside the modal
-    const lineRow = page.getByText(/Test Product/i).first();
-    await expect(lineRow).toBeVisible({ timeout: 5_000 });
-
-    // ETP-4299: ImportLinesModal no longer auto-selects lines — click the checkbox.
-    await clickLastCheckbox(page);
+    // ETP-4299: ImportLinesModal no longer auto-selects lines — select it once it is loaded.
+    await selectImportLine(page, SHIP_LINE_ID);
 
     // Click the import button
     const importSelectedBtn = page.getByRole('button', { name: /Import.*selected|Importar.*seleccionadas/i });
@@ -209,10 +237,9 @@ test.describe('Sales Invoice — import from shipment no-reload', () => {
 
     await expect(page.getByText(/SHIP-MOCK-001/i).first()).toBeVisible({ timeout: 5_000 });
     await page.getByText(/SHIP-MOCK-001/i).first().click();
-    await expect(page.getByText(/Test Product/i).first()).toBeVisible({ timeout: 5_000 });
 
-    // ETP-4299: ImportLinesModal no longer auto-selects lines — click the checkbox.
-    await clickLastCheckbox(page);
+    // ETP-4299: ImportLinesModal no longer auto-selects lines — select it once it is loaded.
+    await selectImportLine(page, SHIP_LINE_ID);
 
     const importSelectedBtn = page.getByRole('button', { name: /Import.*selected|Importar.*seleccionadas/i });
     await expect(importSelectedBtn).toBeEnabled({ timeout: 3_000 });
@@ -232,21 +259,12 @@ test.describe('Sales Invoice — import from shipment no-reload', () => {
 // ---------------------------------------------------------------------------
 
 const ORDER_LINE_ID = 'order-line-discount-001';
+// The action row carries the order line and its discount (ETP-6099: no order-line GET).
 const SHIP_LINE_WITH_ORDER = {
+  ...SHIP_LINE,
   id: 'ship-line-disc-001',
-  product: 'prod-001',
-  'product$_identifier': 'Test Product',
-  movementQuantity: 2,
-  salesOrderLine: ORDER_LINE_ID,
-};
-const ORDER_LINE_WITH_DISCOUNT = {
-  id: ORDER_LINE_ID,
-  product: 'prod-001',
-  orderedQuantity: 2,
-  listPrice: 23,
-  unitPrice: 20.7,
-  discount: 10,
-  lineGrossAmount: 45.54,
+  orderLine: ORDER_LINE_ID,
+  orderLineDiscount: 10,
 };
 
 test.describe('Sales Invoice — import from shipment discount carry-over', () => {
@@ -276,35 +294,8 @@ test.describe('Sales Invoice — import from shipment discount carry-over', () =
       });
     });
 
-    // Shipment list
-    await page.route('**/sws/neo/goods-shipment/goodsShipment{/**,}**', async (route) => {
-      if (route.request().method() !== 'GET') return route.fallback();
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ response: { data: [SHIPMENT] } }),
-      });
-    });
-
-    // Shipment lines — line WITH a salesOrderLine reference
-    await page.route('**/sws/neo/goods-shipment/goodsShipmentLine{/**,}**', async (route) => {
-      if (route.request().method() !== 'GET') return route.fallback();
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ response: { data: [SHIP_LINE_WITH_ORDER] } }),
-      });
-    });
-
-    // Sales order line — returns 10% discount
-    await page.route(`**/sws/neo/sales-order/lines/${ORDER_LINE_ID}`, async (route) => {
-      if (route.request().method() !== 'GET') return route.fallback();
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ response: { data: [ORDER_LINE_WITH_DISCOUNT] } }),
-      });
-    });
+    // Shipment list + lines — the line references an order line with a 10% discount
+    await routeShipmentActions(page, [SHIP_LINE_WITH_ORDER]);
 
     // Capture the POST that creates the invoice line
     await page.route('**/sws/neo/sales-invoice/lines', async (route) => {
@@ -327,10 +318,9 @@ test.describe('Sales Invoice — import from shipment discount carry-over', () =
 
     await expect(page.getByText(/SHIP-MOCK-001/i).first()).toBeVisible({ timeout: 5_000 });
     await page.getByText(/SHIP-MOCK-001/i).first().click();
-    await expect(page.getByText(/Test Product/i).first()).toBeVisible({ timeout: 5_000 });
 
-    // ETP-4299: ImportLinesModal no longer auto-selects lines — click the checkbox.
-    await clickLastCheckbox(page);
+    // ETP-4299: ImportLinesModal no longer auto-selects lines — select it once it is loaded.
+    await selectImportLine(page, SHIP_LINE_WITH_ORDER.id);
 
     const importSelectedBtn = page.getByRole('button', { name: /Import.*selected|Importar.*seleccionadas/i });
     await expect(importSelectedBtn).toBeEnabled({ timeout: 3_000 });
@@ -357,7 +347,10 @@ test.describe('Sales Invoice — import from shipment discount carry-over', () =
 
 // ---------------------------------------------------------------------------
 // ETP-4737: Import from Source Invoice — negative quantity, already-imported
-// detection, and the originInvoice link-back PATCH.
+// detection, and the origin link. Since ETP-6002 the link to the source invoice
+// (C_Invoice_Reverse) is written by the backend when each line is created from a
+// POST carrying `sourceInvoiceLineId`; the modal no longer PATCHes the header's
+// `originInvoices` (that PATCH always came back 409 stale_record).
 // ---------------------------------------------------------------------------
 
 const SRC_INVOICE_ID2 = 'mock-inv-src-001';
@@ -391,47 +384,47 @@ const SRC_INVOICE_HEADER = {
   'currency$_identifier': 'EUR',
 };
 
+// What the rectificative's `availableOriginInvoices` action lists (ETP-6099): the server already
+// keeps the customer's completed, non-rectificative invoices in the invoice's currency. `amount`
+// (detail) = Σ unitPrice × |qty| over all its lines, the imported one included.
 const SOURCE_INVOICE_DOC = {
   id: SOURCE_INVOICE_ID,
   documentNo: 'SRC-INV-001',
-  documentStatus: 'CO',
   businessPartner: BP_ID,
   'businessPartner$_identifier': 'Test Client',
-  invoiceDate: '2026-04-01',
+  date: '2026-04-01',
   currency: 'eur-1',
+  pendingLines: 1,
+  amount: 65,
 };
 
 // Already imported into SRC_INVOICE_HEADER — must appear grayed out in the picker.
 const SOURCE_LINE_1_IMPORTED = {
   id: SRC_LINE_1_ID,
+  lineNo: 10,
   product: 'prod-a',
   'product$_identifier': 'Producto Origen A',
   invoicedQuantity: 2,
+  pendingQuantity: 0,
+  importedHere: true,
   unitPrice: 10,
   lineNetAmount: 20,
 };
 
 // Not yet imported — selectable, and used to assert the negative quantity stepper.
-// ETP-5381: it carries the originating order-line FK under `salesOrderLine` (the key NEO
-// actually returns), so the test can assert the rectificativa's own line re-posts it under
-// the same key instead of the dead `cOrderlineId`.
+// It carries the originating order-line FK under `salesOrderLine` (the key NEO actually
+// returns), so the test can assert the rectificativa's own line does NOT re-post it (ETP-6002).
 const SOURCE_LINE_2_AVAILABLE = {
   id: SRC_LINE_2_ID,
+  lineNo: 20,
   product: 'prod-b',
   'product$_identifier': 'Producto Origen B',
   invoicedQuantity: 3,
+  pendingQuantity: 3,
+  importedHere: false,
   unitPrice: 15,
   lineNetAmount: 45,
   salesOrderLine: ORDER_LINE_ID,
-};
-
-// Current invoice's own existing line — its sourceInvoiceLineId points back at
-// SRC_LINE_1_ID, which is how fetchDocuments builds the alreadyImported set.
-const EXISTING_LINE_LINKING_SOURCE_1 = {
-  id: 'existing-line-1',
-  product: 'prod-a',
-  sourceInvoiceLineId: SRC_LINE_1_ID,
-  invoicedQuantity: -2,
 };
 
 // Classifies a `.../{entity}/header...` request URL as the plain 'detail' GET/PATCH
@@ -464,11 +457,30 @@ function isPlainLinesPath(url) {
 }
 
 async function installSourceInvoiceMocks(page, state) {
-  // Header: detail GET, currency-lookup GET (same URL), candidate-list GET, and the
-  // afterImport PATCH that links originInvoice back to the source invoice.
+  // Header: detail GET, the popup's read actions (ETP-6099: availableOriginInvoices for the
+  // candidates, availableOriginInvoiceLines for the source's lines, the already-imported one marked
+  // `importedHere`), and any header PATCH — captured so the test can assert none of them carries
+  // `originInvoices`.
   await page.route('**/sws/neo/sales-invoice/header{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
+    const { pathname } = new URL(url);
+    if (req.method() === 'POST' && pathname.endsWith(`/header/${SRC_INVOICE_ID2}/action/availableOriginInvoices`)) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [SOURCE_INVOICE_DOC], hasMore: false } }),
+      });
+      return;
+    }
+    if (req.method() === 'POST' && pathname.endsWith(`/header/${SRC_INVOICE_ID2}/action/availableOriginInvoiceLines`)) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [SOURCE_LINE_1_IMPORTED, SOURCE_LINE_2_AVAILABLE], hasMore: false } }),
+      });
+      return;
+    }
     const kind = classifyHeaderRequest(url, SRC_INVOICE_ID2);
     if (req.method() === 'PATCH') {
       if (kind !== 'detail') return route.fallback();
@@ -490,20 +502,10 @@ async function installSourceInvoiceMocks(page, state) {
       });
       return;
     }
-    if (kind === 'list') {
-      // fetchDocuments' candidate-invoices lookup.
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ response: { data: [SOURCE_INVOICE_DOC] } }),
-      });
-      return;
-    }
     route.fallback();
   });
 
-  // Lines: detail view's own (empty) fetch, modal fetchDocuments' own-lines lookup
-  // (for alreadyImported detection), the source invoice's own lines (fetchLines), and POST.
+  // Lines: detail view's own (empty) fetch and the import's line POST.
   await page.route('**/sws/neo/sales-invoice/lines{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
@@ -519,25 +521,7 @@ async function installSourceInvoiceMocks(page, state) {
       return;
     }
     if (req.method() !== 'GET') return route.fallback();
-    if (url.includes(`parentId=${SOURCE_INVOICE_ID}`)) {
-      // fetchLines(docId=SOURCE_INVOICE_ID) — the source invoice's own lines.
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ response: { data: [SOURCE_LINE_1_IMPORTED, SOURCE_LINE_2_AVAILABLE] } }),
-      });
-      return;
-    }
     if (url.includes(`parentId=${SRC_INVOICE_ID2}`)) {
-      if (url.includes('_endRow=200')) {
-        // Modal fetchDocuments' own-lines lookup — builds alreadyImportedSourceLineIds.
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ response: { data: [EXISTING_LINE_LINKING_SOURCE_1] } }),
-        });
-        return;
-      }
       // Detail view's own lines fetch — empty so LinesEmptyState (and its import button) renders.
       await route.fulfill({
         status: 200,
@@ -551,7 +535,7 @@ async function installSourceInvoiceMocks(page, state) {
 }
 
 test.describe('Sales Invoice — Import from Source Invoice (ETP-4737)', () => {
-  test('shows negative quantity, blocks re-import of an already-imported line, and links originInvoice on success', async ({ page }) => {
+  test('shows negative quantity, blocks re-import of an already-imported line, and links the source via the line POST, not a header PATCH', async ({ page }) => {
     const state = { postBodies: [], patchBodies: [] };
 
     await login(page);
@@ -574,8 +558,9 @@ test.describe('Sales Invoice — Import from Source Invoice (ETP-4737)', () => {
     // Assertion: the already-imported source line is grayed out / cannot be re-selected.
     await expect(page.getByText(/already imported|ya importado/i)).toBeVisible();
     const checkboxes = page.getByRole('checkbox');
-    // nth(0) = document-level checkbox, nth(1) = line 1 (already imported), nth(2) = line 2.
-    await expect(checkboxes.nth(1)).toBeDisabled();
+    // nth(0) = document-level checkbox, nth(1) = the lines table's master checkbox,
+    // nth(2) = line 1 (already imported), nth(3) = line 2.
+    await expect(checkboxes.nth(2)).toBeDisabled();
 
     // Assertion: the quantity stepper displays a NEGATIVE value (negativeQuantity prop),
     // not a positive magnitude — checked on the selectable line (invoicedQuantity=3 → -3).
@@ -586,7 +571,7 @@ test.describe('Sales Invoice — Import from Source Invoice (ETP-4737)', () => {
     // as the shared clickLastCheckbox() helper) instead of Playwright's actionability
     // click — the Checkbox's 1px visual target is frequently occluded by its own
     // decorative wrapper div, which fails Playwright's pointer-events hit test.
-    await checkboxes.nth(2).evaluate((el) => el.click());
+    await checkboxes.nth(3).evaluate((el) => el.click());
     const importSelectedBtn = page.getByRole('button', { name: /Import.*selected|Importar.*seleccionadas/i });
     await expect(importSelectedBtn).toBeEnabled({ timeout: 3_000 });
     await importSelectedBtn.click();
@@ -595,23 +580,25 @@ test.describe('Sales Invoice — Import from Source Invoice (ETP-4737)', () => {
     await expect.poll(() => state.postBodies.length, { timeout: 5_000 }).toBeGreaterThan(0);
     expect(Number(state.postBodies[0].invoicedQuantity)).toBeLessThan(0);
 
-    // ETP-5381: the source line's order-line FK must be carried over under `salesOrderLine`
-    // (the spec's java_qualifier for C_INVOICELINE.C_OrderLine_ID), never the pre-fix
-    // `cOrderlineId` — a key that exists in no NEO spec and is dropped silently by
-    // NeoFieldFilter (200, line created, FK NULL). See invoice-import-order-line-fk.mocked.spec.js.
-    expect(state.postBodies[0].salesOrderLine).toBe(ORDER_LINE_ID);
+    // ETP-6002 (as ETP-5729 for the return path): the rectificativa line must NOT carry the
+    // source line's order line, under any key. C_INVOICE_POST would subtract the negative
+    // quantity from C_OrderLine.QtyInvoiced (the returned quantity turns invoiceable again) and
+    // match the rectificativa to the order's shipment (M_MatchSI), a transitive relation.
+    expect(Object.hasOwn(state.postBodies[0], 'salesOrderLine')).toBe(false);
     expect(Object.hasOwn(state.postBodies[0], 'cOrderlineId')).toBe(false);
 
-    // Assertion: after a successful import, afterImport PATCHes the header's originInvoices
-    // virtual field (ETP-4919: plural — a rectificativa can be linked to more than one source
-    // invoice across separate import runs) with the source invoice's id. Other unrelated
-    // PATCHes to the same header (e.g. autosave) may also fire, so find the one that actually
-    // carries originInvoices rather than assuming it is the first captured PATCH.
-    await expect.poll(
-      () => state.patchBodies.some((b) => b.originInvoices !== undefined),
-      { timeout: 5_000 },
-    ).toBe(true);
-    const originInvoicePatch = state.patchBodies.find((b) => b.originInvoices !== undefined);
-    expect(originInvoicePatch.originInvoices).toEqual([SOURCE_INVOICE_ID]);
+    // ETP-6002: the source-invoice link is carried by the line itself — each line POST
+    // must reference its source line under `sourceInvoiceLineId`, which is what the backend
+    // (SalesRectificativeLineLinkSupport) uses to write C_Invoice_Reverse in the same
+    // transaction as the line. Dropping this key would leave the rectificativa unlinked
+    // with no error anywhere.
+    expect(state.postBodies[0].sourceInvoiceLineId).toBe(SRC_LINE_2_ID);
+
+    // The import has finished once the modal is gone (it closes on success). Checked after
+    // that point, not polled, so a header PATCH carrying `originInvoices` cannot slip in
+    // unseen: the modal must not PATCH the header to link the source invoice any more (that
+    // PATCH carried the pre-import `updated` token and always came back 409 stale_record).
+    await expect(page.locator('.fixed.inset-0.z-50')).toHaveCount(0, { timeout: 5_000 });
+    expect(state.patchBodies.filter((b) => Object.hasOwn(b, 'originInvoices'))).toEqual([]);
   });
 });

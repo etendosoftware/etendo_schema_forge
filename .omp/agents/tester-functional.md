@@ -295,11 +295,11 @@ describe('ComponentName', () => {
 
 ## Playwright E2E Spec Template (mocked)
 
-Mocked specs run without a backend by installing `/sws/**` route handlers AFTER `login()` (Playwright matches routes in reverse order). Use this shape:
+Mocked specs run without a backend by installing `/sws/**` route handlers AFTER `login()` (Playwright matches routes in reverse order). They take `test` and `expect` from `e2e/tests/helpers/test.js`, never from `@playwright/test`: that fixture records the coverage the pre-push selects specs with (ETP-5891), and `scripts/__tests__/mocked-specs-coverage-contract.test.js` fails otherwise. A spec that opens more pages (`context.newPage()`) also goes in `e2e/mocked-always-run.json`. Use this shape:
 
 ```javascript
 // @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../helpers/test.js';
 import { login } from '../helpers/auth.js';
 
 const ROWS = [
@@ -357,6 +357,7 @@ for (const spec of ['sales-order', 'purchase-order']) {
 - **Parametrize by window** when the feature is wired into multiple custom windows — one `for (const spec of SPECS)` loop, one `expects` matrix per window.
 - **Mocked vs live:** prefer `.mocked.spec.js` for CI smoke (fast, deterministic). Reserve `.spec.js` (live backend) for flows where the mock would lose fidelity (e.g. real callouts, server-side defaults).
 - Run with `cd e2e && npm test -- tests/flows/<spec>` or via the Make target documented in `docs/e2e-testing-guide.md`.
+- **A spec belongs to a cell.** Put it in the `tests/flows/` folder of the cell whose functional area it exercises (`CELLS` in `e2e/support/test-cell.mjs`), never loose in `tests/flows/`. A new folder must be added to `CELLS`; `cd e2e && npm run test:cell -- --check` fails otherwise. The per-cell report and the QA Datadog board read this map, so a spec of no cell reaches no team when it fails.
 - If a `data-testid` you need does not exist yet, **stop and add it at the generator/shared component level** before continuing — never add it only to one window's generated file.
 
 </playwright_patterns>

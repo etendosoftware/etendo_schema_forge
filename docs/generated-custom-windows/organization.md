@@ -98,7 +98,7 @@ That tab-less `location` entity already exists, but only under the **`warehouse`
 
 `OrganizationPage.jsx` therefore points `LocationModalField`'s `apiBaseUrl` at the **`warehouse`** spec's base (`${neoBase(apiBaseUrl)}/warehouse`) instead of `organization`'s own. This is a deliberate, accepted reuse of a real, working, generic endpoint — not a mock, not fake data, and not a temporary hack pending a follow-up ticket. It works because the fetched/edited `C_Location` record is a real database row addressable from any spec; nothing about the handler is warehouse-scoped. Registering an equivalent `location` entity directly under `organization` (mirroring Warehouse's setup) would be the cleaner long-term architecture, but that is a `com.etendoerp.go` Java/AD change, out of scope for this ticket.
 
-**ETP-5806 — the fiscal address now asks for structured fields too, through this same reuse, gated behind `structured-address-for-sepa`.** The flag is backend-only (TTL 2026-11-15, `docs/feature-flags.md` / `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md`); the fiscal-address modal reads `capabilities.structuredAddressForSepa`, never the flag itself. **While off**, the fiscal-address modal is the pre-ETP-5806 single-line editor (free-text Address line + City/Country/Region) described above, unchanged. **While on**, `WarehouseLocationHandler` is no longer the plain, rule-free DAL pass-through described above: it now validates and persists the same 3 structured SEPA fields (`streetName`/`buildingNumber`/`buildingName`, mandatory-together with City and Country) as `ContactsLocationAddressHandler`, computing `addressLine1`/`addressLine2` via `StructuredAddressComposer` exactly the same way. Because Organization's fiscal address goes through the `warehouse` spec's `location` endpoint, it inherits this behavior for free: the fiscal-address modal now shows Calle/Número/Nombre de edificio instead of free-text Address Line 1/2, and Save is blocked until Street, Number, City and Country are filled. An organization whose fiscal address predates this change shows the same legacy-address warning banner (old free text + Copy button) described in `contacts.md`. See that file's "Structured address fields (ETP-5806)" note for the full behavior — it applies here unchanged, since both windows share `LocationEditorModal`/`LocationModalField`.
+**ETP-5806 — the fiscal address now asks for structured fields too, through this same reuse, gated behind `structured-address-for-sepa`.** The flag is backend-only (TTL 2026-11-15, `docs/feature-flags.md` / `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md`); the fiscal-address modal reads `capabilities.structuredAddressForSepa`, never the flag itself. **While off**, the fiscal-address modal is the pre-ETP-5806 single-line editor (free-text Address line + City/Country/Region) described above, unchanged. **While on**, `WarehouseLocationHandler` is no longer the plain, rule-free DAL pass-through described above: it now validates and persists the same 3 structured SEPA fields (`streetName`/`buildingNumber`/`buildingName`) as `ContactsLocationAddressHandler` — `streetName` mandatory-together with City and Country, `buildingNumber` optional (auto-filled with "s/n" if left blank once `streetName` has content) — computing `addressLine1`/`addressLine2` via `StructuredAddressComposer` exactly the same way. Because Organization's fiscal address goes through the `warehouse` spec's `location` endpoint, it inherits this behavior for free: the fiscal-address modal now shows Calle/Número/Nombre de edificio instead of free-text Address Line 1/2, and Save is blocked until Street, City and Country are filled — Número is no longer part of this gate. An organization whose fiscal address predates this change shows the same legacy-address warning banner (old free text + Copy button) described in `contacts.md`. See that file's "Structured address fields (ETP-5806)" note for the full behavior — it applies here unchanged, since both windows share `LocationEditorModal`/`LocationModalField`, including the server-side "s/n" fallback (`WarehouseLocationHandler`, via `StructuredAddressComposer.effectiveBuildingNumber`) that now also covers callers bypassing this modal.
 
 ## Onboarding Tax ID fix (bug found and fixed as part of ETP-4749)
 
@@ -137,7 +137,7 @@ fiscal-incident deep link. A hidden section is not rendered at all (no collapsed
 |---|---|
 | Certificado digital (`OrganizationPage__section-certificate`) | SII, TicketBAI or VERI\*FACTU is active for the organization, **or** an active catalog model files telematically (registry `telematicFiling`: 303 and 390 today — 349 alone does not show it) |
 | Actividades del IAE (`OrganizationPage__section-iae`) | model 303 **or** model 390 is active |
-| Representante legal / Modelo 390 (`OrganizationPage__section-390`) | model 390 is active |
+| Representante legal / Modelo 390 (`OrganizationPage__section-390`) | model 390 is active (never while the backend-only flag `fiscal-model-390` is off — see below) |
 
 **Data sources** — `useFiscalSectionVisibility(orgId, apiBaseUrl)`
 (`organization/useFiscalSectionVisibility.js`, pure rule `resolveFiscalSectionVisibility`):
@@ -148,6 +148,15 @@ fiscal-incident deep link. A hidden section is not rendered at all (no collapsed
   declarations list (`FmListPage.jsx`) uses. **Empty-catalog rule:** a catalog that was never saved
   answers `{}`, which means **no model is active**; the registry's `defaultActive` is NOT applied
   (it only seeds the catalog drawer's toggles). Toggled in Modelos fiscales → "Catálogo de modelos".
+  **Backend-only flag `fiscal-model-390` (ETP-5716, default off; targeted per user — account
+  email — and per tenant, so two users of the same tenant may differ):** while it is off for the
+  current user,
+  the catalog answer never carries `390` (it lists it under `_unavailable`, which the hook splits
+  off), so the "Representante legal / Modelo 390" section — the identity fields and the
+  representatives grid (`RepresentantesLegalesSection.jsx`, which then never fetches) — is hidden,
+  and "Actividades del IAE" and "Certificado digital" depend on the other models only. The page has
+  no flag logic of its own. Full rule: fiscal-models guide, "Modelo 390 behind the backend-only
+  flag `fiscal-model-390`".
 - **SII / TicketBAI / VERI\*FACTU:** the active `siiRecord` / `tbaiRecord` / `verifactuRecord` of
   `fiscal-config/useFiscalConfig.js`, reused as is. Toggled in Configuración fiscal.
 
@@ -217,7 +226,7 @@ The Modelo 303 report (reused via reflection from Classic in `com.etendoerp.go`)
 | `lineNo` | system | Auto-derived (`MAX(LINE)+10`), same convention as every other lines-shaped entity in this codebase — not user-entered |
 | `epgrafeIAE` | editable (selector) | "Epígrafe IAE" — `EPIAE_Epigraph` |
 | `default` | editable (boolean) | "Valor por defecto" — AD-mandatory; the row the Modelo 303 reads for the last period must have this `true` |
-| `epiaeType` | editable (selector) | "Clave" — `epiae_type` |
+| `epiaeType` | editable (selector) | "Clave" — `epiae_type`. **Not shown in the grid since ETP-5831 (CP-17)**: the column stays in the entity and existing rows keep their value (the grid never PATCHes it), new rows are created without it. The Modelo 390 still reads it, only as the tooltip of the activity row (`useOrg390Identity.js`) |
 | `epiaeCode` | editable (selector) | "Código" — `EPIAE_Code`; **this is the field the 303 needs set on the `default = true` row for the last period**. Not marked AD-`required` (the AD column itself is optional and most rows legitimately don't need it) — the actual requirement is conditional ("only the default row needs it before generating the last period's 303"), which is a process-level validation, not a blanket field-level one. The UI marks it with an info-icon tooltip explaining this instead of blocking save |
 | `organization`, `active`, `client`, `id`, `creationDate`, `createdBy`, `updated`, `updatedBy` | system | No derivation override — same bare `"visibility": "system"` convention used by `asset-group`'s `accounting` secondary tab, letting the raw AD derivation carry through |
 
@@ -227,7 +236,7 @@ The contract/NEO CRUD layer (`GET/POST/PUT/PATCH/DELETE /sws/neo/organization/ac
 
 `OrganizationPage.jsx` is still a hand-built, tabless flat form (see "Interaction model" above) with no tab strip and no generic `DetailView`/`secondaryTabs` rendering — it does **not** import the pipeline-generated scaffold at `artifacts/organization/generated/web/organization/` (that scaffold's `ActividadesDelIaeTable.jsx`/`ActividadesDelIaeForm.jsx` exist only as reference material for field/selector shapes, per the "Generated Files Policy"). Instead, a 4th `SectionRow` — "Actividades del IAE", at the same visual level as Identidad / Datos fiscales / Datos de contacto — renders a dedicated, hand-authored component (since ETP-5831 the section only renders while model 303 or 390 is active — see "Fiscal section visibility"):
 
-- **`tools/app-shell/src/windows/custom/organization/ActividadesIaeSection.jsx`** — the editable grid: Epígrafe IAE / Clave / Código (all `CreatableSearchSelect` with `serverSearch: true` — not the plain `SelectorInput` other lines tables like `AmortizationLinesTable.jsx` use, because `SelectorInput`'s search box sends a `search` query param the real NEO Headless backend does not read, so it never actually filtered; `CreatableSearchSelect`'s `serverSearch` mode sends the `q` param the backend expects, debounced 300ms — `selectorUrl` built from `apiBaseUrl` + `/actividadesDelIae/selectors/<column>`, column names, not the camelCase field key, per NEO Headless's `GET /sws/neo/{spec}/{entity}/selectors/{columnName}`) and a `default` checkbox, plus add/delete row affordances (`AddLineButton`, inline add-row with explicit save/cancel icons rather than InlineLinesPanel's click-outside auto-submit — an intentional simplification, open for REVIEW). A `TriangleAlert` inline hint appears next to `epiaeCode` on any row that is `default = true` with no code set, and an `Info` tooltip on the "Código" column header explains why the field matters. Every field change (selector pick, default toggle, delete, new row) persists immediately via its own API call — this section is **not** part of `form`/the page's unsaved-changes banner, matching the row-level-save convention lines tables already use elsewhere (e.g. `AmortizationLinesTable.jsx`).
+- **`tools/app-shell/src/windows/custom/organization/ActividadesIaeSection.jsx`** — the editable grid: Epígrafe IAE / Código (since ETP-5831 CP-17 the "Clave" column is not offered — see the table above; all `CreatableSearchSelect` with `serverSearch: true` — not the plain `SelectorInput` other lines tables like `AmortizationLinesTable.jsx` use, because `SelectorInput`'s search box sends a `search` query param the real NEO Headless backend does not read, so it never actually filtered; `CreatableSearchSelect`'s `serverSearch` mode sends the `q` param the backend expects, debounced 300ms — `selectorUrl` built from `apiBaseUrl` + `/actividadesDelIae/selectors/<column>`, column names, not the camelCase field key, per NEO Headless's `GET /sws/neo/{spec}/{entity}/selectors/{columnName}`) and a `default` checkbox, plus add/delete row affordances (`AddLineButton`, inline add-row with explicit save/cancel icons rather than InlineLinesPanel's click-outside auto-submit — an intentional simplification, open for REVIEW). A `TriangleAlert` inline hint appears next to `epiaeCode` on any row that is `default = true` with no code set, and an `Info` tooltip on the "Código" column header explains why the field matters. Every field change (selector pick, default toggle, delete, new row) persists immediately via its own API call — this section is **not** part of `form`/the page's unsaved-changes banner, matching the row-level-save convention lines tables already use elsewhere (e.g. `AmortizationLinesTable.jsx`).
 - **`tools/app-shell/src/windows/custom/organization/useActividadesIae.js`** — fetch/create/update/delete hook, sibling to `useOrganizationData.js` (same spec base pattern: `${neoBase(apiBaseUrl)}/organization`). List reads use `?parentId=<orgId>`; creates send `parentId` in the body so `NeoCrudHandler#injectParentIdAsProperty` resolves the FK server-side without the client needing to know the column name.
 
 **Modelo 390 cap — 1 main + 5 others (ETP-5716).** The classic Modelo 390 generator
@@ -243,6 +252,12 @@ activity / activity code checks for the 390 are still pending (390 incidents pha
 **Single-default rule (design decision, no AD callout ported):** the Classic callout `org.openbravo.erpCommon.ad_callouts.SL_IsDefault` on the `default` field could not be classified (`rules-raw.json`: `complexity: "unknown"`, `confidence: "low"`, `warning: "Source not found"`) and stays un-curated, same as this window's other 68 extracted rules. Its net effect — at most one default row per organization — is replicated by hand in `useActividadesIae.js`'s `enforceSingleDefault(keepId)`: whenever a row is turned **on** (`default: true`), every *other* row belonging to the organization is explicitly `PATCH`ed to `default: false` — a real API call per sibling row, not just a local state flip — before the list is refetched. This runs both when toggling an existing row's checkbox and when submitting a new row with `default` already checked. A failed sweep on one sibling is swallowed per-row so one bad row can't block the others from being corrected.
 
 **Concurrent-toggle fix (QA, ETP-4975):** `enforceSingleDefault` used to read its "who else is default" snapshot straight from `state.rows`, closed over at call time — that snapshot only advances once a `refetch()`'s `setState` actually lands, never optimistically at the moment a toggle fires. Two "Principal" checkboxes flipped back-to-back, before either PATCH round-trip settled, each read the OTHER row as still `default:false` in their own stale closure, so neither swept the other — both persisted `default:true` server-side with no corrective PATCH ever issued. The fix is a `rowsRef` (a ref mirroring `state.rows`) that `enforceSingleDefault` also writes its own optimistic mark into, synchronously, before doing anything async — a fresh, always-current source of truth instead of the stale closured snapshot. Because a JS async function runs its synchronous prefix to completion before yielding, "mark self default:true, then look for other rows already marked default:true" is effectively atomic across overlapping calls, so whichever call resumes second still sees and sweeps the first call's mark, even though neither call ever awaited a fresh reload.
+
+**What "IAE" means (ETP-5831 CP-19).** The section description (`orgSectionIaeDesc`) spells the
+acronym out in its first sentence — "Actividades del Impuesto sobre Actividades Económicas (IAE)
+declaradas por esta organización…" (en_US: "Activities under the Spanish Business Activities Tax
+(IAE, Impuesto sobre Actividades Económicas)…"). The title (`orgSectionIae`, "Actividades del IAE")
+stays short: the 200px title column already shows the description right below it. es_AR carries no `orgSection*` keys (it falls back).
 
 **AEAT heading search link (ETP-5831).** The "Epígrafe IAE" column header carries a link to the
 AEAT's IAE heading search (`https://sede.agenciatributaria.gob.es/Sede/buscador-iae.html`,
@@ -303,7 +318,7 @@ replicate Classic:
 | `information` | `aeat390Isperson` | editable (boolean) | "Persona Física 390". AD-mandatory, default `N`. No display logic |
 | `information` | `aeat390Firstname`, `aeat390Surname1`, `aeat390Surname2` | editable (text, 60) | Declarant name/surnames. Optional. Display logic `@EM_Aeat390_Isperson@='Y'`, carried through from the raw AD (no override in `decisions.json`) |
 | `information` | `aeat390RepNif` (20), `aeat390RepName` (60) | editable (text) | Natural-person representative. Optional. Same display logic |
-| `representanteLegal` | `taxID` ("CIF/NIF", 20), `firstName` ("Nombre"), `lastname1` ("Primer Apellido"), `powerDate` ("Fecha Poder", date), `notaryName` ("Notaría") | editable, required | Matches the Classic AD mandatory flags |
+| `representanteLegal` | `taxID` ("NIF" in GO since ETP-5831, AD label "CIF/NIF", 20), `firstName` ("Nombre"), `lastname1` ("Primer Apellido"), `powerDate` ("Fecha Poder", date), `notaryName` ("Notaría") | editable, required | Matches the Classic AD mandatory flags |
 | `representanteLegal` | `lastname2` ("Segundo Apellido") | editable, optional | |
 | `representanteLegal` | `lineNo` | system | Same convention as `actividadesDelIae`. The AD default `@SQL=SELECT COALESCE(MAX(LINE),0)+10 ... WHERE AD_Org_ID=@AD_Org_ID@` is resolved by NEO both on `GET .../representanteLegal/defaults?parentId=<orgId>` and on create (`NeoMandatoryDefaultsService`): verified live, two consecutive creates got `lineNo` 10 and 20 |
 | `representanteLegal` | `organization`, `active` (`fromConfig` `Y`), `client`, `id`, audit columns | system | Same as `actividadesDelIae` |
@@ -339,7 +354,13 @@ is active (ETP-5831, see "Fiscal section visibility"). Its body is
   `PATCH /information/{orgId}` as the rest of `AD_OrgInfo`. The branch below follows the form value,
   so flipping it previews the other branch before saving.
 - **ON — natural person:** Nombre, Primer apellido, Segundo apellido, NIF del representante legal,
-  Nombre del representante legal (`aeat390Firstname/Surname1/Surname2/RepNif/RepName`). Also page-form
+  Nombre del representante legal (`aeat390Firstname/Surname1/Surname2/RepNif/RepName`). Since
+  ETP-5831 (CP-16) they are laid out as **one row of a table in the representatives grid's format**
+  — one column per field, the column header (`<label htmlFor>`) labelling the inline input below it,
+  the field error inside its cell — and there is **no "add" button**: the organization is the one
+  natural person, so a second row is impossible. The table shell (`RepresentativeTableFrame.jsx`:
+  bordered fixed-layout table, muted header row, `RepresentativeHeaderCell`) is the same component
+  the representatives grid renders. Also page-form
   fields, saved with the page; inputs are capped at the AD lengths (60, and 20 for the NIF). The AD
   columns are optional, but the classic module adds two DB checks on `AD_OrgInfo`, mirrored by
   `getAeat390IdentityErrors` (`representanteLegal.js`) so the save never reaches them:
@@ -360,7 +381,7 @@ is active (ETP-5831, see "Fiscal section visibility"). Its body is
   writer uppercases, keeps only `[A-Za-z0-9. ]` and truncates to 9, so a raw `12.345.678-Z` would
   reach the file as `12.345.67`.
 - **OFF — legal representatives grid** (`RepresentantesLegalesSection.jsx` +
-  `useRepresentantesLegales.js`). Columns: Línea, CIF/NIF, Nombre y apellidos, Fecha del poder,
+  `useRepresentantesLegales.js`). Columns: Línea, NIF (labelled "CIF/NIF" until ETP-5831 CP-18; en_US "Tax ID (NIF)"), Nombre y apellidos, Fecha del poder,
   Notaría, edit/delete. Rows are listed by `lineNo` ascending (requested with `_sortBy=lineNo` and
   sorted again on the client by `sortByLineNo`), and the first 3 **active** rows carry a small
   **"390"** marker; the other rows are shown in muted text. A hint above the table states that only
@@ -590,7 +611,7 @@ All of the above are now covered by automated tests — the "pending Tester" gap
 8. Onboard a brand-new tenant through the wizard, filling in a Tax ID in the "Details to start invoicing" step. **It must now be a real one** — `B1234567D` or `12345678Z`; ETP-5190 refuses a malformed value with a `400` before provisioning starts, so the old `1234` example no longer gets past the wizard. Once onboarding finishes, open `/organization` for that tenant and confirm the NIF field shows the real value entered — not the literal `"?"` placeholder. Repeat with the Tax ID left blank and confirm it still shows `"?"` (unchanged legacy behavior for the optional-and-not-provided case), and once more with `1234` to confirm the wizard now rejects it.
 9. Onboard a brand-new tenant as a Company, entering a Company Name (e.g. `Acme Corp`). Once onboarding finishes, open `/organization` for that tenant and confirm "Nombre comercial" shows `Acme Corp` (not blank). Repeat onboarding as a Freelancer (no Company Name field shown) with a Full Name (e.g. `Jane Freelancer`) in the profile step, and confirm "Nombre comercial" shows `Jane Freelancer` instead.
 10. With model 303 or 390 active in Modelos fiscales → "Catálogo de modelos" (otherwise the section is hidden, ETP-5831), open `/organization` and confirm a 4th section, "Actividades del IAE", renders below Datos de contacto with an empty-state message when the organization has no rows yet.
-11. Click "Añadir actividad del IAE", pick an Epígrafe/Clave/Código from each selector, leave "Principal" unchecked, and confirm the row saves (check icon → row appears in the list) without needing the page's own Save button.
+11. Click "Añadir actividad del IAE", pick an Epígrafe/Código from each selector (no "Clave" column since ETP-5831), leave "Principal" unchecked, and confirm the row saves (check icon → row appears in the list) without needing the page's own Save button.
 12. Check "Principal" on that row; confirm it persists (reload the page and the checkbox is still checked). Add a second row and check its "Principal" box too; confirm the FIRST row's checkbox now shows unchecked after a reload — i.e. only one row stays `default = true` at a time.
 13. Mark a row as "Principal" without picking a Código and confirm a warning icon appears next to that row's Código selector (tooltip: "Falta el código…"); confirm hovering the info icon next to the "Código" column header explains why it matters for Modelo 303. Confirm save is NOT blocked either way (visual hint only).
 14. Delete a row via the trash icon and confirm it disappears from the list and does not reappear on reload.
@@ -617,3 +638,13 @@ All of the above are now covered by automated tests — the "pending Tester" gap
     top, with no error. With 390 hidden and incomplete 390 identity data, "Guardar cambios" still
     saves, and reactivating 390 shows the data unchanged. In the IAE grid, "Buscar epígrafe" opens the
     AEAT search in a new tab. The full manual test plan is in the ETP-5831 Jira comment.
+
+## Bespoke grid personal views
+
+The bespoke IAE and legal-representative grids use the existing personal-view contract for `organization` / `actividadesDelIae` and `organization` / `representanteLegal`. IAE selectors and the new inline row follow data-column preferences; the required main-activity column and fixed action cells remain available. Representative line/390 markers and edit/delete cells stay fixed; record order and the separate edit form are unchanged.
+
+The full app-shell `npm run test:all` suite and `npm run build` passed. Browser smoke covered Sales Order only, not these grids; authenticated preference persistence and human QA remain pending. See [the bespoke-grid inventory](../bespoke-grid-views.md) for verification boundaries.
+
+## Certificate status for agents — ETP-5852
+
+Over NEO/MCP, `organization/organization` declares the read-only action `certificate` (`OrganizationCertificateAction` in com.etendoerp.go): whether an active signing certificate exists, `validTo` and `daysLeft`, the same status the fiscal configuration warns about. Uploading and replacing it stays in the app. Feedback M-170.

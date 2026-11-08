@@ -435,7 +435,7 @@ A cash drawer is not reconciled against a bank statement: the user ticks the mov
 
 **Sign convention**, shared by frontend and backend: `difference = declared − (opening + clearedNet)`. POSITIVE means the drawer holds *more* than the books (a surplus → `BPD` deposit); NEGATIVE means *less* (a shortage → `BPW` withdrawal). Balanced when `|difference| < 0.005` — deliberately tighter than, and unrelated to, the split panel's `0.01` reconcile epsilon.
 
-**Backend** — its own spec, `cash-close` (`SPEC_TYPE=R`), handler `@Named("cashClose")` (`CashCloseHandler` + `CashCloseSupport`), at `/sws/neo/cash-close`. A separate spec rather than more actions on `bankReconciliation`, because Core keeps statement-backed and cash-only reconciliations mutually exclusive per document (Classic's `@APRM_ReconciliationMixed@` guard); the handler re-checks this and returns 409 if the draft already has statement-backed lines. It also hard-rejects non-cash accounts with a 400.
+**Backend** — its own spec, `cash-close` (`SPEC_TYPE=R`), handler `@Named("cashClose")` (`CashCloseHandler` + `CashCloseSupport`), at `/sws/neo/cash-close`. A separate spec rather than more actions on `bank-reconciliation`, because Core keeps statement-backed and cash-only reconciliations mutually exclusive per document (Classic's `@APRM_ReconciliationMixed@` guard); the handler re-checks this and returns 409 if the draft already has statement-backed lines. It also hard-rejects non-cash accounts with a 400.
 
 | Action | Behaviour |
 |---|---|
@@ -524,7 +524,7 @@ Until the next `make regen ONLY=financial-account PUSH_TO_NEO=1` + `./gradlew ex
 
 ### Reconciliation tab (T6) — bank and card accounts
 
-The Reconciliation tab renders `ReconciliationSplitPanel` (`tools/app-shell/src/components/contract-ui/ReconciliationSplitPanel.jsx`), a 50/50 split panel that composes the backend at `/sws/neo/bank-reconciliation` (handler `@Named("bankReconciliation")`). It never reimplements Etendo's reconciliation logic — the POST hands the grouped ids over to the Classic flow.
+The Reconciliation tab renders `ReconciliationSplitPanel` (`tools/app-shell/src/components/contract-ui/ReconciliationSplitPanel.jsx`), a 50/50 split panel that composes the backend at `/sws/neo/bank-reconciliation` (handler `ReconciliationHandler`, `@NeoExtension(spec = "bank-reconciliation", entity = "bank-reconciliation")` since ETP-5581). It never reimplements Etendo's reconciliation logic — the POST hands the grouped ids over to the Classic flow.
 
 - **Left panel — pending statement lines** (`usePendingStatementLines(accountId, filters)`): a movements-style toolbar with **back arrow** + status dropdown + date-range picker + search. The current T6 backend only exposes pending lines, so the status dropdown is wired but currently contains `Pendiente (N)` only. Below it, a table with **radio single-select** rows (Fecha · Descripción + status badge · Importe with sign tone) and a `Total: X,XX €` footer.
 - **Right panel — candidate operations** (`useCandidateOperations(accountId, lineId, docType)` — does NOT fetch while no line is selected): an empty state (`Selecciona un movimiento` / hint) until a line is picked, then a `SelectedLineHeader` (line metadata + amount in red/green), a real docType/date/search toolbar, and a table with **checkbox multi-select** rows (Fecha · Información = documentNo + partnerName + badge · Saldo pendiente · Importe). Backend-suggested candidates carry a blue **"Con sugerencia"** badge (ETP-4923, shared label with the left panel's status filter chip); the rest "Pendiente".
@@ -1375,6 +1375,134 @@ used** and only becomes **CONCILIADA at 100 %**; partial lines keep showing in t
 - All new UI uses semantic theme tokens (bar fill `--foreground`, track `--border`, tooltip/primary
   `--text-primary`, "Factura" tag `--status-warning-*`) — no color literals.
 
+### Bounce pairs and discarded lines (ETP-5581)
+
+A **bounce** — in the UI a **"rechazo" (bancario)** in Spanish and a *rejection* in English; the code,
+the i18n keys, the test ids, the payload fields and the Mixpanel event names keep the technical name
+"bounce" — is an outgoing PSD2 statement line plus the line that reverses it: opposite
+sign, exact amount, at most 60 days later. The backend (com.etendoerp.go, behind the per-account flag
+`bank-bounce-suggestions`) detects them; the SPA **never evaluates the flag** and only renders what
+the backend answers. Contract: com.etendoerp.go `docs/neo-headless.md` §4.12.1.1, *Discarded lines
+and bounce pairs*. Discarding is **always by pair** in Etendo, and so is restoring.
+
+**With the flag off nothing changes on screen, discarded lines included.** The automatch groups
+carry no `kind`, `pendingLines` has no `counts.bounce` and no `counts.discarded`, and every piece
+below is a pass-through. A line that is already discarded (by Classic's PSD2 per-line *Discard*
+button, or here while the flag was on) is a plain pending line: listed under *Pendientes* / *Todos*,
+proposed by the automatch and reconcilable. *Descartadas* is not offered (`visibleStatusCodes` needs
+`counts.bounce` or `counts.discarded > 0`), the expanded statement lines show no *Descartada* tag (no
+`discarded` marker) and the *PARCIAL x/y* pill counts matched lines only (no `discardedCount`). With
+the flag on, only an unmatched discarded line counts as discarded; a reconciled one is reconciled.
+**Known limitation:** the account list's *Por conciliar* (and the *Conciliación* tab badge) is a
+stored counter that leaves discarded lines out whatever the flag says, so turning the flag off for an
+account that already discarded pairs shows e.g. 47 there against 49 in the panel, until the flag is
+turned back on.
+
+| Where | What the user sees | Code |
+|---|---|---|
+| Automatch modal | Below the reconciliation groups, **"Rechazos bancarios (N)"** in the same card style, with the explanation *"Pagos que el banco rechazó: la salida y su rechazo por el mismo importe. Al aplicar, las dos líneas se descartan: no se concilian, no generan asiento y dejan de quedar pendientes."* under the title: left the outgoing line, right the bounce line, **one tag** per row (*Confianza alta*, or *Revisar: <motivo corto>*). Every checkbox of the modal (both section headers, the transaction groups and the pairs) is the shared `Checkbox` (`@/components/ui/checkbox`, the one DataTable and the lists use: blue when checked, blue dash when indeterminate); a section header shows the dash whenever any row of its section is checked. High-confidence pairs start checked, pairs to review unchecked; an **ambiguous** pair (several possible outgoing lines) cannot be checked here. Every pair to review has the outlined **"Revisar en el panel"** button (the shared `Button`, `outline` variant, as a pill). The KPI strip gains *Rechazos bancarios* (the panel's status filter keeps the name *Posibles rechazos*); the footer and the apply button count both kinds (*Se vincularán N operación(es) y se descartarán M línea(s)* / *Conciliar N grupo(s) y descartar M par(es)*). One `applySuggestions` call carries both kinds; the toast summarises what was reconciled and what was discarded. | `AutoMatchSuggestionModal.jsx`, `AutoMatchBounceSection.jsx` |
+| "Revisar en el panel" | The modal **closes**; the panel switches its filter to *Posibles rechazos*, selects the pair's bounce line and scrolls to it (a line outside the date range widens it to any date once; leaving *Descartadas* waits for the reload of the lines first, and a second request with the lines already on screen is served at once). **No banner and no return path** (removed after review): the user goes back with the **Automatch** button, which reopens the **cached** suggestions without reloading them, so the checks are as they were left — unless a discard or restore in the panel reloaded the suggestions, which resets them to their defaults. The Automatch button does **not** forget the *No es un rechazo* dismissals (only the header refresh and leaving the tab do), so a pair just dismissed in the panel does not reappear. The modal never opens on its own again during that visit (a discard reloads the suggestions; the user who went to the panel must not have the modal thrown back at them). | `useAutoMatchReview.js` (state owned by `index.jsx`), `useBouncePairReview.jsx` (`useFocusRequest`) |
+| Left panel | Lines of a detected pair show the **"Posible rechazo"** badge (`state: "bounce"`). The status filter gains **"Posibles rechazos"** (`bounce`, a member of *Pendientes*) and **"Descartadas"** (`discarded`, last), each only when the backend reports it (`visibleStatusCodes`). *Todos* and the footer total never include a discarded line: the default `pendingLines` answer does not carry them, and *Descartadas* is served by its own `pendingLines?status=discarded` request, made only while that filter is active, while the other filters keep the counts of the last default answer. | `reconciliationStatusFilter.js`, `reconciliationBadges.jsx`, `useBouncePairReview.jsx` (`useBounceLines`) |
+| Right panel, bounce line | Instead of the candidate operations, the same structure with the pair: the possible outgoing lines (a **radio** each when ambiguous, named by the candidate's date, amount and bank reference so a screen reader can tell identical candidates apart; nothing is preselected for an ambiguous pair) or the bounce line, a notice with the reason (high: the signal; review: the long reason), a footer that opens with **the selected line itself** (*Rechazo seleccionado* / *Salida seleccionada*; *Línea seleccionada* for a discarded line) and then the counterpart (*Salida seleccionada* / *Rechazo*), each with its amount and, muted, its date and bank reference (*Ref. …*, `referenceNo`), then the **net effect of the pair**, and **"No es un rechazo"** (hides the pair for the session, persists nothing — it comes back on the next automatch run: the Automatch button, the header refresh, or leaving the tab) and **"Descartar par"** (`discardPair`, original as `statementLineId`, bounce as `counterpartLineId`). | `BouncePairPanel.jsx`, `bouncePairs.js` (`bouncePanelModel`) |
+| Telling identical lines apart | Two lines with the same text, amount and day (two *RETROCESIÓN TRANSFERENCIA INMEDIATA* of +0,61 €, outgoing lines whose descriptions differ only in a trailing *-1* / *-2*) are distinguishable **without a new column**: every clipped description in the flow — left-panel rows, the right panel's rows, both sides of the modal's pair rows — shows the full text on hover (`TruncatedText`, the tooltip opens only when the text is actually cut); the right panel's rows and the modal's pair sides show the line's bank reference muted (*Ref. …*: next to the badge in the panel, after the date in the modal); and the panel footer names the selected line with its date and reference (row above). An ambiguous pair's left side in the modal shows every candidate's date but **no reference** — which outgoing line it is gets decided in the panel. A line with an empty `referenceNo` shows nothing (no placeholder). Source of the reference: `referenceNo` on every line the backend sends — `pendingLines` rows, `bouncePair.counterpartLine`, `candidates[].line` and the autoMatch group lines (`AutoMatchSupport.lineToJson`). | `BouncePairPanel.jsx`, `AutoMatchBounceSection.jsx`, `ReconciliationSplitPanel.jsx` |
+| Right panel, discarded line | The line it was discarded with, the discard date, and **"Restaurar par"** (`restorePair`, restores both). A line discarded on its own in Classic shows **"Restaurar línea"** instead (and its failure toast names the line, *No se pudo restaurar la línea*). After a restore the other filters' counts are re-read (`usePendingLineCounts`), because the *Descartadas* answer counts only the discarded lines. `restorePair` is gated like `discardPair` (403 `BOUNCE_SUGGESTIONS_OFF`): with the flag off the way to undo a discard is Etendo Classic's PSD2 Restore. | same |
+| Imported statements | The *PARCIAL x/y* pill counts `matchedCount + discardedCount` as resolved, matching the status the backend derives. A discarded line shows a grey **"Descartada"** tag in the expanded statement lines (`discarded: true`). | `StatementsTable.jsx`, `StatementLinesInline.jsx` |
+| Statement edit | `ManualStatementModal` sends each existing line's `id` back on `?action=update`, so the backend keeps its PSD2 transaction id, the discard flag and the pair link when it recreates the line. A line added in the editor travels without `id` (a new line). | `ManualStatementModal.jsx` (`lineToRow.lineId`) |
+
+**Short and long reasons.** The backend sends the confidence and the signals, never a sentence, so
+`bounceReason` derives the reason from the backend's own confidence rule: ambiguous (*N salidas
+posibles*), only the counterparty matches (*solo coincide la contraparte*), bounce wording or a PSD2
+payment link but the bounce came days later (*rechazo N día(s) después*), or anything else (*comprueba
+la salida*). The modal tag uses the short form, the panel notice the long one.
+
+**Statement adjacency (backend rule).** Banks write a return next to the line it reverses, before
+or after it: PSD2 numbers the lines by their position in the bank's list and the booking day has no
+time, so the order within a day is not chronological. The backend looks at both neighbours of a
+return in its statement. Exactly one valid neighbour is its original (a plain pair); two valid
+neighbours make an ambiguous pair whose candidates are only those two (*2 salidas posibles*); none
+leaves the usual rules. Either way the pair carries `adjacent: true` on the automatch group and on
+the `bouncePair` annotation. Adjacency never raises the confidence: a pair is *Confianza alta* only
+under the usual rule, so an adjacent pair with only the counterparty, or with the return a day
+later, is still *Revisar*. On a real statement three 0,61 transfers interleaved with two returns
+give two ambiguous pairs sharing the middle transfer, both offered; the 0,15 return written before
+its payment is a *Confianza alta* pair. The SPA does not read `adjacent` yet. Neighbours follow the
+statement's current line numbers, so editing a statement can change them. Contract: com.etendoerp.go
+`docs/neo-headless.md`, *Statement adjacency*.
+
+**Stored confidence and restore (backend rules).** The confidence stored on a discard (shown again as
+`bounceLink.confidence` under *Descartadas*) records what the system suggested, not the user's
+choice: `high` only when the pair is exactly one the backend proposed as *Confianza alta*. A pair
+chosen among the candidates of an ambiguous pair (e.g. the return with the 0,61 transfer below it,
+out of two), a pair to review, and a pair the backend did not propose are stored `review`.
+*Restaurar par* restores both lines only when each points at the other; a one-sided link restores
+the selected line alone. Both actions lock the two lines while they run, so when two users act on
+the same pair at once the second request waits and sees the first one's result (a second discard is
+refused as already discarded; a second restore finds nothing left to restore).
+
+**Read-only tier.** The modal never opens under the read-only tier. In the panel *Descartar par* and
+*Restaurar par* are disabled and their handlers return early; *No es un rechazo* changes no data and
+stays available (it hides the pair and reports nothing: no `dismissPair` call).
+
+**KPI reporting (roadmap #15).** The SPA reports what the user decided about the suggested pairs;
+the backend turns it into the `backend_bank_bounce_pair_decided` events, and the browser sends two
+frontend events of its own. No property or body field carries a line id other than the ones the
+actions already send, an amount, a counterparty or a statement text. Two backend behaviours need
+nothing from the SPA: an MCP `applySuggestions` (an agent sends no `bounceDecisions`) has the
+proposed pairs it left out reported as `unchecked` by the backend itself, with `channel: mcp`; and
+`backend_bank_bounce_pair_restored` also carries `preselected`, so a restore can be subtracted from
+the high-confidence KPI. Event contract: com.etendoerp.go `docs/backend-observability.md`.
+
+- **`applySuggestions` → `bounceDecisions`.** When the modal shows at least one pair, the body gains
+  `bounceDecisions: [{ groupKey, decision }]`, one entry per **shown** pair that is **not applied**
+  (the checked ones travel in `groups` as before; pairs hidden with *No es un rechazo* are not shown,
+  so not listed). `decision` is `sent_to_panel` for a pair sent to the panel with *Revisar en el
+  panel* during this modal session and not checked again, `unchecked` for every other one (an
+  ambiguous pair included). The key is present, possibly empty, whenever pairs were shown, and absent
+  otherwise, so an apply without pairs keeps its old body. Key and values are one constant each in
+  `bouncePairs.js` (`BOUNCE_DECISIONS_KEY`, `BOUNCE_DECISION`; built by `withBounceDecisions`).
+  Example: `{ financialAccountId, groups: [ {…tx…}, { kind: "bouncePair", statementLineId: "O1",
+  counterpartLineId: "B1" } ], bounceDecisions: [ { groupKey: "bp-amb", decision: "sent_to_panel" },
+  { groupKey: "bp-review", decision: "unchecked" } ] }`.
+- **The modal session** is the life of the current suggestions: `useAutoMatchReview` keeps the
+  `sentToPanelKeys` (added by `startReview`) across a close and the Automatch button, and forgets
+  them when the suggestions reload (a discard or restore in the panel, an apply, the header refresh)
+  or the user leaves the tab. Checking a pair again — alone or with the pairs' select-all — removes
+  it from the set; unchecking does not.
+- **"No es un rechazo" → `dismissPair`.** Besides the session-only hide (unchanged), the panel posts
+  `bank-reconciliation?action=dismissPair` with `{ financialAccountId, statementLineId,
+  counterpartLineId? }`: the line selected in the panel and, when the card shows one, the other line
+  of the pair (the chosen original of an ambiguous pair; left out while none is chosen). The
+  backend persists nothing. Fire-and-forget: a failure shows nothing and blocks nothing; skipped in
+  the read-only tier. `useDismissPair` (`useBouncePairActions.js`), `dismissPairPayload`
+  (`bouncePairs.js`).
+- **`bounce_suggestions_viewed`** (Mixpanel, frontend): once per opening of the modal that shows at
+  least one pair (also when the pairs land after it opened). Properties `account_id`,
+  `pairs_shown`, `pairs_preselected` (pairs that came checked: high confidence, not ambiguous),
+  `auto_opened`.
+- **`bounce_suggestions_dismissed`**: the modal closed **without applying** while it showed pairs —
+  *Cancelar*, *Abrir conciliación*, the X, Esc or the backdrop. Not on an apply, and not on *Revisar
+  en el panel* (the host closes the modal itself). Properties `account_id`, `pairs_shown`,
+  `pairs_checked_at_close`, `auto_opened`. Best effort: closing the browser tab sends nothing.
+- **`auto_opened`** is `true` when the automatch opened the modal by itself (the armed check on
+  entering the tab) and `false` when the Automatch button opened it; `index.jsx` records it per
+  opening and passes it as the modal's `autoOpened` prop.
+- Both events go through the shared tracker (`lib/bounceSuggestionsTelemetry.js` →
+  `@/lib/observability.js`), so the support-session suppression, the kill switch and the
+  provider/environment gating apply, and the payload policy (`payload.js`) keeps only the declared
+  properties (the three counts are bounded integers, `auto_opened` a boolean).
+
+**Errors.** The coded refusals (`LINE_DISCARDED`, `BOUNCE_SUGGESTIONS_OFF`, `SIGN_MISMATCH`,
+`AMOUNT_MISMATCH`, `HAS_PAYMENT`, `LINE_NOT_PENDING`, `DISCARD_NOT_ALLOWED`) carry their English
+`AD_MESSAGE` in `error.messageKeys`; `backendErrors.js` maps each `ETGO_Bounce*` /
+`ETGO_StatementLineDiscarded` key to a `backendError.*` locale key, and the bounce calls translate
+with `translateBackendErrorBody`. The `LINE_DISCARDED` sentence is also mapped by text, for the
+reconcile paths that forward only the message.
+
+**Why the shared hook moved.** The reconciliation suites mock `@/hooks/useReconciliation` with a
+factory listing only the hooks they use, so the new hooks live in their own modules
+(`useAutoMatchReview.js`, `useBouncePairActions.js`, which also holds `usePendingLineCounts`) and the shared POST helper moved to
+`useReconciliationPost.js`, which both import.
+
 ### Reactivar removed — a processed reconciliation is final (ETP-5135)
 
 Reactivar left the user in a half-undone state: the transactions lost their visual link to the
@@ -1422,7 +1550,7 @@ components use it.
 
 ### Automatch engine (T7)
 
-The Reconciliation surface gained the automatic matching engine (backend `MatchRuleEngine` + `AutoMatchSupport` inside `ReconciliationHandler`, `@Named("bankReconciliation")`):
+The Reconciliation surface gained the automatic matching engine (backend `MatchRuleEngine` + `AutoMatchSupport` inside `ReconciliationHandler`, `@NeoExtension(spec = "bank-reconciliation", entity = "bank-reconciliation")`):
 
 > **Rules are tenant-scoped (ETP-4950 QA round).** `MatchRuleEngine.loadRules` loads through the DAL, so only rules of the current client and of a readable organization are ever evaluated. It previously used raw JDBC with no `ad_client_id` filter, which made every tenant's account-less rules apply to every other tenant — see `match-rule.md` → "Engine integration".
 
@@ -1492,13 +1620,14 @@ The `GL_ITEM_REQUIRED` catch in `submitReconcile` now opens the same setup dialo
 - **Same-amount lines each get their own suggestion in one run (ETP-4971).** `buildAutoMatch` threads a single growing `excludedTxns` list through every pending line's call into Core's standard algorithm (`AutoMatchSupport.standardMatch`), mirroring Classic's own `runAutoMatchingAlgorithm` accumulator. Before this fix, Core's `FIN_MatchingTransaction.match(line, excluded)` was always called with an empty `excluded` list, so N pending lines of the identical amount all got offered the SAME transaction and only the first one ended up with a suggestion — the rest required a second Automatch run after accepting the first. `ReconciliationHandlerSupport.summarizePendingLines` shares the same accumulator across the left-panel's `suggested` classification, so its per-state counts match what an actual Automatch run produces (a line whose only same-amount candidate was already claimed by an earlier line now counts as `pending`, not `suggested`).
 - **Conditional auto-open (ETP-4922).** Entering the Reconciliation tab (tab click, `?tab=reconciliation` deep link, or the Cuentas-list `Conciliar (N)` pill's `?autoMatch=true`) no longer pops the modal unconditionally — it *arms* an `autoMatchArmed` flag in `index.jsx` and queries `useAutoMatch` for as long as that tab stays active. The modal only opens once a fresh response confirms `groups.length > 0`; an empty result never opens it (previously it always opened, showing an empty state). The **manual** `Automatch` header button is unaffected — it still calls `setAutoMatchOpen(true)` directly and always opens, empty state included. Leaving the tab disarms the flag, so returning to it re-evaluates from scratch (a stale response from the prior visit is never treated as fresh: `useNeoResource` doesn't clear `data` when its `path` goes back to `null`, so the code tracks readiness with an `autoMatchFetchedRef` ref instead of trusting `loading` alone).
 - **No date prefilter on suggestions (ETP-4922).** The automatch GET carries only `accountId` — no `dateFrom`/`dateTo` — and `ReconciliationHandler.loadPendingLines` has no **date** clause (it does gate on the statement being processed — see the draft-statement bullet below), so the modal proposes every pending statement line regardless of age, even ones older than the Reconciliation panel's own `last30` default window (`ReconciliationSplitPanel.jsx`, unrelated component). This is intentional and distinct from the **date tolerance** (`EM_ETGO_Date_Tolerance`, see "Account configuration" above), which still governs whether a same-amount candidate within N days counts as a match — that tolerance was not touched by ETP-4922.
+- **Bounce pairs (ETP-5581).** With the backend flag `bank-bounce-suggestions` on, the answer also carries `kind: "bouncePair"` groups (every transaction group gets `kind: "transaction"`; a group with no `kind` is a transaction group) and `kpis.bouncePairs`. The modal renders them as "Rechazos bancarios" and applies both kinds in one call; its checks now live in `useAutoMatchSelection` (owned by the detail view through `useAutoMatchReview`, or by the modal itself when no `selection` prop is passed), reset whenever the suggestions reload and kept while they do not. Each transaction group's checkbox is named after its statement line (`financeReconcileAutomatchGroupCheck`). See *Bounce pairs and discarded lines (ETP-5581)* above.
 - **A draft statement is proposed nothing (ETP-5121, QA round).** `loadPendingLines` now gates on `bs.processed = true`, so reactivating a bank statement removes its unmatched lines from the Automatch preview and from the modal's *"Movimientos pendientes"* KPI at the same moment the left panel drops them. The two used to disagree: only `PENDING_LINES_SQL` was gated, so a statement returned to Borrador showed *Pendientes (0)* while the modal went on offering its line — and "Conciliar N grupo(s)" actually reconciled it against a Borrador. The query was also moved from raw HQL to `OBCriteria`, which adds the readable-client/organization predicates the hand-written one lacked (the ETP-4950 pattern, applied there to `MatchRuleEngine.loadRules`). It does **not** carry the reconciled-line exception `PENDING_LINES_SQL` has, and cannot — that exception needs a non-null `FIN_FinAcc_Transaction_ID`, which contradicts this query's own `financialAccountTransaction is null`. The three write paths that consume a suggestion (`reconcileGroup`, `ReconciliationFlowSupport.prepareGroup`, `ReconciliationDifferenceSupport`) reject a Borrador line with a `409` carrying `The bank statement is in draft; …`, translated through `backendErrors.js` → `backendError.statementDraftNotReconcilable`, so applying a preview taken before the reactivation fails cleanly instead of silently reconciling.
 - **1:N (and single-partial) reconciliation** is done by Etendo core (`APRM_MatchingUtility.matchBankStatementLine` splits the line into sub-lines sharing `EM_ETGO_Match_Group_ID`, tagged by `ReconciliationHandler.willSplitLine`). The panel and the imported-statements view **collapse those sub-lines back into a single display line** (`BankStatementsSupport.mergeMatchGroups`), so a split group shows as one entry, not N — see "Partial-match display" below for what that collapsed row looks like when the group isn't fully covered yet.
 - **Which lines reach the panel at all — and the reconciled-line exception (ETP-5121)**: `PENDING_LINES_SQL` lists only lines of a **processed** bank statement, because a draft statement is not reconcilable yet. An **already reconciled** line is exempt: `AND (bs.processed = 'Y' OR (bsl.fin_finacc_transaction_id IS NOT NULL AND COALESCE(rec.processed, 'N') = 'Y'))`. Reactivating a statement (`BankStatementsHandler.handleReactivate`) only flips `processed` — it deliberately does not revert reconciliations — so the line keeps its `FIN_Finacc_Transaction_ID` and that transaction keeps a PROCESSED `FIN_Reconciliation`. Before the exception, reactivating a statement dropped **every** line of it from `?action=pendingLines`, so a genuinely reconciled line vanished from the "Conciliadas" filter — and from every other filter — while Core's `APRM_FIN_BNKSTM_LINE_CHECK_TRG` still made it immutable. That was a dead end, not just a display bug: the line could no longer be un-reconciled from here, and the statement could not be deleted either while it still held a matched line (`handleDelete`). The exception repeats the exact predicate behind `line_status = 'reconciled'` above, so a line whose reconciliation is back in DRAFT keeps falling into the pending pool instead of being dragged in by this clause. A reconciled line of a reactivated statement stays fully actionable: selecting it goes through `ReconciliationSupport.linkedTransactionsIfReconciled`, scoped by line and account only, so the right panel shows its linked movements read-only and "Desconciliar"/"Reactivar" behave as they do on a processed statement.
-- **Left-panel state filter**: `pendingLines` returns a fine-grained `state` per line (`pending | suggested | byRule | difference | reconciled`) plus per-state counts. `suggested` covers a Classic strong `1:1` match, a Core WEAK match and an exact `1:N` signal-group match; `difference` means one thing only — a real amount and/or date deviation inside the account's tolerances (ETP-4965) — so the left badge stays aligned with the automatch modal and with the right-panel preselection behavior.
+- **Left-panel state filter**: `pendingLines` returns a fine-grained `state` per line (`pending | suggested | byRule | difference | reconciled`, plus `bounce` with the `bank-bounce-suggestions` flag on — see *Bounce pairs and discarded lines (ETP-5581)*) plus per-state counts. `suggested` covers a Classic strong `1:1` match, a Core WEAK match and an exact `1:N` signal-group match; `difference` means one thing only — a real amount and/or date deviation inside the account's tolerances (ETP-4965) — so the left badge stays aligned with the automatch modal and with the right-panel preselection behavior.
 - **"Pendientes" is a superset, not a fifth exclusive bucket (ETP-5033)**: the backend classification stays exclusive (one `state` per line), but the dropdown's `pending` entry maps to the SET `{pending, suggested, byRule, difference}` — everything not `reconciled` — via `matchesStatus`/`STATUS_MEMBERS` in the new `reconciliationStatusFilter.js` (`ReconciliationSplitPanel.jsx`, which used to filter with strict equality, hiding suggested/byRule/difference lines behind their own chips even though `pending` is the panel's default filter). `Con sugerencia`, `Por regla` and `Diferencias` stay strict single-state subsets, so a suggested line shows under both its own chip and Pendientes. The chip's count follows the same mapping (`countForStatus`, summed over the covered states) so the number on "Pendientes" always matches the row count it produces.
 - i18n keys: `financeReconcile*` in `tools/app-shell/src/locales/{en_US,es_ES,es_AR}.json`. `es_AR` was missing 15 of them (the 14 `financeReconcileDiff*` plus `financeReconcileAutomatchToastPartial`), which rendered raw key names for that locale — the resolver does not fall back to English (`useUI.js`: `dictionary?.genericLabels?.[key] ?? key`). Backfilled and covered by a parity test (ETP-4965).
-- Hooks: `tools/app-shell/src/hooks/useReconciliation.js` — `usePendingStatementLines`, `useCandidateOperations`, `useReconcileGroup` (all over `useNeoResource` / the shared auth+fetch pattern). The reconcile POST surfaces the backend `{ error: { message } }` text on the thrown Error so it shows in the error toast, and since ETP-4965 also hangs the whole parsed body off it (`err.body`, `err.code`) so callers can act on structured failures such as `GL_ITEM_REQUIRED` or a 409's `remainderLineId`.
+- Hooks: `tools/app-shell/src/hooks/useReconciliation.js` — `usePendingStatementLines`, `useCandidateOperations`, `useReconcileGroup` (all over `useNeoResource` / the shared auth+fetch pattern; the POST helper lives in `useReconciliationPost.js` since ETP-5581). The reconcile POST surfaces the backend `{ error: { message } }` text on the thrown Error so it shows in the error toast, and since ETP-4965 also hangs the whole parsed body off it (`err.body`, `err.code`) so callers can act on structured failures such as `GL_ITEM_REQUIRED` or a 409's `remainderLineId`.
 
 ### Movement Post / Unpost (ETP-4505)
 
@@ -1550,7 +1679,7 @@ index.jsx                          — receives { recordId }, sets page meta, mo
         MovementStatusBadge.jsx    — 2 status chips: Conciliado (green) / Sin conciliar (neutral)
         PostingStatusDot.jsx       — posting status dot; colour from lib/postedStatus.js (Y green, N yellow, failures red + reason)
         MovementRowKebab.jsx       — on-hover kebab (Ver detalle · Unreconcile disabled · Post when !posted · Unpost when posted, ETP-4505)
-    ReconciliationTab.jsx          — thin host for ReconciliationSplitPanel (T6); forwards windowReadOnly (ETP-5457)
+    ReconciliationTab.jsx          — thin host for ReconciliationSplitPanel (T6); forwards windowReadOnly (ETP-5457) and bounceReview (ETP-5581)
     ImportedStatementsTab.jsx      — orchestrates list ↔ lines state machine
       StatementsToolbar.jsx        — back ←, date range, status filter, "Filtro por condicionales" (AdvancedFilterBuilder, same as movements), search, sort popover, refresh button, import split-button (▾ → "+ Nuevo extracto")
       StatementsTable.jsx          — columns: docNo, name (falls back to line date range), file name (rendered as a grey badge), notes, import/transaction dates, lines, out (red, −) / in (green, +), status pill (DRAFT/PENDING/PARTIAL/RECONCILED), per-row kebab (when `actions` is passed); expand chevron is a round bordered button rotating 180° (same as movements). Expanding a row keeps the parent row white and renders the lines inside a grey "Desplegado" area (lg drop shadow, raised above the next row via z-index) wrapping the white rounded lines card.
@@ -1574,7 +1703,7 @@ index.jsx                          — receives { recordId }, sets page meta, mo
 |-----------|------|-------|
 | `Tabs` / `TabsList` / `TabsTrigger` / `TabsContent` | `components/ui/tabs.jsx` | Manual implementation (no Radix react-tabs). Underline-style active indicator in `#121217`. Accepts `icon` and `badge` on `TabsTrigger`. Context value memoized via `useMemo`. |
 | `MoneyAmount` | `components/ui/money-amount.jsx` | Props: `value`, `currency`, `tone` (`auto`/`positive`/`negative`/`neutral`), `compact`. Locale: `es-ES`. `tone='auto'` colors positive green (`#1E874C`), negative red (`#D50B3E`), zero neutral. Sign prefix `+`/`-` applied automatically. |
-| `DateRangePopover` / `DateRangePopoverContent` | `components/ui/date-range-popover.jsx` | Canonical date range picker — same UX as the grid views (Sales Order, etc.). Presets list (Hoy / Ayer / Últimos 7/30 días / Últimos 12 meses / Todo el tiempo / Personalizado) + dual-month calendar with year selector. Value shape: `null \| { presetId } \| { from, to }`. `DateRangePopoverContent` is the inner panel — use it when you need a custom trigger button (as `ListFilterBar.jsx` does). **`placeholder` must be the "no constraint" label** (`ui('dateRangeAnyTime')` — "Cualquier fecha"), never the name of a preset: "Todo el tiempo" is encoded as `value === null`, indistinguishable from "nothing chosen", so `computeTriggerLabel` falls through to `placeholder`. Conciliación used to pass `ui('financeReconcileFilterDate')`, whose literal value is "Últimos 12 meses", so picking "Todo el tiempo" applied the wider filter but left the button still reading "Últimos 12 meses" (ETP-4956). The default label still comes from the initial `{ presetId: 'last12m' }` state, not from the placeholder. |
+| `DateRangePopover` / `DateRangePopoverContent` | `components/ui/date-range-popover.jsx` | Canonical date range picker — same UX as the grid views (Sales Order, etc.). Presets list (Hoy / Ayer / Últimos 7/30 días / Últimos 12 meses / Todo el tiempo / Personalizado) (opt-in `extraPresets={['last3m','last6m']}` adds Últimos 3 / 6 meses before Últimos 12 meses; used only by the Product Movements tab) + dual-month calendar with year selector. Value shape: `null \| { presetId } \| { from, to }`. `DateRangePopoverContent` is the inner panel — use it when you need a custom trigger button (as `ListFilterBar.jsx` does). **`placeholder` must be the "no constraint" label** (`ui('dateRangeAnyTime')` — "Cualquier fecha"), never the name of a preset: "Todo el tiempo" is encoded as `value === null`, indistinguishable from "nothing chosen", so `computeTriggerLabel` falls through to `placeholder`. Conciliación used to pass `ui('financeReconcileFilterDate')`, whose literal value is "Últimos 12 meses", so picking "Todo el tiempo" applied the wider filter but left the button still reading "Últimos 12 meses" (ETP-4956). The default label still comes from the initial `{ presetId: 'last12m' }` state, not from the placeholder. |
 | `DistinctValuesFilter` | `components/ui/distinct-values-filter.jsx` | Reusable Popover-wrapped `DistinctValuesList` for in-memory fixed code lists (no backend pagination). Used by `StatusFilter` and `TypeFilter`. |
 | `ProgressRing` | `components/ui/progress-ring.jsx` | SVG circular progress ring. Props: `value` (0–100), `size` (default 32), `strokeWidth` (default 3). Track is `#E8EAEF`, fill is `#26A95F`. |
 
@@ -1590,6 +1719,9 @@ index.jsx                          — receives { recordId }, sets page meta, mo
 | `useStatementImport()` / `useStatementPreview()` | `hooks/useStatementImport.js`, `hooks/useStatementPreview.js` | **No longer called from the UI since ETP-4954** — `ImportStatementModal` parses in the browser and writes through `useCreateStatement`. Kept because the endpoints behind them remain the Cuaderno 43 path; since ETP-5447 the MCP reaches them through the `bank-statements` spec actions `previewStatement` / `importStatement` (see *MCP / agent access to bank statements*). Mutation hooks for file import — post `{ FIN_Financial_Account_ID, fileName, contentBase64 }` to `POST /sws/neo/bank-statements?action=import`. Returns `{ importStatement, importing, error }`. Both this and `useStatementPreview` are thin wrappers over `useStatementFileRequest(action)` (`hooks/useStatementFileRequest.js`) — same body, same auth, same error shape, only the action and the flag name differ, so the plumbing lives there. A rejected call carries `err.status` and `err.code` (the NEO `error.code`, e.g. `NO_VALID_LINES`). |
 | `useCreateStatement()` | `hooks/useCreateStatement.js` | Mutation hook for manual statement creation — posts `{ FIN_Financial_Account_ID, name, transactionDate, importDate, fileName, notes, lines[] }` to `POST /sws/neo/bank-statements?action=create`. Returns `{ createStatement, creating, error }`. |
 | `useStatementActions()` | `hooks/useStatementActions.js` | Mutation hook for the draft row actions — `processStatement(id)` (`?action=process`), `updateStatement({ id, ...header, lines })` (`?action=update`), `deleteStatement(id)` (`?action=delete`). All only valid for drafts (backend returns 400 otherwise). Returns `{ processStatement, updateStatement, deleteStatement, busy, error }`. |
+| `useAutoMatchReview(groups, { active })` / `useAutoMatchSelection(groups)` | `hooks/useAutoMatchReview.js` | ETP-5581. The automatch modal's checks (only the user's changes are stored; defaults: every transaction group, high-confidence bounce pairs; reset on every reload) and the bounce-pair state the modal and the panel share: `startReview` (focus, and records the pair in `sentToPanelKeys` for the KPI report), `focus` / `consumeFocus`, `dismissedKeys` / `dismiss` / `clearDismissed`, `sentToPanelKeys`, `panel`. Owned by `index.jsx`. |
+| `useDiscardPair()` / `useRestorePair()` / `useDismissPair()` / `usePendingLineCounts()` | `hooks/useBouncePairActions.js` | ETP-5581. `POST bank-reconciliation?action=discardPair` / `restorePair`, both behind the flag (403 `BOUNCE_SUGGESTIONS_OFF`); `dismissPair` reports *No es un rechazo* for the KPI events (persists nothing, called fire-and-forget). Refusals are coded; translate them with `translateBackendErrorBody(err.body, ui, fallback)`. `usePendingLineCounts` reads the counts of the default `pendingLines` answer (no `status`), for the *Descartadas* filter after a restore. |
+| `useReconciliationPost(action)` | `hooks/useReconciliationPost.js` | The shared POST of every `bank-reconciliation` action (moved out of `useReconciliation.js` in ETP-5581). Throws with `err.body` / `err.code`. |
 
 ## Backend endpoints
 
@@ -1754,7 +1886,7 @@ The spec + entity records that wire this endpoint live in `src-db/database/sourc
 
 ### Imported statements
 
-Operations routed by HTTP method + `action` query param, all served by `BankStatementsHandler` (`@Named("bank-statements")`):
+Operations routed by HTTP method + `action` query param, all served by `BankStatementsHandler` (`@NeoExtension(spec = "bank-statements", entity = "bank-statements")` since ETP-5581):
 
 ```
 GET  /sws/neo/bank-statements?FIN_Financial_Account_ID={id}          → list
@@ -1799,7 +1931,11 @@ Before this, `BankStatementsHandler` had **zero** references to PSD2. The consta
 (`modules/com.etendoerp.go/build.gradle:72`, `implementation('com.etendoerp:psd2.bank.integration:[2.0.0,)')`).
 Note it is **not** an AD module dependency: `com.etendoerp.go`'s own
 `src-db/database/sourcedata/AD_MODULE_DEPENDENCY.xml` declares only Core and "OpenAPI
-Implementation", so there is no AD-level dependency record to add or maintain for this. Its other
+Implementation", so there is no AD-level dependency record to add or maintain for this.
+(ETP-5581: `etgo_account_pending_count`, behind "Por conciliar", now reads PSD2's
+`em_psd2_is_discarded`, and the computed-column policy asks for an AD-level dependency for such a
+read. It is deliberately **not** declared yet — a known open item, see `neo-headless.md`,
+*Discarded lines and bounce pairs*.) Its other
 real call sites —
 `PaymentRegistrationService`, `PisPaymentService`, `FinancialAccountBankConnectionHandler` — must
 stay in lockstep with it. (`FinancialAccountsPageHandler` is *not* one of them: it compares
@@ -2128,7 +2264,7 @@ message. Note that `useStatementActions` lives in `src/hooks/`, not
 `windows/custom/financial-account/hooks/`: it is a **global** hook, so this is a platform change and
 every consumer now receives the status alongside the message.
 
-**Status derivation** — `EM_ETGO_STATUS` (Etendo Go-only extension column) is a real STORED value, not computed on read: the list reads it straight off the row and only falls back to a live `BankStatementsSupport.deriveStatementStatus(processed, lineCount, matchedCount)` call when the column is blank (legacy rows predating it). The formula itself: not processed → `DRAFT`; otherwise `PENDING` (no matched lines) / `PARTIAL` / `RECONCILED` (all matched). The list also returns `notes`, and `?action=lines` returns each line's `bpartnerId`/`glItemId` (+ joined `bpartnerFkName`/`glItemName`) and separate `in`/`out` so the edit modal can hydrate the FK pickers.
+**Status derivation** — `EM_ETGO_STATUS` (Etendo Go-only extension column) is a real STORED value, not computed on read: the list reads it straight off the row and only falls back to a live `BankStatementsSupport.deriveStatementStatus(processed, lineCount, matchedCount, discardedCount)` call when the column is blank (legacy rows predating it). The formula itself: not processed → `DRAFT`; otherwise, counting a line as **resolved** when it is matched **or discarded** (ETP-5581 — a PSD2 line discarded as part of a bounce pair), `PENDING` (nothing resolved) / `PARTIAL` / `RECONCILED` (every line matched or discarded). `matchedCount` still counts only lines matched to a transaction; with `bank-bounce-suggestions` on, the list also returns `discardedCount` (stored `EM_ETGO_Discarded_Count`), so what is still pending is `lineCount − matchedCount − discardedCount`. With the flag off the row has no `discardedCount`, and a statement whose stored discarded count is above 0 gets its status derived again without the discarded lines (`BankStatementsHandler.loadStatements`), so the list reads as before ETP-5581. The `PARTIAL` pill still shows `matchedCount/lineCount`. The list also returns `notes`, and `?action=lines` returns each line's `bpartnerId`/`glItemId` (+ joined `bpartnerFkName`/`glItemName`) and separate `in`/`out` so the edit modal can hydrate the FK pickers.
 
 Because it is stored, `EM_ETGO_STATUS` must be kept in sync by SOMETHING every time `Processed` or the match counts change — `BankStatementHeaderStatusHandler` (`FIN_BankStatement` NEW/UPDATE observer, same `event.setCurrentState` technique as `BankStatementLinePendingAmountHandler`) does that unconditionally on every header write, whichever code path caused it (ETP-4891 follow-up). Before this handler existed, a statement imported through the PSD2 bank-connection sync (external `com.etendoerp.psd2` module, never touches this module's own handlers) could get stuck reading "Borrador" forever after being marked processed: its lines get counted correctly by the per-line observer at insert time, but `Processed` is still `false` then, so the status computed at THAT instant is correctly `DRAFT` — and nothing re-derives it once the sync flips `Processed` to `true` on the header alone, since no line event fires for that. The SPA's own "Procesar" action then 400s with "Only draft (unprocessed) statements can be modified" — a correct rejection (the real flag already says processed) that reads as a contradiction next to a "Borrador" label. `R25-bankstatement-stale-status` repairs statements already stuck from before the handler existed.
 
@@ -3172,13 +3308,13 @@ hand-written, reached through a wrapper that branches on `recordId`. Its grids r
 
   **Why it had to stop being virtual:** a value injected in `afterHandle` can only be reordered *within the page the SQL already selected* (`BATCH_SIZE = 75` + infinite-scroll `loadMore`), and NEO's generic `orderby` sorts by DAL properties, which an aggregate over other tables is not. So the column was unsortable by construction. As a physical column maintained by the engine it is a plain column read — indexable, sortable and filterable.
 
-  Configuration: `Computation_Mode = 'S'`, `Computation_Function = etgo_account_pending_count`, `Refresh_Mode = 'S'` (synchronous — recomputed inside the same transaction just before commit, so the badge is exact the moment the user reconciles), `Computation_Sequence_Number = 10`, `AD_Reference` 11 (Integer). Four dependencies: `FIN_BankStatementLine` (walk-back to the account via `fin_bankstatement`), `FIN_BankStatement`, `FIN_Finacc_Transaction`, and a **self-dependency** on `FIN_Financial_Account.Type` — safe because the engine's `my.scd_refreshing` guard hides its own writes from the dependency triggers. Engine reference: `../modules/com.etendoerp.go/docs/STORED-COMPUTED-COLUMNS.md`; in-repo precedent `docs/plans/product-price-stock-stored-computed-columns.md` (ETP-4603).
+  Configuration: `Computation_Mode = 'S'`, `Computation_Function = etgo_account_pending_count`, `Refresh_Mode = 'S'` (synchronous — recomputed inside the same transaction just before commit, so the badge is exact the moment the user reconciles), `Computation_Sequence_Number = 10`, `AD_Reference` 11 (Integer). Four dependencies: `FIN_BankStatementLine` (walk-back to the account via `fin_bankstatement`; watches `FIN_FinAcc_Transaction_ID`, `Isactive`, `FIN_Bankstatement_ID` and, since ETP-5581, PSD2's `EM_PSD2_Is_Discarded`), `FIN_BankStatement`, `FIN_Finacc_Transaction`, and a **self-dependency** on `FIN_Financial_Account.Type` — safe because the engine's `my.scd_refreshing` guard hides its own writes from the dependency triggers. Engine reference: `../modules/com.etendoerp.go/docs/STORED-COMPUTED-COLUMNS.md`; in-repo precedent `docs/plans/product-price-stock-stored-computed-columns.md` (ETP-4603).
 
   Becoming a real field **retired two workarounds** that existed only because `appendVirtualFields` (`resolve-curated.js`, in `schema_forge_core`) copies a closed whitelist excluding `cellType` and `gridLabelKey`: the `VIRTUAL_FIELD_CELL_TYPES` map in `accountCellTypes.jsx` is gone (`resolveCellType` is now a plain `col.cellType` read), and `window.labelOverrides` is gone (the header resolves through the normal `gridLabelKey` → `financeAccountsColPending` path). Keep those two routes in mind for any *other* virtual field, and re-read this note before adding one.
 
   What did **not** change: its contract `type` is still `"integer"`, and `DataTable` right-aligns header **and** cell for any column whose `type` is in its numeric set — which only ever fights the `reconcilePill` renderer, since the column never displays a raw number. `AccountsHeaderTable`'s `GRID_TYPE_OVERRIDE` still forces this one column's DataTable-facing `type` to `"string"` so it stays left-aligned like every other status cell (ETP-4764 follow-up). That override is presentation-only and does not affect sorting: `gridQuery`'s `inferSortMode` maps both `"string"` and `"integer"` to `'raw'`, so `_sortBy` carries the column key either way and the backend orders by the real integer.
 
-  **It counts two different things, one per account type (ETP-4795), and the SQL function preserves that.** `PENDING_BY_ACCOUNT_SQL` in `FinancialAccountsPageHandler` originally had a single branch: unmatched `fin_bankstatementline` rows. A cash drawer never imports a bank statement, so for every cash account the figure was **structurally zero** — not "nothing pending", but "this query cannot see cash". It blinded three surfaces at once: the list's *Por conciliar* column, the sidebar's *Cuentas con pendientes* filter, and the Conciliación tab badge. A second branch counts unreconciled cash movements (`processed='Y'`, `fin_reconciliation_id IS NULL`, `status <> 'RPPC'`, `fa.type='C'`), so a cash account reports the movements awaiting their next close. `etgo_account_pending_count` **sums both branches** rather than `UNION ALL`-ing them, which reproduces the `Map.merge(..., Integer::sum)` the old read loop needed for an account that is cash-type *and* has imported bank statements.
+  **It counts two different things, one per account type (ETP-4795), and the SQL function preserves that.** `PENDING_BY_ACCOUNT_SQL` in `FinancialAccountsPageHandler` originally had a single branch: unmatched `fin_bankstatementline` rows (since ETP-5581, unmatched **and not discarded**: a PSD2 line discarded as part of a bounce pair is resolved, `em_psd2_is_discarded = 'N'` in the function). A cash drawer never imports a bank statement, so for every cash account the figure was **structurally zero** — not "nothing pending", but "this query cannot see cash". It blinded three surfaces at once: the list's *Por conciliar* column, the sidebar's *Cuentas con pendientes* filter, and the Conciliación tab badge. A second branch counts unreconciled cash movements (`processed='Y'`, `fin_reconciliation_id IS NULL`, `status <> 'RPPC'`, `fa.type='C'`), so a cash account reports the movements awaiting their next close. `etgo_account_pending_count` **sums both branches** rather than `UNION ALL`-ing them, which reproduces the `Map.merge(..., Integer::sum)` the old read loop needed for an account that is cash-type *and* has imported bank statements.
 
   One deliberate semantic change: the old query filtered by `ad_client_id` + `ad_org_id = ANY(accessibleOrgs)`, i.e. by the *reader's* scope. A stored value is one number per account and cannot depend on who reads it, so the function has no org filter. In practice an account's statements and transactions live in the account's own org tree, so the same number comes out — verified against real data when the column was introduced.
 
@@ -3755,6 +3891,7 @@ A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO
 - Movements (`MovementsTable.jsx`): the posting dot under the type and the "Contabilizado" half of the "Tipo & Contabilizado" header are hidden, and the "Ordenar por" popover loses the entry (`buildMovementSortColumns(ui, capabilities)`). The movement kebab (`MovementRowKebab.jsx`) hides Contabilizar / Descontabilizar, and no stray separator is left above Eliminar.
 - Reconciliations: `decisions.json → entities.reconciliations.fields.posted` carries the gate; `getContractGridColumns` forwards it, so `ReconciliationListTable.jsx` drops the column, its cells and its sort entry, and the advanced filter (`buildReconciliationFilterColumns(ui, capabilities)`) drops the field. `entities.transaction.fields.posted` carries it too.
 - The reconciled-transactions modal (`ReconciledTxnsModal.jsx`) hides the posting dot.
+- The bulk-posting module's `etblkpAccountingstatus` ("Estado contable") form field of `transaction` and `importedBankStatements` carries the gate too (QA pass 1, CP-8): the generator writes it on the form line and `EntityForm` hides it at render time.
 - Kept on purpose: the Reactivar / Eliminar confirmation dialogs still say the accounting entry will be removed (a consequence of an action the user may take).
 
 Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
@@ -3768,3 +3905,50 @@ A refusal because the document's date has no open accounting period (`PeriodNotA
 Saving an account field of the Accounting tab now refuses a summary (heading) account, an inactive account or combination, and an account of another accounting schema than the row's; on update the row's accounting schema cannot change. The account selectors already hide those accounts (ETP-5681), so in the UI this only shows up in a race, as a translated toast (`backendError.accountIsSummary` / `accountIsInactive` / `accountWrongLedger` / `ledgerNotUpdatable`); REST and MCP callers get a 400 whose text names the field and the account. A value already stored is not re-checked, so existing rows stay saveable. Backend: `PostingAccountGuard` via `FinancialAccountAccountingHandler` (now rolled back on refusal, including a row it had just created) (`com.etendoerp.go`, see `neo-headless.md`).
 
 Error display: `EditAccountModal` now passes the response's `messageKeys` / `messageParams` to `translateBackendError`, so every keyed backend refusal of this window is shown in the UI locale.
+
+## Personal account-grid views
+
+The account list is audited as the standard DataTable surface behind the exact
+`AccountsHeaderTable` contract slot. Under the shared `grid-column-views` flag
+(enabled by default), personal-view controls are reachable and use the existing
+visibility/order/width persistence contract. Existing column protection still
+applies: account columns carrying `headClass`/`cellClass` remain locked against
+hiding, resizing and reordering by useGridView; admitting the entry point does not
+remove those restrictions. Because this window hides ListView's
+normal toolbar and owns its scrolling, ListView places Columns and Save view in a
+separate region above the grid. The custom account toolbar, selection, row actions
+and scroll ownership retain their existing behavior. Unknown replacement header
+tables fail closed until audited. Automated execution and QA for this integration
+remain pending.
+
+### Reconciliation workspace personal column views
+
+Under `GRID_COLUMN_VIEWS`, both tables in `ReconciliationSplitPanel` offer the
+existing Columns and Save view controls. `ReconciliationTab` remains the same thin
+caller. Statement lines use `financial-account/bankStatementLines`; candidate rows
+use `financial-account/transaction` for movements or `sales-invoice/paymentPlan` /
+`purchase-invoice/paymentPlan` for invoice installments. The action endpoint
+`bank-reconciliation` is not used as a row entity.
+
+Scope resolution follows the actual candidate rows rather than assuming the source
+filter describes every row. Invoice candidates must carry `kind: 'invoice'`,
+`id === scheduleId`, and a boolean `isReceipt` selecting sales or purchase. Backend
+`ReconciliationHandler` emits statement-line IDs from `FIN_BankStatementLine`,
+movement IDs from `FIN_Finacc_Transaction`, and invoice-candidate IDs from
+`FIN_Payment_Schedule`; both invoice contracts declare the latter as `paymentPlan`.
+Mixed or unverifiable scopes keep the original candidate table without requesting
+preferences. Admitting them requires a homogeneous verifiable backend identity or
+an explicitly supported heterogeneous scope contract. Missing invoice-window access
+can cause a preference-load error; the original grid remains usable.
+
+Selection cells stay fixed and visible; in reconciled mode the amount/unlink cell
+is also locked. Matching, sorting, totals, selection, expansion, actions, and
+read-only write guards keep their existing behavior. Partial-match flex cards are
+unchanged. Views share the existing user/spec/entity persistence with other
+projections: saving a projection does not retain settings for absent columns.
+
+The full app-shell `npm run test:all` suite passed, including these reconciliation cases, and
+`npm run build` passed. Browser smoke covered Sales Order only, not financial-account grids;
+authenticated preference persistence and human QA remain pending. See the
+[`financial-account README`](../../tools/app-shell/src/windows/custom/financial-account/README.md)
+for the full inventory and fallback rules.

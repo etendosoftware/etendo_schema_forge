@@ -208,14 +208,17 @@ function typeColumnFlex(col, idx) {
  * display table — keeping header wrapping consistent across both modes.
  */
 export function columnMinWidthPx(col) {
+  // A saved user width replaces the default basis, including zero.
+  const userWidth = Number(col.gridUserWidthPx);
+  if (col.gridUserWidthPx != null && Number.isFinite(userWidth) && userWidth >= 0) return userWidth;
   // `headerMinWidthPx` is set by DataTable on plain-list columns only (see listHeaderMinWidthPx);
   // the lines/add-row renderers never carry it, so their colgroup stays on the type basis.
   return Math.max(listTypeBasisPx(col), col.headerMinWidthPx ?? 0);
 }
 
 function listTypeBasisPx(col) {
-  if (col.display === 'tag') return col.minWidth ?? TAG_BASIS_PX;
   if (col.minWidth) return col.minWidth;
+  if (col.display === 'tag') return TAG_BASIS_PX;
   if (col.type === 'boolean' && col.badge) return booleanBadgeBasisPx(col);
   if (SELECTOR_TYPES.has(col.type)) return 192;
   if (col.type === 'percent') return PERCENT_LIST_BASIS_PX;

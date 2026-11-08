@@ -6,9 +6,10 @@ import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
 import { useUI } from '@/i18n';
 import { SelectorChip } from './SelectorChip.jsx';
 import {
-  resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor,
+  resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor, pinSearchTerms, firstPageLimit,
 } from './selectorSelection.js';
 import { useLocateCommittedValue } from './useLocateCommittedValue.js';
+import { LocatingNotice, locatingOverflowClass, locatingRowsClass } from './LocatingNotice.jsx';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 // Page size for the server-side search's paginated fetches (initial load, search, and
@@ -156,6 +157,8 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
   // ETP-5903 — the user typed or pressed a key during this open: the walk stops and the list is not
   // re-centred under them. Reset on every open.
   const interactedRef = useRef(false);
+  const valueRef = useRef(value);
+  valueRef.current = value;
 
   // Resets pagination state before a fresh search (new typed query, or reopening with an
   // empty query) — mirrors the resets CreatableSearchSelect.jsx performs at each of its
@@ -177,10 +180,10 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
   // click, chevron toggle, clear) fetches at once, while TYPING waits out
   // TYPED_SEARCH_DEBOUNCE_MS. They used to share one 300ms debounce, which made both wrong at
   // once: too slow to open, too eager while typing.
-  const fetchServerResults = useCallback((q, offset = 0, { immediate = false } = {}) => {
+  const fetchServerResults = useCallback((q, offset = 0, { immediate = false, limit: requestedLimit } = {}) => {
     // ETP-4576 - no `!token` here: under the cookie scheme the client holds none.
     if (!selectorUrl) { setServerResults(null); setLoadingFirstPage(false); return; }
-    if (offset > 0 && (!hasMoreRef.current || fetchInFlightRef.current)) return;
+    if (offset > 0 && (!hasMoreRef.current || fetchInFlightRef.current)) return false;
     clearTimeout(fetchTimer.current);
     // ETP-4975 BUG-2 fix: offset===0 always starts a NEW search generation (typed, or via
     // focus/open/toggle); offset>0 (scroll-triggered "load more") is tagged with whatever
@@ -197,23 +200,36 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     if (offset === 0) setLoadingFirstPage(true);
     const trimmed = (q || '').trim();
     const queryParams = trimmed ? { ...selectorContext, q: trimmed } : { ...selectorContext };
-    queryParams.limit = SERVER_SEARCH_PAGE;
+    // ETP-6103 — the opening page is the larger walk page when a value is committed; the walk
+    // asks for its own size. `hasMore` below is the server's value, else judged against THIS limit.
+    const limit = requestedLimit
+      ?? (offset === 0 ? firstPageLimit(SERVER_SEARCH_PAGE, valueRef.current, trimmed) : SERVER_SEARCH_PAGE);
+    queryParams.limit = limit;
     queryParams.offset = offset;
     const runFetch = () => {
       fetchInFlightRef.current = true;
       apiFetch(buildUrlWithParams(selectorUrl, queryParams), { baseUrl: '' })
-        .then(r => r.ok ? r.json() : null)
+        .then(r => {
+          if (!r.ok) throw new Error(`Selector request failed: ${r.status}`);
+          return r.json();
+        })
         .then(data => {
           if (!data?.items) return;
           if (searchGenerationRef.current !== requestGeneration) return;
           const items = data.items.map(it => ({ id: it.id, name: it.label || it.name, ...it }));
           setServerResults(prev => (offset === 0 ? items : [...(prev ?? []), ...items]));
           offsetRef.current = offset + items.length;
-          const more = items.length >= SERVER_SEARCH_PAGE;
+          const more = items.length > 0 && (data.hasMore ?? items.length >= limit);
           hasMoreRef.current = more;
           setHasMore(more);
         })
-        .catch(() => {})
+        .catch(() => {
+          // ETP-5948 — a failed "load more" ends the paging, as in CreatableSearchSelect: left
+          // `true`, the ETP-5903 walk re-requested the same page after every failure, forever.
+          if (offset === 0 || searchGenerationRef.current !== requestGeneration) return;
+          hasMoreRef.current = false;
+          setHasMore(false);
+        })
         .finally(() => {
           fetchInFlightRef.current = false;
           setSettledFetches(n => n + 1);
@@ -258,18 +274,24 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     pinAttemptedRef.current = id;
     const generation = searchGenerationRef.current;
     pinRequestRef.current = { id, generation };
-    const queryParams = { ...selectorContext, q: label, limit: CURRENT_SELECTION_SEARCH_LIMIT, offset: 0 };
-    apiFetch(buildUrlWithParams(selectorUrl, queryParams), { baseUrl: '' })
-      .then(r => (r.ok ? r.json() : null))
-      .then(data => {
+    // ETP-5948 — a "<code> - <name>" label finds nothing as a whole; the code retry does.
+    const lookup = async () => {
+      for (const term of pinSearchTerms(label)) {
+        const queryParams = { ...selectorContext, q: term, limit: CURRENT_SELECTION_SEARCH_LIMIT, offset: 0 };
+        const r = await apiFetch(buildUrlWithParams(selectorUrl, queryParams), { baseUrl: '' });
+        const data = r.ok ? await r.json() : null;
+        const match = (data?.items ?? []).filter(it => String(it.id) === id);
+        if (match.length) return match;
+      }
+      return [];
+    };
+    lookup()
+      .then(match => {
         const request = pinRequestRef.current;
         // Abandoned: the value changed, a new search started, or this answer is late.
         if (!request || request.id !== id || request.generation !== generation) return;
         if (searchGenerationRef.current !== generation) return;
-        const items = (data?.items ?? [])
-          .filter(it => String(it.id) === id)
-          .map(it => ({ id: it.id, name: it.label || it.name, ...it }));
-        setPinnedOptions(items);
+        setPinnedOptions(match.map(it => ({ id: it.id, name: it.label || it.name, ...it })));
       })
       .catch(() => {})
       .finally(() => {
@@ -443,9 +465,9 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
 
   // ETP-5903 — locate the committed value in place (walk), then centre it; see the hook.
   const selectedIndex = resolveSelectedIndex(filtered, value);
-  useLocateCommittedValue({
+  const { locating } = useLocateCommittedValue({
     open, query, value, excludeId, dropdownRef, interactedRef, selectorUrl, rows: serverResults,
-    hasMore, pageSize: SERVER_SEARCH_PAGE, settledFetches, locateDone, setLocateDone,
+    panelLoading: loadingFirstPage, hasMore, pageSize: SERVER_SEARCH_PAGE, settledFetches, locateDone, setLocateDone,
     fetchPage: fetchServerResults, offsetRef,
     selectedIndex, renderedCount: filtered.length, layoutKey: dropdownStyle,
   });
@@ -677,7 +699,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           id={`inline-options-${field.key}`}
           role="listbox"
           data-testid={`inline-add-options-${field.key}`}
-          className="bg-card border rounded-md shadow-lg overflow-auto"
+          className={`bg-card border rounded-md shadow-lg ${locatingOverflowClass(locating)}`}
           style={dropdownStyle}
           data-open-up={openUp ? 'true' : 'false'}
           data-inline-add-portal="true"
@@ -715,6 +737,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
               shrink-to-fit sizing inflates the panel to ~2x its content width in Chrome — see
               CreatableSearchSelect's identical comment for the full root cause. */}
           <div className="min-w-full w-max">
+            {locating && <LocatingNotice data-testid={`inline-add-options-${field.key}-locating`} />}
             {/* ETP-5005 — first-page skeleton. Shown only while nothing is displayable yet, so
                 it never replaces options the user can already act on: once the first page lands
                 (or the local catalog has entries) the list below takes over. Three rows rather
@@ -738,6 +761,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
                 ))}
               </div>
             )}
+            <div className={locatingRowsClass(locating)}>
             {filtered.map((opt, index) => {
               // ETP-5846 — TWO INDEPENDENT per-row states, deliberately never derived from one
               // another:
@@ -782,13 +806,14 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
                 </button>
               );
             })}
+            </div>
             {/* "Loading more" footer while a scroll-triggered next page fetches. Gated on
                 `serverResults != null` rather than a separate loading flag — that's also true
                 exactly while the INITIAL page is still in flight (serverResults stays null
                 until the first page resolves), so this never flashes during that load —
                 mirrors SelectorInput.jsx's `{hasMore && selectorUrl && (...)}` /
                 CreatableSearchSelect.jsx's `{serverSearch && !loading && hasMore && ...}` footer. */}
-            {serverResults != null && hasMore && (
+            {serverResults != null && hasMore && !locating && (
               <div className="py-1 text-center text-xs text-muted-foreground select-none pointer-events-none">
                 {ui('loading')}
               </div>

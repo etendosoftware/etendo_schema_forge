@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
+  "version": "0.5.0",
   "generatedAt": "2026-09-08T16:52:49.566Z",
-  "updatedAt": "2026-09-28T18:01:56.640Z",
-  "checksum": "8da4349e96ceb1a5",
+  "updatedAt": "2026-11-06T15:29:42.916Z",
+  "checksum": "2061470c3b23799f",
   "frontendContract": {
     "window": {
       "id": "112",
@@ -52,6 +52,10 @@
               {
                 "value": "Standard Order",
                 "name": "documentSequenceSalesOrder"
+              },
+              {
+                "value": "Quotation",
+                "name": "documentSequenceSalesQuotation"
               },
               {
                 "value": "AR Invoice",
@@ -191,7 +195,6 @@
             }
           }
         ],
-        "javaQualifier": "document-sequence",
         "hideDelete": true
       }
     }
@@ -431,8 +434,7 @@
             "visibility": "discarded",
             "required": true
           }
-        ],
-        "javaQualifier": "document-sequence"
+        ]
       }
     },
     "endpoints": [

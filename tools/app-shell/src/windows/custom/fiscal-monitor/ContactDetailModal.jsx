@@ -5,6 +5,8 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { toast } from 'sonner';
 import LocationEditorModal from '@/windows/custom/shared/LocationEditorModal.jsx';
 
+// committed-selection-ok: a short, fully rendered list that already sets aria-selected from its value; nothing to page or centre.
+
 const SII_TIPO_OPTIONS_SALES = [
   { id: 'F1',  label: 'F1 — Factura' },
   { id: 'F2',  label: 'F2 — Factura simplificada' },

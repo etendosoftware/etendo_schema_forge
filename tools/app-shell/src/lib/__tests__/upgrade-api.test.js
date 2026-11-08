@@ -857,6 +857,17 @@ describe('the account subscription', () => {
     assert.equal(calls[0][0], 'https://api.test/sws/go/billing/subscription');
   });
 
+  // ETP-6060 — a "Mis empresas" row names its company; the id is encoded into the query.
+  it('reads a named company subscription through the clientId query parameter', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ hasSubscription: false }));
+
+    await getSubscription('https://api.test', 'own 3&x');
+
+    assert.equal(calls[0][0],
+      'https://api.test/sws/go/billing/subscription?clientId=own%203%26x');
+  });
+
   // ETP-5443 REVIEW N3: a failed read of the subscription is its own error code, not the
   // generic checkout-creation one — see the doc comment on UPGRADE_ERROR_CODES.
   it('raises a stable error when the subscription is unavailable', async () => {
@@ -918,6 +929,78 @@ describe('the account subscription', () => {
     await assert.rejects(
       () => createPortalSession(''),
       (error) => error.code === UPGRADE_ERROR_CODES.sessionExpired && error.status === 401,
+    );
+  });
+
+  // ETP-5051 O-1b — a "Mis empresas" row opens ITS environment's portal by sending the client id;
+  // /account sends no body and gets the entered environment's.
+  it('sends the client id as the JSON body when one is given', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ url: 'https://billing.stripe.test/session-2' }));
+
+    await createPortalSession('https://api.test', 'CLIENT-2');
+
+    assert.deepEqual(JSON.parse(calls[0][1].body), { clientId: 'CLIENT-2' });
+  });
+
+  // The proof tests above send no body. A body is what changes the request shape (it gains a
+  // Content-Type), so the per-row call is pinned on its own under both schemes: a JSON write that
+  // lost its proof would be refused by the servlet only for "Mis empresas", never for /account.
+  it('carries the write proof and no bearer token on the per-environment portal POST under the cookie scheme', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ url: 'https://billing.stripe.test/session-2' }));
+
+    await createPortalSession('https://api.test', 'CLIENT-2');
+
+    assert.equal(calls[0][1].method, 'POST');
+    assert.equal(headersOf()['x-go-csrf'], CSRF);
+    assert.equal(headersOf().authorization, undefined);
+    assert.match(headersOf()['content-type'], /^application\/json/);
+    assert.equal(calls[0][1].credentials, 'include');
+    assert.deepEqual(JSON.parse(calls[0][1].body), { clientId: 'CLIENT-2' });
+  });
+
+  it('carries the bearer token, and the proof too, on the per-environment portal POST under the bearer scheme', async () => {
+    declareBearerSession();
+    installFetch(jsonResponse({ url: 'https://billing.stripe.test/session-2' }));
+
+    await createPortalSession('https://api.test', 'CLIENT-2');
+
+    assert.equal(headersOf().authorization, `Bearer ${BEARER}`);
+    assert.equal(headersOf()['x-go-csrf'], CSRF);
+    assert.match(headersOf()['content-type'], /^application\/json/);
+    assert.deepEqual(JSON.parse(calls[0][1].body), { clientId: 'CLIENT-2' });
+  });
+
+  it('sends no body without a client id', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ url: 'https://billing.stripe.test/session-1' }));
+
+    await createPortalSession('https://api.test');
+
+    assert.equal(calls[0][1].body, undefined);
+  });
+
+  it('maps a portal 404 NO_SUBSCRIPTION onto portalNoSubscription', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse(
+      { error: { code: 'NO_SUBSCRIPTION', message: 'No subscription' } },
+      { ok: false, status: 404 },
+    ));
+
+    await assert.rejects(
+      () => createPortalSession('', 'CLIENT-DEMO'),
+      (error) => error.code === UPGRADE_ERROR_CODES.portalNoSubscription && error.status === 404,
+    );
+  });
+
+  it('keeps any other portal 404 as portalUnavailable', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ error: { code: 'NOT_FOUND' } }, { ok: false, status: 404 }));
+
+    await assert.rejects(
+      () => createPortalSession('', 'CLIENT-2'),
+      (error) => error.code === UPGRADE_ERROR_CODES.portalUnavailable && error.status === 404,
     );
   });
 

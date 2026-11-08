@@ -306,6 +306,7 @@ A computed column that reads a table from **another module** needs that module d
 - **Browser (React components):** `formatCurrency(currencyCode, value)` and `getCurrencySymbol(currencyCode)` from `tools/app-shell/src/lib/formatCurrency.js`. Never format an amount with `.toFixed()`, `toLocaleString()`, or your own `Intl.NumberFormat` for currency/amount display.
 - **jsreport / PDF / printed reports:** `buildJsreportHelpersString()` from `templates/reports/helpers/report-html-helpers.js` — this is the only helper string that may cross the HTTP boundary into the jsreport container. Never write a second `formatCurrency`/`formatNumber` Handlebars helper by hand.
 - Both read the instance-wide thousands/decimal separators from one shared NEO config source (`GET /sws/neo/currency-format`, `currencyFormatConfig.js`) — see `docs/plans/2026-07-28-currency-format-centralization-proposal.md` for the full architecture.
+- **Quantities, counts, ratios and percentages that are NOT money** (stock units, order quantities, a %): `formatGroupedNumber(value, { minimumFractionDigits, maximumFractionDigits })` (grouped with the instance thousands separator) or `formatPlainDecimal(value)` (ungrouped, for field values), both from `tools/app-shell/src/lib/formatCurrency.js`. Never `toLocaleString`/`Intl.NumberFormat`. Both read the same instance-wide separators as `formatCurrency` through `getCurrencyFormatConfig()`, so panel, modal and tooltip agree. **Trap:** `formatGroupedNumber` defaults to 0 decimals, so a quantity that can be fractional (kg, m, hours) must pass an explicit `maximumFractionDigits` (the Movements tab uses 2) or it is silently rounded to an integer.
 - Before adding a new component or report that displays an amount, **grep for `formatCurrency` first** — there is almost certainly an existing pattern to copy in a sibling window/component.
 
 ## Date-Only Parsing & Formatting
@@ -326,6 +327,15 @@ A computed column that reads a table from **another module** needs that module d
 - **Handlebars / jsreport templates** (`template-csv.hbs`, `ReportDrawer.CSV_TEMPLATE`): the `csvField` helper from `templates/reports/helpers/report-html-helpers.js` is shipped automatically by `buildJsreportHelpersString()`. **Always TRIPLE-stash it** — `{{{csvField x}}}`, never `{{ }}`: double-stash HTML-escapes the helper's own `""` into `&quot;&quot;` and corrupts the file. Never declare a `csvField` in a per-report `helpers.js`; it is canonical, so a local copy is silently stripped and becomes dead code.
 - **xlsx / Excel exports are deliberately EXEMPT.** A workbook string cell is inert (a formula is a different cell type), so an apostrophe there is visible garbage, not a defence. See `NeoXlsxExportWriter.java` and `buildTemplateXlsx.js`.
 - The policy, the trigger set and the expected output for every input are normative: `{etendo_root}/modules/com.etendoerp.go/docs/security/csv-neutralization-fixtures.md` (contract) and `{etendo_root}/modules/com.etendoerp.go/docs/adr/0004-csv-formula-neutralization.md` (rationale). Add a trigger to the table FIRST, then to all three implementations (Java, `csvSerializer.js`, the jsreport source text). Before writing anything that emits CSV, **grep for `csvField` first**.
+
+## Pickers Open on the Committed Value
+
+**Every selector, drawer or popup that offers options MUST open on the value the field already holds**: marked with a check and `aria-selected`, centred, and with the arrow keys starting from it (ETP-5846/5903/5948). The behaviour lives in shared pieces that each picker has to wire in: `contract-ui/selectorSelection.js` and `useLocateCommittedValue`. Each caller also has to pass `value` / `valueLabel` (and `committedItem` for the stock drawer). Leaving either out fails silently: the picker just opens at the top. Both gaps found live during ETP-5948 were exactly that.
+
+- Building a new picker: reuse an existing one (`InlineSearchCombo`, `CreatableSearchSelect`, `SearchPopup`, a `ProductDrawerShell` variant) before writing one, and copy the wiring from a sibling.
+- Guardrail: `tools/app-shell/test/committed-selection-policy.test.js` fails the build on a `role="option"` file that does not use `selectorSelection`, and on a shared picker tag without `value=`. Opt-out: a `committed-selection-ok: <reason>` comment, only for lists with no single committed value or short lists that already set `aria-selected` from their value.
+
+Full reference: `docs/ui-customization.md` (inline edit → "The same reopen contract…").
 
 ## Authenticated Requests (MANDATORY)
 

@@ -8,6 +8,46 @@
 // a catalog of thousands (business partners, products) must not cost dozens of requests per open.
 export const LOCATE_SELECTION_MAX_PAGES = 6;
 
+// ETP-6103 — rows per request while a reopened selector looks for its committed value. One 100-row
+// request costs about the same as a 30-row one (measured on production: ~500-700 ms flat), so the
+// walk is two requests, not a dozen: the first page has this many rows, and if the value is not
+// there the second asks for all the rest of the walk at once. Pickers that opt out of big pages
+// (`largePages: false`, the product drawers) keep their own size and LOCATE_SELECTION_MAX_PAGES.
+export const LOCATE_WALK_PAGE_SIZE = 100;
+
+// ETP-6103 — total rows a big-page walk may load, which is also the server's selector cap
+// (MAX_LIMIT in NeoSelectorService). A typical tenant's 650-account catalogue fits.
+export const LOCATE_WALK_MAX_ROWS = 1000;
+
+/**
+ * Most rows a locate walk may load for a picker: LOCATE_WALK_MAX_ROWS with big pages, otherwise
+ * LOCATE_SELECTION_MAX_PAGES x the picker's own page size.
+ */
+export function locateMaxRows(pageSize, largePages = true) {
+  return largePages ? LOCATE_WALK_MAX_ROWS : LOCATE_SELECTION_MAX_PAGES * pageSize;
+}
+
+/**
+ * Rows to request in the next page of the locate walk (ETP-6103): LOCATE_WALK_PAGE_SIZE for the
+ * first page, then everything that is left of the walk total in one request; never below the
+ * picker's own size.
+ *
+ * @param {number} pageSize the picker's own page size
+ * @param {number} loadedRows rows fetched so far
+ */
+export function locatePageLimit(pageSize, loadedRows) {
+  if (loadedRows <= 0) return Math.max(pageSize, LOCATE_WALK_PAGE_SIZE);
+  return Math.max(pageSize, LOCATE_WALK_MAX_ROWS - loadedRows);
+}
+
+/**
+ * Rows for a picker's FIRST page (ETP-6103): the larger walk size when the open has a committed
+ * value and no typed search, so the walk needs fewer requests; the picker's own size otherwise.
+ */
+export function firstPageLimit(pageSize, value, query) {
+  return hasCommittedValue(value) && String(query ?? '').trim() === '' ? locatePageLimit(pageSize, 0) : pageSize;
+}
+
 /** Whether `value` holds a committed id (not null, undefined or ''). */
 export function hasCommittedValue(value) {
   return value != null && value !== '';
@@ -72,9 +112,11 @@ export function arrowStartIndexFor(query, selected) {
  * (ETP-5903). It stops as soon as the value is on screen, the list ends, the page cap is reached,
  * or the user did something on their own (typed, pressed a key).
  */
-export function shouldKeepLocating({ found, hasMore, loadedRows, pageSize, interacted }) {
+export function shouldKeepLocating({
+  found, hasMore, loadedRows, pageSize, interacted, maxRows = LOCATE_SELECTION_MAX_PAGES * pageSize,
+}) {
   if (found || !hasMore || interacted) return false;
-  return loadedRows < LOCATE_SELECTION_MAX_PAGES * pageSize;
+  return loadedRows < maxRows;
 }
 
 /**
@@ -93,4 +135,52 @@ export function centerOptionInPanel(panel, option) {
   const target = offsetInPanel - (panel.clientHeight - optionRect.height) / 2;
   panel.scrollTop = Math.max(0, target);
   return target <= panel.scrollHeight - panel.clientHeight;
+}
+
+/**
+ * The committed lookup item rebuilt from a saved row (ETP-5948): the reverse of the field's
+ * declarative `onSelectMappings` (see `resolveOnSelectMappings` in DataTable.jsx). Each
+ * `{ from, to }` mapping copied `item[from]` into `row[to]` on selection, so `row[to]` is written
+ * back at the `from` path. Literal (`value`) mappings carry nothing from the item and are skipped.
+ *
+ * Structural: it names no entity and no selector key. A drawer reads whatever part of the item it
+ * needs to recognise its own committed row (the stock drawer: the locator it mapped to the line).
+ *
+ * @param {{ onSelectMappings?: Array<{from?: string, to?: string, value?: unknown}> }} field
+ * @param {object} row the saved row
+ * @param {*} value the committed id
+ * @returns {object|null} `{ id: value, ...mapped paths }`, or null without a committed value
+ */
+export function committedItemFromRow(field, row, value) {
+  if (!hasCommittedValue(value)) return null;
+  const item = { id: value };
+  for (const m of field?.onSelectMappings ?? []) {
+    if (!m?.from || !m.to || m.value !== undefined || row?.[m.to] == null) continue;
+    const keys = m.from.split('.');
+    let target = item;
+    for (const key of keys.slice(0, -1)) target = (target[key] ??= {});
+    target[keys.at(-1)] = row[m.to];
+  }
+  return item;
+}
+
+/** Most label segments a pin lookup tries after the full label (one request each, on a miss). */
+const PIN_MAX_SEGMENTS = 3;
+
+/**
+ * ETP-5948 — search terms for pinning a committed value by its label: the label itself, then each
+ * segment between ` - ` (the AD identifier separator). Selector search matches each identifier
+ * column on its own, so a `"<code> - <name>"` label like an account's finds nothing as a whole,
+ * while one of its parts does — not always the first (a tax reads `"21% - <name> - <category>"`
+ * and only its name is searchable). Callers stop at the first term that returns the id.
+ *
+ * shortcut: segments past PIN_MAX_SEGMENTS are not tried; raise it if a longer identifier shows up.
+ *
+ * @param {string} label The committed value's display label.
+ * @returns {string[]} Distinct, non-empty terms, in the order to try them.
+ */
+export function pinSearchTerms(label) {
+  const full = String(label ?? '').trim();
+  const segments = full.split(' - ').map((s) => s.trim()).slice(0, PIN_MAX_SEGMENTS);
+  return [...new Set([full, ...segments])].filter(Boolean);
 }

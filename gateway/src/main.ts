@@ -9,6 +9,11 @@ import { buildPerEntityOpenApiPaths } from './openapi/build-per-entity-paths.ts'
 import { registerOpenApiRoutes } from './openapi/register-openapi-routes.ts';
 import { configureJsonApiBodyParser } from './public-api/json-api-http.ts';
 
+// The docs page shares the app's origin, so its renderer is pinned and checked by
+// hash: a new or tampered CDN release cannot run there. Upgrade both together.
+const SCALAR_SCRIPT_URL = 'https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.74.0/dist/browser/standalone.js';
+const SCALAR_SCRIPT_INTEGRITY = 'sha384-VXnKAz61Xwc3tbw1P+KKrUP7YbcsSl1Ik4is5UnogJyw9XEYZ5Ay/T1i0zPYtSZH';
+
 const gettingStartedDescription = `
 ## Getting started
 
@@ -90,7 +95,7 @@ Every error is a JSON:API document: \`{"errors": [{"status": "404", "code": "...
 - \`200\` / \`201\`: the request completed; \`204\`: a record was deleted (no body).
 - \`400\`: invalid input, unsupported field, invalid query parameter (see \`source.parameter\`), or invalid operation payload. A create or update missing mandatory fields answers one error per field, code \`missing_required_field\`, with \`source.pointer\` (\`/data/attributes/<name>\` or \`/data/relationships/<name>\`).
 - \`401\`: missing, malformed, or invalid credentials. Error code: \`unauthorized\`.
-- \`402\`: the tenant is blocked.
+- \`402\`: access for this account is suspended; contact the account owner or support. Error code: \`tenant_blocked\` (no further detail is returned).
 - \`403\`: the credential does not have the required scope or organization access.
 - \`404\`: the resource or record does not exist. Error codes: \`not_found\`, \`unknown_action\`.
 - \`406\` / \`415\`: the \`Accept\` or \`Content-Type\` header is not JSON:API (or JSON).
@@ -100,7 +105,7 @@ Every error is a JSON:API document: \`{"errors": [{"status": "404", "code": "...
 - \`428\`: the update did not send \`If-Match\`. Error code: \`precondition_required\`.
 - \`429\`: the API key exceeded its rate limit; wait \`Retry-After\` seconds.
 - \`502\`: Etendo failed or could not complete the upstream request (any 5xx); no internal details are returned. When \`meta.hint\` is present the write may already be saved: read the record before re-sending.
-- \`503\`: Etendo is temporarily unavailable; retry later.
+- \`503\`: Etendo is temporarily unavailable; retry later. Error code: \`service_unavailable\`.
 
 ### Versioning
 
@@ -128,7 +133,17 @@ async function bootstrap() {
   const config = new DocumentBuilder()
     .setTitle('Etendo Public API')
     .setVersion('v1')
-    .addBearerAuth()
+    // Named 'bearerAuth' because every operation built by buildPerEntityOpenApiPaths
+    // references it; the credential is `<clientId>:<clientSecret>`, not a JWT.
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'clientId:clientSecret',
+        description: 'API key credential: `<clientId>:<clientSecret>`.',
+      },
+      'bearerAuth',
+    )
     .build();
   const document = SwaggerModule.createDocument(app, config);
   // The real HTTP routing stays ONE dynamic @Get(':entityName') handler (no
@@ -191,7 +206,7 @@ async function bootstrap() {
     <div class="etendo-notice">This API is in beta. The contract and limits may change while the public API is being validated.</div>
   </div>
   <script id="api-reference" data-url="/api/openapi.json" data-configuration='{"theme":"default","darkMode":false}'></script>
-  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+  <script src="${SCALAR_SCRIPT_URL}" integrity="${SCALAR_SCRIPT_INTEGRITY}" crossorigin="anonymous"></script>
 </body></html>`);
   };
   // /api is the public production documentation entrypoint. It intentionally

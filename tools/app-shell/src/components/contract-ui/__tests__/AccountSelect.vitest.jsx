@@ -58,6 +58,14 @@ describe('AccountSelect', () => {
     expect(within(screen.getByTestId('acct-select')).getByText('requiredField')).toBeInTheDocument();
   });
 
+  // ETP-5948 — the committed account is handed to the popup, which marks it on open.
+  it('opens the popup with the selected account marked', async () => {
+    render(<AccountSelect label="Cuenta" options={OPTIONS} value="acc-626" data-testid="acct-select" />);
+    await openSelector('acct-select');
+    expect(await screen.findByTestId('acct-select-popup-option-acc-626')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('acct-select-popup-option-acc-572')).toHaveAttribute('aria-selected', 'false');
+  });
+
   it('opens a popup titled with the field label that lists every option with its FULL name', async () => {
     render(<AccountSelect label="Cuenta" options={OPTIONS} data-testid="acct-select" />);
     await openSelector('acct-select');
@@ -113,16 +121,30 @@ describe('AccountSelect', () => {
     expect(await screen.findByTestId('acct-select-popup-empty')).toHaveTextContent('noResults');
   });
 
-  it('an optional field can be cleared (onChange(null)); a required one cannot', () => {
+  // ETP-5791 — the × sits inside the field's border: trigger and clear are sibling buttons of the
+  // one bordered wrapper (no nested <button>), so clicking × clears without opening the popup.
+  it('an optional field with a value is cleared by an × inside the field, without opening the popup', () => {
     const onChange = vi.fn();
-    const { unmount } = render(
-      <AccountSelect value="acc-572" options={OPTIONS} onChange={onChange} data-testid="acct-select" />,
-    );
-    fireEvent.click(screen.getByTestId('field-acct-select-clear'));
-    expect(onChange).toHaveBeenCalledWith(null);
-    unmount();
+    render(<AccountSelect value="acc-572" options={OPTIONS} onChange={onChange} data-testid="acct-select" />);
+    const trigger = screen.getByTestId('field-acct-select');
+    const clear = screen.getByTestId('field-acct-select-clear');
 
-    render(<AccountSelect value="acc-572" required options={OPTIONS} data-testid="acct-select" />);
+    expect(clear.parentElement).toBe(trigger.parentElement);
+    expect(clear.parentElement.className).toMatch(/\bborder\b/);
+    expect(trigger.className).not.toMatch(/\bborder\b/);
+    expect(trigger).not.toContainElement(clear);
+
+    fireEvent.click(clear);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith(null);
+    expect(screen.queryByTestId('acct-select-popup')).toBeNull();
+  });
+
+  it.each([
+    ['required', { value: 'acc-572', required: true }],
+    ['empty', { value: null }],
+  ])('offers no × when the field is %s', (_label, props) => {
+    render(<AccountSelect options={OPTIONS} data-testid="acct-select" {...props} />);
     expect(screen.queryByTestId('field-acct-select-clear')).toBeNull();
   });
 
@@ -149,7 +171,7 @@ describe('AccountSelect', () => {
 
     await openSelector('acct-select');
     fireEvent.click(await screen.findByTestId('acct-select-popup-option-vc-430'));
-    expect(loadPage).toHaveBeenCalledWith('', 0, expect.any(AbortSignal));
+    expect(loadPage).toHaveBeenCalledWith('', 0, expect.any(AbortSignal), { limit: 100 });
     expect(screen.queryByText('572 - Bancos c/c')).not.toBeInTheDocument();
     expect(onChange).toHaveBeenCalledWith('vc-430', '430 - Clientes');
   });

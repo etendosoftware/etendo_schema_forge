@@ -3,8 +3,12 @@
 
 const { mockExecute } = vi.hoisted(() => ({ mockExecute: vi.fn() }));
 
+// Keys echo back, except the plan-quota sentence (ETP-5051): an echoed key reads as "not
+// translated", so the translator would fall back and the quota path could not be observed.
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key, params = {}) => (key === 'backendError.quotaExceeded'
+    ? `Límite del plan alcanzado: ${params.resource}`
+    : key),
   useMenuLabel: () => (key) => key,
 }));
 
@@ -97,7 +101,7 @@ import { render, screen, fireEvent, act, within, waitFor } from '@testing-librar
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { toast } from 'sonner';
 import { useMainAttachment } from '@/windows/custom/shared/useMainAttachment.js';
-import GoodsReceiptActions from '@generated/goods-receipt/custom/GoodsReceiptActions';
+import GoodsReceiptActions, { CloneReceiptModal } from '@generated/goods-receipt/custom/GoodsReceiptActions';
 
 const defaultProps = {
   data: {
@@ -328,6 +332,42 @@ describe('GoodsReceiptActions', () => {
       expect(screen.getByTestId('invoice-confirm-confirm')).toHaveTextContent('soCreateDocsBtn');
       expect(screen.getByTestId('invoice-confirm-confirm')).not.toBeDisabled();
       expect(screen.queryByTestId('confirm-result-modal')).not.toBeInTheDocument();
+    });
+
+    // ETP-5051 — createPurchaseInvoice refused by the plan quota: the toast is the translated quota
+    // sentence, never "Error (403)" nor the backend's English prose.
+    it('on a 403 QUOTA_EXCEEDED: toasts the translated quota sentence and keeps the modal open', async () => {
+      globalThis.fetch.mockImplementation((url, opts) => (opts?.method === 'POST'
+        ? Promise.resolve({
+          ok: false,
+          status: 403,
+          json: async () => ({
+            error: {
+              code: 'QUOTA_EXCEEDED', status: 403, message: 'Quota exceeded: Purchase invoices (50/50)',
+              quota: { resourceKey: 'GR_ACTIONS_INVOICES', resourceName: 'Purchase invoices', includedQty: 50, consumed: 50, verdict: 'DENY' },
+            },
+          }),
+        })
+        : Promise.resolve({ ok: true, json: async () => ({ response: { data: [] } }) })));
+      renderActions();
+      fireEvent.click(screen.getByText('createInvoiceBtn'));
+      fireEvent.click(screen.getByTestId('invoice-confirm-confirm'));
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Límite del plan alcanzado: Purchase invoices'));
+      expect(toast.error).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId('create-invoice-confirm-modal')).toBeInTheDocument();
+      expect(screen.queryByTestId('confirm-result-modal')).not.toBeInTheDocument();
+    });
+
+    it('on a refusal with no message: toasts "Error (<status>)" as before', async () => {
+      globalThis.fetch.mockImplementation((url, opts) => (opts?.method === 'POST'
+        ? Promise.resolve({ ok: false, status: 409, json: async () => ({ error: { status: 409 } }) })
+        : Promise.resolve({ ok: true, json: async () => ({ response: { data: [] } }) })));
+      renderActions();
+      fireEvent.click(screen.getByText('createInvoiceBtn'));
+      fireEvent.click(screen.getByTestId('invoice-confirm-confirm'));
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Error (409)'));
     });
 
     it('rapid double-click on the confirm button while a request is in flight results in exactly one POST call', async () => {
@@ -569,5 +609,59 @@ describe('confirming a fully-invoiced receipt (ETP-5265 — direct documentActio
     });
 
     expect(toast.error).toHaveBeenCalledWith('networkError');
+  });
+});
+
+// ETP-5051 — cloning a receipt creates a document, so the plan quota can refuse it. The inline error
+// reads as the translated quota sentence; any other refusal keeps its own message or the generic one.
+describe('CloneReceiptModal — refused clone', () => {
+  const props = {
+    receiptId: 'receipt-1',
+    data: { documentNo: 'ALB-001', documentStatus: 'CO', 'businessPartner$_identifier': 'Supplier A' },
+    base: '/sws/neo',
+    onClose: vi.fn(),
+    onCloned: vi.fn(),
+  };
+
+  function routeClone(status, body) {
+    globalThis.fetch = vi.fn((url, opts) => (opts?.method === 'POST'
+      ? Promise.resolve({ ok: status < 400, status, json: async () => body })
+      : Promise.resolve({ ok: true, json: async () => ({ response: { data: [{ id: 'l-1' }] } }) })));
+  }
+
+  async function clickClone() {
+    render(<CloneReceiptModal {...props} />);
+    fireEvent.click(screen.getByText('cloneReceiptAction'));
+    await waitFor(() => expect(globalThis.fetch.mock.calls.some(([, o]) => o?.method === 'POST')).toBe(true));
+  }
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it('shows the translated quota sentence for a 403 QUOTA_EXCEEDED', async () => {
+    routeClone(403, {
+      error: {
+        code: 'QUOTA_EXCEEDED', status: 403, message: 'Quota exceeded: Goods receipts (30/30)',
+        quota: { resourceKey: 'GR_CLONE_RECEIPTS', resourceName: 'Goods receipts', includedQty: 30, consumed: 30, verdict: 'DENY' },
+      },
+    });
+    await clickClone();
+
+    expect(await screen.findByText('Límite del plan alcanzado: Goods receipts')).toBeInTheDocument();
+    expect(screen.queryByText('cloneReceiptError')).not.toBeInTheDocument();
+    expect(props.onCloned).not.toHaveBeenCalled();
+  });
+
+  it('keeps the backend message of any other refusal', async () => {
+    routeClone(409, { response: { error: { message: 'Receipt cannot be cloned' } } });
+    await clickClone();
+
+    expect(await screen.findByText('Receipt cannot be cloned')).toBeInTheDocument();
+  });
+
+  it('keeps the generic message when the refusal carries none', async () => {
+    routeClone(500, {});
+    await clickClone();
+
+    expect(await screen.findByText('cloneReceiptError')).toBeInTheDocument();
   });
 });
