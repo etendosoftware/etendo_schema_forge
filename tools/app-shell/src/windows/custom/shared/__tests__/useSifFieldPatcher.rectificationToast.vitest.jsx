@@ -139,4 +139,36 @@ describe('useSifFieldPatcher — rectification toast (ETP-5745 CP-14/CP-16/CP-23
 
     expect(toastWarning).toHaveBeenCalledTimes(1);
   });
+
+  /**
+   * ETP-5745 QA gap (low severity, UX, not a bug): `rectifCodeToastRef` is keyed only by
+   * `recordId` ("fires once per record" — see the production comment above the effect), so a
+   * double toggle of "Tipo de documento" within the SAME unsaved form (rectificative -> normal
+   * -> rectificative again) does not re-arm the toast on the second transition, even though the
+   * fields were cleared by the doc-type callout in between. This is intentional: the blocking
+   * completion guard (RectificationFiscalCodeGuard.java) still enforces the same requirement
+   * regardless of whether this heads-up toast re-fires. Documented here as a test, not just a
+   * code comment, per QA's gap report.
+   */
+  it('does NOT re-fire after a double toggle (rectificative -> normal -> rectificative) in the same unsaved form', () => {
+    const baseProps = {
+      recordId: 'inv-5745',
+      apiBaseUrl: '/sws/neo/sales-invoice',
+      onChange: vi.fn(),
+    };
+    const { rerender } = renderHook(
+      ({ data }) => useSifFieldPatcher({ ...baseProps, data }),
+      { initialProps: { data: { documentStatus: 'DR', adOrgId: 'ORG-1', isRectificative: true } } },
+    );
+    expect(toastWarning).toHaveBeenCalledTimes(1);
+
+    // User reverts "Tipo de documento" to a non-rectificative one; the doc-type callout clears
+    // the fiscal fields, but the toast guard tracks only recordId, not isRectificative.
+    rerender({ data: { documentStatus: 'DR', adOrgId: 'ORG-1', isRectificative: false } });
+    expect(toastWarning).toHaveBeenCalledTimes(1);
+
+    // User toggles back to rectificative, same record, still unsaved — no second toast.
+    rerender({ data: { documentStatus: 'DR', adOrgId: 'ORG-1', isRectificative: true } });
+    expect(toastWarning).toHaveBeenCalledTimes(1);
+  });
 });
