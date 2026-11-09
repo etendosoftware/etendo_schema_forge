@@ -267,6 +267,11 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
         `PO ${poDocNo} should appear in the import modal`,
       ).toBeVisible({ timeout: 10_000 });
       await poRow.click();
+      // ETP-6099: expanding the order reads its lines. The order checkbox does not select anything
+      // while that read is still in flight, so wait for the lines before selecting.
+      await expect(page.getByTestId('ImportLinesModal__lineRow').first(),
+        `PO ${poDocNo} lines should load once the order is expanded`,
+      ).toBeVisible({ timeout: 15_000 });
       await slow(page);
     });
 
