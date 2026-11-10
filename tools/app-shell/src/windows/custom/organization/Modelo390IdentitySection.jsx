@@ -89,12 +89,8 @@ function HolderNifField({ value }) {
         id="org-aeat390-holder-nif"
         value={value ?? ''}
         readOnly
-        aria-describedby="org-aeat390-holder-nif-hint"
         className="bg-muted text-muted-foreground cursor-default"
         data-testid="Modelo390IdentitySection__holderNif" />
-      <p id="org-aeat390-holder-nif-hint" className="text-xs text-muted-foreground" data-testid="Modelo390IdentitySection__holderNifHint">
-        {ui('org390HolderNifHint')}
-      </p>
     </div>
   );
 }

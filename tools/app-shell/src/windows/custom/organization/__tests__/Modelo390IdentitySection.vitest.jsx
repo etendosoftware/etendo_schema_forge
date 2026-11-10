@@ -160,6 +160,9 @@ describe('Modelo390IdentitySection — Persona física toggle', () => {
     expect(nif).toHaveValue('B12345678');
     expect(nif).toHaveAttribute('readonly');
     expect(screen.getByLabelText('orgNifLabel')).toBe(nif);
+    // No hint under the NIF: the holder block hint already explains the block.
+    expect(screen.queryByTestId('Modelo390IdentitySection__holderNifHint')).not.toBeInTheDocument();
+    expect(screen.queryByText('org390HolderNifHint')).not.toBeInTheDocument();
     fireEvent.change(nif, { target: { value: 'X' } });
     expect(onFieldChange).not.toHaveBeenCalled();
   });

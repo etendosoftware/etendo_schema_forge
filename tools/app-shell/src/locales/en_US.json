@@ -20834,7 +20834,6 @@
     "org390RepNameLabel": "Representative name or company name",
     "org390HolderTitle": "Holder details",
     "org390HolderHint": "For a natural person the AEAT needs the name and the surnames separately.",
-    "org390HolderNifHint": "The organization's NIF, from Fiscal data.",
     "org390RepTitle": "Representative (optional)",
     "org390RepHint": "Only if the natural person acts through a representative.",
     "orgRepLineLabel": "Line",

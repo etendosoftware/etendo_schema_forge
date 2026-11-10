@@ -21070,7 +21070,6 @@
     "org390RepNameLabel": "Nombre o razón social del representante",
     "org390HolderTitle": "Datos del titular",
     "org390HolderHint": "Para una persona física, la AEAT necesita el nombre y los apellidos por separado.",
-    "org390HolderNifHint": "El NIF de la organización, de Datos fiscales.",
     "org390RepTitle": "Representante (opcional)",
     "org390RepHint": "Solo si la persona física actúa por medio de un representante.",
     "orgRepLineLabel": "Línea",

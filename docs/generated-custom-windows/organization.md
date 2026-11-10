@@ -360,7 +360,7 @@ is active (ETP-5831, see "Fiscal section visibility"). Its body is
   the organization is the one natural person):
   - **"Datos del titular"** (`Modelo390IdentitySection__holder`): the organization's NIF, read-only
     (`Modelo390IdentitySection__holderNif`; it is `information.taxID`, the same form value as the
-    "Datos fiscales" NIF, edited only there), then **Nombre \*** and **Primer apellido \*** and
+    "Datos fiscales" NIF, edited only there; no hint under it), then **Nombre \*** and **Primer apellido \*** and
     Segundo apellido (`aeat390Firstname/Surname1/Surname2`). Hint: the AEAT needs the name and the
     surnames separately for a natural person. Nothing is pre-filled from the organization name.
   - **"Representante (opcional)"** (`Modelo390IdentitySection__representative`): "NIF del
