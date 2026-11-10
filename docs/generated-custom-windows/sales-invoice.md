@@ -1994,10 +1994,10 @@ purchase-invoice — see `purchase-invoice.md` for this window's mirror of the s
 
 **Classic fiscal messages reworded for GO (ETP-6158):** the VERI\*FACTU, TicketBAI and SII messages
 this window can raise on save, Confirmar or a SIF send that name Classic-only UI (e.g. "solapa
-Facturas Rectificativas", the "Añadir Certificado Digital" process, "Descripción Verifactu",
-"Verifique en la cabecera del tercero") reach the user reworded with this window's own labels
-("Rectificaciones" tab, "SIF" tab, "Descripción Operación", Configuración fiscal → Certificado
-digital, Contactos), in the UI language. The TicketBAI recipient checks on Confirmar
+Facturas Rectificativas", the "Añadir Certificado Digital" process, "Verifique en la cabecera del
+tercero") reach the user reworded with this window's own labels ("Rectificaciones" tab, "SIF" tab,
+Configuración fiscal → Certificado digital, Contactos), in the UI language, and keep their
+AD_MESSAGE key in `messageKeys` (REST: the `error` object; MCP: the root of the error result). The TicketBAI recipient checks on Confirmar
 (`TBAI_EmptyPostalCode`, `TBAI_EmptyDir`, `TBAI_EmptyNifCode`: a contact not marked as Factura
 Simplificada needs Código postal, Primera línea and CIF/NIF) point to Contactos → Dirección / the
 contact header. Only messages a GO user can trigger are reworded. Done server-side at NEO's exit (`ClassicMessageRemap`,
