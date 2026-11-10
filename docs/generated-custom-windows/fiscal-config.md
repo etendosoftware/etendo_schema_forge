@@ -228,14 +228,35 @@ VERI\*FACTU therefore read and write the **same** record. Consequences in the `s
   through `onUploaded`, `FiscalConfigPage` bumps a `certVersion` counter and passes it down as
   `certRefreshKey` (→ `CertSection`'s `refreshKey`) to every section and as `refreshKey` to
   `useCertExpiry`, so the block in the other tab (re-rendered when the tab switches), the expiry
-  banner and the status panel's "Certificado" row re-read `GET /certificate`. On mount it calls `GET /sws/neo/certificate` (org inferred from the bearer token) to restore the cert status from `etsg_certificate`, so the "loaded" state persists across window refreshes. `CertModal.jsx` is the 3-step upload modal (pick → verify spinner → done/confirmNif).
+  banner and the status panel's "Certificado" row re-read `GET /certificate`. On mount it calls `GET /sws/neo/certificate?orgId=<org>` to restore the cert status from `etsg_certificate`, so the "loaded" state persists across window refreshes. `CertModal.jsx` is the 3-step upload modal (pick → verify spinner → done/confirmNif).
 
 ### Backend endpoints (`NeoCertificateHelper`)
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | `POST` | `/sws/neo/certificate` | Upload a PKCS#12 cert via `multipart/form-data` (fields: `certificate`, `orgId`, `password`, optional `setOrgNif`) |
-| `GET`  | `/sws/neo/certificate` | Return `{exists, validTo}` for the active cert (org inferred from bearer token) |
+| `GET`  | `/sws/neo/certificate?orgId=<org>` | Return `{exists, validTo}` for the org's active cert. `orgId` is required (400 without it); an org the caller's client does not own answers `{exists: false}` |
+
+**Dates are ISO on the wire (ETP-6053).** `GET /certificate` returns `validTo` and the upload
+response's `certDetails` return `validFrom`/`validTo` as `yyyy-MM-dd` (e.g. `"2027-07-01"`), the same
+as the agents' `certificate` action. The UI formats them for the active locale with
+`formatCalendarDate` (`@/lib/dateOnly.js`) in `CertSection` ("Válido hasta"), `CertModal` (the
+"done" step details) and the status panel's "Certificado" row, and `daysUntil` (expiry banner) parses
+the ISO value directly. Until ETP-6053 the endpoint returned a localized `dd/MM/yyyy`: the browser read
+it month-first (1 July 2027 showed as 07/01/2027) and `daysUntil` returned `null`, so the expiry
+banner never appeared against a real backend — the tests had always mocked ISO.
+
+**The date is the calendar day in the server's default timezone (decided, ETP-6053).** Both
+`GET /certificate` and the upload `certDetails` format the stored instant with a
+`SimpleDateFormat("yyyy-MM-dd")` that sets no zone, so the day is the JVM default timezone's — not
+the UTC day the X.509 validity is expressed in. The agents' `certificate` action reads the same
+expiry the same way (`java.sql.Date#toLocalDate`), so the REST and MCP answers agree on one server.
+A certificate whose `notAfter` is `2027-06-30T23:30:00Z` reads `2027-06-30` on a UTC server and
+`2027-07-01` on a `Europe/Madrid` one; two servers in different zones can report different days for
+the same certificate. This is kept on purpose (an off-by-one at the edge of a validity that lasts
+years is immaterial to the warning) and pinned by the timezone-specific `buildCertDetails` tests in
+`NeoCertificateHelperTest`. The client never re-interprets the zone: `formatCalendarDate` and
+`daysUntil` treat the value as a date-only calendar day.
 
 The upload delegates to `AddCertificateToOrg` (existing SIF process) via reflection.
 
@@ -280,7 +301,7 @@ What the panel shows — derived from the stored records by `deriveConfiguredSta
 | Territorio fiscal | TBAI `etsgSifTerritory` (ARABA/BIZKAIA/GIPUZKOA); else SII `navarra` → Navarra, `guipuzcoa` → Guipúzcoa, `taxtype` IGIC → Canarias, otherwise España / Baleares; VERI\*FACTU `tAXType` 01/03/02 → España / Canarias / Ceuta-Melilla. Row omitted when unknown |
 | Hacienda | the territory's `systemLong`, or the system's `long` text |
 | Operativa nacional (SII) | TicketBAI territories only: "Activa" when an SII record exists, otherwise "No aplica" |
-| Certificado | "Válido hasta dd/mm/aaaa" from `useCertExpiry().validTo` (new return field), or "Pendiente" (warning colour) without a certificate. Never stale: `useCertExpiry` resets `validTo`/`daysLeft` when a read starts (org change or certificate refresh) and clears them when the read fails, so another org's date or an old date never stays on screen |
+| Certificado | "Válido hasta {date}" from `useCertExpiry().validTo` (new return field), the ISO date formatted for the UI locale with `formatCalendarDate` (2-digit day/month, so `es_ES` shows dd/mm/aaaa), or "Pendiente" (warning colour) without a certificate. Never stale: `useCertExpiry` resets `validTo`/`daysLeft` when a read starts (org change or certificate refresh) and clears them when the read fails, so another org's date or an old date never stays on screen |
 | Activado | earliest creation timestamp of the system's records (`created`, the API key NEO serves the `Created` audit column under); row omitted without one |
 
 The "Ver historial de envíos" link of the design is **deliberately not included**.
@@ -342,13 +363,23 @@ not a shared component, so these changes affect no other window.
 
 ## Certificate expiry banner (`CertExpiryBanner`)
 
-`CertExpiryBanner.jsx` renders a warning notice when the organization's digital certificate is approaching expiry. It is shown in `FiscalConfigPage.jsx` with `variant="prominent"` (card style, after the page header). `useCertExpiry.js` fetches `GET /certificate` on mount (org inferred from bearer token) and computes the remaining days via the exported `daysUntil(dateStr)` pure helper.
+`CertExpiryBanner.jsx` renders a warning notice when the organization's digital certificate is approaching expiry. It is shown in `FiscalConfigPage.jsx` with `variant="prominent"` (card style, after the page header). `useCertExpiry.js` fetches `GET /certificate?orgId=<org>` on mount and computes the remaining days via the exported `daysUntil(dateStr)` pure helper.
 
 | Days remaining | State | Appearance | Dismissible |
 |----------------|-------|------------|-------------|
 | > 60 | Hidden | — | — |
 | 31 – 60 | Warning | Amber card with ⚠️ icon | Yes |
-| 0 – 30 | Critical | Red card with 🔴 icon | No |
+| 1 – 30 | Critical | Red card with 🔴 icon | No |
+| 0 | Critical — "vence hoy" | Red card with 🔴 icon | No |
+| < 0 | Critical — expired | Red card with 🔴 icon | No |
+
+**Copy per edge (ETP-6053).** `certExpiryCopy(ui, daysLeft, isCritical)` (exported from the banner,
+shared by both variants) picks the text: an expired certificate shows "El certificado digital ha
+caducado" with a body telling the user to upload a valid one from Configuración fiscal; `0` shows "El
+certificado digital vence hoy"; `1` uses the singular `_one` key ("El certificado vence en 1 día");
+any other count keeps the plural key. Before ETP-6053 these edges read "vence en -12 días" / "0 días" /
+"1 días" — they surfaced only once `GET /certificate` started returning ISO dates and `daysUntil`
+stopped returning `null` with the real backend.
 
 - `daysUntil(dateStr)` lives in `certExpiryUtils.js` (pure, no React deps). Both `todayUtc` and `expiryUtc` are built with `Date.UTC` from UTC date parts (`getUTCFullYear/Month/Date`), so the 60/30-day thresholds fire at UTC midnight regardless of the user's local timezone. Impossible dates (e.g. Feb 31) are rejected via a round-trip check before the diff is computed.
 - When `isCritical` the dismiss button is not rendered; re-opening the page always shows the banner until the cert is renewed.
@@ -357,6 +388,9 @@ not a shared component, so these changes affect no other window.
 i18n keys used:
 - `fiscal.cert.expiry.warn.title` — "Certificate expiring in {days} days"
 - `fiscal.cert.expiry.critical.title` — "Certificate expires in {days} days"
+- `fiscal.cert.expiry.warn.title_one` / `fiscal.cert.expiry.critical.title_one` — singular, used when `daysLeft = 1`
+- `fiscal.cert.expiry.today.title` — "The digital certificate expires today" (`daysLeft = 0`, body stays `fiscal.cert.expiry.body`)
+- `fiscal.cert.expiry.expired.title` / `fiscal.cert.expiry.expired.body` — expired certificate (`daysLeft < 0`)
 - `fiscal.cert.expiry.body` — renewal call-to-action sentence
 - `fiscal.cert.expiry.dismiss` — aria-label for the × button
 
@@ -710,9 +744,10 @@ environment, enrollment dates or submission cadences.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/OnboardingWizard.test.js` — 36 component source-guard tests: all 7 territories, wizard steps, system resolution, record creation via POST, cert modal, navigation callbacks. (Applied-step assertions removed with the screen in ETP-5831.)
 - `tools/app-shell/src/windows/custom/fiscal-config/certExpiryUtils.js` — pure `daysUntil` helper (no React deps); validates month (1–12) and day (1–31); round-trips the constructed `Date.UTC` value through `getUTCFullYear/Month/Date` to reject impossible dates (e.g. `2026-02-31` → March); builds `todayUtc` from `getUTCFullYear/Month/Date` so the boundary is UTC midnight in every timezone; imported by `useCertExpiry.js` and directly importable in Node.js tests.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/certExpiryUtils.test.js` — 21 tests: exports guard (named function, `Date.UTC`, `getUTCFullYear` usage, round-trip check), null/falsy inputs, future dates (1/30/60 days, today=0), past dates, non-ISO inputs (bare string, slash-delimited), out-of-range components (month 0, month 13, day 0, day 32, impossible Feb 31, impossible Apr 31 → all `null`).
-- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/useCertExpiry.test.js` — 11 source-guard tests: re-exports `daysUntil`, exports `useCertExpiry`, `mockDaysLeft` bypass, `return { daysLeft }`, `/certificate` endpoint (no `?orgId` — backend infers org from token), `useApiFetch` usage (no manual `Authorization` header), null-reset before each fetch and in the else branch when cert is absent, `AbortController` usage (`new AbortController`, `controller.abort()` cleanup, `signal.aborted` check before `setDaysLeft`).
-- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/CertExpiryBanner.test.js` — 17 component source-guard tests: visibility thresholds (WARN_DAYS=60, CRITICAL_DAYS=30), dismiss behaviour, variant rendering, i18n keys, color scheme.
-- `e2e/tests/flows/fiscal-config.mocked.spec.js` — 12 Playwright mocked E2E tests: no-org, wizard, SII/TBAI/Verifactu/conflict profiles, wizard flow (territory → confirm → back), cert modal opening; all assertions use `t()` i18n helper.
-- `modules/com.etendoerp.go/.../NeoCertificateHelper.java` — certificate upload + GET endpoints; NIF extraction from X.509 DN; SAVEPOINT-protected org NIF lookup; confirmNif flow.
-- `modules/com.etendoerp.go/.../NeoCertificateHelperTest.java` — 17 unit tests for NIF parsing and normalization.
+- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/useCertExpiry.vitest.js` — 20 behavioral hook tests (replaced the former `useCertExpiry.test.js` source guard): `mockDaysLeft` bypass (no fetch, null `validTo`), no fetch without `orgId`/`apiBaseUrl`, `GET /certificate?orgId=…`, `daysLeft`/`validTo` from `{exists, validTo}`, refetch on org change and on `refreshKey`, no stale certificate (reset when a read starts, cleared when it fails), and (ETP-6053) the hook → `CertExpiryBanner` path fed an ISO `/certificate` payload: warning at 45 days, critical at 15, "vence hoy", expired, nothing beyond 60.
+- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/CertSection.vitest.jsx` / `CertModal.vitest.jsx` — ETP-6053: the ISO `validTo` (and the upload `validFrom`/`validTo`) rendered through `formatCalendarDate` in the UI locale, never month-first.
+- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/CertExpiryBanner.vitest.jsx` — render tests: visibility thresholds (WARN_DAYS=60, CRITICAL_DAYS=30), dismiss behaviour, variant rendering, i18n keys, and (ETP-6053) the es_ES copy for expired / today / 1 day / 15 days plus non-dismissable expired and today in both variants.
+- `e2e/tests/flows/fiscal/fiscal-config.mocked.spec.js` — 31 Playwright mocked E2E tests (`npx playwright test --list`): wizard and wizard interaction, certificate upload modal and flow, Change SIF and its per-profile notice, onboarding save regression, activation through `configureFiscalSystem`, Add complementary SIF, smart deactivation, Save gating / unsaved-changes guard / status panel, and (ETP-6053) certificate validity from an ISO `GET /certificate` (status panel and certificate section show the date in the locale; a certificate expiring in 15 days shows the critical banner); all assertions use the `t()` i18n helper.
+- `modules/com.etendoerp.go/.../NeoCertificateHelper.java` — certificate upload + GET + DELETE endpoints; ISO `yyyy-MM-dd` dates in the server default timezone; NIF extraction from X.509 DN; SAVEPOINT-protected org NIF lookup; confirmNif flow.
+- `modules/com.etendoerp.go/.../NeoCertificateHelperTest.java` — 55 unit tests: NIF parsing and normalization, plus (ETP-6053) `buildCertDetails` returning ISO `validFrom`/`validTo`, with the server timezone pinned (`TimeZone.setDefault`) to UTC, `Europe/Madrid` and `America/Argentina/Buenos_Aires` around a `notAfter` near UTC midnight.
 - i18n: 250+ `fiscal.*` keys in `en_US.json` / `es_ES.json`; territory names, group hints, system descriptions, and all CertModal strings go through `useUI()`. E2E tests resolved via `e2e/tests/helpers/i18n.js` (locale-switchable).
