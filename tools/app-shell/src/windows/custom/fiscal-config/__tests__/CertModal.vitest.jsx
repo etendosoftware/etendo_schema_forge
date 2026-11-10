@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-config/CertModal.jsx
 // Vitest render tests for CertModal (replaces source-reading tests)
 
 const stableApiFetch = vi.fn(() => Promise.resolve({ ok: true, json: async () => ({}) }));
