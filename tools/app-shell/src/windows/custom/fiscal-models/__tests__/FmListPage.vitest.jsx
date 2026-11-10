@@ -1258,6 +1258,62 @@ describe('FmListPage — fiscal-models-catalog save on toggle', () => {
     toastError.mockRestore();
   });
 
+  // The confirmed catalog also advances inside the chain while a later PUT is still queued: when
+  // B was clicked before A answered, A's success is what B's failure must roll back to.
+  it('A confirmed while B is queued, then B fails: rolls back to A (not the read), one toast', async () => {
+    const toastError = vi.spyOn(toast, 'error').mockImplementation(() => {});
+    const { fetchMock, puts } = deferredPutFetch();
+    globalThis.fetch = fetchMock;
+    const { getByText } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    fireEvent.click(screen.getByTestId('fm-list-catalog-button'));
+
+    fireEvent.click(screen.getByTestId('catalog-toggle-349')); // A: { 303: on, 349: off }
+    fireEvent.click(screen.getByTestId('catalog-save-none'));  // B: { 303: off, 349: off }, queued
+    expect(drawerActive()).toEqual({ '303': false, '349': false });
+    expect(getByText(/fm\.catalog\.title.*\(0\)/)).toBeTruthy();
+
+    await waitFor(() => expect(puts).toHaveLength(1));
+    puts[0].ok();
+    await waitFor(() => expect(puts).toHaveLength(2));
+    expect(puts[1].body).toEqual({ '303': false, '349': false });
+    puts[1].fail();
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('fm.catalog.save_failed'));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(toastError).toHaveBeenCalledTimes(1);
+    expect(drawerActive()).toEqual({ '303': true, '349': false });
+    expect(getByText(/fm\.catalog\.title.*\(1\)/)).toBeTruthy();
+    toastError.mockRestore();
+  });
+
+  // Unmount with a PUT in flight (e.g. navigating away right after a toggle). The chain outlives
+  // the component: its rollback `setActiveModels` hits an unmounted component (a React 18 no-op)
+  // and must not throw. PINNED current behaviour: the failure toast STILL fires after unmount
+  // (sonner's toaster is global, so the user is still told the toggle was not saved).
+  it('unmounting while a PUT is pending does not throw; if that PUT then fails, the toast still fires once', async () => {
+    const toastError = vi.spyOn(toast, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { fetchMock, puts } = deferredPutFetch();
+    globalThis.fetch = fetchMock;
+    const { unmount } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    fireEvent.click(screen.getByTestId('fm-list-catalog-button'));
+    fireEvent.click(screen.getByTestId('catalog-toggle-349'));
+    await waitFor(() => expect(puts).toHaveLength(1));
+
+    expect(() => unmount()).not.toThrow();
+    puts[0].fail();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(toastError).toHaveBeenCalledTimes(1);
+    expect(toastError).toHaveBeenCalledWith('fm.catalog.save_failed');
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+    toastError.mockRestore();
+  });
+
   // Review W2 — the catalog is re-read when the token changes; a read landing while a PUT is in
   // flight used to put the pre-toggle catalog back, and nothing re-applied the toggle afterwards.
   it('a catalog re-read (token refresh) while a PUT is in flight does not undo the toggle', async () => {

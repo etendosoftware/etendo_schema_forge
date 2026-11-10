@@ -1,7 +1,7 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/FmCatalogPage.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-models/catalogAvailability.js
 // Vitest component tests for FmCatalogPage.jsx
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
@@ -27,7 +27,7 @@ vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
 
 // ETP-5716 — the organization's SII status (controls the 390 activation warning). Not in the SII
 // by default, so every pre-existing test toggles straight away.
-const sii = vi.hoisted(() => ({ active: false, since: null, calls: 0, gate: null }));
+const sii = vi.hoisted(() => ({ active: false, since: null, calls: 0, gate: null, rejectNext: false }));
 vi.mock('../useOrgSiiStatus.js', async (importOriginal) => {
   const actual = await importOriginal();
   return {
@@ -35,6 +35,12 @@ vi.mock('../useOrgSiiStatus.js', async (importOriginal) => {
     // `sii.gate` (a promise) holds the status read open, to click again while it is in flight.
     default: () => () => {
       sii.calls += 1;
+      // `sii.rejectNext` makes the next read reject once (a getSiiStatus that breaks its
+      // never-rejects contract), to check the in-flight lock is released on a failure too.
+      if (sii.rejectNext) {
+        sii.rejectNext = false;
+        return Promise.reject(new Error('sii status read failed'));
+      }
       const answer = () => ({ active: sii.active, since: sii.since });
       return sii.gate ? sii.gate.then(answer) : Promise.resolve(answer());
     },
@@ -55,6 +61,7 @@ beforeEach(() => {
   sii.since = null;
   sii.calls = 0;
   sii.gate = null;
+  sii.rejectNext = false;
 });
 
 // ── Rendering ────────────────────────────────────────────────────────────────
@@ -445,6 +452,58 @@ describe('FmCatalogPage — SII warning when activating the 390', () => {
     // Once the read settled, the switch answers clicks again.
     fireEvent.click(screen.getByTestId('FmCatalogPage__siiConfirm'));
     expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  describe('when the SII status read rejects', () => {
+    // ETP-5831 — the per-model lock is released in a `finally`: a failed SII read must not leave
+    // the 390 switch dead for the rest of the drawer's life. `toggleModel` has no `catch` (the real
+    // getSiiStatus never rejects), so the switch's discarded promise rejects at process level; that
+    // expected rejection is swallowed for the duration of the test, as LifecycleConfirmModal does.
+    let ignoreExpectedRejection;
+    beforeEach(() => {
+      ignoreExpectedRejection = () => {};
+      process.on('unhandledRejection', ignoreExpectedRejection);
+    });
+    afterEach(() => {
+      process.removeListener('unhandledRejection', ignoreExpectedRejection);
+    });
+
+    it('releases the in-flight lock when the SII status read rejects, so the next click still saves', async () => {
+      sii.rejectNext = true;
+      const onSave = vi.fn();
+      const { container } = render(<FmCatalogPage {...defaultProps} onSave={onSave} />);
+      fireEvent.click(switchOf(container, '390'));
+      await waitFor(() => expect(sii.calls).toBe(1));
+      await new Promise(resolve => setTimeout(resolve, 0));
+      // The failed read toggles nothing and saves nothing.
+      expect(switchOf(container, '390').getAttribute('aria-checked')).toBe('false');
+      expect(onSave).not.toHaveBeenCalled();
+
+      // The second click is not swallowed by a stale lock: it reads the status again and activates.
+      fireEvent.click(switchOf(container, '390'));
+      await waitFor(() => expect(switchOf(container, '390').getAttribute('aria-checked')).toBe('true'));
+      expect(sii.calls).toBe(2);
+      expect(onSave).toHaveBeenCalledTimes(1);
+      expect(onSave).toHaveBeenCalledWith({ '303': true, '349': true, '390': true });
+    });
+
+    it('releases the in-flight lock when the SII status read rejects (in the SII): the next click asks', async () => {
+      sii.active = true;
+      sii.rejectNext = true;
+      const onSave = vi.fn();
+      const { container } = render(<FmCatalogPage {...defaultProps} onSave={onSave} />);
+      fireEvent.click(switchOf(container, '390'));
+      await waitFor(() => expect(sii.calls).toBe(1));
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(screen.queryByTestId('FmCatalogPage__siiWarning')).toBeNull();
+
+      fireEvent.click(switchOf(container, '390'));
+      fireEvent.click(await screen.findByTestId('FmCatalogPage__siiConfirm'));
+      expect(sii.calls).toBe(2);
+      expect(switchOf(container, '390').getAttribute('aria-checked')).toBe('true');
+      expect(onSave).toHaveBeenCalledTimes(1);
+      expect(onSave).toHaveBeenCalledWith({ '303': true, '349': true, '390': true });
+    });
   });
 
   it('never asks for 303/349, nor when deactivating the 390', async () => {
