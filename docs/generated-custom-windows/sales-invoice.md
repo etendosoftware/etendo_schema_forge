@@ -1999,7 +1999,7 @@ tercero") reach the user reworded with this window's own labels ("Rectificacione
 Configuración fiscal → Certificado digital, Contactos), in the UI language, and keep their
 AD_MESSAGE key in `messageKeys` (REST: the `error` object; MCP: the root of the error result). The TicketBAI recipient checks on Confirmar
 (`TBAI_EmptyPostalCode`, `TBAI_EmptyDir`, `TBAI_EmptyNifCode`: a contact not marked as Factura
-Simplificada needs Código postal, Primera línea and CIF/NIF) point to Contactos → Dirección / the
+Simplificada needs Código postal, Primera línea and NIF/CIF) point to Contactos → Dirección / the
 contact header. Only messages a GO user can trigger are reworded. Done server-side at NEO's exit (`ClassicMessageRemap`,
 `com.etendoerp.go` neo-headless.md §4.17), so REST, batch and MCP agree; the Classic messages
 themselves are unchanged. The catalog and how to add an entry live there.
