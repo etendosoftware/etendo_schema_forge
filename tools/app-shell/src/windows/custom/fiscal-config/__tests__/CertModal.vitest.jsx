@@ -3,7 +3,9 @@
 
 const stableApiFetch = vi.fn(() => Promise.resolve({ ok: true, json: async () => ({}) }));
 
-vi.mock('@/i18n', () => ({ useUI: () => (key) => key, useLocaleSwitch: () => ({ locale: 'es_ES' }) }));
+// `localeState.value` is the UI locale; es_ES unless a test switches it.
+const localeState = vi.hoisted(() => ({ value: 'es_ES' }));
+vi.mock('@/i18n', () => ({ useUI: () => (key) => key, useLocaleSwitch: () => ({ locale: localeState.value }) }));
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => stableApiFetch }));
 vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u }));
 vi.mock('@/components/ui/button', () => ({
@@ -127,6 +129,46 @@ describe('CertModal', () => {
     expect(screen.getByText('01/07/2025')).toBeInTheDocument();
     expect(screen.getByText('01/07/2027')).toBeInTheDocument();
     expect(screen.queryByText('2027-07-01')).not.toBeInTheDocument();
+  });
+
+  // The UI locale is passed through, not pinned to es_ES: en_US reads the same days month-first.
+  it('formats the done-step validity dates month-first for en_US', () => {
+    localeState.value = 'en_US';
+    try {
+      render(
+        <CertModal
+          {...baseProps}
+          debugInitialState={{
+            step: 'done',
+            file: { name: 'cert.p12', size: 1024 },
+            certDetails: { subject: 'CN=Test', issuer: 'CN=CA', validFrom: '2025-07-02', validTo: '2027-07-01', algorithm: 'SHA256' },
+          }}
+        />
+      );
+      expect(screen.getByText('07/02/2025')).toBeInTheDocument();
+      expect(screen.getByText('07/01/2027')).toBeInTheDocument();
+    } finally {
+      localeState.value = 'es_ES';
+    }
+  });
+
+  // Missing validity dates drop their rows instead of rendering a dash.
+  it('omits the validity rows of the done step when the details carry no dates', () => {
+    render(
+      <CertModal
+        {...baseProps}
+        debugInitialState={{
+          step: 'done',
+          file: { name: 'cert.p12', size: 1024 },
+          certDetails: { subject: 'CN=Test', issuer: 'CN=CA', validFrom: '', algorithm: 'SHA256' },
+        }}
+      />
+    );
+    expect(screen.getByText('fiscal.cert.detail.file')).toBeInTheDocument();
+    expect(screen.getByText('fiscal.cert.detail.algorithm')).toBeInTheDocument();
+    expect(screen.queryByText('fiscal.cert.detail.validFrom')).not.toBeInTheDocument();
+    expect(screen.queryByText('fiscal.cert.detail.validTo')).not.toBeInTheDocument();
+    expect(screen.queryByText('—')).not.toBeInTheDocument();
   });
 
   it('renders confirmNif step when debugInitialState has step=confirmNif', () => {
