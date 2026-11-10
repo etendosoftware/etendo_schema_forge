@@ -1992,6 +1992,18 @@ ETP-5700 section.
 Both `sifSending.js` and `SiiSendHandler.java` are shared between sales-invoice and
 purchase-invoice — see `purchase-invoice.md` for this window's mirror of the same fix.
 
+**Classic fiscal messages reworded for GO (ETP-6158):** the VERI\*FACTU, TicketBAI and SII messages
+this window can raise on save, Confirmar or a SIF send that name Classic-only UI (e.g. "solapa
+Facturas Rectificativas", the "Añadir Certificado Digital" process, "Descripción Verifactu",
+"Verifique en la cabecera del tercero") reach the user reworded with this window's own labels
+("Rectificaciones" tab, "SIF" tab, "Descripción Operación", Configuración fiscal → Certificado
+digital, Contactos), in the UI language. Done server-side at NEO's exit (`ClassicMessageRemap`,
+`com.etendoerp.go` neo-headless.md §4.17), so REST, batch and MCP agree; the Classic messages
+themselves are unchanged. The catalog and how to add an entry live there.
+
+> **ETP-6158:** the two sentences below are now literal entries of that same catalog; only the
+> matched sentence is replaced, not the whole `message`.
+
 **Drifted classic field names in validation messages are fully replaced, bilingually (ETP-5745,
 5th fix):** classic `SIIUtils.invoicePreviousValidations` (`org.openbravo.module.sii`, untouched by
 this fix — its text is correct for Classic's own UI, and it is ALWAYS Spanish regardless of the

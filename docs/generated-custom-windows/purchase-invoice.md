@@ -1872,6 +1872,8 @@ carried `onSave`/`isDirty` was removed; the form kebab entry's host does not rec
 kebab entry is disabled while the header is dirty instead (see "Unsaved header edits block the form
 send" in the ETP-5700 section).
 
+> **ETP-6158:** these two sentences are now literal entries of the central Classic message remap (`ClassicMessageRemap`, neo-headless.md §4.17), applied at NEO's REST and MCP exits; `remapDriftedFieldLabels` only delegates to it. Only the matched sentence is replaced now, not the whole `message`.
+
 **Vendor-reference validation message fully replaced with a bilingual GO sentence (ETP-5745, 5th
 fix) — this is the authoritative note, verified live against this window.** Classic's purchase-only
 pre-send check (`SIIUtils.invoicePreviousValidations`, `org.openbravo.module.sii`, untouched) names
