@@ -61,8 +61,9 @@ function rowActionProps({ readOnly, allowClone, onEdit, onClone, onDelete }) {
 
 // Bulk-delete outcome, per the shared three-outcome contract: refetch when anything was deleted,
 // and narrow the selection to the rows that failed (none left = cleared, all left = unchanged).
-function applyDeleteOutcome(succeeded, failed, reload, keepOnly) {
-  if (succeeded.length > 0) reload();
+// ETP-6143 — an unknown outcome (the job's result could not be read) refetches too.
+function applyDeleteOutcome(succeeded, failed, reload, keepOnly, outcomeUnknown = false) {
+  if (succeeded.length > 0 || outcomeUnknown) reload();
   keepOnly(failed.map((row) => row.id));
 }
 
@@ -725,7 +726,9 @@ export function ListModalWindow({
   // dialog, the parallel DELETEs and the three-outcome toast (all / partial / none) behave
   // identically here. On a partial failure only the rows that failed stay checked.
   const applyBulkDeleteOutcome = useCallback(
-    (succeeded, failed) => applyDeleteOutcome(succeeded, failed, reload, keepOnly),
+    (succeeded, failed, meta) => applyDeleteOutcome(
+      succeeded, failed, reload, keepOnly, Boolean(meta?.outcomeUnknown),
+    ),
     [reload, keepOnly],
   );
 

@@ -357,6 +357,7 @@ for (const spec of ['sales-order', 'purchase-order']) {
 - **Parametrize by window** when the feature is wired into multiple custom windows — one `for (const spec of SPECS)` loop, one `expects` matrix per window.
 - **Mocked vs live:** prefer `.mocked.spec.js` for CI smoke (fast, deterministic). Reserve `.spec.js` (live backend) for flows where the mock would lose fidelity (e.g. real callouts, server-side defaults).
 - Run with `cd e2e && npm test -- tests/flows/<spec>` or via the Make target documented in `docs/e2e-testing-guide.md`.
+- **A spec belongs to a cell.** Put it in the `tests/flows/` folder of the cell whose functional area it exercises (`CELLS` in `e2e/support/test-cell.mjs`), never loose in `tests/flows/`. A new folder must be added to `CELLS`; `cd e2e && npm run test:cell -- --check` fails otherwise. The per-cell report and the QA Datadog board read this map, so a spec of no cell reaches no team when it fails.
 - If a `data-testid` you need does not exist yet, **stop and add it at the generator/shared component level** before continuing — never add it only to one window's generated file.
 
 </playwright_patterns>

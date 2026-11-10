@@ -23,6 +23,7 @@ vi.mock('@/lib/buildUrlWithParams.js', () => ({
 }));
 
 import { CreatableSearchSelect } from '../CreatableSearchSelect.jsx';
+import { mockGeometry, ROW_H, PANEL_H } from './selectorTestGeometry.js';
 
 function makePage(startId, count) {
   return Array.from({ length: count }, (_, i) => ({ id: String(startId + i), label: `Item-${startId + i}` }));
@@ -248,8 +249,8 @@ describe('CreatableSearchSelect — serverSearch pagination (ETP-4975)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// ETP-5903 — reopening with a committed value that is not on page 0 walks forward (up to 6 pages
-// = 300 rows) to show it IN PLACE; beyond that it is pinned on top through one label lookup.
+// ETP-5903 — reopening with a committed value that is not on page 0 walks forward (up to the
+// 1000-row walk total) to show it IN PLACE; beyond that it is pinned on top through one label lookup.
 // `routedFetch` answers by URL (`offset`, or `q=` for the lookup), independent of request order.
 // ---------------------------------------------------------------------------
 describe('CreatableSearchSelect — locating the committed value on reopen (ETP-5903)', () => {
@@ -263,7 +264,7 @@ describe('CreatableSearchSelect — locating the committed value on reopen (ETP-
       if (params.has('q')) return jsonOk(lookup);
       if (params.has('id')) return jsonOk([]);
       const offset = Number(params.get('offset') || 0);
-      return jsonOk(makePage(offset, Math.max(0, Math.min(50, totalRows - offset))));
+      return jsonOk(makePage(offset, Math.max(0, Math.min(Number(params.get('limit') || 50), totalRows - offset))));
     });
   }
   const listOffsets = () => global.fetch.mock.calls
@@ -284,22 +285,24 @@ describe('CreatableSearchSelect — locating the committed value on reopen (ETP-
     await reopen('120', 'Item-120');
 
     await waitFor(() => expect(screen.getByTestId('option-partner-120')).toHaveAttribute('aria-selected', 'true'));
-    expect(listOffsets()).toEqual([0, 50, 100]);
+    // ETP-6103: the opening page and the walk ask for 100 rows.
+    expect(listOffsets()).toEqual([0, 100]);
     expect(lookupCalls()).toHaveLength(0);
     expect(screen.getByTestId('option-partner-119')).toBeInTheDocument();
     expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'option-partner-0');
   });
 
   it('stops at the page cap, then pins the value on top through one label lookup', async () => {
-    global.fetch = routedFetch({ totalRows: 1000, lookup: [{ id: 'bp-9', label: 'Zeta' }, { id: 'bp-99', label: 'Zeta 2' }] });
+    global.fetch = routedFetch({ totalRows: 2000, lookup: [{ id: 'bp-9', label: 'Zeta' }, { id: 'bp-99', label: 'Zeta 2' }] });
 
     await reopen('bp-9', 'Zeta');
 
     await waitFor(() => expect(screen.getByTestId('option-partner-bp-9')).toHaveAttribute('aria-selected', 'true'));
-    expect(listOffsets()).toEqual([0, 50, 100, 150, 200, 250]);
+    // ETP-6103: 100 rows, then the rest of the 1000-row walk total in one request.
+    expect(listOffsets()).toEqual([0, 100]);
     expect(lookupCalls()).toHaveLength(1);
-    // Only the id-equal row is pinned, on top of the 300 walked rows.
-    expect(screen.getAllByRole('option')).toHaveLength(301);
+    // Only the id-equal row is pinned, on top of the 1000 walked rows.
+    expect(screen.getAllByRole('option')).toHaveLength(1001);
     expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'option-partner-bp-9');
     expect(screen.queryByTestId('option-partner-bp-99')).not.toBeInTheDocument();
   });
@@ -355,5 +358,150 @@ describe('CreatableSearchSelect — locating the committed value on reopen (ETP-
     fireEvent.change(input, { target: { value: 'Item' } });
     expect(panel.scrollTop).toBe(0);
     await waitFor(() => expect(lookupCalls().some(([url]) => String(url).includes('q=Item'))).toBe(true));
+  });
+});
+
+// ETP-6103 — a committed value past the first page: the rows stay laid out but invisible under the
+// loading notice until the value is centred; every way out of the walk must release the hold.
+describe('CreatableSearchSelect — the hold while locating the committed value (ETP-6103)', () => {
+  const originalFetch = global.fetch;
+  let restoreGeometry;
+  beforeEach(() => { restoreGeometry = mockGeometry(); });
+  afterEach(() => {
+    restoreGeometry();
+    vi.restoreAllMocks();
+    global.fetch = originalFetch;
+  });
+
+  const deferred = () => { let resolve; const promise = new Promise((r) => { resolve = r; }); return { promise, resolve }; };
+  const NOTICE = 'options-partner-locating';
+  const optionOf = (id) => screen.getByTestId(`option-partner-${id}`);
+  const isHidden = (el) => el.closest('.invisible') !== null || el.classList.contains('invisible');
+  // 300 rows, 100 per page. `onPage(offset, page)` may return a promise to delay / fail that page.
+  function pagedFetch(onPage) {
+    return vi.fn((url) => {
+      const params = new URL(String(url), 'http://test').searchParams;
+      const offset = Number(params.get('offset') || 0);
+      const limit = Number(params.get('limit') || 50);
+      const page = () => jsonOk(makePage(offset, Math.max(0, Math.min(limit, 300 - offset))));
+      return onPage?.(offset, page) ?? page();
+    });
+  }
+  const walkCalls = () => global.fetch.mock.calls.filter(([url]) => new URL(String(url), 'http://test').searchParams.get('offset') === '100');
+  // '98' is among the last rows of the 100-row first page: it cannot be centred until page 2 lands.
+  async function openHeld(onPage) {
+    global.fetch = pagedFetch(onPage);
+    render(<CreatableSearchSelect {...baseProps} field={field} value="98" displayValue="Item-98" onChange={vi.fn()} />);
+    fireEvent.click(screen.getByTestId('field-partner-chip'));
+    const input = await screen.findByTestId('field-partner');
+    await waitFor(() => expect(walkCalls()).toHaveLength(1));
+    return input;
+  }
+  const centred = (el) => Math.abs(el.getBoundingClientRect().top - (PANEL_H - ROW_H) / 2) < 2;
+
+  it('shows the notice with the rows invisible while locating, then releases them centred', async () => {
+    const page2 = deferred();
+    await openHeld((offset, page) => (offset === 100 ? page2.promise.then(page) : undefined));
+    expect(screen.getByTestId(NOTICE)).toBeInTheDocument();
+    expect(isHidden(optionOf('98'))).toBe(true);
+
+    page2.resolve();
+    await waitFor(() => expect(screen.queryByTestId(NOTICE)).toBeNull());
+    expect(isHidden(optionOf('98'))).toBe(false);
+    expect(optionOf('98')).toHaveAttribute('aria-selected', 'true');
+    expect(centred(optionOf('98'))).toBe(true);
+  });
+
+  it('releases the hold when the page fails', async () => {
+    const page2 = deferred();
+    await openHeld((offset) => (offset === 100
+      ? page2.promise.then(() => ({ ok: false, status: 500, json: async () => ({}) })) : undefined));
+    expect(screen.getByTestId(NOTICE)).toBeInTheDocument();
+    page2.resolve();
+    await waitFor(() => expect(isHidden(optionOf('98'))).toBe(false));
+    expect(screen.queryByTestId(NOTICE)).toBeNull();
+  });
+
+  it('leaves no stuck hold when closed and reopened during the hold', async () => {
+    const stale = deferred();
+    let first = true;
+    const input = await openHeld((offset, page) => {
+      if (offset !== 100 || !first) return undefined;
+      first = false;
+      return stale.promise.then(page);
+    });
+    fireEvent.keyDown(input, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByTestId('options-partner')).toBeNull());
+
+    fireEvent.click(screen.getByTestId('field-partner-chip'));
+    await screen.findByTestId('field-partner');
+    stale.resolve(); // the page of the closed open lands late
+    await waitFor(() => expect(screen.queryByTestId('option-partner-98')).not.toBeNull());
+    await waitFor(() => expect(isHidden(optionOf('98'))).toBe(false));
+    expect(screen.queryByTestId(NOTICE)).toBeNull();
+    expect(optionOf('98')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('ends the hold on a key press', async () => {
+    const page2 = deferred();
+    const input = await openHeld((offset, page) => (offset === 100 ? page2.promise.then(page) : undefined));
+    expect(screen.getByTestId(NOTICE)).toBeInTheDocument();
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    await waitFor(() => expect(screen.queryByTestId(NOTICE)).toBeNull());
+    expect(isHidden(optionOf('98'))).toBe(false);
+    page2.resolve();
+  });
+
+  it('ends the hold when the user types', async () => {
+    const page2 = deferred();
+    const input = await openHeld((offset, page) => (offset === 100 ? page2.promise.then(page) : undefined));
+    fireEvent.change(input, { target: { value: 'Item' } });
+    await waitFor(() => expect(screen.queryByTestId(NOTICE)).toBeNull());
+    page2.resolve();
+  });
+});
+
+// hasMore: the server's value when present, else judged against the limit that page asked for.
+describe('CreatableSearchSelect — hasMore of a page (ETP-6103)', () => {
+  const originalFetch = global.fetch;
+  afterEach(() => { vi.restoreAllMocks(); global.fetch = originalFetch; });
+  const pageOf = (items, hasMore) => Promise.resolve({ ok: true, json: async () => ({ items, ...(hasMore === undefined ? {} : { hasMore }) }) });
+  async function openWith(response) {
+    global.fetch = vi.fn().mockReturnValueOnce(response);
+    render(<CreatableSearchSelect {...baseProps} field={field} value="" displayValue="" onChange={vi.fn()} />);
+    fireEvent.focus(screen.getByTestId('field-partner'));
+    await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(0));
+  }
+  const moreFooter = () => screen.queryByText('loading');
+
+  it('prefers the server: a full page with hasMore false has no further page', async () => {
+    await openWith(pageOf(makePage(0, 50), false));
+    expect(moreFooter()).toBeNull();
+  });
+
+  it('prefers the server: a short page with hasMore true still has a further page', async () => {
+    await openWith(pageOf(makePage(0, 3), true));
+    expect(moreFooter()).not.toBeNull();
+  });
+
+  it('falls back to items.length >= limit when the server says nothing', async () => {
+    await openWith(pageOf(makePage(0, 50)));
+    expect(moreFooter()).not.toBeNull();
+  });
+
+  it('falls back to no further page for a short page', async () => {
+    await openWith(pageOf(makePage(0, 49)));
+    expect(moreFooter()).toBeNull();
+  });
+
+  it('is false on an empty page even when the server claims hasMore: the walk requests nothing more', async () => {
+    global.fetch = vi.fn().mockReturnValue(pageOf([], true));
+    render(<CreatableSearchSelect {...baseProps} field={field} value="7" displayValue="Item-7" onChange={vi.fn()} />);
+    fireEvent.click(screen.getByTestId('field-partner-chip'));
+    await screen.findByTestId('field-partner');
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 150));
+    const pages = global.fetch.mock.calls.filter(([url]) => !new URL(String(url), 'http://test').searchParams.has('q'));
+    expect(pages).toHaveLength(1);
   });
 });

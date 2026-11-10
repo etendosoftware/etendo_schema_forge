@@ -81,6 +81,7 @@ export const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'position',
   'provider',
   'reason',
+  'reportSessionId',
   'role_groups',
   'route',
   'routePattern',

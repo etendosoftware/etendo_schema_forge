@@ -3895,3 +3895,35 @@ ETP-5711 in com.etendoerp.go, CUT not bumped). Sibling of `R50-gl-journal-foreig
   `git ls-tree` over every `origin/*` ref), so this fix is `R52`. Gap series `G` (payment config)
   continues with `G5`; the `G` gaps live only in `onboarding-and-datafixes-map.md` §4, not in
   `onboarding-gaps.md`.
+
+## ETP-5837 — Quotation series prefix PR + renumbering existing quotations (N10, R57, 2026-11-06)
+
+- **2026-11-06 — `C_ORDER_CHK_RESTRINCTIONS_TRG` raises `@20501@` when `DOCUMENTNO` changes on a
+  `Processed='Y'` order (unless `Docaction='CL'`).** Booked, converted, rejected and voided
+  quotations are all `Processed='Y'`, so any renumbering fix must wrap the `C_Order` UPDATE in
+  `ad_disable_triggers()` / `ad_enable_triggers()` (R57, same pattern as R50/R55).
+- **2026-11-06 — Renumbering a document: move `updated` too.** The quotation PDF cache
+  (`C_File`, `EM_ETGO_IsPreviewMain='Y'`, named `sales-quotation-<documentno>.pdf`) is invalidated
+  only by `record.updated > attachment.updatedAt` (SPA `attachmentFreshness.isCachedRenderingStale`
+  and server `NeoDocumentPdf`, same rule). A SQL fix that changes `documentno` without bumping
+  `updated` leaves the old number on every later preview/print/email forever. With the bump, the
+  next open re-renders and `markAsMain` replaces the file under the new name. Do not delete or
+  rename `C_File` rows from SQL — the bytes on disk stay.
+- **2026-11-06 — Where a quotation number is copied as text: nowhere that needs fixing (local DB,
+  full scan of every text column).** Converted orders (`C_Order.Quotation_ID`) and invoices
+  (`C_Invoice.C_Order_ID`) hold FKs only; `ConvertQuotationIntoOrder` copies the header then sets
+  `DocumentNo=null`; no `print-*/template.hbs` prints an order/quotation number; no stored computed
+  column derives from `C_Order.DocumentNo`; `C_Order` has no stored identifier column; vector
+  search has no `C_Order` source (only `M_Product`, `C_BPartner`, `C_Invoice`); quotations are
+  never posted (0 `FACT_ACCT`). `ETGO_EMAIL_SEND_LOG` is history and is left as is.
+- **2026-11-06 — `C_Order.DocumentNo` has NO unique constraint** (only the non-unique indexes
+  `c_order_client_org_date_docno`, `c_order_documentno_id`). A renumbering fix must guard against
+  creating a duplicate itself (`NOT EXISTS` on the target number within client + doctype).
+- **2026-11-06 — Quotation doctype shape.** `docbasetype='SOO' AND docsubtypeso='OB'`, name
+  `Quotation`, `DocNoSequence_ID` → per-tenant `AD_Sequence` `Quotation` (mask `#######`, no
+  prefix/suffix). F&B International Group carries TWO quotation doctypes with two sequences;
+  QA Testing's sequence sits at `currentnext=10000`. On local DB only GOClient holds quotations
+  (24, numbers 1000000–1000023, `C_DocType_ID = C_DocTypeTarget_ID` on all, drafts included).
+- **2026-11-06 — Label bookkeeping.** Highest label across every local/remote ref was `R56`, gap
+  `N9`; this fix is `R57`, gap `N10`. The newest pending fix on any ref was
+  `20261028T120000Z__R51-etgo-survey-config-seed`.

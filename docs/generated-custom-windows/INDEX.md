@@ -43,6 +43,7 @@ This folder is the entry point for documentation that describes how generated an
 | [purchase-invoice.md](purchase-invoice.md) | Custom purchase-invoice flow |
 | [return-to-vendor-shipment.md](return-to-vendor-shipment.md) | Generated return-to-vendor-shipment flow |
 | [matched-purchase-invoices.md](matched-purchase-invoices.md) | Read-only receipt-invoice link consultation window |
+| [invoice-inbox.md](invoice-inbox.md) | Custom Invoice Inbox ("Bandeja de facturas", ETP-6049, capability `invoiceInbox`) — upload supplier invoices (drop or pick, one request per file, progress tray) and follow them in a status-filtered list with counters; rows still being read refresh themselves. Review panel (ETP-6050) and Confirm/Discard (ETP-6051) not included |
 
 ## Inventory
 
@@ -94,6 +95,7 @@ This folder is the entry point for documentation that describes how generated an
 |------|-------------|
 | [balance-sheet.md](balance-sheet.md) | Contract-driven financial report — point-in-time assets, liabilities, and owner equity by accounting schema and year |
 | [report-journal-entries.md](report-journal-entries.md) | Contract-driven journal book — entries grouped with debit/credit lines for a date range with dimension filters |
+| [profit-loss.md](profit-loss.md) | Contract-driven financial report — the period result as Classic's account-report tree, with contact/product filters and comparison; behind `dynamic-reports`, an interactive view with live filters, splits and a ledger/entry/document drill-down |
 | [report-trial-balance.md](report-trial-balance.md) | Contract-driven trial balance — opening/period/closing balances per account with General Ledger drill-down |
 
 ## Settings
@@ -106,7 +108,7 @@ This folder is the entry point for documentation that describes how generated an
 | [payment-term.md](payment-term.md) | Generated `list-modal` payment-term catalog (grid + compact create/edit popup, no detail view; `/payment-term/<id>` opens the popup): name + days only, key and month offset derived server-side, rename syncs translations (ETP-5978) |
 | [tax.md](tax.md) | Generated tax-rate maintenance window |
 | [tax-category.md](tax-category.md) | Generated tax-category catalog window (groups tax rates; ETP-4249) |
-| [business-partner-category.md](business-partner-category.md) | Generated business-partner-category master/detail flow behind a thin wrapper; contact type + accounts by type behind the `contact-category-type` flag (ETP-5791) |
+| [business-partner-category.md](business-partner-category.md) | Generated business-partner-category master/detail flow behind a thin wrapper; contact type + accounts by type (Accounting tab), list type columns and contact-type quick filter behind the `contact-category-type` flag (ETP-5791) |
 | [user.md](user.md) | Generated user window — multi-role template composition with a live permission-preview matrix (ETP-4906) and defaults dependencies |
 | [fiscal-config.md](fiscal-config.md) | Custom fiscal configuration window — onboarding wizard (SII/TBAI/Verifactu) and ongoing config maintenance; SIF activation through the backend `fiscalSystemCatalog` / `configureFiscalSystem` actions on `sii-config` (ETP-6053) |
 | [fiscal-models.md](fiscal-models.md) | Custom fiscal models window — declaration list and per-model detail pages (303, 349) with auto-compute and file generation |

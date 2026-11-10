@@ -722,6 +722,7 @@ export default function ReversedInvoicesPanel({
   api,
   catalogs,
   onCountChange,
+  onVisibilityChange,
   isActive,
   isNew,
   onSaveHeader,
@@ -1100,6 +1101,23 @@ export default function ReversedInvoicesPanel({
   // (field not yet enriched by the backend) keep the actions
   const notRectificative = data?.isRectificative === false || data?.isRectificative === 'false';
   const isReadOnly = accessReadOnly || (processed && !isVoid) || notRectificative; // ETP-5830: role tier
+
+  // ETP-5745 CP-14 — this tab (decisions.json declares it with
+  // `displayLogic: "@isRectificative@='true'"`) is wired as a `renderTab: false` custom
+  // component, so that declared displayLogic never reaches the generated HeaderPage's
+  // `customTabs` wiring (no AD-tab display-logic evaluation runs for a custom-component tab —
+  // see generate-frontend.js's getCustomTabItems). Report visibility here instead, the same way
+  // every other 'tab'-placement custom component opts out via onVisibilityChange: hide the tab
+  // for an invoice the backend has confirmed is NOT a rectificativa, mirroring the existing
+  // `notRectificative` gate above (only an EXPLICIT false blocks — an unsaved record whose
+  // isRectificative hasn't been enriched yet keeps the tab, so starting a new "Factura
+  // Rectificativa" and linking its original before the first save still works). Without this,
+  // a plain invoice that happens to be the target of someone else's rectification (the
+  // "incoming" row CP-12 added) showed this tab with the rectificativa displayed as if IT were
+  // the "Factura original" of the plain invoice — backwards (ETP-5745 CP-14).
+  useEffect(() => {
+    onVisibilityChange?.(!notRectificative);
+  }, [notRectificative, onVisibilityChange]);
 
   // ── render ─────────────────────────────────────────────────────────────────
   const showEmptyState = !loading && lines.length === 0 && !addingLine;

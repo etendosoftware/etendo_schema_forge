@@ -107,7 +107,8 @@ import {
 // actually runs for combos; applyCalloutComboUpdates unconditionally skips
 // the trigger field before ever reaching it, so the trigger-field staleness
 // path can only be exercised by calling applyOneComboEntry directly.
-import { applyOneComboEntry, isCurrencyRateRecalcTarget } from '../detailViewHelpers.jsx';
+import { applyOneComboEntry, isCurrencyRateRecalcTarget, isRectificationCascadeTarget }
+  from '../detailViewHelpers.jsx';
 
 describe('normalizePatchFieldValues', () => {
   it('skips keys ending in $_identifier', () => {
@@ -239,6 +240,54 @@ describe('applyCalloutFieldUpdates', () => {
     expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1', { origin: 'callout' });
   });
 
+  // ETP-5745 CP-18: the invoice document-type callout's own reset of the rectification fields
+  // (e.g. `aeatsiiMotivoRectif: ''`, `tbaiReverseinvoicecode: ''` when reverting to a normal doc
+  // type) used to be silently dropped by BOTH guards above — the field already held a non-empty
+  // value (that's the whole point of the reset) and the user had typically touched it by hand
+  // while the invoice was rectificative. isRectificationCascadeTarget exempts exactly these
+  // fields when the trigger is `transactionDocument`, mirroring isDocumentDateCascadeTarget.
+  it('applies an empty rectification-field reset from the transactionDocument callout even '
+      + 'over an existing non-empty, user-touched value', () => {
+    const a = makeArgs({
+      triggerField: 'transactionDocument',
+      data: { aeatsiiMotivoRectif: 'R1' },
+      userTouchedRef: { current: new Set(['aeatsiiMotivoRectif']) },
+    });
+    applyCalloutFieldUpdates(
+      { aeatsiiMotivoRectif: { value: '' } },
+      a,
+    );
+    expect(a.appliedFields.get('aeatsiiMotivoRectif')).toBe('');
+    expect(a.hook.handleChange)
+      .toHaveBeenCalledWith('aeatsiiMotivoRectif', '', { origin: 'callout' });
+  });
+
+  it('does NOT exempt a rectification field when the trigger is something else', () => {
+    const a = makeArgs({
+      triggerField: 'businessPartner',
+      data: { aeatsiiMotivoRectif: 'R1' },
+      userTouchedRef: { current: new Set(['aeatsiiMotivoRectif']) },
+    });
+    applyCalloutFieldUpdates(
+      { aeatsiiMotivoRectif: { value: '' } },
+      a,
+    );
+    expect(a.appliedFields.has('aeatsiiMotivoRectif')).toBe(false);
+  });
+
+  it('does NOT exempt a field outside the rectification set even from transactionDocument', () => {
+    const a = makeArgs({
+      triggerField: 'transactionDocument',
+      data: { warehouse: 'EXISTING' },
+      userTouchedRef: { current: new Set(['warehouse']) },
+    });
+    applyCalloutFieldUpdates(
+      { warehouse: { value: '' } },
+      a,
+    );
+    expect(a.appliedFields.has('warehouse')).toBe(false);
+  });
+
   it('emits key$_identifier when entry._identifier is present', () => {
     const a = makeArgs();
     applyCalloutFieldUpdates(
@@ -352,6 +401,29 @@ describe('exchange-rate recalculation on callout', () => {
     } else {
       expect(hook.handleChange).not.toHaveBeenCalled();
     }
+  });
+});
+
+// ETP-5745 CP-18: the invoice rectification fields (SII/TicketBAI/VERI*FACTU structural fields
+// the doc-type callout resets) are exempt from the two applyCalloutFieldUpdates guards ONLY when
+// the trigger is `transactionDocument` — the exact same shape of exemption
+// isDocumentDateCascadeTarget/isCurrencyRateRecalcTarget already have for their own fields.
+describe('isRectificationCascadeTarget', () => {
+  it.each([
+    ['isRectificative', 'transactionDocument', true],
+    ['aeatsiiClaveTipo', 'transactionDocument', true],
+    ['aeatsiiTipoRectif', 'transactionDocument', true],
+    ['aeatsiiMotivoRectif', 'transactionDocument', true],
+    ['tbaiIsreverseinvoice', 'transactionDocument', true],
+    ['tbaiReverseinvoicetype', 'transactionDocument', true],
+    ['tbaiReverseinvoicecode', 'transactionDocument', true],
+    ['etvfacInvType', 'transactionDocument', true],
+    ['etvfacReverseinvtype', 'transactionDocument', true],
+    ['aeatsiiMotivoRectif', 'businessPartner', false],
+    ['warehouse', 'transactionDocument', false],
+    ['etvfacInvType', undefined, false],
+  ])('isRectificationCascadeTarget(%s, trigger=%s) is %s', (key, trigger, expected) => {
+    expect(isRectificationCascadeTarget(key, trigger)).toBe(expected);
   });
 });
 

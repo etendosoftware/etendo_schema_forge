@@ -211,6 +211,23 @@ Route tracking ignores query-string and hash-only changes.
 | `onboarding_environment_enter_succeeded` | Environment entry succeeds. |
 | `onboarding_environment_enter_failed` | Environment entry fails. |
 
+### Interactive report events (ETP-6080, flag `dynamic-reports`)
+
+Emitted by the interactive report view (`components/reports/dynamic/reportTelemetry.js`), as agreed
+in the reports KPI analysis (PR #25). Every event carries `specName` (the report id) and
+`reportSessionId`, a random UUID per report session. `reportSessionId` is in the host allowlist
+(`payload.js`) and in `TRUSTED_CONTEXT_KEYS` (`observability/core.js`): its name contains
+`session`, so without the trusted entry the gateway redacts it and the funnels break with no error.
+Its value (36 characters) stays under the gateway's opaque-value scrub. `errorCode` is a class
+(`network`, `http_500`, `org_access_denied`), never a message.
+
+| Event | When | Properties |
+|-------|------|-----------|
+| `report_opened` | Once per report session, when the first request answers | `source` (`menu` when picked from the report list, else `deep_link`), `outcome`, `durationMs`, `errorCode` |
+| `report_filter_applied` | One per user change, when its result is visible or its request failed. Never for the defaults, "Limpiar filtros" or a change whose request was replaced inside the debounce | `type` (`period`, `organization`, `account_level`, `business_partner`, `product`, `comparison`), `outcome`, `durationMs` (none for `account_level`: nothing loads), `errorCode` |
+| `report_group_toggled` | A row folded or unfolded, expand all, collapse all | `type` (`expand`, `collapse`, `expand_all`, `collapse_all`), `outcome: success` |
+| `report_drilldown` | A drill-down step | `type` (`ledger`, `entry` timed from the click to the answer; `document` when the tab opens), `outcome` (`success`, `error` incl. a blocked pop-up, `no_document` for an entry with no window) |
+
 ### Health Score events (ETP-4209)
 
 These three events feed the customer Health Score dashboard in Mixpanel.
@@ -643,3 +660,66 @@ by navigating a RUM resource to its matching Java APM trace under the configured
 release and tenant; a successful unit build does not prove collector delivery.
 
 Reference: [Connect RUM and traces](https://docs.datadoghq.com/tracing/other_telemetry/rum/).
+
+### Feature flag resolution diagnostics
+
+`feature_flags_diagnostic` goes through the common telemetry gateway to enabled
+Datadog RUM actions and Mixpanel. Its bounded labels are `operation`, `outcome`,
+`provider`, `reason`, and `source`; optional `durationMs` measures elapsed time,
+`account_id` identifies the company (AD_Client), and `flagKey` names an evaluation
+that failed. It never carries account email, targeting key, request URL, token,
+or an exception message. Telemetry kill switches remain enforced by the gateway.
+
+Use `operation=configuration_fetch` to count actual Datadog configuration request
+attempts, with `started` and terminal `success`, `error`, or `cancelled` outcomes.
+`context_update` is a separate operation: `deduplicated` means an identical update
+was avoided and is not a network request. `identity_resolution` and
+`company_switch` track identity availability and completion of retargeting. An
+elapsed company-switch duration measures the context transition, not product
+adoption. `flag_evaluation/error` records a provider evaluation failure once per
+account/company/flag/provider until reset.
+
+Compare terminal configuration requests per authenticated session and company
+switch, cancellation/error rates, context deduplication counts, and successful
+company-switch duration percentiles before and after a deployed fix. Compare the
+same environment, release and sampling settings. RUM is sampled and intake can
+fail: these are observed events, not a complete billing or network ledger.
+
+`feature_flag_evaluated` remains the exposure event for adoption analysis. Boolean
+values use `enabled`; finite numeric values use `value`. `reason` distinguishes a
+provider assignment from a declared default when supplied by OpenFeature. The
+opaque account ID is carried in the historical `username` property, with the
+company separately in `account_id`; an email targeting key is never copied into
+analytics. Deduplication includes account, company, flag, value, provider and reason,
+so another company can report the same assignment. The exposure cache is bounded
+to 1,000 entries per page; entries may be reported again after eviction or reset.
+
+Only flag exposure/diagnostic events are buffered before telemetry is ready, up
+to the latest 100 events. Their capture-time identity properties are preserved.
+Latest pending `identify` and company grouping are applied before replay, while
+native RUM flag values retain their existing bounded latest-value buffer. Logout
+or account reset clears all pending events, identities, groups and RUM values;
+generation guards stop an older replay from restoring the previous grouping.
+Other arbitrary pre-initialization business events are still discarded. Bounded
+buffers can drop events during a long initialization and are not durable delivery.
+
+Support-session suppression applies to the replay path too: flag exposure and
+`feature_flags_diagnostic` custom actions are discarded while support mode is
+active. Entering support mode also clears pending custom actions, so lifting it
+cannot replay support activity into customer analytics. Native RUM flag values,
+monitoring identity and company grouping continue with the `support_session`
+marker; logout during pending identity replay restores that marker after reset.
+
+`session_started` captures an in-memory session ownership epoch before awaiting
+flag retargeting. Logout, account reset, or a company/user transition invalidates
+that epoch, including a return to the same identity fields. A superseded call
+cannot restore the old company's analytics grouping or emit its delayed session
+start; it also stops before flushing if ownership changes during event delivery.
+Repeated publication of the same identity or enrichment of the company name does
+not invalidate a current session. A flag-provider outage alone does not suppress
+a valid session event: session ownership, rather than flag availability, controls
+analytics attribution.
+
+Code and unit tests establish this emission contract. Confirm receipt in the
+selected Mixpanel project and Datadog environment after deployment before using
+these events as evidence of an operational improvement.

@@ -91,6 +91,13 @@ describe('approved properties survive the gateway (ETP-4578 H8, N5)', () => {
     assert.deepEqual(lost, [], `approved keys the gateway redacts or drops: ${lost.join(', ')}`);
   });
 
+  // ETP-6080: the key has `session` in its name and its value is a UUID; both must get through.
+  it('lets a real reportSessionId through, name and value', () => {
+    const id = crypto.randomUUID();
+    const out = sanitizeValue({ reportSessionId: id }, { allowedKeys: APPROVED, trustedKeys: TRUSTED_CONTEXT_KEYS });
+    assert.equal(out.reportSessionId, id);
+  });
+
   it('keeps `$name` out of the approved set until the open decision (D6) is made', () => {
     assert.equal(SAFE_EVENT_PROPERTY_KEYS.has('$name'), false);
   });

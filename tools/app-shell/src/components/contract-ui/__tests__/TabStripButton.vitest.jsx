@@ -58,6 +58,15 @@ describe('TabStripButton', () => {
     });
   });
 
+  // ETP-5791 — the tab's own `icon` (e.g. a CustomLines `tabIcon`) is drawn instead of the icon
+  // its key resolves to.
+  it('draws the icon it is given instead of the one of its key', () => {
+    const OwnIcon = (props) => <svg data-testid="own-tab-icon" {...props} />;
+    const { button } = renderButton({ icon: OwnIcon });
+    expect(button.querySelector('[data-testid="own-tab-icon"]')).not.toBeNull();
+    expect(button.querySelectorAll('svg')).toHaveLength(1);
+  });
+
   describe('disabled (with disabledHint)', () => {
     const HINT = 'attachmentsSaveFirstHint';
 

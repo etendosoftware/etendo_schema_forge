@@ -10,16 +10,18 @@ import {
   fetchOrderLines,
   describeLoadFailure,
   getOrderDisplay,
+  getOrderTotal,
+  isOrderCovered,
   submitOrderImport,
   buildOrderInvoiceLineBody,
 } from './invoiceOrderImport.js';
 
 /**
  * «Importar desde pedido» of an invoice — ONE component for sales and purchase invoices
- * (ETP-5828). `direction` picks the specs, the labels and the data path (`INVOICE_ORDER_IMPORT`,
+ * (ETP-5828). `direction` picks the specs, the labels and the import path (`INVOICE_ORDER_IMPORT`,
  * `importVia`): `'server'` imports with the `importOrderLines` action (sales), `'client'` POSTs
- * each line from the browser and PATCHes the header % afterwards (purchases, until QA decides the
- * draft-pending rule, MCP-2). The look — the Figma popup, the global-discount notice, the footer
+ * each line from the browser and PATCHes the header % afterwards (purchases, until QA decides
+ * MCP-2). Both LIST through the invoice's `availableOrders` / `availableOrderLines` (ETP-6099). The look — the Figma popup, the global-discount notice, the footer
  * counting ORDERS — is the same for both.
  *
  * @param {object} props  the parent's ImportLinesModal props (invoiceId, bpId, base, onClose, …)
@@ -41,27 +43,22 @@ export default function InvoiceOrderImportModal({ direction, ...props }) {
 
   // Stable per apiFetch/direction: ImportLinesModal re-reads the documents when fetchDocuments
   // changes identity.
-  // ETP-5828 — a failed read (server path) is told with the toast the popup already uses for its
-  // import errors; the list then shows what it showed before (no orders / an empty order). `ui`
-  // is read through a ref so the handlers keep their identity: the modal refetches when they change.
+  // ETP-5828 — a failed read is told with the toast the popup already uses for its import errors;
+  // the list then shows what it showed before (no orders / an empty order). Both directions list
+  // through the invoice's actions since ETP-6099, so both toast. `ui` is read through a ref so the
+  // handlers keep their identity: the modal refetches when they change.
   const uiRef = useRef(ui);
   uiRef.current = ui;
-  const handlers = useMemo(() => {
-    const fetchDocuments = (args) => fetchOrderDocuments({ ...args, apiFetch, config });
-    const fetchLines = (args) => fetchOrderLines({ ...args, apiFetch, config });
-    // Server path only: the purchase (client) path keeps propagating untoasted, as before.
-    if (!viaServer) return { fetchDocuments, fetchLines };
-    return {
-      fetchDocuments: (args) => fetchDocuments(args).catch((err) => {
-        toast.error(describeLoadFailure(err, uiRef.current));
-        return { documents: [], sharedContext: { invoiceId: args.invoiceId }, excludedByCurrency: false };
-      }),
-      fetchLines: (args) => fetchLines(args).catch((err) => {
-        toast.error(describeLoadFailure(err, uiRef.current));
-        return [];
-      }),
-    };
-  }, [apiFetch, config, viaServer]);
+  const handlers = useMemo(() => ({
+    fetchDocuments: (args) => fetchOrderDocuments({ ...args, apiFetch, config }).catch((err) => {
+      toast.error(describeLoadFailure(err, uiRef.current));
+      return { documents: [], sharedContext: { invoiceId: args.invoiceId }, excludedByCurrency: false };
+    }),
+    fetchLines: (args) => fetchOrderLines({ ...args, apiFetch, config }).catch((err) => {
+      toast.error(describeLoadFailure(err, uiRef.current));
+      return [];
+    }),
+  }), [apiFetch, config]);
 
   const submitImport = (args) => submitOrderImport({ ...args, apiFetch, config, serverCarry, ui });
 
@@ -79,6 +76,11 @@ export default function InvoiceOrderImportModal({ direction, ...props }) {
       fetchDocuments={handlers.fetchDocuments}
       fetchLines={handlers.fetchLines}
       getDocDisplay={getOrderDisplay}
+      // ETP-6099 — the lines are read when an order is opened; the row hides a covered order and
+      // shows its total from the `availableOrders` row.
+      eagerLoadLines={false}
+      isDocumentCovered={isOrderCovered}
+      getDocumentTotal={getOrderTotal}
       {...(viaServer
         ? { submitImport }
         : { linesEndpoint: `${config.invoiceSpec}/lines`, buildLineBody: buildOrderInvoiceLineBody })}
