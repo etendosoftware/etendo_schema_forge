@@ -123,7 +123,9 @@ describe('Modelo390IdentitySection — Persona física toggle', () => {
     const representative = screen.getByTestId('Modelo390IdentitySection__representative');
     expect(within(representative).getByTestId('Modelo390IdentitySection__representative-title')).toHaveTextContent('org390RepTitle');
     expect(within(representative).getByTestId('Modelo390IdentitySection__representative-hint-org390RepHint')).toBeInTheDocument();
-    expect(within(representative).getByTestId('Modelo390IdentitySection__representative-hint-org390RepPairHint')).toBeInTheDocument();
+    // The "(optional)" title says it all: no extra both-or-neither hint (the pair error still shows on save).
+    expect(within(representative).queryByTestId('Modelo390IdentitySection__representative-hint-org390RepPairHint')).not.toBeInTheDocument();
+    expect(within(representative).queryByText('org390RepPairHint')).not.toBeInTheDocument();
     for (const field of ['aeat390RepNif', 'aeat390RepName']) {
       expect(within(representative).getByTestId(`Modelo390IdentitySection__${field}`)).toBeInTheDocument();
     }
@@ -170,12 +172,13 @@ describe('Modelo390IdentitySection — Persona física toggle', () => {
     }
   });
 
-  it('points at the representatives grid below in the switch hint, shown while the switch is off', async () => {
+  it('shows only the label next to the switch, with no hint under it', async () => {
     mockFetch([]);
     render(<Harness />);
     expect(await screen.findByTestId('RepresentantesLegalesSection__root')).toBeInTheDocument();
     expect(screen.getByTestId('Label__aeat390Isperson')).toHaveTextContent('org390IsPersonLabel');
-    expect(screen.getByTestId('Modelo390IdentitySection__isPersonHint')).toHaveTextContent('org390IsPersonHint');
+    expect(screen.queryByTestId('Modelo390IdentitySection__isPersonHint')).not.toBeInTheDocument();
+    expect(screen.queryByText('org390IsPersonHint')).not.toBeInTheDocument();
   });
 
   it('shows a field error right under its input, in its own block', () => {

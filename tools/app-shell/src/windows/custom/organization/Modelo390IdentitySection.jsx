@@ -120,19 +120,16 @@ export default function Modelo390IdentitySection({ form, fieldErrors = {}, onFie
 
   return (
     <div className="flex flex-col gap-4" data-testid="Modelo390IdentitySection__root">
-      <div className="flex items-start gap-3">
+      <div className="flex items-center gap-3">
         <Switch
           id="org-aeat390-isperson"
           checked={isPerson}
           onCheckedChange={v => onFieldChange('aeat390Isperson', Boolean(v))}
           aria-label={ui('org390IsPersonLabel')}
           data-testid="Modelo390IdentitySection__isPerson" />
-        <div className="flex flex-col gap-0.5">
-          <Label htmlFor="org-aeat390-isperson" className="text-sm text-foreground font-medium" data-testid="Label__aeat390Isperson">
-            {ui('org390IsPersonLabel')}
-          </Label>
-          <p className="text-xs leading-[18px] text-muted-foreground" data-testid="Modelo390IdentitySection__isPersonHint">{ui('org390IsPersonHint')}</p>
-        </div>
+        <Label htmlFor="org-aeat390-isperson" className="text-sm text-foreground font-medium" data-testid="Label__aeat390Isperson">
+          {ui('org390IsPersonLabel')}
+        </Label>
       </div>
 
       {isPerson ? (
@@ -157,7 +154,7 @@ export default function Modelo390IdentitySection({ form, fieldErrors = {}, onFie
           </PersonBlock>
           <PersonBlock
             titleKey="org390RepTitle"
-            hintKeys={['org390RepHint', 'org390RepPairHint']}
+            hintKeys={['org390RepHint']}
             gridClassName="grid-cols-2"
             testId="Modelo390IdentitySection__representative"
             data-testid="PersonBlock__representative">

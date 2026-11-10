@@ -350,9 +350,8 @@ is active (ETP-5831, see "Fiscal section visibility"). Its body is
 `Modelo390IdentitySection.jsx`:
 
 - **"Persona física" switch** (`information.aeat390Isperson`), labelled "La organización es una
-  persona física (autónomo)" since ETP-5831 (CP-16), with a one-sentence hint pointing at the
-  grid shown right below when it is off ("Si no lo es, indica sus representantes legales en la
-  tabla de abajo."; es_AR uses the impersonal "se indican"). It is a page-form field: flipping it
+  persona física (autónomo)" since ETP-5831 (CP-16). Only the label is shown, with no hint under
+  it. It is a page-form field: flipping it
   shows the unsaved-changes banner and is persisted by the page's Save, in the same
   `PATCH /information/{orgId}` as the rest of `AD_OrgInfo`. The branch below follows the form value,
   so flipping it previews the other branch before saving.
@@ -365,9 +364,10 @@ is active (ETP-5831, see "Fiscal section visibility"). Its body is
     Segundo apellido (`aeat390Firstname/Surname1/Surname2`). Hint: the AEAT needs the name and the
     surnames separately for a natural person. Nothing is pre-filled from the organization name.
   - **"Representante (opcional)"** (`Modelo390IdentitySection__representative`): "NIF del
-    representante" and "Nombre o razón social del representante" (`aeat390RepNif/RepName`). Hints:
-    only if the natural person acts through a representative; neither field is required on its own,
-    but if one is filled the other must be too.
+    representante" and "Nombre o razón social del representante" (`aeat390RepNif/RepName`). One hint:
+    only if the natural person acts through a representative. Neither field carries an asterisk;
+    the "(opcional)" title says the block may stay empty, and the both-or-neither rule shows up
+    only as the inline `org390RepPairRequired` error on save when just one of the two is filled.
 
   **Why name and surnames are asked even though the org already has a name:** the Modelo 390
   (DR390e2025/2026) has "Nombre" (pos. 83) as a field of its own, "OBLIGATORIO (persona física)",
