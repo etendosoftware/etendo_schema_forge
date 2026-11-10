@@ -22218,7 +22218,7 @@
     "orgSection390": "Representante legal / Modelo 390",
     "orgSection390Desc": "Identidad del declarante y de sus representantes legales que se incluye en el modelo 390 (resumen anual de IVA) de la AEAT.",
     "org390IsPersonLabel": "La organización es una persona física (autónomo)",
-    "org390IsPersonHint": "Activado: el nombre y los apellidos del propio declarante se indican aquí. Desactivado: el Modelo 390 usa la tabla de representantes legales.",
+    "org390IsPersonHint": "Si no lo es, se indican sus representantes legales en la tabla de abajo.",
     "org390RepNifLabel": "NIF del representante",
     "org390RepNameLabel": "Nombre o razón social del representante",
     "org390HolderTitle": "Datos del titular",

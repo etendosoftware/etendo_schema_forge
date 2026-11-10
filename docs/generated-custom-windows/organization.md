@@ -350,9 +350,9 @@ is active (ETP-5831, see "Fiscal section visibility"). Its body is
 `Modelo390IdentitySection.jsx`:
 
 - **"Persona física" switch** (`information.aeat390Isperson`), labelled "La organización es una
-  persona física (autónomo)" since ETP-5831 (CP-16), with a hint that explains both branches: ON,
-  the declarant's own name and surnames are entered here; OFF, the Modelo 390 uses the legal
-  representatives grid. It is a page-form field: flipping it
+  persona física (autónomo)" since ETP-5831 (CP-16), with a one-sentence hint pointing at the
+  grid shown right below when it is off ("Si no lo es, indica sus representantes legales en la
+  tabla de abajo."; es_AR uses the impersonal "se indican"). It is a page-form field: flipping it
   shows the unsaved-changes banner and is persisted by the page's Save, in the same
   `PATCH /information/{orgId}` as the rest of `AD_OrgInfo`. The branch below follows the form value,
   so flipping it previews the other branch before saving.

@@ -170,9 +170,10 @@ describe('Modelo390IdentitySection — Persona física toggle', () => {
     }
   });
 
-  it('explains both branches on the switch', () => {
+  it('points at the representatives grid below in the switch hint, shown while the switch is off', async () => {
     mockFetch([]);
     render(<Harness />);
+    expect(await screen.findByTestId('RepresentantesLegalesSection__root')).toBeInTheDocument();
     expect(screen.getByTestId('Label__aeat390Isperson')).toHaveTextContent('org390IsPersonLabel');
     expect(screen.getByTestId('Modelo390IdentitySection__isPersonHint')).toHaveTextContent('org390IsPersonHint');
   });

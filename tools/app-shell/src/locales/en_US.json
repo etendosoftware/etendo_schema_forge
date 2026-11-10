@@ -20830,7 +20830,7 @@
     "orgSection390": "Legal representative / Modelo 390",
     "orgSection390Desc": "Declarant and legal representative identity included in the AEAT Modelo 390 (annual VAT summary).",
     "org390IsPersonLabel": "The organization is a natural person (self-employed)",
-    "org390IsPersonHint": "On: the declarant's own name and surnames are entered here. Off: the Modelo 390 uses the legal representatives table below.",
+    "org390IsPersonHint": "If not, enter its legal representatives in the table below.",
     "org390RepNifLabel": "Representative NIF",
     "org390RepNameLabel": "Representative name or company name",
     "org390HolderTitle": "Holder details",
