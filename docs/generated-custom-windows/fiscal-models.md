@@ -5201,7 +5201,7 @@ recorded here so a future pass doesn't have to rediscover them from scratch.
 | `PUT` | `/fiscal303/declarations?id=` | FmListPage — persist status change |
 | `DELETE` | `/fiscal303/declarations?id=` | `FmRowActions`' delete action (ETP-5187), via `deleteDeclaration` — rejects (409) deleting anything but a `draft` declaration (defense in depth; the frontend also only ever shows the action for draft rows) |
 | `GET` | `/fiscal-models-catalog` | FmListPage — fetch the active-models catalog on mount (per-Client), via `useFiscalModelsCatalog`; also consumed cross-spec, through the same hook, by `ReversedInvoicesPanel.jsx` (sales-invoice/purchase-invoice) to gate the "Correctiva del 349" checkbox — see "Downstream consumer" above — and by the Organization window to show its fiscal sections (ETP-5831, `organization.md`) |
-| `PUT` | `/fiscal-models-catalog` | FmListPage, via `FmCatalogPage`'s `onSave` — persist the active-models catalog (per-Client); sent only on a real change and only after a successful catalog read (ETP-5716, see "Persistence") |
+| `PUT` | `/fiscal-models-catalog` | FmListPage, via `FmCatalogPage`'s `onSave` — persist the active-models catalog (per-Client); sent on every toggle (save-on-toggle, ETP-5831 CP-22), one at a time in toggle order, and only after a successful catalog read; a failed `PUT` rolls the switches back and toasts (ETP-5716, ETP-5831, see "Persistence") |
 | `GET` | `/fiscal303/boxes?year=&period=` | `computeBoxes303` |
 | `GET` | `/fiscal303/modified?year=&period=&since=` | `checkModified303` |
 | `GET` | `/fiscal303/generate?year=&period=&tipo=` | `generate303File` |

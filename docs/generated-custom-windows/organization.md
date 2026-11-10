@@ -361,11 +361,12 @@ is active (ETP-5831, see "Fiscal section visibility"). Its body is
   - **"Datos del titular"** (`Modelo390IdentitySection__holder`): the organization's NIF, read-only
     (`Modelo390IdentitySection__holderNif`; it is `information.taxID`, the same form value as the
     "Datos fiscales" NIF, edited only there; no hint under it), then **Nombre \*** and **Primer apellido \*** and
-    Segundo apellido (`aeat390Firstname/Surname1/Surname2`). Hint: the AEAT needs the name and the
-    surnames separately for a natural person. Nothing is pre-filled from the organization name.
+    Segundo apellido (`aeat390Firstname/Surname1/Surname2`). Block hint under the title
+    (`org390HolderHint`): the AEAT needs the name and the surnames separately for a natural person.
+    Nothing is pre-filled from the organization name.
   - **"Representante (opcional)"** (`Modelo390IdentitySection__representative`): "NIF del
-    representante" and "Nombre o razón social del representante" (`aeat390RepNif/RepName`). One hint:
-    only if the natural person acts through a representative. Neither field carries an asterisk;
+    representante" and "Nombre o razón social del representante" (`aeat390RepNif/RepName`). One block hint under the
+    title (`org390RepHint`): "Solo si la persona física actúa por medio de un representante". Neither field carries an asterisk;
     the "(opcional)" title says the block may stay empty, and the both-or-neither rule shows up
     only as the inline `org390RepPairRequired` error on save when just one of the two is filled.
 
@@ -633,8 +634,8 @@ All of the above are now covered by automated tests — the "pending Tester" gap
 13. Mark a row as "Principal" without picking a Código and confirm a warning icon appears next to that row's Código selector (tooltip: "Falta el código…"); confirm hovering the info icon next to the "Código" column header explains why it matters for Modelo 303. Confirm save is NOT blocked either way (visual hint only).
 14. Delete a row via the trash icon and confirm it disappears from the list and does not reappear on reload.
 15. Open Fiscal → Modelo 303 for a period whose organization has NO default IAE activity with a code, select the last period of the year (4T quarterly, or December for monthly), and attempt to submit. Confirm a translated banner appears ("Esta organización necesita al menos una actividad del IAE marcada como principal…") with a "Ir a Organización" button that navigates to `/organization`, and that the request never reaches the backend's submit endpoint. Repeat for a non-last period (e.g. 1T/2T/3T or any month before 12) with the same missing data and confirm submission proceeds normally (the guard only applies to the last period). Then add/mark a valid default IAE row with a code and confirm the last-period submission proceeds past this guard.
-16. **Modelo 390 identity — natural person (ETP-5716).** In "Representante legal / Modelo 390", turn
-    "Persona física" on, leave Nombre and Primer apellido empty and Save: both show "Requerido" inline
+16. **Modelo 390 identity — natural person (ETP-5716, ETP-5831 CP-16).** In "Representante legal /
+    Modelo 390", turn on "La organización es una persona física (autónomo)" (no hint under it), leave Nombre and Primer apellido empty and Save: both show "Requerido" inline
     and nothing is saved. Check the two blocks "Datos del titular" (with the org NIF read-only) and
     "Representante (opcional)". Fill them, type only "Nombre o razón social del representante" and Save: the NIF
     field shows "Debe rellenar ambos…". Type the NIF as ` 12.345.678-z ` with a name and Save: it
