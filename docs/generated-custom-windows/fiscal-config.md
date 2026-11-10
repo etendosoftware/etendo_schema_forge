@@ -237,6 +237,15 @@ VERI\*FACTU therefore read and write the **same** record. Consequences in the `s
 | `POST` | `/sws/neo/certificate` | Upload a PKCS#12 cert via `multipart/form-data` (fields: `certificate`, `orgId`, `password`, optional `setOrgNif`) |
 | `GET`  | `/sws/neo/certificate` | Return `{exists, validTo}` for the active cert (org inferred from bearer token) |
 
+**Dates are ISO on the wire (ETP-6053).** `GET /certificate` returns `validTo` and the upload
+response's `certDetails` return `validFrom`/`validTo` as `yyyy-MM-dd` (e.g. `"2027-07-01"`), the same
+as the agents' `certificate` action. The UI formats them for the active locale with
+`formatCalendarDate` (`@/lib/dateOnly.js`) in `CertSection` ("Válido hasta"), `CertModal` (the
+"done" step details) and the status panel's "Certificado" row, and `daysUntil` (expiry banner) parses
+the ISO value directly. Until ETP-6053 the endpoint returned a localized `dd/MM/yyyy`: the browser read
+it month-first (1 July 2027 showed as 07/01/2027) and `daysUntil` returned `null`, so the expiry
+banner never appeared against a real backend — the tests had always mocked ISO.
+
 The upload delegates to `AddCertificateToOrg` (existing SIF process) via reflection.
 
 ### NIF/CIF validation

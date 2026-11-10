@@ -2,7 +2,7 @@
 
 const stableApiFetch = vi.fn(() => Promise.resolve({ ok: true, json: async () => ({}) }));
 
-vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
+vi.mock('@/i18n', () => ({ useUI: () => (key) => key, useLocaleSwitch: () => ({ locale: 'es_ES' }) }));
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => stableApiFetch }));
 vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u }));
 vi.mock('@/components/ui/button', () => ({
@@ -109,6 +109,23 @@ describe('CertModal', () => {
     );
     expect(screen.getByText('fiscal.cert.success.title')).toBeInTheDocument();
     expect(screen.getByText('fiscal.cert.btn.use')).toBeInTheDocument();
+  });
+
+  // ETP-6053 — the upload details carry ISO dates; 1 July must read 01/07, not 07/01.
+  it('formats the ISO validity dates of the done step in the UI locale', () => {
+    render(
+      <CertModal
+        {...baseProps}
+        debugInitialState={{
+          step: 'done',
+          file: { name: 'cert.p12', size: 1024 },
+          certDetails: { subject: 'CN=Test', issuer: 'CN=CA', validFrom: '2025-07-01', validTo: '2027-07-01', algorithm: 'SHA256' },
+        }}
+      />
+    );
+    expect(screen.getByText('01/07/2025')).toBeInTheDocument();
+    expect(screen.getByText('01/07/2027')).toBeInTheDocument();
+    expect(screen.queryByText('2027-07-01')).not.toBeInTheDocument();
   });
 
   it('renders confirmNif step when debugInitialState has step=confirmNif', () => {

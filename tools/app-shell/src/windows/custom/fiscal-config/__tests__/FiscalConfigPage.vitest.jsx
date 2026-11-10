@@ -1784,6 +1784,17 @@ describe('FiscalStatusSummary — deriveConfiguredStatus / buildConfiguredStatus
   // ETP-6053 — the territory comes from the backend catalog (fiscalSystemCatalog).
   const catalog = FISCAL_SYSTEM_CATALOG;
 
+  // ETP-6053 — the certificate row formats the ISO validTo of GET /certificate as dd/MM/yyyy for
+  // es_ES: 1 July 2027 reads 01/07/2027, never the month-first 07/01/2027.
+  it('formats the certificate validTo as dd/MM/yyyy for es_ES', () => {
+    const uiParams = (key, params) => (params ? `${key} ${Object.values(params).join(' ')}` : key);
+    const status = deriveConfiguredStatus({ profile: 'sii', siiRecord: { id: 'sii-1', taxtype: 'IVA' }, catalog });
+    const rows = buildConfiguredStatusRows({
+      status, territories, systems, cert: { validTo: '2027-07-01' }, locale: 'es_ES', ui: uiParams,
+    });
+    expect(rowValue(rows, 'cert')).toBe('fiscal.cert.validUntil 01/07/2027');
+  });
+
   it('maps sii-navarra to the Navarra territory with no national-operation row', () => {
     const status = deriveConfiguredStatus({ profile: 'sii-navarra', siiRecord: { id: 'sii-1', navarra: 'Y', taxtype: 'IVA' }, catalog });
     expect(status.system).toBe('SII');

@@ -3,9 +3,11 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // --- Mocks ----------------------------------------------------------------
 
-const stableUi = (key) => key;
+// Interpolation params are appended so a test can see the formatted date inside a message.
+const stableUi = (key, params) => (params ? `${key} ${Object.values(params).join(' ')}` : key);
 vi.mock('@/i18n', () => ({
   useUI: () => stableUi,
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 
 vi.mock('@/components/ui/button', () => ({
@@ -148,7 +150,7 @@ describe('CertSection — cert loaded (exists: true)', () => {
   it('renders the valid-until date', async () => {
     render(<CertSection {...BASE_PROPS} />);
     await waitFor(() => {
-      expect(screen.getByText('fiscal.cert.validUntil')).toBeInTheDocument();
+      expect(screen.getByText('fiscal.cert.validUntil 31/12/2025')).toBeInTheDocument();
     });
   });
 
@@ -261,5 +263,28 @@ describe('CertSection — shared certificate (ETP-5831)', () => {
     rerender(<CertSection {...BASE_PROPS} refreshKey={1} />);
     expect(await screen.findByText('fiscal.cert.replace')).toBeInTheDocument();
     expect(mockApiFetch).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ETP-6053 — GET /certificate returns validTo as ISO yyyy-MM-dd; the row shows it in the UI
+// locale, so 1 July 2027 reads 01/07/2027 (it used to come as dd/MM/yyyy and render 07/01).
+describe('CertSection — validity date formatting (ETP-6053)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useApiFetch).mockReturnValue(mockApiFetch);
+  });
+
+  it('formats the loaded certificate validTo in the UI locale', async () => {
+    mockApiFetch.mockResolvedValue(makeJsonResponse({ exists: true, validTo: '2027-07-01' }));
+    render(<CertSection {...BASE_PROPS} />);
+    expect(await screen.findByText('fiscal.cert.validUntil 01/07/2027')).toBeInTheDocument();
+  });
+
+  it('formats the validTo reported by a fresh upload the same way', async () => {
+    mockApiFetch.mockResolvedValue(makeJsonResponse({ exists: true, validTo: '2027-07-01' }));
+    render(<CertSection {...BASE_PROPS} />);
+    fireEvent.click(await screen.findByText('fiscal.cert.replace'));
+    fireEvent.click(screen.getByText('upload-modal'));
+    expect(await screen.findByText('fiscal.cert.validUntil 01/01/2026')).toBeInTheDocument();
   });
 });
