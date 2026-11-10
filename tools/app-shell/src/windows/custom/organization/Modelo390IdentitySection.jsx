@@ -137,7 +137,7 @@ export default function Modelo390IdentitySection({ form, fieldErrors = {}, onFie
           <PersonBlock
             titleKey="org390HolderTitle"
             hintKeys={['org390HolderHint']}
-            gridClassName="grid-cols-2"
+            gridClassName="grid-cols-1 sm:grid-cols-2"
             testId="Modelo390IdentitySection__holder"
             data-testid="PersonBlock__holder">
             <HolderNifField value={form.taxID} data-testid="HolderNifField__holder" />
@@ -155,7 +155,7 @@ export default function Modelo390IdentitySection({ form, fieldErrors = {}, onFie
           <PersonBlock
             titleKey="org390RepTitle"
             hintKeys={['org390RepHint']}
-            gridClassName="grid-cols-2"
+            gridClassName="grid-cols-1 sm:grid-cols-2"
             testId="Modelo390IdentitySection__representative"
             data-testid="PersonBlock__representative">
             {REPRESENTATIVE_FIELDS.map(([field, labelKey]) => (

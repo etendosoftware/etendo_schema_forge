@@ -32,6 +32,7 @@ import { getListBehavior } from './modelRegistryList.js';
 import { useFiscalModelsCatalog } from './useFiscalModelsCatalog.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { neoBase } from '@/components/related-documents/helpers.js';
 import { isNetworkError } from '@etendosoftware/app-shell-core/auth';
 import { parseBackendError, isDuplicateConflict } from '@/lib/backendErrors.js';
 
@@ -875,9 +876,12 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
 
   // Shared catalog reader (ETP-5831): same endpoint, same `{}` = no model active rule as the
   // Organization window's fiscal sections. `setActiveModels` stays local for the drawer's save.
+  // Catalog PUTs still in flight (see saveCatalog below). While any is pending, a re-read of the
+  // catalog (the token refresh re-reads it) must not overwrite the optimistic toggle.
+  const pendingCatalogSavesRef = useRef(0);
   const {
     activeModels, setActiveModels, unavailableModels, loaded: catalogLoaded, error: catalogError,
-  } = useFiscalModelsCatalog(apiBaseUrl, token);
+  } = useFiscalModelsCatalog(apiBaseUrl, token, { holdActiveModels: () => pendingCatalogSavesRef.current > 0 });
 
   // ETP-5831 CP-22 — the catalog drawer saves on every toggle. The PUTs are chained so that fast
   // consecutive toggles reach the server in order (the last toggle wins), and a failed one rolls
@@ -889,7 +893,6 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
   //                         toasts (an earlier failed PUT is superseded by the later full catalog).
   const confirmedCatalogRef = useRef(activeModels);
   const latestCatalogRef = useRef(null);
-  const pendingCatalogSavesRef = useRef(0);
   const catalogSaveChainRef = useRef(Promise.resolve());
   useEffect(() => {
     if (pendingCatalogSavesRef.current === 0) confirmedCatalogRef.current = activeModels;
@@ -908,7 +911,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
     if (!apiBaseUrl) return;
     latestCatalogRef.current = newActive;
     pendingCatalogSavesRef.current += 1;
-    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+    const base = neoBase(apiBaseUrl);
     catalogSaveChainRef.current = catalogSaveChainRef.current
       .then(() => apiFetch(`${base}/fiscal-models-catalog`, {
         method: 'PUT',

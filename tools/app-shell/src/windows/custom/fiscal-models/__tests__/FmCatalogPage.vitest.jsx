@@ -27,12 +27,17 @@ vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
 
 // ETP-5716 — the organization's SII status (controls the 390 activation warning). Not in the SII
 // by default, so every pre-existing test toggles straight away.
-const sii = vi.hoisted(() => ({ active: false, since: null, calls: 0 }));
+const sii = vi.hoisted(() => ({ active: false, since: null, calls: 0, gate: null }));
 vi.mock('../useOrgSiiStatus.js', async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...actual,
-    default: () => () => { sii.calls += 1; return Promise.resolve({ active: sii.active, since: sii.since }); },
+    // `sii.gate` (a promise) holds the status read open, to click again while it is in flight.
+    default: () => () => {
+      sii.calls += 1;
+      const answer = () => ({ active: sii.active, since: sii.since });
+      return sii.gate ? sii.gate.then(answer) : Promise.resolve(answer());
+    },
   };
 });
 
@@ -49,6 +54,7 @@ beforeEach(() => {
   sii.active = false;
   sii.since = null;
   sii.calls = 0;
+  sii.gate = null;
 });
 
 // ── Rendering ────────────────────────────────────────────────────────────────
@@ -405,6 +411,40 @@ describe('FmCatalogPage — SII warning when activating the 390', () => {
     await waitFor(() => expect(switchOf(container, '390').getAttribute('aria-checked')).toBe('true'));
     expect(screen.queryByTestId('FmCatalogPage__siiWarning')).toBeNull();
     expect(onSave).toHaveBeenCalledWith({ '303': true, '349': true, '390': true });
+  });
+
+  // ETP-5831 (review W3) — the SII status is read across an await; a second click on the same
+  // switch during it used to take the activate branch again (double flip, two saves).
+  it('ignores a second click on the 390 while its SII status is still being read (outside the SII)', async () => {
+    let release;
+    sii.gate = new Promise((r) => { release = r; });
+    const onSave = vi.fn();
+    const { container } = render(<FmCatalogPage {...defaultProps} onSave={onSave} />);
+    fireEvent.click(switchOf(container, '390'));
+    fireEvent.click(switchOf(container, '390'));
+    release();
+    await waitFor(() => expect(switchOf(container, '390').getAttribute('aria-checked')).toBe('true'));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(sii.calls).toBe(1);
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave).toHaveBeenCalledWith({ '303': true, '349': true, '390': true });
+  });
+
+  it('ignores a second click on the 390 while its SII status is still being read (in the SII)', async () => {
+    sii.active = true;
+    let release;
+    sii.gate = new Promise((r) => { release = r; });
+    const onSave = vi.fn();
+    const { container } = render(<FmCatalogPage {...defaultProps} onSave={onSave} />);
+    fireEvent.click(switchOf(container, '390'));
+    fireEvent.click(switchOf(container, '390'));
+    release();
+    expect(await screen.findAllByTestId('FmCatalogPage__siiWarning')).toHaveLength(1);
+    expect(sii.calls).toBe(1);
+    expect(onSave).not.toHaveBeenCalled();
+    // Once the read settled, the switch answers clicks again.
+    fireEvent.click(screen.getByTestId('FmCatalogPage__siiConfirm'));
+    expect(onSave).toHaveBeenCalledTimes(1);
   });
 
   it('never asks for 303/349, nor when deactivating the 390', async () => {

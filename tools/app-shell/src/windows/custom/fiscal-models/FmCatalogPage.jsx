@@ -117,12 +117,23 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, unavailabl
   // ETP-5716 — activating a `siiWarningOnActivate` model for an organization in the SII asks
   // first (SiiActivationWarning). Deactivating, or an organization outside the SII (or an SII
   // status that cannot be read), toggles right away.
+  // Models whose SII status is being read: a second click on the same switch during that await
+  // is ignored. Without it both clicks see the model inactive, both take the activate branch, and
+  // the model flips twice (two PUTs) or the warning opens twice.
+  const siiCheckInFlight = useRef(new Set());
   const toggleModel = async (id) => {
+    if (siiCheckInFlight.current.has(id)) return;
     if (!getModel(id)?.siiWarningOnActivate || activeRef.current[id]) {
       applyToggle(id);
       return;
     }
-    const status = await getSiiStatus();
+    siiCheckInFlight.current.add(id);
+    let status;
+    try {
+      status = await getSiiStatus();
+    } finally {
+      siiCheckInFlight.current.delete(id);
+    }
     if (!status?.active) {
       applyToggle(id);
       return;

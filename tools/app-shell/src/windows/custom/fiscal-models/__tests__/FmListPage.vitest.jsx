@@ -1258,6 +1258,31 @@ describe('FmListPage — fiscal-models-catalog save on toggle', () => {
     toastError.mockRestore();
   });
 
+  // Review W2 — the catalog is re-read when the token changes; a read landing while a PUT is in
+  // flight used to put the pre-toggle catalog back, and nothing re-applied the toggle afterwards.
+  it('a catalog re-read (token refresh) while a PUT is in flight does not undo the toggle', async () => {
+    const { fetchMock, puts } = deferredPutFetch();
+    globalThis.fetch = fetchMock;
+    const { getByText, rerender } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    fireEvent.click(screen.getByTestId('fm-list-catalog-button'));
+
+    fireEvent.click(screen.getByTestId('catalog-toggle-349')); // 349 off, PUT pending
+    await waitFor(() => expect(puts).toHaveLength(1));
+
+    const gets = () => fetchMock.mock.calls.filter(([url, init]) =>
+      String(url).includes('fiscal-models-catalog') && (init?.method ?? 'GET') === 'GET').length;
+    rerender(<FmListPage declarations={[]} {...withCatalogProps} token="refreshed-token" />);
+    await waitFor(() => expect(gets()).toBe(2));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(drawerActive()).toEqual({ '303': true, '349': false });
+
+    puts[0].ok();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(drawerActive()).toEqual({ '303': true, '349': false });
+    expect(getByText(/fm\.catalog\.title.*\(1\)/)).toBeTruthy();
+  });
+
   it('an earlier failed PUT superseded by a later successful one neither rolls back nor toasts', async () => {
     const toastError = vi.spyOn(toast, 'error').mockImplementation(() => {});
     const { fetchMock, puts } = deferredPutFetch();
