@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
@@ -70,26 +70,26 @@ function ToggleSwitch({ checked, onChange, disabled }) {
   );
 }
 
-/**
- * Whether the drawer's selection differs from the one it opened with. Values are compared as
- * booleans, so an absent model and an explicit `false` are the same (toggling a model on and back
- * off is no change). Exported for tests.
- */
-export function catalogSelectionChanged(before = {}, after = {}) {
-  const ids = new Set([...Object.keys(before), ...Object.keys(after)]);
-  return [...ids].some(id => Boolean(before[id]) !== Boolean(after[id]));
-}
-
 export default function FmCatalogPage({ onBack, onSave, activeModels, unavailableModels, token, apiBaseUrl }) {
   const t = useUI();
   // ETP-5716 — models the backend marks unavailable (catalogAvailability.js) are not offered.
   const catalog = filterAvailableModels(CATALOG, unavailableModels);
   const { locale } = useLocaleSwitch();
   const navigate = useNavigate();
-  const [initialActive] = useState(
+  const [active, setActive] = useState(
     () => activeModels ?? Object.fromEntries(catalog.map(m => [m.id, m.defaultActive]))
   );
-  const [active, setActive] = useState(initialActive);
+  // The selection the next toggle starts from. A ref, not the render's `active`: the SII path
+  // toggles after an await, and two fast clicks must each build on the previous one.
+  const activeRef = useRef(active);
+  // ETP-5831 CP-22 — the drawer follows the catalog the page holds: the optimistic value right
+  // after a toggle, and the last server-confirmed one when a save fails, so a failed toggle
+  // visibly flips back.
+  useEffect(() => {
+    if (!activeModels) return;
+    activeRef.current = activeModels;
+    setActive(activeModels);
+  }, [activeModels]);
   const [configModel, setConfigModel] = useState(null);
   // ETP-5716 — the model awaiting the SII confirmation (see SiiActivationWarning), or null, and
   // the formatted SII date when the organization joined during the current year.
@@ -97,26 +97,28 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, unavailabl
   const [siiSinceLabel, setSiiSinceLabel] = useState(null);
   const getSiiStatus = useOrgSiiStatus({ apiBaseUrl, enabled: ANY_SII_WARNING });
 
-  // Closing saves only a real change: opening and closing the drawer never rewrites the catalog.
-  const handleClose = () => {
-    if (catalogSelectionChanged(initialActive, active)) onSave?.(active);
-    onBack?.();
-  };
+  // ETP-5831 CP-22 — every toggle is saved right away (see applyToggle); closing only closes.
+  // Saving on close lost every change made before a reload or a navigation with the drawer open.
+  const handleClose = () => onBack?.();
 
   // ETP-5187 (adjacent scope) — Modelo 303 needs a default IAE activity configured for its
   // year-end declaration (see `showIaeActivityReminder`'s own doc comment in
   // `fiscalModelsUtils.js`). Only fires on the inactive → active transition of a model whose
   // registry entry asks for it (`iaeReminderOnActivate`: 303 only) — never on deactivation.
-  const applyToggle = (id) => setActive(prev => {
+  // ETP-5831 CP-22 — each toggle hands the full new selection to `onSave` immediately.
+  const applyToggle = (id) => {
+    const prev = activeRef.current;
     const next = { ...prev, [id]: !prev[id] };
+    activeRef.current = next;
+    setActive(next);
     if (getModel(id)?.iaeReminderOnActivate && !prev[id] && next[id]) showIaeActivityReminder(t, navigate);
-    return next;
-  });
+    onSave?.(next);
+  };
   // ETP-5716 — activating a `siiWarningOnActivate` model for an organization in the SII asks
   // first (SiiActivationWarning). Deactivating, or an organization outside the SII (or an SII
   // status that cannot be read), toggles right away.
   const toggleModel = async (id) => {
-    if (!getModel(id)?.siiWarningOnActivate || active[id]) {
+    if (!getModel(id)?.siiWarningOnActivate || activeRef.current[id]) {
       applyToggle(id);
       return;
     }

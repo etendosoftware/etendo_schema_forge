@@ -36,7 +36,7 @@ vi.mock('../useOrgSiiStatus.js', async (importOriginal) => {
   };
 });
 
-import FmCatalogPage, { catalogSelectionChanged } from '../FmCatalogPage.jsx';
+import FmCatalogPage from '../FmCatalogPage.jsx';
 
 const defaultProps = {
   onBack: vi.fn(),
@@ -201,72 +201,54 @@ describe('FmCatalogPage — toggle', () => {
   });
 });
 
-// ── Close / Save ──────────────────────────────────────────────────────────────
+// ── Save on toggle / close ────────────────────────────────────────────────────
 
-describe('FmCatalogPage — close and save', () => {
-  // ETP-5716: closing saves only a real change, so opening and closing the drawer never rewrites
-  // the catalog (a PUT replaces the whole catalog).
-  it('closes without saving when the close button is clicked with no change', () => {
+// ETP-5831 CP-22 — every toggle is saved right away with the full new selection; closing the
+// drawer only closes it. Saving on close lost every change made before a reload or a navigation
+// with the drawer open (the access log showed no PUT at all).
+describe('FmCatalogPage — save on toggle, close only closes', () => {
+  const switchOf = (container, id) => Array.from(container.querySelectorAll('.fm-catalog-card'))
+    .find(c => c.querySelector('.fm-catalog-card__badge')?.textContent === id)
+    .querySelector('[role="switch"]');
+
+  it('saves the full new selection as soon as a model is toggled, without closing', () => {
     const onBack = vi.fn();
     const onSave = vi.fn();
     const { container } = render(
       <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
     );
-    const closeBtn = container.querySelector('.fm-catalog-header__back');
-    fireEvent.click(closeBtn);
+    fireEvent.click(switchOf(container, '303'));
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave).toHaveBeenCalledWith({ '303': false, '349': true });
+    expect(onBack).not.toHaveBeenCalled();
+    expect(container.querySelector('.fm-catalog-drawer')).not.toBeNull();
+  });
+
+  it('closing with the X button only closes: nothing is saved, with or without a previous toggle', () => {
+    const onBack = vi.fn();
+    const onSave = vi.fn();
+    const { container } = render(
+      <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
+    );
+    fireEvent.click(container.querySelector('.fm-catalog-header__back'));
     expect(onSave).not.toHaveBeenCalled();
-    expect(onBack).toHaveBeenCalled();
+    expect(onBack).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(switchOf(container, '303'));
+    fireEvent.click(container.querySelector('.fm-catalog-header__back'));
+    expect(onSave).toHaveBeenCalledTimes(1); // the toggle, not the close
+    expect(onBack).toHaveBeenCalledTimes(2);
   });
 
-  it('passes updated activeModels to onSave after toggle', () => {
+  it('closing via the backdrop overlay only closes: nothing is saved', () => {
     const onBack = vi.fn();
     const onSave = vi.fn();
     const { container } = render(
       <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
     );
-    const switches = container.querySelectorAll('[role="switch"]');
-    fireEvent.click(switches[0]); // toggle 303 off
-    const closeBtn = container.querySelector('.fm-catalog-header__back');
-    fireEvent.click(closeBtn);
-    const savedActive = onSave.mock.calls[0][0];
-    // After toggling 303 off it should be false
-    expect(savedActive['303']).toBe(false);
-    expect(savedActive['349']).toBe(true);
-  });
-
-  // Regression: previously the backdrop overlay was rendered externally by
-  // FmListPage, so clicking it to close the drawer bypassed FmCatalogPage's
-  // onSave entirely and silently discarded toggled model states. Now
-  // FmCatalogPage owns its own overlay + drawer wrapper, and a single
-  // handleClose (calling onSave then onBack) backs BOTH the backdrop click
-  // and the X button, so both close paths save consistently.
-  it('calls onSave and onBack when the backdrop overlay is clicked after a change (not just the X button)', () => {
-    const onBack = vi.fn();
-    const onSave = vi.fn();
-    const { container } = render(
-      <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
-    );
-    fireEvent.click(container.querySelectorAll('[role="switch"]')[0]); // toggle 303 off
-    const overlay = container.querySelector('.fm-catalog-overlay');
-    fireEvent.click(overlay);
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ '303': false, '349': true }));
-    expect(onBack).toHaveBeenCalled();
-  });
-
-  it('persists a toggle made before closing via the backdrop overlay (the actual bug being fixed)', () => {
-    const onBack = vi.fn();
-    const onSave = vi.fn();
-    const { container } = render(
-      <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
-    );
-    const switches = container.querySelectorAll('[role="switch"]');
-    fireEvent.click(switches[0]); // toggle 303 off
-    const overlay = container.querySelector('.fm-catalog-overlay');
-    fireEvent.click(overlay);
-    const savedActive = onSave.mock.calls[0][0];
-    expect(savedActive['303']).toBe(false);
-    expect(savedActive['349']).toBe(true);
-    expect(onBack).toHaveBeenCalled();
+    fireEvent.click(container.querySelector('.fm-catalog-overlay'));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(onBack).toHaveBeenCalledTimes(1);
   });
 
   it('does not close when clicking inside the drawer itself (stopPropagation on the drawer wrapper)', () => {
@@ -275,72 +257,49 @@ describe('FmCatalogPage — close and save', () => {
     const { container } = render(
       <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
     );
-    const drawer = container.querySelector('.fm-catalog-drawer');
-    fireEvent.click(drawer);
+    fireEvent.click(container.querySelector('.fm-catalog-drawer'));
     expect(onSave).not.toHaveBeenCalled();
     expect(onBack).not.toHaveBeenCalled();
   });
 
-  it('does not save when the backdrop is clicked without any toggle', () => {
-    // Edge case: closing via backdrop when `active` state is identical to the
-    // original `activeModels` prop — no toggles made before closing.
-    const onBack = vi.fn();
+  it('two fast toggles each save the cumulative selection, in order', () => {
     const onSave = vi.fn();
-    const original = { '303': true, '349': true };
     const { container } = render(
-      <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={original} />
+      <FmCatalogPage onBack={vi.fn()} onSave={onSave} activeModels={{ '303': true, '349': true }} />
     );
-    const overlay = container.querySelector('.fm-catalog-overlay');
-    fireEvent.click(overlay);
-    expect(onSave).not.toHaveBeenCalled();
-    expect(onBack).toHaveBeenCalledTimes(1);
+    fireEvent.click(switchOf(container, '303'));
+    fireEvent.click(switchOf(container, '349'));
+    expect(onSave.mock.calls.map(([sel]) => sel)).toEqual([
+      { '303': false, '349': true },
+      { '303': false, '349': false },
+    ]);
   });
 
-  it('toggling a model on and back off is no change: nothing is saved', () => {
+  it('toggling a model on and back off saves twice and ends on the original value', () => {
     const onSave = vi.fn();
     const { container } = render(
       <FmCatalogPage onBack={vi.fn()} onSave={onSave} activeModels={{ '303': true }} />
     );
-    const card349 = Array.from(container.querySelectorAll('.fm-catalog-card'))
-      .find(c => c.querySelector('.fm-catalog-card__badge')?.textContent === '349');
-    fireEvent.click(card349.querySelector('[role="switch"]'));
-    fireEvent.click(card349.querySelector('[role="switch"]'));
-    fireEvent.click(container.querySelector('.fm-catalog-header__back'));
-    expect(onSave).not.toHaveBeenCalled();
+    fireEvent.click(switchOf(container, '349'));
+    fireEvent.click(switchOf(container, '349'));
+    expect(onSave).toHaveBeenCalledTimes(2);
+    expect(onSave.mock.calls[1][0]).toEqual({ '303': true, '349': false });
   });
 
-  // Gap: handleClose has no idempotency guard (no "already closed" flag). In
-  // the real app this is masked because FmListPage unmounts FmCatalogPage on
-  // the first onBack, but the component itself does not protect against being
-  // invoked twice (e.g. two click events reaching it before that unmount
-  // commits). This test documents the current (unguarded) behavior — see
-  // BUG report to Forge for the risk assessment.
-  it('handleClose has no de-dup guard: firing the backdrop click twice invokes onSave/onBack twice', () => {
-    const onBack = vi.fn();
+  // The page rolls a failed save back by handing the drawer the last confirmed catalog.
+  it('follows the activeModels prop, so a rolled-back toggle visibly flips back', () => {
     const onSave = vi.fn();
-    const { container } = render(
-      <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
+    const confirmed = { '303': true, '349': true };
+    const { container, rerender } = render(
+      <FmCatalogPage onBack={vi.fn()} onSave={onSave} activeModels={confirmed} />
     );
-    fireEvent.click(container.querySelectorAll('[role="switch"]')[0]); // a change, so close saves
-    const overlay = container.querySelector('.fm-catalog-overlay');
-    fireEvent.click(overlay);
-    fireEvent.click(overlay);
-    expect(onSave).toHaveBeenCalledTimes(2);
-    expect(onBack).toHaveBeenCalledTimes(2);
-  });
-
-  it('handleClose has no de-dup guard: firing the X button twice invokes onSave/onBack twice', () => {
-    const onBack = vi.fn();
-    const onSave = vi.fn();
-    const { container } = render(
-      <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
-    );
-    fireEvent.click(container.querySelectorAll('[role="switch"]')[0]); // a change, so close saves
-    const closeBtn = container.querySelector('.fm-catalog-header__back');
-    fireEvent.click(closeBtn);
-    fireEvent.click(closeBtn);
-    expect(onSave).toHaveBeenCalledTimes(2);
-    expect(onBack).toHaveBeenCalledTimes(2);
+    fireEvent.click(switchOf(container, '303'));
+    expect(switchOf(container, '303').getAttribute('aria-checked')).toBe('false');
+    rerender(<FmCatalogPage onBack={vi.fn()} onSave={onSave} activeModels={{ ...confirmed }} />);
+    expect(switchOf(container, '303').getAttribute('aria-checked')).toBe('true');
+    // The next toggle builds on the rolled-back selection.
+    fireEvent.click(switchOf(container, '349'));
+    expect(onSave).toHaveBeenLastCalledWith({ '303': true, '349': false });
   });
 });
 
@@ -396,13 +355,15 @@ describe('FmCatalogPage — SII warning when activating the 390', () => {
       .find(c => c.querySelector('.fm-catalog-card__badge')?.textContent === '390');
     expect(card390().className).toContain('fm-catalog-card--attention');
     expect(switchOf(container, '390').getAttribute('aria-checked')).toBe('false');
+    expect(onSave).not.toHaveBeenCalled(); // nothing is saved while the warning is open
 
     fireEvent.click(screen.getByTestId('FmCatalogPage__siiConfirm'));
     expect(screen.queryByTestId('FmCatalogPage__siiWarning')).toBeNull();
     expect(card390().className).not.toContain('fm-catalog-card--attention');
     expect(switchOf(container, '390').getAttribute('aria-checked')).toBe('true');
-    fireEvent.click(container.querySelector('.fm-catalog-header__back'));
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ '390': true }));
+    // ETP-5831 CP-22 — "Activar" saves right away, with the full selection.
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave).toHaveBeenCalledWith({ '303': true, '349': true, '390': true });
   });
 
   it('organization that joined the SII this year: the warning says "since <date>", not exempt', async () => {
@@ -426,20 +387,24 @@ describe('FmCatalogPage — SII warning when activating the 390', () => {
     expect(warning.textContent).toBe('fm.catalog.sii_warning_title fm.catalog.sii_warning_bodyfm.action.cancelfm.catalog.activate');
   });
 
-  it('organization in the SII: "Cancelar" leaves it inactive', async () => {
+  it('organization in the SII: "Cancelar" leaves it inactive and saves nothing', async () => {
     sii.active = true;
-    const { container } = render(<FmCatalogPage {...defaultProps} />);
+    const onSave = vi.fn();
+    const { container } = render(<FmCatalogPage {...defaultProps} onSave={onSave} />);
     fireEvent.click(switchOf(container, '390'));
     fireEvent.click(await screen.findByTestId('FmCatalogPage__siiCancel'));
     expect(screen.queryByTestId('FmCatalogPage__siiWarning')).toBeNull();
     expect(switchOf(container, '390').getAttribute('aria-checked')).toBe('false');
+    expect(onSave).not.toHaveBeenCalled();
   });
 
-  it('organization outside the SII: activates without asking', async () => {
-    const { container } = render(<FmCatalogPage {...defaultProps} />);
+  it('organization outside the SII: activates without asking, and saves right away', async () => {
+    const onSave = vi.fn();
+    const { container } = render(<FmCatalogPage {...defaultProps} onSave={onSave} />);
     fireEvent.click(switchOf(container, '390'));
     await waitFor(() => expect(switchOf(container, '390').getAttribute('aria-checked')).toBe('true'));
     expect(screen.queryByTestId('FmCatalogPage__siiWarning')).toBeNull();
+    expect(onSave).toHaveBeenCalledWith({ '303': true, '349': true, '390': true });
   });
 
   it('never asks for 303/349, nor when deactivating the 390', async () => {
@@ -483,8 +448,7 @@ describe('FmCatalogPage — unavailable models', () => {
     const { container } = render(
       <FmCatalogPage onBack={vi.fn()} onSave={onSave} activeModels={undefined} unavailableModels={['390']} />
     );
-    fireEvent.click(container.querySelectorAll('[role="switch"]')[0]); // a change, so close saves
-    fireEvent.click(container.querySelector('.fm-catalog-header__back'));
+    fireEvent.click(container.querySelectorAll('[role="switch"]')[0]); // a toggle saves right away
     const saved = onSave.mock.calls[0][0];
     expect('390' in saved).toBe(false);
     expect(Object.keys(saved).sort()).toEqual(['303', '349']);
@@ -498,7 +462,6 @@ describe('FmCatalogPage — unavailable models', () => {
     const card349 = Array.from(container.querySelectorAll('.fm-catalog-card'))
       .find(c => c.querySelector('.fm-catalog-card__badge')?.textContent === '349');
     fireEvent.click(card349.querySelector('[role="switch"]'));
-    fireEvent.click(container.querySelector('.fm-catalog-header__back'));
     expect(onSave).toHaveBeenCalledWith({ '303': true, '349': true });
   });
 
@@ -509,60 +472,12 @@ describe('FmCatalogPage — unavailable models', () => {
     );
     expect(badges(container).sort()).toEqual(['303', '349', '390']);
     expect(headerTitleBadge(container)).toBe('3');
-    fireEvent.click(container.querySelectorAll('[role="switch"]')[0]); // a change, so close saves
-    fireEvent.click(container.querySelector('.fm-catalog-header__back'));
+    fireEvent.click(container.querySelectorAll('[role="switch"]')[0]); // a toggle saves right away
     expect(onSave.mock.calls[0][0]).toHaveProperty('390');
   });
 
   it('treats a missing unavailableModels prop as nothing unavailable', () => {
     const { container } = render(<FmCatalogPage {...defaultProps} />);
     expect(badges(container)).toContain('390');
-  });
-});
-
-// ── catalogSelectionChanged: the "save only on a real change" rule ───────────
-
-describe('catalogSelectionChanged', () => {
-  it('is false for the same selection', () => {
-    expect(catalogSelectionChanged({ 303: true, 349: false }, { 303: true, 349: false })).toBe(false);
-  });
-
-  it('is true when a model flips', () => {
-    expect(catalogSelectionChanged({ 303: true }, { 303: false })).toBe(true);
-    expect(catalogSelectionChanged({ 349: false }, { 349: true })).toBe(true);
-  });
-
-  it('treats a missing key and an explicit false as the same', () => {
-    expect(catalogSelectionChanged({ 303: true }, { 303: true, 349: false })).toBe(false);
-    expect(catalogSelectionChanged({ 303: true, 390: false }, { 303: true })).toBe(false);
-  });
-
-  it('is true when a model missing before is now active', () => {
-    expect(catalogSelectionChanged({ 303: true }, { 303: true, 349: true })).toBe(true);
-  });
-
-  it('is true when an active model disappears', () => {
-    expect(catalogSelectionChanged({ 303: true, 349: true }, { 303: true })).toBe(true);
-  });
-
-  it('compares values as booleans', () => {
-    expect(catalogSelectionChanged({ 303: 1, 349: 0 }, { 303: true, 349: false })).toBe(false);
-    expect(catalogSelectionChanged({ 303: 'Y' }, { 303: true })).toBe(false);
-    expect(catalogSelectionChanged({ 303: null, 349: undefined }, {})).toBe(false);
-    expect(catalogSelectionChanged({ 303: '' }, { 303: true })).toBe(true);
-  });
-
-  it('defaults missing arguments to an empty selection', () => {
-    expect(catalogSelectionChanged()).toBe(false);
-    expect(catalogSelectionChanged(undefined, { 303: false })).toBe(false);
-    expect(catalogSelectionChanged({ 303: true }, undefined)).toBe(true);
-  });
-
-  it('does not mutate its arguments', () => {
-    const before = { 303: true };
-    const after = { 303: false, 349: true };
-    catalogSelectionChanged(before, after);
-    expect(before).toEqual({ 303: true });
-    expect(after).toEqual({ 303: false, 349: true });
   });
 });

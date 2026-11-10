@@ -879,6 +879,56 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
     activeModels, setActiveModels, unavailableModels, loaded: catalogLoaded, error: catalogError,
   } = useFiscalModelsCatalog(apiBaseUrl, token);
 
+  // ETP-5831 CP-22 — the catalog drawer saves on every toggle. The PUTs are chained so that fast
+  // consecutive toggles reach the server in order (the last toggle wins), and a failed one rolls
+  // back to the last catalog the server confirmed.
+  //   confirmedCatalogRef — last server-confirmed catalog: the read result, then every PUT that
+  //                         answered OK. Tracked from `activeModels` only while no save is pending
+  //                         (otherwise `activeModels` holds an optimistic, unconfirmed value).
+  //   latestCatalogRef    — the most recent selection requested; only its failure rolls back and
+  //                         toasts (an earlier failed PUT is superseded by the later full catalog).
+  const confirmedCatalogRef = useRef(activeModels);
+  const latestCatalogRef = useRef(null);
+  const pendingCatalogSavesRef = useRef(0);
+  const catalogSaveChainRef = useRef(Promise.resolve());
+  useEffect(() => {
+    if (pendingCatalogSavesRef.current === 0) confirmedCatalogRef.current = activeModels;
+  }, [activeModels]);
+
+  const saveCatalog = useCallback((newActive) => {
+    // The PUT replaces the whole catalog: never send one built without a successful read
+    // (it would switch off every model the drawer could not see).
+    if (!catalogLoaded || catalogError) {
+      toast.error(t('fm.catalog.save_unavailable'));
+      // Hand the drawer the unchanged catalog back so its switch does not stay flipped.
+      setActiveModels(current => ({ ...current }));
+      return;
+    }
+    setActiveModels(newActive);
+    if (!apiBaseUrl) return;
+    latestCatalogRef.current = newActive;
+    pendingCatalogSavesRef.current += 1;
+    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+    catalogSaveChainRef.current = catalogSaveChainRef.current
+      .then(() => apiFetch(`${base}/fiscal-models-catalog`, {
+        method: 'PUT',
+        baseUrl: '',
+        body: JSON.stringify(newActive),
+      }))
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        confirmedCatalogRef.current = newActive;
+      })
+      .catch((err) => {
+        // A failed save is never silent (ETP-5831 CP-22): unless a later toggle already sent the
+        // full catalog again, the optimistic update is undone and the user is told.
+        if (latestCatalogRef.current !== newActive) return;
+        setActiveModels(confirmedCatalogRef.current);
+        toast.error(isNetworkError(err) ? err.message : t('fm.catalog.save_failed'));
+      })
+      .finally(() => { pendingCatalogSavesRef.current -= 1; });
+  }, [catalogLoaded, catalogError, apiBaseUrl, apiFetch, setActiveModels, t]);
+
   // "Resultado" auto-compute, one bucket set per registered model — see
   // `useDeclarationsAutoCompute` above for the draft / other / submitted split.
   const { draftMapById, otherMapById } = useDeclarationsAutoCompute(decls, { token, apiBaseUrl, onComputeUpdate });
@@ -1470,32 +1520,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           activeModels={activeModels}
           unavailableModels={unavailableModels}
           onBack={() => setShowCatalog(false)}
-          onSave={(newActive) => {
-            setShowCatalog(false);
-            // The PUT replaces the whole catalog: never send one built without a successful read
-            // (it would switch off every model the drawer could not see).
-            if (!catalogLoaded || catalogError) {
-              toast.error(t('fm.catalog.save_unavailable'));
-              return;
-            }
-            const previousActive = activeModels;
-            setActiveModels(newActive);
-            if (apiBaseUrl) {
-              const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-              apiFetch(`${base}/fiscal-models-catalog`, {
-                method: 'PUT',
-                baseUrl: '',
-                body: JSON.stringify(newActive),
-              })
-                .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); })
-                .catch((err) => {
-                  // A failed save is never silent (ETP-5831 CP-22): the optimistic update is
-                  // undone — unless a later save already replaced it — and the user is told.
-                  setActiveModels(current => (current === newActive ? previousActive : current));
-                  toast.error(isNetworkError(err) ? err.message : t('fm.catalog.save_failed'));
-                });
-            }
-          }}
+          onSave={saveCatalog}
           token={token}
           apiBaseUrl={apiBaseUrl}
           data-testid="FmCatalogPage__cb728e" />
