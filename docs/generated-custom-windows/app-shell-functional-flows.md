@@ -508,7 +508,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   period end or an upgrade releases it.
 - **Formatting:** prices through `formatCurrency` with the `upgradePlanPriceMonthly` /
   `upgradePlanPriceYearly` keys; dates through `formatCalendarDate`. Strings in `en_US.json`,
-  `es_ES.json` and `es_AR.json` (`locales/__tests__/etp5053-plan-change-keys.vitest.js` pins parity).
+  `es_ES.json` and `es_AR.json` (`locales/__tests__/plan-change-locale-parity.vitest.js` pins parity).
 - **Test ids:** `PlanChangeDialog__root`, `__loading`, `__unavailable`, `__retry`, `__none`,
   `__pending`, `__options`, `__option` (with `data-plan-key`, `data-timing`), `__optionName`,
   `__optionPrice`, `__optionTiming`, `__consequences`, `__timingNote`, `__quotaKept`, `__quotaFine`,
