@@ -1,21 +1,17 @@
-import { todayCalendarISO } from '../../../lib/dateOnly.js';
-
 /**
  * Resolves the fiscal system for the 'siiver' regime — split out of `resolveSystem`
  * (SonarQube S3776) so the territory veto and the volume/lowChoice branching are each
  * a flat, independently-readable chain instead of one nested inside the other.
  *
- * @param {string|null} territory
+ * @param {string[]|null} allowedSystems - what the backend catalog allows for the territory
  * @param {'high'|'low'|null} volume
  * @param {'sii'|'verifactu'|null} lowChoice
  * @returns {'SII'|'VERIFACTU'|null}
  */
-function resolveSiiverSystem({ territory, volume, lowChoice }) {
-  // SII only accepts IVA/IGIC taxpayers (verified against the AEATSII_CONFIG.taxtype
-  // AD_Ref_List — ETP-5272 point 4). A territory whose tax scheme SII cannot represent
-  // (Ceuta/Melilla → IPSI) has exactly one applicable system regardless of billing
-  // volume, so the volume/lowChoice answers never matter for it.
-  if (territory && !getAllowedSystemsForTerritory(territory).includes('SII')) {
+function resolveSiiverSystem({ allowedSystems, volume, lowChoice }) {
+  // A territory whose catalog entry does not allow SII (Ceuta/Melilla → IPSI, which SII cannot
+  // represent) has exactly one applicable system regardless of billing volume.
+  if (allowedSystems?.length && !allowedSystems.includes('SII')) {
     return 'VERIFACTU';
   }
   if (volume === 'high') return 'SII';
@@ -31,16 +27,15 @@ function resolveSiiverSystem({ territory, volume, lowChoice }) {
  * @param {boolean|null} alsoNational - tbai: does the org also operate under SII national?
  * @param {'high'|'low'|null} volume - siiver: annual billing volume threshold
  * @param {'sii'|'verifactu'|null} lowChoice - siiver + low: chosen system
- * @param {string|null} [territory] - the selected territory id (e.g. 'ceuta'). Used to
- *   veto SII when the territory's tax scheme is not one SII supports (see
- *   `getAllowedSystemsForTerritory`). Optional for backward compatibility with callers
- *   that only know the regime.
+ * @param {string[]|null} [allowedSystems] - the systems the backend catalog allows for the
+ *   selected territory (`allowedSystemsFor`). Used to veto SII where it does not apply.
  * @returns {'SII'|'TBAI'|'SII+TBAI'|'VERIFACTU'|null}
  */
-export function resolveSystem({ regime, alsoNational, volume, lowChoice, territory = null }) {
+export function resolveSystem({ regime, alsoNational, volume, lowChoice, allowedSystems = null }) {
+  // A UI guess only: the server (configureFiscalSystem) is the authority on which pairs are valid.
   if (regime === 'sii_foral') return 'SII';
   if (regime === 'tbai') return alsoNational ? 'SII+TBAI' : 'TBAI';
-  if (regime === 'siiver') return resolveSiiverSystem({ territory, volume, lowChoice });
+  if (regime === 'siiver') return resolveSiiverSystem({ allowedSystems, volume, lowChoice });
   return null;
 }
 
@@ -164,29 +159,51 @@ export function getVerifactuTaxTypeLabel(value) {
 }
 
 /**
- * Single source of truth for which fiscal systems are valid per territory.
+ * The systems the backend catalog (`fiscalSystemCatalog`, ETP-6053) allows for a territory.
+ * The rules live in the backend only; an unknown territory or a catalog not loaded yet allows
+ * nothing.
  *
- * `ceuta` (Ceuta/Melilla) is deliberately `['VERIFACTU']` only, unlike
- * `baleares`/`canarias`: Ceuta/Melilla taxpayers use the IPSI tax scheme, and the
- * AEATSII_CONFIG.taxtype AD_Ref_List only defines `IVA`/`IGIC` — SII has no way to
- * represent an IPSI taxpayer at all (confirmed against the DB reference list, ETP-5272
- * point 4). `canarias` (IGIC) IS supported by SII, so it keeps both options.
- * TicketBAI is Basque-territory-specific (its own ETSG_SIF_Territory reference list has
- * no Ceuta/Melilla value either) and was never offered outside `alava`/`bizkaia`/
- * `gipuzkoa`, so it needed no change here.
+ * @param {{ territories?: Array<{ territory: string, systems: string[] }> }|null} catalog
+ * @param {string|null} territory
+ * @returns {string[]}
  */
-const TERRITORY_ALLOWED_SYSTEMS = {
-  navarra:  ['SII'],
-  alava:    ['TBAI', 'SII+TBAI'],
-  bizkaia:  ['TBAI', 'SII+TBAI'],
-  gipuzkoa: ['TBAI', 'SII+TBAI'],
-  baleares: ['SII', 'VERIFACTU'],
-  canarias: ['SII', 'VERIFACTU'],
-  ceuta:    ['VERIFACTU'],
-};
+export function allowedSystemsFor(catalog, territory) {
+  const entry = catalog?.territories?.find(t => t.territory === territory);
+  return entry?.systems ?? [];
+}
 
-export function getAllowedSystemsForTerritory(territory) {
-  return TERRITORY_ALLOWED_SYSTEMS[territory] ?? [];
+/**
+ * The territory a stored configuration belongs to, identified with the values the backend
+ * catalog says each territory's records carry: TicketBAI territory first, then the SII flags and
+ * tax type (preferring a territory where SII stands alone, e.g. España / Baleares over Álava),
+ * then the VERI*FACTU tax type.
+ *
+ * @param {object|null} catalog
+ * @param {{ sii?: object|null, tbai?: object|null, verifactu?: object|null }} records
+ * @returns {string|null}
+ */
+export function territoryOfRecords(catalog, { sii = null, tbai = null, verifactu = null }) {
+  const territories = catalog?.territories ?? [];
+  const tbaiValue = String(tbai?.etsgSifTerritory ?? '').toUpperCase();
+  if (tbaiValue) {
+    const match = territories.find(t => t.tbaiTerritory === tbaiValue);
+    if (match) return match.territory;
+  }
+  if (sii) {
+    const taxtype = String(sii.taxtype ?? '').toUpperCase();
+    const candidates = territories.filter(t => t.sii
+      && t.sii.navarra === isEtendoTrue(sii.navarra)
+      && t.sii.guipuzcoa === isEtendoTrue(sii.guipuzcoa)
+      && t.sii.taxtype === taxtype);
+    const standalone = candidates.find(t => t.systems?.includes('SII'));
+    const match = standalone ?? candidates[0];
+    if (match) return match.territory;
+  }
+  if (verifactu) {
+    const match = territories.find(t => t.verifactuTaxType && t.verifactuTaxType === verifactu.tAXType);
+    if (match) return match.territory;
+  }
+  return null;
 }
 
 /**
@@ -243,93 +260,6 @@ export function getCertificateContext(system) {
   return null;
 }
 
-/**
- * Today as `yyyy-MM-dd` in the LOCAL calendar — the value the onboarding writes into the
- * fiscal systems' date-only adoption fields (`fechaAcogidaSII`, `monitordate`,
- * `tbaisystemdate`). ETP-5700: this used to be `toISOString().slice(0, 10)`, the UTC day,
- * which in Spain between 00:00 and 01:00/02:00 is still yesterday.
- *
- * @returns {string}
- */
-export function todayIsoDate() {
-  return todayCalendarISO();
-}
-
-export function buildOnboardingPayloads(system, territory) {
-  const today = todayIsoDate();
-  const siiDefaults = {
-    acogidaAlSII:       'N',
-    entornoDeProduccin: 'Y',
-    adjuntarArchivosXML: 'Y',
-    fechaAcogidaSII:    today,
-    monitordate:        today,
-  };
-  const tbaiDefaults = {
-    tbaisystemdate:          today,
-    productionEnv:           'Y',
-    uSEAsproductDesc:        'N',
-    validatePreviousInvoice: 'N',
-  };
-  const verifactuDefaults = { defaultQR: 'Y' };
-
-  switch (system) {
-    case 'SII':
-      switch (territory) {
-        case 'navarra':
-          return { sii: { navarra: 'Y', taxtype: 'IVA', ...siiDefaults }, tbai: null, verifactu: null };
-        case 'gipuzkoa':
-          return { sii: { guipuzcoa: 'Y', taxtype: 'IVA', ...siiDefaults }, tbai: null, verifactu: null };
-        case 'baleares':
-          return { sii: { taxtype: 'IVA', ...siiDefaults }, tbai: null, verifactu: null };
-        case 'canarias':
-          return { sii: { taxtype: 'IGIC', ...siiDefaults }, tbai: null, verifactu: null };
-        case 'ceuta':
-          // SII does not support the IPSI tax scheme (Ceuta/Melilla) — see
-          // getAllowedSystemsForTerritory / ETP-5272 point 4. resolveSystem() never
-          // resolves to 'SII' for this territory, so this branch should be unreachable;
-          // guarded here too rather than building a payload the server will reject.
-          return { sii: null, tbai: null, verifactu: null };
-        default:
-          return { sii: null, tbai: null, verifactu: null };
-      }
-    case 'TBAI':
-      switch (territory) {
-        case 'alava':
-          return { sii: null, tbai: { etsgSifTerritory: 'ARABA', ...tbaiDefaults }, verifactu: null };
-        case 'bizkaia':
-          return { sii: null, tbai: { etsgSifTerritory: 'BIZKAIA', ...tbaiDefaults }, verifactu: null };
-        case 'gipuzkoa':
-          return { sii: null, tbai: { etsgSifTerritory: 'GIPUZKOA', ...tbaiDefaults }, verifactu: null };
-        default:
-          return { sii: null, tbai: null, verifactu: null };
-      }
-    case 'SII+TBAI':
-      switch (territory) {
-        case 'alava':
-          return { sii: { taxtype: 'IVA', ...siiDefaults }, tbai: { etsgSifTerritory: 'ARABA', ...tbaiDefaults }, verifactu: null };
-        case 'bizkaia':
-          return { sii: { taxtype: 'IVA', ...siiDefaults }, tbai: { etsgSifTerritory: 'BIZKAIA', ...tbaiDefaults }, verifactu: null };
-        case 'gipuzkoa':
-          return { sii: { guipuzcoa: 'Y', taxtype: 'IVA', ...siiDefaults }, tbai: { etsgSifTerritory: 'GIPUZKOA', ...tbaiDefaults }, verifactu: null };
-        default:
-          return { sii: null, tbai: null, verifactu: null };
-      }
-    case 'VERIFACTU':
-      switch (territory) {
-        case 'baleares':
-          return { sii: null, tbai: null, verifactu: { tAXType: '01', nextSendWaitTime: '60', ...verifactuDefaults } };
-        case 'canarias':
-          return { sii: null, tbai: null, verifactu: { tAXType: '03', nextSendWaitTime: '60', ...verifactuDefaults } };
-        case 'ceuta':
-          return { sii: null, tbai: null, verifactu: { tAXType: '02', nextSendWaitTime: '60', ...verifactuDefaults } };
-        default:
-          return { sii: null, tbai: null, verifactu: null };
-      }
-    default:
-      return { sii: null, tbai: null, verifactu: null };
-  }
-}
-
 export function buildVerifactuUpdatePayload(form) {
   return {
     tAXType:   normalizeVerifactuTaxType(form?.tAXType),
@@ -367,49 +297,6 @@ export function mapSiiRecordToForm(record) {
     postedInvoices:     normalizeEtendoBoolean(record?.postedInvoices),
     authorizationno:    record?.authorizationno ?? '',
   };
-}
-
-/**
- * Returns field defaults for record creation based on territory + SII enrollment.
- * Each property is an object of field overrides, or null if that system should not be created.
- *
- * @param {'baleares'|'canarias'|'ceuta'|'navarra'|'alava'|'bizkaia'|'gipuzkoa'} territory
- * @param {boolean} inSii - true if org is enrolled in SII
- * @returns {{ sii: object|null, verifactu: object|null, tbai: object|null }}
- */
-export function getTerritoryDefaults(territory, inSii) {
-  switch (territory) {
-    case 'baleares':
-      return inSii
-        ? { sii: { taxtype: 'IVA' }, verifactu: null, tbai: null }
-        : { sii: null, verifactu: { tAXType: '01' }, tbai: null };
-    case 'canarias':
-      return inSii
-        ? { sii: { taxtype: 'IGIC' }, verifactu: null, tbai: null }
-        : { sii: null, verifactu: { tAXType: '03' }, tbai: null };
-    case 'ceuta':
-      // SII does not support the IPSI tax scheme (Ceuta/Melilla) — see
-      // getAllowedSystemsForTerritory / ETP-5272 point 4. Unlike baleares/canarias,
-      // `inSii` is not honored here: VERIFACTU is the only valid system for this
-      // territory regardless of caller-supplied SII enrollment state.
-      return { sii: null, verifactu: { tAXType: '02' }, tbai: null };
-    case 'navarra':
-      return { sii: { navarra: 'Y', taxtype: 'IVA' }, verifactu: null, tbai: null };
-    case 'alava':
-      return inSii
-        ? { sii: { taxtype: 'IVA' }, verifactu: null, tbai: { etsgSifTerritory: 'ARABA' } }
-        : { sii: null, verifactu: null, tbai: { etsgSifTerritory: 'ARABA' } };
-    case 'bizkaia':
-      return inSii
-        ? { sii: { taxtype: 'IVA' }, verifactu: null, tbai: { etsgSifTerritory: 'BIZKAIA' } }
-        : { sii: null, verifactu: null, tbai: { etsgSifTerritory: 'BIZKAIA' } };
-    case 'gipuzkoa':
-      return inSii
-        ? { sii: { guipuzcoa: 'Y', taxtype: 'IVA' }, verifactu: null, tbai: { etsgSifTerritory: 'GIPUZKOA' } }
-        : { sii: null, verifactu: null, tbai: { etsgSifTerritory: 'GIPUZKOA' } };
-    default:
-      return { sii: null, verifactu: null, tbai: null };
-  }
 }
 
 export async function parseApiError(res) {

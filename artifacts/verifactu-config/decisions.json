@@ -7,7 +7,6 @@
   },
   "entities": {
     "cabeceraDeConfiguraciónVerifactu": {
-      "javaQualifier": "verifactu-config-ready-handler",
       "fields": {
         "organization": {
           "visibility": "system",

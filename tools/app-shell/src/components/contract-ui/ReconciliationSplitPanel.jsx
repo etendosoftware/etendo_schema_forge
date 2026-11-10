@@ -23,6 +23,8 @@ import { useAccountMutations } from '@/hooks/useAccountMutations.js';
 import {
   STATUS_CODES, countForStatus, matchesStatus,
 } from './reconciliationStatusFilter.js';
+import { isBounceReviewLine, pendingLinesStatusParam } from './bouncePairs.js';
+import { useBounceLines, useBouncePairPanel } from './useBouncePairReview.jsx';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DistinctValuesFilter } from '@/components/ui/distinct-values-filter';
 import { DateRangePopover } from '@/components/ui/date-range-popover';
@@ -80,7 +82,10 @@ const STATUS_LABEL_KEY = {
   suggested: 'financeReconcileFilterStatusSuggested',
   byRule: 'financeReconcileFilterStatusByRule',
   difference: 'financeReconcileFilterStatusDifference',
+  // ETP-5581 — offered only when the backend reports them (see visibleStatusCodes).
+  bounce: 'financeReconcileFilterStatusBounce',
   reconciled: 'financeReconcileFilterStatusReconciled',
+  discarded: 'financeReconcileFilterStatusDiscarded',
 };
 
 const ReconciliationGridContext = createContext(null);
@@ -255,7 +260,7 @@ function ToolbarShell({ children, search, onSearchChange, testIdPrefix }) {
   );
 }
 
-function ReconciliationStatusFilter({ value, onChange, counts = {} }) {
+function ReconciliationStatusFilter({ value, onChange, counts = {}, codes = STATUS_CODES }) {
   const ui = useUI();
   // Summed over the states each code covers, not read straight off `counts` — the "Pendiente" entry
   // is a superset, so its own bucket would under-report the rows it shows (ETP-5033).
@@ -264,7 +269,7 @@ function ReconciliationStatusFilter({ value, onChange, counts = {} }) {
     <DistinctValuesFilter
       value={value}
       onChange={onChange}
-      codes={STATUS_CODES}
+      codes={codes}
       labelFor={(code) => `${ui(STATUS_LABEL_KEY[code] ?? STATUS_LABEL_KEY.pending)} (${countFor(code)})`}
       allLabel={`${ui('financeReconcileFilterStatusAll')} (${counts.all ?? 0})`}
       searchPlaceholder={ui('financeReconcileFilterStatusSearchPlaceholder')}
@@ -577,6 +582,8 @@ function StatementLinesPanel({
   lines, total, loading, currency, bcpLocale, selectedLineId, onSelectLine, search, onSearchChange,
   status, onStatusChange, statusCounts, dateRange, onDateRangeChange, onBack,
   sortKey = null, sortDirection = 'asc', onSort,
+  // ETP-5581 — the filter codes to offer (the bounce / discarded entries only when reported).
+  statusCodes = STATUS_CODES,
 }) {
   const ui = useUI();
 
@@ -608,7 +615,7 @@ function StatementLinesPanel({
             checked={selected}
             onChange={() => onSelectLine(line)}
             data-testid={`recon-line-radio-${line.id}`}
-            className="h-4 w-4 accent-[hsl(var(--foreground))]"
+            className="h-4 w-4 accent-primary"
           />
         </TableCell>
         <DateCell
@@ -666,7 +673,7 @@ function StatementLinesPanel({
       >
         <ArrowLeft className="h-5 w-5" data-testid="ArrowLeft__d0f4d5" />
       </button>
-      <ReconciliationStatusFilter value={status} onChange={onStatusChange} counts={statusCounts} data-testid="ReconciliationStatusFilter__d0f4d5" />
+      <ReconciliationStatusFilter value={status} onChange={onStatusChange} counts={statusCounts} codes={statusCodes} data-testid="ReconciliationStatusFilter__d0f4d5" />
       <DateRangePopover value={dateRange} onChange={onDateRangeChange} placeholder={ui('dateRangeAnyTime')} data-testid="DateRangePopover__d0f4d5" />
     </ToolbarShell>
   );
@@ -1603,6 +1610,11 @@ export function ReconciliationSplitPanel({
   // un-link and the difference post hidden, every confirmation dialog kept shut, and each mutating
   // handler wrapped in `guardWrite`. Browsing, filtering and selecting stay available.
   windowReadOnly = false,
+  // ETP-5581 — the host's bounce-pair review state (`useAutoMatchReview().panel`): the line
+  // "Revisar en el panel" asked to show (`focus` / `onFocusConsumed`) and the pairs dismissed with
+  // "No es un rechazo" (`dismissedKeys` / `onDismiss`), shared with the automatch modal. Optional:
+  // without it the panel keeps its own dismissals.
+  bounceReview = null,
 }) {
   const ui = useUI();
   const { locale: appLocale } = useLocaleSwitch();
@@ -1644,12 +1656,20 @@ export function ReconciliationSplitPanel({
   const rightBounds = useMemo(() => getDateBounds(rightDateRange), [rightDateRange]);
 
   const {
-    lines, counts: statusCounts, loading: linesLoading,
+    lines: pendingLines, counts: pendingCounts, loading: linesLoading,
     reload: reloadLines,
   } = usePendingStatementLines(accountId, {
     dateFrom: toDateParam(leftBounds.from),
     dateTo: toDateParam(leftBounds.to),
+    // ETP-5581 — `discarded` only while the "Descartadas" filter is active; otherwise absent.
+    status: pendingLinesStatusParam(leftStatus),
   });
+  // ETP-5581 — bounce pairs and discarded lines. A pass-through while the backend reports neither.
+  const bounceLines = useBounceLines({
+    lines: pendingLines, counts: pendingCounts, status: leftStatus, review: bounceReview,
+    accountId, dateFrom: toDateParam(leftBounds.from), dateTo: toDateParam(leftBounds.to),
+  });
+  const { lines, counts: statusCounts } = bounceLines;
   // The selection stores identity (id + matchGroupId); the LIVE line data is re-resolved from the
   // latest `lines` on every render, re-matched by group first so a head-id shift after a split /
   // unlink doesn't lose the selection and the right panel always reflects fresh amounts/txns.
@@ -1677,7 +1697,9 @@ export function ReconciliationSplitPanel({
   }, [lines, selectedLineSel, linesLoading, leftStatus]);
   const sourceMeta = SOURCE_META[rightSource] ?? SOURCE_META.receipts;
   const invoiceMode = sourceMeta.kind === 'invoices';
-  const candidateLineId = resolveCandidateLineId(selectedLine);
+  // A bounce or discarded line gets the bounce-pair panel instead of candidates (ETP-5581): there
+  // is nothing to fetch for it.
+  const candidateLineId = isBounceReviewLine(selectedLine) ? null : resolveCandidateLineId(selectedLine);
   const { candidates, counts: sourceCounts, loading: candLoading } = useCandidateOperations(
     accountId, candidateLineId, sourceMeta.docType,
     invoiceMode ? 'invoices' : null,
@@ -1702,12 +1724,14 @@ export function ReconciliationSplitPanel({
   // Pending un-reconcile request (single row OR the bulk selection): { ids, hasAuto, count }.
   const [removeRequest, setRemoveRequest] = useState(null);
 
-  const selectLine = (line) => {
+  // Stable (only state setters inside): the bounce focus request depends on it, and a new function
+  // every render would re-run that effect on every render instead of when its inputs change.
+  const selectLine = useCallback((line) => {
     setSelectedLineSel(line);
     setSelectedOpIds(new Set());
     // Default the type selector to the matching transaction direction for the line.
     setRightSource((Number(line?.amount) || 0) < 0 ? 'payments' : 'receipts');
-  };
+  }, []);
 
   const changeSource = (next) => {
     setRightSource(next);
@@ -1727,6 +1751,16 @@ export function ReconciliationSplitPanel({
     setSelectedLineSel(null);
     setSelectedOpIds(new Set());
   };
+
+  // ETP-5581 — the right panel of a bounce or discarded line (null for any other line).
+  const { panel: bouncePanel } = useBouncePairPanel({
+    accountId, currency, bcpLocale, selectedLine, lines, loading: linesLoading,
+    discardedLines: bounceLines.discardedLines, reloadLines, onChanged: onReconcileSuccess,
+    onRestored: bounceLines.refreshDefaultCounts,
+    dismiss: bounceLines.dismiss, windowReadOnly, review: bounceReview,
+    status: leftStatus, setStatus: setLeftStatus, setSearch: setLeftSearch, dateRange: leftDateRange,
+    setDateRange: setLeftDateRange, selectLine,
+  });
 
   const visibleLines = useMemo(() => {
     const q = leftSearch.trim().toLowerCase();
@@ -2174,12 +2208,14 @@ export function ReconciliationSplitPanel({
           status={leftStatus}
           onStatusChange={setLeftStatus}
           statusCounts={statusCounts}
+          statusCodes={bounceLines.statusCodes}
           dateRange={leftDateRange}
           onDateRangeChange={setLeftDateRange}
           search={leftSearch}
           onSearchChange={setLeftSearch}
           onBack={onBack}
           data-testid="StatementLinesPanel__d0f4d5" />
+        {bouncePanel ?? (
         <CandidateOperationsPanel
           line={selectedLine}
           candidates={visibleCandidates}
@@ -2231,6 +2267,7 @@ export function ReconciliationSplitPanel({
               data-testid="ReconciliationActionBar__d0f4d5" />
           ) : null}
           data-testid="CandidateOperationsPanel__d0f4d5" />
+        )}
       </div>
       {/* ETP-4965: the same modal the "post the difference" banner uses, reached from the other
           direction — the user pressed Conciliar on a match with a postable difference and the

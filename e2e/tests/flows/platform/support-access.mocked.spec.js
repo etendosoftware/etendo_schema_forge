@@ -6,7 +6,7 @@
 // @covers tools/app-shell/src/layout/AppLayout.jsx
 // @covers tools/app-shell/src/components/UserAvatarButton.jsx
 // @covers tools/app-shell/src/runtime-routes.jsx
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login, MOCK_ORG_ID } from '../../helpers/auth.js';
 
 /**

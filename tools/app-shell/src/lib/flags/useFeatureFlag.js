@@ -11,6 +11,8 @@ const RESOLUTION_EVENTS = [
   ProviderEvents.Ready,
   ProviderEvents.ConfigurationChanged,
   ProviderEvents.ContextChanged,
+  ProviderEvents.Error,
+  ProviderEvents.Stale,
 ];
 
 /**

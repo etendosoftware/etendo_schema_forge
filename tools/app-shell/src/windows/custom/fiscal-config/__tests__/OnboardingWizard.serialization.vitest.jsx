@@ -36,18 +36,23 @@ vi.mock('@/components/ui/button', () => ({
   ),
 }));
 
-// The POST that creates each config record must come back with a record in the NEO
-// envelope: `createRecords` stores what it returns, and the detail screen only mounts a
-// section when its `createdRecords.<system>` is truthy.
-vi.mock('@/auth/useApiFetch.js', () => ({
-  useApiFetch: vi.fn(() => vi.fn((url) => Promise.resolve({
-    ok: true,
-    text: () => Promise.resolve(''),
-    json: () => Promise.resolve({
-      response: { data: [{ id: url.includes('tbai') ? 'tbai-rec-1' : 'sii-rec-1' }] },
-    }),
-  }))),
+// ETP-6053 — Confirm calls the organization's configureFiscalSystem action, which answers the
+// records it created; the wizard reads each one back and the detail screen only mounts a section
+// when its `createdRecords.<system>` is truthy. One stable apiFetch, like the memoized real one.
+const stableApiFetch = vi.hoisted(() => vi.fn((url) => {
+  const json = url.includes('/action/configureFiscalSystem')
+    ? { response: { data: { system: 'SII+TBAI', territory: 'alava', created: [
+      { system: 'SII', id: 'sii-rec-1' }, { system: 'TBAI', id: 'tbai-rec-1' },
+    ] } } }
+    : { response: { data: [{ id: url.includes('tbai') ? 'tbai-rec-1' : 'sii-rec-1' }] } };
+  return Promise.resolve({ ok: true, text: () => Promise.resolve(''), json: () => Promise.resolve(json) });
 }));
+vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: vi.fn(() => stableApiFetch) }));
+
+vi.mock('../useFiscalCatalog.js', async () => {
+  const { FISCAL_SYSTEM_CATALOG } = await import('./fiscalSystemCatalog.fixture.js');
+  return { useFiscalCatalog: () => ({ catalog: FISCAL_SYSTEM_CATALOG, error: null, loading: false }) };
+});
 
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: vi.fn(() => ({
@@ -60,18 +65,6 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 vi.mock('@/components/related-documents/helpers.js', () => ({
   fetchById: vi.fn(() => Promise.resolve(null)),
   neoBase: (url) => url?.replace(/\/[^/]+$/, '') ?? '',
-}));
-
-// `resolveSystem` decides which detail screen is shown; force the combined system, which is
-// the only one that saves two records. `buildOnboardingPayloads` must return BOTH payloads
-// so `createdRecords.sii` and `.tbai` exist and both sections mount.
-vi.mock('../fiscalConfig.utils.js', async (importOriginal) => ({
-  ...(await importOriginal()),
-  buildOnboardingPayloads: vi.fn(() => ({ sii: {}, tbai: {} })),
-  getFiscalRecordId: vi.fn(() => null),
-  getAllowedSystemsForTerritory: vi.fn(() => ['SII', 'TBAI', 'VERIFACTU']),
-  getCertificateContext: vi.fn(() => null),
-  resolveSystem: vi.fn(() => 'SII+TBAI'),
 }));
 
 /**
@@ -100,8 +93,8 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 import OnboardingWizard from '../OnboardingWizard.jsx';
 
 /**
- * Walks the wizard to the SII+TBAI detail screen: pick a territory, continue, confirm.
- * `createRecords` then creates both records and lands on the detail step, where both the
+ * Walks the wizard to the SII+TBAI detail screen: pick Álava, answer "also SII", confirm.
+ * `createRecords` then activates both systems and lands on the detail step, where both the
  * SII and the TBAI section are mounted at once.
  */
 async function renderAtDetailScreen(props = {}) {
@@ -112,7 +105,10 @@ async function renderAtDetailScreen(props = {}) {
     ...props,
   };
   const utils = render(<OnboardingWizard {...merged} />);
-  fireEvent.click(screen.getByText('fiscal.territory.navarra'));
+  // Álava + "also national SII" resolves to SII + TicketBAI, the only system saving two records.
+  fireEvent.click(screen.getByText('fiscal.territory.alava'));
+  fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
+  fireEvent.click(screen.getByText('fiscal.onboarding.subq.sii.label'));
   fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
   fireEvent.click(screen.getByText('fiscal.onboarding.confirm.btn'));
   await waitFor(() => expect(screen.getByText('fiscal.save')).toBeInTheDocument());

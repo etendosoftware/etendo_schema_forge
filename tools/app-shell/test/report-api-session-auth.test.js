@@ -85,7 +85,7 @@ let fetchCalls;
 let originalFetch;
 let sessionFetchCount;
 
-function stubFetch({ sessionOk = true, sessionStatus = 200 } = {}) {
+function stubFetch({ sessionOk = true, sessionStatus = 200, roleOrgs = ['0'] } = {}) {
   fetchCalls = [];
   sessionFetchCount = 0;
   originalFetch = globalThis.fetch;
@@ -102,6 +102,7 @@ function stubFetch({ sessionOk = true, sessionStatus = 200 } = {}) {
         status: 200,
         json: async () => ({
           environment: { clientId: 'C1', orgId: 'O1', roleId: 'R1', userId: 'U1' },
+          roleList: [{ id: 'R1', orgList: roleOrgs.map((id) => ({ id })) }],
           csrfToken: VALID_CSRF,
         }),
       };
@@ -122,8 +123,9 @@ function stubFetch({ sessionOk = true, sessionStatus = 200 } = {}) {
   };
 }
 
+// A report's NEO data call. The access check (ETP-6080) also reads /sws/neo/myreportaccess; that is not one.
 function neoCall() {
-  return [...fetchCalls].reverse().find((c) => c.url.includes('/sws/neo/'));
+  return [...fetchCalls].reverse().find((c) => c.url.includes('/sws/neo/') && !c.url.includes('/sws/neo/myreportaccess'));
 }
 
 describe('report-api.js — session-cookie authentication (ETP-5460)', () => {
@@ -193,30 +195,65 @@ describe('report-api.js — session-cookie authentication (ETP-5460)', () => {
     });
   });
 
-  describe('GET /api/reports/:id/data', () => {
+  // ETP-6080: GET /data is gone (it ran report SQL with no params = every
+  // org); POST /query is the JSON route, through the shared handleReportQuery.
+  describe('POST /api/reports/:id/query', () => {
     it('rejects with 401 and makes no NEO call when no session cookie is present', async () => {
       const handler = loadMiddleware();
       const res = makeRes();
-      await handler(makeReq('GET', `/api/reports/${NEO_REPORT_ID}/data`, null, {}), res, () => {
-        throw new Error('data route did not match');
+      await handler(makeReq('POST', `/api/reports/${NEO_REPORT_ID}/query`, '{}', {}), res, () => {
+        throw new Error('query route did not match');
       });
       assert.equal(res.statusCode, 401);
       assert.equal(neoCall(), undefined);
     });
 
-    it('succeeds with a valid session and never sends a CSRF header on this safe GET', async () => {
+    it('rejects with 403 without the CSRF header (unsafe POST)', async () => {
       const handler = loadMiddleware();
       const res = makeRes();
       await handler(
-        makeReq('GET', `/api/reports/${NEO_REPORT_ID}/data`, null, validSessionHeaders('GET')),
+        makeReq('POST', `/api/reports/${NEO_REPORT_ID}/query`, '{}', { cookie: VALID_SESSION_COOKIE }),
         res,
-        () => { throw new Error('data route did not match'); },
+        () => { throw new Error('query route did not match'); },
       );
-      assert.equal(res.statusCode, 200, `data failed: ${String(res.body).slice(0, 300)}`);
-      const call = neoCall();
-      assert.ok(call);
-      assert.equal(call.init.headers.Cookie, VALID_SESSION_COOKIE);
-      assert.equal('X-Go-CSRF' in call.init.headers, false);
+      assert.equal(res.statusCode, 403);
+    });
+
+    it('answers 400 QUERY_NOT_SUPPORTED for a NEO report, without calling NEO', async () => {
+      const handler = loadMiddleware();
+      const res = makeRes();
+      await handler(
+        makeReq('POST', `/api/reports/${NEO_REPORT_ID}/query`, '{}', validSessionHeaders('POST')),
+        res,
+        () => { throw new Error('query route did not match'); },
+      );
+      assert.equal(res.statusCode, 400);
+      assert.equal(JSON.parse(res.body).code, 'QUERY_NOT_SUPPORTED');
+      assert.equal(neoCall(), undefined);
+    });
+
+    it('answers 400 INVALID_BODY for a malformed JSON body', async () => {
+      const handler = loadMiddleware();
+      const res = makeRes();
+      await handler(
+        makeReq('POST', `/api/reports/${NEO_REPORT_ID}/query`, '{nope', validSessionHeaders('POST')),
+        res,
+        () => { throw new Error('query route did not match'); },
+      );
+      assert.equal(res.statusCode, 400);
+      assert.equal(JSON.parse(res.body).code, 'INVALID_BODY');
+    });
+
+    it('no longer serves GET /api/reports/:id/data (falls through to next)', async () => {
+      const handler = loadMiddleware();
+      let fellThrough = false;
+      await handler(
+        makeReq('GET', `/api/reports/${NEO_REPORT_ID}/data`, null, validSessionHeaders('GET')),
+        makeRes(),
+        () => { fellThrough = true; },
+      );
+      assert.equal(fellThrough, true);
+      assert.equal(sessionFetchCount, 0);
     });
   });
 
@@ -263,11 +300,12 @@ describe('report-api.js — session-cookie authentication (ETP-5460)', () => {
       const handler = loadMiddlewareWith({ etendoUrl: CONFIGURED });
       const res = makeRes();
       await handler(
-        makeReq('GET', `/api/reports/${NEO_REPORT_ID}/data`, null, validSessionHeaders('GET')),
+        makeReq('POST', `/api/reports/${NEO_REPORT_ID}/render`, JSON.stringify({ format: 'html' }),
+          validSessionHeaders('POST')),
         res,
-        () => { throw new Error('data route did not match'); },
+        () => { throw new Error('render route did not match'); },
       );
-      assert.equal(res.statusCode, 200, `data failed: ${String(res.body).slice(0, 300)}`);
+      assert.equal(res.statusCode, 200, `render failed: ${String(res.body).slice(0, 300)}`);
       const sessionCall = fetchCalls.find((c) => c.url.includes('/sws/go/session'));
       assert.ok(sessionCall, 'expected a session resolution call');
       assert.equal(sessionCall.url, `${CONFIGURED}/sws/go/session`);
@@ -323,9 +361,10 @@ describe('report-api.js — session-cookie authentication (ETP-5460)', () => {
       const handler = loadMiddlewareWith();
       const res = makeRes();
       await handler(
-        makeReq('GET', `/api/reports/${NEO_REPORT_ID}/data`, null, validSessionHeaders('GET')),
+        makeReq('POST', `/api/reports/${NEO_REPORT_ID}/render`, JSON.stringify({ format: 'html' }),
+          validSessionHeaders('POST')),
         res,
-        () => { throw new Error('data route did not match'); },
+        () => { throw new Error('render route did not match'); },
       );
       const sessionCall = fetchCalls.find((c) => c.url.includes('/sws/go/session'));
       assert.equal(sessionCall.url, 'http://localhost:8080/etendo/sws/go/session');
@@ -336,11 +375,12 @@ describe('report-api.js — session-cookie authentication (ETP-5460)', () => {
       const handler = loadMiddlewareWith({ etendoUrl: CONFIGURED });
       const res = makeRes();
       await handler(
-        makeReq('GET', `/api/reports/${NEO_REPORT_ID}/data`, null, validSessionHeaders('GET')),
+        makeReq('POST', `/api/reports/${NEO_REPORT_ID}/render`, JSON.stringify({ format: 'html' }),
+          validSessionHeaders('POST')),
         res,
-        () => { throw new Error('data route did not match'); },
+        () => { throw new Error('render route did not match'); },
       );
-      assert.equal(res.statusCode, 200, `data failed: ${String(res.body).slice(0, 300)}`);
+      assert.equal(res.statusCode, 200, `render failed: ${String(res.body).slice(0, 300)}`);
       const sessionCall = fetchCalls.find((c) => c.url.includes('/sws/go/session'));
       assert.equal(sessionCall.url, `${CONFIGURED}/sws/go/session`);
       assert.ok(neoCall().url.startsWith(`${CONFIGURED}/sws/neo/`), `NEO call went to ${neoCall().url}`);
@@ -417,9 +457,10 @@ describe('report-api.js — session-cookie authentication (ETP-5460)', () => {
         const handler = loadMiddlewareWith({ etendoUrl: CONFIGURED });
         const res = makeRes();
         await handler(
-          makeReq('GET', `/api/reports/${reportId}/data`, null, validSessionHeaders('GET')),
+          makeReq('POST', `/api/reports/${reportId}/render`, JSON.stringify({ format: 'html' }),
+            validSessionHeaders('POST')),
           res,
-          () => { throw new Error('data route did not match'); },
+          () => { throw new Error('render route did not match'); },
         );
         return res;
       }
@@ -431,7 +472,7 @@ describe('report-api.js — session-cookie authentication (ETP-5460)', () => {
       ]) {
         it(`${label} fetches the company logo from the etendoUrl option`, async () => {
           const res = await getData(reportId);
-          assert.equal(res.statusCode, 200, `data failed: ${String(res.body).slice(0, 300)}`);
+          assert.equal(res.statusCode, 200, `render failed: ${String(res.body).slice(0, 300)}`);
           assert.ok(poolQueries.length > 0, 'expected the logo lookup to query the (fake) pool');
           const calls = imageCalls();
           assert.equal(calls.length, 1, `image calls: ${calls.map((c) => c.url).join(', ')}`);
@@ -451,7 +492,86 @@ describe('report-api.js — session-cookie authentication (ETP-5460)', () => {
     });
   });
 
+  // ETP-6080: /render runs the same org check as /query, before any report SQL.
+  describe('POST /api/reports/:id/render — org check', () => {
+    let pgModule;
+    let originalPool;
+    let savedGradleProps;
+    let tmpDir;
+    let poolQueries;
+
+    beforeEach(async () => {
+      pgModule = await import('pg');
+      originalPool = pgModule.default.Pool;
+      poolQueries = [];
+      // The org check finds nothing: the role reaches no requested org.
+      pgModule.default.Pool = class FakePool {
+        async query(sql) { poolQueries.push(sql); return { rows: [] }; }
+
+        async end() {}
+      };
+      tmpDir = mkdtempSync(join(tmpdir(), 'report-api-org-'));
+      const gradlePath = join(tmpDir, 'gradle.properties');
+      writeFileSync(gradlePath, 'bbdd.host=fake-db\nbbdd.port=5432\nbbdd.user=u\nbbdd.password=p\nbbdd.sid=fake\n');
+      savedGradleProps = process.env.ETENDO_GRADLE_PROPERTIES;
+      process.env.ETENDO_GRADLE_PROPERTIES = gradlePath;
+    });
+
+    afterEach(() => {
+      pgModule.default.Pool = originalPool;
+      if (savedGradleProps === undefined) delete process.env.ETENDO_GRADLE_PROPERTIES;
+      else process.env.ETENDO_GRADLE_PROPERTIES = savedGradleProps;
+      rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    async function render(reportId, params) {
+      const handler = loadMiddleware();
+      const res = makeRes();
+      await handler(
+        makeReq('POST', `/api/reports/${reportId}/render`, JSON.stringify({ format: 'html', params }),
+          validSessionHeaders('POST')),
+        res,
+        () => { throw new Error('render route did not match'); },
+      );
+      return res;
+    }
+
+    it('answers 403 ORG_ACCESS_DENIED for an org the role cannot read, before any report SQL', async () => {
+      globalThis.fetch = originalFetch;
+      stubFetch({ roleOrgs: ['O1'] });
+      const res = await render('profit-loss', { orgId: 'FOREIGN' });
+      assert.equal(res.statusCode, 403, String(res.body).slice(0, 300));
+      assert.equal(JSON.parse(res.body).code, 'ORG_ACCESS_DENIED');
+      assert.ok(poolQueries.length > 0, 'the org check queried the pool');
+      assert.ok(poolQueries.every((q) => q.includes('ad_isorgincluded')), 'report SQL ran after a denied check');
+    });
+
+    it('runs no org check for a NEO report (nothing reads __ORGID__ there)', async () => {
+      const res = await render(NEO_REPORT_ID, { orgId: 'FOREIGN' });
+      assert.equal(res.statusCode, 200, String(res.body).slice(0, 300));
+      // The only pool use left is the company-logo lookup.
+      assert.ok(poolQueries.every((q) => !q.includes('ad_isorgincluded')), poolQueries.join('\n'));
+    });
+  });
+
   describe('report-api.js source — wiring', () => {
+    it('resolves the /query route and the org check from the shared core modules (ETP-6080)', () => {
+      assert.match(PLUGIN_SRC, /const \{ handleReportQuery, runReportSql \} = await loadReportCli\('report-query'\)/);
+      assert.match(PLUGIN_SRC, /assertReportOrgAccess, assertReportAccess \} = await loadReportCli\('report-auth'\)/);
+      const render = PLUGIN_SRC.indexOf("path.match(/^\\/api\\/reports\\/([\\w-]+)\\/render$/)");
+      assert.ok(render > 0, 'render route not found');
+      const check = PLUGIN_SRC.indexOf('await checkRenderOrgAccess(reportId, session, params)', render);
+      const fetch = PLUGIN_SRC.indexOf('await fetchReportData(reportId', render);
+      assert.ok(check > 0 && check < fetch, 'the org check must run before fetchReportData on /render');
+      const access = PLUGIN_SRC.indexOf('await assertReportAccess(session, reportId, { etendoBase: etendoUrl })', render);
+      assert.ok(access > 0 && access < check, 'the report access check must run before the org check on /render');
+    });
+
+    it('runs the render SQL through core runReportSql, not a copy of it (ETP-6080 W4)', () => {
+      assert.match(PLUGIN_SRC, /\{ rows, openingRows, operandRows \} = await runReportSql\(pool, contract, \{[^}]*mainSql: sql/);
+      assert.doesNotMatch(PLUGIN_SRC, /applyPlaceholders\(contract\.sql\.(openingQuery|operandsQuery)/);
+    });
+
     it('imports loadReportCli from the gated local-core loader', () => {
       assert.match(PLUGIN_SRC, /import \{ loadReportCli \} from '\.\/report-cli\.js';/);
     });
@@ -588,5 +708,76 @@ describe('report-api.js — warehouse selector org scoping (mirrors ReportSelect
     );
     // two separate ifs (both can apply at once), not an else-if chain
     assert.doesNotMatch(warehouseBlock, /else/);
+  });
+});
+
+// ETP-6080 — the year selector carries each fiscal year's bounds and follows the
+// org's (inherited) calendar. Mirrors ReportSelectorsServlet.buildYearQuery.
+describe('report-api.js — year selector (mirrors ReportSelectorsServlet.buildYearQuery)', () => {
+  const yearEntry = PLUGIN_SRC.match(/'year':\s*\{[\s\S]*?\n\s{16}\},/)?.[0] ?? '';
+  const start = PLUGIN_SRC.indexOf("if (type === 'year' && selectedOrgId) {");
+  const yearBlock = PLUGIN_SRC.slice(start, PLUGIN_SRC.indexOf('// ETP-5573', start));
+
+  it('selects startDate/endDate as yyyy-MM-dd text from the year periods, camelCase keys', () => {
+    assert.match(yearEntry, /to_char\(MIN\(p\.startdate\), 'YYYY-MM-DD'\) FROM c_period p WHERE p\.c_year_id = y\.c_year_id\) AS "startDate"/);
+    assert.match(yearEntry, /to_char\(MAX\(p\.enddate\), 'YYYY-MM-DD'\) FROM c_period p WHERE p\.c_year_id = y\.c_year_id\) AS "endDate"/);
+  });
+
+  it('scopes selectedOrgId to the calendar of its calendar owner, bound as a parameter', () => {
+    assert.ok(start > -1, 'year filter block not found');
+    assert.match(yearBlock, /ad_org_getcalendarowner\(\$\$\{values\.length\}\)/);
+    assert.doesNotMatch(yearBlock, /o\.c_calendar_id = c\.c_calendar_id AND o\.ad_org_id/);
+  });
+});
+
+describe('report-api.js — document report tenant client scoping (ETP-6089)', () => {
+  it('passes header, lines, and taxes queries through applyPlaceholders with session.clientId', () => {
+    const docStart = PLUGIN_SRC.indexOf("if (contract.type === 'document' && contract.sql?.header)");
+    assert.ok(docStart >= 0, 'document branch must exist in fetchReportData');
+    const docEnd = PLUGIN_SRC.indexOf('\n  // SQL query: either inline in contract', docStart);
+    const docBranch = PLUGIN_SRC.slice(docStart, docEnd);
+
+    assert.doesNotMatch(docBranch, /function replacePlaceholders|const replace =/,
+      'inline parameter replacement functions must be replaced with applyPlaceholders');
+    assert.match(docBranch, /const clientId = session\.clientId;/);
+    assert.match(docBranch, /const headerSql = applyPlaceholders\(contract\.sql\.header, \{\s*clientId,\s*params,\s*contract,\s*locale\s*\}\);/);
+    assert.match(docBranch, /applyPlaceholders\(contract\.sql\.lines, \{\s*clientId,\s*params,\s*contract,\s*locale\s*\}\)/);
+    assert.match(docBranch, /applyPlaceholders\(contract\.sql\.taxes, \{\s*clientId,\s*params,\s*contract,\s*locale\s*\}\)/);
+  });
+
+  it('scopes all 8 print-* document report contracts with ad_client_id and validates cross-tenant isolation', async () => {
+    const printReports = [
+      'print-sales-order',
+      'print-sales-invoice',
+      'print-sales-quotation',
+      'print-purchase-order',
+      'print-goods-shipment',
+      'print-payment-in',
+      'print-return-material-receipt',
+      'print-return-to-vendor-shipment',
+    ];
+
+    const { loadReportCli } = await import('../vite-plugins/report-cli.js');
+    const { applyPlaceholders } = await loadReportCli('report-sql');
+
+    for (const reportId of printReports) {
+      const contractPath = join(fileURLToPath(new URL('../../../artifacts', import.meta.url)), reportId, 'report-contract.json');
+      const contract = JSON.parse(readFileSync(contractPath, 'utf8'));
+
+      assert.match(contract.sql.header, /AND \w+\.ad_client_id = '__CLIENT_ID__'/);
+      assert.match(contract.sql.lines, /AND \w+\.ad_client_id = '__CLIENT_ID__'/);
+      if (contract.sql.taxes) {
+        assert.match(contract.sql.taxes, /AND \w+\.ad_client_id = '__CLIENT_ID__'/);
+      }
+
+      const tenantA = 'CLIENTA123';
+      const tenantB = 'CLIENTB456';
+      const sqlA = applyPlaceholders(contract.sql.header, { clientId: tenantA, params: { documentId: 'DOC1' } });
+      const sqlB = applyPlaceholders(contract.sql.header, { clientId: tenantB, params: { documentId: 'DOC1' } });
+
+      assert.ok(sqlA.includes(`'${tenantA}'`));
+      assert.ok(sqlB.includes(`'${tenantB}'`));
+      assert.notEqual(sqlA, sqlB);
+    }
   });
 });

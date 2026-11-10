@@ -1,0 +1,149 @@
+{
+  "$schema": "decisions-v2",
+  "window": {
+    "category": "purchases",
+    "name": "Invoice Inbox",
+    "layoutType": "custom",
+    "hidePrint": true
+  },
+  "entities": {
+    "header": {
+      "methods": [
+        "GET",
+        "GETBYID"
+      ],
+      "fields": {
+        "fileName": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false,
+          "gridOrder": 1
+        },
+        "source": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false,
+          "gridOrder": 2
+        },
+        "creationDate": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false,
+          "gridOrder": 3
+        },
+        "businessPartner": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false,
+          "gridOrder": 4
+        },
+        "extractedName": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false,
+          "gridOrder": 5
+        },
+        "extractedTaxID": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false,
+          "gridOrder": 6
+        },
+        "orderReference": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false,
+          "gridOrder": 7
+        },
+        "invoiceDate": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false,
+          "gridOrder": 8
+        },
+        "grandTotalAmount": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false,
+          "gridOrder": 9
+        },
+        "status": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false,
+          "gridOrder": 10
+        },
+        "errorCode": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false,
+          "gridOrder": 11
+        },
+        "duplicateOfInvoice": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false,
+          "gridOrder": 12
+        },
+        "sender": {
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false
+        },
+        "invoice": {
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false
+        },
+        "discardedAt": {
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false
+        },
+        "reviewed": {
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false
+        },
+        "adjusted": {
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false
+        },
+        "targetType": {
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false
+        },
+        "currentData": {
+          "visibility": "discarded",
+          "reason": "Large JSON text (up to 1 MB); not served in the list. The review panel (ETP-6050) loads it per record."
+        },
+        "extractedData": {
+          "visibility": "discarded",
+          "reason": "Large JSON text (up to 1 MB); not served in the list. The review panel (ETP-6050) loads it per record."
+        },
+        "processingAttempts": {
+          "visibility": "system",
+          "derivation": "fromConfig",
+          "reason": "Server-side processing bookkeeping; never shown or written by the UI."
+        },
+        "processingLease": {
+          "visibility": "system",
+          "derivation": "fromConfig",
+          "reason": "Server-side processing bookkeeping; never shown or written by the UI."
+        },
+        "processedAt": {
+          "visibility": "system",
+          "derivation": "fromConfig",
+          "reason": "Server-side processing bookkeeping; never shown or written by the UI."
+        },
+        "active": {
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false
+        }
+      }
+    }
+  }
+}

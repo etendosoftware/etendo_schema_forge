@@ -7,7 +7,6 @@
   },
   "entities": {
     "header": {
-      "javaQualifier": "tbai-config-sequence-handler",
       "fields": {
         "organization": {
           "visibility": "system",

@@ -6,12 +6,16 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { buildRuntimeRoutes } from '../runtime-routes.jsx';
 import { applySupportSessionFromServer, resetSupportSessionForTests } from '../lib/supportSession.js';
 import { defaultNavigation, optionalNavigation } from '../windows/__tests__/navigationExpectations.js';
-
 describe('buildRuntimeRoutes', () => {
   it('keeps synthetic navigation destinations explicitly registered and protected', () => {
     const routes = buildRuntimeRoutes({ windowMap: {}, apiBaseUrl: '/sws/neo' });
+    // Custom windows gated by `accessWindowId` that the registry loads by name: they are served
+    // by the `:windowName` route, not by a path of their own. Keep this list explicit and short;
+    // every other entry without a windowId must have its own route.
+    const servedByWindowRoute = new Set(['invoice-inbox']);
     const synthetic = [...defaultNavigation.filter(entry => !entry.windowId && !entry.obuiappProcessId),
-      ...optionalNavigation.filter(entry => !entry.app)];
+      ...optionalNavigation.filter(entry => !entry.app)].filter(entry => !servedByWindowRoute.has(entry.name));
+    expect(routes.find(candidate => candidate.path === ':windowName')?.public).toBe(false);
     for (const entry of synthetic) {
       const route = routes.find(candidate => candidate.path === entry.path.split('?')[0]);
       expect(route, entry.name).toBeDefined();

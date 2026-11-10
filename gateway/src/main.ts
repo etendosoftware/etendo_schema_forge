@@ -95,7 +95,7 @@ Every error is a JSON:API document: \`{"errors": [{"status": "404", "code": "...
 - \`200\` / \`201\`: the request completed; \`204\`: a record was deleted (no body).
 - \`400\`: invalid input, unsupported field, invalid query parameter (see \`source.parameter\`), or invalid operation payload. A create or update missing mandatory fields answers one error per field, code \`missing_required_field\`, with \`source.pointer\` (\`/data/attributes/<name>\` or \`/data/relationships/<name>\`).
 - \`401\`: missing, malformed, or invalid credentials. Error code: \`unauthorized\`.
-- \`402\`: the tenant is blocked.
+- \`402\`: access for this account is suspended; contact the account owner or support. Error code: \`tenant_blocked\` (no further detail is returned).
 - \`403\`: the credential does not have the required scope or organization access.
 - \`404\`: the resource or record does not exist. Error codes: \`not_found\`, \`unknown_action\`.
 - \`406\` / \`415\`: the \`Accept\` or \`Content-Type\` header is not JSON:API (or JSON).
@@ -105,7 +105,7 @@ Every error is a JSON:API document: \`{"errors": [{"status": "404", "code": "...
 - \`428\`: the update did not send \`If-Match\`. Error code: \`precondition_required\`.
 - \`429\`: the API key exceeded its rate limit; wait \`Retry-After\` seconds.
 - \`502\`: Etendo failed or could not complete the upstream request (any 5xx); no internal details are returned. When \`meta.hint\` is present the write may already be saved: read the record before re-sending.
-- \`503\`: Etendo is temporarily unavailable; retry later.
+- \`503\`: Etendo is temporarily unavailable; retry later. Error code: \`service_unavailable\`.
 
 ### Versioning
 
