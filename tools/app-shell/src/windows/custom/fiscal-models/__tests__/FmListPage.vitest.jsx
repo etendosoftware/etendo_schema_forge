@@ -1082,6 +1082,70 @@ describe('FmListPage — fiscal-models-catalog error and malformed-response hand
   });
 });
 
+// ── fiscal-models-catalog — failed save is never silent ────────────────────
+// QA CP-22: the PUT used to update local state optimistically and swallow any failure, so a 403
+// looked like a save and the change was gone after a reload. A failed PUT now restores the
+// previous catalog and says so.
+
+describe('FmListPage — fiscal-models-catalog failed save', () => {
+  function catalogFetchWithPut(putAnswer) {
+    return vi.fn((url, init) => {
+      if (String(url).includes('fiscal-models-catalog')) {
+        if (init?.method === 'PUT') return putAnswer();
+        return Promise.resolve({ ok: true, json: async () => ({ '303': true, '349': true }) });
+      }
+      return Promise.reject(new Error(`unmocked fetch: ${url}`));
+    });
+  }
+
+  it('restores the previous catalog and shows an error when the PUT answers 403', async () => {
+    const toastError = vi.spyOn(toast, 'error').mockImplementation(() => {});
+    globalThis.fetch = catalogFetchWithPut(
+      () => Promise.resolve({ ok: false, status: 403, json: async () => ({}) }));
+    const { getByText } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    expect(getByText(/fm\.catalog\.title.*\(2\)/)).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('fm-list-catalog-button'));
+    fireEvent.click(screen.getByTestId('catalog-save-none'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('fm.catalog.save_failed'));
+    expect(getByText(/fm\.catalog\.title.*\(2\)/)).toBeTruthy();
+  });
+
+  it('restores the previous catalog and shows the network error when the PUT gets no answer', async () => {
+    const toastError = vi.spyOn(toast, 'error').mockImplementation(() => {});
+    globalThis.fetch = catalogFetchWithPut(() => Promise.reject(new TypeError('Failed to fetch')));
+    const { getByText } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    fireEvent.click(screen.getByTestId('fm-list-catalog-button'));
+    fireEvent.click(screen.getByTestId('catalog-save-none'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
+    const [message] = toastError.mock.calls[0];
+    expect(typeof message).toBe('string');
+    expect(message).not.toBe('Failed to fetch');
+    expect(getByText(/fm\.catalog\.title.*\(2\)/)).toBeTruthy();
+  });
+
+  it('keeps the new catalog and shows no error when the PUT succeeds', async () => {
+    const toastError = vi.spyOn(toast, 'error').mockImplementation(() => {});
+    globalThis.fetch = catalogFetchWithPut(
+      () => Promise.resolve({ ok: true, status: 200, json: async () => ({}) }));
+    const { getByText } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    fireEvent.click(screen.getByTestId('fm-list-catalog-button'));
+    fireEvent.click(screen.getByTestId('catalog-save-303-only'));
+
+    await waitFor(() => expect(getByText(/fm\.catalog\.title.*\(1\)/)).toBeTruthy());
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(toastError).not.toHaveBeenCalled();
+    expect(getByText(/fm\.catalog\.title.*\(1\)/)).toBeTruthy();
+  });
+});
+
 // ── fiscal-models-catalog — concurrent save / unmount safety ───────────────
 
 // ── Incidencias column — real per-declaration refresh (ETP-4755) ──────────────

@@ -32,6 +32,7 @@ import { getListBehavior } from './modelRegistryList.js';
 import { useFiscalModelsCatalog } from './useFiscalModelsCatalog.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { isNetworkError } from '@etendosoftware/app-shell-core/auth';
 import { parseBackendError, isDuplicateConflict } from '@/lib/backendErrors.js';
 
 // committed-selection-ok: short, fully rendered lists that already set aria-selected from their value; nothing to page or centre.
@@ -1477,6 +1478,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
               toast.error(t('fm.catalog.save_unavailable'));
               return;
             }
+            const previousActive = activeModels;
             setActiveModels(newActive);
             if (apiBaseUrl) {
               const base = apiBaseUrl.replace(/\/[^/]+$/, '');
@@ -1485,8 +1487,13 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
                 baseUrl: '',
                 body: JSON.stringify(newActive),
               })
-                .then(r => { if (!r.ok) throw new Error(r.status); })
-                .catch(() => {});
+                .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); })
+                .catch((err) => {
+                  // A failed save is never silent (ETP-5831 CP-22): the optimistic update is
+                  // undone — unless a later save already replaced it — and the user is told.
+                  setActiveModels(current => (current === newActive ? previousActive : current));
+                  toast.error(isNetworkError(err) ? err.message : t('fm.catalog.save_failed'));
+                });
             }
           }}
           token={token}
