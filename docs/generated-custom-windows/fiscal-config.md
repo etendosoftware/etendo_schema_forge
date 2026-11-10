@@ -357,7 +357,17 @@ not a shared component, so these changes affect no other window.
 |----------------|-------|------------|-------------|
 | > 60 | Hidden | — | — |
 | 31 – 60 | Warning | Amber card with ⚠️ icon | Yes |
-| 0 – 30 | Critical | Red card with 🔴 icon | No |
+| 1 – 30 | Critical | Red card with 🔴 icon | No |
+| 0 | Critical — "vence hoy" | Red card with 🔴 icon | No |
+| < 0 | Critical — expired | Red card with 🔴 icon | No |
+
+**Copy per edge (ETP-6053).** `certExpiryCopy(ui, daysLeft, isCritical)` (exported from the banner,
+shared by both variants) picks the text: an expired certificate shows "El certificado digital ha
+caducado" with a body telling the user to upload a valid one from Configuración fiscal; `0` shows "El
+certificado digital vence hoy"; `1` uses the singular `_one` key ("El certificado vence en 1 día");
+any other count keeps the plural key. Before ETP-6053 these edges read "vence en -12 días" / "0 días" /
+"1 días" — they surfaced only once `GET /certificate` started returning ISO dates and `daysUntil`
+stopped returning `null` with the real backend.
 
 - `daysUntil(dateStr)` lives in `certExpiryUtils.js` (pure, no React deps). Both `todayUtc` and `expiryUtc` are built with `Date.UTC` from UTC date parts (`getUTCFullYear/Month/Date`), so the 60/30-day thresholds fire at UTC midnight regardless of the user's local timezone. Impossible dates (e.g. Feb 31) are rejected via a round-trip check before the diff is computed.
 - When `isCritical` the dismiss button is not rendered; re-opening the page always shows the banner until the cert is renewed.
@@ -366,6 +376,9 @@ not a shared component, so these changes affect no other window.
 i18n keys used:
 - `fiscal.cert.expiry.warn.title` — "Certificate expiring in {days} days"
 - `fiscal.cert.expiry.critical.title` — "Certificate expires in {days} days"
+- `fiscal.cert.expiry.warn.title_one` / `fiscal.cert.expiry.critical.title_one` — singular, used when `daysLeft = 1`
+- `fiscal.cert.expiry.today.title` — "The digital certificate expires today" (`daysLeft = 0`, body stays `fiscal.cert.expiry.body`)
+- `fiscal.cert.expiry.expired.title` / `fiscal.cert.expiry.expired.body` — expired certificate (`daysLeft < 0`)
 - `fiscal.cert.expiry.body` — renewal call-to-action sentence
 - `fiscal.cert.expiry.dismiss` — aria-label for the × button
 
@@ -720,7 +733,7 @@ environment, enrollment dates or submission cadences.
 - `tools/app-shell/src/windows/custom/fiscal-config/certExpiryUtils.js` — pure `daysUntil` helper (no React deps); validates month (1–12) and day (1–31); round-trips the constructed `Date.UTC` value through `getUTCFullYear/Month/Date` to reject impossible dates (e.g. `2026-02-31` → March); builds `todayUtc` from `getUTCFullYear/Month/Date` so the boundary is UTC midnight in every timezone; imported by `useCertExpiry.js` and directly importable in Node.js tests.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/certExpiryUtils.test.js` — 21 tests: exports guard (named function, `Date.UTC`, `getUTCFullYear` usage, round-trip check), null/falsy inputs, future dates (1/30/60 days, today=0), past dates, non-ISO inputs (bare string, slash-delimited), out-of-range components (month 0, month 13, day 0, day 32, impossible Feb 31, impossible Apr 31 → all `null`).
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/useCertExpiry.test.js` — 11 source-guard tests: re-exports `daysUntil`, exports `useCertExpiry`, `mockDaysLeft` bypass, `return { daysLeft }`, `/certificate` endpoint (no `?orgId` — backend infers org from token), `useApiFetch` usage (no manual `Authorization` header), null-reset before each fetch and in the else branch when cert is absent, `AbortController` usage (`new AbortController`, `controller.abort()` cleanup, `signal.aborted` check before `setDaysLeft`).
-- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/CertExpiryBanner.test.js` — 17 component source-guard tests: visibility thresholds (WARN_DAYS=60, CRITICAL_DAYS=30), dismiss behaviour, variant rendering, i18n keys, color scheme.
+- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/CertExpiryBanner.vitest.jsx` — render tests: visibility thresholds (WARN_DAYS=60, CRITICAL_DAYS=30), dismiss behaviour, variant rendering, i18n keys, and (ETP-6053) the es_ES copy for expired / today / 1 day / 15 days plus non-dismissable expired and today in both variants.
 - `e2e/tests/flows/fiscal-config.mocked.spec.js` — 12 Playwright mocked E2E tests: no-org, wizard, SII/TBAI/Verifactu/conflict profiles, wizard flow (territory → confirm → back), cert modal opening; all assertions use `t()` i18n helper.
 - `modules/com.etendoerp.go/.../NeoCertificateHelper.java` — certificate upload + GET endpoints; NIF extraction from X.509 DN; SAVEPOINT-protected org NIF lookup; confirmNif flow.
 - `modules/com.etendoerp.go/.../NeoCertificateHelperTest.java` — 17 unit tests for NIF parsing and normalization.
