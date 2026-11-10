@@ -2673,6 +2673,80 @@ full value on hover, no horizontal scroll.
 
 With a `read-only` tier the SIF tab locks its fields (`useSifFieldPatcher` `locked`, same path as a processed invoice) and `ReversedInvoicesPanel` is read-only. Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.
 
+## Rectificative invoice fiscal-code validation — ETP-5745 (CP-13 through CP-26)
+
+A QA pass found a chain of bugs around the per-system "rectification motive/code" fields
+(SII `aeatsiiMotivoRectif`, TicketBAI `tbaiReverseinvoicecode`, VERI\*FACTU `etvfacInvType`) on a
+rectificative invoice. User-facing behavior after the fix:
+
+**Completion is blocked, never silently fixed, when a required code is missing.** A rectificative
+invoice (its DocType has `em_etsg_isrectificative = 'Y'`) can only be completed once every fiscal
+system that is actually **active for the organization** has its own code/motive filled in. Trying
+to complete with one or more missing shows a blocking error naming exactly which SYSTEM(S) are
+missing — e.g. "Debe seleccionar un motivo/código de rectificación en la solapa SIF para SII y
+TicketBAI." (the message names the systems, not the field names — field-level precision is the
+toast's job, below). A system that is not configured for the org (no SII enrollment, no TicketBAI
+config, no VERI\*FACTU config) is never counted as missing — an org that only runs VERI\*FACTU is
+never blocked on SII/TBAI fields it doesn't use. Enforced server-side in
+`RectificationFiscalCodeGuard`, reachable from every channel (UI, MCP, batch) since it hooks
+`AbstractInvoiceHeaderHandler#completeInvoiceIfNeeded` before
+`InvoiceCompletionService.completeInvoice` runs.
+
+**Early heads-up toast in the SIF tab.** Before the user even tries to complete, the SIF tab (via
+`useSifFieldPatcher`) shows a one-time warning toast naming the precise missing FIELD (by its real
+translated label, not the technical column name) per missing active system — e.g. "Complete Motivo
+de rectificación (SII) y Código de Factura Rectificativa (TicketBAI) en la solapa SIF antes de
+confirmar." — so the gap is visible while still editing instead of only at the blocking completion
+attempt. The toast fires once per record and never re-fires once every active system's field is
+filled (it previously re-fired forever on a reactivated rectificative invoice whose codes were
+already set — fixed by gating on "any active system still missing its value", not on
+`isRectificative` alone).
+
+**No system auto-picks a motive or code.** Earlier behavior auto-set TicketBAI's `tbaiReverseinvoicecode`
+to `"R4"` and copied VERI\*FACTU's `etvfacInvType` from the DocType's own configured code
+the moment the user picked a rectificative document type — both removed. The user must always
+choose the value explicitly; only genuinely **structural** fields (SII's `aeatsiiClaveTipo`/
+`aeatsiiTipoRectif`) are still corrected automatically, and only for orgs where SII is active.
+
+**VERI\*FACTU's field visibly clears, instead of re-showing a stale "F1".** When a document type
+becomes rectificative, `etvfacInvType` clears to empty in the callout response (matching SII/TBAI's
+own "value cleared, pick it again" visual cue) rather than silently keeping or re-stamping `F1`
+(VERI\*FACTU's normal-invoice default). Reverting to a non-rectificative type resets it back to
+`F1`.
+
+**A stray VERI\*FACTU rectificative code (R1–R5) on a non-rectificative invoice blocks
+completion too**, rather than being silently corrected back to `F1` — consistent with "surface it,
+never fix it silently" for anything the guard can detect at completion time. The callout's own
+clear-on-revert above is unaffected: that is an immediate, visible UI reset while editing, not a
+silent background correction at save time.
+
+**"Rectificaciones" tab now hides itself for a non-rectificative invoice that is merely the
+TARGET of someone else's rectification.** `ReversedInvoicesPanel` is a `renderTab: false` custom
+component, so the AD tab's own `decisions.json` `displayLogic` (`@isRectificative@='true'`) never
+reaches the generated `HeaderPage`'s tab-visibility wiring — no display-logic evaluation runs for a
+custom-component tab at all. Before this fix, a plain invoice that happened to be the TARGET of
+someone else's rectification (the "incoming" row CP-12's `rectifyingInvoices` added) still showed
+this tab, with the rectificativa displayed as if IT were the "Factura original" of the plain
+invoice — backwards. The panel now reports its own visibility via `onVisibilityChange` (the same opt-out
+every other `'tab'`-placement custom component uses), hiding for an invoice the backend has
+confirmed is NOT rectificative (`data.isRectificative === false`); an unsaved record whose
+`isRectificative` has not been enriched yet still keeps the tab, so starting a new "Factura
+Rectificativa" and linking its original before the first save still works.
+
+Fix spans `com.etendoerp.go`'s `RectificationFiscalCodeGuard`, `InvoiceCalloutHelper`,
+`SalesRectificativeFiscalDefaults`, `InvoiceCompletionService`, and `NeoDefaultsService`
+(unrelated `/defaults` combo-fallback fix: a non-deterministic first-row pick on optional columns,
+now gated to mandatory columns only), and this repo's `detailViewHelpers.jsx`
+(`isRectificationCascadeTarget` cascade-exemption for the two guards in `applyCalloutFieldUpdates`
+that otherwise silently drop a legitimate backend reset), `useSifFieldPatcher.js`
+(`missingRectificationSystems`), `backendErrors.js` (`translateRectificationCodeRequired`,
+plus the `ETGO_InvoiceVerifactuInvTypeNotRectificative` key), and
+`tools/app-shell/src/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx` (the
+`onVisibilityChange` tab-hiding fix above). New message keys on the Java side:
+`ETGO_InvoiceRectificationCodeRequired`, `ETGO_InvoiceVerifactuInvTypeNotRectificative` — see
+`{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` for the full messageKeys/messageParams
+reference.
+
 ## Completion refused for missing TicketBAI recipient data — ETP-5824
 
 Completing a sales invoice can now be refused by `com.smf.ticketbai` before the document leaves
