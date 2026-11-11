@@ -161,8 +161,28 @@ describe.each([
     ];
     renderModal({ orders: [{ id: 'SO-A', pct: 0 }], lines: { 'SO-A': taken } });
     fireEvent.click(await screen.findByText('SO-A'));
-    expect(await screen.findByTestId('ImportLinesModal__importedNote'))
-      .toHaveTextContent('inDraftInvoiceOne:{"documentNo":"FV1000002"}');
+    const note = await screen.findByTestId('ImportLinesModal__importedNote');
+    expect(note).toHaveTextContent('inDraftInvoiceOne:{"documentNo":"FV1000002"}');
+    // QA BUG-1 — the note wraps (2 lines max) instead of being cut, and carries its full text.
+    expect(note).toHaveAttribute('title', 'inDraftInvoiceOne:{"documentNo":"FV1000002"}');
+    expect(note.className).toContain('line-clamp-2');
+    expect(note.className).not.toContain('truncate');
+  });
+
+  // QA OBS-2 — a line another draft holds only PART of stays selectable and says so.
+  it('a line partly held by another draft stays selectable and says how much and where', async () => {
+    const partly = [
+      { id: 'A-1', lineNo: 10, 'product$_identifier': 'Agua', pendingQuantity: 2, unitPrice: 100,
+        inDraftInvoices: [{ id: 'inv-2', documentNo: 'FC1000020', quantity: 1 }] },
+    ];
+    renderModal({ orders: [{ id: 'SO-A', pct: 0 }], lines: { 'SO-A': partly } });
+    fireEvent.click(await screen.findByText('SO-A'));
+    const note = await screen.findByTestId('ImportLinesModal__lineNote');
+    expect(note).toHaveTextContent('partlyInDraftInvoiceOne:{"quantity":"1","documentNo":"FC1000020"}');
+    expect(note).toHaveAttribute('title');
+    expect(screen.queryByTestId('ImportLinesModal__importedNote')).toBeNull();
+    fireEvent.click(screen.getByTestId('ImportLinesModal__lineRow'));
+    expect(screen.getByTestId('ImportLinesModal__lineRow')).toHaveAttribute('data-selected', 'true');
   });
 
   it('carries a single order %: tag, undiscounted row total, toggle in the notice area, ONE import call and the carried toast', async () => {

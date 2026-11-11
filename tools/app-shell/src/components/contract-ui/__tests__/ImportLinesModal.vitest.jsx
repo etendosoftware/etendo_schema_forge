@@ -1479,17 +1479,22 @@ describe('ImportLinesModal', () => {
       expect(hint).not.toHaveTextContent('importLinesSelected');
     });
 
-    it('describeImportedLine replaces the note under a greyed-out line; null keeps «ya importado»', async () => {
+    it('describeLine replaces the note under a greyed-out line (null keeps «ya importado») and adds one to a selectable line', async () => {
       defaultProps.fetchLines.mockResolvedValue([
         { ...LINE_ROWS[0], id: 'x1', _alreadyImported: true, _heldBy: 'FV1' },
         { ...LINE_ROWS[1], id: 'x2', _alreadyImported: true },
         { ...LINE_ROWS[0], id: 'x3', _productName: 'Widget C' },
+        { ...LINE_ROWS[0], id: 'x4', _productName: 'Widget D', _heldBy: 'FV9' },
       ]);
-      await renderSettled({ describeImportedLine: (line) => (line._heldBy ? `held:${line._heldBy}` : null) });
+      await renderSettled({ describeLine: (line) => (line._heldBy ? `held:${line._heldBy}` : null) });
       fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
       await waitFor(() => expect(screen.getAllByTestId('ImportLinesModal__importedNote')).toHaveLength(2));
       expect(screen.getAllByTestId('ImportLinesModal__importedNote').map(n => n.textContent))
         .toEqual(['held:FV1', 'alreadyImported']);
+      // Only the selectable line with a note gets one (none for Widget C), with its tooltip.
+      const lineNotes = screen.getAllByTestId('ImportLinesModal__lineNote');
+      expect(lineNotes.map(n => n.textContent)).toEqual(['held:FV9']);
+      expect(lineNotes[0]).toHaveAttribute('title', 'held:FV9');
     });
   });
 });

@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUI } from '@/i18n';
+import { formatGroupedNumber } from '@/lib/formatCurrency.js';
 import useOrderGlobalDiscountImport from './useOrderGlobalDiscountImport.jsx';
 import {
   invoiceOrderImportConfig,
@@ -12,7 +13,7 @@ import {
   getOrderDisplay,
   getOrderTotal,
   isOrderCovered,
-  importedLineNote,
+  orderLineNote,
   submitOrderImport,
 } from './invoiceOrderImport.js';
 
@@ -27,6 +28,9 @@ import {
  * @param {object} props  the parent's ImportLinesModal props (invoiceId, bpId, base, onClose, …)
  * @param {'sales'|'purchase'} props.direction
  */
+// Quantities may be fractional (kg, hours): up to 4 decimals, grouped like every quantity.
+const fmtQty = (value) => formatGroupedNumber(value, { maximumFractionDigits: 4 });
+
 export default function InvoiceOrderImportModal({ direction, ...props }) {
   const config = invoiceOrderImportConfig(direction);
   // ETP-4576 - the credential belongs to apiFetch, not to the component.
@@ -57,8 +61,8 @@ export default function InvoiceOrderImportModal({ direction, ...props }) {
   }), [apiFetch, config]);
 
   const submitImport = (args) => submitOrderImport({ ...args, apiFetch, config, serverCarry, ui });
-  // QA UI-4 — a taken line names the draft invoice holding it instead of a bare «ya importado».
-  const describeImportedLine = (line) => importedLineNote(line, ui);
+  // QA UI-4 / OBS-2 — a line taken (wholly or partly) by other drafts names them.
+  const describeLine = (line, state) => orderLineNote(line, state, ui, fmtQty);
 
   return (
     <ImportLinesModal
@@ -78,7 +82,7 @@ export default function InvoiceOrderImportModal({ direction, ...props }) {
       isDocumentCovered={isOrderCovered}
       getDocumentTotal={getOrderTotal}
       submitImport={submitImport}
-      describeImportedLine={describeImportedLine}
+      describeLine={describeLine}
       // QA UI-6 — only the order popups count lines in the footer («2 líneas seleccionadas»).
       countLinesInFooter
       {...globalDiscountProps}

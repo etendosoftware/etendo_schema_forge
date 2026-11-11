@@ -222,20 +222,36 @@ function orderLineRow(l, pending, sharedContext) {
     _alreadyImported: alreadyInCurrent || pending <= 0,
     _alreadyInCurrent: alreadyInCurrent,
     _inDraftInvoices: (l.inDraftInvoices || []).map(d => d.documentNo || d.id),
+    // What the OTHER drafts hold of the line, summed (magnitude): the note of a line they hold
+    // only partly (QA OBS-2). Missing on an older backend, which sends no per-draft quantity.
+    _heldByDrafts: (l.inDraftInvoices || []).reduce((sum, d) => sum + Math.abs(Number(d.quantity) || 0), 0),
   };
 }
 
 /**
- * ETP-5828 (QA UI-4) — what a greyed-out order line says under its product: the draft invoice(s)
- * holding it when nothing is left because OTHER drafts took it («en factura borrador FV1000002»);
- * «ya importado» when it is on THIS invoice or fully invoiced. `ui` is injected (pure).
+ * ETP-5828 — what an order line says under its product. `ui` and the quantity formatter
+ * `fmtQty` are injected (pure).
+ * - Greyed out (QA UI-4): the draft invoice(s) holding it when nothing is left because OTHER
+ *   drafts took it («en factura borrador FV1000002»); «ya importado» when it is on THIS invoice or
+ *   fully invoiced.
+ * - Still selectable but partly held by other drafts (QA OBS-2): how much they hold and where
+ *   («1 en factura borrador FC1000020»); nothing when no other draft holds it, or when an older
+ *   backend sends no per-draft quantity.
  */
-export function importedLineNote(line, ui) {
+export function orderLineNote(line, { imported }, ui, fmtQty = String) {
   const drafts = line?._inDraftInvoices || [];
-  if (line?._alreadyInCurrent || drafts.length === 0) return ui('alreadyImported');
+  if (imported) {
+    if (line?._alreadyInCurrent || drafts.length === 0) return ui('alreadyImported');
+    return drafts.length === 1
+      ? ui('inDraftInvoiceOne', { documentNo: drafts[0] })
+      : ui('inDraftInvoiceMany', { documentNos: drafts.join(', ') });
+  }
+  const held = Number(line?._heldByDrafts) || 0;
+  if (drafts.length === 0 || held <= 0) return null;
+  const quantity = fmtQty(held);
   return drafts.length === 1
-    ? ui('inDraftInvoiceOne', { documentNo: drafts[0] })
-    : ui('inDraftInvoiceMany', { documentNos: drafts.join(', ') });
+    ? ui('partlyInDraftInvoiceOne', { quantity, documentNo: drafts[0] })
+    : ui('partlyInDraftInvoiceMany', { quantity, documentNos: drafts.join(', ') });
 }
 
 export const getOrderDisplay = (doc) => ({

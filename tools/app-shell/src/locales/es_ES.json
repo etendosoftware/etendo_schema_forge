@@ -17845,6 +17845,8 @@
     "importLinesSelectedSuffixMany": "seleccionadas",
     "inDraftInvoiceOne": "en factura borrador {documentNo}",
     "inDraftInvoiceMany": "en facturas borrador {documentNos}",
+    "partlyInDraftInvoiceOne": "{quantity} en factura borrador {documentNo}",
+    "partlyInDraftInvoiceMany": "{quantity} en facturas borrador {documentNos}",
     "importNoticeTitle": "Información de importación",
     "importNoticeBody": "Aquí se mostrarán avisos relacionados con las líneas seleccionadas.",
     "importedLinesWithErrors": "Se importaron {count} línea(s) con {errors} error(es)",

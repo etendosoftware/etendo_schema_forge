@@ -16,7 +16,7 @@ import {
   fetchOrderLines,
   submitOrderImport as submitWith,
   discountOutcome,
-  importedLineNote,
+  orderLineNote,
   MAX_LISTED_ORDERS,
   OrderImportLoadError,
   describeLoadFailure,
@@ -458,13 +458,16 @@ describe('invoice order import — what a taken line says', () => {
 
   it('keeps the drafts holding a line, by document number', async () => {
     const stub = async () => mockRes(true, [
-      { id: 'ol1', pendingQuantity: 0, inDraftInvoices: [{ id: 'i2', documentNo: 'FV1000002' }] },
+      { id: 'ol1', pendingQuantity: 0, inDraftInvoices: [{ id: 'i2', documentNo: 'FV1000002', quantity: 2 }] },
       { id: 'ol2', pendingQuantity: 3 },
+      { id: 'ol3', pendingQuantity: 1,
+        inDraftInvoices: [{ id: 'i3', documentNo: 'FC1', quantity: 1 }, { id: 'i4', documentNo: 'FC2', quantity: 2.5 }] },
     ]);
     const lines = await fetchOrderLines({
       apiFetch: stub, config: SALES, base: '/b', docId: 'o1', sharedContext: { invoiceId: 'inv1' },
     });
-    assert.deepEqual(lines.map(l => l._inDraftInvoices), [['FV1000002'], []]);
+    assert.deepEqual(lines.map(l => l._inDraftInvoices), [['FV1000002'], [], ['FC1', 'FC2']]);
+    assert.deepEqual(lines.map(l => l._heldByDrafts), [2, 0, 3.5]);
   });
 
   for (const [name, line, expected] of [
@@ -473,8 +476,23 @@ describe('invoice order import — what a taken line says', () => {
     ['on THIS invoice (also held elsewhere)', { _alreadyInCurrent: true, _inDraftInvoices: ['FV1'] }, 'alreadyImported'],
     ['fully invoiced (no draft holds it)', { _inDraftInvoices: [] }, 'alreadyImported'],
   ]) {
-    it(`importedLineNote: ${name}`, () => {
-      assert.equal(importedLineNote(line, ui), expected);
+    it(`orderLineNote (greyed out): ${name}`, () => {
+      assert.equal(orderLineNote(line, { imported: true }, ui), expected);
+    });
+  }
+
+  // QA OBS-2 — a line other drafts hold only PART of stays selectable and says how much and where.
+  const fmtQty = (q) => `#${q}`;
+  for (const [name, line, expected] of [
+    ['partly held by one other draft', { _inDraftInvoices: ['FC1000020'], _heldByDrafts: 1 },
+      'partlyInDraftInvoiceOne:{"quantity":"#1","documentNo":"FC1000020"}'],
+    ['partly held by two other drafts', { _inDraftInvoices: ['FC1', 'FC2'], _heldByDrafts: 3 },
+      'partlyInDraftInvoiceMany:{"quantity":"#3","documentNos":"FC1, FC2"}'],
+    ['held by no other draft', { _inDraftInvoices: [], _heldByDrafts: 0 }, null],
+    ['older backend: no per-draft quantity', { _inDraftInvoices: ['FC1'], _heldByDrafts: 0 }, null],
+  ]) {
+    it(`orderLineNote (selectable): ${name}`, () => {
+      assert.equal(orderLineNote(line, { imported: false }, ui, fmtQty), expected);
     });
   }
 });

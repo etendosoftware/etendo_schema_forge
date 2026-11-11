@@ -157,9 +157,10 @@ export default function ImportLinesModal({
                          // loaded; once loaded (or null/undefined, or no prop) the sum of its lines
   countLinesInFooter = false, // true: the footer reads «1 línea seleccionada» / «N líneas
                               // seleccionadas»; false keeps the generic «N Seleccionados»
-  describeImportedLine,  // (line) => string | null: the note under a greyed-out line's product (e.g.
-                         // the draft holding it); null/absent keeps the default («ya importado», or
-                         // the line's draft shipments)
+  describeLine,          // (line, { imported }) => string | null: the note under a line's product
+                         // (e.g. the draft invoice holding it). On a greyed-out line null/absent
+                         // keeps the default («ya importado», or the line's draft shipments); on a
+                         // selectable line null shows no note. Up to 2 lines, full text as tooltip.
 }) {
   if (!linesEndpoint && !submitImport) {
     throw new Error('ImportLinesModal: linesEndpoint prop is required unless submitImport is provided');
@@ -556,6 +557,27 @@ export default function ImportLinesModal({
     return unitPrice != null ? unitPrice * lineQtyOf(line).displayQty : null;
   };
 
+  // The note under the product: ETP-5828 (QA BUG-1) it wraps onto a second line inside the same
+  // fixed column (clamped at 2, so the 64 px row never grows) with the full text as a tooltip —
+  // a draft invoice number truncated after «borrador FV1…» told the user nothing.
+  const defaultImportedNote = (line) => (line._inDraftShipments?.length
+    ? `${ui('inDraftShipment')}: ${line._inDraftShipments.join(', ')}`
+    : ui('alreadyImported'));
+
+  const renderLineNote = (line, imported) => {
+    const note = describeLine?.(line, { imported }) || (imported ? defaultImportedNote(line) : null);
+    if (!note) return null;
+    return (
+      <span
+        className="line-clamp-2 break-words text-xs leading-4 text-muted-foreground"
+        title={note}
+        data-testid={imported ? 'ImportLinesModal__importedNote' : 'ImportLinesModal__lineNote'}
+      >
+        {note}
+      </span>
+    );
+  };
+
   const renderLine = (line, docId) => {
     const imported = line._alreadyImported;
     const lineSelected = !imported && selected.has(line.id);
@@ -588,11 +610,7 @@ export default function ImportLinesModal({
         </span>
         <span className={cn('min-w-0 px-3', showPriceColumns ? 'w-[176px] shrink-0' : 'flex-1')}>
           <span className="block truncate font-semibold text-foreground">{line._productName}</span>
-          {imported && (
-            <span className="block truncate text-xs text-muted-foreground" data-testid="ImportLinesModal__importedNote">
-              {describeImportedLine?.(line) || (line._inDraftShipments?.length ? `${ui('inDraftShipment')}: ${line._inDraftShipments.join(', ')}` : ui('alreadyImported'))}
-            </span>
-          )}
+          {renderLineNote(line, imported)}
         </span>
         {showAvailableQtyColumn && (
           <span className="w-[90px] shrink-0 px-3 text-right tabular-nums text-muted-foreground">
