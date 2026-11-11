@@ -1686,11 +1686,13 @@ export function useEntity(entity, childEntity, {
 
     // The child rows of `parentId` (normalized), through the cache like every read. Shared by
     // fetchChildren and the forced fetchById, which must commit them with the header.
+    const childrenKey = useCallback((parentId) => (cacheScope
+        ? createQueryKey({ ...cacheScope, apiBase: apiBaseUrl, spec: specName, entity: childEntity, parentId, filters: { childSortBy } })
+        : null), [cacheScope, apiBaseUrl, specName, childEntity, childSortBy]);
+
     const queryChildren = useCallback((parentId, { force = false } = {}) => {
         // NEO Headless uses ?parentId= to filter child entity records
-        const key = cacheScope
-            ? createQueryKey({ ...cacheScope, apiBase: apiBaseUrl, spec: specName, entity: childEntity, parentId, filters: { childSortBy } })
-            : null;
+        const key = childrenKey(parentId);
         const sortParam = childSortBy ? `&_sortBy=${childSortBy}` : '';
         const fetcher = (signal) => apiFetch(`/${childEntity}?parentId=${parentId}${sortParam}`, { signal })
             .then(res => {
@@ -1699,7 +1701,7 @@ export function useEntity(entity, childEntity, {
             })
             .then(data => normalizeRows(data?.response?.data ?? (Array.isArray(data) ? data : []), childEntity));
         return runQuery(key, fetcher, { force });
-    }, [apiBaseUrl, childEntity, apiFetch, childSortBy, cacheScope, specName, runQuery]);
+    }, [childEntity, apiFetch, childSortBy, runQuery, childrenKey]);
 
     const fetchChildren = useCallback((parentId, { silent = false, force = false } = {}) => {
         if (!childEntity || !parentId) {
@@ -1825,6 +1827,14 @@ export function useEntity(entity, childEntity, {
         const linesRead = force && childEntity
             ? queryChildren(id, { force: true }).catch(() => null)
             : undefined;
+        // The lines entry this forced read populated, evicted whenever its lines are dropped
+        // instead of committed: the cache stores the response even when the read is discarded,
+        // and an entry written after an invalidation is fresh, so the next reader would get the
+        // pre-mutation lines (an invalidation only marks the entries already stored).
+        const dropLinesEntry = () => {
+            const linesKey = linesRead ? childrenKey(id) : null;
+            if (linesKey) dataCache?.cache?.remove(linesKey);
+        };
         return runQuery(key, fetcher, { force })
             .then(row => (linesRead ? linesRead.then(lines => ({ row, lines })) : { row, lines: undefined }))
             .then(({ row, lines }) => {
@@ -1833,6 +1843,7 @@ export function useEntity(entity, childEntity, {
                 // (now stale) result and evict the cache entry it just populated.
                 if (opSeqRef.current !== seqAtStart) {
                     if (key) dataCache?.cache?.remove(key);
+                    dropLinesEntry();
                     setLoading(false);
                     return;
                 }
@@ -1842,6 +1853,7 @@ export function useEntity(entity, childEntity, {
                 // staleTime, so the next navigation re-asks (matches pre-cache behavior).
                 if (!row || row.id == null) {
                     if (key) dataCache?.cache?.remove(key);
+                    dropLinesEntry();
                     setRecordError('notFound');
                     setSelected(null);
                     setEditing(null);
@@ -1869,7 +1881,7 @@ export function useEntity(entity, childEntity, {
                 setEditing(null);
                 setLoading(false);
             });
-    }, [apiBaseUrl, entity, apiFetch, fetchChildren, queryChildren, childEntity, cacheScope, specName, runQuery, dataCache, neutralizePendingDefaults]);
+    }, [apiBaseUrl, entity, apiFetch, fetchChildren, queryChildren, childrenKey, childEntity, cacheScope, specName, runQuery, dataCache, neutralizePendingDefaults]);
 
     // Lightweight header refresh used after line add/update/delete operations.
     // Unlike fetchById, this preserves fields the user has explicitly edited (tracked in

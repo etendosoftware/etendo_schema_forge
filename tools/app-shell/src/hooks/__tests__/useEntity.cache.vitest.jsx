@@ -716,7 +716,7 @@ describe('useEntity — shared cache integration (ETP-4563)', () => {
     let releaseStale;
     const staleGate = new Promise((r) => { releaseStale = r; });
     let phase = 'initial';
-    const { fetchMock } = makeFetch({
+    const { fetchMock, counts } = makeFetch({
       handler: ({ method, path }) => {
         if (method === 'GET' && path === '/header/42') {
           if (phase === 'stale') {
@@ -728,7 +728,8 @@ describe('useEntity — shared cache integration (ETP-4563)', () => {
           if (phase === 'stale') {
             return { ok: true, status: 200, _label: 'children', json: async () => { await staleGate; return { response: { data: [{ id: 's1' }, { id: 's2' }, { id: 's3' }] } }; } };
           }
-          return { ...jsonOk([{ id: 'l1' }, { id: 'l2' }]), _label: 'children' };
+          // After the delete the server holds only l2.
+          return { ...jsonOk(phase === 'initial' ? [{ id: 'l1' }, { id: 'l2' }] : [{ id: 'l2' }]), _label: 'children' };
         }
         return null;
       },
@@ -752,6 +753,14 @@ describe('useEntity — shared cache integration (ETP-4563)', () => {
     expect(a.result.current.selected?.grandTotalAmount).toBe(10);
     expect(a.result.current.children.map(c => c.id)).toEqual(['l2']);
     expect(a.result.current.loading).toBe(false);
+
+    // The superseded read's lines were stored in the cache AFTER the delete invalidated it, so
+    // they must have been evicted: reselecting within the freshness window re-asks the server
+    // and shows the post-mutation lines, never the stale s1..s3.
+    const linesBefore = counts.children;
+    await act(async () => { a.result.current.handleSelect({ id: '42', grandTotalAmount: 10 }); });
+    await waitFor(() => expect(counts.children).toBe(linesBefore + 1));
+    await waitFor(() => expect(a.result.current.children.map(c => c.id)).toEqual(['l2']));
   });
 
   it('24. a successful handleProcess refetches the cached children of the record', async () => {
