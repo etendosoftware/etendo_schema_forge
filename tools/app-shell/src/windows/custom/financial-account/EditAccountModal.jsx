@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Copy, RefreshCw, Unlink2, Archive, AlertTriangle, Info, Plug, Settings2, Calculator, RotateCcw, ChevronDown, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -1018,40 +1018,70 @@ function GlItemDifferenceSection({ ui, glItemDifference, first = false }) {
 
 // ---------------------------------------------------------------------------
 // SEPA remittances setting (ETP-6148) — «Admite remesas», FIN_Financial_Account.
-// EM_ETGO_Allow_Remittance. Read from `account.allowRemittance`, which the financial-accounts-page
-// payload carries only while the sepa-remittances flag is on (the same flag behind the
-// capability that shows this section). Turning it on is validated and provisioned server-side
-// (Bank type + valid IBAN, remittance payment methods linked); turning it off is refused while the
-// account has open remittances. The UI only reports those refusals (see backendErrors.js).
+// EM_ETGO_Allow_Remittance. The stored value reaches this modal under TWO names, depending on where
+// it was opened from — the same trap as the tolerances (see readTolerances):
+//   - from the Cuentas LIST, the row comes from the generic W spec, which names it by its
+//     contract/DAL key, `eTGOAllowRemittance`;
+//   - from the account DETAIL, the record comes from the `financial-accounts-page` R spec
+//     (FinancialAccountsPageHandler), which carries the flat `allowRemittance` only while the
+//     sepa-remittances flag is on.
+// Reading only `allowRemittance` made the list-opened modal always show «off» and compare the
+// dirty check against that wrong snapshot. The save is the same either way: the modal sends
+// `allowRemittance` and useAccountMutations maps it to `eTGOAllowRemittance`. Turning it on is
+// validated and provisioned server-side (Bank type + valid IBAN, remittance payment methods
+// linked); turning it off is refused while the account has open remittances. The UI only reports
+// those refusals (see backendErrors.js).
 // ---------------------------------------------------------------------------
+
+/**
+ * Whether the account allows remittances, read from either spelling (contract key first, as in
+ * readTolerances). `true`, `'Y'` and `'true'` mean on; anything else, including a missing key,
+ * means off.
+ */
+function readAllowRemittance(account) {
+  const raw = account?.eTGOAllowRemittance ?? account?.allowRemittance;
+  return raw === true || raw === 'Y' || raw === 'true';
+}
 
 function useRemittanceSetting(open, account) {
   const [value, setValue] = useState(false);
   const [snapshot, setSnapshot] = useState(false);
+  // Keyed on primitives (the account id and its stored flag), not on the `account` object: a new
+  // object carrying the same account (a refetch, a parent re-render) must not throw away a toggle
+  // the user has just made. A real change of the stored flag still re-syncs.
+  const accountId = account?.id;
+  const initial = readAllowRemittance(account);
 
   useEffect(() => {
-    if (!open || !account) return;
-    const initial = account.allowRemittance === true;
+    if (!open || accountId == null) return;
     setValue(initial);
     setSnapshot(initial);
-  }, [open, account]);
+  }, [open, accountId, initial]);
 
   return { value, setValue, dirty: value !== snapshot };
 }
 
 function RemittanceSettingsSection({ ui, remittance }) {
+  // The Switch is a <button>; it is NOT wrapped in a <label> (Radix's own recommendation, and how
+  // the other switches in the app are laid out): a label around it can re-activate the button and
+  // toggle it straight back. The text is a separate <label htmlFor> instead, so it still names the
+  // switch and a click on it still toggles it once.
+  const switchId = useId();
   return (
     <div className="mt-6 border-b border-[hsl(var(--border-subtle))] pb-4" data-testid="remittance-settings-section">
       <p className="text-sm font-medium text-[hsl(var(--foreground))] mb-3">
         {ui('financeAccountsRemittanceSection')}
       </p>
-      <label className="inline-flex cursor-pointer items-center gap-2 text-sm leading-6 text-[hsl(var(--foreground))]">
+      <div className="inline-flex items-center gap-2 text-sm leading-6 text-[hsl(var(--foreground))]">
         <Switch
+          id={switchId}
           checked={remittance.value}
           onCheckedChange={(checked) => remittance.setValue(checked === true)}
           data-testid="edit-account-allow-remittance" />
-        {ui('financeAccountsRemittanceAllow')}
-      </label>
+        <label htmlFor={switchId} className="cursor-pointer" data-testid="edit-account-allow-remittance-label">
+          {ui('financeAccountsRemittanceAllow')}
+        </label>
+      </div>
       <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]" data-testid="edit-account-allow-remittance-hint">
         {ui('financeAccountsRemittanceAllowHint')}
       </p>

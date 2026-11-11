@@ -1966,9 +1966,149 @@ describe('EditAccountModal', () => {
         expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', checked);
       });
 
-      it('treats a non-boolean truthy value as off', () => {
-        renderModal({ account: { ...REMITTANCE_ACCOUNT, allowRemittance: 'Y' } });
+      // The flag arrives as a boolean from both specs, but 'Y' / 'true' (a DAL Y/N column read
+      // raw) also mean on; any other value stays off (readAllowRemittance).
+      it('treats a non-boolean truthy value other than Y / true as off', () => {
+        renderModal({ account: { ...REMITTANCE_ACCOUNT, allowRemittance: 'yes' } });
         expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'false');
+      });
+    });
+
+    // Repro of the list-opened bug: the Cuentas LIST row (generic W spec) carries the flag under
+    // its contract key `eTGOAllowRemittance` only, while the DETAIL record (financial-accounts-page)
+    // carries the flat `allowRemittance`. Reading only the latter opened the list modal OFF and
+    // compared the dirty check against that wrong snapshot.
+    describe('where the modal was opened from', () => {
+      const saveButton = () => screen.getByTestId('edit-account-save');
+
+      it('from the Cuentas list (contract key only): opens ON, not dirty; switching off makes it dirty', async () => {
+        const user = userEvent.setup();
+        renderModal({ account: { ...REMITTANCE_ACCOUNT, eTGOAllowRemittance: true } });
+        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'true');
+        expect(saveButton()).toBeDisabled();
+        await user.click(screen.getByTestId(TOGGLE));
+        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'false');
+        expect(saveButton()).toBeEnabled();
+      });
+
+      it('from the detail (flat key only): opens ON', () => {
+        renderModal({ account: { ...REMITTANCE_ACCOUNT, allowRemittance: true } });
+        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'true');
+        expect(saveButton()).toBeDisabled();
+      });
+
+      it.each([
+        [false, true, 'false'],
+        [true, false, 'true'],
+      ])('with both keys the contract key wins (eTGOAllowRemittance %s, allowRemittance %s → %s)', (contract, flat, checked) => {
+        renderModal({ account: { ...REMITTANCE_ACCOUNT, eTGOAllowRemittance: contract, allowRemittance: flat } });
+        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', checked);
+      });
+
+      it.each([
+        ['Y', 'true'],
+        ['true', 'true'],
+        [true, 'true'],
+        ['N', 'false'],
+        ['yes', 'false'],
+        [false, 'false'],
+      ])('reads the contract key %j as %s', (value, checked) => {
+        renderModal({ account: { ...REMITTANCE_ACCOUNT, eTGOAllowRemittance: value } });
+        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', checked);
+      });
+
+      it.each([['Y', 'true'], ['true', 'true'], ['N', 'false']])('reads the flat key %j as %s', (value, checked) => {
+        renderModal({ account: { ...REMITTANCE_ACCOUNT, allowRemittance: value } });
+        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', checked);
+      });
+
+      it('opens OFF when neither key is present', () => {
+        renderModal({ account: REMITTANCE_ACCOUNT });
+        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'false');
+      });
+
+      it('saving a list-opened toggle sends allowRemittance (useAccountMutations maps it to eTGOAllowRemittance)', async () => {
+        const user = userEvent.setup();
+        renderModal({ account: { ...REMITTANCE_ACCOUNT, eTGOAllowRemittance: true } });
+        await user.click(screen.getByTestId(TOGGLE));
+        const payload = await saveAndGetPayload(user);
+        expect(updateAccount.mock.calls[0][0]).toBe('acc-rem');
+        expect(payload).toEqual({ allowRemittance: false });
+      });
+
+      it('a list-opened account saved without touching the switch never sends the flag', async () => {
+        const user = userEvent.setup();
+        renderModal({ account: { ...REMITTANCE_ACCOUNT, eTGOAllowRemittance: true } });
+        await rename(user);
+        const payload = await saveAndGetPayload(user);
+        expect(payload).not.toHaveProperty('allowRemittance');
+      });
+    });
+
+    describe('re-sync with the account prop', () => {
+      const rerenderWith = (rerender, account) => rerender(
+        <EditAccountModal open account={account} onClose={vi.fn()} onSaved={vi.fn()}
+          onArchive={vi.fn()} onConnect={vi.fn()} />,
+      );
+
+      it('a new object for the same account and value keeps the pending toggle', async () => {
+        const user = userEvent.setup();
+        const { rerender } = renderModal({ account: { ...REMITTANCE_ACCOUNT, eTGOAllowRemittance: false } });
+        await user.click(screen.getByTestId(TOGGLE));
+        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'true');
+        // A refetch / parent re-render hands over a fresh object with the same stored value.
+        rerenderWith(rerender, { ...REMITTANCE_ACCOUNT, eTGOAllowRemittance: false });
+        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'true');
+        expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+      });
+
+      it('re-syncs when the stored value changes', async () => {
+        const user = userEvent.setup();
+        const { rerender } = renderModal({ account: { ...REMITTANCE_ACCOUNT, eTGOAllowRemittance: false } });
+        await user.click(screen.getByTestId(TOGGLE));
+        rerenderWith(rerender, { ...REMITTANCE_ACCOUNT, eTGOAllowRemittance: true });
+        await waitFor(() => expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'true'));
+        // The new stored value is the snapshot: nothing is pending.
+        expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+        await user.click(screen.getByTestId(TOGGLE));
+        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'false');
+        expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+      });
+    });
+
+    // The real Radix Switch (not mocked): it used to sit inside a <label>, which can re-activate the
+    // button and toggle it straight back.
+    describe('switch and label (real Switch)', () => {
+      it('one click turns it on and enables «Guardar cambios»; a second turns it off', async () => {
+        const user = userEvent.setup();
+        renderModal({ account: REMITTANCE_ACCOUNT });
+        await user.click(screen.getByTestId(TOGGLE));
+        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'true');
+        expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+        await user.click(screen.getByTestId(TOGGLE));
+        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'false');
+      });
+
+      it('a click on the label text toggles it exactly once', async () => {
+        const user = userEvent.setup();
+        renderModal({ account: REMITTANCE_ACCOUNT });
+        const label = screen.getByTestId('edit-account-allow-remittance-label');
+        expect(label).toHaveTextContent('financeAccountsRemittanceAllow');
+        await user.click(label);
+        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'true');
+        await user.click(label);
+        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'false');
+      });
+
+      it('the switch is not inside a <label>, and the label names it', () => {
+        renderModal({ account: REMITTANCE_ACCOUNT });
+        const toggle = screen.getByTestId(TOGGLE);
+        expect(toggle.closest('label')).toBeNull();
+        const label = screen.getByTestId('edit-account-allow-remittance-label');
+        expect(label.tagName).toBe('LABEL');
+        expect(toggle.id).toBeTruthy();
+        expect(label).toHaveAttribute('for', toggle.id);
+        expect(screen.getByRole('switch', { name: 'financeAccountsRemittanceAllow' })).toBe(toggle);
       });
     });
 
