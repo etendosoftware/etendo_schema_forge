@@ -388,7 +388,7 @@
     },
     {
       "id": "bp-self-service-portal",
-      "description": "Read-only self-service portal where a tenant's Business Partner opens a magic link and sees their completed invoices, outstanding balance and invoice PDFs. The portal surface, its three /sws/portal/* endpoints and the access table are UNCONDITIONAL; the flag gates only whether the sales-invoice email carries the link, and is targeted at the ETGO_ACCOUNT email of the user sending the invoice.",
+      "description": "Read-only customer portal a tenant's Business Partner opens from a link in a sales document email and sees their completed invoices, outstanding balance and invoice PDFs. The portal surface, its /sws/portal/* endpoints and the etgo_portal_link table are UNCONDITIONAL; the flag gates only whether a sales quotation, order, shipment or invoice email carries the link (ETP-6209; ETP-5267 covered the invoice only), and is targeted at the ETGO_ACCOUNT email of the user sending the document. Each link lives 48 hours from its send; renewing an expired link is not gated.",
       "owner": "sebastianbarrozo",
       "jira": "ETP-5267",
       "created": "2026-09-10",

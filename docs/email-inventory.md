@@ -193,19 +193,28 @@ Since F3 (2026-08-26) all render through `EmailLayout` (#7 and #8 added by ETP-5
 `email/render/messages/emails_{es_ES,en_US}.properties` (`document.subject`, `document.body`,
 `document.cta`, plus one `{contract}.documentType` key each) rather than in Java literals.
 
-**ETP-5267 — `sales-invoice-send` can carry a Business Partner portal link.** It is the only one of
-the six that overrides `resolveAdditionalParagraphHtml`, a hook added on
-`DefaultDocumentSendEmailContract` whose default is `Optional.empty()`. That default is the
-guarantee: **the other five emails are byte-identical to what they produced before the hook
-existed**, because there is nothing to append — not because each caller is careful. The extra
-paragraph renders between the body copy and the summary block, as an inline anchor rather than a
-second button, since `EmailContent` carries one call to action and it belongs to the document.
+**ETP-5267 / ETP-6209 — the sales document emails carry a customer portal link.**
+`sales-quotation-send`, `sales-order-send`, `goods-shipment-send` and `sales-invoice-send` (credit
+notes included) declare `portalDocumentKind()` on `DefaultDocumentSendEmailContract`, whose default
+is `Optional.empty()`. That default is the guarantee: **every other document email is
+byte-identical to what it produced before**, because it declares nothing. The base class only asks
+whether a kind was declared and never names a window. The extra paragraph renders between the body
+copy and the summary block, as an inline anchor rather than a second button, since `EmailContent`
+carries one call to action and it belongs to the document.
 
-Its copy is `document.portal.intro` / `document.portal.cta` in both catalogs. The paragraph appears
-only when the `bp-portal-link` flag resolves true for the **sending account** (see
-`com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md` → *Per-account targeting*); when it does
-not, the send is unchanged **and no `etgo_portal_access` row is minted**, which is what keeps the
-always-deployed portal surface empty until someone is deliberately sending links.
+Its copy is `document.portal.intro` (with the link's validity in hours) / `document.portal.cta` in
+both catalogs. The paragraph appears only when the `bp-portal-link` flag resolves true for the
+**sending account** (see `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md` →
+*Per-account targeting*); when it does not, the send is unchanged **and no `etgo_portal_link` row is
+minted**. Each send mints its own link, valid 48 hours from that send; a link minted for an email
+that was throttled, refused as duplicate or failed never becomes valid.
+
+**`portal-link-renewal` (ETP-6209)** is a ninth GO email, outside the document family: opening an
+expired portal link emails a new one to the **To and CC of the original send** (never to whoever
+opened it). Copy: `portal-link-renewal.*` in both catalogs. It is refused for any caller outside
+`PortalRenewalScope`, and is recorded in the document's own send history, so it shows in the
+document's Emails card next to the original send. Contract: `contracts/PortalLinkRenewalEmailContract.java`;
+trigger: `POST /sws/portal/renew` (`com.etendoerp.go/src/com/etendoerp/go/portal/PortalLinkService.java`).
 
 > ⚠ **The default subject and body exist in two places.** When the operator sends without editing
 > anything, the backend composes the copy from the catalog above — but the modal shows the operator

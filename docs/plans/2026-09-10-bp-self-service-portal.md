@@ -4,6 +4,11 @@ Status: **approved for MVP, ready for DEV** · Created 2026-09-10 ·
 Jira: **[ETP-5267](https://etendoproject.atlassian.net/browse/ETP-5267)** (epic ETP-3504 Etendo Next) ·
 Flag: **`bp-portal-link`** (backend-only, targeted per sending `ETGO_ACCOUNT` email, see §2.5)
 
+> **Superseded in part by [`2026-11-11-customer-portal-sales-documents.md`](2026-11-11-customer-portal-sales-documents.md)
+> (ETP-6209):** one link per document send valid 48 hours instead of one stable link per Business
+> Partner, renewal by email instead of manual revocation (the revoke action is removed), every sales
+> document email instead of the invoice only. Its §0 lists exactly which sections below no longer hold.
+
 ## 0. Goal
 
 Replicate the scope of Holded's native "Portal del cliente" inside Etendo Go, for the MVP only:

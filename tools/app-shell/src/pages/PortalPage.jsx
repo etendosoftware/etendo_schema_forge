@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { AlertCircle, Download, FileText, Loader2, Receipt } from 'lucide-react';
+import { AlertCircle, Ban, Download, FileText, Loader2, MailCheck, Receipt } from 'lucide-react';
 import { useLocaleSwitch, useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,10 +13,13 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 import {
   PORTAL_ERROR,
+  PORTAL_LINK_STATE,
+  PORTAL_RENEWAL,
   fetchInvoicePdfBlob,
   fetchPortalIdentity,
   fetchPortalInvoices,
   fetchPortalLogoBlob,
+  renewPortalLink,
   resolvePortalBaseUrl,
 } from '@/lib/portal/portalApi.js';
 import { portalPdfFileName, resolveInvoiceStatus } from '@/lib/portal/portalInvoices.js';
@@ -39,11 +42,17 @@ import { saveBlobAsFile } from '@/lib/portal/portalDownload.js';
  *   added (plan §2.5).
  * - **It renders no tenant chrome.** Public routes mount outside `ShellLayout`, so the page
  *   owns its own full-page frame the way `InviteAcceptancePage` does.
- * - **Invalid and revoked look identical.** The backend answers the same to both, and the UI
- *   keeps that property: one generic message, no retry offered, nothing to enumerate against
+ * - **Invalid, pending and deactivated links look identical.** The backend answers the same to
+ *   all, and the UI keeps that property: one generic message, no retry offered, nothing to enumerate against
  *   (plan §5.2 / §6). A *transient* failure is a different screen — it says so and offers a
  *   retry — because telling a customer their link is dead when the network blinked would send
  *   them chasing a new link that they do not need.
+ *
+ * **Each link lives 48 hours after its email (ETP-6209).** An expired link renews itself: the page
+ * asks for a new one once, on its own, and the backend emails it to the address the document was
+ * sent to — never to whoever is looking at this page. The page then says a new link was sent (or
+ * was sent recently). A customer who is blocked or inactive, or whose supplier's plan expired,
+ * gets "contact the company" and no reason.
  *
  * The token is deliberately left in the address bar. The link is meant to be bookmarkable
  * (plan §1/§4.6), and scrubbing it would break the bookmark; what §5.4 forbids is the token
@@ -51,12 +60,17 @@ import { saveBlobAsFile } from '@/lib/portal/portalDownload.js';
  * `Authorization` header instead — see `lib/portal/portalApi.js`.
  */
 
-/** The four screens this page can be on. */
+/** The screens this page can be on. */
 const VIEW = {
   loading: 'loading',
   ready: 'ready',
   invalid: 'invalid',
   transientFailure: 'transient-failure',
+  renewing: 'renewing',
+  renewed: 'renewed',
+  recentlySent: 'recently-sent',
+  unavailable: 'unavailable',
+  renewFailed: 'renew-failed',
 };
 
 /** Full-page frame shared by every state, so the portal looks like one surface throughout. */
@@ -277,6 +291,8 @@ export default function PortalPage() {
   const [downloadFailed, setDownloadFailed] = useState(false);
   const [logoUrl, setLogoUrl] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  // The renewal already requested in this page's life, `{ token, request }` (see renewOnce).
+  const renewalRef = useRef(null);
 
   useEffect(() => {
     const trimmed = token.trim();
@@ -291,21 +307,61 @@ export default function PortalPage() {
     setView(VIEW.loading);
     setDownloadFailed(false);
 
-    // Both calls validate the same token, so they go out together rather than in sequence.
-    Promise.all([
-      fetchPortalIdentity(apiFetch, trimmed),
-      fetchPortalInvoices(apiFetch, trimmed),
-    ]).then(([loadedIdentity, loadedSummary]) => {
-      if (!active) return;
-      setIdentity(loadedIdentity);
-      setSummary(loadedSummary);
-      setView(VIEW.ready);
-    }).catch((error) => {
+    const showError = (error) => {
       if (!active) return;
       setView(
         error?.code === PORTAL_ERROR.invalidLink ? VIEW.invalid : VIEW.transientFailure,
       );
-    });
+    };
+
+    // The renewal goes out once per token: a re-render or a remount of the same expired link
+    // (StrictMode runs this effect twice) joins the request already in flight instead of emailing
+    // the customer again. A retry after a failed renewal clears the guard.
+    const renewOnce = () => {
+      if (renewalRef.current?.token !== trimmed) {
+        renewalRef.current = { token: trimmed, request: renewPortalLink(apiFetch, trimmed) };
+      }
+      setView(VIEW.renewing);
+      renewalRef.current.request.then((result) => {
+        if (!active) return;
+        if (result.state === PORTAL_LINK_STATE.unavailable) {
+          setView(VIEW.unavailable);
+        } else if (result.state === PORTAL_LINK_STATE.renewed) {
+          setView(result.renewal === PORTAL_RENEWAL.recentlySent ? VIEW.recentlySent : VIEW.renewed);
+        } else {
+          // The link had not expired after all (clock skew): load the portal normally.
+          renewalRef.current = null;
+          setAttempt((value) => value + 1);
+        }
+      }).catch((error) => {
+        if (!active) return;
+        if (error?.code === PORTAL_ERROR.invalidLink) {
+          setView(VIEW.invalid);
+          return;
+        }
+        renewalRef.current = null;
+        setView(VIEW.renewFailed);
+      });
+    };
+
+    // The link's state decides what loads next: only a valid link may read documents.
+    fetchPortalIdentity(apiFetch, trimmed).then((loadedIdentity) => {
+      if (!active) return null;
+      setIdentity(loadedIdentity);
+      if (loadedIdentity.state === PORTAL_LINK_STATE.expired) {
+        renewOnce();
+        return null;
+      }
+      if (loadedIdentity.state === PORTAL_LINK_STATE.unavailable) {
+        setView(VIEW.unavailable);
+        return null;
+      }
+      return fetchPortalInvoices(apiFetch, trimmed).then((loadedSummary) => {
+        if (!active) return;
+        setSummary(loadedSummary);
+        setView(VIEW.ready);
+      });
+    }).catch(showError);
 
     return () => { active = false; };
   }, [token, apiFetch, attempt]);
@@ -402,6 +458,87 @@ export default function PortalPage() {
           title={ui('portalInvalidLinkTitle')}
           description={ui('portalInvalidLinkDescription')}
           data-testid="PortalNotice__3db5f6" />
+      </PortalFrame>
+    );
+  }
+
+  if (view === VIEW.renewing) {
+    return (
+      <PortalFrame data-testid="PortalFrame__3db5f6">
+        <PortalNotice
+          testId="portal-renewing"
+          icon={<Loader2
+            className="h-8 w-8 animate-spin text-primary"
+            data-testid="Loader2__3db5f6" />}
+          title={ui('portalRenewingTitle')}
+          description={ui('portalRenewingDescription')}
+          data-testid="PortalNotice__3db5f6" />
+      </PortalFrame>
+    );
+  }
+
+  if (view === VIEW.renewed || view === VIEW.recentlySent) {
+    const recently = view === VIEW.recentlySent;
+    return (
+      <PortalFrame data-testid="PortalFrame__3db5f6">
+        <PortalNotice
+          testId={recently ? 'portal-recently-sent' : 'portal-renewed'}
+          icon={(
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <MailCheck className="h-6 w-6" data-testid="MailCheck__3db5f6" />
+            </span>
+          )}
+          title={ui(recently ? 'portalRecentlySentTitle' : 'portalRenewedTitle')}
+          description={ui(recently ? 'portalRecentlySentDescription' : 'portalRenewedDescription')}
+          data-testid="PortalNotice__3db5f6" />
+      </PortalFrame>
+    );
+  }
+
+  // One message for blocked, inactive and plan-expired alike: the reason is the company's
+  // business, not the customer's.
+  if (view === VIEW.unavailable) {
+    const tenantName = identity?.tenantName;
+    return (
+      <PortalFrame data-testid="PortalFrame__3db5f6">
+        <PortalNotice
+          testId="portal-unavailable"
+          icon={(
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <Ban className="h-6 w-6" data-testid="Ban__3db5f6" />
+            </span>
+          )}
+          title={ui('portalUnavailableTitle')}
+          description={tenantName
+            ? ui('portalUnavailableDescription', { tenantName })
+            : ui('portalUnavailableDescriptionGeneric')}
+          data-testid="PortalNotice__3db5f6" />
+      </PortalFrame>
+    );
+  }
+
+  if (view === VIEW.renewFailed) {
+    return (
+      <PortalFrame data-testid="PortalFrame__3db5f6">
+        <PortalNotice
+          testId="portal-renew-error"
+          icon={(
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+              <AlertCircle className="h-6 w-6" data-testid="AlertCircle__3db5f6" />
+            </span>
+          )}
+          title={ui('portalRenewErrorTitle')}
+          description={ui('portalRenewErrorDescription')}
+          data-testid="PortalNotice__3db5f6">
+          <Button
+            variant="outline"
+            className="mt-6"
+            onClick={() => setAttempt((value) => value + 1)}
+            data-testid="portal-renew-retry"
+          >
+            {ui('retry')}
+          </Button>
+        </PortalNotice>
       </PortalFrame>
     );
   }

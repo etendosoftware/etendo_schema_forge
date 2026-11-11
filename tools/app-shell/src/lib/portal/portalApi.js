@@ -18,10 +18,16 @@ import { detectBaseUrl } from '@etendosoftware/app-shell-core/auth/api';
  * tenant logout choke point — clearing state for a session that never existed. See
  * `docs/request-policy.md`.
  *
- * **3. Unknown and revoked are deliberately indistinguishable.** The backend answers the same
- * way to both (plan §5.2), and this module keeps that property by collapsing 401/403/404 into
- * one {@link PORTAL_ERROR.invalidLink} code. Nothing in the UI may branch on which it was —
- * that branch is the enumeration oracle the design removes.
+ * **3. Unknown, pending and deactivated links are deliberately indistinguishable.** The backend
+ * answers the same 401 to all of them (plan §5.2), and this module keeps that property by
+ * collapsing 401/403/404 into one {@link PORTAL_ERROR.invalidLink} code. Nothing in the UI may
+ * branch on which it was — that branch is the enumeration oracle the design removes.
+ *
+ * **4. A link expires 48 hours after its email (ETP-6209).** `/me` then answers a `state`
+ * ({@link PORTAL_LINK_STATE}) instead of a 401, and only for a link that was really sent: an
+ * expired link is renewed with {@link renewPortalLink}, which emails a new one to the original
+ * recipients. The "unavailable" state never says why (customer blocked, inactive, or the
+ * issuing company's plan expired).
  *
  * Endpoints live under `/sws/portal/*`, never `/sws/neo/*`: the portal is a separate bounded
  * context and must not be reachable through the generic CRUD engine every window shares.
@@ -51,6 +57,23 @@ export const PORTAL_ERROR = {
   loadFailed: 'loadFailed',
   downloadFailed: 'downloadFailed',
 };
+
+/**
+ * What `/me` and `/renew` say about a link that was really emailed (ETP-6209). Anything else is
+ * {@link PORTAL_ERROR.invalidLink}.
+ */
+export const PORTAL_LINK_STATE = Object.freeze({
+  valid: 'valid',
+  expired: 'expired',
+  unavailable: 'unavailable',
+  renewed: 'renewed',
+});
+
+/** What `/renew` did, when it answered {@link PORTAL_LINK_STATE.renewed}. */
+export const PORTAL_RENEWAL = Object.freeze({
+  sent: 'sent',
+  recentlySent: 'recentlySent',
+});
 
 /**
  * Statuses that mean "this token is not, or is no longer, a credential".
@@ -103,13 +126,18 @@ function readableAmount(value) {
 async function portalGet(fetchImpl, token, path, {
   invalidOn = INVALID_TOKEN_STATUSES,
   failure = PORTAL_ERROR.loadFailed,
+  method,
 } = {}) {
   let response;
   try {
     // `on401: 'ignore'`: an invalid portal link answers 401, which is a domain answer here and
     // must not reach the tenant logout wiring. `token` puts the portal token in the
     // Authorization header — never in the URL.
-    response = await fetchImpl(`${PORTAL_API_PREFIX}${path}`, { token, on401: 'ignore' });
+    response = await fetchImpl(`${PORTAL_API_PREFIX}${path}`, {
+      token,
+      on401: 'ignore',
+      ...(method ? { method } : {}),
+    });
   } catch (cause) {
     // The request never completed (offline, DNS, aborted). That is transient and retryable,
     // and saying "your link is invalid" for it would be a lie the BP cannot act on.
@@ -123,18 +151,24 @@ async function portalGet(fetchImpl, token, path, {
 }
 
 /**
- * Validates the token and returns who the link belongs to.
+ * Validates the token and returns its state and who the link belongs to.
  *
  * Both names are optional in the rendered page: the portal must stay usable when the backend
  * has nothing friendly to show, so a missing name degrades to no greeting rather than to an
- * error state.
+ * error state. `state` defaults to `valid`: a backend that predates ETP-6209 answered 200 only
+ * for a valid link.
  *
- * @returns {Promise<{ businessPartnerName: string|null, tenantName: string|null }>}
+ * @returns {Promise<{ state: string, businessPartnerName: string|null, tenantName: string|null,
+ *   hasLogo: boolean, entryDocument: { kind: string, id: string }|null }>}
  */
 export async function fetchPortalIdentity(fetchImpl, token) {
   const response = await portalGet(fetchImpl, token, '/me');
   const data = await response.json().catch(() => ({}));
+  const entryKind = readableText(data?.entryDocument?.kind);
+  const entryId = readableText(data?.entryDocument?.id);
   return {
+    state: readLinkState(data?.state),
+    entryDocument: entryKind && entryId ? { kind: entryKind, id: entryId } : null,
     businessPartnerName: readableText(data?.businessPartnerName),
     tenantName: readableText(data?.tenantName),
     // The backend says whether there is a logo, so the page never requests one that does not
@@ -142,6 +176,34 @@ export async function fetchPortalIdentity(fetchImpl, token) {
     // this field shows no logo rather than a placeholder.
     hasLogo: data?.hasLogo === true,
   };
+}
+
+/**
+ * Asks for a new link to replace an expired one (ETP-6209).
+ *
+ * The backend emails it to the recipients of the original email — never to whoever is looking
+ * at this page — so nothing about the new link comes back here: only whether one went out.
+ * A 5xx means the email could not be sent and is worth retrying ({@link PORTAL_ERROR.loadFailed}).
+ *
+ * @returns {Promise<{ state: string, renewal: string|null }>}
+ */
+export async function renewPortalLink(fetchImpl, token) {
+  const response = await portalGet(fetchImpl, token, '/renew', {
+    method: 'POST',
+    invalidOn: INVALID_TOKEN_STATUSES_PDF,
+  });
+  const data = await response.json().catch(() => ({}));
+  const renewal = readableText(data?.renewal);
+  return {
+    state: readLinkState(data?.state),
+    renewal: renewal === PORTAL_RENEWAL.recentlySent ? PORTAL_RENEWAL.recentlySent
+      : (renewal === PORTAL_RENEWAL.sent ? PORTAL_RENEWAL.sent : null),
+  };
+}
+
+/** A known {@link PORTAL_LINK_STATE} value, `valid` for anything else. */
+function readLinkState(value) {
+  return Object.values(PORTAL_LINK_STATE).includes(value) ? value : PORTAL_LINK_STATE.valid;
 }
 
 /**
