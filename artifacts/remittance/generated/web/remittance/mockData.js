@@ -143,6 +143,13 @@ export const lines = [
     "paymentScheduleDetail": "Sample paymentScheduleDetail",
     "amount": 38907,
     "currency": "USD",
+    "status": "DR",
+    "businessPartner": "Acme Corp",
+    "dueDate": "2026-01-15",
+    "invoiceDocumentNo": "LI-00001",
+    "invoiceDate": "2026-01-15",
+    "invoiceGrandTotal": 38907,
+    "invoiceOutstanding": 38907,
     "remittanceId": "mock-remittance-001"
   },
   {
@@ -152,6 +159,13 @@ export const lines = [
     "paymentScheduleDetail": "Sample paymentScheduleDetail",
     "amount": 9306,
     "currency": "EUR",
+    "status": "CO",
+    "businessPartner": "TechFlow Inc",
+    "dueDate": "2026-01-16",
+    "invoiceDocumentNo": "LI-00002",
+    "invoiceDate": "2026-01-16",
+    "invoiceGrandTotal": 9306,
+    "invoiceOutstanding": 9306,
     "remittanceId": "mock-remittance-002"
   },
   {
@@ -161,6 +175,13 @@ export const lines = [
     "paymentScheduleDetail": "Sample paymentScheduleDetail",
     "amount": 11544,
     "currency": "GBP",
+    "status": "VO",
+    "businessPartner": "Global Trade Ltd",
+    "dueDate": "2026-01-17",
+    "invoiceDocumentNo": "LI-00003",
+    "invoiceDate": "2026-01-17",
+    "invoiceGrandTotal": 11544,
+    "invoiceOutstanding": 11544,
     "remittanceId": "mock-remittance-003"
   },
   {
@@ -170,6 +191,13 @@ export const lines = [
     "paymentScheduleDetail": "Sample paymentScheduleDetail",
     "amount": 11872,
     "currency": "USD",
+    "status": "IP",
+    "businessPartner": "Summit Industries",
+    "dueDate": "2026-01-18",
+    "invoiceDocumentNo": "LI-00004",
+    "invoiceDate": "2026-01-18",
+    "invoiceGrandTotal": 11872,
+    "invoiceOutstanding": 11872,
     "remittanceId": "mock-remittance-004"
   },
   {
@@ -179,6 +207,13 @@ export const lines = [
     "paymentScheduleDetail": "Sample paymentScheduleDetail",
     "amount": 48460,
     "currency": "EUR",
+    "status": "DR",
+    "businessPartner": "Pacific Partners",
+    "dueDate": "2026-01-19",
+    "invoiceDocumentNo": "LI-00005",
+    "invoiceDate": "2026-01-19",
+    "invoiceGrandTotal": 48460,
+    "invoiceOutstanding": 48460,
     "remittanceId": "mock-remittance-005"
   },
   {
@@ -188,6 +223,13 @@ export const lines = [
     "paymentScheduleDetail": "Sample paymentScheduleDetail",
     "amount": 45418,
     "currency": "GBP",
+    "status": "CO",
+    "businessPartner": "Alpine Solutions",
+    "dueDate": "2026-01-20",
+    "invoiceDocumentNo": "LI-00006",
+    "invoiceDate": "2026-01-20",
+    "invoiceGrandTotal": 45418,
+    "invoiceOutstanding": 45418,
     "remittanceId": "mock-remittance-006"
   },
   {
@@ -197,6 +239,13 @@ export const lines = [
     "paymentScheduleDetail": "Sample paymentScheduleDetail",
     "amount": 33840,
     "currency": "USD",
+    "status": "VO",
+    "businessPartner": "Meridian Group",
+    "dueDate": "2026-01-21",
+    "invoiceDocumentNo": "LI-00007",
+    "invoiceDate": "2026-01-21",
+    "invoiceGrandTotal": 33840,
+    "invoiceOutstanding": 33840,
     "remittanceId": "mock-remittance-007"
   },
   {
@@ -206,6 +255,13 @@ export const lines = [
     "paymentScheduleDetail": "Sample paymentScheduleDetail",
     "amount": 25716,
     "currency": "EUR",
+    "status": "IP",
+    "businessPartner": "Vertex Systems",
+    "dueDate": "2026-01-22",
+    "invoiceDocumentNo": "LI-00008",
+    "invoiceDate": "2026-01-22",
+    "invoiceGrandTotal": 25716,
+    "invoiceOutstanding": 25716,
     "remittanceId": "mock-remittance-008"
   },
   {
@@ -215,6 +271,13 @@ export const lines = [
     "paymentScheduleDetail": "Sample paymentScheduleDetail",
     "amount": 44780,
     "currency": "GBP",
+    "status": "DR",
+    "businessPartner": "Atlas Manufacturing",
+    "dueDate": "2026-01-23",
+    "invoiceDocumentNo": "LI-00009",
+    "invoiceDate": "2026-01-23",
+    "invoiceGrandTotal": 44780,
+    "invoiceOutstanding": 44780,
     "remittanceId": "mock-remittance-009"
   },
   {
@@ -224,6 +287,13 @@ export const lines = [
     "paymentScheduleDetail": "Sample paymentScheduleDetail",
     "amount": 12483,
     "currency": "USD",
+    "status": "CO",
+    "businessPartner": "Nova Enterprises",
+    "dueDate": "2026-01-24",
+    "invoiceDocumentNo": "LI-00010",
+    "invoiceDate": "2026-01-24",
+    "invoiceGrandTotal": 12483,
+    "invoiceOutstanding": 12483,
     "remittanceId": "mock-remittance-010"
   },
   {
@@ -233,6 +303,13 @@ export const lines = [
     "paymentScheduleDetail": "Sample paymentScheduleDetail",
     "amount": 46022,
     "currency": "EUR",
+    "status": "VO",
+    "businessPartner": "Pinnacle Services",
+    "dueDate": "2026-01-25",
+    "invoiceDocumentNo": "LI-00011",
+    "invoiceDate": "2026-01-25",
+    "invoiceGrandTotal": 46022,
+    "invoiceOutstanding": 46022,
     "remittanceId": "mock-remittance-011"
   },
   {
@@ -242,6 +319,13 @@ export const lines = [
     "paymentScheduleDetail": "Sample paymentScheduleDetail",
     "amount": 38634,
     "currency": "GBP",
+    "status": "IP",
+    "businessPartner": "Horizon Labs",
+    "dueDate": "2026-01-26",
+    "invoiceDocumentNo": "LI-00012",
+    "invoiceDate": "2026-01-26",
+    "invoiceGrandTotal": 38634,
+    "invoiceOutstanding": 38634,
     "remittanceId": "mock-remittance-012"
   }
 ];

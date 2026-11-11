@@ -1,4 +1,5 @@
 // @covers artifacts/remittance/generated/web/remittance/RemittancePage.jsx
+// @covers artifacts/remittance/generated/web/remittance/LinesTable.jsx
 //
 // Guards what the generated remittance page hands to the shared views — the header processes
 // («Procesar» / «Reactivar»), the custom slots and the «Todas / Cobros / Pagos» list tabs — as
@@ -6,6 +7,8 @@
 // the process visibility and routing are run through DetailView's real helpers
 // (evalDisplayLogicRaw / dispatchProcessAction), with the same two filters DetailView applies
 // (displayLogicRaw, then requiresLines).
+// The Lines tab is the real generated LinesTable rendered over a stubbed DataTable, so its columns
+// are read as the page ships them; labels and tones go through the real resolvers DataTable uses.
 let mockTier = 'full';
 const mockCaptured = {};
 
@@ -25,7 +28,10 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 vi.mock('@/components/attachments', () => ({ AttachmentsTab: () => null }));
 vi.mock('@generated/remittance/generated/web/remittance/RemittanceTable', () => ({ default: () => null }));
 vi.mock('@generated/remittance/generated/web/remittance/RemittanceForm', () => ({ default: () => null }));
-vi.mock('@generated/remittance/generated/web/remittance/LinesTable', () => ({ default: () => null }));
+vi.mock('@/components/contract-ui', () => ({
+  DataTable: (props) => { mockCaptured.linesColumns = props.columns; return <div data-testid="lines-data-table" />; },
+  InlineLinesPanel: (props) => { mockCaptured.linesColumns = props.columns; return <div data-testid="lines-inline-panel" />; },
+}));
 vi.mock('@generated/remittance/generated/web/remittance/LinesForm', () => ({ default: () => null }));
 vi.mock('@generated/remittance/custom/RemittanceBottomPanel', () => ({ default: function MockBottomPanel() { return null; } }));
 vi.mock('@generated/remittance/custom/RemittanceProcessConfirmModal', () => ({ default: function MockConfirmModal() { return null; } }));
@@ -41,6 +47,10 @@ import { evalDisplayLogicRaw, dispatchProcessAction } from '@/components/contrac
 import enUS from '@/locales/en_US.json';
 import esES from '@/locales/es_ES.json';
 import esAR from '@/locales/es_AR.json';
+import { resolveLabel } from '@etendosoftware/app-shell-core/i18n/resolveLabel';
+import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
+import { statusLabel } from '@/lib/statusBadge.js';
+import { resolveStatusTone } from '@/lib/statusToneOverride.js';
 
 const LOCALES = [['en_US', enUS], ['es_ES', esES], ['es_AR', esAR]];
 
@@ -48,6 +58,7 @@ beforeEach(() => {
   mockTier = 'full';
   delete mockCaptured.list;
   delete mockCaptured.detail;
+  delete mockCaptured.linesColumns;
 });
 
 function detailProps() {
@@ -199,5 +210,75 @@ describe('RemittancePage — «Todas / Cobros / Pagos» list tabs', () => {
     for (const key of ['remittanceTabAll', 'remittanceTabCollections', 'remittanceTabPayments']) {
       expect(json.genericLabels[key], key).toEqual(expect.stringMatching(/\S/));
     }
+  });
+});
+
+describe('RemittancePage — Lines tab', () => {
+  // The columns of the real LinesTable the page hands to DetailView.
+  function linesColumns() {
+    const { DetailTable } = detailProps();
+    render(<DetailTable />);
+    return mockCaptured.linesColumns;
+  }
+
+  // Header label as DataTable resolves it: col.labels, then useLabel(column) with the window's
+  // labelOverrides, then col.label.
+  function headerLabels(locale, json) {
+    const { labelOverrides } = detailProps();
+    const translate = (column) => resolveLabel(json, column, labelOverrides?.[locale] ?? null);
+    return linesColumns().map((col) => resolveColumnLabel(col, locale, translate));
+  }
+
+  const ES_HEADERS = ['Factura', 'Fecha factura', 'Vencimiento', 'Cliente', 'Total factura', 'Pendiente', 'A remesar', 'Estado del recibo'];
+
+  it('shows the due item columns in order, «Estado del recibo» last', () => {
+    expect(linesColumns().map((c) => c.key)).toEqual([
+      'invoiceDocumentNo', 'invoiceDate', 'dueDate', 'businessPartner', 'invoiceGrandTotal', 'invoiceOutstanding', 'amount', 'status',
+    ]);
+    expect(headerLabels('es_ES', esES)).toEqual(ES_HEADERS);
+  });
+
+  it.each([
+    ['en_US', enUS, ['Invoice', 'Invoice date', 'Due date', 'Customer', 'Invoice total', 'Outstanding', 'To remit', 'Receipt status']],
+    ['es_AR', esAR, ES_HEADERS],
+  ])('translates every column header in %s', (locale, json, expected) => {
+    expect(headerLabels(locale, json)).toEqual(expected);
+  });
+
+  it('renders the receipt status as a status badge with the payment status labels', () => {
+    const status = linesColumns().find((c) => c.key === 'status');
+    expect(status.type).toBe('status');
+    expect(status.enumLabels).toEqual({
+      RPAP: 'statusRpap', RPAE: 'statusRpae', RPVOID: 'statusRpvoid', REM_SENT: 'statusRemSent', PPM: 'statusPpm',
+      RPR: 'statusRpr', REM_CANCEL: 'statusRemCancel', RDNC: 'statusRdnc', PWNC: 'statusPwnc', RPPC: 'statusRppc',
+      ETGOERR: 'statusEtgoerr',
+    });
+  });
+
+  it.each([
+    ['RPAP', 'A Pagar', 'neutral'],
+    ['REM_SENT', 'Remesado', 'warning'],
+    ['REM_CANCEL', 'Liquidado en remesa', 'success'],
+    ['RPR', 'Cobrado', 'success'],
+    ['PPM', 'Pagado', 'warning'],
+    ['RPVOID', 'Anulado', 'destructive'],
+    ['ETGOERR', 'Pago con error', 'destructive'],
+  ])('shows %s as «%s» in the %s tone', (code, label, tone) => {
+    const status = linesColumns().find((c) => c.key === 'status');
+    expect(statusLabel(code, esES, undefined, status.enumLabels)).toBe(label);
+    expect(resolveStatusTone(code, status.enumVariants)).toBe(tone);
+  });
+
+  it.each([['en_US', enUS], ['es_ES', esES]])('every receipt status label is translated in %s', (_loc, json) => {
+    const status = linesColumns().find((c) => c.key === 'status');
+    for (const key of Object.values(status.enumLabels)) {
+      expect(json.genericLabels[key], key).toEqual(expect.stringMatching(/\S/));
+    }
+  });
+
+  it('passes no line form, so a row click opens nothing', () => {
+    const props = detailProps();
+    expect(props.DetailTable).toBeTruthy();
+    expect(props).not.toHaveProperty('DetailForm');
   });
 });

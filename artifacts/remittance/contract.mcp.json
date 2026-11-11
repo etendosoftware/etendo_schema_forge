@@ -1,8 +1,8 @@
 {
-  "version": "0.14.0",
+  "version": "0.21.0",
   "generatedAt": "2026-11-05T18:53:39.346Z",
-  "updatedAt": "2026-11-06T15:49:40.281Z",
-  "contractChecksum": "a7777403773374cb",
+  "updatedAt": "2026-11-11T12:01:06.516Z",
+  "contractChecksum": "ed3b48499477f2f8",
   "apiPrediction": {
     "specName": "remittance",
     "baseUrl": "/sws/neo/remittance",
@@ -76,6 +76,13 @@
         "reference": "Payment_Scheduledetail",
         "inputMode": "search",
         "url": "/sws/neo/remittance/lines/selectors/paymentScheduleDetail"
+      },
+      {
+        "entity": "lines",
+        "field": "businessPartner",
+        "column": "C_BPartner_ID",
+        "inputMode": "selector",
+        "url": "/sws/neo/remittance/lines/selectors/businessPartner"
       }
     ],
     "actions": [
@@ -353,6 +360,27 @@
           },
           "currency": {
             "readOnly": true
+          },
+          "status": {
+            "readOnly": true
+          },
+          "businessPartner": {
+            "readOnly": true
+          },
+          "dueDate": {
+            "readOnly": true
+          },
+          "invoiceDocumentNo": {
+            "readOnly": true
+          },
+          "invoiceDate": {
+            "readOnly": true
+          },
+          "invoiceGrandTotal": {
+            "readOnly": true
+          },
+          "invoiceOutstanding": {
+            "readOnly": true
           }
         }
       }
@@ -434,5 +462,5 @@
     "dangerousOperations": [],
     "agentPrompt": "SEPA remittances (Etendo table REM_Remittance): a batch of customer collections (SEPA CORE direct debit) or vendor payments (SEPA credit transfer) that the company sends to its bank in one file. Only available when the account has the sepa-remittances feature enabled; otherwise every call answers 403 feature_disabled. The `remittance` entity is the header: create it with name (max 60 characters), financialAccount (only accounts with \"Allow Remittances\" are accepted), remittanceType (its name says whether it is a collection or a payment remittance; only types whose SEPA scheme is enabled on the chosen account are accepted) and dueDate (the date the bank charges or credits the remittance). documentNo, transactionDate and the document type are assigned by the server, and remittanceStatus (PE Pending, PR Processed, CT/PT Collected/Paid, CP/PP partially, AN Voided) is set by the remittance processes and never written. A processed remittance cannot be edited. The `lines` entity is read-only: each line is one due item (paymentScheduleDetail, whose identifier shows the invoice, due date and amount) or payment (payment) of the remittance with its amount; lines cannot be created, edited or deleted through this spec yet, and the Classic remittance processes (select payments, process remittance, create remittance file) are not exposed."
   },
-  "checksum": "bf897da5325929d5"
+  "checksum": "fe9b927d35310e8c"
 }

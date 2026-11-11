@@ -138,15 +138,45 @@ its action. `processOverrides` also excludes those buttons from the detail view,
 
 | Order | Key | Column | Label (es_ES) |
 |---|---|---|---|
-| 1 | `paymentScheduleDetail` | `FIN_Payment_Scheduledetail_ID` | Vencimiento |
-| 2 | `amount` | `Amount` | Importe (formatted with the line currency) |
+| 1 | `invoiceDocumentNo` | path `paymentScheduleDetail.invoicePaymentSchedule.invoice.documentNo` | Factura (`grow: true`) |
+| 2 | `invoiceDate` | path `….invoice.invoiceDate` (`yyyy-MM-dd`) | Fecha factura |
+| 3 | `dueDate` | path `paymentScheduleDetail.invoicePaymentSchedule.expectedDate` (`yyyy-MM-dd`) | Vencimiento |
+| 4 | `businessPartner` | path `paymentScheduleDetail.businessPartner` (FK, shown as its identifier) | Cliente |
+| 5 | `invoiceGrandTotal` | path `….invoice.grandTotalAmount` | Total factura (line currency) |
+| 6 | `invoiceOutstanding` | path `….invoice.outstandingAmount` | Pendiente (line currency) |
+| 7 | `amount` | `Amount` | A remesar (line currency) |
+| 8 | `status` | Classic path `payment.status` | Estado del recibo (status badge) |
 
 The column set is a user decision (2026-11-06).
-- **Vencimiento is temporary.** `paymentScheduleDetail` is the first column and the growing one
-  (`grow: true`), because it always has a value. Its AD identifier reads «due date - installment
-  amount - line amount», e.g. «02-11-2026 - 53.24 - 53.24». The target is separate Factura /
-  Cliente / Vencimiento fields through the generic Classic property-path work, a separate task
-  (`lines-invoice-order-columns` in `flags-registry.json`).
+- **Factura, Fecha factura, Vencimiento, Cliente, Total factura and Pendiente are property-path fields** (`propertyPath` in `decisions.json`,
+  see `docs/decisions-reference.md`). They are declared only in decisions, with no REM column.
+  - They are read through many-to-one steps from the line, served by NEO under their key and
+    always read-only.
+  - Their headers come from per-field `labels`, because the target column `DocumentNo` would
+    otherwise take the window's «Nº documento» override.
+  - Vencimiento is `expectedDate`, the same date «Seleccionar desde factura» shows and filters
+    on, not the Classic identifier's `Duedate`.
+  - They need the `ETGO_SF_FIELD.PROPERTY_PATH` column in the database before the push.
+  - On the lines entity they are seven `ETGO_SF_FIELD` rows, counting `payment.status`: `AD_COLUMN_ID` NULL,
+    `PROPERTY_PATH` set, `JAVA_QUALIFIER` = the key, `ISREADONLY = 'Y'`, visibility `readOnly`. The
+    other Classic property fields of the tab (`invoice`, `order`, `displayedAccount`, …) do not opt
+    in, so they keep the legacy treatment and stay discarded.
+  - The amounts (Total factura, Pendiente, A remesar) use `currencyField: "currency"`, the
+    line's currency, and are right-aligned as `amount` columns. The column order follows Holded
+    (user decision 2026-11-06).
+  - Check: `SELECT property_path, java_qualifier, isreadonly FROM etgo_sf_field WHERE
+    property_path IS NOT NULL` (joined to the `remittance` spec).
+- `paymentScheduleDetail` (the due item) is no longer a column (`grid: false`). It is still
+  served, because the API and the picker rely on it.
+- **Estado del recibo** is the Classic property field `payment.status`, opted in per field with
+  `"propertyPath": "payment.status"` and `"visibility": "readOnly"` in its decision. As a path
+  field it is never required and has no default, so it stays out of `addLineFields`. It is a status badge: the
+  labels are the payment status keys (`statusRpap`, `statusRpr`, `statusRemSent` «Remesado»,
+  `statusRemCancel` «Liquidado en remesa», …) and the tone comes from `getStatusTone`. It is empty
+  while the remittance is pending, because the line has no payment yet.
+- **Grid only.** `window.hideDetailForm: true`, so the generated page passes no `DetailForm` and
+  clicking a line opens nothing. Before, it opened a nearly empty side panel with only the amount.
+  The generator still emits `LinesForm.jsx` and its import; both are unused.
 - **Importe carries the currency** («53,24 €»). `amount.currencyField: "currency"` names REM's
   virtual SQL-logic column `REM_GETREMLINECURRENCY(REM_RemittanceLine_ID)`. NEO serves it as a
   plain text code, and `resolveRowCurrency` (`lib/rowCurrency.js`, opt-in through
@@ -167,48 +197,30 @@ The column set is a user decision (2026-11-06).
   because that token is not defined.
 
 Discarded:
-- the AD_Field property paths (see below). Invoice and order are not shown, which is
-  `lines-invoice-order-columns` in `flags-registry.json`;
+- the Classic AD_Field property-path fields (see below). They now arrive with their path, but the
+  Lines tab uses its own path fields above instead;
 - the SQL-logic column `orderPaymentInPlan` (order payment plan);
 - `origstatus`.
 
-#### Classic property-path fields: not supported
+#### Classic property-path fields
 
 The Classic Lines tab shows the invoice, the payment plan and the payment status through AD_Field
-`Property` paths. These fields are not columns of `REM_RemittanceLine`. The AD has no property-path
-field for the business partner.
+`Property` paths. These are not columns of `REM_RemittanceLine`. Since ETP-6148 the extractor emits
+them with `propertyPath` (keyed by the last segment, read-only), and the pipeline can serve them
+through `ETGO_SF_FIELD.PROPERTY_PATH`. This window keeps all of them discarded, so no row is
+written for them:
 
-| Field | `AD_Field.Property` | Anchor column (another table) |
-|---|---|---|
-| `invoice` | `paymentScheduleDetail.invoicePaymentSchedule.invoice` | `FIN_Payment_Schedule.C_Invoice_ID` |
-| `invoicePaymentSchedule` | `paymentScheduleDetail.invoicePaymentSchedule` (due date + amount) | `FIN_Payment_ScheduleDetail.FIN_Payment_Schedule_Invoice` |
-| `order` | `paymentScheduleDetail.orderPaymentSchedule.order` | `FIN_Payment_Schedule.C_Order_ID` |
-| `status` | `payment.status` | `FIN_Payment.Status` |
-| `displayedAccount`, `displayedAccount2` | `…eTABAMBankaccount.displayedAccount` | `C_BP_BankAccount.Displayedaccount` |
+| Field | `AD_Field.Property` |
+|---|---|
+| `invoice` | `paymentScheduleDetail.invoicePaymentSchedule.invoice` |
+| `invoicePaymentSchedule` | `paymentScheduleDetail.invoicePaymentSchedule` (due date + amount) |
+| `order` | `paymentScheduleDetail.orderPaymentSchedule.order` |
+| `status` | `payment.status` |
+| `displayedAccount`, `displayedAccount2` | `…eTABAMBankaccount.displayedAccount` |
 
-The user approved enabling them (read-only). They were tried and reverted because they fail at
-three points of the pipeline:
-
-1. **Extractor.** `extract-fields.js` selects `f.Property` but never uses it. Each field is emitted as
-   its anchor column, with a flat key (`invoice`, `C_Invoice_ID`). The generated `LinesTable` then
-   reads `row.invoice`.
-2. **Push.** `push-to-neo` `upsertSingleField` only matches `ETGO_SF_FIELD` rows of the entity's own
-   table, `REM_RemittanceLine`. These fields are therefore skipped silently: no row, no error.
-3. **NEO.** `NeoFieldFilter.resolveProperty` resolves a field with
-   `getPropertyByColumnName(<anchor column>)` on `RemittanceLine`. No such property exists, so NEO
-   never serializes a value.
-
-The result would be an always-empty column that cannot be filtered or sorted. That is exactly the
-fictitious-column pattern the list-column rule forbids.
-
-Two supported routes, both outside a window-config change:
-- **`_extraProperties`.** NEO serves dotted paths on GET when the caller asks for them, and
-  `NeoFieldFilter.includeRequestedExtraProperties` allowlists them as
-  `paymentScheduleDetail$invoicePaymentSchedule$invoice$_identifier`. The generated `DetailView`
-  never sends that parameter, so this needs a `window.customLinesComponent`, the way invoice-inbox
-  requests `businessPartner.taxID`. Those cells are still not filterable on the server.
-- **A generator and NEO feature** that maps `AD_Field.Property` to a served, filterable key. This is
-  a Schema Forge Developer task in `schema_forge_core` and `com.etendoerp.go`.
+The Lines tab shows the document number, the business partner and the expected date through its
+own decisions-only paths (the table above the «Discarded» list). The AD has no property-path field
+for the business partner.
 
 ### «Procesar» / «Reactivar», status banner and lines total
 
@@ -381,10 +393,10 @@ These need a new column, which the scope rules out, or a later task. None was in
 | List "Nº de documentos" and "Total" | **not covered**. Both are aggregates of the lines; there is no Classic column |
 | Header SEPA scheme | covered by the `remittanceType` name. There is no separate field |
 | Header creditor identifier | left out (computed at XML time, see above) |
-| Line due date | in the `paymentScheduleDetail` identifier (payment plan due date and amount) |
-| Line invoice number | **not covered**. It is not in either identifier, and the Classic `invoice` property-path field is not supported (see "Classic property-path fields") |
-| Line business partner | **not covered**. It is only in the `payment` identifier, which stays empty until the line is processed. Classic has no property-path field for it |
-| Line status | **not covered**. Neither identifier carries a status, and the Classic `payment.status` property-path field is not supported |
+| Line due date | covered: «Vencimiento», property path `paymentScheduleDetail.invoicePaymentSchedule.expectedDate` |
+| Line invoice number | covered: «Factura», property path `….invoice.documentNo` |
+| Line business partner | covered: «Cliente», property path `paymentScheduleDetail.businessPartner` (declared in decisions; Classic has no field for it) |
+| Line status | **not covered**. The Classic `payment.status` property-path field could now be served, but it is not shown: the payment is empty until the remittance is processed |
 
 ## Selectors and callout
 

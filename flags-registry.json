@@ -2316,7 +2316,7 @@
         {
           "id": "release-order",
           "kind": "precondition",
-          "note": "Release order across four repos; no repo enforces it. (1) Publish org.openbravo.module.remittance with a NEW version, because republishing 5.2.0 is refused. (2) Raise com.etendoerp.go build.gradle `module.remittance` to that version. GO's CI resolves the published JAR and does not compile against RemittanceStatusUtil / remittanceStatus until then. (3) Publish schema_forge_core: `minDate` in @etendosoftware/schema-forge-cli and DateField `minDate` in @etendosoftware/app-shell-core. (4) Bump schema_forge package.json, tools/app-shell/package.json and package-lock.json to that release, then run `make regen ONLY=remittance`. And therefore: if any step is skipped or done out of order, GO fails to compile (1→2), or the published validator reports F16 on remittance and a regen with the old core drops `minDate` from the generated form (3→4).",
+          "note": "Release order across four repos; no repo enforces it. (1) Publish org.openbravo.module.remittance with a NEW version, because republishing 5.2.0 is refused. (2) Raise com.etendoerp.go build.gradle `module.remittance` to that version. GO's CI resolves the published JAR and does not compile against RemittanceStatusUtil / remittanceStatus until then. (3) Publish schema_forge_core TWICE, or once with both: (3a) `minDate` (schema-forge-cli, and DateField `minDate` in @etendosoftware/app-shell-core), already committed on core feature/ETP-6148; (3b) a SECOND core publish with the property-path fields, strictly per-field opt-in via the decision `propertyPath` (extract-fields `adPropertyPath` / resolve-curated / generate-contract / push-to-neo / neo-writer / neo-delta) in @etendosoftware/schema-forge-cli. (4) Bump schema_forge package.json, tools/app-shell/package.json and package-lock.json to the release that carries BOTH (3a) and (3b); a bump to the minDate-only release is not enough. Then, on a database where com.etendoerp.go's ETGO_SF_FIELD.PROPERTY_PATH column exists (update.database), run `make regen ONLY=remittance PUSH_TO_NEO=1` and export.database: the remittance lines' path rows need that column. And therefore: if any step is skipped or done out of order, GO fails to compile (1→2), or the published validator reports F16 on remittance and a regen with the old core drops `minDate` from the generated form (3a→4), or a regen with a core without (3b) drops the seven remittance line path fields (Factura, Fecha factura, Vencimiento, Cliente, Total factura, Pendiente, Estado del recibo) and pushes no PROPERTY_PATH rows (3b→4).",
           "refs": [
             "README.md: Module repos (org.openbravo.module.remittance)",
             "docs/generated-custom-windows/remittance.md: Regeneration",
@@ -2382,15 +2382,6 @@
           ]
         },
         {
-          "id": "lines-invoice-order-columns",
-          "kind": "open",
-          "note": "USER-DEFERRED on 2026-11-06. The Lines tab shows Payment, Amount and Currency only. Invoice and Order are not shown because REM_RemittanceLine has no column for them: Classic reaches them through AD_Field property paths, which the extractor, push-to-neo and NeoFieldFilter do not support end to end. Chosen direction (2026-11-06), as a separate task and NOT new REM columns: generic support for Classic AD_FIELD property-path fields across Schema Forge (extractor, contract, generator), NEO (an ETGO_SF_FIELD.PROPERTY_PATH served read-only) and the MCP (read-only). And therefore: until then, a user cannot see which invoice or order each remittance line settles without opening the payment.",
-          "refs": [
-            "artifacts/remittance/decisions.json: entities.lines.fields (invoice, order)",
-            "docs/generated-custom-windows/remittance.md: Classic property-path fields: not supported"
-          ]
-        },
-        {
           "id": "remittance-posting",
           "kind": "open",
           "note": "USER-DEFERRED on 2026-11-06. The remittance has no «Contabilizar» / «Descontabilizar» action and no posting-status (POSTED) column. Blocked by: the provisioned remittance types have ISPOSTINGALLOWED = 'N' (DocREMRemittance answers DocumentDisabled); there is no REM_Remittance_Type_Acct configuration; and the method/account link uses the upon-use values. Needs the accounting-defaults decision first. And therefore: remittances are never posted from Etendo GO. Once unblocked, the UI side is declarative: menuActions post/unpost, statusPills posted, and the posted field gated by showAccountingFields. The backend side is RemittanceHeaderHandler delegating post/unpost to DocumentPostingService.",
@@ -2424,6 +2415,16 @@
           "note": "RemittanceHeaderHandler answers every interactive callout of the remittance header empty, because its only callout, Classic's REM_RemittanceType_FinAccount, works in the reverse order of the window (type -> account combo) and dereferences a cleared type. A callout added later to that header would be silenced too. And therefore: whoever adds a header callout must narrow the neutralization to REM_RemittanceType_FinAccount (the callout request body names the trigger field, which the pre-hook does not see today).",
           "refs": [
             "RemittanceHeaderHandler"
+          ]
+        },
+        {
+          "id": "path-field-selector-registered",
+          "kind": "open",
+          "note": "The generator registers a selector for the read-only property-path field `businessPartner` of the remittance lines (api.selectors entry with url /sws/neo/remittance/lines/selectors/businessPartner), because it is a foreignKey with inputMode selector. NEO cannot resolve it: businessPartner is not a REM_RemittanceLine column but the path paymentScheduleDetail.businessPartner. Unused today, because the field is read-only and the grid renders businessPartner$_identifier. And therefore: anything that later opens that selector (an inline editor, a filter widget that asks the selector, an MCP etendo_selectors call) gets an error instead of options. Follow-up: skip selector registration for propertyPath fields in the core generator (generate-frontend.js / generate-contract.js selectors), then regen remittance.",
+          "refs": [
+            "ETP-6148",
+            "artifacts/remittance/generated/web/remittance/RemittancePage.jsx: api.selectors",
+            "schema_forge_core cli/src/generate-frontend.js"
           ]
         }
       ]

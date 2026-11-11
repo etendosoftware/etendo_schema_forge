@@ -134,6 +134,13 @@ export const api = {
       "reference": "Payment_Scheduledetail",
       "inputMode": "search",
       "url": "/sws/neo/remittance/lines/selectors/paymentScheduleDetail"
+    },
+    {
+      "entity": "lines",
+      "field": "businessPartner",
+      "column": "C_BPartner_ID",
+      "inputMode": "selector",
+      "url": "/sws/neo/remittance/lines/selectors/businessPartner"
     }
   ],
   "actions": [
@@ -265,7 +272,6 @@ export default function RemittancePage({ windowName, recordId, ...props }) {
         detailEntity="lines"
         Form={RemittanceForm}
         DetailTable={LinesTable}
-        DetailForm={LinesForm}
         summary={summary}
         statusField={statusField}
         extraBadges={extraBadges}

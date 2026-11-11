@@ -17,6 +17,7 @@
     },
     "listSortBy": "transactionDate desc",
     "detailSortBy": "lineNo asc",
+    "hideDetailForm": true,
     "customComponents": {
       "bottomSection": "RemittanceBottomPanel",
       "subHeader": "RemittanceStatusBanner",
@@ -299,6 +300,105 @@
       ],
       "_methodsNote": "ETP-6148 — lines are added only through «Seleccionar desde factura» (no POST/PUT/PATCH, every field readOnly, so DetailView shows no add-line area and no edit). DELETE enables the generic line delete (row trash icon + selection bar); DetailView hides it on a processed remittance (lockWhenProcessed) and RemittanceLinesHandler refuses it there too.",
       "fields": {
+        "invoiceDate": {
+          "propertyPath": "paymentScheduleDetail.invoicePaymentSchedule.invoice.invoiceDate",
+          "type": "date",
+          "label": "Invoice Date",
+          "column": "DateInvoiced",
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 2,
+          "form": false,
+          "labels": {
+            "es_ES": "Fecha factura",
+            "es_AR": "Fecha factura",
+            "en_US": "Invoice date"
+          },
+          "reason": "ETP-6148 — 'Fecha factura': the invoice date (C_Invoice.DateInvoiced, DAL invoiceDate), read through a property path; yyyy-MM-dd, formatted with formatCalendarDate."
+        },
+        "invoiceGrandTotal": {
+          "propertyPath": "paymentScheduleDetail.invoicePaymentSchedule.invoice.grandTotalAmount",
+          "type": "amount",
+          "label": "Invoice Total",
+          "column": "GrandTotal",
+          "currencyField": "currency",
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 5,
+          "form": false,
+          "labels": {
+            "es_ES": "Total factura",
+            "es_AR": "Total factura",
+            "en_US": "Invoice total"
+          },
+          "reason": "ETP-6148 — 'Total factura': the invoice grand total (C_Invoice.GrandTotal, DAL grandTotalAmount), read through a property path; formatted with the line currency."
+        },
+        "invoiceOutstanding": {
+          "propertyPath": "paymentScheduleDetail.invoicePaymentSchedule.invoice.outstandingAmount",
+          "type": "amount",
+          "label": "Outstanding",
+          "column": "OutstandingAmt",
+          "currencyField": "currency",
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 6,
+          "form": false,
+          "labels": {
+            "es_ES": "Pendiente",
+            "es_AR": "Pendiente",
+            "en_US": "Outstanding"
+          },
+          "reason": "ETP-6148 — 'Pendiente': the invoice's outstanding amount (C_Invoice.OutstandingAmt, DAL outstandingAmount), read through a property path; formatted with the line currency."
+        },
+        "invoiceDocumentNo": {
+          "propertyPath": "paymentScheduleDetail.invoicePaymentSchedule.invoice.documentNo",
+          "type": "string",
+          "label": "Invoice",
+          "column": "DocumentNo",
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 1,
+          "grow": true,
+          "form": false,
+          "labels": {
+            "es_ES": "Factura",
+            "es_AR": "Factura",
+            "en_US": "Invoice"
+          },
+          "reason": "ETP-6148 — 'Factura': the invoice number of the due item, read through a property path (no REM column; generic Classic property-path fields). The column that absorbs the leftover width."
+        },
+        "businessPartner": {
+          "propertyPath": "paymentScheduleDetail.businessPartner",
+          "type": "foreignKey",
+          "label": "Customer",
+          "column": "C_BPartner_ID",
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 4,
+          "form": false,
+          "labels": {
+            "es_ES": "Cliente",
+            "es_AR": "Cliente",
+            "en_US": "Customer"
+          },
+          "reason": "ETP-6148 — 'Cliente': the due item's business partner (the one «Seleccionar desde factura» shows), read through a property path; an FK, served with businessPartner$_identifier."
+        },
+        "dueDate": {
+          "propertyPath": "paymentScheduleDetail.invoicePaymentSchedule.expectedDate",
+          "type": "date",
+          "label": "Due Date",
+          "column": "ExpectedDate",
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 3,
+          "form": false,
+          "labels": {
+            "es_ES": "Vencimiento",
+            "es_AR": "Vencimiento",
+            "en_US": "Due date"
+          },
+          "reason": "ETP-6148 — 'Vencimiento': the invoice payment plan's expected date, the same date «Seleccionar desde factura» shows and filters on (RemittanceDueItems uses expectedDate). Served as yyyy-MM-dd and formatted with formatCalendarDate."
+        },
         "lineNo": {
           "visibility": "readOnly",
           "grid": false,
@@ -307,12 +407,10 @@
         },
         "paymentScheduleDetail": {
           "visibility": "readOnly",
-          "grid": true,
-          "gridOrder": 1,
-          "grow": true,
+          "grid": false,
           "form": false,
           "label": "Due Item",
-          "reason": "ETP-6148 — 'Vencimiento' (FIN_Payment_Scheduledetail_ID). TEMPORARY first column (user decision 2026-11-06) until the generic Classic property-path fields land: its AD identifier reads «due date - installment amount - line amount». The target is separate Factura / Cliente / Vencimiento fields through property paths. It grows because it always has a value."
+          "reason": "ETP-6148 — 'Vencimiento' (FIN_Payment_Scheduledetail_ID), the due item the line settles. Not a column any more: the Lines tab shows Factura / Cliente / Vencimiento through property paths that start from it (invoiceDocumentNo, businessPartner, dueDate). Still served (the API and «Seleccionar desde factura» rely on it)."
         },
         "payment": {
           "visibility": "readOnly",
@@ -323,9 +421,14 @@
         "amount": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 2,
+          "gridOrder": 7,
           "currencyField": "currency",
-          "reason": "ETP-6148 — 'Importe'. currencyField names the line's own text currency (REM's SQL-logic Currency, e.g. EUR), which resolveRowCurrency accepts as a plain ISO code, so the cell reads «53,24 €» with the line currency."
+          "labels": {
+            "es_ES": "A remesar",
+            "es_AR": "A remesar",
+            "en_US": "To remit"
+          },
+          "reason": "ETP-6148 — 'Importe'. currencyField names the line's own text currency (REM's SQL-logic Currency, e.g. EUR), which resolveRowCurrency accepts as a plain ISO code, so the cell reads «53,24 €» with the line currency. Header «A remesar» / «To remit» (per-field labels): the part of the due amount this line remits."
         },
         "invoice": {
           "visibility": "discarded",
@@ -354,8 +457,18 @@
           "reason": "ETP-6148 — Classic technical column (payment status before remitting)."
         },
         "status": {
-          "visibility": "discarded",
-          "reason": "ETP-6148 — AD_Field property path payment.status (anchor FIN_Payment.Status). Not supported end to end (checked for ETP-6148): the extractor ignores AD_Field.Property and emits the anchor column of the joined table (here Status) as a flat key; push-to-neo only matches columns of REM_RemittanceLine, so the field is skipped; NeoFieldFilter resolves fields with getPropertyByColumnName on RemittanceLine, so NEO never serves it. Enabling it would render an always-empty, unfilterable column."
+          "propertyPath": "payment.status",
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 8,
+          "form": false,
+          "label": "Receipt Status",
+          "labels": {
+            "es_ES": "Estado del recibo",
+            "es_AR": "Estado del recibo",
+            "en_US": "Receipt status"
+          },
+          "reason": "ETP-6148 — 'Estado del recibo': the Classic property-path field payment.status (AD_Field.Property), opted in by \"propertyPath\": \"payment.status\" (per-field opt-in). Served as a PROPERTY_PATH row; rendered as a status badge with the payment status labels (genericLabels statusRpap… statusRemSent / statusRemCancel) and getStatusTone. Empty until the remittance is processed (the line has no payment yet)."
         },
         "displayedAccount": {
           "visibility": "discarded",
