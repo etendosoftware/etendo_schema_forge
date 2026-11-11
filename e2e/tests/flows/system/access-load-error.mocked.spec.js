@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/layout/AppLayout.jsx
 // @covers tools/app-shell/src/App.jsx
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login, declareNoSession } from '../../helpers/auth.js';
 
 /**

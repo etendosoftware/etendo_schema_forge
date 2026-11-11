@@ -312,10 +312,10 @@ describe('OnboardingPage', () => {
   it('renders register form fields', async () => {
     localStorage.removeItem('sf_platform_token');
     await renderAtRegister();
-    // Form has name, email, password fields
+    // Form has name and email fields; since ETP-6081 the sign-up asks for no password.
     expect(screen.getByText('onboardingNameLabel')).toBeInTheDocument();
     expect(screen.getByText('onboardingEmailLabel')).toBeInTheDocument();
-    expect(screen.getByText('onboardingPasswordLabel')).toBeInTheDocument();
+    expect(screen.queryByText('onboardingPasswordLabel')).not.toBeInTheDocument();
   });
 
   it('shows the create account button', async () => {
@@ -350,10 +350,6 @@ describe('OnboardingPage', () => {
 
     fireEvent.click(screen.getByTestId('action-switch-to-register'));
     expect(screen.getByText('onboardingRegisterTitle')).toBeInTheDocument();
-    const registerPassword = screen.getByLabelText(/onboardingPasswordLabel/);
-    expect(registerPassword).toHaveAttribute('type', 'password');
-    fireEvent.click(screen.getByLabelText('onboardingShowPassword'));
-    expect(registerPassword).toHaveAttribute('type', 'text');
 
     fireEvent.click(screen.getByTestId('action-switch-to-login'));
     expect(screen.getByText('onboardingLoginTitle')).toBeInTheDocument();
@@ -622,9 +618,6 @@ describe('OnboardingPage', () => {
     // one carrying a real <label for="streetName">, so it is the one findByLabelText can locate.
     fireEvent.change(await screen.findByLabelText(/streetNameLabel/), {
       target: { value: 'Secret Street 123' },
-    });
-    fireEvent.change(screen.getByLabelText(/onboardingSectorLabel/), {
-      target: { value: 'services' },
     });
     fireEvent.click(screen.getByText('back'));
 
@@ -1876,59 +1869,28 @@ describe('OnboardingPage', () => {
     });
   });
 
-  describe('password strength feedback', () => {
-    const typePassword = (container, value) => {
-      const input = container.querySelector('#reg-password');
-      fireEvent.change(input, { target: { value } });
-      return input;
-    };
-
-    // ETP-4664 (core 0.3.25): submit is gated on isValidEmailFormat(email) as well as on
-    // password strength, so a strong password alone is no longer enough to enable it.
+  // ETP-6081: the sign-up asks for no password, so only the email gates account creation. The
+  // strength checklist is covered where a password is still asked (an invitation), in core.
+  describe('register without a password', () => {
     const typeEmail = (container, value) => {
       const input = container.querySelector('#reg-email');
       fireEvent.change(input, { target: { value } });
       return input;
     };
 
-    it('disables the create account button while the password is empty', async () => {
+    it('shows no password field and no strength checklist', async () => {
       localStorage.removeItem('sf_platform_token');
-      await renderAtRegister();
-      expect(screen.getByTestId('action-register-submit')).toBeDisabled();
-      // No requirements list until the user starts typing.
+      const { container } = await renderAtRegister();
+      expect(container.querySelector('#reg-password')).toBeNull();
       expect(screen.queryByTestId('register-password-requirements')).not.toBeInTheDocument();
     });
 
-    it('shows the checklist and keeps submit disabled for a weak password', async () => {
+    it('keeps submit disabled until the email is well formed', async () => {
       localStorage.removeItem('sf_platform_token');
       const { container } = await renderAtRegister();
-      typePassword(container, '123');
-      expect(screen.getByTestId('register-password-requirements')).toBeInTheDocument();
-      expect(screen.getByTestId('register-password-rule-minLength')).toHaveAttribute('data-met', 'false');
-      expect(screen.getByTestId('register-password-rule-special')).toHaveAttribute('data-met', 'false');
-      expect(screen.getByTestId('action-register-submit')).toBeDisabled();
-    });
+      // ETP-6082: the business sector is required too; choose it so only the email is left.
+      fireEvent.change(container.querySelector('#reg-sector'), { target: { value: 'servicios' } });
 
-    it('marks every rule met and enables submit for a strong password', async () => {
-      localStorage.removeItem('sf_platform_token');
-      const { container } = await renderAtRegister();
-      typeEmail(container, 'ada@example.com');
-      typePassword(container, 'Str0ng!Pass');
-      ['minLength', 'uppercase', 'lowercase', 'number', 'special'].forEach(rule => {
-        expect(screen.getByTestId(`register-password-rule-${rule}`)).toHaveAttribute('data-met', 'true');
-      });
-      expect(screen.getByTestId('action-register-submit')).not.toBeDisabled();
-    });
-
-    it('keeps submit disabled for a strong password when the email is malformed', async () => {
-      localStorage.removeItem('sf_platform_token');
-      const { container } = await renderAtRegister();
-      typePassword(container, 'Str0ng!Pass');
-      ['minLength', 'uppercase', 'lowercase', 'number', 'special'].forEach(rule => {
-        expect(screen.getByTestId(`register-password-rule-${rule}`)).toHaveAttribute('data-met', 'true');
-      });
-
-      // Empty, then progressively less wrong, but never valid.
       expect(screen.getByTestId('action-register-submit')).toBeDisabled();
       ['ada', 'ada@', 'ada@example'].forEach((value) => {
         typeEmail(container, value);

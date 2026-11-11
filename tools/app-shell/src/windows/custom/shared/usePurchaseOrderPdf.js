@@ -24,5 +24,5 @@ export function usePurchaseOrderPdf(orderId, apiBaseUrl, token, currencyData = n
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [currencyData?.exchangeRate, currencyData?.orgCurrencyCode],
   );
-  return useDocumentPdf(orderId, apiBaseUrl, token, buildPurchaseOrderData, labels, cacheConfig);
+  return useDocumentPdf(orderId, apiBaseUrl, token, buildPurchaseOrderData, labels, cacheConfig, 'purchase-order');
 }

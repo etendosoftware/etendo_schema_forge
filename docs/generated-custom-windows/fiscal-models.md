@@ -4816,6 +4816,12 @@ The catalog drawer lists the tax forms the tenant can enable/disable — no lock
 | `349` | Modelo 349 — Operaciones intracomunitarias | Mensual + Trimestral | Declaración informativa de operaciones con empresas de la Unión Europea |
 | `390` | Modelo 390 - Resumen anual de IVA | Anual | Declaración resumen anual de las autoliquidaciones de IVA del ejercicio (ETP-5716) |
 
+**Card order is stable (ETP-5831 CP-21).** The cards are sorted by model code (`303`, `349`,
+`390`), with any `locked` model last; the order never depends on the active state. Until
+ETP-5831 the drawer sorted active models first (since ETP-3778) and re-sorted on every toggle, so a
+card jumped away from the pointer as soon as it was switched on or off. Not a regression of the
+ETP-5831 catalog refactor — the active-first sort predates it.
+
 ### Modelo 390 behind the backend-only flag `fiscal-model-390` (ETP-5716)
 
 The whole Modelo 390 is hidden until the backend-only flag `fiscal-model-390` is on for the current
@@ -4846,9 +4852,9 @@ answer:
   the stored value (absent is not `false`). So a page loaded while the flag was off, saved after the
   flag was turned on at runtime, does not erase the tenant's 390.
 - **Catalog save, stored catalog unreadable (both flag states):** the backend refuses the save with
-  HTTP 500 and writes nothing, rather than merging the body over `{}`. The SPA does not surface that
-  500 yet (the `PUT` is fire-and-forget, see "Persistence" below; open item
-  `refused-save-silent-in-spa` in the registry entry).
+  HTTP 500 and writes nothing, rather than merging the body over `{}`. Since ETP-5831 (QA CP-22) the
+  SPA undoes the change and says so, like any failed save (see "Persistence" › "On save" below); the
+  generic 500 itself is still open item `refused-save-generic-500` in the registry entry.
 - **When the drawer saves** is not flag behaviour: it applies to every model. See "Persistence" ›
   "On save" below.
 - **Not gated:** the `/fiscal390/*` endpoints, the 390 declarations CRUD and the
@@ -4899,7 +4905,7 @@ organization is in the SII:
 
 Each catalog entry declares a `periodicities: string[]` array (not a single `periodicity` string) — `FmCatalogPage` renders one `.fm-catalog-card__pill` per value, reusing the existing `fm.catalog.periodicity.monthly/quarterly/annual` locale keys. The header's model-count badge (`CATALOG.length`) and the "active models" counter are always derived from the `CATALOG` array, never hardcoded. Since ETP-5716 `CATALOG` is the model registry itself (`listModels()`, see "Model registry" above).
 
-Toggling a model on/off in the drawer updates a local `active` map (`{ [modelId]: boolean }`) inside `FmCatalogPage`; closing the drawer calls `onSave(active)`, which `FmListPage` uses to update its own `activeModels` state. That same map is threaded down to `NewDeclModal` (see below) so the "new declaration" flow only ever offers models the tenant actually activated.
+Toggling a model on/off in the drawer updates a local `active` map (`{ [modelId]: boolean }`) inside `FmCatalogPage`; each toggle calls `onSave(next)` right away (save-on-toggle, ETP-5831 CP-22, see "On save" below), which `FmListPage` uses to update its own `activeModels` state and persist it. Closing the drawer only closes it. That same map is threaded down to `NewDeclModal` (see below) so the "new declaration" flow only ever offers models the tenant actually activated.
 
 ### Catalog card height consistency (ETP-4755)
 
@@ -4920,7 +4926,8 @@ taller than its sibling.
 `activeModels` is not purely in-memory state anymore — it round-trips through NEO Headless and survives reloads:
 
 - **On mount**, when `apiBaseUrl` is present, `FmListPage` reads `GET {base}/fiscal-models-catalog` through the shared `useFiscalModelsCatalog(apiBaseUrl, token)` hook (ETP-5831, see "Shared catalog reader" below; the request goes through `useApiFetch`, which adds the session headers, and `token` only acts as a refresh key) and seeds `activeModels` from the JSON response (`{"303": true, "349": false}`-shaped). A tenant with nothing saved yet gets back `{}` from the backend — i.e. **no model is active by default**; there is no hardcoded "both models active" starting point. When `apiBaseUrl` is absent (e.g. tests, storybook-like contexts), the fetch is skipped entirely and `activeModels` simply stays at its initial value, `{}`.
-- **On save** (every model; ETP-5716). Closing the drawer calls `onSave` **only when the selection really changed**: `catalogSelectionChanged(initialActive, active)` (exported from `FmCatalogPage.jsx`) compares the two maps as booleans, so a missing key equals `false` and toggling a model on and back off is no change. Opening and closing the drawer never rewrites the catalog. `FmListPage`'s `onSave` then closes the drawer and, **if the catalog read has not finished or failed** (`!catalogLoaded || catalogError`), discards the change and shows the error toast `fm.catalog.save_unavailable` ("No se pudo cargar el catálogo de modelos, así que los cambios no se han guardado. Recarga la página e inténtalo de nuevo."). The reason: the `PUT` replaces the whole catalog, and a drawer built without a successful read would switch off every model it could not see. Otherwise it updates `activeModels` immediately through the hook's `setActiveModels` (so the UI reflects the change without waiting on the network) and, only when `apiBaseUrl` is present, fire-and-forgets a `PUT {base}/fiscal-models-catalog` with the new map as the JSON body. A failed `PUT` is silently swallowed (`.catch(() => {})`), the same convention `FavoritesContext.jsx`'s `syncToServer` uses — the UI does not roll back or surface an error; the next successful `GET` (e.g. after a reload) is the source of truth. That includes the backend's **500** when it refuses a save because the stored catalog cannot be read (see "Modelo 390 behind the backend-only flag"): the page shows the change as saved although nothing was written — open item `refused-save-silent-in-spa` in the `fiscal-model-390` registry entry.
+- **On save** (every model; save-on-toggle since ETP-5831, QA CP-22). **Every effective toggle is saved immediately**; closing the drawer (X button or overlay click) only closes it and sends nothing. `FmCatalogPage`'s `applyToggle` builds the full new selection and calls `onSave(next)`. That covers a plain toggle and the "Activar" button of the SII warning on the 390. "Cancelar" saves nothing, and nothing is saved while the warning is open. The IAE reminder on activating the 303 fires as before. Until CP-22 the drawer saved only in `handleClose`, so a toggle followed by a reload or a navigation with the drawer open sent no `PUT` and was lost silently ("desactivo el 390, recargo la página y sigue activo"). `FmListPage`'s `onSave` (`saveCatalog`) **keeps the drawer open**. **If the catalog read has not finished or failed** (`!catalogLoaded || catalogError`), it discards the change, hands the drawer the unchanged catalog back and shows the error toast `fm.catalog.save_unavailable` ("No se pudo cargar el catálogo de modelos, así que los cambios no se han guardado. Recarga la página e inténtalo de nuevo."). The reason: the `PUT` replaces the whole catalog, and a drawer built without a successful read would switch off every model it could not see. Otherwise it updates `activeModels` immediately (optimistic) and, only when `apiBaseUrl` is present, sends `PUT {base}/fiscal-models-catalog` with the new map as the JSON body. **The `PUT`s are serialized** through a promise chain (`catalogSaveChainRef`): a second toggle's `PUT` leaves only after the first one has answered, so fast consecutive toggles can never reach the server out of order, and the last toggle wins. The drawer follows the catalog the page holds (its `active` state is re-synced from the `activeModels` prop), so an optimistic toggle and a rollback are both visible on the switches. While the SII status of a model is being read (the 390's activation warning), a second click on that same switch is ignored, so it cannot flip twice or open the warning twice (review W3).
+- **A failed save is never silent (ETP-5831, QA CP-22).** On a non-ok answer (403, 500, …) or no answer at all, `onSave` rolls `activeModels` (and so the drawer's switches) back to the **last server-confirmed catalog** (`confirmedCatalogRef`: the read result, then every `PUT` that answered OK) and shows `toast.error`. This happens only for the most recent toggle: an earlier failed `PUT` that a later toggle has already superseded neither rolls back nor toasts, because the later `PUT` carries the full catalog again. The toast is `fm.catalog.save_failed` ("No se han podido guardar los cambios del catálogo de modelos, así que se han deshecho. Inténtalo de nuevo.") for an HTTP error, or the already-translated `NetworkError` message (`isNetworkError(err)`, see `docs/request-policy.md`) when the request got no answer. Until then the failure was swallowed (`.catch(() => {})`): the page showed the change as saved and it was gone after a reload. That is exactly how CP-22 hid a backend bug: since ETP-5819 every catalog `PUT` answered **403**, because core stores the `ETGO_FiscalModelsCatalog` preference as a client-`0` row that the NEO tenant write guard refused; `NeoFiscalModelsCatalogService.saveActiveModels` now writes it inside `NeoTenantWriteGuard.allowingSystemRows` (see `docs/feedback.md`, "NEO tenant write guard vs. core preferences"). The backend's **500** for an unreadable stored catalog (see "Modelo 390 behind the backend-only flag") takes the same path; its generic status is open item `refused-save-generic-500` in the `fiscal-model-390` registry entry. Since the catalog also drives the Organization window's fiscal sections (IAE, Representante legal / Modelo 390, certificate) and the sales-invoice 349 panel, a lost save used to leave those sections visible after a reload.
 - **`catalogLoaded`** (the hook's `loaded`) gates rendering while the initial `GET` is in flight. It starts `true` only when `apiBaseUrl` is missing; otherwise it starts `false` and flips to `true` in the `GET`'s `.finally()`, regardless of whether the request succeeded or failed. While `catalogLoaded` is `false`: the table region shows a "Cargando…" `EmptyState` instead of either the real table or the "no active models" empty state, and the "+ Nueva declaración" toolbar button does not render at all — its guard is `catalogLoaded && activeCount > 0`, not just `activeCount > 0` (see "No active models" below). This avoids flashing an incorrect CTA/empty-state before the real catalog value is known.
 - **Scope: per-Client, not per-org or per-user.** The backend service (`NeoFiscalModelsCatalogService`, `com.etendoerp.go`) stores the map in `AD_PREFERENCE` under key `ETGO_FiscalModelsCatalog`, scoped only to `OBContext.getOBContext().getCurrentClient()` — organization, user and role are all passed as `null` to `Preferences`. Every user of the same client, in any organization, with any role, reads and writes the same catalog state.
 
@@ -5044,7 +5051,15 @@ does `ReversedInvoicesPanel.jsx`'s "Correctiva del 349" gate (below). One rule f
 never-saved catalog (`{}`) or a failed read means **no model active**; `defaultActive` is not
 applied. Readers test a model with `isModelActive(activeModels, id)` (`=== true`). Tests:
 `fiscal-models/__tests__/useFiscalModelsCatalog.vitest.jsx` (`isModelActive`, `{}` kept as is,
-non-ok / rejected reads, no `apiBaseUrl`, refresh on `refreshKey`, stale-response and unmount guards).
+non-ok / rejected reads, no `apiBaseUrl`, refresh on `refreshKey`, stale-response and unmount guards,
+`holdActiveModels`).
+
+Optional third argument `{ holdActiveModels }`: a function asked when a read lands; while it returns
+true the read leaves `activeModels` alone (`unavailableModels`, `loaded` and `error` still update).
+`FmListPage` passes `() => pendingCatalogSavesRef.current > 0`, so a re-read triggered by a token
+refresh while a catalog `PUT` is in flight cannot put the pre-toggle catalog back over the
+optimistic toggle (ETP-5831 review W2). The Organization window and `ReversedInvoicesPanel` only read,
+pass nothing, and always take the read.
 
 ### Downstream consumer outside this window: the sales/purchase-invoice "Correctiva del 349" gate (ETP-4755)
 
@@ -5186,7 +5201,7 @@ recorded here so a future pass doesn't have to rediscover them from scratch.
 | `PUT` | `/fiscal303/declarations?id=` | FmListPage — persist status change |
 | `DELETE` | `/fiscal303/declarations?id=` | `FmRowActions`' delete action (ETP-5187), via `deleteDeclaration` — rejects (409) deleting anything but a `draft` declaration (defense in depth; the frontend also only ever shows the action for draft rows) |
 | `GET` | `/fiscal-models-catalog` | FmListPage — fetch the active-models catalog on mount (per-Client), via `useFiscalModelsCatalog`; also consumed cross-spec, through the same hook, by `ReversedInvoicesPanel.jsx` (sales-invoice/purchase-invoice) to gate the "Correctiva del 349" checkbox — see "Downstream consumer" above — and by the Organization window to show its fiscal sections (ETP-5831, `organization.md`) |
-| `PUT` | `/fiscal-models-catalog` | FmListPage, via `FmCatalogPage`'s `onSave` — persist the active-models catalog (per-Client); sent only on a real change and only after a successful catalog read (ETP-5716, see "Persistence") |
+| `PUT` | `/fiscal-models-catalog` | FmListPage, via `FmCatalogPage`'s `onSave` — persist the active-models catalog (per-Client); sent on every toggle (save-on-toggle, ETP-5831 CP-22), one at a time in toggle order, and only after a successful catalog read; a failed `PUT` rolls the switches back and toasts (ETP-5716, ETP-5831, see "Persistence") |
 | `GET` | `/fiscal303/boxes?year=&period=` | `computeBoxes303` |
 | `GET` | `/fiscal303/modified?year=&period=&since=` | `checkModified303` |
 | `GET` | `/fiscal303/generate?year=&period=&tipo=` | `generate303File` |

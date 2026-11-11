@@ -3,7 +3,7 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/FmListPage.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-models/FmCatalogPage.jsx
 // @covers tools/app-shell/src/windows/custom/organization/useFiscalSectionVisibility.js
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login, MOCK_ORG_ID } from '../../helpers/auth.js';
 
 /**
@@ -58,7 +58,7 @@ async function openFiscalModels(page, catalog) {
   return puts;
 }
 
-/** Opens the catalog drawer, toggles the cards of `ids` (if any) and closes it with the X. */
+/** Opens the catalog drawer, toggles the cards of `ids` (each toggle saves at once) and closes it with the X. */
 async function toggleInDrawerAndClose(page, ids = []) {
   await page.getByTestId('fm-list-catalog-button').click();
   const drawer = page.locator('.fm-catalog-drawer');
@@ -176,7 +176,7 @@ test.describe('Modelo 390 availability — flag off (catalog marks 390 unavailab
     const puts = await openFiscalModels(page, FLAG_OFF_CATALOG);
 
     await toggleInDrawerAndClose(page);
-    // A save would fire on close; give it the time a PUT would need before asserting none came.
+    // Saves fire on toggle only (ETP-5831 CP-22); give a stray PUT time to show up before asserting none came.
     await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
 
     expect(puts).toEqual([]);

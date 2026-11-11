@@ -29,6 +29,7 @@ export const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'accuracy',
   'app',
   'attempt',
+  'auto_opened',
   'branch',
   'category',
   'channel',
@@ -58,6 +59,9 @@ export const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'mockMode',
   'operation',
   'orgId',
+  'pairs_checked_at_close',
+  'pairs_preselected',
+  'pairs_shown',
   'rowsTotal',
   'rowsCreated',
   'rowsFailed',
@@ -77,6 +81,7 @@ export const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'position',
   'provider',
   'reason',
+  'reportSessionId',
   'role_groups',
   'route',
   'routePattern',
@@ -125,12 +130,25 @@ const NUMERIC_EVENT_PROPERTY_KEYS = new Map([
   ['columnsManuallyMapped', { min: 0, max: 1000000000 }],
   ['fkAutoResolved', { min: 0, max: 1000000000 }],
   ['fkCreated', { min: 0, max: 1000000000 }],
+  // Bounce suggestions of the automatch modal (ETP-5581): pair counts, integers only
+  // (INTEGER_EVENT_PROPERTY_KEYS).
+  ['pairs_shown', { min: 0, max: 1000000 }],
+  ['pairs_preselected', { min: 0, max: 1000000 }],
+  ['pairs_checked_at_close', { min: 0, max: 1000000 }],
 
   ...KPI_NUMERIC_RANGES,
 ]);
 
+// Numeric keys that are counts of whole things: a fractional value is dropped, not sent.
+const INTEGER_EVENT_PROPERTY_KEYS = new Set([
+  'pairs_shown',
+  'pairs_preselected',
+  'pairs_checked_at_close',
+]);
+
 const BOOLEAN_EVENT_PROPERTY_KEYS = new Set([
   ...KPI_BOOLEAN_KEYS,
+  'auto_opened',
   'enabled',
   'mockMode',
   'supportRequested',
@@ -270,6 +288,7 @@ function sanitizeListProperty(key, value) {
 }
 
 function isSafeNumberForKey(key, value) {
+  if (INTEGER_EVENT_PROPERTY_KEYS.has(key) && !Number.isInteger(value)) return false;
   return isNumberInRange(value, NUMERIC_EVENT_PROPERTY_KEYS.get(key));
 }
 

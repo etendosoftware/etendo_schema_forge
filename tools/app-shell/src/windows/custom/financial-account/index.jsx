@@ -27,6 +27,7 @@ import { useFinancialAccountCacheInvalidation } from './financialAccountCacheInv
 import { useBankConnectionFlow } from '@/hooks/useBankConnectionFlow';
 import { AutoMatchSuggestionModal } from '@/components/contract-ui/AutoMatchSuggestionModal';
 import { useAutoMatch } from '@/hooks/useReconciliation';
+import { useAutoMatchReview } from '@/hooks/useAutoMatchReview.js';
 import { SyncStatusInline } from '@/components/financial-accounts/SyncStatusInline';
 import { RefreshButton } from '@/components/financial-accounts';
 import { ACCOUNT_TYPE } from '@/components/financial-accounts/tokens';
@@ -240,6 +241,9 @@ export function FinancialAccountDetail({ recordId }) {
     () => searchParams.get('autoMatch') === 'true' || searchParams.get('tab') === 'reconciliation',
   );
   const [autoMatchOpen, setAutoMatchOpen] = useState(false);
+  // ETP-5581 — whether the current opening of the modal was the automatch's own (the armed check
+  // below) or the Automatch button, for the `auto_opened` property of the bounce-suggestion events.
+  const [autoMatchAutoOpened, setAutoMatchAutoOpened] = useState(false);
   // Transaction to highlight in the Movements tab (deep-link from the reconciled-txns modal arrow).
   // `txnAny` is the same deep-link with one extra promise: the target may be OLDER than the
   // Movements tab's 30-day default, so that tab must open its date filter unbounded or the row
@@ -327,8 +331,35 @@ export function FinancialAccountDetail({ recordId }) {
     }
     if (!autoMatchFetchedRef.current) return;
     setAutoMatchArmed(false);
-    if (autoMatchGroups.length > 0) setAutoMatchOpen(true);
+    if (autoMatchGroups.length > 0) {
+      setAutoMatchAutoOpened(true);
+      setAutoMatchOpen(true);
+    }
   }, [autoMatchArmed, autoMatchLoading, autoMatchGroups]);
+  // ETP-5581 — the state the modal and the reconciliation panel share around a bounce pair: the
+  // modal's checks, the line "Revisar en el panel" asked to show, and the pairs dismissed with
+  // "No es un rechazo". Inert while the backend sends no bounce pair.
+  const autoMatchReview = useAutoMatchReview(autoMatchGroups, {
+    active: activeTab === 'reconciliation' && !isCashAccount,
+  });
+  // "Revisar en el panel": close the modal and show the pair's bounce line. There is no return
+  // path: the Automatch button reopens the modal, on the same suggestions (and so the same checks)
+  // unless a discard or restore in the panel reloaded them. Disarming means the automatch never
+  // pops the modal again on its own during this visit — a discard reloads the suggestions, and
+  // the user who went to the panel must not have the modal thrown back at them.
+  const { startReview, clearDismissed } = autoMatchReview;
+  const handleReviewPair = useCallback((group) => {
+    startReview(group);
+    setAutoMatchOpen(false);
+    setAutoMatchArmed(false);
+  }, [startReview]);
+  const closeAutoMatch = useCallback(() => setAutoMatchOpen(false), []);
+  // Reopens the cached suggestions; it does NOT forget the "No es un rechazo" dismissals (only the
+  // header refresh and leaving the tab do), or a pair just dismissed in the panel would reappear.
+  const openAutoMatch = useCallback(() => {
+    setAutoMatchAutoOpened(false);
+    setAutoMatchOpen(true);
+  }, []);
   const { movements, totals, enabledDimensions, headerDimensions, trxTypes, accountOrgId, paymentMethods, loading: movementsLoading, reload: reloadMovements } = useAccountMovements(recordId);
   // Movement create/edit/delete/lifecycle and funds transfers change the balances and pending
   // counts the list shows (a transfer touches TWO accounts; the entity-wide invalidation covers both).
@@ -365,8 +396,10 @@ export function FinancialAccountDetail({ recordId }) {
     reloadAutoMatch();
     reloadMovements();
     reloadReconciliations();
+    // A fresh automatch run proposes again the bounce pairs dismissed with "No es un rechazo".
+    clearDismissed();
     setReconciliationRefreshKey((k) => k + 1);
-  }, [reloadAccountAndList, reloadAutoMatch, reloadMovements, reloadReconciliations]);
+  }, [reloadAccountAndList, reloadAutoMatch, reloadMovements, reloadReconciliations, clearDismissed]);
   const movementsTabRef = useRef(null);
   const statementsTabRef = useRef(null);
   const runCsvExport = useCsvExport();
@@ -514,7 +547,7 @@ export function FinancialAccountDetail({ recordId }) {
             ui={ui}
             onRefresh={handleReconciliationRefresh}
             onEdit={() => setEditOpen(true)}
-            onAutoMatch={() => setAutoMatchOpen(true)}
+            onAutoMatch={openAutoMatch}
             onExport={handleExport}
             windowReadOnly={windowReadOnly}
             data-testid="DetailToolbarActions__f7dbb3" />
@@ -560,6 +593,7 @@ export function FinancialAccountDetail({ recordId }) {
               paymentMethods={paymentMethods}
               onReconcileSuccess={() => { reloadAccountAndList(); reloadMovements(); reloadAutoMatch(); }}
               windowReadOnly={windowReadOnly}
+              bounceReview={autoMatchReview.panel}
               data-testid="ReconciliationTab__f7dbb3" />
           ))}
           {activeTab === 'statements' && (
@@ -587,8 +621,17 @@ export function FinancialAccountDetail({ recordId }) {
         kpis={autoMatchKpis}
         currency={account?.currencyIso ?? 'EUR'}
         open={autoMatchOpen && !isCashAccount && !windowReadOnly}
-        onClose={() => setAutoMatchOpen(false)}
+        onClose={closeAutoMatch}
         onSuccess={handleAutoMatchSuccess}
+        // ETP-5581 — the checks live in the host, so closing the modal for "Revisar en el panel"
+        // and reopening it with the Automatch button keeps them while the suggestions do not reload.
+        selection={autoMatchReview.selection}
+        dismissedPairKeys={autoMatchReview.dismissedKeys}
+        onReviewPair={handleReviewPair}
+        // ETP-5581 — what the apply reports as `sent_to_panel`, and how this opening happened, for
+        // the bounce-suggestion KPI events.
+        sentToPanelKeys={autoMatchReview.sentToPanelKeys}
+        autoOpened={autoMatchAutoOpened}
         // Same shape ReconciliationTab hands the split panel — the modal names the accounting
         // account a near-match difference will be posted to.
         glItemDifference={account?.glItemDifferenceId

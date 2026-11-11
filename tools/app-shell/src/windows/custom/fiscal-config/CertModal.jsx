@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { useUI } from '@/i18n';
+import { useUI, useLocaleSwitch } from '@/i18n';
+import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { FileText, Upload, Eye, EyeOff, Lock, TriangleAlert, Check, Info } from 'lucide-react';
 import FiscalStepItem from './FiscalStepItem.jsx';
 import { neoBase } from '@/components/related-documents/helpers.js';
@@ -104,6 +105,9 @@ function CircularProgress({ progress }) {
 
 export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUpload, debugInitialState }) {
   const ui = useUI();
+  const { locale } = useLocaleSwitch();
+  // The upload details carry ISO yyyy-MM-dd dates; shown in the UI locale (ETP-6053).
+  const certDate = (raw) => raw && formatCalendarDate(raw, locale || 'es_ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
 
   const CONTEXT_SUBTITLE = {
@@ -415,8 +419,8 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
                   [ui('fiscal.cert.detail.file'),      file?.name],
                   [ui('fiscal.cert.detail.holder'),    parseCN(certDetails?.subject)],
                   [ui('fiscal.cert.detail.issuer'),    parseCN(certDetails?.issuer)],
-                  [ui('fiscal.cert.detail.validFrom'), certDetails?.validFrom],
-                  [ui('fiscal.cert.detail.validTo'),   certDetails?.validTo],
+                  [ui('fiscal.cert.detail.validFrom'), certDate(certDetails?.validFrom)],
+                  [ui('fiscal.cert.detail.validTo'),   certDate(certDetails?.validTo)],
                   [ui('fiscal.cert.detail.algorithm'), certDetails?.algorithm],
                 ].filter(([, v]) => v).map(([k, v]) => (
                   <div key={k} className="flex items-center px-4 py-2.5 gap-4">

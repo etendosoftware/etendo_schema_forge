@@ -9,6 +9,7 @@ beforeEach(() => resetGridBoundary(gridBoundary));
 // @covers tools/app-shell/src/windows/custom/organization/Modelo390IdentitySection.jsx
 // @covers tools/app-shell/src/windows/custom/organization/RepresentantesLegalesSection.jsx
 // @covers tools/app-shell/src/windows/custom/organization/representanteLegal.js
+// @covers tools/app-shell/src/windows/custom/organization/RepresentativeTableFrame.jsx
 //
 // The "Representante legal / Modelo 390" section of the Organization window. What must hold:
 // "Persona física" switches between the natural-person fields (page form) and the legal
@@ -102,6 +103,103 @@ describe('Modelo390IdentitySection — Persona física toggle', () => {
 
     fireEvent.click(screen.getByTestId('Modelo390IdentitySection__isPerson'));
     expect(await screen.findByTestId('RepresentantesLegalesSection__root')).toBeInTheDocument();
+  });
+
+  // ETP-5831 CP-16 — a natural person is shown as two blocks: the holder (org NIF read-only + its
+  // own name and surnames, required apart as the AEAT asks) and an optional representative.
+  it('splits the natural-person fields into a holder block and an optional representative block', () => {
+    mockFetch([]);
+    render(<Harness initial={{ aeat390Isperson: true, taxID: 'B12345678', aeat390Firstname: 'Ana' }} />);
+
+    const holder = screen.getByTestId('Modelo390IdentitySection__holder');
+    expect(within(holder).getByTestId('Modelo390IdentitySection__holder-title')).toHaveTextContent('org390HolderTitle');
+    expect(within(holder).getByTestId('Modelo390IdentitySection__holder-hint-org390HolderHint')).toHaveTextContent('org390HolderHint');
+    for (const field of ['aeat390Firstname', 'aeat390Surname1', 'aeat390Surname2']) {
+      expect(within(holder).getByTestId(`Modelo390IdentitySection__${field}`)).toBeInTheDocument();
+    }
+    expect(within(holder).queryByTestId('Modelo390IdentitySection__aeat390RepNif')).not.toBeInTheDocument();
+    expect(within(holder).getByTestId('Modelo390IdentitySection__aeat390Firstname')).toHaveValue('Ana');
+
+    const representative = screen.getByTestId('Modelo390IdentitySection__representative');
+    expect(within(representative).getByTestId('Modelo390IdentitySection__representative-title')).toHaveTextContent('org390RepTitle');
+    expect(within(representative).getByTestId('Modelo390IdentitySection__representative-hint-org390RepHint')).toBeInTheDocument();
+    // The "(optional)" title says it all: no extra both-or-neither hint (the pair error still shows on save).
+    expect(within(representative).queryByTestId('Modelo390IdentitySection__representative-hint-org390RepPairHint')).not.toBeInTheDocument();
+    expect(within(representative).queryByText('org390RepPairHint')).not.toBeInTheDocument();
+    for (const field of ['aeat390RepNif', 'aeat390RepName']) {
+      expect(within(representative).getByTestId(`Modelo390IdentitySection__${field}`)).toBeInTheDocument();
+    }
+
+    // Labels: only Nombre and Primer apellido carry the required asterisk; neither representative
+    // field is required on its own (both-or-neither is enforced on save).
+    const labels = ['aeat390Firstname', 'aeat390Surname1', 'aeat390Surname2', 'aeat390RepNif', 'aeat390RepName']
+      .map(field => screen.getByTestId(`Label__${field}`).textContent);
+    expect(labels).toEqual([
+      'orgRepFirstNameLabel *', 'orgRepLastname1Label *', 'orgRepLastname2Label', 'org390RepNifLabel', 'org390RepNameLabel',
+    ]);
+    // Each input keeps an accessible name from its label.
+    expect(screen.getByLabelText(/orgRepFirstNameLabel/)).toBe(screen.getByTestId('Modelo390IdentitySection__aeat390Firstname'));
+    expect(screen.getByLabelText('org390RepNameLabel')).toBe(screen.getByTestId('Modelo390IdentitySection__aeat390RepName'));
+    // No table, no add button: the organization is the one natural person.
+    expect(within(screen.getByTestId('Modelo390IdentitySection__personFields')).queryByRole('table')).not.toBeInTheDocument();
+    expect(within(screen.getByTestId('Modelo390IdentitySection__personFields')).queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('shows the organization NIF read-only in the holder block, taken from the page form', () => {
+    mockFetch([]);
+    const onFieldChange = vi.fn();
+    render(
+      <Modelo390IdentitySection
+        form={{ aeat390Isperson: true, taxID: 'B12345678' }}
+        onFieldChange={onFieldChange}
+        apiBaseUrl={API_BASE_URL}
+        orgId={ORG_ID} />
+    );
+    const nif = screen.getByTestId('Modelo390IdentitySection__holderNif');
+    expect(within(screen.getByTestId('Modelo390IdentitySection__holder')).getByTestId('Modelo390IdentitySection__holderNif')).toBe(nif);
+    expect(nif).toHaveValue('B12345678');
+    expect(nif).toHaveAttribute('readonly');
+    expect(screen.getByLabelText('orgNifLabel')).toBe(nif);
+    // No hint under the NIF: the holder block hint already explains the block.
+    expect(screen.queryByTestId('Modelo390IdentitySection__holderNifHint')).not.toBeInTheDocument();
+    expect(screen.queryByText('org390HolderNifHint')).not.toBeInTheDocument();
+    fireEvent.change(nif, { target: { value: 'X' } });
+    expect(onFieldChange).not.toHaveBeenCalled();
+  });
+
+  it('does not pre-fill the holder name from the organization name', () => {
+    mockFetch([]);
+    render(<Harness initial={{ aeat390Isperson: true, name: 'Ana García SL', socialName: 'Ana García' }} />);
+    for (const field of ['aeat390Firstname', 'aeat390Surname1', 'aeat390Surname2', 'aeat390RepNif', 'aeat390RepName']) {
+      expect(screen.getByTestId(`Modelo390IdentitySection__${field}`)).toHaveValue('');
+    }
+  });
+
+  it('shows only the label next to the switch, with no hint under it', async () => {
+    mockFetch([]);
+    render(<Harness />);
+    expect(await screen.findByTestId('RepresentantesLegalesSection__root')).toBeInTheDocument();
+    expect(screen.getByTestId('Label__aeat390Isperson')).toHaveTextContent('org390IsPersonLabel');
+    expect(screen.queryByTestId('Modelo390IdentitySection__isPersonHint')).not.toBeInTheDocument();
+    expect(screen.queryByText('org390IsPersonHint')).not.toBeInTheDocument();
+  });
+
+  it('shows a field error right under its input, in its own block', () => {
+    mockFetch([]);
+    render(
+      <Modelo390IdentitySection
+        form={{ aeat390Isperson: true }}
+        fieldErrors={{ aeat390Surname1: 'fieldRequired', aeat390RepNif: 'org390RepPairRequired' }}
+        onFieldChange={() => {}}
+        apiBaseUrl={API_BASE_URL}
+        orgId={ORG_ID} />
+    );
+    const error = screen.getByTestId('Modelo390IdentitySection__error-aeat390Surname1');
+    expect(error).toHaveTextContent('fieldRequired');
+    expect(error.parentElement).toBe(screen.getByTestId('Modelo390IdentitySection__field-aeat390Surname1'));
+    expect(screen.getByTestId('Modelo390IdentitySection__aeat390Surname1')).toHaveAttribute('aria-invalid', 'true');
+    expect(within(screen.getByTestId('Modelo390IdentitySection__representative'))
+      .getByTestId('Modelo390IdentitySection__error-aeat390RepNif')).toHaveTextContent('org390RepPairRequired');
   });
 
   it('caps the natural-person inputs at the AD column lengths', () => {

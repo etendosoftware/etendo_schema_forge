@@ -93,7 +93,7 @@ const ERROR_DOCUMENT_SCHEMA: JsonSchema = {
 const ERROR_DESCRIPTIONS: Record<string, string> = {
   '400': 'Invalid request: unknown or read-only field, invalid query parameter (source.parameter names it), malformed body, or a value Etendo rejected.',
   '401': 'Missing, malformed or invalid API key.',
-  '402': 'The tenant is blocked (payment required).',
+  '402': 'Access for this account is suspended (code tenant_blocked). Contact the account owner or support.',
   '403': 'The credential has no access to this resource, operation or organization, or lacks the public-api:process scope for an action.',
   '404': 'The resource or record does not exist, or the operation is not exposed.',
   '406': 'Accept does not allow application/vnd.api+json or application/json.',

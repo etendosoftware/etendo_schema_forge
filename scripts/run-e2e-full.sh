@@ -210,7 +210,7 @@ fi
 
 if [ "$SUITE" != "integration" ]; then
   # E2E_MOCKED_SPECS: spec paths under e2e/, space-separated, to run instead of the whole suite (the
-  # pre-push passes the changed specs when nothing else calls for all of them).
+  # pre-push passes the ones the change can affect, scripts/select-mocked-specs.js; CI never sets it).
   read -r -a mocked_specs <<< "${E2E_MOCKED_SPECS:-}"
   only_specs=""
   [ "${#mocked_specs[@]}" -gt 0 ] && only_specs=", only ${#mocked_specs[@]} spec(s): ${mocked_specs[*]}"

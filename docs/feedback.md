@@ -3263,3 +3263,85 @@ as called from `regen-all.js`.
 version / `updatedAt` / checksum only. Treat `make regen-check ONLY=<window> FROM_CACHE=1` (what the
 pre-push hook and CI's offline drift check compute) as the authoritative result, and commit what it
 produces.
+
+## [2026-11-02] ETP-5831 — Two known gaps left open (root fix deferred)
+
+### 1. Dev server loads `@radix-ui/react-dismissable-layer` twice (page freeze after a menu → dialog)
+
+**Symptom:** in `make dev` only, confirming "Cambiar SIF" in Fiscal Configuration left
+`pointer-events: none` on `<body>`; the wizard appeared but nothing responded until a full reload.
+Production builds are not affected.
+
+**Root cause:** `@radix-ui/react-dialog` is pre-bundled by Vite (something in `src/` imports it
+directly, e.g. via `FileLightbox`), while `@radix-ui/react-dropdown-menu` is served raw through
+`@etendosoftware/app-shell-core`, which `tools/app-shell/vite.config.js` excludes from
+`optimizeDeps`. The two therefore load separate copies of `@radix-ui/react-dismissable-layer`, each
+with its own layer stack. The modal menu locked the body, the dialog saved that lock as the
+"original" value and restored it on close.
+
+**Workaround (in place):** the fiscal-config kebab is `DropdownMenu modal={false}`, so it never takes
+the lock. Any other hand-written menu that opens a dialog needs the same (see
+`docs/ui-customization.md` → kebab menu gotcha). Covered by TC2 in
+`e2e/tests/flows/fiscal/fiscal-config.mocked.spec.js`.
+
+**Root fix (deferred by the user to another ticket):** add the `@radix-ui/*` packages to
+`optimizeDeps.include` in `tools/app-shell/vite.config.js`, so dev resolves a single copy.
+
+### 2. `FiscalDefaultsSection` reads the full fiscal config on every contact view (QA F-3)
+
+**Symptom:** none visible; a cost. Contacts → Financiero now gates its "Valores por Defecto SIF"
+blocks on the active SIF of the selected organization (see `generated-custom-windows/contacts.md`
+→ "ETP-5831 (CP-20) — SIF-gated blocks"), and reads it through `useFiscalConfig`, which fetches the
+three fiscal config entities (SII, TicketBAI, VERI\*FACTU) each time a contact's Financial tab is
+mounted. There is no cache shared across contacts.
+
+**Status:** accepted for now, deferred. A shared, org-keyed cache (or a single lightweight
+"active SIF" read) would remove the repeated requests.
+
+## [2026-11-10] ETP-5831 — NEO tenant write guard vs. core preferences (catalog save lost, QA CP-22)
+
+**Component:** `NeoFiscalModelsCatalogService` (`com.etendoerp.go`) + `FmListPage.jsx` catalog `onSave`.
+
+**Symptom:** deactivating Modelo 390 (or 303) in Modelos fiscales → Catálogo de modelos looked saved,
+but after a reload the change was gone, and the Organization window kept showing "Actividades IAE"
+and "Representante legal / Modelo 390". The Tomcat access log showed `PUT
+/sws/neo/fiscal-models-catalog → 403`; the last stored value predated ETP-5819.
+
+**Root cause:** core's `Preferences.setPreferenceValue` creates (or updates) the `AD_Preference` row at
+client `0` / org `0`, visible at the tenant. ETP-5819's `NeoTenantWriteGuard`, wrapped around every
+NEO dispatch, refuses on flush any row whose client is not the request's → `OBSecurityException` →
+403. The SPA swallowed the failed `PUT` after an optimistic update, so nothing told the user.
+
+**Fix:** the service writes the preference **and flushes** inside
+`NeoTenantWriteGuard.allowingSystemRows` (client `0` only, never another tenant; the check runs on
+flush, so the flush must be inside the scope). `FmListPage` now undoes the optimistic update and
+shows `fm.catalog.save_failed` (or the `NetworkError` message) on any failed `PUT`.
+
+**Lesson:** any NEO code that writes through a core helper storing System rows (preferences, role
+template accesses, client-0 audit records) must do it inside `allowingSystemRows`. Other NEO
+preference writers through the same helper — `NeoFavoritesService`, `NeoFiltersService`,
+`NeoGridViewsService` — were not checked here and may hit the same 403. And never swallow a failed
+save after an optimistic update: it turns a backend refusal into silent data loss.
+
+## [2026-11-10] ETP-5831 — `FmCatalogPage.toggleModel` relies on `getSiiStatus` never rejecting
+
+**Component:** `tools/app-shell/src/windows/custom/fiscal-models/FmCatalogPage.jsx` (`toggleModel`)
+and `useOrgSiiStatus.js` (`fetchOrgSiiStatus`).
+
+**Observation (review/QA of the CP-22 fixes):** when a `siiWarningOnActivate` model (the 390) is
+switched on, `toggleModel` awaits `getSiiStatus()` inside a `try { … } finally { … }` with **no
+`catch`**. The `finally` releases the per-model double-click lock (`siiCheckInFlight`), but a
+rejection would still propagate out of the async switch handler as an **unhandled promise
+rejection**: the switch would stay off, nothing would be saved and the user would get no toast.
+
+**Why it is safe today:** `fetchOrgSiiStatus` never rejects. It catches every failure (no
+organization, non-ok answer, network error, bad JSON) and resolves `SII_STATUS_OFF`, so the
+documented "status unknown → activate right away" path is always taken.
+
+**Risk:** the safety is an implicit contract of `fetchOrgSiiStatus`, not something `toggleModel`
+enforces. If that function (or `useOrgSiiStatus`'s memoised `getSiiStatus`) is ever changed to
+reject, the catalog toggle breaks silently.
+
+**Status:** noted, not fixed (no behaviour change in ETP-5831). The fix, if the contract ever
+changes, is a `catch` in `toggleModel` that treats a failed read as "not in the SII" (same as
+`fetchOrgSiiStatus` does now) or shows an error toast.

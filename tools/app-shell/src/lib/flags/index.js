@@ -9,6 +9,8 @@ export {
   MY_COMPANIES_PAGE,
   GRID_COLUMN_VIEWS,
   CONTACT_CATEGORY_TYPE,
+  DOC_TEMPLATE_SELECTION,
+  DYNAMIC_REPORTS,
   FLAG_DEFAULTS,
   defaultForFlag,
 } from './flag-keys.js';

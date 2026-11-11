@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { Save, RefreshCw, PlusCircle, MoreVertical, AlertTriangle } from 'lucide-react';
 import {
   DropdownMenu,
@@ -11,13 +11,16 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth, useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { useUI } from '@/i18n';
+import { useUI, useLocaleSwitch } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard.js';
 import { useFiscalConfig } from './useFiscalConfig.js';
 import { detectProfile } from './fiscalConfig.utils.js';
 import { useCertExpiry } from './useCertExpiry.js';
 import { useFiscalTestMode } from './useFiscalTestMode.js';
+import { useFiscalCatalog } from './useFiscalCatalog.js';
+import { isFiscalAccessDenied } from './fiscalSystemApi.js';
 import { useDebugMode } from '../fiscal-monitor/useDebugMode.js';
 import CertExpiryBanner from './CertExpiryBanner.jsx';
 import OnboardingWizard from './OnboardingWizard.jsx';
@@ -27,6 +30,10 @@ import VerifactuSection from './VerifactuSection.jsx';
 import FiscalConfigDebugPanel from './FiscalConfigDebugPanel.jsx';
 import ChangeSifDialog from './ChangeSifDialog.jsx';
 import TabBar from './TabBar.jsx';
+import FiscalStatusSummary, {
+  EnvironmentBadge, buildConfiguredStatusRows, deriveConfiguredStatus,
+} from './FiscalStatusSummary.jsx';
+import { buildSystems, buildTerritories } from './fiscalCatalog.js';
 
 // Profiles that represent a real, active fiscal config (i.e. "Change SIF" applies).
 const CONFIGURED_PROFILES = ['sii', 'sii-navarra', 'sii+tbai', 'tbai', 'verifactu'];
@@ -54,12 +61,21 @@ function resolvePageTitle(ui, profileLabel) {
   return profileLabel ? `${ui('fiscal.title')} ${profileLabel}` : ui('fiscal.title');
 }
 
+/**
+ * Why "Añadir SII" failed, for the error banner. A role the backend does not let run the action at
+ * all gets our own sentence, never the generic English "Access denied to spec" text.
+ */
+function addSiiFailureReason(err, ui) {
+  if (isFiscalAccessDenied(err)) return ui('fiscal.err.noPermission');
+  return err instanceof Error ? err.message : String(err);
+}
+
 function resolveRenderProfile(addingComplementary, effectiveProfile) {
   return addingComplementary ? 'sii+tbai' : effectiveProfile;
 }
 
 /**
- * Saves two sections one after the other — never both at once (ETP-5112).
+ * Saves the given sections one after the other — never at once (ETP-5112).
  *
  * Each section's `save()` issues a PUT carrying the record's `updated` token, and core parses that
  * token through a `private final static SimpleDateFormat` (`JsonToDataConverter` line 129) which is
@@ -67,24 +83,33 @@ function resolveRenderProfile(addingComplementary, effectiveProfile) {
  * check then refuses one with "the record has already been changed by another user" against a
  * record nobody touched. Reproduced on the Organization screen with exactly this two-write shape.
  *
- * Both sections are still attempted even when the first fails, which is what `allSettled` gave us
- * and what the combined error below depends on — hence the explicit try/catch per save rather than
- * a bare sequential await, which would skip the second on the first failure.
+ * Every section is still attempted even when an earlier one fails, which is what `allSettled` gave
+ * us and what the combined error below depends on — hence the explicit try/catch per save rather
+ * than a bare sequential await, which would skip the rest on the first failure.
+ *
+ * @param {Array<{ ref: object|null, tab: number }>} sections
+ * @returns {Promise<{ error: Error, tab: number } | null>} the first failure, or null
  */
-async function saveTwoRefs(ref1, ref2) {
-  const outcomes = [];
-  for (const ref of [ref1, ref2]) {
+async function saveSections(sections) {
+  let firstFailure = null;
+  for (const { ref, tab } of sections) {
     try {
       await ref?.save();
-      outcomes.push(null);
     } catch (err) {
-      outcomes.push(err);
+      firstFailure ??= { error: err, tab };
     }
   }
-  const firstError = outcomes.find(Boolean);
-  if (firstError) {
-    throw new Error(firstError.message ?? 'Error saving');
-  }
+  return firstFailure;
+}
+
+/**
+ * The ref and record a tab section of the SII + TicketBAI layout is bound to: the complementary
+ * record while `system` is the one being added, otherwise the section's own stored record.
+ */
+function tabSectionBinding(system, { addingComplementary, complementaryRef, complementaryRecord, ownRef, ownRecord }) {
+  return addingComplementary === system
+    ? { ref: complementaryRef, record: complementaryRecord }
+    : { ref: ownRef, record: ownRecord };
 }
 
 // ── FiscalConfigPage ───────────────────────────────────────────────────────────
@@ -108,6 +133,7 @@ export default function FiscalConfigPage(props) {
 
 function FiscalConfigPageContent({ token, apiBaseUrl }) {
   const ui = useUI();
+  const { locale } = useLocaleSwitch();
   const navigate = useNavigate();
   const { selectedOrg, selectedRole, selectOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
@@ -123,6 +149,20 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
   const [savedOk, setSavedOk] = useState(false);
   const [resetKey, setResetKey] = useState(0);
   const [changeSifOpen, setChangeSifOpen] = useState(false);
+  // ETP-5831 — the organization has ONE certificate (etsg_certificate, keyed by ad_org_id), shared
+  // by SII, TicketBAI and VERI*FACTU. Bumped whenever it is replaced from any section, so every
+  // reader (the other tab's CertSection, the expiry banner, the status panel) re-reads it.
+  const [certVersion, setCertVersion] = useState(0);
+  const handleCertUploaded = () => setCertVersion(v => v + 1);
+  // ETP-5831 — unsaved changes per section (useFormDirty). "Guardar" is enabled only while some
+  // section is dirty (or a complementary SIF is being added); after a successful save the sections
+  // remount (resetKey) and report themselves clean, which disables it again.
+  const [dirtySections, setDirtySections] = useState({});
+  const reportDirty = useMemo(() => {
+    const reporter = (key) => (dirty) => setDirtySections(prev => (prev[key] === dirty ? prev : { ...prev, [key]: dirty }));
+    return { sii: reporter('sii'), tbai: reporter('tbai'), verifactu: reporter('verifactu') };
+  }, []);
+  const isDirty = Object.values(dirtySections).some(Boolean);
 
   // "Add complementary SIF" — null while idle, 'sii' or 'tbai' while adding
   const [addingComplementary, setAddingComplementary] = useState(null);
@@ -152,19 +192,23 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
     ? [mockOverride.sii, mockOverride.tbai, mockOverride.verifactu]
     : [siiRecord, tbaiRecord, verifactuRecord];
 
-  const { daysLeft: certDaysLeft } = useCertExpiry(apiBaseUrl, { mockDaysLeft: mockCertDays, orgId });
+  const { daysLeft: certDaysLeft, validTo: certValidTo } =
+    useCertExpiry(apiBaseUrl, { mockDaysLeft: mockCertDays, orgId, refreshKey: certVersion });
 
   // ETP-5272 — AD_Preference "Fuerza SII/TicketBAI/VeriFactu a modo prueba":
   // when active, the whole window becomes read-only (no new SIF activation is
   // allowed outside a production environment). Fails open on fetch error.
   const { forceTestMode } = useFiscalTestMode(apiBaseUrl);
+  // ETP-6053 — the territory × system rules come from the backend; the status panel reads which
+  // territory the stored records belong to from them.
+  const { catalog: fiscalCatalog } = useFiscalCatalog(apiBaseUrl, orgId);
 
   const siiRef       = useRef(null);
   const tbaiRef      = useRef(null);
   const verifactuRef = useRef(null);
 
-  // "Add complementary SIF" — only when real API data (not mock), org selected,
-  // and profile is singly sii or tbai (not already combined or verifactu).
+  // "Add SII" — only when real API data (not mock), org selected, and the profile is TicketBAI
+  // alone: SII is the only system that can be added on top of another one.
   const canAddComplementary = !mockOverride && !!orgId && !forceTestMode &&
     effectiveProfile === 'tbai';
 
@@ -173,14 +217,11 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
     setCreatingComplementary(true);
     setAddingComplementaryError(null);
     try {
-      const system = effectiveProfile === 'sii' ? 'tbai' : 'sii';
-      const created = await createComplementary(system, orgId);
+      const created = await createComplementary(orgId);
       setComplementaryRecord(created);
-      setAddingComplementary(system);
+      setAddingComplementary('sii');
     } catch (err) {
-      setAddingComplementaryError(
-        ui('fiscal.addComplementary.err.createFailed', { error: err instanceof Error ? err.message : String(err) })
-      );
+      setAddingComplementaryError(ui('fiscal.addComplementary.err.createFailed', { error: addSiiFailureReason(err, ui) }));
     } finally {
       setCreatingComplementary(false);
     }
@@ -191,12 +232,21 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
     setSaveError(null);
     setSavedOk(false);
     try {
-      if (effectiveProfile === 'sii' && addingComplementary === 'tbai') {
-        await saveTwoRefs(siiRef.current, complementaryRef.current);
-      } else if (effectiveProfile === 'tbai' && addingComplementary === 'sii') {
-        await saveTwoRefs(tbaiRef.current, complementaryRef.current);
-      } else if (effectiveProfile === 'sii+tbai') {
-        await saveTwoRefs(siiRef.current, tbaiRef.current);
+      if (renderProfile === 'sii+tbai') {
+        // Both tabs stay mounted (ETP-5831): save every section with unsaved changes, plus the
+        // complementary record being added (its save is what finishes "adding"). A clean section is
+        // not re-saved — its validation could fail behind a hidden tab where nobody sees it.
+        const sections = [
+          { key: 'sii', tab: 0, ref: addingComplementary === 'sii' ? complementaryRef : siiRef },
+          { key: 'tbai', tab: 1, ref: addingComplementary === 'tbai' ? complementaryRef : tbaiRef },
+        ].filter(s => dirtySections[s.key] || addingComplementary === s.key)
+          .map(s => ({ ref: s.ref.current, tab: s.tab }));
+        const failure = await saveSections(sections);
+        if (failure) {
+          // The failing section shows its own error; bring its tab to the front so it is seen.
+          setActiveTab(failure.tab);
+          throw new Error(failure.error?.message ?? 'Error saving');
+        }
       } else {
         const refMap = { sii: siiRef, 'sii-navarra': siiRef, tbai: tbaiRef, verifactu: verifactuRef };
         await refMap[effectiveProfile]?.current?.save();
@@ -207,16 +257,21 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
       setResetKey(k => k + 1);
       setSavedOk(true);
       setTimeout(() => setSavedOk(false), 2500);
+      return true;
     } catch (err) {
       if (!err?._sectionHandled) setSaveError(err instanceof Error ? err.message : String(err));
+      return false;
     } finally {
       setSaving(false);
     }
   }
 
-  function handleCancel() {
-    navigate(-1);
-  }
+  // ETP-5831 — warn before leaving with unsaved changes (in-app navigation, locale switch, F5/tab
+  // close) through the shared registry, offering "Save and continue" via handleSave (resolves
+  // false on failure, so the prompt stays). Off while a save is in flight; after a successful save
+  // the sections remount and report clean. During the onboarding wizard no section is mounted,
+  // so the flag is false and nothing prompts — the wizard is not guarded.
+  useUnsavedChangesGuard(isDirty && !saving, handleSave);
 
   const DebugPanel = debugMode ? (
     <FiscalConfigDebugPanel
@@ -257,6 +312,54 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
   // not in mock/debug mode (mock records cannot be deactivated on the server).
   const canChangeSif = !mockOverride && orgId && CONFIGURED_PROFILES.includes(effectiveProfile);
 
+  // ── Status panel (ETP-5831) ──────────────────────────────────────────────────
+  // The "Estado" card, shown beside the form whenever the organization already has a fiscal
+  // configuration — on opening the window, after a reload, on later visits and right after the
+  // wizard's first save (the wizard hands over through `onComplete` = refetch; it has no summary
+  // screen of its own). Never during the wizard: that branch returns before this point. Rows are
+  // derived from the stored records (deriveConfiguredStatus); no link to the submission history.
+  const configuredStatus = deriveConfiguredStatus({
+    profile: effectiveProfile, siiRecord: effectiveSii, tbaiRecord: effectiveTbai, verifactuRecord: effectiveVerifactu,
+    catalog: fiscalCatalog,
+  });
+  // What each tab of the SII + TicketBAI layout edits: the stored record, or the complementary one
+  // while it is being added.
+  const complementary = { addingComplementary, complementaryRef, complementaryRecord };
+  const siiTab = tabSectionBinding('sii', { ...complementary, ownRef: siiRef, ownRecord: effectiveSii });
+  const tbaiTab = tabSectionBinding('tbai', { ...complementary, ownRef: tbaiRef, ownRecord: effectiveTbai });
+
+  // Below `xl` the panel stacks under the form at full width (no horizontal scroll); from `xl` it
+  // is a 360px column beside it, its top level with the form's first row (or the tab switch).
+  const statusPanel = configuredStatus ? (
+    <aside className="w-full xl:w-[360px] xl:flex-shrink-0" aria-label={ui('fiscal.status.title')} data-testid="FiscalConfigPage__statusColumn">
+      <FiscalStatusSummary
+        eyebrow={{
+          label: ui('fiscal.status.title'),
+          badge: <EnvironmentBadge isProduction={configuredStatus.isProduction} ui={ui} data-testid="FiscalStatusSummary__envBadge" />,
+        }}
+        title={ui('fiscal.status.active', { system: buildSystems(ui)[configuredStatus.system]?.name })}
+        body={ui('fiscal.status.body')}
+        rows={buildConfiguredStatusRows({
+          status: configuredStatus,
+          territories: buildTerritories(ui),
+          systems: buildSystems(ui),
+          cert: certValidTo ? { validTo: certValidTo } : null,
+          locale,
+          ui,
+        })}
+        data-testid="FiscalStatusSummary__panel" />
+    </aside>
+  ) : null;
+
+  // Form column + status panel, side by side.
+  const withStatus = (content) => (
+    <div className="flex flex-col xl:flex-row xl:items-start gap-6">
+      <div className="w-full xl:flex-1 min-w-0" data-testid="FiscalConfigPage__formColumn">{content}</div>
+      {statusPanel}
+    </div>
+  );
+  const certProps = { certRefreshKey: certVersion, onCertUploaded: handleCertUploaded };
+
   // ── Org bar ──────────────────────────────────────────────────────────────────
   const saveLabel = resolveSaveLabel(ui, saving, savedOk);
 
@@ -273,7 +376,12 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
         </div>
         <div className="flex items-center gap-2">
           {(canAddComplementary || canChangeSif) && !addingComplementary && (
-            <DropdownMenu data-testid="DropdownMenu__310303">
+            /* Non-modal on purpose (ETP-5831): "Cambiar SIF" opens a Radix Dialog from this menu.
+                A modal menu also locks <body> with `pointer-events: none`; in the Vite dev server the
+                menu and the dialog load separate copies of Radix's DismissableLayer, so the dialog
+                saved the menu's lock as the "original" value and restored it on close, freezing the
+                page until a reload. A non-modal menu never takes that lock. */
+            <DropdownMenu modal={false} data-testid="DropdownMenu__310303">
               <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__310303">
                 <button
                   type="button"
@@ -312,15 +420,9 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
             </DropdownMenu>
           )}
           <Button
-            variant="outline"
-            onClick={handleCancel}
-            disabled={saving}
-            data-testid="Button__310303">
-            {ui('fiscal.cancel')}
-          </Button>
-          <Button
             onClick={handleSave}
-            disabled={saving || !orgId || forceTestMode}
+            disabled={saving || !orgId || forceTestMode || !(isDirty || addingComplementary)}
+            data-dirty={String(isDirty)}
             className={resolveSaveClass(savedOk)}
             data-testid="Button__310303">
             <Save size={14} className="mr-1.5" data-testid="Save__310303" />
@@ -414,6 +516,7 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
         {showContent && ['sii', 'sii-navarra'].includes(renderProfile) && (
           <div className="flex-1 overflow-y-auto">
             <div className="px-6 py-6">
+              {withStatus(<>
               <SiiSection
                 key={resetKey}
                 ref={siiRef}
@@ -424,11 +527,14 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
                 variant={effectiveProfile}
                 hideSave
                 locked={forceTestMode}
+                {...certProps}
+                onDirtyChange={reportDirty.sii}
                 data-testid="SiiSection__310303" />
               <CertExpiryBanner
                 daysLeft={certDaysLeft}
                 variant="prominent"
                 data-testid="CertExpiryBanner__310303" />
+              </>)}
             </div>
           </div>
         )}
@@ -436,44 +542,58 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
         {/* SII + TBAI — with tabs (also used when adding a complementary SIF) */}
         {showContent && renderProfile === 'sii+tbai' && (
           <>
-            <TabBar
-              tabs={[ui('fiscal.tab.sii'), ui('fiscal.tab.tbai')]}
-              active={activeTab}
-              onChange={setActiveTab}
-              data-testid="TabBar__310303" />
+            {/* The SII | TicketBAI switch sits in the form column, so the status panel's top is
+                level with the switch's top (ETP-5831). */}
             <div className="flex-1 overflow-y-auto">
               <div className="px-6 py-6">
-                {activeTab === 0 && (
+                {withStatus(<>
+                <TabBar
+                  tabs={[ui('fiscal.tab.sii'), ui('fiscal.tab.tbai')]}
+                  active={activeTab}
+                  onChange={setActiveTab}
+                  className="pb-4"
+                  data-testid="TabBar__310303" />
+                {/* Both tabs stay mounted (ETP-5831): switching only hides the other section, so its
+                    unsaved edits survive and keep counting for "Guardar" and the unsaved-changes
+                    guard. The certificate block renders in the visible tab only (one shared
+                    certificate: no duplicate block, test ids or /certificate read). */}
+                <div hidden={activeTab !== 0} data-testid="FiscalConfigPage__siiPane">
                   <SiiSection
                     key={`sii-${resetKey}`}
-                    ref={addingComplementary === 'sii' ? complementaryRef : siiRef}
-                    record={addingComplementary === 'sii' ? complementaryRecord : effectiveSii}
+                    ref={siiTab.ref}
+                    record={siiTab.record}
                     apiBaseUrl={apiBaseUrl}
                     orgId={orgId}
                     onSave={() => {}}
                     variant="sii"
                     hideSave
                     locked={forceTestMode}
+                    {...certProps}
+                    hideCert={activeTab !== 0}
+                    onDirtyChange={reportDirty.sii}
                     data-testid="SiiSection__310303" />
-                )}
-                {activeTab === 1 && (
+                </div>
+                <div hidden={activeTab !== 1} data-testid="FiscalConfigPage__tbaiPane">
                   <TbaiSection
                     key={`tbai-${resetKey}`}
-                    ref={addingComplementary === 'tbai' ? complementaryRef : tbaiRef}
-                    record={addingComplementary === 'tbai' ? complementaryRecord : effectiveTbai}
+                    ref={tbaiTab.ref}
+                    record={tbaiTab.record}
                     apiBaseUrl={apiBaseUrl}
                     orgId={orgId}
                     onSave={() => {}}
                     hideSave
-                    hideCert
                     locked={forceTestMode}
+                    {...certProps}
+                    hideCert={activeTab !== 1}
+                    onDirtyChange={reportDirty.tbai}
                     data-testid="TbaiSection__310303" />
-                )}
+                </div>
                 <CertExpiryBanner
                   daysLeft={certDaysLeft}
                   variant="prominent"
                   data-testid="CertExpiryBanner__310303" />
                 {/* errors are shown in the org bar */}
+                </>)}
               </div>
             </div>
           </>
@@ -483,6 +603,7 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
         {showContent && renderProfile === 'tbai' && (
           <div className="flex-1 overflow-y-auto">
             <div className="px-6 py-6">
+              {withStatus(<>
               <TbaiSection
                 key={resetKey}
                 ref={tbaiRef}
@@ -492,12 +613,15 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
                 onSave={() => {}}
                 hideSave
                 locked={forceTestMode}
+                {...certProps}
+                onDirtyChange={reportDirty.tbai}
                 data-testid="TbaiSection__310303" />
               <CertExpiryBanner
                 daysLeft={certDaysLeft}
                 variant="prominent"
                 data-testid="CertExpiryBanner__310303" />
               {/* errors are shown in the org bar */}
+              </>)}
             </div>
           </div>
         )}
@@ -506,6 +630,7 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
         {showContent && renderProfile === 'verifactu' && (
           <div className="flex-1 overflow-y-auto">
             <div className="px-6 py-6">
+              {withStatus(<>
               <VerifactuSection
                 key={resetKey}
                 ref={verifactuRef}
@@ -515,12 +640,15 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
                 onSave={() => {}}
                 hideSave
                 locked={forceTestMode}
+                {...certProps}
+                onDirtyChange={reportDirty.verifactu}
                 data-testid="VerifactuSection__310303" />
               <CertExpiryBanner
                 daysLeft={certDaysLeft}
                 variant="prominent"
                 data-testid="CertExpiryBanner__310303" />
               {/* errors are shown in the org bar */}
+              </>)}
             </div>
           </div>
         )}

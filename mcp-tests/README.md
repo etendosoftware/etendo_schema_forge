@@ -35,11 +35,11 @@ Every command below is a `make` target run from the **repository root**.
    | Variable (as named in `config.example.toml`) | For |
    |---|---|
    | `OPENAI_API_KEY` (`[provider] api_key_env`) | The LLM gateway. Without it nothing runs (exit 2). |
-   | `MCP_TEST_TARGET_HOLDED_TOKEN` (`[targets.holded] token_env`) | Holded's API key, sent as a bearer. **Not yet verified against the live server**: if Holded rejects it, switch that target to `auth = "oauth"` and record which one worked in `config.example.toml`. |
 
-   Etendo Go targets use `auth = "oauth"`: the first run opens a browser, and the token is cached
-   in `mcp-tests/.auth/<target>.json` (0600, gitignored). `make mcp-login TARGET=<t>` pre-warms it;
-   it is never required.
+   Every target uses `auth = "oauth"`, Holded included: the first run opens a browser, and the
+   token is cached in `mcp-tests/.auth/<target>.json` (0600, gitignored). `make mcp-login TARGET=<t>`
+   pre-warms it; it is never required. Holded grants no refresh token, so when its token expires
+   run `make mcp-login TARGET=holded` again (or let the next interactive run reopen the browser).
 4. **A reachable target.** `local` is `http://localhost:3100/mcp` and needs `make dev` running (the
    Vite dev server serves the OAuth `.well-known` documents and proxies `/mcp`; Tomcat on `:8080`
    alone does not). Every target that takes part in a comparison needs `platform = "etendo-go"` or
@@ -167,13 +167,18 @@ otherwise `UNOFFICIAL`, and the figure is still fully reported but is not a KR n
 run whose targets could not check some entities because their MCP does not offer the tool says so:
 `OFFICIAL — 10 entities not verifiable on holded (tools not offered)`. Read it as official, with the
 listed entities taken on trust: their freshness rests on the account having been freshly
-initialized and seeded, not on a read. The KR line
-is *subject wins / evaluated tasks*, always split in two because they say different things about
-the product:
+initialized and seeded, not on a read. The KR line (plan `2026-10-22-mcp-okr-metric-base-plan.md`
+§3.3) is *(Etendo Win + Etendo Only) / evaluated tasks* against an 80 % target, always followed by
+the five results, because they say different things about the product:
 
-- **won by capability** — the other platform declared the task `notPossible` (decision rule step 0);
-- **won by measurement** — both sides ran it and steps 1–4 decided (successes, median calls with a
-  20 % margin, unrecovered errors, median tokens with a 10 % margin).
+- **Etendo Only / Holded Only** — the other platform declared the task `notPossible` (rule step 0);
+- **Etendo Win / Holded Win** — both sides ran it and rule 2 decided: successes, unrecovered errors,
+  median total tokens of the conversation (catalogue included) with a 10 % margin, then median calls
+  with a 20 % margin;
+- **empate** — nothing separated them.
+
+Rule 2 requires real token usage: a task where a side has a success without it is *not evaluable*
+(there is no byte fallback — bytes leave the tool catalogue out).
 
 Ties count in the denominator; not-evaluable and excluded tasks do not. The next line pins the rule
 version, its parameters sha, `REPEAT` and the report version.

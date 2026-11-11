@@ -1,3 +1,5 @@
+// @covers artifacts/sales-invoice/custom/InvoiceBottomPanel.jsx
+// @covers tools/app-shell/src/windows/custom/shared/importSaveOptions.js
 // Regression suite for the import-modal remount bug (ETP-4459).
 //
 // Component under test: artifacts/sales-invoice/custom/InvoiceBottomPanel.jsx
@@ -61,7 +63,8 @@ vi.mock('@generated/sales-invoice/custom/ImportFromSourceInvoiceModal', () => ({
   default: () => <div data-testid="import-source-modal" />,
 }));
 
-import { render, screen } from '@testing-library/react';
+import { createRef } from 'react';
+import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import InvoiceBottomPanel from '@generated/sales-invoice/custom/InvoiceBottomPanel';
@@ -125,18 +128,22 @@ describe('InvoiceBottomPanel.linesEmptyState — import modal selection (ETP-445
     expect(onForceOpenHandled).toHaveBeenCalled();
   });
 
-  it("forceOpen='order' on a regular (FAC) draft mounts the ORDER modal", () => {
+  it("forceOpen='order' on a regular (FAC) draft mounts the ORDER modal without calling onSave", () => {
     const onForceOpenHandled = vi.fn();
+    const onSave = vi.fn().mockResolvedValue(true);
     render(
       <LinesEmptyState
         {...BASE_PROPS}
         data={FAC_DRAFT}
         forceOpen="order"
+        onSave={onSave}
         onForceOpenHandled={onForceOpenHandled}
       />,
     );
     expectOnlyModal('import-order-modal');
     expect(onForceOpenHandled).toHaveBeenCalled();
+    // forceOpen is the re-delivery after DetailView already saved the new record.
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   it('legacy forceOpen=true (boolean) falls back to the ref default (shipment) without crashing', () => {
@@ -180,7 +187,7 @@ describe('InvoiceBottomPanel.linesEmptyState — import modal selection (ETP-445
     for (const id of MODAL_IDS) expect(screen.queryByTestId(id)).toBeNull();
     // useUI mock returns the key, so the button is labelled with the i18n key.
     await user.click(screen.getByText('importFromReturnShipment'));
-    expect(onSave).toHaveBeenCalledWith('return');
+    expect(onSave).toHaveBeenCalledWith('return', { skipSaveWhenClean: true });
     expectOnlyModal('import-return-modal');
   });
 
@@ -190,7 +197,7 @@ describe('InvoiceBottomPanel.linesEmptyState — import modal selection (ETP-445
     render(<LinesEmptyState {...BASE_PROPS} data={RECTIFICATIVA_DRAFT} onSave={onSave} />);
     for (const id of MODAL_IDS) expect(screen.queryByTestId(id)).toBeNull();
     await user.click(screen.getByText('importFromSourceInvoice'));
-    expect(onSave).toHaveBeenCalledWith('sourceInvoice');
+    expect(onSave).toHaveBeenCalledWith('sourceInvoice', { skipSaveWhenClean: true });
     expectOnlyModal('import-source-modal');
   });
 
@@ -199,17 +206,22 @@ describe('InvoiceBottomPanel.linesEmptyState — import modal selection (ETP-445
     const onSave = vi.fn().mockResolvedValue(false);
     render(<LinesEmptyState {...BASE_PROPS} data={RECTIFICATIVA_DRAFT} onSave={onSave} />);
     await user.click(screen.getByText('importFromReturnShipment'));
-    expect(onSave).toHaveBeenCalledWith('return');
+    expect(onSave).toHaveBeenCalledWith('return', { skipSaveWhenClean: true });
     for (const id of MODAL_IDS) expect(screen.queryByTestId(id)).toBeNull();
   });
 
-  it("clicking shipment/order buttons on a FAC draft passes the matching type to onSave", async () => {
+  // ETP-6099: every «Importar desde…» entry asks DetailView to skip the save of an unedited
+  // invoice (ETP-5828 started it for the order import only).
+  it.each([
+    ['shipment', 'importFromShipment', 'import-shipment-modal'],
+    ['order', 'importFromSalesOrder', 'import-order-modal'],
+  ])("clicking the %s import button on a FAC draft calls onSave with skipSaveWhenClean and mounts its modal", async (type, label, modalId) => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(true);
     render(<LinesEmptyState {...BASE_PROPS} data={FAC_DRAFT} onSave={onSave} />);
-    await user.click(screen.getByText('importFromShipment'));
-    expect(onSave).toHaveBeenLastCalledWith('shipment');
-    expectOnlyModal('import-shipment-modal');
+    await user.click(screen.getByText(label));
+    expect(onSave).toHaveBeenCalledWith(type, { skipSaveWhenClean: true });
+    expectOnlyModal(modalId);
   });
 });
 
@@ -271,7 +283,7 @@ describe('InvoiceBottomPanel.detailExtraActions — import modal selection (ETP-
     render(<DetailExtraActions {...BASE_PROPS} data={RECTIFICATIVA_DRAFT} onSave={onSave} />);
     for (const id of MODAL_IDS) expect(screen.queryByTestId(id)).toBeNull();
     await user.click(screen.getByText('importFromReturnShipment'));
-    expect(onSave).toHaveBeenCalledWith('return');
+    expect(onSave).toHaveBeenCalledWith('return', { skipSaveWhenClean: true });
     expectOnlyModal('import-return-modal');
   });
 
@@ -281,7 +293,7 @@ describe('InvoiceBottomPanel.detailExtraActions — import modal selection (ETP-
     render(<DetailExtraActions {...BASE_PROPS} data={RECTIFICATIVA_DRAFT} onSave={onSave} />);
     for (const id of MODAL_IDS) expect(screen.queryByTestId(id)).toBeNull();
     await user.click(screen.getByText('importFromSourceInvoice'));
-    expect(onSave).toHaveBeenCalledWith('sourceInvoice');
+    expect(onSave).toHaveBeenCalledWith('sourceInvoice', { skipSaveWhenClean: true });
     expectOnlyModal('import-source-modal');
   });
 
@@ -290,8 +302,19 @@ describe('InvoiceBottomPanel.detailExtraActions — import modal selection (ETP-
     const onSave = vi.fn().mockResolvedValue(true);
     render(<DetailExtraActions {...BASE_PROPS} data={FAC_DRAFT} onSave={onSave} />);
     await user.click(screen.getByText('importFromShipment'));
-    expect(onSave).toHaveBeenCalledWith('shipment');
+    expect(onSave).toHaveBeenCalledWith('shipment', { skipSaveWhenClean: true });
     expectOnlyModal('import-shipment-modal');
+  });
+
+  // The line-menu «Importar desde pedido» has no inline trigger: it reaches the component only
+  // through the imperative handle that lineMenuActions calls.
+  it("the imperative openImportOrderModal handle calls onSave('order', skipSaveWhenClean) and mounts the order modal", async () => {
+    const onSave = vi.fn().mockResolvedValue(true);
+    const ref = createRef();
+    render(<DetailExtraActions {...BASE_PROPS} data={FAC_DRAFT} onSave={onSave} ref={ref} hideTrigger />);
+    await act(async () => { await ref.current.openImportOrderModal(); });
+    expect(onSave).toHaveBeenCalledWith('order', { skipSaveWhenClean: true });
+    expectOnlyModal('import-order-modal');
   });
 
   it('does not mount any modal when onSave resolves falsy (save failed)', async () => {

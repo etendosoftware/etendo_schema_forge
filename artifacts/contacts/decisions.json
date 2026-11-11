@@ -368,6 +368,7 @@
           "label": "Email",
           "section": "principal",
           "order": 10,
+          "agentPrompt": "#REF#agent-prompts/contacts/business-partner.etgo-email.md",
           "publicApi": { "exposed": true, "name": "email" }
         },
         "etgoPhone": {
@@ -533,7 +534,8 @@
           { "name": "city_name", "internalPath": "cityName", "dataType": "string", "readable": true },
           { "name": "postal_code", "internalPath": "postalCode", "dataType": "string", "readable": true },
           { "name": "country", "internalPath": "country", "dataType": "string", "readable": true },
-          { "name": "region_name", "internalPath": "regionName", "dataType": "string", "readable": true }
+          { "name": "region_name", "internalPath": "regionName", "dataType": "string", "readable": true },
+          { "name": "country_code", "internalPath": "countryCode", "dataType": "string", "writable": false }
         ]
       },
       "fields": {
@@ -619,7 +621,8 @@
           "grid": true,
           "searchable": true,
           "section": "principal",
-          "columnWidth": 320
+          "columnWidth": 320,
+          "agentPrompt": "#REF#agent-prompts/contacts/contact.email.md"
         },
         "phone": {
           "visibility": "editable",

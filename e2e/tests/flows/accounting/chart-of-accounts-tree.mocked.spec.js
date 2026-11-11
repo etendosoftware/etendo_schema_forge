@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 
 // @covers artifacts/chart-of-accounts/custom/AccountTreeView.jsx
@@ -62,7 +62,8 @@ test.describe('Chart of Accounts — tree toolbar', () => {
     await login(page);
     await installMocks(page);
     await page.goto('/chart-of-accounts');
-    await expect(page.getByTestId('account-tree-table')).toBeVisible();
+    // Cold-load budget: the tree self-fetch runs only after the generic list fetch, so under parallel CI load it can exceed 5 s.
+    await expect(page.getByTestId('account-tree-table')).toBeVisible({ timeout: 15_000 });
     // The wrapper keeps its own id inside ListView (ListView passes every table a generic one).
     await expect(page.getByTestId('account-tree')).toBeVisible();
   });
@@ -124,7 +125,8 @@ test.describe('Chart of Accounts — tree toolbar', () => {
 
   test('a shared link with filters reproduces the view', async ({ page }) => {
     await page.goto('/chart-of-accounts?accountType=L');
-    await expect(row(page, 'acc-40000001')).toBeVisible();
+    // Same cold-load cascade as beforeEach: the tree self-fetch waits on the generic list fetch.
+    await expect(row(page, 'acc-40000001')).toBeVisible({ timeout: 15_000 });
     await expect(row(page, 'group-A')).toHaveCount(0);
   });
 

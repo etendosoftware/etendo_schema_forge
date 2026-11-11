@@ -246,7 +246,7 @@ export function useProductSelectorFetch({
       setPageQuery(null);
       setLoadingMore(false);
     } else if (appendInFlightRef.current) {
-      return;
+      return false;
     }
     const generation = generationRef.current;
     const isStale = () => generationRef.current !== generation;

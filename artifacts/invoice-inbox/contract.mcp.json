@@ -1,0 +1,176 @@
+{
+  "version": "0.2.1",
+  "generatedAt": "2026-11-03T14:49:56.386Z",
+  "updatedAt": "2026-11-03T14:50:17.594Z",
+  "contractChecksum": "c56db59e273c80c1",
+  "apiPrediction": {
+    "specName": "invoice-inbox",
+    "baseUrl": "/sws/neo/invoice-inbox",
+    "crud": {
+      "header": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
+        "listUrl": "/sws/neo/invoice-inbox/header",
+        "detailUrl": "/sws/neo/invoice-inbox/header/{id}",
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
+      }
+    },
+    "selectors": [
+      {
+        "entity": "header",
+        "field": "businessPartner",
+        "column": "C_BPartner_ID",
+        "reference": "BPartner",
+        "inputMode": "selector",
+        "url": "/sws/neo/invoice-inbox/header/selectors/businessPartner"
+      },
+      {
+        "entity": "header",
+        "field": "invoice",
+        "column": "C_Invoice_ID",
+        "reference": "Invoice",
+        "inputMode": "selector",
+        "url": "/sws/neo/invoice-inbox/header/selectors/invoice"
+      },
+      {
+        "entity": "header",
+        "field": "duplicateOfInvoice",
+        "column": "Duplicate_Invoice_ID",
+        "reference": "Invoice",
+        "inputMode": "search",
+        "url": "/sws/neo/invoice-inbox/header/selectors/duplicateOfInvoice"
+      }
+    ],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "purchases"
+    }
+  },
+  "formState": {
+    "entities": {
+      "header": {
+        "fields": {
+          "active": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "discardedAt": {
+            "readOnly": true
+          },
+          "businessPartner": {
+            "readOnly": true
+          },
+          "invoiceDate": {
+            "readOnly": true
+          },
+          "grandTotalAmount": {
+            "readOnly": true
+          },
+          "invoice": {
+            "readOnly": true
+          },
+          "targetType": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "PURCHASE_INVOICE"
+          },
+          "reviewed": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
+          "adjusted": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
+          "orderReference": {
+            "readOnly": true
+          },
+          "extractedTaxID": {
+            "readOnly": true
+          },
+          "sender": {
+            "readOnly": true
+          },
+          "fileName": {
+            "readOnly": true,
+            "required": true
+          },
+          "extractedName": {
+            "readOnly": true
+          },
+          "duplicateOfInvoice": {
+            "readOnly": true
+          },
+          "status": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "PROCESSING"
+          },
+          "source": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "UPLOAD"
+          },
+          "errorCode": {
+            "readOnly": true
+          },
+          "creationDate": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "@#Date@"
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Create and manage invoice inbox documents.",
+    "whenToUse": [
+      "Use for supplier invoice inbox before receipt or invoice."
+    ],
+    "minimumCreate": {},
+    "selectorContexts": [],
+    "actions": [],
+    "workflow": [
+      "Create a new record",
+      "Update as needed"
+    ],
+    "edgeCases": [
+      "Required field without default value must be provided"
+    ],
+    "examples": [],
+    "warnings": [
+      "This spec appears read-only from generated form metadata",
+      "Transactional spec has no generated lifecycle action metadata"
+    ],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "5a39589254a3daf6"
+}

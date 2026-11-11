@@ -1,7 +1,7 @@
 // @covers tools/app-shell/src/windows/custom/shared/OcrSidePanel.jsx
 // @covers tools/app-shell/src/windows/custom/shared/UploadedFileViewer.jsx
 // @covers tools/app-shell/src/windows/custom/shared/FileLightbox.jsx
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 
 /**

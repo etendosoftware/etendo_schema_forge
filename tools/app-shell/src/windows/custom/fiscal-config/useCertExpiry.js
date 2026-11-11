@@ -5,20 +5,33 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 
 export { daysUntil };
 
-export function useCertExpiry(apiBaseUrl, { mockDaysLeft = null, orgId = null } = {}) {
+/**
+ * The organization's certificate expiry: `daysLeft` (for the expiry banner) and the raw `validTo`
+ * date (for the status panel's "Certificado" row, ETP-5831). `refreshKey` re-reads it — bumped by
+ * FiscalConfigPage whenever the certificate is replaced.
+ *
+ * Never stale (ETP-5831): both values are reset when a read starts (org change or refresh), so the
+ * previous organization's certificate is never shown while the new one loads, and cleared when the
+ * read fails, so a failed read never leaves an old date on screen.
+ */
+export function useCertExpiry(apiBaseUrl, { mockDaysLeft = null, orgId = null, refreshKey = 0 } = {}) {
   const [daysLeft, setDaysLeft] = useState(null);
+  const [validTo, setValidTo] = useState(null);
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
 
   useEffect(() => {
     if (mockDaysLeft !== null) {
       setDaysLeft(mockDaysLeft);
+      setValidTo(null);
       return;
     }
     if (!apiBaseUrl || !orgId) {
       setDaysLeft(null);
+      setValidTo(null);
       return;
     }
     setDaysLeft(null);
+    setValidTo(null);
     const controller = new AbortController();
     apiFetch(`/certificate?${new URLSearchParams({ orgId })}`, { signal: controller.signal })
       .then(r => r.json())
@@ -26,13 +39,19 @@ export function useCertExpiry(apiBaseUrl, { mockDaysLeft = null, orgId = null } 
         if (controller.signal.aborted) return;
         if (data?.exists && data?.validTo) {
           setDaysLeft(daysUntil(data.validTo));
+          setValidTo(data.validTo);
         } else {
           setDaysLeft(null);
+          setValidTo(null);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setDaysLeft(null);
+        setValidTo(null);
+      });
     return () => controller.abort();
-  }, [apiFetch, mockDaysLeft, apiBaseUrl, orgId]);
+  }, [apiFetch, mockDaysLeft, apiBaseUrl, orgId, refreshKey]);
 
-  return { daysLeft };
+  return { daysLeft, validTo };
 }

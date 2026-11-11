@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/components/contract-ui/DetailTabStrip.jsx
 // @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 import { openFormViewTab } from '../../helpers/secondaryTabsInteractions.js';
 

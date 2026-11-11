@@ -212,6 +212,12 @@ const BACKEND_ERROR_MAP = {
   // ETP-5471: create/import on a bank-connected account (BankStatementsHandler + the generic
   // financial-account statement entities).
   'This account is synchronized with the bank; statements cannot be created or imported manually.': 'backendError.statementBankConnectedNotCreatable',
+  // ETP-5581: com.etendoerp.go AD_MESSAGE ETGO_StatementLineDiscarded (409 LINE_DISCARDED), the
+  // refusal to reconcile a discarded line. Its key route is in BACKEND_ERROR_KEY_MAP; this text
+  // entry serves the reconcile paths that forward only the message (the split panel's
+  // reconcileGroup / reconcileDifference toasts, the automatch per-group failures). English-only
+  // AD message, so the text is a stable contract.
+  'This bank statement line is discarded, so it cannot be reconciled. Restore it first.': 'backendError.bankLineDiscarded',
   // Price list (PriceListHeaderHandler) validation messages
   'A tariff marked as default cannot be deactivated.': 'backendError.priceListCannotDeactivateDefault',
   'There is already an asset category with this name.': 'backendError.assetGroupNameDuplicate',
@@ -250,6 +256,11 @@ const BACKEND_ERROR_MAP = {
   // AD_Message/i18n involvement, so it always renders in Spanish regardless of session
   // locale (ETP-4831 case 2, inverse symptom of the invoice-line skeleton below).
   'No hay líneas a facturar en este pedido': 'backendError.noLinesToInvoice',
+  // OrderDocumentAvailability.DRAFT_COVERS_INVOICE_UNNAMED (com.etendoerp.go — ETP-5828): the
+  // draft-covers 400 when no covering draft is readable by the role (another organization), so
+  // the sentence carries no numbers; the numbered form is matchDraftInvoiceCoversPending.
+  'A draft invoice already covers what is left to invoice; complete or delete it instead of creating another one.':
+    'backendError.draftInvoiceCoversPendingUnnamed',
   // ETP-5712: the backend answers 409 `returnInvoiceAlreadyExists` with exactly this sentence when
   // the return already has a non-voided rectificative invoice and the request does not carry
   // `allowDuplicate:true` (one per return, like the screen, which hides its button). ETP-5381 had
@@ -485,6 +496,15 @@ const BACKEND_ERROR_KEY_MAP = {
   // same rationale as the CashCloseSupport matchers below: a raw BigDecimal string pasted into
   // Spanish copy renders the wrong decimal separator and no currency symbol.
   ETGO_InvoiceRectificationExceedsOriginal: 'backendError.invoiceRectificationExceedsOriginal',
+  // ETP-5745 CP-26 — com.etendoerp.go RectificationFiscalCodeGuard: completing a NON-rectificative
+  // invoice whose VERI*FACTU `etvfacInvType` is still a stray R1-R5 (left over from an earlier
+  // choice, e.g. the document type was reverted through a channel that skipped the UI callout's
+  // own clear-on-revert, such as a direct MCP/REST write). BLOCKS instead of silently correcting
+  // it to F1 — unlike that callout, which may still auto-clear it in the SAME gesture the user
+  // just made (reverting the document type); this guard is the backstop for state the user
+  // already brought to "Confirm", so correcting it without saying anything would hide a real
+  // mistake instead of surfacing it.
+  ETGO_InvoiceVerifactuInvTypeNotRectificative: 'backendError.verifactuInvTypeNotRectificative',
   // ETP-5692 — core `PostedDocument` ("Document already Posted."), which DocumentPostingService
   // now names instead of the misleading "being posted by another process" when a post hits a
   // document someone else already posted. Resolved in the GO locale server-side, so mapping it
@@ -525,6 +545,17 @@ const BACKEND_ERROR_KEY_MAP = {
   // ETP-5684 — NeoAccountingAccessPolicy (com.etendoerp.go): a post/unpost from a role without
   // Show Accounting Fields. The SPA hides those actions, so this reaches only a stale screen.
   ETGO_AccountingAccessDenied: 'backendError.accountingAccessDenied',
+  // ETP-5581 — the coded refusals of the bank bounce-pair actions (com.etendoerp.go
+  // BankBounceErrors / StatementLineDiscard: discardPair, restorePair and the bounce-pair groups of
+  // applySuggestions), each with its short `code` and this AD_MESSAGE in `error.messageKeys`.
+  // English-only AD messages, so this map is where they become Spanish.
+  ETGO_StatementLineDiscarded: 'backendError.bankLineDiscarded',
+  ETGO_BounceSuggestionsOff: 'backendError.bounceSuggestionsOff',
+  ETGO_BounceSignMismatch: 'backendError.bounceSignMismatch',
+  ETGO_BounceAmountMismatch: 'backendError.bounceAmountMismatch',
+  ETGO_BounceHasPayment: 'backendError.bounceHasPayment',
+  ETGO_BounceLineNotPending: 'backendError.bounceLineNotPending',
+  ETGO_BounceDiscardNotAllowed: 'backendError.bounceDiscardNotAllowed',
 };
 
 // ETP-5360 — a message that IS still an untranslated `@Key@` token (or carries some) is its own
@@ -720,6 +751,28 @@ function translateInvoiceReactivateFiscalRectified(messageKeys, messageParams, t
     ? messageParams.rectificativas.join(', ')
     : messageParams.rectificativas;
   return resolveLocaleKey(t, 'backendError.invoiceReactivateFiscalRectified', { fiscalSystem, rectificativas });
+}
+
+const RECTIFICATION_CODE_REQUIRED_KEY = 'ETGO_InvoiceRectificationCodeRequired';
+
+/**
+ * `ETGO_InvoiceRectificationCodeRequired` (`RectificationFiscalCodeGuard.java`, ETP-5745 CP-19):
+ * same reason as {@link translateInvoiceReactivateFiscalRectified} just above — this message
+ * needs the locale-aware conjunction join ("SII y TicketBAI" / "SII and TicketBAI"), which the
+ * generic key route's `toInterpolationParams` (plain comma join) does not give. The backend's
+ * `message` field is deliberately English prose (the wire contract for MCP/scripts); the SPA
+ * never shows it — it renders this localized sentence from `messageParams.systems` instead, a
+ * raw JSON array of system names ("SII", "TicketBAI", "Verifactu"), in the dynamic subset the
+ * guard found still missing their own rectification code/motive.
+ */
+function translateRectificationCodeRequired(messageKeys, messageParams, t) {
+  if (!Array.isArray(messageKeys) || !messageKeys.includes(RECTIFICATION_CODE_REQUIRED_KEY)) return null;
+  if (!messageParams || typeof messageParams !== 'object') return null;
+  const systems = Array.isArray(messageParams.systems)
+    ? joinWithConjunction(messageParams.systems, t)
+    : messageParams.systems;
+  if (!systems) return null;
+  return resolveLocaleKey(t, 'backendError.rectificationCodeRequired', { systems });
 }
 
 // ETP-5840 — the exchange-rate refusals of com.etendoerp.go, rendered from their identity.
@@ -1193,6 +1246,24 @@ function matchDraftInvoiceExists(msg) {
   return docs ? { docs } : null;
 }
 
+// OrderDocumentAvailability.draftCoversInvoiceReason (com.etendoerp.go — ETP-5828): "Generar
+// factura" on a sales order whose draft invoices already hold everything left to invoice answers
+// 400 "A draft invoice (D1, D2) already covers what is left to invoice; complete or delete it
+// instead of creating another one." — the same sentence as the MCP's availableNow:false advice.
+// The draft numbers are one opaque {docs} param between the fixed prefix and suffix (never a
+// regex), kept in step with DRAFT_COVERS_INVOICE_PREFIX / _SUFFIX. Read by the bulk "Generar
+// factura" (BulkOrderMoreMenu), which no longer pre-skips orders with a draft invoice.
+const DRAFT_INVOICE_COVERS_PREFIX = 'A draft invoice (';
+const DRAFT_INVOICE_COVERS_SUFFIX = ') already covers what is left to invoice; complete or delete it instead of creating another one.';
+
+function matchDraftInvoiceCoversPending(msg) {
+  if (!msg.startsWith(DRAFT_INVOICE_COVERS_PREFIX) || !msg.endsWith(DRAFT_INVOICE_COVERS_SUFFIX)) {
+    return null;
+  }
+  const docs = msg.slice(DRAFT_INVOICE_COVERS_PREFIX.length, -DRAFT_INVOICE_COVERS_SUFFIX.length);
+  return docs ? { docs } : null;
+}
+
 // CreateDraftInvoiceHandler.java:606 (com.etendoerp.go) — "Order not found: " +
 // orderId. Fixed English prefix + dynamic order id appended, no closing delimiter
 // (ETP-4831 case 4, family B). Same plain-string-slicing rationale as
@@ -1637,6 +1708,7 @@ const PARAMETERIZED_MATCHERS = [
   [matchReturnReasonTooLong, 'backendError.returnReasonTooLong'],
   [matchReturnInvoiceWithoutAmount, 'backendError.returnInvoiceWithoutAmount'],
   [matchDraftInvoiceExists, 'backendError.draftInvoiceExists'],
+  [matchDraftInvoiceCoversPending, 'backendError.draftInvoiceCoversPending'],
   [matchOrderNotFound, 'backendError.orderNotFound'],
   [matchShipmentNotFound, 'backendError.shipmentNotFound'],
   [matchAccountAlreadyExists, 'backendError.accountAlreadyExists'],
@@ -1996,6 +2068,11 @@ export function translateBackendError(msg, t, options = {}) {
   const reactivateFiscal = translateInvoiceReactivateFiscalRectified(
     options.messageKeys, options.messageParams, t);
   if (reactivateFiscal !== null) return reactivateFiscal;
+
+  // ETP-5745 CP-19: same reason — translateRectificationCodeRequired's conjunction join too.
+  const rectificationCodeRequired = translateRectificationCodeRequired(
+    options.messageKeys, options.messageParams, t);
+  if (rectificationCodeRequired !== null) return rectificationCodeRequired;
 
   // Key route first: it is the only one that can resolve a message whose text is unmatchable by
   // construction. Runs even when `msg` is empty — the keys alone carry enough to say what failed.

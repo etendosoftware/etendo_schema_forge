@@ -1,9 +1,16 @@
+// @covers tools/app-shell/src/App.jsx
 /**
  * Smoke test for App.jsx — verifies the root component mounts
  * without crashing when all heavy dependencies are mocked.
  */
 
 // Mock all heavy imports before loading App
+const runtimeSession = vi.hoisted(() => ({ onSessionChange: null }));
+const clearAccountIdentityMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock('@/lib/flags/bootstrap.js', () => ({
+  clearAccountIdentity: clearAccountIdentityMock,
+}));
+
 vi.mock('sonner', () => ({
   toast: Object.assign(vi.fn(), {
     success: vi.fn(),
@@ -19,14 +26,17 @@ vi.mock('sonner', () => ({
 vi.mock('@etendosoftware/app-shell-core/runtime', async () => {
   const { MemoryRouter } = await import('react-router-dom');
   return {
-    AppShellRuntime: ({ children, layout: Layout, menuGroups }) => (
-      <MemoryRouter>
-        <div data-testid="app-shell-runtime">
-          {children}
-          {Layout && <Layout menuGroups={menuGroups} />}
-        </div>
-      </MemoryRouter>
-    ),
+    AppShellRuntime: ({ children, layout: Layout, menuGroups, auth }) => {
+      runtimeSession.onSessionChange = auth?.onSessionChange;
+      return (
+        <MemoryRouter>
+          <div data-testid="app-shell-runtime">
+            {children}
+            {Layout && <Layout menuGroups={menuGroups} />}
+          </div>
+        </MemoryRouter>
+      );
+    },
   };
 });
 
@@ -195,6 +205,59 @@ describe('App', () => {
     // The runtime mock renders the `layout` prop it receives; App must pass
     // its own AppLayout so SideMenu/Favorites/CommandPalette/Copilot chrome survives.
     expect(screen.getByTestId('app-layout')).toBeInTheDocument();
+  });
+});
+
+describe('session changes preserve feature-flag identity until logout', () => {
+  beforeEach(() => {
+    clearAccountIdentityMock.mockClear();
+    runtimeSession.onSessionChange = null;
+  });
+
+  it('does not reset the account when restoring an authenticated cookie session without a bearer token', () => {
+    render(<App />);
+
+    runtimeSession.onSessionChange({
+      token: null,
+      username: 'erp-admin',
+      clientId: 'company-a',
+    });
+
+    expect(clearAccountIdentityMock).not.toHaveBeenCalled();
+  });
+
+  it('does not reset the account when changing company within a valid cookie session', () => {
+    render(<App />);
+
+    runtimeSession.onSessionChange({ token: null, username: 'erp-admin', clientId: 'company-a' });
+    clearAccountIdentityMock.mockClear();
+    runtimeSession.onSessionChange({ token: null, username: 'erp-admin', clientId: 'company-b' });
+
+    expect(clearAccountIdentityMock).not.toHaveBeenCalled();
+  });
+
+  it('does not reset account targeting on a bearer token rotation', () => {
+    render(<App />);
+
+    runtimeSession.onSessionChange({ token: 'rotated-token', username: 'erp-admin', clientId: 'company-a' });
+
+    expect(clearAccountIdentityMock).not.toHaveBeenCalled();
+  });
+
+  it('resets account targeting when the session is actually removed', () => {
+    render(<App />);
+
+    runtimeSession.onSessionChange(null);
+
+    expect(clearAccountIdentityMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('resets account targeting for a normalized empty logout session', () => {
+    render(<App />);
+
+    runtimeSession.onSessionChange({ token: null, username: undefined, clientId: undefined });
+
+    expect(clearAccountIdentityMock).toHaveBeenCalledTimes(1);
   });
 });
 
