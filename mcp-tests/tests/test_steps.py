@@ -50,6 +50,29 @@ class LoaderTest(unittest.TestCase):
         self.assertEqual(probe.setup[0].save_as, "invoice")
         self.assertEqual(probe.teardown[1].for_each, "{{steps.payments.items}}")
 
+    def test_an_aliased_fixture_is_spliced_before_the_probes_own_steps(self):
+        # ETP-5848: `- *fixture` inside a setup list, then steps of the probe's own.
+        suite = load_suite(_suite("""
+            window: w
+            x-fixtures:
+              base: &base
+                - { tool: create_contact, saveAs: bp }
+                - { tool: create_invoice, saveAs: invoice }
+            probes:
+              - id: p
+                mode: write
+                prompt: hi
+                setup:
+                  - *base
+                  - { tool: create_bank_movement, saveAs: movement }
+        """))
+        self.assertEqual([s.tool for s in suite.probe("p").setup],
+                         ["create_contact", "create_invoice", "create_bank_movement"])
+
+    def test_a_list_nested_two_levels_is_still_refused(self):
+        with self.assertRaises(ValueError):
+            parse_steps([[[{"tool": "a"}]]], probe_id="p", phase="setup")
+
     def test_a_probe_without_steps_has_empty_tuples(self):
         probe = load_suite(_suite("""
             probes:

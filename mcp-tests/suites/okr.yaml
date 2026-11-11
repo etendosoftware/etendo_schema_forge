@@ -15,13 +15,15 @@
 # service) with a 50 € price on "Tarifa de venta principal" (`f-order-direct-invoice`).
 # GOClient has no G/L item for transfers between its own accounts: create once, in the chart
 # "Arbol de cuentas GO", the subaccount 55500001 "Traspasos internos" under 5550 (its G/L item comes
-# with it) (`f-bank-account-transfer`).
+# with it) (`f-bank-account-transfer`). The bank account "Cuenta de Banco" of GOClient receives the
+# statement of `f-bank-reconciliation`.
 #
 # DATA (holded): a Spanish Holded account authorized as Operator with the full catalogue (367
 # tools on 2026-11-05; a narrower credential hides tools and makes every block below wrong). It
 # needs, created once: the products "Agua", "Fernet", "Cerveza" and "Queso Sardo" (21 % VAT, with
 # stock in the main warehouse), the service "Hora de instalación" at 50 €, a second warehouse
-# (`f-warehouse-transfer` reads it as the second of `list_warehouses`) and a cash account "Caja".
+# (`f-warehouse-transfer` reads it as the second of `list_warehouses`), a cash account "Caja" and a
+# bank account "Cuenta de Banco" (`f-bank-reconciliation`).
 # Probes find them by name, as on Etendo.
 #
 # Every probe has a Holded block, written from the live tools/list and the live checks of
@@ -1467,3 +1469,214 @@ probes:
         notPossible:
           kind: goal
           reason: "No Holded tool reads the configuration of invoice submission to the tax office (SII, TicketBAI, VeriFactu) or the tax returns filed."
+
+  # --- fourth batch (functionality sheet for marketing, 2026-11-11) ---
+  # Conversions between documents and bank reconciliation, which no probe above measured. Each was
+  # piloted without an agent on both platforms on 2026-11-11 (setup, the action an agent would run,
+  # the check): Etendo createOrder / createDraftInvoice / createPurchaseInvoice / reconcileGroup,
+  # Holded convert_document / reconcile_transaction_with_document.
+
+  # An accepted quotation becomes a sales order. Etendo's conversion needs the quotation's payment
+  # method (core refuses it without one), so the setup sets it, as a person who quoted would have.
+  - id: f-quotation-to-order
+    category: flow
+    mode: write
+    prompt: "Cliente {{marker}} aceptó el presupuesto que le hicimos. Pasalo a pedido."
+    platforms:
+      etendo-go:
+        setup:
+          - tool: etendo_create
+            args: { spec: contacts, entity: businessPartner, fields: { name: "Cliente {{marker}}" } }
+            saveAs: bp
+          - tool: etendo_create
+            args:
+              spec: contacts
+              entity: locationAddress
+              parentId: "{{steps.bp.data.id}}"
+              fields: { country: "106", addressLine1: "Calle Mayor 1", cityName: "Madrid", postalCode: "28001" }
+            saveAs: address
+          - tool: etendo_create
+            args: { spec: sales-quotation, entity: quotation,
+                    fields: { businessPartner: "{{steps.bp.data.id}}", partnerAddress: "{{steps.address.data.id}}",
+                              paymentMethod: Efectivo, description: "{{marker}}" } }
+            saveAs: quotation
+          - tool: etendo_create
+            args: { spec: sales-quotation, entity: quotationLine, parentId: "{{steps.quotation.data.id}}",
+                    fields: { product: Fernet, orderedQuantity: 2 } }
+          - tool: etendo_action
+            args: { spec: sales-quotation, entity: quotation, id: "{{steps.quotation.data.id}}",
+                    action: documentAction, parameters: { docAction: CO } }
+        expectEffect:
+          tool: etendo_list
+          args: { spec: sales-order, entity: header, filters: { businessPartner: "{{steps.bp.data.id}}" } }
+      holded:
+        setup:
+          - tool: create_contact
+            args: { name: "Cliente {{marker}}", type: client }
+            saveAs: bp
+          - tool: list_products
+            args: { name: "Fernet", limit: 5 }
+            saveAs: fernet
+          - tool: create_estimate
+            args: { contact_id: "{{steps.bp.id}}", date: "{{today}}", description: "{{marker}}",
+                    items: [{ name: "Fernet", product_id: "{{steps.fernet.items.0.id}}", units: 2 }] }
+            saveAs: estimate
+          - tool: approve_estimate
+            args: { estimateId: "{{steps.estimate.id}}" }
+        expectEffect:
+          tool: list_sales_orders
+          args: { contact_id: "{{steps.bp.id}}", limit: 50 }
+
+  # A delivered shipment is invoiced. Etendo invoices a shipment with the customer's own payment
+  # method and terms (it refuses a customer without them), so the setup gives the customer both.
+  - id: f-shipment-to-invoice
+    category: flow
+    mode: write
+    prompt: "Ya le entregamos la mercadería a Cliente {{marker}}. Facturale lo que le mandamos."
+    platforms:
+      etendo-go:
+        setup:
+          - tool: etendo_create
+            args: { spec: contacts, entity: businessPartner, fields: { name: "Cliente {{marker}}" } }
+            saveAs: bp
+          - tool: etendo_update
+            args: { spec: contacts, entity: customer, id: "{{steps.bp.data.id}}", updated: "{{steps.bp.data.updated}}",
+                    fields: { paymentMethod: Efectivo, paymentTerms: Inmediato } }
+          - tool: etendo_create
+            args:
+              spec: contacts
+              entity: locationAddress
+              parentId: "{{steps.bp.data.id}}"
+              fields: { country: "106", addressLine1: "Calle Mayor 1", cityName: "Madrid", postalCode: "28001" }
+            saveAs: address
+          - tool: etendo_create
+            args: { spec: goods-shipment, entity: goodsShipment,
+                    fields: { businessPartner: "{{steps.bp.data.id}}", partnerAddress: "{{steps.address.data.id}}",
+                              description: "{{marker}}" } }
+            saveAs: shipment
+          - tool: etendo_create
+            args: { spec: goods-shipment, entity: goodsShipmentLine, parentId: "{{steps.shipment.data.id}}",
+                    fields: { product: Agua, movementQuantity: 2 } }
+          - tool: etendo_action
+            args: { spec: goods-shipment, entity: goodsShipment, id: "{{steps.shipment.data.id}}",
+                    action: documentAction, parameters: { docAction: CO } }
+        expectEffect:
+          tool: etendo_list
+          args: { spec: sales-invoice, entity: header,
+                  filters: { businessPartner: "{{steps.bp.data.id}}", documentStatus: CO } }
+      holded:
+        setup:
+          - tool: create_contact
+            args: { name: "Cliente {{marker}}", type: client }
+            saveAs: bp
+          - tool: list_products
+            args: { name: "Agua", limit: 5 }
+            saveAs: agua
+          - tool: list_warehouses
+            args: {}
+            saveAs: wh
+          - tool: create_waybill
+            args: { contact_id: "{{steps.bp.id}}", date: "{{today}}", description: "{{marker}}",
+                    warehouse_id: "{{steps.wh.items.0.id}}",
+                    items: [{ name: "Agua", product_id: "{{steps.agua.items.0.id}}", units: 2 }] }
+            saveAs: waybill
+          - tool: approve_waybill
+            args: { waybillId: "{{steps.waybill.id}}" }
+        expectEffect:
+          tool: list_invoices
+          args: { contact_id: "{{steps.bp.id}}", limit: 50 }
+          where: { draft: false }
+
+  # The supplier's invoice for a purchase order is registered. Like the sales side, Etendo needs the
+  # order's payment method to complete it.
+  - id: f-purchase-order-to-invoice
+    category: flow
+    mode: write
+    prompt: "Prov. {{marker}} nos mandó la factura del pedido de compra que le hicimos. Registrala."
+    platforms:
+      etendo-go:
+        setup:
+          - tool: etendo_create
+            args: { spec: contacts, entity: businessPartner, fields: { name: "Prov. {{marker}}", vendor: true } }
+            saveAs: sup
+          - tool: etendo_create
+            args:
+              spec: contacts
+              entity: locationAddress
+              parentId: "{{steps.sup.data.id}}"
+              fields: { country: "106", addressLine1: "Calle Industria 1", cityName: "Madrid", postalCode: "28002" }
+            saveAs: supaddress
+          - tool: etendo_create
+            args: { spec: purchase-order, entity: header,
+                    fields: { businessPartner: "{{steps.sup.data.id}}", partnerAddress: "{{steps.supaddress.data.id}}",
+                              paymentMethod: Efectivo, description: "{{marker}}" } }
+            saveAs: order
+          - tool: etendo_create
+            args: { spec: purchase-order, entity: lines, parentId: "{{steps.order.data.id}}",
+                    fields: { product: Cerveza, orderedQuantity: 10, unitPrice: 2 } }
+          - tool: etendo_action
+            args: { spec: purchase-order, entity: header, id: "{{steps.order.data.id}}",
+                    action: documentAction, parameters: { docAction: CO } }
+        expectEffect:
+          tool: etendo_list
+          args: { spec: purchase-invoice, entity: header,
+                  filters: { businessPartner: "{{steps.sup.data.id}}", documentStatus: CO } }
+      holded:
+        setup:
+          - tool: create_contact
+            args: { name: "Prov. {{marker}}", type: supplier }
+            saveAs: sup
+          - tool: list_products
+            args: { name: "Cerveza", limit: 5 }
+            saveAs: cerveza
+          - tool: create_purchase_order
+            args: { contact_id: "{{steps.sup.id}}", date: "{{today}}", description: "{{marker}}",
+                    items: [{ name: "Cerveza", product_id: "{{steps.cerveza.items.0.id}}", units: 10, price: 2 }] }
+            saveAs: order
+          - tool: approve_purchase_order
+            args: { purchaseOrderId: "{{steps.order.id}}" }
+        expectEffect:
+          tool: list_purchases
+          args: { contact_id: "{{steps.sup.id}}", limit: 50 }
+          where: { draft: false }
+
+  # A bank movement is reconciled with the invoice it pays. The check reads the movement (the
+  # statement line on Etendo) as reconciled: what the prompt asks, on both platforms. Etendo also
+  # records a payment for the invoice; Holded marks the invoice paid.
+  - id: f-bank-reconciliation
+    category: flow
+    mode: write
+    prompt: "En la Cuenta de Banco entró una transferencia de 121 € de Cliente {{marker}}: es el pago de su factura. Concilialo."
+    platforms:
+      etendo-go:
+        setup:
+          - *customer-with-invoice
+          - tool: etendo_list
+            args: { spec: financial-account, entity: account, filters: { name: "Cuenta de Banco" }, fields: [id] }
+            saveAs: bank
+          - tool: etendo_action
+            args: { spec: bank-statements, entity: bank-statements, id: "{{steps.bank.data.0.id}}",
+                    action: createStatement,
+                    parameters: { name: "Extracto {{marker}}", transactionDate: "{{today}}", importDate: "{{today}}",
+                                  lines: [{ date: "{{today}}", in: 121, description: "Transferencia de Cliente {{marker}}" }] } }
+        expectEffect:
+          tool: etendo_action
+          args: { spec: bank-reconciliation, entity: bank-reconciliation, id: "{{steps.bank.data.0.id}}",
+                  action: pendingLines, parameters: { q: "Transferencia de Cliente {{marker}}" } }
+          rowsAt: response.data.lines
+          where: { state: reconciled }
+      holded:
+        setup:
+          - *h-customer-with-invoice
+          - tool: list_banking_accounts
+            args: {}
+            saveAs: bank
+            aggregate: { where: { name: "Cuenta de Banco" }, value: "0", groupBy: id }
+          - tool: create_bank_movement
+            args: { bankingAccountId: "{{steps.bank.groups.0.key}}",
+                    body: { amount: "121.00", description: "Transferencia de Cliente {{marker}}", value_date: "{{today}}" } }
+            saveAs: movement
+        expectEffect:
+          tool: list_banking_account_bank_movements
+          args: { id: "{{steps.bank.groups.0.key}}", limit: 200 }
+          where: { description: "Transferencia de Cliente {{marker}}", status: reconciled }

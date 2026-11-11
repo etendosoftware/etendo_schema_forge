@@ -57,11 +57,17 @@ class Step:
 
 
 def parse_steps(raw: Any, *, probe_id: str, phase: str) -> list[Step]:
-    """Validate one `setup:` / `teardown:` list from the suite file."""
+    """Validate one `setup:` / `teardown:` list from the suite file.
+
+    ETP-5848: an entry may itself be a list of steps — a YAML alias of a shared fixture
+    (`- *customer-with-invoice`) followed by steps of the probe's own. It is spliced in place, one
+    level deep: YAML has no other way to extend an aliased list.
+    """
     if raw is None:
         return []
     if not isinstance(raw, list):
         raise ValueError(f"Probe {probe_id!r}: {phase} must be a list of steps.")
+    raw = [step for entry in raw for step in (entry if isinstance(entry, list) else [entry])]
     steps: list[Step] = []
     for i, entry in enumerate(raw):
         if not isinstance(entry, dict) or not entry.get("tool"):

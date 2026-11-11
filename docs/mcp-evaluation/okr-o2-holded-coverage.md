@@ -21,10 +21,10 @@ sin crear datos en Holded. Lo marcado *a confirmar* se probó en vivo el 5 nov (
 
 | Clasificación | Pruebas |
 |---|---:|
-| **Ambos** | 34 |
+| **Ambos** | 38 (34 más las 4 de la planilla de marketing, 11 nov) |
 | **Solo Etendo** | 7 |
 | **Dividida** | 1 (`w-company-users-numbering`: la parte común es la prueba nueva `q-invoice-numbering`, en Ambos; la original queda Solo Etendo) |
-| **Total** | 43 (42 más `q-invoice-numbering`) |
+| **Total** | 47 (42 más `q-invoice-numbering` y las 4 de la planilla de marketing) |
 
 Hoy la suite tiene 3 pruebas posibles en ambas; con esta clasificación pasan a **35** (34 más la
 parte común de la dividida).
@@ -186,3 +186,20 @@ antigüedad de saldos).
 3. Para la medición oficial: una cuenta de Holded española y nueva, con los datos que nombran las
    pruebas (cabecera de `okr.yaml`, *DATA (holded)*).
 4. Agregar las pruebas nuevas que se aprueben a `okr-o2-flows.md` y a la suite.
+
+## Pruebas agregadas desde la planilla de marketing (11 nov)
+
+La planilla *Etendo_agentico_funcionalidades_marketing.xlsx* lista funcionalidades que ninguna prueba
+medía. Se agregaron 4, posibles en ambos y piloteadas sin agente en las dos plataformas (setup, la
+acción que haría un agente, la comprobación antes y después):
+
+| Prueba | Funcionalidad (fila de la planilla) | Etendo | Holded |
+|---|---|---|---|
+| `f-quotation-to-order` | Presupuesto → pedido (24) | `createOrder` | `convert_document` estimate → salesorder |
+| `f-shipment-to-invoice` | Albarán → factura (39) | `createDraftInvoice` del albarán | `convert_document` waybill → invoice |
+| `f-purchase-order-to-invoice` | Pedido de compra → factura (39) | `createPurchaseInvoice` | `convert_document` order → purchase |
+| `f-bank-reconciliation` | Conciliación bancaria (75-83) | extracto + `reconcileGroup` | movimiento + `reconcile_transaction_with_document` |
+
+Quedaron afuera, por ahora: contabilizar una factura (Holded contabiliza al aprobar: sería Solo
+Etendo), el cobro en otra moneda (sin confirmar en Holded), la búsqueda por significado (Holded solo
+busca contactos) y la antigüedad de saldos (Holded no tiene el informe).

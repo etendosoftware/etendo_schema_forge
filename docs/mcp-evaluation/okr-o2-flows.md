@@ -79,6 +79,10 @@ fija. Se itera; todavía **no son pruebas de la suite**.
 | 37 | `w-commercial-setup` | Tarifa y condiciones de pago | Tarifa, Condiciones de pago | ✅ | verificar |
 | 38 | `w-company-users-numbering` | Usuarios, roles, datos de la empresa y numeración | Usuarios, Roles, Organización, Secuencias de documentos | ✅/👁 | parcial |
 | 38b | `q-invoice-numbering` | Prefijo de las facturas de venta: la parte de 38 que también hace Holded | Secuencias de documentos | 👁 | sí |
+| 44 | `f-quotation-to-order` | Presupuesto aceptado → pedido (planilla de marketing, 11 nov) | Presupuesto, Pedido | ✅ | sí |
+| 45 | `f-shipment-to-invoice` | Albarán entregado → factura | Albarán, Factura | ✅ | sí |
+| 46 | `f-purchase-order-to-invoice` | Factura del proveedor de un pedido de compra | Pedido de compra, Factura de compra | ✅ | sí |
+| 47 | `f-bank-reconciliation` | Conciliar un movimiento del banco con la factura que paga | Extracto, Conciliación | ✅ | sí |
 | | **Errores y negativas** | | | | |
 | 39 | `e-unknown-document` | Documento que no existe | Factura | 📄 | sí |
 | 40 | ~~`e-invalid-write`~~ | Cantidad negativa — **retirada del KR** (Etendo la acepta por diseño) | Pedido | 📄 | — |
