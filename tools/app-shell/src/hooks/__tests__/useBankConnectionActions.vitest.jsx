@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/hooks/useBankConnectionActions.js
 import { renderHook, act, waitFor } from '@testing-library/react';
 
 vi.mock('@/auth/AuthContext.jsx', () => ({
@@ -13,6 +14,7 @@ import {
   launchSaltEdgePopup,
   BANK_CONNECTION_CALLBACK_PATH,
   BANK_CONNECTION_KEY,
+  SYNC_STATUS_MAX_IDS,
 } from '../useBankConnectionActions';
 
 function okResponse(payload) {
@@ -220,6 +222,174 @@ describe('useBankConnectionActions — hook', () => {
     expect(calledUrl).toContain('action=sync');
   });
 
+  it('syncStatus reads every id in one GET request and returns the accounts map', async () => {
+    const accounts = {
+      'FA-1': { inProgress: true },
+      'FA-2': { inProgress: false, lastSyncDate: '2026-11-05T10:00:00Z' },
+    };
+    globalThis.fetch.mockResolvedValue(okResponse({ accounts }));
+
+    const { result } = renderHook(() => useBankConnectionActions());
+    let out;
+    await act(async () => {
+      out = await result.current.syncStatus(['FA-1', 'FA-2']);
+    });
+
+    expect(out).toEqual(accounts);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    const [calledUrl, init] = globalThis.fetch.mock.calls[0];
+    expect(calledUrl).toContain('action=syncStatus');
+    // ETP-6154 follow-up — GET with the ids as a comma-separated query param (read access only).
+    expect(init.method).toBe('GET');
+    expect(init.body).toBeUndefined();
+    expect(calledUrl).toContain(`financialAccountIds=${encodeURIComponent('FA-1,FA-2')}`);
+  });
+
+  it.each([
+    ['no accounts key', {}],
+    ['a null accounts value', { accounts: null }],
+    ['a non-object accounts value', { accounts: 'nope' }],
+  ])('syncStatus returns an empty map when the payload has %s', async (_label, payload) => {
+    globalThis.fetch.mockResolvedValue(okResponse(payload));
+
+    const { result } = renderHook(() => useBankConnectionActions());
+    let out;
+    await act(async () => {
+      out = await result.current.syncStatus(['FA-1']);
+    });
+
+    expect(out).toEqual({});
+  });
+
+  // The ids one syncStatus GET carried, decoded from its query string.
+  function idsOfCall(n) {
+    const [calledUrl] = globalThis.fetch.mock.calls[n];
+    return new URL(calledUrl, 'http://localhost').searchParams.get('financialAccountIds').split(',');
+  }
+
+  it('syncStatus splits more than SYNC_STATUS_MAX_IDS ids into chunks and merges their maps', async () => {
+    expect(SYNC_STATUS_MAX_IDS).toBe(200);
+    const ids = Array.from({ length: 201 }, (_, i) => `FA-${i}`);
+    globalThis.fetch
+      .mockResolvedValueOnce(okResponse({ accounts: { 'FA-0': { inProgress: true }, 'FA-199': { inProgress: false } } }))
+      .mockResolvedValueOnce(okResponse({ accounts: { 'FA-200': { inProgress: true } } }));
+
+    const { result } = renderHook(() => useBankConnectionActions());
+    let out;
+    await act(async () => {
+      out = await result.current.syncStatus(ids);
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    expect(idsOfCall(0)).toEqual(ids.slice(0, 200));
+    expect(idsOfCall(1)).toEqual(['FA-200']);
+    globalThis.fetch.mock.calls.forEach(([, init]) => expect(init.method).toBe('GET'));
+    expect(out).toEqual({
+      'FA-0': { inProgress: true },
+      'FA-199': { inProgress: false },
+      'FA-200': { inProgress: true },
+    });
+  });
+
+  it('syncStatus drops duplicate and empty ids before chunking', async () => {
+    // 200 distinct ids once duplicates and empties are gone: ONE request, not two.
+    const distinct = Array.from({ length: 200 }, (_, i) => `FA-${i}`);
+    const noisy = [...distinct, 'FA-0', 'FA-199', '', null, undefined, 'FA-5'];
+    globalThis.fetch.mockResolvedValue(okResponse({ accounts: {} }));
+
+    const { result } = renderHook(() => useBankConnectionActions());
+    await act(async () => {
+      await result.current.syncStatus(noisy);
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(idsOfCall(0)).toEqual(distinct);
+  });
+
+  it.each([
+    ['an empty array', []],
+    ['only empty ids', ['', null, undefined]],
+    ['null', null],
+    ['undefined', undefined],
+  ])('syncStatus sends no request and returns {} for %s', async (_label, input) => {
+    const { result } = renderHook(() => useBankConnectionActions());
+    let out;
+    await act(async () => {
+      out = await result.current.syncStatus(input);
+    });
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(out).toEqual({});
+  });
+
+  it('syncStatus URL-encodes an id that needs it', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse({ accounts: {} }));
+    const odd = 'FA 1&x=2/ñ';
+
+    const { result } = renderHook(() => useBankConnectionActions());
+    await act(async () => {
+      await result.current.syncStatus([odd, 'FA-2']);
+    });
+
+    const [calledUrl] = globalThis.fetch.mock.calls[0];
+    expect(calledUrl).toContain(`financialAccountIds=${encodeURIComponent(`${odd},FA-2`)}`);
+    expect(calledUrl).not.toContain('&x=2');
+    expect(idsOfCall(0)).toEqual([odd, 'FA-2']);
+  });
+
+  // Current behaviour: the chunks run in parallel through Promise.all, so ONE failing chunk
+  // rejects the whole read and the maps of the chunks that did answer are discarded.
+  it('syncStatus rejects the whole read when one chunk fails', async () => {
+    const ids = Array.from({ length: 201 }, (_, i) => `FA-${i}`);
+    globalThis.fetch
+      .mockResolvedValueOnce(okResponse({ accounts: { 'FA-0': { inProgress: true } } }))
+      .mockResolvedValueOnce({
+        ok: false, status: 500, json: async () => ({ error: { message: 'chunk failed' } }),
+      });
+
+    const { result } = renderHook(() => useBankConnectionActions());
+    let out;
+    let thrown;
+    await act(async () => {
+      try {
+        out = await result.current.syncStatus(ids);
+      } catch (err) {
+        thrown = err;
+      }
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    expect(out).toBeUndefined();
+    expect(thrown?.message).toBe('chunk failed');
+    expect(thrown?.status).toBe(500);
+  });
+
+  it('syncStatus gives up after 15 s (BANK_CONNECTION_TIMEOUT), well before the 45 s default', async () => {
+    vi.useFakeTimers();
+    try {
+      globalThis.fetch.mockImplementation((_url, init) => new Promise((_resolve, reject) => {
+        init.signal.addEventListener('abort', () => {
+          const abortErr = new Error('aborted');
+          abortErr.name = 'AbortError';
+          reject(abortErr);
+        });
+      }));
+
+      const { result } = renderHook(() => useBankConnectionActions());
+      let thrown = null;
+      const pending = result.current.syncStatus(['FA-1']).catch((err) => { thrown = err; });
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(14999); });
+      expect(thrown).toBeNull();
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+      await pending;
+      expect(thrown?.message).toBe('BANK_CONNECTION_TIMEOUT');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('saveImportSettings posts to the import-settings action', async () => {
     globalThis.fetch.mockResolvedValue(okResponse({ ok: true }));
 
@@ -283,6 +453,51 @@ describe('useBankConnectionActions — hook', () => {
     expect(thrown.status).toBe(422);
     await waitFor(() => expect(result.current.error).toBe(thrown));
     expect(result.current.loading).toBe(false);
+  });
+
+  it('carries the error body code on the thrown error (translated by identity downstream)', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({
+        error: { message: 'Could not acquire the sync lock', status: 503, code: 'BANK_SYNC_LOCK_UNAVAILABLE' },
+      }),
+    });
+
+    const { result } = renderHook(() => useBankConnectionActions());
+    let thrown;
+    await act(async () => {
+      try {
+        await result.current.sync('FA-1');
+      } catch (err) {
+        thrown = err;
+      }
+    });
+
+    expect(thrown.message).toBe('Could not acquire the sync lock');
+    expect(thrown.status).toBe(503);
+    expect(thrown.code).toBe('BANK_SYNC_LOCK_UNAVAILABLE');
+  });
+
+  it('leaves code undefined when the error body has none', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: { message: 'Bank rejected' } }),
+    });
+
+    const { result } = renderHook(() => useBankConnectionActions());
+    let thrown;
+    await act(async () => {
+      try {
+        await result.current.sync('FA-1');
+      } catch (err) {
+        thrown = err;
+      }
+    });
+
+    expect(thrown.message).toBe('Bank rejected');
+    expect(thrown).not.toHaveProperty('code');
   });
 
   it('falls back to an HTTP status message when the error body has no message', async () => {

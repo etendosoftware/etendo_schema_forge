@@ -4,7 +4,7 @@ import { useUI, useLocaleSwitch } from '@/i18n';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { useBankStatements } from '@/hooks/useBankStatements';
 import { useStatementActions } from '@/hooks/useStatementActions';
-import { useBankConnectionActions } from '@/hooks/useBankConnectionActions';
+import { useBankSync } from './BankSyncContext.jsx';
 import { useBatchDeleteDialog } from '@/hooks/useBatchDeleteDialog.jsx';
 import { StatementsToolbar } from './StatementsToolbar';
 import {
@@ -104,8 +104,9 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
 
   const { statements, loading, reload } = useBankStatements(accountId);
   const { processStatement, reactivateStatement, deleteStatement, busy } = useStatementActions();
-  const { sync } = useBankConnectionActions();
-  const [syncing, setSyncing] = useState(false);
+  const bankSync = useBankSync();
+  const { startSync } = bankSync;
+  const syncing = bankSync.isSyncing(accountId);
   const { invalidateAccountList } = useFinancialAccountCacheInvalidation();
 
   const [selectedStatementId, setSelectedStatementId] = useState(null);
@@ -204,33 +205,18 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
   // Runs the bank statement fetch for this account (same backend action behind the kebab's
   // "Sync now"). The bridge mirrors Classic's "Get Bank Statement": it returns a status
   // (Success/WARNING/ERROR) plus the localized process message rather than throwing.
-  const handleSyncStatements = async () => {
+  // ETP-6154: through the window's shared BankSyncContext — it owns the in-flight guard, the
+  // polling of a sync still running server side and the one result toast (bankSyncNotify.js), so
+  // this tab only says what to reload once the sync is over, however long that takes.
+  const handleSyncStatements = () => {
     if (windowReadOnly || !accountId || syncing) return;
-    setSyncing(true);
-    try {
-      const res = await sync(accountId);
-      refreshStatements();
-      // ETP-5582: a finished sync moves the account's lastSyncDate (detail header label).
-      onSynced?.();
-      // ETP-4891 follow-up: com.etendoerp.psd2 ships no real es_ES translation for these
-      // AD_MESSAGEs (see backendErrors.js), so Core always resolves the English text — route it
-      // through the same frontend translation map every other untranslated backend message uses.
-      const msg = res?.message ? translateBackendError(res.message, ui) : res?.message;
-      if (res?.status === 'ERROR') {
-        toast.error(msg || ui('financeAccountsBankConnectionSyncError'));
-      } else if (res?.status === 'WARNING') {
-        // ETP-5181: same reasoning as EditAccountModal's notifySyncResult — a WARNING means the
-        // sync completed but something needs the user's attention (typically an import range
-        // reaching past the provider's max fetch interval), which toast.info under-sells.
-        toast.warning(msg || ui('financeAccountsBankConnectionSyncDone'));
-      } else {
-        toast.success(msg || ui('financeAccountsBankConnectionSyncDone'));
-      }
-    } catch (err) {
-      toast.error(err?.message || ui('financeAccountsBankConnectionSyncError'));
-    } finally {
-      setSyncing(false);
-    }
+    startSync(accountId, {
+      onDone: () => {
+        refreshStatements();
+        // ETP-5582: a finished sync moves the account's lastSyncDate (detail header label).
+        onSynced?.();
+      },
+    });
   };
 
   // Per-variant wiring for the confirm dialog: the action to run plus its

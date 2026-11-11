@@ -47,6 +47,12 @@ import { EditAccountModal } from '@/windows/custom/financial-account/EditAccount
 import { ArchiveAccountDialog } from '@/windows/custom/financial-account/ArchiveAccountDialog.jsx';
 import { DeleteAccountDialog } from '@/windows/custom/financial-account/DeleteAccountDialog.jsx';
 import { BankConnectionFlowUI } from '@/windows/custom/financial-account/BankConnectionFlowUI.jsx';
+import {
+  useBankSync,
+  useBankSyncDone,
+  useBankSyncTracking,
+} from '@/windows/custom/financial-account/BankSyncContext.jsx';
+import { BankSyncBanner } from '@/windows/custom/financial-account/BankSyncBanner.jsx';
 import { FundsTransferModal } from '@/windows/custom/financial-account/FundsTransferModal.jsx';
 import { ConfirmDialog } from '@/components/OAuth2ClientDialog';
 import BankConnectionDeleteConfirmModal from '@/windows/custom/financial-account/BankConnectionDeleteConfirmModal.jsx';
@@ -269,17 +275,33 @@ export default function AccountsHeaderTable({
     refreshNow();
   };
 
-  const { sync, disconnect, reconnect, finishReconnect } = useBankConnectionActions();
+  const { disconnect, reconnect, finishReconnect } = useBankConnectionActions();
   const bankConnectionFlow = useBankConnectionFlow({ onDone: reload });
+  // ETP-6154 — the window's shared bank-sync state. Tracking the bank-connected rows lets a sync
+  // already running for any of them (page reload, another user, the scheduled process) show as in
+  // progress; the listener reloads the list when a sync ends that no other component reloads for
+  // (a row / kebab sync, or one discovered that way).
+  const bankSync = useBankSync();
+  const { startSync } = bankSync;
+  // `{ id, name }`: the names feed the "syncing" banner above the table (the provider only knows ids).
+  const connectedAccounts = useMemo(
+    () => (Array.isArray(data)
+      ? data.filter((a) => a?.bankConnected === true).map((a) => ({ id: a.id, name: a.name }))
+      : []),
+    [data],
+  );
+  useBankSyncTracking(bankSync, connectedAccounts);
+  useBankSyncDone(bankSync, null, () => reload());
 
 
   // Every string these bank-action toasts show ORIGINATES IN THE BACKEND: com.etendoerp.psd2's
   // AD_MESSAGE catalog, relayed verbatim by the NEO bridge. Its es_ES rows carry the ENGLISH text
   // with istranslated='N' unless the separate .es_es pack was imported, so Core resolves English
   // whatever the session locale is — which is why these have to go through the frontend
-  // translation map, exactly like the two sibling entry points onto this same bridge already do
-  // (EditAccountModal.jsx:193 and ImportedStatementsTab.jsx:183). ETP-4891 fixed those two and
-  // missed this one, so the list-row sync icon kept rendering the raw English.
+  // translation map, exactly like the two sibling entry points onto this same bridge already do.
+  // ETP-4891 fixed those two and missed this one, so the list-row sync icon kept rendering the raw
+  // English. (Since ETP-6154 the SYNC result is toasted by the shared bankSyncNotify.js, which
+  // applies the same mapping; this helper is left for reconnect and disconnect.)
   //
   // BANK_CONNECTION_TIMEOUT is NOT backend copy: it is the sentinel useBankConnectionActions.js:131
   // throws when its AbortController fires. It is a protocol token, so it maps to our own label
@@ -297,20 +319,11 @@ export default function AccountsHeaderTable({
       return;
     }
     if (action === 'syncNow') {
-      try {
-        const res = await sync(account.id);
-        reload();
-        const msg = bankActionMessage(res?.message);
-        if (res?.status === 'ERROR') {
-          toast.error(msg || ui('financeAccountsBankConnectionSyncError'));
-        } else if (res?.status === 'WARNING') {
-          toast.info(msg || ui('financeAccountsBankConnectionSyncDone'));
-        } else {
-          toast.success(msg || ui('financeAccountsBankConnectionSyncDone'));
-        }
-      } catch (err) {
-        toast.error(bankActionMessage(err.message) || ui('financeAccountsBankConnectionSyncError'));
-      }
+      // ETP-6154 — through the window's shared BankSyncContext: it refuses a second request while
+      // this account is already syncing, follows a sync still running server side, and shows the
+      // one result toast (bankSyncNotify.js). No `onDone`: the list reload below
+      // (useBankSyncDone) runs when it finishes.
+      startSync(account.id);
       return;
     }
     if (action === 'reconnect') {
@@ -480,6 +493,18 @@ export default function AccountsHeaderTable({
           )}
           data-testid="AccountsToolbar__accthdr" />
       </div>
+
+      {/* ETP-6154 — while any account syncs: "Sincronizando movimientos de …", above the table,
+          gone on its own when the sync ends (the result toast still reports the outcome).
+          Not rendered while the Edit account modal is open: the modal shows its own banner, and
+          this one would only repeat it behind the overlay. It comes back on close if the sync
+          is still running. */}
+      {editAccount && !windowReadOnly ? null : (
+        <BankSyncBanner
+          accounts={bankSync.syncingAccounts}
+          className="m-2 shrink-0"
+          data-testid="accounts-bank-sync-banner" />
+      )}
 
       {/* min-h-0 lets the flex child actually shrink so the inner overflow engages */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
