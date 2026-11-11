@@ -490,7 +490,7 @@ For SII rows, the spec hint (`'sales-invoice'` or `'purchase-invoice'`) is deriv
 
 `FiscalMonitorPage.jsx` renders `<CertExpiryBanner daysLeft={certDaysLeft} variant="subtle" />` immediately after the `OrgLead` header bar. The subtle variant is a thin strip (no icon card), less intrusive than the prominent variant used in fiscal-config.
 
-`useCertExpiry.js` fetches cert status on mount and is shared between both fiscal pages. See the [fiscal-config](fiscal-config.md#certificate-expiry-banner-certexpirybanner) doc for threshold details and i18n keys.
+`useCertExpiry.js` fetches cert status on mount and is shared between both fiscal pages. See the [fiscal-config](fiscal-config.md#certificate-expiry-banner-certexpirybanner) doc for threshold details and i18n keys. The subtle strip uses the same copy as the prominent card, including the expired, "vence hoy" and singular-day texts (ETP-6053), and the same non-dismissable rule for every critical case.
 
 Debug: the debug panel exposes a "Cert expiry" toggle (None / 45d warn / 20d crit) that bypasses the API call and injects a mock `daysLeft` directly.
 

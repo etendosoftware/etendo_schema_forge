@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FileText, Printer, FileDown, FileSpreadsheet, Loader2, X, ChevronDown, Info, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,11 @@ import { useFavorites } from '@/components/layout/FavoritesContext';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { fetchMyReportAccess } from '@/lib/rolesApi.js';
+import { useFeatureFlag, DYNAMIC_REPORTS } from '@/lib/flags';
+import { opensDynamicView } from '@/components/reports/dynamic/dynamicReports.js';
+import { cn } from '@/lib/utils';
+import DynamicReportBadge, { DYNAMIC_REPORT_CARD_CLASS } from '@/components/reports/dynamic/DynamicReportBadge.jsx';
+import { reportDocumentUrl } from '@/components/reports/reportDocumentUrl.js';
 // Etendo context path prefix (e.g. "/etendo" in production, "" in local dev where
 // Vite proxies /sws/* directly). Same logic as auth/api.js detectBaseUrl().
 function getEtendoBase() {
@@ -35,7 +40,7 @@ const ETENDO_BASE = getEtendoBase();
 // business/calendar date, so it deliberately does NOT go through
 // parseCalendarDate/formatCalendarDate (dateOnly.js) — those are for
 // timezone-safe business dates, a different problem.
-function buildReportFilename(reportId, format, suffix = '') {
+export function buildReportFilename(reportId, format, suffix = '') {
   const now = new Date();
   const dd = String(now.getDate()).padStart(2, '0');
   const mm = String(now.getMonth() + 1).padStart(2, '0');
@@ -159,15 +164,18 @@ function ReportCardPreview({ reportId }) {
 // literals in application UI): card surface + border, muted frame, and
 // foreground/muted-foreground text, all resolved from the current theme
 // instead of Figma's light-mode-only colors.
-function ReportCard({ report, onRun }) {
+function ReportCard({ report, onRun, interactive = false }) {
   const { locale } = useLocaleSwitch();
   const reportTitle = report.title?.[locale] || report.title?.en_US || report.title?.es_ES || report.id;
   return (
     <button
       onClick={() => onRun(report)}
-      className="flex flex-col items-stretch w-full p-1 rounded-xl border border-border bg-card shadow-sm hover:border-primary/30 hover:shadow-md transition-all text-left overflow-hidden"
+      className={cn('relative flex flex-col items-stretch w-full p-1 rounded-xl border border-border bg-card shadow-sm hover:border-primary/30 hover:shadow-md transition-all text-left overflow-hidden', interactive && DYNAMIC_REPORT_CARD_CLASS)}
     >
       <ReportCardPreview reportId={report.id} data-testid="ReportCardPreview__3c998a" />
+      {interactive && <DynamicReportBadge
+        className="absolute top-2.5 right-2.5 bg-card shadow-sm"
+        data-testid="DynamicReportBadge__3c998a" />}
       <div className="flex flex-col items-stretch gap-1 p-3">
         <div className="flex items-center gap-2">
           <h3 className="text-base font-medium text-foreground min-w-0 flex-1">
@@ -193,9 +201,9 @@ function ReportCard({ report, onRun }) {
 function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams = {}, value, valueLabel }) {
   const apiFetch = useApiFetch(ETENDO_BASE);
 
-  const loadPage = useCallback((q, off, signal) => {
+  const loadPage = useCallback((q, off, signal, opts) => {
     const extra = Object.entries(extraParams).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
-    const params = `q=${encodeURIComponent(q)}&limit=${SEARCH_POPUP_PAGE_SIZE}&offset=${off}${extra ? '&' + extra : ''}`;
+    const params = `q=${encodeURIComponent(q)}&limit=${opts?.limit ?? SEARCH_POPUP_PAGE_SIZE}&offset=${off}${extra ? '&' + extra : ''}`;
     return apiFetch(`/sws/report-selectors/${selector}?${params}`, { signal })
       .then(r => {
         if (!r.ok) throw new Error(`Report selector request failed: ${r.status}`);
@@ -220,6 +228,9 @@ function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams =
     />
   );
 }
+
+// ETP-6080: loaded only when the `dynamic-reports` flag opens it.
+const DynamicReportView = lazy(() => import('@/components/reports/dynamic/DynamicReportView.jsx'));
 
 // Dropdown / search-as-you-type selector.
 // minLength=0 → shows all options on focus (used for small catalogs like org, accounting schema).
@@ -498,7 +509,7 @@ function SearchInput({ selector, value, displayValue, onChange, multi, minLength
 
 // Multi-select popup: shows selected tags + a "+" button that opens a modal with
 // a searchable list and checkboxes. Used for Business Partner, Product, Project.
-function PopupMultiSelector({ selector, label, onChange, value = '', displayValue = '' }) {
+export function PopupMultiSelector({ selector, label, onChange, value = '', displayValue = '' }) {
   const ui = useUI();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -1084,6 +1095,18 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
   );
 }
 
+/**
+ * The message of a failed render. The org and report access checks (ETP-6080) answer
+ * `ORG_ACCESS_DENIED` / `REPORT_ACCESS_DENIED` with an
+ * English text, so those codes are shown translated; anything else keeps the server's message.
+ */
+async function renderErrorMessage(res, ui) {
+  const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+  if (data?.code === 'ORG_ACCESS_DENIED') return ui('reportErrorOrgAccess');
+  if (data?.code === 'REPORT_ACCESS_DENIED') return ui('reportErrorReportAccess');
+  return data?.error || `Render failed: ${res.status}`;
+}
+
 function DrillDownViewer({ report, token, baseParams, bpId, bpName, targetReportId, extraParams = {}, isolateParams = [] }) {
   const iframeRef = useRef(null);
   const [loading, setLoading] = useState(true);
@@ -1137,8 +1160,7 @@ function DrillDownViewer({ report, token, baseParams, bpId, bpName, targetReport
         timeout: 0,
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-        throw new Error(data.error || `Render failed: ${res.status}`);
+        throw new Error(await renderErrorMessage(res, ui));
       }
       if (format === 'html' || format === 'preview') {
         writeToIframe(await res.text());
@@ -1275,25 +1297,12 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
         // the document window (sales-invoice/purchase-invoice) is decided by
         // the report's own template.hbs (docWindow in the postMessage), never
         // hardcoded here, since this handler is shared by every report.
-        const docWindow = e.data.docWindow || 'sales-invoice';
-        const basePath = window.location.pathname.replace(/\/[^/]*$/, '');
-        // Optional deep-link query the report itself supplies (ETP-5013
-        // follow-up): a financial-account transaction has no window of its
-        // own — it opens its PARENT account and needs `?txn=<id>` for that
-        // window to select/expand the right movement. Data-driven, like
-        // docWindow: this handler is shared by every report and never
-        // hardcodes a window's own param names.
-        //
-        // Key and value travel SEPARATELY, and the '=' is joined here rather
-        // than in the report's SQL on purpose: applyPlaceholders rewrites
-        // `= '...'` into an `IN (...)` list to support multi-select params,
-        // so a literal '=' next to a quote inside the query was swallowed by
-        // that rewrite and corrupted the SQL (ETP-5013 follow-up).
-        const { docQueryKey, docQueryValue } = e.data;
-        const docQuery = docQueryKey && docQueryValue
-          ? `?${encodeURIComponent(docQueryKey)}=${encodeURIComponent(docQueryValue)}`
-          : '';
-        window.open(`${window.location.origin}${basePath}/${docWindow}/${e.data.invoiceId}${docQuery}`, '_blank');
+        window.open(reportDocumentUrl({
+          docWindow: e.data.docWindow || 'sales-invoice',
+          recordId: e.data.invoiceId,
+          docQueryKey: e.data.docQueryKey,
+          docQueryValue: e.data.docQueryValue,
+        }), '_blank');
       }
     };
     window.addEventListener('message', handler);
@@ -1506,8 +1515,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
         timeout: 0,
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-        throw new Error(data.error || `Render failed: ${res.status}`);
+        throw new Error(await renderErrorMessage(res, ui));
       }
       if (format === 'html' || format === 'preview') {
         const html = await res.text();
@@ -1532,7 +1540,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
       setError(err.message);
     }
     setLoading(false);
-  }, [report.id, apiFetch, submitParams, locale]);
+  }, [report.id, apiFetch, submitParams, locale, ui]);
 
   // No auto-render on mount — wait for user to click Run Report... UNLESS the
   // page was opened via a deep-link that carries real filter values (e.g. the
@@ -1860,7 +1868,7 @@ const CATEGORY_LABELS = {
 // Deliberately just Reporte + Formato: unlike a real AD window's list, a
 // report has no secondary identifiers (SKU, category, stock...) worth a
 // column, so the mockup this was built from drops "Tipo" too.
-function ReportListRow({ report, onRun, locale }) {
+function ReportListRow({ report, onRun, locale, interactive = false }) {
   const reportTitle = report.title?.[locale] || report.title?.en_US || report.title?.es_ES || report.id;
   return (
     <button
@@ -1868,6 +1876,7 @@ function ReportListRow({ report, onRun, locale }) {
       className="w-full flex items-center gap-3 px-3 py-2.5 border-b border-border-subtle hover:bg-muted/40 transition-colors text-left"
     >
       <span className="flex-1 min-w-0 text-sm font-medium text-foreground truncate">{reportTitle}</span>
+      {interactive && <DynamicReportBadge data-testid="DynamicReportBadge__3c998a" />}
       <div className="flex gap-2 flex-wrap shrink-0">
         {/* Same 'html' exclusion as ReportCard's badge row (ETP-5013) — a real,
             still-rendered output, just not advertised as downloadable here. */}
@@ -1883,6 +1892,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
   const tMenu = useMenuLabel();
   const ui = useUI();
   const { toggleFavorite, isFavorite } = useFavorites();
+  const dynamicReportsOn = useFeatureFlag(DYNAMIC_REPORTS);
   const favKey = categoryFilter ? `report-viewer?category=${categoryFilter}` : 'report-viewer';
   const favActive = isFavorite(favKey);
   // Same list/gallery switch as the Product window (ListView.jsx's ViewToggle,
@@ -1959,6 +1969,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
                 <ReportListRow
                   key={r.id}
                   report={r}
+                  interactive={opensDynamicView(r.id, dynamicReportsOn)}
                   onRun={selectReport}
                   locale={locale}
                   data-testid="ReportListRow__3c998a" />
@@ -1983,6 +1994,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
                 <ReportCard
                   key={r.id}
                   report={r}
+                  interactive={opensDynamicView(r.id, dynamicReportsOn)}
                   onRun={selectReport}
                   data-testid="ReportCard__3c998a" />
               ))}
@@ -2020,6 +2032,7 @@ export default function ReportViewerPage() {
   const localeLangKey = locale === 'es_ES' ? 'es' : 'en';
   const categoryFilter = searchParams.get('category');
   const reportId = searchParams.get('report');
+  const dynamicReportsOn = useFeatureFlag(DYNAMIC_REPORTS);
 
   // ETP-5402 QA follow-up — the caller's own per-report tiers (id -> 'full'|'read-only', a
   // missing key means no access), fetched once on mount. `null` means "not resolved yet" —
@@ -2093,7 +2106,11 @@ export default function ReportViewerPage() {
 
   const selectedReport = reportId ? visibleReports.find(r => r.id === reportId) : null;
 
+  // ETP-6080 F10: a report picked from the list was opened from the menu; any other arrival
+  // (a pasted URL, a favourite, a reload) counts as a deep link for `report_opened.source`.
+  const [pickedReportId, setPickedReportId] = useState(null);
   const selectReport = (report) => {
+    setPickedReportId(report.id);
     const params = new URLSearchParams(searchParams);
     params.set('report', report.id);
     setSearchParams(params);
@@ -2119,6 +2136,25 @@ export default function ReportViewerPage() {
         windowId={categoryWindowId}
         data-testid={`WindowAccessGuard__report-viewer-${categoryFilter}`}
       />
+    );
+  }
+
+  if (selectedReport && opensDynamicView(selectedReport.id, dynamicReportsOn)) {
+    return (
+      <Suspense
+        fallback={<Loader2
+          className="w-5 h-5 m-auto animate-spin text-muted-foreground"
+          data-testid="Loader2__3c998a" />}
+        data-testid="Suspense__3c998a">
+        <DynamicReportView
+          report={selectedReport}
+          onBack={clearReport}
+          selectedOrgId={selectedOrg?.id || null}
+          roleOrgs={selectedRole?.orgList || []}
+          source={pickedReportId === selectedReport.id ? 'menu' : 'deep_link'}
+          reportAccess={reportAccess}
+          data-testid="DynamicReportView__3c998a" />
+      </Suspense>
     );
   }
 

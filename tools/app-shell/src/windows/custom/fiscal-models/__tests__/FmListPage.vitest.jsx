@@ -66,7 +66,13 @@ vi.mock('../FmCatalogPage.jsx', () => ({
   default: ({ onSave, unavailableModels, activeModels }) =>
     React.createElement(
       'div',
-      { className: 'fm-catalog-drawer', 'data-unavailable-models': JSON.stringify(unavailableModels ?? null) },
+      {
+        className: 'fm-catalog-drawer',
+        'data-testid': 'catalog-drawer',
+        'data-unavailable-models': JSON.stringify(unavailableModels ?? null),
+        // What the drawer's switches show: FmListPage hands it the optimistic or rolled-back catalog.
+        'data-active-models': JSON.stringify(activeModels ?? null),
+      },
       React.createElement(
         'button',
         { 'data-testid': 'catalog-save-none', onClick: () => onSave({ '303': false, '349': false }) },
@@ -698,8 +704,8 @@ describe('FmListPage — no active models', () => {
     await waitForCatalogLoad();
     deactivateAllModels(container, getByText);
 
-    // Catalog drawer auto-closes after onSave — confirm it's actually closed first.
-    expect(container.querySelector('.fm-catalog-drawer')).toBeFalsy();
+    // ETP-5831 CP-22 — the drawer saves on every toggle and stays open after a save.
+    expect(container.querySelector('.fm-catalog-drawer')).toBeTruthy();
 
     // The old dedicated CTA button is gone; only the title renders in the empty state.
     expect(queryByText(/fm\.list\.empty_no_active_models_cta/)).toBeFalsy();
@@ -1032,7 +1038,9 @@ describe('FmListPage — fiscal-models-catalog error and malformed-response hand
     fireEvent.click(screen.getByTestId('fm-list-catalog-button'));
     fireEvent.click(screen.getByTestId('catalog-save-none')); // the drawer saves a change
     expect(calls.filter(c => c.method === 'PUT')).toEqual([]);
-    expect(container.querySelector('.fm-catalog-drawer')).toBeNull();
+    // The drawer stays open (save-on-toggle) and is handed the unchanged catalog back.
+    expect(container.querySelector('.fm-catalog-drawer')).not.toBeNull();
+    expect(JSON.parse(screen.getByTestId('catalog-drawer').dataset.activeModels)).toEqual({});
     expect(toastError).toHaveBeenCalledWith('fm.catalog.save_unavailable');
     toastError.mockRestore();
   });
@@ -1079,6 +1087,277 @@ describe('FmListPage — fiscal-models-catalog error and malformed-response hand
     await waitForCatalogLoad();
     expect(getByText(/fm\.catalog\.title.*\(0\)/)).toBeTruthy();
     expect(container.querySelector('.fm-empty-state').textContent).toContain('fm.list.empty_no_active_models');
+  });
+});
+
+// ── fiscal-models-catalog — failed save is never silent ────────────────────
+// QA CP-22: the PUT used to update local state optimistically and swallow any failure, so a 403
+// looked like a save and the change was gone after a reload. A failed PUT now restores the
+// previous catalog and says so.
+
+describe('FmListPage — fiscal-models-catalog failed save', () => {
+  function catalogFetchWithPut(putAnswer) {
+    return vi.fn((url, init) => {
+      if (String(url).includes('fiscal-models-catalog')) {
+        if (init?.method === 'PUT') return putAnswer();
+        return Promise.resolve({ ok: true, json: async () => ({ '303': true, '349': true }) });
+      }
+      return Promise.reject(new Error(`unmocked fetch: ${url}`));
+    });
+  }
+
+  it('restores the previous catalog and shows an error when the PUT answers 403', async () => {
+    const toastError = vi.spyOn(toast, 'error').mockImplementation(() => {});
+    globalThis.fetch = catalogFetchWithPut(
+      () => Promise.resolve({ ok: false, status: 403, json: async () => ({}) }));
+    const { getByText } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    expect(getByText(/fm\.catalog\.title.*\(2\)/)).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('fm-list-catalog-button'));
+    fireEvent.click(screen.getByTestId('catalog-save-none'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('fm.catalog.save_failed'));
+    expect(getByText(/fm\.catalog\.title.*\(2\)/)).toBeTruthy();
+  });
+
+  it('restores the previous catalog and shows the network error when the PUT gets no answer', async () => {
+    const toastError = vi.spyOn(toast, 'error').mockImplementation(() => {});
+    globalThis.fetch = catalogFetchWithPut(() => Promise.reject(new TypeError('Failed to fetch')));
+    const { getByText } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    fireEvent.click(screen.getByTestId('fm-list-catalog-button'));
+    fireEvent.click(screen.getByTestId('catalog-save-none'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
+    const [message] = toastError.mock.calls[0];
+    expect(typeof message).toBe('string');
+    expect(message).not.toBe('Failed to fetch');
+    expect(getByText(/fm\.catalog\.title.*\(2\)/)).toBeTruthy();
+  });
+
+  it('keeps the new catalog and shows no error when the PUT succeeds', async () => {
+    const toastError = vi.spyOn(toast, 'error').mockImplementation(() => {});
+    globalThis.fetch = catalogFetchWithPut(
+      () => Promise.resolve({ ok: true, status: 200, json: async () => ({}) }));
+    const { getByText } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    fireEvent.click(screen.getByTestId('fm-list-catalog-button'));
+    fireEvent.click(screen.getByTestId('catalog-save-303-only'));
+
+    await waitFor(() => expect(getByText(/fm\.catalog\.title.*\(1\)/)).toBeTruthy());
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(toastError).not.toHaveBeenCalled();
+    expect(getByText(/fm\.catalog\.title.*\(1\)/)).toBeTruthy();
+  });
+});
+
+// ── fiscal-models-catalog — save on toggle (ETP-5831 CP-22) ─────────────────
+// The drawer used to save only when it was closed, so a toggle followed by a reload or a
+// navigation sent no PUT and was lost silently. Every toggle now PUTs at once; the PUTs are
+// chained so the last toggle wins; a failed PUT rolls the drawer back to the last confirmed catalog.
+
+describe('FmListPage — fiscal-models-catalog save on toggle', () => {
+  // GET answers `initial`; each PUT waits for the test to settle it via the returned `puts` list.
+  function deferredPutFetch(initial = { '303': true, '349': true }) {
+    const puts = [];
+    const fetchMock = vi.fn((url, init) => {
+      if (!String(url).includes('fiscal-models-catalog')) return Promise.reject(new Error(`unmocked fetch: ${url}`));
+      if (init?.method !== 'PUT') return Promise.resolve({ ok: true, json: async () => initial });
+      return new Promise((resolve) => {
+        puts.push({
+          body: JSON.parse(init.body),
+          ok: () => resolve({ ok: true, status: 204, json: async () => ({}) }),
+          fail: () => resolve({ ok: false, status: 403, json: async () => ({}) }),
+        });
+      });
+    });
+    return { fetchMock, puts };
+  }
+  const drawerActive = () => JSON.parse(screen.getByTestId('catalog-drawer').dataset.activeModels);
+
+  it('a toggle sends the PUT right away and the drawer stays open', async () => {
+    const { fetchMock, puts } = deferredPutFetch();
+    globalThis.fetch = fetchMock;
+    render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    fireEvent.click(screen.getByTestId('fm-list-catalog-button'));
+    fireEvent.click(screen.getByTestId('catalog-toggle-349'));
+
+    await waitFor(() => expect(puts).toHaveLength(1));
+    expect(puts[0].body).toEqual({ '303': true, '349': false });
+    expect(screen.getByTestId('catalog-drawer')).toBeInTheDocument();
+    expect(drawerActive()).toEqual({ '303': true, '349': false });
+    puts[0].ok();
+  });
+
+  it('opening and closing the drawer sends no PUT', async () => {
+    const { fetchMock, puts } = deferredPutFetch();
+    globalThis.fetch = fetchMock;
+    render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    fireEvent.click(screen.getByTestId('fm-list-catalog-button'));
+    expect(screen.getByTestId('catalog-drawer')).toBeInTheDocument();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(puts).toHaveLength(0);
+  });
+
+  it('two fast toggles are sent in order, one at a time, and the last PUT carries the final state', async () => {
+    const { fetchMock, puts } = deferredPutFetch();
+    globalThis.fetch = fetchMock;
+    render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    fireEvent.click(screen.getByTestId('fm-list-catalog-button'));
+
+    fireEvent.click(screen.getByTestId('catalog-toggle-349')); // 349 off
+    fireEvent.click(screen.getByTestId('catalog-toggle-349')); // 349 back on
+    expect(drawerActive()).toEqual({ '303': true, '349': true });
+
+    await waitFor(() => expect(puts).toHaveLength(1));
+    // The second PUT waits for the first: it can never overtake it on the wire.
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(puts).toHaveLength(1);
+    puts[0].ok();
+
+    await waitFor(() => expect(puts).toHaveLength(2));
+    expect(puts.map(p => p.body)).toEqual([
+      { '303': true, '349': false },
+      { '303': true, '349': true },
+    ]);
+    puts[1].ok();
+  });
+
+  it('a failed PUT flips the drawer back to the last confirmed catalog and shows the toast', async () => {
+    const toastError = vi.spyOn(toast, 'error').mockImplementation(() => {});
+    const { fetchMock, puts } = deferredPutFetch();
+    globalThis.fetch = fetchMock;
+    const { getByText } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    fireEvent.click(screen.getByTestId('fm-list-catalog-button'));
+
+    // First toggle is confirmed by the server ...
+    fireEvent.click(screen.getByTestId('catalog-toggle-349'));
+    await waitFor(() => expect(puts).toHaveLength(1));
+    puts[0].ok();
+    await waitFor(() => expect(getByText(/fm\.catalog\.title.*\(1\)/)).toBeTruthy());
+
+    // ... the second one fails: the drawer goes back to the confirmed { 349: false }, not the read.
+    fireEvent.click(screen.getByTestId('catalog-toggle-349'));
+    expect(drawerActive()).toEqual({ '303': true, '349': true });
+    await waitFor(() => expect(puts).toHaveLength(2));
+    puts[1].fail();
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('fm.catalog.save_failed'));
+    expect(toastError).toHaveBeenCalledTimes(1);
+    expect(drawerActive()).toEqual({ '303': true, '349': false });
+    expect(screen.getByTestId('catalog-drawer')).toBeInTheDocument();
+    expect(getByText(/fm\.catalog\.title.*\(1\)/)).toBeTruthy();
+    toastError.mockRestore();
+  });
+
+  // The confirmed catalog also advances inside the chain while a later PUT is still queued: when
+  // B was clicked before A answered, A's success is what B's failure must roll back to.
+  it('A confirmed while B is queued, then B fails: rolls back to A (not the read), one toast', async () => {
+    const toastError = vi.spyOn(toast, 'error').mockImplementation(() => {});
+    const { fetchMock, puts } = deferredPutFetch();
+    globalThis.fetch = fetchMock;
+    const { getByText } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    fireEvent.click(screen.getByTestId('fm-list-catalog-button'));
+
+    fireEvent.click(screen.getByTestId('catalog-toggle-349')); // A: { 303: on, 349: off }
+    fireEvent.click(screen.getByTestId('catalog-save-none'));  // B: { 303: off, 349: off }, queued
+    expect(drawerActive()).toEqual({ '303': false, '349': false });
+    expect(getByText(/fm\.catalog\.title.*\(0\)/)).toBeTruthy();
+
+    await waitFor(() => expect(puts).toHaveLength(1));
+    puts[0].ok();
+    await waitFor(() => expect(puts).toHaveLength(2));
+    expect(puts[1].body).toEqual({ '303': false, '349': false });
+    puts[1].fail();
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('fm.catalog.save_failed'));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(toastError).toHaveBeenCalledTimes(1);
+    expect(drawerActive()).toEqual({ '303': true, '349': false });
+    expect(getByText(/fm\.catalog\.title.*\(1\)/)).toBeTruthy();
+    toastError.mockRestore();
+  });
+
+  // Unmount with a PUT in flight (e.g. navigating away right after a toggle). The chain outlives
+  // the component: its rollback `setActiveModels` hits an unmounted component (a React 18 no-op)
+  // and must not throw. PINNED current behaviour: the failure toast STILL fires after unmount
+  // (sonner's toaster is global, so the user is still told the toggle was not saved).
+  it('unmounting while a PUT is pending does not throw; if that PUT then fails, the toast still fires once', async () => {
+    const toastError = vi.spyOn(toast, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { fetchMock, puts } = deferredPutFetch();
+    globalThis.fetch = fetchMock;
+    const { unmount } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    fireEvent.click(screen.getByTestId('fm-list-catalog-button'));
+    fireEvent.click(screen.getByTestId('catalog-toggle-349'));
+    await waitFor(() => expect(puts).toHaveLength(1));
+
+    expect(() => unmount()).not.toThrow();
+    puts[0].fail();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(toastError).toHaveBeenCalledTimes(1);
+    expect(toastError).toHaveBeenCalledWith('fm.catalog.save_failed');
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+    toastError.mockRestore();
+  });
+
+  // Review W2 — the catalog is re-read when the token changes; a read landing while a PUT is in
+  // flight used to put the pre-toggle catalog back, and nothing re-applied the toggle afterwards.
+  it('a catalog re-read (token refresh) while a PUT is in flight does not undo the toggle', async () => {
+    const { fetchMock, puts } = deferredPutFetch();
+    globalThis.fetch = fetchMock;
+    const { getByText, rerender } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    fireEvent.click(screen.getByTestId('fm-list-catalog-button'));
+
+    fireEvent.click(screen.getByTestId('catalog-toggle-349')); // 349 off, PUT pending
+    await waitFor(() => expect(puts).toHaveLength(1));
+
+    const gets = () => fetchMock.mock.calls.filter(([url, init]) =>
+      String(url).includes('fiscal-models-catalog') && (init?.method ?? 'GET') === 'GET').length;
+    rerender(<FmListPage declarations={[]} {...withCatalogProps} token="refreshed-token" />);
+    await waitFor(() => expect(gets()).toBe(2));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(drawerActive()).toEqual({ '303': true, '349': false });
+
+    puts[0].ok();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(drawerActive()).toEqual({ '303': true, '349': false });
+    expect(getByText(/fm\.catalog\.title.*\(1\)/)).toBeTruthy();
+  });
+
+  it('an earlier failed PUT superseded by a later successful one neither rolls back nor toasts', async () => {
+    const toastError = vi.spyOn(toast, 'error').mockImplementation(() => {});
+    const { fetchMock, puts } = deferredPutFetch();
+    globalThis.fetch = fetchMock;
+    render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    fireEvent.click(screen.getByTestId('fm-list-catalog-button'));
+
+    fireEvent.click(screen.getByTestId('catalog-toggle-349')); // off
+    fireEvent.click(screen.getByTestId('catalog-toggle-349')); // on
+    await waitFor(() => expect(puts).toHaveLength(1));
+    puts[0].fail();
+    await waitFor(() => expect(puts).toHaveLength(2));
+    puts[1].ok();
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(toastError).not.toHaveBeenCalled();
+    expect(drawerActive()).toEqual({ '303': true, '349': true });
+    toastError.mockRestore();
   });
 });
 
@@ -1199,10 +1478,8 @@ describe('FmListPage — fiscal-models-catalog concurrent save and unmount safet
 
     fireEvent.click(getByText(/fm\.catalog\.title/));
     fireEvent.click(container.querySelector('[data-testid="catalog-save-303-only"]'));
-    // Drawer closes itself on save; reopen to fire a second save before the
-    // first PUT's promise (mocked as already-resolved, but not yet awaited by
-    // the component) has been observed by any assertion below.
-    fireEvent.click(getByText(/fm\.catalog\.title/));
+    // The drawer stays open after a save (ETP-5831 CP-22); fire a second save before the
+    // first PUT's promise has been observed by any assertion below.
     fireEvent.click(container.querySelector('[data-testid="catalog-save-none"]'));
 
     await waitFor(() => {
@@ -1210,9 +1487,7 @@ describe('FmListPage — fiscal-models-catalog concurrent save and unmount safet
       const puts = calls.filter(([, opts]) => opts?.method === 'PUT');
       expect(puts.length).toBe(2);
     });
-    // Local UI state reflects the LAST click synchronously — unaffected by
-    // network resolve order, since the PUT response is fire-and-forget
-    // (no `.then` writes activeModels back from the server).
+    // Local UI state reflects the LAST click: the PUTs are chained, so the last one wins.
     expect(getByText(/fm\.catalog\.title.*\(0\)/)).toBeTruthy();
   });
 

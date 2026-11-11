@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/hooks/useBatchDeleteDialog.jsx
+// @covers tools/app-shell/src/components/contract-ui/DeleteConfirmDialog.jsx
 import { renderHook, act } from '@testing-library/react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -28,6 +30,7 @@ vi.mock('@/i18n', () => ({
       bulkDeleteAllFailed: 'None of the {count} selected record(s) could be deleted.',
       bulkDeleteInProgress: 'Deleting…',
       bulkDeleteInProgressMessage: 'Deleting {count} record(s). This may take a few seconds.',
+      bulkDeleteProgressMessage: 'Deleting {processed} of {total} records…',
     };
     let text = map[key] || key;
     if (params) {
@@ -606,5 +609,83 @@ describe('useBatchDeleteDialog — in-flight requests and failing outcome handle
     await user.click(screen.getByText('Again'));
     expect(screen.getByText(/delete 1 record\(s\)/)).toBeInTheDocument();
     expect(screen.getByTestId('batch-delete-confirm')).not.toBeDisabled();
+  });
+});
+
+describe('useBatchDeleteDialog — server-side bulk delete with progress (ETP-6143)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function Host({ items, deleteOneFn, bulkDeleteFn, onOutcome }) {
+    const { requestBatchDelete, batchDeleteDialog } = useBatchDeleteDialog({
+      deleteOneFn, bulkDeleteFn, onOutcome,
+    });
+    return (
+      <>
+        <button onClick={() => requestBatchDelete(items)}>Bulk</button>
+        {batchDeleteDialog}
+      </>
+    );
+  }
+
+  it('sends the whole selection to bulkDeleteFn once and shows its progress until it settles', async () => {
+    let report;
+    let settle;
+    const bulkDeleteFn = vi.fn((items, { onProgress }) => {
+      report = onProgress;
+      return new Promise((resolve) => { settle = () => resolve({ succeeded: items, failed: [], errors: [] }); });
+    });
+    const deleteOneFn = vi.fn();
+    const onOutcome = vi.fn();
+    render(<Host items={['a', 'b', 'c']} deleteOneFn={deleteOneFn} bulkDeleteFn={bulkDeleteFn} onOutcome={onOutcome} />);
+
+    act(() => { screen.getByText('Bulk').click(); });
+    fireEvent.click(screen.getByTestId('batch-delete-confirm'));
+
+    expect(await screen.findByText('Deleting 0 of 3 records…')).toBeInTheDocument();
+    act(() => { report({ processed: 2, total: 3 }); });
+    expect(screen.getByText('Deleting 2 of 3 records…')).toBeInTheDocument();
+    expect(screen.getByTestId('batch-delete-progress')).toHaveAttribute('aria-valuenow', '2');
+
+    await act(async () => { settle(); });
+
+    await waitFor(() => expect(onOutcome).toHaveBeenCalledWith(['a', 'b', 'c'], []));
+    expect(bulkDeleteFn).toHaveBeenCalledTimes(1);
+    expect(deleteOneFn).not.toHaveBeenCalled();
+    expect(screen.queryByText('Delete records')).not.toBeInTheDocument();
+  });
+
+  it('keeps the per-row DELETE for a single record', async () => {
+    const bulkDeleteFn = vi.fn();
+    const deleteOneFn = vi.fn(async (item) => item);
+    const onOutcome = vi.fn();
+    render(<Host items={['a']} deleteOneFn={deleteOneFn} bulkDeleteFn={bulkDeleteFn} onOutcome={onOutcome} />);
+
+    act(() => { screen.getByText('Bulk').click(); });
+    fireEvent.click(screen.getByTestId('batch-delete-confirm'));
+
+    await waitFor(() => expect(onOutcome).toHaveBeenCalledWith(['a'], []));
+    expect(bulkDeleteFn).not.toHaveBeenCalled();
+    expect(deleteOneFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('a bulkDeleteFn that rejects reports an unknown outcome, not a failure, and closes the dialog', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const bulkDeleteFn = vi.fn(async () => { throw new Error('network down'); });
+    const onOutcome = vi.fn();
+    render(<Host items={['a', 'b']} deleteOneFn={vi.fn()} bulkDeleteFn={bulkDeleteFn} onOutcome={onOutcome} />);
+
+    act(() => { screen.getByText('Bulk').click(); });
+    fireEvent.click(screen.getByTestId('batch-delete-confirm'));
+
+    // The job may still be running on the server: nothing is claimed deleted OR failed, and the
+    // host is told to refetch instead of keeping a selection that may already be gone.
+    await waitFor(() => expect(onOutcome).toHaveBeenCalledWith([], [], { outcomeUnknown: true }));
+    const { toast } = await import('sonner');
+    expect(toast.warning).toHaveBeenCalledWith(expect.stringContaining('bulkDeleteOutcomeUnknown'));
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(screen.queryByText('Delete records')).not.toBeInTheDocument();
+    consoleError.mockRestore();
   });
 });
