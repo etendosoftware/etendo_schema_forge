@@ -63,6 +63,24 @@ class TokenContextTest(unittest.TestCase):
 
 
 class CheckAnswerTest(unittest.TestCase):
+    def test_any_of_passes_on_either_reading_and_fails_on_neither(self):
+        # ETP-5848: receivables net of customer credit, or the outstanding invoices alone.
+        spec = {"all": [{"anyOf": [{"number": 4888.34, "tolerance": 1}, {"number": 4970.54, "tolerance": 1}]}]}
+        for answer in ("Nos deben 4.888,34 €", "Nos deben 4.970,54 €"):
+            with self.subTest(answer=answer):
+                self.assertTrue(matcher.check_answer(answer, spec)["verified"])
+        result = matcher.check_answer("Nos deben 5.100 €", spec)
+        self.assertFalse(result["verified"])
+        self.assertEqual([c["ok"] for c in result["all"][0]["anyOf"]], [False, False])
+
+    def test_any_of_is_validated(self):
+        for spec in ({"all": [{"anyOf": [{"number": 1.5}]}]},                      # one alternative
+                     {"all": [{"anyOf": [{"number": 1.5}, {"bogus": 1}]}]},         # a bad alternative
+                     {"all": [{"anyOf": [{"number": 1.5}, {"number": 2.5}], "text": "x"}]},
+                     {"none": [{"anyOf": [{"text": "a"}, {"text": "b"}]}]}):
+            with self.subTest(spec=spec), self.assertRaises(ValueError):
+                matcher.normalize_spec(spec)
+
     def test_numbers_match_within_tolerance_in_either_convention(self):
         spec = [{"number": 1234.56, "tolerance": 0.01}]
         for answer in ("Te debe 1.234,56 €", "It is 1,234.56 EUR", "total: 1234,56"):
@@ -192,8 +210,7 @@ class CheckAnswerTest(unittest.TestCase):
         # A signed amount is not a phone.
         self.assertEqual([n["token"] for n in matcher.extract_numbers("ajuste +12 €")], ["12"])
 
-    def test_dates_and_ids_stay_out_under_v4(self):
-        self.assertEqual(matcher.MATCHER_VERSION, 4)
+    def test_dates_and_ids_stay_out_since_v4(self):
         answer = ("Factura FV/2026/0121 del 14/10/2026 (2026-10-14), id 95E2A8B50A254B2AAE6774B8C2F28120, "
                   "pedido SO-0121, uuid 3f2a9c1e-77b0-4d2e-9a11-0c5e2b7d0121, v1.2.1")
         self.assertEqual(matcher.extract_numbers(answer), [])
