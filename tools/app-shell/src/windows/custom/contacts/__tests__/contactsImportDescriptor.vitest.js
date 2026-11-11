@@ -1,6 +1,8 @@
 // @covers tools/app-shell/src/windows/custom/contacts/contactsImportDescriptor.js
 // @covers tools/app-shell/src/windows/custom/contacts/contactsFkResolvers.js
 // @covers tools/app-shell/src/lib/importFlagGates.js
+// @covers tools/app-shell/src/lib/importCapabilities.js
+// @covers tools/app-shell/src/lib/structuredAddress.js
 import { describe, it, vi, afterEach, beforeEach } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -23,13 +25,15 @@ import '../contactsFkResolvers.js'; // registers the 'contacts-country' resolver
 import '../contactsImportDescriptor.js';
 import { CONTACT_CATEGORY_TYPE } from '@/lib/flags/flag-keys.js';
 import { applyImportFlagGates } from '@/lib/importFlagGates.js';
+import { publishImportCapabilities, resetImportCapabilitiesForTests } from '@/lib/importCapabilities.js';
+import { composeAddressLines } from '@/lib/structuredAddress.js';
 
 const setCategoryTypeFlag = (on) => { flagState.values = { [CONTACT_CATEGORY_TYPE]: on }; };
 beforeEach(() => setCategoryTypeFlag(true));
 
 const baseRow = {
   name: 'Acme Corp', etgoFirstname: 'Lucia', etgoLastname: 'Fernandez', etgoEmail: 'lucia@x.com',
-  address: 'Av. Siempreviva 742', city: 'Springfield', postal: '1000',
+  streetName: 'Av. Siempreviva 742', city: 'Springfield', postal: '1000',
   country: 'Argentina', region: 'Córdoba',
 };
 
@@ -378,7 +382,7 @@ describe('contacts import descriptor', () => {
 
     const ops = await buildOperations({
       name: 'Acme Iberia', etgoFirstname: 'Ana', etgoLastname: 'García',
-      address: 'Calle Mayor 1', city: 'Madrid', postal: '28013', country: 'Spain', region: 'Madrid',
+      streetName: 'Calle Mayor 1', city: 'Madrid', postal: '28013', country: 'Spain', region: 'Madrid',
     }, {
       spec: 'contacts', descriptorName: 'contacts', token: 't', resolveCountryFn: resolveCountry,
     });
@@ -718,5 +722,156 @@ describe('contacts import descriptor — rows in a multi-row batch (ETP-5676)', 
     for (const op of requests[0].filter((o) => o.entity === 'businessPartner')) {
       assert.equal(op.body.businessPartnerCategory, 'BPG-RETAIL');
     }
+  });
+});
+
+// With `structured-address-for-sepa` ON, ContactsLocationAddressHandler requires Street, City and
+// Country on a new address (Number falls back to "s/n"). The import used to send only
+// `addressLine1`: every address-bearing row sat in "Correctas" during review and then failed at
+// confirm with `400 Missing required field(s): streetName, buildingNumber`.
+describe('contacts import descriptor — structured address capability ON', () => {
+  const resolveCountryFn = async () => ({ status: 'auto-resolved', id: 'C-ES', name: 'España' });
+  const row = {
+    name: 'Ponferrada SL', streetName: 'Avenida de la Puebla 42', city: 'Ponferrada', postal: '24402',
+    country: 'España', region: 'León',
+  };
+  beforeEach(() => publishImportCapabilities({ structuredAddressForSepa: true }));
+  afterEach(() => resetImportCapabilitiesForTests());
+
+  // An old "Dirección" column maps onto Calle (its aliases moved there), so a whole address in
+  // Calle with no Número is the shape every pre-existing file arrives in.
+  it('sends a whole address in Calle as the street, with the "s/n" number, like LocationEditorModal', async () => {
+    const ops = await buildOperations(row, {
+      spec: 'contacts', descriptorName: 'contacts', token: 't', resolveCountryFn,
+    });
+    const location = ops.find((op) => op.entity === 'locationAddress');
+    assert.equal(location.body.streetName, 'Avenida de la Puebla 42');
+    assert.equal(location.body.buildingNumber, 's/n');
+    assert.equal(location.body.addressLine1, 'Avenida de la Puebla 42, s/n');
+  });
+
+  // The shape an export of a structured address comes back in (Calle = street, Número = number):
+  // the number the user had must survive the round trip, never replaced by the "s/n" fallback.
+  it('keeps a filled Número as the building number, composing "Calle, Número"', async () => {
+    const ops = await buildOperations({ ...row, streetName: 'Calle Mayor', buildingNumber: ' 12 ' }, {
+      spec: 'contacts', descriptorName: 'contacts', token: 't', resolveCountryFn,
+    });
+    const { body } = ops.find((op) => op.entity === 'locationAddress');
+    assert.deepEqual(
+      { streetName: body.streetName, buildingNumber: body.buildingNumber, addressLine1: body.addressLine1 },
+      { streetName: 'Calle Mayor', buildingNumber: '12', addressLine1: 'Calle Mayor, 12' },
+    );
+    // Neither flag is sent, so the server applies its Y/Y default (ship-to and invoice-to).
+    assert.equal('shipToAddress' in body, false);
+    assert.equal('invoiceToAddress' in body, false);
+  });
+
+  it('flags an address with no city on the city cell while reviewing', () => {
+    const errors = runImportRowValidator('contacts', { ...row, taxID: 'B12345674', city: '' }, {});
+    assert.deepEqual(errors.map((e) => e.target), ['city']);
+  });
+
+  // Mirrors ContactsLocationAddressHandler: street required (number never is) and the 70 / 16
+  // max lengths of EM_OBSEPA_StrtNm / BldgNb. Each limit is pinned on both sides of the boundary.
+  // The translator interpolates `{max}` like useUI does, so the too-long rows also prove the
+  // limit reaches the TRANSLATED message (the other keys echo back and fall to English).
+  const translate = (key, params) => (key === 'importErrorAddressFieldTooLong'
+    ? 'Máximo {max} caracteres.'.replace('{max}', params?.max)
+    : key);
+  it.each([
+    ['street blank, address given by the city', { streetName: '' }, ['streetName']],
+    ['Número without Calle: one error, on Calle', { streetName: '', buildingNumber: '12' }, ['streetName']],
+    ['only the country missing', { country: '' }, ['country']],
+    ['street at 70 characters', { streetName: 'S'.repeat(70) }, []],
+    ['street over 70 characters', { streetName: 'S'.repeat(71) }, ['streetName'], ['Máximo 70 caracteres.']],
+    ['number at 16 characters', { buildingNumber: '1'.repeat(16) }, []],
+    ['number over 16 characters', { buildingNumber: '1'.repeat(17) }, ['buildingNumber'], ['Máximo 16 caracteres.']],
+  ])('%s', (_label, cells, targets, messages) => {
+    const errors = runImportRowValidator('contacts', { ...row, taxID: 'B12345674', ...cells }, { translate });
+    assert.deepEqual(errors.map((e) => e.target), targets);
+    if (messages) assert.deepEqual(errors.map((e) => e.message), messages);
+  });
+
+  // Whole rows, not variations of a full address. HAS_ADDRESS decides both sides: a row with no
+  // address cell is no address (no errors, no location op), while a lone province or a lone Número
+  // IS one, so the whole street/city/country rule applies instead of the row passing silently.
+  it.each([
+    ['no address cells', {}, [], false],
+    ['province only', { region: 'León' }, ['streetName', 'city', 'country'], true],
+    ['Número only', { buildingNumber: '12' }, ['streetName', 'city', 'country'], true],
+  ])('%s', async (_label, cells, targets, hasLocation) => {
+    const addressRow = { name: 'Ponferrada SL', ...cells };
+    assert.deepEqual(runImportRowValidator('contacts', addressRow, {}).map((e) => e.target), targets);
+    const ops = await buildOperations(addressRow, {
+      spec: 'contacts', descriptorName: 'contacts', token: 't', resolveCountryFn,
+    });
+    assert.equal(ops.some((op) => op.entity === 'locationAddress'), hasLocation);
+  });
+});
+
+// Flag OFF (and nothing published, which must read as OFF): the pre-ETP-5806 single address line.
+// Calle is sent as typed, "Calle, Número" when the number is filled, and NO structured keys.
+describe('contacts import descriptor — structured address capability OFF', () => {
+  const resolveCountryFn = async () => ({ status: 'auto-resolved', id: 'C-ES', name: 'España' });
+  const config = { spec: 'contacts', descriptorName: 'contacts', token: 't', resolveCountryFn };
+  const row = { name: 'Ponferrada SL', city: 'Ponferrada', postal: '24402', country: 'España' };
+  const addressOf = async (cells) => {
+    const ops = await buildOperations({ ...row, ...cells }, config);
+    const { addressLine1, addressLine2, streetName, buildingNumber } =
+      ops.find((op) => op.entity === 'locationAddress')?.body ?? {};
+    return { addressLine1, addressLine2, streetName, buildingNumber };
+  };
+  const legacy = (addressLine1, addressLine2) => ({
+    addressLine1, addressLine2, streetName: undefined, buildingNumber: undefined,
+  });
+  beforeEach(() => resetImportCapabilitiesForTests());
+  afterEach(() => resetImportCapabilitiesForTests());
+
+  const longStreet = 'A'.repeat(58); // "<58>, 123" is 63 characters, past the 60 of Address1
+  it.each([
+    ['Calle alone is trimmed, with no "s/n"', { streetName: '  Calle Mayor 1  ' }, legacy('Calle Mayor 1')],
+    ['a blank Número is ignored', { streetName: 'Calle Mayor 1', buildingNumber: '  ' }, legacy('Calle Mayor 1')],
+    ['Calle + Número compose as "Calle, Número"', { streetName: 'Calle Mayor', buildingNumber: '12' }, legacy('Calle Mayor, 12')],
+    ['past 60 characters the number overflows to Address2', { streetName: longStreet, buildingNumber: '123' }, legacy(longStreet, '123')],
+  ])('payload: %s', async (_label, cells, expected) => {
+    assert.deepEqual(await addressOf(cells), expected);
+  });
+
+  it('fails closed: a capability published and then reset is OFF again', async () => {
+    publishImportCapabilities({ structuredAddressForSepa: true });
+    assert.equal((await addressOf({ streetName: 'Calle Mayor 1' })).buildingNumber, 's/n');
+    resetImportCapabilitiesForTests();
+    assert.deepEqual(await addressOf({ streetName: 'Calle Mayor 1' }), legacy('Calle Mayor 1'));
+  });
+
+  it('builds the location op for a row whose only address cell is Número', async () => {
+    const ops = await buildOperations({ name: 'Ponferrada SL', buildingNumber: '12' }, config);
+    assert.ok(ops.find((op) => op.entity === 'locationAddress'));
+  });
+
+  it.each([
+    ['Número without Calle: one error, on Calle', { buildingNumber: '12' }, ['streetName']],
+    ['Calle alone', { streetName: 'Calle Mayor 1' }, []],
+    ['Calle + Número', { streetName: 'Calle Mayor', buildingNumber: '12' }, []],
+    // Address1 holds 60: a longer Calle used to show as Correcta and then roll the row back at save
+    // (alone) or be cut at 60 in silence (with Número).
+    ['Calle of exactly 60', { streetName: 'A'.repeat(60) }, []],
+    ['Calle over 60, alone', { streetName: 'A'.repeat(61) }, ['streetName']],
+    ['Calle over 60, with Número', { streetName: 'A'.repeat(61), buildingNumber: '12' }, ['streetName']],
+  ])('errors: %s', (_label, cells, targets) => {
+    const errors = runImportRowValidator('contacts', { ...row, taxID: 'B12345674', ...cells }, {});
+    assert.deepEqual(errors.map((e) => e.target), targets);
+    if (targets.length && cells.streetName) assert.match(errors[0].message, /\b60\b/);
+  });
+});
+
+// The composer is fed raw CSV cells, which are not always strings (a numeric cell, a missing one).
+describe('structuredAddress.composeAddressLines — non-string input', () => {
+  it.each([
+    ['numeric number', ['Calle Mayor', 12, null], { address1: 'Calle Mayor, 12', address2: '' }],
+    ['numeric street, missing number', [742, undefined, undefined], { address1: '742, s/n', address2: '' }],
+    ['null street', [null, 12, null], { address1: '', address2: '' }],
+  ])('%s', (_label, args, expected) => {
+    assert.deepEqual(composeAddressLines(...args), expected);
   });
 });

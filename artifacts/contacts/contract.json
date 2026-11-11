@@ -1,8 +1,8 @@
 {
   "version": "0.7.0",
   "generatedAt": "2026-09-20T18:16:41.258Z",
-  "updatedAt": "2026-11-02T22:48:26.037Z",
-  "checksum": "279e307ad19abaf0",
+  "updatedAt": "2026-11-11T12:04:27.112Z",
+  "checksum": "3a375ef562e7d6c7",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -416,15 +416,42 @@
           {
             "required": false,
             "type": "string",
-            "target": "address",
+            "target": "streetName",
             "aliases": [
+              "calle",
+              "nombre de la calle",
+              "via",
+              "vía",
+              "street",
+              "street name",
               "direccion",
-              "dirección"
+              "dirección",
+              "address"
             ],
-            "label": "Address",
-            "example": "Calle Mayor 12",
-            "exampleKey": "importExampleContactAddress",
-            "labelKey": "importHeaderAddress",
+            "label": "Street",
+            "example": "Calle Mayor",
+            "exampleKey": "importExampleContactStreet",
+            "labelKey": "importHeaderStreet",
+            "headerScope": "address"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "buildingNumber",
+            "aliases": [
+              "numero",
+              "número",
+              "num",
+              "nº",
+              "numero de calle",
+              "número de calle",
+              "number",
+              "building number",
+              "street number"
+            ],
+            "label": "Number",
+            "example": "12",
+            "labelKey": "importHeaderBuildingNumber",
             "headerScope": "address"
           },
           {
@@ -1713,8 +1740,7 @@
               "source": "N"
             }
           }
-        ],
-        "javaQualifier": "businessPartnerHandler"
+        ]
       },
       "customer": {
         "tableName": "C_BPartner",
@@ -5786,15 +5812,42 @@
           {
             "required": false,
             "type": "string",
-            "target": "address",
+            "target": "streetName",
             "aliases": [
+              "calle",
+              "nombre de la calle",
+              "via",
+              "vía",
+              "street",
+              "street name",
               "direccion",
-              "dirección"
+              "dirección",
+              "address"
             ],
-            "label": "Address",
-            "example": "Calle Mayor 12",
-            "exampleKey": "importExampleContactAddress",
-            "labelKey": "importHeaderAddress",
+            "label": "Street",
+            "example": "Calle Mayor",
+            "exampleKey": "importExampleContactStreet",
+            "labelKey": "importHeaderStreet",
+            "headerScope": "address"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "buildingNumber",
+            "aliases": [
+              "numero",
+              "número",
+              "num",
+              "nº",
+              "numero de calle",
+              "número de calle",
+              "number",
+              "building number",
+              "street number"
+            ],
+            "label": "Number",
+            "example": "12",
+            "labelKey": "importHeaderBuildingNumber",
             "headerScope": "address"
           },
           {
@@ -6771,8 +6824,7 @@
             "visibility": "readOnly",
             "required": false
           }
-        ],
-        "javaQualifier": "businessPartnerHandler"
+        ]
       },
       "customer": {
         "tableName": "C_BPartner",

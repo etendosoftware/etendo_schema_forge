@@ -20,6 +20,14 @@ import { stripUrlScheme } from './contactsWebUrl.js';
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 import { readFeatureFlag } from '@/lib/flags/useFeatureFlag.js';
 import { CONTACT_CATEGORY_TYPE } from '@/lib/flags/flag-keys.js';
+import { hasImportCapability } from '@/lib/importCapabilities.js';
+import {
+  ADDRESS_LINE_MAX_LENGTH,
+  BUILDING_NUMBER_MAX_LENGTH,
+  STREET_NAME_MAX_LENGTH,
+  composeAddressLines,
+  effectiveBuildingNumber,
+} from '@/lib/structuredAddress.js';
 
 /**
  * Feature flag `contact-category-type` (ETP-5791) — the toggle point of this descriptor. Read per
@@ -34,6 +42,25 @@ import { CONTACT_CATEGORY_TYPE } from '@/lib/flags/flag-keys.js';
  */
 function contactCategoryTypeEnabled() {
   return readFeatureFlag(CONTACT_CATEGORY_TYPE) === true;
+}
+
+/**
+ * ETP-6206 — the per-account backend flag `structured-address-for-sepa` (ETP-5806), served as
+ * `capabilities.structuredAddressForSepa` and read here through `importCapabilities` (the import
+ * descriptor cannot reach AuthContext). Read per row, never at module load, like the flag above.
+ *
+ *  - ON  → the server requires Street, City and Country on every new address (Number falls back to
+ *          "s/n"), so the location op carries `streetName` / `buildingNumber` exactly like
+ *          `LocationEditorModal`'s `buildSavePayload`. Before ETP-6206 it sent only `addressLine1`
+ *          and every address-bearing row failed at confirm with
+ *          `400 Missing required field(s): streetName, buildingNumber` after the preview had shown
+ *          it as "Correcta".
+ *  - OFF → the pre-ETP-5806 single address line.
+ */
+const STRUCTURED_ADDRESS_CAPABILITY = 'structuredAddressForSepa';
+
+function structuredAddressEnabled() {
+  return hasImportCapability(STRUCTURED_ADDRESS_CAPABILITY);
 }
 
 // `creditLimit` used to be listed here with no matching decisions.json column, so nothing
@@ -60,7 +87,10 @@ const CONTACT_TARGETS = ['firstName', 'lastName', 'email', 'phone', 'position'];
  * bare `Boolean("   ")` is true — it would build a location op out of nothing but spaces.
  */
 const HAS_ADDRESS = (row) => Boolean(
-  row.address || row.city || row.postal || row.country || String(row.region ?? '').trim(),
+  row.city || row.postal || row.country || String(row.region ?? '').trim()
+  // ETP-6206 — Calle / Número (Calle replaced the Dirección column), trimmed for the same reason
+  // as the province.
+  || String(row.streetName ?? '').trim() || String(row.buildingNumber ?? '').trim(),
 );
 const businessPartnerCategoriesCache = new Map();
 
@@ -410,6 +440,37 @@ async function resolveExistingCategoryId(row, config) {
   return categoryResolution.id ?? null;
 }
 
+/**
+ * The address-line part of the location body, per `structured-address-for-sepa` (ETP-6206).
+ *
+ * Calle replaced the Dirección column and inherited its aliases, so an old template or export
+ * with a "Dirección" header lands here as the street.
+ *
+ * Flag ON mirrors `LocationEditorModal.buildSavePayload` key for key: the composed Address1/2
+ * (which the server recomputes from the structured fields anyway, so they can never contradict
+ * them), `streetName`, and `buildingNumber` with the same "s/n" fallback. Flag OFF sends Calle as
+ * the single address line: verbatim when Número is blank ("s/n" is a flag-ON convention, and
+ * this is what the old Dirección column sent), composed as "Calle, Número" otherwise.
+ */
+function addressLineFields(row) {
+  const street = String(row.streetName ?? '').trim();
+  if (structuredAddressEnabled()) {
+    const composed = composeAddressLines(street, row.buildingNumber, '');
+    return {
+      addressLine1: composed.address1 || null,
+      addressLine2: composed.address2 || null,
+      streetName: street || null,
+      buildingNumber: effectiveBuildingNumber(street, row.buildingNumber),
+    };
+  }
+  if (!street || !String(row.buildingNumber ?? '').trim()) return { addressLine1: street || undefined };
+  const composed = composeAddressLines(street, row.buildingNumber, '');
+  return {
+    addressLine1: composed.address1,
+    ...(composed.address2 ? { addressLine2: composed.address2 } : {}),
+  };
+}
+
 async function resolveLocation(row, config) {
   if (!HAS_ADDRESS(row)) return null;
   const resolveCountry = config.resolveCountryFn || getFkResolver('contacts-country');
@@ -420,11 +481,15 @@ async function resolveLocation(row, config) {
       : `The country "${row.country}" could not be resolved to an existing record.`;
     throw new Error(message);
   }
+  const addressLines = addressLineFields(row);
   return {
     id: 'location', spec: config.spec, entity: 'locationAddress', parentRef: 'bp',
     body: {
-      name: [row.city, row.address].filter(Boolean).join(', ') || 'Location',
-      addressLine1: row.address, cityName: row.city, postalCode: row.postal,
+      // Built from the effective address line, as LocationEditorModal does, so a row that only
+      // fills Calle / Número still gets a readable location name.
+      name: [row.city, addressLines.addressLine1].filter(Boolean).join(', ') || 'Location',
+      ...addressLines,
+      cityName: row.city, postalCode: row.postal,
       country: countryResult.id,
       // ETP-4997: the province travels as free text and `ContactsLocationAddressHandler`
       // resolves it, scoped to the country in this very payload. It used to be resolved here,
@@ -528,6 +593,73 @@ function contactIdentityErrors(row, translate) {
   return [];
 }
 
+/** `translatedOrFallback` for a message with interpolation params. */
+function translatedWithParams(key, params, fallback, translate) {
+  return translatedOrFallback(key, fallback,
+    typeof translate === 'function' ? (k) => translate(k, params) : null);
+}
+
+/**
+ * ETP-6206 — the address rule of `ContactsLocationAddressHandler.rejectUnusableCreatePayload`,
+ * checked while the user is still REVIEWING. Flag `structured-address-for-sepa` ON: a row
+ * that says anything about an address needs a street (Calle), a city and a country. Number is
+ * never required (the server falls back to "s/n"). The server's max-length check
+ * (`rejectOversizedFields`) is mirrored too, since it is two comparisons: Calle carries a whole
+ * address when it comes from an old "Dirección" column, which can exceed the street's 70.
+ *
+ * Flag OFF: a Número with no Calle is reported on the Calle cell (the single address line is
+ * built from Calle, so the number would otherwise be dropped in silence), and so is a Calle longer
+ * than Address1's 60 characters. Nothing else, as before (the server only requires the country, and
+ * an unresolved country already fails its row).
+ * With the flag ON the street-required error already covers that row, once.
+ */
+function addressErrors(row, translate) {
+  const street = String(row.streetName ?? '').trim();
+  const streetRequired = () => ({
+    target: 'streetName',
+    message: translatedOrFallback('importErrorAddressStreetRequired',
+      'The address needs a street.', translate),
+  });
+  const streetTooLong = (max) => ({
+    target: 'streetName',
+    message: translatedWithParams('importErrorAddressFieldTooLong', { max },
+      `This value is too long: at most ${max} characters.`, translate),
+  });
+  if (!structuredAddressEnabled()) {
+    if (!street) return String(row.buildingNumber ?? '').trim() ? [streetRequired()] : [];
+    // Calle is the address line itself (C_Location.Address1, 60): longer, it failed the save alone
+    // and was cut at 60 in silence next to a Número (the composer keeps only the street's first 60).
+    return street.length > ADDRESS_LINE_MAX_LENGTH ? [streetTooLong(ADDRESS_LINE_MAX_LENGTH)] : [];
+  }
+  if (!HAS_ADDRESS(row)) return [];
+  const errors = [];
+  if (!street) {
+    errors.push(streetRequired());
+  } else if (street.length > STREET_NAME_MAX_LENGTH) {
+    errors.push(streetTooLong(STREET_NAME_MAX_LENGTH));
+  }
+  if (String(row.buildingNumber ?? '').trim().length > BUILDING_NUMBER_MAX_LENGTH) {
+    errors.push({
+      target: 'buildingNumber',
+      message: translatedWithParams('importErrorAddressFieldTooLong', { max: BUILDING_NUMBER_MAX_LENGTH },
+        `This value is too long: at most ${BUILDING_NUMBER_MAX_LENGTH} characters.`, translate),
+    });
+  }
+  if (!String(row.city ?? '').trim()) {
+    errors.push({
+      target: 'city',
+      message: translatedOrFallback('importErrorAddressCityRequired', 'The address needs a city.', translate),
+    });
+  }
+  if (!String(row.country ?? '').trim()) {
+    errors.push({
+      target: 'country',
+      message: translatedOrFallback('importErrorAddressCountryRequired', 'The address needs a country.', translate),
+    });
+  }
+  return errors;
+}
+
 registerImportRowValidator('contacts', (row, { translate } = {}) => [
   taxIdCellError(row.taxID, translate),
   codedCellError(row.oBTIKTaxIDKey, TAX_ID_KEY_VALUES, {
@@ -543,6 +675,7 @@ registerImportRowValidator('contacts', (row, { translate } = {}) => [
     codedCellError(row.vendor, YES_NO_VALUES, { ...VENDOR_CELL, translate }),
   ]),
   ...contactIdentityErrors(row, translate),
+  ...addressErrors(row, translate),
 ].filter(Boolean));
 
 // ETP-4997 — the CSV export derives its columns from these same import fields, but reads the
@@ -575,7 +708,13 @@ registerExportHints('contacts', {
     position: 'etgoChildData.position',
     // Address (C_Location) — bill-to, then ship-to, then newest, mirroring ETGO_GET_LOCATION so
     // the exported address is the one the grid's Location column already shows.
-    address: 'etgoChildData.address',
+    // ETP-6206 — `street` is the structured street, or the whole address line for an address never
+    // broken down; `buildingNumber` comes only with a structured street (BusinessPartnerHandler
+    // derives both). So a structured address exports as two values and re-imports unchanged, and
+    // a legacy one exports its whole line under Calle with Número empty (flag ON re-import: number
+    // "s/n"; flag OFF: the line verbatim). The number is never written twice.
+    streetName: 'etgoChildData.street',
+    buildingNumber: 'etgoChildData.buildingNumber',
     city: 'etgoChildData.city',
     postal: 'etgoChildData.postal',
     country: 'etgoChildData.country',
