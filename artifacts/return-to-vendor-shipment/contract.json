@@ -1,8 +1,8 @@
 {
   "version": "0.7.0",
   "generatedAt": "2026-08-13T11:56:58.791Z",
-  "updatedAt": "2026-11-05T13:33:52.667Z",
-  "checksum": "c3ef0df1c6cb22bb",
+  "updatedAt": "2026-11-11T18:10:19.699Z",
+  "checksum": "33a7933eb35fdf48",
   "frontendContract": {
     "window": {
       "id": "273673D2ED914C399A6C51DB758BE0F9",
@@ -488,7 +488,6 @@
             }
           }
         ],
-        "javaQualifier": "returnToVendorShipmentHeaderHandler",
         "draftMode": {
           "enabled": true,
           "processField": "documentAction",
@@ -1370,8 +1369,7 @@
             "visibility": "readOnly",
             "required": false
           }
-        ],
-        "javaQualifier": "returnToVendorShipmentHeaderHandler"
+        ]
       },
       "returnToVendorShipmentLine": {
         "tableName": "M_InOutLine",

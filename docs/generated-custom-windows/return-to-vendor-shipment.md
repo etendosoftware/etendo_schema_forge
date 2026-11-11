@@ -650,8 +650,8 @@ The popup opened by "Crear Factura Rectificativa" on a completed (CO), not-yet-i
   confirmed return, same components as the customer return.
 - Purchase rectificative: SII fields only, without a motive (purchase-side corrective support is not
   implemented). `sifFields` and `sifDefaults` are declared on every channel, MCP included: the header
-  handler is bound by `@NeoExtension` since ETP-6179 (its row's `Java_Qualifier` is still to be
-  removed, a pending data step).
+  handler is bound by `@NeoExtension` since ETP-6179 (the row's `Java_Qualifier`, the class's
+  `@Named` and the artifact's `javaQualifier` were removed).
 
 The step is shared (`tools/app-shell/src/windows/custom/shared/InvoiceSifStep.jsx`) and built
 from the backend's `sifDefaults` action, which answers which fiscal systems are active for the
