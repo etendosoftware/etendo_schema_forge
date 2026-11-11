@@ -1422,9 +1422,9 @@
           ]
         },
         {
-          "id": "refused-save-silent-in-spa",
+          "id": "refused-save-generic-500",
           "kind": "open",
-          "note": "When the stored catalog cannot be read, the backend refuses the catalog PUT (IllegalStateException from NeoFiscalModelsCatalogService.saveActiveModels, answered as HTTP 500 by NeoServlet, nothing written) in both flag states. The SPA does not notice: FmListPage's onSave has already applied the new selection through setActiveModels and its fire-and-forget PUT swallows the error (.catch(() => {})), so the page shows the change as saved until the next reload. Not done yet: map the refusal to a distinct status (409 or 503) instead of the generic 500, and in the SPA show a toast and re-read the catalog on a non-ok PUT. Not accepted debt -- an open item.",
+          "note": "When the stored catalog cannot be read, the backend refuses the catalog PUT (IllegalStateException from NeoFiscalModelsCatalogService.saveActiveModels, answered as HTTP 500 by NeoServlet, nothing written) in both flag states. Since ETP-5831 (QA CP-22) the SPA no longer hides it: FmListPage undoes its optimistic update and shows fm.catalog.save_failed on any non-ok PUT. Not done yet: map the refusal to a distinct status (409 or 503) instead of the generic 500. Not accepted debt -- an open item.",
           "refs": [
             "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md — '`fiscal-model-390` (ETP-5716)', 'Stored catalog unreadable'",
             "docs/generated-custom-windows/fiscal-models.md — 'Persistence (NEO Headless, per-Client)', 'On save'"

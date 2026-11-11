@@ -496,6 +496,15 @@ const BACKEND_ERROR_KEY_MAP = {
   // same rationale as the CashCloseSupport matchers below: a raw BigDecimal string pasted into
   // Spanish copy renders the wrong decimal separator and no currency symbol.
   ETGO_InvoiceRectificationExceedsOriginal: 'backendError.invoiceRectificationExceedsOriginal',
+  // ETP-5745 CP-26 — com.etendoerp.go RectificationFiscalCodeGuard: completing a NON-rectificative
+  // invoice whose VERI*FACTU `etvfacInvType` is still a stray R1-R5 (left over from an earlier
+  // choice, e.g. the document type was reverted through a channel that skipped the UI callout's
+  // own clear-on-revert, such as a direct MCP/REST write). BLOCKS instead of silently correcting
+  // it to F1 — unlike that callout, which may still auto-clear it in the SAME gesture the user
+  // just made (reverting the document type); this guard is the backstop for state the user
+  // already brought to "Confirm", so correcting it without saying anything would hide a real
+  // mistake instead of surfacing it.
+  ETGO_InvoiceVerifactuInvTypeNotRectificative: 'backendError.verifactuInvTypeNotRectificative',
   // ETP-5692 — core `PostedDocument` ("Document already Posted."), which DocumentPostingService
   // now names instead of the misleading "being posted by another process" when a post hits a
   // document someone else already posted. Resolved in the GO locale server-side, so mapping it
@@ -742,6 +751,28 @@ function translateInvoiceReactivateFiscalRectified(messageKeys, messageParams, t
     ? messageParams.rectificativas.join(', ')
     : messageParams.rectificativas;
   return resolveLocaleKey(t, 'backendError.invoiceReactivateFiscalRectified', { fiscalSystem, rectificativas });
+}
+
+const RECTIFICATION_CODE_REQUIRED_KEY = 'ETGO_InvoiceRectificationCodeRequired';
+
+/**
+ * `ETGO_InvoiceRectificationCodeRequired` (`RectificationFiscalCodeGuard.java`, ETP-5745 CP-19):
+ * same reason as {@link translateInvoiceReactivateFiscalRectified} just above — this message
+ * needs the locale-aware conjunction join ("SII y TicketBAI" / "SII and TicketBAI"), which the
+ * generic key route's `toInterpolationParams` (plain comma join) does not give. The backend's
+ * `message` field is deliberately English prose (the wire contract for MCP/scripts); the SPA
+ * never shows it — it renders this localized sentence from `messageParams.systems` instead, a
+ * raw JSON array of system names ("SII", "TicketBAI", "Verifactu"), in the dynamic subset the
+ * guard found still missing their own rectification code/motive.
+ */
+function translateRectificationCodeRequired(messageKeys, messageParams, t) {
+  if (!Array.isArray(messageKeys) || !messageKeys.includes(RECTIFICATION_CODE_REQUIRED_KEY)) return null;
+  if (!messageParams || typeof messageParams !== 'object') return null;
+  const systems = Array.isArray(messageParams.systems)
+    ? joinWithConjunction(messageParams.systems, t)
+    : messageParams.systems;
+  if (!systems) return null;
+  return resolveLocaleKey(t, 'backendError.rectificationCodeRequired', { systems });
 }
 
 // ETP-5840 — the exchange-rate refusals of com.etendoerp.go, rendered from their identity.
@@ -2037,6 +2068,11 @@ export function translateBackendError(msg, t, options = {}) {
   const reactivateFiscal = translateInvoiceReactivateFiscalRectified(
     options.messageKeys, options.messageParams, t);
   if (reactivateFiscal !== null) return reactivateFiscal;
+
+  // ETP-5745 CP-19: same reason — translateRectificationCodeRequired's conjunction join too.
+  const rectificationCodeRequired = translateRectificationCodeRequired(
+    options.messageKeys, options.messageParams, t);
+  if (rectificationCodeRequired !== null) return rectificationCodeRequired;
 
   // Key route first: it is the only one that can resolve a message whose text is unmatchable by
   // construction. Runs even when `msg` is empty — the keys alone carry enough to say what failed.
