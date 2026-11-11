@@ -649,8 +649,9 @@ The popup opened by "Crear Factura Rectificativa" on a completed (CO), not-yet-i
 - **Confirmar** with the rectificative-invoice toggle on and **Crear factura rectificativa** on a
   confirmed return, same components as the customer return.
 - Purchase rectificative: SII fields only, without a motive (purchase-side corrective support is not
-  implemented). Over MCP `sifFields`/`sifDefaults` are not declared for this window yet (the handler is
-  still bound by `Java_Qualifier`); REST and the screen use them.
+  implemented). `sifFields` and `sifDefaults` are declared on every channel, MCP included: the header
+  handler is bound by `@NeoExtension` since ETP-6179 (its row's `Java_Qualifier` is still to be
+  removed, a pending data step).
 
 The step is shared (`tools/app-shell/src/windows/custom/shared/InvoiceSifStep.jsx`) and built
 from the backend's `sifDefaults` action, which answers which fiscal systems are active for the
