@@ -3266,17 +3266,16 @@ with the shared round `RowExpandToggle` (ETP-5593, sized 24 × 24 through `class
 adornment slot and the amount; an expanded document shows a bordered lines table with a master
 checkbox and a −/+ quantity stepper (`NumberStepperInput`, bounded by the line's available
 quantity, typed values still validated on blur); the footer has the selection hint and the
-«Cancelar» / primary pills. The hint and the primary button count the selected LINES, with
-singular/plural wording («**1 línea** seleccionada», «**2 líneas** seleccionadas»,
-«Importar seleccionadas (2)»; keys `importLinesSelectedCountOne/Many`,
-`importLinesSelectedSuffixOne/Many`) in every popup — ETP-5828 QA UI-6 replaced the
-`selectedDocumentsKey` prop (which counted documents, «1 pedido(s)») and the old «N Seleccionados».
+«Cancelar» / primary pills. The hint reads «N Seleccionados» (`selected`) and the primary button
+counts the selected lines; with `countLinesInFooter` the hint counts LINES with singular/plural
+wording instead (see the prop table).
 
 **Optional props added by ETP-5828** (all default to the previous behaviour):
 
 | Prop | Effect |
 |---|---|
 | `renderSelectionPanel(selection)` | Renders the fixed-height notice area under the list (`ImportLinesModal__selectionPanelSlot`). Return an `<ImportNotice tone="neutral"\|"warning" title body control? />` (exported from the same file); `null` shows the neutral «Información de importación» notice. Without the prop there is no notice area. |
+| `countLinesInFooter` | Default `false` («N Seleccionados»). `true`: the footer reads «**1 línea** seleccionada» / «**N líneas** seleccionadas» (keys `importLinesSelectedCountOne/Many`, `importLinesSelectedSuffixOne/Many`). Opted in only by the invoices' «Importar desde pedido» (`InvoiceOrderImportModal`, ETP-5828 QA UI-6), which until then counted ORDERS through the removed `selectedDocumentsKey` prop («1 pedido(s)» with two lines). |
 | `describeImportedLine(line)` | The note under a greyed-out line's product. Return a string (e.g. the order import's «en factura borrador FV1000002», from the line's `inDraftInvoices`, ETP-5828 QA UI-4) or `null` to keep the default («ya importado», or «en albarán: …» from `_inDraftShipments`). Rendered as `ImportLinesModal__importedNote`. |
 | `importButtonKey` | i18n key of the primary button (default `importSelected`; `{count}` receives `" (N)"` or `""`). |
 

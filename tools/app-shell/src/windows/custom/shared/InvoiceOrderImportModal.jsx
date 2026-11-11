@@ -79,6 +79,8 @@ export default function InvoiceOrderImportModal({ direction, ...props }) {
       getDocumentTotal={getOrderTotal}
       submitImport={submitImport}
       describeImportedLine={describeImportedLine}
+      // QA UI-6 — only the order popups count lines in the footer («2 líneas seleccionadas»).
+      countLinesInFooter
       {...globalDiscountProps}
       data-testid="ImportLinesModal__52f314" />
   );
