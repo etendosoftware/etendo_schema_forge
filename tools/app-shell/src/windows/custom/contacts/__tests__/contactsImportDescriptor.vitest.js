@@ -2,7 +2,6 @@
 // @covers tools/app-shell/src/windows/custom/contacts/contactsFkResolvers.js
 // @covers tools/app-shell/src/lib/importFlagGates.js
 // @covers tools/app-shell/src/lib/importCapabilities.js
-// @covers tools/app-shell/src/lib/structuredAddress.js
 import { describe, it, vi, afterEach, beforeEach } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -26,7 +25,6 @@ import '../contactsImportDescriptor.js';
 import { CONTACT_CATEGORY_TYPE } from '@/lib/flags/flag-keys.js';
 import { applyImportFlagGates } from '@/lib/importFlagGates.js';
 import { publishImportCapabilities, resetImportCapabilitiesForTests } from '@/lib/importCapabilities.js';
-import { composeAddressLines } from '@/lib/structuredAddress.js';
 
 const setCategoryTypeFlag = (on) => { flagState.values = { [CONTACT_CATEGORY_TYPE]: on }; };
 beforeEach(() => setCategoryTypeFlag(true));
@@ -862,16 +860,5 @@ describe('contacts import descriptor — structured address capability OFF', () 
     const errors = runImportRowValidator('contacts', { ...row, taxID: 'B12345674', ...cells }, {});
     assert.deepEqual(errors.map((e) => e.target), targets);
     if (targets.length && cells.streetName) assert.match(errors[0].message, /\b60\b/);
-  });
-});
-
-// The composer is fed raw CSV cells, which are not always strings (a numeric cell, a missing one).
-describe('structuredAddress.composeAddressLines — non-string input', () => {
-  it.each([
-    ['numeric number', ['Calle Mayor', 12, null], { address1: 'Calle Mayor, 12', address2: '' }],
-    ['numeric street, missing number', [742, undefined, undefined], { address1: '742, s/n', address2: '' }],
-    ['null street', [null, 12, null], { address1: '', address2: '' }],
-  ])('%s', (_label, args, expected) => {
-    assert.deepEqual(composeAddressLines(...args), expected);
   });
 });

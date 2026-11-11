@@ -23,7 +23,7 @@ import {
     STREET_NAME_MAX_LENGTH,
     composeAddressLines,
     effectiveBuildingNumber,
-} from '@/lib/structuredAddress.js';
+} from '@etendosoftware/app-shell-core/lib/locationAddress.js';
 const EMPTY_FORM = {
     address: '',
     address2: '',
@@ -41,7 +41,7 @@ const EMPTY_FORM = {
 };
 const SELECTOR_PAGE_SIZE = 120;
 
-// ETP-5806 — the address constants and the composer live in `@/lib/structuredAddress.js`, shared
+// ETP-5806 — the address constants and the composer come from core `lib/locationAddress.js`, shared
 // with the Contacts import (ETP-6206) so the two payload builders cannot drift. The *_MAX_LENGTH
 // constants are enforced below as `maxLength` so the user can never type past what the backend
 // can store; without that cap a value sent through another path (e.g. paste) used to reach

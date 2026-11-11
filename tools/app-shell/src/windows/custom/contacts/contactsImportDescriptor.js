@@ -27,7 +27,7 @@ import {
   STREET_NAME_MAX_LENGTH,
   composeAddressLines,
   effectiveBuildingNumber,
-} from '@/lib/structuredAddress.js';
+} from '@etendosoftware/app-shell-core/lib/locationAddress.js';
 
 /**
  * Feature flag `contact-category-type` (ETP-5791) — the toggle point of this descriptor. Read per

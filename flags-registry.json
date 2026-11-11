@@ -1293,7 +1293,6 @@
       "paths": {
         "frontend": [
           "tools/app-shell/src/windows/custom/shared/LocationEditorModal.jsx",
-          "tools/app-shell/src/lib/structuredAddress.js",
           "tools/app-shell/src/windows/custom/contacts/contactsImportDescriptor.js",
           "tools/app-shell/src/lib/importCapabilities.js"
         ],
