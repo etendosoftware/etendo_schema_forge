@@ -57,7 +57,7 @@ The skill `stored-computed-column` states it explicitly: a value injected by `Ne
 | Sort Fecha, Cantidad, Costo | `movementDate`, `movementQuantity`, `transactionCost` (physical) | Yes |
 | Filter warehouse | `storageBin` `in` (bins of that warehouse); the warehouse is not a column of `M_Transaction` | Workable, with the `in` limit of 100 values |
 | Sort Almacén | warehouse name, reached through the bin: not physical | **No** |
-| Sort Tipo | physical `movementType` sorts by code, not by the label shown; the return/normal distinction (`C_DocType.IsReturn`) is not physical | **Only by code** |
+| Sort Tipo | physical `movementType` sorts by code, not by the label shown; the return/normal distinction (`C_DocType.IsReturn`) is not physical | **Superseded (ETP-5908):** the Type header now orders by the visible label. The SPA sends the order of the translated label buckets in the active language (`typeLabelOrder`) and `ProductTransactionsHandler#orderedPage` ranks the filtered set by it on the server (see `docs/generated-custom-windows/product.md`, Movements) |
 | Documento (label, link) | `afterHandle` (already works) | Display only; the task does not ask to sort it |
 | Stock resultante | running sum computed in `afterHandle` over the whole product history | Display only; the task says it is not sortable |
 
