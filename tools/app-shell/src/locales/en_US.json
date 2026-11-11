@@ -20084,6 +20084,7 @@
     "productMovementsTypeInventoryIn": "Inventory in",
     "productMovementsTypeInventoryOut": "Inventory out",
     "productMovementsTypeTransfer": "Transfer between warehouses",
+    "productMovementsEmptyText": "Every entry, exit, return and adjustment will show up here as soon as a document is processed for this product.",
     "productMovementsNoResults": "No results for the applied filters",
     "productMovementsError": "The movements could not be loaded",
     "productMovementsSaveFirstHint": "Save the product to see its movements",

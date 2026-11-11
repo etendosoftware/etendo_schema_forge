@@ -19479,6 +19479,7 @@
     "productMovementsTypeInventoryIn": "Entrada de inventario",
     "productMovementsTypeInventoryOut": "Salida de inventario",
     "productMovementsTypeTransfer": "Transferencia entre almacenes",
+    "productMovementsEmptyText": "Acá vas a ver cada entrada, salida, devolución y ajuste en cuanto se procese un documento con este producto.",
     "productMovementsNoResults": "Sin resultados para los filtros aplicados",
     "productMovementsError": "No se pudieron cargar los movimientos",
     "productMovementsSaveFirstHint": "Guardá el producto para ver sus movimientos",
