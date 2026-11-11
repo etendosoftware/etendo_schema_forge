@@ -1035,3 +1035,69 @@ describe('ProductSidebar — Ver movimientos link and chart click', () => {
     expect(screen.queryByTestId('dialog')).toBeNull();
   });
 });
+
+// A failed read must never be drawn as a stock of 0 (live finding on ETP-5908).
+describe('ProductSidebar failed reads', () => {
+  const stock = [{ storageBin: 'LOC1', 'warehouse$_identifier': 'WH-A', quantityOnHand: 1530 }];
+  const tx = [{ movementDate: '2025-01-15', movementQuantity: 10, storageBin: 'LOC1' }];
+  const ok = (data) => Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data } }) });
+  const mockFetch = ({ stockResult, txResult }) => {
+    globalThis.fetch = vi.fn((url) => (url.includes('/stock') ? stockResult(url) : txResult(url)));
+  };
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('shows an unavailable state, not 0 or a chart, when /stock answers 500', async () => {
+    mockFetch({ stockResult: () => Promise.resolve({ ok: false, status: 500 }), txResult: () => ok(tx) });
+    render(<ProductSidebar {...defaultProps} />);
+    const dash = await screen.findByTestId('AvailabilityUnavailable');
+    expect(dash).toHaveAttribute('aria-label', 'stockUnavailable');
+    expect(screen.queryByText('0')).toBeNull();
+    expect(screen.queryByTestId('StockChartExpandButton')).toBeNull();
+    expect(screen.getByTestId('StockUnavailableNote')).toHaveTextContent('stockUnavailableDesc');
+    expect(screen.queryByText('noStockMovements')).toBeNull();
+  });
+
+  it('shows the unavailable state on a network error of /stock', async () => {
+    mockFetch({ stockResult: () => Promise.reject(new Error('net')), txResult: () => ok(tx) });
+    render(<ProductSidebar {...defaultProps} />);
+    expect(await screen.findByTestId('AvailabilityUnavailable')).toBeInTheDocument();
+    expect(screen.queryByTestId('AvailabilityValueSkeleton')).toBeNull();
+  });
+
+  it('keeps the real stock and says the history failed when only the history request fails', async () => {
+    mockFetch({ stockResult: () => ok(stock), txResult: () => Promise.resolve({ ok: false, status: 500 }) });
+    render(<ProductSidebar {...defaultProps} />);
+    expect(await screen.findByTestId('StockUnavailableNote')).toHaveTextContent('stockHistoryUnavailable');
+    expect(screen.queryByTestId('AvailabilityUnavailable')).toBeNull();
+    expect(screen.queryByText('noStockMovements')).toBeNull();
+    // The Available card is still rendered with the real stock and its warehouse label.
+    expect(screen.getByText('1.530')).toBeInTheDocument();
+    expect(screen.getByTestId('AvailabilityWarehousePill')).toHaveTextContent('WH-A');
+    expect(screen.queryByTestId('StockChartExpandButton')).toBeNull();
+  });
+
+  it('keeps the real stock cards in the Warehouses tab when only the history fails', async () => {
+    mockFetch({ stockResult: () => ok(stock), txResult: () => Promise.resolve({ ok: false, status: 500 }) });
+    render(<ProductSidebar {...defaultProps} />);
+    await screen.findByTestId('StockUnavailableNote');
+    fireEvent.click(screen.getByTestId('ProductSidebarTab-warehouses'));
+    expect(screen.getByTestId('WarehouseCardAvailability')).toHaveTextContent('1.530');
+    expect(screen.getAllByTestId('StockUnavailableNote')).toHaveLength(1);
+  });
+
+  it('keeps the empty state for a legitimately empty product (no stock rows, no movements)', async () => {
+    mockFetch({ stockResult: () => ok([]), txResult: () => ok([]) });
+    render(<ProductSidebar {...defaultProps} />);
+    expect(await screen.findByText('noStockMovements')).toBeInTheDocument();
+    expect(screen.queryByTestId('StockUnavailableNote')).toBeNull();
+    expect(screen.queryByTestId('AvailabilityUnavailable')).toBeNull();
+  });
+
+  it('shows the note in the Warehouses tab when /stock fails', async () => {
+    mockFetch({ stockResult: () => Promise.resolve({ ok: false, status: 500 }), txResult: () => ok(tx) });
+    render(<ProductSidebar {...defaultProps} />);
+    await screen.findByTestId('AvailabilityUnavailable');
+    fireEvent.click(screen.getByTestId('ProductSidebarTab-warehouses'));
+    expect(screen.getAllByTestId('StockUnavailableNote').length).toBeGreaterThan(0);
+  });
+});

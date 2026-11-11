@@ -84,7 +84,8 @@ function SidebarPeriodSelector({ period, onChangePeriod, ui, disabled = false })
 
 // Horizontal availability widget: icon box + label + locations link/badge + big number.
 // With `onBadgeClick` the badge is a real button (RF-06: opens the Warehouses tab).
-function AvailabilityWidget({ label, value, badge, onBadgeClick, loading = false }) {
+function AvailabilityWidget({ label, value, badge, onBadgeClick, loading = false, unavailable = false }) {
+  const ui = useUI();
   return (
     <div className="flex-1 flex items-center gap-3 pl-3 pr-2 py-2 bg-card border border-border-subtle rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]">
       <div className="w-10 h-10 shrink-0 flex items-center justify-center bg-card border border-border-control rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]">
@@ -110,7 +111,9 @@ function AvailabilityWidget({ label, value, badge, onBadgeClick, loading = false
         <span className="text-2xl font-medium tracking-[-0.01em] text-foreground leading-9">
           {loading ? (
             <Skeleton className="my-2 h-5 w-16" aria-hidden="true" data-testid="AvailabilityValueSkeleton" />
-          ) : (value === null ? <span className="text-muted-foreground">—</span> : value)}
+          ) : (unavailable
+            ? <span className="text-muted-foreground" role="img" aria-label={ui('stockUnavailable')} title={ui('stockUnavailable')} data-testid="AvailabilityUnavailable">—</span>
+            : (value === null ? <span className="text-muted-foreground">—</span> : value))}
         </span>
       </div>
     </div>
@@ -241,6 +244,15 @@ function StockEmptyState({ onAdjustStock, onReplenish }) {
           {ui('replenishStock')}
         </button>
       </div>
+    </div>
+  );
+}
+
+// A failed read of the stock or of the movement history: never drawn as 0 or as an empty product.
+function StockUnavailableNote({ message }) {
+  return (
+    <div className="px-4 py-6 flex items-center justify-center" role="status" data-testid="StockUnavailableNote">
+      <span className="text-xs text-muted-foreground text-center">{message}</span>
     </div>
   );
 }
@@ -431,7 +443,7 @@ function WarehouseCards({ rows, ui, fmt }) {
 export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
   const ui = useUI();
   const apiFetch = useApiFetch(apiBaseUrl);
-  const { stockRows, transactions, partial } = useStockHistory(recordId, apiFetch);
+  const { stockRows, transactions, partial, stockFailed, historyFailed } = useStockHistory(recordId, apiFetch);
   const [activeTab, setActiveTab] = useState('summary');
   // RF-16: collapsed is only different markup; every hook above/below stays mounted, so period, hidden series and history survive.
   const [collapsed, setCollapsed] = useSidebarCollapsed();
@@ -468,9 +480,12 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
   if (binCount === 1) onHandSubtitle = locationRows[0]?.binName ?? null;
   else if (binCount > 1) onHandSubtitle = ui('stockLocationsCount', { count: binCount });
 
-  const hasChart = transactions !== null && transactions.length > 0;
+  // Without a trusted stock there is no anchor for the series: no chart rather than a flat zero one.
+  const hasChart = transactions !== null && transactions.length > 0 && !stockFailed;
   // The stock is still being read: the "Available" value shows a placeholder bar instead of a number.
-  const stockLoading = stockRows === null || transactions === null;
+  // The card shows whenever the stock rows loaded, whatever the history did (a failed history only replaces the chart).
+  const stockKnown = stockRows !== null;
+  const stockLoading = (stockRows === null && !stockFailed) || transactions === null;
   const sortedRows = [...locationRows].sort((a, b) => b.quantityOnHand - a.quantityOnHand);
   const navigate = useNavigate();
 
@@ -555,10 +570,11 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
               ui={ui}
               disabled={!hasChart}
               data-testid="SidebarPeriodSelector__59b33d" />
-            {(hasChart || stockLoading) && <AvailabilityWidget
+            {(hasChart || stockLoading || stockFailed || (stockKnown && historyFailed)) && <AvailabilityWidget
               label={ui('stockAvailableLabel')}
               value={stockLoading ? null : fmt(onHand)}
               loading={stockLoading}
+              unavailable={stockFailed}
               badge={onHandSubtitle}
               onBadgeClick={binCount > 1 ? () => setActiveTab('warehouses') : undefined}
               data-testid="AvailabilityWidget__59b33d" />}
@@ -574,6 +590,7 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
               ui={ui}
               disabled={!hasChart}
               data-testid="SidebarPeriodSelector__59b33d" />
+            {stockFailed && <StockUnavailableNote message={ui('stockUnavailableDesc')} data-testid="StockUnavailableNote__59b33d" />}
             <WarehouseCards rows={sortedRows} ui={ui} fmt={fmt} data-testid="WarehouseCards__59b33d" />
           </div>
         )}
@@ -587,7 +604,9 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
       {/* ── Stock movement or empty state ── */}
       {hasChart
         ? <StockChart {...stockChartProps} data-testid="StockChart__59b33d" />
-        : transactions !== null && <StockEmptyState
+        : (stockFailed || historyFailed)
+          ? <StockUnavailableNote message={ui(stockFailed ? 'stockUnavailableDesc' : 'stockHistoryUnavailable')} data-testid="StockUnavailableNote__59b33d" />
+          : transactions !== null && <StockEmptyState
         onAdjustStock={() => navigate('/physical-inventory/new')}
         onReplenish={() => navigate('/purchase-order/new')}
         data-testid="StockEmptyState__59b33d" />

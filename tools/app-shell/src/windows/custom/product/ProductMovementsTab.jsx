@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeftRight, ArrowUpRight, FileText, Loader2 } from 'lucide-react';
-import { useUI } from '@/i18n';
+import { useLocaleSwitch, useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useCurrency } from '@/hooks/useCurrency';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
@@ -24,6 +24,7 @@ import {
   MOVEMENTS_PAGE_SIZE,
   buildAnyMovementQuery,
   buildMovementsQuery,
+  buildTypeLabelOrder,
   formatProcessTime,
   isMovementsSortKey,
   isStorableProduct,
@@ -141,6 +142,7 @@ function NoMovementsForFilters({ ui }) {
 
 export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onVisibilityChange }) {
   const ui = useUI();
+  const { locale } = useLocaleSwitch();
   const apiFetch = useApiFetch(apiBaseUrl);
   const currency = useCurrency() ?? 'USD';
   const productId = data?.id;
@@ -223,13 +225,18 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onVisi
 
   const filters = useMemo(() => ({ direction, dateRange, warehouseId }), [direction, dateRange, warehouseId]);
 
+  // The Type column sorts by the label the user reads, in the active language: the order of the label
+  // buckets is recomputed per locale and travels with the request (a string, so the page loader only
+  // changes when the order does). Any other sort sends nothing.
+  const typeOrder = sort.key === 'type' ? buildTypeLabelOrder(ui, locale) : null;
+
   const loadPage = useCallback(async (start) => {
     const mine = ++generation.current;
     setState((prev) => (start === 0
       ? { rows: [], loading: true, loadingMore: false, error: null, hasMore: false }
       : { ...prev, loadingMore: true }));
     try {
-      const res = await apiFetch(buildMovementsQuery({ productId, filters, sort, start }));
+      const res = await apiFetch(buildMovementsQuery({ productId, filters, sort, start, typeOrder }));
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const page = rowsOf(await res.json());
       if (mine !== generation.current) return;
@@ -244,7 +251,7 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onVisi
       if (mine !== generation.current) return;
       setState((prev) => ({ ...prev, loading: false, loadingMore: false, error: error.message }));
     }
-  }, [apiFetch, productId, filters, sort]);
+  }, [apiFetch, productId, filters, sort, typeOrder]);
 
   // Any change of the view starts again from the first page.
   useEffect(() => {

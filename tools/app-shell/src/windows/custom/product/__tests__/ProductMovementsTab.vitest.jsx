@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   // The per-account flag, published by the backend as `capabilities.productMovements`.
   capabilities: { productMovements: true },
   navigate: vi.fn(),
+  dictionary: {},
+  locale: 'es_ES',
   location: { pathname: '/product/p1', search: '?a=1', hash: '', state: null },
 }));
 vi.mock('react-router-dom', () => ({
@@ -18,7 +20,11 @@ vi.mock('react-router-dom', () => ({
   useLocation: () => mocks.location,
 }));
 
-vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
+// `dictionary` / `locale` let a test show real labels in a given language; by default a label is its key.
+vi.mock('@/i18n', () => ({
+  useUI: () => (key) => mocks.dictionary[key] ?? key,
+  useLocaleSwitch: () => ({ locale: mocks.locale }),
+}));
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => mocks.apiFetch }));
 vi.mock('@/hooks/useCapabilitiesSafe.js', () => ({ useCapabilitiesSafe: () => mocks.capabilities }));
 vi.mock('@/hooks/useCurrency', () => ({ useCurrency: () => 'EUR' }));
@@ -97,6 +103,8 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     mocks.navigate.mockReset();
     mocks.location = { pathname: '/product/p1', search: '?a=1', hash: '', state: null };
     mocks.capabilities = { productMovements: true };
+    mocks.dictionary = {};
+    mocks.locale = 'es_ES';
     route();
   });
 
@@ -361,6 +369,66 @@ describe('ProductMovementsTab (ETP-5889)', () => {
 
     await waitFor(() => expect(pageRequests()).toHaveLength(2));
     expect(query(pageRequests()[1]).get('_sortBy')).toBe('movementDate,transactionProcessDate,id');
+  });
+
+  describe('Type column sorts by the visible label', () => {
+    const labelsOf = (dict) => ({ ...dict.genericLabels });
+
+    it('sends the label order of the active language, ascending then descending, and nothing for other columns', async () => {
+      mocks.dictionary = labelsOf(esES);
+      render(<ProductMovementsTab data={storable} isActive />);
+      await waitFor(() => expect(pageRequests()).toHaveLength(1));
+      expect(query(pageRequests()[0]).has('typeLabelOrder')).toBe(false);
+
+      await userEvent.click(screen.getByText(esES.genericLabels.typeColumn));
+      await waitFor(() => expect(pageRequests()).toHaveLength(2));
+      const asc = query(pageRequests()[1]);
+      expect(asc.get('_sortBy')).toBe('etgoDocKind,-movementDate,-transactionProcessDate,-id');
+      expect(asc.get('typeLabelOrder')).toBe(
+        'vendor-receipt,customer-shipment,internal-consumption,vendor-return,customer-return,inventory-in,inventory-out,transfer');
+
+      await userEvent.click(screen.getByText(esES.genericLabels.typeColumn));
+      await waitFor(() => expect(pageRequests()).toHaveLength(3));
+      const desc = query(pageRequests()[2]);
+      expect(desc.get('_sortBy')).toBe('-etgoDocKind,-movementDate,-transactionProcessDate,-id');
+      expect(desc.get('typeLabelOrder')).toBe(asc.get('typeLabelOrder'));
+
+      await userEvent.click(screen.getByText(esES.genericLabels.productMovementsQuantity));
+      await waitFor(() => expect(pageRequests()).toHaveLength(4));
+      expect(query(pageRequests()[3]).has('typeLabelOrder')).toBe(false);
+    });
+
+    it('computes another order in another language and asks again when the language changes', async () => {
+      mocks.dictionary = labelsOf(enUS);
+      mocks.locale = 'en_US';
+      const { rerender } = render(<ProductMovementsTab data={storable} isActive />);
+      await waitFor(() => expect(pageRequests()).toHaveLength(1));
+      await userEvent.click(screen.getByText(enUS.genericLabels.typeColumn));
+      await waitFor(() => expect(pageRequests()).toHaveLength(2));
+      const english = query(pageRequests()[1]).get('typeLabelOrder');
+      expect(english).toBe(
+        'customer-return,vendor-receipt,internal-consumption,inventory-in,inventory-out,customer-shipment,transfer,vendor-return');
+
+      mocks.dictionary = labelsOf(esES);
+      mocks.locale = 'es_ES';
+      rerender(<ProductMovementsTab data={storable} isActive />);
+      await waitFor(() => expect(pageRequests()).toHaveLength(3));
+      const spanish = query(pageRequests()[2]);
+      expect(spanish.get('typeLabelOrder')).not.toBe(english);
+      expect(spanish.get('_startRow')).toBe('0');
+    });
+
+    it('keeps aria-sort on the Type header only and does not refetch on a language change under another sort', async () => {
+      render(<ProductMovementsTab data={storable} isActive />);
+      await waitFor(() => expect(pageRequests()).toHaveLength(1));
+      await userEvent.click(screen.getByText('typeColumn'));
+      await waitFor(() => expect(pageRequests()).toHaveLength(2));
+      expect(screen.getByText('typeColumn').closest('[role="columnheader"]')).toHaveAttribute('aria-sort', 'ascending');
+      expect(screen.getByText('date').closest('[role="columnheader"]')).toHaveAttribute('aria-sort', 'none');
+      await userEvent.click(screen.getByText('date'));
+      await waitFor(() => expect(pageRequests()).toHaveLength(3));
+      expect(query(pageRequests()[2]).has('typeLabelOrder')).toBe(false);
+    });
   });
 
   it('does not let the resulting stock be sorted', async () => {
