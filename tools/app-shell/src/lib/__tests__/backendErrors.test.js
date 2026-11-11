@@ -771,6 +771,70 @@ describe('translateBackendErrorBody', () => {
   }
 });
 
+describe('bank bounce-pair refusals (ETP-5581)', () => {
+  // com.etendoerp.go BankBounceErrors / StatementLineDiscard: each coded refusal carries its
+  // English AD_MESSAGE key in error.messageKeys; the SPA translates it with translateBackendErrorBody.
+  const KEYED = [
+    ['LINE_DISCARDED', 'ETGO_StatementLineDiscarded', 'backendError.bankLineDiscarded',
+      'This bank statement line is discarded, so it cannot be reconciled. Restore it first.'],
+    ['BOUNCE_SUGGESTIONS_OFF', 'ETGO_BounceSuggestionsOff', 'backendError.bounceSuggestionsOff',
+      'Bounce suggestions are not enabled for this account.'],
+    ['SIGN_MISMATCH', 'ETGO_BounceSignMismatch', 'backendError.bounceSignMismatch',
+      'The two lines of a bounce must have opposite signs: one takes the money out and the other brings it back.'],
+    ['AMOUNT_MISMATCH', 'ETGO_BounceAmountMismatch', 'backendError.bounceAmountMismatch',
+      'The two lines of a bounce must have exactly the same amount.'],
+    ['HAS_PAYMENT', 'ETGO_BounceHasPayment', 'backendError.bounceHasPayment',
+      'One of the lines is the bank movement of a payment registered in Etendo. Discarding it would leave that payment without its bank movement, so this bounce cannot be discarded.'],
+    ['LINE_NOT_PENDING', 'ETGO_BounceLineNotPending', 'backendError.bounceLineNotPending',
+      'One of the lines is not pending reconciliation: its bank statement is in draft, it is part of a partially reconciled line, or another suggestion already uses it.'],
+    ['DISCARD_NOT_ALLOWED', 'ETGO_BounceDiscardNotAllowed', 'backendError.bounceDiscardNotAllowed',
+      'This bounce cannot be discarded. Both lines must be unreconciled lines imported from the bank, and the later one must be dated at most 60 days after the earlier one.'],
+  ];
+
+  for (const [code, messageKey, localeKey, english] of KEYED) {
+    it(`routes ${messageKey} (${code}) to ${localeKey}`, () => {
+      const body = { error: { code, message: english, messageKeys: [messageKey] } };
+      assert.equal(translateBackendErrorBody(body, (k) => `translated:${k}`, 'fallback'), `translated:${localeKey}`);
+    });
+  }
+
+  it('routes each refusal to its own locale key', () => {
+    const keys = KEYED.map(([code, messageKey]) => translateBackendErrorBody(
+      { error: { code, message: 'x', messageKeys: [messageKey] } }, (k) => `translated:${k}`, 'f'));
+    assert.equal(new Set(keys).size, KEYED.length);
+  });
+
+  it('maps the LINE_DISCARDED English sentence by text, for the paths that forward only the message', () => {
+    const [, , localeKey, english] = KEYED[0];
+    assert.equal(translateBackendError(english, (k) => `translated:${k}`), `translated:${localeKey}`);
+    assert.equal(translateBackendError(`  ${english}  `, (k) => `translated:${k}`), `translated:${localeKey}`);
+  });
+
+  it('does not map the other bounce sentences by text (they are routed by key only)', () => {
+    for (const [, , , english] of KEYED.slice(1)) {
+      assert.equal(translateBackendError(english, (k) => `translated:${k}`), english);
+    }
+  });
+
+  for (const locale of ['en_US', 'es_ES', 'es_AR']) {
+    it(`resolves every refusal to a non-empty ${locale} translation`, () => {
+      const json = JSON.parse(readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'));
+      const t = localeTranslator(locale);
+      for (const [code, messageKey, localeKey, english] of KEYED) {
+        const out = translateBackendErrorBody({ error: { code, message: english, messageKeys: [messageKey] } }, t, 'f');
+        assert.equal(out, json.genericLabels[localeKey], `${locale}.${localeKey}`);
+        assert.ok(out.trim(), `${locale}.${localeKey} is blank`);
+        if (locale !== 'en_US') {
+          assert.notEqual(out, english, `${locale}.${localeKey} is untranslated`);
+          // The product wording is "rechazo" (bancario), never "rebote" nor "devolución".
+          assert.doesNotMatch(out, /devoluci/i, `${locale}.${localeKey} says devolución`);
+          assert.doesNotMatch(out, /rebote/i, `${locale}.${localeKey} says rebote`);
+        }
+      }
+    });
+  }
+});
+
 describe('translateBackendError — legacy "Account could not be found" text, new EN wording (ETP-5175)', () => {
   const es = localeTranslator('es_ES');
 
@@ -3665,6 +3729,83 @@ describe('translateBackendError — invoice reactivate fiscal-rectified refusal 
   });
 });
 
+// ── ETP-5745 CP-19/CP-23: rectification fiscal-code-required refusal (RectificationFiscalCodeGuard)
+// — `messageParams.systems` is a raw array of ACTIVE fiscal systems still missing their own
+// rectification code/motive, joined with the SAME locale-aware conjunction as fiscalSystem above
+// (the backend's own `message` field is deliberately plain English prose — the wire contract for
+// MCP/scripts; the SPA never shows it, it renders this localized sentence instead).
+describe('translateBackendError — rectification fiscal-code-required refusal (ETP-5745)', () => {
+  const es = localeTranslator('es_ES');
+  const en = localeTranslator('en_US');
+  const KEY = 'ETGO_InvoiceRectificationCodeRequired';
+
+  it('renders the key in es_ES and en_US, never the raw key or the backend prose', () => {
+    const prose = 'Select a rectification reason/code in the SIF tab for SII.';
+    const esText = translateBackendError(prose, es, { messageKeys: [KEY], messageParams: { systems: ['SII'] } });
+    const enText = translateBackendError(prose, en, { messageKeys: [KEY], messageParams: { systems: ['SII'] } });
+    assert.notEqual(esText, 'backendError.rectificationCodeRequired');
+    assert.notEqual(enText, 'backendError.rectificationCodeRequired');
+    assert.notEqual(esText, enText);
+  });
+
+  it('names a single missing system with no conjunction needed', () => {
+    const text = translateBackendError('ignored', es, { messageKeys: [KEY], messageParams: { systems: ['Verifactu'] } });
+    assert.match(text, /Verifactu/);
+  });
+
+  it('joins a 2-element systems array with the real es_ES/en_US conjunction, not a comma', () => {
+    const params = { systems: ['SII', 'TicketBAI'] };
+    const esText = translateBackendError('ignored', es, { messageKeys: [KEY], messageParams: params });
+    const enText = translateBackendError('ignored', en, { messageKeys: [KEY], messageParams: params });
+    assert.match(esText, /SII y TicketBAI/);
+    assert.match(enText, /SII and TicketBAI/);
+    assert.doesNotMatch(esText, /SII, TicketBAI/);
+  });
+
+  it('joins a 3-element systems array with no Oxford comma before the conjunction', () => {
+    const params = { systems: ['SII', 'TicketBAI', 'Verifactu'] };
+    const esText = translateBackendError('ignored', es, { messageKeys: [KEY], messageParams: params });
+    const enText = translateBackendError('ignored', en, { messageKeys: [KEY], messageParams: params });
+    assert.match(esText, /SII, TicketBAI y Verifactu/);
+    assert.match(enText, /SII, TicketBAI and Verifactu/);
+  });
+
+  it('keeps the backend prose when the locale has no entry for the key', () => {
+    const prose = 'raw backend prose';
+    assert.equal(translateBackendError(prose, (k) => k, {
+      messageKeys: [KEY], messageParams: { systems: ['SII'] },
+    }), prose);
+  });
+});
+
+// ── ETP-5745 CP-26: a non-rectificative invoice with a stray VERI*FACTU R1-R5 code BLOCKS
+// completion instead of being silently corrected (reverted from the original CP-20 behavior).
+// No dynamic messageParams — a single fixed sentence naming one field on one system, resolved
+// through the generic BACKEND_ERROR_KEY_MAP route (not a dedicated composer).
+describe('translateBackendError — Verifactu invoice type not rectificative (ETP-5745 CP-26)', () => {
+  const es = localeTranslator('es_ES');
+  const en = localeTranslator('en_US');
+  const KEY = 'ETGO_InvoiceVerifactuInvTypeNotRectificative';
+
+  it('renders the key in es_ES and en_US, never the raw key or the backend prose', () => {
+    const prose = 'The VERI*FACTU invoice type cannot be a rectification code (R1-R5) on an '
+      + 'invoice that is not rectificative. Fix it in the SIF tab before confirming.';
+    const esText = translateBackendError(prose, es, { messageKeys: [KEY] });
+    const enText = translateBackendError(prose, en, { messageKeys: [KEY] });
+    assert.notEqual(esText, 'backendError.verifactuInvTypeNotRectificative');
+    assert.notEqual(enText, 'backendError.verifactuInvTypeNotRectificative');
+    assert.notEqual(esText, prose);
+    assert.notEqual(esText, enText);
+    assert.match(esText, /Verifactu|VERI\*FACTU/i);
+    assert.match(esText, /rectificaci/i);
+  });
+
+  it('keeps the backend prose when the locale has no entry for the key', () => {
+    const prose = 'raw backend prose';
+    assert.equal(translateBackendError(prose, (k) => k, { messageKeys: [KEY] }), prose);
+  });
+});
+
 // ── translateByMessageKey messageParams forwarding — no regression on param-less keys ──
 //
 // translateByMessageKey now forwards messageParams to t(key, params) for EVERY keyed message,
@@ -4441,6 +4582,38 @@ describe('translateBackendError — draft invoice already exists (ETP-5714)', ()
     }
     const ar = readFileSync(new URL('../../locales/es_AR.json', import.meta.url), 'utf8');
     assert.ok(ar.includes('Confirmala o eliminala antes de generar otra'));
+  });
+
+  // ETP-5828 — the sales order's "Generar factura" answers 400 with this sentence when its draft
+  // invoices already hold everything left (OrderDocumentAvailability.draftCoversInvoiceReason).
+  const coversEs = fakeUiTranslator({
+    'backendError.draftInvoiceCoversPending': 'La factura borrador {docs} ya cubre lo que queda por facturar. Confírmala o elimínala en lugar de generar otra.',
+    'backendError.draftInvoiceCoversPendingUnnamed': 'Una factura borrador ya cubre lo que queda por facturar. Confírmala o elimínala en lugar de generar otra.',
+  });
+  const covers = (docs) => `A draft invoice (${docs}) already covers what is left to invoice; complete or delete it instead of creating another one.`;
+  // DRAFT_COVERS_INVOICE_UNNAMED: no covering draft is readable by the role, so no numbers at all.
+  const coversUnnamed = 'A draft invoice already covers what is left to invoice; complete or delete it instead of creating another one.';
+
+  for (const [label, message, expected] of [
+    ['numbered drafts keep their numbers', covers('FV-1, FV-2'),
+      'La factura borrador FV-1, FV-2 ya cubre lo que queda por facturar. Confírmala o elimínala en lugar de generar otra.'],
+    ['the unnamed sentence gets its own sentence', coversUnnamed,
+      'Una factura borrador ya cubre lo que queda por facturar. Confírmala o elimínala en lugar de generar otra.'],
+    ['empty parentheses stay untouched', covers(''), covers('')],
+  ]) {
+    it(`translates the draft-covers 400 from the { status, message } body — ${label}`, () => {
+      assert.equal(translateBackendErrorBody({ status: 'error', message }, coversEs, 'Error (400)'), expected);
+    });
+  }
+
+  it('ships backendError.draftInvoiceCoversPending with {docs} and its unnamed form in en_US, es_ES and es_AR (es_AR in voseo)', () => {
+    for (const loc of ['en_US', 'es_ES', 'es_AR']) {
+      const flat = readFileSync(new URL(`../../locales/${loc}.json`, import.meta.url), 'utf8');
+      assert.ok(flat.match(/"backendError\.draftInvoiceCoversPending":\s*"[^"]*\{docs\}/), `${loc} lost {docs}`);
+      assert.ok(flat.match(/"backendError\.draftInvoiceCoversPendingUnnamed":\s*"[^"{]+"/), `${loc} lacks the unnamed sentence`);
+    }
+    const ar = readFileSync(new URL('../../locales/es_AR.json', import.meta.url), 'utf8');
+    assert.ok(ar.includes('Confirmala o eliminala en lugar de generar otra'));
   });
 });
 

@@ -1,5 +1,6 @@
 import { track, addFeatureFlagEvaluation } from '../observability.js';
 import { NO_EXPOSURE_FLAGS } from './flag-keys.js';
+import { reportFlagDiagnostic } from './diagnostics.js';
 import { buildObservabilityEvent, OBSERVABILITY_EVENTS } from '../observability/events.js';
 
 /**
@@ -20,7 +21,7 @@ import { buildObservabilityEvent, OBSERVABILITY_EVENTS } from '../observability/
  * - **Never disturb evaluation.** `after` runs inside flag resolution, which is
  *   called on every render through `useFeatureFlag`. It never awaits and never
  *   throws; a reporting failure must not change what a flag resolves to.
- * - **Deduplicate per flag/value/provider, not per flag/value.** `initFeatureFlags`
+ * - **Deduplicate per account/company/flag/value/provider/reason.** `initFeatureFlags`
  *   registers this hook before the real provider is ready (`createFlagProvider`
  *   awaits a dynamic import and, for a remote provider, a network round-trip), so the
  *   very first evaluation on every page load — for essentially every session,
@@ -65,37 +66,55 @@ export function resetExposureCache() {
   reported.clear();
 }
 
+const SAFE_REASONS = new Set(['STATIC', 'DEFAULT', 'TARGETING_MATCH', 'SPLIT', 'CACHED', 'DISABLED', 'ERROR', 'UNKNOWN', 'STALE']);
+const MAX_REPORTED_EXPOSURES = 1000;
+
+function exposureIdentity(hookContext) {
+  const context = hookContext?.context ?? {};
+  return [context.accountId || context.targetingKey || '', context.clientId || context.account_id || ''];
+}
+
+function remember(key) {
+  if (reported.has(key)) return false;
+  if (reported.size >= MAX_REPORTED_EXPOSURES) reported.delete(reported.values().next().value);
+  reported.add(key);
+  return true;
+}
+
 export function buildExposureProperties(hookContext, evaluationDetails) {
+  const context = hookContext?.context ?? {};
+  const value = evaluationDetails?.value;
+  // The targeting key is now the backend's email. Keep the existing opaque account
+  // identity field without copying that email into analytics.
+  const legacyKey = typeof context.targetingKey === 'string' && !context.targetingKey.includes('@')
+    ? context.targetingKey : undefined;
   return {
     flagKey: hookContext?.flagKey,
-    // `enabled`, not `value`: the payload sanitizer treats `value` as a numeric
-    // property and silently drops booleans passed under that name.
-    enabled: evaluationDetails?.value,
+    ...(typeof value === 'boolean' ? { enabled: value } : { value }),
     variant: evaluationDetails?.variant,
     provider: hookContext?.providerMetadata?.name,
-    // The targeting key travels under `username` because that property is
-    // already sanctioned by the observability payload policy; introducing a new
-    // identity-bearing key would widen it without adding information.
-    username: hookContext?.context?.targetingKey,
+    username: context.accountId || legacyKey,
+    account_id: context.clientId || context.account_id,
+    reason: SAFE_REASONS.has(evaluationDetails?.reason) ? evaluationDetails.reason : undefined,
   };
 }
 
 export function createFlagExposureHook({
   trackImpl = track,
   rumEvaluationImpl = addFeatureFlagEvaluation,
+  diagnosticImpl = reportFlagDiagnostic,
 } = {}) {
   return {
     after(hookContext, evaluationDetails) {
       try {
         const { flagKey, value } = { flagKey: hookContext?.flagKey, value: evaluationDetails?.value };
-        if (!flagKey || typeof value !== 'boolean') return;
+        if (!flagKey || !(typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value)))) return;
         // The telemetry kill switches are read by the observability layer itself.
         if (NO_EXPOSURE_FLAGS.has(flagKey)) return;
 
         const provider = hookContext?.providerMetadata?.name;
-        const dedupeKey = `${flagKey}:${value}:${provider}`;
-        if (reported.has(dedupeKey)) return;
-        reported.add(dedupeKey);
+        const dedupeKey = JSON.stringify([...exposureIdentity(hookContext), flagKey, value, provider, evaluationDetails?.reason]);
+        if (!remember(dedupeKey)) return;
 
         const event = buildObservabilityEvent(
           OBSERVABILITY_EVENTS.FEATURE_FLAG_EVALUATED,
@@ -114,6 +133,18 @@ export function createFlagExposureHook({
         }
       } catch {
         // Reporting is best-effort; evaluation continues regardless.
+      }
+    },
+    error(hookContext) {
+      try {
+        const flagKey = hookContext?.flagKey;
+        if (!flagKey || NO_EXPOSURE_FLAGS.has(flagKey)) return;
+        const provider = hookContext?.providerMetadata?.name;
+        if (!remember(JSON.stringify([...exposureIdentity(hookContext), flagKey, provider, 'error']))) return;
+        diagnosticImpl({ operation: 'flag_evaluation', outcome: 'error', provider,
+          reason: 'provider_error', flagKey, account_id: hookContext?.context?.clientId || hookContext?.context?.account_id });
+      } catch {
+        // Error hooks are also inside evaluation and must remain best effort.
       }
     },
   };

@@ -1,136 +1,57 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { apiFetch as moduleApiFetch } from '@/auth/api.js';
+import useImportLoadFailureToast from '@/windows/custom/shared/useImportLoadFailureToast.js';
+import { draftDocumentsOf, fetchInOutDocuments, fetchInOutLines, isCoveredDocument, pendingOf, zeroDocumentTotal } from '@/windows/custom/shared/inOutImport.js';
 
-async function fetchDraftInfoByOrderLine({ base, bpId, currentShipmentId }) {
-  // Fetch current shipment lines directly (by parentId) + other draft shipments list in parallel.
-  // Avoids relying on the current shipment appearing in the paginated list.
-  const [currentLinesRes, shipmentsRes] = await Promise.all([
-    currentShipmentId
-      ? moduleApiFetch(`${base}/goods-shipment/goodsShipmentLine?parentId=${currentShipmentId}&_startRow=0&_endRow=200`)
-      : Promise.resolve(null),
-    moduleApiFetch(`${base}/goods-shipment/goodsShipment?_startRow=0&_endRow=100&_sortBy=movementDate desc`),
-  ]);
+// ETP-6099 — the invoices and their lines come from the shipment's own read actions
+// (`availableInvoices` / `availableInvoiceLines`, inOutImport.js). The server applies what the
+// popup filtered here before: completed, plain invoices of the customer (not rectificative — ETP-6002
+// IMP-3: a rectificative delivers nothing) in the shipment's currency, newest created first, and the
+// pending per line — with an order line: invoiced − delivered − drafts (this shipment included);
+// without one: 0 once the invoice line points at a shipment line, else the invoiced quantity. The
+// covered invoices (`pendingLines: 0`) are listed too and hidden by `isDocumentCovered`, so the
+// popup still says «all already imported». Replaced: the company-wide invoice list (500), the
+// shipment header, the shipment list (100), the lines of every draft shipment and, per expanded
+// invoice, the lines of its sales order.
+const ENTITY = 'goodsShipment'; // the header entity of the action URLs
+const SPEC = 'goods-shipment';
 
-  const draftInfo = {};
+// The «no invoices in this currency» probe (only when nothing is listed): plain invoices only,
+// the same criteria as ImportFromSourceInvoiceModal and the «Facturas» subset filter.
+const CURRENCY_PROBE = Object.freeze({
+  sourceHeader: 'sales-invoice/header',
+  criteria: Object.freeze([
+    { fieldName: 'transactionDocument$documentCategory', operator: 'equals', value: 'ARI' },
+    { fieldName: 'transactionDocument$etsgIsRectificative', operator: 'notEqual', value: true },
+  ]),
+});
 
-  if (currentLinesRes?.ok) {
-    const currentLines = (await currentLinesRes.json())?.response?.data || [];
-    currentLines.forEach(l => {
-      if (!l.salesOrderLine) return;
-      if (!draftInfo[l.salesOrderLine]) draftInfo[l.salesOrderLine] = { qty: 0, docNos: new Set() };
-      draftInfo[l.salesOrderLine].qty += Number(l.movementQuantity) || 0;
-    });
-  }
+const fetchDocuments = ({ base, bpId, invoiceId: shipmentId }) => fetchInOutDocuments({
+  apiFetch: moduleApiFetch, base, spec: SPEC, entity: ENTITY, targetId: shipmentId, bpId,
+  action: 'availableInvoices', dateKey: 'invoiceDate', currencyProbe: CURRENCY_PROBE,
+});
 
-  if (shipmentsRes.ok) {
-    const all = (await shipmentsRes.json())?.response?.data || [];
-    const otherDrafts = all.filter(s =>
-      s.documentStatus === 'DR' && s.businessPartner === bpId && s.id !== currentShipmentId,
-    );
-    const lineResults = await Promise.all(
-      otherDrafts.map(s =>
-        moduleApiFetch(`${base}/goods-shipment/goodsShipmentLine?parentId=${s.id}&_startRow=0&_endRow=200`)
-          .then(r => r.ok ? r.json().then(d => ({ docNo: s.documentNo, lines: d?.response?.data || [] })) : null),
-      ),
-    );
-    for (const result of lineResults) {
-      if (!result) continue;
-      result.lines.forEach(l => {
-        if (!l.salesOrderLine) return;
-        if (!draftInfo[l.salesOrderLine]) draftInfo[l.salesOrderLine] = { qty: 0, docNos: new Set() };
-        draftInfo[l.salesOrderLine].qty += Number(l.movementQuantity) || 0;
-        draftInfo[l.salesOrderLine].docNos.add(result.docNo);
-      });
-    }
-  }
-
-  return draftInfo;
-}
-
-// ETP-6002 (IMP-3): only plain invoices are shipped from. A rectificative (FVR…) carries its source
-// lines' order lines, but it delivers nothing — it must not be offered here. Same server-side
-// criteria as ImportFromSourceInvoiceModal and the "Facturas" subset filter: the plain-invoice
-// category (ARI — which also leaves out the legacy ARC / ARI_RM rectificative categories) and not
-// flagged rectificative.
-const PLAIN_INVOICE_CRITERIA = encodeURIComponent(JSON.stringify([
-  { fieldName: 'transactionDocument$documentCategory', operator: 'equals', value: 'ARI' },
-  { fieldName: 'transactionDocument$etsgIsRectificative', operator: 'notEqual', value: true },
-]));
-
-const fetchDocuments = async ({ base, bpId, invoiceId: shipmentId }) => {
-  const [invoicesRes, draftInfo, headerRes] = await Promise.all([
-    moduleApiFetch(`${base}/sales-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc&criteria=${PLAIN_INVOICE_CRITERIA}`),
-    fetchDraftInfoByOrderLine({ base, bpId, currentShipmentId: shipmentId }),
-    moduleApiFetch(`${base}/goods-shipment/goodsShipment/${shipmentId}`),
-  ]);
-
-  let shipmentCurrency = null;
-  if (headerRes.ok) {
-    shipmentCurrency = (await headerRes.json())?.response?.data?.[0]?.etgoCurrency || null;
-  }
-
-  let documents = [];
-  let excludedByCurrency = false;
-  const ordersByInvoiceId = {};
-  if (invoicesRes.ok) {
-    const all = (await invoicesRes.json())?.response?.data || [];
-    const candidates = all.filter(o => o.documentStatus === 'CO' && o.businessPartner === bpId);
-    documents = shipmentCurrency ? candidates.filter(o => o.currency === shipmentCurrency) : candidates;
-    excludedByCurrency = !!shipmentCurrency && documents.length === 0 && candidates.length > 0;
-    documents.forEach(doc => {
-      if (doc.salesOrder) ordersByInvoiceId[doc.id] = doc.salesOrder;
-    });
-  }
-  return { documents, sharedContext: { ordersByInvoiceId, draftInfo }, excludedByCurrency };
+const toInvoiceLine = (l) => {
+  const pending = pendingOf(l);
+  return {
+    ...l,
+    _orderLineId: l.orderLine || undefined,
+    _productName: l['product$_identifier'] || l.id,
+    _maxQty: pending,
+    _unitPrice: 0,
+    _lineNetAmount: 0,
+    _alreadyImported: pending === 0,
+    _inDraftShipments: draftDocumentsOf(l),
+  };
 };
 
 const fetchLines = async ({ base, docId, sharedContext }) => {
-  const orderId = sharedContext.ordersByInvoiceId?.[docId];
-
-  const [invoiceLinesRes, orderLinesRes] = await Promise.all([
-    moduleApiFetch(`${base}/sales-invoice/lines?parentId=${docId}&_startRow=0&_endRow=200`),
-    orderId
-      ? moduleApiFetch(`${base}/sales-order/lines?parentId=${orderId}&_startRow=0&_endRow=200`)
-      : Promise.resolve(null),
-  ]);
-
-  if (!invoiceLinesRes.ok) return [];
-  const invoiceLines = (await invoiceLinesRes.json())?.response?.data || [];
-
-  const deliveredByOrderLine = {};
-  const orderLineByProduct = {};
-  if (orderLinesRes?.ok) {
-    const orderLines = (await orderLinesRes.json())?.response?.data || [];
-    orderLines.forEach(ol => {
-      deliveredByOrderLine[ol.id] = Number(ol.deliveredQuantity) || 0;
-      if (ol.product) orderLineByProduct[ol.product] = ol.id;
-    });
-  }
-
-  return invoiceLines.map(l => {
-    const qty = Number(l.invoicedQuantity) || 0;
-    const alreadyLinked = !!l.goodsShipmentLine;
-    const orderLineId = l.salesOrderLine || orderLineByProduct[l.product];
-    const delivered = orderLineId ? (deliveredByOrderLine[orderLineId] ?? 0) : 0;
-    const draftEntry = orderLineId ? sharedContext.draftInfo?.[orderLineId] : undefined;
-    const inOtherDrafts = draftEntry?.qty || 0;
-    // For lines with an order: delivery tracking supports partial imports across multiple
-    // shipments. For direct invoice lines (no order): m_inoutline_id is the only signal.
-    const pending = orderLineId
-      ? Math.max(0, qty - delivered - inOtherDrafts)
-      : alreadyLinked ? 0 : Math.max(0, qty);
-    return {
-      ...l,
-      _orderLineId: orderLineId,
-      _productName: l['product$_identifier'] || l.id,
-      _maxQty: pending,
-      _unitPrice: 0,
-      _lineNetAmount: 0,
-      _alreadyImported: pending === 0,
-      _inDraftShipments: draftEntry?.docNos?.size ? [...draftEntry.docNos] : undefined,
-    };
+  const rows = await fetchInOutLines({
+    apiFetch: moduleApiFetch, base, spec: SPEC, entity: ENTITY, targetId: sharedContext?.targetId,
+    action: 'availableInvoiceLines', params: { invoiceId: docId },
   });
+  return rows.map(toInvoiceLine);
 };
 
 const getDocDisplay = (doc) => ({ docNo: doc.documentNo || doc.id, date: doc.invoiceDate });
@@ -151,6 +72,7 @@ export default function ImportFromSalesInvoiceModal(props) {
   // (an invoice importing shipment lines), and resolveApiUrl only skips a prefix that
   // matches - so a configured base doubles it and 404s.
   const apiFetch = useApiFetch('');
+  const loaders = useImportLoadFailureToast(fetchDocuments, fetchLines);
   return (
     <ImportLinesModal
       {...props}
@@ -163,8 +85,11 @@ export default function ImportFromSalesInvoiceModal(props) {
       allImportedMessageKey="allSalesInvoicesAlreadyImported"
       successMessageKey="linesImportedFromSalesInvoice"
       showPriceColumns={false}
-      fetchDocuments={fetchDocuments}
-      fetchLines={fetchLines}
+      fetchDocuments={loaders.fetchDocuments}
+      fetchLines={loaders.fetchLines}
+      eagerLoadLines={false}
+      isDocumentCovered={isCoveredDocument}
+      getDocumentTotal={zeroDocumentTotal}
       getDocDisplay={getDocDisplay}
       buildLineBody={buildLineBody}
     />

@@ -2,7 +2,7 @@ import { track, group, groupSet, flush } from '../observability.js';
 import { extractWindowName } from './payload.js';
 import { HEALTH_EVENTS_MAP } from './health-events.map.js';
 import { setFeatureFlagContext } from '../flags/bootstrap.js';
-import { getSessionIdentity, setSessionIdentity } from '../sessionIdentity.js';
+import { getSessionIdentity, getSessionIdentityEpoch, setSessionIdentity } from '../sessionIdentity.js';
 
 function getWindowName() {
   try {
@@ -22,12 +22,21 @@ function getSessionContext() {
 export async function trackSessionStarted({ username, clientId, clientName } = {}) {
   // Recorded first, so the flag context below and every later event see who signed in.
   setSessionIdentity({ username, clientId, clientName });
+  const session = getSessionIdentity();
+  const epoch = getSessionIdentityEpoch();
+  const stillCurrent = () => {
+    const current = getSessionIdentity();
+    return epoch === getSessionIdentityEpoch() && session.username === current.username && session.clientId === current.clientId;
+  };
   // Re-target feature flags on the signed-in identity so bucketing matches the
   // Mixpanel user this session reports as. This does NOT reintroduce identify() —
   // that call was removed entirely from the survey/session flow as part of the
-  // ETP-4352 GDPR remediation and must stay gone; setFeatureFlagContext is a local
+  // ETP-4352 GDPR remediation and must stay gone; setFeatureFlagContext is an asynchronous
   // OpenFeature evaluation-context update, unrelated to Mixpanel identity tracking.
-  setFeatureFlagContext({ username, clientId });
+  await setFeatureFlagContext({ username, clientId });
+  // A failed flag assignment can still belong to a valid session. Session ownership,
+  // rather than the provider's success boolean, decides whether telemetry may continue.
+  if (!stillCurrent()) return;
   if (clientId) {
     void group('account_id', clientId);
     const clientNameValue = clientName || getSessionIdentity().clientName;
@@ -38,6 +47,7 @@ export async function trackSessionStarted({ username, clientId, clientName } = {
   await track('session_started', {
     account_id: clientId || undefined,
   });
+  if (!stillCurrent()) return;
   await flush();
 }
 

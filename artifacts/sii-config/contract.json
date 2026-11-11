@@ -1,8 +1,8 @@
 {
   "version": "0.5.0",
   "generatedAt": "2026-04-28T16:08:39.756Z",
-  "updatedAt": "2026-09-07T11:22:14.638Z",
-  "checksum": "2a1828f6c1572919",
+  "updatedAt": "2026-11-03T16:26:16.496Z",
+  "checksum": "825e8e2366f92c96",
   "frontendContract": {
     "window": {
       "id": "C1D3A2A017AC4B82B9FEE6F4D2A0C55A",
@@ -597,8 +597,7 @@
               "source": "N"
             }
           }
-        ],
-        "javaQualifier": "sii-config-deactivate-handler"
+        ]
       },
       "logHash": {
         "tableName": "aeatsii_config_log",
@@ -943,8 +942,7 @@
             "visibility": "system",
             "required": true
           }
-        ],
-        "javaQualifier": "sii-config-deactivate-handler"
+        ]
       },
       "logHash": {
         "tableName": "aeatsii_config_log",

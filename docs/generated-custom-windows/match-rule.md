@@ -72,7 +72,7 @@ delete DELETE /sws/neo/match-rule/etgoMatchRuleHeader/{id}
 
 ## Engine integration (ETP-4101 / T7)
 
-The rules maintained here are now **consumed by the bank-reconciliation automatch engine** (`MatchRuleEngine` + `AutoMatchSupport`, invoked from `ReconciliationHandler`, `@Named("bankReconciliation")`):
+The rules maintained here are now **consumed by the bank-reconciliation automatch engine** (`MatchRuleEngine` + `AutoMatchSupport`, invoked from `ReconciliationHandler`, `@NeoExtension(spec = "bank-reconciliation", entity = "bank-reconciliation")`):
 
 - Active rules **of the current tenant** for the account (specific or account-less = all of that tenant's accounts), ordered by ascending `priority`, are evaluated against each pending statement line the standard Etendo algorithm could not match (invoice-backed lines are skipped). `textCondition` (`C`/`S`/`R`) is tested against the line's description + reference + partner name, reusing the same 200 ms regex guard as the validation hook.
 - **Tenant isolation (ETP-4950 QA round).** `MatchRuleEngine.loadRules` reads through the DAL (`OBCriteria` over the `ETGO_Match_Rule` entity), which adds the readable-client / readable-organization predicates by itself. It used to be hand-written JDBC whose `WHERE` filtered on `isactive` and the account but **not** on `ad_client_id`, so an account-less rule of ANY tenant was loaded for EVERY account of EVERY tenant: Automatch matched lines against rules the user could not even see, since the list in this window goes through the DAL-backed generic CRUD and was correctly isolated all along. The DAL filter also survives the `setAdminMode(true)` this whole path runs in — admin mode only skips the entity-access check, not those predicates.
@@ -161,8 +161,10 @@ rounds, while every other list in the app (Cuentas, its Movimientos / Extractos 
 `ListView`) already offered a checkbox column and a bulk delete. Added here with the **same** parts,
 not a second implementation:
 
-- `hooks/useBulkRowDelete` — the confirm dialog, one `DELETE /{entity}/{id}` per row in parallel, and
-  the three-outcome toast (all / partial / none).
+- `hooks/useBulkRowDelete` — the confirm dialog, the delete itself and the three-outcome toast
+  (all / partial / none). Two or more rows on a spec URL are deleted by one server-side batch job
+  with a progress bar (ETP-6143). Otherwise, one `DELETE /{entity}/{id}` is sent per row in
+  parallel.
 - `components/financial-accounts/BulkDeleteSelectionBar` — the floating "N Seleccionados" pill
   (count + trash + close), itself built on the generic `SelectionToolbar` portal.
 

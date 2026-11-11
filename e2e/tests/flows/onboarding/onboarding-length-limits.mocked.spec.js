@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/pages/OnboardingPage.jsx
 import { test, expect } from '../../helpers/test.js';
 import { declareNoSession } from '../../helpers/auth.js';
 
@@ -99,7 +100,7 @@ async function registerAndReachProfile(page, ts) {
   await page.getByTestId('action-switch-to-register').click();
   await page.locator('#reg-name').fill('QA User');
   await page.locator('#reg-email').fill(`qa-len-${ts}@example.com`);
-  await page.locator('#reg-password').fill(`Qa-${ts}-Pass!42`);
+  await page.getByTestId('sector-select').selectOption('servicios');
   await page.getByTestId('action-register-submit').click();
   await expect(page.getByText(/vamos a dejar todo listo/i)).toBeVisible({ timeout: 5_000 });
 }
@@ -108,14 +109,13 @@ async function registerAndReachProfile(page, ts) {
 
 test.describe('ETP-4665 — Step 1 length limits', () => {
 
-  test('caps name, email and password at their column sizes', async ({ page }) => {
+  test('caps name and email at their column sizes', async ({ page }) => {
     await installMocks(page);
     await page.goto('/onboarding');
     await page.getByTestId('action-switch-to-register').click();
 
     await expect(page.locator('#reg-name')).toHaveAttribute('maxlength', String(LIMITS.accountName));
     await expect(page.locator('#reg-email')).toHaveAttribute('maxlength', String(LIMITS.email));
-    await expect(page.locator('#reg-password')).toHaveAttribute('maxlength', String(LIMITS.password));
   });
 
   test('silently blocks an email past 60 characters — the exact reported overflow', async ({ page }) => {
@@ -143,7 +143,7 @@ test.describe('ETP-4665 — Step 1 length limits', () => {
 
     await page.locator('#reg-name').fill('QA User');
     await page.locator('#reg-email').fill('qa@example.com');
-    await page.locator('#reg-password').fill('Qa-Pass!42x');
+    await page.getByTestId('sector-select').selectOption('servicios');
     await page.getByTestId('action-register-submit').click();
 
     await expect(page.getByText(`El campo no puede superar los ${LIMITS.email} caracteres.`))
@@ -173,8 +173,8 @@ test.describe('ETP-4665 — Step 2 length limits', () => {
     await expect(regName).toHaveValue(longName.slice(0, LIMITS.accountName));
 
     await page.locator('#reg-email').fill(`qa-prefill-${ts}@example.com`);
-    await page.locator('#reg-password').fill(`Qa-${ts}-Pass!42`);
-    await page.getByTestId('action-register-submit').click();
+    await page.getByTestId('sector-select').selectOption('servicios');
+      await page.getByTestId('action-register-submit').click();
     await expect(page.getByText(/vamos a dejar todo listo/i)).toBeVisible({ timeout: 5_000 });
 
     await expect(page.locator('#fullName')).toHaveValue(longName.slice(0, LIMITS.fullName));

@@ -15,7 +15,7 @@ warning, information, neutral and destructive roles.
 
 ## What this window should allow
 
-- Guide new organizations through fiscal territory selection and system assignment via a 6-screen onboarding wizard.
+- Guide new organizations through fiscal territory selection and system assignment via a 6-screen onboarding wizard (five logical steps plus the skipped screen, see "Wizard screens").
 - Detect which fiscal records already exist and render only the applicable section(s): SII, TBAI, SII+TBAI (combined), or Verifactu.
 - Allow editing of operational fields for each system: fiscal year dates, TBAI certificate upload, and Verifactu editable fields only. (SII submission cadences — `plazoLmiteDeEnvoASII`, `cadenciaEnvoFacturasVentaASII`, `cadenciaEnvoFacturasCompraASII` — are stored in the DB but are no longer exposed in the SiiSection UI; they retain any value set outside the app.)
 - SII's "Authorization registration number" field (`authorizationno`, `SiiSection.jsx`) has `autoComplete="off"` — without it the browser autofilled the field with the logged-in user's saved email — plus a client-side `maxLength={15}` and a `validate()` guard rejecting values over 15 characters, matching the `authorizationno VARCHAR(15)` DB column; the error surfaces via the `fiscal.sii.err.authRegNoTooLong` i18n key (`en_US.json`/`es_ES.json`).
@@ -68,7 +68,7 @@ The manual screen still enforces territory-driven compatibility, but it no longe
 | Place | Options (order shown) |
 |---|---|
 | Sub-question, billing ≤ 6.010.121 € (`siiver` territories, `lowChoice`) | SII, VERI\*FACTU (was VERI\*FACTU, SII — reordered in ETP-5597) |
-| Manual screen, "Sistema fiscal" (`getAllowedSystemsForTerritory`) | Navarra: SII · Álava/Bizkaia/Gipuzkoa: TicketBAI, SII + TicketBAI · Baleares/Canarias: SII, VERI\*FACTU · Ceuta/Melilla: VERI\*FACTU |
+| Manual screen, "Sistema fiscal" (`allowedSystemsFor(catalog, territory)`, from the backend catalog since ETP-6053) | Navarra: SII · Álava/Bizkaia/Gipuzkoa: TicketBAI, SII + TicketBAI · Baleares/Canarias: SII, VERI\*FACTU · Ceuta/Melilla: VERI\*FACTU |
 | Territory screen groups (by regime) | SII (Navarra), TicketBAI (País Vasco), SII / VERI\*FACTU (rest) |
 | Detail/config tabs for SII + TicketBAI | SII, TicketBAI |
 
@@ -92,7 +92,7 @@ Changing the territory in either the main wizard screen or the manual screen res
 
 ## Change SIF (switching the active fiscal system)
 
-Once an organization has a live fiscal configuration, the window lets the user **change the active SIF** — for example to move from Verifactu to SII+TBAI, or simply to leave the organization with no active fiscal system. The change is intentionally destructive-looking but non-destructive: the outgoing configuration is **deactivated and kept as a trace, never deleted**.
+Once an organization has a live fiscal configuration, the window lets the user **change the active SIF** — for example to move from Verifactu to SII+TBAI, or simply to leave the organization with no active fiscal system. What happens to the outgoing configuration depends on whether it was ever used (smart deactivation, ETP-4785 — `AbstractSmartDeactivationHandler` and its three subclasses in com.etendoerp.go): if **no invoice was ever sent through it** since its adoption date (or it has no adoption date), the row is **deleted**; if invoices were sent, it is **deactivated and kept as a trace** (audit trail). Either way the organization is left without that active system.
 
 ### One active config per org (data model)
 
@@ -101,7 +101,7 @@ The three SIF modules originally enforced "one config per org" through a UNIQUE 
 | Module | Table | Trigger |
 |--------|-------|---------|
 | SII (`org.openbravo.module.sii`) | `AEATSII_CONFIG` | `AEATSII_ONE_ACTIVE_CONFIG_TRG` |
-| TicketBAI (`com.smf.ticketbai`) | `TBAI_CONFIG` | `TBAI_ONE_ACTIVE_CONFIG_TRG` |
+| TicketBAI (`com.smf.ticketbai`) | `TBAI_CONFIG` | none any more — `TBAI_ONE_ACTIVE_CONFIG_TRG` was dropped by `com.smf.ticketbai` dcd88b3 (ETP-4783). Since ETP-6053 the rule is enforced for every NEO write by `FiscalSifGuard` in `com.etendoerp.go` (see "Agents (MCP)") |
 | Verifactu (`com.etendoerp.verifactu`) | `ETVFAC_VERIFACTU_CONFIG` | `ETVFAC_ONE_ACTIVE_CONFIG_TRG` |
 
 The invariant is therefore: **at most one active config record per system per org at any time**, with any number of inactive trace rows alongside it. Exactly one active config across all three systems is the "configured" state; zero active rows is the "no active SIF" state.
@@ -118,7 +118,7 @@ canChangeSif = !mockOverride && orgId && CONFIGURED_PROFILES.includes(effectiveP
 
 ### Confirm dialog and deactivation
 
-Clicking the button opens `ChangeSifDialog` (`data-testid="ChangeSifDialog__content"`). On **Confirm** (`fiscal.changeSif.confirm`, "Deactivate and change"), the dialog deactivates each config record the active profile spans, using the **same NEO save path the section forms use for edits** — a `PUT` to `/{spec}/{entity}/{recordId}` with body `{ active: false }` (NEO writes `isactive='N'`). The row is retained as a trace; nothing is deleted.
+Clicking the button opens `ChangeSifDialog` (`data-testid="ChangeSifDialog__content"`). On **Confirm** (`fiscal.changeSif.confirm`, "Deactivate and change"), the dialog deactivates each config record the active profile spans, using the **same NEO save path the section forms use for edits** — a `PUT` to `/{spec}/{entity}/{recordId}` with body `{ active: false }`. The backend then applies the smart deactivation: the row is **deleted** when no invoice was sent through it since its adoption date (SII `aeatsii_facturas`, TicketBAI `c_invoice.em_tbai_issent`, VERI*FACTU invoices from `in_vfactu_system`) — the answer is then `{"deleted": true}` instead of the record — and only **deactivated** (`isactive='N'`, kept as a trace) when there were. The dialog says so (`fiscal.changeSif.body`, ETP-6053): "Si ya se enviaron facturas con este sistema, su configuración se conserva como registro; si no, se elimina." — it used to promise the configuration was never deleted. The auto-send schedule of SII/TicketBAI is removed in both cases. VERI*FACTU refuses the change while completed invoices are still pending submission (`ETVFAC_cfg_verifactu_block`).
 
 `getSystemsToDeactivate(profile)` in `fiscalConfig.utils.js` maps the profile to the systems that must be deactivated:
 
@@ -133,11 +133,11 @@ On success the dialog closes and calls `onChanged` → `refetch`; with no active
 
 ### sii+tbai — two-step deactivation and partial failure
 
-A combined `sii+tbai` profile spans two rows, deactivated **sequentially**. By design there is **no rollback**: if the second PUT fails after the first succeeded, the first system stays deactivated (e.g. `sii+tbai` degrades to `tbai`-only). No data is corrupted — a row is only flagged inactive — and the state is fully recoverable. In that case the dialog shows `fiscal.changeSif.err.partial` (`data-testid="ChangeSifDialog__error"`), naming which system(s) were already deactivated and instructing the user to **re-open the dialog to finish deactivating the rest**. Rollback is intentionally out of scope because the partial state is rare and self-recoverable.
+A combined `sii+tbai` profile spans two rows, deactivated **sequentially**. By design there is **no rollback**: if the second PUT fails after the first succeeded, the first system stays deactivated (e.g. `sii+tbai` degrades to `tbai`-only). No data is corrupted — each row is deleted or flagged inactive exactly as a single deactivation would — and the state is fully recoverable. In that case the dialog shows `fiscal.changeSif.err.partial` (`data-testid="ChangeSifDialog__error"`), naming which system(s) were already deactivated and instructing the user to **re-open the dialog to finish deactivating the rest**. Rollback is intentionally out of scope because the partial state is rare and self-recoverable.
 
 ### Wizard reappearance
 
-Leaving the wizard without choosing a system is a **valid "no active SIF" state** — an org may legitimately carry only inactive trace rows. Picking and configuring a SIF from the wizard creates a new active config (possibly from a different SIF family than the one deactivated). Because the trigger enforces one active row per org per system, the new active config coexists cleanly with the old trace rows.
+Leaving the wizard without choosing a system is a **valid "no active SIF" state** — an org may legitimately carry only inactive trace rows (or none, when the deactivated configurations were never used and were deleted). Picking and configuring a SIF from the wizard creates a new active config (possibly from a different SIF family than the one deactivated). Because the trigger enforces one active row per org per system, the new active config coexists cleanly with the old trace rows.
 
 **Freeze after confirming (fixed in ETP-5831, pre-existing).** Confirming "Cambiar SIF" used to
 leave `pointer-events: none` on `<body>`: the wizard appeared but nothing responded until a full
@@ -196,7 +196,7 @@ NEO Headless reads fiscal-config records with `NO_ACTIVE_FILTER=true` (see `NeoC
 
 ## Window-access gate (ETP-5395 Fix 3)
 
-`FiscalConfigPage.jsx` is a fully hand-written custom page, so — despite menu.json carrying this window's own real `AD_Window_ID` (`C1D3A2A017AC4B82B9FEE6F4D2A0C55A`) — it never automatically picked up the generic `useWindowAccess`/`WindowAccessGuard` gate `generate-frontend.js` wires into every generated window, the same class of gap ETP-4658 found and fixed for `financial-account`/`sales-invoice`/etc. Without it, a role with no grant on this window still fired the sii/tbai/verifactu-config fetches, got a correct backend 403 (`"Access denied to spec for current role"`), and `useFiscalConfig.js`'s `fetchAllRows()` HTTP-status-only error message rendered raw ("Failed to load {spec}: HTTP 403" + a Retry button that can never help). Fixed by gating in a thin default-export wrapper (`FiscalConfigPage` → `useWindowAccess` → `WindowAccessGuard` or `FiscalConfigPageContent`): without access the page's hooks never mount, so the doomed config fetches are not even sent. (A first version checked the tier inside the page, after its last hook; moving it out also keeps the page under Sonar's cognitive-complexity limit.) **Not yet applied to `fiscal-monitor`**, whose `useFiscalMonitor.js` reuses this same `fetchAllRows()` helper and has the identical gap (grepped: zero `WindowAccessGuard`/`useWindowAccess` references anywhere in that window's custom directory) — out of scope for this fix since it was not part of the reported symptom, flagged as a follow-up candidate.
+`FiscalConfigPage.jsx` is a fully hand-written custom page, so — despite menu.json carrying this window's own real `AD_Window_ID` (`C1D3A2A017AC4B82B9FEE6F4D2A0C55A`) — it never automatically picked up the generic `useWindowAccess`/`WindowAccessGuard` gate `generate-frontend.js` wires into every generated window, the same class of gap ETP-4658 found and fixed for `financial-account`/`sales-invoice`/etc. Without it, a role with no grant on this window still fired the sii/tbai/verifactu-config fetches, got a correct backend 403 (`"Access denied to spec for current role"`), and `useFiscalConfig.js`'s `fetchAllRows()` HTTP-status-only error message rendered raw ("Failed to load {spec}: HTTP 403" + a Retry button that can never help). Fixed by gating in a thin default-export wrapper (`FiscalConfigPage` → `useWindowAccess` → `WindowAccessGuard` or `FiscalConfigPageContent`): without access the page's hooks never mount, so the doomed config fetches are not even sent. (A first version checked the tier inside the page, after its last hook; moving it out also keeps the page under Sonar's cognitive-complexity limit.) `fiscal-monitor`, whose `useFiscalMonitor.js` reuses the same `fetchAllRows()` helper, had the identical gap and was fixed the same way (`FiscalMonitorPage.jsx`, 2026-09-23; see `docs/feedback.md`).
 
 ## Data model
 
@@ -208,7 +208,7 @@ Three independent NEO Headless entities (one per system):
 | TBAI | `tbai-config` | `header` |
 | Verifactu | `verifactu-config` | `cabeceraDeConfiguraciónVerifactu` |
 
-Records are POST-created during wizard confirmation step and then edited in the detail step. `useFiscalConfig.js` parallelizes the 3 GET fetches and derives the profile client-side. Since the "Change SIF" feature (ETP-4785), each system can hold **at most one active row plus any number of inactive trace rows** per org; the client filters to the active row before resolving the profile (see "Change SIF" → "Active-config resolution").
+Records are created by the backend when the wizard's confirmation step calls `configureFiscalSystem` (see "Activation through the backend (ETP-6053)") and then edited in the detail step. `useFiscalConfig.js` parallelizes the 3 GET fetches and derives the profile client-side. Since the "Change SIF" feature (ETP-4785), each system can hold **at most one active row plus any number of inactive trace rows** per org; the client filters to the active row before resolving the profile (see "Change SIF" → "Active-config resolution").
 
 ## Certificate upload (CertModal + CertSection)
 
@@ -228,14 +228,35 @@ VERI\*FACTU therefore read and write the **same** record. Consequences in the `s
   through `onUploaded`, `FiscalConfigPage` bumps a `certVersion` counter and passes it down as
   `certRefreshKey` (→ `CertSection`'s `refreshKey`) to every section and as `refreshKey` to
   `useCertExpiry`, so the block in the other tab (re-rendered when the tab switches), the expiry
-  banner and the status panel's "Certificado" row re-read `GET /certificate`. On mount it calls `GET /sws/neo/certificate` (org inferred from the bearer token) to restore the cert status from `etsg_certificate`, so the "loaded" state persists across window refreshes. `CertModal.jsx` is the 3-step upload modal (pick → verify spinner → done/confirmNif).
+  banner and the status panel's "Certificado" row re-read `GET /certificate`. On mount it calls `GET /sws/neo/certificate?orgId=<org>` to restore the cert status from `etsg_certificate`, so the "loaded" state persists across window refreshes. `CertModal.jsx` is the 3-step upload modal (pick → verify spinner → done/confirmNif).
 
 ### Backend endpoints (`NeoCertificateHelper`)
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | `POST` | `/sws/neo/certificate` | Upload a PKCS#12 cert via `multipart/form-data` (fields: `certificate`, `orgId`, `password`, optional `setOrgNif`) |
-| `GET`  | `/sws/neo/certificate` | Return `{exists, validTo}` for the active cert (org inferred from bearer token) |
+| `GET`  | `/sws/neo/certificate?orgId=<org>` | Return `{exists, validTo}` for the org's active cert. `orgId` is required (400 without it); an org the caller's client does not own answers `{exists: false}` |
+
+**Dates are ISO on the wire (ETP-6053).** `GET /certificate` returns `validTo` and the upload
+response's `certDetails` return `validFrom`/`validTo` as `yyyy-MM-dd` (e.g. `"2027-07-01"`), the same
+as the agents' `certificate` action. The UI formats them for the active locale with
+`formatCalendarDate` (`@/lib/dateOnly.js`) in `CertSection` ("Válido hasta"), `CertModal` (the
+"done" step details) and the status panel's "Certificado" row, and `daysUntil` (expiry banner) parses
+the ISO value directly. Until ETP-6053 the endpoint returned a localized `dd/MM/yyyy`: the browser read
+it month-first (1 July 2027 showed as 07/01/2027) and `daysUntil` returned `null`, so the expiry
+banner never appeared against a real backend — the tests had always mocked ISO.
+
+**The date is the calendar day in the server's default timezone (decided, ETP-6053).** Both
+`GET /certificate` and the upload `certDetails` format the stored instant with a
+`SimpleDateFormat("yyyy-MM-dd")` that sets no zone, so the day is the JVM default timezone's — not
+the UTC day the X.509 validity is expressed in. The agents' `certificate` action reads the same
+expiry the same way (`java.sql.Date#toLocalDate`), so the REST and MCP answers agree on one server.
+A certificate whose `notAfter` is `2027-06-30T23:30:00Z` reads `2027-06-30` on a UTC server and
+`2027-07-01` on a `Europe/Madrid` one; two servers in different zones can report different days for
+the same certificate. This is kept on purpose (an off-by-one at the edge of a validity that lasts
+years is immaterial to the warning) and pinned by the timezone-specific `buildCertDetails` tests in
+`NeoCertificateHelperTest`. The client never re-interprets the zone: `formatCalendarDate` and
+`daysUntil` treat the value as a date-only calendar day.
 
 The upload delegates to `AddCertificateToOrg` (existing SIF process) via reflection.
 
@@ -280,7 +301,7 @@ What the panel shows — derived from the stored records by `deriveConfiguredSta
 | Territorio fiscal | TBAI `etsgSifTerritory` (ARABA/BIZKAIA/GIPUZKOA); else SII `navarra` → Navarra, `guipuzcoa` → Guipúzcoa, `taxtype` IGIC → Canarias, otherwise España / Baleares; VERI\*FACTU `tAXType` 01/03/02 → España / Canarias / Ceuta-Melilla. Row omitted when unknown |
 | Hacienda | the territory's `systemLong`, or the system's `long` text |
 | Operativa nacional (SII) | TicketBAI territories only: "Activa" when an SII record exists, otherwise "No aplica" |
-| Certificado | "Válido hasta dd/mm/aaaa" from `useCertExpiry().validTo` (new return field), or "Pendiente" (warning colour) without a certificate. Never stale: `useCertExpiry` resets `validTo`/`daysLeft` when a read starts (org change or certificate refresh) and clears them when the read fails, so another org's date or an old date never stays on screen |
+| Certificado | "Válido hasta {date}" from `useCertExpiry().validTo` (new return field), the ISO date formatted for the UI locale with `formatCalendarDate` (2-digit day/month, so `es_ES` shows dd/mm/aaaa), or "Pendiente" (warning colour) without a certificate. Never stale: `useCertExpiry` resets `validTo`/`daysLeft` when a read starts (org change or certificate refresh) and clears them when the read fails, so another org's date or an old date never stays on screen |
 | Activado | earliest creation timestamp of the system's records (`created`, the API key NEO serves the `Created` audit column under); row omitted without one |
 
 The "Ver historial de envíos" link of the design is **deliberately not included**.
@@ -342,13 +363,23 @@ not a shared component, so these changes affect no other window.
 
 ## Certificate expiry banner (`CertExpiryBanner`)
 
-`CertExpiryBanner.jsx` renders a warning notice when the organization's digital certificate is approaching expiry. It is shown in `FiscalConfigPage.jsx` with `variant="prominent"` (card style, after the page header). `useCertExpiry.js` fetches `GET /certificate` on mount (org inferred from bearer token) and computes the remaining days via the exported `daysUntil(dateStr)` pure helper.
+`CertExpiryBanner.jsx` renders a warning notice when the organization's digital certificate is approaching expiry. It is shown in `FiscalConfigPage.jsx` with `variant="prominent"` (card style, after the page header). `useCertExpiry.js` fetches `GET /certificate?orgId=<org>` on mount and computes the remaining days via the exported `daysUntil(dateStr)` pure helper.
 
 | Days remaining | State | Appearance | Dismissible |
 |----------------|-------|------------|-------------|
 | > 60 | Hidden | — | — |
 | 31 – 60 | Warning | Amber card with ⚠️ icon | Yes |
-| 0 – 30 | Critical | Red card with 🔴 icon | No |
+| 1 – 30 | Critical | Red card with 🔴 icon | No |
+| 0 | Critical — "vence hoy" | Red card with 🔴 icon | No |
+| < 0 | Critical — expired | Red card with 🔴 icon | No |
+
+**Copy per edge (ETP-6053).** `certExpiryCopy(ui, daysLeft, isCritical)` (exported from the banner,
+shared by both variants) picks the text: an expired certificate shows "El certificado digital ha
+caducado" with a body telling the user to upload a valid one from Configuración fiscal; `0` shows "El
+certificado digital vence hoy"; `1` uses the singular `_one` key ("El certificado vence en 1 día");
+any other count keeps the plural key. Before ETP-6053 these edges read "vence en -12 días" / "0 días" /
+"1 días" — they surfaced only once `GET /certificate` started returning ISO dates and `daysUntil`
+stopped returning `null` with the real backend.
 
 - `daysUntil(dateStr)` lives in `certExpiryUtils.js` (pure, no React deps). Both `todayUtc` and `expiryUtc` are built with `Date.UTC` from UTC date parts (`getUTCFullYear/Month/Date`), so the 60/30-day thresholds fire at UTC midnight regardless of the user's local timezone. Impossible dates (e.g. Feb 31) are rejected via a round-trip check before the diff is computed.
 - When `isCritical` the dismiss button is not rendered; re-opening the page always shows the banner until the cert is renewed.
@@ -357,6 +388,9 @@ not a shared component, so these changes affect no other window.
 i18n keys used:
 - `fiscal.cert.expiry.warn.title` — "Certificate expiring in {days} days"
 - `fiscal.cert.expiry.critical.title` — "Certificate expires in {days} days"
+- `fiscal.cert.expiry.warn.title_one` / `fiscal.cert.expiry.critical.title_one` — singular, used when `daysLeft = 1`
+- `fiscal.cert.expiry.today.title` — "The digital certificate expires today" (`daysLeft = 0`, body stays `fiscal.cert.expiry.body`)
+- `fiscal.cert.expiry.expired.title` / `fiscal.cert.expiry.expired.body` — expired certificate (`daysLeft < 0`)
 - `fiscal.cert.expiry.body` — renewal call-to-action sentence
 - `fiscal.cert.expiry.dismiss` — aria-label for the × button
 
@@ -379,7 +413,8 @@ When `forceTestMode` is `true` the window becomes **read-only**:
   `SiiSection` and `TbaiSection` gained the identical `locked` prop and guard so all three
   sections lock the same way.
 - The page-level Save button is disabled (`disabled={saving || !orgId || forceTestMode || !(isDirty || addingComplementary)}` — the last term is the ETP-5831 unsaved-changes rule).
-- The "Add SII"/"Add TBAI" complementary action (`canAddComplementary`) is hidden — creating
+- The "Añadir SII" complementary action (`canAddComplementary`; since ETP-6053 SII is the only
+  system that can be added, and only on a TicketBAI-alone profile) is hidden — creating
   a new active fiscal system record is itself a kind of activation forced-test-mode must block.
 - A warning banner (`data-testid="FiscalConfigPage__testModeBanner"`, same testid on
   `OnboardingWizard__testModeBanner` for the wizard) is shown above the section content.
@@ -456,7 +491,12 @@ Ceuta/Melilla in the first place, unlike SII.
 
 ### Fix — data/config-level, not a one-off `if`
 
-`getAllowedSystemsForTerritory(territory)` in `fiscalConfig.utils.js` is now backed by a
+> **Since ETP-6053** the table below lives only in the backend (`FiscalSifRules` in
+> com.etendoerp.go) and reaches the window through the `fiscalSystemCatalog` action; the JS table,
+> `getAllowedSystemsForTerritory`, `buildOnboardingPayloads` and `getTerritoryDefaults` were
+> removed. See "Activation through the backend (ETP-6053)". The text below is the ETP-5272 history.
+
+`getAllowedSystemsForTerritory(territory)` in `fiscalConfig.utils.js` was backed by a
 single declarative table, `TERRITORY_ALLOWED_SYSTEMS`, instead of a switch that grouped
 `baleares`/`canarias`/`ceuta` together:
 
@@ -554,8 +594,8 @@ The SII and TicketBAI adoption dates (`fechaAcogidaSII` / `monitordate` on `aeat
 as UTC, which in Spain hid every invoice dated on the adoption day from the fiscal send gate
 (`sales-invoice.md` → "Fiscal sending … — ETP-5700"):
 
-- **Writing "today".** The onboarding payloads (`todayIsoDate()` in `fiscalConfig.utils.js`),
-  `createComplementary` (`useFiscalConfig.js`) and the save handlers of `SiiSection.jsx` /
+- **Writing "today".** The onboarding records (built by the backend since ETP-6053, on the
+  server's local day) and the save handlers of `SiiSection.jsx` /
   `TbaiSection.jsx` now use `todayCalendarISO()` (`@/lib/dateOnly.js`). The previous
   `new Date().toISOString().slice(0, 10)` is the UTC day, still yesterday in Spain between local
   midnight and 01:00/02:00.
@@ -566,6 +606,87 @@ as UTC, which in Spain hid every invoice dated on the adoption day from the fisc
   `useFiscalConfig()` (`earliestSiiCutoverDate`, `earliestTbaiCutoverDate`), the invoice send gate,
   and `fiscal-monitor`'s `buildCutoverCriteria`, which already sliced the first 10 characters and is
   unaffected.
+
+## Activation through the backend (ETP-6053)
+
+The window no longer builds or posts the config records itself. The onboarding wizard and the
+"Añadir SII" button activate a billing system with the same actions agents use, on
+`sii-config/siiConfiguration` with the organization as id (`useApiFetch`, `fiscalSystemApi.js`):
+
+| Call | What the window does with it |
+|---|---|
+| `GET /sii-config/siiConfiguration/{orgId}/action/fiscalSystemCatalog` (`useFiscalCatalog`) | `systems` per territory: the manual screen's choices (`allowedSystemsFor`) and the SII veto of `resolveSystem` (Ceuta/Melilla → VERI*FACTU). The record values per territory: which territory a stored configuration belongs to (`territoryOfRecords`, the "Estado" panel). A failed read shows a `fiscal.catalog.err.load` banner over the wizard |
+| `POST /sii-config/siiConfiguration/{orgId}/action/configureFiscalSystem` `{system, territory}` | The wizard's "Confirmar": the server validates and creates the records; the window reads them back (`fetchCreatedRecords`) for the detail step |
+| same, `{system: 'SII'}` | "Añadir SII" (`useFiscalConfig.createComplementary(orgId)`, offered only on a TicketBAI-alone profile): no territory, the server takes the TicketBAI's. The created SII record is put straight into the hook's state and the profile re-detected, so the page title and the "Estado" panel show SII + TicketBAI at once — not a refetch, which would flip `loading` and unmount the tab being edited |
+
+**Which access gates them.** Both actions hang off `sii-config`, so NEO gates them on the role's
+access to the **SII Configuration window** — the window this page is gated on (see "Window-access
+gate") — read for the catalog, read-write for the activation. Nothing on the Organization window is
+needed (an earlier version of ETP-6053 put them on `organization/organization`, which locked out
+roles such as "F&B España, S.A - Admin" or "Finance" that write the fiscal windows but not
+Organization). The activation also needs read-write on the window of each system it creates
+(TicketBAI, VERI*FACTU) and refuses otherwise with `ETGO_FiscalSifNoWindowAccess` ("Tu rol no tiene
+permiso para configurar VERI*FACTU…"). If a role reaches the page without the access the actions
+need, the window shows `fiscal.err.noPermission` — never NEO's English "Access denied to spec for
+current role" (`FiscalAccessDeniedError` in `fiscalSystemApi.js`: a 403 without `messageKeys`).
+
+The tests read the catalog from `__tests__/fiscalSystemCatalog.golden.json`
+(`fiscalSystemCatalog.fixture.js`, also used by the e2e mocks). com.etendoerp.go keeps the same
+file and asserts `FiscalSifRules.catalog()` equals it; both suites pin its SHA-256, so the rules
+cannot change on one side without the other.
+
+Rules and refusals (messages in the user's language, shown where the wizard and "Añadir SII"
+showed errors before — below the confirm button, and in the `fiscal.addComplementary.err.createFailed`
+banner):
+
+| Rule | Refusal |
+|---|---|
+| territory mandatory and compatible with the system | `ETGO_FiscalSifTerritoryRequired`, `ETGO_FiscalSifNotAllowed` |
+| one active SIF per organization, SII + TicketBAI aside | `ETGO_FiscalSifAlreadyConfigured`; "Añadir SII" in TicketBAI's own territory only (`ETGO_FiscalSifTerritoryMismatch`), refused on a legacy TicketBAI without territory (`ETGO_FiscalSifTbaiNoTerritory`) |
+| only in a productive environment (`ETSG_ForceTestMode`) | `ETGO_FiscalSifTestMode` — "Solo podrá activar un sistema fiscal en un entorno productivo." (the window is also locked, as before) |
+| never on the `*` organization (`0`) | `ETGO_FiscalSifOrgStar` — "No se puede activar un sistema de facturación en la organización «*». Usa la organización de tu empresa." |
+
+Two activations of the same organization never overlap: the action locks the organization's `AD_OrgInfo` row before its "one active SIF" checks, and holds it until its records are committed, so the second one waits and is then refused (see neo-headless §4.12.1.10). The catalog action answers `GET` only.
+
+What stays in the window is presentation only: `fiscalCatalog.js` keeps the territory order, the
+wizard's questions (`regime`, `askNational`, `askVolume`) and the labels; no allowed systems and
+no derived values.
+
+**SII is acogido from creation, on every channel.** The records `configureFiscalSystem` builds
+carry `acogidaAlSII: 'Y'` and the SII is stored with `INSIISYSTEM = 'Y'` and `fechaAcogidaSII` =
+today. Before ETP-6053 the wizard posted `'N'` and turned it on with the detail save, so leaving the
+detail step without saving left an active SII that was not acogido; the detail save now keeps the
+same value. `AEATSII_CHECK_SIFS_CONFIGS_TRG` therefore runs at the activation instead of at the
+detail save. "Añadir SII" gets the same SII record the wizard's SII + TicketBAI gets for that
+territory (`taxtype` IVA, `guipuzcoa` for Gipuzkoa) — it used to post `acogidaAlSII: 'Y'` alone.
+
+### Agents (MCP)
+
+Agents never create the three config records with `etendo_create`: that verb (and `etendo_batch`
+creates, and `etendo_delete`) is hidden on `sii-config/siiConfiguration`, `tbai-config/header` and
+`verifactu-config/cabeceraDeConfiguraciónVerifactu` through `MCP_CONFIG.verbs`. They call the same
+action:
+
+```
+etendo_action(spec:'sii-config', entity:'siiConfiguration', id:'<organizationId>',
+              action:'configureFiscalSystem', parameters:{system:'SII+TBAI', territory:'gipuzkoa'})
+```
+
+On top of the rules above: derived fields stay read-only on `etendo_update` — `tAXType`, and the values this window never edits but the activation sets (SII `acogidaAlSII`, `entornoDeProduccin`, `adjuntarArchivosXML`; TicketBAI `productionEnv`, `uSEAsproductDesc`, `validatePreviousInvoice`), each through a
+field-level `MCP_CONFIG.fields.readOnly` (the window's detail step never changes them over REST,
+where `MCP_CONFIG` does not apply: `SiiSection` PUTs the SII ones back with the record's values,
+`TbaiSection` leaves the TicketBAI ones out of its PUT); the certificate is not writable by agents
+(`organization/certificadoDigital` verbs hidden) and the action warns when the organization has
+none; and "Cambiar SIF" is UI only — an agent changing `active` gets `ETGO_FiscalSifActiveByAgent`.
+
+Server-side rules that hold for the window too (every NEO channel, `FiscalSifGuard` in the three
+config customizations): no config created inactive, none created in forced test mode, and one
+active config per system and organization.
+
+The confirmation screen's "next step" text (`fiscal.onboarding.confirm.next.body`) only promises
+what the detail step lets the user edit afterwards — the certificate, the SII authorization
+number and TicketBAI automatic sending — and no longer mentions the test or production
+environment, enrollment dates or submission cadences.
 
 ## Manual verification
 
@@ -580,11 +701,11 @@ as UTC, which in Spain hid every invoice dated on the adoption day from the fisc
 6a. (ETP-5831) With a `sii+tbai` org, confirm "Certificado digital" appears in both the SII and the TicketBAI tab. Replace the certificate from the TicketBAI tab and confirm the SII tab and the status panel's "Certificado" row show the new expiry date.
 7. Open `/fiscal-config` with an org that has both SII and Verifactu records and confirm the conflict warning renders.
 8. Press "Omitir por ahora" on the territory screen and confirm the skipped screen shows with a "← Volver al asistente" button that returns to territory selection.
-9. Open `/fiscal-config` with an org that has a single active SII (or Verifactu/TBAI) config. Confirm the **"Change SIF"** button appears in the org bar. Press it, confirm the dialog shows the matching permanence notice, press "Deactivate and change", and verify the onboarding wizard reappears (org resolved to `unconfigured`). Query the DB and confirm the old config row still exists with `isactive='N'`.
+9. Open `/fiscal-config` with an org that has a single active SII (or Verifactu/TBAI) config. Confirm the **"Change SIF"** button appears in the org bar. Press it, confirm the dialog shows the matching permanence notice, press "Deactivate and change", and verify the onboarding wizard reappears (org resolved to `unconfigured`). Query the DB: if invoices were sent through the old config, its row still exists with `isactive='N'`; if none were, the row is gone (smart deactivation, see "Change SIF").
 10. Repeat with a `sii+tbai` org and confirm **both** the SII and TBAI rows are deactivated (two-step) and the wizard reappears.
 11. Open `/fiscal-config` with an org that has NO config, or one in a `conflict` state — confirm the "Change SIF" button is NOT shown.
 12. (Verifactu, `isReady=true`) Confirm the Verifactu section fields are locked for editing but the "Change SIF" button still works — the lock does not block the change.
-13. (ETP-5272) With the AD_Preference "Fuerza SII/TicketBAI/VeriFactu a modo prueba" active, open `/fiscal-config` for a configured org and confirm: the `FiscalConfigPage__testModeBanner` warning appears, all section inputs are disabled, the page Save button is disabled, and "Add SII"/"Add TBAI" is absent from the kebab menu — while "Change SIF" (if present) and certificate upload remain usable. Deactivate the preference and confirm the window returns to its normal editable state.
+13. (ETP-5272) With the AD_Preference "Fuerza SII/TicketBAI/VeriFactu a modo prueba" active, open `/fiscal-config` for a configured org and confirm: the `FiscalConfigPage__testModeBanner` warning appears, all section inputs are disabled, the page Save button is disabled, and "Añadir SII" is absent from the kebab menu — while "Change SIF" (if present) and certificate upload remain usable. Deactivate the preference and confirm the window returns to its normal editable state.
 14. (ETP-5272) Simulate a `/sws/neo/fiscal-test-mode` fetch failure (network block or 500 in devtools) and confirm the window stays fully editable — fail-open — while a `console.warn` is logged.
 15. (ETP-5272 follow-up — wizard lock) With the AD_Preference active, open `/fiscal-config` for a brand-new org (no SII/TBAI/Verifactu records) and confirm the onboarding wizard shows the `OnboardingWizard__testModeBanner` warning on every step. Pick a territory and reach the confirm screen — the activate button (`OnboardingWizard__confirmActivateButton`) must be disabled, and clicking it must not create any config record (check the DB / network tab). Deactivate the preference and confirm the same wizard flow now creates the record and reaches the detail step and then the configured page normally.
 
@@ -597,7 +718,9 @@ as UTC, which in Spain hid every invoice dated on the adoption day from the fisc
 - `tools/app-shell/src/windows/custom/fiscal-config/OnboardingWizard.jsx` — 5-screen wizard with territory groups, sub-questions, confirm, detail and skipped screens (the applied screen was removed in ETP-5831; the detail save hands over to the page).
 - `tools/app-shell/src/windows/custom/fiscal-config/CertSection.jsx` — cert status widget with on-mount GET fetch to restore state after refresh.
 - `tools/app-shell/src/windows/custom/fiscal-config/CertModal.jsx` — PKCS#12 upload modal (pick → verify → confirmNif? → done).
-- `tools/app-shell/src/windows/custom/fiscal-config/fiscalConfig.utils.js` — `detectProfile`, `resolveSystem`, `getTerritoryDefaults`, `getCertificateContext`, `parseApiError` (async helper that reads the error body from a failed NEO response and extracts a human-readable message), plus the Change SIF helpers `isActiveRecord`, `activeOrNull`, `getChangeSifNoticeKey`, `getSystemsToDeactivate`, `getFiscalRecordId`. `buildOnboardingPayloads` creates the POST body for wizard confirmation; `acogidaAlSII` defaults to `'N'` so the SII enrollment flag is not prematurely activated during onboarding. `mapSiiRecordToForm` no longer maps `plazoLmiteDeEnvoASII`, `cadenciaEnvoFacturasVentaASII`, or `cadenciaEnvoFacturasCompraASII` — those fields are retained in the DB but excluded from the form state.
+- `tools/app-shell/src/windows/custom/fiscal-config/fiscalConfig.utils.js` — `detectProfile`, `resolveSystem`, `allowedSystemsFor` / `territoryOfRecords` (read the backend catalog, ETP-6053), `getCertificateContext`, `parseApiError` (async helper that reads the error body from a failed NEO response and extracts a human-readable message), plus the Change SIF helpers `isActiveRecord`, `activeOrNull`, `getChangeSifNoticeKey`, `getSystemsToDeactivate`, `getFiscalRecordId`. The onboarding records are built by the backend (`configureFiscalSystem`, see "Activation through the backend"). `mapSiiRecordToForm` no longer maps `plazoLmiteDeEnvoASII`, `cadenciaEnvoFacturasVentaASII`, or `cadenciaEnvoFacturasCompraASII` — those fields are retained in the DB but excluded from the form state.
+- `tools/app-shell/src/windows/custom/fiscal-config/fiscalSystemApi.js` — `fetchFiscalCatalog`, `configureFiscalSystem`, `fetchCreatedRecords`: the window's calls to the fiscal-system actions on `sii-config/siiConfiguration` (ETP-6053), plus `FiscalAccessDeniedError` / `isFiscalAccessDenied` for a role the backend refuses outright.
+- `tools/app-shell/src/windows/custom/fiscal-config/useFiscalCatalog.js` — the backend territory × system catalog for the wizard and the status panel (ETP-6053).
 - `tools/app-shell/src/windows/custom/fiscal-config/ChangeSifDialog.jsx` — "Change SIF" confirm dialog: per-profile permanence notice, sequential deactivation via `PUT {active:false}`, partial-failure handling for `sii+tbai`.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/ChangeSifDialog.vitest.jsx` — dialog tests: notice selection per profile, deactivation PUT path, sii+tbai two-step, partial-failure message, INFORM-not-block posture.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/FiscalConfigPage.vitest.jsx` — page tests including `canChangeSif` visibility gating (`CONFIGURED_PROFILES`, no mock override) and dialog wiring, plus (ETP-5395 Fix 3) a "no access" describe block asserting `WindowAccessGuard` renders instead of the raw error box for a `'none'` access tier.
@@ -611,18 +734,20 @@ as UTC, which in Spain hid every invoice dated on the adoption day from the fisc
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/OnboardingWizard.vitest.jsx` — ETP-5272 follow-up: banner shown/hidden by `forceTestMode`; territory→confirm navigation unaffected (browsing is not blocked); confirm/activate button disabled when locked and enabled when not; `createRecords()` never calls the API when locked; default (`forceTestMode` omitted) behaves as unlocked.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/FiscalConfigPage.vitest.jsx` — ETP-5272 follow-up: `forceTestMode` is forwarded to `OnboardingWizard` as a prop (both `true` and `false`); the page's own `FiscalConfigPage__testModeBanner` correctly does NOT render in the `'unconfigured'` branch (that banner belongs to the configured-profile branch — the wizard renders its own).
 - DB triggers (com.etendoerp.go SIF modules) — `AEATSII_ONE_ACTIVE_CONFIG_TRG`, `TBAI_ONE_ACTIVE_CONFIG_TRG`, `ETVFAC_ONE_ACTIVE_CONFIG_TRG` enforce one *active* config per org (relaxed from one config per org).
-- `cli/test/fiscal-config.utils.test.js` — 92 regression tests covering profile detection, onboarding payloads, contract-specific ids, Verifactu save guards, SII field mapping, CertModal upload flow, and confirmNif flow (all passing).
+- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/fiscalConfig.utils.vitest.js` — the pure helpers: boolean/date normalization, Verifactu tax type and update payload, `allowedSystemsFor` / `territoryOfRecords` against the backend catalog golden, `resolveSystem` (with the allowed-systems veto), `detectProfile`, `getFiscalRecordId`, `mapSiiRecordToForm`, the Change SIF helpers, `parseApiError` and the environment helpers. (It replaced `cli/test/fiscal-config.utils.test.js`; the onboarding-payload cases went with `buildOnboardingPayloads` in ETP-6053 and are covered in com.etendoerp.go.)
 - `tools/app-shell/src/windows/custom/fiscal-config/useFiscalConfig.js` — parallel fetcher hook for the 3 config records; filters inactive trace rows (`activeOrNull`) before `detectProfile` so a "Change SIF" leftover never masks the live config. `fetchAllRows` and `earliestCutoverDate` (previously private; the latter returns the earliest row's raw value since ETP-5700) are now **exported** so other fiscal windows reuse the same "all config rows, earliest-ever cutover" mechanism instead of duplicating it — first reused by `fiscal-monitor/useFiscalMonitor.js` for the TBAI monitor's earliest-cutover gate (ETP-5229, item #13; see `fiscal-monitor.md`).
-- `cli/test/useFiscalConfig.test.js` — 16 tests covering source guards (named export, Promise.all, entity constants, detectProfile wiring), `fetchRecord` URL construction via `useApiFetch` (no manual Authorization header), response parsing (empty/missing data), and error handling.
+- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/useFiscalConfig.vitest.js` — the hook without an org, a successful fetch, API errors and non-ok answers, `refetch`, `earliestCutoverDate`, and `createComplementary` ("Añadir SII" through `configureFiscalSystem`, and the state/profile update to SII + TicketBAI without a refetch).
+- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/fiscalSystemApi.vitest.js` / `useFiscalCatalog.vitest.js` / `fiscalSystemCatalog.fixture.vitest.js` — ETP-6053: the catalog read, the `configureFiscalSystem` call, the 403 access denial (`FiscalAccessDeniedError`), `fetchCreatedRecords`, the catalog hook, and the golden file pinned by its SHA-256.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/SiiSection.test.js` — 17 component source-guard tests: forwardRef/`useImperativeHandle`, navarra badge, form fields, PUT endpoint contract, hideSave/hideCert.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/TbaiSection.test.js` — 17 component source-guard tests: enroll date + invoice description validation, PUT endpoint, boolean serialization. Note: `TbaiSection` deliberately excludes `productionEnv`, `uSEAsproductDesc`, and `validatePreviousInvoice` from the PUT body — overriding those fields would silently revert any change the operator made in Etendo Classic (e.g. `productionEnv='N'` for testing). Only the fields owned by the Etendo GO form (enroll date and invoice description) are sent.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/VerifactuSection.test.js` — 18 component source-guard tests: `isLocked` derived from `isReady` (no status badge — removed, lock behavior unaffected), disabled controls when locked, tax type select, absence of the removed `inVfactuSystem` field/enrollment date, PUT payload contract.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/OnboardingWizard.test.js` — 36 component source-guard tests: all 7 territories, wizard steps, system resolution, record creation via POST, cert modal, navigation callbacks. (Applied-step assertions removed with the screen in ETP-5831.)
 - `tools/app-shell/src/windows/custom/fiscal-config/certExpiryUtils.js` — pure `daysUntil` helper (no React deps); validates month (1–12) and day (1–31); round-trips the constructed `Date.UTC` value through `getUTCFullYear/Month/Date` to reject impossible dates (e.g. `2026-02-31` → March); builds `todayUtc` from `getUTCFullYear/Month/Date` so the boundary is UTC midnight in every timezone; imported by `useCertExpiry.js` and directly importable in Node.js tests.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/certExpiryUtils.test.js` — 21 tests: exports guard (named function, `Date.UTC`, `getUTCFullYear` usage, round-trip check), null/falsy inputs, future dates (1/30/60 days, today=0), past dates, non-ISO inputs (bare string, slash-delimited), out-of-range components (month 0, month 13, day 0, day 32, impossible Feb 31, impossible Apr 31 → all `null`).
-- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/useCertExpiry.test.js` — 11 source-guard tests: re-exports `daysUntil`, exports `useCertExpiry`, `mockDaysLeft` bypass, `return { daysLeft }`, `/certificate` endpoint (no `?orgId` — backend infers org from token), `useApiFetch` usage (no manual `Authorization` header), null-reset before each fetch and in the else branch when cert is absent, `AbortController` usage (`new AbortController`, `controller.abort()` cleanup, `signal.aborted` check before `setDaysLeft`).
-- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/CertExpiryBanner.test.js` — 17 component source-guard tests: visibility thresholds (WARN_DAYS=60, CRITICAL_DAYS=30), dismiss behaviour, variant rendering, i18n keys, color scheme.
-- `e2e/tests/flows/fiscal-config.mocked.spec.js` — 12 Playwright mocked E2E tests: no-org, wizard, SII/TBAI/Verifactu/conflict profiles, wizard flow (territory → confirm → back), cert modal opening; all assertions use `t()` i18n helper.
-- `modules/com.etendoerp.go/.../NeoCertificateHelper.java` — certificate upload + GET endpoints; NIF extraction from X.509 DN; SAVEPOINT-protected org NIF lookup; confirmNif flow.
-- `modules/com.etendoerp.go/.../NeoCertificateHelperTest.java` — 17 unit tests for NIF parsing and normalization.
+- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/useCertExpiry.vitest.js` — 20 behavioral hook tests (replaced the former `useCertExpiry.test.js` source guard): `mockDaysLeft` bypass (no fetch, null `validTo`), no fetch without `orgId`/`apiBaseUrl`, `GET /certificate?orgId=…`, `daysLeft`/`validTo` from `{exists, validTo}`, refetch on org change and on `refreshKey`, no stale certificate (reset when a read starts, cleared when it fails), and (ETP-6053) the hook → `CertExpiryBanner` path fed an ISO `/certificate` payload: warning at 45 days, critical at 15, "vence hoy", expired, nothing beyond 60.
+- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/CertSection.vitest.jsx` / `CertModal.vitest.jsx` — ETP-6053: the ISO `validTo` (and the upload `validFrom`/`validTo`) rendered through `formatCalendarDate` in the UI locale, never month-first.
+- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/CertExpiryBanner.vitest.jsx` — render tests: visibility thresholds (WARN_DAYS=60, CRITICAL_DAYS=30), dismiss behaviour, variant rendering, i18n keys, and (ETP-6053) the es_ES copy for expired / today / 1 day / 15 days plus non-dismissable expired and today in both variants.
+- `e2e/tests/flows/fiscal/fiscal-config.mocked.spec.js` — 31 Playwright mocked E2E tests (`npx playwright test --list`): wizard and wizard interaction, certificate upload modal and flow, Change SIF and its per-profile notice, onboarding save regression, activation through `configureFiscalSystem`, Add complementary SIF, smart deactivation, Save gating / unsaved-changes guard / status panel, and (ETP-6053) certificate validity from an ISO `GET /certificate` (status panel and certificate section show the date in the locale; a certificate expiring in 15 days shows the critical banner); all assertions use the `t()` i18n helper.
+- `modules/com.etendoerp.go/.../NeoCertificateHelper.java` — certificate upload + GET + DELETE endpoints; ISO `yyyy-MM-dd` dates in the server default timezone; NIF extraction from X.509 DN; SAVEPOINT-protected org NIF lookup; confirmNif flow.
+- `modules/com.etendoerp.go/.../NeoCertificateHelperTest.java` — 55 unit tests: NIF parsing and normalization, plus (ETP-6053) `buildCertDetails` returning ISO `validFrom`/`validTo`, with the server timezone pinned (`TimeZone.setDefault`) to UTC, `Europe/Madrid` and `America/Argentina/Buenos_Aires` around a `notAfter` near UTC midnight.
 - i18n: 250+ `fiscal.*` keys in `en_US.json` / `es_ES.json`; territory names, group hints, system descriptions, and all CertModal strings go through `useUI()`. E2E tests resolved via `e2e/tests/helpers/i18n.js` (locale-switchable).

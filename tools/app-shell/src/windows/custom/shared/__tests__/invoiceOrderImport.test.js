@@ -2,6 +2,7 @@
 // @covers artifacts/sales-invoice/custom/ImportFromOrderModal.jsx
 // @covers artifacts/purchase-invoice/custom/ImportFromPurchaseOrderModal.jsx
 // @covers tools/app-shell/src/windows/custom/shared/InvoiceOrderImportModal.jsx
+// @covers tools/app-shell/src/windows/custom/shared/importActionClient.js
 import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -16,6 +17,12 @@ import {
   submitOrderImport as submitWith,
   discountOutcome,
   buildOrderInvoiceLineBody,
+  MAX_LISTED_ORDERS,
+  OrderImportLoadError,
+  describeLoadFailure,
+  isOrderCovered,
+  getOrderTotal,
+  newestCreatedFirst,
 } from '../invoiceOrderImport.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -50,29 +57,44 @@ describe('invoice order import — one popup, two directions', () => {
     });
   }
 
-  // The one switch of the data path (MCP-2, `importVia`): sales read pending from the server
-  // action, purchases from the order lines until QA decides whether drafts count as pending.
-  for (const [direction, actionPending] of [['sales', true], ['purchase', false]]) {
+  // Both directions list and read pending through the invoice's actions (ETP-5828 for sales,
+  // ETP-6099 for purchases: availableOrders for the orders, ONE availableOrderLines per order);
+  // `importVia` (MCP-2) only switches the import.
+  for (const direction of ['sales', 'purchase']) {
     const config = INVOICE_ORDER_IMPORT[direction];
     const invoice = config.invoiceSpec;
     const order = config.orderSpec;
 
-    it(`${direction}: reads ${order} and ${invoice}, ${actionPending ? 'pending from availableOrderLines' : 'pending = ordered − invoiced, no action call'}`, async () => {
+    it(`${direction}: lists through availableOrders and availableOrderLines, never the order GETs`, async () => {
       const urls = [];
-      const stub = async (url) => {
+      const bodies = [];
+      const stub = async (url, opts) => {
         urls.push(url);
+        if (opts?.body) bodies.push([url, JSON.parse(opts.body)]);
+        if (url.endsWith('/availableOrders')) return mockRes(true, [{ id: 'o1', documentNo: 'SO-1', date: '2026-11-01' }]);
         if (url.endsWith('/availableOrderLines')) return mockRes(true, [{ id: 'ol1', pendingQuantity: 1 }]);
         if (url.includes(`/${order}/lines`)) return mockRes(true, [{ id: 'ol1', orderedQuantity: 5, invoicedQuantity: 2, unitPrice: 10 }]);
         return mockRes(true, []);
       };
       await fetchOrderDocuments({ apiFetch: stub, config, base: '/b', bpId: 'bp1', invoiceId: 'inv1' });
       const lines = await fetchOrderLines({ apiFetch: stub, config, base: '/b', docId: 'o1', sharedContext: { invoiceId: 'inv1' } });
-      assert.deepEqual(urls.map(u => u.split('?')[0]), [
-        `/b/${order}/header`, `/b/${invoice}/lines`, `/b/${invoice}/header/inv1`,
-        `/b/${order}/lines`,
-        ...(actionPending ? [`/b/${invoice}/header/inv1/action/availableOrderLines`] : []),
-      ]);
-      assert.equal(lines[0]._maxQty, actionPending ? 1 : 3);
+      assert.deepEqual(urls.map(u => u.split('?')[0]),
+        [`/b/${invoice}/header/inv1/action/availableOrders`, `/b/${invoice}/lines`, `/b/${invoice}/header/inv1`,
+          `/b/${invoice}/header/inv1/action/availableOrderLines`]);
+      assert.equal(lines[0]._maxQty, 1);
+      // Both directions ask `detail` on the list: the creationDate purchases sort by, and a
+      // pendingLines that leaves out the lines already on this invoice (so an order with nothing
+      // selectable is hidden at open, as before the lines loaded lazily). Only purchases ask the
+      // pre-ETP-6099 pending rule (`pendingBasis: 'classic'`, no draft deduction).
+      assert.deepEqual(bodies.find(([u]) => u.endsWith('/availableOrders'))[1], direction === 'purchase'
+        ? { limit: MAX_LISTED_ORDERS, includeCovered: true, detail: true, pendingBasis: 'classic' }
+        : { limit: MAX_LISTED_ORDERS, includeCovered: true, detail: true });
+      // Only the client import builds its line body from the row, so only it asks `detail` on the
+      // lines; the sales lines body stays as it was.
+      const linesBody = bodies.find(([u]) => u.endsWith('/availableOrderLines'))[1];
+      assert.deepEqual(linesBody, direction === 'purchase'
+        ? { orderId: 'o1', includeCovered: true, detail: true, pendingBasis: 'classic' }
+        : { orderId: 'o1', includeCovered: true });
     });
   }
 
@@ -96,8 +118,11 @@ function mockRes(ok, data) {
   return { ok, json: async () => ({ response: { data } }) };
 }
 
-function installFetch({ orders, invLines = [], invoiceHeader, linesOk = true, headerOk = true }) {
+// `available` is what the invoice's availableOrders action lists (ETP-5828); empty, the popup reads
+// the partner's order list to tell "no orders" from "none in this currency", as `orders` here.
+function installFetch({ orders, available = [], invLines = [], invoiceHeader, linesOk = true, headerOk = true }) {
   globalThis.fetch = mock.fn(async (url) => {
+    if (url.includes('/action/availableOrders')) return mockRes(true, available);
     if (url.includes('/sales-order/header?')) return mockRes(true, orders);
     if (url.includes('/sales-invoice/lines?parentId=')) return mockRes(linesOk, invLines);
     if (url.includes('/sales-invoice/header/')) return mockRes(headerOk, [invoiceHeader]);
@@ -131,6 +156,118 @@ describe('invoice order import — the toast follows the server answer, not the 
   });
 });
 
+// ETP-5828 — the sales popup lists the invoice's availableOrders: the customer's own pending
+// orders (no 500-order company cut), read without re-reading the invoice.
+describe('invoice order import (sales) — fetchDocuments lists through availableOrders', () => {
+  afterEach(() => {
+    mock.reset();
+  });
+
+  it('asks for the whole list as a read and maps each row to what the popup shows', async () => {
+    installFetch({
+      orders: [{ id: 'never-read', documentStatus: 'CO', businessPartner: 'bp1', invoiceStatus: 0 }],
+      available: [
+        { id: 'o2', documentNo: 'SO-2', date: '2026-11-02', businessPartner: 'bp1', globalDiscount: 10 },
+        { id: 'o1', documentNo: 'SO-1', date: '2026-10-01', businessPartner: 'bp1', globalDiscount: 0 },
+      ],
+      invoiceHeader: { currency: 'EUR' },
+    });
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+
+    const [url, opts] = globalThis.fetch.mock.calls[0].arguments;
+    assert.equal(url, '/b/sales-invoice/header/inv1/action/availableOrders');
+    assert.equal(opts.method, 'POST');
+    assert.equal(opts.refreshVersion, false);
+    // `detail`: pendingLines leaves out the lines already on this invoice (ETP-6099).
+    assert.deepEqual(JSON.parse(opts.body), { limit: MAX_LISTED_ORDERS, includeCovered: true, detail: true });
+    assert.equal(globalThis.fetch.mock.calls.some(c => String(c.arguments[0]).includes('/sales-order/header')), false,
+      'a non-empty list never reads the order GET');
+    assert.deepEqual(result.documents.map(d => [d.id, d.orderDate, d.documentNo]),
+      [['o2', '2026-11-02', 'SO-2'], ['o1', '2026-10-01', 'SO-1']]);
+    assert.deepEqual(result.sharedContext.orderDiscountMap, { o2: 10 });
+    assert.equal(result.excludedByCurrency, false);
+  });
+
+  // ETP-6099 — the actions answer newest by document date; the popups listed newest created.
+  it('newestCreatedFirst re-sorts by creationDate and keeps the server order without it', () => {
+    const rows = [{ id: 'a', creationDate: '2026-01-01T10:00:00' }, { id: 'b', creationDate: '2026-03-01T10:00:00' },
+      { id: 'c', creationDate: '2026-02-01T10:00:00' }];
+    assert.deepEqual(newestCreatedFirst(rows).map(r => r.id), ['b', 'c', 'a']);
+    const plain = [{ id: 'x' }, { id: 'y' }];
+    assert.equal(newestCreatedFirst(plain), plain);
+  });
+
+  for (const [name, rows, expected] of [
+    ['equal timestamps keep the server order (stable)',
+      [{ id: 'a', creationDate: '2026-01-01T10:00:00' }, { id: 'b', creationDate: '2026-01-01T10:00:00' }], ['a', 'b']],
+    ['rows without creationDate go last, in server order',
+      [{ id: 'n1' }, { id: 'a', creationDate: '2026-01-01T10:00:00' }, { id: 'n2' },
+        { id: 'b', creationDate: '2026-02-01T10:00:00' }], ['b', 'a', 'n1', 'n2']],
+    ['an unparseable creationDate sorts like a missing one',
+      [{ id: 'bad', creationDate: 'not a date' }, { id: 'a', creationDate: '2026-01-01T10:00:00' }], ['a', 'bad']],
+  ]) {
+    it(`newestCreatedFirst: ${name}`, () => {
+      assert.deepEqual(newestCreatedFirst(rows).map(r => r.id), expected);
+    });
+  }
+
+  // ETP-6099 — lines are read on expand, so the row decides from the availableOrders row.
+  it('the row hides an order with pendingLines 0 and totals it from amount', () => {
+    assert.equal(isOrderCovered({ pendingLines: 0 }), true);
+    assert.equal(isOrderCovered({ pendingLines: 2 }), false);
+    assert.equal(isOrderCovered({}), false);
+    assert.equal(getOrderTotal({ amount: '45.5' }), 45.5);
+    assert.equal(getOrderTotal({}), null);
+  });
+});
+
+// ETP-5828 — a failed availableOrders / availableOrderLines read is not "nothing to import": it
+// rejects with OrderImportLoadError carrying the body. ETP-6099: purchases too (they list through
+// the same actions), so the popup toasts it instead of showing an empty list in silence.
+describe('invoice order import — a failed list read', () => {
+  afterEach(() => {
+    mock.reset();
+  });
+
+  const REFUSAL = { error: { code: 'importTargetNotDraft', message: 'The invoice is not a draft' } };
+  const failingFetch = () => mock.fn(async (url) => (
+    /\/action\/|\/purchase-order\/header\?/.test(url)
+      ? { ok: false, status: 400, json: async () => REFUSAL }
+      : mockRes(true, [{ currency: 'EUR' }])));
+
+  for (const [name, read, rejects] of [
+    ['sales availableOrders', () => fetchDocuments({ base: '/b', bpId: 'bp1', invoiceId: 'inv1' }), true],
+    ['sales availableOrderLines', () => fetchLines({ base: '/b', docId: 'o1', sharedContext: { invoiceId: 'inv1' } }), true],
+    ['purchase availableOrders', () => fetchOrderDocuments({
+      apiFetch, config: invoiceOrderImportConfig('purchase'), base: '/b', bpId: 'bp1', invoiceId: 'inv1',
+    }), true],
+  ]) {
+    it(`${name}: ${rejects ? 'rejects with OrderImportLoadError carrying the body' : 'resolves to no documents, as before'}`, async () => {
+      globalThis.fetch = failingFetch();
+      if (rejects) {
+        await assert.rejects(read(), (err) => err instanceof OrderImportLoadError && err.body === REFUSAL);
+      } else {
+        assert.deepEqual((await read()).documents, []);
+      }
+    });
+  }
+
+  const es = (key) => `ES ${key}`;
+  for (const [name, err, expected] of [
+    ['a server refusal renders its code, never the English text',
+      new OrderImportLoadError(REFUSAL), 'ES backendError.importTargetNotDraft'],
+    ['a network failure shows its already translated message',
+      Object.assign(new Error('Sin conexión. Reintentá.'), { name: 'NetworkError' }), 'Sin conexión. Reintentá.'],
+    ['an unreadable refusal body falls back to documentsLoadError',
+      new OrderImportLoadError(null), 'ES documentsLoadError'],
+  ]) {
+    it(`describeLoadFailure: ${name}`, () => {
+      assert.equal(describeLoadFailure(err, es), expected);
+    });
+  }
+});
+
+// With availableOrders empty, the partner's order list still tells "none in this currency" apart.
 describe('invoice order import (sales) — fetchDocuments currency filter', () => {
   afterEach(() => {
     mock.reset();
@@ -144,6 +281,9 @@ describe('invoice order import (sales) — fetchDocuments currency filter', () =
     const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
     assert.equal(result.documents.length, 1);
     assert.equal(result.documents[0].id, 'o1');
+    // Not offered by the action even with includeCovered: nothing to import, the row hides it.
+    assert.equal(result.documents[0].pendingLines, 0);
+    assert.equal(isOrderCovered(result.documents[0]), true);
     assert.equal(result.excludedByCurrency, false);
   });
 
@@ -295,20 +435,22 @@ describe('invoice order import (sales) — submitOrderImport (importOrderLines a
     assert.deepEqual(result, { ok: false, error: 'failedToImportLines' });
   });
 
-  it('caps the selectable quantity with the action pending (drafts included)', async () => {
-    globalThis.fetch = mock.fn(async (url) => {
-      if (url.includes('/action/availableOrderLines')) return mockRes(true, [{ id: 'ol1', pendingQuantity: 2 }]);
-      return mockRes(true, [
-        { id: 'ol1', orderedQuantity: 5, invoicedQuantity: 0, unitPrice: 10 },
-        { id: 'ol2', orderedQuantity: 5, invoicedQuantity: 0, unitPrice: 10 },
-      ]);
-    });
+  // ETP-5828 — ONE availableOrderLines per order, covered lines included at 0, as a read.
+  it('caps the selectable quantity with the action pending (drafts included), in one read', async () => {
+    globalThis.fetch = mock.fn(async () => mockRes(true, [
+      { id: 'ol2', lineNo: 20, 'product$_identifier': 'Pan', pendingQuantity: 0, unitPrice: 10 },
+      { id: 'ol1', lineNo: 10, 'product$_identifier': 'Agua', pendingQuantity: 2, unitPrice: 10 },
+    ]));
     const lines = await fetchLines({
       base: '/b', docId: 'o1', sharedContext: { invoiceId: 'inv1', alreadyImportedOrderLines: new Set() },
     });
-    assert.equal(lines.find(l => l.id === 'ol1')._maxQty, 2);
-    assert.equal(lines.find(l => l.id === 'ol2')._maxQty, 0);
-    assert.equal(lines.find(l => l.id === 'ol2')._alreadyImported, true);
+    assert.equal(globalThis.fetch.mock.calls.length, 1);
+    const [url, opts] = globalThis.fetch.mock.calls[0].arguments;
+    assert.equal(url, '/b/sales-invoice/header/inv1/action/availableOrderLines');
+    assert.equal(opts.refreshVersion, false);
+    assert.deepEqual(JSON.parse(opts.body), { orderId: 'o1', includeCovered: true });
+    assert.deepEqual(lines.map(l => [l.id, l._productName, l._maxQty, l._lineNetAmount, l._alreadyImported]),
+      [['ol1', 'Agua', 2, 20, false], ['ol2', 'Pan', 0, 0, true]]);
   });
 });
 

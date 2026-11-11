@@ -367,6 +367,11 @@ describe('buildAccountReportTree — flattening', () => {
       // report (Profit & Loss) never flips isGroupStart.
       group: 'G1',
       isGroupStart: false,
+      // ETP-6080 — the interactive view folds by `parentId` (nearest listed
+      // ancestor; null under the root container) and colours the trend by the
+      // effective `sign`.
+      parentId: null,
+      sign: 'D',
     });
   });
 

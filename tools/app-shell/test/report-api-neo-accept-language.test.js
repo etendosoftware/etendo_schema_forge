@@ -164,26 +164,6 @@ describe('report-api NEO fetch — Accept-Language (ETP-5013)', () => {
   });
 
   describe('absent locale', () => {
-    it('omits the Accept-Language KEY entirely on the /data route', async () => {
-      // /data is a raw-data endpoint with no render/locale concept, so it calls
-      // fetchReportData WITHOUT a locale — which is exactly the code path the
-      // conditional spread protects. The key must be ABSENT, not present-and-
-      // undefined: `{ 'Accept-Language': undefined }` serializes to the literal
-      // string "undefined" over the wire, which the backend would then try to
-      // parse as a language code.
-      const handler = loadMiddleware();
-      const res = makeRes();
-      await handler(makeReq('GET', '/api/reports/tax-report/data'), res, () => {
-        throw new Error('data route did not match');
-      });
-      const neoCall = lastNeoCall();
-      assert.ok(neoCall, 'no NEO fetch was made');
-      const headers = neoCall.init.headers;
-      assert.equal('Accept-Language' in headers, false,
-        `Accept-Language must not be present at all, got: ${JSON.stringify(headers)}`);
-      assert.equal(Object.keys(headers).includes('Accept-Language'), false);
-    });
-
     it('omits the Accept-Language KEY when the render locale is an empty string', async () => {
       const headers = await renderAndCaptureNeoHeaders('tax-report', { locale: '' });
       assert.equal('Accept-Language' in headers, false,
@@ -200,11 +180,8 @@ describe('report-api NEO fetch — Accept-Language (ETP-5013)', () => {
       assert.equal(headers['Accept-Language'], 'es_ES');
     });
 
-    it('still sends Content-Type and the session Cookie when no locale is supplied', async () => {
-      const handler = loadMiddleware();
-      const res = makeRes();
-      await handler(makeReq('GET', '/api/reports/tax-report/data'), res, () => {});
-      const headers = lastNeoCall().init.headers;
+    it('still sends Content-Type and the session Cookie when the render body has no locale', async () => {
+      const headers = await renderAndCaptureNeoHeaders('tax-report');
       assert.equal(headers['Content-Type'], 'application/json');
       assert.equal(headers.Cookie, SESSION_COOKIE);
     });
@@ -254,10 +231,8 @@ describe('report-api NEO fetch — Accept-Language (ETP-5013)', () => {
         /fetchReportData\(reportId, \{ limit, session, params, locale \}\)/);
     });
 
-    it('deliberately does NOT pass a locale at the /data call site', () => {
-      // /data has no render/locale concept; the asymmetry is intentional and is
-      // what keeps the "absent key" branch alive in production, not just in tests.
-      assert.match(PLUGIN_SRC, /fetchReportData\(reportId, \{ limit, session \}\)/);
+    it('has no locale-less fetchReportData call site left (GET /data removed, ETP-6080)', () => {
+      assert.doesNotMatch(PLUGIN_SRC, /fetchReportData\(reportId, \{ limit, session \}\)/);
     });
   });
 });

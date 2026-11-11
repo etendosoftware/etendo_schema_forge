@@ -8,6 +8,7 @@ import ImportFromOrderModal from './ImportFromOrderModal';
 import ImportFromReturnShipmentModal from './ImportFromReturnShipmentModal';
 import ImportFromSourceInvoiceModal from './ImportFromSourceInvoiceModal';
 import { getArSubtype } from './invoiceSubtype';
+import { IMPORT_SAVE_OPTIONS } from '@/windows/custom/shared/importSaveOptions.js';
 
 /**
  * Sales Invoice bottom section. Delegates to the shared LinesBottomSection so
@@ -52,25 +53,25 @@ function InvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, recordId, 
 
   const handleImportClick = async () => {
     pendingModal.current = 'shipment';
-    if (onSave) { const ok = await onSave('shipment'); if (!ok) return; }
+    if (onSave) { const ok = await onSave('shipment', IMPORT_SAVE_OPTIONS); if (!ok) return; }
     setShowImportModal(true);
   };
 
   const handleImportOrderClick = async () => {
     pendingModal.current = 'order';
-    if (onSave) { const ok = await onSave('order'); if (!ok) return; }
+    if (onSave) { const ok = await onSave('order', IMPORT_SAVE_OPTIONS); if (!ok) return; }
     setShowImportOrderModal(true);
   };
 
   const handleImportReturnClick = async () => {
     pendingModal.current = 'return';
-    if (onSave) { const ok = await onSave('return'); if (!ok) return; }
+    if (onSave) { const ok = await onSave('return', IMPORT_SAVE_OPTIONS); if (!ok) return; }
     setShowImportReturnModal(true);
   };
 
   const handleImportSourceClick = async () => {
     pendingModal.current = 'sourceInvoice';
-    if (onSave) { const ok = await onSave('sourceInvoice'); if (!ok) return; }
+    if (onSave) { const ok = await onSave('sourceInvoice', IMPORT_SAVE_OPTIONS); if (!ok) return; }
     setShowImportSourceModal(true);
   };
 
@@ -202,25 +203,25 @@ const InvoiceLineActions = forwardRef(function InvoiceLineActions(
 
   const openModal = async () => {
     pendingModal.current = 'shipment';
-    if (onSave) { const ok = await onSave('shipment'); if (!ok) return; }
+    if (onSave) { const ok = await onSave('shipment', IMPORT_SAVE_OPTIONS); if (!ok) return; }
     setShowImportModal(true);
   };
 
   const openOrderModal = async () => {
     pendingModal.current = 'order';
-    if (onSave) { const ok = await onSave('order'); if (!ok) return; }
+    if (onSave) { const ok = await onSave('order', IMPORT_SAVE_OPTIONS); if (!ok) return; }
     setShowImportOrderModal(true);
   };
 
   const openReturnModal = async () => {
     pendingModal.current = 'return';
-    if (onSave) { const ok = await onSave('return'); if (!ok) return; }
+    if (onSave) { const ok = await onSave('return', IMPORT_SAVE_OPTIONS); if (!ok) return; }
     setShowImportReturnModal(true);
   };
 
   const openSourceModal = async () => {
     pendingModal.current = 'sourceInvoice';
-    if (onSave) { const ok = await onSave('sourceInvoice'); if (!ok) return; }
+    if (onSave) { const ok = await onSave('sourceInvoice', IMPORT_SAVE_OPTIONS); if (!ok) return; }
     setShowImportSourceModal(true);
   };
 

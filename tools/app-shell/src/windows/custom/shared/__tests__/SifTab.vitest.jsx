@@ -1366,9 +1366,8 @@ describe('SifTab', () => {
       expect(onChange).toHaveBeenCalledTimes(1);
       expect(onChange).toHaveBeenCalledWith('etvfacInvType', 'F1');
 
-      // Guard (`vfInvTypeDefaultedRef`) must not re-fire for the same record on
-      // a re-render, even though data.etvfacInvType is still empty (onChange is
-      // a no-op mock here, so it never actually gets written into `data`).
+      // A plain re-render with the same (still empty) value must not re-fire: the effect
+      // depends on the value, not on renders (ETP-5747 removed the per-record ref guard).
       rerender(<SifTab {...makeProps({ data: { documentStatus: 'DR' }, onChange })} />);
       expect(onChange).toHaveBeenCalledTimes(1);
     });
@@ -1383,6 +1382,84 @@ describe('SifTab', () => {
       const onChange = vi.fn();
       render(<SifTab {...makeProps({ data: { documentStatus: 'CO' }, onChange })} />);
       expect(onChange).not.toHaveBeenCalled();
+    });
+
+    // ETP-5747 repro: a forced re-read (fetchById after "Importar desde factura origen") puts the
+    // stored NULL back; the per-record guard had already fired, so the default never returned.
+    it('re-applies F1 after a re-read of the record empties etvfacInvType again', () => {
+      const onChange = vi.fn();
+      const props = (invType) => makeProps({ data: { documentStatus: 'DR', etvfacInvType: invType }, onChange });
+      const { rerender } = render(<SifTab {...props(null)} />);
+      rerender(<SifTab {...props('F1')} />);
+      rerender(<SifTab {...props(null)} />);
+      const f1Calls = onChange.mock.calls.filter(([f, v]) => f === 'etvfacInvType' && v === 'F1');
+      expect(f1Calls).toHaveLength(2);
+    });
+
+    it('never overrides the rectificative type the server copied from the document type', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', etvfacInvType: 'R1', etvfacReverseinvtype: 'I' },
+        onChange,
+      })} />);
+      expect(onChange).not.toHaveBeenCalledWith('etvfacInvType', expect.anything());
+    });
+  });
+
+  // ── etvfacReverseinvtype auto-default effect (ETP-4783, ETP-5747) ───────────
+
+  describe('etvfacReverseinvtype auto-default effect (ETP-4783, ETP-5747)', () => {
+    beforeEach(() => {
+      mockFiscalConfig('verifactu');
+    });
+
+    const reverseProps = (onChange, reverseType) => makeProps({
+      data: { documentStatus: 'DR', etvfacInvType: 'R1', etvfacReverseinvtype: reverseType },
+      onChange,
+    });
+
+    it('sets I when the invoice type is rectificative and the reverse type is blank', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...reverseProps(onChange, null)} />);
+      expect(onChange).toHaveBeenCalledWith('etvfacReverseinvtype', 'I');
+    });
+
+    it('re-applies I after a re-read of the record empties it again', () => {
+      const onChange = vi.fn();
+      const { rerender } = render(<SifTab {...reverseProps(onChange, null)} />);
+      rerender(<SifTab {...reverseProps(onChange, 'I')} />);
+      rerender(<SifTab {...reverseProps(onChange, null)} />);
+      const iCalls = onChange.mock.calls.filter(([f, v]) => f === 'etvfacReverseinvtype' && v === 'I');
+      expect(iCalls).toHaveLength(2);
+    });
+
+    it('never overwrites a reverse type that is already stored', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...reverseProps(onChange, 'S')} />);
+      expect(onChange).not.toHaveBeenCalledWith('etvfacReverseinvtype', expect.anything());
+    });
+
+    it('does nothing for a non-rectificative invoice type', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', etvfacInvType: 'F1' }, onChange })} />);
+      expect(onChange).not.toHaveBeenCalledWith('etvfacReverseinvtype', expect.anything());
+    });
+
+    // A re-read (fetchById) hands over a NEW data object carrying the server-stored reverse type
+    // (SalesRectificativeFiscalDefaults copies it from the document type). The client must keep it.
+    it('never writes I when a re-read payload echoes the server-stored reverse type S', () => {
+      const onChange = vi.fn();
+      const reRead = () => makeProps({
+        data: { documentStatus: 'DR', etvfacInvType: 'R1', etvfacReverseinvtype: 'S' },
+        onChange,
+      });
+      const { rerender } = render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', etvfacInvType: 'F1' },
+        onChange,
+      })} />);
+      rerender(<SifTab {...reRead()} />);
+      rerender(<SifTab {...reRead()} />);
+      expect(onChange).not.toHaveBeenCalledWith('etvfacReverseinvtype', expect.anything());
     });
   });
 
@@ -1419,6 +1496,65 @@ describe('SifTab', () => {
       const onChange = vi.fn();
       render(<SifTab {...makeProps({ data: { documentStatus: 'DR', isRectificative: false }, onChange })} />);
       expect(onChange).not.toHaveBeenCalledWith('aeatsiiClaveTipo', expect.anything());
+    });
+
+    // ETP-5747 repro: "Importar desde factura origen" re-reads the record after importing
+    // (DetailView onRefresh → fetchById), which replaces the pending 'R' with the stored 'F1'.
+    // The effect used to be a one-shot per record, so the tab kept showing F1 until a reload.
+    it('sales: re-applies R after a re-read of the record resets the pending value to F1', () => {
+      const onChange = vi.fn();
+      const props = (claveTipo) => makeProps({
+        data: { documentStatus: 'DR', isRectificative: true, aeatsiiClaveTipo: claveTipo },
+        onChange,
+      });
+      const { rerender } = render(<SifTab {...props('F1')} />);
+      rerender(<SifTab {...props('R')} />);
+      rerender(<SifTab {...props('F1')} />);
+      const rCalls = onChange.mock.calls.filter(([f, v]) => f === 'aeatsiiClaveTipo' && v === 'R');
+      expect(rCalls).toHaveLength(2);
+    });
+
+    it('sales: never overrides a type the user picked in the Select', () => {
+      const onChange = vi.fn();
+      const props = (claveTipo) => makeProps({
+        data: { documentStatus: 'DR', isRectificative: true, aeatsiiClaveTipo: claveTipo },
+        onChange,
+      });
+      const { rerender } = render(<SifTab {...props('R')} />);
+      fireEvent.click(screen.getByTestId('mock-select-option-F1'));
+      expect(onChange).toHaveBeenCalledWith('aeatsiiClaveTipo', 'F1');
+      rerender(<SifTab {...props('F1')} />);
+      expect(onChange).not.toHaveBeenCalledWith('aeatsiiClaveTipo', 'R');
+    });
+
+    it('sales: a type picked on one record does not block the R default on the next record', () => {
+      const onChange = vi.fn();
+      const props = (recordId, claveTipo) => makeProps({
+        recordId,
+        data: { documentStatus: 'DR', isRectificative: true, aeatsiiClaveTipo: claveTipo },
+        onChange,
+      });
+      const { rerender } = render(<SifTab {...props('inv-A', 'R')} />);
+      fireEvent.click(screen.getByTestId('mock-select-option-F1'));
+      rerender(<SifTab {...props('inv-A', 'F1')} />);
+      expect(onChange).not.toHaveBeenCalledWith('aeatsiiClaveTipo', 'R');
+
+      rerender(<SifTab {...props('inv-B', 'F1')} />);
+      expect(onChange).toHaveBeenLastCalledWith('aeatsiiClaveTipo', 'R');
+    });
+
+    it('sales: sets R when isRectificative flips from false to true on the same record', () => {
+      const onChange = vi.fn();
+      const props = (isRectificative) => makeProps({
+        data: { documentStatus: 'DR', isRectificative, aeatsiiClaveTipo: 'F1' },
+        onChange,
+      });
+      const { rerender } = render(<SifTab {...props(false)} />);
+      expect(onChange).not.toHaveBeenCalledWith('aeatsiiClaveTipo', 'R');
+
+      rerender(<SifTab {...props(true)} />);
+      const rCalls = onChange.mock.calls.filter(([f, v]) => f === 'aeatsiiClaveTipo' && v === 'R');
+      expect(rCalls).toHaveLength(1);
     });
 
     // ETP-5745 CP-10 — the corrected behavior under test.
@@ -1462,6 +1598,20 @@ describe('SifTab', () => {
       const onChange = vi.fn();
       render(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiClaveTipo: 'R' }, onChange })} />);
       expect(onChange).toHaveBeenCalledWith('aeatsiiTipoRectif', 'I');
+    });
+
+    // ETP-5747: the same re-read drops the pending 'I' with the pending 'R'; it must come back.
+    it('sales: re-applies I after a re-read of the record empties aeatsiiTipoRectif again', () => {
+      const onChange = vi.fn();
+      const props = (tipoRectif) => makeProps({
+        data: { documentStatus: 'DR', aeatsiiClaveTipo: 'R', aeatsiiTipoRectif: tipoRectif },
+        onChange,
+      });
+      const { rerender } = render(<SifTab {...props(null)} />);
+      rerender(<SifTab {...props('I')} />);
+      rerender(<SifTab {...props(null)} />);
+      const iCalls = onChange.mock.calls.filter(([f, v]) => f === 'aeatsiiTipoRectif' && v === 'I');
+      expect(iCalls).toHaveLength(2);
     });
 
     it('purchase: calls onChange with I when the SII type (ClaveTipoFc) is R and no value exists yet', () => {

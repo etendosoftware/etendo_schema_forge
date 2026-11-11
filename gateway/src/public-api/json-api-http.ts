@@ -169,8 +169,22 @@ const PASS_THROUGH_STATUSES = new Set([400, 401, 402, 403, 404, 409, 412, 422, 4
 const DEFAULT_CODES: Record<number, string> = {
   400: 'bad_request', 401: 'unauthorized', 403: 'forbidden', 404: 'not_found', 406: 'not_acceptable',
   409: 'conflict', 412: 'precondition_failed', 415: 'unsupported_media_type', 422: 'unprocessable_entity',
-  428: 'precondition_required', 429: 'rate_limit_exceeded',
+  428: 'precondition_required', 429: 'rate_limit_exceeded', 503: 'service_unavailable',
 };
+
+// Etendo's codes come as UPPER_SNAKE, camelCase or plain text; the public contract is snake_case.
+// Acronyms are split (`HTTPError` -> `http_error`), any other separator run becomes one `_`.
+// Capped first: the acronym pass is quadratic on a long upper-case run.
+const publicCode = (code: string): string => code.slice(0, 100)
+  .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+  .replace(/([a-z\d])([A-Z])/g, '$1_$2')
+  .replace(/[^A-Za-z\d]+/g, '_')
+  .replace(/^_+|_+$/g, '')
+  .toLowerCase();
+
+// A blocked tenant's 402 carries an internal billing state: the integrator gets only this
+// generic text, the reason stays in the server log.
+const TENANT_BLOCKED_DETAIL = 'Access for this account is suspended. Contact the account owner or support.';
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -284,12 +298,18 @@ export function upstreamException(status: number, body: unknown): HttpException 
     }
     return badGateway('Etendo could not complete the request. Retry later; contact support if it persists.', { upstreamStatus: status });
   }
+  if (status === 402) {
+    log.warn(`NeoServlet answered 402 (tenant blocked): ${upstream.code ?? 'no code'} ${upstream.message ?? upstream.detail ?? 'no message'}`);
+    return new HttpException({
+      errors: [{ status: '402', code: 'tenant_blocked', title: titleFor(402), detail: TENANT_BLOCKED_DETAIL } satisfies JsonApiError],
+    }, 402);
+  }
   const meta: Record<string, unknown> = {};
   if (upstream.message && upstream.detail) meta.detail = upstream.detail;
   if (upstream.hint) meta.hint = upstream.hint;
   if (upstream.field) meta.field = upstream.field;
   // A refusal NeoServlet sends without a code (e.g. "Invalid country") still gets the status's one.
-  const code = upstream.code ?? DEFAULT_CODES[status];
+  const code = (upstream.code && publicCode(upstream.code)) || DEFAULT_CODES[status];
   const error: JsonApiError = {
     status: String(status),
     ...(code ? { code } : {}),

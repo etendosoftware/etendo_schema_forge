@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/lib/neoBaseUrl.js
 // `.vitest.js` (jsdom), not `.test.js` (Node test runner): every function here reads the real
 // `window.location.pathname`, and `npm test` runs `node --test` with no DOM globals at all.
 // `Object.defineProperty(window, 'location', ...)` is the existing convention for stubbing it
@@ -5,7 +6,9 @@
 // Vitest, which is how `AppIframeHost.vitest.jsx` and `SideMenu.vitest.jsx` set VITE_* flags.
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { detectBasePath, getNeoBaseUrl, getSpecBaseUrl } from '../neoBaseUrl.js';
+import {
+  detectBasePath, getNeoBaseUrl, getSpecBaseUrl, specFromBaseUrl,
+} from '../neoBaseUrl.js';
 
 const originalLocation = window.location;
 
@@ -97,5 +100,25 @@ describe('getSpecBaseUrl', () => {
     const windowLoaderBase = `${getNeoBaseUrl()}/product`; // WindowLoader.jsx:95
     expect(getSpecBaseUrl('product')).toBe(windowLoaderBase);
     expect(getSpecBaseUrl('product')).toBe('/etendo/sws/neo/product');
+  });
+});
+
+describe('specFromBaseUrl', () => {
+  it('is the inverse of getSpecBaseUrl', () => {
+    import.meta.env.VITE_API_BASE = '/etendo';
+    setPathname('/etendo/web/com.etendoerp.go/product');
+
+    expect(specFromBaseUrl(getSpecBaseUrl('sales-order'))).toBe('sales-order');
+  });
+
+  it('refuses anything that is not exactly a spec URL rather than guessing (ETP-5371)', () => {
+    import.meta.env.VITE_API_BASE = '/etendo';
+    setPathname('/etendo/web/com.etendoerp.go/product');
+
+    expect(specFromBaseUrl('/etendo')).toBeNull();
+    expect(specFromBaseUrl('http://localhost/api')).toBeNull();
+    expect(specFromBaseUrl('/etendo/sws/neo/product/header')).toBeNull();
+    expect(specFromBaseUrl('/etendo/sws/neo/')).toBeNull();
+    expect(specFromBaseUrl(undefined)).toBeNull();
   });
 });
