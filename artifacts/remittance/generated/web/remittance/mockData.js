@@ -139,6 +139,7 @@ export const lines = [
   {
     "id": "mock-lines-001",
     "lineNo": 10,
+    "invoice": "Sample invoice",
     "payment": "Sample payment",
     "paymentScheduleDetail": "Sample paymentScheduleDetail",
     "amount": 38907,
@@ -150,11 +151,14 @@ export const lines = [
     "invoiceDate": "2026-01-15",
     "invoiceGrandTotal": 38907,
     "invoiceOutstanding": 38907,
+    "invoiceSalesTransaction": "Sample invoiceSalesTransaction",
+    "dueOutstanding": 38907,
     "remittanceId": "mock-remittance-001"
   },
   {
     "id": "mock-lines-002",
     "lineNo": 20,
+    "invoice": "Sample invoice",
     "payment": "Sample payment",
     "paymentScheduleDetail": "Sample paymentScheduleDetail",
     "amount": 9306,
@@ -166,11 +170,14 @@ export const lines = [
     "invoiceDate": "2026-01-16",
     "invoiceGrandTotal": 9306,
     "invoiceOutstanding": 9306,
+    "invoiceSalesTransaction": "Sample invoiceSalesTransaction",
+    "dueOutstanding": 9306,
     "remittanceId": "mock-remittance-002"
   },
   {
     "id": "mock-lines-003",
     "lineNo": 30,
+    "invoice": "Sample invoice",
     "payment": "Sample payment",
     "paymentScheduleDetail": "Sample paymentScheduleDetail",
     "amount": 11544,
@@ -182,11 +189,14 @@ export const lines = [
     "invoiceDate": "2026-01-17",
     "invoiceGrandTotal": 11544,
     "invoiceOutstanding": 11544,
+    "invoiceSalesTransaction": "Sample invoiceSalesTransaction",
+    "dueOutstanding": 11544,
     "remittanceId": "mock-remittance-003"
   },
   {
     "id": "mock-lines-004",
     "lineNo": 40,
+    "invoice": "Sample invoice",
     "payment": "Sample payment",
     "paymentScheduleDetail": "Sample paymentScheduleDetail",
     "amount": 11872,
@@ -198,11 +208,14 @@ export const lines = [
     "invoiceDate": "2026-01-18",
     "invoiceGrandTotal": 11872,
     "invoiceOutstanding": 11872,
+    "invoiceSalesTransaction": "Sample invoiceSalesTransaction",
+    "dueOutstanding": 11872,
     "remittanceId": "mock-remittance-004"
   },
   {
     "id": "mock-lines-005",
     "lineNo": 50,
+    "invoice": "Sample invoice",
     "payment": "Sample payment",
     "paymentScheduleDetail": "Sample paymentScheduleDetail",
     "amount": 48460,
@@ -214,11 +227,14 @@ export const lines = [
     "invoiceDate": "2026-01-19",
     "invoiceGrandTotal": 48460,
     "invoiceOutstanding": 48460,
+    "invoiceSalesTransaction": "Sample invoiceSalesTransaction",
+    "dueOutstanding": 48460,
     "remittanceId": "mock-remittance-005"
   },
   {
     "id": "mock-lines-006",
     "lineNo": 60,
+    "invoice": "Sample invoice",
     "payment": "Sample payment",
     "paymentScheduleDetail": "Sample paymentScheduleDetail",
     "amount": 45418,
@@ -230,11 +246,14 @@ export const lines = [
     "invoiceDate": "2026-01-20",
     "invoiceGrandTotal": 45418,
     "invoiceOutstanding": 45418,
+    "invoiceSalesTransaction": "Sample invoiceSalesTransaction",
+    "dueOutstanding": 45418,
     "remittanceId": "mock-remittance-006"
   },
   {
     "id": "mock-lines-007",
     "lineNo": 70,
+    "invoice": "Sample invoice",
     "payment": "Sample payment",
     "paymentScheduleDetail": "Sample paymentScheduleDetail",
     "amount": 33840,
@@ -246,11 +265,14 @@ export const lines = [
     "invoiceDate": "2026-01-21",
     "invoiceGrandTotal": 33840,
     "invoiceOutstanding": 33840,
+    "invoiceSalesTransaction": "Sample invoiceSalesTransaction",
+    "dueOutstanding": 33840,
     "remittanceId": "mock-remittance-007"
   },
   {
     "id": "mock-lines-008",
     "lineNo": 80,
+    "invoice": "Sample invoice",
     "payment": "Sample payment",
     "paymentScheduleDetail": "Sample paymentScheduleDetail",
     "amount": 25716,
@@ -262,11 +284,14 @@ export const lines = [
     "invoiceDate": "2026-01-22",
     "invoiceGrandTotal": 25716,
     "invoiceOutstanding": 25716,
+    "invoiceSalesTransaction": "Sample invoiceSalesTransaction",
+    "dueOutstanding": 25716,
     "remittanceId": "mock-remittance-008"
   },
   {
     "id": "mock-lines-009",
     "lineNo": 90,
+    "invoice": "Sample invoice",
     "payment": "Sample payment",
     "paymentScheduleDetail": "Sample paymentScheduleDetail",
     "amount": 44780,
@@ -278,11 +303,14 @@ export const lines = [
     "invoiceDate": "2026-01-23",
     "invoiceGrandTotal": 44780,
     "invoiceOutstanding": 44780,
+    "invoiceSalesTransaction": "Sample invoiceSalesTransaction",
+    "dueOutstanding": 44780,
     "remittanceId": "mock-remittance-009"
   },
   {
     "id": "mock-lines-010",
     "lineNo": 100,
+    "invoice": "Sample invoice",
     "payment": "Sample payment",
     "paymentScheduleDetail": "Sample paymentScheduleDetail",
     "amount": 12483,
@@ -294,11 +322,14 @@ export const lines = [
     "invoiceDate": "2026-01-24",
     "invoiceGrandTotal": 12483,
     "invoiceOutstanding": 12483,
+    "invoiceSalesTransaction": "Sample invoiceSalesTransaction",
+    "dueOutstanding": 12483,
     "remittanceId": "mock-remittance-010"
   },
   {
     "id": "mock-lines-011",
     "lineNo": 110,
+    "invoice": "Sample invoice",
     "payment": "Sample payment",
     "paymentScheduleDetail": "Sample paymentScheduleDetail",
     "amount": 46022,
@@ -310,11 +341,14 @@ export const lines = [
     "invoiceDate": "2026-01-25",
     "invoiceGrandTotal": 46022,
     "invoiceOutstanding": 46022,
+    "invoiceSalesTransaction": "Sample invoiceSalesTransaction",
+    "dueOutstanding": 46022,
     "remittanceId": "mock-remittance-011"
   },
   {
     "id": "mock-lines-012",
     "lineNo": 120,
+    "invoice": "Sample invoice",
     "payment": "Sample payment",
     "paymentScheduleDetail": "Sample paymentScheduleDetail",
     "amount": 38634,
@@ -326,6 +360,8 @@ export const lines = [
     "invoiceDate": "2026-01-26",
     "invoiceGrandTotal": 38634,
     "invoiceOutstanding": 38634,
+    "invoiceSalesTransaction": "Sample invoiceSalesTransaction",
+    "dueOutstanding": 38634,
     "remittanceId": "mock-remittance-012"
   }
 ];

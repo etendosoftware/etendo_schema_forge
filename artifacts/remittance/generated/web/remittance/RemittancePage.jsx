@@ -50,7 +50,7 @@ const requiredHeaderFields = ['remittanceType', 'dueDate', 'name', 'financialAcc
 // @sf-generated-start addLineFields:lines
 const addLineFields = {
   entry: [
-
+    { key: 'amount', column: 'Amount', type: 'number', required: true, label: 'Amount', labels: {"es_ES":"A remesar","es_AR":"A remesar","en_US":"To remit"}, defaultValue: 0 },
   ],
   derived: [
 
@@ -81,7 +81,7 @@ export const api = {
       "getById": true,
       "post": false,
       "put": false,
-      "patch": false,
+      "patch": true,
       "delete": true,
       "listUrl": "/sws/neo/remittance/lines",
       "detailUrl": "/sws/neo/remittance/lines/{id}",
@@ -89,6 +89,7 @@ export const api = {
       "methods": [
         "GET",
         "GETBYID",
+        "PATCH",
         "DELETE"
       ]
     }
@@ -118,6 +119,14 @@ export const api = {
       "reference": "Financial_Account",
       "inputMode": "selector",
       "url": "/sws/neo/remittance/remittance/selectors/financialAccount"
+    },
+    {
+      "entity": "lines",
+      "field": "invoice",
+      "column": "C_Invoice_ID",
+      "reference": "Invoice",
+      "inputMode": "search",
+      "url": "/sws/neo/remittance/lines/selectors/invoice"
     },
     {
       "entity": "lines",
@@ -285,11 +294,13 @@ export default function RemittancePage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         hidePrint
+        noHeaderBorder
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "REM_Remittance", config: {} } }]}
         bottomSection={RemittanceBottomPanel}
         headerContent={(data) => <RemittanceStatusBanner data={data} />}
         processConfirmModal={RemittanceProcessConfirmModal}
         requiredHeaderFields={requiredHeaderFields}
+        addLineGuard={(_, children) => children.length < 0}
         detailSortBy="lineNo asc"
         titleField="name"
         statusEnumLabels={{"PE":"remittanceStatusPe","PR":"remittanceStatusPr","CT":"remittanceStatusCt","PT":"remittanceStatusPt","CP":"remittanceStatusCp","PP":"remittanceStatusPp","AN":"remittanceStatusAn"}}

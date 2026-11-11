@@ -18,6 +18,10 @@
     "listSortBy": "transactionDate desc",
     "detailSortBy": "lineNo asc",
     "hideDetailForm": true,
+    "noHeaderBorder": true,
+    "_noHeaderBorderNote": "ETP-6148 round 3 (user decision) — the header fields sit flush on the page like Sales Invoice, which declares the same option, not inside DetailView's default rounded, bordered card.",
+    "maxDetailLines": 0,
+    "_maxDetailLinesNote": "ETP-6148 round 3 — import-only lines (the return-material-receipt pattern): no «+ Añadir línea». Lines have no POST and only come from «Seleccionar desde factura». Needed since amount became editable (editInPlace), which put it in addLineFields.entry and made DetailView show the add-line area.",
     "customComponents": {
       "bottomSection": "RemittanceBottomPanel",
       "subHeader": "RemittanceStatusBanner",
@@ -296,9 +300,12 @@
       "methods": [
         "GET",
         "GETBYID",
+        "PATCH",
         "DELETE"
       ],
       "_methodsNote": "ETP-6148 — lines are added only through «Seleccionar desde factura» (no POST/PUT/PATCH, every field readOnly, so DetailView shows no add-line area and no edit). DELETE enables the generic line delete (row trash icon + selection bar); DetailView hides it on a processed remittance (lockWhenProcessed) and RemittanceLinesHandler refuses it there too.",
+      "rowEdit": false,
+      "_rowEditNote": "ETP-6148 round 3 — no row edit mode, as in Classic: no Edit (pencil) action and a click does not turn the row into inputs. The only editable value is «A remesar» (amount.editInPlace), an always-visible input committed by PATCH (methods above; RemittanceLinesHandler writes only amount and refuses with 422 ETGO_RemittanceLineAmountInvalid outside 0 < |amount| <= |due outstanding|). The trash icon (line delete) and «Seleccionar desde factura» stay.",
       "fields": {
         "invoiceDate": {
           "propertyPath": "paymentScheduleDetail.invoicePaymentSchedule.invoice.invoiceDate",
@@ -360,6 +367,16 @@
           "gridOrder": 1,
           "grow": true,
           "form": false,
+          "link": {
+            "idField": "invoice",
+            "window": {
+              "field": "invoiceSalesTransaction",
+              "values": {
+                "true": "sales-invoice",
+                "false": "purchase-invoice"
+              }
+            }
+          },
           "labels": {
             "es_ES": "Factura",
             "es_AR": "Factura",
@@ -419,20 +436,47 @@
           "reason": "ETP-6148 — 'Pago' (FIN_Payment_ID). Hidden on the Lines tab (user decision 2026-11-06, option a): a line created from an invoice due amount has no payment until the remittance is processed, and the grid cannot hide a column based on the header's processed state. Still served."
         },
         "amount": {
-          "visibility": "readOnly",
+          "visibility": "editable",
           "grid": true,
           "gridOrder": 7,
           "currencyField": "currency",
+          "editInPlace": {
+            "resetToField": "dueOutstanding",
+            "maxField": "dueOutstanding"
+          },
           "labels": {
             "es_ES": "A remesar",
             "es_AR": "A remesar",
             "en_US": "To remit"
           },
-          "reason": "ETP-6148 — 'Importe'. currencyField names the line's own text currency (REM's SQL-logic Currency, e.g. EUR), which resolveRowCurrency accepts as a plain ISO code, so the cell reads «53,24 €» with the line currency. Header «A remesar» / «To remit» (per-field labels): the part of the due amount this line remits."
+          "reason": "ETP-6148 — 'Importe'. currencyField names the line's own text currency (REM's SQL-logic Currency, e.g. EUR), which resolveRowCurrency accepts as a plain ISO code, so the cell reads «53,24 €» with the line currency. Header «A remesar» / «To remit» (per-field labels): the part of the due amount this line remits. Round 3: the only editable line value (user decision, Holded pattern), an always-visible input with a reset to the due's outstanding (editInPlace), capped at it; read-only text once the remittance is processed (the document lock)."
+        },
+        "dueOutstanding": {
+          "propertyPath": "paymentScheduleDetail.amount",
+          "type": "amount",
+          "label": "Due Outstanding",
+          "column": "Amount",
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false,
+          "reason": "ETP-6148 round 3 — decisions-only path field: the amount of the payment schedule detail the line points to, i.e. the due's outstanding (the bound REM itself checks, REM_OutOfRangeAmount). It is the reset value and the maximum of «A remesar» (amount.editInPlace). Not invoiceOutstanding, which is the whole invoice's outstanding and is wrong for an invoice with several dues. Not a column."
         },
         "invoice": {
-          "visibility": "discarded",
-          "reason": "ETP-6148 — AD_Field property path paymentScheduleDetail.invoicePaymentSchedule.invoice (anchor FIN_Payment_Schedule.C_Invoice_ID). Not supported end to end (checked for ETP-6148): the extractor ignores AD_Field.Property and emits the anchor column of the joined table (here C_Invoice_ID) as a flat key; push-to-neo only matches columns of REM_RemittanceLine, so the field is skipped; NeoFieldFilter resolves fields with getPropertyByColumnName on RemittanceLine, so NEO never serves it. Enabling it would render an always-empty, unfilterable column."
+          "propertyPath": "paymentScheduleDetail.invoicePaymentSchedule.invoice",
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false,
+          "reason": "ETP-6148 round 3 — the Classic property field paymentScheduleDetail.invoicePaymentSchedule.invoice, opted in per field (propertyPath) as a hidden read-only path field: it carries the invoice id the Factura column links to (invoiceDocumentNo.link.idField). Not a column."
+        },
+        "invoiceSalesTransaction": {
+          "propertyPath": "paymentScheduleDetail.invoicePaymentSchedule.invoice.salesTransaction",
+          "type": "boolean",
+          "label": "Sales Transaction",
+          "column": "IsSOTrx",
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false,
+          "reason": "ETP-6148 round 3 — decisions-only path field: the invoice's own sales flag picks the Factura link's target window (true: sales-invoice, false: purchase-invoice), read from the invoice itself, not from the remittance type. Not a column."
         },
         "invoicePaymentSchedule": {
           "visibility": "discarded",

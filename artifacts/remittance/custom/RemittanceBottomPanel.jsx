@@ -18,6 +18,11 @@ export function canSelectDueItems(data) {
   return Boolean(data && !isProcessed(data) && data.remittanceType && data.financialAccount);
 }
 
+/** «R-0012 · Remesa marzo»: the picker's subtitle, the remittance being filled. */
+export function remittanceSubtitle(data) {
+  return [data?.documentNo, data?.name].filter(Boolean).join(' · ');
+}
+
 function isProcessed(data) {
   return data?.processed === true || data?.processed === 'Y';
 }
@@ -73,7 +78,7 @@ function RemittanceLinesTotal({ remittanceId, apiBaseUrl, lines }) {
 }
 
 /**
- * Bottom section of the remittance detail. Remittance lines are read-only (GET only), so
+ * Bottom section of the remittance detail. Remittance lines are never added inline (no POST), so
  * DetailView hides its whole add-line area — and with it `detailExtraActions` / `lineMenuActions`.
  * Once the remittance has lines this panel draws the «Seleccionar desde factura» trigger itself
  * (the panel-rendered pattern, `docs/ui-customization.md`). The empty state carries the same button.
@@ -115,6 +120,7 @@ export default function RemittanceBottomPanel({ data, recordId, apiBaseUrl, line
         <SelectDueItemsModal
           remittanceId={id}
           apiBaseUrl={apiBaseUrl}
+          subtitle={remittanceSubtitle(data)}
           onClose={() => setOpen(false)}
           onSuccess={() => { setOpen(false); window.location.reload(); }}
           data-testid="SelectDueItemsModal__panel" />,
@@ -164,6 +170,7 @@ function RemittanceLinesEmptyState({ data, recordId, apiBaseUrl, onRefresh, onSa
         <SelectDueItemsModal
           remittanceId={id}
           apiBaseUrl={apiBaseUrl}
+          subtitle={remittanceSubtitle(data)}
           onClose={() => setOpen(false)}
           onSuccess={() => { setOpen(false); onRefresh?.(); }}
           data-testid="SelectDueItemsModal__empty" />

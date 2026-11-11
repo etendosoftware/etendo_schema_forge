@@ -115,6 +115,10 @@ Every column is a real AD column, so it sorts and filters on the server. Labels 
 
 ### Header form
 
+**Layout (round 3, user decision):** `window.noHeaderBorder: true`, the option Sales Invoice
+declares. DetailView drops its default rounded, bordered card around the header fields, so they
+sit flush on the page between the blue status banner and the Líneas tab. The banner is unchanged.
+
 | Key | Visibility | Notes |
 |---|---|---|
 | `financialAccount` | editable, required | first editable field (after `documentNo`). The handler's selector only offers accounts with «Admite remesas» on (`EM_ETGO_Allow_Remittance = 'Y'`) |
@@ -134,7 +138,7 @@ its action. `processOverrides` also excludes those buttons from the detail view,
 `processes` array is empty. Print, Send document, and the Duplicate / Email row actions are off.
 `summaryFields: []` stops the summary strip from repeating the read-only fields.
 
-### Lines (no add or edit; delete while pending)
+### Lines (no add; «A remesar» editable and delete while pending)
 
 | Order | Key | Column | Label (es_ES) |
 |---|---|---|---|
@@ -177,6 +181,47 @@ The column set is a user decision (2026-11-06).
 - **Grid only.** `window.hideDetailForm: true`, so the generated page passes no `DetailForm` and
   clicking a line opens nothing. Before, it opened a nearly empty side panel with only the amount.
   The generator still emits `LinesForm.jsx` and its import; both are unused.
+- **Only «A remesar» is editable** (round 3, user decision, Holded pattern), so a due can be
+  remitted in part.
+  - `entities.lines.rowEdit: false` makes the generated `LinesTable.jsx` pass `rowEditDisabled`
+    to `InlineLinesPanel`. There is no Edit (pencil) and no row edit mode.
+  - `amount.editInPlace: { resetToField: "dueOutstanding", maxField: "dueOutstanding" }` makes the
+    column an always-visible amount input (`ResettableAmountInput`). It has a ↻ button that
+    restores the due's outstanding.
+  - The input refuses inline an empty amount, 0, a sign different from the due's, or an amount
+    over the due's outstanding (`lib/boundedAmount.js`). The refusal shows a red border, the
+    message as tooltip and a toast, and nothing is sent.
+  - A valid amount is committed on blur or Enter through the generic inline handler:
+    `PATCH /lines/{id}` with the whole row. NEO writes only `amount`, the one line field with
+    `ISREADONLY = 'N'`, and drops the read-only and path keys.
+  - RemittanceLinesHandler (com.etendoerp.go) enforces the same rule with 422s:
+    - `ETGO_RemittanceLineAmountInvalid` for an amount out of range;
+    - `ETGO_RemittanceProcessedNotEditable` on a processed remittance;
+    - `ETGO_RemittanceLineAmountNotEditable` for a line without a due.
+  - Once the remittance is processed, the document lock (`isDocumentReadOnly`) turns the column
+    into plain read-only text.
+  - `entities.lines.methods` is `["GET","GETBYID","PATCH","DELETE"]`. The trash icon (line
+    delete) and «Seleccionar desde factura» stay.
+- **No «+ Añadir línea».** `window.maxDetailLines: 0` (the import-only lines pattern, as in
+  return-material-receipt) makes the generated page pass an `addLineGuard` that is always false.
+  Without it the editable `amount` lands in `addLineFields.entry`, and DetailView's add-line area
+  (gated by «has entry fields» and `canAddLines`) showed an «+ Añadir línea» that could only fail
+  (lines have no POST).
+- **`dueOutstanding`** is a hidden decisions-only path field, `paymentScheduleDetail.amount`: the
+  amount of the payment schedule detail the line points to, i.e. the due's outstanding. It is the
+  bound REM itself checks (`REM_OutOfRangeAmount`), and the reset value and maximum of «A
+  remesar». It is not `invoiceOutstanding`, which is the whole invoice's outstanding and is wrong
+  for an invoice with several dues.
+- **Factura opens the invoice** (round 3). `invoiceDocumentNo.link` renders the number underlined
+  with ↗, like «Pago» in Financial Account › Movimientos.
+  - The target id is `invoice`, the Classic property field
+    `paymentScheduleDetail.invoicePaymentSchedule.invoice`, opted in as a hidden read-only path
+    field.
+  - The target window comes from the invoice itself: `invoiceSalesTransaction`
+    (`….invoice.salesTransaction`, a hidden decisions-only path field). `true` opens
+    `/sales-invoice/<id>`, `false` opens `/purchase-invoice/<id>`.
+  - A line with no invoice keeps a plain cell. See `docs/ui-customization.md` → *Per-column
+    link*.
 - **Importe carries the currency** («53,24 €»). `amount.currencyField: "currency"` names REM's
   virtual SQL-logic column `REM_GETREMLINECURRENCY(REM_RemittanceLine_ID)`. NEO serves it as a
   plain text code, and `resolveRowCurrency` (`lib/rowCurrency.js`, opt-in through
@@ -228,6 +273,13 @@ for the business partner.
 header process buttons (DetailView `processes`), running `hook.handleProcess`, which POSTs
 `/remittance/{id}/action/<name>` with `{ fieldValues }`.
 
+**Order (round 3):** trash · Guardar · Procesar (or Reactivar). The primary action is the
+right-most button, as in Sales Invoice. Sales Invoice gets that order because its Confirmar is the
+draftMode button that follows Guardar. Here Procesar is a declared process, which DetailView puts
+before the save actions. So the route wrapper `windows/custom/remittance/index.jsx` passes
+`saveActionsFirst`, the same DetailView opt-in payment-in and payment-out use. It changes the
+order only, not `saveBeforeProcesses`.
+
 | Entry | Button | Visible | Asks | Backend |
 |---|---|---|---|---|
 | `process` | «Procesar», primary (`positive`) | `@Processed@='N'` and `requiresLines` | the grouping, through the generic `ProcessParamDialog`: `grouping` select, default `P` «Sin agrupar», or `GGPD` «Agrupar por cliente y vencimiento» | `process` → `{ status, message }` |
@@ -267,15 +319,15 @@ the banner renders as the first child of the detail content, under the top bar. 
 ### «Seleccionar desde factura» (adding lines)
 
 **Removing a line** uses the generic lines delete, the same as other windows: a trash icon on the row,
-or row selection plus the delete bar. `entities.lines.methods` is `["GET","GETBYID","DELETE"]`, so
+or row selection plus the delete bar. `entities.lines.methods` is `["GET","GETBYID","PATCH","DELETE"]`, so
 the contract has `delete: true` and `ETGO_SF_ENTITY.ISDELETE = 'Y'`. DetailView hides it on a
 processed remittance: `isDocumentReadOnly` derives from `processed` (`lockWhenProcessed`), and
 RemittanceLinesHandler refuses the DELETE there too. There is no custom per-line «×» (user
-decision). POST/PUT/PATCH stay off and every line field is read-only, so DetailView shows no
-add-line area and no edit. The custom empty state passes `canAddLine={false}`, so no «+ Añadir
-línea» appears.
+decision). POST and PUT stay off, so DetailView shows no add-line area; PATCH carries only the «A
+remesar» edit (see the Lines section). The custom empty state passes `canAddLine={false}`, so no
+«+ Añadir línea» appears.
 
-Lines cannot be created or edited directly. They come from
+Lines cannot be created directly, and only their amount can be changed. They come from
 the invoice due items, one row per installment, picked in a modal. This replaces Classic's OBUIAPP
 process «Select Invoices and Orders» (`REMSelectInvoicesAndOrders`) for invoices only.
 
@@ -292,33 +344,57 @@ process «Select Invoices and Orders» (`REMSelectInvoicesAndOrders`) for invoic
   remittance type and a financial account (`canSelectDueItems`). The with-lines trigger also
   requires a saved record and is hidden on a read-only window or document.
 
-**Picker.** `SelectDueItemsModal.jsx` reuses the shared `components/contract-ui/InvoicePickerModal.jsx`.
-- It uses the picker's optional props: `getRowDate` (due date), `getRowAmount` (outstanding
-  amount), `isRowLocked`, `selectAll` and the window's own i18n keys. Every default keeps the
-  rectificative-invoice behaviour unchanged.
-- Each row shows the invoice number, the contact, the due date and the outstanding amount in its
-  currency (`formatCurrency`, `formatCalendarDate`).
-- It is multi-select with «Seleccionar todo», a search by invoice or contact, and infinite scroll.
-- A due item already in this remittance arrives with `alreadyInRemittance: true` and renders
-  checked and disabled (`data-locked`). It is never sent again.
+**Picker (round 3).** `SelectDueItemsModal.jsx` renders the generic
+`components/contract-ui/DocumentPickerModal.jsx`, modelled on the sales invoice «Importar desde
+pedido» popup but without its per-line sub-selection. That popup itself is unchanged; only its
+exported `ImportNotice` is reused. The columns follow Holded's «Añade los documentos»:
 
-**Backend contract.** `remittanceDueItemsApi.js` calls both actions through `useApiFetch(apiBaseUrl)`,
+| Column | Content |
+|---|---|
+| Factura (the generic `invoice` key; «Documento» before) | the invoice number only, as a link (`RecordLink` + `resolveColumnLink`, `/sales-invoice/<invoiceId>` or `/purchase-invoice/<invoiceId>` by `salesTransaction`; the click closes the modal). No document type line under it (user decision) |
+| Fecha factura | `invoiceDate` (`formatCalendarDate`) |
+| Vencimiento | `dueDate` and, under it, the due status (`dueStatus`: Vencido / Vence hoy / Sin vencer) |
+| Cliente/Proveedor | `businessPartner` |
+| Total / Pendiente | `grandTotalAmount` / `outstandingAmount` (`formatCurrency`, the due's currency) |
+| A remesar | the same `ResettableAmountInput` as the grid, capped at `outstandingAmount`, reset to it |
+
+- Dues already in the remittance (`alreadyInRemittance`) open checked and `aria-selected`
+  (`committedIdSet` in `selectorSelection.js`), with their current `lineAmount`. New ones start at
+  their outstanding.
+- Unchecking an included due marks it for removal; changing an amount marks it for update.
+- The footer shows the selected count and their total.
+- The primary «Importar seleccionados» is disabled while nothing changed or any selected amount is
+  invalid.
+- Confirming sends the difference (`diffSelection`) in ONE `syncDueItems` call. Removal is
+  explicit: the list is paged and searchable, so a due that was never loaded is never touched.
+- The subtitle is the remittance (`documentNo · name`).
+
+**Backend contract.** `remittanceDueItemsApi.js` calls the actions through `useApiFetch(apiBaseUrl)`,
 and RemittanceHeaderHandler serves them:
 
 | Action | Body | Answer (`response.data`) |
 |---|---|---|
-| `POST /remittance/{id}/action/availableDueItems` | `{ search, page, pageSize }`, with `page` 1-based (`FIRST_PAGE`; the action defaults to 1) and `pageSize` 20 (the action defaults to 50, max 200) | `{ items: [{ id, documentNo, businessPartner, dueDate, outstandingAmount, currency, alreadyInRemittance }], total }` |
-| `POST /remittance/{id}/action/selectDueItems` | `{ ids }` | `{ created, message }`. A refusal is a 422 with `messageKeys` |
+| `POST /remittance/{id}/action/availableDueItems` | `{ search, page, pageSize }`, with `page` 1-based (`FIRST_PAGE`; the action defaults to 1) and `pageSize` 20 (the action defaults to 50, max 200) | `{ items: [{ id, documentNo, invoiceId, salesTransaction, invoiceDate, dueDate, dueStatus, businessPartner, businessPartnerId, grandTotalAmount, outstandingAmount, currency, alreadyInRemittance, lineAmount, lineIds }], total }`. Included dues always come back |
+| `POST /remittance/{id}/action/syncDueItems` | `{ items: [{ id, amount }], remove: [id] }` | `{ created, updated, removed, message }`, in one transaction. 422s: `ETGO_RemittanceLineAmountInvalid`, `ETGO_RemittanceDueItemNotAvailable`, `ETGO_RemittanceDueItemNotIncluded` (each with `invalidIds`), `ETGO_RemittanceDueItemsSelectionFailed`, `ETGO_RemittanceProcessedNotEditable` |
+| `POST /remittance/{id}/action/selectDueItems` | `{ ids }` | `{ created, message }`. Kept, no longer used by the SPA |
 
 Which due items are offered (direction, account, organization, outstanding amount, not already in an
 open remittance) is decided by the backend, following Classic's `REMSelectInvoicesAndOrders`.
 
-**Messages.** On success a toast shows `remittanceDueItemsAdded` (`{count}` = `created`). A refusal is
-translated through `backendErrors.js`, using `messageKeys` first and falling back to
-`remittanceDueItemsAddError` / `remittanceDueItemsLoadError`. New keys: `remittanceSelectFromInvoices`,
-`remittanceSelectDueItemsTitle`, `remittanceSearchDueItems`, `remittanceNoDueItems`,
-`remittanceDueItemsSelectedCount`, `remittanceAddDueItems`, `remittanceDueItemsAdded`,
-`remittanceDueItemsAddError`, `remittanceDueItemsLoadError` and `remittanceLinesEmptyDescription`.
+**Messages.** On success a toast shows `remittanceDueItemsSynced` (`{created}`, `{updated}`,
+`{removed}`); a refusal falls back to `remittanceDueItemsSyncError`. Round 3 keys: the column
+labels `invoice` and `remittanceCol*`, `remittanceDueStatus*`, `remittanceDueItemsNoticeTitle/Body`,
+`remittanceDueItemsFooter`, `remittanceDueItemsConfirm`, and the generic `boundedAmount*` /
+`resetAmountTo`. A refusal is translated through `backendErrors.js`, using `messageKeys` first
+and falling back to `remittanceDueItemsSyncError` / `remittanceDueItemsLoadError`. The three
+round-3 refusals (`backendError.remittanceLineAmountInvalid`, `…LineAmountNotEditable`,
+`…DueItemNotIncluded`) use the backend catalog's wording. The amount refusal leaves out the
+maximum, because the backend sends it with no `messageParams` and the field already shows it
+inline. Other keys of the window: `remittanceSelectFromInvoices`, `remittanceSelectDueItemsTitle`,
+`remittanceSearchDueItems`, `remittanceNoDueItems`, `remittanceDueItemsLoadError` and
+`remittanceLinesEmptyDescription`. The old picker's `remittanceDueItemsSelectedCount`,
+`remittanceAddDueItems`, `remittanceDueItemsAdded` and `remittanceDueItemsAddError` were removed
+in round 3.
 
 ### Status (`Remittance_Status`, reference `REM_RemittanceStatus`)
 
@@ -418,8 +494,10 @@ These need a new column, which the scope rules out, or a later task. None was in
   (`customLoaders.remittance`), `menu.json` (Finance, after `financial-account`).
 - `tools/app-shell/src/lib/statusToneOverride.js` (per-column status tones).
 - `artifacts/remittance/custom/RemittanceBottomPanel.jsx`, `SelectDueItemsModal.jsx` and
-  `remittanceDueItemsApi.js` («Seleccionar desde factura»), and the optional row props of
-  `components/contract-ui/InvoicePickerModal.jsx`.
+  `remittanceDueItemsApi.js` («Seleccionar desde factura»), on the generic
+  `components/contract-ui/DocumentPickerModal.jsx`, `ResettableAmountInput.jsx`, `RecordLink.jsx`
+  and `lib/boundedAmount.js`. The shared `InvoicePickerModal.jsx` is back to its pre-ETP-6148
+  shape: the optional row props round 2 added for remittance were removed in round 3.
 - i18n: `genericLabels.remittanceStatusPe` … `remittanceStatusAn` in `locales/{en_US,es_ES,es_AR}.json`.
 
 ### Test ids
@@ -435,7 +513,8 @@ These need a new column, which the scope rules out, or a later task. None was in
 | Lines total | `remittance-lines-total`, `-label`, `-amount` |
 | Status banner | `remittance-status-banner` (`data-status` = the code) |
 | «Procesar» / «Reactivar» | the generic process buttons; grouping dialog `process-param-label-grouping`; the reactivate confirmation is the shared `ConfirmDialog` (`components/OAuth2ClientDialog.jsx`), which takes no `data-testid` of its own: target its `DialogContent__4aea7f` / `Button__4aea7f`, or the dialog role and its title |
-| Due-item picker | `remittance-due-items-picker-modal`, `-search`, `-list`, `-option-{id}` (`data-locked`), `-select-all`, `-apply` |
+| Due-item picker | `document-picker-modal`, `-search`, `-select-all`, `-list`, `-row-{id}` (`aria-selected`), `-check-{id}`, `-amount-{id}` (`-input`, `-reset`), `-amount-error-{id}`, `-status`, `-confirm`, `-cancel`; the document link `remittance-due-item-link-{id}`, the due status `remittance-due-status-{id}` |
+| «A remesar» in the grid | `line-in-place-amount-{lineId}` (`-input`, `-reset`) |
 
 ## Regeneration
 

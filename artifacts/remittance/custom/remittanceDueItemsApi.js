@@ -1,14 +1,20 @@
-// ETP-6148 — «Seleccionar desde factura»: the two remittance-header actions behind the due-item
+// ETP-6148 — «Seleccionar desde factura»: the remittance-header actions behind the due-item
 // picker, served by RemittanceHeaderHandler (com.etendoerp.go). Pure functions over an injected
 // `apiFetch` (the shared helper from `useApiFetch(apiBaseUrl)`), so the modal stays thin and these
 // can be unit-tested without React.
 //
 // Contract (NEO action envelope `{ response: { data } }`, read defensively):
 //   POST /remittance/{id}/action/availableDueItems  { search, page, pageSize }
-//     → { items: [{ id, documentNo, businessPartner, dueDate, outstandingAmount, currency,
-//                   alreadyInRemittance }], total }
-//   POST /remittance/{id}/action/selectDueItems     { ids }
-//     → { created, message }    errors: 422 with `messageKeys`
+//     → { items: [{ id, documentNo, invoiceId, salesTransaction, invoiceDate,
+//                   dueDate, dueStatus (OVERDUE | DUE_TODAY | PENDING), businessPartner,
+//                   businessPartnerId, grandTotalAmount, outstandingAmount (the due's maximum),
+//                   currency, alreadyInRemittance, lineAmount, lineIds }], total }
+//     Dues already in this remittance always come back (alreadyInRemittance, with lineAmount =
+//     the sum of their lines and lineIds), so the picker can manage them.
+//   POST /remittance/{id}/action/syncDueItems       { items: [{ id, amount }], remove: [id] }
+//     → { created, updated, removed, message }    one transaction
+//   Refusals are 422s with `messageKeys` (see dueItemsErrorMessage). The backend also keeps the
+//   older add-only `selectDueItems` action; the SPA no longer calls it.
 
 import {
   translateBackendError,
@@ -75,25 +81,6 @@ export async function fetchDueItemsPage(apiFetch, remittanceId, { search = '', p
 }
 
 /**
- * Adds the chosen due items to the remittance as lines.
- *
- * @returns {Promise<{ created: number, message: string|null }>}
- * @throws {Error} with `body` when the backend refuses
- */
-export async function selectDueItems(apiFetch, remittanceId, ids) {
-  const res = await apiFetch(actionPath(remittanceId, 'selectDueItems'), {
-    method: 'POST',
-    body: JSON.stringify({ ids }),
-  });
-  if (!res.ok) {
-    throw Object.assign(new Error(`selectDueItems ${res.status}`), { status: res.status, body: await readJsonSafely(res) });
-  }
-  const data = unwrap(await res.json());
-  const created = Number.isFinite(Number(data.created)) ? Number(data.created) : ids.length;
-  return { created, message: data.message ?? null };
-}
-
-/**
  * ETP-6148 — the remittance's lines total over ALL its lines, not just the loaded page: the lines
  * list with core's grid summary (`_summary={"amount":"sum","id":"count"}`), which answers one
  * row `{ amount, id, isGridSummary: true }` inside `response.data`. When the summary row is
@@ -126,4 +113,34 @@ export async function fetchLinesTotal(apiFetch, remittanceId, loadedLines = []) 
 function unwrapSummaryRow(json) {
   const data = json?.response?.data ?? json?.data;
   return Array.isArray(data) ? data[0] : data;
+}
+
+/**
+ * ETP-6148 round 3 — applies the picker's changes in one transaction (RemittanceHeaderHandler
+ * `syncDueItems`): `items` are the new dues and the included ones whose amount changed
+ * (`{ id, amount }`, id = the FIN_Payment_Schedule id); `remove` the included dues the user
+ * unchecked. Removal is explicit because the picker is paged and searchable: a due never loaded
+ * is never touched. Refusals (422): ETGO_RemittanceLineAmountInvalid, ETGO_RemittanceDueItemNotAvailable,
+ * ETGO_RemittanceDueItemNotIncluded (each with `invalidIds`), ETGO_RemittanceDueItemsSelectionFailed,
+ * ETGO_RemittanceProcessedNotEditable — nothing is kept on any of them.
+ *
+ * @returns {Promise<{ created: number, updated: number, removed: number, message: string|null }>}
+ * @throws {Error} with `body` when the backend refuses
+ */
+export async function syncDueItems(apiFetch, remittanceId, { items = [], remove = [] } = {}) {
+  const res = await apiFetch(actionPath(remittanceId, 'syncDueItems'), {
+    method: 'POST',
+    body: JSON.stringify({ items, remove }),
+  });
+  if (!res.ok) {
+    throw Object.assign(new Error(`syncDueItems ${res.status}`), { status: res.status, body: await readJsonSafely(res) });
+  }
+  const data = unwrap(await res.json());
+  const count = (value) => (Number.isFinite(Number(value)) ? Number(value) : 0);
+  return {
+    created: count(data.created),
+    updated: count(data.updated),
+    removed: count(data.removed),
+    message: data.message ?? null,
+  };
 }

@@ -1493,6 +1493,10 @@ describe('translateBackendError — SEPA remittance refusals of a financial acco
     ['ETGO_RemittanceAlreadyProcessed', 'backendError.remittanceAlreadyProcessed'],
     ['ETGO_RemittanceNoLines', 'backendError.remittanceNoLines'],
     ['ETGO_RemittanceNotProcessed', 'backendError.remittanceNotProcessed'],
+    // syncDueItems / the in-place «A remesar» cell (422).
+    ['ETGO_RemittanceLineAmountInvalid', 'backendError.remittanceLineAmountInvalid'],
+    ['ETGO_RemittanceLineAmountNotEditable', 'backendError.remittanceLineAmountNotEditable'],
+    ['ETGO_RemittanceDueItemNotIncluded', 'backendError.remittanceDueItemNotIncluded'],
   ];
   // The *Failed refusals embed the cause (REM's own text) as `{0}` and the backend sends no
   // messageParams, so their sentences take `{detail}`: without it the key route yields and the

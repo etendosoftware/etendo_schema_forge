@@ -142,3 +142,22 @@ export function pinSearchTerms(label) {
   const segments = full.split(' - ').map((s) => s.trim()).slice(0, PIN_MAX_SEGMENTS);
   return [...new Set([full, ...segments])].filter(Boolean);
 }
+
+/**
+ * ETP-6148 — the multi-select counterpart of {@link resolveSelectedIndex}: the ids of the rows
+ * that are committed (already applied to the record — e.g. the dues already in a remittance), so
+ * a reopened multi-select picker opens with exactly those rows checked and `aria-selected`.
+ * The committed state comes from the caller's `isCommitted(row)` only, never from a draft.
+ *
+ * @param {object[]} rows the loaded rows
+ * @param {(row: object) => boolean} isCommitted whether a row is committed
+ * @param {(row: object) => string} getId the row's id
+ * @returns {Set<string>} the committed ids, as strings
+ */
+export function committedIdSet(rows, isCommitted, getId) {
+  const ids = new Set();
+  for (const row of rows ?? []) {
+    if (isCommitted(row)) ids.add(String(getId(row)));
+  }
+  return ids;
+}

@@ -44,5 +44,10 @@ export default function RemittanceRoute(props) {
   if (!isCapabilityVisible(capabilities, SEPA_REMITTANCES_CAPABILITY) || tier === 'none') {
     return <AccessDeniedMessage data-testid="AccessDeniedMessage__6148a1" />;
   }
-  return <RemittanceApp {...props} data-testid="RemittanceApp__6148a1" />;
+  // ETP-6148 round 3 — `saveActionsFirst` (DetailView prop, same opt-in as payment-in and
+  // payment-out): Guardar renders to the left of Procesar / Reactivar, so the primary action is
+  // the right-most button, as in Sales Invoice (whose Confirmar is the draftMode button that
+  // already follows Guardar). Procesar is a declared process, which DetailView renders before
+  // the save actions unless the window opts in. Order only: no saveBeforeProcesses.
+  return <RemittanceApp {...props} saveActionsFirst data-testid="RemittanceApp__6148a1" />;
 }

@@ -21,7 +21,9 @@ vi.mock('@/components/access/ProcessAccessGuard.jsx', () => ({
   AccessDeniedMessage: () => <div data-testid="window-access-denied" />,
 }));
 vi.mock('@generated/remittance/generated/web/remittance/index.jsx', () => ({
-  default: (props) => <div data-testid="remittance-app" data-api={props.apiBaseUrl} />,
+  default: (props) => (
+    <div data-testid="remittance-app" data-api={props.apiBaseUrl} data-save-actions-first={String(props.saveActionsFirst)} />
+  ),
 }));
 
 import RemittanceRoute, { REMITTANCE_WINDOW_ID } from '../index.jsx';
@@ -42,6 +44,19 @@ describe('Remittance route guard', () => {
     expect(screen.queryByTestId('window-access-denied')).toBeNull();
     expect(mockWindowIds).toContain(REMITTANCE_WINDOW_ID);
     expect(REMITTANCE_WINDOW_ID).toBe('FF8080812E71F7C7012E71FD0499001B');
+  });
+
+  // ETP-6148 round 3 — Guardar renders before Procesar / Reactivar, so the toolbar reads
+  // trash · Guardar · Procesar. The ordering itself is DetailView's (DetailView.saveButtons
+  // .vitest.jsx › "toolbar order — saveActionsFirst"); this guards that the route opts in.
+  it('opts the generated window into saveActionsFirst', () => {
+    renderRoute();
+    expect(screen.getByTestId('remittance-app')).toHaveAttribute('data-save-actions-first', 'true');
+  });
+
+  it('a caller cannot drop saveActionsFirst by passing it as false', () => {
+    render(<RemittanceRoute apiBaseUrl="/sws/neo/remittance" saveActionsFirst={false} />);
+    expect(screen.getByTestId('remittance-app')).toHaveAttribute('data-save-actions-first', 'true');
   });
 
   it('checks the same window id the sidebar entry is gated by', () => {

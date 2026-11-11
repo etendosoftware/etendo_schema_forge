@@ -546,7 +546,7 @@ const BACKEND_ERROR_KEY_MAP = {
   // today (422). The SPA blocks it first through the field's `minDate`; this is the safety net.
   ETGO_RemittanceDueDatePast: 'backendError.remittanceDueDatePast',
   // ETP-6148 — «Seleccionar desde factura» refusals (RemittanceHeaderHandler availableDueItems /
-  // selectDueItems, 422). ETGO_RemittanceDueItemsSelectionFailed embeds the cause as `{0}` and the
+  // selectDueItems / syncDueItems, 422). ETGO_RemittanceDueItemsSelectionFailed embeds the cause as `{0}` and the
   // backend sends no `messageParams`, so its sentence takes a `{detail}` param: while the param is
   // absent the key route yields (UNFILLED_PARAM) and the backend's own text, already in the request
   // language and carrying the cause, is shown instead.
@@ -555,6 +555,12 @@ const BACKEND_ERROR_KEY_MAP = {
   ETGO_RemittanceDueItemsRequired: 'backendError.remittanceDueItemsRequired',
   ETGO_RemittanceDueItemNotAvailable: 'backendError.remittanceDueItemNotAvailable',
   ETGO_RemittanceDueItemsSelectionFailed: 'backendError.remittanceDueItemsSelectionFailed',
+  // ETP-6148 round 3 — «A remesar» edits (lines PATCH) and the picker sync (syncDueItems, 422).
+  // The amount refusal's sentence takes no number: the SPA has already refused the same values
+  // inline (lib/boundedAmount.js) with the exact maximum, so this is the safety net.
+  ETGO_RemittanceLineAmountInvalid: 'backendError.remittanceLineAmountInvalid',
+  ETGO_RemittanceLineAmountNotEditable: 'backendError.remittanceLineAmountNotEditable',
+  ETGO_RemittanceDueItemNotIncluded: 'backendError.remittanceDueItemNotIncluded',
   // ETP-6148 — «Procesar» / «Reactivar» (RemittanceHeaderHandler process / reactivate, 422). The
   // two *Failed keys carry REM's own text as `{0}` with no `messageParams`, so their sentences
   // take `{detail}`: without the param the key route yields and REM's text, already in the

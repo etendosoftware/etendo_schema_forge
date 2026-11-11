@@ -9,7 +9,7 @@ import {
   dueItemsErrorMessage,
   fetchDueItemsPage,
   fetchLinesTotal,
-  selectDueItems,
+  syncDueItems,
 } from '@generated/remittance/custom/remittanceDueItemsApi.js';
 
 function jsonResponse(body, { ok = true, status = 200 } = {}) {
@@ -82,58 +82,68 @@ describe('fetchDueItemsPage', () => {
   });
 });
 
-describe('selectDueItems', () => {
-  it('posts the chosen ids to selectDueItems', async () => {
-    const apiFetch = vi.fn().mockResolvedValue(jsonResponse({ response: { data: { created: 2 } } }));
-    await selectDueItems(apiFetch, 'rem-1', ['a', 'b']);
-    expect(apiFetch).toHaveBeenCalledWith('/remittance/rem-1/action/selectDueItems', expect.objectContaining({ method: 'POST' }));
-    expect(bodyOf(apiFetch)).toEqual({ ids: ['a', 'b'] });
+describe('syncDueItems', () => {
+  it('posts the new/changed dues and the removals in one call', async () => {
+    const apiFetch = vi.fn().mockResolvedValue(jsonResponse({ response: { data: { created: 1, updated: 1, removed: 1 } } }));
+    await syncDueItems(apiFetch, 'rem/1', { items: [{ id: 'psd-1', amount: 50 }, { id: 'psd-2', amount: 12.5 }], remove: ['psd-3'] });
+    expect(apiFetch).toHaveBeenCalledWith('/remittance/rem%2F1/action/syncDueItems', expect.objectContaining({ method: 'POST' }));
+    expect(bodyOf(apiFetch)).toEqual({ items: [{ id: 'psd-1', amount: 50 }, { id: 'psd-2', amount: 12.5 }], remove: ['psd-3'] });
   });
 
-  it('returns `created` and `message` from the `response.data` envelope', async () => {
-    const apiFetch = vi.fn().mockResolvedValue(jsonResponse({ response: { data: { created: 2, message: 'ok' } } }));
-    expect(await selectDueItems(apiFetch, 'rem-1', ['a', 'b', 'c'])).toEqual({ created: 2, message: 'ok' });
+  it('always sends both arrays, empty when not given', async () => {
+    const apiFetch = vi.fn().mockResolvedValue(jsonResponse({ response: { data: {} } }));
+    await syncDueItems(apiFetch, 'rem-1');
+    expect(bodyOf(apiFetch)).toEqual({ items: [], remove: [] });
+    await syncDueItems(apiFetch, 'rem-1', { remove: ['x'] });
+    expect(bodyOf(apiFetch, 1)).toEqual({ items: [], remove: ['x'] });
   });
 
-  it('reads the same answer out of a plain `data` envelope', async () => {
-    const apiFetch = vi.fn().mockResolvedValue(jsonResponse({ data: { created: '1' } }));
-    expect(await selectDueItems(apiFetch, 'rem-1', ['a', 'b'])).toEqual({ created: 1, message: null });
+  it('parses the three counts and the message from the `response.data` envelope', async () => {
+    const apiFetch = vi.fn().mockResolvedValue(jsonResponse({ response: { data: { created: 2, updated: '1', removed: 3, message: 'ok' } } }));
+    expect(await syncDueItems(apiFetch, 'rem-1', { items: [] })).toEqual({ created: 2, updated: 1, removed: 3, message: 'ok' });
   });
 
-  it('falls back to the number of ids sent when `created` is missing or not a number', async () => {
-    const apiFetch = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ response: { data: {} } }))
-      .mockResolvedValueOnce(jsonResponse({ response: { data: { created: 'n/a' } } }));
-    expect((await selectDueItems(apiFetch, 'rem-1', ['a', 'b', 'c'])).created).toBe(3);
-    expect((await selectDueItems(apiFetch, 'rem-1', ['a'])).created).toBe(1);
+  it('reads a plain `data` envelope too', async () => {
+    const apiFetch = vi.fn().mockResolvedValue(jsonResponse({ data: { created: 1 } }));
+    expect(await syncDueItems(apiFetch, 'rem-1', { items: [] })).toEqual({ created: 1, updated: 0, removed: 0, message: null });
+  });
+
+  it('counts a missing or non-numeric count as 0', async () => {
+    const apiFetch = vi.fn().mockResolvedValue(jsonResponse({ response: { data: { created: 'n/a', updated: null } } }));
+    expect(await syncDueItems(apiFetch, 'rem-1', { items: [{ id: 'a', amount: 1 }] })).toEqual({ created: 0, updated: 0, removed: 0, message: null });
   });
 
   it('rejects with the status and the parsed body on a 422', async () => {
-    const body = { error: { message: 'x', messageKeys: ['ETGO_RemittanceDueItemNotAvailable'] } };
+    const body = { error: { message: 'x', messageKeys: ['ETGO_RemittanceLineAmountInvalid'], invalidIds: ['psd-1'] } };
     const apiFetch = vi.fn().mockResolvedValue(jsonResponse(body, { ok: false, status: 422 }));
-    await expect(selectDueItems(apiFetch, 'rem-1', ['a'])).rejects.toMatchObject({ status: 422, body });
+    await expect(syncDueItems(apiFetch, 'rem-1', { items: [{ id: 'psd-1', amount: 999 }] })).rejects.toMatchObject({ status: 422, body });
+  });
+
+  it('rejects with a null body when the refusal carries no JSON', async () => {
+    const apiFetch = vi.fn().mockResolvedValue(brokenJsonResponse({ status: 500 }));
+    await expect(syncDueItems(apiFetch, 'rem-1', {})).rejects.toMatchObject({ status: 500, body: null });
   });
 });
 
 describe('dueItemsErrorMessage', () => {
   const dictionary = {
     'backendError.remittanceDueItemNotAvailable': 'T:notAvailable',
-    remittanceDueItemsAddError: 'T:addError',
+    remittanceDueItemsSyncError: 'T:addError',
   };
   const ui = (key) => dictionary[key] ?? key;
 
   it('translates a refusal by its messageKeys, whatever language the prose is in', () => {
     const body = { error: { message: 'Uno o más vencimientos ya no están disponibles.', messageKeys: ['ETGO_RemittanceDueItemNotAvailable'] } };
-    expect(dueItemsErrorMessage(body, ui, 'remittanceDueItemsAddError')).toBe('T:notAvailable');
+    expect(dueItemsErrorMessage(body, ui, 'remittanceDueItemsSyncError')).toBe('T:notAvailable');
   });
 
   it('falls back to the given key when there is no body', () => {
-    expect(dueItemsErrorMessage(null, ui, 'remittanceDueItemsAddError')).toBe('T:addError');
+    expect(dueItemsErrorMessage(null, ui, 'remittanceDueItemsSyncError')).toBe('T:addError');
   });
 
   it('shows the backend text when it carries no key the SPA knows', () => {
     const body = { error: { message: 'Server said something specific.' } };
-    expect(dueItemsErrorMessage(body, ui, 'remittanceDueItemsAddError')).toBe('Server said something specific.');
+    expect(dueItemsErrorMessage(body, ui, 'remittanceDueItemsSyncError')).toBe('Server said something specific.');
   });
 });
 

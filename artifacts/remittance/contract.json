@@ -1,8 +1,8 @@
 {
-  "version": "0.21.0",
+  "version": "0.23.0",
   "generatedAt": "2026-11-05T18:53:39.346Z",
-  "updatedAt": "2026-11-11T12:46:53.484Z",
-  "checksum": "ed3b48499477f2f8",
+  "updatedAt": "2026-11-11T16:18:21.071Z",
+  "checksum": "96669b991549f211",
   "frontendContract": {
     "window": {
       "id": "FF8080812E71F7C7012E71FD0499001B",
@@ -139,6 +139,7 @@
         "PP": "remittanceStatusPp",
         "AN": "remittanceStatusAn"
       },
+      "noHeaderBorder": true,
       "rowQuickActions": {
         "actions": {
           "duplicate": {
@@ -152,7 +153,8 @@
       "sendDocument": {
         "enabled": false
       },
-      "layoutType": "default"
+      "layoutType": "default",
+      "maxDetailLines": 0
     },
     "entities": {
       "remittance": {
@@ -492,6 +494,23 @@
             }
           },
           {
+            "name": "invoice",
+            "apiKey": "invoice",
+            "column": "C_Invoice_ID",
+            "label": "Invoice",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "reference": "Invoice",
+            "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
             "name": "payment",
             "apiKey": "payment",
             "column": "FIN_Payment_ID",
@@ -532,7 +551,7 @@
             "label": "Amount",
             "type": "amount",
             "tsType": "number",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true,
             "grid": true,
             "form": true,
@@ -549,6 +568,10 @@
             },
             "gridOrder": 7,
             "currencyField": "currency",
+            "editInPlace": {
+              "resetToField": "dueOutstanding",
+              "maxField": "dueOutstanding"
+            },
             "validation": {
               "required": true,
               "maxLength": 10
@@ -733,7 +756,17 @@
               "en_US": "Invoice"
             },
             "gridOrder": 1,
-            "grow": true
+            "grow": true,
+            "link": {
+              "idField": "invoice",
+              "window": {
+                "field": "invoiceSalesTransaction",
+                "values": {
+                  "true": "sales-invoice",
+                  "false": "purchase-invoice"
+                }
+              }
+            }
           },
           {
             "name": "invoiceDate",
@@ -793,6 +826,32 @@
             },
             "gridOrder": 6,
             "currencyField": "currency"
+          },
+          {
+            "name": "invoiceSalesTransaction",
+            "apiKey": "invoiceSalesTransaction",
+            "column": "IsSOTrx",
+            "label": "Sales Transaction",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "explicitType": true
+          },
+          {
+            "name": "dueOutstanding",
+            "apiKey": "dueOutstanding",
+            "column": "Amount",
+            "label": "Due Outstanding",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "explicitType": true
           }
         ],
         "searchableFields": [],
@@ -811,7 +870,8 @@
               "source": "0"
             }
           }
-        ]
+        ],
+        "rowEdit": false
       }
     }
   },
@@ -951,6 +1011,7 @@
         "PP": "remittanceStatusPp",
         "AN": "remittanceStatusAn"
       },
+      "noHeaderBorder": true,
       "rowQuickActions": {
         "actions": {
           "duplicate": {
@@ -963,7 +1024,8 @@
       },
       "sendDocument": {
         "enabled": false
-      }
+      },
+      "maxDetailLines": 0
     },
     "entities": {
       "remittance": {
@@ -1223,8 +1285,9 @@
             "apiKey": "invoice",
             "column": "C_Invoice_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
-            "required": true
+            "visibility": "readOnly",
+            "required": false,
+            "propertyPath": "paymentScheduleDetail.invoicePaymentSchedule.invoice"
           },
           {
             "name": "invoicePaymentSchedule",
@@ -1287,7 +1350,7 @@
             "apiKey": "amount",
             "column": "Amount",
             "type": "amount",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -1432,6 +1495,24 @@
             "visibility": "readOnly",
             "required": false,
             "propertyPath": "paymentScheduleDetail.invoicePaymentSchedule.invoice.outstandingAmount"
+          },
+          {
+            "name": "invoiceSalesTransaction",
+            "apiKey": "invoiceSalesTransaction",
+            "column": "IsSOTrx",
+            "type": "boolean",
+            "visibility": "readOnly",
+            "required": false,
+            "propertyPath": "paymentScheduleDetail.invoicePaymentSchedule.invoice.salesTransaction"
+          },
+          {
+            "name": "dueOutstanding",
+            "apiKey": "dueOutstanding",
+            "column": "Amount",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": false,
+            "propertyPath": "paymentScheduleDetail.amount"
           }
         ]
       }
@@ -1520,7 +1601,7 @@
         "getById": true,
         "post": false,
         "put": false,
-        "patch": false,
+        "patch": true,
         "delete": true,
         "listUrl": "/sws/neo/remittance/lines",
         "detailUrl": "/sws/neo/remittance/lines/{id}",
@@ -1528,6 +1609,7 @@
         "methods": [
           "GET",
           "GETBYID",
+          "PATCH",
           "DELETE"
         ]
       }
@@ -1557,6 +1639,14 @@
         "reference": "Financial_Account",
         "inputMode": "selector",
         "url": "/sws/neo/remittance/remittance/selectors/financialAccount"
+      },
+      {
+        "entity": "lines",
+        "field": "invoice",
+        "column": "C_Invoice_ID",
+        "reference": "Invoice",
+        "inputMode": "search",
+        "url": "/sws/neo/remittance/lines/selectors/invoice"
       },
       {
         "entity": "lines",
@@ -1836,6 +1926,22 @@
         "description": "Field 'dueDate' should be present in lines"
       },
       {
+        "id": "t-field-presence-lines-dueOutstanding",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "dueOutstanding",
+        "runner": "node",
+        "description": "Field 'dueOutstanding' should be present in lines"
+      },
+      {
+        "id": "t-field-presence-lines-invoice",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "invoice",
+        "runner": "node",
+        "description": "Field 'invoice' should be present in lines"
+      },
+      {
         "id": "t-field-presence-lines-invoiceDate",
         "category": "field-presence",
         "entity": "lines",
@@ -1866,6 +1972,14 @@
         "field": "invoiceOutstanding",
         "runner": "node",
         "description": "Field 'invoiceOutstanding' should be present in lines"
+      },
+      {
+        "id": "t-field-presence-lines-invoiceSalesTransaction",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "invoiceSalesTransaction",
+        "runner": "node",
+        "description": "Field 'invoiceSalesTransaction' should be present in lines"
       },
       {
         "id": "t-field-presence-lines-lineNo",
@@ -1996,6 +2110,22 @@
         "description": "Field 'dueDate' should have type 'string' in lines"
       },
       {
+        "id": "t-field-type-lines-dueOutstanding",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "dueOutstanding",
+        "runner": "node",
+        "description": "Field 'dueOutstanding' should have type 'number' in lines"
+      },
+      {
+        "id": "t-field-type-lines-invoice",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "invoice",
+        "runner": "node",
+        "description": "Field 'invoice' should have type 'string' in lines"
+      },
+      {
         "id": "t-field-type-lines-invoiceDate",
         "category": "field-type",
         "entity": "lines",
@@ -2026,6 +2156,14 @@
         "field": "invoiceOutstanding",
         "runner": "node",
         "description": "Field 'invoiceOutstanding' should have type 'number' in lines"
+      },
+      {
+        "id": "t-field-type-lines-invoiceSalesTransaction",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "invoiceSalesTransaction",
+        "runner": "node",
+        "description": "Field 'invoiceSalesTransaction' should have type 'boolean' in lines"
       },
       {
         "id": "t-field-type-lines-lineNo",
@@ -2529,6 +2667,14 @@
         "description": "Selector endpoint for 'businessPartner' in lines should exist"
       },
       {
+        "id": "t-selector-endpoint-lines-invoice",
+        "category": "selector-endpoint",
+        "entity": "lines",
+        "field": "invoice",
+        "runner": "node",
+        "description": "Selector endpoint for 'invoice' in lines should exist"
+      },
+      {
         "id": "t-selector-endpoint-lines-payment",
         "category": "selector-endpoint",
         "entity": "lines",
@@ -2615,14 +2761,6 @@
         "field": "id",
         "runner": "node",
         "description": "System field 'id' should exist in backend but not frontend for lines"
-      },
-      {
-        "id": "t-system-field-lines-invoice",
-        "category": "system-field",
-        "entity": "lines",
-        "field": "invoice",
-        "runner": "node",
-        "description": "System field 'invoice' should exist in backend but not frontend for lines"
       },
       {
         "id": "t-system-field-lines-invoicePaymentSchedule",
@@ -2864,22 +3002,22 @@
       }
     ],
     "summary": {
-      "total": 152,
+      "total": 158,
       "byCategory": {
         "action-endpoint": 6,
         "crud-flags": 2,
         "default-value-type": 6,
-        "field-presence": 20,
-        "field-type": 20,
+        "field-presence": 23,
+        "field-type": 23,
         "readonlylogic-evaluable": 6,
         "readonlylogic-valid": 6,
         "rule-declared": 43,
-        "selector-endpoint": 5,
-        "system-field": 36,
+        "selector-endpoint": 6,
+        "system-field": 35,
         "visibility": 2
       },
       "byRunner": {
-        "node": 152,
+        "node": 158,
         "junit": 0
       }
     }

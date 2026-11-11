@@ -43,7 +43,7 @@ import { render, screen } from '@testing-library/react';
 import RemittancePage from '@generated/remittance/generated/web/remittance/RemittancePage.jsx';
 import RemittanceBottomPanel from '@generated/remittance/custom/RemittanceBottomPanel';
 import RemittanceProcessConfirmModal from '@generated/remittance/custom/RemittanceProcessConfirmModal';
-import { evalDisplayLogicRaw, dispatchProcessAction } from '@/components/contract-ui/detailViewHelpers.jsx';
+import { evalDisplayLogicRaw, dispatchProcessAction, canShowAddLineArea, resolveCanAddLines } from '@/components/contract-ui/detailViewHelpers.jsx';
 import enUS from '@/locales/en_US.json';
 import esES from '@/locales/es_ES.json';
 import esAR from '@/locales/es_AR.json';
@@ -151,6 +151,12 @@ describe('RemittancePage — detail slots', () => {
     expect(screen.getByTestId('status-banner-stub')).toHaveAttribute('data-status', 'PE');
   });
 
+  // User decision (round 3 live test): the header fields sit flush on the page like Sales Invoice,
+  // not inside DetailView's default rounded, bordered card (window.noHeaderBorder).
+  it('renders the header form without the card wrapper, like Sales Invoice', () => {
+    expect(detailProps().noHeaderBorder).toBe(true);
+  });
+
   it('orders the lines by line number and titles the record by its name', () => {
     const props = detailProps();
     expect(props.detailSortBy).toBe('lineNo asc');
@@ -161,6 +167,21 @@ describe('RemittancePage — detail slots', () => {
   it('marks the window read-only for a read-only access tier', () => {
     mockTier = 'read-only';
     expect(detailProps().window).toEqual({ readOnly: true });
+  });
+
+  // Repro (ETP-6148 round 3, live test): «A remesar» became an editable field, so the generated
+  // addLineFields.entry is no longer empty, and DetailView's add-line area — gated only by
+  // canShowAddLineArea(…, entry fields, …, canAddLines) — showed «+ Añadir línea» under a pending
+  // remittance's lines. Lines have no POST (405); they only come from «Seleccionar desde factura».
+  // Run through DetailView's real gate with the props the page hands it.
+  it('never shows the add-line area, even on a pending remittance with lines and an editable amount', () => {
+    const props = detailProps();
+    const pending = { id: 'rem-1', processed: false, remittanceType: 'T', financialAccount: 'A', name: 'R', dueDate: '2026-12-01' };
+    const children = [{ id: 'l1', amount: 10 }];
+    expect(props.addLineFields.entry.map((f) => f.key)).toContain('amount');
+    const canAddLines = resolveCanAddLines(props.addLineGuard, pending, props.requiredHeaderFields, children);
+    expect(canAddLines).toBe(false);
+    expect(canShowAddLineArea({ editing: pending }, false, props.addLineFields.entry, undefined, canAddLines)).toBe(false);
   });
 
   it('renders the access guard instead of the views when access is none', () => {
