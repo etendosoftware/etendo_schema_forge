@@ -287,6 +287,8 @@ A computed column that reads a table from **another module** needs that module d
 
 **Every user-visible string MUST be translated.** The app is primarily used in Spanish by real clients. Hardcoded English strings are treated as bugs. See `docs/i18n-guide.md` for the full reference (hooks, locale JSON structure, rules for adding keys). Key hooks: `useUI()` for generic labels, `useLabel()` for AD fields, `useMenuLabel()` for menus/tabs. All new keys must be added to BOTH `en_US.json` and `es_ES.json`.
 
+**A Classic `AD_MESSAGE` that reads wrong in GO** (it names a Classic tab, process or field label) is reworded in `com.etendoerp.go`, never by editing the Classic row (shared with Classic) and never in `backendErrors.js`: add it to `ClassicMessageRemap` and both `neo_hints_{es,en}.properties`, only if a GO user can trigger it. Full rule: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §4.17.
+
 ## Currency & Amount Formatting
 
 **Every monetary value MUST be formatted through the canonical currency utilities — never a hand-rolled `Intl.NumberFormat`/`toLocaleString` call.** A hardcoded locale (`'en-US'`, unpinned `undefined`) or a missing `useGrouping: true` silently drops the thousands separator or renders the wrong decimal comma — this exact bug shipped repeatedly across the codebase before ETP-4314 centralized it. Treat any new ad-hoc money formatter as a bug, not a style nit.
