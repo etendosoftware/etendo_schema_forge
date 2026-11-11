@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Copy, Loader2, RefreshCw, Unlink2, Archive, AlertTriangle, Info, Plug, Settings2, Calculator, RotateCcw, ChevronDown, Trash2 } from 'lucide-react';
+import { Copy, RefreshCw, Unlink2, Archive, AlertTriangle, Info, Plug, Settings2, Calculator, RotateCcw, ChevronDown, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -1871,13 +1871,13 @@ function BankConnectionSection({
 /**
  * "Sincronizar ahora" inside the bank connection panel.
  *
- * ETP-6154: disabled and spinning while a sync of this account runs — `bankConnection.syncing`
+ * ETP-6154: disabled, with its icon bobbing, while a fetch of this account runs — `bankConnection.syncing`
  * is the window's shared bank-sync state, so a sync started from the list row or the statements
  * tab counts too. The tooltip trigger is a wrapper span because a disabled button fires no pointer
  * events, which would hide the "in progress" tooltip exactly when it matters.
  */
-// ETP-6154 — while syncing the button must read BUSY, not merely disabled: info-tinted, full
-// opacity, a progress cursor, a real spinner and "Sincronizando…". Two whole class strings rather
+// ETP-6154 — while fetching the button must read BUSY, not merely disabled: info-tinted, full
+// opacity, a progress cursor, the bobbing icon and "Trayendo extractos…". Two whole class strings rather
 // than overrides, so no two utilities compete for the same property.
 const SYNC_BTN_BASE = 'inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]';
 const SYNC_BTN_IDLE = `${SYNC_BTN_BASE} border-[hsl(var(--border-control))] bg-card text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] disabled:opacity-50`;
@@ -1899,13 +1899,10 @@ function BankSyncButton({ ui, bankConnection, busy }) {
               data-testid="bank-connection-edit-sync"
               className={syncing ? SYNC_BTN_SYNCING : SYNC_BTN_IDLE}
             >
-              {syncing ? (
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" data-testid="bank-connection-edit-sync-spinner" />
-              ) : (
-                <BankSyncIcon
-                  className="h-4 w-4 text-[hsl(var(--text-disabled))]"
-                  data-testid="bank-connection-edit-sync-icon" />
-              )}
+              <BankSyncIcon
+                spinning={syncing}
+                className={syncing ? 'h-4 w-4' : 'h-4 w-4 text-[hsl(var(--text-disabled))]'}
+                data-testid="bank-connection-edit-sync-icon" />
               {ui(syncing ? 'financeAccountsBankSyncBadge' : 'financeAccountsMenuSyncNow')}
             </button>
           </span>

@@ -3,23 +3,24 @@ import { render, screen } from '@testing-library/react';
 import { BankSyncIcon } from '../BankSyncIcon.jsx';
 
 describe('BankSyncIcon', () => {
-  it('renders the bank glyph with the arrows badge, idle by default', () => {
+  // ETP-6154 option D — FileDown ("traer extractos"), and a vertical bob instead of a rotation.
+  it('renders the FileDown glyph, idle by default (no animation)', () => {
     render(<BankSyncIcon />);
 
     const root = screen.getByTestId('bank-sync-icon');
     expect(root).toHaveAttribute('data-spinning', 'false');
-    expect(root).toContainElement(screen.getByTestId('Landmark__banksync'));
-    expect(root).toContainElement(screen.getByTestId('ArrowDownUp__banksync'));
-    expect(screen.getByTestId('ArrowDownUp__banksync').getAttribute('class')).not.toMatch(/animate-spin/);
+    expect(root).toContainElement(screen.getByTestId('FileDown__banksync'));
+    expect(screen.getByTestId('FileDown__banksync').getAttribute('class')).not.toMatch(/bank-sync-bob/);
   });
 
-  it('spins only the badge while a sync runs, never the bank', () => {
+  it('bobs (never rotates) while a fetch runs, and stops for reduced motion', () => {
     render(<BankSyncIcon spinning />);
 
     expect(screen.getByTestId('bank-sync-icon')).toHaveAttribute('data-spinning', 'true');
-    expect(screen.getByTestId('ArrowDownUp__banksync').getAttribute('class')).toMatch(/animate-spin/);
-    expect(screen.getByTestId('Landmark__banksync').getAttribute('class')).not.toMatch(/animate-spin/);
-    expect(screen.getByTestId('bank-sync-icon').className).not.toMatch(/animate-spin/);
+    const glyphClass = screen.getByTestId('FileDown__banksync').getAttribute('class');
+    expect(glyphClass).toMatch(/animate-\[bank-sync-bob_1s_ease-in-out_infinite\]/);
+    expect(glyphClass).toMatch(/motion-reduce:animate-none/);
+    expect(glyphClass).not.toMatch(/animate-spin/);
   });
 
   it('is decorative: hidden from assistive technology', () => {
@@ -35,16 +36,6 @@ describe('BankSyncIcon', () => {
     const root = screen.getByTestId('bank-sync-icon');
     expect(root.className).toMatch(/\bh-4 w-4 text-red-500\b/);
     expect(root.className).not.toMatch(/\bh-5\b/);
-  });
-
-  it('puts badgeClassName on the badge backdrop (bg-card by default)', () => {
-    const { rerender } = render(<BankSyncIcon />);
-    const badgeOf = () => screen.getByTestId('ArrowDownUp__banksync').parentElement;
-    expect(badgeOf().className).toMatch(/\bbg-card\b/);
-
-    rerender(<BankSyncIcon badgeClassName="bg-primary" />);
-    expect(badgeOf().className).toMatch(/\bbg-primary\b/);
-    expect(badgeOf().className).not.toMatch(/\bbg-card\b/);
   });
 
   it('uses the data-testid it is given', () => {

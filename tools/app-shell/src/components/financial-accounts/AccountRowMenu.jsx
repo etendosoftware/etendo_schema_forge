@@ -53,11 +53,11 @@ function StaleReconnectMenuItem({ account, ui, onBankConnectionAction }) {
 }
 
 /**
- * "Sincronizar ahora" (bank-connected accounts only — the caller decides).
+ * "Traer extractos" (bank-connected accounts only — the caller decides).
  *
- * ETP-6154: reads the window's shared bank-sync state, so while a sync of this account runs —
- * started from here or from any other entry point — the item is disabled, its badge spins and the
- * label says the sync is in progress. `title` carries the same text the row button's tooltip shows
+ * ETP-6154: reads the window's shared bank-sync state, so while a fetch of this account runs —
+ * started from here or from any other entry point — the item is disabled, its icon bobs and the
+ * label says the fetch is in progress. `title` carries the same text the row button's tooltip shows
  * (a Radix tooltip inside a menu item would fight the menu for focus and hover).
  */
 function SyncNowMenuItem({ account, ui, onBankConnectionAction }) {
@@ -68,16 +68,13 @@ function SyncNowMenuItem({ account, ui, onBankConnectionAction }) {
       aria-busy={syncing}
       title={ui(syncing ? 'financeAccountsBankSyncInProgress' : 'financeAccountsBankSyncTooltip')}
       onClick={() => onBankConnectionAction?.('syncNow', account)}
-      className="group/syncitem"
       data-testid={`account-row-menu-sync-${account.id}`}
     >
       {/* 16px, like its siblings: the item's `[&>svg]:size-4` shrinks their bare svgs, and this
-          icon is a wrapper span the rule does not reach. The badge backdrop follows the item's
-          focus tint. */}
+          icon is a wrapper span the rule does not reach. */}
       <BankSyncIcon
         spinning={syncing}
         className="h-4 w-4 text-[hsl(var(--text-disabled))]"
-        badgeClassName="bg-popover group-focus/syncitem:bg-accent"
         data-testid={`account-row-menu-sync-icon-${account.id}`} />
       <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
         {ui(syncing ? 'financeAccountsBankSyncInProgress' : 'financeAccountsMenuSyncNow')}

@@ -99,7 +99,6 @@ function SyncStatementsButton({ ui, onClick, syncing }) {
               <BankSyncIcon
                 spinning={syncing}
                 className="h-5 w-5"
-                badgeClassName="bg-primary"
                 data-testid="statements-bank-sync-icon" />
               {ui('financeAccountStatementsBankConnectionSync')}
             </button>

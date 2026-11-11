@@ -9,7 +9,7 @@
 // to consume these through an `ACCOUNT_CELL_RENDERERS` registry; the generic
 // `DataTable` now supplies its own `<TableCell>` around whatever `col.render` returns,
 // which is why these are exported as bare bodies with no wrapper of their own.
-import { Copy, Loader2 } from 'lucide-react';
+import { Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { Tag } from '@/components/ui/tag';
@@ -17,6 +17,7 @@ import { TruncatedText } from '@/components/ui/truncated-text.jsx';
 import { ACCOUNT_TYPE } from '../tokens';
 import { AccountLogoAvatar } from '../AccountLogoAvatar.jsx';
 import { SyncStatusInline } from '../SyncStatusInline.jsx';
+import { BankSyncIcon } from '../BankSyncIcon.jsx';
 import { useBankSyncStatus } from '@/windows/custom/financial-account/BankSyncContext.jsx';
 
 const TYPE_LABEL_KEY = {
@@ -45,7 +46,7 @@ function chunkIban(iban) {
 // Removed with its slot; COLUMN_CHROME.name's left padding in AccountsHeaderTable
 // mirrors this cell's leading offset and was reduced to match.
 // ETP-6154 — while a bank sync of this row's account runs (shared BankSyncContext), the row shows a
-// "Sincronizando…" pill next to the name (same shape as the "Sin conexión" pill, in the info
+// "Trayendo extractos…" pill next to the name (same shape as the "Sin conexión" pill, in the info
 // tokens). SyncStatusInline never shows its own in-progress line here (the pill replaces it), and
 // its last-sync age is hidden for the duration of the sync. (A thin progress bar under the cell
 // was tried and removed: it read as cramped under the name.)
@@ -55,7 +56,7 @@ function SyncingPill({ account, ui }) {
       className="inline-flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-status-info px-2 py-1 text-xs font-medium leading-4 text-status-info-foreground"
       data-testid={`account-row-syncing-badge-${account.id}`}
     >
-      <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" data-testid="Loader2__dc050f" />
+      <BankSyncIcon spinning className="h-3 w-3" data-testid={`account-row-syncing-icon-${account.id}`} />
       {ui('financeAccountsBankSyncBadge')}
     </span>
   );

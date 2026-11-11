@@ -16,12 +16,6 @@ import { useBankSyncStatus } from '@/windows/custom/financial-account/BankSyncCo
 import { AccountRowMenu } from './AccountRowMenu.jsx';
 import { BankSyncIcon } from './BankSyncIcon.jsx';
 
-// ETP-6154 — the BankSyncIcon badge's backdrop has to match whatever is behind the button so the
-// badge reads as cut out of the bank: the hovered row's tint (DataTable publishes it as
-// `--row-hover-bg`; these actions are only visible while the row is hovered), or the button's own
-// hover disc. Disabled (sync running), the button has no hover disc, so the row tint stays.
-const ROW_SYNC_BADGE_BG = 'bg-[var(--row-hover-bg,hsl(var(--card)))] group-hover/sync:bg-[hsl(var(--border-subtle))] group-disabled/sync:bg-[var(--row-hover-bg,hsl(var(--card)))]';
-
 export function AccountRowActions({
   account,
   onOpen,
@@ -64,10 +58,10 @@ export function AccountRowActions({
             <TooltipContent data-testid="TooltipContent__acctactions">{ui('financeAccountsMenuEdit')}</TooltipContent>
           </Tooltip>
         )}
-        {/* Sync is only meaningful for bank-connected accounts — same statement fetch as the
-            kebab's "Sincronizar ahora" / the statements tab's "Sincronizar extractos".
-            ETP-6154: while a sync of this account runs (from ANY entry point — the shared
-            BankSyncContext), the button is disabled with its badge spinning. The trigger is a
+        {/* Fetching statements is only meaningful for bank-connected accounts — same bank fetch
+            as the kebab's "Traer extractos" and the statements tab's.
+            ETP-6154: while a fetch of this account runs (from ANY entry point — the shared
+            BankSyncContext), the button is disabled with its icon bobbing. The trigger is a
             wrapper span because a disabled button fires no pointer events, which would keep the
             "in progress" tooltip from ever showing. */}
         {!windowReadOnly && account.bankConnected === true ? (
@@ -81,12 +75,11 @@ export function AccountRowActions({
                   disabled={syncing}
                   data-testid={`account-row-refresh-${account.id}`}
                   onClick={() => onBankConnectionAction?.('syncNow', account)}
-                  className="group/sync inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--border-subtle))] disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--border-subtle))] disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 >
                   <BankSyncIcon
                     spinning={syncing}
                     className="h-5 w-5"
-                    badgeClassName={ROW_SYNC_BADGE_BG}
                     data-testid={`account-row-refresh-icon-${account.id}`} />
                 </button>
               </span>

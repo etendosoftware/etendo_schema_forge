@@ -1,30 +1,33 @@
-import { ArrowDownUp, Landmark } from 'lucide-react';
+import { FileDown } from 'lucide-react';
+
+/** The bob, as an arbitrary Tailwind animation so the `motion-reduce:` variant applies to it. */
+const BOB_CLASS = 'animate-[bank-sync-bob_1s_ease-in-out_infinite] motion-reduce:animate-none';
 
 /**
- * ETP-6154 — the icon of every PSD2 bank-sync entry point (list row button, row kebab item,
- * Imported statements toolbar, Edit account modal): a bank (`Landmark`, the glyph this window
- * already uses for the bank connection) with a small up/down-arrows badge in its bottom-right
- * corner. It replaces the generic `RefreshCw`, which read as "reload the screen" and looked the
- * same as the toolbar refresh button sitting next to it.
+ * ETP-6154 — the icon of every PSD2 "traer extractos" entry point (list row button, row kebab
+ * item, Imported statements toolbar, Edit account modal button) and of the in-progress pill and
+ * banner: lucide `FileDown`, a document with a down arrow — "bring the statements in from the bank".
  *
- * While a sync runs (`spinning`) only the badge turns, so the bank stays legible.
+ * Deliberately NOT circular arrows (every window's refresh button) nor up/down arrows (the list's
+ * sort control): the first version, a bank with an `ArrowDownUp` badge, read as "sort".
+ *
+ * `spinning` keeps its name so callers stay as they were, but the motion is a gentle vertical
+ * bob (±2px, 1 s, ease-in-out, looping), not a rotation. The keyframes (`bank-sync-bob`) live in
+ * `src/index.css`; `motion-reduce:animate-none` stops it for users who ask for reduced motion.
  *
  * Purely decorative (`aria-hidden`): the button that hosts it carries the accessible label.
  *
  * @param {{
  *   spinning?: boolean,
  *   className?: string,
- *   badgeClassName?: string,
  *   'data-testid'?: string,
- * }} props `className` sizes the whole icon (rows use `h-5 w-5`, the modal `h-4 w-4`) and may set
- *   its color; `badgeClassName` is the badge's backdrop, which has to match the surface it sits
- *   on so the badge reads as cut out of the bank (`bg-card` by default; a primary button passes
- *   `bg-primary`)
+ * }} props `spinning` = a fetch is in progress (the icon bobs); `className` sizes the icon (rows
+ *   use `h-5 w-5`, the modal `h-4 w-4`, the pill `h-3 w-3`) and may set its color; `data-spinning`
+ *   on the root mirrors `spinning` for tests
  */
 export function BankSyncIcon({
   spinning = false,
   className = 'h-5 w-5',
-  badgeClassName = 'bg-card',
   'data-testid': testId = 'bank-sync-icon',
 }) {
   return (
@@ -32,18 +35,12 @@ export function BankSyncIcon({
       aria-hidden="true"
       data-testid={testId}
       data-spinning={spinning ? 'true' : 'false'}
-      className={`relative inline-flex shrink-0 ${className}`}
+      className={`inline-flex shrink-0 ${className}`}
     >
-      <Landmark className="h-full w-full" aria-hidden="true" data-testid="Landmark__banksync" />
-      <span
-        className={`absolute -bottom-[2px] -right-[3px] inline-flex h-[60%] w-[60%] items-center justify-center rounded-full p-[1px] ${badgeClassName}`}
-      >
-        <ArrowDownUp
-          className={`h-full w-full ${spinning ? 'animate-spin' : ''}`}
-          strokeWidth={2.5}
-          aria-hidden="true"
-          data-testid="ArrowDownUp__banksync" />
-      </span>
+      <FileDown
+        className={`h-full w-full ${spinning ? BOB_CLASS : ''}`}
+        aria-hidden="true"
+        data-testid="FileDown__banksync" />
     </span>
   );
 }

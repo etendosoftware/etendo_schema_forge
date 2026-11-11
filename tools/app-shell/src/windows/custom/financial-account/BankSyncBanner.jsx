@@ -21,13 +21,12 @@ function sentenceWithName(ui, key, name, testId) {
   ]));
 }
 
-/** The banner's icon: the bank-sync glyph with its badge turning, on the info tint. */
+/** The banner's icon: the "traer extractos" glyph, bobbing. */
 function SyncingIcon({ className = '' }) {
   return (
     <BankSyncIcon
       spinning
       className={`h-5 w-5 ${className}`}
-      badgeClassName="bg-status-info"
       data-testid="bank-sync-banner-icon" />
   );
 }

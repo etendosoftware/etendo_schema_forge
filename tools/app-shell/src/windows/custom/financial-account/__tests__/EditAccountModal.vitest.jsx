@@ -3224,9 +3224,9 @@ describe('EditAccountModal — shared bank-sync state', () => {
     const button = screen.getByTestId('bank-connection-edit-sync');
     expect(button).toBeDisabled();
     expect(button).toHaveAttribute('aria-busy', 'true');
-    // ETP-6154 follow-up — while syncing the button reads busy: a real spinner replaces the
-    // bank-sync icon and the label becomes "Sincronizando…".
-    expect(screen.getByTestId('bank-connection-edit-sync-spinner')).toBeInTheDocument();
+    // ETP-6154 follow-up — while fetching the button reads busy: the icon bobs and the label
+    // becomes "Trayendo extractos…".
+    expect(screen.getByTestId('bank-connection-edit-sync-icon')).toHaveAttribute('data-spinning', 'true');
     expect(button).toHaveTextContent('financeAccountsBankSyncBadge');
     await user.hover(screen.getByTestId('bank-connection-edit-sync-wrap'));
     expect((await screen.findAllByText('financeAccountsBankSyncInProgress')).length).toBeGreaterThan(0);
