@@ -17,6 +17,13 @@ import { matchOptionByLabel } from '@/lib/matchOptionLabel.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useTbaiPostalCodeContext, shouldWarnMissingTbaiPostalCode } from './tbaiPostalCodeWarning.js';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
+import {
+    BUILDING_NAME_MAX_LENGTH,
+    BUILDING_NUMBER_MAX_LENGTH,
+    STREET_NAME_MAX_LENGTH,
+    composeAddressLines,
+    effectiveBuildingNumber,
+} from '@/lib/structuredAddress.js';
 const EMPTY_FORM = {
     address: '',
     address2: '',
@@ -34,26 +41,11 @@ const EMPTY_FORM = {
 };
 const SELECTOR_PAGE_SIZE = 120;
 
-// ETP-5806 — length of C_Location.Address1/Address2, NOT the 70 of EM_OBSEPA_StrtNm.
-const ADDRESS_LINE_MAX_LENGTH = 60;
-
-// ETP-5806 follow-up — DB column lengths of the 3 structured SEPA fields themselves
-// (org.openbravo.sepa.iso20022's AD_COLUMN.FIELDLENGTH for EM_OBSEPA_StrtNm/BldgNb/BldgNm).
-// Enforced here as `maxLength` so the user can never type past what the backend can store —
-// the backend (StructuredAddressComposer#fieldsExceedingMaxLength) is the real source of truth
-// and rejects an over-length value with a 400; without this client-side cap a value sent through
-// another path (e.g. paste) used to reach OBDal.flush() as a raw data-truncation SQL error (500).
-const STREET_NAME_MAX_LENGTH = 70;
-const BUILDING_NUMBER_MAX_LENGTH = 16;
-const BUILDING_NAME_MAX_LENGTH = 35;
-
-// ETP-5806 follow-up (UX redesign) — Number is no longer mandatory. When the user leaves it
-// empty, this literal is used as the effective number both in the composed preview
-// (`composeAddressLines`) and in the save payload (`buildSavePayload`), matching the Spanish
-// addressing convention for "sin número". It is NOT translated — it is the same abbreviation
-// used in both locales (see `buildingNumberEmptyPlaceholder` in the locale files, used only
-// for the input's placeholder, not for this composed value).
-const EMPTY_BUILDING_NUMBER_FALLBACK = 's/n';
+// ETP-5806 — the address constants and the composer live in `@/lib/structuredAddress.js`, shared
+// with the Contacts import (ETP-6206) so the two payload builders cannot drift. The *_MAX_LENGTH
+// constants are enforced below as `maxLength` so the user can never type past what the backend
+// can store; without that cap a value sent through another path (e.g. paste) used to reach
+// OBDal.flush() as a raw data-truncation SQL error (500).
 
 /**
  * Resolves the `buildingNumber` save value (ETP-5806 follow-up): structured mode only, and
@@ -62,9 +54,7 @@ const EMPTY_BUILDING_NUMBER_FALLBACK = 's/n';
  */
 function resolveBuildingNumberForSave(structuredAddressEnabled, form) {
     if (!structuredAddressEnabled) return null;
-    const hasStreet = (form.streetName || '').trim() !== '';
-    if (hasStreet) return form.buildingNumber.trim() || EMPTY_BUILDING_NUMBER_FALLBACK;
-    return form.buildingNumber.trim() || null;
+    return effectiveBuildingNumber(form.streetName, form.buildingNumber);
 }
 
 // ETP-5806 follow-up — the resulting-address preview badge has exactly 3 states (legacy / auto /
@@ -121,53 +111,6 @@ function LegacyAddressLineRow({ label, value, testId }) {
             <CopyButton value={value} data-testid={`${testId}-copy`} />
         </div>
     );
-}
-
-/** Concatenates two parts with `sep` only when BOTH are non-empty — mirrors Java's `append`. */
-function appendPart(base, sep, part) {
-    if (!base) return part;
-    if (!part) return base;
-    return `${base}${sep}${part}`;
-}
-
-/**
- * Client-side PREVIEW of the composed Address1/Address2 (ETP-5806), shown as "Dirección
- * resultante" so the user sees what will be saved before submitting. This is a UX convenience
- * only — the backend (`StructuredAddressComposer.composeAddressLines`, ported from Classic's
- * `LocationSEPA.java::fillAddressLines`) is the source of truth and recomputes the same thing
- * server-side for every channel, REST and MCP alike. Keep this in exact lockstep with the Java
- * algorithm: same separators (", " and " - "), same 60-char line length, same precedence of
- * truncation cases.
- */
-function composeAddressLines(streetName, buildingNumber, buildingName) {
-    const street = (streetName || '').trim();
-    const name = (buildingName || '').trim();
-    // ETP-5806 follow-up (bug fix) — a composed address line always needs a street as its
-    // base, exactly like the backend (StructuredAddressComposer never composes a line without
-    // one). Without this early return, an empty street + a typed Number ("1") produced
-    // address1 = "1" (via appendPart treating the falsy `street` as "nothing before, return
-    // the part"), which flipped the badge to "Completado" with no street ever entered.
-    if (!street) {
-        return {address1: '', address2: ''};
-    }
-    // Number is optional; an empty one composes as "s/n" rather than being dropped, so the
-    // preview (and the saved value, see `buildSavePayload`) shows a number component once a
-    // street is present.
-    const number = (buildingNumber || '').trim() || EMPTY_BUILDING_NUMBER_FALLBACK;
-
-    const streetAndNumber = appendPart(street, ', ', number);
-    const wholeAddress = appendPart(streetAndNumber, ' - ', name);
-
-    if (wholeAddress.length <= ADDRESS_LINE_MAX_LENGTH) {
-        return {address1: wholeAddress, address2: ''};
-    }
-    if (streetAndNumber.length <= ADDRESS_LINE_MAX_LENGTH) {
-        return {address1: streetAndNumber, address2: name.slice(0, ADDRESS_LINE_MAX_LENGTH)};
-    }
-    return {
-        address1: street.slice(0, ADDRESS_LINE_MAX_LENGTH),
-        address2: appendPart(number, ' - ', name).slice(0, ADDRESS_LINE_MAX_LENGTH),
-    };
 }
 
 /**
