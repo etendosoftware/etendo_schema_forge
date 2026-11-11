@@ -223,3 +223,62 @@ describe('BulkOrderMoreMenu — createDraftInvoice leaves the draft rule to the 
     expect(toast.warning).toHaveBeenCalledWith('2 ok, 2 failed');
   });
 });
+
+// ETP-6179 — with a fiscal system active, "Crear facturas" first shows the fiscal data read-only.
+// The orders here differ only in the SII key (customers with their own key): the shared fields show
+// their value, the key shows "per customer", and each order's POST carries its OWN preview values.
+describe('BulkOrderMoreMenu — read-only fiscal data summary before bulk invoicing (ETP-6179)', () => {
+  const preview = (siiKey) => ({
+    systems: ['SII'], sales: true, rectificative: false,
+    fields: { etsgDateOperation: '2026-11-11', aeatsiiClaveTipo: siiKey },
+    fieldSpecs: [
+      { name: 'etsgDateOperation', system: 'SII', type: 'date' },
+      { name: 'aeatsiiClaveTipo', system: 'SII', type: 'option', options: ['F1', 'F2', 'F4'] },
+    ],
+    siiAuthorizationAvailable: false,
+  });
+  const KEYS = { 'so-a': 'F1', 'so-b': 'F2' };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockApiFetch.mockImplementation((url) => {
+      const [, id, action] = String(url).match(/\/header\/([^/]+)\/action\/(\w+)/) ?? [];
+      if (action === 'sifDefaults') {
+        return Promise.resolve(jsonResponse({ response: { data: preview(KEYS[id]) } }));
+      }
+      return Promise.resolve(jsonResponse({ response: { data: { id: `inv-${id}` } } }));
+    });
+  });
+
+  it('shows "per customer" for the differing SII key and sends each order its own values', async () => {
+    const refresh = vi.fn();
+    render(<BulkOrderMoreMenu selectedRows={[order('so-a'), order('so-b')]} clearSelection={vi.fn()}
+      token="tok" apiBaseUrl="/sws/neo/sales-order" refresh={refresh} />);
+    fireEvent.click(screen.getByText(/^soBulkCreateInvoices/));
+
+    await screen.findByTestId('invoice-sif-step-modal');
+    expect(screen.getByTestId('Varies__sifstep_aeatsiiClaveTipo'))
+      .toHaveValue('invoiceSifStep.variesPerCustomer');
+    expect(screen.queryByTestId('Varies__sifstep_etsgDateOperation')).toBeNull();
+    expect(mockApiFetch.mock.calls.some(([u]) => String(u).includes('createDraftInvoice'))).toBe(false);
+
+    fireEvent.click(screen.getByTestId('invoice-sif-step-modal-confirm'));
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+
+    const posts = mockApiFetch.mock.calls.filter(([u]) => String(u).includes('/action/createDraftInvoice'));
+    const sent = Object.fromEntries(posts.map(([u, init]) => [
+      String(u).match(/header\/([^/]+)\//)[1], JSON.parse(init.body).sifFields.aeatsiiClaveTipo]));
+    expect(sent).toEqual({ 'so-a': 'F1', 'so-b': 'F2' });
+  });
+
+  it('creates nothing when the summary is cancelled', async () => {
+    render(<BulkOrderMoreMenu selectedRows={[order('so-a'), order('so-b')]} clearSelection={vi.fn()}
+      token="tok" apiBaseUrl="/sws/neo/sales-order" refresh={vi.fn()} />);
+    fireEvent.click(screen.getByText(/^soBulkCreateInvoices/));
+    await screen.findByTestId('invoice-sif-step-modal');
+    fireEvent.click(screen.getByTestId('invoice-sif-step-modal-back'));
+
+    await waitFor(() => expect(screen.queryByTestId('invoice-sif-step-modal')).toBeNull());
+    expect(mockApiFetch.mock.calls.some(([u]) => String(u).includes('createDraftInvoice'))).toBe(false);
+  });
+});

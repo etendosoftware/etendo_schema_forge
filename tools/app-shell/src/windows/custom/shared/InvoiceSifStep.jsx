@@ -200,43 +200,86 @@ export function hasSifSystems(preview) {
   return (preview?.systems?.length ?? 0) > 0;
 }
 
-// What makes two invoices' fiscal data the same for the bulk summary: the same systems, the same
-// direction/rectificative flag and the same value in every field.
-function previewSignature(preview) {
-  return JSON.stringify({
-    systems: preview?.systems ?? [],
-    rectificative: !!preview?.rectificative,
-    fields: preview?.fields ?? {},
+// The SII key: the one field that legitimately differs between the orders of one bulk run
+// (customers with their own key). Any other differing field comes from data GO never fills itself
+// (an order created in Classic), so it reads "per order" instead of "per customer".
+const PER_CUSTOMER_FIELDS = new Set(['aeatsiiClaveTipo', 'aeatsiiClaveTipoFc']);
+
+/** The label a field shows in the bulk summary when its value differs between the invoices. */
+export function varyingFieldLabelKey(name) {
+  return PER_CUSTOMER_FIELDS.has(name)
+    ? 'invoiceSifStep.variesPerCustomer'
+    : 'invoiceSifStep.variesPerOrder';
+}
+
+/**
+ * Merges the previews of several invoices into one read-only summary: the systems and fields of
+ * all of them, a field's value when every invoice gets the same one, and the field listed in
+ * `varying` when they do not (or when an invoice does not have it at all).
+ */
+function mergePreviews(previews) {
+  const systems = [];
+  const specs = [];
+  const seen = new Set();
+  previews.forEach(p => {
+    (p.systems ?? []).forEach(sys => { if (!systems.includes(sys)) systems.push(sys); });
+    (p.fieldSpecs ?? []).forEach(spec => {
+      if (!seen.has(spec.name)) { seen.add(spec.name); specs.push(spec); }
+    });
   });
+  const fields = {};
+  const varying = {};
+  specs.forEach(({ name }) => {
+    const values = previews.map(p => JSON.stringify(p.fields?.[name] ?? null));
+    const has = previews.every(p => Object.prototype.hasOwnProperty.call(p.fields ?? {}, name));
+    if (has && values.every(v => v === values[0])) {
+      fields[name] = previews[0].fields[name];
+    } else {
+      varying[name] = true;
+    }
+  });
+  const first = previews.find(hasSifSystems) ?? previews[0];
+  return {
+    preview: {
+      ...first,
+      systems,
+      fieldSpecs: specs,
+      fields,
+      siiAuthorizationAvailable: previews.every(p => p.siiAuthorizationAvailable === true),
+    },
+    varying,
+  };
 }
 
 /**
  * ETP-6179 — the bulk "one invoice per selected order" flows. Fetches the preview of every order
- * and answers what the summary modal can show:
- *   - `none`  : no order has an active fiscal system, or a preview could not be read (fail open,
- *               as the single-record step does) — the flow runs as before, without a summary;
- *   - `same`  : every order would get exactly the same fiscal data — `preview` is that data;
- *   - `mixed` : the orders would get different fiscal data (other org, other document type, a
- *               customer with its own SII key…) — no single summary is true for all of them.
+ * and answers what the read-only summary shows:
+ *   - `none`    : no order has an active fiscal system, or a preview could not be read (fail open,
+ *                 as the single-record step does) — the flow runs as before, without a summary;
+ *   - `summary` : a fiscal system is active — `preview` merges every order's data (a value when it
+ *                 is the same for all, the field in `varying` when it is not) and `previews[i]` is
+ *                 what order `i` will be sent as its own `sifFields`.
  *
  * @param {Function} apiFetch an authenticated fetch
  * @param {string[]} urls one `.../action/sifDefaults` URL per order
- * @returns {Promise<{kind: 'none'|'same'|'mixed', preview?: object, previews: object[]}>}
+ * @returns {Promise<{kind: 'none'|'summary', preview?: object, varying?: object, previews: object[]}>}
  */
 export async function resolveBulkSifPreview(apiFetch, urls) {
   const previews = await Promise.all((urls ?? []).map(url => fetchSifPreview(apiFetch, url)));
   if (previews.length === 0 || previews.some(p => p == null) || !previews.some(hasSifSystems)) {
     return { kind: 'none', previews };
   }
-  const first = previewSignature(previews[0]);
-  return previews.every(p => previewSignature(p) === first)
-    ? { kind: 'same', preview: previews[0], previews }
-    : { kind: 'mixed', previews };
+  return { kind: 'summary', ...mergePreviews(previews), previews };
 }
 
-/** A fixed, read-only step over a preview, for {@link InvoiceSifStepModal} in `readOnly` mode. */
-export function readOnlySifStep(preview) {
-  return { preview, values: preview?.fields ?? {}, setValue: () => {}, valid: true, back: () => {} };
+/**
+ * A fixed, read-only step over a preview, for {@link InvoiceSifStepModal} in `readOnly` mode;
+ * `varying` names the fields whose value differs between the invoices of a bulk run.
+ */
+export function readOnlySifStep(preview, varying = {}) {
+  return {
+    preview, values: preview?.fields ?? {}, varying, setValue: () => {}, valid: true, back: () => {},
+  };
 }
 
 /** Adds `sifFields` to an invoice-creating action's body when the step produced values. */
@@ -274,12 +317,23 @@ function OptionField({ id, spec, value, onChange, ui, disabled }) {
   );
 }
 
-function StepField({ spec, values, setValue, authorizationAvailable, ui, readOnly }) {
+function StepField({ spec, values, setValue, authorizationAvailable, ui, readOnly, varies }) {
   const id = `sif-step-${spec.name}`;
   const value = values[spec.name];
   const label = ui(FIELD_LABEL_KEYS[spec.name] ?? spec.name);
   let control;
-  if (spec.type === 'option') {
+  if (varies) {
+    control = (
+      <Input
+        id={id}
+        type="text"
+        value={ui(varyingFieldLabelKey(spec.name))}
+        disabled
+        readOnly
+        className="bg-muted/40 italic"
+        data-testid={`Varies__sifstep_${spec.name}`} />
+    );
+  } else if (spec.type === 'option') {
     control = <OptionField id={id} spec={spec} value={value} onChange={v => setValue(spec.name, v)} ui={ui} disabled={readOnly} />;
   } else if (spec.type === 'date') {
     control = (
@@ -348,6 +402,7 @@ export function InvoiceSifStepPanel({ sif, readOnly = false, notice }) {
                   setValue={setValue}
                   authorizationAvailable={preview.siiAuthorizationAvailable === true}
                   readOnly={readOnly}
+                  varies={!!sif.varying?.[spec.name]}
                   ui={ui} />
               ))}
             </div>
