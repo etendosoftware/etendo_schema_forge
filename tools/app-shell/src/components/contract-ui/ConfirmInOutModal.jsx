@@ -8,7 +8,7 @@ import { periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 import { PeriodRecoveryLink } from './PeriodRecoveryLink.jsx';
 import { usePriceListPicker, PriceListSelectField } from './PriceListPicker';
 import { useRectifiableInvoices, RectifiableInvoiceField } from './RectifiableInvoicePicker';
-import { useInvoiceSifStep, InvoiceSifStepPanel, withSifFields } from '@/windows/custom/shared/InvoiceSifStep.jsx';
+import { useInvoiceSifStep, InvoiceSifStepPanel, withSifFields, SIF_STEP_DIALOG_WIDTH } from '@/windows/custom/shared/InvoiceSifStep.jsx';
 
 /** POSTs one NEO action and throws the backend's own message when it refuses. */
 async function postAction(apiFetch, url, body) {
@@ -254,7 +254,7 @@ export default function ConfirmInOutModal({
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          width: 468, borderRadius: 16, background: 'hsl(var(--card))',
+          width: sif.active ? SIF_STEP_DIALOG_WIDTH : 468, maxWidth: 'calc(100vw - 32px)', borderRadius: 16, background: 'hsl(var(--card))',
           boxShadow: '0 24px 60px -12px hsl(var(--foreground) / .32), 0 8px 24px -8px hsl(var(--foreground) / .18)',
           overflow: 'hidden',
         }}
@@ -290,7 +290,11 @@ export default function ConfirmInOutModal({
         {/* Body */}
         <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-          {sif.active && <InvoiceSifStepPanel sif={sif} data-testid="InvoiceSifStepPanel__3b3aca" />}
+          {sif.active && (
+            <div style={{ maxHeight: '65vh', overflowY: 'auto' }}>
+              <InvoiceSifStepPanel sif={sif} data-testid="InvoiceSifStepPanel__3b3aca" />
+            </div>
+          )}
 
           {/* Info row — hidden when only creating invoice (skipDocumentAction) or when no invoice action is available */}
           {!sif.active && !skipDocumentAction && invoiceAction && infoRowBold && (

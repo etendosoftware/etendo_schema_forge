@@ -6,7 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { overlayStyle, cardStyle, btnPrimaryStyle, btnSecondaryStyle, closeBtnStyle, Spinner } from './ConfirmDocumentModal';
 import { usePriceListPicker, PriceListSelectField } from './PriceListPicker';
 import { useRectifiableInvoices, RectifiableInvoiceField } from './RectifiableInvoicePicker';
-import { useInvoiceSifStep, InvoiceSifStepPanel } from '@/windows/custom/shared/InvoiceSifStep.jsx';
+import { useInvoiceSifStep, InvoiceSifStepPanel, SIF_STEP_DIALOG_WIDTH } from '@/windows/custom/shared/InvoiceSifStep.jsx';
 
 import { authHeaders } from '@/auth/api.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -190,7 +190,7 @@ export default function CreateInvoiceConfirmModal({
   const dismiss = loading ? undefined : onClose;
   return createPortal(
     <div data-testid="create-invoice-confirm-modal" onClick={dismiss} style={overlayStyle}>
-      <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: 460 }}>
+      <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: sif.active ? SIF_STEP_DIALOG_WIDTH : 460, maxWidth: 'calc(100vw - 32px)' }}>
 
         <div style={{ padding: '16px 20px 14px', borderBottom: '0.5px solid hsl(var(--border-subtle))', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
@@ -200,7 +200,7 @@ export default function CreateInvoiceConfirmModal({
         </div>
 
         {sif.active && (
-          <div style={{ padding: '14px 20px' }}>
+          <div style={{ padding: '14px 20px', maxHeight: '65vh', overflowY: 'auto' }}>
             <InvoiceSifStepPanel sif={sif} data-testid="InvoiceSifStepPanel__e6fb8b" />
           </div>
         )}

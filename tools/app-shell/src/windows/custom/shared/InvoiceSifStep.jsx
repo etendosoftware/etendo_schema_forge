@@ -13,6 +13,7 @@ import {
   VERIFACTU_INV_TYPE_OPTIONS,
 } from '@/windows/custom/shared/useSifFieldPatcher.js';
 import { normalizeDateInputValue } from '@/windows/custom/fiscal-config/fiscalConfig.utils.js';
+import { InfoBanner } from '@/components/InfoBanner.jsx';
 
 /**
  * ETP-6179 — the "Datos fiscales" step of every modal that creates AND completes an invoice in one
@@ -57,11 +58,31 @@ const FIELD_OPTIONS = {
   tbaiReverseinvoicecode: TBAI_REVERSEINVOICECODE_OPTIONS,
 };
 
-const SYSTEM_LABEL_KEYS = {
-  SII: 'sifDataTabs.tab.sii',
-  TicketBAI: 'sifDataTabs.tab.tbai',
-  Verifactu: 'sifDataTabs.tab.verifactu',
+// Each system's section heading: the SIF tab's own panel title/subtitle keys (SifTab.jsx PANEL_META).
+const SYSTEM_PANEL_KEYS = {
+  SII: { title: 'sifDataTabs.panel.sii.title', subtitle: 'sifDataTabs.panel.sii.subtitle' },
+  TicketBAI: { title: 'sifDataTabs.panel.tbai.title', subtitle: 'sifDataTabs.panel.tbai.subtitle' },
+  Verifactu: { title: 'sifDataTabs.panel.verifactu.title', subtitle: 'sifDataTabs.panel.verifactu.subtitle' },
 };
+
+/**
+ * The step's dialog width: two columns of fields plus a select long enough for the longest
+ * VERI*FACTU type ("F2 - Factura Simplificada/sin identificación destinatario"). The modals that
+ * host the step widen to it while the step shows (their first screen keeps its own width).
+ */
+export const SIF_STEP_DIALOG_WIDTH = 600;
+
+/**
+ * An option's text. Some locale labels already start with their code ("F1 - Factura…", the
+ * VERI*FACTU types and the rectification codes) and are shown as they are; the others ("Factura")
+ * get the code in front, so the code always appears exactly once.
+ */
+export function sifOptionLabel(option, ui) {
+  const label = ui(option.labelKey);
+  return typeof label === 'string' && label.startsWith(`${option.value} `)
+    ? label
+    : `${option.value} — ${label}`;
+}
 
 // The rectification codes a rectificative invoice cannot be confirmed without — mirrors the
 // backend guard (RectificationFiscalCodeGuard), which refuses the same blanks with a 422.
@@ -287,9 +308,9 @@ export function withSifFields(body, sif) {
   return sif?.payload ? { ...body, sifFields: sif.payload } : body;
 }
 
-function FieldRow({ label, htmlFor, children }) {
+function FieldRow({ label, htmlFor, children, wide }) {
   return (
-    <div className="space-y-1.5">
+    <div className={`space-y-1.5 min-w-0 ${wide ? 'col-span-2' : ''}`}>
       <Label htmlFor={htmlFor} className="text-sm text-foreground font-medium" data-testid="Label__sifstep">
         {label}
       </Label>
@@ -303,13 +324,16 @@ function OptionField({ id, spec, value, onChange, ui, disabled }) {
   const options = (FIELD_OPTIONS[spec.name] ?? []).filter(o => allowed.size === 0 || allowed.has(o.value));
   return (
     <Select value={value || undefined} onValueChange={onChange} disabled={disabled} data-testid={`Select__sifstep_${spec.name}`}>
-      <SelectTrigger id={id} data-testid={`SelectTrigger__sifstep_${spec.name}`}>
+      <SelectTrigger
+        id={id}
+        className="h-auto min-h-10 whitespace-normal text-left [&>span]:line-clamp-none"
+        data-testid={`SelectTrigger__sifstep_${spec.name}`}>
         <SelectValue placeholder="—" data-testid="SelectValue__sifstep" />
       </SelectTrigger>
       <SelectContent className="z-[60]" data-testid="SelectContent__sifstep">
         {options.map(o => (
-          <SelectItem key={o.value} value={o.value} data-testid={`SelectItem__sifstep_${o.value}`}>
-            {o.value} — {ui(o.labelKey)}
+          <SelectItem key={o.value} value={o.value} className="whitespace-normal" data-testid={`SelectItem__sifstep_${o.value}`}>
+            {sifOptionLabel(o, ui)}
           </SelectItem>
         ))}
       </SelectContent>
@@ -345,15 +369,19 @@ function StepField({ spec, values, setValue, authorizationAvailable, ui, readOnl
         data-testid={`DateField__sifstep_${spec.name}`} />
     );
   } else if (spec.type === 'boolean') {
+    // Box and label on one row, like the app's other checkbox fields.
     const disabled = readOnly || (spec.name === 'aeatsiiIsauthorization' && !authorizationAvailable);
-    control = (
-      <div className="h-10 flex items-center">
+    return (
+      <div className="col-span-2 flex items-center gap-2.5 min-h-10">
         <CheckboxField
           id={id}
           checked={Boolean(value)}
           disabled={disabled}
           onToggle={v => setValue(spec.name, v)}
           data-testid={`CheckboxField__sifstep_${spec.name}`} />
+        <Label htmlFor={id} className="text-sm text-foreground font-medium" data-testid="Label__sifstep">
+          {label}
+        </Label>
       </div>
     );
   } else {
@@ -368,8 +396,13 @@ function StepField({ spec, values, setValue, authorizationAvailable, ui, readOnl
         data-testid={`Input__sifstep_${spec.name}`} />
     );
   }
-  return <FieldRow label={label} htmlFor={id}>{control}</FieldRow>;
+  return <FieldRow label={label} htmlFor={id} wide={spec.type === 'option' || spec.type === 'boolean'}>{control}</FieldRow>;
 }
+
+// Narrow fields (dates, texts) pair up in two columns first; the long selects and the checkboxes
+// then take a full row each, so no option text is ever cut and no label wraps away from its box.
+const FIELD_ORDER = { date: 0, text: 0, option: 1, boolean: 2 };
+const byLayout = (a, b) => (FIELD_ORDER[a.type] ?? 0) - (FIELD_ORDER[b.type] ?? 0);
 
 /**
  * The step's body: one section per active system with its editable fields. A field shared by
@@ -383,17 +416,27 @@ export function InvoiceSifStepPanel({ sif, readOnly = false, notice }) {
   const specs = preview.fieldSpecs ?? [];
   const systems = preview.systems ?? [];
   return (
-    <div data-testid="invoice-sif-step" className="flex flex-col gap-4">
-      <div className="text-xs text-muted-foreground leading-snug">{notice ?? ui('invoiceSifStep.description')}</div>
+    <div data-testid="invoice-sif-step" className="flex flex-col gap-5">
+      {notice
+        ? <InfoBanner dismissible={false} data-testid="invoice-sif-step-notice">{notice}</InfoBanner>
+        : <p className="text-xs text-muted-foreground leading-relaxed">{ui('invoiceSifStep.description')}</p>}
       {systems.map(system => {
-        const fields = specs.filter(s => s.system === system && isFieldShown(s.name, values));
+        const fields = specs
+          .filter(s => s.system === system && isFieldShown(s.name, values))
+          .sort(byLayout);
         if (fields.length === 0) return null;
+        const panel = SYSTEM_PANEL_KEYS[system];
         return (
-          <section key={system} data-testid={`invoice-sif-step-${system}`} className="flex flex-col gap-3">
-            <div className="text-xs font-semibold text-foreground uppercase tracking-wide">
-              {ui(SYSTEM_LABEL_KEYS[system] ?? system)}
+          <section
+            key={system}
+            data-testid={`invoice-sif-step-${system}`}
+            className="rounded-lg border border-border/40 bg-card overflow-hidden"
+          >
+            <div className="flex flex-col gap-0.5 px-4 py-3 border-b border-border/40">
+              <span className="text-sm font-semibold text-foreground">{panel ? ui(panel.title) : system}</span>
+              {panel && <span className="text-xs text-muted-foreground">{ui(panel.subtitle)}</span>}
             </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <div className="grid grid-cols-2 gap-x-5 gap-y-4 p-4">
               {fields.map(spec => (
                 <StepField
                   key={spec.name}
@@ -440,7 +483,8 @@ export function InvoiceSifStepModal({
     >
       <div
         onClick={e => e.stopPropagation()}
-        className="w-[480px] max-h-[85vh] flex flex-col overflow-hidden rounded-xl bg-card border border-border/40 shadow-lg"
+        style={{ width: SIF_STEP_DIALOG_WIDTH }}
+        className="max-w-[calc(100vw-32px)] max-h-[85vh] flex flex-col overflow-hidden rounded-xl bg-card border border-border/40 shadow-lg"
       >
         <div className="px-5 pt-4 pb-3 border-b border-border/40 text-[15px] font-semibold text-foreground">
           {ui('invoiceSifStep.title')}

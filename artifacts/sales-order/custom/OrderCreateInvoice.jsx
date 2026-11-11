@@ -21,7 +21,7 @@ import { translateBackendError, translateBackendErrorBody, translateQuotaRefusal
 // instead, which owns that header along with the credential and the CSRF proof, so there is
 // no longer any header-building in this file to get wrong.
 import { useApiFetch } from '@/auth/useApiFetch.js';
-import { useInvoiceSifStep, InvoiceSifStepPanel, withSifFields } from '@/windows/custom/shared/InvoiceSifStep.jsx';
+import { useInvoiceSifStep, InvoiceSifStepPanel, withSifFields, SIF_STEP_DIALOG_WIDTH } from '@/windows/custom/shared/InvoiceSifStep.jsx';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -626,7 +626,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
 
   return (
     <div data-testid="sales-order-confirm-modal" onClick={handleClose} style={overlayStyle}>
-      <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: 460 }}>
+      <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: sif.active ? SIF_STEP_DIALOG_WIDTH : 460, maxWidth: 'calc(100vw - 32px)' }}>
 
         {/* Title row */}
         <div style={{ padding: '16px 20px 14px', borderBottom: '0.5px solid hsl(var(--card))', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -637,7 +637,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
         </div>
 
         {sif.active && (
-          <div style={{ padding: '14px 20px', overflowY: 'auto' }}>
+          <div style={{ padding: '14px 20px', overflowY: 'auto', minHeight: 0 }}>
             <InvoiceSifStepPanel sif={sif} data-testid="InvoiceSifStepPanel__18d1f0" />
           </div>
         )}
@@ -877,7 +877,7 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
 
   return (
     <div data-testid="sales-order-manage-docs-modal" onClick={onClose} style={overlayStyle}>
-      <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: 460 }}>
+      <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: sif.active ? SIF_STEP_DIALOG_WIDTH : 460, maxWidth: 'calc(100vw - 32px)' }}>
 
         {/* Title row */}
         <div style={{ padding: '16px 20px 14px', borderBottom: '0.5px solid hsl(var(--card))', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -888,7 +888,7 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
         </div>
 
         {sif.active && (
-          <div style={{ padding: '14px 20px', overflowY: 'auto' }}>
+          <div style={{ padding: '14px 20px', overflowY: 'auto', minHeight: 0 }}>
             <InvoiceSifStepPanel sif={sif} data-testid="InvoiceSifStepPanel__manageDocs" />
           </div>
         )}
