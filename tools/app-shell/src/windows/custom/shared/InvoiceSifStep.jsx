@@ -116,17 +116,9 @@ export function useInvoiceSifStep({ enabled, apiFetch, defaultsUrl, body, absolu
 
   const fetchPreview = useCallback(async () => {
     if (cacheRef.current?.key === cacheKey) return cacheRef.current.data;
-    try {
-      const res = await apiFetch(defaultsUrl, {
-        method: 'POST', body: bodyKey, ...(absoluteUrl ? { baseUrl: '' } : {}),
-      });
-      if (!res.ok) return null;
-      const data = (await res.json())?.response?.data ?? null;
-      cacheRef.current = { key: cacheKey, data };
-      return data;
-    } catch {
-      return null;
-    }
+    const data = await fetchSifPreview(apiFetch, defaultsUrl, bodyKey, { absoluteUrl });
+    if (data) cacheRef.current = { key: cacheKey, data };
+    return data;
   }, [apiFetch, defaultsUrl, bodyKey, absoluteUrl, cacheKey]);
 
   const start = useCallback(async (proceed) => {
@@ -180,6 +172,73 @@ export function useInvoiceSifStep({ enabled, apiFetch, defaultsUrl, body, absolu
   };
 }
 
+/**
+ * One `sifDefaults` call: the preview, or `null` when the server could not answer (callers fail
+ * open on `null`, see {@link useInvoiceSifStep}).
+ *
+ * @param {Function} apiFetch an authenticated fetch (hook or module-level)
+ * @param {string} url the source record's `.../action/sifDefaults` URL
+ * @param {string|object} [body] the keys that select what is invoiced
+ * @param {{absoluteUrl?: boolean}} [opts]
+ */
+export async function fetchSifPreview(apiFetch, url, body, { absoluteUrl = false } = {}) {
+  try {
+    const res = await apiFetch(url, {
+      method: 'POST',
+      body: typeof body === 'string' ? body : JSON.stringify(body ?? {}),
+      ...(absoluteUrl ? { baseUrl: '' } : {}),
+    });
+    if (!res.ok) return null;
+    return (await res.json())?.response?.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Whether a preview has anything to show (a fiscal system with editable fields is active). */
+export function hasSifSystems(preview) {
+  return (preview?.systems?.length ?? 0) > 0;
+}
+
+// What makes two invoices' fiscal data the same for the bulk summary: the same systems, the same
+// direction/rectificative flag and the same value in every field.
+function previewSignature(preview) {
+  return JSON.stringify({
+    systems: preview?.systems ?? [],
+    rectificative: !!preview?.rectificative,
+    fields: preview?.fields ?? {},
+  });
+}
+
+/**
+ * ETP-6179 — the bulk "one invoice per selected order" flows. Fetches the preview of every order
+ * and answers what the summary modal can show:
+ *   - `none`  : no order has an active fiscal system, or a preview could not be read (fail open,
+ *               as the single-record step does) — the flow runs as before, without a summary;
+ *   - `same`  : every order would get exactly the same fiscal data — `preview` is that data;
+ *   - `mixed` : the orders would get different fiscal data (other org, other document type, a
+ *               customer with its own SII key…) — no single summary is true for all of them.
+ *
+ * @param {Function} apiFetch an authenticated fetch
+ * @param {string[]} urls one `.../action/sifDefaults` URL per order
+ * @returns {Promise<{kind: 'none'|'same'|'mixed', preview?: object, previews: object[]}>}
+ */
+export async function resolveBulkSifPreview(apiFetch, urls) {
+  const previews = await Promise.all((urls ?? []).map(url => fetchSifPreview(apiFetch, url)));
+  if (previews.length === 0 || previews.some(p => p == null) || !previews.some(hasSifSystems)) {
+    return { kind: 'none', previews };
+  }
+  const first = previewSignature(previews[0]);
+  return previews.every(p => previewSignature(p) === first)
+    ? { kind: 'same', preview: previews[0], previews }
+    : { kind: 'mixed', previews };
+}
+
+/** A fixed, read-only step over a preview, for {@link InvoiceSifStepModal} in `readOnly` mode. */
+export function readOnlySifStep(preview) {
+  return { preview, values: preview?.fields ?? {}, setValue: () => {}, valid: true, back: () => {} };
+}
+
 /** Adds `sifFields` to an invoice-creating action's body when the step produced values. */
 export function withSifFields(body, sif) {
   return sif?.payload ? { ...body, sifFields: sif.payload } : body;
@@ -196,11 +255,11 @@ function FieldRow({ label, htmlFor, children }) {
   );
 }
 
-function OptionField({ id, spec, value, onChange, ui }) {
+function OptionField({ id, spec, value, onChange, ui, disabled }) {
   const allowed = new Set(spec.options ?? []);
   const options = (FIELD_OPTIONS[spec.name] ?? []).filter(o => allowed.size === 0 || allowed.has(o.value));
   return (
-    <Select value={value || undefined} onValueChange={onChange} data-testid={`Select__sifstep_${spec.name}`}>
+    <Select value={value || undefined} onValueChange={onChange} disabled={disabled} data-testid={`Select__sifstep_${spec.name}`}>
       <SelectTrigger id={id} data-testid={`SelectTrigger__sifstep_${spec.name}`}>
         <SelectValue placeholder="—" data-testid="SelectValue__sifstep" />
       </SelectTrigger>
@@ -215,23 +274,24 @@ function OptionField({ id, spec, value, onChange, ui }) {
   );
 }
 
-function StepField({ spec, values, setValue, authorizationAvailable, ui }) {
+function StepField({ spec, values, setValue, authorizationAvailable, ui, readOnly }) {
   const id = `sif-step-${spec.name}`;
   const value = values[spec.name];
   const label = ui(FIELD_LABEL_KEYS[spec.name] ?? spec.name);
   let control;
   if (spec.type === 'option') {
-    control = <OptionField id={id} spec={spec} value={value} onChange={v => setValue(spec.name, v)} ui={ui} />;
+    control = <OptionField id={id} spec={spec} value={value} onChange={v => setValue(spec.name, v)} ui={ui} disabled={readOnly} />;
   } else if (spec.type === 'date') {
     control = (
       <DateField
         id={id}
         value={normalizeDateInputValue(value ?? '')}
         onChange={iso => setValue(spec.name, iso || null)}
+        disabled={readOnly}
         data-testid={`DateField__sifstep_${spec.name}`} />
     );
   } else if (spec.type === 'boolean') {
-    const disabled = spec.name === 'aeatsiiIsauthorization' && !authorizationAvailable;
+    const disabled = readOnly || (spec.name === 'aeatsiiIsauthorization' && !authorizationAvailable);
     control = (
       <div className="h-10 flex items-center">
         <CheckboxField
@@ -249,6 +309,7 @@ function StepField({ spec, values, setValue, authorizationAvailable, ui }) {
         type="text"
         value={value ?? ''}
         onChange={e => setValue(spec.name, e.target.value)}
+        disabled={readOnly}
         className="bg-card"
         data-testid={`Input__sifstep_${spec.name}`} />
     );
@@ -260,7 +321,7 @@ function StepField({ spec, values, setValue, authorizationAvailable, ui }) {
  * The step's body: one section per active system with its editable fields. A field shared by
  * two systems (the operation date) is shown once, under the first.
  */
-export function InvoiceSifStepPanel({ sif }) {
+export function InvoiceSifStepPanel({ sif, readOnly = false, notice }) {
   const ui = useUI();
   const { preview, values, setValue } = sif;
   if (!preview) return null;
@@ -269,7 +330,7 @@ export function InvoiceSifStepPanel({ sif }) {
   const systems = preview.systems ?? [];
   return (
     <div data-testid="invoice-sif-step" className="flex flex-col gap-4">
-      <div className="text-xs text-muted-foreground leading-snug">{ui('invoiceSifStep.description')}</div>
+      <div className="text-xs text-muted-foreground leading-snug">{notice ?? ui('invoiceSifStep.description')}</div>
       {systems.map(system => {
         const fields = specs.filter(s => s.system === system && isFieldShown(s.name, values));
         if (fields.length === 0) return null;
@@ -286,13 +347,14 @@ export function InvoiceSifStepPanel({ sif }) {
                   values={values}
                   setValue={setValue}
                   authorizationAvailable={preview.siiAuthorizationAvailable === true}
+                  readOnly={readOnly}
                   ui={ui} />
               ))}
             </div>
           </section>
         );
       })}
-      {!sif.valid && (
+      {!readOnly && !sif.valid && (
         <div data-testid="invoice-sif-step-required" className="text-xs text-muted-foreground">
           {ui('invoiceSifStep.rectificationRequired')}
         </div>
@@ -304,8 +366,13 @@ export function InvoiceSifStepPanel({ sif }) {
 /**
  * The step as a dialog of its own, for a flow whose first step is a shared modal it cannot
  * extend (the quotation's ActionChoiceModal). Same panel, with Back / Confirm.
+ *
+ * `readOnly` + `notice` + `onCancel` turn it into the bulk summary (one invoice per selected
+ * order): the values are shown, never edited, and the secondary button cancels the whole run.
  */
-export function InvoiceSifStepModal({ sif, confirmLabel, loading = false, error, onConfirm, onClose }) {
+export function InvoiceSifStepModal({
+  sif, confirmLabel, loading = false, error, onConfirm, onClose, readOnly = false, notice, onCancel,
+}) {
   const ui = useUI();
   const disabled = loading || !sif.valid;
   return (
@@ -324,7 +391,7 @@ export function InvoiceSifStepModal({ sif, confirmLabel, loading = false, error,
           {ui('invoiceSifStep.title')}
         </div>
         <div className="px-5 py-4 overflow-y-auto">
-          <InvoiceSifStepPanel sif={sif} />
+          <InvoiceSifStepPanel sif={sif} readOnly={readOnly} notice={notice} />
         </div>
         {error && (
           <div className="px-5 py-2 text-xs text-destructive whitespace-pre-line" data-testid="invoice-sif-step-modal-error">
@@ -335,11 +402,11 @@ export function InvoiceSifStepModal({ sif, confirmLabel, loading = false, error,
           <button
             type="button"
             data-testid="invoice-sif-step-modal-back"
-            onClick={sif.back}
+            onClick={onCancel ?? sif.back}
             disabled={loading}
             className="text-xs px-3.5 py-1.5 rounded-md border border-border text-muted-foreground disabled:opacity-50"
           >
-            {ui('back')}
+            {onCancel ? ui('cancel') : ui('back')}
           </button>
           <button
             type="button"

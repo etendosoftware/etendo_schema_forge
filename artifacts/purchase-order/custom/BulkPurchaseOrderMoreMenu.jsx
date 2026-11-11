@@ -22,6 +22,7 @@
 // the same in-place list refetch instead of a full page reload.
 
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 // ETP-4576 - module-level helpers cannot hold a hook, so they take the module-level
 // apiFetch: same credential, same CSRF proof, resolved from the published session.
 import { apiFetch as moduleApiFetch } from '@/auth/api.js';
@@ -37,7 +38,10 @@ import { useUI } from '@/i18n';
 import { trackDocumentCreated } from '@/lib/observability/health-events.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { showBulkActionToast, persistBulkActionResult } from '@/hooks/useBulkActionToast';
-import { translateBackendErrorBody, translateQuotaRefusalBody } from '@/lib/backendErrors.js';
+import { joinWithConjunction, translateBackendErrorBody, translateQuotaRefusalBody } from '@/lib/backendErrors.js';
+import {
+  InvoiceSifStepModal, readOnlySifStep, resolveBulkSifPreview,
+} from '@/windows/custom/shared/InvoiceSifStep.jsx';
 const COMPLETED = 'CO';
 const DRAFT = 'DR';
 
@@ -77,7 +81,25 @@ async function hasDraftGoodsReceipt(orderId, apiBaseUrl) {
   }
 }
 
-async function runBulkPurchaseOrderAction({ rows, action, apiBaseUrl, token, ui }) {
+// ETP-6179: the fiscal systems' display names, in the order the preview lists them.
+const SYSTEM_LABEL_KEYS = {
+  SII: 'sifDataTabs.tab.sii',
+  TicketBAI: 'sifDataTabs.tab.tbai',
+  Verifactu: 'sifDataTabs.tab.verifactu',
+};
+
+/**
+ * ETP-6179: the preview of the invoices this run would create — one `sifDefaults` per COMPLETED
+ * selected order (the others fail before reaching the backend anyway).
+ */
+function previewBulkInvoices(rows, apiBaseUrl) {
+  const urls = rows
+    .filter(row => (row.documentStatus || row.docStatus) === COMPLETED)
+    .map(row => `${apiBaseUrl}/header/${row.id}/action/sifDefaults`);
+  return resolveBulkSifPreview(moduleApiFetch, urls);
+}
+
+async function runBulkPurchaseOrderAction({ rows, action, apiBaseUrl, token, ui, sifFields }) {
   const isInvoice = action === 'createPurchaseInvoice';
 
   const outcomes = await Promise.allSettled(
@@ -104,7 +126,8 @@ async function runBulkPurchaseOrderAction({ rows, action, apiBaseUrl, token, ui 
       const res = await moduleApiFetch(`${apiBaseUrl}/header/${row.id}/action/${action}`, {
         method: 'POST',
         
-        body: JSON.stringify({}),
+        // ETP-6179: the fiscal data the summary showed, the same for every invoice of the run.
+        body: JSON.stringify(isInvoice && sifFields ? { sifFields } : {}),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => null);
@@ -140,13 +163,14 @@ async function runBulkPurchaseOrderAction({ rows, action, apiBaseUrl, token, ui 
 export default function BulkPurchaseOrderMoreMenu({ selectedRows, clearSelection, token, apiBaseUrl, refresh, windowReadOnly }) {
   const ui = useUI();
   const [running, setRunning] = useState(false);
+  // ETP-6179: the read-only fiscal-data summary shown before creating the invoices.
+  const [sifSummary, setSifSummary] = useState(null);
 
   if (!selectedRows || selectedRows.length === 0 || windowReadOnly) return null;
 
-  const handleSelect = (action) => async () => {
-    if (running) return;
+  const run = async (action, sifFields) => {
     setRunning(true);
-    const result = await runBulkPurchaseOrderAction({ rows: selectedRows, action, apiBaseUrl, token, ui });
+    const result = await runBulkPurchaseOrderAction({ rows: selectedRows, action, apiBaseUrl, token, ui, sifFields });
     setRunning(false);
 
     // ETP-5302 — refetch the rows in place rather than reloading the whole browser page,
@@ -166,7 +190,39 @@ export default function BulkPurchaseOrderMoreMenu({ selectedRows, clearSelection
     }, 600);
   };
 
+  // ETP-6179: before creating one invoice per order, show the fiscal data they will all get —
+  // only when a fiscal system is active and every order would get the SAME data. Otherwise
+  // (none active, a preview not readable, or orders whose data differ) the run goes on as
+  // before and each invoice gets its own backend defaults.
+  const handleSelect = (action) => async () => {
+    if (running) return;
+    if (action === 'createPurchaseInvoice') {
+      setRunning(true);
+      const bulk = await previewBulkInvoices(selectedRows, apiBaseUrl);
+      setRunning(false);
+      if (bulk.kind === 'same') {
+        setSifSummary(bulk.preview);
+        return;
+      }
+    }
+    await run(action);
+  };
+
+  const confirmSifSummary = async () => {
+    const preview = sifSummary;
+    await run('createPurchaseInvoice', preview?.fields);
+    setSifSummary(null);
+  };
+
+  const summaryNotice = sifSummary
+    ? ui('invoiceSifStep.bulkNotice', {
+      systems: joinWithConjunction(
+        (sifSummary.systems ?? []).map(system => ui(SYSTEM_LABEL_KEYS[system] ?? system)), ui),
+    })
+    : null;
+
   return (
+    <>
     <DropdownMenu data-testid="DropdownMenu__c24331">
       <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__c24331">
         <Button
@@ -196,5 +252,19 @@ export default function BulkPurchaseOrderMoreMenu({ selectedRows, clearSelection
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    {sifSummary && createPortal(
+      <InvoiceSifStepModal
+        sif={readOnlySifStep(sifSummary)}
+        readOnly
+        notice={summaryNotice}
+        confirmLabel={`${ui('poBulkCreateInvoices')} (${selectedRows.length})`}
+        loading={running}
+        onConfirm={confirmSifSummary}
+        onCancel={() => setSifSummary(null)}
+        onClose={() => setSifSummary(null)}
+        data-testid="InvoiceSifStepModal__bulk6179" />,
+      document.body,
+    )}
+    </>
   );
 }

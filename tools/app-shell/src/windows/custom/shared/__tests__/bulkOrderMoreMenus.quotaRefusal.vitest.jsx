@@ -207,7 +207,11 @@ describe('BulkOrderMoreMenu — createDraftInvoice leaves the draft rule to the 
     fireEvent.click(screen.getByText(/^soBulkCreateInvoices/));
     await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
 
-    const urls = mockApiFetch.mock.calls.map(([u]) => String(u));
+    // ETP-6179: the fiscal-data preview (sifDefaults) is read first; none is active here, so the
+    // run goes straight on and only the invoice POSTs remain to compare.
+    const allUrls = mockApiFetch.mock.calls.map(([u]) => String(u));
+    const urls = allUrls.filter((u) => !u.includes('/action/sifDefaults'));
+    expect(allUrls.some((u) => u.includes('/action/sifDefaults'))).toBe(true);
     expect(urls.some((u) => u.includes('/action/checkDraftInvoice'))).toBe(false);
     expect(urls).toEqual(ROWS.filter((r) => r.post).map((r) => URL(r.id, 'createDraftInvoice')));
     expect(mockApiFetch.mock.calls.every(([, init]) => init?.method === 'POST')).toBe(true);

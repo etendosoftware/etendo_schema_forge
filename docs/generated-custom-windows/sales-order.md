@@ -846,8 +846,17 @@ The printed order uses the organization's saved design (variant, color, font, te
   before the order is confirmed / the invoice is created.
 - Normal invoice: VERI*FACTU type from the document type the invoice will use (`F1` when it has none);
   SII key the customer's own default key when it declares one, else `F1`.
-- Not covered: the list's bulk "Generar factura" (`BulkOrderMoreMenu`, one invoice per order) sends
-  no SIF values; each invoice gets the backend defaults.
+- The list's bulk "Crear facturas" (`BulkOrderMoreMenu`, ONE invoice per selected order) reads the
+  `sifDefaults` preview of every completed selected order first. When a fiscal system is active and
+  every order would get the SAME fiscal data, it shows that data READ-ONLY (`InvoiceSifStepModal` in
+  `readOnly` mode) with the notice "All invoices will be created with this fiscal information for
+  submission to <systems>. To use different values on an invoice, create it individually."
+  (`invoiceSifStep.bulkNotice`). Confirm creates the invoices sending those values as `sifFields`;
+  Cancel creates nothing. Editing per invoice only happens in the individual flow.
+- When no system is active, a preview cannot be read, or the selected orders would get DIFFERENT
+  fiscal data (another organization, another document type, a customer with its own SII key), no
+  summary is shown and the run goes on as before: each invoice gets its own backend defaults.
+  How a mixed selection should behave is pending a product decision (ETP-6179).
 
 The step is shared (`tools/app-shell/src/windows/custom/shared/InvoiceSifStep.jsx`) and built
 from the backend's `sifDefaults` action, which answers which fiscal systems are active for the

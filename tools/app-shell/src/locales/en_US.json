@@ -21896,6 +21896,7 @@
     "sendToSifLabelTbaiPurchase": "Send to Batuz",
     "sendToSifLabelBothPurchase": "Send to SII and Batuz",
     "sendToSifSaveFirst": "Save your changes before sending",
+    "invoiceSifStep.bulkNotice": "All invoices will be created with this fiscal information for submission to {systems}. To use different values on an invoice, create it individually.",
     "invoiceSifStep.title": "Fiscal data",
     "invoiceSifStep.description": "Review the fiscal data the invoice will be created with. It is applied when the invoice is confirmed and cannot be changed afterwards.",
     "invoiceSifStep.rectificationRequired": "Choose a rectification code for every fiscal system to continue.",
