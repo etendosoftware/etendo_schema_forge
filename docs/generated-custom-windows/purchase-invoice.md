@@ -1872,6 +1872,26 @@ carried `onSave`/`isDirty` was removed; the form kebab entry's host does not rec
 kebab entry is disabled while the header is dirty instead (see "Unsaved header edits block the form
 send" in the ETP-5700 section).
 
+**Classic fiscal messages reworded for GO (ETP-6158):** the SII, AEAT 349 and (on a Bizkaia/Batuz
+organisation) TicketBAI messages this window can raise whose Classic text names Classic-only UI
+reach the user reworded with GO's labels, in the UI language, with their AD_MESSAGE key in
+`messageKeys` (REST: the `error` object; MCP: the root of the error result). Done server-side at
+NEO's exit by `ClassicMessageRemap` (`com.etendoerp.go` `docs/neo-headless.md` §4.17: full catalog,
+matching rules, how to add an entry); the Classic `AD_MESSAGE` rows are unchanged. Keys a user can
+meet here: SII `AEATSII_EmptyCertificatePath`, `AEATSII_InvoiceManualSending`,
+`AEATSII_SII_ACCRUAL_DATE_EMPTY`, and the literals `siiMissingInvoiceType` ("Tipo factura", SIF tab)
+and `siiMissingDocumentNo` (below); AEAT 349 `AEAT349_CINVREV_CHECK` (Rectificaciones tab); on
+Batuz, `TBAI_ConfigNotFound` (`PurchaseInvoiceBatuzRegister`) and `TBAI_CertificateNotValid`.
+VERI\*FACTU never applies to purchases, and the TicketBAI recipient checks (`TBAI_EmptyNifCode`,
+`TBAI_EmptyPostalCode`, `TBAI_EmptyDir`) are sales-only (`ProcessInvoiceTbaiHook` checks only
+sales invoices) — see `sales-invoice.md`.
+
+> **Superseded in part by ETP-6158:** the "Nº documento" sentence below is now the literal entry
+> `siiMissingDocumentNo` of that catalog; `remapDriftedFieldLabels` only delegates to it. Only the
+> matched sentence is replaced, not the whole `message`, and the language is captured for every
+> request right after authentication (`NeoLanguage.captureRequestCode()`), not only in
+> `SiiSendHandler`.
+
 **Vendor-reference validation message fully replaced with a bilingual GO sentence (ETP-5745, 5th
 fix) — this is the authoritative note, verified live against this window.** Classic's purchase-only
 pre-send check (`SIIUtils.invoicePreviousValidations`, `org.openbravo.module.sii`, untouched) names

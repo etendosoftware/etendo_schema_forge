@@ -1992,6 +1992,32 @@ ETP-5700 section.
 Both `sifSending.js` and `SiiSendHandler.java` are shared between sales-invoice and
 purchase-invoice — see `purchase-invoice.md` for this window's mirror of the same fix.
 
+**Classic fiscal messages reworded for GO (ETP-6158):** the VERI\*FACTU, TicketBAI, SII and
+AEAT 349 messages this window can raise on save, Confirmar or a SIF send whose Classic text names
+Classic-only UI (e.g. "solapa Facturas Rectificativas", the "Añadir Certificado Digital" process,
+"Verifique en la cabecera del tercero") reach the user reworded with GO's own labels ("pestaña
+Rectificaciones", "pestaña SIF", Configuración fiscal → Certificado digital, Contactos → NIF/CIF,
+pestaña Dirección), in the UI language, and keep their AD_MESSAGE key in `messageKeys` (REST: the
+`error` object; MCP: the root of the error result). Only messages a GO user can trigger are
+reworded. Done server-side at NEO's exit (`ClassicMessageRemap`, `com.etendoerp.go`
+`docs/neo-headless.md` §4.17, which holds the full catalog and how to add an entry), so REST, batch
+and MCP agree; the Classic `AD_MESSAGE` rows themselves are unchanged. The keys a user can meet in
+this window:
+
+| System | Keys |
+|---|---|
+| VERI\*FACTU | `ETVFAC_invoice_type_rectifying`, `ETVFAC_reversed_invoice` (Tipo de Factura in the SIF tab vs the Rectificaciones tab), `ETVFAC_Missing_DocType_Config`, `ETVFAC_error_code_idtype` (Clave NIF País Residencia of the contact) |
+| TicketBAI | `TBAI_ConfigNotFound`, `TBAI_CertificateNotValid`, `TBAI_NullCertificate`, `TBAI_SetKey`; on Confirmar or Anular (`ProcessInvoiceTbaiHook`, sales only), the recipient checks `TBAI_EmptyNifCode`, `TBAI_EmptyPostalCode`, `TBAI_EmptyDir` (a contact not marked as Factura Simplificada needs NIF/CIF, and its invoice Dirección needs a postal code and a Primera línea — fixed in Contactos, pestaña Dirección) |
+| SII | `AEATSII_EmptyCertificatePath`, `AEATSII_InvoiceManualSending`, `AEATSII_SII_ACCRUAL_DATE_EMPTY` (Fecha incorporación al SII), and the literal `siiMissingInvoiceType` (below) |
+| AEAT 349 | `AEAT349_CINVREV_CHECK` (the Rectificaciones tab mixes Year/Period) |
+
+Not reworded on purpose, because GO never shows them: `ETVFAC_complete_rectifying_type`,
+`ETVFAC_null_description` and `AEATSII_RECTIFIC_2017` (reasons in §4.17).
+
+> **Superseded in part by ETP-6158:** the two SII sentences of the next paragraph are now literal
+> entries of that same catalog. Only the matched sentence is replaced, not the whole `message`,
+> and the language is captured for every request right after authentication.
+
 **Drifted classic field names in validation messages are fully replaced, bilingually (ETP-5745,
 5th fix):** classic `SIIUtils.invoicePreviousValidations` (`org.openbravo.module.sii`, untouched by
 this fix — its text is correct for Classic's own UI, and it is ALWAYS Spanish regardless of the
