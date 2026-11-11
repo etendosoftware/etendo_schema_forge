@@ -735,3 +735,39 @@ shared by both handlers):
   other value with the purchase order's own reason.
 - The handler is bound by `@NeoExtension(spec = "purchase-order", entity = "header")`; its
   `Java_Qualifier` and the `javaQualifier` in `decisions.json` were removed together.
+
+## Public API — complete action — ETP-6157
+
+`decisions.json` opts the window into the public API's `complete` action
+(`window.publicApi.actions: ["complete"]`), so the manifest (`public-api/base.v1.json`) declares
+`POST /api/v1/purchase-order/{id}/actions/complete`. It is the only action the window publishes. The gateway sends
+`{"docAction": "CO"}` to `POST /sws/neo/purchase-order/header/{id}/action/documentAction`, the same document action as
+the window's confirm button, and answers the order re-read with `document_status` `CO`.
+
+- The API key needs `public-api:process`; a key without it gets `403`.
+- The order needs a payment method, which it inherits from its contact's `purchase_payment_method` when it is created;
+  without one Etendo refuses with `422 business_rule`. A contact created through the API has none: the caller
+  looks one up and sets it first (see "Public API — payment-method lookup" below).
+- Completing an order that is already `CO` answers `200` with `meta.alreadyApplied: true` and runs nothing.
+- A `PATCH` or `DELETE` on the completed order answers `422`; no public action reopens or voids it.
+
+Evidence: `gateway/e2e/support/orders.ts` (`complete action`), shared by the sales and purchase order flows.
+Contract: `docs/public-api.md` §4.2.1.
+
+## Public API — payment-method lookup — ETP-6160
+
+`decisions.json` declares a lookup on the header's `paymentMethod`
+(`publicApi.lookup: { "context": { "IsSOTrx": "N" } }`), so the manifest publishes
+`GET /api/v1/purchase-order/lookups/payment_method`. It lists the tenant's active payment methods, the same list the app
+offers, as `{ type: "payment-method", id, attributes: { label } }`, with `filter[search]` and
+`page[number]` / `page[size]`. The gateway calls `GET /sws/neo/purchase-order/header/selectors/paymentMethod` with
+`IsSOTrx=N` fixed; a caller's own parameters are refused with `400`. The context is forwarded to the field's
+selector; whether it narrows the list depends on that field's validation rule, as in the app. Integrators must not
+rely on the list being filtered by sales or purchase.
+
+An integrator with no id known beforehand completes an order this way: `GET /api/v1/contacts/lookups/purchase_payment_method`,
+`PATCH` the contact's `purchase_payment_method` (with `If-Match`), create the order (it inherits the value), then
+`POST /api/v1/purchase-order/{id}/actions/complete`. Setting `payment_method` on the order directly, with an id from this
+window's lookup, works too.
+
+Evidence: `gateway/e2e/support/orders.ts` (`complete action`). Contract: `docs/public-api.md` §4.2.2.

@@ -51,6 +51,28 @@ type PublicApiEntity = PublicApiSchema['entities'][string] & {
   processes?: Array<{ action?: string; method?: string }>;
 };
 
+/** A lookup declared on a manifest field (see the controller's lookup route). */
+type FieldLookup = { selector?: string; type?: string };
+
+/** Fields of a top-level resource that publish a lookup, as [publicName, lookup]. */
+function lookupsOf(entity: PublicApiEntity): Array<[string, Required<FieldLookup>]> {
+  if (entity.parent) return [];
+  return (Object.entries(entity.fields) as Array<[string, { lookup?: FieldLookup }]>)
+    .filter(([, field]) => typeof field.lookup?.selector === 'string' && typeof field.lookup.type === 'string')
+    .map(([name, field]) => [name, field.lookup as Required<FieldLookup>]);
+}
+
+const lookupPath = (entityName: string, fieldName: string) => `/api/v1/${entityName}/lookups/${fieldName}`;
+
+/** Query parameters of a lookup: pagination and the search text. */
+function lookupQueryParameters(): OpenApiParameter[] {
+  return [
+    { name: 'filter[search]', in: 'query', required: false, description: 'Only values whose label contains this text (case-insensitive).', schema: { type: 'string' } },
+    { name: 'page[number]', in: 'query', required: false, description: 'Page to read, starting at 1.', schema: { type: 'integer', minimum: 1, default: 1 } },
+    { name: 'page[size]', in: 'query', required: false, description: `Values per page (maximum ${MAX_PAGE_SIZE}).`, schema: { type: 'integer', minimum: 1, maximum: MAX_PAGE_SIZE, default: DEFAULT_PAGE_SIZE } },
+  ];
+}
+
 // Success and error documents are application/vnd.api+json; application/json is
 // listed too because the gateway accepts it on requests and for Accept.
 const JSON_API_MEDIA_TYPE = 'application/vnd.api+json';
@@ -296,6 +318,11 @@ export function buildPerEntityOpenApiPaths(schema: PublicApiSchema): Record<stri
       if (fieldName === 'id') continue;
       properties[fieldName] = (field as typeof field & { dataType?: FieldSchema }).dataType ?? { type: 'string' };
     }
+    // A field with a lookup says where its valid ids are listed.
+    for (const [fieldName] of lookupsOf(entity)) {
+      if (!properties[fieldName]) continue;
+      properties[fieldName] = { ...properties[fieldName], description: `Id of a valid value; list them with GET ${lookupPath(entityName, fieldName)}.` };
+    }
     const allowed = new Set(entity.operations.map((operation) => operation.toUpperCase()));
     const can = (operation: string) => allowed.has(operation) || (operation === 'GET' && allowed.has('LIST'));
     const collection: OpenApiPathItem = {};
@@ -395,6 +422,39 @@ export function buildPerEntityOpenApiPaths(schema: PublicApiSchema): Record<stri
           },
         };
       }
+    }
+    // Lookups: the valid values of a reference field, top-level resources only.
+    for (const [fieldName, lookup] of lookupsOf(entity)) {
+      paths[lookupPath(entityName, fieldName)] = {
+        get: {
+          operationId: `lookup_${entityName.replace(/-/g, '_')}_${fieldName}`,
+          summary: `List the valid values of ${fieldName} (${title})`,
+          tags: [tag],
+          description: `Lists the values ${fieldName} accepts (id and label), the same ones the application offers in its selector. Send the id as ${fieldName}. Requires the public-api:read scope. Only filter[search], page[number] and page[size] are accepted; any other query parameter answers 400. A field without a lookup answers 404 (code unknown_lookup). Any fixed context the lookup declares is forwarded to the field's selector; whether it narrows the list depends on that field's validation rule, as in the app, so do not rely on the list being filtered by sales or purchase.`,
+          parameters: lookupQueryParameters(),
+          responses: {
+            ...response(`Valid values of ${fieldName}`, {
+              type: 'object',
+              properties: {
+                data: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      type: { type: 'string', enum: [lookup.type], description: `Value type: ${lookup.type}.` },
+                      id: { type: 'string' },
+                      attributes: { type: 'object', properties: { label: { type: 'string', nullable: true } } },
+                    },
+                  },
+                } as any,
+                ...LIST_META_LINKS,
+              },
+            }),
+            ...errorResponsesFor('get'),
+          },
+          security: [{ bearerAuth: [] }],
+        },
+      };
     }
     if (Object.keys(collection).length) paths[basePath] = collection;
     if (Object.keys(item).length) paths[itemPath] = item;

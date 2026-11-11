@@ -2140,5 +2140,15 @@
     ],
     "author": "pipeline",
     "date": "2026-10-22"
+  },
+  {
+    "from": "0.56.0",
+    "to": "0.57.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"paymentMethod\" property \"publicApi\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-11-06"
   }
 ]
