@@ -1824,6 +1824,13 @@ export function useEntity(entity, childEntity, {
         // header totals with the old lines (subtotal 0 next to the new grand total, ~1 s). The
         // lines are therefore read IN PARALLEL with the header and committed in the same tick.
         // `null` = the lines read failed: they are cleared, as a non-silent fetchChildren does.
+        // Known window: while this forced lines GET is in flight, a NON-forced reader of the same
+        // lines key (fetchChildren without force, a plain fetchById/handleSelect) is handed this
+        // same in-flight request by the cache's dedup, so after a mutation it can still show the
+        // pre-mutation lines; evicting the entry below cannot help once the promise is shared.
+        // Starting the lines read with the header widened that window by about one header round
+        // trip. The proper fix belongs in schema_forge_core `queryCache.fetchQuery` (do not hand a
+        // non-forced reader an in-flight request started before an invalidation).
         const linesRead = force && childEntity
             ? queryChildren(id, { force: true }).catch(() => null)
             : undefined;
