@@ -106,6 +106,20 @@ export function resultOfFinishedSync(state, startedAt) {
   return null;
 }
 
+/**
+ * Adds a caller to a sync already running for its account: no request is sent, its `waiter` (if
+ * any) runs when that sync finishes, the outcome toast is now owed to this tab, and an info toast
+ * says the sync was already under way.
+ *
+ * @returns {{status: 'IN_PROGRESS'}}
+ */
+function joinRunningSync(running, waiter, ui) {
+  if (waiter) running.waiters.push(waiter);
+  running.requested = true;
+  notifyBankSyncResult({ status: 'IN_PROGRESS' }, ui);
+  return { status: 'IN_PROGRESS' };
+}
+
 function withId(list, id) {
   return list.includes(id) ? list : [...list, id];
 }
@@ -178,6 +192,33 @@ export function useBankSyncController() {
   }, []);
 
   /**
+   * The sync request itself failed. The 45 s client timeout does not stop the bridge: the sync
+   * keeps running server side, so the account stays "in progress" and the outcome is learnt from
+   * the status endpoint. Any other failure ends the sync with an error toast and no callbacks.
+   */
+  const handleSyncRequestFailure = useCallback((accountId, entry, err) => {
+    if (err?.message === BANK_CONNECTION_TIMEOUT && canPoll()) {
+      entry.timedOut = true;
+      startPolling(accountId);
+      return;
+    }
+    finish(accountId, null, { runCallbacks: false, error: err });
+  }, [finish, startPolling]);
+
+  /**
+   * The bridge answered IN_PROGRESS (another user, tab or the scheduled process holds the lock):
+   * say so, then follow the running sync — or let go of it when its status cannot be polled.
+   */
+  const followSyncAlreadyInProgress = useCallback((accountId, res) => {
+    notifyBankSyncResult(res, depsRef.current.ui);
+    if (canPoll()) {
+      startPolling(accountId);
+    } else {
+      drop(accountId);
+    }
+  }, [drop, startPolling]);
+
+  /**
    * Starts a sync of `accountId`, unless one is already running for it — in which case no request
    * is sent: the caller's `onDone` joins the running one and an info toast says so.
    *
@@ -196,12 +237,7 @@ export function useBankSyncController() {
     if (!accountId) return null;
     const waiter = onDone ? { fn: onDone, isAlive: isAlive ?? (() => true) } : null;
     const running = entriesRef.current.get(accountId);
-    if (running) {
-      if (waiter) running.waiters.push(waiter);
-      running.requested = true;
-      notifyBankSyncResult({ status: 'IN_PROGRESS' }, depsRef.current.ui);
-      return { status: 'IN_PROGRESS' };
-    }
+    if (running) return joinRunningSync(running, waiter, depsRef.current.ui);
     const entry = {
       requested: true, startedAt: Date.now(), failures: 0, timedOut: false,
       waiters: waiter ? [waiter] : [],
@@ -221,29 +257,17 @@ export function useBankSyncController() {
     try {
       res = await depsRef.current.sync(accountId);
     } catch (err) {
-      // The 45 s client timeout does not stop the bridge: the sync keeps running server side, so
-      // keep the account "in progress" and learn the outcome from the status endpoint.
-      if (err?.message === BANK_CONNECTION_TIMEOUT && canPoll()) {
-        entry.timedOut = true;
-        startPolling(accountId);
-        return null;
-      }
-      finish(accountId, null, { runCallbacks: false, error: err });
+      handleSyncRequestFailure(accountId, entry, err);
       return null;
     }
 
     if (res?.status === 'IN_PROGRESS') {
-      notifyBankSyncResult(res, depsRef.current.ui);
-      if (canPoll()) {
-        startPolling(accountId);
-      } else {
-        drop(accountId);
-      }
+      followSyncAlreadyInProgress(accountId, res);
       return res;
     }
     finish(accountId, res);
     return res;
-  }, [begin, drop, finish, startPolling]);
+  }, [begin, drop, finish, handleSyncRequestFailure, followSyncAlreadyInProgress]);
 
   // ── Polling ────────────────────────────────────────────────────────────────────────────────
   const pollKey = pollIds.join(',');

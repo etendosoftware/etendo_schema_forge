@@ -10,15 +10,22 @@ const NAME_SLOT = '\u0000name\u0000';
 /**
  * The translated sentence with `name` emphasized. Splitting on a sentinel keeps each locale's word
  * order; if the sentinel is missing (a dictionary without the key echoes it back), the text is
- * shown as is.
+ * shown as is. The name is emphasized where it first appears; every locale places {name} once,
+ * and any further occurrence is rendered as plain text.
  */
 function sentenceWithName(ui, key, name, testId) {
-  const parts = ui(key, { name: NAME_SLOT }).split(NAME_SLOT);
-  if (parts.length < 2) return ui(key, { name });
-  return parts.flatMap((part, i) => (i === 0 ? [part] : [
-    <strong key={`n${i}`} className="font-semibold" data-testid={`${testId}-name`}>{name}</strong>,
-    part,
-  ]));
+  const sentence = ui(key, { name: NAME_SLOT });
+  const slotAt = sentence.indexOf(NAME_SLOT);
+  if (slotAt < 0) return ui(key, { name });
+  const before = sentence.slice(0, slotAt);
+  const after = sentence.slice(slotAt + NAME_SLOT.length).split(NAME_SLOT).join(name);
+  return (
+    <>
+      {before}
+      <strong className="font-semibold" data-testid={`${testId}-name`}>{name}</strong>
+      {after}
+    </>
+  );
 }
 
 /** The banner's icon: the "traer extractos" glyph, bobbing. */
