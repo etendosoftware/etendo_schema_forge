@@ -16,7 +16,7 @@ import {
   fetchOrderLines,
   submitOrderImport as submitWith,
   discountOutcome,
-  buildOrderInvoiceLineBody,
+  importedLineNote,
   MAX_LISTED_ORDERS,
   OrderImportLoadError,
   describeLoadFailure,
@@ -58,8 +58,9 @@ describe('invoice order import — one popup, two directions', () => {
   }
 
   // Both directions list and read pending through the invoice's actions (ETP-5828 for sales,
-  // ETP-6099 for purchases: availableOrders for the orders, ONE availableOrderLines per order);
-  // `importVia` (MCP-2) only switches the import.
+  // ETP-6099 for purchases: availableOrders for the orders, ONE availableOrderLines per order), and
+  // since QA MCP-2 with the SAME rule: purchases asked `pendingBasis: 'classic'` (no draft
+  // deduction), so their popup offered lines another draft invoice already held.
   for (const direction of ['sales', 'purchase']) {
     const config = INVOICE_ORDER_IMPORT[direction];
     const invoice = config.invoiceSpec;
@@ -84,34 +85,29 @@ describe('invoice order import — one popup, two directions', () => {
       assert.equal(lines[0]._maxQty, 1);
       // Both directions ask `detail` on the list: the creationDate purchases sort by, and a
       // pendingLines that leaves out the lines already on this invoice (so an order with nothing
-      // selectable is hidden at open, as before the lines loaded lazily). Only purchases ask the
-      // pre-ETP-6099 pending rule (`pendingBasis: 'classic'`, no draft deduction).
-      assert.deepEqual(bodies.find(([u]) => u.endsWith('/availableOrders'))[1], direction === 'purchase'
-        ? { limit: MAX_LISTED_ORDERS, includeCovered: true, detail: true, pendingBasis: 'classic' }
-        : { limit: MAX_LISTED_ORDERS, includeCovered: true, detail: true });
-      // Only the client import builds its line body from the row, so only it asks `detail` on the
-      // lines; the sales lines body stays as it was.
-      const linesBody = bodies.find(([u]) => u.endsWith('/availableOrderLines'))[1];
-      assert.deepEqual(linesBody, direction === 'purchase'
-        ? { orderId: 'o1', includeCovered: true, detail: true, pendingBasis: 'classic' }
-        : { orderId: 'o1', includeCovered: true });
+      // selectable is hidden at open, as before the lines loaded lazily). No `pendingBasis`: the
+      // server rule, drafts deducted, as the MCP gets it.
+      assert.deepEqual(bodies.find(([u]) => u.endsWith('/availableOrders'))[1],
+        { limit: MAX_LISTED_ORDERS, includeCovered: true, detail: true });
+      assert.deepEqual(bodies.find(([u]) => u.endsWith('/availableOrderLines'))[1],
+        { orderId: 'o1', includeCovered: true });
+    });
+
+    it(`${direction}: imports through the ${invoice} importOrderLines action, in ONE call`, async () => {
+      const calls = [];
+      const stub = async (url, opts) => { calls.push([url, opts]); return mockRes(true, { importedCount: 1 }); };
+      const result = await submitWith({
+        apiFetch: stub, config, base: '/b', invoiceId: 'inv1', selection: {},
+        lines: [{ line: { id: 'ol1' }, qty: 1, docId: 'o1' }],
+        serverCarry: () => ({ carryGlobalDiscount: false, afterImportResult: { carried: false } }),
+        ui: k => k,
+      });
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0][0], `/b/${invoice}/header/inv1/action/importOrderLines`);
+      assert.equal(calls[0][1].method, 'POST');
+      assert.equal(result.ok, true);
     });
   }
-
-  it('sales: imports through the sales-invoice importOrderLines action', async () => {
-    const calls = [];
-    const stub = async (url, opts) => { calls.push([url, opts]); return mockRes(true, { importedCount: 1 }); };
-    const result = await submitWith({
-      apiFetch: stub, config: SALES, base: '/b', invoiceId: 'inv1', selection: {},
-      lines: [{ line: { id: 'ol1' }, qty: 1, docId: 'o1' }],
-      serverCarry: () => ({ carryGlobalDiscount: false, afterImportResult: { carried: false } }),
-      ui: k => k,
-    });
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0][0], '/b/sales-invoice/header/inv1/action/importOrderLines');
-    assert.equal(calls[0][1].method, 'POST');
-    assert.equal(result.ok, true);
-  });
 });
 
 function mockRes(ok, data) {
@@ -454,6 +450,35 @@ describe('invoice order import (sales) — submitOrderImport (importOrderLines a
   });
 });
 
+// ETP-5828 (QA UI-4) — a line taken by OTHER draft invoices names them (`inDraftInvoices` of
+// availableOrderLines) instead of a bare «ya importado»; on THIS invoice or fully invoiced it
+// still says «ya importado».
+describe('invoice order import — what a taken line says', () => {
+  const ui = (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key);
+
+  it('keeps the drafts holding a line, by document number', async () => {
+    const stub = async () => mockRes(true, [
+      { id: 'ol1', pendingQuantity: 0, inDraftInvoices: [{ id: 'i2', documentNo: 'FV1000002' }] },
+      { id: 'ol2', pendingQuantity: 3 },
+    ]);
+    const lines = await fetchOrderLines({
+      apiFetch: stub, config: SALES, base: '/b', docId: 'o1', sharedContext: { invoiceId: 'inv1' },
+    });
+    assert.deepEqual(lines.map(l => l._inDraftInvoices), [['FV1000002'], []]);
+  });
+
+  for (const [name, line, expected] of [
+    ['held by one other draft', { _inDraftInvoices: ['FV1000002'] }, 'inDraftInvoiceOne:{"documentNo":"FV1000002"}'],
+    ['held by two other drafts', { _inDraftInvoices: ['FV1', 'FV2'] }, 'inDraftInvoiceMany:{"documentNos":"FV1, FV2"}'],
+    ['on THIS invoice (also held elsewhere)', { _alreadyInCurrent: true, _inDraftInvoices: ['FV1'] }, 'alreadyImported'],
+    ['fully invoiced (no draft holds it)', { _inDraftInvoices: [] }, 'alreadyImported'],
+  ]) {
+    it(`importedLineNote: ${name}`, () => {
+      assert.equal(importedLineNote(line, ui), expected);
+    });
+  }
+});
+
 describe('invoice order import (sales) — duplicate detection via the order line FK', () => {
   afterEach(() => {
     mock.reset();
@@ -519,57 +544,6 @@ describe('invoice order import (sales) — fetchDocuments invoice global-discoun
       assert.equal(sharedContext.invoiceGlobalDiscount, expected.invoiceGlobalDiscount);
       assert.equal(sharedContext.invoiceHasLines, expected.invoiceHasLines);
       assert.equal(sharedContext.invoiceStateKnown, expected.invoiceStateKnown);
-    });
-  }
-});
-
-// Restored from the pre-unification purchase popup tests (ImportFromPurchaseOrderModal.test.js):
-// the CLIENT path (purchases, importVia 'client') still builds and POSTs each invoice line.
-describe('invoice order import (purchase, client path) — buildOrderInvoiceLineBody', () => {
-  const buildLineBody = (args) => buildOrderInvoiceLineBody(args);
-  const PURCHASE_ORDER_LINE_FK = orderLineApiKey('purchase-invoice');
-  const line = {
-    id: 'ol1',
-    product: 'p1',
-    description: 'Entrega especial',
-    unitPrice: 10,
-    listPrice: 10,
-    tax: 't1',
-    uOM: 'u1',
-  };
-
-  it('carries the order line description into the built invoice line body', () => {
-    const result = buildLineBody({ line, qty: 2, invoiceId: 'inv1', lineNo: 10 });
-    assert.equal(result.description, 'Entrega especial');
-  });
-
-  it('computes the line net amount from the unit price and the imported quantity', () => {
-    const result = buildLineBody({ line, qty: 3, invoiceId: 'inv1', lineNo: 10 });
-    assert.equal(result.invoicedQuantity, 3);
-    assert.equal(result.lineNetAmount, 30);
-  });
-
-  // ETP-5381 REGRESSION GUARD: posting the FK under a key the spec does not declare makes
-  // NeoFieldFilter drop it silently (HTTP 200, line created, C_OrderLine_ID NULL).
-  it('sends the source order line under the spec API key for C_OrderLine_ID', () => {
-    const result = buildLineBody({ line, qty: 2, invoiceId: 'inv1', lineNo: 10 });
-    assert.equal(result[PURCHASE_ORDER_LINE_FK], 'ol1');
-    assert.equal(Object.hasOwn(result, 'cOrderlineId'), false);
-  });
-
-  // ETP-5710: an order line without a list price but with a discount used to post U == L +
-  // etgoDiscount, which the server reads as "not yet discounted" and discounts a second time.
-  for (const [name, input, listPrice] of [
-    ['reconstructs the list price when the order line has none and a discount', { unitPrice: 90, listPrice: 0, discount: 10 }, 100],
-    ['keeps the order line list price when it has one', { unitPrice: 90, listPrice: 100, discount: 10 }, 100],
-    ['falls back to the unit price without a discount', { unitPrice: 10, listPrice: 0 }, 10],
-    ['falls back to the unit price with a 100 percent discount', { unitPrice: 0, listPrice: 0, discount: 100 }, 0],
-    ['rounds the reconstructed list price to 6 decimals', { unitPrice: 10, listPrice: 0, discount: 3 }, 10.309278],
-  ]) {
-    it(name, () => {
-      const result = buildLineBody({ line: { ...line, ...input }, qty: 1, invoiceId: 'inv1', lineNo: 10 });
-      assert.equal(result.listPrice, listPrice);
-      if (input.discount && input.discount < 100) assert.equal(result.etgoDiscount, input.discount);
     });
   }
 });

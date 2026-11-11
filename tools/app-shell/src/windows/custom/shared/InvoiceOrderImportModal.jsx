@@ -12,17 +12,17 @@ import {
   getOrderDisplay,
   getOrderTotal,
   isOrderCovered,
+  importedLineNote,
   submitOrderImport,
-  buildOrderInvoiceLineBody,
 } from './invoiceOrderImport.js';
 
 /**
  * «Importar desde pedido» of an invoice — ONE component for sales and purchase invoices
- * (ETP-5828). `direction` picks the specs, the labels and the import path (`INVOICE_ORDER_IMPORT`,
- * `importVia`): `'server'` imports with the `importOrderLines` action (sales), `'client'` POSTs
- * each line from the browser and PATCHes the header % afterwards (purchases, until QA decides
- * MCP-2). Both LIST through the invoice's `availableOrders` / `availableOrderLines` (ETP-6099). The look — the Figma popup, the global-discount notice, the footer
- * counting ORDERS — is the same for both.
+ * (ETP-5828). `direction` picks the specs and the labels (`INVOICE_ORDER_IMPORT`); both directions
+ * list through the invoice's `availableOrders` / `availableOrderLines` (ETP-6099) and import with
+ * ONE `importOrderLines` call (purchases too since QA MCP-2), the same actions the MCP uses. The
+ * look — the Figma popup, the global-discount notice, the footer counting the selected lines — is
+ * the same for both.
  *
  * @param {object} props  the parent's ImportLinesModal props (invoiceId, bpId, base, onClose, …)
  * @param {'sales'|'purchase'} props.direction
@@ -35,11 +35,7 @@ export default function InvoiceOrderImportModal({ direction, ...props }) {
   // base doubles it and 404s. The URLs already carry `base`.
   const apiFetch = useApiFetch('');
   const ui = useUI();
-  const viaServer = config.importVia === 'server';
-  // The client path needs the header endpoint for its browser-side PATCH (the hook's afterImport).
-  const { serverCarry, ...globalDiscountProps } = useOrderGlobalDiscountImport(
-    viaServer ? undefined : { headerEndpoint: `${config.invoiceSpec}/header` },
-  );
+  const { serverCarry, ...globalDiscountProps } = useOrderGlobalDiscountImport();
 
   // Stable per apiFetch/direction: ImportLinesModal re-reads the documents when fetchDocuments
   // changes identity.
@@ -61,6 +57,8 @@ export default function InvoiceOrderImportModal({ direction, ...props }) {
   }), [apiFetch, config]);
 
   const submitImport = (args) => submitOrderImport({ ...args, apiFetch, config, serverCarry, ui });
+  // QA UI-4 — a taken line names the draft invoice holding it instead of a bare «ya importado».
+  const describeImportedLine = (line) => importedLineNote(line, ui);
 
   return (
     <ImportLinesModal
@@ -71,8 +69,6 @@ export default function InvoiceOrderImportModal({ direction, ...props }) {
       noSearchResultsKey="noOrdersMatchYourSearch"
       noCurrencyMatchMessageKey={config.noCurrencyMatchMessageKey}
       successMessageKey={config.successMessageKey}
-      selectedDocumentsKey="importOrdersSelectedCount"
-      importButtonKey="importSelectedOrders"
       fetchDocuments={handlers.fetchDocuments}
       fetchLines={handlers.fetchLines}
       getDocDisplay={getOrderDisplay}
@@ -81,9 +77,8 @@ export default function InvoiceOrderImportModal({ direction, ...props }) {
       eagerLoadLines={false}
       isDocumentCovered={isOrderCovered}
       getDocumentTotal={getOrderTotal}
-      {...(viaServer
-        ? { submitImport }
-        : { linesEndpoint: `${config.invoiceSpec}/lines`, buildLineBody: buildOrderInvoiceLineBody })}
+      submitImport={submitImport}
+      describeImportedLine={describeImportedLine}
       {...globalDiscountProps}
       data-testid="ImportLinesModal__52f314" />
   );

@@ -5,73 +5,72 @@ import {
   normalizeGlobalDiscountPct,
   resolveOrderGlobalDiscount,
   isCarryingGlobalDiscount,
-  shouldPatchInvoiceGlobalDiscount,
 } from '../orderGlobalDiscountRule.js';
 
 const order = (docNo, pct) => ({ docNo, pct });
 
-// One row per outcome of the decision. `patchOn` / `patchOff` = expected PATCH predicate with
-// the toggle ON / OFF; `carryOn` = expected isCarryingGlobalDiscount with the toggle ON.
+// One row per outcome of the decision. `carryOn` = expected isCarryingGlobalDiscount with the
+// toggle ON.
 const CASES = [
   {
     name: 'empty selection',
     input: { selectedOrders: [], invoicePct: null, invoiceHasLines: false },
     expected: { kind: 'none' },
-    carryOn: false, patchOn: false,
+    carryOn: false,
   },
   {
     name: 'every order at 0 % and no invoice %',
     input: { selectedOrders: [order('A', 0)], invoicePct: null, invoiceHasLines: true },
     expected: { kind: 'none' },
-    carryOn: false, patchOn: false,
+    carryOn: false,
   },
   {
     name: 'orders with different % (10 % + 0 %)',
     input: { selectedOrders: [order('A', 10), order('B', 0)], invoicePct: 0, invoiceHasLines: false },
     expected: { kind: 'mixed', orders: [order('A', 10), order('B', 0)], invoicePct: 0 },
-    carryOn: false, patchOn: false,
+    carryOn: false,
   },
   {
     name: 'invoice 5 % and orders at 0 %',
     input: { selectedOrders: [order('A', 0)], invoicePct: 5, invoiceHasLines: false },
     expected: { kind: 'invoiceMismatch', pct: 0, invoicePct: 5 },
-    carryOn: false, patchOn: false,
+    carryOn: false,
   },
   {
     name: 'invoice 5 % and orders at 10 %',
     input: { selectedOrders: [order('A', 10)], invoicePct: 5, invoiceHasLines: true },
     expected: { kind: 'invoiceMismatch', pct: 10, invoicePct: 5 },
-    carryOn: false, patchOn: false,
+    carryOn: false,
   },
   {
     name: 'invoice 0 % that already has lines',
     input: { selectedOrders: [order('A', 10)], invoicePct: 0, invoiceHasLines: true },
     expected: { kind: 'invoiceHasLines', pct: 10, invoicePct: 0 },
-    carryOn: false, patchOn: false,
+    carryOn: false,
   },
   {
     name: 'invoice 0 % without lines',
     input: { selectedOrders: [order('A', 10), order('B', 10)], invoicePct: null, invoiceHasLines: false },
     expected: { kind: 'carry', pct: 10, invoicePct: 0, matchesInvoice: false },
-    carryOn: true, patchOn: true,
+    carryOn: true,
   },
   {
     name: 'invoice % equal to the orders % without lines',
     input: { selectedOrders: [order('A', 10)], invoicePct: 10, invoiceHasLines: false },
     expected: { kind: 'carry', pct: 10, invoicePct: 10, matchesInvoice: true },
-    carryOn: true, patchOn: false,
+    carryOn: true,
   },
   {
     name: 'invoice % equal to the orders % with lines',
     input: { selectedOrders: [order('A', 10)], invoicePct: 10, invoiceHasLines: true },
     expected: { kind: 'carry', pct: 10, invoicePct: 10, matchesInvoice: true },
-    carryOn: true, patchOn: false,
+    carryOn: true,
   },
   {
     name: 'string and float-noise % compare equal to the invoice %',
     input: { selectedOrders: [order('A', '10.00'), order('B', 10.000001)], invoicePct: '10', invoiceHasLines: true },
     expected: { kind: 'carry', pct: 10, invoicePct: 10, matchesInvoice: true },
-    carryOn: true, patchOn: false,
+    carryOn: true,
   },
   // Invoice header or lines could not be read: an unread % or unread lines must never be
   // overwritten / discounted, so nothing is offered and nothing is PATCHed.
@@ -79,19 +78,19 @@ const CASES = [
     name: 'invoice state unknown, read as 0 % without lines',
     input: { selectedOrders: [order('A', 10)], invoicePct: null, invoiceHasLines: false, invoiceStateKnown: false },
     expected: { kind: 'none' },
-    carryOn: false, patchOn: false,
+    carryOn: false,
   },
   {
     name: 'invoice state unknown, read as the same % as the orders',
     input: { selectedOrders: [order('A', 10)], invoicePct: 10, invoiceHasLines: false, invoiceStateKnown: false },
     expected: { kind: 'none' },
-    carryOn: false, patchOn: false,
+    carryOn: false,
   },
   {
     name: 'invoice state unknown with orders at different %',
     input: { selectedOrders: [order('A', 10), order('B', 5)], invoicePct: null, invoiceHasLines: false, invoiceStateKnown: false },
     expected: { kind: 'none' },
-    carryOn: false, patchOn: false,
+    carryOn: false,
   },
 ];
 
@@ -103,14 +102,12 @@ describe('resolveOrderGlobalDiscount', () => {
   }
 });
 
-describe('isCarryingGlobalDiscount / shouldPatchInvoiceGlobalDiscount', () => {
-  for (const { name, input, carryOn, patchOn } of CASES) {
-    it(`${name}: carrying=${carryOn}, PATCH=${patchOn} with the toggle ON, both false with it OFF`, () => {
+describe('isCarryingGlobalDiscount', () => {
+  for (const { name, input, carryOn } of CASES) {
+    it(`${name}: carrying=${carryOn} with the toggle ON, false with it OFF`, () => {
       const decision = resolveOrderGlobalDiscount(input);
       assert.equal(isCarryingGlobalDiscount(decision, true), carryOn);
-      assert.equal(shouldPatchInvoiceGlobalDiscount(decision, true), patchOn);
       assert.equal(isCarryingGlobalDiscount(decision, false), false);
-      assert.equal(shouldPatchInvoiceGlobalDiscount(decision, false), false);
     });
   }
 });

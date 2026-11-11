@@ -4,7 +4,7 @@
 // @covers tools/app-shell/src/components/contract-ui/ImportLinesModal.jsx
 //
 // The order-import popup of sales and purchase invoices rendered for real (ImportLinesModal + the
-// global-discount hook + the data module), one suite per data path (`importVia`). Moved here from
+// global-discount hook + the data module), one suite per direction. Moved here from
 // useOrderGlobalDiscountImport.vitest.jsx so the component's tests sit next to it; that file keeps
 // the hook's own unit tests.
 
@@ -33,7 +33,7 @@ vi.mock('@/components/ui/checkbox', () => ({
   ),
 }));
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import InvoiceOrderImportModal from '../InvoiceOrderImportModal.jsx';
@@ -48,19 +48,23 @@ beforeEach(() => {
 // The ONE order-import popup of sales and purchase invoices (InvoiceOrderImportModal), with the real
 // ImportLinesModal and hook: the selection the modal computes is the one the decision runs on, and
 // the import is a single server action per direction — never a line POST nor a header PATCH.
-// Server path (importVia 'server'): sales. Purchases go through the client path below until QA
-// decides the draft-pending rule (MCP-2); flipping them back adds their row here again.
+// ETP-5828 QA MCP-2: purchases too (they POSTed each line and PATCHed the header % from the
+// browser, and listed with `pendingBasis: 'classic'`, so they offered lines other drafts held).
 describe.each([
-  { direction: 'sales', invoiceSpec: 'sales-invoice', orderSpec: 'sales-order', titleKey: 'importFromSalesOrder' },
-])('InvoiceOrderImportModal ($direction, server path)', ({ direction, invoiceSpec, titleKey }) => {
+  { direction: 'sales', invoiceSpec: 'sales-invoice', titleKey: 'importFromSalesOrder', emptyKey: 'noCompletedSalesOrdersForThisCustomer' },
+  { direction: 'purchase', invoiceSpec: 'purchase-invoice', titleKey: 'importFromPurchaseOrder', emptyKey: 'noCompletedPurchaseOrdersForThisSupplier' },
+])('InvoiceOrderImportModal ($direction)', ({ direction, invoiceSpec, titleKey, emptyKey }) => {
   const ok = (data) => ({ ok: true, json: async () => ({ response: { data } }) });
 
   // ETP-5828 — the server path lists through the invoice's actions only: availableOrders for the
   // orders and ONE availableOrderLines per order (price and product included); the order GETs are
   // never read, so any of them is an unexpected request here.
-  function renderModal({ orders, importRes = ok({ importedCount: 1 }), ordersRes }) {
+  // `lines` (optional): the availableOrderLines rows of each order, by order id; by default one
+  // line of 1 × 100.
+  function renderModal({ orders, importRes = ok({ importedCount: 1 }), ordersRes, ordersError, lines = {} }) {
     mockApiFetch.mockImplementation(async (url, opts) => {
       if (url.endsWith('/action/availableOrders')) {
+        if (ordersError) throw ordersError;
         if (ordersRes) return ordersRes;
         return ok(orders.map(o => ({
           id: o.id, documentNo: o.id, businessPartner: 'bp-1', 'businessPartner$_identifier': 'BP 1',
@@ -71,9 +75,9 @@ describe.each([
       if (url.endsWith(`/${invoiceSpec}/header/inv-1`)) return ok([{ currency: 'EUR', etgoTotalDiscount: 0 }]);
       if (url.endsWith('/action/availableOrderLines')) {
         const docId = JSON.parse(opts.body).orderId;
-        return ok([{ id: `${docId}-l1`, lineNo: 10, 'product$_identifier': `Product ${docId}`, pendingQuantity: 1, unitPrice: 100 }]);
+        return ok(lines[docId] || [{ id: `${docId}-l1`, lineNo: 10, 'product$_identifier': `Product ${docId}`, pendingQuantity: 1, unitPrice: 100 }]);
       }
-      if (url.endsWith('/action/importOrderLines')) return importRes;
+      if (url === `${BASE}/${invoiceSpec}/header/inv-1/action/importOrderLines`) return importRes;
       throw new Error(`Unexpected request ${opts?.method || 'GET'} ${url}`);
     });
     const onSuccess = vi.fn();
@@ -98,9 +102,9 @@ describe.each([
     await waitFor(() => expect(screen.getAllByText(total)).toHaveLength(orders.length));
     expect(mockApiFetch.mock.calls.filter(([url]) => url.endsWith('/action/availableOrderLines'))).toHaveLength(0);
     fireEvent.click(screen.getByTestId('ImportLinesModal__selectAll'));
-    // Select-all reads the lines of the orders not opened yet and selects them.
+    // Select-all reads the lines of the orders not opened yet and selects them (one line each).
     await waitFor(() => expect(screen.getByTestId('ImportLinesModal__import'))
-      .toHaveTextContent(`importSelectedOrders:{"count":" (${orders.length})"}`));
+      .toHaveTextContent(`importSelected:{"count":" (${orders.length})"}`));
   }
 
   const importCalls = () => mockApiFetch.mock.calls.filter(([url]) => url.endsWith('/action/importOrderLines'));
@@ -111,13 +115,54 @@ describe.each([
   // availableOrders row, an order whose remaining lines are all on this invoice. It asks `detail`,
   // under which the server leaves those lines out of pendingLines (pending is quantity-based, so a
   // line partly on this invoice still has some left); such an order comes at 0 and is not shown.
-  it('lists with detail and hides at open an order with nothing selectable', async () => {
+  it('lists with detail and the server rule, and hides at open an order with nothing selectable', async () => {
     renderModal({ orders: [{ id: 'SO-A', pct: 0 }, { id: 'SO-B', pct: 0, pendingLines: 0 }] });
     expect(await screen.findByText('SO-A')).toBeInTheDocument();
     expect(screen.queryByText('SO-B')).toBeNull();
     const [, opts] = mockApiFetch.mock.calls.find(([url]) => url.endsWith('/action/availableOrders'));
-    expect(JSON.parse(opts.body)).toMatchObject({ includeCovered: true, detail: true });
+    expect(JSON.parse(opts.body)).toEqual({ limit: 1000, includeCovered: true, detail: true });
     expect(mockApiFetch.mock.calls.filter(([url]) => url.endsWith('/action/availableOrderLines'))).toHaveLength(0);
+  });
+
+  // ETP-6099 — a failed read is told (describeLoadFailure: a request with no answer shows its own
+  // message), then the empty list.
+  it('a failed order read shows the load-error toast and the empty list', async () => {
+    renderModal({ orders: [], ordersError: new Error('Sin conexión') });
+    expect(await screen.findByText(emptyKey)).toBeInTheDocument();
+    expect(toast.error).toHaveBeenCalledWith('Sin conexión');
+  });
+
+  // QA UI-3 — ticking an order whose lines are not loaded yet opens it, reads its lines AND
+  // selects them: one click, not one to unfold and another to select.
+  it('ticking an order not opened yet loads and selects its lines in the same click', async () => {
+    const twoLines = [
+      { id: 'A-1', lineNo: 10, 'product$_identifier': 'Agua', pendingQuantity: 1, unitPrice: 100 },
+      { id: 'A-2', lineNo: 20, 'product$_identifier': 'Pan', pendingQuantity: 1, unitPrice: 100 },
+    ];
+    renderModal({ orders: [{ id: 'SO-A', pct: 0 }], lines: { 'SO-A': twoLines } });
+    const docRow = (await screen.findByText('SO-A')).closest('[data-testid="ImportLinesModal__docRow"]');
+    fireEvent.click(within(docRow).getByTestId('checkbox'));
+
+    await waitFor(() => expect(screen.getAllByTestId('ImportLinesModal__lineRow')
+      .map(r => r.getAttribute('data-selected'))).toEqual(['true', 'true']));
+    // QA UI-6 — the footer counts the selected LINES, in the plural: «2 líneas seleccionadas».
+    const hint = screen.getByTestId('ImportLinesModal__selectionHint');
+    expect(hint).toHaveTextContent('importLinesSelectedCountMany:{"count":2}');
+    expect(hint).toHaveTextContent('importLinesSelectedSuffixMany');
+    expect(screen.getByTestId('ImportLinesModal__import')).toHaveTextContent('importSelected:{"count":" (2)"}');
+  });
+
+  // QA UI-4 — a line other drafts took names the draft; one on THIS invoice keeps «ya importado».
+  it('a line held by another draft invoice names it instead of «ya importado»', async () => {
+    const taken = [
+      { id: 'A-1', lineNo: 10, 'product$_identifier': 'Agua', pendingQuantity: 0, unitPrice: 100,
+        inDraftInvoices: [{ id: 'inv-2', documentNo: 'FV1000002' }] },
+      { id: 'A-2', lineNo: 20, 'product$_identifier': 'Pan', pendingQuantity: 1, unitPrice: 100 },
+    ];
+    renderModal({ orders: [{ id: 'SO-A', pct: 0 }], lines: { 'SO-A': taken } });
+    fireEvent.click(await screen.findByText('SO-A'));
+    expect(await screen.findByTestId('ImportLinesModal__importedNote'))
+      .toHaveTextContent('inDraftInvoiceOne:{"documentNo":"FV1000002"}');
   });
 
   it('carries a single order %: tag, undiscounted row total, toggle in the notice area, ONE import call and the carried toast', async () => {
@@ -134,7 +179,9 @@ describe.each([
     expect(screen.queryByText(formatCurrency(undefined, 90))).toBeNull();
     expect(screen.getByTestId('ImportLinesModal__selectionPanelSlot'))
       .toContainElement(screen.getByTestId('ImportGlobalDiscount__toggle'));
-    expect(screen.getByTestId('ImportLinesModal__selectionHint')).toHaveTextContent('importOrdersSelectedCount:{"count":1}');
+    // QA UI-6 — one selected line: «1 línea seleccionada».
+    expect(screen.getByTestId('ImportLinesModal__selectionHint')).toHaveTextContent('importLinesSelectedCountOne:{"count":1}');
+    expect(screen.getByTestId('ImportLinesModal__selectionHint')).toHaveTextContent('importLinesSelectedSuffixOne');
 
     fireEvent.click(screen.getByTestId('ImportLinesModal__import'));
     await waitFor(() => expect(onSuccess).toHaveBeenCalled());
@@ -167,13 +214,13 @@ describe.each([
     expect(toast.success).toHaveBeenCalledWith('importGlobalDiscountNotCarriedOne:{"count":1}');
   });
 
-  it('orders at 10 % + 0 % show the mixed warning, count two orders and send carryGlobalDiscount false', async () => {
+  it('orders at 10 % + 0 % show the mixed warning, count two lines and send carryGlobalDiscount false', async () => {
     const orders = [{ id: 'SO-A', pct: 10 }, { id: 'SO-B', pct: 0 }];
     const { onSuccess } = renderModal({ orders, importRes: ok({ importedCount: 2 }) });
     await selectAllOrders(orders);
 
     expect(screen.getByTestId('ImportGlobalDiscount__warning')).toHaveTextContent('importGlobalDiscountMixedTitle');
-    expect(screen.getByTestId('ImportLinesModal__import')).toHaveTextContent('importSelectedOrders:{"count":" (2)"}');
+    expect(screen.getByTestId('ImportLinesModal__import')).toHaveTextContent('importSelected:{"count":" (2)"}');
 
     fireEvent.click(screen.getByTestId('ImportLinesModal__import'));
     await waitFor(() => expect(onSuccess).toHaveBeenCalled());
@@ -197,120 +244,5 @@ describe.each([
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('failedToImportLines'));
     expect(onSuccess).not.toHaveBeenCalled();
     expect(writeCalls()).toEqual([]);
-  });
-});
-
-// Client path (importVia 'client'): purchases while MCP-2 is open. Since ETP-6099 they LIST like
-// sales (availableOrders + one availableOrderLines per order), asking the pre-ETP-6099 pending rule
-// (`pendingBasis: 'classic'`: ordered − invoiced, no draft deduction); the import is
-// still one line POST each, then the header % PATCHed from the browser. Same popup, same notice
-// and toasts as sales.
-describe('InvoiceOrderImportModal (purchase, client path)', () => {
-  const ok = (data) => ({ ok: true, json: async () => ({ response: { data } }) });
-
-  function renderModal({ orders, patchOk = true, ordersError }) {
-    mockApiFetch.mockImplementation(async (url, opts) => {
-      if (url.endsWith('/purchase-invoice/header/inv-1/action/availableOrders')) {
-        if (ordersError) throw ordersError;
-        return ok(orders.map(o => ({
-          id: o.id, documentNo: o.id, businessPartner: 'bp-1', 'businessPartner$_identifier': 'BP 1',
-          currency: 'EUR', globalDiscount: o.pct, date: '2026-10-30', pendingLines: 1, amount: 100,
-        })));
-      }
-      if (url.includes('/purchase-invoice/lines?parentId=')) return ok([]);
-      if (url.endsWith('/purchase-invoice/header/inv-1')) {
-        if (opts?.method === 'PATCH') return { ok: patchOk };
-        return ok([{ currency: 'EUR', etgoTotalDiscount: 0, updated: 'X' }]);
-      }
-      if (url.endsWith('/purchase-invoice/header/inv-1/action/availableOrderLines')) {
-        const docId = JSON.parse(opts.body).orderId;
-        // The row carries every field the client line body reads (no order-lines GET).
-        return ok([{ id: `${docId}-l1`, lineNo: 10, 'product$_identifier': `Product ${docId}`, product: 'p1',
-          pendingQuantity: 2, orderedQuantity: 3, invoicedQuantity: 1, unitPrice: 50, listPrice: 50,
-          grossUnitPrice: 0, discount: 0, description: null, tax: 't1', uOM: 'u1' }]);
-      }
-      if (url === '/purchase-invoice/lines' && opts?.method === 'POST') {
-        return { ok: true, json: async () => ({ response: { data: [{ id: 'new' }] } }) };
-      }
-      throw new Error(`Unexpected request ${opts?.method || 'GET'} ${url}`);
-    });
-    const onSuccess = vi.fn();
-    render(
-      <InvoiceOrderImportModal direction="purchase" invoiceId="inv-1" bpId="bp-1" base={BASE}
-        headers={{}} onClose={vi.fn()} onSuccess={onSuccess} />,
-    );
-    return { onSuccess };
-  }
-
-  async function selectAllAndImport(orders) {
-    const total = formatCurrency(undefined, 100); // the order's amount: 50 × pending 2
-    await waitFor(() => expect(screen.getAllByText(total)).toHaveLength(orders.length));
-    fireEvent.click(screen.getByTestId('ImportLinesModal__selectAll'));
-    await waitFor(() => expect(screen.getByTestId('ImportLinesModal__import'))
-      .toHaveTextContent(`importSelectedOrders:{"count":" (${orders.length})"}`));
-  }
-
-  const calls = (pred) => mockApiFetch.mock.calls.filter(pred);
-  const linePosts = () => calls(([url, opts]) => url === '/purchase-invoice/lines' && opts?.method === 'POST');
-  const patches = () => calls(([, opts]) => opts?.method === 'PATCH');
-  const importActionCalls = () => calls(([url]) => url.includes('/action/importOrderLines'));
-
-  // ETP-6099 — purchases list through the actions now, so a failed read is told like on sales
-  // (describeLoadFailure: a request with no answer shows its own message), then the empty list.
-  it('a failed purchase order read shows the load-error toast and the empty list', async () => {
-    renderModal({ orders: [], ordersError: new Error('Sin conexión') });
-    expect(await screen.findByText('noCompletedPurchaseOrdersForThisSupplier')).toBeInTheDocument();
-    expect(toast.error).toHaveBeenCalledWith('Sin conexión');
-  });
-
-  it('carries the order %: one line POST per line, then the header PATCH, and the carried toast', async () => {
-    const orders = [{ id: 'PO-A', pct: 10 }];
-    const { onSuccess } = renderModal({ orders });
-    await selectAllAndImport(orders);
-    expect(screen.getByTestId('ImportGlobalDiscount__toggle')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId('ImportLinesModal__import'));
-    await waitFor(() => expect(onSuccess).toHaveBeenCalled());
-
-    expect(importActionCalls()).toEqual([]);
-    // Both reads ask the classic pending rule (product decision: purchases list as before).
-    const readBody = (action) => JSON.parse(calls(([url]) => url.endsWith(`/action/${action}`))[0][1].body);
-    expect(readBody('availableOrders')).toMatchObject({ pendingBasis: 'classic' });
-    expect(readBody('availableOrderLines')).toMatchObject({ orderId: 'PO-A', pendingBasis: 'classic' });
-    expect(linePosts()).toHaveLength(1);
-    expect(JSON.parse(linePosts()[0][1].body)).toMatchObject({
-      parentId: 'inv-1', product: 'p1', invoicedQuantity: 2, unitPrice: 50, salesOrderLine: 'PO-A-l1',
-    });
-    expect(patches()).toEqual([[`${BASE}/purchase-invoice/header/inv-1`, {
-      method: 'PATCH', body: JSON.stringify({ etgoTotalDiscount: 10, updated: 'X' }),
-    }]]);
-    expect(toast.success).toHaveBeenCalledWith('importGlobalDiscountImportedOne:{"count":1,"pct":"10"}');
-  });
-
-  it('with the toggle OFF it POSTs the lines, never PATCHes, and says «sin descuento global»', async () => {
-    const orders = [{ id: 'PO-A', pct: 10 }];
-    const { onSuccess } = renderModal({ orders });
-    await selectAllAndImport(orders);
-    fireEvent.click(screen.getByTestId('ImportGlobalDiscount__switch'));
-
-    fireEvent.click(screen.getByTestId('ImportLinesModal__import'));
-    await waitFor(() => expect(onSuccess).toHaveBeenCalled());
-
-    expect(linePosts()).toHaveLength(1);
-    expect(patches()).toEqual([]);
-    expect(toast.success).toHaveBeenCalledWith('importGlobalDiscountNotCarriedOne:{"count":1}');
-  });
-
-  it('a failed header PATCH keeps the lines and warns that the % was not applied', async () => {
-    const orders = [{ id: 'PO-A', pct: 10 }];
-    const { onSuccess } = renderModal({ orders, patchOk: false });
-    await selectAllAndImport(orders);
-
-    fireEvent.click(screen.getByTestId('ImportLinesModal__import'));
-    await waitFor(() => expect(onSuccess).toHaveBeenCalled());
-
-    expect(patches()).toHaveLength(1);
-    expect(toast.warning).toHaveBeenCalledWith('importGlobalDiscountPatchFailed:{"pct":"10"}');
-    expect(toast.success).not.toHaveBeenCalled();
   });
 });

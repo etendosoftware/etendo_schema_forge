@@ -3266,14 +3266,18 @@ with the shared round `RowExpandToggle` (ETP-5593, sized 24 × 24 through `class
 adornment slot and the amount; an expanded document shows a bordered lines table with a master
 checkbox and a −/+ quantity stepper (`NumberStepperInput`, bounded by the line's available
 quantity, typed values still validated on blur); the footer has the selection hint and the
-«Cancelar» / primary pills.
+«Cancelar» / primary pills. The hint and the primary button count the selected LINES, with
+singular/plural wording («**1 línea** seleccionada», «**2 líneas** seleccionadas»,
+«Importar seleccionadas (2)»; keys `importLinesSelectedCountOne/Many`,
+`importLinesSelectedSuffixOne/Many`) in every popup — ETP-5828 QA UI-6 replaced the
+`selectedDocumentsKey` prop (which counted documents, «1 pedido(s)») and the old «N Seleccionados».
 
 **Optional props added by ETP-5828** (all default to the previous behaviour):
 
 | Prop | Effect |
 |---|---|
 | `renderSelectionPanel(selection)` | Renders the fixed-height notice area under the list (`ImportLinesModal__selectionPanelSlot`). Return an `<ImportNotice tone="neutral"\|"warning" title body control? />` (exported from the same file); `null` shows the neutral «Información de importación» notice. Without the prop there is no notice area. |
-| `selectedDocumentsKey` | i18n key such as `importOrdersSelectedCount` («{count} pedido(s)»): the footer reads «**N pedido(s)** seleccionado(s)» and the import button counts DOCUMENTS with a selected line instead of lines. |
+| `describeImportedLine(line)` | The note under a greyed-out line's product. Return a string (e.g. the order import's «en factura borrador FV1000002», from the line's `inDraftInvoices`, ETP-5828 QA UI-4) or `null` to keep the default («ya importado», or «en albarán: …» from `_inDraftShipments`). Rendered as `ImportLinesModal__importedNote`. |
 | `importButtonKey` | i18n key of the primary button (default `importSelected`; `{count}` receives `" (N)"` or `""`). |
 
 **The notice box (Figma «Alert»).** The slot is 92 px: a 12 px gap and an 80 px alert (padding 16,
@@ -3289,7 +3293,9 @@ Inter 14 (~95 characters).
 **Lazy lines and server-listed documents (ETP-6099).** A popup that lists its documents through a
 server read action (`availableOrders`, `availableShipments`, `availableReceipts`, …) passes
 `eagerLoadLines={false}` so a document's lines are read only when it is expanded or selected, not
-one lines call per document at opening. Two optional props make that work without the lines:
+one lines call per document at opening. Ticking a document whose lines are not loaded yet opens it,
+reads its lines AND selects them in that same click — also when the chevron already started the read
+(ETP-5828 QA UI-3; before, the first tick only unfolded it). Two optional props make that work without the lines:
 
 | Prop | Effect |
 |---|---|
