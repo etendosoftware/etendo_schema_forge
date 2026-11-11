@@ -17,9 +17,14 @@ export function boundedAmountMessage(ui, errorKey, max, currency) {
 /**
  * ETP-6148 — an always-visible amount input with a small reset (↻) button inside, the Holded
  * «A remesar» cell. The reset puts back `resetValue` (for a remittance line, the due's
- * outstanding). The typed amount is validated against `max` with {@link validateBoundedAmount}:
- * not empty, not 0, the sign of `max`, and no larger than it in magnitude. An invalid amount stays
- * on screen with a red border; its message is the input's tooltip and accessible description.
+ * outstanding). The ↻ is rendered whenever there is a `resetValue` and the input is enabled;
+ * while the value already equals it, the button is disabled (muted, `disabled` +
+ * `aria-disabled`, a click does nothing), so the amount sits in the same place on every row.
+ * Without a `resetValue`, or on a disabled input, there is no button (the input keeps its right
+ * padding either way). The typed amount is validated against `max` with
+ * {@link validateBoundedAmount}: not empty, not 0, the sign of `max`, and no larger than it in
+ * magnitude. An invalid amount stays on screen with a red border; its message is the input's
+ * tooltip and accessible description.
  *
  * Two ways to use it, both through the same rules:
  * - committed on blur (the line grid): `onCommit(number)` runs only for a VALID amount that
@@ -53,7 +58,10 @@ export function ResettableAmountInput({
   const shown = draft ?? value;
   const { error } = validateBoundedAmount(shown, max);
   const message = boundedAmountMessage(ui, error, max, currency);
-  const canReset = !disabled && resetValue != null && !sameAmount(shown, resetValue);
+  // The ↻ is rendered whenever there is something to reset to (and the input is enabled); it is
+  // only ACTIVE when the value differs from it, so the number never shifts between rows.
+  const showReset = !disabled && resetValue != null;
+  const canReset = showReset && !sameAmount(shown, resetValue);
   const resetLabel = ui('resetAmountTo', { amount: formatCurrency(currency, Number(resetValue)) });
   const describedBy = message ? `${dataTestId}-error` : undefined;
 
@@ -108,13 +116,18 @@ export function ResettableAmountInput({
           message ? 'border-destructive focus-visible:ring-destructive' : 'border-input',
         ].join(' ')}
         data-testid={`${dataTestId}-input`} />
-      {canReset && (
+      {showReset && (
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); handleReset(); }}
+          onClick={(e) => { e.stopPropagation(); if (canReset) handleReset(); }}
+          disabled={!canReset}
+          aria-disabled={canReset ? undefined : 'true'}
           aria-label={resetLabel}
           title={resetLabel}
-          className="absolute right-1 flex h-6 w-6 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-muted hover:text-foreground"
+          className={[
+            'absolute right-1 flex h-6 w-6 items-center justify-center rounded-full text-[hsl(var(--text-disabled))]',
+            canReset ? 'hover:bg-muted hover:text-foreground' : 'cursor-default opacity-40',
+          ].join(' ')}
           data-testid={`${dataTestId}-reset`}
         >
           <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" data-testid="RotateCcw__6148r3" />

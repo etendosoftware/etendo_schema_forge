@@ -125,9 +125,27 @@ describe('ResettableAmountInput — commit on blur', () => {
     expect(onRowClick).not.toHaveBeenCalled();
   });
 
-  it('hides the reset when the value already equals the reset value', () => {
+  // User decision (round 3 live test): the ↻ stays rendered when the value already equals the reset
+  // value, disabled, so the number does not shift left compared with rows that can be reset.
+  it('keeps the reset rendered but disabled when the value already equals the reset value', () => {
     renderCommitMode({ value: '100.00' });
-    expect(resetButton()).toBeNull();
+    expect(resetButton()).toBeInTheDocument();
+    expect(resetButton()).toBeDisabled();
+    expect(resetButton()).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('clicking the disabled reset commits nothing and reports nothing', async () => {
+    const { onCommit, onInvalid } = renderCommitMode({ value: '100.00' });
+    await act(async () => { fireEvent.click(resetButton()); });
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(onInvalid).not.toHaveBeenCalled();
+  });
+
+  it('enables the reset again once the value differs from the reset value', async () => {
+    renderCommitMode({ value: '100.00' });
+    type('60');
+    expect(resetButton()).not.toBeDisabled();
+    expect(resetButton()).not.toHaveAttribute('aria-disabled');
   });
 
   it('hides the reset without a reset value, or when disabled', () => {

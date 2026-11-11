@@ -3678,7 +3678,10 @@ Two opt-ins in `decisions.json`, usable apart or together (the remittance lines 
 - **Field `editInPlace: { resetToField?, maxField? }`** (at least one of the two). An always-visible amount input for that
   column (`ResettableAmountInput`), outside the row edit mode and even with `rowEditDisabled`.
   - `resetToField` is the sibling field a small ↻ button restores. Its tooltip and `aria-label`
-    come from `resetAmountTo`, with the amount through `formatCurrency`.
+    come from `resetAmountTo`, with the amount through `formatCurrency`. The button is always
+    rendered when there is a reset value. While the amount already equals it, the button is
+    disabled (muted, `aria-disabled`, a click does nothing), so the number never shifts between
+    rows.
   - `maxField` is the sibling field the amount may not exceed in magnitude, and whose sign it must
     have.
   - The rules live in `lib/boundedAmount.js` (`validateBoundedAmount`): not empty, not 0, the

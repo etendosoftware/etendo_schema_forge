@@ -187,7 +187,8 @@ The column set is a user decision (2026-11-06).
     to `InlineLinesPanel`. There is no Edit (pencil) and no row edit mode.
   - `amount.editInPlace: { resetToField: "dueOutstanding", maxField: "dueOutstanding" }` makes the
     column an always-visible amount input (`ResettableAmountInput`). It has a ↻ button that
-    restores the due's outstanding.
+    restores the due's outstanding. The button is disabled while the amount already equals it, so
+    the number stays in place on every row.
   - The input refuses inline an empty amount, 0, a sign different from the due's, or an amount
     over the due's outstanding (`lib/boundedAmount.js`). The refusal shows a red border, the
     message as tooltip and a toast, and nothing is sent.
