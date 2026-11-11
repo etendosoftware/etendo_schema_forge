@@ -632,6 +632,53 @@ describe('useEntity — shared cache integration (ETP-4563)', () => {
     await waitFor(() => expect(counts.children).toBe(2));
   });
 
+  // ETP-5828 (QA UI-1) — after «Importar desde pedido» the totals panel showed the new header
+  // totals next to the OLD lines for ~1 s: the forced re-read committed the header, and only
+  // then asked for the lines. The lines must land in the same render as the header.
+  it('23b. fetchById with { force: true } commits the header and its lines in the same render', async () => {
+    let releaseLines;
+    const linesGate = new Promise((r) => { releaseLines = r; });
+    let imported = false;
+    const { fetchMock } = makeFetch({
+      handler: ({ method, path }) => {
+        if (method === 'GET' && path === '/header/42') {
+          return { ...recordOk({ id: '42', grandTotalAmount: imported ? 90 : 0 }), _label: 'record' };
+        }
+        if (method === 'GET' && path === '/lines') {
+          const rows = imported ? [{ id: 'l1' }, { id: 'l2' }] : [];
+          return {
+            ok: true, status: 200, _label: 'children',
+            json: async () => { if (imported) await linesGate; return { response: { data: rows } }; },
+          };
+        }
+        return null;
+      },
+    });
+    globalThis.fetch = fetchMock;
+
+    const frames = [];
+    const a = renderHook(() => {
+      const h = useEntity('header', 'lines', opts({ skipListFetch: true }));
+      frames.push({ total: h.selected?.grandTotalAmount, lines: h.children.length });
+      return h;
+    }, { wrapper });
+    await act(async () => { await a.result.current.fetchById('42'); });
+    await waitFor(() => expect(a.result.current.selected?.grandTotalAmount).toBe(0));
+
+    imported = true; // the server imported two lines and recomputed the header
+    let refresh;
+    await act(async () => { refresh = a.result.current.fetchById('42', { force: true }); });
+    await act(async () => { await new Promise((resolve) => { setTimeout(resolve, 20); }); });
+    // The header GET is back but the lines GET is not: nothing new may be on screen yet.
+    expect(a.result.current.selected?.grandTotalAmount).toBe(0);
+
+    await act(async () => { releaseLines(); await refresh; });
+    expect(a.result.current.selected?.grandTotalAmount).toBe(90);
+    expect(a.result.current.children).toHaveLength(2);
+    // No render ever paired the new header with the old (empty) lines.
+    expect(frames.some(f => f.total === 90 && f.lines === 0)).toBe(false);
+  });
+
   it('24. a successful handleProcess refetches the cached children of the record', async () => {
     const { fetchMock, counts } = makeFetch({
       handler: ({ method, path }) => (method === 'POST' && /\/header\/[^/]+\/action\//.test(path)

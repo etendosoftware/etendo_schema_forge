@@ -1684,6 +1684,23 @@ export function useEntity(entity, childEntity, {
         loadList(false);
     }, [loadList, skipListFetch]);
 
+    // The child rows of `parentId` (normalized), through the cache like every read. Shared by
+    // fetchChildren and the forced fetchById, which must commit them with the header.
+    const queryChildren = useCallback((parentId, { force = false } = {}) => {
+        // NEO Headless uses ?parentId= to filter child entity records
+        const key = cacheScope
+            ? createQueryKey({ ...cacheScope, apiBase: apiBaseUrl, spec: specName, entity: childEntity, parentId, filters: { childSortBy } })
+            : null;
+        const sortParam = childSortBy ? `&_sortBy=${childSortBy}` : '';
+        const fetcher = (signal) => apiFetch(`/${childEntity}?parentId=${parentId}${sortParam}`, { signal })
+            .then(res => {
+                if (!res.ok) throw new Error(`${res.status}`);
+                return res.json();
+            })
+            .then(data => normalizeRows(data?.response?.data ?? (Array.isArray(data) ? data : []), childEntity));
+        return runQuery(key, fetcher, { force });
+    }, [apiBaseUrl, childEntity, apiFetch, childSortBy, cacheScope, specName, runQuery]);
+
     const fetchChildren = useCallback((parentId, { silent = false, force = false } = {}) => {
         if (!childEntity || !parentId) {
             setChildren([]);
@@ -1700,24 +1717,13 @@ export function useEntity(entity, childEntity, {
         // purchase-invoice-import-from-receipt.mocked.spec.js and
         // return-to-vendor-shipment.mocked.spec.js.
         if (!silent) setChildrenLoading(true);
-        // NEO Headless uses ?parentId= to filter child entity records
-        const key = cacheScope
-            ? createQueryKey({ ...cacheScope, apiBase: apiBaseUrl, spec: specName, entity: childEntity, parentId, filters: { childSortBy } })
-            : null;
-        const sortParam = childSortBy ? `&_sortBy=${childSortBy}` : '';
-        const fetcher = (signal) => apiFetch(`/${childEntity}?parentId=${parentId}${sortParam}`, { signal })
-            .then(res => {
-                if (!res.ok) throw new Error(`${res.status}`);
-                return res.json();
-            })
-            .then(data => normalizeRows(data?.response?.data ?? (Array.isArray(data) ? data : []), childEntity));
-        runQuery(key, fetcher, { force })
+        queryChildren(parentId, { force })
             .then(rows => setChildren(rows))
             // Silent refreshes must not blank a table the user is already looking
             // at just because one background request failed transiently (ETP-4512).
             .catch(() => { if (!silent) setChildren([]); })
             .finally(() => { if (!silent) setChildrenLoading(false); });
-    }, [apiBaseUrl, childEntity, apiFetch, childSortBy, cacheScope, specName, runQuery]);
+    }, [childEntity, queryChildren]);
 
     // HandleDefaults: fetch backend-resolved defaults for a NEW child line under the
     // given parent and normalize them (dates, booleans, enum ints) exactly as
@@ -1810,8 +1816,18 @@ export function useEntity(entity, childEntity, {
         // promise handed out always settles as fulfilled and can never surface as an
         // unhandled rejection in a caller that ignores it. The `if (!id) return;` guard
         // above still returns undefined, exactly as before.
+        // ETP-5828 (QA UI-1) — a forced re-read follows a server-side change that usually rewrote
+        // header AND lines together (an import, a document action). Committing the header first
+        // and the lines one round trip later left a frame where the totals panel mixed the new
+        // header totals with the old lines (subtotal 0 next to the new grand total, ~1 s). The
+        // lines are therefore read IN PARALLEL with the header and committed in the same tick.
+        // `null` = the lines read failed: they are cleared, as a non-silent fetchChildren does.
+        const linesRead = force && childEntity
+            ? queryChildren(id, { force: true }).catch(() => null)
+            : undefined;
         return runQuery(key, fetcher, { force })
-            .then(row => {
+            .then(row => (linesRead ? linesRead.then(lines => ({ row, lines })) : { row, lines: undefined }))
+            .then(({ row, lines }) => {
                 if (!isCurrent()) return;
                 // ETP-4563: a mutation superseded this read while it was in flight: drop the
                 // (now stale) result and evict the cache entry it just populated.
@@ -1837,8 +1853,10 @@ export function useEntity(entity, childEntity, {
                 // ETP-5602: a forced re-read follows a server-side change (a document action,
                 // a process), which may have rewritten the lines too — reactivating an invoice
                 // bumps UPDATED on every line. Serving the cached lines kept their old version,
-                // so the first line edit failed with 409 stale_record.
-                fetchChildren(row.id, { force });
+                // so the first line edit failed with 409 stale_record. The forced path already
+                // re-read them above (same tick as the header); the plain one reads them now.
+                if (lines !== undefined) setChildren(lines ?? []);
+                else fetchChildren(row.id, { force });
                 setLoading(false);
             })
             .catch(err => {
@@ -1851,7 +1869,7 @@ export function useEntity(entity, childEntity, {
                 setEditing(null);
                 setLoading(false);
             });
-    }, [apiBaseUrl, entity, apiFetch, fetchChildren, cacheScope, specName, runQuery, dataCache, neutralizePendingDefaults]);
+    }, [apiBaseUrl, entity, apiFetch, fetchChildren, queryChildren, childEntity, cacheScope, specName, runQuery, dataCache, neutralizePendingDefaults]);
 
     // Lightweight header refresh used after line add/update/delete operations.
     // Unlike fetchById, this preserves fields the user has explicitly edited (tracked in
