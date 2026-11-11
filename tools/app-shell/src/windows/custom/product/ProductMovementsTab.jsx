@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUpRight, Loader2 } from 'lucide-react';
+import { ArrowLeftRight, ArrowUpRight, FileText, Loader2 } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useCurrency } from '@/hooks/useCurrency';
@@ -22,12 +22,15 @@ import {
   DEFAULT_MOVEMENTS_PERIOD,
   MOVEMENTS_DEFAULT_SORT,
   MOVEMENTS_PAGE_SIZE,
+  buildAnyMovementQuery,
   buildMovementsQuery,
   formatProcessTime,
   isMovementsSortKey,
   isStorableProduct,
+  isUnfilteredMovements,
   quantityTone,
   resolveMovementType,
+  resolveMovementsEmptyKind,
   shouldShowMovementsTab,
   signedQuantity,
 } from './productMovements';
@@ -72,9 +75,13 @@ function DocumentLink({ row, label, openInNewTab }) {
       type="button"
       onClick={open}
       data-testid="product-movements-doc-link"
-      className="group inline-flex items-center gap-1 text-xs font-medium text-[hsl(var(--foreground))]"
+      className="group inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-xs font-medium text-[hsl(var(--foreground))] transition-colors hover:bg-muted"
     >
-      <span className="border-b border-[hsl(var(--text-disabled))] transition-colors group-hover:border-[hsl(var(--foreground))]">{label}</span>
+      <FileText
+        className="h-3.5 w-3.5 text-muted-foreground"
+        aria-hidden="true"
+        data-testid="FileText__763719" />
+      <span>{label}</span>
       <ArrowUpRight
         className="h-3.5 w-3.5"
         aria-hidden="true"
@@ -91,14 +98,12 @@ function MovementRow({ row, ui, currency }) {
   const hasDocument = row.etgoDocWindow && row.etgoDocHeaderId && row.etgoDocLabel;
 
   return (
-    <div role="row" className={`${GRID} border-b border-border/50 px-3 py-3 text-sm`} data-testid="product-movements-row">
-      {time ? (
-        <div role="cell" className="flex flex-col items-start gap-1">
-          <span className="font-medium tabular-nums">{formatCalendarDate(row.movementDate)}</span>
-          <span className="text-xs tabular-nums text-muted-foreground" data-testid="product-movements-time">{time}</span>
-        </div>
-      ) : <span role="cell" className="font-medium tabular-nums">{formatCalendarDate(row.movementDate)}</span>}
-      <div role="cell" className="flex flex-col items-start gap-1">
+    <div role="row" className={`${GRID} border-b border-border/50 px-3 py-2 text-sm`} data-testid="product-movements-row">
+      <div role="cell" className="flex items-baseline gap-1.5 whitespace-nowrap">
+        <span className="font-medium tabular-nums">{formatCalendarDate(row.movementDate)}</span>
+        {time ? <span className="text-xs tabular-nums text-muted-foreground" data-testid="product-movements-time">{time}</span> : null}
+      </div>
+      <div role="cell" className="flex flex-wrap items-center gap-2">
         <Tag variant={TAG_VARIANT[tone]} data-testid="Tag__763719">{typeLabel}</Tag>
         {hasDocument ? <DocumentLink
           row={row}
@@ -118,8 +123,19 @@ function MovementRow({ row, ui, currency }) {
   );
 }
 
-/** The empty state: the filters of the view (the period included) match none of the movements. */
-function EmptyMovements({ ui }) {
+/** The product has no movement at all: the design's empty state. */
+function NoMovementsYet({ ui }) {
+  return (
+    <div className="flex flex-col items-center gap-2 p-10 text-center" data-testid="product-movements-empty">
+      <ArrowLeftRight className="h-8 w-8 text-muted-foreground" aria-hidden="true" data-testid="ArrowLeftRight__763719" />
+      <p className="text-base font-semibold">{ui('noStockMovements')}</p>
+      <p className="max-w-md text-sm text-muted-foreground">{ui('productMovementsEmptyText')}</p>
+    </div>
+  );
+}
+
+/** The product has movements, but the filters of the view (the period included) match none of them. */
+function NoMovementsForFilters({ ui }) {
   return <p className="p-10 text-center text-sm text-muted-foreground" data-testid="product-movements-no-results">{ui('productMovementsNoResults')}</p>;
 }
 
@@ -143,6 +159,8 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onVisi
   const [state, setState] = useState({ rows: [], loading: true, loadingMore: false, error: null, hasMore: false });
   const [everActive, setEverActive] = useState(false);
   const generation = useRef(0);
+  // Answer of the "does the product have ANY movement" probe: { productId, answer: 'any' | 'none' | 'failed' }.
+  const [probe, setProbe] = useState(null);
   // The tab's own scroll box is bounded by the room left in the content column (inline maxHeight wins
   // over the class, which only stays as the pre-measure fallback), so the page itself never scrolls.
   const scrollBox = useRemainingHeight({ active: Boolean(isActive) });
@@ -157,6 +175,7 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onVisi
     setWarehouseId(null);
     setWarehouses([]);
     setEverActive(Boolean(isActive && storable));
+    setProbe(null);
     setState({ rows: [], loading: true, loadingMore: false, error: null, hasMore: false });
   }
 
@@ -233,6 +252,26 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onVisi
     loadPage(0);
   }, [storable, productId, everActive, loadPage]);
 
+  // The probe: only when the first page came back empty under filters that are not the unfiltered ones, and
+  // only once per product (a failure is cached too, so nothing retries in a loop). A change of filters or
+  // product cancels the one in flight, so a stale answer is never applied.
+  const pageEmpty = everActive && !state.loading && !state.error && state.rows.length === 0;
+  const probeAnswer = probe && probe.productId === productId ? probe.answer : undefined;
+  const needsProbe = storable && Boolean(productId) && pageEmpty && !isUnfilteredMovements(filters) && probeAnswer === undefined;
+  useEffect(() => {
+    if (!needsProbe) return undefined;
+    let cancelled = false;
+    (async () => {
+      let answer = 'failed';
+      try {
+        const res = await apiFetch(buildAnyMovementQuery({ productId, sort }));
+        if (res.ok) answer = rowsOf(await res.json()).length > 0 ? 'any' : 'none';
+      } catch { /* falls back to the "no results for the filters" message */ }
+      if (!cancelled) setProbe({ productId, answer });
+    })();
+    return () => { cancelled = true; };
+  }, [needsProbe, productId, sort, apiFetch]);
+
   const onScroll = (event) => {
     const el = event.currentTarget;
     const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - NEAR_BOTTOM_PX;
@@ -247,6 +286,8 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onVisi
   // Nothing to show while the product is unsaved (DetailView disables the tab, but a route state can
   // still open it) or not stocked.
   if (!visible || !storable) return null;
+
+  const emptyKind = resolveMovementsEmptyKind({ filters, probe: probeAnswer });
 
   // `aria-sort` belongs on the header cell, and only the column the list is sorted by carries a direction.
   const ariaSort = (key) => (sort.key === key ? ARIA_SORT[sort.direction] : 'none');
@@ -327,7 +368,7 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onVisi
         </div>
 
         {state.loading ? Array.from({ length: SKELETON_ROWS }, (_, i) => (
-          <div key={i} aria-hidden="true" className={`${GRID} border-b border-border/50 px-3 py-3`} data-testid="product-movements-skeleton">
+          <div key={i} aria-hidden="true" className={`${GRID} border-b border-border/50 px-3 py-2.5`} data-testid="product-movements-skeleton">
             {Array.from({ length: 6 }, (__, j) => <Skeleton key={j} className="h-4 w-full" data-testid="Skeleton__763719" />)}
           </div>
         )) : null}
@@ -336,14 +377,14 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onVisi
           <div className="flex flex-col items-center gap-3 p-6 text-center" role="alert" data-testid="product-movements-error">
             <p className="text-sm text-destructive">{ui('productMovementsError')}</p>
             {/* A failed first load starts again; a failed page asks for that same page again. */}
-            <Button type="button" variant="outline" size="sm" onClick={() => loadPage(state.rows.length)} data-testid="product-movements-retry">
+            <Button type="button" variant="outline" size="sm" onClick={() => { if (state.rows.length === 0) setProbe(null); loadPage(state.rows.length); }} data-testid="product-movements-retry">
               {ui('retry')}
             </Button>
           </div>
         ) : null}
 
-        {!state.loading && !state.error && state.rows.length === 0
-          ? <EmptyMovements ui={ui} data-testid="EmptyMovements__763719" /> : null}
+        {pageEmpty && emptyKind === 'none' ? <NoMovementsYet ui={ui} data-testid="NoMovementsYet__763719" /> : null}
+        {pageEmpty && emptyKind === 'filtered' ? <NoMovementsForFilters ui={ui} data-testid="NoMovementsForFilters__763719" /> : null}
 
         {state.rows.map((row) => <MovementRow
           key={row.id}

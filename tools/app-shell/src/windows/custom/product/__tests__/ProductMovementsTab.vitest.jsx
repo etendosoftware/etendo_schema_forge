@@ -213,7 +213,7 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     expect(onCountChange).not.toHaveBeenCalled();
   });
 
-  it('opens on the last 7 days, newest first, 50 rows at a time', async () => {
+  it('opens on the last 30 days, newest first, 50 rows at a time', async () => {
     render(<ProductMovementsTab data={storable} isActive />);
 
     await waitFor(() => expect(pageRequests()).toHaveLength(1));
@@ -223,6 +223,9 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     expect(params.get('_startRow')).toBe('0');
     expect(params.get('_endRow')).toBe('49');
     const criteria = JSON.parse(params.get('criteria'));
+    // 30 calendar days, both ends included: from = today - 29 days
+    const [from, to] = criteria.map((c) => new Date(`${c.value}T00:00:00`));
+    expect(Math.round((to - from) / 86400000)).toBe(29);
     expect(criteria.map((c) => `${c.fieldName}:${c.operator}`)).toEqual(['movementDate:greaterOrEqual', 'movementDate:lessOrEqual']);
   });
 
@@ -311,7 +314,7 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     expect(lines[1]).toHaveTextContent('productMovementsTypeTransfer');
   });
 
-  it('shows the time of day under the date, straight from etgoProcessTime', async () => {
+  it('shows the time of day next to the date on the same line, straight from etgoProcessTime', async () => {
     route({ pages: [[
       row({ etgoProcessTime: '2026-11-03T09:05:07' }),
       row({ etgoProcessTime: '2026-11-03T16:21:43' }),
@@ -321,17 +324,21 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     const times = await screen.findAllByTestId('product-movements-time');
     expect(times.map((t) => t.textContent)).toEqual(['09:05', '16:21']);
     const [first] = await screen.findAllByTestId('product-movements-row');
-    expect(first.querySelector('[data-testid="product-movements-time"]').className).toContain('text-muted-foreground');
+    const timeEl = first.querySelector('[data-testid="product-movements-time"]');
+    expect(timeEl.className).toContain('text-muted-foreground');
+    // one line: date and time are siblings of the same inline row, not stacked in a column
+    expect(timeEl.parentElement.className).not.toContain('flex-col');
+    expect(timeEl.parentElement).toHaveTextContent('20/10/2026');
   });
 
-  it('renders no second line and no extra element when etgoProcessTime is absent or malformed', async () => {
+  it('renders only the date, with no time element, when etgoProcessTime is absent or malformed', async () => {
     route({ pages: [[row(), row({ etgoProcessTime: null }), row({ etgoProcessTime: 'nope' })]], total: 3 });
     render(<ProductMovementsTab data={storable} isActive />);
 
     const lines = await screen.findAllByTestId('product-movements-row');
     expect(lines).toHaveLength(3);
     expect(screen.queryByTestId('product-movements-time')).toBeNull();
-    lines.forEach((line) => expect(line.querySelector('[role="cell"]').children).toHaveLength(0));
+    lines.forEach((line) => expect(line.querySelector('[role="cell"]').children).toHaveLength(1));
   });
 
   it('sorts by the warehouse name and starts again from the first page', async () => {
@@ -441,11 +448,69 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     expect(pageRequests()).toHaveLength(1);
   });
 
-  it('says there are no results for the filters when the page comes back empty', async () => {
-    route({ pages: [[]], total: 0 });
-    render(<ProductMovementsTab data={storable} isActive />);
+  describe('empty states (probe: does the product have ANY movement?)', () => {
+    // Routes the list: filtered pages (with criteria) answer `filtered`, the probe (pageSize 1, no criteria) `any`.
+    const routeProbe = ({ filtered = [], any = [row()], probeFails = false } = {}) => {
+      mocks.apiFetch.mockImplementation(async (path) => {
+        if (path.startsWith('/stock')) return respond([]);
+        const q = query(path);
+        if (q.get('_endRow') === '0' && !q.has('criteria')) {
+          if (probeFails) throw new Error('boom');
+          return respond(any);
+        }
+        return respond(filtered);
+      });
+    };
+    const probeRequests = () => pageRequests().filter((p) => query(p).get('_endRow') === '0');
 
-    expect(await screen.findByTestId('product-movements-no-results')).toHaveTextContent('productMovementsNoResults');
+    it('product with movements, filters match none: says no results for the filters', async () => {
+      routeProbe({ any: [row()] });
+      render(<ProductMovementsTab data={storable} isActive />);
+
+      expect(await screen.findByTestId('product-movements-no-results')).toHaveTextContent('productMovementsNoResults');
+      expect(screen.queryByTestId('product-movements-empty')).toBeNull();
+      expect(probeRequests()).toHaveLength(1);
+      expect(query(probeRequests()[0]).has('criteria')).toBe(false);
+    });
+
+    it('product with no movement at all: shows the design empty state', async () => {
+      routeProbe({ any: [] });
+      render(<ProductMovementsTab data={storable} isActive />);
+
+      const empty = await screen.findByTestId('product-movements-empty');
+      expect(empty).toHaveTextContent('noStockMovements');
+      expect(empty).toHaveTextContent('productMovementsEmptyText');
+      // same icon as the side panel's "Ver movimientos" link (lucide ArrowLeftRight)
+      expect(empty.querySelector('[data-testid="ArrowLeftRight__763719"]')).not.toBeNull();
+      expect(empty.querySelector('[data-testid^="PackageOpen"]')).toBeNull();
+      expect(screen.queryByTestId('product-movements-no-results')).toBeNull();
+    });
+
+    it('does not probe when rows exist', async () => {
+      route({ pages: [[row()]] });
+      render(<ProductMovementsTab data={storable} isActive />);
+      await screen.findAllByTestId('product-movements-row');
+      expect(pageRequests().filter((p) => query(p).get('_endRow') === '0')).toHaveLength(0);
+    });
+
+    it('a failed probe falls back to the filters message and is not retried', async () => {
+      routeProbe({ probeFails: true });
+      render(<ProductMovementsTab data={storable} isActive />);
+
+      expect(await screen.findByTestId('product-movements-no-results')).toBeInTheDocument();
+      await waitFor(() => expect(probeRequests()).toHaveLength(1));
+    });
+
+    it('caches the answer: a second empty filter combination does not probe again', async () => {
+      routeProbe({ any: [row()] });
+      render(<ProductMovementsTab data={storable} isActive />);
+      await screen.findByTestId('product-movements-no-results');
+
+      await userEvent.click(screen.getByTestId('period'));
+      await waitFor(() => expect(pageRequests().length).toBeGreaterThan(2));
+      await screen.findByTestId('product-movements-no-results');
+      expect(probeRequests()).toHaveLength(1);
+    });
   });
 
   it('shows skeleton rows while the first page loads', async () => {
@@ -740,6 +805,22 @@ describe('ProductMovementsTab (ETP-5889)', () => {
 
       expect(await screen.findByRole('alert')).toHaveTextContent('productMovementsError');
     });
+  });
+
+  it('labels the cost column "Costo de la transacción" in both Spanish locales', () => {
+    expect(esES.genericLabels.productMovementsCost).toBe('Costo de la transacción');
+    expect(esAR.genericLabels.productMovementsCost).toBe('Costo de la transacción');
+  });
+
+  it('puts the type pill and the document chip on the same line', async () => {
+    route({ pages: [[row({ etgoDocKind: 'goods-receipt', etgoDocWindow: 'goods-receipt', etgoDocHeaderId: 'h1', etgoDocLabel: 'MV-0021' })]] });
+    render(<ProductMovementsTab data={storable} isActive />);
+
+    const chip = await screen.findByTestId('product-movements-doc-link');
+    expect(chip).toHaveTextContent('MV-0021');
+    expect(chip.querySelector('[data-testid="FileText__763719"]')).not.toBeNull();
+    expect(chip.parentElement.className).not.toContain('flex-col');
+    expect(chip.parentElement).toHaveTextContent('productMovementsTypeVendorReceipt');
   });
 
   it.each([['en_US', enUS], ['es_ES', esES], ['es_AR', esAR]])('declares a non-empty productMovementsDirection label in %s', (_locale, json) => {

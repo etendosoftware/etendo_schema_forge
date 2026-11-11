@@ -3,12 +3,15 @@
 import {
   DEFAULT_MOVEMENTS_PERIOD,
   MOVEMENTS_DEFAULT_SORT,
+  buildAnyMovementQuery,
   buildMovementsCriteria,
   buildMovementsQuery,
   formatProcessTime,
   isMovementsSortKey,
   isStorableProduct,
+  isUnfilteredMovements,
   resolveMovementType,
+  resolveMovementsEmptyKind,
   shouldShowMovementsTab,
   signedQuantity,
 } from '../productMovements';
@@ -77,9 +80,9 @@ describe('productMovements (ETP-5889)', () => {
       ]);
     });
 
-    it('turns the default period into the last 7 calendar days, both ends included', () => {
+    it('turns the default period (last 30 days, since 2026-11-11) into 30 calendar days, both ends included', () => {
       expect(buildMovementsCriteria({ dateRange: DEFAULT_MOVEMENTS_PERIOD })).toEqual([
-        { fieldName: 'movementDate', operator: 'greaterOrEqual', value: '2026-10-22' },
+        { fieldName: 'movementDate', operator: 'greaterOrEqual', value: '2026-09-29' },
         { fieldName: 'movementDate', operator: 'lessOrEqual', value: '2026-10-28' },
       ]);
     });
@@ -242,6 +245,34 @@ describe('productMovements (ETP-5889)', () => {
       expect(formatProcessTime('2026-11-03T16:21:43+02:00')).toBe('16:21');
       expect(spy).not.toHaveBeenCalled();
       spy.mockRestore();
+    });
+  });
+
+  describe('empty-state probe', () => {
+    it('isUnfilteredMovements is true only without period, direction and warehouse', () => {
+      expect(isUnfilteredMovements({ direction: 'all', dateRange: null, warehouseId: null })).toBe(true);
+      expect(isUnfilteredMovements({ direction: 'in' })).toBe(false);
+      expect(isUnfilteredMovements({ warehouseId: 'w' })).toBe(false);
+      expect(isUnfilteredMovements({ dateRange: DEFAULT_MOVEMENTS_PERIOD })).toBe(false);
+    });
+
+    it('buildAnyMovementQuery asks for one record with no criteria and the same sort', () => {
+      const { route, params, criteria } = parse(buildAnyMovementQuery({ productId: 'p1' }));
+      expect(route).toBe('/transactions');
+      expect(params.get('parentId')).toBe('p1');
+      expect(params.get('_startRow')).toBe('0');
+      expect(params.get('_endRow')).toBe('0');
+      expect(params.get('_sortBy')).toBe(TIE_DESC);
+      expect(criteria).toEqual([]);
+    });
+
+    it('resolveMovementsEmptyKind decides the empty state', () => {
+      const filtered = { direction: 'in' };
+      expect(resolveMovementsEmptyKind({ filters: {}, probe: undefined })).toBe('none');
+      expect(resolveMovementsEmptyKind({ filters: filtered, probe: undefined })).toBe('checking');
+      expect(resolveMovementsEmptyKind({ filters: filtered, probe: 'none' })).toBe('none');
+      expect(resolveMovementsEmptyKind({ filters: filtered, probe: 'any' })).toBe('filtered');
+      expect(resolveMovementsEmptyKind({ filters: filtered, probe: 'failed' })).toBe('filtered');
     });
   });
 });

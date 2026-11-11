@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Maximize2, Box, Calendar, ChevronDown, PanelRightClose } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { SIDEBAR_PERIOD_OPTIONS, DEFAULT_SIDEBAR_PERIOD, formatPeriodRange } from './productSidebarPeriod';
@@ -83,7 +84,7 @@ function SidebarPeriodSelector({ period, onChangePeriod, ui, disabled = false })
 
 // Horizontal availability widget: icon box + label + locations link/badge + big number.
 // With `onBadgeClick` the badge is a real button (RF-06: opens the Warehouses tab).
-function AvailabilityWidget({ label, value, badge, onBadgeClick }) {
+function AvailabilityWidget({ label, value, badge, onBadgeClick, loading = false }) {
   return (
     <div className="flex-1 flex items-center gap-3 pl-3 pr-2 py-2 bg-card border border-border-subtle rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]">
       <div className="w-10 h-10 shrink-0 flex items-center justify-center bg-card border border-border-control rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]">
@@ -107,7 +108,9 @@ function AvailabilityWidget({ label, value, badge, onBadgeClick }) {
           )}
         </div>
         <span className="text-2xl font-medium tracking-[-0.01em] text-foreground leading-9">
-          {value === null ? <span className="text-muted-foreground">—</span> : value}
+          {loading ? (
+            <Skeleton className="my-2 h-5 w-16" aria-hidden="true" data-testid="AvailabilityValueSkeleton" />
+          ) : (value === null ? <span className="text-muted-foreground">—</span> : value)}
         </span>
       </div>
     </div>
@@ -466,6 +469,8 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
   else if (binCount > 1) onHandSubtitle = ui('stockLocationsCount', { count: binCount });
 
   const hasChart = transactions !== null && transactions.length > 0;
+  // The stock is still being read: the "Available" value shows a placeholder bar instead of a number.
+  const stockLoading = stockRows === null || transactions === null;
   const sortedRows = [...locationRows].sort((a, b) => b.quantityOnHand - a.quantityOnHand);
   const navigate = useNavigate();
 
@@ -550,9 +555,10 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
               ui={ui}
               disabled={!hasChart}
               data-testid="SidebarPeriodSelector__59b33d" />
-            {hasChart && <AvailabilityWidget
+            {(hasChart || stockLoading) && <AvailabilityWidget
               label={ui('stockAvailableLabel')}
-              value={fmt(onHand)}
+              value={stockLoading ? null : fmt(onHand)}
+              loading={stockLoading}
               badge={onHandSubtitle}
               onBadgeClick={binCount > 1 ? () => setActiveTab('warehouses') : undefined}
               data-testid="AvailabilityWidget__59b33d" />}

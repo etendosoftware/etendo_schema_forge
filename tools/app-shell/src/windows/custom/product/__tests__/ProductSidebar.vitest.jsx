@@ -181,6 +181,25 @@ describe('ProductSidebar', () => {
     });
   });
 
+  it('shows a placeholder bar instead of the available quantity while the stock is loading', async () => {
+    globalThis.fetch = vi.fn(() => new Promise(() => {}));
+    render(<ProductSidebar {...defaultProps} />);
+
+    expect(await screen.findByTestId('AvailabilityValueSkeleton')).toBeInTheDocument();
+    expect(screen.getByText('stockAvailableLabel')).toBeInTheDocument();
+  });
+
+  it('replaces the placeholder with the quantity once the stock is loaded', async () => {
+    mockFetchResponses({
+      stockRows: [{ storageBin: 'LOC1', 'warehouse$_identifier': 'WH-A', quantityOnHand: 50, reservedQty: 5 }],
+      transactions: [{ movementDate: '2025-01-15', movementQuantity: 10, storageBin: 'LOC1' }],
+    });
+    render(<ProductSidebar {...defaultProps} />);
+
+    await waitFor(() => expect(screen.queryByTestId('AvailabilityValueSkeleton')).toBeNull());
+    expect(screen.getByText('stockAvailableLabel')).toBeInTheDocument();
+  });
+
   it('shows stock movement chart title when transactions exist', async () => {
     const stockRows = [
       { storageBin: 'LOC1', 'warehouse$_identifier': 'WH-A', quantityOnHand: 100, reservedQty: 0 },

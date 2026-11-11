@@ -6,8 +6,9 @@ import { getDateBounds, toDateParam } from '@/lib/dateRangeBounds.js';
 
 export const MOVEMENTS_PAGE_SIZE = 50;
 
-// The design opens on the last 7 days.
-export const DEFAULT_MOVEMENTS_PERIOD = Object.freeze({ presetId: 'last7' });
+// The updated design (2026-11-11) opens on the last 30 days (it was 7): fewer empty opens for products
+// without recent activity.
+export const DEFAULT_MOVEMENTS_PERIOD = Object.freeze({ presetId: 'last30' });
 
 // Sortable columns -> backend column. The foreign key is sorted by its identifier (the warehouse name),
 // not by its id; every other key is a physical column of M_Transaction, so the backend can order by it.
@@ -92,6 +93,30 @@ export function buildMovementsQuery({ productId, filters = {}, sort = MOVEMENTS_
   const criteria = buildMovementsCriteria(filters);
   if (criteria.length) params.append('criteria', JSON.stringify(criteria));
   return `/transactions?${params.toString()}`;
+}
+
+/** True when the filters (period, direction, warehouse) leave the product's movements untouched. */
+export function isUnfilteredMovements(filters = {}) {
+  return buildMovementsCriteria(filters).length === 0;
+}
+
+/** Path + query string of the probe: ONE record of the product, no period/direction/warehouse criteria. */
+export function buildAnyMovementQuery({ productId, sort = MOVEMENTS_DEFAULT_SORT }) {
+  return buildMovementsQuery({ productId, filters: {}, sort, start: 0, pageSize: 1 });
+}
+
+/**
+ * Which empty state an empty page deserves.
+ *  - 'none'      the product has no movement at all (the design's empty state);
+ *  - 'filtered'  it has movements, the filters match none of them;
+ *  - 'checking'  the probe is still in flight (nothing is shown yet).
+ * `probe` is the answer of the probe: 'any', 'none', 'failed' or absent. A failed probe falls back to 'filtered'.
+ */
+export function resolveMovementsEmptyKind({ filters, probe }) {
+  if (isUnfilteredMovements(filters)) return 'none';
+  if (probe === 'none') return 'none';
+  if (probe === 'any' || probe === 'failed') return 'filtered';
+  return 'checking';
 }
 
 // Source-document kind -> label key. A return keeps the base movement type and is told apart by the
