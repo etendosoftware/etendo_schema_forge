@@ -5,6 +5,7 @@ import { ConfirmResultModal } from '@/components/contract-ui/ConfirmResultModal.
 import { fetchOptionalJson } from '@/windows/custom/shared/pdfUtils.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useInvoiceSifStep, InvoiceSifStepModal, withSifFields } from '@/windows/custom/shared/InvoiceSifStep.jsx';
 import { translateBackendErrorBody } from '@/lib/backendErrors.js';
 
 const OPTION_ORDER = 'order';
@@ -42,6 +43,12 @@ export default function QuotationConfirmModal({
   const apiFetch = useApiFetch('');
 
   const [freshData, setFreshData] = useState(null);
+  // ETP-6179: the invoice's mandatory "Datos fiscales" step (only fetched for «Facturar directamente»).
+  const sif = useInvoiceSifStep({
+    enabled: !!quotationId,
+    apiFetch,
+    defaultsUrl: `${entityUrl}/${quotationId}/action/sifDefaults`,
+  });
 
   // Fetch fresh record + line count on mount
   useEffect(() => {
@@ -84,7 +91,13 @@ export default function QuotationConfirmModal({
   const totalLines     = Number(d.summedLineAmount ?? d.totalLines ?? d.grandTotalAmount ?? 0) || 0;
   const currency       = d['currency$_identifier'] || '';
 
-  const handleConfirm = async (optionId) => {
+  // ETP-6179: «Facturar directamente» goes through the "Datos fiscales" step first (when a fiscal
+  // system is active); «Crear pedido» never does.
+  const handleConfirm = (optionId) => (optionId === OPTION_INVOICE
+    ? sif.start(() => runConfirm(optionId))
+    : runConfirm(optionId));
+
+  const runConfirm = async (optionId) => {
     if (loading) return;
     setLoading(true);
     setError(null);
@@ -189,7 +202,7 @@ export default function QuotationConfirmModal({
       } else {
         const res = await apiFetch(
           `${entityUrl}/${quotationId}/action/createDraftInvoice`,
-          { method: 'POST', body: JSON.stringify({}) },
+          { method: 'POST', body: JSON.stringify(withSifFields({}, sif)) },
         );
         if (!res.ok) {
           const err = await res.json().catch(() => null);
@@ -294,6 +307,19 @@ export default function QuotationConfirmModal({
     },
   ];
 
+  if (sif.active) {
+    return (
+      <InvoiceSifStepModal
+        sif={sif}
+        confirmLabel={ui('soInvoiceDirectly')}
+        loading={loading}
+        error={error}
+        onConfirm={() => runConfirm(OPTION_INVOICE)}
+        onClose={onClose}
+        data-testid="InvoiceSifStepModal__sq6179" />
+    );
+  }
+
   return (
     <ActionChoiceModal
       title={ui('sqConfirmQuotationTitle')}
@@ -304,7 +330,7 @@ export default function QuotationConfirmModal({
       defaultOptionId={OPTION_ORDER}
       onCancel={onClose}
       onContinue={handleConfirm}
-      loading={loading}
+      loading={loading || sif.loading}
       error={error}
     />
   );

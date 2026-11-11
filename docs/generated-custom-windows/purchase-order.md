@@ -735,3 +735,22 @@ shared by both handlers):
   other value with the purchase order's own reason.
 - The handler is bound by `@NeoExtension(spec = "purchase-order", entity = "header")`; its
   `Java_Qualifier` and the `javaQualifier` in `decisions.json` were removed together.
+
+## Fiscal data step before the invoice is created — ETP-6179
+
+- **Confirmar** with *Crear factura* ticked (`ConfirmModal` in `PurchaseOrderActions.jsx`) and
+  **Gestionar documentos** on a confirmed order (`CreateDocsModal`).
+- SII fields only (see goods-receipt). Not covered: the list's bulk "Generar factura"
+  (`BulkPurchaseOrderMoreMenu`, one invoice per order), which gets the backend defaults.
+
+The step is shared (`tools/app-shell/src/windows/custom/shared/InvoiceSifStep.jsx`) and built
+from the backend's `sifDefaults` action, which answers which fiscal systems are active for the
+invoice's organization (SII, TicketBAI, VERI*FACTU), which SIF-tab fields are editable and what each
+would get. It is fetched when the primary button is pressed: when no system is active the flow is
+exactly as before; otherwise the modal turns into the "Datos fiscales" step (Back / the same
+primary button) and only then confirms anything, so no source document is left confirmed without
+its invoice because of a fiscal problem. The values travel as `sifFields` in the invoice action's
+body; the backend validates them with the same per-system rule as the invoice's own completion
+(`RectificationFiscalCodeGuard`, 422 `ETGO_InvoiceRectificationCodeRequired`). If the preview cannot
+be loaded the flow continues without the step: the backend applies the same defaults anyway.
+Backend reference: `com.etendoerp.go` `docs/neo-headless.md` §4.12.36b (ETP-6179).

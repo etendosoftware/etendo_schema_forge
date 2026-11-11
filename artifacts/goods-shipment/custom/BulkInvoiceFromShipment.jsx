@@ -279,7 +279,13 @@ export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, 
         ? ui('selectShipmentsSameCurrency')
         : undefined;
 
-  const handleCreate = async (priceListId) => {
+  // ETP-6179: the ONE invoice these documents become gets the modal's "Datos fiscales" step.
+  const sifIds = invoiceableRows.map(r => r.id);
+  const sifDefaultsUrl = sifIds.length > 0
+    ? `${base}/goods-shipment/goodsShipment/${sifIds[0]}/action/sifDefaults`
+    : undefined;
+
+  const handleCreate = async (priceListId, _originInvoices, sifFields) => {
     if (creating) return;
     setCreating(true);
     try {
@@ -289,7 +295,9 @@ export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, 
           method: 'POST',
           baseUrl: '',
           token,
-          body: JSON.stringify({ shipmentIds: invoiceableRows.map(r => r.id), priceListId }),
+          body: JSON.stringify({
+            shipmentIds: invoiceableRows.map(r => r.id), priceListId, ...(sifFields ? { sifFields } : {}),
+          }),
         },
       );
       if (!res.ok) {
@@ -362,6 +370,8 @@ export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, 
           isSOTrx
           apiBaseUrl={apiBaseUrl}
           token={token}
+          sifDefaultsUrl={sifDefaultsUrl}
+          sifDefaultsBody={{ shipmentIds: sifIds }}
           onConfirm={handleCreate}
           onClose={() => setShowModal(false)}
           onPriceListChange={setSelectedPriceListId}

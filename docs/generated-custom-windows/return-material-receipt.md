@@ -777,3 +777,24 @@ An `unpost` of a return receipt that is not posted is refused with **422** (`ETG
 ## "Generar factura rectificativa" title on the post-confirm invoice popup — ETP-5688
 
 The popup opened by "Crear Factura Rectificativa" on a completed (CO), not-yet-invoiced return is the shared `CreateInvoiceConfirmModal`, previously titled with the generic `soManageDocsTitle` ("Generar factura"). It now takes an optional `title` prop (default unchanged elsewhere); `ConfirmWithCreditButtonBase` forwards its `createInvoiceModalTitle` prop, which this window supplies as `returnReceipt.createRectificativeInvoiceTitle` ("Generar factura rectificativa"). The draft-time `ConfirmInOutModal` title ("¿Gestionar factura rectificativa?") and the row-hover Confirmar are unchanged.
+
+## Fiscal data step before the invoice is created — ETP-6179
+
+- **Confirmar** with *Crear factura rectificativa* on (`ConfirmWithCreditButtonBase` →
+  `ConfirmInOutModal`, also the list row's confirm) and **Crear factura rectificativa** on a confirmed
+  return (`CreateInvoiceConfirmModal`).
+- Rectificative: `R4` preselected for the SII motive, the TicketBAI code and the VERI*FACTU type, all
+  editable; SII key `R`/type `I` and the TicketBAI/VERI*FACTU reverse types are set automatically.
+  Before ETP-6179 this flow completed the invoice as an ordinary `F1`.
+
+The step is shared (`tools/app-shell/src/windows/custom/shared/InvoiceSifStep.jsx`) and built
+from the backend's `sifDefaults` action, which answers which fiscal systems are active for the
+invoice's organization (SII, TicketBAI, VERI*FACTU), which SIF-tab fields are editable and what each
+would get. It is fetched when the primary button is pressed: when no system is active the flow is
+exactly as before; otherwise the modal turns into the "Datos fiscales" step (Back / the same
+primary button) and only then confirms anything, so no source document is left confirmed without
+its invoice because of a fiscal problem. The values travel as `sifFields` in the invoice action's
+body; the backend validates them with the same per-system rule as the invoice's own completion
+(`RectificationFiscalCodeGuard`, 422 `ETGO_InvoiceRectificationCodeRequired`). If the preview cannot
+be loaded the flow continues without the step: the backend applies the same defaults anyway.
+Backend reference: `com.etendoerp.go` `docs/neo-headless.md` §4.12.36b (ETP-6179).

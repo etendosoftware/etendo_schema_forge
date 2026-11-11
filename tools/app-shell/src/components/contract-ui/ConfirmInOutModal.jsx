@@ -8,6 +8,7 @@ import { periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 import { PeriodRecoveryLink } from './PeriodRecoveryLink.jsx';
 import { usePriceListPicker, PriceListSelectField } from './PriceListPicker';
 import { useRectifiableInvoices, RectifiableInvoiceField } from './RectifiableInvoicePicker';
+import { useInvoiceSifStep, InvoiceSifStepPanel, withSifFields } from '@/windows/custom/shared/InvoiceSifStep.jsx';
 
 /** POSTs one NEO action and throws the backend's own message when it refuses. */
 async function postAction(apiFetch, url, body) {
@@ -182,6 +183,14 @@ export default function ConfirmInOutModal({
     token,
   });
   const canConfirm = (!priceListRequired || !!priceListId) && rectify.isSatisfied;
+  // ETP-6179: the mandatory "Datos fiscales" step, before anything is confirmed — the source
+  // document is only completed once the invoice's SIF fields are settled.
+  const actionBase = `/${specName}/${entityName}/${recordId}/action`;
+  const sif = useInvoiceSifStep({
+    enabled: invoiceRequested && !!invoiceAction,
+    apiFetch,
+    defaultsUrl: `${actionBase}/sifDefaults`,
+  });
 
   const { documentNo, bpName, total, currency } = docInfo ?? {};
 
@@ -199,13 +208,13 @@ export default function ConfirmInOutModal({
     try {
       const invoice = await runConfirm({
         apiFetch,
-        actionBase: `/${specName}/${entityName}/${recordId}/action`,
+        actionBase,
         skipDocumentAction,
         invoiceRequested,
         invoiceAction,
-        invoiceBody: buildInvoiceBody({
+        invoiceBody: withSifFields(buildInvoiceBody({
           pickerActive, priceListId, rectifyActive, selectedIds: rectify.selectedIds,
-        }),
+        }), sif),
       });
       onConfirmed({ invoice });
     } catch (err) {
@@ -221,8 +230,10 @@ export default function ConfirmInOutModal({
   const primaryLabel = invoiceRequested && confirmWithInvoiceLabel
     ? confirmWithInvoiceLabel
     : confirmLabel;
+  const onPrimary = () => sif.start(handleConfirm);
+  const busy = loading || sif.loading;
 
-  const confirmDisabled = loading || !canConfirm;
+  const confirmDisabled = busy || !canConfirm || (sif.active && !sif.valid);
   const confirmRestBg = confirmDisabled ? 'var(--status-info-border)' : 'var(--status-info-fg)';
 
   return createPortal(
@@ -252,7 +263,7 @@ export default function ConfirmInOutModal({
         <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid hsl(var(--border-subtle))', position: 'relative' }}>
           <div style={{ paddingRight: 36 }}>
             <div style={{ fontSize: 18, fontWeight: 700, color: 'hsl(var(--foreground))', lineHeight: 1.2 }}>
-              {title}
+              {sif.active ? ui('invoiceSifStep.title') : title}
             </div>
             {subtitleParts.length > 0 && (
               <div data-testid="confirm-modal-doc-info" style={{ marginTop: 6, fontSize: 13, color: 'hsl(var(--muted-foreground))', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -279,8 +290,10 @@ export default function ConfirmInOutModal({
         {/* Body */}
         <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
+          {sif.active && <InvoiceSifStepPanel sif={sif} data-testid="InvoiceSifStepPanel__3b3aca" />}
+
           {/* Info row — hidden when only creating invoice (skipDocumentAction) or when no invoice action is available */}
-          {!skipDocumentAction && invoiceAction && infoRowBold && (
+          {!sif.active && !skipDocumentAction && invoiceAction && infoRowBold && (
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
               <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--status-success-bg)', border: '1px solid var(--status-success-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
                 <svg width="12" height="10" viewBox="0 0 12 10" fill="none" stroke="var(--status-success-fg)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -296,7 +309,7 @@ export default function ConfirmInOutModal({
           )}
 
           {/* Toggle card — hidden when only creating invoice (skipDocumentAction) or when no invoice action is available */}
-          {!skipDocumentAction && invoiceAction && <div
+          {!sif.active && !skipDocumentAction && invoiceAction && <div
             role="switch"
             aria-checked={createInvoice}
             data-testid="confirm-modal-invoice-toggle"
@@ -333,7 +346,7 @@ export default function ConfirmInOutModal({
             <ToggleSwitch on={createInvoice} data-testid="ToggleSwitch__3b3aca" />
           </div>}
 
-          {pickerActive && (
+          {!sif.active && pickerActive && (
             <PriceListSelectField
               priceLists={priceLists}
               priceListId={priceListId}
@@ -343,7 +356,7 @@ export default function ConfirmInOutModal({
               data-testid="confirm-modal-price-list-field" />
           )}
 
-          {rectifyActive && (
+          {!sif.active && rectifyActive && (
             <RectifiableInvoiceField
               invoices={rectify.invoices}
               selectedIds={rectify.selectedIds}
@@ -379,23 +392,34 @@ export default function ConfirmInOutModal({
             type="button"
             data-testid="confirm-modal-cancel-btn"
             onClick={onClose}
-            disabled={loading}
-            style={{ fontSize: 13, padding: '9px 16px', borderRadius: 9, border: '1px solid hsl(var(--border-subtle))', background: CANCEL_REST_BG, color: 'hsl(var(--muted-foreground))', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.5 : 1 }}
-            onMouseEnter={e => { if (!loading) e.currentTarget.style.background = CANCEL_HOVER_BG; }}
+            disabled={busy}
+            style={{ fontSize: 13, padding: '9px 16px', borderRadius: 9, border: '1px solid hsl(var(--border-subtle))', background: CANCEL_REST_BG, color: 'hsl(var(--muted-foreground))', cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.5 : 1 }}
+            onMouseEnter={e => { if (!busy) e.currentTarget.style.background = CANCEL_HOVER_BG; }}
             onMouseLeave={e => { e.currentTarget.style.background = CANCEL_REST_BG; }}
           >
             {cancelLabel}
           </button>
+          {sif.active && (
+            <button
+              type="button"
+              data-testid="confirm-modal-sif-back-btn"
+              onClick={sif.back}
+              disabled={loading}
+              style={{ fontSize: 13, padding: '9px 16px', borderRadius: 9, border: '1px solid hsl(var(--border-subtle))', background: CANCEL_REST_BG, color: 'hsl(var(--muted-foreground))', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.5 : 1 }}
+            >
+              {ui('back')}
+            </button>
+          )}
           <button
             type="button"
             data-testid="confirm-modal-confirm-btn"
-            onClick={handleConfirm}
+            onClick={onPrimary}
             disabled={confirmDisabled}
             style={{ height: 38, display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, padding: '0 18px', borderRadius: 9, border: 'none', background: confirmRestBg, color: 'hsl(var(--card))', cursor: confirmDisabled ? 'not-allowed' : 'pointer', transition: 'background .15s' }}
             onMouseEnter={e => { if (!confirmDisabled) e.currentTarget.style.background = CONFIRM_HOVER_BG; }}
             onMouseLeave={e => { e.currentTarget.style.background = confirmRestBg; }}
           >
-            {loading ? (
+            {busy ? (
               <>
                 <Spinner data-testid="Spinner__3b3aca" />
                 {processingLabel || primaryLabel}

@@ -651,3 +651,24 @@ Documentos and the button is back.
 ## Agent prompts on value and dates — ETP-5852
 
 `header.agentPrompt` says a shipment carries quantities only (its value is the order lines' prices times the quantities, or the invoice made from it; M-71), and `movementDate.agentPrompt` that a completed shipment keeps its date: it is corrected with a return and a new shipment (M-163).
+
+## Fiscal data step before the invoice is created — ETP-6179
+
+- **Confirmar** with the invoice toggle on (`GoodsShipmentConfirmModal` → `ConfirmInOutModal`) and
+  **Crear factura de venta** on a confirmed shipment (`GoodsShipmentActions` →
+  `CreateInvoiceConfirmModal`), including the list's bulk "Crear factura" of several shipments into
+  ONE invoice (`BulkInvoiceFromShipment`, preview with the same `shipmentIds`).
+- The invoice's document type is never a return/rectificative one (`findARInvoiceDocType` skips
+  them since ETP-6179).
+
+The step is shared (`tools/app-shell/src/windows/custom/shared/InvoiceSifStep.jsx`) and built
+from the backend's `sifDefaults` action, which answers which fiscal systems are active for the
+invoice's organization (SII, TicketBAI, VERI*FACTU), which SIF-tab fields are editable and what each
+would get. It is fetched when the primary button is pressed: when no system is active the flow is
+exactly as before; otherwise the modal turns into the "Datos fiscales" step (Back / the same
+primary button) and only then confirms anything, so no source document is left confirmed without
+its invoice because of a fiscal problem. The values travel as `sifFields` in the invoice action's
+body; the backend validates them with the same per-system rule as the invoice's own completion
+(`RectificationFiscalCodeGuard`, 422 `ETGO_InvoiceRectificationCodeRequired`). If the preview cannot
+be loaded the flow continues without the step: the backend applies the same defaults anyway.
+Backend reference: `com.etendoerp.go` `docs/neo-headless.md` §4.12.36b (ETP-6179).

@@ -6,6 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { overlayStyle, cardStyle, btnPrimaryStyle, btnSecondaryStyle, closeBtnStyle, Spinner } from './ConfirmDocumentModal';
 import { usePriceListPicker, PriceListSelectField } from './PriceListPicker';
 import { useRectifiableInvoices, RectifiableInvoiceField } from './RectifiableInvoicePicker';
+import { useInvoiceSifStep, InvoiceSifStepPanel } from '@/windows/custom/shared/InvoiceSifStep.jsx';
 
 import { authHeaders } from '@/auth/api.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -66,6 +67,12 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
  *   title            — optional dialog title. Defaults to the generic `soManageDocsTitle`
  *                      ("Generar factura"); a caller whose action is not a plain invoice (e.g. the
  *                      return windows' rectificative invoice, ETP-5688) passes its own text.
+ *   sifDefaultsUrl   — ETP-6179: the complete URL of the source record's `sifDefaults` action. When
+ *                      set, the modal adds the mandatory "Datos fiscales" step (only when a fiscal
+ *                      system is active for the invoice's organization) and passes its values as
+ *                      the THIRD argument of `onConfirm`, for the caller to send as `sifFields`.
+ *   sifDefaultsBody  — optional body of that call (the `shipmentIds` / `receiptIds` a bulk caller
+ *                      invoices together), so the preview describes the same invoice.
  *   onPriceListChange — optional. Called with the picker's current `priceListId` every time it
  *                      changes (including the initial preselect/resolve). The picker's selection
  *                      is internal state this modal owns; a bulk caller that needs to react to it
@@ -88,6 +95,8 @@ export default function CreateInvoiceConfirmModal({
   pendingQtyTotal,
   onPriceListChange,
   title,
+  sifDefaultsUrl,
+  sifDefaultsBody,
 }) {
   const ui = useUI();
   const apiFetch = useApiFetch();
@@ -163,10 +172,17 @@ export default function CreateInvoiceConfirmModal({
     : ui('soCreateInvoiceCheckDesc');
 
   const canConfirm = (!showPriceListPicker || !!priceListId) && rectify.isSatisfied;
+  const sif = useInvoiceSifStep({
+    enabled: !!sifDefaultsUrl,
+    apiFetch,
+    defaultsUrl: sifDefaultsUrl,
+    body: sifDefaultsBody,
+    absoluteUrl: true,
+  });
   // Sonar S3776 — the primary button below reused `loading || !canConfirm`
   // three times (disabled, opacity, cursor); computing it once removes two
   // redundant evaluations from the function's cognitive complexity.
-  const confirmDisabled = loading || !canConfirm;
+  const confirmDisabled = loading || !canConfirm || sif.loading || (sif.active && !sif.valid);
   // ETP-5333 — while the invoice is being created, the modal must stay mounted
   // (see the primary button below): a backdrop click or the × must not close it
   // out from under the in-flight request, which would reproduce the same
@@ -178,12 +194,18 @@ export default function CreateInvoiceConfirmModal({
 
         <div style={{ padding: '16px 20px 14px', borderBottom: '0.5px solid hsl(var(--border-subtle))', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-            {title ?? ui('soManageDocsTitle')}
+            {sif.active ? ui('invoiceSifStep.title') : (title ?? ui('soManageDocsTitle'))}
           </div>
           <button type="button" onClick={dismiss} disabled={loading} style={closeBtnStyle}>&times;</button>
         </div>
 
-        <div style={{ padding: '14px 20px' }}>
+        {sif.active && (
+          <div style={{ padding: '14px 20px' }}>
+            <InvoiceSifStepPanel sif={sif} data-testid="InvoiceSifStepPanel__e6fb8b" />
+          </div>
+        )}
+
+        {!sif.active && <div style={{ padding: '14px 20px' }}>
           <div style={{ background: 'var(--status-info-bg)', border: '0.5px solid var(--status-info-border)', borderRadius: 10, padding: '14px 16px' }}>
             {bpName && <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>{bpName}</div>}
             <div style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4, display: 'flex', alignItems: 'center', minHeight: 28 }}>
@@ -192,9 +214,9 @@ export default function CreateInvoiceConfirmModal({
                 : displayAmount}
             </div>
           </div>
-        </div>
+        </div>}
 
-        {showPriceListPicker && (
+        {!sif.active && showPriceListPicker && (
           <div style={{ padding: '0 20px 14px' }}>
             <PriceListSelectField
               priceLists={priceLists}
@@ -206,7 +228,7 @@ export default function CreateInvoiceConfirmModal({
           </div>
         )}
 
-        {rectifiableInvoicesUrl && (
+        {!sif.active && rectifiableInvoicesUrl && (
           <div style={{ padding: '0 20px 14px' }}>
             <RectifiableInvoiceField
               invoices={rectify.invoices}
@@ -236,22 +258,30 @@ export default function CreateInvoiceConfirmModal({
           This is NOT the same as the toggle in ConfirmInOutModal: there the button says
           "Confirmar", and generating the invoice really is an optional extra.
         */}
-        <div style={{ padding: '0 20px 16px', fontSize: 12, color: 'hsl(var(--muted-foreground))', lineHeight: 1.4 }}>
+        {!sif.active && <div style={{ padding: '0 20px 16px', fontSize: 12, color: 'hsl(var(--muted-foreground))', lineHeight: 1.4 }}>
           {subtitle}
-        </div>
+        </div>}
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid hsl(var(--border-subtle))' }}>
           <button type="button" onClick={onClose} disabled={loading} style={{ ...btnSecondaryStyle, opacity: loading ? 0.5 : 1 }}>
             {ui('cancel')}
           </button>
+          {sif.active && (
+            <button type="button" data-testid="invoice-confirm-sif-back-btn" onClick={sif.back} disabled={loading} style={{ ...btnSecondaryStyle, opacity: loading ? 0.5 : 1 }}>
+              {ui('back')}
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => onConfirm(priceListId, rectify.selectedIds)}
+            data-testid="invoice-confirm-primary-btn"
+            onClick={() => sif.start(() => (sif.payload
+              ? onConfirm(priceListId, rectify.selectedIds, sif.payload)
+              : onConfirm(priceListId, rectify.selectedIds)))}
             disabled={confirmDisabled}
             style={{ ...btnPrimaryStyle, opacity: confirmDisabled ? 0.6 : 1, cursor: confirmDisabled ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
             {loading && <Spinner data-testid="Spinner__e6fb8b" />}
-            {loading ? ui('soProcessing') : ui('soCreateDocsBtn')}
+            {(loading || sif.loading) ? ui('soProcessing') : ui('soCreateDocsBtn')}
           </button>
         </div>
       </div>

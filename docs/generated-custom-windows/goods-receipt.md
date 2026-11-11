@@ -819,3 +819,24 @@ With a record id, `createPurchaseInvoice` is `availableNow:false` once nothing i
 ## Alternative units hidden from agents — ETP-5852
 
 `lines.operativeUOM` and `lines.operativeQuantity` carry a field-level `MCP_CONFIG` (`fields.visibility:"discarded"`, `included:false`): agents do not see them in `etendo_schema`, cannot send them, and `etendo_defaults` no longer offers them. Exposed, it suggested an unrelated operative unit (Centímetro for a beer). The app and REST are unchanged; the form already hid them. Feedback M-119.
+
+## Fiscal data step before the invoice is created — ETP-6179
+
+- **Confirmar** with the invoice toggle on (`ConfirmGoodsReceiptModal` → `ConfirmInOutModal`) and
+  **Crear factura de compra** on a confirmed receipt (`GoodsReceiptActions`), including the bulk
+  "Crear factura" of several receipts into ONE invoice (`BulkInvoiceFromReceipt`).
+- Purchase invoices only carry SII fields (Fecha operación, Tipo factura, Descripción SII,
+  Autorización, Fecha registro contable): VERI*FACTU never sends purchases, and TicketBAI/Batuz has no
+  editable field on the SIF tab. The document type is never a return/rectificative one.
+
+The step is shared (`tools/app-shell/src/windows/custom/shared/InvoiceSifStep.jsx`) and built
+from the backend's `sifDefaults` action, which answers which fiscal systems are active for the
+invoice's organization (SII, TicketBAI, VERI*FACTU), which SIF-tab fields are editable and what each
+would get. It is fetched when the primary button is pressed: when no system is active the flow is
+exactly as before; otherwise the modal turns into the "Datos fiscales" step (Back / the same
+primary button) and only then confirms anything, so no source document is left confirmed without
+its invoice because of a fiscal problem. The values travel as `sifFields` in the invoice action's
+body; the backend validates them with the same per-system rule as the invoice's own completion
+(`RectificationFiscalCodeGuard`, 422 `ETGO_InvoiceRectificationCodeRequired`). If the preview cannot
+be loaded the flow continues without the step: the backend applies the same defaults anyway.
+Backend reference: `com.etendoerp.go` `docs/neo-headless.md` §4.12.36b (ETP-6179).

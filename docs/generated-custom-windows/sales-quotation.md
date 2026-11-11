@@ -623,3 +623,21 @@ The lines grid shows the **unit of measure** of every line in a new read-only co
 The quotation tab still carries the classic *Create Lines From*, *Pick from Receipt* and *Cancel and Replace* (with its confirm step) buttons, which this window never renders. The MCP
 configuration (`quotation` entity) withholds them with a reason, and `etendo_schema(view:"actions")` lists them under `withheldActions`; see
 `sales-order.md` for the behavior.
+
+## Fiscal data step before the invoice is created — ETP-6179
+
+- **Confirmar → Facturar directamente** (`QuotationConfirmModal`) opens the step as its own dialog
+  (`InvoiceSifStepModal`) before the invoice is created; *Crear pedido* never asks.
+- Normal invoice: VERI*FACTU type from the invoice's document type (`F1` fallback).
+
+The step is shared (`tools/app-shell/src/windows/custom/shared/InvoiceSifStep.jsx`) and built
+from the backend's `sifDefaults` action, which answers which fiscal systems are active for the
+invoice's organization (SII, TicketBAI, VERI*FACTU), which SIF-tab fields are editable and what each
+would get. It is fetched when the primary button is pressed: when no system is active the flow is
+exactly as before; otherwise the modal turns into the "Datos fiscales" step (Back / the same
+primary button) and only then confirms anything, so no source document is left confirmed without
+its invoice because of a fiscal problem. The values travel as `sifFields` in the invoice action's
+body; the backend validates them with the same per-system rule as the invoice's own completion
+(`RectificationFiscalCodeGuard`, 422 `ETGO_InvoiceRectificationCodeRequired`). If the preview cannot
+be loaded the flow continues without the step: the backend applies the same defaults anyway.
+Backend reference: `com.etendoerp.go` `docs/neo-headless.md` §4.12.36b (ETP-6179).

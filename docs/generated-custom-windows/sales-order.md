@@ -838,3 +838,25 @@ The printed order uses the organization's saved design (variant, color, font, te
 ## Agent prompt on the business partner — ETP-5852
 
 `businessPartner.agentPrompt`: names can repeat; agents tell partners apart by reading `searchKey` and `taxID` from `contacts/businessPartner` with an `id in [...]` filter. Feedback M-191.
+
+## Fiscal data step before the invoice is created — ETP-6179
+
+- **Confirmar** with *Crear factura* ticked (`ConfirmModal` in `OrderCreateInvoice.jsx`) and
+  **Gestionar documentos / Generar factura** on a confirmed order (`CreateDocsModal`) show the step
+  before the order is confirmed / the invoice is created.
+- Normal invoice: VERI*FACTU type from the document type the invoice will use (`F1` when it has none);
+  SII key the customer's own default key when it declares one, else `F1`.
+- Not covered: the list's bulk "Generar factura" (`BulkOrderMoreMenu`, one invoice per order) sends
+  no SIF values; each invoice gets the backend defaults.
+
+The step is shared (`tools/app-shell/src/windows/custom/shared/InvoiceSifStep.jsx`) and built
+from the backend's `sifDefaults` action, which answers which fiscal systems are active for the
+invoice's organization (SII, TicketBAI, VERI*FACTU), which SIF-tab fields are editable and what each
+would get. It is fetched when the primary button is pressed: when no system is active the flow is
+exactly as before; otherwise the modal turns into the "Datos fiscales" step (Back / the same
+primary button) and only then confirms anything, so no source document is left confirmed without
+its invoice because of a fiscal problem. The values travel as `sifFields` in the invoice action's
+body; the backend validates them with the same per-system rule as the invoice's own completion
+(`RectificationFiscalCodeGuard`, 422 `ETGO_InvoiceRectificationCodeRequired`). If the preview cannot
+be loaded the flow continues without the step: the backend applies the same defaults anyway.
+Backend reference: `com.etendoerp.go` `docs/neo-headless.md` §4.12.36b (ETP-6179).

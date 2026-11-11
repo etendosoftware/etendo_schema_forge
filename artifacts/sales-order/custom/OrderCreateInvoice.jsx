@@ -21,6 +21,7 @@ import { translateBackendError, translateBackendErrorBody, translateQuotaRefusal
 // instead, which owns that header along with the credential and the CSRF proof, so there is
 // no longer any header-building in this file to get wrong.
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useInvoiceSifStep, InvoiceSifStepPanel, withSifFields } from '@/windows/custom/shared/InvoiceSifStep.jsx';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -371,6 +372,12 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
   const [orderConfirmed,  setOrderConfirmed]  = useState(false);
   const [shipmentResult,  setShipmentResult]  = useState(null);
   const [invoiceResult,   setInvoiceResult]   = useState(null);
+  // ETP-6179: the invoice's mandatory "Datos fiscales" step, BEFORE the order is confirmed.
+  const sif = useInvoiceSifStep({
+    enabled: createInvoice && !invoiceResult,
+    apiFetch,
+    defaultsUrl: `${apiBaseUrl}/header/${orderId}/action/sifDefaults`,
+  });
 
   // Fetch fresh record + line count on mount
   useEffect(() => {
@@ -511,7 +518,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
     if (createInvoice && !invoiceResult) {
       try {
         const res = await apiFetch(`${apiBaseUrl}/header/${orderId}/action/createDraftInvoice`,
-          { method: 'POST', body: JSON.stringify({}) });
+          { method: 'POST', body: JSON.stringify(withSifFields({}, sif)) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
           // ETP-5381: was the only branch here not running the backend message through
@@ -595,6 +602,8 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
   // modal opens with whatever exists and the page reloads on its own close.
   // Otherwise the order is silently in CO state but the UI keeps showing DR,
   // and reopening the modal would re-attempt step 1 → @AlreadyPosted@.
+  const confirmDisabled = loading || sif.loading || (sif.active && !sif.valid);
+
   const handleClose = () => {
     if (orderConfirmed || shipmentResult || invoiceResult) {
       // ETP-4779 — covers the partial-failure path: e.g. the shipment POST
@@ -622,13 +631,19 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
         {/* Title row */}
         <div style={{ padding: '16px 20px 14px', borderBottom: '0.5px solid hsl(var(--card))', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-            {ui('soConfirmTitle', { number: documentNo })}
+            {sif.active ? ui('invoiceSifStep.title') : ui('soConfirmTitle', { number: documentNo })}
           </div>
           <button type="button" onClick={handleClose} style={closeBtn}>&times;</button>
         </div>
 
+        {sif.active && (
+          <div style={{ padding: '14px 20px', overflowY: 'auto' }}>
+            <InvoiceSifStepPanel sif={sif} data-testid="InvoiceSifStepPanel__18d1f0" />
+          </div>
+        )}
+
         {/* Blue summary card */}
-        <div style={{ padding: '14px 20px' }}>
+        {!sif.active && <div style={{ padding: '14px 20px' }}>
           <div style={{ background: 'var(--status-info-bg)', border: '0.5px solid var(--status-info-border)', borderRadius: 10, padding: '14px 16px' }}>
             {bpName && (
               <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>
@@ -653,10 +668,10 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
               </span>
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* Checkboxes — both optional, both can be selected simultaneously */}
-        <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {!sif.active && <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>
             {ui('soGenerateDocs')}
           </div>
@@ -676,7 +691,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
             subtitle={invoiceResult ? ui('soAlreadyCreated') : ui('soCreateInvoiceCheckDesc')}
             disabled={Boolean(invoiceResult)}
             testId="sales-order-confirm-invoice-card" />
-        </div>
+        </div>}
 
         {error && (
           <div style={{ padding: '8px 20px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))', whiteSpace: 'pre-line' }}>
@@ -688,10 +703,15 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
           <button type="button" onClick={handleClose} disabled={loading} style={{ ...btnSecondary, opacity: loading ? 0.5 : 1 }}>
             {ui('cancel')}
           </button>
-          <button type="button" data-testid="sales-order-confirm-submit" onClick={handleConfirm} disabled={loading}
-            style={{ ...btnPrimaryStyle, opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          {sif.active && (
+            <button type="button" data-testid="sales-order-confirm-sif-back" onClick={sif.back} disabled={loading} style={{ ...btnSecondary, opacity: loading ? 0.5 : 1 }}>
+              {ui('back')}
+            </button>
+          )}
+          <button type="button" data-testid="sales-order-confirm-submit" onClick={() => sif.start(handleConfirm)} disabled={confirmDisabled}
+            style={{ ...btnPrimaryStyle, opacity: confirmDisabled ? 0.6 : 1, cursor: confirmDisabled ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             {loading && <Spinner data-testid="Spinner__18d1f0" />}
-            {loading ? ui('soProcessing') : primaryLabel}
+            {(loading || sif.loading) ? ui('soProcessing') : primaryLabel}
           </button>
         </div>
       </div>
@@ -800,6 +820,12 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
   const soleAction = needsShip !== needsInvoice;
   const shipWanted = soleAction ? needsShip : createShipment;
   const invoiceWanted = soleAction ? needsInvoice : createInvoice;
+  // ETP-6179: the invoice's mandatory "Datos fiscales" step.
+  const sif = useInvoiceSifStep({
+    enabled: invoiceWanted,
+    apiFetch,
+    defaultsUrl: `${base}/sales-order/header/${orderId}/action/sifDefaults`,
+  });
 
   const handleCreate = async () => {
     if (loading || (!shipWanted && !invoiceWanted)) return;
@@ -823,7 +849,7 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
 
       if (invoiceWanted) {
         const res = await apiFetch(`${base}/sales-order/header/${orderId}/action/createDraftInvoice`,
-          { method: 'POST', body: JSON.stringify({}) });
+          { method: 'POST', body: JSON.stringify(withSifFields({}, sif)) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
           // ETP-5051 — a plan-quota refusal reads as the translated quota sentence. ETP-5828 —
@@ -847,6 +873,7 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
   };
 
   const canCreate = shipWanted || invoiceWanted;
+  const submitDisabled = loading || !canCreate || sif.loading || (sif.active && !sif.valid);
 
   return (
     <div data-testid="sales-order-manage-docs-modal" onClick={onClose} style={overlayStyle}>
@@ -855,13 +882,19 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
         {/* Title row */}
         <div style={{ padding: '16px 20px 14px', borderBottom: '0.5px solid hsl(var(--card))', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-            {manageDocsLabel(ui, needsShip, needsInvoice) ?? ui('soManageDocsTitle')}
+            {sif.active ? ui('invoiceSifStep.title') : (manageDocsLabel(ui, needsShip, needsInvoice) ?? ui('soManageDocsTitle'))}
           </div>
           <button type="button" onClick={onClose} style={closeBtn}>&times;</button>
         </div>
 
+        {sif.active && (
+          <div style={{ padding: '14px 20px', overflowY: 'auto' }}>
+            <InvoiceSifStepPanel sif={sif} data-testid="InvoiceSifStepPanel__manageDocs" />
+          </div>
+        )}
+
         {/* Blue summary card — no warning since order is already confirmed */}
-        <div style={{ padding: '14px 20px' }}>
+        {!sif.active && <div style={{ padding: '14px 20px' }}>
           <div style={{ background: 'var(--status-info-bg)', border: '0.5px solid var(--status-info-border)', borderRadius: 10, padding: '14px 16px' }}>
             {bpName && (
               <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>
@@ -872,10 +905,10 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
               {formatCurrency(currency, grandTotal)}
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* Only show cards for pending actions; subtitle shows outstanding qty/amount */}
-        <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {!sif.active && <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>
             {/* "(optional)" is only true while there is something to opt out of. With one action
                 left it is not optional — it is what the button does. */}
@@ -901,7 +934,7 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
               implied={soleAction}
             testId="sales-order-manage-invoice-card" />
           )}
-        </div>
+        </div>}
 
         {error && (
           <div style={{ padding: '8px 20px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))', whiteSpace: 'pre-line' }}>
@@ -913,10 +946,15 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
           <button type="button" onClick={onClose} disabled={loading} style={{ ...btnSecondary, opacity: loading ? 0.5 : 1 }}>
             {ui('cancel')}
           </button>
-          <button type="button" data-testid="sales-order-manage-docs-submit" onClick={handleCreate} disabled={loading || !canCreate}
-            style={{ ...btnPrimaryStyle, opacity: (loading || !canCreate) ? 0.6 : 1, cursor: (loading || !canCreate) ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          {sif.active && (
+            <button type="button" data-testid="sales-order-manage-docs-sif-back" onClick={sif.back} disabled={loading} style={{ ...btnSecondary, opacity: loading ? 0.5 : 1 }}>
+              {ui('back')}
+            </button>
+          )}
+          <button type="button" data-testid="sales-order-manage-docs-submit" onClick={() => sif.start(handleCreate)} disabled={submitDisabled}
+            style={{ ...btnPrimaryStyle, opacity: submitDisabled ? 0.6 : 1, cursor: submitDisabled ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             {loading && <Spinner data-testid="Spinner__18d1f0" />}
-            {loading ? ui('soProcessing') : ui('soCreateDocsBtn')}
+            {(loading || sif.loading) ? ui('soProcessing') : ui('soCreateDocsBtn')}
           </button>
         </div>
       </div>
