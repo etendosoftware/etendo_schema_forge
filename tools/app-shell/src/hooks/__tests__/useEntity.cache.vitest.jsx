@@ -679,6 +679,81 @@ describe('useEntity — shared cache integration (ETP-4563)', () => {
     expect(frames.some(f => f.total === 90 && f.lines === 0)).toBe(false);
   });
 
+  // 23b pins the happy path of the joint commit. The two cases below pin its failure branches,
+  // which 23b never reaches: a lines read that fails, and a read superseded by a mutation.
+  it('23c. a forced re-read whose lines read fails commits the header and clears the lines', async () => {
+    let linesFail = false;
+    const { fetchMock } = makeFetch({
+      handler: ({ method, path }) => {
+        if (method === 'GET' && path === '/header/42') {
+          return { ...recordOk({ id: '42', grandTotalAmount: linesFail ? 90 : 0 }), _label: 'record' };
+        }
+        if (method === 'GET' && path === '/lines') {
+          return linesFail
+            ? { ok: false, status: 500, _label: 'children', json: async () => ({ error: { message: 'boom' } }) }
+            : { ...jsonOk([{ id: 'l1' }]), _label: 'children' };
+        }
+        return null;
+      },
+    });
+    globalThis.fetch = fetchMock;
+
+    const a = renderHook(() => useEntity('header', 'lines', opts({ skipListFetch: true })), { wrapper });
+    await act(async () => { await a.result.current.fetchById('42'); });
+    await waitFor(() => expect(a.result.current.children).toHaveLength(1));
+
+    linesFail = true;
+    // The returned promise must settle: a failed lines read is not a failed record read.
+    await act(async () => { await a.result.current.fetchById('42', { force: true }); });
+
+    expect(a.result.current.selected?.grandTotalAmount).toBe(90);
+    expect(a.result.current.recordError).toBeNull();
+    expect(a.result.current.children).toEqual([]);
+    expect(a.result.current.loading).toBe(false);
+  });
+
+  it('23d. a forced re-read superseded by a mutation commits neither its header nor its lines', async () => {
+    let releaseStale;
+    const staleGate = new Promise((r) => { releaseStale = r; });
+    let phase = 'initial';
+    const { fetchMock } = makeFetch({
+      handler: ({ method, path }) => {
+        if (method === 'GET' && path === '/header/42') {
+          if (phase === 'stale') {
+            return { ok: true, status: 200, _label: 'record', json: async () => { await staleGate; return { response: { data: [{ id: '42', grandTotalAmount: 999 }] } }; } };
+          }
+          return { ...recordOk({ id: '42', grandTotalAmount: phase === 'initial' ? 20 : 10 }), _label: 'record' };
+        }
+        if (method === 'GET' && path === '/lines') {
+          if (phase === 'stale') {
+            return { ok: true, status: 200, _label: 'children', json: async () => { await staleGate; return { response: { data: [{ id: 's1' }, { id: 's2' }, { id: 's3' }] } }; } };
+          }
+          return { ...jsonOk([{ id: 'l1' }, { id: 'l2' }]), _label: 'children' };
+        }
+        return null;
+      },
+    });
+    globalThis.fetch = fetchMock;
+
+    const a = renderHook(() => useEntity('header', 'lines', opts({ skipListFetch: true })), { wrapper });
+    await act(async () => { await a.result.current.fetchById('42'); });
+    await waitFor(() => expect(a.result.current.children).toHaveLength(2));
+
+    phase = 'stale';
+    let refresh;
+    await act(async () => { refresh = a.result.current.fetchById('42', { force: true }); });
+    // A line delete lands while both forced GETs are in flight: it bumps the mutation counter.
+    phase = 'fresh';
+    await act(async () => { a.result.current.handleDeleteChild('l1'); });
+    await waitFor(() => expect(a.result.current.selected?.grandTotalAmount).toBe(10));
+
+    await act(async () => { releaseStale(); await refresh; });
+
+    expect(a.result.current.selected?.grandTotalAmount).toBe(10);
+    expect(a.result.current.children.map(c => c.id)).toEqual(['l2']);
+    expect(a.result.current.loading).toBe(false);
+  });
+
   it('24. a successful handleProcess refetches the cached children of the record', async () => {
     const { fetchMock, counts } = makeFetch({
       handler: ({ method, path }) => (method === 'POST' && /\/header\/[^/]+\/action\//.test(path)
