@@ -895,6 +895,7 @@ export default function UpgradePage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState(null);
+  const [replacementPurchase, setReplacementPurchase] = useState(null);
   const [steps, setSteps] = useState(() => initialSetupSteps());
   // 'loading' | 'ready' | 'unavailable'. On 'unavailable' the checkout is shown
   // anyway: the backend is authoritative, so a failed lookup must not block a
@@ -1297,9 +1298,11 @@ export default function UpgradePage() {
   // guaranteed to have committed yet when this function's own closure captured
   // `form` — reading `form.tenantName` here would silently send the STALE value,
   // including an empty string when the field was never populated (ETP-5443).
-  const runUpgrade = async tenantName => {
+  const runUpgrade = async (tenantName, replacePurchaseId = null) => {
     setPhase('running');
     setTransferWarning(false);
+    setFormError(null);
+    setReplacementPurchase(null);
     // Duration is measured from here to the terminal event in the resume
     // effect above, so it covers the full round trip through Stripe's hosted
     // page — not just this request. There is no `startedAt` local variable
@@ -1320,6 +1323,7 @@ export default function UpgradePage() {
           // without one under its legacy price fallback; the page never relies on that and sends
           // the plan it showed.
           planKey: selectedPlan.planKey,
+          ...(replacePurchaseId ? { replacePurchaseId } : {}),
           language: getStoredLocale(),
         }
       );
@@ -1336,6 +1340,16 @@ export default function UpgradePage() {
         JSON.stringify(includeDataTransfer ? dataTransfer : {}));
       window.location.assign(session.checkoutUrl);
     } catch (error) {
+      if (error?.code === UPGRADE_ERROR_CODES.purchaseSelectionChanged) {
+        setReplacementPurchase(error.purchase?.replacementAllowed ? {
+          purchaseId: error.purchase.purchaseId,
+          tenantName,
+          planKey: selectedPlan.planKey,
+        } : null);
+        setFormError(UPGRADE_ERROR_CODES.purchaseSelectionChanged);
+        setPhase('form');
+        return;
+      }
       const existingPurchaseHandled = await handleExistingPurchaseError(error, {
         baseUrl: getUpgradeBaseUrl(),
         setFormError,
@@ -1798,6 +1812,12 @@ export default function UpgradePage() {
                 ui={ui}
                 data-testid="PlanSummary__58bad7" />
 
+              {selectedPlan?.secondMonthFree === true && (
+                <p className="text-sm text-muted-foreground" data-testid="upgrade-monthly-promotion">
+                  {ui('upgradeMonthlyIntroductoryOffer')}
+                </p>
+              )}
+
               {formError && (
                 <div
                   role="alert"
@@ -1805,7 +1825,23 @@ export default function UpgradePage() {
                   data-testid="upgrade-error"
                 >
                   <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" data-testid="CircleAlert__58bad7" />
-                  <span>{ui(formError)}</span>
+                  <div className="space-y-3">
+                    <p>{ui(formError)}</p>
+                    {replacementPurchase
+                      && replacementPurchase.planKey === selectedPlan?.planKey
+                      && replacementPurchase.tenantName === form.tenantName.trim() && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={phase === 'running'}
+                        onClick={() => runUpgrade(replacementPurchase.tenantName,
+                          replacementPurchase.purchaseId)}
+                        data-testid="upgrade-replace-purchase"
+                      >
+                        {ui('upgradeReplacePendingPurchase')}
+                      </Button>
+                    )}
+                  </div>
                 </div>
               )}
 
