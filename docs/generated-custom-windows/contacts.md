@@ -1801,6 +1801,8 @@ As in the app (whose form does not show it), a contact's `searchKey` is its numb
 
 An address created over MCP without `name` gets the name the address editor gives (city and address line, else region and country, else "Location"), not the AD default ".". Feedback M-168.
 
+Since ETP-6206 the server caps the stored name at the 60 characters of `C_BPartner_Location.Name` on every channel (app form, import, MCP), on create and on update, trimming a trailing ", " or spaces left by the cut (`ContactAddressName`). Before, a long street pushed "city, address line" past the column and the save failed.
+
 ## Agent prompts on accounting accounts — ETP-5852
 
 The account fields of `customerAccounting` and `vendorAccounting` tell agents they take an accounting combination id, found with `etendo_selectors` by account number, not a chart-of-accounts `elementValue` id. Feedback M-129.

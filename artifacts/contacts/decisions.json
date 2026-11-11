@@ -594,8 +594,7 @@
         "taxLocation": {
           "publicApi": { "exposed": true, "name": "taxLocation" }
         }
-      },
-      "javaQualifier": "contactsLocationAddressHandler"
+      }
     },
     "contact": {
       "fields": {

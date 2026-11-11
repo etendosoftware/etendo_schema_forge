@@ -1,8 +1,8 @@
 {
   "version": "0.7.0",
   "generatedAt": "2026-09-20T18:16:41.258Z",
-  "updatedAt": "2026-11-11T12:04:27.112Z",
-  "checksum": "3a375ef562e7d6c7",
+  "updatedAt": "2026-11-11T13:36:56.452Z",
+  "checksum": "82cecfcffa2b5efa",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -4872,8 +4872,7 @@
               "source": "N"
             }
           }
-        ],
-        "javaQualifier": "contactsLocationAddressHandler"
+        ]
       },
       "contact": {
         "tableName": "AD_User",
@@ -10806,8 +10805,7 @@
             "visibility": "system",
             "required": true
           }
-        ],
-        "javaQualifier": "contactsLocationAddressHandler"
+        ]
       },
       "contact": {
         "tableName": "AD_User",
