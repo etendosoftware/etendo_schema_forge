@@ -1292,6 +1292,21 @@ export default function UpgradePage() {
     return () => { cancelled = true; };
   }, []);
 
+  const buildPurchasePayload = (tenantName, replacePurchaseId) => ({
+    action: 'productive-tenant',
+    clientName: tenantName,
+    ...(isDemoOrigin && selectedDemoClientId ? { demoClientId: selectedDemoClientId } : {}),
+    ...(includeDataTransfer ? { dataTransfer } : {}),
+    upgradeAction: form.upgradeAction,
+    // Always a KEY from the catalog — the plan chosen on the Plan step and summarized on the
+    // Payment step — never a price and never a literal written here. The server only sells
+    // without one under its legacy price fallback; the page never relies on that and sends
+    // the plan it showed.
+    planKey: selectedPlan.planKey,
+    ...(replacePurchaseId ? { replacePurchaseId } : {}),
+    language: getStoredLocale(),
+  });
+
   // `tenantName` is passed in explicitly by the caller (handleSubmit) rather than
   // read from `form.tenantName` here: the caller may have just computed it (demo
   // fallback) and called `setForm` a moment earlier, and that update is not
@@ -1312,20 +1327,7 @@ export default function UpgradePage() {
     try {
       const session = await createBillingPurchase(
         getUpgradeBaseUrl(),
-        {
-          action: 'productive-tenant',
-          clientName: tenantName,
-          ...(isDemoOrigin && selectedDemoClientId ? { demoClientId: selectedDemoClientId } : {}),
-          ...(includeDataTransfer ? { dataTransfer } : {}),
-          upgradeAction: form.upgradeAction,
-          // Always a KEY from the catalog — the plan chosen on the Plan step and summarized on the
-          // Payment step — never a price and never a literal written here. The server only sells
-          // without one under its legacy price fallback; the page never relies on that and sends
-          // the plan it showed.
-          planKey: selectedPlan.planKey,
-          ...(replacePurchaseId ? { replacePurchaseId } : {}),
-          language: getStoredLocale(),
-        }
+        buildPurchasePayload(tenantName, replacePurchaseId)
       );
       // Payment and provisioning are confirmed by the backend/webhook. The
       // browser only follows the provider-hosted URL and never handles cards.

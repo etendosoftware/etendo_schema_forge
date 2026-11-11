@@ -2,12 +2,13 @@
 
 Jira: ETP-6216. Scope: the functional application and the Etendo GO billing adapter.
 
-Status: implemented locally on `feature/ETP-6216`; not committed, published or deployed.
+Status: implemented and committed on `feature/ETP-6216`; publication checks are in progress.
+Human QA and live Stripe validation remain pending. No deployment has been performed.
 
 ## Problem
 
-Creating a purchase currently looks up an unfinished purchase by account and company name before
-reading the selected plan. It can return that purchase's original Stripe Checkout URL even when
+Before this change, creating a purchase looked up an unfinished purchase by account and company
+name before reading the selected plan. It could return that purchase's original Stripe Checkout URL even when
 the customer selected another plan or billing interval. The original price must remain immutable
 when explicitly resuming a purchase, but resuming must not silently override a new selection.
 
@@ -62,10 +63,12 @@ cd tools/app-shell
 npm run test:vitest -- src/pages/__tests__/UpgradePage.vitest.jsx
 ```
 
-The Java sources and focused tests were compiled from this worktree and executed with the real
-JUnit Jupiter and Vintage engines, using cached runtime/test jars. This was a fallback for the
-sandbox refusing the Gradle wrapper cache lock; it is not evidence that the Gradle task ran.
-The normal repeatable repository command, from the Etendo root, is:
+The normal Gradle task compiled the application and test sources and passed the focused selection:
+239 tests across ten classes, with zero failures, errors or skips. This includes 15 price-service
+tests using real localhost HTTP fixtures. The earlier cached-jar fallback was superseded after
+aligning this isolated environment with the canonical core baseline and regenerating its SQLC
+test fixture. Those setup changes did not modify the delivered application sources.
+The repeatable repository command, from the Etendo root with JDK 17, is:
 
 ```sh
 ./gradlew goTestUnit \
@@ -81,6 +84,21 @@ The normal repeatable repository command, from the Etendo root, is:
   --tests com.etendoerp.go.payment.SubscriptionLifecycleApplierTest
 ```
 
-Browser verification and screenshots remain pending: local browser startup was refused by the
-sandbox, and the copied tooling packages also prevented the normal Vite startup. No database
-concurrency, live Stripe billing, real coupon/schedule, or production deployment was validated.
+The focused local mocked Playwright scenario passed conflict → explicit confirmation → selected
+plan replacement with one worker and zero retries. It asserted the 409 response, the selected
+plan and predecessor ID in the replacement request, and the 201 response before following the
+mock Checkout URL. Its sanitized screenshot and exact commands are in the
+[delivery evidence](../../artifacts/delivery-evidence/ETP-6216/README.md). Restoring the unchanged
+lockfile dependencies resolved the old copied-tooling mismatch; the previous sandbox/browser
+startup restrictions no longer apply to this validation.
+
+The full pre-push suite also covers reconciliation integration. Its first execution exposed a
+missing collaborator seam for promotion recovery; the service now follows the reconciler's
+existing injectable-collaborator pattern, with regression cases for live/dry runs and phase
+failure isolation. Its complete `BillingReconciliationServiceTest` class passed 69 tests with
+zero failures, errors or skips through normal Gradle after that correction. Publication requires
+the full pre-push checks to pass; current results belong in
+the delivery evidence rather than being inferred from the focused selection above.
+
+No database concurrency, live Stripe billing, real coupon/schedule, or production deployment was
+validated. Human QA remains pending: Matías Bernal / Emilio Polliotti.
