@@ -2798,6 +2798,7 @@ function TableDataRow({
   onCloneRow,
   quickActionsEnabled,
   rowQuickActions,
+  rowWritesOff = false,
   entity,
   apiBaseUrl,
   token,
@@ -2807,7 +2808,6 @@ function TableDataRow({
   const isSelectedLine = selectedRowId != null && row.id === selectedRowId;
   const rowDisabled = isRowSelectable && !isRowSelectable(row);
   // Read-only: the hover pencil is a write affordance; row click still opens the record to view.
-  const showHoverPencil = !rowQuickActions?.readOnly;
 
   return (
     <TableRow
@@ -2883,7 +2883,7 @@ function TableDataRow({
               >
                 <Check className="h-5 w-5" aria-hidden="true" data-testid="Check__eb5261" />
               </button>
-            ) : showHoverPencil && (
+            ) : !rowWritesOff && (
               <button
                 type="button"
                 onClick={(e) => {
@@ -3271,11 +3271,13 @@ export function DataTable({
   // ETP-5757 — list GET envelope siblings (`meta.listTotals`); see serverTotals below.
   meta,
   gridView = null,
+  windowReadOnly = false,
 }) {
   // A read-only window drops the row write handlers once, at the entry: every branch below
-  // (legacy trash column, hover actions, row pencil) reads these two names.
-  const onDeleteRow = rowQuickActions?.readOnly ? null : onDeleteRowProp;
-  const onEditRow = rowQuickActions?.readOnly ? null : onEditRowProp;
+  // (legacy trash column, hover actions, row pencil) reads these names.
+  const rowWritesOff = !!(rowQuickActions?.readOnly || windowReadOnly);
+  const onDeleteRow = rowWritesOff ? null : onDeleteRowProp;
+  const onEditRow = rowWritesOff ? null : onEditRowProp;
   const t = useLabel(labelOverrides);
   const tMenu = useMenuLabel();
   const ui = useUI();
@@ -3813,7 +3815,7 @@ export function DataTable({
               rowHoverStyle,
               editingRowId, handleRowActivation, hoverRowActions, onSaveRow, onCancelEdit,
               onEditRow, onDeleteRow, deletingRows, setDeletingRows, ui, legacyDeleteEnabled,
-              onCloneRow, quickActionsEnabled, rowQuickActions, entity, apiBaseUrl, token,
+              onCloneRow, quickActionsEnabled, rowQuickActions, rowWritesOff, entity, apiBaseUrl, token,
               hasDimensionsPanel, quickActionsColWidthPx,
             })}
             {addRow?.active && (

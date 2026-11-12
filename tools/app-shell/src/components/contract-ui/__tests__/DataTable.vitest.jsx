@@ -165,6 +165,12 @@ describe('DataTable', () => {
       expect(screen.queryByTestId('row-delete-1')).not.toBeInTheDocument();
     });
 
+    it('renders no legacy trash column under windowReadOnly without rowQuickActions', () => {
+      render(<DataTable columns={COLUMNS} data={DATA} onDeleteRow={vi.fn()} windowReadOnly />);
+      expect(screen.queryAllByTitle('deleteRowTooltip')).toHaveLength(0);
+      expect(screen.queryByTestId('row-delete-1')).not.toBeInTheDocument();
+    });
+
     it('renders no trash in hoverRowActions mode when readOnly', () => {
       render(
         <DataTable
