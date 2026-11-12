@@ -107,8 +107,9 @@ Differences with the written tasks:
 1. Period selector (3/6/12 months, default 12), exact date range under it, modal that inherits the period but keeps independent state.
 2. Per-warehouse series chart; month labels in the system language; X-axis rules; tooltip with sorted rows and a Total row.
 3. Interactive legend (panel and modal behave differently), at least one series always visible.
-4. Summary / Warehouses tabs, "N ubicaciones" link, warehouse cards, remove "Reserved".
-5. Collapse to a 48 px strip, state persisted across reloads.
+4. Summary / Warehouses tabs, "N ubicaciones" link (**superseded 2026-11-12:** the whole stock card is the button and "N ubicaciones" is a plain pill), warehouse cards, remove "Reserved".
+5. Collapse to a 48 px strip, state persisted across reloads (**control superseded 2026-11-12:** one 24 px circular button on the divider, strip with only the Resumen and Almacenes icons).
+6. **Design pass 2026-11-12** (designer Valeria, ETP-5889): server-side "Total del período" row (`etgoTotals`, neo-headless.md §5.3.4.b), 340 px table floor with full-width borderless table, same-line date/time and type/document cells, Etendo AI chart palette and tokens, strong primary Save and blue active tab (Product only). Details: `docs/generated-custom-windows/product.md`, last section.
 
 **Design verification (Claude Design board, 2026-11-02).** Checked in the board: RF-01 to RF-05, RF-09, RF-11, RF-12, RF-14 (click), RF-15 and RF-16 behave as written. Details left open:
 - The Y axis rescales when a series is hidden; the RFs say nothing about it.
@@ -146,7 +147,7 @@ The role is not an event property of this event: it travels on every event as th
 | Resulting stock with a warehouse filter | **Follows the filter**: per product and warehouse when a warehouse is selected, per product otherwise. Not computed for the count-only request |
 | Return types | `C_DocType.IsReturn`, resolved by the handler |
 | Sortable Almacén and Tipo | Two stored computed columns on `M_Transaction` (`EM_Etgo_Warehouse_ID`, `EM_Etgo_Doc_Kind`, `S`/`S`) |
-| Default periods (decided 2026-11-02) | **Amended 2026-11-11:** the Movements tab now opens on **last 30 days** (was 7): the designer changed it in the updated design (Producto - Panel lateral v2), and it means fewer empty opens for products without recent activity. Originally decided as last 7 days; the side panel defaults to **12 months** with the exact range `DD/MM/AAAA – DD/MM/AAAA` under the selector (RF-01, RF-05). Neither default changes. The Jira text of ETP-5889 (scope item "Barra de filtros" and CP-07) was corrected by the user from "3 months" to "7 days" on 2026-11-02 |
+| Default periods (decided 2026-11-02) | **Superseded 2026-11-12: the Movements tab opens on the last 7 days again** (designer's final comment on ETP-5889; the 2026-11-11 30-day change is reversed, `DEFAULT_MOVEMENTS_PERIOD = last7`). The side panel stays on 12 months. History: ~~Amended 2026-11-11:~~ the Movements tab now opens on **last 30 days** (was 7): the designer changed it in the updated design (Producto - Panel lateral v2), and it means fewer empty opens for products without recent activity. Originally decided as last 7 days; the side panel defaults to **12 months** with the exact range `DD/MM/AAAA – DD/MM/AAAA` under the selector (RF-01, RF-05). Neither default changes. The Jira text of ETP-5889 (scope item "Barra de filtros" and CP-07) was corrected by the user from "3 months" to "7 days" on 2026-11-02 |
 | Flag for ETP-5908 (decided 2026-11-02) | Reuses the capability `productMovements`, no own flag; see section 4B for what depends on it |
 | Who sees the tab | A per-account feature flag, `product-movements-tab` (default off), evaluated only in the backend by `ProductMovementsPolicy` and published as the capability `productMovements`. The flag gates behaviour only: it is **not** access control (with it off the `transactions` rows stay readable under the role's access; only `etgoStockAfter` and `etgoTotalRows` are withheld) |
 
@@ -158,7 +159,7 @@ The role is not an event property of this event: it travels on every event as th
 - **Datadog**: the flag exists and has a targeting rule by account email in Production (two accounts); it must be widened for the KPIs to measure anything. A real TTL is still to be set (the registry holds a placeholder, 2027-01-31).
 - **First KPI value**: the collector reports the last complete Monday–Sunday week, so the first value appears on the Monday after the first complete week in which the tab was deployed and used (for the week of 2 to 8 November, on 2026-11-09). Until the event has been seen in production the KPIs are N/D, never 0.
 - **Analyst**: does the tenant admin count as a warehouse role; release date and cohort the 3-month target counts from; whether the KPI is restricted to accounts with the flag (with a gradual rollout the denominator includes devices that cannot see the tab).
-- ~~Default period of the tab~~: **closed 2026-11-02** as last 7 days; **changed 2026-11-11 to last 30 days** following the updated design (fewer empty opens for products without recent activity).
+- ~~Default period of the tab~~: **closed 2026-11-02** as last 7 days; changed 2026-11-11 to last 30 days, **reverted 2026-11-12 to last 7 days** by the designer's final call (superseded).
 - **`W+`/`W-` (Work Order) movements**: not in the type table and not excluded; not decided.
 - **Not verified**: MCP access (scope 12), a product with more than one page of movements, the flag off in a hosted environment, the event reaching Datadog and Mixpanel (nothing is configured locally), and the filter of the lists (`"x" in properties[…]`) in the collector's own segmentation query.
 - Optional hardening: a `RAISE WARNING` in the two PL/pgSQL functions instead of returning null on error (needs `update.database`).
