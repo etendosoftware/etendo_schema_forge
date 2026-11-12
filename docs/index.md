@@ -39,6 +39,7 @@
 | [xml-regeneration-check.md](xml-regeneration-check.md) | **XML regeneration check**: compare original module XML vs export.database output without DB access |
 | [local-env-plugin.md](local-env-plugin.md) | **local-env plugin** (`local-env.d/plugins/etendo-go`): seeds the GO sample client into local-env's cached DB and starts one Etendo GO SPA per environment on its own `SPA_PORT`/`BFF_PORT`; how `make dev` / `make dev-local-core` honour those ports |
 | [ci-parity-install.md](ci-parity-install.md) | **CI parity install** (`make ci-parity`): bring the local Etendo checkout to the module/branch set CI installs, then clean DB + install — dry-run by default |
+| [../.claude/skills/jenkins/SKILL.md](../.claude/skills/jenkins/SKILL.md) | **Jenkins, read-only** (`make jenkins`): jobs, pipeline source (repo/branch/Jenkinsfile), webhook filters, builds and console logs of `jenkins-go` and `jenkins2`; credentials in `~/.config/etendo-jenkins/config.json`; secrets masked in every output |
 
 ## Field & Pipeline Reference
 
