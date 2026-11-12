@@ -61,11 +61,11 @@ run by a human; this plan names no ids.
 | `AD_TABLE_ID` | FK `AD_TABLE` | no | `C_Order`, `M_InOut` or `C_Invoice` |
 | `RECORD_ID` | VARCHAR(32) | no | The document the link opens |
 | `DOCUMENT_KIND` | VARCHAR(20) | no | `QUOTATION` / `ORDER` / `SHIPMENT` / `INVOICE` (check constraint). A credit note is `INVOICE`; credit-note-ness is read from `C_DocType` at display time (§B.2) |
-| `ORIGIN` | VARCHAR(10) | no | `SEND` or `RENEWAL` (check constraint) |
-| `PARENT_LINK_ID` | FK self | yes | For `RENEWAL`: the expired link that triggered it |
-| `ROOT_LINK_ID` | FK self | no | The `SEND` row of the chain (equals own id on a `SEND` row). **The KPI unit "one send"** |
-| `CONTRACT_NAME` | VARCHAR(60) | no | e.g. `sales-order-send`, `portal-link-renewal` |
-| `ETGO_EMAIL_SEND_LOG_ID` | FK `ETGO_EMAIL_SEND_LOG` | yes | Best effort: history writes are swallowed on failure (`TransactionalEmailService.java:555-561`) |
+| `LINK_ORIGIN` | VARCHAR(10) | no | `SEND` or `RENEWAL` (check constraint) |
+| `PARENT_LINK_ID` | VARCHAR(32), no FK | yes | For `RENEWAL`: the expired link that triggered it |
+| `ROOT_LINK_ID` | VARCHAR(32), no FK | no | The `SEND` row of the chain (equals own id on a `SEND` row). **The KPI unit "one send"** |
+| `CONTRACT_NAME` | VARCHAR(80) | no | e.g. `sales-order-send`, `portal-link-renewal` |
+| `ETGO_EMAIL_SEND_LOG_ID` | VARCHAR(32), no FK | yes | Best effort: history writes are swallowed on failure (`TransactionalEmailService.java:555-561`) |
 | `RECIPIENTS_TO` | VARCHAR(2000) | no | Every To address, same format/size as `ETGO_EMAIL_SEND_LOG.RECIPIENTS_TO` (`ETGO_EMAIL_SEND_LOG.xml:60`) |
 | `RECIPIENTS_CC` | VARCHAR(2000) | yes | Every CC address (`ETGO_EMAIL_SEND_LOG.xml:64`) |
 | `EMAIL_LANGUAGE` | VARCHAR(10) | no | The send's language; the renewal email reuses it (`ETGO_EMAIL_SEND_LOG.xml:80` sizing) |
@@ -74,6 +74,14 @@ run by a human; this plan names no ids.
 | `FIRST_USED`, `LAST_USED` | TIMESTAMP | yes | First / last successful validation (KPI fallback when usage events are opted out) |
 
 Indexes: unique `TOKEN_HASH`; `(AD_CLIENT_ID, C_BPARTNER_ID)`; `ROOT_LINK_ID`; `PARENT_LINK_ID`.
+
+**The three link columns are loose references, on purpose** (review W5, decided 2026-11-12): the
+XML (`ETGO_PORTAL_LINK.xml`) carries no foreign key on them and stays that way. A self-FK would need
+an `AD_REF_TABLE` record to be modelled in the AD and buys nothing the code relies on — every chain
+read is by id from the row itself. A foreign key to `ETGO_EMAIL_SEND_LOG` would make the future
+purge of that table (deferred, `transactional-email-contracts.md` → *Readable send history*) fail on
+any send that carried a link, and the column is best effort anyway. Keeping the XML unchanged also
+means no new `update.database` for the review round.
 Recipients in clear on a client-level table is the same privacy decision already taken for
 `ETGO_EMAIL_SEND_LOG` (ETP-5069) — same data, same access level, nothing new exposed.
 
@@ -240,7 +248,8 @@ system-caller pattern of `DemoTrialNoticeEmailContract` (`:106-108`, `:211-219`)
   the document's Emails card next to the original send (recommendation; one-line change if the user
   prefers it hidden).
 - `deliveryPolicy`: idempotency key `portal-link-renewal:{tenant}:{newLinkId}:v1`; throttles
-  `perRecipient(5, 3600)`, `perTenant(100, 3600)`, `global(2000, 60)` as backstop
+  `perRecipient(20, 3600)`, `perTenant(100, 3600)`, `global(2000, 60)` as backstop — the
+  document-email ceilings; 5/h would have been a second product cap the story does not have
   (`EmailThrottleRule.java:52-118`).
 - `onDelivered` confirms the renewal row (same §A.2.6 hook), then `portal.link.renewed` is emitted.
 
@@ -248,8 +257,8 @@ system-caller pattern of `DemoTrialNoticeEmailContract` (`:106-108`, `:211-219`)
 
 | Property (env) | Default | Meaning |
 |---|---|---|
-| `etendo.go.portal.renewal.cooldownMinutes` (`ETGO_PORTAL_RENEWAL_COOLDOWN_MINUTES`) | **15** | An expired link renews at most once per cool-down: a confirmed `RENEWAL` row with this `PARENT_LINK_ID` sent inside the window ⇒ `recentlySent`, no email, and the page still says a new link was sent. After the window, re-opening it sends a new email |
-| `etendo.go.portal.renewal.maxPerDay` (`ETGO_PORTAL_RENEWAL_MAX_PER_DAY`) | **0 (no limit)** | Optional operator cap, off by default — the story sets none: confirmed renewals per `(AD_CLIENT_ID, C_BPARTNER_ID)` per rolling 24 h; above it ⇒ `recentlySent` |
+| `etendo.go.portal.renewal.cooldownMinutes` (`ETGO_PORTAL_RENEWAL_COOLDOWN_MINUTES`) | **15** | An expired link renews at most once per cool-down: an active `RENEWAL` row with this `PARENT_LINK_ID` created inside the window — pending ones included, under a `SELECT … FOR UPDATE` on the expired link so it holds across requests and nodes — ⇒ `recentlySent`, no email, and the page still says a new link was sent. After the window, re-opening it sends a new email |
+| `etendo.go.portal.renewal.maxPerDay` (`ETGO_PORTAL_RENEWAL_MAX_PER_DAY`) | **0 (no limit)** | Optional operator cap, off by default — the story sets none: active renewals (by creation) per `(AD_CLIENT_ID, C_BPARTNER_ID)` per rolling 24 h; above it ⇒ `recentlySent` |
 
 `0` meaning "no limit" deliberately differs from the email throttle convention (non-positive ⇒
 default, `DefaultDocumentSendEmailContract.java:180-193`) because "no limit" is a legitimate PO
@@ -632,6 +641,19 @@ Where the code differs from the text above, and why:
   Etendo GO would have hit it. `PortalServlet#resolveToken` reads `X-Portal-Token` first, then the
   `/me/{token}` path, then `Authorization: Bearer` (legacy), so a GO session's own credential is
   never what opens the portal. This supersedes MVP §5.4's "sent as an `Authorization` header".
+- **Known debt carried over from the MVP (review W6, not fixed):** `PortalRateLimiter` keys on
+  `HttpServletRequest#getRemoteAddr`. Behind a load balancer or proxy that is the balancer's
+  address, so every visitor shares one 30 req/min bucket per node — a busy tenant could see
+  legitimate 429s, and the limiter protects nothing per caller. Fixing it needs a trusted
+  `X-Forwarded-For` policy for the deployment; out of scope for ETP-6209.
+- **Renewal concurrency (review W1).** `PortalLinkService#renew` locks the expired link's row
+  (`SELECT … FOR UPDATE`) and counts renewals by creation, pending ones included; a failed attempt
+  deactivates its pending row. Chosen over committing before releasing an in-JVM lock because the
+  row lock also holds across nodes and needs no extra commit in the send path.
+- **Confirmation is committed at once (review W3).** After a successful confirm the service commits,
+  so a later failure in the same request cannot invalidate the link the customer already holds.
+  Safe because both portal contracts carry an idempotency key: the send's history and audit rows are
+  already committed. A failed confirm is rolled back on its own and the session reopened.
 - **`POST /renew` extra answers:** `{state:"valid"}` when the link had not expired, `503` when the
   email could not be sent (the page offers a retry).
 

@@ -117,7 +117,8 @@ graph LR
   class LAYOUT,PROVIDER,SMTP hub
 ```
 
-**6 verified, 16 migrated, 24 total.** The account greens were opened in a real inbox on 2026-08-25:
+**6 verified, 16 migrated, 25 total** (the 25th, `portal-link-renewal`, ETP-6209, is described in
+§3.A and not yet verified in an inbox). The account greens were opened in a real inbox on 2026-08-25:
 the invitation (including the resend path), the password reset stating its true 30-minute window,
 and — from one run of a fresh admin through sign-up and onboarding — the welcome and the
 environment-ready notice. A second run, an invited operator accepting from scratch, confirmed the
@@ -375,7 +376,7 @@ recipients, subject, the operator's message and the signed download link are sto
 **per tenant**, under **client-level AD security**. The justification is narrow and worth keeping
 in view — an operator must be able to prove to their own customer what was sent, to whom and when,
 and a hash cannot do that. The scope is correspondingly narrow: only the eight document-send
-contracts opt in.
+contracts and `portal-link-renewal` (ETP-6209) opt in.
 
 - **Gate:** `EmailContract#logsSendHistory()` defaults to `false`.
   `DefaultDocumentSendEmailContract` overrides it to `true`, so the eight document-send contracts
@@ -384,12 +385,19 @@ contracts opt in.
   automatically. The **account/auth family** (`company-invitation`, `reset-password`,
   `password-changed`, `verify-email`, `login-alert`, `organization-joined`) inherits `false` and
   **never reaches the table** — those recipients are the platform's own users and that copy carries
-  single-use links.
+  single-use links. **`portal-link-renewal`** (ETP-6209) also opts in: a renewed customer portal link
+  is correspondence about the document, so it is filed under the document's own `RECORD_ID` and
+  spec (`getSpecName(EmailSendContext)`) and shows in its Emails card next to the original send.
 - **Write path:** `TransactionalEmailService#recordAudit` writes the history row immediately
   *before* the safety-store audit row, so both land in the same transaction and can never disagree.
   `DalEmailSendLogStore` writes **without** admin mode, which is what makes `AD_CLIENT_ID` /
   `AD_ORG_ID` / `CREATEDBY` the caller's real values — and incidentally closes the
-  null-`userId` gap §5.1 complains about, for these eight contracts.
+  null-`userId` gap §5.1 complains about, for the document sends. **One exception (ETP-6209):** a
+  send made from the System context — the portal link renewal, which runs with no tenant session —
+  would otherwise be filed under client `0`, where no window sees it. `DalEmailSendLogStore#setOwner`
+  files such a row under the tenant named by the command (`tenantId`) at organization `0` (`*`),
+  readable by every organization of that tenant; `CREATEDBY` is then the System user. Only a
+  System-context send that names a tenant takes this path.
 - **`MESSAGE_BODY` is the operator's text, not the rendered email.** What is stored is
   `EmailMessageEdits#getMessage()`, pre-escape. A send that used the catalog's default copy stores
   `null` there and keeps its `SUBJECT`.
