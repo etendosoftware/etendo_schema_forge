@@ -265,16 +265,7 @@ export default function ConfirmInOutModal({
             <div style={{ fontSize: 18, fontWeight: 700, color: 'hsl(var(--foreground))', lineHeight: 1.2 }}>
               {sif.active ? ui('invoiceSifStep.title') : title}
             </div>
-            {subtitleParts.length > 0 && (
-              <div data-testid="confirm-modal-doc-info" style={{ marginTop: 6, fontSize: 13, color: 'hsl(var(--muted-foreground))', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                {subtitleParts.map((part, i) => (
-                  <span key={part} style={{ display: 'contents' }}>
-                    {i > 0 && <span style={{ color: 'hsl(var(--text-disabled))', userSelect: 'none' }}>·</span>}
-                    <span style={i === 0 ? { fontWeight: 700, color: 'hsl(var(--foreground))' } : undefined}>{part}</span>
-                  </span>
-                ))}
-              </div>
-            )}
+            <DocInfoSubtitle parts={subtitleParts} data-testid="DocInfoSubtitle__3b3aca" />
           </div>
           <button
             type="button"
@@ -313,42 +304,14 @@ export default function ConfirmInOutModal({
           )}
 
           {/* Toggle card — hidden when only creating invoice (skipDocumentAction) or when no invoice action is available */}
-          {!sif.active && !skipDocumentAction && invoiceAction && <div
-            role="switch"
-            aria-checked={createInvoice}
-            data-testid="confirm-modal-invoice-toggle"
-            tabIndex={0}
-            onClick={toggle}
-            onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(); } }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer', borderRadius: 10,
-              padding: createInvoice ? '13px 15px' : '14px 16px',
-              border: createInvoice ? '2px solid var(--status-info-border)' : '1px solid hsl(var(--border-subtle))',
-              background: createInvoice ? 'var(--status-info-bg)' : 'hsl(var(--card))',
-              transition: 'border-color .15s, background .15s',
-              outline: 'none',
-            }}
-            onFocus={e => { e.currentTarget.style.boxShadow = '0 0 0 3px hsl(var(--focus-ring) / 0.22)'; }}
-            onBlur={e => { e.currentTarget.style.boxShadow = 'none'; }}
-          >
-            <div style={{ width: 38, height: 38, borderRadius: 9, background: 'var(--status-info-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--status-info-fg)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="16" y1="13" x2="8" y2="13" />
-                <line x1="16" y1="17" x2="8" y2="17" />
-              </svg>
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: createInvoice ? 'var(--status-info-fg)' : 'hsl(var(--foreground))', lineHeight: 1.3 }}>
-                {cardTitle}
-              </div>
-              <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 3, lineHeight: 1.45 }}>
-                {cardDesc}
-              </div>
-            </div>
-            <ToggleSwitch on={createInvoice} data-testid="ToggleSwitch__3b3aca" />
-          </div>}
+          {!sif.active && !skipDocumentAction && invoiceAction && (
+            <InvoiceToggleCard
+              on={createInvoice}
+              onToggle={toggle}
+              title={cardTitle}
+              description={cardDesc}
+              data-testid="InvoiceToggleCard__3b3aca" />
+          )}
 
           {!sif.active && pickerActive && (
             <PriceListSelectField
@@ -423,24 +386,102 @@ export default function ConfirmInOutModal({
             onMouseEnter={e => { if (!confirmDisabled) e.currentTarget.style.background = CONFIRM_HOVER_BG; }}
             onMouseLeave={e => { e.currentTarget.style.background = confirmRestBg; }}
           >
-            {busy ? (
-              <>
-                <Spinner data-testid="Spinner__3b3aca" />
-                {processingLabel || primaryLabel}
-              </>
-            ) : (
-              <>
-                <svg width="14" height="11" viewBox="0 0 14 11" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="1 5.5 5 9.5 13 1" />
-                </svg>
-                {primaryLabel}
-              </>
-            )}
+            <ConfirmButtonContent
+              busy={busy}
+              label={primaryLabel}
+              processingLabel={processingLabel}
+              data-testid="ConfirmButtonContent__3b3aca" />
           </button>
         </div>
       </div>
     </div>,
     document.body,
+  );
+}
+
+/**
+ * The "create the invoice too" switch card: icon, title, description and the toggle. Extracted
+ * from the modal (Sonar S3776), which only decides whether it shows.
+ */
+function InvoiceToggleCard({ on, onToggle, title, description }) {
+  return (
+    <div
+      role="switch"
+      aria-checked={on}
+      data-testid="confirm-modal-invoice-toggle"
+      tabIndex={0}
+      onClick={onToggle}
+      onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); onToggle(); } }}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer', borderRadius: 10,
+        padding: on ? '13px 15px' : '14px 16px',
+        border: on ? '2px solid var(--status-info-border)' : '1px solid hsl(var(--border-subtle))',
+        background: on ? 'var(--status-info-bg)' : 'hsl(var(--card))',
+        transition: 'border-color .15s, background .15s',
+        outline: 'none',
+      }}
+      onFocus={e => { e.currentTarget.style.boxShadow = '0 0 0 3px hsl(var(--focus-ring) / 0.22)'; }}
+      onBlur={e => { e.currentTarget.style.boxShadow = 'none'; }}
+    >
+      <div style={{ width: 38, height: 38, borderRadius: 9, background: 'var(--status-info-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--status-info-fg)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="16" y1="13" x2="8" y2="13" />
+          <line x1="16" y1="17" x2="8" y2="17" />
+        </svg>
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: on ? 'var(--status-info-fg)' : 'hsl(var(--foreground))', lineHeight: 1.3 }}>
+          {title}
+        </div>
+        <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 3, lineHeight: 1.45 }}>
+          {description}
+        </div>
+      </div>
+      <ToggleSwitch on={on} data-testid="ToggleSwitch__3b3aca" />
+    </div>
+  );
+}
+
+/**
+ * The header's "number · partner · total" line, the first part in bold; nothing when there is no
+ * part. Extracted from the modal (Sonar S3776).
+ */
+function DocInfoSubtitle({ parts }) {
+  if (parts.length === 0) return null;
+  return (
+    <div data-testid="confirm-modal-doc-info" style={{ marginTop: 6, fontSize: 13, color: 'hsl(var(--muted-foreground))', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+      {parts.map((part, i) => (
+        <span key={part} style={{ display: 'contents' }}>
+          {i > 0 && <span style={{ color: 'hsl(var(--text-disabled))', userSelect: 'none' }}>·</span>}
+          <span style={i === 0 ? { fontWeight: 700, color: 'hsl(var(--foreground))' } : undefined}>{part}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The primary button's content: a spinner with the processing label while busy, else a check
+ * mark with the label. Extracted from the modal (Sonar S3776).
+ */
+function ConfirmButtonContent({ busy, label, processingLabel }) {
+  if (busy) {
+    return (
+      <>
+        <Spinner data-testid="Spinner__3b3aca" />
+        {processingLabel || label}
+      </>
+    );
+  }
+  return (
+    <>
+      <svg width="14" height="11" viewBox="0 0 14 11" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="1 5.5 5 9.5 13 1" />
+      </svg>
+      {label}
+    </>
   );
 }
 

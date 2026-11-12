@@ -79,6 +79,36 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
  *                      (e.g. to recompute a per-line quote once a Tarifa is chosen) has no other
  *                      way to observe it. A no-op when omitted.
  */
+/** A plain es-ES number with fixed decimals, or '-' when there is none. */
+function formatFixedNumber(v, dec = 2) {
+  return v != null
+    ? Number(v).toLocaleString('es-ES', { minimumFractionDigits: dec, maximumFractionDigits: dec, useGrouping: true })
+    : '-';
+}
+
+/**
+ * What the summary card shows for the document being invoiced: its business partner and its
+ * amount line. Extracted from the modal (Sonar S3776); the rules are unchanged:
+ * - the document's own currency wins — it may have been edited in draft to diverge from the
+ *   linked order's currency (ETP-4028: currency is editable until confirmed);
+ * - a bulk caller passes `cardAmountLabel` because it has no single trustworthy total to show —
+ *   it wins over both the computed total and the documentNo fallback, neither of which mean
+ *   anything for N documents.
+ */
+function summarizeInvoiceSource(data, cardAmountLabel) {
+  const documentNo = data?.documentNo || '';
+  const bpName = data?.['businessPartner$_identifier'] || '';
+  const linkedOrder = Array.isArray(data?.linkedOrders) ? data.linkedOrders[0] : null;
+  const currencyCode = data?.['etgoCurrency$_identifier'] || data?.['currency$_identifier']
+    || linkedOrder?.['currency$_identifier'] || '';
+  const grandTotal = Number(linkedOrder?.grandTotalAmount ?? data?.grandTotalAmount ?? 0);
+  const formattedTotal = currencyCode
+    ? formatCurrency(currencyCode, grandTotal)
+    : formatFixedNumber(grandTotal);
+  const displayAmount = cardAmountLabel ?? (grandTotal !== 0 ? formattedTotal : documentNo);
+  return { bpName, displayAmount };
+}
+
 export default function CreateInvoiceConfirmModal({
   data,
   loading,
@@ -130,24 +160,7 @@ export default function CreateInvoiceConfirmModal({
     onPriceListChange?.(priceListId);
   }, [priceListId, onPriceListChange]);
 
-  const documentNo  = data?.documentNo || '';
-  const bpName      = data?.['businessPartner$_identifier'] || '';
-  const linkedOrder = Array.isArray(data?.linkedOrders) ? data.linkedOrders[0] : null;
-  // The document's own currency wins — it may have been edited in draft to diverge
-  // from the linked order's currency (ETP-4028: currency is editable until confirmed).
-  const currency    = data?.['etgoCurrency$_identifier'] || data?.['currency$_identifier']
-    || linkedOrder?.['currency$_identifier'] || '';
-  const currencyCode = currency;
-  const grandTotal  = Number(linkedOrder?.grandTotalAmount ?? data?.grandTotalAmount ?? 0);
-
-  const fmtNum = (v, dec = 2) =>
-    v != null ? Number(v).toLocaleString('es-ES', { minimumFractionDigits: dec, maximumFractionDigits: dec, useGrouping: true }) : '-';
-
-  const formattedTotal = currencyCode ? formatCurrency(currencyCode, grandTotal) : fmtNum(grandTotal);
-  // A bulk caller passes cardAmountLabel because it has no single trustworthy total to show
-  // (see CreateInvoiceConfirmModal usage from the bulk toolbar actions) — it wins over both the
-  // computed total and the documentNo fallback, neither of which mean anything for N documents.
-  const displayAmount = cardAmountLabel ?? (grandTotal !== 0 ? formattedTotal : documentNo);
+  const { bpName, displayAmount } = summarizeInvoiceSource(data, cardAmountLabel);
 
   useEffect(() => {
     // A bulk caller supplies pendingQtyTotal already summed across its selection — pendingQtyUrl
@@ -168,7 +181,7 @@ export default function CreateInvoiceConfirmModal({
 
   const effectivePendingQty = pendingQtyTotal !== undefined ? pendingQtyTotal : pendingQty;
   const subtitle = effectivePendingQty != null
-    ? ui('soAmountPendingInvoice', { pending: `${fmtNum(effectivePendingQty, 0)} ${ui('units')}` })
+    ? ui('soAmountPendingInvoice', { pending: `${formatFixedNumber(effectivePendingQty, 0)} ${ui('units')}` })
     : ui('soCreateInvoiceCheckDesc');
 
   const canConfirm = (!showPriceListPicker || !!priceListId) && rectify.isSatisfied;
