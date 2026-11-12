@@ -26248,7 +26248,7 @@
     "portalEmptyTitle": "No invoices yet",
     "portalEmptyDescription": "Invoices issued to you will appear here.",
     "portalInvalidLinkTitle": "This link is no longer valid",
-    "portalInvalidLinkDescription": "Ask for a new link from whoever sent you the invoice.",
+    "portalInvalidLinkDescription": "Ask for a new link from whoever sent you the document.",
     "portalLoadErrorTitle": "We could not load your invoices",
     "portalLoadErrorDescription": "Check your connection and try again.",
     "portalDownloadFailed": "The invoice PDF could not be downloaded. Please try again.",

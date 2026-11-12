@@ -22186,7 +22186,7 @@
     "portalEmptyTitle": "Todavía no hay facturas",
     "portalEmptyDescription": "Las facturas que se te emitan aparecerán aquí.",
     "portalInvalidLinkTitle": "Este enlace ya no es válido",
-    "portalInvalidLinkDescription": "Pedí un enlace nuevo a quien te envió la factura.",
+    "portalInvalidLinkDescription": "Pedí un enlace nuevo a quien te envió el documento.",
     "portalLoadErrorTitle": "No pudimos cargar tus facturas",
     "portalLoadErrorDescription": "Comprobá tu conexión y volvé a intentarlo.",
     "portalDownloadFailed": "No se pudo descargar el PDF de la factura. Volvé a intentarlo.",
