@@ -3572,8 +3572,12 @@ Rules, all in `ListView.jsx`:
   menu never shows an action that does nothing.
 - When the split menu offers the import, the **standalone import icon** in the toolbar
   (`ListView__importButton`) is **not rendered**, because the menu already offers it.
-- The standalone icon **stays** whenever the menu is unavailable (read-only window, `hideCreate`), so
-  the import is never left unreachable.
+- The standalone icon **stays** when the menu is unavailable only because of `hideCreate`, so the
+  import is never left unreachable. A **read-only** window (static `window.readOnly` or the runtime
+  Solo-lectura tier) gets no import at all: no icon, no menu item, no empty-state import (ETP-5830).
+- Related, in the shared `DataTable`: when `rowQuickActions.readOnly` or `windowReadOnly` is set,
+  `onDeleteRow`/`onEditRow` are dropped at the entry, so there is no legacy trash column, no hover
+  trash and no hover pencil. Row click still opens the record to view.
 
 The generator's own `window.newActions` (`docs/decisions-reference.md` → *New Actions*) still emits only
 `key`/`label`/`onClick`; `opensImportDialog` is set from the wrapper.

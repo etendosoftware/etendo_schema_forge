@@ -119,7 +119,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   6. Sign in as a user with no role assigned (or a role with zero window/process access) and confirm the "No access" screen renders instead of the sidebar, and that navigating directly to a known window URL (e.g. `/sales-order`) also lands on the blocking screen rather than the window.
   7. Repeat step 6 with `?embedded=1` appended to the URL and confirm the blocking screen still renders (not the bare routed page or a blank frame).
   8. While signed in as a user with an assigned role and visible sidebar, have an administrator revoke that role (or drop it to zero window/process access) in another session, then trigger a fresh role-menu fetch (e.g. reload or navigate) and confirm the sidebar is replaced by the blocking screen rather than staying visible alongside it.
-  9. As a non-admin with a non-empty role menu, check Finance Reports, Inventory Reports, and Smart Scan against that role's permission-anchor grants: `full` or `read-only` shows the entry; a missing grant hides it even though the route is a custom page. Confirm granted entries also open successfully. Since ETP-5830 no system role template grants Smart Scan, so a role built from a template does not see it; only Admin/client-admin (sidebar exemption above) or a role with a hand-made grant does.
+  9. As a non-admin with a non-empty role menu, check Finance Reports, Inventory Reports, and Smart Scan against that role's permission-anchor grants: `full` or `read-only` shows the entry; a missing grant hides it even though the route is a custom page. Confirm granted entries also open successfully. Since ETP-5830 no system role template grants Smart Scan, so a role built from a template does not see it. It is blocked for every role, Admin/client-admin included: the admin `windowAccess` map only contains a permission-anchor window on which some role holds an active grant, and since ETP-5830 no role does, so the anchor resolves to `none` for Admin too. Only a hand-made grant on some role brings it back, and then for Admin as well.
   10. As GOAdmin or GOClient Admin, confirm all three anchor entries are visible and open successfully. On a fresh load, confirm menu-tree entries wait for `SFListMenu`, while capability/anchor entries wait for their own maps or the admin exemption; neither nullable map state should briefly expose restricted entries.
 
 ### 3. Generated/custom window loading
@@ -1154,7 +1154,9 @@ What a read-only role gets, surface by surface:
 | `/new` reached by URL | redirected to the list, with no defaults fetch (skipped for `?embedded=1`) | `useNewRouteEditingReset` in `detailViewHelpers.jsx` |
 | "Open the add row" hand-offs (`openAddSecondaryLine`, `openCustomTabAdd` router state on `/{id}`) | not gated: they are router state, not URL, and only an in-app save sets them, which a read-only role cannot do | `DetailView.jsx` deep-link effect |
 | Sub-tab tables (inline and non-inline) | no "+ Añadir", no inline edit, no delete, no hover pencil; an empty tab shows an empty table, not the add illustration (same as `readOnlyLogic` tabs) | `SecondaryTableTab` — `tabReadOnly = windowReadOnly \|\| readOnlyLogic` |
+| List (`ListView` + shared `DataTable`) | no row trash (legacy column or hover), no hover pencil, no import (toolbar icon, "Nuevo" split-menu item, empty-state import). Row click still opens the record to view, so the hidden pencil (whose no-handler fallback was the same open) is not a regression | `DataTable` `rowWritesOff`, `ListView` `importEnabled` |
 | Sub-tab sidebar detail / form sub-tabs | read-only form, no Save/Delete | sidebar + `SecondaryFormTab` |
+| Row preview (Order, Purchase order, Quotation) | the primary button reads "Ver" with an eye icon instead of "Editar"; same action, opens the locked form | `PreviewActionButtons` `readOnly` |
 | Sub-tabs with a `customAddModal` (Contactos → Dirección) | row click opens nothing — the address modal has no read-only mode | `resolveSecondaryRowClickHandler` |
 | Custom `Panel` sub-tabs and `CustomLines` | receive `editing=false` / `readOnly` | `SecondaryPanelTab`, primary Panel |
 | Attachments tab | no upload dropzone, no delete, no description edit; download and preview kept | `AttachmentsTab` `accessReadOnly` |
@@ -1163,7 +1165,15 @@ What a read-only role gets, surface by surface:
 dropzone. A completed document keeps accepting attachments (`isDocumentReadOnly` is ignored,
 ETP-5526), and `readOnly` alone removes deletion only (ETP-5432). Attachment errors now go through
 `translateBackendError`, so the backend's `accessDeniedToSpec` 403 shows as a translated toast,
-not the raw English message.
+not the raw English message. `extractApiErrorMessage(res, t)` (`lib/apiError.js`) gives the same
+result to the other callers that pass the UI translator (`ContactsTable` delete,
+`BillingPreferencesForm`, `useRepresentantesLegales`): without `t` it keeps the raw backend text.
+
+On the list, the gate lives in `DataTable` itself: when `rowQuickActions.readOnly` or
+`windowReadOnly` is set (`ListView` passes both, from the static `window.readOnly` or the runtime
+Solo-lectura tier), `onDeleteRow` and `onEditRow` are dropped at the entry, so a custom header table
+that passes its own handler cannot reopen the trash. `hideCreate` alone (no read-only) still keeps the
+standalone import icon.
 
 Custom panels that write on their own each take the signal explicitly: Contactos → Financiero
 (`BillingPreferencesForm`, `FiscalDefaultsSection`), Calendario → Períodos
