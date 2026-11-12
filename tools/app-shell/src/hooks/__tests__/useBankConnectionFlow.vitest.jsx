@@ -439,3 +439,21 @@ describe('useBankConnectionFlow — empty account list reasons', () => {
     expect(toast.error).not.toHaveBeenCalledWith(expect.stringContaining('undefined'));
   });
 });
+
+describe('useBankConnectionFlow — create refused by a remittance provisioning conflict (ETP-6148)', () => {
+  it('toasts the translated ETGO_RemittanceProvisioningConflict, not the raw backend text', async () => {
+    uiMock.mockImplementation((key) => (key === 'backendError.remittanceProvisioningConflict' ? 'T:provisioningConflict' : key));
+    launchSaltEdgePopup.mockResolvedValue('conn-9');
+    fetchAccounts.mockResolvedValue({ accounts: [{ id: 'se1' }], providerName: '', providerLogoUrl: '' });
+    createAndLink.mockRejectedValue(Object.assign(new Error('No se pudo preparar la cuenta (texto del backend).'), {
+      status: 409,
+      body: { error: { status: 409, message: 'No se pudo preparar la cuenta (texto del backend).', messageKeys: ['ETGO_RemittanceProvisioningConflict'] } },
+    }));
+    const onDone = vi.fn();
+    const { result } = renderHook(() => useBankConnectionFlow({ onDone }));
+    await act(async () => { await result.current.startCreate('B'); });
+    await act(async () => { await result.current.confirmSelection('se1'); });
+    expect(toast.error).toHaveBeenCalledWith('T:provisioningConflict');
+    expect(onDone).not.toHaveBeenCalled();
+  });
+});

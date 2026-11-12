@@ -122,6 +122,9 @@ export function useBankConnectionActions() {
       if (!res.ok) {
         const err = new Error(json?.error?.message || `HTTP ${res.status}`);
         err.status = json?.error?.status ?? res.status;
+        // ETP-6148 — the parsed body travels with the error so callers can translate by
+        // `messageKeys` (e.g. a 409 ETGO_RemittanceProvisioningConflict on createAndLink).
+        err.body = json;
         throw err;
       }
       return json?.response?.data ?? {};

@@ -15,6 +15,7 @@ import {
   parseBackendError,
   translateBackendErrorResponse,
   translateBackendErrorBody,
+  hasMappedMessageKey,
   translateImportRefusal,
   isImportRefusalCode,
   translateQuotaRefusalBody,
@@ -1471,15 +1472,18 @@ describe('translateBackendError — country/IBAN validation (ETP-4896)', () => {
   });
 });
 
-// ETP-6148 — the «Admite remesas» refusals of a financial account (FinancialAccountRemittanceSupport
-// / SepaRemittancesFlag in com.etendoerp.go), mapped by key through the real locales. The 422
-// open-remittances refusal is deliberately NOT mapped: its text embeds the count and the backend
-// sends no messageParams, so it reaches the user as the backend wrote it.
-describe('translateBackendError — SEPA remittance refusals of a financial account (ETP-6148)', () => {
+// ETP-6148 — the SEPA remittance refusals (SepaRemittancesFlag and the remittance handlers in
+// com.etendoerp.go), mapped by key through the real locales.
+describe('translateBackendError — SEPA remittance refusals (ETP-6148)', () => {
   const KEYED = [
+    ['ETGO_SepaRemittancesDisabled', 'backendError.sepaRemittancesDisabled'],
     ['ETGO_RemittanceAccountNotBank', 'backendError.remittanceAccountNotBank'],
     ['ETGO_RemittanceAccountIbanRequired', 'backendError.remittanceAccountIbanRequired'],
-    ['ETGO_SepaRemittancesDisabled', 'backendError.sepaRemittancesDisabled'],
+    ['ETGO_RemittanceMethodAccountNotAllowed', 'backendError.remittanceMethodAccountNotAllowed'],
+    // RemittanceHeaderHandler: an account with no remittance payment methods linked (422), and the
+    // Bank-account create racing on that provisioning (409, retry).
+    ['ETGO_RemittanceAccountNotAllowed', 'backendError.remittanceAccountNotAllowed'],
+    ['ETGO_RemittanceProvisioningConflict', 'backendError.remittanceProvisioningConflict'],
     // RemittanceHeaderHandler: a new or changed due date earlier than today (422), the safety
     // net behind the dueDate field's `minDate`.
     ['ETGO_RemittanceDueDatePast', 'backendError.remittanceDueDatePast'],
@@ -1510,6 +1514,34 @@ describe('translateBackendError — SEPA remittance refusals of a financial acco
   const labels = Object.fromEntries(LOCALES.map((loc) => [
     loc, JSON.parse(readFileSync(new URL(`../../locales/${loc}.json`, import.meta.url), 'utf8')).genericLabels,
   ]));
+
+  // FinancialAccountHandler: changing a Bank account's type while it has open remittances (422).
+  // The count travels inside the backend text ({0}) with no messageParams, so the sentence takes
+  // `{count}`: without it the backend text (count included) is shown, never a number-less sentence.
+  describe('ETGO_RemittanceAccountTypeChangeBlocked', () => {
+    const KEY = 'ETGO_RemittanceAccountTypeChangeBlocked';
+    const UI_KEY = 'backendError.remittanceAccountTypeChangeBlocked';
+
+    it('has a {count} sentence in every locale', () => {
+      for (const loc of LOCALES) assert.match(labels[loc][UI_KEY] ?? '', /\{count\}/, loc);
+    });
+
+    it('without messageParams.count, shows the backend text with its count', () => {
+      const prose = 'No se puede cambiar el tipo de una cuenta bancaria que tiene 3 remesas abiertas.';
+      for (const loc of LOCALES) {
+        assert.equal(translateBackendError(prose, localeTranslator(loc), { messageKeys: [KEY] }), prose, loc);
+      }
+      const body = { error: { status: 422, message: prose, messageKeys: [KEY] } };
+      assert.equal(translateBackendErrorBody(body, localeTranslator('es_ES'), 'fallback'), prose);
+    });
+
+    it('with messageParams.count, renders the locale sentence with the number', () => {
+      for (const loc of LOCALES) {
+        const out = translateBackendError('raw', localeTranslator(loc), { messageKeys: [KEY], messageParams: { count: 3 } });
+        assert.equal(out, labels[loc][UI_KEY].replace('{count}', '3'), loc);
+      }
+    });
+  });
 
   it('has every key, non-empty, in en_US, es_ES and es_AR', () => {
     for (const loc of LOCALES) {
@@ -1570,15 +1602,6 @@ describe('translateBackendError — SEPA remittance refusals of a financial acco
     });
   }
 
-  it('the 422 open-remittances refusal keeps the backend text, count included', () => {
-    const message = 'No se puede desactivar: la cuenta tiene 3 remesas abiertas.';
-    const body = { error: { status: 422, message, messageKeys: ['ETGO_RemittanceAccountHasOpenRemittances'] } };
-    assert.equal(translateBackendErrorBody(body, localeTranslator('es_ES'), 'fallback'), message);
-    assert.equal(
-      translateBackendError(message, localeTranslator('en_US'), { messageKeys: ['ETGO_RemittanceAccountHasOpenRemittances'] }),
-      message,
-    );
-  });
 });
 
 // ETP-4891 follow-up: PSD2_IBANAutoFillFailed (com.etendoerp.psd2) — that module ships ~108
@@ -4743,5 +4766,30 @@ describe('translateImportRefusal / isImportRefusalCode — line-import refusals 
       assert.match(labels['backendError.importQuantityExceedsPending'], /\{requested\}.*\{product\}.*\{pending\}/, locale);
       assert.match(labels[NOTHING_PENDING_ON_LINE], /\{requested\}.*\{product\}/, locale);
     }
+  });
+});
+
+// ETP-6148 — hasMappedMessageKey: whether a refusal names a key the SPA translates. The account
+// create/edit flows use it to tell a code-less 409 that carries a mapped key
+// (ETGO_RemittanceProvisioningConflict) from a real duplicate name.
+describe('hasMappedMessageKey', () => {
+  it('is true for a mapped key', () => {
+    assert.equal(hasMappedMessageKey(['ETGO_RemittanceProvisioningConflict']), true);
+  });
+
+  it('is false for an unmapped key', () => {
+    assert.equal(hasMappedMessageKey(['ETGO_SomethingNobodyMapped']), false);
+  });
+
+  it('is true when any key of a mix is mapped, wherever it sits', () => {
+    assert.equal(hasMappedMessageKey(['ETGO_SomethingNobodyMapped', 'ETGO_RemittanceProvisioningConflict']), true);
+    assert.equal(hasMappedMessageKey(['ETGO_RemittanceAccountNotBank', 'ETGO_SomethingNobodyMapped']), true);
+  });
+
+  it('is false for an empty list, undefined, null or a non-array', () => {
+    assert.equal(hasMappedMessageKey([]), false);
+    assert.equal(hasMappedMessageKey(undefined), false);
+    assert.equal(hasMappedMessageKey(null), false);
+    assert.equal(hasMappedMessageKey('ETGO_RemittanceProvisioningConflict'), false);
   });
 });

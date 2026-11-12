@@ -98,14 +98,20 @@ describe('SepaMandateSection', () => {
       expect(screen.queryByText('label:EM_Obsepad_Mandate_Date')).not.toBeInTheDocument();
     });
 
-    it('shows the mandate-id placeholder and the signature-date help', () => {
+    // ETP-6148: the backend stores the mandate on create, so the fields hold real values: no
+    // «left blank, …» placeholder any more, one neutral help line on the mandate ID.
+    it('explains the autofill once, as one line under the fields, with no placeholder in the inputs', () => {
       renderSection();
-      expect(screen.getByTestId('field-obsepadMandateIdentifier'))
-        .toHaveAttribute('placeholder', 'ui:sepaMandateIdPlaceholder');
-      expect(screen.getByText('ui:sepaMandateSignedOnHint')).toBeInTheDocument();
+      expect(screen.getByTestId('field-obsepadMandateIdentifier')).not.toHaveAttribute('placeholder', expect.stringMatching(/\S/));
+      expect(screen.getByTestId('SepaMandateSection-autofill-hint')).toHaveTextContent('ui:sepaMandateAutofillHint');
+      expect(screen.getAllByText('ui:sepaMandateAutofillHint')).toHaveLength(1);
+      // Under the fields, not in the left description column.
+      const hint = screen.getByTestId('SepaMandateSection-autofill-hint');
+      expect(screen.getByText('ui:sepaMandateDescription').parentElement).not.toContainElement(hint);
+      expect(screen.getByTestId('field-obsepadMandateIdentifier').compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
-    it('builds the descriptors with i18n keys for placeholder and help', () => {
+    it('builds the descriptors with no placeholder and no per-field help', () => {
       const ui = vi.fn((k) => `t(${k})`);
       const [id, date] = buildSepaMandateFields(ui);
       expect(id).toMatchObject({
@@ -113,22 +119,23 @@ describe('SepaMandateSection', () => {
         column: 'EM_Obsepad_Mandate_Identifier',
         type: 'string',
         maxLength: 35,
-        placeholderKey: 'sepaMandateIdPlaceholder',
         labels: { en_US: 't(sepaMandateId)' },
       });
+      expect(id).not.toHaveProperty('placeholderKey');
+      expect(id).not.toHaveProperty('help');
+      expect(date).not.toHaveProperty('help');
       expect(date).toMatchObject({
         key: 'obsepadMandateDate',
         column: 'EM_Obsepad_Mandate_Date',
         type: 'date',
-        help: 'sepaMandateSignedOnHint',
         labels: { en_US: 't(sepaMandateSignedOn)' },
       });
     });
   });
 
   it.each([['en_US', enUS], ['es_ES', esES], ['es_AR', esAR]])('every key the section reads exists in %s', (_loc, json) => {
-    const keys = ['sepaMandate', 'sepaMandateDescription', 'sepaMandateId', 'sepaMandateIdPlaceholder',
-      'sepaMandateSignedOn', 'sepaMandateSignedOnHint'];
+    const keys = ['sepaMandate', 'sepaMandateDescription', 'sepaMandateId', 'sepaMandateAutofillHint',
+      'sepaMandateSignedOn'];
     for (const key of keys) expect(json.genericLabels[key], key).toEqual(expect.stringMatching(/\S/));
   });
 

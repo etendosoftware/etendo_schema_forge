@@ -38,7 +38,6 @@ export const account = [
     "eTGOAmountTolerance": 99.44,
     "eTGODateTolerance": 90,
     "eTGOPendingCount": 90,
-    "eTGOAllowRemittance": "Sample eTGOAllowRemittance",
     "pSD2LastSyncDate": "Sample pSD2LastSyncDate"
   },
   {
@@ -78,7 +77,6 @@ export const account = [
     "eTGOAmountTolerance": 96.94,
     "eTGODateTolerance": 93,
     "eTGOPendingCount": 93,
-    "eTGOAllowRemittance": "Sample eTGOAllowRemittance",
     "pSD2LastSyncDate": "Sample pSD2LastSyncDate"
   },
   {
@@ -118,7 +116,6 @@ export const account = [
     "eTGOAmountTolerance": 12.48,
     "eTGODateTolerance": 8,
     "eTGOPendingCount": 8,
-    "eTGOAllowRemittance": "Sample eTGOAllowRemittance",
     "pSD2LastSyncDate": "Sample pSD2LastSyncDate"
   },
   {
@@ -158,7 +155,6 @@ export const account = [
     "eTGOAmountTolerance": 96.31,
     "eTGODateTolerance": 91,
     "eTGOPendingCount": 91,
-    "eTGOAllowRemittance": "Sample eTGOAllowRemittance",
     "pSD2LastSyncDate": "Sample pSD2LastSyncDate"
   },
   {
@@ -198,7 +194,6 @@ export const account = [
     "eTGOAmountTolerance": 31.27,
     "eTGODateTolerance": 72,
     "eTGOPendingCount": 72,
-    "eTGOAllowRemittance": "Sample eTGOAllowRemittance",
     "pSD2LastSyncDate": "Sample pSD2LastSyncDate"
   },
   {
@@ -238,7 +233,6 @@ export const account = [
     "eTGOAmountTolerance": 76.52,
     "eTGODateTolerance": 78,
     "eTGOPendingCount": 78,
-    "eTGOAllowRemittance": "Sample eTGOAllowRemittance",
     "pSD2LastSyncDate": "Sample pSD2LastSyncDate"
   },
   {
@@ -278,7 +272,6 @@ export const account = [
     "eTGOAmountTolerance": 2.66,
     "eTGODateTolerance": 31,
     "eTGOPendingCount": 31,
-    "eTGOAllowRemittance": "Sample eTGOAllowRemittance",
     "pSD2LastSyncDate": "Sample pSD2LastSyncDate"
   },
   {
@@ -318,7 +311,6 @@ export const account = [
     "eTGOAmountTolerance": 10.03,
     "eTGODateTolerance": 97,
     "eTGOPendingCount": 97,
-    "eTGOAllowRemittance": "Sample eTGOAllowRemittance",
     "pSD2LastSyncDate": "Sample pSD2LastSyncDate"
   },
   {
@@ -358,7 +350,6 @@ export const account = [
     "eTGOAmountTolerance": 93.97,
     "eTGODateTolerance": 70,
     "eTGOPendingCount": 70,
-    "eTGOAllowRemittance": "Sample eTGOAllowRemittance",
     "pSD2LastSyncDate": "Sample pSD2LastSyncDate"
   },
   {
@@ -398,7 +389,6 @@ export const account = [
     "eTGOAmountTolerance": 1.1,
     "eTGODateTolerance": 77,
     "eTGOPendingCount": 77,
-    "eTGOAllowRemittance": "Sample eTGOAllowRemittance",
     "pSD2LastSyncDate": "Sample pSD2LastSyncDate"
   },
   {
@@ -438,7 +428,6 @@ export const account = [
     "eTGOAmountTolerance": 79.99,
     "eTGODateTolerance": 32,
     "eTGOPendingCount": 32,
-    "eTGOAllowRemittance": "Sample eTGOAllowRemittance",
     "pSD2LastSyncDate": "Sample pSD2LastSyncDate"
   },
   {
@@ -478,7 +467,6 @@ export const account = [
     "eTGOAmountTolerance": 53.61,
     "eTGODateTolerance": 26,
     "eTGOPendingCount": 26,
-    "eTGOAllowRemittance": "Sample eTGOAllowRemittance",
     "pSD2LastSyncDate": "Sample pSD2LastSyncDate"
   }
 ];

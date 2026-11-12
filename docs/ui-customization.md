@@ -3697,6 +3697,20 @@ Two opt-ins in `decisions.json`, usable apart or together (the remittance lines 
 `ResettableAmountInput` is also the amount cell of `DocumentPickerModal` (below), so a grid and a
 picker refuse exactly the same values.
 
+### Badge on selector options (`optionBadge` in `decisions.json`) — ETP-6148
+
+A selector field can mark some of its options with a small neutral badge, driven by a key the
+selector endpoint already serves on each item:
+
+```json
+"financialAccount": { "optionBadge": { "field": "ibanValid", "equals": false, "labelKey": "remittanceAccountNoIbanBadge" } }
+```
+
+`EntityForm` builds a `renderOption` for `CreatableSearchSelect` (`buildOptionBadgeRenderer`): the
+option's name, plus the badge when `item[field] === equals`. Fields without the option keep the
+default row. The committed-value marking of the picker is untouched; only the row content changes.
+First consumer: remittance's Cuenta («Sin IBAN»).
+
 ### Document picker modal (`DocumentPickerModal`) — ETP-6148
 
 `components/contract-ui/DocumentPickerModal.jsx` picks documents (or their dues) from a server-driven

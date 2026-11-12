@@ -1,8 +1,8 @@
 {
-  "version": "0.23.0",
+  "version": "0.24.0",
   "generatedAt": "2026-11-05T18:53:39.346Z",
-  "updatedAt": "2026-11-11T16:18:21.071Z",
-  "checksum": "96669b991549f211",
+  "updatedAt": "2026-11-12T12:05:04.349Z",
+  "checksum": "8374e7bdd635faf8",
   "frontendContract": {
     "window": {
       "id": "FF8080812E71F7C7012E71FD0499001B",
@@ -72,6 +72,9 @@
       "summaryFields": [],
       "detailSortBy": "lineNo asc",
       "listSortBy": "transactionDate desc",
+      "headerExtra": {
+        "customForm": "RemittanceSepaFileData"
+      },
       "labelOverrides": {
         "es_ES": {
           "Datetrx": "Fecha",
@@ -330,6 +333,11 @@
             "seq": 10,
             "gridOrder": 4,
             "columnWidth": 290,
+            "optionBadge": {
+              "field": "ibanValid",
+              "equals": false,
+              "labelKey": "remittanceAccountNoIbanBadge"
+            },
             "validation": {
               "required": true,
               "maxLength": 32
@@ -944,6 +952,9 @@
       "summaryFields": [],
       "detailSortBy": "lineNo asc",
       "listSortBy": "transactionDate desc",
+      "headerExtra": {
+        "customForm": "RemittanceSepaFileData"
+      },
       "labelOverrides": {
         "es_ES": {
           "Datetrx": "Fecha",

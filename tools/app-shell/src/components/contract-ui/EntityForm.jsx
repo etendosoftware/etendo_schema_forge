@@ -528,6 +528,31 @@ function formatReadOnlyDisplayValue(f, isReadOnly, rawDisplayValue) {
     return parseFloat(Number(rawDisplayValue).toFixed(10));
 }
 
+/**
+ * ETP-6148 — `optionBadge` (decisions.json, on a selector field): a `renderOption` for
+ * CreatableSearchSelect that appends a small neutral badge (`ui(labelKey)`) to every option whose
+ * selector item has `item[field] === equals` (e.g. remittance's Cuenta: «Sin IBAN» when
+ * `ibanValid` is false). Returns undefined without the option, so the default row renders.
+ */
+export function buildOptionBadgeRenderer(f, ui) {
+  const badge = f?.optionBadge;
+  if (!badge?.field || !badge?.labelKey) return undefined;
+  const text = ui(badge.labelKey);
+  return (opt) => (
+    <span className="inline-flex min-w-0 items-center gap-2">
+      <span className="truncate">{opt.labelPrefix && `${opt.labelPrefix} - `}{opt.name}</span>
+      {opt?.[badge.field] === badge.equals && (
+        <span
+          className="shrink-0 rounded-full border border-[hsl(var(--border-subtle))] bg-muted px-2 py-0.5 text-xs font-medium text-[hsl(var(--muted-foreground))]"
+          data-testid={`option-badge-${f.key}-${opt.id}`}
+        >
+          {text}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function buildSearchSelectorUrl(apiBaseUrl, entity, f, apiSelectorEntry) {
   return apiBaseUrl ? (() => {
     const base = `${apiBaseUrl}/${entity}/selectors/${f.column}`;
@@ -1005,6 +1030,8 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
       token,
       emptyOptionLabel: resolveUiKey(ui, f.emptyOptionLabelKey),
       serverSearch: true,
+      // ETP-6148 — decisions.json `optionBadge`: undefined (the default row) for every other field.
+      renderOption: buildOptionBadgeRenderer(f, ui),
     };
     const canCreate = !!(f.allowCreate && f.createSpec && f.createEntity && apiBaseUrl);
     const createTitle = f.createTitleKey

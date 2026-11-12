@@ -1,4 +1,5 @@
 // @covers artifacts/remittance/generated/web/remittance/RemittancePage.jsx
+// @covers artifacts/remittance/generated/web/remittance/RemittanceForm.jsx
 // @covers artifacts/remittance/generated/web/remittance/LinesTable.jsx
 //
 // Guards what the generated remittance page hands to the shared views — the header processes
@@ -31,9 +32,12 @@ vi.mock('@generated/remittance/generated/web/remittance/RemittanceForm', () => (
 vi.mock('@/components/contract-ui', () => ({
   DataTable: (props) => { mockCaptured.linesColumns = props.columns; return <div data-testid="lines-data-table" />; },
   InlineLinesPanel: (props) => { mockCaptured.linesColumns = props.columns; return <div data-testid="lines-inline-panel" />; },
+  // The real generated RemittanceForm (vi.importActual below) renders EntityForm: capture its fields.
+  EntityForm: (props) => { mockCaptured.form = props; return null; },
 }));
 vi.mock('@generated/remittance/generated/web/remittance/LinesForm', () => ({ default: () => null }));
 vi.mock('@generated/remittance/custom/RemittanceBottomPanel', () => ({ default: function MockBottomPanel() { return null; } }));
+vi.mock('@generated/remittance/custom/RemittanceSepaFileData', () => ({ default: function MockSepaFileData() { return null; } }));
 vi.mock('@generated/remittance/custom/RemittanceProcessConfirmModal', () => ({ default: function MockConfirmModal() { return null; } }));
 vi.mock('@generated/remittance/custom/RemittanceStatusBanner', () => ({
   default: ({ data }) => <div data-testid="status-banner-stub" data-status={data?.remittanceStatus} />,
@@ -43,6 +47,7 @@ import { render, screen } from '@testing-library/react';
 import RemittancePage from '@generated/remittance/generated/web/remittance/RemittancePage.jsx';
 import RemittanceBottomPanel from '@generated/remittance/custom/RemittanceBottomPanel';
 import RemittanceProcessConfirmModal from '@generated/remittance/custom/RemittanceProcessConfirmModal';
+import RemittanceSepaFileData from '@generated/remittance/custom/RemittanceSepaFileData';
 import { evalDisplayLogicRaw, dispatchProcessAction, canShowAddLineArea, resolveCanAddLines } from '@/components/contract-ui/detailViewHelpers.jsx';
 import enUS from '@/locales/en_US.json';
 import esES from '@/locales/es_ES.json';
@@ -155,6 +160,24 @@ describe('RemittancePage — detail slots', () => {
   // not inside DetailView's default rounded, bordered card (window.noHeaderBorder).
   it('renders the header form without the card wrapper, like Sales Invoice', () => {
     expect(detailProps().noHeaderBorder).toBe(true);
+  });
+
+  // ETP-6148 — «Datos para el fichero SEPA» below the header form.
+  it('renders the SEPA file data block as the form footer', () => {
+    expect(detailProps().formFooter).toBe(RemittanceSepaFileData);
+  });
+
+  it('the Cuenta field of the generated form carries the «Sin IBAN» optionBadge, and no other field does', async () => {
+    const { default: RealRemittanceForm } = await vi.importActual('@generated/remittance/generated/web/remittance/RemittanceForm.jsx');
+    render(<RealRemittanceForm data={{}} onChange={vi.fn()} />);
+    const { fields } = mockCaptured.form;
+    expect(fields.find((f) => f.key === 'financialAccount').optionBadge)
+      .toEqual({ field: 'ibanValid', equals: false, labelKey: 'remittanceAccountNoIbanBadge' });
+    expect(fields.filter((f) => f.optionBadge).map((f) => f.key)).toEqual(['financialAccount']);
+  });
+
+  it.each(LOCALES)('the «Sin IBAN» badge label is translated in %s', (_loc, json) => {
+    expect(json.genericLabels.remittanceAccountNoIbanBadge).toEqual(expect.stringMatching(/\S/));
   });
 
   it('orders the lines by line number and titles the record by its name', () => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, RefreshCw, Unlink2, Archive, AlertTriangle, Info, Plug, Settings2, Calculator, RotateCcw, ChevronDown, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -8,7 +8,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ConfirmDialog } from '@/components/OAuth2ClientDialog';
 import { useUI, useLocaleSwitch } from '@/i18n';
@@ -29,11 +28,11 @@ import {
   stripTrailingPeriods,
   translateBackendError,
   isDuplicateConflict,
+  hasMappedMessageKey,
   extractBackendMessageKeys,
   extractBackendMessageParams,
 } from '@/lib/backendErrors.js';
 import { validateIbanForCountry, countryLacksIbanConfig } from '@/lib/countryIban.js';
-import { SEPA_REMITTANCES_CAPABILITY } from '@/lib/capabilityVisibility.js';
 import { formatCalendarDate, calendarISODaysAgo } from '@/lib/dateOnly.js';
 import { useSplitButtonDropdown } from './useSplitButtonDropdown';
 import BankConnectionDeleteConfirmModal from './BankConnectionDeleteConfirmModal';
@@ -299,7 +298,7 @@ async function copyIbanToClipboard(account, ui) {
  */
 async function persistAccountEdits({
   account, fields, settings, reconciliation, glItemDifference, accounting, updateAccount,
-  saveImportSettings, saveAccountingConfiguration, remittance = null,
+  saveImportSettings, saveAccountingConfiguration,
 }) {
   const updates = {};
   if (fields.nameDirty) updates.name = fields.name.trim();
@@ -320,9 +319,6 @@ async function persistAccountEdits({
   // '' clears the limit back to "unset"; the mutation maps it to null.
   if (reconciliation?.writeoffDirty) updates.writeoffLimit = reconciliation.writeoffLimit;
   if (glItemDifference?.dirty) updates.glItemDifferenceId = glItemDifference.value?.id || '';
-  // ETP-6148 — null when the section is not shown (no capability, or not a Bank account), so a
-  // toggle left changed before switching the Type away from Bank is never sent.
-  if (remittance?.dirty) updates.allowRemittance = remittance.value;
   if (Object.keys(updates).length > 0) {
     // The version this form was opened on. Added alongside the changed fields, never instead of
     // the emptiness gate above, so an untouched form still issues no PUT at all.
@@ -1017,79 +1013,6 @@ function GlItemDifferenceSection({ ui, glItemDifference, first = false }) {
 }
 
 // ---------------------------------------------------------------------------
-// SEPA remittances setting (ETP-6148) — «Admite remesas», FIN_Financial_Account.
-// EM_ETGO_Allow_Remittance. The stored value reaches this modal under TWO names, depending on where
-// it was opened from — the same trap as the tolerances (see readTolerances):
-//   - from the Cuentas LIST, the row comes from the generic W spec, which names it by its
-//     contract/DAL key, `eTGOAllowRemittance`;
-//   - from the account DETAIL, the record comes from the `financial-accounts-page` R spec
-//     (FinancialAccountsPageHandler), which carries the flat `allowRemittance` only while the
-//     sepa-remittances flag is on.
-// Reading only `allowRemittance` made the list-opened modal always show «off» and compare the
-// dirty check against that wrong snapshot. The save is the same either way: the modal sends
-// `allowRemittance` and useAccountMutations maps it to `eTGOAllowRemittance`. Turning it on is
-// validated and provisioned server-side (Bank type + valid IBAN, remittance payment methods
-// linked); turning it off is refused while the account has open remittances. The UI only reports
-// those refusals (see backendErrors.js).
-// ---------------------------------------------------------------------------
-
-/**
- * Whether the account allows remittances, read from either spelling (contract key first, as in
- * readTolerances). `true`, `'Y'` and `'true'` mean on; anything else, including a missing key,
- * means off.
- */
-function readAllowRemittance(account) {
-  const raw = account?.eTGOAllowRemittance ?? account?.allowRemittance;
-  return raw === true || raw === 'Y' || raw === 'true';
-}
-
-function useRemittanceSetting(open, account) {
-  const [value, setValue] = useState(false);
-  const [snapshot, setSnapshot] = useState(false);
-  // Keyed on primitives (the account id and its stored flag), not on the `account` object: a new
-  // object carrying the same account (a refetch, a parent re-render) must not throw away a toggle
-  // the user has just made. A real change of the stored flag still re-syncs.
-  const accountId = account?.id;
-  const initial = readAllowRemittance(account);
-
-  useEffect(() => {
-    if (!open || accountId == null) return;
-    setValue(initial);
-    setSnapshot(initial);
-  }, [open, accountId, initial]);
-
-  return { value, setValue, dirty: value !== snapshot };
-}
-
-function RemittanceSettingsSection({ ui, remittance }) {
-  // The Switch is a <button>; it is NOT wrapped in a <label> (Radix's own recommendation, and how
-  // the other switches in the app are laid out): a label around it can re-activate the button and
-  // toggle it straight back. The text is a separate <label htmlFor> instead, so it still names the
-  // switch and a click on it still toggles it once.
-  const switchId = useId();
-  return (
-    <div className="mt-6 border-b border-[hsl(var(--border-subtle))] pb-4" data-testid="remittance-settings-section">
-      <p className="text-sm font-medium text-[hsl(var(--foreground))] mb-3">
-        {ui('financeAccountsRemittanceSection')}
-      </p>
-      <div className="inline-flex items-center gap-2 text-sm leading-6 text-[hsl(var(--foreground))]">
-        <Switch
-          id={switchId}
-          checked={remittance.value}
-          onCheckedChange={(checked) => remittance.setValue(checked === true)}
-          data-testid="edit-account-allow-remittance" />
-        <label htmlFor={switchId} className="cursor-pointer" data-testid="edit-account-allow-remittance-label">
-          {ui('financeAccountsRemittanceAllow')}
-        </label>
-      </div>
-      <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]" data-testid="edit-account-allow-remittance-hint">
-        {ui('financeAccountsRemittanceAllowHint')}
-      </p>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Accounting configuration hook + section (ETP-4530 — Accounting tab)
 // ---------------------------------------------------------------------------
 
@@ -1332,12 +1255,6 @@ export function EditAccountModal({
   const recon = useReconciliationSettings(open, account);
   const glItemDifference = useGlItemDifference(open, account);
   const accounting = useAccountingConfiguration(open, account);
-  const remittance = useRemittanceSetting(open, account);
-  // ETP-6148 — the SEPA remittances section: the sepaRemittances capability (the per-account
-  // sepa-remittances flag, evaluated server-side) AND a Bank account, read off the pending Type
-  // selection so the section follows a Type change made in this same edit.
-  const canSeeRemittances = useHasCapability(SEPA_REMITTANCES_CAPABILITY);
-  const showRemittance = canSeeRemittances && fields.isBankType;
   // ETP-4530 — the Accounting tab is only reachable for roles granted this capability (resolved
   // server-side, admin roles always pass). Fails closed to `false` until the capabilities map
   // loads, so it can flip false → true shortly after the modal mounts, or true → false mid-session
@@ -1384,7 +1301,7 @@ export function EditAccountModal({
   const dirty = fields.nameDirty || fields.typeDirty || fields.ibanDirty || fields.currencyDirty
     || fields.countryDirty || fields.swiftDirty
     || bankConnection.settingsDirty || (!isCash && recon.dirty) || glItemDifference.dirty
-    || accounting.dirty || (showRemittance && remittance.dirty);
+    || accounting.dirty;
   // What makes the form unsavable, independently of whether anything changed. Split out of
   // `canSave` because "Sincronizar ahora" needs the same verdict without the `dirty`/`saving`
   // terms: it must refuse to sync a form it cannot persist rather than sync stale dates.
@@ -1411,7 +1328,6 @@ export function EditAccountModal({
         updateAccount,
         saveImportSettings,
         saveAccountingConfiguration,
-        remittance: showRemittance ? remittance : null,
       });
     } finally {
       setSaving(false);
@@ -1426,7 +1342,9 @@ export function EditAccountModal({
     // discriminator; the status is not.
     if (err.code === 'stale_record' || err.body?.error === 'stale_record') {
       setError(ui('financeAccountsEditStaleRecord'));
-    } else if (isDuplicateConflict(err.status, err.code)) {
+    } else if (isDuplicateConflict(err.status, err.code) && !hasMappedMessageKey(extractBackendMessageKeys(err.body))) {
+      // ETP-6148: a code-less 409 that names a translated message (ETGO_RemittanceProvisioningConflict)
+      // is not a duplicate name; it falls through to the translated toast below.
       // ETP-5782: only `duplicate_key` (or a legacy code-less 409) means "name taken"; any other
       // 409 (record in use, retryable conflict) falls through to the server's own message.
       setError(ui('financeAccountsNewNameExists'));
@@ -1577,13 +1495,6 @@ export function EditAccountModal({
                     recon={recon}
                     data-testid="ReconciliationSettingsSection__73027d" />
                 </>
-              ) : null}
-
-              {showRemittance ? (
-                <RemittanceSettingsSection
-                  ui={ui}
-                  remittance={remittance}
-                  data-testid="RemittanceSettingsSection__73027d" />
               ) : null}
 
               <GlItemDifferenceSection

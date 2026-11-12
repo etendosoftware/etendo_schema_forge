@@ -50,8 +50,8 @@ export const INVOICE_INBOX_CAPABILITY = 'invoiceInbox';
 
 /**
  * ETP-6148 — the capability that switches on SEPA remittances: the Remittance menu entry and page,
- * the «Admite remesas» toggle of the Edit Account modal (Bank accounts only) and the SEPA
- * mandate section of a contact. Served by
+ * and the SEPA mandate section of a contact. (There is no per-account switch: Bank accounts get the
+ * remittance payment methods when they are created, server-side.) Served by
  * `SFWindowAccessMap` as `capabilities.sepaRemittances`: the backend evaluates the per-account
  * feature flag `sepa-remittances` (the same evaluator that gates the remittance handlers) and the
  * browser never does. Fails closed.

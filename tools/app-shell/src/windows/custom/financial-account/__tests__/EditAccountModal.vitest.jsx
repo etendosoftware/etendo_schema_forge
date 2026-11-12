@@ -102,9 +102,6 @@ vi.mock('@/hooks/useMovementLookups.js', () => ({
 }));
 
 import { EditAccountModal, initialEditTab, isDeleteMode } from '../EditAccountModal.jsx';
-import enUS from '@/locales/en_US.json';
-import esES from '@/locales/es_ES.json';
-import esAR from '@/locales/es_AR.json';
 
 // `countryIso: 'ES'` (the STORED country) makes this account eligible for the Salt Edge
 // connection, which is Spain-only since ETP-4896 — see saltEdgeEligibility.js. `countryId` is
@@ -370,6 +367,51 @@ describe('EditAccountModal', () => {
       expect(toastError).toHaveBeenCalledWith('Account is used by a reconciliation.'),
     );
     expect(screen.queryByText('financeAccountsNewNameExists')).not.toBeInTheDocument();
+  });
+
+  // ETP-6148 — a code-less 409 that names a mapped message key is not a duplicate name
+  // (reportSaveError's hasMappedMessageKey guard): ETGO_RemittanceProvisioningConflict is a
+  // «try again», toasted in the SPA's own words.
+  describe('409 with a mapped message key (ETP-6148)', () => {
+    async function renameAndSave(user) {
+      const nameInput = screen.getByTestId('edit-account-name');
+      await user.clear(nameInput);
+      await user.type(nameInput, 'BBVA Renamed');
+      await user.click(screen.getByTestId('edit-account-save'));
+    }
+
+    it('toasts ETGO_RemittanceProvisioningConflict translated, not as «name already exists»', async () => {
+      const user = userEvent.setup();
+      uiMock.mockImplementation((key) => (key === 'backendError.remittanceProvisioningConflict' ? 'T:provisioningConflict' : key));
+      const err = new Error('Texto del backend.');
+      err.status = 409;
+      err.code = null;
+      err.body = { error: { status: 409, message: 'Texto del backend.', messageKeys: ['ETGO_RemittanceProvisioningConflict'] } };
+      updateAccount.mockRejectedValueOnce(err);
+      const onClose = vi.fn();
+      renderModal({ onClose });
+      await renameAndSave(user);
+
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith('T:provisioningConflict'));
+      expect(screen.queryByTestId('edit-account-error')).not.toBeInTheDocument();
+      expect(screen.queryByText('financeAccountsNewNameExists')).not.toBeInTheDocument();
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('a real duplicate (duplicate_key, no mapped key) still shows the name-exists error', async () => {
+      const user = userEvent.setup();
+      const err = new Error('duplicate key value violates unique constraint');
+      err.status = 409;
+      err.code = 'duplicate_key';
+      err.body = { error: { status: 409, code: 'duplicate_key', message: err.message, messageKeys: ['SomeUnmappedKey'] } };
+      updateAccount.mockRejectedValueOnce(err);
+      renderModal();
+      await renameAndSave(user);
+
+      await waitFor(() =>
+        expect(screen.getByTestId('edit-account-error')).toHaveTextContent('financeAccountsNewNameExists'));
+      expect(toastError).not.toHaveBeenCalled();
+    });
   });
 
   it('toasts an error for a non-409 save failure', async () => {
@@ -1885,10 +1927,11 @@ describe('EditAccountModal', () => {
   // Type (like Currency) locks the moment real movement history exists. When
   // locked it renders as plain info text (label + value, no input box), not a
   // disabled control; when editable it renders a 3-option Select.
-  // ETP-6148 — «Remesas SEPA» (EM_ETGO_Allow_Remittance) in the General tab: behind the
-  // sepaRemittances capability AND a Bank account, read off the pending Type selection.
-  describe('SEPA remittances setting (ETP-6148)', () => {
-    const REMITTANCE_ACCOUNT = {
+  // ETP-6148 — there is no per-account «Admite remesas» switch any more: Bank accounts get the SEPA
+  // remittance payment methods when they are created. The modal shows no remittance setting and
+  // never sends the flag, whatever the capability says and whatever the stored row carries.
+  describe('SEPA remittances: no account setting (ETP-6148)', () => {
+    const REMITTANCE_BANK = {
       id: 'acc-rem',
       name: 'Santander',
       type: 'B',
@@ -1898,349 +1941,93 @@ describe('EditAccountModal', () => {
       countryIso: 'ES',
       bankConnected: false,
       hasTransactions: false,
+      // What a list row / detail record of an account set up before the removal can still carry.
+      eTGOAllowRemittance: true,
+      allowRemittance: true,
     };
-    const SECTION = 'remittance-settings-section';
-    const TOGGLE = 'edit-account-allow-remittance';
-    const withoutRemittanceCapability = () =>
-      hasCapability.mockImplementation((key) => key !== 'sepaRemittances');
 
-    async function rename(user, value = 'Santander Renamed') {
+    async function renameAndSave(user) {
       const nameInput = screen.getByTestId('edit-account-name');
       await user.clear(nameInput);
-      await user.type(nameInput, value);
-    }
-
-    async function saveAndGetPayload(user) {
+      await user.type(nameInput, 'Santander Renamed');
       await user.click(screen.getByTestId('edit-account-save'));
       await waitFor(() => expect(updateAccount).toHaveBeenCalledTimes(1));
       return updateAccount.mock.calls[0][1];
     }
 
-    async function rejectToggleWith(user, err) {
-      updateAccount.mockRejectedValueOnce(err);
-      renderModal({ account: REMITTANCE_ACCOUNT });
-      await user.click(screen.getByTestId(TOGGLE));
+    it('shows no remittance section on a Bank account, even with the sepaRemittances capability', () => {
+      hasCapability.mockReturnValue(true);
+      renderModal({ account: REMITTANCE_BANK });
+      expect(screen.getByTestId('edit-account-name')).toBeInTheDocument();
+      expect(screen.queryByTestId('remittance-settings-section')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('edit-account-allow-remittance')).not.toBeInTheDocument();
+      expect(screen.queryByText('financeAccountsRemittanceAllow')).not.toBeInTheDocument();
+      // Not dirty on open: the stored flag no longer takes part in the dirty check.
+      expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+    });
+
+    it('an edit never sends allowRemittance or eTGOAllowRemittance', async () => {
+      const user = userEvent.setup();
+      renderModal({ account: REMITTANCE_BANK });
+      const payload = await renameAndSave(user);
+      expect(payload).toMatchObject({ name: 'Santander Renamed' });
+      expect(payload).not.toHaveProperty('allowRemittance');
+      expect(payload).not.toHaveProperty('eTGOAllowRemittance');
+    });
+
+    it('a type change never sends the flag either', async () => {
+      const user = userEvent.setup();
+      renderModal({ account: REMITTANCE_BANK });
+      await pickType(user, 'Cash');
       await user.click(screen.getByTestId('edit-account-save'));
-    }
-
-    describe('visibility', () => {
-      it('shows the section, with its labels, for a Bank account when the capability is granted', () => {
-        renderModal({ account: REMITTANCE_ACCOUNT });
-        const section = screen.getByTestId(SECTION);
-        expect(section).toHaveTextContent('financeAccountsRemittanceSection');
-        expect(section).toHaveTextContent('financeAccountsRemittanceAllow');
-        expect(screen.getByTestId('edit-account-allow-remittance-hint'))
-          .toHaveTextContent('financeAccountsRemittanceAllowHint');
-        expect(hasCapability).toHaveBeenCalledWith('sepaRemittances');
-      });
-
-      it('hides the section without the sepaRemittances capability', () => {
-        withoutRemittanceCapability();
-        renderModal({ account: REMITTANCE_ACCOUNT });
-        expect(screen.queryByTestId(SECTION)).not.toBeInTheDocument();
-        // The rest of the General tab is unaffected.
-        expect(screen.getByTestId('edit-account-name')).toBeInTheDocument();
-      });
-
-      it.each([['Cash', 'C'], ['Card', 'CA']])('hides the section for a %s account', (_label, type) => {
-        renderModal({ account: { ...REMITTANCE_ACCOUNT, type } });
-        expect(screen.queryByTestId(SECTION)).not.toBeInTheDocument();
-      });
-
-      it.each(['Cash', 'Card'])('hides the section after switching the Type to %s', async (kind) => {
-        const user = userEvent.setup();
-        renderModal({ account: REMITTANCE_ACCOUNT });
-        expect(screen.getByTestId(SECTION)).toBeInTheDocument();
-        await pickType(user, kind);
-        await waitFor(() => expect(screen.queryByTestId(SECTION)).not.toBeInTheDocument());
-      });
+      await waitFor(() => expect(updateAccount).toHaveBeenCalledTimes(1));
+      const payload = updateAccount.mock.calls[0][1];
+      expect(payload).toMatchObject({ type: 'C' });
+      expect(payload).not.toHaveProperty('allowRemittance');
+      expect(payload).not.toHaveProperty('eTGOAllowRemittance');
     });
 
-    describe('initial state', () => {
-      it.each([
-        ['true', true, 'true'],
-        ['false', false, 'false'],
-        ['missing', undefined, 'false'],
-      ])('follows account.allowRemittance (%s)', (_label, allowRemittance, checked) => {
-        renderModal({ account: { ...REMITTANCE_ACCOUNT, allowRemittance } });
-        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', checked);
+    describe('a type change refused with ETGO_RemittanceAccountTypeChangeBlocked', () => {
+      const UI_KEY = 'backendError.remittanceAccountTypeChangeBlocked';
+      const PROSE = 'No se puede cambiar el tipo de una cuenta bancaria que tiene 2 remesas abiertas.';
+      const blocked = (messageParams) => Object.assign(new Error(PROSE), {
+        status: 422,
+        body: { error: { status: 422, message: PROSE, messageKeys: ['ETGO_RemittanceAccountTypeChangeBlocked'], ...(messageParams ? { messageParams } : {}) } },
       });
 
-      // The flag arrives as a boolean from both specs, but 'Y' / 'true' (a DAL Y/N column read
-      // raw) also mean on; any other value stays off (readAllowRemittance).
-      it('treats a non-boolean truthy value other than Y / true as off', () => {
-        renderModal({ account: { ...REMITTANCE_ACCOUNT, allowRemittance: 'yes' } });
-        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'false');
-      });
-    });
-
-    // Repro of the list-opened bug: the Cuentas LIST row (generic W spec) carries the flag under
-    // its contract key `eTGOAllowRemittance` only, while the DETAIL record (financial-accounts-page)
-    // carries the flat `allowRemittance`. Reading only the latter opened the list modal OFF and
-    // compared the dirty check against that wrong snapshot.
-    describe('where the modal was opened from', () => {
-      const saveButton = () => screen.getByTestId('edit-account-save');
-
-      it('from the Cuentas list (contract key only): opens ON, not dirty; switching off makes it dirty', async () => {
-        const user = userEvent.setup();
-        renderModal({ account: { ...REMITTANCE_ACCOUNT, eTGOAllowRemittance: true } });
-        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'true');
-        expect(saveButton()).toBeDisabled();
-        await user.click(screen.getByTestId(TOGGLE));
-        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'false');
-        expect(saveButton()).toBeEnabled();
-      });
-
-      it('from the detail (flat key only): opens ON', () => {
-        renderModal({ account: { ...REMITTANCE_ACCOUNT, allowRemittance: true } });
-        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'true');
-        expect(saveButton()).toBeDisabled();
-      });
-
-      it.each([
-        [false, true, 'false'],
-        [true, false, 'true'],
-      ])('with both keys the contract key wins (eTGOAllowRemittance %s, allowRemittance %s → %s)', (contract, flat, checked) => {
-        renderModal({ account: { ...REMITTANCE_ACCOUNT, eTGOAllowRemittance: contract, allowRemittance: flat } });
-        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', checked);
-      });
-
-      it.each([
-        ['Y', 'true'],
-        ['true', 'true'],
-        [true, 'true'],
-        ['N', 'false'],
-        ['yes', 'false'],
-        [false, 'false'],
-      ])('reads the contract key %j as %s', (value, checked) => {
-        renderModal({ account: { ...REMITTANCE_ACCOUNT, eTGOAllowRemittance: value } });
-        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', checked);
-      });
-
-      it.each([['Y', 'true'], ['true', 'true'], ['N', 'false']])('reads the flat key %j as %s', (value, checked) => {
-        renderModal({ account: { ...REMITTANCE_ACCOUNT, allowRemittance: value } });
-        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', checked);
-      });
-
-      it('opens OFF when neither key is present', () => {
-        renderModal({ account: REMITTANCE_ACCOUNT });
-        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'false');
-      });
-
-      it('saving a list-opened toggle sends allowRemittance (useAccountMutations maps it to eTGOAllowRemittance)', async () => {
-        const user = userEvent.setup();
-        renderModal({ account: { ...REMITTANCE_ACCOUNT, eTGOAllowRemittance: true } });
-        await user.click(screen.getByTestId(TOGGLE));
-        const payload = await saveAndGetPayload(user);
-        expect(updateAccount.mock.calls[0][0]).toBe('acc-rem');
-        expect(payload).toEqual({ allowRemittance: false });
-      });
-
-      it('a list-opened account saved without touching the switch never sends the flag', async () => {
-        const user = userEvent.setup();
-        renderModal({ account: { ...REMITTANCE_ACCOUNT, eTGOAllowRemittance: true } });
-        await rename(user);
-        const payload = await saveAndGetPayload(user);
-        expect(payload).not.toHaveProperty('allowRemittance');
-      });
-    });
-
-    describe('re-sync with the account prop', () => {
-      const rerenderWith = (rerender, account) => rerender(
-        <EditAccountModal open account={account} onClose={vi.fn()} onSaved={vi.fn()}
-          onArchive={vi.fn()} onConnect={vi.fn()} />,
-      );
-
-      it('a new object for the same account and value keeps the pending toggle', async () => {
-        const user = userEvent.setup();
-        const { rerender } = renderModal({ account: { ...REMITTANCE_ACCOUNT, eTGOAllowRemittance: false } });
-        await user.click(screen.getByTestId(TOGGLE));
-        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'true');
-        // A refetch / parent re-render hands over a fresh object with the same stored value.
-        rerenderWith(rerender, { ...REMITTANCE_ACCOUNT, eTGOAllowRemittance: false });
-        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'true');
-        expect(screen.getByTestId('edit-account-save')).toBeEnabled();
-      });
-
-      it('re-syncs when the stored value changes', async () => {
-        const user = userEvent.setup();
-        const { rerender } = renderModal({ account: { ...REMITTANCE_ACCOUNT, eTGOAllowRemittance: false } });
-        await user.click(screen.getByTestId(TOGGLE));
-        rerenderWith(rerender, { ...REMITTANCE_ACCOUNT, eTGOAllowRemittance: true });
-        await waitFor(() => expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'true'));
-        // The new stored value is the snapshot: nothing is pending.
-        expect(screen.getByTestId('edit-account-save')).toBeDisabled();
-        await user.click(screen.getByTestId(TOGGLE));
-        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'false');
-        expect(screen.getByTestId('edit-account-save')).toBeEnabled();
-      });
-    });
-
-    // The real Radix Switch (not mocked): it used to sit inside a <label>, which can re-activate the
-    // button and toggle it straight back.
-    describe('switch and label (real Switch)', () => {
-      it('one click turns it on and enables «Guardar cambios»; a second turns it off', async () => {
-        const user = userEvent.setup();
-        renderModal({ account: REMITTANCE_ACCOUNT });
-        await user.click(screen.getByTestId(TOGGLE));
-        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'true');
-        expect(screen.getByTestId('edit-account-save')).toBeEnabled();
-        await user.click(screen.getByTestId(TOGGLE));
-        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'false');
-      });
-
-      it('a click on the label text toggles it exactly once', async () => {
-        const user = userEvent.setup();
-        renderModal({ account: REMITTANCE_ACCOUNT });
-        const label = screen.getByTestId('edit-account-allow-remittance-label');
-        expect(label).toHaveTextContent('financeAccountsRemittanceAllow');
-        await user.click(label);
-        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'true');
-        await user.click(label);
-        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'false');
-      });
-
-      it('the switch is not inside a <label>, and the label names it', () => {
-        renderModal({ account: REMITTANCE_ACCOUNT });
-        const toggle = screen.getByTestId(TOGGLE);
-        expect(toggle.closest('label')).toBeNull();
-        const label = screen.getByTestId('edit-account-allow-remittance-label');
-        expect(label.tagName).toBe('LABEL');
-        expect(toggle.id).toBeTruthy();
-        expect(label).toHaveAttribute('for', toggle.id);
-        expect(screen.getByRole('switch', { name: 'financeAccountsRemittanceAllow' })).toBe(toggle);
-      });
-    });
-
-    describe('dirty tracking', () => {
-      it('makes the form dirty when toggled, and clean again when switched back', async () => {
-        const user = userEvent.setup();
-        renderModal({ account: REMITTANCE_ACCOUNT });
-        expect(screen.getByTestId('edit-account-save')).toBeDisabled();
-
-        await user.click(screen.getByTestId(TOGGLE));
-        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'true');
-        expect(screen.getByTestId('edit-account-save')).toBeEnabled();
-
-        await user.click(screen.getByTestId(TOGGLE));
-        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'false');
-        expect(screen.getByTestId('edit-account-save')).toBeDisabled();
-      });
-    });
-
-    describe('PUT payload', () => {
-      it('sends allowRemittance: true when switched on', async () => {
-        const user = userEvent.setup();
-        renderModal({ account: REMITTANCE_ACCOUNT });
-        await user.click(screen.getByTestId(TOGGLE));
-        const payload = await saveAndGetPayload(user);
-        expect(updateAccount.mock.calls[0][0]).toBe('acc-rem');
-        expect(payload).toMatchObject({ allowRemittance: true });
-        expect(payload).not.toHaveProperty('name');
-      });
-
-      it('sends allowRemittance: false when switched off', async () => {
-        const user = userEvent.setup();
-        renderModal({ account: { ...REMITTANCE_ACCOUNT, allowRemittance: true } });
-        await user.click(screen.getByTestId(TOGGLE));
-        const payload = await saveAndGetPayload(user);
-        expect(payload).toMatchObject({ allowRemittance: false });
-      });
-
-      it('omits allowRemittance when it did not change', async () => {
-        const user = userEvent.setup();
-        renderModal({ account: { ...REMITTANCE_ACCOUNT, allowRemittance: true } });
-        await rename(user);
-        const payload = await saveAndGetPayload(user);
-        expect(payload).toMatchObject({ name: 'Santander Renamed' });
-        expect(payload).not.toHaveProperty('allowRemittance');
-      });
-
-      it('omits allowRemittance when it was switched and switched back', async () => {
-        const user = userEvent.setup();
-        renderModal({ account: REMITTANCE_ACCOUNT });
-        await user.click(screen.getByTestId(TOGGLE));
-        await user.click(screen.getByTestId(TOGGLE));
-        await rename(user);
-        const payload = await saveAndGetPayload(user);
-        expect(payload).not.toHaveProperty('allowRemittance');
-      });
-
-      it('never sends allowRemittance after the Type left Bank, even if it was toggled first', async () => {
-        const user = userEvent.setup();
-        renderModal({ account: REMITTANCE_ACCOUNT });
-        await user.click(screen.getByTestId(TOGGLE));
-        await pickType(user, 'Card');
-        await waitFor(() => expect(screen.queryByTestId(SECTION)).not.toBeInTheDocument());
-        const payload = await saveAndGetPayload(user);
-        expect(payload).toMatchObject({ type: 'CA' });
-        expect(payload).not.toHaveProperty('allowRemittance');
-      });
-
-      it('does not count a pending toggle as dirty once the capability is lost', async () => {
-        const user = userEvent.setup();
-        // The capability can flip true -> false mid-session (the map reloads): the toggle the user
-        // left changed must stop counting as a pending edit once the section is gone.
-        const { rerender } = renderModal({ account: REMITTANCE_ACCOUNT });
-        await user.click(screen.getByTestId(TOGGLE));
-        expect(screen.getByTestId('edit-account-save')).toBeEnabled();
-        withoutRemittanceCapability();
-        rerender(
-          <EditAccountModal open account={REMITTANCE_ACCOUNT} onClose={vi.fn()} onSaved={vi.fn()}
-            onArchive={vi.fn()} onConnect={vi.fn()} />,
-        );
-        expect(screen.queryByTestId(SECTION)).not.toBeInTheDocument();
-        expect(screen.getByTestId('edit-account-save')).toBeDisabled();
-      });
-
-      it('never sends allowRemittance without the capability', async () => {
-        const user = userEvent.setup();
-        withoutRemittanceCapability();
-        renderModal({ account: { ...REMITTANCE_ACCOUNT, allowRemittance: true } });
-        await rename(user);
-        const payload = await saveAndGetPayload(user);
-        expect(payload).not.toHaveProperty('allowRemittance');
-      });
-    });
-
-    it.each([['en_US', enUS], ['es_ES', esES], ['es_AR', esAR]])('every key the section reads exists in %s', (_loc, json) => {
-      for (const key of ['financeAccountsRemittanceSection', 'financeAccountsRemittanceAllow', 'financeAccountsRemittanceAllowHint']) {
-        expect(json.genericLabels[key], key).toEqual(expect.stringMatching(/\S/));
+      async function changeTypeAndSave(user, err) {
+        updateAccount.mockRejectedValueOnce(err);
+        renderModal({ account: REMITTANCE_BANK });
+        await pickType(user, 'Cash');
+        await user.click(screen.getByTestId('edit-account-save'));
       }
-    });
 
-    describe('backend refusals', () => {
-      const keyed = (messageKey, status, message) => Object.assign(new Error(message), {
-        status,
-        body: { error: { message, messageKeys: [messageKey] } },
-      });
-
-      it.each([
-        ['ETGO_RemittanceAccountNotBank', 'backendError.remittanceAccountNotBank', 400,
-          'Solo las cuentas bancarias admiten remesas.'],
-        ['ETGO_RemittanceAccountIbanRequired', 'backendError.remittanceAccountIbanRequired', 400,
-          'Para admitir remesas, la cuenta necesita un IBAN válido.'],
-        ['ETGO_SepaRemittancesDisabled', 'backendError.sepaRemittancesDisabled', 403,
-          'Las remesas SEPA no están activadas para tu cuenta.'],
-      ])('%s shows its translated text', async (messageKey, uiKey, status, translated) => {
+      it('shows the translated sentence with the open-remittance count', async () => {
         const user = userEvent.setup();
-        uiMock.mockImplementation((key) => (key === uiKey ? translated : key));
-        await rejectToggleWith(user, keyed(messageKey, status, `raw ${messageKey}`));
-        await waitFor(() => expect(toastError).toHaveBeenCalledWith(translated));
+        uiMock.mockImplementation((key, params) => (key === UI_KEY ? `T:typeChangeBlocked ${params?.count}` : key));
+        await changeTypeAndSave(user, blocked({ count: 2 }));
+        await waitFor(() => expect(toastError).toHaveBeenCalledWith('T:typeChangeBlocked 2'));
         expect(toastSuccess).not.toHaveBeenCalled();
       });
 
-      it('shows the backend text of the 422 open-remittances refusal as is', async () => {
+      it('without messageParams, shows the backend text (count included), never a number-less sentence', async () => {
         const user = userEvent.setup();
-        const message = 'No se puede desactivar: la cuenta tiene 2 remesas abiertas.';
-        const err = keyed('ETGO_RemittanceAccountHasOpenRemittances', 422, message);
-        updateAccount.mockRejectedValueOnce(err);
-        renderModal({ account: { ...REMITTANCE_ACCOUNT, allowRemittance: true } });
-        await user.click(screen.getByTestId(TOGGLE));
+        uiMock.mockImplementation((key) => (key === UI_KEY ? 'T:typeChangeBlocked {count}' : key));
+        await changeTypeAndSave(user, blocked());
+        await waitFor(() => expect(toastError).toHaveBeenCalledWith(PROSE));
+        expect(toastError.mock.calls[0][0]).toContain('2');
+      });
+
+      it('keeps the modal open with the pending Type', async () => {
+        const user = userEvent.setup();
+        const onClose = vi.fn();
+        updateAccount.mockRejectedValueOnce(blocked({ count: 2 }));
+        renderModal({ account: REMITTANCE_BANK, onClose });
+        await pickType(user, 'Cash');
         await user.click(screen.getByTestId('edit-account-save'));
-        await waitFor(() => expect(toastError).toHaveBeenCalledWith(message));
-        // The modal stays open with the toggle as the user left it.
-        expect(screen.getByTestId(TOGGLE)).toHaveAttribute('aria-checked', 'false');
+        await waitFor(() => expect(toastError).toHaveBeenCalled());
+        expect(onClose).not.toHaveBeenCalled();
+        expect(screen.getByTestId('edit-account-modal')).toBeInTheDocument();
       });
     });
   });

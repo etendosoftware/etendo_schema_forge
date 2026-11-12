@@ -6,6 +6,7 @@ import RemittanceTable from './RemittanceTable';
 import RemittanceForm from './RemittanceForm';
 import LinesTable from './LinesTable';
 import LinesForm from './LinesForm';
+import RemittanceSepaFileData from '../../../custom/RemittanceSepaFileData';
 import { AttachmentsTab } from '@/components/attachments';
 import RemittanceBottomPanel from '../../../custom/RemittanceBottomPanel';
 import RemittanceStatusBanner from '../../../custom/RemittanceStatusBanner';
@@ -293,6 +294,7 @@ export default function RemittancePage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        formFooter={RemittanceSepaFileData}
         hidePrint
         noHeaderBorder
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "REM_Remittance", config: {} } }]}

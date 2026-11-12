@@ -1,7 +1,11 @@
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import {
+  translateBackendError,
+  extractBackendMessageKeys,
+  extractBackendMessageParams,
+} from '@/lib/backendErrors.js';
 import { useBankConnectionActions, launchSaltEdgePopup } from './useBankConnectionActions';
 
 /**
@@ -80,7 +84,13 @@ export function useBankConnectionFlow({ onDone } = {}) {
       toast.success(ui('financeAccountsBankConnectionSuccess'));
       onDone?.();
     } catch (err) {
-      toast.error(err.message || ui('financeAccountsBankConnectionLinkError'));
+      // ETP-6148 — translate by `messageKeys` first (a 409 ETGO_RemittanceProvisioningConflict when
+      // the new Bank account's remittance setup races); otherwise the raw message, as before.
+      toast.error(translateBackendError(err.message, ui, {
+        code: err.code,
+        messageKeys: extractBackendMessageKeys(err.body),
+        messageParams: extractBackendMessageParams(err.body),
+      }) || ui('financeAccountsBankConnectionLinkError'));
     }
   }, [createAndLink, link, onDone, ui]);
 

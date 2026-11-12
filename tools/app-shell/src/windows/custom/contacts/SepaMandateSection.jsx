@@ -10,11 +10,18 @@ import { SEPA_REMITTANCES_CAPABILITY, isCapabilityVisible } from '@/lib/capabili
 // so this section is their only editor; it rides the same `onChange` as
 // FiscalDefaultsSection, so the values are saved with the record.
 //
-// The defaults are the backend's (BusinessPartnerHandler, behind the
-// `sepa-remittances` flag): a blank mandate ID takes the contact's tax ID and
-// an empty signature date its creation date. The placeholder and the help
-// line only say so — the browser never fills them in itself, so what the user
-// leaves blank is exactly what the server defaults.
+// The values are STORED by the backend (ContactSepaMandateDefaults, behind the
+// `sepa-remittances` flag): when a customer is created, an empty mandate ID is
+// saved as the contact's tax ID and an empty signature date as today; the new
+// form already receives the date from DEFAULTS. On any later save of a
+// customer, each mandate field that is empty in the DB and not sent in the
+// body is filled (ID = current tax ID, date = creation date), so old customers
+// get theirs on their next save. A sent value always wins; a field sent empty
+// is cleared for that save only (the next save refills it); a tax-ID change
+// never moves a stored ID; non-customers are never filled. So the fields show
+// real stored values, re-read with the record; one muted line under both
+// fields (no placeholder, no per-field hint) says where they come from. The
+// browser never fills the ID itself — the server does it on save.
 
 /** Max length of `EM_Obsepad_Mandate_Identifier` (NVARCHAR(35), the SEPA mandate id). */
 export const MANDATE_ID_MAX_LENGTH = 35;
@@ -43,7 +50,6 @@ export function buildSepaMandateFields(ui) {
       type: 'string',
       section: 'principal',
       maxLength: MANDATE_ID_MAX_LENGTH,
-      placeholderKey: 'sepaMandateIdPlaceholder',
       labels: { en_US: ui('sepaMandateId') },
     },
     {
@@ -51,7 +57,6 @@ export function buildSepaMandateFields(ui) {
       column: 'EM_Obsepad_Mandate_Date',
       type: 'date',
       section: 'principal',
-      help: 'sepaMandateSignedOnHint',
       labels: { en_US: ui('sepaMandateSignedOn') },
     },
   ];
@@ -78,6 +83,11 @@ export default function SepaMandateSection(props) {
             fields={buildSepaMandateFields(ui)}
             cols={2}
             data-testid="EntityForm__sepa-mandate" />
+          {/* One explanation for both fields: a single muted line under the two-column row, on
+              the fields' left edge (no placeholder or per-field hint inside the form). */}
+          <p className="mt-1.5 text-xs text-muted-foreground" data-testid="SepaMandateSection-autofill-hint">
+            {ui('sepaMandateAutofillHint')}
+          </p>
         </div>
       </div>
     </>

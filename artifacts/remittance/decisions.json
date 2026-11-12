@@ -19,6 +19,10 @@
     "detailSortBy": "lineNo asc",
     "hideDetailForm": true,
     "noHeaderBorder": true,
+    "headerExtra": {
+      "customForm": "RemittanceSepaFileData"
+    },
+    "_headerExtraNote": "ETP-6148 — «Datos para el fichero SEPA» below the header form (artifacts/remittance/custom/RemittanceSepaFileData.jsx): the chosen account's IBAN (read-only with a lock hint, or an input that saves it ON THE ACCOUNT when missing) and the computed SEPA creditor identifier. No BIC (user decision). Contract in sepaFileDataApi.js.",
     "_noHeaderBorderNote": "ETP-6148 round 3 (user decision) — the header fields sit flush on the page like Sales Invoice, which declares the same option, not inside DetailView's default rounded, bordered card.",
     "maxDetailLines": 0,
     "_maxDetailLinesNote": "ETP-6148 round 3 — import-only lines (the return-material-receipt pattern): no «+ Añadir línea». Lines have no POST and only come from «Seleccionar desde factura». Needed since amount became editable (editInPlace), which put it in addLineFields.entry and made DetailView show the add-line area.",
@@ -196,7 +200,12 @@
           "section": "principal",
           "seq": 10,
           "required": true,
-          "reason": "ETP-6148 — 'Cuenta' (FIN_Financial_Account_ID). The selector is served by the remittance handler and only offers accounts with EM_ETGO_Allow_Remittance = Y. Placed first in the form because remittanceType depends on it. List: columnWidth 290 fits a typical account name («Cuenta Remesa ETP-6148 - EUR»); `name` absorbs the leftover width (grow), not the account or the type (user decision 2026-11-06)."
+          "optionBadge": {
+            "field": "ibanValid",
+            "equals": false,
+            "labelKey": "remittanceAccountNoIbanBadge"
+          },
+          "reason": "ETP-6148 — 'Cuenta' (FIN_Financial_Account_ID). The selector is served by the remittance handler, which decides what it offers: Bank accounts with the remittance payment methods, including those WITHOUT a valid IBAN, whose items carry `ibanValid: false` and show a «Sin IBAN» badge (optionBadge); their IBAN is entered in the «Datos para el fichero SEPA» block, and the header refuses the save (422 ETGO_RemittanceAccountIbanRequired) until it is valid. There is no per-account «Admite remesas» switch any more; Bank accounts get the remittance payment methods when they are created. Placed first in the form because remittanceType depends on it. List: columnWidth 290 fits a typical account name («Cuenta Remesa ETP-6148 - EUR»); `name` absorbs the leftover width (grow), not the account or the type (user decision 2026-11-06)."
         },
         "dueDate": {
           "visibility": "editable",

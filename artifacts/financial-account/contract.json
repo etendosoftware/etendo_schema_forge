@@ -1,8 +1,8 @@
 {
-  "version": "0.10.0",
+  "version": "0.12.0",
   "generatedAt": "2026-09-29T12:00:08.872Z",
-  "updatedAt": "2026-11-05T21:50:02.811Z",
-  "checksum": "56d27bee7da360aa",
+  "updatedAt": "2026-11-11T19:52:23.478Z",
+  "checksum": "e5bfa0c0345dd2d7",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -822,29 +822,6 @@
             }
           },
           {
-            "name": "eTGOAllowRemittance",
-            "apiKey": "eTGOAllowRemittance",
-            "column": "EM_ETGO_Allow_Remittance",
-            "label": "Allow Remittances",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": false,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            },
-            "defaultValue": "N",
-            "visibleWhenCapability": "sepaRemittances",
-            "validation": {
-              "required": true,
-              "maxLength": 1
-            }
-          },
-          {
             "name": "pSD2LastSyncDate",
             "apiKey": "pSD2LastSyncDate",
             "column": "EM_PSD2_Last_Sync_Date",
@@ -926,13 +903,6 @@
             "derivation": {
               "type": "computed",
               "source": "3"
-            }
-          },
-          {
-            "name": "eTGOAllowRemittance",
-            "derivation": {
-              "type": "computed",
-              "source": "N"
             }
           }
         ]
@@ -3905,14 +3875,6 @@
             "required": true
           },
           {
-            "name": "eTGOAllowRemittance",
-            "apiKey": "eTGOAllowRemittance",
-            "column": "EM_ETGO_Allow_Remittance",
-            "type": "boolean",
-            "visibility": "editable",
-            "required": true
-          },
-          {
             "name": "updated",
             "apiKey": "updated",
             "column": "Updated",
@@ -6730,14 +6692,6 @@
         "description": "Default value for 'default' in account should be a string"
       },
       {
-        "id": "t-default-value-type-account-eTGOAllowRemittance",
-        "category": "default-value-type",
-        "entity": "account",
-        "field": "eTGOAllowRemittance",
-        "runner": "node",
-        "description": "Default value for 'eTGOAllowRemittance' in account should be a string"
-      },
-      {
         "id": "t-default-value-type-account-eTGOAmountTolerance",
         "category": "default-value-type",
         "entity": "account",
@@ -7946,14 +7900,6 @@
         "description": "Field 'description' should be present in account"
       },
       {
-        "id": "t-field-presence-account-eTGOAllowRemittance",
-        "category": "field-presence",
-        "entity": "account",
-        "field": "eTGOAllowRemittance",
-        "runner": "node",
-        "description": "Field 'eTGOAllowRemittance' should be present in account"
-      },
-      {
         "id": "t-field-presence-account-eTGOAmountTolerance",
         "category": "field-presence",
         "entity": "account",
@@ -8832,14 +8778,6 @@
         "field": "description",
         "runner": "node",
         "description": "Field 'description' should have type 'string' in account"
-      },
-      {
-        "id": "t-field-type-account-eTGOAllowRemittance",
-        "category": "field-type",
-        "entity": "account",
-        "field": "eTGOAllowRemittance",
-        "runner": "node",
-        "description": "Field 'eTGOAllowRemittance' should have type 'boolean' in account"
       },
       {
         "id": "t-field-type-account-eTGOAmountTolerance",
@@ -13264,15 +13202,15 @@
       }
     ],
     "summary": {
-      "total": 886,
+      "total": 883,
       "byCategory": {
         "action-endpoint": 29,
         "crud-flags": 7,
-        "default-value-type": 36,
+        "default-value-type": 35,
         "displaylogic-evaluable": 52,
         "displaylogic-valid": 52,
-        "field-presence": 111,
-        "field-type": 111,
+        "field-presence": 110,
+        "field-type": 110,
         "readonlylogic-evaluable": 33,
         "readonlylogic-valid": 33,
         "rule-declared": 228,
@@ -13282,7 +13220,7 @@
         "visibility": 7
       },
       "byRunner": {
-        "node": 886,
+        "node": 883,
         "junit": 0
       }
     }

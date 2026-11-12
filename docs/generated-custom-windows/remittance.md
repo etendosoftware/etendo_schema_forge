@@ -121,7 +121,7 @@ sit flush on the page between the blue status banner and the Líneas tab. The ba
 
 | Key | Visibility | Notes |
 |---|---|---|
-| `financialAccount` | editable, required | first editable field (after `documentNo`). The handler's selector only offers accounts with «Admite remesas» on (`EM_ETGO_Allow_Remittance = 'Y'`) |
+| `financialAccount` | editable, required | first editable field (after `documentNo`). The handler's selector offers active Bank accounts with the remittance payment methods linked (Bank accounts get them when created; there is no «Admite remesas» switch). Accounts without a valid IBAN are offered too, with a «Sin IBAN» badge (`optionBadge`); their IBAN is entered in «Datos para el fichero SEPA». A header write with another account is refused with 422: `ETGO_RemittanceAccountNotBank`, `ETGO_RemittanceAccountIbanRequired` or `ETGO_RemittanceAccountNotAllowed` (no remittance methods: an account created before the feature or with the flag off; no backfill), mapped in `backendErrors.js` |
 | `remittanceType` | editable, required | `dependsOn: { field: "financialAccount", filterKey: "FIN_Financial_Account_ID" }`. The selector request carries the chosen account, and the handler only offers the types whose payment method is linked to it |
 | `dueDate` | editable, required | the date the bank charges or credits the remittance. `"minDate": "today"`: the picker disables past days, and a typed past date is refused with «La fecha no puede ser anterior a hoy.» (`fieldMinDateError`); the save is blocked too. Only a new value is checked, so a saved remittance with a past date still opens. The backend refuses the same with 422 `ETGO_RemittanceDueDatePast`, translated through `backendErrors.js` (`backendError.remittanceDueDatePast`) |
 | `name` | editable, required | at most 60 characters, checked by the handler. The AD field has no read-only logic, so `decisions.json` adds `readOnlyLogic: "@Processed@='Y'"`, the same lock as the other header fields; the handler already refuses the edit (422 `ETGO_RemittanceProcessedNotEditable`) |
@@ -317,6 +317,55 @@ the banner renders as the first child of the detail content, under the top bar. 
 - If that row is missing or unreadable, it sums the loaded lines.
 - It is re-read whenever the lines change.
 
+### «Datos para el fichero SEPA» (IBAN and creditor identifier)
+
+A block below the header form (`window.headerExtra.customForm` →
+`artifacts/remittance/custom/RemittanceSepaFileData.jsx`, rendered by DetailView as its
+`formFooter`). It follows the chosen Cuenta, on a new, unsaved remittance too, and shows two values.
+There is no BIC (user decision).
+
+Layout (Holded reference):
+- a compact, subtle card (`rounded-xl`, `border-subtle`) on the form grid's left and right edges
+  (`mx-2`, the `p-2` of DetailView's header card body), with about the form's own row gap
+  (`mt-3 mb-3`) before the Líneas tabs;
+- a light header strip with the title on the left and, when the IBAN is stored, «🔒 De la cuenta
+  <nombre>» on the right;
+- below it the header form's own grid and tokens (EntityForm's `Label`, `Input`, `FIELD_HEIGHT`,
+  `ROW_GAP_Y`, 4 columns): IBAN in columns 1–2, «Identificador del acreedor» in columns 3–4.
+  Each label is inline, left of its value (it wraps above on a narrow screen), so the read-only
+  body is a single row. Values use the app font. Without an IBAN, «IBAN *», the input and «Guardar
+  IBAN» share one row at input height, with one help line below.
+
+- **IBAN.**
+  - When the account's IBAN is valid, it is shown read-only, in groups of 4, with a lock and «De la
+    cuenta <nombre>».
+  - When it is missing or invalid, it is an input (placeholder «ES91 2100 0418 4502 0005 1332»).
+    The input is validated inline with the Edit-account rules (`validateIbanForCountry`, same error
+    keys) and has a «Guardar IBAN» button. The note says «Esta cuenta no tiene IBAN guardado. Se
+    guardará en la cuenta <nombre>.» The IBAN is saved **on the account**, not on the remittance.
+    The block is then re-read.
+  - While the IBAN is missing, a red line says the remittance cannot be saved. The header refuses
+    the save with 422 `ETGO_RemittanceAccountIbanRequired`, mapped in `backendErrors.js`.
+  - On a processed remittance the block is read-only.
+- **Identificador del acreedor**, computed by the backend from the organization's country and tax ID
+  and the remittance type's business code (000 by default). Its info icon first says what
+  it is (it identifies the company as issuer of SEPA direct debits; the bank assigns it; only for
+  collection remittances), then how it is built (country, check digits, suffix, tax ID). When it cannot be computed, a warning names what is missing: «la organización no
+  tiene NIF», «la organización no tiene país», «la cuenta no tiene IBAN», or that the collection
+  remittance type's creditor business code is not valid (it must be 3 letters or digits; provisioning
+  stores `000`, the default suffix).
+- **Cuenta selector.** Accounts without a valid IBAN are offered too, marked with a «Sin IBAN» badge
+  (`financialAccount.optionBadge` on the selector item's `ibanValid`, see `docs/ui-customization.md`
+  → *Badge on selector options*).
+
+**Contract (confirmed by the backend, isolated in `sepaFileDataApi.js`):**
+
+| Call | Body | Answer |
+|---|---|---|
+| `POST <spec>/remittance/{id or new}/action/sepaFileData` | `{ accountId, organizationId? }` (the header's organization when set) | `{ accountId, accountName, iban, ibanValid, organizationId, country, creditorId, creditorIdAvailable, missing: ["iban"\|"orgTaxId"\|"country"\|"creditorBusinessCode"] }`. NEO actions need a record segment, so an unsaved remittance sends `new` (never loaded). `country` is the organization's country, the one inside the creditor id. `orgTaxId` is also missing when the tax ID cannot form an identifier. Refusals: 404 (account or organization not found), 422 `ETGO_RemittanceAccountNotBank` / `…NotAllowed`, 403 `feature_disabled` |
+| `GET /sws/neo/financial-account/account/{id}` then `PATCH` the same | `{ iBAN, updated }` | the existing account update. `updated` is mandatory on every NEO update, hence the read first. The body carries only the IBAN; the account must already have a country (set in Edit account). Without one the backend answers 400 `ETGO_FinAccIbanRequiresCountry`, shown as «La cuenta no tiene país. Indícalo primero en Editar cuenta para poder guardar el IBAN.» (`remittanceSepaIbanNeedsAccountCountry`, also when an older backend sends only the English literal). The other refusals (the IBAN/country pair texts) go through `translateBackendError` |
+| `financialAccount` selector items | — | `{ id, label, iban, ibanValid }`; accounts without a valid IBAN are offered too. DEFAULTS never prefills an IBAN-less account |
+
 ### «Seleccionar desde factura» (adding lines)
 
 **Removing a line** uses the generic lines delete, the same as other windows: a trash icon on the row,
@@ -413,9 +462,7 @@ REM's own processes set the value (`org.openbravo.module.remittance`, `feature/E
 existed before the column gets the default `PE` and keeps it until one of REM's processes (process,
 reactivate, settle, return or their undo) refreshes it.
 - It shows «Pendiente» in the list, the detail pill and the status filter.
-- If its type is one Etendo GO provisioned, it counts as open (`PE`, `PR`, `CP`, `PP`). So the
-  account cannot turn «Admite remesas» off or be archived (422
-  `ETGO_RemittanceAccountHasOpenRemittances`).
+- If its type is one Etendo GO provisioned, it counts as open (`PE`, `PR`, `CP`, `PP`).
 
 Tracked as `existing-remittances-not-backfilled` in `flags-registry.json`.
 
@@ -530,8 +577,8 @@ A push creates `ETGO_SF_FIELD` rows that point to the `AD_COLUMN` rows of the sp
 
 ## Manual verification
 
-Prerequisites: the `sepa-remittances` flag on, the spec pushed, and at least one bank account with
-«Admite remesas» on.
+Prerequisites: the `sepa-remittances` flag on, the spec pushed, and at least one Bank account with a
+valid IBAN created while the flag was on (so it has the remittance payment methods).
 
 1. With the flag off, there is no menu entry, `/remittance` shows the access-denied screen, and
    `GET /sws/neo/remittance/remittance` answers 403. With the flag on, «Remesas» appears in
@@ -539,7 +586,8 @@ Prerequisites: the `sepa-remittances` flag on, the spec pushed, and at least one
    nor the page.
 2. The list shows Fecha, Tipo de remesa, Nombre, Cuenta, Fecha de cargo/abono and Estado. Every
    column sorts and appears in "Filtro por condicionales".
-3. In a new remittance, Cuenta only offers accounts with «Admite remesas». Tipo de remesa is empty
+3. In a new remittance, Cuenta only offers Bank accounts with a valid IBAN and the remittance
+   payment methods. Tipo de remesa is empty
    until an account is chosen, and then only offers the types linked to that account.
 4. After saving, Fecha is today, Nº documento is filled in (first field, and first list column) and Estado is Pendiente (a neutral
    badge in the grid; «Pendiente» in the form and the detail pill).

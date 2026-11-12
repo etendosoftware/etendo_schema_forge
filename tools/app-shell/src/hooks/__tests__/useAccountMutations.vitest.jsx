@@ -355,32 +355,30 @@ describe('useAccountMutations', () => {
     expect(body).not.toHaveProperty('eTGOAmountTolerance');
   });
 
-  // ETP-6148 — «Admite remesas» (EM_ETGO_Allow_Remittance): the DAL property drops the "EM_"
-  // prefix like the tolerances above, and the value is coerced to a strict boolean.
-  it.each([
-    [true, true],
-    [false, false],
-    ['true', false],
-    [1, false],
-    [null, false],
-  ])('updateAccount maps allowRemittance %j to eTGOAllowRemittance %j', async (given, sent) => {
+  // ETP-6148 — the per-account «Admite remesas» flag is gone (Bank accounts are provisioned on
+  // create): an `allowRemittance` key a stale caller still passes is no longer mapped to the DAL
+  // property, nor forwarded as is.
+  it.each([true, false])('updateAccount no longer maps allowRemittance (%s) to eTGOAllowRemittance', async (value) => {
     globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-1' }]));
 
     const { result } = renderHook(() => useAccountMutations(), { wrapper });
     await act(async () => {
-      await result.current.updateAccount('acc-1', { allowRemittance: given });
+      await result.current.updateAccount('acc-1', { name: 'Renamed', allowRemittance: value });
     });
 
     const [, init] = findFetchCall(`${ENTITY_URL}/acc-1`);
-    expect(JSON.parse(init.body)).toEqual({ eTGOAllowRemittance: sent });
+    const body = JSON.parse(init.body);
+    expect(body).toMatchObject({ name: 'Renamed' });
+    expect(body).not.toHaveProperty('eTGOAllowRemittance');
+    expect(body).not.toHaveProperty('allowRemittance');
   });
 
-  it('updateAccount omits eTGOAllowRemittance when allowRemittance is not in the payload', async () => {
+  it('updateAccount with only allowRemittance sends no remittance key', async () => {
     globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-1' }]));
 
     const { result } = renderHook(() => useAccountMutations(), { wrapper });
     await act(async () => {
-      await result.current.updateAccount('acc-1', { name: 'Renamed' });
+      await result.current.updateAccount('acc-1', { allowRemittance: true });
     });
 
     const [, init] = findFetchCall(`${ENTITY_URL}/acc-1`);
