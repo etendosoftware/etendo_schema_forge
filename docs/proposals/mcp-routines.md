@@ -75,7 +75,7 @@ One tool, `etendo_routine`, with a `mode` argument:
 
 ### 3.2 Response
 
-Every execution (`exec` or `run`) returns an `executionId`.
+Every execution (`exec` or `run`) returns an `executionId` (from phase 2, when executions are stored).
 
 - Success: `{ ok:true, executionId, steps:[{id, ok, recordId?}], results:{<stepId>: …} }`.
   `results` holds the full result of the steps marked `returnResult:true`; when none is marked, only
@@ -161,9 +161,9 @@ Add a third column to the `okr` suite of `mcp-tests`: **Etendo + routine**.
 
 | Phase | Scope | Done when |
 |---|---|---|
-| 1 | Tables (`ETGO_MCP_ROUTINE*`), `etendo_routine` registered in `ToolRegistry`, `mode:"exec"` with `route()` per step, `$ref`/`$ref.path`/`$param` substitution, step limit, allowed-tool list, step-by-step commit and the §3.2 response. | An agent creates a product and its price in one `exec` call; a failing second step reports the first as completed. |
-| 2 | `save` (explicit and `fromExecution`), `run`, `list`, `describe`, `update` with version history, `delete`, typed parameter validation, owner-only access. | A routine saved from an `exec` runs with new parameters; another user cannot see it; `run` with `version` uses an older version. |
-| 3 | `mode:"execution"`, `returnResult`, JUnit coverage of every mode and error path. | `execution` returns every step result; tests cover the edge cases below. |
+| 1 | `etendo_routine` registered in `ToolRegistry`, `mode:"exec"` with `route()` per step, `$ref` and `$ref.path` substitution, `returnResult`, step limit, allowed-tool list, step-by-step commit and the §3.2 response without `executionId`. No tables yet. | An agent creates a customer and its address in one `exec` call; a failing second step reports the first as completed. |
+| 2 | Tables (`ETGO_MCP_ROUTINE*`), stored executions and `executionId`, `save` (explicit and `fromExecution`), `run` with `$param` substitution, `list`, `describe`, `update` with version history, `delete`, typed parameter validation, owner-only access. | A routine saved from an `exec` runs with new parameters; another user cannot see it; `run` with `version` uses an older version. |
+| 3 | `mode:"execution"`, JUnit coverage of every mode and error path. | `execution` returns every step result; tests cover the edge cases below. |
 | 4 | "Etendo + routine" column in the `okr` suite, routine fixtures per test, child KR in the report and in etendo-kpis. | One full run reports the three columns and the child KR. |
 
 Edge cases to cover (phase 3): reference to a later or missing step, missing or wrongly typed
