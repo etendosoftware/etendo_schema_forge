@@ -101,7 +101,7 @@ Full detail in the `action=delete` section further down.
 |---|---|---|
 | **Cuentas** (the list — generic `ListView` + `AccountsHeaderTable` slot) | trash disabled whenever the selection held a row with `deletable === false` (ETP-4871, via `isRowDeletable`); the slot's own toolbar unmounted while a selection was active | trash always enabled — an undeletable account comes back as a 409 per-row failure; the toolbar stays mounted |
 | **Movimientos** | trash always enabled (ETP-5085), with the shared reason appended to any failure toast; the kebab's Eliminar hidden for a payment-linked movement and for a funds-transfer leg | trash always enabled; 1 row = Payment Removal, N rows = classic delete; reason only for 1 row; the kebab always shows Eliminar — toasting the reason on a blocked row, confirming first on every other |
-| **Extractos importados** | trash disabled for a processed statement or on a bank-connected account (ETP-4921 + PSD2, via `resolveBulkDeleteBlock` → `disabledReason`) | trash always enabled — the backend answers 400 (`requireDraft`) or 409 (bank-connected); the per-row hover trash icon is still hidden for a processed statement |
+| **Extractos importados** | trash disabled for a processed statement or on a bank-connected account (ETP-4921 + PSD2, via `resolveBulkDeleteBlock` → `disabledReason`) | trash always enabled — the backend answers 400 (`requireDraft`) or 409 (bank-connected); the per-row hover trash icon is still hidden for a processed statement. With flag `psd2-statement-import-settings` ON (ETP-6151) a bank-connected account answers 400 only for a posted statement or one with matched lines, and the per-row trash shows on every row of that account |
 
 ## Two backend guards came with it
 
@@ -111,22 +111,25 @@ fixes rather than UX:
 - **A movement carrying a `FIN_Payment` is now rejected with 409**
   (`FinancialAccountTransactionsHandler.handleDelete`). It was previously deletable over REST, MCP
   and the bulk path with **no validation at all**, orphaning the payment.
-- **A statement belonging to a PSD2 bank-connected account is now rejected with 409**
-  (`BankStatementsHandler.handleDelete`). Previously enforced in the frontend only.
+- **A statement belonging to a PSD2 bank-connected account is rejected with 409** by
+  `BankStatementsHandler.handleDelete` (previously enforced in the frontend only). **ETP-6151**
+  opens delete on such an account, but **only with the per-account flag
+  `psd2-statement-import-settings` ON** (see below); with it OFF, the 409 stands.
 
-## Statements on a bank-connected account: no manual create, import or delete (ETP-5471)
+## Statements on a bank-connected account: no manual create or import; delete behind a flag (ETP-5471, ETP-6151)
 
 On an account whose `EM_PSD2_Connection_Status` is connected, statements come from the bank sync.
 The UI already hides Import / Create there (`StatementsToolbar` shows only Sincronizar), but until
-ETP-5471 the backend refused only `?action=delete`. An MCP agent created a statement on a connected
+ETP-5471 the backend refused only `?action=delete` (ETP-6151 opens delete only with the flag ON, see the last row of
+the table). An MCP agent created a statement on a connected
 account in test pass CB-46. The rule is now enforced server-side, on every path, with one predicate:
 `BankStatementsSupport.isBankConnected` (`BankIntegrationConstants.FA_CONNECTION_STATUS_CONNECTED`).
 
-| Path | Refused with 409 when the account is connected |
+| Path | Behaviour when the account is connected |
 |---|---|
-| `bank-statements?action=create` (manual statement) and MCP `createStatement` | `BankStatementsHandler.handleCreate`, before anything is saved |
-| `bank-statements?action=import` / `?action=preview` (C43 / CSV) and MCP `importStatement` / `previewStatement` | `BankStatementsHandler.parseUploadInput`, before the file is decoded |
-| `bank-statements?action=delete` and MCP `deleteStatement` | `BankStatementsHandler.handleDelete` (pre-existing guard) |
+| `bank-statements?action=create` (manual statement) and MCP `createStatement` | 409 — `BankStatementsHandler.handleCreate`, before anything is saved |
+| `bank-statements?action=import` / `?action=preview` (C43 / CSV) and MCP `importStatement` / `previewStatement` | 409 — `BankStatementsHandler.parseUploadInput`, before the file is decoded |
+| `bank-statements?action=delete` and MCP `deleteStatement` | **Flag OFF (default): 409** `Statements from a bank-connected account cannot be deleted.`, as before ETP-6151. **Flag `psd2-statement-import-settings` ON (ETP-6151): not refused** — `BankStatementsHandler.handleDelete` delegates to `BankStatementDeletion`: a processed statement is reactivated and deleted in one step, unless it is posted or has matched lines (400). See *Delete on a bank-connected account (ETP-6151)* below. |
 
 - **One write path.** The MCP named actions of the `bank-statements` spec
   (`BankStatementAgentActions`, ETP-5447/ETP-5469) dispatch to the same handler methods as the REST
@@ -142,6 +145,43 @@ account in test pass CB-46. The rule is now enforced server-side, on every path,
   manually." translated through `backendError.statementBankConnectedNotCreatable`
   (`lib/backendErrors.js`, exact-text match; keep the Java constant
   `BankStatementsHandler.MSG_STATEMENT_BANK_CONNECTED_NOT_CREATABLE` byte-for-byte in sync).
+
+### Delete on a bank-connected account (ETP-6151, behind a flag)
+
+**Feature flag `psd2-statement-import-settings`** (per account, evaluated by `Psd2ImportSettingsFlag`
+with the ETGO_ACCOUNT email as targeting key, default OFF; the whole ETP-6151 feature is behind it,
+see *Feature flag* below). **Everything in this subsection applies only with the flag ON.** With it
+OFF, `BankStatementDeletion.prepareLegacy` keeps the pre-ETP-6151 rule: only a draft can be deleted,
+a statement of a bank-connected account answers 409
+`Statements from a bank-connected account cannot be deleted.` (`MSG_STATEMENT_BANK_CONNECTED`,
+mapped to `backendError.statementBankConnectedNotDeletable`) and a processed statement of an
+unconnected account answers the not-draft 400.
+
+ETP-5111 refused every statement delete on a connected account (409). With the flag ON, ETP-6151
+reverses it: a user who imported a wrong period needs to be able to remove it. The rule lives in
+`BankStatementDeletion` (package-private, `com.etendoerp.go.schemaforge`), called from
+`BankStatementsHandler.handleDelete`, and branches only on the account's connection status and the
+statement's `processed` / `posted` flags:
+
+| Statement | Account not bank-connected | Account bank-connected |
+|---|---|---|
+| Draft, no matched lines | deleted | deleted |
+| Processed, not posted, no matched lines | 400 `Only draft (unprocessed) statements can be modified` | **reactivated and deleted in one transaction** (the same `reactivateStatement` as `?action=reactivate`) |
+| Processed and posted | 400 (not a draft) | 400 `The statement is posted. Unpost it before deleting it.` |
+| Any state with matched lines | 400 `The statement has matched lines; unreconcile them before deleting` | same 400 |
+
+Every rejection happens before anything is written. The same behaviour holds for the UI (row and
+bulk), the REST API and the MCP `deleteStatement` action (whose static description states both the
+flag-OFF and flag-ON rule, since a declared action cannot see the account). Create and import stay 409
+whatever the flag says (table above).
+
+**Nothing records that a statement was deleted.** Whether its movements come back is decided only by
+the account's "Importar desde" date (`EM_PSD2_IMPORT_FROM_DATE`) on the next synchronization: the
+bank still serves the movements dated on or after that date (within its history window), so they are
+imported again. The only way to keep them out is to move the date forward. The UI says so in the
+delete confirmation (see *Re-import notice* below). A bulk delete is one request per statement
+(`useBatchDeleteDialog`), so partial success is possible: some statements are removed, others
+refused with their own reason.
 
 ## Accepted consequence
 
@@ -1813,9 +1853,10 @@ cell below without editing `BACKEND_ERROR_MAP` in the same commit is a regressio
 | `MSG_PAYMENT_LINKED_NOT_DELETABLE` (ETP-5111) | `This movement belongs to a payment. Delete it from the payment instead.` | `backendError.paymentMovementNotDeletable` |
 | `MSG_RECEIPT_LINKED_NOT_DELETABLE` (ETP-5111) | `This movement belongs to a receipt. Delete it from the receipt instead.` | `backendError.receiptMovementNotDeletable` |
 | `MSG_PROCESSED_NOT_DELETABLE` (ETP-5111) | `The movement is already processed or posted. Select it on its own to delete it.` | `backendError.movementProcessedNotDeletable` |
-| `MSG_STATEMENT_BANK_CONNECTED` (ETP-5111 — declared in `BankStatementsHandler`, not this one) | `Statements from a bank-connected account cannot be deleted.` | `backendError.statementBankConnectedNotDeletable` |
+| `MSG_STATEMENT_BANK_CONNECTED` (ETP-5111 — declared in `BankStatementsHandler`, not this one; answered only with flag `psd2-statement-import-settings` OFF) | `Statements from a bank-connected account cannot be deleted.` | `backendError.statementBankConnectedNotDeletable` |
+| `MSG_STATEMENT_POSTED_NOT_DELETABLE` (ETP-6151 — same handler; answered only with the flag ON) | `The statement is posted. Unpost it before deleting it.` | `backendError.statementPostedNotDeletable` |
 
-All six are ASCII-only, single-line, and carry no leading or trailing whitespace. The **trailing
+All seven are ASCII-only, single-line, and carry no leading or trailing whitespace. The **trailing
 period is part of the matched text** for the five that have one; `Transaction not found` has none.
 The payment/receipt pair differs in exactly two words each — `payment`/`receipt` — so a
 copy-paste-and-edit of one row is the likeliest way to break the other.
@@ -1910,22 +1951,25 @@ POST /sws/neo/bank-statements?action=create                          → manual 
                        glItemId, in, out }] }
 POST /sws/neo/bank-statements?action=process   body: { id }            → process a draft
 POST /sws/neo/bank-statements?action=update    body: { id, ...create }  → edit a draft (replaces all lines)
-POST /sws/neo/bank-statements?action=delete    body: { id }            → delete a draft (+ its lines); 409 on a bank-connected account
+POST /sws/neo/bank-statements?action=delete    body: { id }            → delete a statement (+ its lines): a draft; flag OFF: 409 on a bank-connected account; flag `psd2-statement-import-settings` ON (ETP-6151): on a bank-connected account also a processed one (reactivated + deleted in one step; 400 if posted). 400 with matched lines
 ```
 
 The manual-create handler builds the `FIN_BankStatement` (name, dates, `fileName`, `notes`), one `FIN_BankStatementLine` per non-blank line (`in`→`cramount`, `out`→`dramount`, `bpartnerName`→`bpartnername`, `bpartnerId`→`businessPartner` FK, `glItemId`→`gLItem` FK, blank `reference` defaults to `**` — Reference No is optional in BOTH flows). A non-blank line whose `in` and `out` are both 0 is rejected with a 400 ("Every line must have an amount in either Deposit or Withdrawal") rather than silently dropped: the manual flow has a user who can fix it. The `process` flag (default `true`) drives the save modal's split button: **Save and process** (`true`) runs the same `processStatement` as import so the lines become reconcilable; **Save as draft** (`false`) just persists the statement with `processed='N'`. Mirrors Classic's manual bank-statement header + line fields.
 
-**Draft row actions** (`process` / `update` / `delete`) are guarded by `requireDraft(id)`, which 400s when the id is missing, the statement does not exist, or it has already been processed (`isProcessed()`). So only drafts can be processed, edited or deleted; processed statements are immutable. `update` re-applies the editable header and **rebuilds only the unmatched lines** (see the reactivation section below), optionally processing afterwards when `process=true`. `delete` removes the lines then the statement.
+**Draft row actions** (`process` / `update` / `delete`) are guarded by `requireDraft(id)`, which 400s when the id is missing, the statement does not exist, or it has already been processed (`isProcessed()`). So only drafts can be processed or edited; processed statements are immutable. `delete` follows `BankStatementDeletion` instead: only a draft, and a bank-connected account answers 409 — except with flag `psd2-statement-import-settings` ON (ETP-6151), where a processed one is deletable on a bank-connected account (see *Delete on a bank-connected account*). `update` re-applies the editable header and **rebuilds only the unmatched lines** (see the reactivation section below), optionally processing afterwards when `process=true`. `delete` removes the lines then the statement.
 
-**ETP-5111 adds one more guard to `delete`, applied after `requireDraft`:** a statement whose
-account is **PSD2 bank-connected** (`BankIntegrationConstants.FA_CONNECTION_STATUS_CONNECTED`, the
-Salt Edge status `"CO"`) is rejected with a **409**. The literal is
-`MSG_STATEMENT_BANK_CONNECTED` = `Statements from a bank-connected account cannot be deleted.`,
-mapped to `backendError.statementBankConnectedNotDeletable` — exact text, trailing period included;
-see the wire-contract table in the `action=delete` section above for why that matters. The statements of a connected account
-come from the bank, so they must not be hand-deleted — a rule this window already enforced by
-disabling its own affordances, and which now holds for REST, MCP and the bulk-delete path too.
-Before this, `BankStatementsHandler` had **zero** references to PSD2. The constant lives in a
+**ETP-5111 added a PSD2 guard to `delete`; ETP-6151 replaces its outcome, behind the flag `psd2-statement-import-settings`.** `BankStatementsHandler`
+reads whether the statement's account is **PSD2 bank-connected**
+(`BankStatementsSupport.isBankConnected`, `BankIntegrationConstants.FA_CONNECTION_STATUS_CONNECTED`,
+the Salt Edge status `"CO"`). ETP-5111 answered 409 `Statements from a bank-connected account cannot
+be deleted.` (constant `MSG_STATEMENT_BANK_CONNECTED`, mapped to
+`backendError.statementBankConnectedNotDeletable`); both stay, and are what a flag-OFF account gets.
+With the flag ON a connected account deletes processed statements too, refusing a posted one with
+`MSG_STATEMENT_POSTED_NOT_DELETABLE` (`The statement is posted. Unpost it before deleting it.`,
+mapped to `backendError.statementPostedNotDeletable` — exact text, trailing period included; see the
+wire-contract table in the `action=delete` section above for why that matters), as detailed in
+*Delete on a bank-connected account (ETP-6151)*. Before ETP-5111, `BankStatementsHandler` had **zero** references to PSD2 and
+the rule was enforced in the frontend only, so it held for REST, MCP and the bulk-delete path only from then on. The PSD2 constant lives in a
 **third** module (`com.etendoerp.psd2.bank.integration`), reachable because
 `com.etendoerp.go` declares it as a **Gradle** dependency
 (`modules/com.etendoerp.go/build.gradle:72`, `implementation('com.etendoerp:psd2.bank.integration:[2.0.0,)')`).
@@ -1940,9 +1984,8 @@ real call sites —
 `PaymentRegistrationService`, `PisPaymentService`, `FinancialAccountBankConnectionHandler` — must
 stay in lockstep with it. (`FinancialAccountsPageHandler` is *not* one of them: it compares
 `"CO"` inline against a `ResultSet` column, a hardcoded duplicate of the constant and a small debt
-of its own.) Accepted consequence, already owned by the PSD2 ticket: an old **manual** statement
-sitting on an account that is connected today is no longer deletable either — it is one that could
-no longer be created there in the first place.
+of its own.) An old **manual** statement sitting on an account that is connected today follows the
+connected-account rule too: 409 with the flag OFF; with it ON (ETP-6151) deletable, processed included, unless posted or matched.
 
 #### Reactivating a partially reconciled statement (ETP-4921)
 
@@ -2147,12 +2190,19 @@ work arithmetically, but it is a magnitude by contract, three other call sites r
 lives in one subtraction. No frontend change: the `reconciledAmount != 0` contract was always
 right, it was being fed wrong numbers.
 
-#### A bank-connected account's statements are read-only (ETP-4921)
+#### A bank-connected account's statements cannot be edited by hand (ETP-4921; delete reopened by ETP-6151 behind a flag)
 
 On a PSD2-connected account the statements come from the bank, so they must not be hand-edited.
 Reactivar was the one door still open: Edit and Delete already hide themselves once a statement is
 processed (and the sync leaves them processed), but reactivating brings it back to draft and
-reopens both.
+reopens both. **With flag `psd2-statement-import-settings` ON, ETP-6151 narrows the lock to editing:**
+the account's content stays read-only (no Edit, no Reactivar), but Delete is open on every row,
+processed ones included — the backend reactivates and deletes in one step (see *Delete on a
+bank-connected account*), so Eliminar does not need Reactivar exposed. **With the flag OFF (default)
+the lock is the one ETP-4921/ETP-5111 describe below**: no Edit and no Delete on any row of a
+connected account, Reactivar disabled with the old tooltip. The SPA reads the flag through
+`usePsd2ImportSettingsFlag()` (see *Feature flag*), in `StatementsTable`, `StatementRowKebab` and
+`ImportedStatementsTab`.
 
 **The signal is ACCOUNT-level, and that is deliberate.** Nothing on the statement records that it
 came from the bank. The PSD2 module writes only a `fileName`, from a translated AD_MESSAGE:
@@ -2183,9 +2233,11 @@ backend:
 
 | Entry point | Behaviour |
 |---|---|
-| `StatementRowKebab` Reactivar | disabled, tooltip `financeAccountStatementsRowBankSyncedTooltip` |
-| `RowActions` inline Edit + Delete | not rendered at all, even for a draft — same as they already do for a processed statement |
-| Bulk-delete trigger | **no longer gated in the frontend (ETP-5111)** — the trash button stays enabled and `BankStatementsHandler.handleDelete` answers 409 instead (see below) |
+| `StatementRowKebab` Reactivar | disabled; tooltip `financeAccountStatementsRowBankSyncedTooltip` ("…cannot be edited or deleted") with the flag OFF, `financeAccountStatementsRowBankSyncedEditTooltip` ("…cannot be edited") with it ON |
+| `RowActions` inline Edit | not rendered at all, even for a draft — same as it already does for a processed statement |
+| `RowActions` inline Delete | flag OFF: not rendered on a bank-connected account (neither Edit nor Delete, as before). Flag ON (ETP-6151): **rendered on every row of a bank-connected account** (`canDelete = isDraft \|\| (bankConnected && flag)`); on any other account still draft-only. Opens the confirm dialog with the re-import notice |
+| `StatementRowKebab` Eliminar | always offered, unchanged; the backend's refusal is translated in `runConfirm` (409 with the flag OFF; 400 posted / matched lines with it ON) |
+| Bulk-delete trigger | **no longer gated in the frontend (ETP-5111)** — the trash button stays enabled and `BankStatementsHandler.handleDelete` decides (409 on a connected account with the flag OFF; with `psd2-statement-import-settings` ON, ETP-6151 opens it — see below) |
 
 Procesar is deliberately NOT gated: completing a draft is not editing its content.
 
@@ -2198,19 +2250,60 @@ its own key rather than a reuse of `financeAccountStatementsRowProcessedTooltip`
 
 **ETP-5111 removed the function together with the whole pre-blocking approach**, and moved the
 connected-account rule to where it belonged all along — the server.
-`BankStatementsHandler.handleDelete` now reads the account's PSD2 connection status itself and
-answers **409** (`MSG_STATEMENT_BANK_CONNECTED`, translated through
-`backendError.statementBankConnectedNotDeletable` — exact literal in the wire-contract table of the
-`action=delete` section above). Until then this was a **frontend-only** gate:
+`BankStatementsHandler.handleDelete` then read the account's PSD2 connection status itself and
+answered **409** (`MSG_STATEMENT_BANK_CONNECTED`, translated through
+`backendError.statementBankConnectedNotDeletable`). **That 409 and both names stay, as the flag-OFF
+behaviour**; with `psd2-statement-import-settings` ON (ETP-6151) the delete is open instead. The
+outcomes of both are in the wire-contract table of the `action=delete` section above. Until
+ETP-5111 this was a **frontend-only** gate:
 the same delete was still reachable over REST, MCP and the bulk path with no server-side validation
 at all. The precedence question disappears with the function — a single-statement delete surfaces
 whichever reason the server actually returned — and the two tooltips that survive
-(`financeAccountStatementsRowBankSyncedTooltip` on Reactivar,
+(`financeAccountStatementsRowBankSyncedTooltip` on Reactivar — with the flag ON, ETP-6151 swaps it for the new key `financeAccountStatementsRowBankSyncedEditTooltip`, "Statements of a bank-connected account cannot be edited", which no longer mentions delete —
 `financeAccountStatementsRowProcessedTooltip` on Procesar and on the inline row actions) each
 explain one specific control that is still genuinely disabled.
 
 Follow-up worth having: if the PSD2 module ever marks the statements it creates, this gate should
 move to that per-statement flag — it would then also leave legacy manual statements editable.
+
+#### Re-import notice in the statement delete dialogs (ETP-6151, flag ON only)
+
+With flag `psd2-statement-import-settings` OFF none of this renders: no notice, no `status` read, stock delete dialogs. With it ON, because nothing records a deleted bank statement, both delete confirmations on a bank-connected
+account carry a warning block. It is built from three pieces:
+
+- **`BankReimportNotice`** (`windows/custom/financial-account/BankReimportNotice.jsx`) renders the
+  warning: "Transactions from {date} onwards will be imported again on the next bank sync. To keep
+  them from coming back, move the "Import from" date forward in "Edit account"." (key
+  `financeAccountStatementsDeleteBankReimportNotice`; the date goes through `formatCalendarDate`). With no
+  known date it falls back to `financeAccountStatementsDeleteBankReimportNoticeNoDate`.
+- **`useBankImportFromDate(accountId, enabled)`** (same file) supplies the date: `GET
+  bank-connection?action=status` through `useBankConnectionActions().fetchStatus`, returned as
+  `{ importFromDate, refresh }`. It is read when a delete is REQUESTED (`refresh()` from the row's
+  `onDelete` and the bulk bar's `onDelete`), not on mount, because the date can be changed in "Editar
+  cuenta" while the tab stays open. Nothing is fetched when the account is not bank-connected, and a
+  failed read leaves the date `null` (the date-less wording).
+- **`notice?: ReactNode` prop** (default `null`, so every other surface is unchanged), rendered under
+  the description of both `StatementConfirmDialog` (single delete, passed only for the `delete`
+  variant) and the shared `DeleteConfirmDialog` (`components/contract-ui`). The bulk path passes the
+  notice through `useBatchDeleteDialog({ renderDialog })` in `ImportedStatementsTab`.
+
+#### Feature flag `psd2-statement-import-settings` (ETP-6151)
+
+All of ETP-6151 — the import settings asked when connecting a bank account (see
+`financial-account-management.md`) and the delete of statements of a bank-connected account — is
+behind one boolean flag, evaluated **per account** (targeting key = the account email, lowercase
+`email` attribute), **default OFF**: an absent key in the control plane means OFF for everyone, and OFF
+is exactly the behaviour of `develop` before the ticket.
+
+| | Flag OFF (default) | Flag ON |
+|---|---|---|
+| Delete a statement of a bank-connected account | 409 `Statements from a bank-connected account cannot be deleted.`; no Edit / Delete on its rows; Reactivar tooltip "…cannot be edited or deleted" | draft deleted; processed reactivated and deleted in one step unless posted (400) or matched (400); Delete on every row; tooltip "…cannot be edited"; re-import notice in the delete dialogs |
+| Connect modal / Edit-account panel | no import fields on connect; the old panel with the empty "Por defecto" grouping | "Importar desde" + grouping required, help text, provider-history advisory |
+
+- **SPA:** `hooks/usePsd2ImportSettingsFlag.js` is the single read point (`useFeatureFlag(PSD2_STATEMENT_IMPORT_SETTINGS) === true`, key in `lib/flags/flag-keys.js`, default `false`).
+- **Backend:** `Psd2ImportSettingsFlag` (`GoFeatureFlags.FLAG_PSD2_STATEMENT_IMPORT_SETTINGS`), evaluated once per action. The SPA gating is visual only; the backend enforces its own rules, so both ends must agree on the key and the identity.
+- **Restored for OFF:** `financeAccountsBankConnectionGroupingNone` ("Default") and `backendError.statementBankConnectedNotDeletable` (its text map entry stays in `lib/backendErrors.js`); the OFF rendering of the edit panel is `LegacyBankImportSettings.jsx`.
+- **Registry / rollout:** `flags-registry.json` entry `psd2-statement-import-settings` (TTL placeholder 2026-12-31); see `docs/feature-flags.md` and, for the backend, `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md`.
 
 #### Bulk delete may attempt a processed statement, and the backend rejects it (ETP-4921, criterion inverted by ETP-5111)
 

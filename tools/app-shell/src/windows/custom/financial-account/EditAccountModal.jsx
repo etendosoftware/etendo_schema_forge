@@ -39,9 +39,13 @@ import {
   extractBackendMessageParams,
 } from '@/lib/backendErrors.js';
 import { validateIbanForCountry, countryLacksIbanConfig } from '@/lib/countryIban.js';
-import { formatCalendarDate, calendarISODaysAgo } from '@/lib/dateOnly.js';
+import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { useSplitButtonDropdown } from './useSplitButtonDropdown';
 import BankConnectionDeleteConfirmModal from './BankConnectionDeleteConfirmModal';
+import { BankImportSettingsFields, importSettingsIncomplete } from './BankImportSettingsFields.jsx';
+import { importFromBeyondFetchInterval } from './bankImportSettingsShared.js';
+import { LegacyBankImportSettings } from './LegacyBankImportSettings.jsx';
+import { usePsd2ImportSettingsFlag } from '@/hooks/usePsd2ImportSettingsFlag.js';
 import { useBankSync } from './BankSyncContext.jsx';
 import { BankSyncBanner } from './BankSyncBanner.jsx';
 
@@ -112,7 +116,6 @@ function accountingFieldsForType(accountType) {
   return accountType === ACCOUNT_TYPE.BANK ? ACCOUNTING_FIELDS : ACCOUNTING_FIELDS_ALL_TYPES;
 }
 
-const GROUPING_OPTIONS = ['1BD', '1BW', '1BM', '1BE'];
 const FIELD_INPUT = 'bg-card shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]';
 
 // ETP-4896 — Country field. `CreatableSearchSelect` over the live `C_Country_ID` selector (239
@@ -618,38 +621,6 @@ function isImportRangeInvalid({ importFromDate, importToDate } = {}) {
 }
 
 /**
- * ETP-5181. Whether "Importar desde" reaches further back than the bank will serve, and from
- * which date it actually will.
- *
- * PSD2 providers publish a `max_fetch_interval` (90 days under the regulation's baseline, more
- * for some banks) and the account's provider record carries it; the bridge exposes it on
- * `GET status` as `maxFetchInterval`. A missing or non-positive limit means the provider never
- * published one, and we advise nothing rather than guess.
- *
- * Advisory only, deliberately: it does not block Save. The date stays exactly as typed, because
- * the range is applied as a LOCAL filter over whatever the provider returns (Salt Edge ignores
- * from_date/to_date — see BankIntegrationUtils.buildSaltEdgeTransactionsEndpoint), so an
- * over-long range loses nothing inside the window that IS available. The point is only to stop
- * the user expecting history the bank will never hand over.
- *
- * The comparison is plain string `<` on two `yyyy-MM-dd` values: ISO date-only strings order
- * lexicographically, so no `Date` is built here and there is no timezone to get wrong. The bound
- * itself comes from `calendarISODaysAgo`, which does the local-calendar arithmetic.
- */
-function importFromBeyondFetchInterval(importFromDate, maxFetchInterval) {
-  if (!importFromDate) return null;
-  // Finiteness FIRST, then a positive comparison. Do not collapse this into `maxFetchInterval <= 0`
-  // (what Sonar's S1940 proposes for the equivalent `!(maxFetchInterval > 0)`): the bridge OMITS
-  // the key when the provider declares no limit, and `undefined <= 0` is false, so that rewrite
-  // would fall through on the commonest case and build the bound from NaN. `NaN <= 0` is false
-  // too. Stating finiteness explicitly says what the guard is actually for and keeps the
-  // comparison uninverted.
-  if (!Number.isFinite(maxFetchInterval) || maxFetchInterval <= 0) return null;
-  const earliest = calendarISODaysAgo(maxFetchInterval);
-  return importFromDate < earliest ? { days: maxFetchInterval, earliest } : null;
-}
-
-/**
  * Bank connection panel state + actions.
  *
  * Covers both live connections and soft-disconnected ones: a deactivated connection still needs
@@ -660,6 +631,8 @@ function useBankConnection(
   open, account, bankConnected, onSaved, onClose, bankReconnectable, beforeSync,
 ) {
   const ui = useUI();
+  // ETP-6151 — flag `psd2-statement-import-settings` (off: the pre-ETP-6151 import panel).
+  const importSettingsEnabled = usePsd2ImportSettingsFlag();
   const { fetchStatus, disconnect, reconnect, finishReconnect } = useBankConnectionActions();
   const bankSync = useBankSync();
   const { startSync } = bankSync;
@@ -755,13 +728,16 @@ function useBankConnection(
     // For the in-panel BankSyncBanner: this account only, named.
     syncingAccounts: syncing && account ? [{ id: account.id, name: account.name || null }] : [],
     hasBankLink: liveHasBankLink, settingsDirty, rangeInvalid: isImportRangeInvalid(form),
-    // Derived from `form`, not from `initial`, so it covers both halves of the requirement with
-    // no extra wiring: `form` is hydrated from GET status when the modal opens (so an account
-    // already saved with an out-of-range date advises immediately, untouched) and rewritten on
-    // every keystroke of the date box (so it tracks edits).
-    fetchIntervalWarning: importFromBeyondFetchInterval(
-      form.importFromDate, status?.maxFetchInterval,
-    ),
+    // ETP-6151 — "Importar desde" and the grouping are required, but only once the bank section is
+    // touched: a connection linked before they were mandatory may still hold a null date, and that
+    // must not block saving the account's other fields. Touching the section means saving it, and
+    // the bridge then requires both (import-settings).
+    requiredMissing: importSettingsEnabled && settingsDirty && importSettingsIncomplete(form),
+    // Flag off only: the ON rendering derives the advisory inside BankImportSettingsFields.
+    fetchIntervalWarning: importSettingsEnabled
+      ? null
+      : importFromBeyondFetchInterval(form.importFromDate, status?.maxFetchInterval),
+    importSettingsEnabled,
     handleSync, handleReconnect, handleDisconnect, handleDeleteConnection,
   };
 }
@@ -1304,7 +1280,8 @@ export function EditAccountModal({
   const saveBlocked = fields.name.trim() === '' || fields.ibanInvalid
     || (fields.typeEditable && fields.type === '')
     || (fields.currencyEditable && fields.currencyId === '')
-    || recon.amountToleranceInvalid || bankConnection.rangeInvalid;
+    || recon.amountToleranceInvalid || bankConnection.rangeInvalid
+    || bankConnection.requiredMissing;
   const canSave = dirty && !saving && !saveBlocked;
   const busy = saving || bankConnection.busy;
 
@@ -1945,70 +1922,43 @@ function BankConnectionPanel({ ui, bankConnection, busy, reauthMessage, reauthTo
         accounts={bankConnection.syncingAccounts}
         data-testid="bank-connection-edit-sync-banner" />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <DateInput
-          label={ui('financeAccountsBankConnectionImportFrom')}
-          name="bank-connection-import-from"
-          value={bankConnection.form.importFromDate || ''}
-          onChange={(v) => bankConnection.setForm((f) => ({ ...f, importFromDate: v }))}
-          data-testid="DateInput__73027d" />
-        <DateInput
-          label={ui('financeAccountsBankConnectionImportTo')}
-          name="bank-connection-import-to"
-          value={bankConnection.form.importToDate || ''}
-          onChange={(v) => bankConnection.setForm((f) => ({ ...f, importToDate: v }))}
-          data-testid="DateInput__73027d" />
-        <Field label={ui('financeAccountsBankConnectionGrouping')} data-testid="Field__73027d">
-          {/* White wrapper: the picker's box is bg-transparent (built for white cards),
-              so on this gray card it blends in — the white backing makes it stand out. */}
-          <div className="rounded-lg bg-card">
-            <CreatableSearchSelect
-              field={{ key: 'statementGrouping', id: 'statementGrouping', name: 'statementGrouping' }}
-              value={bankConnection.form.statementGrouping || ''}
-              displayValue={bankConnection.form.statementGrouping
-                ? ui(`financeAccountsBankConnectionGrouping_${bankConnection.form.statementGrouping}`) : ''}
-              onChange={(id) => bankConnection.setForm((f) => ({ ...f, statementGrouping: id || '' }))}
-              formData={bankConnection.form}
-              resolvedLabel={ui('financeAccountsBankConnectionGrouping')}
-              emptyOptionLabel={ui('financeAccountsBankConnectionGroupingNone')}
-              staticOptions={GROUPING_OPTIONS.map((o) => ({
-                id: o, name: ui(`financeAccountsBankConnectionGrouping_${o}`),
-              }))}
-              data-testid="bank-connection-edit-grouping" />
-          </div>
-        </Field>
-      </div>
-
-      {/* ETP-5104. Sits under the whole grid rather than inside one Field: the error belongs to the
-          PAIR of dates, and `Field` has no error slot anyway (components/forms/fields.jsx). Same
-          shape as the amount-tolerance error in the reconciliation section. */}
-      {bankConnection.rangeInvalid ? (
-        <p className="text-xs text-destructive" data-testid="bank-connection-import-range-error">
-          {ui('financeAccountsBankConnectionImportRangeInvalid')}
-        </p>
-      ) : null}
-
-      {/* ETP-5181 QA CP-2. The panel's two standing notices are stacked here, at the foot of the
-          panel, rather than one above the grid and one below it. QA read the split as two unrelated
-          things; grouped, they read as one block of "what you should know about this connection",
-          and the fetch-interval notice inherits the position users already scan for the
-          re-authorization one. It still sits FIRST of the two: it is the one the date box directly
-          above it can fix, so it stays closest to its cause. */}
-      {bankConnection.fetchIntervalWarning ? (
-        <div
-          className={`flex items-center gap-2 rounded-lg px-3 py-3 ${BANNER_TONE_CLASSES.warning.bg}`}
-          data-testid="bank-connection-import-fetch-interval-warning"
-        >
-          <AlertTriangle
-            className={`h-4 w-4 shrink-0 ${BANNER_TONE_CLASSES.warning.fg}`}
-            data-testid="AlertTriangle__73027d" />
-          <span className={`text-sm font-medium ${BANNER_TONE_CLASSES.warning.fg}`}>
-            {ui('financeAccountsBankConnectionImportBeyondFetchInterval', {
-              days: bankConnection.fetchIntervalWarning.days,
-            })}
-          </span>
-        </div>
-      ) : null}
+      {bankConnection.importSettingsEnabled ? (
+        <>
+        {/* ETP-6151 — date + grouping come from the component the connect flow's account picker
+            also renders, so both ask for them in the same words. "Importar hasta" is edit-only and
+            sits between them, as it always has. The range error rides in the `footer` slot so it
+            still reads right under the dates; the ETP-5181 fetch-interval notice follows it, first of
+            the panel's two standing notices (it is the one the date box above can fix), with the
+            re-authorization banner below. */}
+        <BankImportSettingsFields
+          importFromDate={bankConnection.form.importFromDate}
+          statementGrouping={bankConnection.form.statementGrouping}
+          onChange={(patch) => bankConnection.setForm((f) => ({ ...f, ...patch }))}
+          maxFetchInterval={bankConnection.status?.maxFetchInterval}
+          showRequiredErrors={bankConnection.settingsDirty}
+          testIdPrefix="bank-connection"
+          gridClassName="sm:grid-cols-3"
+          footer={bankConnection.rangeInvalid ? (
+            // ETP-5104. The error belongs to the PAIR of dates, so it sits under the whole grid.
+            <p className="text-xs text-destructive" data-testid="bank-connection-import-range-error">
+              {ui('financeAccountsBankConnectionImportRangeInvalid')}
+            </p>
+          ) : null}
+          data-testid="BankImportSettingsFields__73027d">
+          <DateInput
+            label={ui('financeAccountsBankConnectionImportTo')}
+            name="bank-connection-import-to"
+            value={bankConnection.form.importToDate || ''}
+            onChange={(v) => bankConnection.setForm((f) => ({ ...f, importToDate: v }))}
+            data-testid="DateInput__73027d" />
+        </BankImportSettingsFields>
+        </>
+      ) : (
+        <LegacyBankImportSettings
+          bankConnection={bankConnection}
+          warningTone={BANNER_TONE_CLASSES.warning}
+          data-testid="LegacyBankImportSettings__73027d" />
+      )}
 
       {/* Amber only inside the last week before the consent lapses (see `buildReauthTone`);
           informational blue for the ~83 days before that, so the two banners above and below are

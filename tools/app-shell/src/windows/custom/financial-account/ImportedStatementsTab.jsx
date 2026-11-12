@@ -6,6 +6,9 @@ import { useBankStatements } from '@/hooks/useBankStatements';
 import { useStatementActions } from '@/hooks/useStatementActions';
 import { useBankSync } from './BankSyncContext.jsx';
 import { useBatchDeleteDialog } from '@/hooks/useBatchDeleteDialog.jsx';
+import { DeleteConfirmDialog } from '@/components/contract-ui/DeleteConfirmDialog.jsx';
+import { usePsd2ImportSettingsFlag } from '@/hooks/usePsd2ImportSettingsFlag.js';
+import { BankReimportNotice, useBankImportFromDate } from './BankReimportNotice.jsx';
 import { StatementsToolbar } from './StatementsToolbar';
 import {
   StatementsTable,
@@ -108,6 +111,17 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
   const { startSync } = bankSync;
   const syncing = bankSync.isSyncing(accountId);
   const { invalidateAccountList } = useFinancialAccountCacheInvalidation();
+  // ETP-6151 — statements of a bank-connected account can be deleted (processed ones included),
+  // but whatever the bank still serves from "Importar desde" onwards comes back on the next sync.
+  // Both delete confirmations say so, naming that date; it is re-read on every delete request.
+  // Flag `psd2-statement-import-settings` off: no notice, no status read, stock delete dialogs.
+  const importSettingsEnabled = usePsd2ImportSettingsFlag();
+  const reimportNoticeEnabled = importSettingsEnabled && bankConnectionSynced;
+  const { importFromDate: bankImportFromDate, refresh: refreshBankImportFromDate } =
+    useBankImportFromDate(accountId, reimportNoticeEnabled);
+  const bankReimportNotice = reimportNoticeEnabled ? (
+    <BankReimportNotice importFromDate={bankImportFromDate} data-testid="BankReimportNotice__6f147a" />
+  ) : null;
 
   const [selectedStatementId, setSelectedStatementId] = useState(null);
   const [search, setSearch] = useState('');
@@ -130,8 +144,11 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
     onEdit: (s) => setEditingStatement(s),
     onProcess: (s) => setConfirm({ variant: 'process', statement: s }),
     onReactivate: (s) => setConfirm({ variant: 'reactivate', statement: s }),
-    onDelete: (s) => setConfirm({ variant: 'delete', statement: s }),
-  }), []);
+    onDelete: (s) => {
+      refreshBankImportFromDate();
+      setConfirm({ variant: 'delete', statement: s });
+    },
+  }), [refreshBankImportFromDate]);
 
   const handleSelectionChange = (id) => {
     setSelectedIds((prev) => {
@@ -187,10 +204,22 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
   // ETP-5111 — the bulk trash is no longer pre-disabled here. ETP-4921 blocked it up front for a
   // processed statement or a bank-connected (PSD2) account ("don't let them touch the trash
   // can"); the unified delete rule inverts that: the delete is attempted and the backend's own
-  // 409 reason is what the user reads (spelled out when a single statement was selected, and
-  // counters-only above that). The per-row hover trash keeps its own `isDraftStatement` gate —
-  // that surface is out of scope.
+  // reason is what the user reads (spelled out when a single statement was selected, and
+  // counters-only above that). ETP-6151 — on a bank-connected account the backend now deletes
+  // processed statements too (refusing posted ones and ones with matched lines), and the dialog
+  // carries the re-import notice; `renderDialog` only adds that notice to the stock dialog.
   const { requestBatchDelete, batchDeleteDialog, deleting: bulkDeleting } = useBatchDeleteDialog({
+    renderDialog: reimportNoticeEnabled ? ({ open, count, deleting, progress, onConfirm, onClose }) => (
+      <DeleteConfirmDialog
+        open={open}
+        count={count}
+        deleting={deleting}
+        progress={progress}
+        onConfirm={onConfirm}
+        onClose={onClose}
+        notice={bankReimportNotice}
+        data-testid="DeleteConfirmDialog__batch-delete" />
+    ) : undefined,
     deleteOneFn: (id) => deleteStatement(id),
     onOutcome: (succeeded, failed) => {
       if (succeeded.length > 0) refreshStatements();
@@ -361,7 +390,10 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
           count={selectedIds.size}
           deleting={bulkDeleting}
           onCancel={clearSelection}
-          onDelete={() => requestBatchDelete(Array.from(selectedIds))}
+          onDelete={() => {
+            refreshBankImportFromDate();
+            requestBatchDelete(Array.from(selectedIds));
+          }}
           data-testid="StatementsBulkDeleteSelectionBar__6f147a" />
       )}
       <StatementsToolbar
@@ -438,6 +470,7 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
         busy={busy}
         onConfirm={runConfirm}
         onClose={closeConfirm}
+        notice={confirm.variant === 'delete' ? bankReimportNotice : null}
         data-testid="StatementConfirmDialog__6f147a" />
     </div>
   );
