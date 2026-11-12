@@ -64,6 +64,8 @@ const buildLineBody = async ({ line, qty, invoiceId: shipmentId, lineNo }) => ({
   product: line.product,
   movementQuantity: qty,
   uOM: line.uOM || null,
+  // ETP-6002 CP-14: the server drops it when it is a QUOTATION line (GoodsShipmentLineHandler), so
+  // a shipment never marks a quotation delivered; a sales-order line is kept.
   ...(line._orderLineId ? { salesOrderLine: line._orderLineId } : {}),
   invoiceLineId: line.id,
   lineNo,

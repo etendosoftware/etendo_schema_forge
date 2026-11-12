@@ -91,11 +91,9 @@ export const SALES_RELATED_DOCS = {
     sources: [
       criteriaSource('orders', 'sales-order', 'sales-order', 'header', 'quotation'),
       listInvoicesSource('invoices', 'sales-invoice', 'sales-quotation', 'quotation'),
-      // ETP-6002 (IMP-3): shipments whose own lines point at this quotation's lines — a shipment
-      // made from an invoice that came straight from the quotation. Injected on the detail GET by
-      // SalesQuotationHeaderHandler (QuotationShipmentLinks); a direct line link only, never
-      // deduced through invoices. The mirror of the shipment's quotation chip below.
-      selectSource('shipments', doc => (doc.isReturn === true ? 'return-material-receipt' : 'shipment'), 'linkedShipments'),
+      // ETP-6002 CP-14 (QA criterion): a quotation's direct relations are its orders and invoices
+      // only. A shipment made from an invoice that came straight from the quotation relates to that
+      // invoice, never to the quotation, so there is no shipment / return source here.
     ],
   },
 
@@ -149,10 +147,10 @@ export const SALES_RELATED_DOCS = {
   'goods-shipment': movementDefinition({
     spec: 'goods-shipment',
     entity: 'goodsShipment',
-    // ETP-6002 (IMP-3): `linkedOrders` may hold a QUOTATION (a shipment made from an invoice that
-    // came straight from it); GoodsShipmentHeaderHandler flags it with `isQuotation`
-    // (DocSubTypeSO = 'OB'), so it renders as a quotation chip, not as "Pedido".
-    orderType: doc => (doc.isQuotation === true ? 'sales-quotation' : 'sales-order'),
+    // ETP-6002 CP-14: `linkedOrders` never holds a quotation — GoodsShipmentHeaderHandler leaves
+    // out every order with DocSubTypeSO = 'OB' (the shipment relates to the invoice, not to the
+    // quotation it came from) — so every entry is an order chip.
+    orderType: 'sales-order',
     invoiceType: 'sales-invoice',
     returnType: 'return-material-receipt',
     returnsField: 'returnReceipts',
