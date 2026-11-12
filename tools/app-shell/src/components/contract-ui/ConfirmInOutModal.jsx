@@ -391,13 +391,13 @@ export default function ConfirmInOutModal({
         </div>
 
         {/* Footer */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '12px 20px', background: 'hsl(var(--muted))', borderTop: '1px solid hsl(var(--border-subtle))' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 10, padding: '12px 20px', background: 'hsl(var(--muted))', borderTop: '1px solid hsl(var(--border-subtle))' }}>
           <button
             type="button"
             data-testid="confirm-modal-cancel-btn"
             onClick={onClose}
             disabled={busy}
-            style={{ fontSize: 13, padding: '9px 16px', borderRadius: 9, border: '1px solid hsl(var(--border-subtle))', background: CANCEL_REST_BG, color: 'hsl(var(--muted-foreground))', cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.5 : 1 }}
+            style={{ whiteSpace: 'nowrap', fontSize: 13, padding: '9px 16px', borderRadius: 9, border: '1px solid hsl(var(--border-subtle))', background: CANCEL_REST_BG, color: 'hsl(var(--muted-foreground))', cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.5 : 1 }}
             onMouseEnter={e => { if (!busy) e.currentTarget.style.background = CANCEL_HOVER_BG; }}
             onMouseLeave={e => { e.currentTarget.style.background = CANCEL_REST_BG; }}
           >
@@ -409,7 +409,7 @@ export default function ConfirmInOutModal({
               data-testid="confirm-modal-sif-back-btn"
               onClick={sif.back}
               disabled={loading}
-              style={{ fontSize: 13, padding: '9px 16px', borderRadius: 9, border: '1px solid hsl(var(--border-subtle))', background: CANCEL_REST_BG, color: 'hsl(var(--muted-foreground))', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.5 : 1 }}
+              style={{ whiteSpace: 'nowrap', fontSize: 13, padding: '9px 16px', borderRadius: 9, border: '1px solid hsl(var(--border-subtle))', background: CANCEL_REST_BG, color: 'hsl(var(--muted-foreground))', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.5 : 1 }}
             >
               {ui('back')}
             </button>
@@ -419,7 +419,7 @@ export default function ConfirmInOutModal({
             data-testid="confirm-modal-confirm-btn"
             onClick={onPrimary}
             disabled={confirmDisabled}
-            style={{ height: 38, display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, padding: '0 18px', borderRadius: 9, border: 'none', background: confirmRestBg, color: 'hsl(var(--card))', cursor: confirmDisabled ? 'not-allowed' : 'pointer', transition: 'background .15s' }}
+            style={{ whiteSpace: 'nowrap', height: 38, display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, padding: '0 18px', borderRadius: 9, border: 'none', background: confirmRestBg, color: 'hsl(var(--card))', cursor: confirmDisabled ? 'not-allowed' : 'pointer', transition: 'background .15s' }}
             onMouseEnter={e => { if (!confirmDisabled) e.currentTarget.style.background = CONFIRM_HOVER_BG; }}
             onMouseLeave={e => { e.currentTarget.style.background = confirmRestBg; }}
           >

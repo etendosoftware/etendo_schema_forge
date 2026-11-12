@@ -276,7 +276,7 @@ describe('BulkOrderMoreMenu — read-only fiscal data summary before bulk invoic
       token="tok" apiBaseUrl="/sws/neo/sales-order" refresh={vi.fn()} />);
     fireEvent.click(screen.getByText(/^soBulkCreateInvoices/));
     await screen.findByTestId('invoice-sif-step-modal');
-    fireEvent.click(screen.getByTestId('invoice-sif-step-modal-back'));
+    fireEvent.click(screen.getByTestId('invoice-sif-step-modal-cancel'));
 
     await waitFor(() => expect(screen.queryByTestId('invoice-sif-step-modal')).toBeNull());
     expect(mockApiFetch.mock.calls.some(([u]) => String(u).includes('createDraftInvoice'))).toBe(false);

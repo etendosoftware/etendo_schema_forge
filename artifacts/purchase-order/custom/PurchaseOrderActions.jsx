@@ -689,20 +689,20 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid hsl(var(--card))' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid hsl(var(--card))' }}>
           <button type="button" onClick={handleClose} disabled={loading}
-            style={{ ...btnSecondary, opacity: loading ? 0.5 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
+            style={{ whiteSpace: 'nowrap', ...btnSecondary, opacity: loading ? 0.5 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
             {ui('cancel')}
           </button>
           {sif.active && (
             <button type="button" data-testid="purchase-order-confirm-sif-back" onClick={sif.back} disabled={loading}
-              style={{ ...btnSecondary, opacity: loading ? 0.5 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
+              style={{ whiteSpace: 'nowrap', ...btnSecondary, opacity: loading ? 0.5 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
               {ui('back')}
             </button>
           )}
           <button type="button" onClick={() => sif.start(handleConfirm)} disabled={confirmDisabled}
             data-testid="action-confirm-modal"
-            style={{ ...btnPrimaryStyle, opacity: confirmDisabled ? 0.6 : 1, cursor: confirmDisabled ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            style={{ whiteSpace: 'nowrap', ...btnPrimaryStyle, opacity: confirmDisabled ? 0.6 : 1, cursor: confirmDisabled ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             {loading && <Spinner data-testid="Spinner__8b5323" />}
             {(loading || sif.loading) ? ui('poProcessing') : primaryLabel}
           </button>
@@ -960,17 +960,17 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid hsl(var(--card))' }}>
-          <button type="button" onClick={onClose} disabled={loading} style={{ ...btnSecondary, opacity: loading ? 0.5 : 1 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid hsl(var(--card))' }}>
+          <button type="button" onClick={onClose} disabled={loading} style={{ whiteSpace: 'nowrap', ...btnSecondary, opacity: loading ? 0.5 : 1 }}>
             {ui('cancel')}
           </button>
           {sif.active && (
-            <button type="button" data-testid="purchase-order-docs-sif-back" onClick={sif.back} disabled={loading} style={{ ...btnSecondary, opacity: loading ? 0.5 : 1 }}>
+            <button type="button" data-testid="purchase-order-docs-sif-back" onClick={sif.back} disabled={loading} style={{ whiteSpace: 'nowrap', ...btnSecondary, opacity: loading ? 0.5 : 1 }}>
               {ui('back')}
             </button>
           )}
           <button type="button" onClick={() => sif.start(handleCreate)} disabled={submitDisabled}
-            style={{ ...btnPrimaryStyle, opacity: submitDisabled ? 0.6 : 1, cursor: submitDisabled ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            style={{ whiteSpace: 'nowrap', ...btnPrimaryStyle, opacity: submitDisabled ? 0.6 : 1, cursor: submitDisabled ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             {loading && <Spinner data-testid="Spinner__8b5323" />}
             {(loading || sif.loading) ? ui('poProcessing') : ui('soCreateDocsBtn')}
           </button>

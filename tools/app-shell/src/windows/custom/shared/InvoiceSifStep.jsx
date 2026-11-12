@@ -73,15 +73,16 @@ const SYSTEM_PANEL_KEYS = {
 export const SIF_STEP_DIALOG_WIDTH = 600;
 
 /**
- * An option's text. Some locale labels already start with their code ("F1 - Factura…", the
- * VERI*FACTU types and the rectification codes) and are shown as they are; the others ("Factura")
- * get the code in front, so the code always appears exactly once.
+ * An option's text, in ONE format for every SIF select: "CODE - Label", the form the locale labels
+ * of the VERI*FACTU types and the rectification codes already carry ("F1 - Factura (art. 6…)",
+ * "R4 - Resto"). Those are shown as they are; the others ("Factura") get the same "CODE - " prefix,
+ * so the code always appears exactly once and every select reads alike.
  */
 export function sifOptionLabel(option, ui) {
   const label = ui(option.labelKey);
   return typeof label === 'string' && label.startsWith(`${option.value} `)
     ? label
-    : `${option.value} — ${label}`;
+    : `${option.value} - ${label}`;
 }
 
 // The rectification codes a rectificative invoice cannot be confirmed without — mirrors the
@@ -466,7 +467,8 @@ export function InvoiceSifStepPanel({ sif, readOnly = false, notice }) {
  * extend (the quotation's ActionChoiceModal). Same panel, with Back / Confirm.
  *
  * `readOnly` + `notice` + `onCancel` turn it into the bulk summary (one invoice per selected
- * order): the values are shown, never edited, and the secondary button cancels the whole run.
+ * order): the values are shown, never edited, and there is no Back (no earlier screen). The ×
+ * and Cancelar always close without creating anything (`onClose`, or `onCancel` when given).
  */
 export function InvoiceSifStepModal({
   sif, confirmLabel, loading = false, error, onConfirm, onClose, readOnly = false, notice, onCancel,
@@ -486,8 +488,18 @@ export function InvoiceSifStepModal({
         style={{ width: SIF_STEP_DIALOG_WIDTH }}
         className="max-w-[calc(100vw-32px)] max-h-[85vh] flex flex-col overflow-hidden rounded-xl bg-card border border-border/40 shadow-lg"
       >
-        <div className="px-5 pt-4 pb-3 border-b border-border/40 text-[15px] font-semibold text-foreground">
-          {ui('invoiceSifStep.title')}
+        <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3 border-b border-border/40">
+          <span className="text-[15px] font-semibold text-foreground">{ui('invoiceSifStep.title')}</span>
+          <button
+            type="button"
+            data-testid="invoice-sif-step-modal-close"
+            aria-label={ui('close')}
+            onClick={onClose}
+            disabled={loading}
+            className="h-7 w-7 inline-flex items-center justify-center rounded-md text-lg leading-none text-muted-foreground hover:bg-muted disabled:opacity-50"
+          >
+            &times;
+          </button>
         </div>
         <div className="px-5 py-4 overflow-y-auto">
           <InvoiceSifStepPanel sif={sif} readOnly={readOnly} notice={notice} />
@@ -497,22 +509,34 @@ export function InvoiceSifStepModal({
             {error}
           </div>
         )}
-        <div className="flex justify-end gap-2 px-5 py-3 border-t border-border/40">
+        {/* Wraps on a narrow screen instead of squeezing the primary label onto two lines. */}
+        <div className="flex flex-wrap justify-end gap-2 px-5 py-3 border-t border-border/40">
           <button
             type="button"
-            data-testid="invoice-sif-step-modal-back"
-            onClick={onCancel ?? sif.back}
+            data-testid="invoice-sif-step-modal-cancel"
+            onClick={onCancel ?? onClose}
             disabled={loading}
-            className="text-xs px-3.5 py-1.5 rounded-md border border-border text-muted-foreground disabled:opacity-50"
+            className="text-xs px-3.5 py-1.5 rounded-md border border-border text-muted-foreground whitespace-nowrap disabled:opacity-50"
           >
-            {onCancel ? ui('cancel') : ui('back')}
+            {ui('cancel')}
           </button>
+          {!onCancel && (
+            <button
+              type="button"
+              data-testid="invoice-sif-step-modal-back"
+              onClick={sif.back}
+              disabled={loading}
+              className="text-xs px-3.5 py-1.5 rounded-md border border-border text-muted-foreground whitespace-nowrap disabled:opacity-50"
+            >
+              {ui('back')}
+            </button>
+          )}
           <button
             type="button"
             data-testid="invoice-sif-step-modal-confirm"
             onClick={onConfirm}
             disabled={disabled}
-            className="text-[13px] font-medium px-3.5 py-1.5 rounded-md bg-primary text-primary-foreground disabled:opacity-60 disabled:cursor-not-allowed"
+            className="text-[13px] font-medium px-3.5 py-1.5 rounded-md bg-primary text-primary-foreground whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {loading ? ui('soProcessing') : confirmLabel}
           </button>

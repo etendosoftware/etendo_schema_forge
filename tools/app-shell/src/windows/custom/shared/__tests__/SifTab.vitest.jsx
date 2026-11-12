@@ -286,8 +286,8 @@ describe('SifTab', () => {
 
     it('renders CLAVE_TIPO sales options (not purchase options)', () => {
       render(<SifTab {...makeProps()} />);
-      expect(screen.getByText('F1 — sifDataTabs.option.invoice')).toBeInTheDocument();
-      expect(screen.queryByText('F6 — sifDataTabs.option.accountingDocument')).not.toBeInTheDocument();
+      expect(screen.getByText('F1 - sifDataTabs.option.invoice')).toBeInTheDocument();
+      expect(screen.queryByText('F6 - sifDataTabs.option.accountingDocument')).not.toBeInTheDocument();
     });
 
     it('shows the authorization checkbox', () => {
@@ -389,8 +389,8 @@ describe('SifTab', () => {
 
     it('renders purchase-specific CLAVE_TIPO_FC options', () => {
       render(<SifTab {...makeProps({ apiBaseUrl: '/sws/neo/purchase-invoice' })} />);
-      expect(screen.getByText('F6 — sifDataTabs.option.accountingDocument')).toBeInTheDocument();
-      expect(screen.queryByText('F2 — sifDataTabs.option.simplifiedInvoice')).not.toBeInTheDocument();
+      expect(screen.getByText('F6 - sifDataTabs.option.accountingDocument')).toBeInTheDocument();
+      expect(screen.queryByText('F2 - sifDataTabs.option.simplifiedInvoice')).not.toBeInTheDocument();
     });
 
     it('derives specName purchase-invoice from apiBaseUrl last segment', () => {
@@ -888,7 +888,7 @@ describe('SifTab', () => {
     it('renders all 5 TBAI_REVERSEINVOICECODE_OPTIONS', () => {
       render(<SifTab {...makeProps({ data: { documentStatus: 'DR', isRectificative: true } })} />);
       ['R1', 'R2', 'R3', 'R4', 'R5'].forEach((v) => {
-        expect(screen.getByText(`${v} — sifDataTabs.option.tbaiReverse${v}`)).toBeInTheDocument();
+        expect(screen.getByText(`${v} - sifDataTabs.option.tbaiReverse${v}`)).toBeInTheDocument();
       });
     });
 
@@ -1147,9 +1147,9 @@ describe('SifTab', () => {
       // still offers it, and a legacy record can still carry it (see the
       // "legacy etvfacInvType value" test below).
       ['F1', 'F2', 'R1', 'R2', 'R3', 'R4', 'R5'].forEach((v) => {
-        expect(screen.getByText(`${v} — sifDataTabs.option.vf${v}`)).toBeInTheDocument();
+        expect(screen.getByText(`${v} - sifDataTabs.option.vf${v}`)).toBeInTheDocument();
       });
-      expect(screen.queryByText(/^F3 — /)).not.toBeInTheDocument();
+      expect(screen.queryByText(/^F3 - /)).not.toBeInTheDocument();
     });
 
     // ETP-5117: a record whose etvfacInvType is still 'F3' (legacy/Classic value —
@@ -1164,7 +1164,7 @@ describe('SifTab', () => {
       // "value — label" format used for a matching option.
       const trigger = document.querySelector('#sif-vfInvType');
       expect(trigger).toHaveTextContent('F3');
-      expect(screen.queryByText('F3 — sifDataTabs.option.vfF3')).not.toBeInTheDocument();
+      expect(screen.queryByText('F3 - sifDataTabs.option.vfF3')).not.toBeInTheDocument();
 
       // Rendering a legacy value must not itself mutate data or fire onChange
       // (the ETP-4390 auto-default effect only fires when the field is empty).

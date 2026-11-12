@@ -262,12 +262,12 @@ export default function CreateInvoiceConfirmModal({
           {subtitle}
         </div>}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid hsl(var(--border-subtle))' }}>
-          <button type="button" onClick={onClose} disabled={loading} style={{ ...btnSecondaryStyle, opacity: loading ? 0.5 : 1 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid hsl(var(--border-subtle))' }}>
+          <button type="button" onClick={onClose} disabled={loading} style={{ whiteSpace: 'nowrap', ...btnSecondaryStyle, opacity: loading ? 0.5 : 1 }}>
             {ui('cancel')}
           </button>
           {sif.active && (
-            <button type="button" data-testid="invoice-confirm-sif-back-btn" onClick={sif.back} disabled={loading} style={{ ...btnSecondaryStyle, opacity: loading ? 0.5 : 1 }}>
+            <button type="button" data-testid="invoice-confirm-sif-back-btn" onClick={sif.back} disabled={loading} style={{ whiteSpace: 'nowrap', ...btnSecondaryStyle, opacity: loading ? 0.5 : 1 }}>
               {ui('back')}
             </button>
           )}
@@ -278,7 +278,7 @@ export default function CreateInvoiceConfirmModal({
               ? onConfirm(priceListId, rectify.selectedIds, sif.payload)
               : onConfirm(priceListId, rectify.selectedIds)))}
             disabled={confirmDisabled}
-            style={{ ...btnPrimaryStyle, opacity: confirmDisabled ? 0.6 : 1, cursor: confirmDisabled ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            style={{ whiteSpace: 'nowrap', ...btnPrimaryStyle, opacity: confirmDisabled ? 0.6 : 1, cursor: confirmDisabled ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
             {loading && <Spinner data-testid="Spinner__e6fb8b" />}
             {(loading || sif.loading) ? ui('soProcessing') : ui('soCreateDocsBtn')}
