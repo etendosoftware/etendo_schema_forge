@@ -1,11 +1,11 @@
+// @covers tools/app-shell/src/i18n/errorTranslator.js
+// @covers tools/app-shell/src/locales/es_ES.json
 import { afterEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   NETWORK_ERROR_FALLBACK, NetworkError, resetErrorTranslatorForTests,
-} from '@etendosoftware/app-shell-core/auth';
-import {
   STALE_SESSION_ERROR_FALLBACK, STALE_SESSION_ERROR_KEY, staleSessionError,
 } from '@etendosoftware/app-shell-core/auth';
 import esES from '../../locales/es_ES.json';
