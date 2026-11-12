@@ -16,25 +16,25 @@ allowlistCaptured: false
 
 documents:
   - { name: sales-order,      tool: etendo_list, args: { spec: sales-order, entity: header } }
-  - { name: sales-quotation,  tool: etendo_list, args: { spec: sales-quotation, entity: header } }
+  - { name: sales-quotation,  tool: etendo_list, args: { spec: sales-quotation, entity: quotation } }
   - { name: sales-invoice,    tool: etendo_list, args: { spec: sales-invoice, entity: header } }
   - { name: purchase-order,   tool: etendo_list, args: { spec: purchase-order, entity: header } }
   - { name: purchase-invoice, tool: etendo_list, args: { spec: purchase-invoice, entity: header } }
-  - { name: goods-shipment,   tool: etendo_list, args: { spec: goods-shipment, entity: header } }
-  - { name: goods-receipt,    tool: etendo_list, args: { spec: goods-receipt, entity: header } }
-  - { name: payment-in,       tool: etendo_list, args: { spec: payment-in, entity: header } }
+  - { name: goods-shipment,   tool: etendo_list, args: { spec: goods-shipment, entity: goodsShipment } }
+  - { name: goods-receipt,    tool: etendo_list, args: { spec: goods-receipt, entity: goodsReceipt } }
+  - { name: payment-in,       tool: etendo_list, args: { spec: payment-in, entity: finPayment } }
   - { name: payment-out,      tool: etendo_list, args: { spec: payment-out, entity: header } }
 
 masterData:
   - name: business-partner
     tool: etendo_list
-    args: { spec: business-partner, entity: header }
+    args: { spec: contacts, entity: businessPartner }
     key: name
     baseline: [customer-paridad, supplier-paridad]
     allow: []
   - name: product
     tool: etendo_list
-    args: { spec: product, entity: header }
+    args: { spec: product, entity: product }
     key: searchKey
     baseline: [product-servicio]
     allow: []

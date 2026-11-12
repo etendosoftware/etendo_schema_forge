@@ -59,6 +59,35 @@ async function waitForDetailReady(page) {
   await waitForLoadingIndicatorsGone(page, { timeout: 10_000 });
 }
 
+/**
+ * ETP-6206 — whether the account has `structured-address-for-sepa` ON, read from the SAME source
+ * the SPA reads (`/sws/neo/windowaccessmap` → `capabilities.structuredAddressForSepa`, unwrapped
+ * as `fetchWindowAccess` in App.jsx does). It is a per-account backend flag with no env switch, so
+ * the spec asks the environment instead of being told; that keeps the import payload assertions
+ * true in both states without a second run configuration.
+ */
+async function readStructuredAddressCapability(page) {
+  const response = await page.request.get('/sws/neo/windowaccessmap', { headers: await apiAuthHeaders(page) });
+  expect(response.status(), 'windowaccessmap must answer to read the capabilities').toBe(200);
+  const data = await response.json();
+  let payload = data;
+  if (typeof data?.result === 'string') payload = JSON.parse(data.result);
+  else if (data?.result && typeof data.result === 'object') payload = data.result;
+  return payload?.capabilities?.structuredAddressForSepa === true;
+}
+
+/**
+ * The address the import sends for a row whose only address cell is the old "Dirección" column
+ * (it maps onto Calle) and no Número. Flag ON: Calle is the street, the number falls back to
+ * "s/n" and Address1 is composed from both. Flag OFF: Calle is sent verbatim as Address1, with no
+ * structured keys at all.
+ */
+function expectedImportedAddress(street, structured) {
+  return structured
+    ? { addressLine1: `${street}, s/n`, streetName: street, buildingNumber: 's/n' }
+    : { addressLine1: street, streetName: undefined, buildingNumber: undefined };
+}
+
 test.describe('ETP-4905 — Contacts import category resolution (Tomcat integration)', () => {
   test.skip(!RUN_INTEGRATION, 'Requires E2E_USE_MOCK=0 and E2E_PASSWORD for a real Etendo backend');
   test.setTimeout(120_000);
@@ -148,10 +177,11 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
     });
 
     // ETP-4954: the mapping modal is now field-first — the count is FIELDS with a source out
-    // of all importable fields (20 for Contacts: ETP-5791 dropped the Customer/Vendor columns
-    // ETP-5544 had added, the type now comes from the category), not columns mapped out of
-    // columns present.
-    await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('14/20');
+    // of all importable fields (21 for Contacts: ETP-5791 dropped the Customer/Vendor columns
+    // ETP-5544 had added, the type now comes from the category; ETP-6206 split Dirección into
+    // Calle + Número), not columns mapped out of columns present. `direccion` still maps (onto
+    // Calle), so 14 sources are found.
+    await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('14/21');
     // ETP-5223: the chip reads `<source column>→<target caption>`, and the target caption
     // is now resolved through `fieldLabelFn` (the AD label dictionary for the SESSION locale)
     // instead of the English `field.label` declared in decisions.json. The locale here is
@@ -213,7 +243,13 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
       (operation) => operation.entity === 'locationAddress' && operation.parentRef === firstBpOperation.id,
     );
     expect(firstLocation, 'expected the first row to carry its own location').toBeTruthy();
-    expect(firstLocation.body.addressLine1).toBe('Calle Mayor 1');
+    const structuredAddress = await readStructuredAddressCapability(page);
+    const expectedAddress = expectedImportedAddress('Calle Mayor 1', structuredAddress);
+    expect({
+      addressLine1: firstLocation.body.addressLine1,
+      streetName: firstLocation.body.streetName,
+      buildingNumber: firstLocation.body.buildingNumber,
+    }).toEqual(expectedAddress);
     expect(firstLocation.body.cityName).toBe('Madrid');
     expect(firstLocation.body.postalCode).toBe('28013');
 
@@ -233,7 +269,9 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
     await expect(page.getByTestId('field-etgoWeb')).toHaveValue(`e2e-${unique}.example`);
     await expect(page.getByTestId('field-taxID')).toHaveValue(taxId(0));
     await page.getByTestId('tab-locationAddress').click();
-    await expect(page.getByText('Madrid, Calle Mayor 1', { exact: true })).toBeVisible({ timeout: 15_000 });
+    // The location name is built as "<city>, <Address1>" and stored as sent on a REST create.
+    await expect(page.getByText(`Madrid, ${expectedAddress.addressLine1}`, { exact: true }))
+      .toBeVisible({ timeout: 15_000 });
     await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-tomcat-detail.png'), fullPage: true });
   });
 

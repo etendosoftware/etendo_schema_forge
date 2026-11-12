@@ -23,6 +23,10 @@ import { EditAccountModal } from './EditAccountModal.jsx';
 import { ArchiveAccountDialog } from './ArchiveAccountDialog.jsx';
 import { DeleteAccountDialog } from './DeleteAccountDialog.jsx';
 import { BankConnectionFlowUI } from './BankConnectionFlowUI.jsx';
+import {
+  BankSyncProvider, useBankSync, useBankSyncDone, useBankSyncTracking,
+} from './BankSyncContext.jsx';
+import { BankSyncBanner } from './BankSyncBanner.jsx';
 import { useFinancialAccountCacheInvalidation } from './financialAccountCacheInvalidation';
 import { useBankConnectionFlow } from '@/hooks/useBankConnectionFlow';
 import { AutoMatchSuggestionModal } from '@/components/contract-ui/AutoMatchSuggestionModal';
@@ -212,6 +216,54 @@ function useDeepLinkParams(searchParams, setSearchParams, setters) {
 }
 
 /**
+ * ETP-6154 — the detail's view of the window's shared bank-sync state (provider in
+ * FinancialAccountWindow below). Tracking this account finds a sync already running for it (page
+ * reload, another user, the scheduled process); the listener calls `onSyncDone` when a sync ends
+ * that neither the statements tab nor the Edit modal reloads for — i.e. one discovered that way.
+ *
+ * @param {object|null|undefined} account the loaded account
+ * @param {string} recordId the account id from the route
+ * @param {() => void} onSyncDone reload for a finished sync nobody else reloads for
+ * @returns {Array<{id: string, name: string|null}>} THIS account's running sync (at most one),
+ *   named for the banner
+ */
+function useAccountBankSync(account, recordId, onSyncDone) {
+  const bankSync = useBankSync();
+  useBankSyncTracking(
+    bankSync,
+    account?.bankConnected === true ? [{ id: account.id, name: account.name }] : [],
+  );
+  // Only THIS account's sync is announced here — the banner above the tabs is about the record on
+  // screen, not about whatever else the list may have started.
+  const accountSyncs = useMemo(
+    () => (bankSync.syncingAccounts || []).filter((a) => a.id === account?.id)
+      .map((a) => ({ ...a, name: a.name || account?.name || null })),
+    [bankSync.syncingAccounts, account?.id, account?.name],
+  );
+  useBankSyncDone(bankSync, recordId, onSyncDone);
+  return accountSyncs;
+}
+
+/**
+ * ETP-6154 — while this account syncs: "Sincronizando movimientos de …", above the tabs, gone on
+ * its own when the sync ends (the result toast still reports the outcome). Not rendered while the
+ * Edit account modal is open: the modal shows its own banner, and this one would only repeat it
+ * behind the overlay. It comes back on close if the sync is still running.
+ *
+ * A plain render helper (not a component), so the element tree is the same as rendering inline.
+ */
+function renderAccountBankSyncBanner(accountSyncs, { editOpen, windowReadOnly }) {
+  // Same condition as the Edit account modal's `open`: it is never shown on a read-only window.
+  if (editOpen && !windowReadOnly) return null;
+  return (
+    <BankSyncBanner
+      accounts={accountSyncs}
+      className="mx-2 mt-2 shrink-0"
+      data-testid="account-detail-bank-sync-banner" />
+  );
+}
+
+/**
  * Financial Account detail view (single account: Movimientos / Extractos /
  * Conciliación). Rendered for /financial-account/{recordId} by the wrapper at the
  * bottom of this file.
@@ -305,6 +357,8 @@ export function FinancialAccountDetail({ recordId }) {
       setActiveTab(visibleTabs[0].key);
     }
   }, [account, visibleTabs, activeTab]);
+  // ETP-6154 — the window's shared bank-sync state, narrowed to this account (see the hook).
+  const accountSyncs = useAccountBankSync(account, recordId, reloadAccountAndList);
   // ETP-4530: powers the Edit modal's "Connect bank" button from this entry point too — same
   // flow/UI as the accounts list (FinancialAccountsPage.jsx), just reloading the account instead.
   const bankConnectionFlow = useBankConnectionFlow({ onDone: reloadAccountAndList });
@@ -486,7 +540,11 @@ export function FinancialAccountDetail({ recordId }) {
   useSetPageMeta(
     {
       title: accountName,
-      titleExtra: account ? <SyncStatusInline account={account} data-testid="SyncStatusInline__f7dbb3" /> : null,
+      // `syncing={false}`: the header keeps showing the last-sync age during a sync — the banner
+      // above the tabs is this view's one in-progress signal (ETP-6154, product decision).
+      titleExtra: account ? (
+        <SyncStatusInline account={account} syncing={false} data-testid="SyncStatusInline__f7dbb3" />
+      ) : null,
       breadcrumb: `${ui('financeMenuLabel')} / ${ui('financeAccountsPageTitle')} / ${accountName}`,
     },
     [accountName, account?.type, account?.bankConnected, account?.bankConnectionPending, account?.lastSyncDate],
@@ -526,6 +584,9 @@ export function FinancialAccountDetail({ recordId }) {
   return (
     <TooltipProvider data-testid="TooltipProvider__f7dbb3">
       <div className="flex h-full flex-col overflow-hidden">
+
+        {/* ETP-6154 — this account's "syncing" banner, hidden behind the Edit modal. */}
+        {renderAccountBankSyncBanner(accountSyncs, { editOpen, windowReadOnly })}
 
         {/* Tab strip + Edit / Export button */}
         <div className="flex items-center justify-between border-b border-[hsl(var(--border-subtle))] pl-0 pr-2">
@@ -697,6 +758,16 @@ export function FinancialAccountDetail({ recordId }) {
  * branch would otherwise render the generic DetailView instead of our tabs.
  */
 export default function FinancialAccountWindow(props) {
+  // ETP-6154 — one bank-sync state for the whole window (list, detail tabs, Edit modal), so the
+  // four sync entry points disable and spin together and never fire concurrent syncs.
+  return (
+    <BankSyncProvider data-testid="BankSyncProvider__f7dbb3">
+      <FinancialAccountWindowBody {...props} data-testid="FinancialAccountWindowBody__f7dbb3" />
+    </BankSyncProvider>
+  );
+}
+
+function FinancialAccountWindowBody(props) {
   if (props.recordId) {
     return <FinancialAccountDetail recordId={props.recordId} data-testid="FinancialAccountDetail__f7dbb3" />;
   }

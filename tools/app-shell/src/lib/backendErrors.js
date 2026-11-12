@@ -81,6 +81,11 @@ const BACKEND_ERROR_MAP = {
   // matching and has to become a parameterized matcher.
   'No active bank connection found for financial account %s. Connect the account first.':
     'backendError.psd2NoActiveConnection',
+  // ETP-6154 — not backend copy: the sentinel useBankConnectionActions throws when its own
+  // AbortController fires (the bank service never answered). A protocol token, so it maps to our
+  // label instead of reaching the user verbatim — from every bank-sync entry point, through the one
+  // notifier (financial-account/bankSyncNotify.js).
+  BANK_CONNECTION_TIMEOUT: 'financeAccountsBankConnectionTimeout',
   // Multi-currency payment registration (com.etendoerp.go PaymentCurrencyConverter, ETP-4504) — plain
   // English literals with no AD_MESSAGE behind them. The modal mirrors the first two client-side and
   // keeps the buttons disabled, so they are mostly unreachable; the format/non-positive ones are
@@ -1830,7 +1835,17 @@ const GENERIC_CODE_MESSAGES = {
   forbidden: ['This action is not allowed for the current role.', 'backendError.forbidden'],
 };
 // service_unavailable carries a sanitized, non-fixed text, so it is translated by code alone.
-const CODE_ONLY_KEYS = { service_unavailable: 'backendError.serviceUnavailable' };
+// ETP-6154 — BANK_SYNC_LOCK_UNAVAILABLE: the PSD2 bridge could not take the per-account sync lock
+// (no pooled connection to hold it), so it refused rather than risk duplicated statement lines. Its
+// message is server prose; the code is the identity, and the refusal is retryable.
+// ETP-6154 — BANK_SYNC_DUPLICATE_CHECK_FAILED: the import could not verify whether some bank
+// transactions were already imported, so it skipped them rather than risk duplicates. Arrives on an
+// ERROR or WARNING sync result; same rule as the lock code.
+const CODE_ONLY_KEYS = {
+  service_unavailable: 'backendError.serviceUnavailable',
+  BANK_SYNC_LOCK_UNAVAILABLE: 'backendError.bankSyncLockUnavailable',
+  BANK_SYNC_DUPLICATE_CHECK_FAILED: 'backendError.bankSyncDuplicateCheckFailed',
+};
 
 function translateByCode(msg, t, code) {
   if (!code) return null;

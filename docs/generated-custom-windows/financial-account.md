@@ -3799,8 +3799,10 @@ offer (REST and the SPA are unchanged; full tables in `com.etendoerp.go/docs/neo
   (`pSD2GetBankstatement`, `pSD2GetConsent`, `psd2ReconnectFa`, `psd2GetConnections`,
   `psd2RefreshConnections`) are excluded too: consent and reconnection need a person to authorize at
   the bank (SCA). Disconnecting the bank IS exposed, as the declared actions `disconnectBank`
-  (soft) and `deleteBankConnection` (permanent, the agent must ask the user first) — see
-  `com.etendoerp.go/docs/neo-headless.md` §4.12.1.8. The account's own create, update and delete
+  (soft) and `deleteBankConnection` (permanent, the agent must ask the user first), and so is the
+  sync, as `syncBank` and `bankSyncStatus` instead of `pSD2GetBankstatement` (ETP-6154) — see
+  `com.etendoerp.go/docs/neo-headless.md` §4.12.1.8 and `financial-account-management.md` →
+  *MCP / agent access to the bank connection*. The account's own create, update and delete
   stay — the SPA uses them, and an agent creates accounts with the same server-side rules (country
   required, see above).
 - **`transaction` — read-only through MCP.** Create, update and delete answer 405 (its
@@ -3843,7 +3845,7 @@ finished**, as relative time. Cash, offline/reconnectable and unconnected accoun
 
   | Place | Text | Source |
   |---|---|---|
-  | List row / detail header (`SyncStatusInline`) | "Sincronizado hace 54 segundos" | `account.lastSyncDate` |
+  | List row / detail header (`SyncStatusInline`) | "Sincronizado hace 54 segundos"; while a sync of the account runs, "Sincronización en curso, por favor espere…" instead (ETP-6154) | `account.lastSyncDate`; the in-progress text comes from the shared `BankSyncContext` |
   | Edit connection modal (`BankConnectionPanel`, under the provider name) | "Última sincronización hace 54 segundos" | `bankConnection.status.lastSyncDate` |
 
 - **No date:** "Nunca sincronizada" (`financeAccountsNeverSynced`), shown only for a connected account that has never completed a sync, with a GRAY dot and text (muted-foreground) instead of green (list row and detail header, same `SyncStatusInline`); unconnected accounts show nothing.
@@ -3853,7 +3855,10 @@ finished**, as relative time. Cash, offline/reconnectable and unconnected accoun
   (`hooks/useNow.js`), one shared 30 s interval for all labels on screen.
 - **Refresh after a sync:** the list reloads (rows + summary); the modal re-fetches status after
   `runSync`; the detail reloads the account after `runSync` (modal `onSaved`) and after
-  `handleSyncStatements` in the Statements tab (`onSynced`).
+  `handleSyncStatements` in the Statements tab (`onSynced`). Since ETP-6154 these reloads run when
+  the sync actually ends, which can be after polling a sync still running on the server, and each
+  runs once. See `financial-account-management.md` → *Bank sync: one at a time, shared by the four
+  entry points* → "Who reloads what".
 - **i18n:** `financeAccountsSyncedAgo`, `financeAccountsLastSyncAgo`
   (both with `{time}`), `financeAccountsNeverSynced`. The old `financeAccountsSyncedJustNow`,
   `financeAccountsSyncUpdatedAgo`, `financeAccountsUpdatedAgo` and `financeAccountsUnsyncedNotice` were removed.

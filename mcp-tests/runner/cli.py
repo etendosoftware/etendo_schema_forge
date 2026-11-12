@@ -237,6 +237,17 @@ def _new_run_id(target: str, now: dt.datetime) -> str:
     return f"{now.strftime('%Y%m%dT%H%M')}-{target}-{secrets.token_hex(2)}"
 
 
+def _selected_probes(suite: Suite, wanted: str | None) -> list[Probe]:
+    """`--probe a,b,c` in suite order (ETP-5848: one comparison fills its slots with several
+    probes instead of waiting for the slowest attempt of each); none means every probe."""
+    if not wanted:
+        return list(suite.probes)
+    ids = [p.strip() for p in wanted.split(",") if p.strip()]
+    for probe_id in ids:
+        suite.probe(probe_id)  # an unknown id fails here, naming the known ones
+    return [p for p in suite.probes if p.id in ids]
+
+
 def _resolve_suite_path(name: str) -> Path:
     candidate = Path(name)
     if candidate.exists():
@@ -439,11 +450,59 @@ async def _verify_effect(
     axis, never folded into `outcome`: an agent reporting OKAY while the effect
     is missing is a different and more dangerous result than an honest failure.
     `None` means "could not verify", which is not the same as "verified absent".
+
+    ETP-5848: an effect with `anyOf` alternatives (two ways a platform records the
+    same result) is verified when any of them is; it is absent only when every one
+    was checked and found absent, and not verifiable when none was found and one
+    could not be checked.
     """
     effect = probe.expect_effect
     if effect is None:
         return None, None, None
+    alternatives = effect.any_of or (effect,)
+    results = []
+    for one in alternatives:
+        results.append(await _verify_one_effect(one, probe.id, target, run_id=run_id, timestamp=timestamp,
+                                                saved=saved, marker=marker))
+        if results[-1][0] is True:
+            break
+    if not effect.any_of:
+        return results[0]
+    details = [r[1] or {"harnessError": r[2]} for r in results]
+    if any(r[0] is True for r in results):
+        return True, {"anyOf": details}, None
+    errored = next((r[2] for r in results if r[2]), None)
+    if errored:
+        return None, None, errored
+    return False, {"anyOf": details}, None
 
+
+def _effect_summary(detail: dict[str, Any]) -> str:
+    """`tool -> N rows` (with its `where`), or each alternative of an `anyOf` effect."""
+    if "anyOf" in detail:
+        return " | ".join(_effect_summary(d) if "tool" in d else "not verifiable" for d in detail["anyOf"])
+    where = f", where {json.dumps(detail['where'], ensure_ascii=False)}" if detail.get("where") else ""
+    return f"{detail.get('tool')} -> {detail.get('rows')} rows{where}"
+
+
+def _effect_rows(detail: dict[str, Any]) -> int | None:
+    if "anyOf" in detail:
+        rows = [d.get("rows") for d in detail["anyOf"] if isinstance(d.get("rows"), int)]
+        return max(rows) if rows else None
+    return detail.get("rows")
+
+
+async def _verify_one_effect(
+    effect: Any,
+    probe_id: str,
+    target: dict[str, Any],
+    *,
+    run_id: str,
+    timestamp: str,
+    saved: dict[str, Any] | None = None,
+    marker: str | None = None,
+) -> tuple[bool | None, dict[str, Any] | None, dict[str, Any] | None]:
+    """One effect check (see `_verify_effect`)."""
     known = dict(saved or {})
     unresolved = False
     try:
@@ -452,7 +511,9 @@ async def _verify_effect(
             if effect.lookup:
                 # ETP-5848: reads that find what the agent created; failures surface below.
                 lookups = [replace(s, args=interpolate_args(
-                    s.args, run_id=run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
+                    s.args, run_id=run_id, probe_id=probe_id, timestamp=timestamp, marker=marker
+                ), aggregate=interpolate_args(
+                    s.aggregate, run_id=run_id, probe_id=probe_id, timestamp=timestamp, marker=marker
                 )) for s in effect.lookup]
                 done = await run_steps(lookups, lambda tool, args: call_tool(session, tool, args),
                                        phase="lookup", saved=known, stop_on_error=True,
@@ -461,7 +522,7 @@ async def _verify_effect(
                 if failed:
                     raise VerificationError(f"lookup[{failed['index']}] {failed['tool']}: {failed['error']}")
             call_args = interpolate_args(
-                effect.args, run_id=run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
+                effect.args, run_id=run_id, probe_id=probe_id, timestamp=timestamp, marker=marker
             )
             try:
                 # A check may name what setup created (`{{steps.invoice.id}}`, D41).
@@ -480,7 +541,7 @@ async def _verify_effect(
                     payload = rows_at(payload, effect.rows_at)
                 if effect.where:
                     where = resolve_refs(interpolate_args(
-                        effect.where, run_id=run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
+                        effect.where, run_id=run_id, probe_id=probe_id, timestamp=timestamp, marker=marker
                     ), known)
                     rows = count_matching(payload, where)
                 else:
@@ -542,6 +603,10 @@ async def _run_phase(
             s,
             args=interpolate_args(
                 s.args, run_id=run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
+            ),
+            # ETP-5848: an aggregate's `where` names the attempt's records ("Banco {{marker}}").
+            aggregate=interpolate_args(
+                s.aggregate, run_id=run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
             ),
         )
         for s in declared
@@ -808,9 +873,9 @@ async def run_attempt(
         elif verified is False:
             # The headline case this amendment exists for.
             claim = " despite the agent reporting OKAY" if verdict["outcome"] == "OKAY" else ""
-            print(f"    {tag} effect ABSENT{claim} ({detail['tool']} -> {detail['rows']} rows)")
+            print(f"    {tag} effect ABSENT{claim} ({_effect_summary(detail)})")
         elif verified is True:
-            print(f"    {tag} effect verified ({detail['tool']} -> {detail['rows']} rows)")
+            print(f"    {tag} effect verified ({_effect_summary(detail)})")
 
         ctx.events.emit(
             PROBE_FINISHED,
@@ -824,7 +889,7 @@ async def run_attempt(
                 EFFECT_CHECKED,
                 probe=probe.id, attempt=attempt,
                 verified=verified,
-                rows=None if detail is None else detail.get("rows"),
+                rows=None if detail is None else _effect_rows(detail),
             )
     except SetupFailed as exc:
         # The agent never ran: there is nothing to measure (D41). A 429 is
@@ -903,9 +968,62 @@ async def run_attempt(
             result["finishedAt"] = _now_ms()
             _write_json(attempt_path(ctx.run_dir, probe.id, attempt), result)
 
+    # Valentin, 2026-11-05: a failed attempt on a target that declares a feedback tool is reported
+    # through it, AFTER the measurement and in a session of its own, so the failure reaches the
+    # people who can fix it and costs the comparison nothing. A harness error is not a product
+    # failure (it is replaced, D43) and is never reported.
+    feedback_tool = ctx.target.get("feedback_on_failure")
+    if feedback_tool and result.get("success") is False and not result.get("harnessError"):
+        result["failureFeedback"] = await _send_failure_feedback(ctx.target, feedback_tool, result)
+
     result["finishedAt"] = _now_ms()
     _write_json(attempt_path(ctx.run_dir, probe.id, attempt), result)
     return result, stop_run
+
+
+def failure_feedback_args(result: dict[str, Any]) -> dict[str, Any]:
+    """The feedback-tool arguments for a failed attempt: the agent's own report, plus what the
+    harness saw that the agent may not have (the verified effect absent, a wrong answer, tool
+    calls that returned an error). The outcome is the harness's, not the agent's claim."""
+    verdict = result.get("verdict") or {}
+    why = []
+    if result.get("effectVerified") is False:
+        check = result.get("effectCheck") or {}
+        why.append(f"the expected effect was not found ({_effect_summary(check)})")
+    if result.get("answerVerified") is False:
+        why.append(f"the answer did not match the check ({json.dumps(result.get('answerCheck'), ensure_ascii=False)[:300]})")
+    if not why:
+        why.append(f"the agent reported {verdict.get('outcome') or 'no verdict'}")
+    claimed = f" The agent reported {verdict['outcome']}: {verdict.get('summary')}" if verdict.get("outcome") else ""
+    failures = list(verdict.get("failures") or [])
+    reported = {f.get("tool") for f in failures}
+    for call in result.get("toolCalls") or []:
+        if call.get("error") and call.get("tool") not in reported:
+            failures.append({"tool": call.get("tool"), "payload": call.get("args") or {},
+                             "error": str(call.get("result"))[:500], "recovered": False})
+    args = {
+        "outcome": "ERROR",
+        "summary": f"[mcp-tests {result.get('runId')} · {result.get('probeId')} a{result.get('attempt')}] "
+                   f"Task not achieved: {'; '.join(why)}. Prompt: {result.get('prompt')!r}.{claimed}"[:2000],
+        "achieved": verdict.get("achieved") or "Not verified by the harness.",
+    }
+    for key in ("plannedApproach", "howKnown", "frictions", "wastedCalls", "suggestions"):
+        if verdict.get(key):
+            args[key] = verdict[key]
+    if failures:
+        args["failures"] = failures
+    return args
+
+
+async def _send_failure_feedback(target: dict[str, Any], tool: str, result: dict[str, Any]) -> dict[str, Any]:
+    """Call the target's feedback tool for a failed attempt; never raises (it is not measured)."""
+    args = failure_feedback_args(result)
+    try:
+        async with mcp_session(target) as session:
+            answer = await call_tool(session, tool, args)
+        return {"tool": tool, "ok": True, "response": json.dumps(answer, ensure_ascii=False)[:500]}
+    except Exception as exc:  # noqa: BLE001 - feedback is best effort and outside the measurement
+        return {"tool": tool, "ok": False, "error": f"{type(exc).__name__}: {exc}"[:500]}
 
 
 async def run_target(
@@ -1407,7 +1525,7 @@ async def _run_single(
         return 0
 
     suite = load_suite(_resolve_suite_path(args.suite))
-    probes = [suite.probe(args.probe)] if args.probe else list(suite.probes)
+    probes = _selected_probes(suite, args.probe)
 
     # What the target says it is, and its tool catalogue, read once before the
     # first probe (plan §6). Skipped when auth already failed: there is no
@@ -1489,7 +1607,7 @@ async def _run_compare(
         print("--login takes one --target, not --targets.", file=sys.stderr)
         return 2
     suite = load_suite(_resolve_suite_path(args.suite))
-    probes = [suite.probe(args.probe)] if args.probe else list(suite.probes)
+    probes = _selected_probes(suite, args.probe)
     try:
         rule.resolve_parameters(suite.decision)
     except rule.RuleMismatch as exc:
@@ -1731,7 +1849,7 @@ def main(argv: list[str] | None = None) -> int:
         default=DEFAULT_AUTH_WAIT,
         help=f"Seconds to wait for the OAuth callback (default {DEFAULT_AUTH_WAIT}).",
     )
-    parser.add_argument("--probe", help="Run only this probe id (default: every probe in the suite)")
+    parser.add_argument("--probe", help="Run only these probe ids, comma-separated (default: every probe in the suite)")
     parser.add_argument(
         "--model",
         help="Explicit override of provider.model from the config. The only "
