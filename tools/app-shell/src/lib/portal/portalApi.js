@@ -7,11 +7,21 @@ import { detectBaseUrl } from '@etendosoftware/app-shell-core/auth/api';
  * Partner opens a magic link and reads their own invoices, with no account and no session.
  * Three consequences shape this module.
  *
- * **1. The token is the whole credential, and it travels in a header.** It arrives once, as a
- * path segment of `/portal/<token>` (that is what makes the link mailable and bookmarkable),
- * and every request made afterwards passes it through `apiFetch`'s `token` option so it goes
- * out as `Authorization: Bearer …`. It must NEVER be appended to a query string — that is the
- * one place it would be recorded in access logs and proxy logs (plan §5.4).
+ * **1. The token is the whole credential, and it travels in its own header.** It arrives once,
+ * as a path segment of `/portal/<token>` (that is what makes the link mailable and
+ * bookmarkable), and every request made afterwards sends it as {@link PORTAL_TOKEN_HEADER}. It
+ * must NEVER be appended to a query string — that is the one place it would be recorded in
+ * access logs and proxy logs (plan §5.4).
+ *
+ * Not as `Authorization`, and that is load-bearing (ETP-6209 live test). `Authorization` belongs
+ * to the app's session credential scheme: in a browser that holds an Etendo GO session the
+ * scheme is `cookie`, and the shared helper then drops an explicit `token` without a word
+ * (`credentialHeadersForToken` in app-shell-core) — the portal received no token and showed
+ * "this link is no longer valid" for a valid link. The portal token is not a session
+ * credential, so it rides a header the scheme never touches, and the servlet reads that header
+ * first, so a GO session's own credential can never be what opens the portal. The `token`
+ * option is still passed: under `bearer` it keeps the visitor's GO JWT, if any, off these
+ * requests.
  *
  * **2. A 401 here is a domain answer, not an expired session**, so every call sets
  * `on401: 'ignore'`. Without it the shared helper would route the BP's invalid link into the
@@ -34,6 +44,12 @@ import { detectBaseUrl } from '@etendosoftware/app-shell-core/auth/api';
  * This is also why the route's own `apiBaseUrl` (which already ends in `/sws/neo`) is NOT
  * usable here — see {@link resolvePortalBaseUrl}.
  */
+
+/**
+ * Header carrying the portal token. Read first by `PortalServlet#resolveToken` in
+ * `com.etendoerp.go`; keep the two spellings identical.
+ */
+export const PORTAL_TOKEN_HEADER = 'X-Portal-Token';
 
 /** Path prefix of the portal's own servlet — deliberately NOT under `/sws/neo`. */
 const PORTAL_API_PREFIX = '/sws/portal';
@@ -131,10 +147,11 @@ async function portalGet(fetchImpl, token, path, {
   let response;
   try {
     // `on401: 'ignore'`: an invalid portal link answers 401, which is a domain answer here and
-    // must not reach the tenant logout wiring. `token` puts the portal token in the
-    // Authorization header — never in the URL.
+    // must not reach the tenant logout wiring. The portal token travels in its own header,
+    // whatever the session credential scheme is — never in the URL.
     response = await fetchImpl(`${PORTAL_API_PREFIX}${path}`, {
       token,
+      headers: { [PORTAL_TOKEN_HEADER]: token },
       on401: 'ignore',
       ...(method ? { method } : {}),
     });
@@ -211,7 +228,7 @@ function readLinkState(value) {
  *
  * Fetched as a blob and turned into an object URL by the caller, rather than pointed at from an
  * `<img src>` directly. That is not indirection for its own sake: a browser issues an `<img>`
- * request itself, with no opportunity to attach an `Authorization` header, so a direct `src`
+ * request itself, with no opportunity to attach the token header, so a direct `src`
  * would force the token into the query string — where it lands in every access log along the way
  * and breaks §5.4. Going through `apiFetch` keeps the token in the header, exactly like every
  * other portal request.

@@ -56,8 +56,8 @@ import { saveBlobAsFile } from '@/lib/portal/portalDownload.js';
  *
  * The token is deliberately left in the address bar. The link is meant to be bookmarkable
  * (plan §1/§4.6), and scrubbing it would break the bookmark; what §5.4 forbids is the token
- * appearing in a *query string* on the wire, which is why every request sends it as an
- * `Authorization` header instead — see `lib/portal/portalApi.js`.
+ * appearing in a *query string* on the wire, which is why every request sends it in the
+ * `X-Portal-Token` header instead — see `lib/portal/portalApi.js`.
  */
 
 /** The screens this page can be on. */

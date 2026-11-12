@@ -623,6 +623,15 @@ Where the code differs from the text above, and why:
 - **D-1 on the data endpoints.** `/invoices`, `/invoices/{id}/pdf` answer the generic 401 for an
   expired or unavailable link; `/logo` answers for any sent link (the expired page shows the
   company's branding).
+- **The portal token travels in `X-Portal-Token`, not `Authorization`** (live-test fix). The
+  SPA's request helper decides `Authorization` from the app's session credential scheme; with an
+  Etendo GO session in the browser the scheme resolves to `cookie` and an explicit token is dropped,
+  so the portal got no token and answered "invalid" to a valid link (incognito worked). With no GO
+  session the scheme resolves to `bearer` (`auto` + no CSRF proof), which is why it only failed for
+  signed-in browsers — but production is one domain for every tenant, so any customer who also uses
+  Etendo GO would have hit it. `PortalServlet#resolveToken` reads `X-Portal-Token` first, then the
+  `/me/{token}` path, then `Authorization: Bearer` (legacy), so a GO session's own credential is
+  never what opens the portal. This supersedes MVP §5.4's "sent as an `Authorization` header".
 - **`POST /renew` extra answers:** `{state:"valid"}` when the link had not expired, `503` when the
   email could not be sent (the page offers a retry).
 
