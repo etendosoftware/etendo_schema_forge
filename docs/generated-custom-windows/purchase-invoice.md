@@ -3187,12 +3187,6 @@ An issued invoice is voided with a credit note (factura rectificativa), never by
 
 ## One label format for the SIF tab's selects — ETP-6179
 
-Every select of the SIF tab (`SifTab.jsx`: SII *Tipo factura*, SII *Motivo rectificación*,
-VERI\*FACTU *Tipo factura*, TicketBAI *Código factura rectificativa*) now renders its options as
-**"CODE - Label"**, with the code exactly once. Before, the tab prefixed every option with
-`"<code> — "`, so the labels whose locale text already starts with the code read twice
-("F1 — F1 - Factura (art. 6…)", "R4 — R4 - Resto"). The formatter is the shared
-`sifOptionLabel(option, ui)` exported by `tools/app-shell/src/windows/custom/shared/InvoiceSifStep.jsx`:
-a label that already starts with its code is shown as it is, any other one gets the `"CODE - "`
-prefix. The "Datos fiscales" step of the invoice-creating modals uses the same function, so the tab
-and the step always read alike. No locale key changed.
+The purchase invoice mounts the same shared `SifTab`, so its SII *Tipo factura* options (F6, LC, F5,
+F1) read "CODE - Label" with the code once, exactly like the sales invoice; see
+[sales-invoice.md → One label format for the SIF tab's selects](sales-invoice.md#one-label-format-for-the-sif-tabs-selects--etp-6179).

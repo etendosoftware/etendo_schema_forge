@@ -743,29 +743,10 @@ shared by both handlers):
 - SII fields only (see goods-receipt for the defaults); no VERI*FACTU, no TicketBAI, no rectification
   code. The invoice header carries the order, so Fecha operación and Descripción SII come from the
   order when it has them.
-- The list's bulk "Crear facturas" (`BulkPurchaseOrderMoreMenu`, ONE invoice per selected order) reads the
-  `sifDefaults` preview of every completed selected order first. Whenever a fiscal system is active
-  it shows the fiscal data READ-ONLY (`InvoiceSifStepModal` in `readOnly` mode) with the notice "All
-  invoices will be created with this fiscal information for submission to <systems>. To use
-  different values on an invoice, create it individually." (`invoiceSifStep.bulkNotice`). A field
-  with the same value for every order shows it; a field that differs shows "Según cada cliente"
-  (`invoiceSifStep.variesPerCustomer`) for the SII key — customers with their own key, the only
-  realistic difference in GO, where a client has one organization and one fiscal system — and
-  "Según cada pedido" (`invoiceSifStep.variesPerOrder`) for anything else (e.g. an order created in
-  Classic with its own SII description or operation date). Confirm creates the invoices, each POST
-  sending its OWN order's preview values as `sifFields`; Cancel creates nothing. Editing per
-  invoice only happens in the individual flow.
-- When no system is active, or a preview cannot be read, no summary is shown and the run goes on as
-  before: each invoice gets its own backend defaults.
+- The list's bulk "Crear facturas" (`BulkPurchaseOrderMoreMenu`, one invoice per selected order)
+  shows the same read-only fiscal-data summary as the sales order's bulk menu, with SII fields only;
+  the rules (when it appears, "Según cada cliente / pedido", each order sending its own values) are in
+  [sales-order.md → Fiscal data step before the invoice is created](sales-order.md#fiscal-data-step-before-the-invoice-is-created--etp-6179).
 
-The step is shared (`tools/app-shell/src/windows/custom/shared/InvoiceSifStep.jsx`) and built
-from the backend's `sifDefaults` action, which answers which fiscal systems are active for the
-invoice's organization (SII, TicketBAI, VERI*FACTU), which SIF-tab fields are editable and what each
-would get. It is fetched when the primary button is pressed: when no system is active the flow is
-exactly as before; otherwise the modal turns into the "Datos fiscales" step (Back / the same
-primary button) and only then confirms anything, so no source document is left confirmed without
-its invoice because of a fiscal problem. The values travel as `sifFields` in the invoice action's
-body; the backend validates them with the same per-system rule as the invoice's own completion
-(`RectificationFiscalCodeGuard`, 422 `ETGO_InvoiceRectificationCodeRequired`). If the preview cannot
-be loaded the flow continues without the step: the backend applies the same defaults anyway.
-Backend reference: `com.etendoerp.go` `docs/neo-headless.md` §4.12.36b (ETP-6179).
+How the step itself works — the backend `sifDefaults` preview, when it appears, the
+`sifFields` it sends and the fail-open rule — is described once in [sales-order.md → Fiscal data step before the invoice is created](sales-order.md#fiscal-data-step-before-the-invoice-is-created--etp-6179).

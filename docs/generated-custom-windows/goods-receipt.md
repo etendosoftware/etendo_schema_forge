@@ -839,14 +839,5 @@ With a record id, `createPurchaseInvoice` is `availableNow:false` once nothing i
   order (or whose lines point to one) takes the order's values, as its invoice does
   (`PurchaseInvoiceSifTarget`, review W2).
 
-The step is shared (`tools/app-shell/src/windows/custom/shared/InvoiceSifStep.jsx`) and built
-from the backend's `sifDefaults` action, which answers which fiscal systems are active for the
-invoice's organization (SII, TicketBAI, VERI*FACTU), which SIF-tab fields are editable and what each
-would get. It is fetched when the primary button is pressed: when no system is active the flow is
-exactly as before; otherwise the modal turns into the "Datos fiscales" step (Back / the same
-primary button) and only then confirms anything, so no source document is left confirmed without
-its invoice because of a fiscal problem. The values travel as `sifFields` in the invoice action's
-body; the backend validates them with the same per-system rule as the invoice's own completion
-(`RectificationFiscalCodeGuard`, 422 `ETGO_InvoiceRectificationCodeRequired`). If the preview cannot
-be loaded the flow continues without the step: the backend applies the same defaults anyway.
-Backend reference: `com.etendoerp.go` `docs/neo-headless.md` §4.12.36b (ETP-6179).
+How the step itself works — the backend `sifDefaults` preview, when it appears, the
+`sifFields` it sends and the fail-open rule — is described once in [sales-order.md → Fiscal data step before the invoice is created](sales-order.md#fiscal-data-step-before-the-invoice-is-created--etp-6179).

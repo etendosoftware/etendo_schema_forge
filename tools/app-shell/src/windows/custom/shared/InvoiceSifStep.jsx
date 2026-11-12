@@ -60,9 +60,9 @@ const FIELD_OPTIONS = {
 
 // Each system's section heading: the SIF tab's own panel title/subtitle keys (SifTab.jsx PANEL_META).
 const SYSTEM_PANEL_KEYS = {
-  SII: { title: 'sifDataTabs.panel.sii.title', subtitle: 'sifDataTabs.panel.sii.subtitle' },
-  TicketBAI: { title: 'sifDataTabs.panel.tbai.title', subtitle: 'sifDataTabs.panel.tbai.subtitle' },
-  Verifactu: { title: 'sifDataTabs.panel.verifactu.title', subtitle: 'sifDataTabs.panel.verifactu.subtitle' },
+  SII: { titleKey: 'sifDataTabs.panel.sii.title', subtitleKey: 'sifDataTabs.panel.sii.subtitle' },
+  TicketBAI: { titleKey: 'sifDataTabs.panel.tbai.title', subtitleKey: 'sifDataTabs.panel.tbai.subtitle' },
+  Verifactu: { titleKey: 'sifDataTabs.panel.verifactu.title', subtitleKey: 'sifDataTabs.panel.verifactu.subtitle' },
 };
 
 /**
@@ -453,8 +453,8 @@ export function InvoiceSifStepPanel({ sif, readOnly = false, notice, 'data-testi
             className="rounded-lg border border-border/40 bg-card overflow-hidden"
           >
             <div className="flex flex-col gap-0.5 px-4 py-3 border-b border-border/40">
-              <span className="text-sm font-semibold text-foreground">{panel ? ui(panel.title) : system}</span>
-              {panel && <span className="text-xs text-muted-foreground">{ui(panel.subtitle)}</span>}
+              <span className="text-sm font-semibold text-foreground">{panel ? ui(panel.titleKey) : system}</span>
+              {panel && <span className="text-xs text-muted-foreground">{ui(panel.subtitleKey)}</span>}
             </div>
             <div className="grid grid-cols-2 gap-x-5 gap-y-4 p-4">
               {fields.map(spec => (
