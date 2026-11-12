@@ -3184,3 +3184,9 @@ An issued invoice is voided with a credit note (factura rectificativa), never by
 - the agentic docs page `etendo-go-docs/agentic/finance/invoices.md` walks the five calls.
 
 **Verify:** `etendo_action(spec: "purchase-invoice", id: <completed invoice>, action: "documentAction", parameters: {docAction: "VO"})` answers 422 naming the credit note; re-run the okr probe `f-void-invoice`.
+
+## One label format for the SIF tab's selects — ETP-6179
+
+The purchase invoice mounts the same shared `SifTab`, so its SII *Tipo factura* options (F6, LC, F5,
+F1) read "CODE - Label" with the code once, exactly like the sales invoice; see
+[sales-invoice.md → One label format for the SIF tab's selects](sales-invoice.md#one-label-format-for-the-sif-tabs-selects--etp-6179).

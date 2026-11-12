@@ -37,12 +37,14 @@ vi.mock('@/components/contract-ui/ConfirmInOutModal', () => ({
   // invoiceAction/defaultCreateInvoice are exposed as data-attributes (ETP-4848)
   // so tests can assert what ConfirmWithCreditButtonBase computed and passed down,
   // without needing to render the real modal's internals.
-  default: ({ onConfirmed, onClose, invoiceAction, defaultCreateInvoice, title }) => (
+  default: ({ onConfirmed, onClose, invoiceAction, defaultCreateInvoice, title, base, specName, entityName, recordId }) => (
     <div
       data-testid="confirm-inout-modal"
       data-invoice-action={invoiceAction ?? ''}
       data-default-create-invoice={String(defaultCreateInvoice)}
       data-title={title ?? ''}
+      // ETP-6179 — what the real modal builds its own sifDefaults URL from.
+      data-sif-source={`${base}/${specName}/${entityName}/${recordId}`}
     >
       <button data-testid="confirm-inout-confirm-with-id" onClick={() => onConfirmed({ invoice: { id: 'INV-1', documentNo: 'FC-001', amount: 100, documentStatus: 'CO' } })} />
       <button data-testid="confirm-inout-confirm-no-id" onClick={() => onConfirmed({ invoice: {} })} />
@@ -72,8 +74,13 @@ vi.mock('@/components/contract-ui/ConfirmResultModal', () => ({
 // flight, and stays mounted until it resolves — mirroring the real
 // CreateInvoiceConfirmModal's own loading contract.
 vi.mock('@/components/contract-ui/CreateInvoiceConfirmModal', () => ({
-  default: ({ onConfirm, onClose, loading, title }) => (
-    <div data-testid="create-invoice-confirm-modal" data-title={title ?? ''}>
+  // ETP-6179 — exposes the sifDefaults URL it is handed, and a confirm that answers like the real
+  // modal does after its "Datos fiscales" step: (priceListId, originInvoices, sifFields).
+  default: ({ onConfirm, onClose, loading, title, sifDefaultsUrl }) => (
+    <div data-testid="create-invoice-confirm-modal" data-title={title ?? ''} data-sif-defaults-url={sifDefaultsUrl ?? ''}>
+      <button
+        data-testid="create-invoice-confirm-with-sif"
+        onClick={() => onConfirm(undefined, ['INV-ORIG'], { etvfacInvType: 'R4', aeatsiiMotivoRectif: 'R4' })} />
       <button data-testid="create-invoice-confirm" onClick={onConfirm} disabled={loading}>
         {loading ? 'soProcessing' : 'soCreateDocsBtn'}
       </button>
@@ -897,5 +904,82 @@ describe('ConfirmWithCreditButtonBase — respects isDocumentReadOnly (ETP-5205)
     );
     fireConfirm();
     expect(screen.getByTestId('confirm-inout-modal')).toBeInTheDocument();
+  });
+});
+
+// ETP-6179 — the return windows' rectificative invoice goes through the "Datos fiscales" step: the
+// CO "create rectificative invoice" modal is pointed at the return's own sifDefaults (whose preview
+// preselects R4 per system), and the values it hands back travel as `sifFields` in
+// createReturnInvoice, next to the rectified invoices.
+describe('ConfirmWithCreditButtonBase — fiscal data step of the rectificative invoice (ETP-6179)', () => {
+  let originalLocation;
+
+  beforeEach(() => {
+    mockNavigate.mockClear();
+    mockOnRefresh.mockClear();
+    originalLocation = window.location;
+    delete window.location;
+    window.location = { ...originalLocation, reload: vi.fn() };
+    globalThis.fetch = vi.fn(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ response: { data: { id: 'RET-1', documentNo: 'FC-002', documentStatus: 'CO' } } }),
+    }));
+  });
+
+  afterEach(() => {
+    delete window.location;
+    window.location = originalLocation;
+  });
+
+  function openCoModal(data = { documentStatus: 'CO', hasReturnInvoice: false, id: 'REC-001' }) {
+    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={data} />);
+    fireEvent.click(screen.getByTestId('action-create-return-invoice'));
+  }
+
+  it('points the create-invoice modal at the return record\'s own sifDefaults action', () => {
+    openCoModal();
+    expect(screen.getByTestId('create-invoice-confirm-modal')).toHaveAttribute(
+      'data-sif-defaults-url', '/sws/neo/some-window/someWindow/REC-001/action/sifDefaults');
+  });
+
+  it('falls back to recordId for the sifDefaults URL when data carries no id', () => {
+    openCoModal({ documentStatus: 'CO', hasReturnInvoice: false });
+    expect(screen.getByTestId('create-invoice-confirm-modal')).toHaveAttribute(
+      'data-sif-defaults-url', '/sws/neo/some-window/someWindow/REC-001/action/sifDefaults');
+  });
+
+  it('sends the step values (R4 preselected) as sifFields with the rectified invoices', async () => {
+    openCoModal();
+    fireEvent.click(screen.getByTestId('create-invoice-confirm-with-sif'));
+
+    await screen.findByTestId('confirm-result-modal');
+    const [url, init] = globalThis.fetch.mock.calls[0];
+    expect(String(url)).toContain('/someWindow/REC-001/action/createReturnInvoice');
+    expect(JSON.parse(init.body)).toEqual({
+      originInvoices: ['INV-ORIG'],
+      sifFields: { etvfacInvType: 'R4', aeatsiiMotivoRectif: 'R4' },
+    });
+  });
+
+  it('sends no sifFields when the modal confirmed without the step (no fiscal system)', async () => {
+    openCoModal();
+    fireEvent.click(screen.getByTestId('create-invoice-confirm'));
+
+    await screen.findByTestId('confirm-result-modal');
+    expect(JSON.parse(globalThis.fetch.mock.calls[0][1].body)).not.toHaveProperty('sifFields');
+  });
+
+  it('closing the modal creates nothing', () => {
+    openCoModal();
+    fireEvent.click(screen.getByTestId('create-invoice-close'));
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('hands the DR confirm modal what it builds its own sifDefaults URL from', () => {
+    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={{ documentStatus: 'DR', id: 'REC-001' }} />);
+    fireConfirm();
+    expect(screen.getByTestId('confirm-inout-modal')).toHaveAttribute(
+      'data-sif-source', '/sws/neo/some-window/someWindow/REC-001');
+    expect(screen.getByTestId('confirm-inout-modal')).toHaveAttribute('data-invoice-action', 'createReturnInvoice');
   });
 });

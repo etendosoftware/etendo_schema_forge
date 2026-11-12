@@ -778,6 +778,20 @@ An `unpost` of a return receipt that is not posted is refused with **422** (`ETG
 
 The popup opened by "Crear Factura Rectificativa" on a completed (CO), not-yet-invoiced return is the shared `CreateInvoiceConfirmModal`, previously titled with the generic `soManageDocsTitle` ("Generar factura"). It now takes an optional `title` prop (default unchanged elsewhere); `ConfirmWithCreditButtonBase` forwards its `createInvoiceModalTitle` prop, which this window supplies as `returnReceipt.createRectificativeInvoiceTitle` ("Generar factura rectificativa"). The draft-time `ConfirmInOutModal` title ("¿Gestionar factura rectificativa?") and the row-hover Confirmar are unchanged.
 
+## Fiscal data step before the invoice is created — ETP-6179
+
+- **Confirmar** with *Crear factura rectificativa* on (`ConfirmWithCreditButtonBase` →
+  `ConfirmInOutModal`, also the list row's confirm) and **Crear factura rectificativa** on a confirmed
+  return (`CreateInvoiceConfirmModal`).
+- Rectificative: `R4` preselected for the SII motive, the TicketBAI code and the VERI*FACTU type, all
+  editable; SII key `R`/type `I` and the TicketBAI/VERI*FACTU reverse types are set automatically.
+  Before ETP-6179 this flow completed the invoice as an ordinary `F1`. Clearing a code blocks the
+  primary button (`invoiceSifStep.rectificationRequired`); an API caller that sends a blank code gets
+  422 `ETGO_InvoiceRectificationCodeRequired` and nothing is created.
+
+How the step itself works — the backend `sifDefaults` preview, when it appears, the
+`sifFields` it sends and the fail-open rule — is described once in [sales-order.md → Fiscal data step before the invoice is created](sales-order.md#fiscal-data-step-before-the-invoice-is-created--etp-6179).
+
 ## Doc type and number survive picking the customer — ETP-5837 (QA round 1)
 
 Choosing the customer on a new return no longer switches the document to the shipment doc type. Before, the number

@@ -623,3 +623,19 @@ The lines grid shows the **unit of measure** of every line in a new read-only co
 The quotation tab still carries the classic *Create Lines From*, *Pick from Receipt* and *Cancel and Replace* (with its confirm step) buttons, which this window never renders. The MCP
 configuration (`quotation` entity) withholds them with a reason, and `etendo_schema(view:"actions")` lists them under `withheldActions`; see
 `sales-order.md` for the behavior.
+
+## Fiscal data step before the invoice is created — ETP-6179
+
+- **Confirmar → Facturar directamente** (`QuotationConfirmModal`) opens the step as its own dialog
+  (`InvoiceSifStepModal`) before the invoice is created; *Crear pedido* never asks.
+- The dialog has × / *Cancelar* (close without creating anything), *Atrás* and *Facturar
+  directamente*. **Atrás** returns to the "¿Qué quieres hacer?" choice with *Facturar directamente*
+  still selected (not the recommended *Crear pedido* default) and keeps the values typed in the step,
+  so pressing *Continuar* again reopens the step as it was left.
+- Normal invoice: VERI*FACTU type from the invoice's document type (`F1` fallback); SII key the
+  customer's own default key when it declares one, else `F1`; SII description and operation date
+  from the quotation's own SII fields when it has them, else the organization's default
+  description and today.
+
+How the step itself works — the backend `sifDefaults` preview, when it appears, the
+`sifFields` it sends and the fail-open rule — is described once in [sales-order.md → Fiscal data step before the invoice is created](sales-order.md#fiscal-data-step-before-the-invoice-is-created--etp-6179).

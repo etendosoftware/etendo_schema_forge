@@ -43,13 +43,15 @@ export function useConfirmWithCredit({
   // ETP-5381: originInvoices carries the invoice(s) the rectificative invoice will rectify. The
   // backend needs them BEFORE completing — without the C_Invoice_Reverse link the rectificative
   // invoice cannot be confirmed — so the modal asks the user and passes them through here.
-  const handleCreateReturnInvoice = useCallback(async (originInvoices) => {
+  // ETP-6179: sifFields carries the "Datos fiscales" step's values (CreateInvoiceConfirmModal).
+  const handleCreateReturnInvoice = useCallback(async (originInvoices, sifFields) => {
     if (creatingInvoice) return;
     setCreatingInvoice(true);
     try {
       const body = Array.isArray(originInvoices) && originInvoices.length > 0
         ? { originInvoices }
         : {};
+      if (sifFields) body.sifFields = sifFields;
       const res = await apiFetch(
         `/${entitySegment}/${data?.id || recordId}/action/createReturnInvoice`,
         { method: 'POST', body: JSON.stringify(body) },
