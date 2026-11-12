@@ -9,9 +9,18 @@ export const MOVEMENTS_PAGE_SIZE = 50;
 // Request parameter carrying the order of the type buckets (contract: neo-headless.md §5.3.4.a).
 export const TYPE_ORDER_PARAM = 'typeLabelOrder';
 
-// The updated design (2026-11-11) opens on the last 30 days (it was 7): fewer empty opens for products
-// without recent activity.
-export const DEFAULT_MOVEMENTS_PERIOD = Object.freeze({ presetId: 'last30' });
+// The designer's final call (ETP-5889) opens on the last 7 days (the 30-day default was reverted). The side
+// panel keeps its own 12-month window; "Ver movimientos" still prefilters the period it was opened with.
+export const DEFAULT_MOVEMENTS_PERIOD = Object.freeze({ presetId: 'last7' });
+
+// Minimum height (px) of the movements table box. The box takes the room left below it, never less than
+// this: when that room is smaller the whole form column scrolls and the table keeps this height. Shared by
+// the tab (inline minHeight) and the `useRemainingHeight` default so the two cannot drift apart.
+export const MOVEMENTS_TABLE_MIN_HEIGHT = 340;
+
+// Opt-in query parameter: the backend answers `response.totals` ({ netQuantity, count }) over ALL the records
+// matching the filters. Only the first page of a view asks for it.
+export const TOTALS_PARAM = 'etgoTotals';
 
 // Sortable columns -> backend column. The foreign key is sorted by its identifier (the warehouse name),
 // not by its id; every other key is a physical column of M_Transaction, so the backend can order by it.
@@ -83,7 +92,7 @@ function prefixed(sortBy) {
 }
 
 /** Path + query string of one page of the product's transactions (`start` is the first row, 0-based). */
-export function buildMovementsQuery({ productId, filters = {}, sort = MOVEMENTS_DEFAULT_SORT, start = 0, pageSize = MOVEMENTS_PAGE_SIZE, typeOrder = null }) {
+export function buildMovementsQuery({ productId, filters = {}, sort = MOVEMENTS_DEFAULT_SORT, start = 0, pageSize = MOVEMENTS_PAGE_SIZE, typeOrder = null, withTotals = false }) {
   // An unknown column falls back to the default sort, tie-breakers included.
   const sortKey = isMovementsSortKey(sort?.key) ? sort.key : MOVEMENTS_DEFAULT_SORT.key;
   const column = SORT_COLUMNS[sortKey];
@@ -99,7 +108,22 @@ export function buildMovementsQuery({ productId, filters = {}, sort = MOVEMENTS_
   params.append('_endRow', String(start + pageSize - 1));
   const criteria = buildMovementsCriteria(filters);
   if (criteria.length) params.append('criteria', JSON.stringify(criteria));
+  // Totals only ride on the first page: later pages and the one-record probe never ask for them.
+  if (withTotals && start === 0) params.append(TOTALS_PARAM, 'true');
   return `/transactions?${params.toString()}`;
+}
+
+/**
+ * The period totals of a list response: `{ netQuantity, count }`, or null when the backend did not send
+ * them (older backend, flag off, aggregate failure) or sent something unusable. Strict on purpose: a
+ * partial or non-numeric answer must hide the total row, never show a wrong sum.
+ */
+export function extractMovementTotals(json) {
+  const totals = json?.response?.totals ?? json?.totals;
+  const { netQuantity, count } = totals ?? {};
+  if (typeof netQuantity !== 'number' || !Number.isFinite(netQuantity)) return null;
+  if (typeof count !== 'number' || !Number.isInteger(count) || count < 0) return null;
+  return { netQuantity, count };
 }
 
 /** True when the filters (period, direction, warehouse) leave the product's movements untouched. */

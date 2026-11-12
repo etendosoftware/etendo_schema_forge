@@ -7,6 +7,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   DEFAULT_MOVEMENTS_PERIOD,
+  MOVEMENTS_TABLE_MIN_HEIGHT,
+  extractMovementTotals,
   MOVEMENTS_DEFAULT_SORT,
   buildAnyMovementQuery,
   buildMovementsCriteria,
@@ -88,9 +90,10 @@ describe('productMovements (ETP-5889)', () => {
       ]);
     });
 
-    it('turns the default period (last 30 days, since 2026-11-11) into 30 calendar days, both ends included', () => {
+    it('turns the default period (last 7 days) into 7 calendar days, both ends included', () => {
+      expect(DEFAULT_MOVEMENTS_PERIOD).toEqual({ presetId: 'last7' });
       expect(buildMovementsCriteria({ dateRange: DEFAULT_MOVEMENTS_PERIOD })).toEqual([
-        { fieldName: 'movementDate', operator: 'greaterOrEqual', value: '2026-09-29' },
+        { fieldName: 'movementDate', operator: 'greaterOrEqual', value: '2026-10-22' },
         { fieldName: 'movementDate', operator: 'lessOrEqual', value: '2026-10-28' },
       ]);
     });
@@ -489,5 +492,43 @@ describe('locale parity of the Movements tab and side panel keys', () => {
       const labels = labelsOf(locale);
       for (const key of KEYS) expect(labels[key], `${locale}.${key}`).not.toBe(en[key]);
     }
+  });
+});
+
+describe('period totals (ETP-5889 M4)', () => {
+  it('asks for the totals on the first page only, and only when the caller wants them', () => {
+    const base = { productId: 'p1' };
+    expect(parse(buildMovementsQuery({ ...base, withTotals: true, start: 0 })).params.get('etgoTotals')).toBe('true');
+    expect(parse(buildMovementsQuery({ ...base, withTotals: true, start: 50 })).params.has('etgoTotals')).toBe(false);
+    expect(parse(buildMovementsQuery(base)).params.has('etgoTotals')).toBe(false);
+    expect(parse(buildAnyMovementQuery(base)).params.has('etgoTotals')).toBe(false);
+  });
+
+  it('keeps the table floor at 340 px', () => {
+    expect(MOVEMENTS_TABLE_MIN_HEIGHT).toBe(340);
+  });
+
+  describe('extractMovementTotals', () => {
+    it('reads response.totals', () => {
+      expect(extractMovementTotals({ response: { data: [], totals: { netQuantity: -7, count: 3 } } })).toEqual({ netQuantity: -7, count: 3 });
+    });
+    it('reads a top-level totals, fractional and zero sums', () => {
+      expect(extractMovementTotals({ totals: { netQuantity: 0.5, count: 0 } })).toEqual({ netQuantity: 0.5, count: 0 });
+    });
+    it.each([
+      ['undefined', undefined],
+      ['null', null],
+      ['no totals', { response: { data: [] } }],
+      ['null totals', { response: { totals: null } }],
+      ['string quantity', { response: { totals: { netQuantity: '5', count: 1 } } }],
+      ['string count', { response: { totals: { netQuantity: 5, count: '1' } } }],
+      ['NaN quantity', { response: { totals: { netQuantity: Number.NaN, count: 1 } } }],
+      ['Infinity quantity', { response: { totals: { netQuantity: Infinity, count: 1 } } }],
+      ['missing count', { response: { totals: { netQuantity: 5 } } }],
+      ['fractional count', { response: { totals: { netQuantity: 5, count: 1.5 } } }],
+      ['negative count', { response: { totals: { netQuantity: 5, count: -1 } } }],
+    ])('returns null for %s', (_name, json) => {
+      expect(extractMovementTotals(json)).toBeNull();
+    });
   });
 });
