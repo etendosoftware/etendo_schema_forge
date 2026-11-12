@@ -117,7 +117,7 @@ and the last breadcrumb segment read the same label: `getRecordTitle` looks the 
 the form field's `options` and translates the key. Without `titleField` the title falls back to the
 raw `_identifier` and shows the stored English name (*Purchase Order*, *AP Invoice*) while the grid
 and the Nombre field show *Pedido de compra* — the QA rejection of ETP-5285. One declaration, three
-surfaces, no custom component.
+surfaces, no custom component for the display (sorting by that label needs one, see below).
 
 | `AD_Sequence.Name` | i18n key | es_ES | en_US |
 |---|---|---|---|
@@ -134,6 +134,23 @@ Adding a series means adding its name to `VISIBLE_SEQUENCE_NAMES`, to `enumValue
 three locale files — miss the last and the grid renders the raw English name, with no error. It
 also means shipping the `AD_Sequence` row itself in `GOClient/AD_SEQUENCE.xml`: a name on the
 allowlist that no row carries is simply a series that never appears, with no error either.
+
+### Sorting by Nombre follows the translated label (ETP-5837, QA CP-18)
+
+The list sorts server-side, so `_sortBy=name asc` ordered the rows by the stored English names.
+An ascending sort by Nombre read *… Pedido de compra, Presupuesto de venta, Pedido de venta*
+(`Purchase Order`, `Quotation`, `Standard Order`), which is not alphabetical in either language.
+The table now re-sorts the Name column on the client, by the label the cell shows. That is
+`window.customComponents.headerTable: "SequenceHeaderTable"`
+(`artifacts/document-sequence/custom/SequenceHeaderTable.jsx`). It wraps the generated
+`SequenceTable` and reads the labels from the same `enumValues` (through `contract.json`) and
+`useMenuLabel` as `renderEnumCell`, so the order always matches the screen. This is exact because
+the spec exposes only a handful of rows (seven series; a tenant with two quotation doctypes, such
+as F&B International Group, has two `Quotation` rows, so eight), always one page. Other columns
+keep the server order. Only the grid is re-sorted: Print → PDF/CSV of the list keeps the server
+order (by stored name), because `ListView` hands its server-side sort (`sortColumn` /
+`sortDirection`) to `ReportDrawer`, which fetches and orders the rows itself. The MCP is unchanged:
+`etendo_list` still returns and sorts by the stored name.
 
 ## Which sequences the list shows
 
@@ -225,6 +242,12 @@ corrective data-fix,
 it has run, the row is listed with whatever prefix it already had (usually none) — expected, not a
 regression. The fix sets `PR` only where the prefix is empty (a prefix the tenant chose is kept),
 and also renumbers that tenant's existing quotations, `1000005` → `PR1000005`.
+
+**Starting number (QA CP-17).** The dataset also shipped this row with `STARTNO` 10000, while the
+other six start at 1000000. The dataset row now ships 1000000. Existing tenants are aligned by
+`cli/src/data-fixes/sql/20261112T120000Z__R58-quotation-sequence-startno.sql`. It sets `STARTNO`
+1000000 only on a `Quotation` sequence still at 10000. It never touches `CURRENTNEXT`, the prefix,
+or any quotation, so the next quotation keeps the number it would have had.
 
 ### Why no `DocumentNo_*` sequence is listed
 
@@ -423,6 +446,15 @@ two code paths writing the same rows. See
 13. On a **freshly provisioned** tenant, confirm the seven rows already carry `PC` / `PV` / `PR` /
    `FV` / `FVR` / `FC` / `FCR` with Número inicial and Próximo número both at 1000000 — that is the
    onboarding dataset, not the data-fix.
+13b. ETP-5837 (CP-17), same freshly provisioned tenant: *Presupuesto de venta* shows Número inicial
+   1000000, like the other six. On an older tenant it reads 10000 until data-fix
+   `R58-quotation-sequence-startno` has run. R58 changes only Número inicial, never Próximo
+   número.
+13c. ETP-5837 (CP-18): sort by Nombre ascending. In Spanish the order is *Factura de compra, Factura
+   de compra rectificativa, Factura de venta, Factura de venta rectificativa, Pedido de compra,
+   Pedido de venta, Presupuesto de venta*. In English it is *Corrective Purchase Invoice, Corrective
+   Sales Invoice, Purchase Invoice, Purchase Order, Sales Invoice, Sales Order, Sales Quotation*.
+   Descending reverses it.
 14. ETP-5364, same freshly provisioned tenant: in Classic, confirm the `AP Invoice` doc type has
    **Documento controlado = Y** and points at the `AP Invoice` sequence, then create a purchase
    invoice and confirm its number reads `FC1000000`. A number with no prefix means the doctype
@@ -470,6 +502,12 @@ two code paths writing the same rows. See
   ETP-5837 it also pins the list scope as `readPredicates` (`readPredicatesScopeByName`), that a list
   GET is not short-circuited, and the 404 on an update of a hidden sequence
   (`refusesUpdateOfHiddenSequence`).
+- `tools/app-shell/src/windows/custom/document-sequence/__tests__/SequenceHeaderTable.vitest.jsx`
+  pins the Name sort by translated label (es_ES asc/desc, en_US asc, from the real locale files).
+  It also checks that another sort column keeps the server order, and that the wrapper hands the
+  generated table the re-sorted rows (QA CP-18).
+- `cli/test/data-fixes-r58-quotation-sequence-startno.test.js` pins R58: only `STARTNO`, only on
+  `Quotation` rows still at 10000, never `CURRENTNEXT`/prefix/documents (QA CP-17).
 
 ## Onboarding — ETP-5190
 

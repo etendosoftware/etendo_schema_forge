@@ -211,12 +211,26 @@ const BACKEND_ERROR_MAP = {
   // Pre-checked so APRM_FIN_FINACC_TRAN_CHECK_TRG does not fire: a JDBC error escapes the
   // handler's OBException branch as an opaque 500.
   'The movement is already processed or posted. Select it on its own to delete it.': 'backendError.movementProcessedNotDeletable',
-  // The two statement refusals, in the order a user meets them.
+  // The statement delete refusals. ETP-6151 — a bank-connected account no longer refuses the
+  // delete outright (the former 409 "Statements from a bank-connected account cannot be deleted."
+  // is gone from BankStatementsHandler): a processed statement there is reactivated and deleted in
+  // one step unless it is posted (below) or has matched lines.
+  // Flag `psd2-statement-import-settings` off: the backend still refuses the delete outright.
   'Statements from a bank-connected account cannot be deleted.': 'backendError.statementBankConnectedNotDeletable',
+  'The statement is posted. Unpost it before deleting it.': 'backendError.statementPostedNotDeletable',
   'The statement has matched lines; unreconcile them before deleting': 'backendError.statementHasMatchedLines',
   // ETP-5471: create/import on a bank-connected account (BankStatementsHandler + the generic
   // financial-account statement entities).
   'This account is synchronized with the bank; statements cannot be created or imported manually.': 'backendError.statementBankConnectedNotCreatable',
+  // ETP-6151 — FinancialAccountBankConnectionHandler link / createAndLink / import-settings
+  // validation of the PSD2 import settings. The connect modal and the edit panel enforce both
+  // fields before sending, so these are a safety net; they reuse the fields' own required/range
+  // copy. The range one is reachable on link: an account may keep an older "Importar hasta".
+  'The import from date is required': 'financeAccountsBankConnectionImportFromRequired',
+  'The import from date is not a valid date (expected yyyy-MM-dd)': 'financeAccountsBankConnectionImportFromRequired',
+  'The statement grouping is required': 'financeAccountsBankConnectionGroupingRequired',
+  'The statement grouping must be one of 1BD, 1BW, 1BM, 1BE': 'financeAccountsBankConnectionGroupingRequired',
+  'The import from date cannot be later than the import to date': 'financeAccountsBankConnectionImportRangeInvalid',
   // ETP-5581: com.etendoerp.go AD_MESSAGE ETGO_StatementLineDiscarded (409 LINE_DISCARDED), the
   // refusal to reconcile a discarded line. Its key route is in BACKEND_ERROR_KEY_MAP; this text
   // entry serves the reconcile paths that forward only the message (the split panel's

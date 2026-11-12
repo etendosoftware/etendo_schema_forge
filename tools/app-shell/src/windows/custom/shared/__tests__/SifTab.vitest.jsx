@@ -1,5 +1,6 @@
 // @covers tools/app-shell/src/windows/custom/shared/SifTab.jsx
 // @covers tools/app-shell/src/windows/custom/shared/useSifFieldPatcher.js
+// @covers tools/app-shell/src/windows/custom/shared/InvoiceSifStep.jsx
 // Mocks must be declared before any imports that pull in the mocked modules.
 
 import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
@@ -8,8 +9,11 @@ vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), warning: vi.fn(), error: vi.fn() },
 }));
 
+// Per-test translations: a key missing here comes back as itself (the usual convention); a test
+// that needs a real-looking label (one that already carries its code) sets it.
+const uiLabels = vi.hoisted(() => ({}));
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key) => uiLabels[key] ?? key,
   useLabel: () => (key) => key,
 }));
 
@@ -213,6 +217,7 @@ function renderControlled(overrides = {}, onChangeSpy) {
 describe('SifTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.keys(uiLabels).forEach((k) => { delete uiLabels[k]; });
   });
 
   afterEach(() => {
@@ -286,8 +291,8 @@ describe('SifTab', () => {
 
     it('renders CLAVE_TIPO sales options (not purchase options)', () => {
       render(<SifTab {...makeProps()} />);
-      expect(screen.getByText('F1 — sifDataTabs.option.invoice')).toBeInTheDocument();
-      expect(screen.queryByText('F6 — sifDataTabs.option.accountingDocument')).not.toBeInTheDocument();
+      expect(screen.getByText('F1 - sifDataTabs.option.invoice')).toBeInTheDocument();
+      expect(screen.queryByText('F6 - sifDataTabs.option.accountingDocument')).not.toBeInTheDocument();
     });
 
     it('shows the authorization checkbox', () => {
@@ -389,8 +394,8 @@ describe('SifTab', () => {
 
     it('renders purchase-specific CLAVE_TIPO_FC options', () => {
       render(<SifTab {...makeProps({ apiBaseUrl: '/sws/neo/purchase-invoice' })} />);
-      expect(screen.getByText('F6 — sifDataTabs.option.accountingDocument')).toBeInTheDocument();
-      expect(screen.queryByText('F2 — sifDataTabs.option.simplifiedInvoice')).not.toBeInTheDocument();
+      expect(screen.getByText('F6 - sifDataTabs.option.accountingDocument')).toBeInTheDocument();
+      expect(screen.queryByText('F2 - sifDataTabs.option.simplifiedInvoice')).not.toBeInTheDocument();
     });
 
     it('derives specName purchase-invoice from apiBaseUrl last segment', () => {
@@ -888,7 +893,7 @@ describe('SifTab', () => {
     it('renders all 5 TBAI_REVERSEINVOICECODE_OPTIONS', () => {
       render(<SifTab {...makeProps({ data: { documentStatus: 'DR', isRectificative: true } })} />);
       ['R1', 'R2', 'R3', 'R4', 'R5'].forEach((v) => {
-        expect(screen.getByText(`${v} — sifDataTabs.option.tbaiReverse${v}`)).toBeInTheDocument();
+        expect(screen.getByText(`${v} - sifDataTabs.option.tbaiReverse${v}`)).toBeInTheDocument();
       });
     });
 
@@ -1147,9 +1152,21 @@ describe('SifTab', () => {
       // still offers it, and a legacy record can still carry it (see the
       // "legacy etvfacInvType value" test below).
       ['F1', 'F2', 'R1', 'R2', 'R3', 'R4', 'R5'].forEach((v) => {
-        expect(screen.getByText(`${v} — sifDataTabs.option.vf${v}`)).toBeInTheDocument();
+        expect(screen.getByText(`${v} - sifDataTabs.option.vf${v}`)).toBeInTheDocument();
       });
-      expect(screen.queryByText(/^F3 — /)).not.toBeInTheDocument();
+      expect(screen.queryByText(/^F3 - /)).not.toBeInTheDocument();
+    });
+
+    // One "CODE - Label" format: a locale label that already starts with its code
+    // ("F1 - Factura…", the real VERI*FACTU labels) is shown as it is, so the code never doubles.
+    it('shows the code once when the translated label already starts with it', () => {
+      uiLabels['sifDataTabs.option.vfF1'] = 'F1 - Factura (art. 6, 7.2 y 7.3 del RD 1619/2012)';
+      uiLabels['sifDataTabs.option.vfF2'] = 'Factura simplificada';
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', etvfacInvType: 'F1' } })} />);
+      expect(screen.getAllByText('F1 - Factura (art. 6, 7.2 y 7.3 del RD 1619/2012)').length).toBeGreaterThan(0);
+      expect(screen.queryByText(/^F1 - F1 - /)).not.toBeInTheDocument();
+      expect(screen.getByText('F2 - Factura simplificada')).toBeInTheDocument();
+      expect(document.querySelector('#sif-vfInvType')).toHaveTextContent(/^F1 - Factura \(art\. 6/);
     });
 
     // ETP-5117: a record whose etvfacInvType is still 'F3' (legacy/Classic value —
@@ -1164,7 +1181,7 @@ describe('SifTab', () => {
       // "value — label" format used for a matching option.
       const trigger = document.querySelector('#sif-vfInvType');
       expect(trigger).toHaveTextContent('F3');
-      expect(screen.queryByText('F3 — sifDataTabs.option.vfF3')).not.toBeInTheDocument();
+      expect(screen.queryByText('F3 - sifDataTabs.option.vfF3')).not.toBeInTheDocument();
 
       // Rendering a legacy value must not itself mutate data or fire onChange
       // (the ETP-4390 auto-default effect only fires when the field is empty).

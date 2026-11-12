@@ -5,6 +5,13 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({ token: 'test-token' }),
 }));
 
+// ETP-6151 — flag `psd2-statement-import-settings`. Off by default: the pre-existing suites below
+// describe the flag-off behaviour; the ETP-6151 block turns it on.
+const importSettingsFlag = vi.hoisted(() => ({ on: false }));
+vi.mock('../usePsd2ImportSettingsFlag.js', () => ({
+  usePsd2ImportSettingsFlag: () => importSettingsFlag.on,
+}));
+
 vi.mock('../useNeoResource', () => ({
   getApiBase: () => '',
 }));
@@ -712,5 +719,151 @@ describe('useBankConnectionActions — fetchAccounts empty-list diagnosis', () =
 
     expect(data.emptyReason).toBeUndefined();
     expect(data.accountCurrency).toBeUndefined();
+  });
+});
+
+/**
+ * ETP-6151 — `link` / `createAndLink` return the bridge's top-level `messages` (NeoHints such as
+ * the fetch-interval advisory) next to their data, so the flow can show them; every other action
+ * keeps returning exactly its `data`. And `fetchAccounts` forwards the bank's `maxFetchInterval`
+ * for the connect modal's advisory, undefined when the bridge publishes no usable number.
+ */
+describe('useBankConnectionActions — link advisories and fetch interval (ETP-6151)', () => {
+  beforeEach(() => {
+    globalThis.fetch = vi.fn();
+    importSettingsFlag.on = true;
+  });
+
+  afterEach(() => {
+    importSettingsFlag.on = false;
+    vi.restoreAllMocks();
+  });
+
+  function responseWithMessages(data, messages) {
+    return { ok: true, json: async () => ({ response: { data }, messages }) };
+  }
+
+  const WARNING = { type: 'warning', text: 'This bank only provides the last 90 days.' };
+
+  it('flag off: link and createAndLink return exactly the bridge data, no messages key', async () => {
+    importSettingsFlag.on = false;
+    globalThis.fetch.mockResolvedValue(responseWithMessages({ linked: true }, [WARNING]));
+    const { result } = renderHook(() => useBankConnectionActions());
+
+    let linked;
+    let created;
+    await act(async () => {
+      linked = await result.current.link({ financialAccountId: 'FA-1' });
+      created = await result.current.createAndLink({ type: 'B', connectionId: 'c1' });
+    });
+
+    expect(linked).toEqual({ linked: true });
+    expect(created).toEqual({ linked: true });
+  });
+
+  it('link returns the data together with the top-level messages', async () => {
+    globalThis.fetch.mockResolvedValue(responseWithMessages({ linked: true }, [WARNING]));
+    const { result } = renderHook(() => useBankConnectionActions());
+
+    let data;
+    await act(async () => {
+      data = await result.current.link({
+        financialAccountId: 'FA-1', connectionId: 'c1', saltEdgeAccountId: 'se1',
+        importFromDate: '2026-11-01', statementGrouping: '1BM',
+      });
+    });
+
+    expect(data).toEqual({ linked: true, messages: [WARNING] });
+    const [, init] = globalThis.fetch.mock.calls[0];
+    expect(JSON.parse(init.body)).toEqual({
+      financialAccountId: 'FA-1', connectionId: 'c1', saltEdgeAccountId: 'se1',
+      importFromDate: '2026-11-01', statementGrouping: '1BM',
+    });
+  });
+
+  it('createAndLink returns the data together with the top-level messages', async () => {
+    globalThis.fetch.mockResolvedValue(responseWithMessages({ id: 'new' }, [WARNING]));
+    const { result } = renderHook(() => useBankConnectionActions());
+
+    let data;
+    await act(async () => {
+      data = await result.current.createAndLink({ type: 'B', connectionId: 'c1' });
+    });
+
+    expect(data).toEqual({ id: 'new', messages: [WARNING] });
+  });
+
+  it('link returns an empty messages list when the response carries none', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse({ linked: true }));
+    const { result } = renderHook(() => useBankConnectionActions());
+
+    let data;
+    await act(async () => {
+      data = await result.current.link({ financialAccountId: 'FA-1' });
+    });
+
+    expect(data).toEqual({ linked: true, messages: [] });
+  });
+
+  it('link returns an empty messages list when messages is not an array', async () => {
+    globalThis.fetch.mockResolvedValue(responseWithMessages({}, { type: 'warning' }));
+    const { result } = renderHook(() => useBankConnectionActions());
+
+    let data;
+    await act(async () => {
+      data = await result.current.createAndLink({ type: 'B' });
+    });
+
+    expect(data).toEqual({ messages: [] });
+  });
+
+  it('keeps every other action returning only its data, messages included in the body or not', async () => {
+    globalThis.fetch.mockImplementation(async () => responseWithMessages({ ok: true }, [WARNING]));
+    const { result } = renderHook(() => useBankConnectionActions());
+
+    let saved;
+    let synced;
+    let status;
+    await act(async () => {
+      saved = await result.current.saveImportSettings({ financialAccountId: 'FA-1' });
+      synced = await result.current.sync('FA-1');
+      status = await result.current.fetchStatus('FA-1');
+    });
+
+    expect(saved).toEqual({ ok: true });
+    expect(synced).toEqual({ ok: true });
+    expect(status).toEqual({ ok: true });
+  });
+
+  async function fetchAccountsWith(payload) {
+    globalThis.fetch.mockResolvedValue(okResponse(payload));
+    const { result } = renderHook(() => useBankConnectionActions());
+    let data;
+    await act(async () => {
+      data = await result.current.fetchAccounts('conn-1', 'B', 'FA-1');
+    });
+    return data;
+  }
+
+  it('fetchAccounts forwards the bank maxFetchInterval', async () => {
+    const data = await fetchAccountsWith({ accounts: [{ id: 'a' }], maxFetchInterval: 180 });
+
+    expect(data.maxFetchInterval).toBe(180);
+  });
+
+  it('fetchAccounts leaves maxFetchInterval undefined when the bridge omits it', async () => {
+    const data = await fetchAccountsWith({ accounts: [{ id: 'a' }] });
+
+    expect(data.maxFetchInterval).toBeUndefined();
+  });
+
+  it.each([
+    ['a numeric string', '90'],
+    ['null', null],
+    ['an object', { days: 90 }],
+  ])('fetchAccounts leaves maxFetchInterval undefined when it is %s', async (_label, value) => {
+    const data = await fetchAccountsWith({ accounts: [], maxFetchInterval: value });
+
+    expect(data.maxFetchInterval).toBeUndefined();
   });
 });

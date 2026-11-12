@@ -1,5 +1,7 @@
 // @covers tools/app-shell/src/windows/custom/return-material-receipt/ConfirmWithCreditButton.jsx
 // @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
+// @covers tools/app-shell/src/windows/custom/shared/InvoiceSifStep.jsx
+// @covers tools/app-shell/src/components/contract-ui/CreateInvoiceConfirmModal.jsx
 import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 import { buildRectifiableInvoicesPayload } from '../../helpers/rectifiable-invoices-mock.js';
@@ -152,7 +154,7 @@ const RECTIFIABLE_INVOICES = [
  * @param {object} [opts.state] capture bag — `state.invoicePosts` collects every
  *        createReturnInvoice request body.
  */
-async function installReturnReceiptMocks(page, { suggestedInvoiceIds = [], state } = {}) {
+async function installReturnReceiptMocks(page, { suggestedInvoiceIds = [], state, sifPreview } = {}) {
   // NOTE: two page.route() registrations per endpoint, not the `{/**,}**`
   // brace pattern — Playwright's glob→regex compiler only treats `**` as
   // "crosses path separators" when it is immediately followed by `/` (or the
@@ -185,6 +187,19 @@ async function installReturnReceiptMocks(page, { suggestedInvoiceIds = [], state
     const req = route.request();
     const url = req.url();
     const method = req.method();
+
+    // ETP-6179: POST action/sifDefaults → the "Datos fiscales" preview of the invoice. Only
+    // answered when a test passes `sifPreview`; otherwise it falls through to login()'s generic
+    // stub, which lists no fiscal system, so the flows above run without the step as before.
+    if (sifPreview && method === 'POST' && url.includes('/action/sifDefaults')) {
+      state?.sifRequests?.push(url);
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: sifPreview } }),
+      });
+      return;
+    }
 
     // POST action/documentAction → complete the record
     if (method === 'POST' && url.includes('/action/documentAction')) {
@@ -583,5 +598,79 @@ test.describe('return-material-receipt — CO form actions (no existing invoice)
     // useConfirmWithCredit.handleCreateReturnInvoice(originInvoices).
     expect(state.invoicePosts).toHaveLength(1);
     expect(state.invoicePosts[0].originInvoices).toEqual(['rect-inv-a']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test suite 4 — CO rectificative invoice through the "Datos fiscales" step (ETP-6179)
+// ---------------------------------------------------------------------------
+
+/**
+ * A rectificative invoice is created AND confirmed in one call, so the modal shows the mandatory
+ * "Datos fiscales" step before creating it. The backend preview preselects R4 in every active
+ * system (SII motive, VERI*FACTU type); the step shows it, and those values travel as `sifFields`
+ * in createReturnInvoice next to `originInvoices`.
+ */
+test.describe('return-material-receipt — CO rectificative invoice with the fiscal data step', () => {
+  const SIF_PREVIEW = {
+    systems: ['SII', 'Verifactu'],
+    rectificative: true,
+    sales: false,
+    fields: { etsgDateOperation: '2026-11-10', aeatsiiMotivoRectif: 'R4', etvfacInvType: 'R4' },
+    fieldSpecs: [
+      { name: 'etsgDateOperation', system: 'SII', type: 'date' },
+      { name: 'aeatsiiMotivoRectif', system: 'SII', type: 'option' },
+      { name: 'etvfacInvType', system: 'Verifactu', type: 'option', options: ['R1', 'R2', 'R3', 'R4', 'R5'] },
+    ],
+    siiAuthorizationAvailable: false,
+  };
+  let state;
+
+  test.beforeEach(async ({ page }) => {
+    state = { invoicePosts: [], rectifiableRequests: [], sifRequests: [] };
+    await login(page);
+    await installReturnReceiptMocks(page, { suggestedInvoiceIds: ['rect-inv-a'], state, sifPreview: SIF_PREVIEW });
+  });
+
+  test('shows R4 preselected per system, Atrás keeps the modal, and posts sifFields on confirm', async ({ page }) => {
+    await page.goto('/return-material-receipt/ret-003');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+
+    await page.getByTestId('action-create-return-invoice').click();
+    const invoiceModal = page.getByTestId('create-invoice-confirm-modal');
+    await expect(invoiceModal.getByTestId('invoice-confirm-rectify-selected-rect-inv-a')).toBeVisible({ timeout: 8_000 });
+
+    // First press: the step, not the invoice.
+    const primary = invoiceModal.getByTestId('invoice-confirm-primary-btn');
+    await expect(primary).toBeEnabled({ timeout: 5_000 });
+    await primary.click();
+
+    const step = invoiceModal.getByTestId('invoice-sif-step');
+    await expect(step).toBeVisible({ timeout: 8_000 });
+    expect(state.sifRequests[0]).toContain('/return-material-receipt/returnMaterialReceipt/ret-003/action/sifDefaults');
+    expect(state.invoicePosts).toHaveLength(0);
+    await expect(step.getByTestId('invoice-sif-step-SII')).toBeVisible();
+    await expect(step.getByTestId('invoice-sif-step-Verifactu')).toBeVisible();
+    await expect(step.getByTestId('SelectTrigger__sifstep_aeatsiiMotivoRectif')).toContainText('R4 - ');
+    await expect(step.getByTestId('SelectTrigger__sifstep_etvfacInvType')).toContainText('R4 - ');
+    // Every code is chosen, so nothing blocks the confirm.
+    await expect(step.getByTestId('invoice-sif-step-required')).toHaveCount(0);
+
+    // Atrás: back to the first screen, nothing created; the step comes back unchanged.
+    await invoiceModal.getByTestId('invoice-confirm-sif-back-btn').click();
+    await expect(step).toHaveCount(0);
+    await expect(invoiceModal.getByTestId('invoice-confirm-rectify-selected-rect-inv-a')).toBeVisible();
+    await primary.click();
+    await expect(invoiceModal.getByTestId('invoice-sif-step')).toBeVisible();
+    expect(state.invoicePosts).toHaveLength(0);
+
+    // Final confirm: the invoice, carrying the step's values.
+    await primary.click();
+    await expect(page.getByTestId('confirm-result-modal')).toBeVisible({ timeout: 8_000 });
+    expect(state.invoicePosts).toHaveLength(1);
+    expect(state.invoicePosts[0]).toEqual({
+      originInvoices: ['rect-inv-a'],
+      sifFields: SIF_PREVIEW.fields,
+    });
   });
 });

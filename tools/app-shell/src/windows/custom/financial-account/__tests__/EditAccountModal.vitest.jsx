@@ -15,6 +15,12 @@ beforeAll(() => {
 // implementation to prove the ETP-4891 translateBackendError wiring on the sync-result toast,
 // while every other test keeps the default key-echoing behavior.
 const uiMock = vi.fn((key) => key);
+// ETP-6151 — flag `psd2-statement-import-settings`. Off by default (the pre-existing suites describe the flag-off panel); the ETP-6151 block turns it on.
+const importSettingsFlag = vi.hoisted(() => ({ on: false }));
+vi.mock('@/hooks/usePsd2ImportSettingsFlag.js', () => ({
+  usePsd2ImportSettingsFlag: () => importSettingsFlag.on,
+}));
+
 vi.mock('@/i18n', () => ({
   useUI: () => uiMock,
   useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: vi.fn() }),
@@ -3145,6 +3151,161 @@ describe('EditAccountModal', () => {
     });
   });
 
+
+  // ETP-6151 — "Importar desde" and the statement grouping are required on a connection, but only
+  // once the bank section is touched: a connection linked before they were mandatory may still
+  // hold a null date, and that must not block saving the account's other fields. Touching the
+  // section means saving it, and the bridge then requires both.
+  describe('ETP-6151 — required import settings', () => {
+    const FROM_BOX = 'field-date-bank-connection-import-from';
+    const TO_BOX = 'field-date-bank-connection-import-to';
+    const LEGACY_STATUS = {
+      ...BASE_STATUS, importFromDate: null, importToDate: null, statementGrouping: null,
+    };
+
+    beforeAll(() => {
+      Element.prototype.scrollIntoView = vi.fn();
+    });
+
+    beforeEach(() => { importSettingsFlag.on = true; });
+    afterEach(() => { importSettingsFlag.on = false; });
+
+    it('saves the other account fields of a connection with no stored date or grouping', async () => {
+      const user = userEvent.setup();
+      fetchStatus.mockResolvedValue(LEGACY_STATUS);
+      await openConnectedModal();
+
+      // Nothing is flagged on an untouched section.
+      expect(screen.queryByTestId('bank-connection-import-from-required')).toBeNull();
+      expect(screen.queryByTestId('bank-connection-grouping-required')).toBeNull();
+
+      const nameInput = screen.getByTestId('edit-account-name');
+      await user.clear(nameInput);
+      await user.type(nameInput, 'BBVA Renamed');
+      const save = screen.getByTestId('edit-account-save');
+      expect(save).toBeEnabled();
+      await user.click(save);
+
+      await waitFor(() => expect(updateAccount).toHaveBeenCalledTimes(1));
+      expect(updateAccount.mock.calls[0][1]).toMatchObject({ name: 'BBVA Renamed' });
+      // The untouched bank section is not written.
+      expect(saveImportSettings).not.toHaveBeenCalled();
+    });
+
+    it('blocks Save, flagging both fields, once the section of such a connection is touched', async () => {
+      const user = userEvent.setup();
+      fetchStatus.mockResolvedValue(LEGACY_STATUS);
+      await openConnectedModal();
+
+      await typeImportDate(user, TO_BOX, '31122026');
+
+      expect(await screen.findByTestId('bank-connection-import-from-required'))
+        .toHaveTextContent('financeAccountsBankConnectionImportFromRequired');
+      expect(screen.getByTestId('bank-connection-grouping-required'))
+        .toHaveTextContent('financeAccountsBankConnectionGroupingRequired');
+      const save = screen.getByTestId('edit-account-save');
+      expect(save).toBeDisabled();
+      await user.click(save);
+      expect(saveImportSettings).not.toHaveBeenCalled();
+      expect(updateAccount).not.toHaveBeenCalled();
+    });
+
+    it('unblocks Save once both are filled, and saves them', async () => {
+      const user = userEvent.setup();
+      fetchStatus.mockResolvedValue(LEGACY_STATUS);
+      await openConnectedModal();
+
+      await typeImportDate(user, FROM_BOX, '01112026');
+      expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+      expect(screen.queryByTestId('bank-connection-import-from-required')).toBeNull();
+      expect(screen.getByTestId('bank-connection-grouping-required')).toBeInTheDocument();
+
+      await user.click(screen.getByTestId('field-statementGrouping'));
+      await user.click(await screen.findByTestId('option-statementGrouping-1BM'));
+
+      const save = screen.getByTestId('edit-account-save');
+      expect(save).toBeEnabled();
+      expect(screen.queryByTestId('bank-connection-grouping-required')).toBeNull();
+      await user.click(save);
+
+      await waitFor(() => expect(saveImportSettings).toHaveBeenCalledWith(expect.objectContaining({
+        financialAccountId: 'acc-9',
+        importFromDate: '2026-11-01',
+        statementGrouping: '1BM',
+      })));
+    });
+
+    it('blocks Save when the user empties the stored date of a complete connection', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      const fromInput = screen.getByTestId(FROM_BOX);
+      await user.clear(fromInput);
+      await user.tab();
+
+      expect(await screen.findByTestId('bank-connection-import-from-required')).toBeInTheDocument();
+      expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+      // The grouping is still set, so only the date is flagged.
+      expect(screen.queryByTestId('bank-connection-grouping-required')).toBeNull();
+    });
+
+    it('does not block Save for a dirty section whose two fields are set', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      await typeImportDate(user, FROM_BOX, '15012026');
+
+      expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+      expect(screen.queryByTestId('bank-connection-import-from-required')).toBeNull();
+      expect(screen.queryByTestId('bank-connection-grouping-required')).toBeNull();
+    });
+
+    it('offers the four groupings with no empty "Default" option, opening on the stored one', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      await user.click(screen.getByTestId('field-statementGrouping-chip'));
+
+      expect(await screen.findByTestId('option-statementGrouping-1BD')).toHaveAttribute('aria-selected', 'true');
+      for (const id of ['1BW', '1BM', '1BE']) {
+        expect(screen.getByTestId(`option-statementGrouping-${id}`)).toHaveAttribute('aria-selected', 'false');
+      }
+      expect(screen.queryByTestId('option-statementGrouping-__empty__')).toBeNull();
+    });
+  });
+
+  // ETP-6151 flag off (the default here): the panel is the pre-ETP-6151 one — no required rule, no
+  // help text, and the grouping still offers the empty "Por defecto" option.
+  describe('ETP-6151 — flag psd2-statement-import-settings off', () => {
+    beforeAll(() => {
+      Element.prototype.scrollIntoView = vi.fn();
+    });
+
+    it('does not require the date or the grouping, nor flag them, once the section is touched', async () => {
+      const user = userEvent.setup();
+      fetchStatus.mockResolvedValue({
+        ...BASE_STATUS, importFromDate: null, importToDate: null, statementGrouping: null,
+      });
+      await openConnectedModal();
+
+      await typeImportDate(user, 'field-date-bank-connection-import-to', '31122026');
+
+      expect(screen.queryByTestId('bank-connection-import-from-required')).toBeNull();
+      expect(screen.queryByTestId('bank-connection-grouping-required')).toBeNull();
+      expect(screen.queryByTestId('bank-connection-import-from-help')).toBeNull();
+      expect(screen.queryByTestId('bank-connection-grouping-help')).toBeNull();
+      expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+    });
+
+    it('still offers the empty "Por defecto" grouping option', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      await user.click(screen.getByTestId('field-statementGrouping-chip'));
+
+      expect(await screen.findByTestId('option-statementGrouping-__empty__')).toBeInTheDocument();
+    });
+  });
 });
 
 // ETP-6154 — "Sincronizar ahora" goes through the window's shared BankSyncContext: it is disabled
