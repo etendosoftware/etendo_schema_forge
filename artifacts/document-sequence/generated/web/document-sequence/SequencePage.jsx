@@ -2,7 +2,7 @@ import { useMemo, useEffect } from 'react';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
-import SequenceTable from './SequenceTable';
+import SequenceTable from '../../../custom/SequenceHeaderTable';
 import SequenceForm from './SequenceForm';
 import { AttachmentsTab } from '@/components/attachments';
 import catalogs from './mockCatalogs';

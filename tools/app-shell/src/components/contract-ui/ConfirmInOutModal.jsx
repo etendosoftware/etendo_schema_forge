@@ -8,6 +8,7 @@ import { periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 import { PeriodRecoveryLink } from './PeriodRecoveryLink.jsx';
 import { usePriceListPicker, PriceListSelectField } from './PriceListPicker';
 import { useRectifiableInvoices, RectifiableInvoiceField } from './RectifiableInvoicePicker';
+import { useInvoiceSifStep, InvoiceSifStepPanel, withSifFields, SIF_STEP_DIALOG_WIDTH } from '@/windows/custom/shared/InvoiceSifStep.jsx';
 
 /** POSTs one NEO action and throws the backend's own message when it refuses. */
 async function postAction(apiFetch, url, body) {
@@ -182,6 +183,14 @@ export default function ConfirmInOutModal({
     token,
   });
   const canConfirm = (!priceListRequired || !!priceListId) && rectify.isSatisfied;
+  // ETP-6179: the mandatory "Datos fiscales" step, before anything is confirmed — the source
+  // document is only completed once the invoice's SIF fields are settled.
+  const actionBase = `/${specName}/${entityName}/${recordId}/action`;
+  const sif = useInvoiceSifStep({
+    enabled: invoiceRequested && !!invoiceAction,
+    apiFetch,
+    defaultsUrl: `${actionBase}/sifDefaults`,
+  });
 
   const { documentNo, bpName, total, currency } = docInfo ?? {};
 
@@ -199,13 +208,13 @@ export default function ConfirmInOutModal({
     try {
       const invoice = await runConfirm({
         apiFetch,
-        actionBase: `/${specName}/${entityName}/${recordId}/action`,
+        actionBase,
         skipDocumentAction,
         invoiceRequested,
         invoiceAction,
-        invoiceBody: buildInvoiceBody({
+        invoiceBody: withSifFields(buildInvoiceBody({
           pickerActive, priceListId, rectifyActive, selectedIds: rectify.selectedIds,
-        }),
+        }), sif),
       });
       onConfirmed({ invoice });
     } catch (err) {
@@ -221,8 +230,10 @@ export default function ConfirmInOutModal({
   const primaryLabel = invoiceRequested && confirmWithInvoiceLabel
     ? confirmWithInvoiceLabel
     : confirmLabel;
+  const onPrimary = () => sif.start(handleConfirm);
+  const busy = loading || sif.loading;
 
-  const confirmDisabled = loading || !canConfirm;
+  const confirmDisabled = busy || !canConfirm || (sif.active && !sif.valid);
   const confirmRestBg = confirmDisabled ? 'var(--status-info-border)' : 'var(--status-info-fg)';
 
   return createPortal(
@@ -243,7 +254,7 @@ export default function ConfirmInOutModal({
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          width: 468, borderRadius: 16, background: 'hsl(var(--card))',
+          width: sif.active ? SIF_STEP_DIALOG_WIDTH : 468, maxWidth: 'calc(100vw - 32px)', borderRadius: 16, background: 'hsl(var(--card))',
           boxShadow: '0 24px 60px -12px hsl(var(--foreground) / .32), 0 8px 24px -8px hsl(var(--foreground) / .18)',
           overflow: 'hidden',
         }}
@@ -252,18 +263,9 @@ export default function ConfirmInOutModal({
         <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid hsl(var(--border-subtle))', position: 'relative' }}>
           <div style={{ paddingRight: 36 }}>
             <div style={{ fontSize: 18, fontWeight: 700, color: 'hsl(var(--foreground))', lineHeight: 1.2 }}>
-              {title}
+              {sif.active ? ui('invoiceSifStep.title') : title}
             </div>
-            {subtitleParts.length > 0 && (
-              <div data-testid="confirm-modal-doc-info" style={{ marginTop: 6, fontSize: 13, color: 'hsl(var(--muted-foreground))', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                {subtitleParts.map((part, i) => (
-                  <span key={part} style={{ display: 'contents' }}>
-                    {i > 0 && <span style={{ color: 'hsl(var(--text-disabled))', userSelect: 'none' }}>·</span>}
-                    <span style={i === 0 ? { fontWeight: 700, color: 'hsl(var(--foreground))' } : undefined}>{part}</span>
-                  </span>
-                ))}
-              </div>
-            )}
+            <DocInfoSubtitle parts={subtitleParts} data-testid="DocInfoSubtitle__3b3aca" />
           </div>
           <button
             type="button"
@@ -279,8 +281,14 @@ export default function ConfirmInOutModal({
         {/* Body */}
         <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
+          {sif.active && (
+            <div style={{ maxHeight: '65vh', overflowY: 'auto' }}>
+              <InvoiceSifStepPanel sif={sif} data-testid="InvoiceSifStepPanel__3b3aca" />
+            </div>
+          )}
+
           {/* Info row — hidden when only creating invoice (skipDocumentAction) or when no invoice action is available */}
-          {!skipDocumentAction && invoiceAction && infoRowBold && (
+          {!sif.active && !skipDocumentAction && invoiceAction && infoRowBold && (
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
               <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--status-success-bg)', border: '1px solid var(--status-success-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
                 <svg width="12" height="10" viewBox="0 0 12 10" fill="none" stroke="var(--status-success-fg)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -296,44 +304,16 @@ export default function ConfirmInOutModal({
           )}
 
           {/* Toggle card — hidden when only creating invoice (skipDocumentAction) or when no invoice action is available */}
-          {!skipDocumentAction && invoiceAction && <div
-            role="switch"
-            aria-checked={createInvoice}
-            data-testid="confirm-modal-invoice-toggle"
-            tabIndex={0}
-            onClick={toggle}
-            onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(); } }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer', borderRadius: 10,
-              padding: createInvoice ? '13px 15px' : '14px 16px',
-              border: createInvoice ? '2px solid var(--status-info-border)' : '1px solid hsl(var(--border-subtle))',
-              background: createInvoice ? 'var(--status-info-bg)' : 'hsl(var(--card))',
-              transition: 'border-color .15s, background .15s',
-              outline: 'none',
-            }}
-            onFocus={e => { e.currentTarget.style.boxShadow = '0 0 0 3px hsl(var(--focus-ring) / 0.22)'; }}
-            onBlur={e => { e.currentTarget.style.boxShadow = 'none'; }}
-          >
-            <div style={{ width: 38, height: 38, borderRadius: 9, background: 'var(--status-info-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--status-info-fg)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="16" y1="13" x2="8" y2="13" />
-                <line x1="16" y1="17" x2="8" y2="17" />
-              </svg>
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: createInvoice ? 'var(--status-info-fg)' : 'hsl(var(--foreground))', lineHeight: 1.3 }}>
-                {cardTitle}
-              </div>
-              <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 3, lineHeight: 1.45 }}>
-                {cardDesc}
-              </div>
-            </div>
-            <ToggleSwitch on={createInvoice} data-testid="ToggleSwitch__3b3aca" />
-          </div>}
+          {!sif.active && !skipDocumentAction && invoiceAction && (
+            <InvoiceToggleCard
+              on={createInvoice}
+              onToggle={toggle}
+              title={cardTitle}
+              description={cardDesc}
+              data-testid="InvoiceToggleCard__3b3aca" />
+          )}
 
-          {pickerActive && (
+          {!sif.active && pickerActive && (
             <PriceListSelectField
               priceLists={priceLists}
               priceListId={priceListId}
@@ -343,7 +323,7 @@ export default function ConfirmInOutModal({
               data-testid="confirm-modal-price-list-field" />
           )}
 
-          {rectifyActive && (
+          {!sif.active && rectifyActive && (
             <RectifiableInvoiceField
               invoices={rectify.invoices}
               selectedIds={rectify.selectedIds}
@@ -374,45 +354,134 @@ export default function ConfirmInOutModal({
         </div>
 
         {/* Footer */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '12px 20px', background: 'hsl(var(--muted))', borderTop: '1px solid hsl(var(--border-subtle))' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 10, padding: '12px 20px', background: 'hsl(var(--muted))', borderTop: '1px solid hsl(var(--border-subtle))' }}>
           <button
             type="button"
             data-testid="confirm-modal-cancel-btn"
             onClick={onClose}
-            disabled={loading}
-            style={{ fontSize: 13, padding: '9px 16px', borderRadius: 9, border: '1px solid hsl(var(--border-subtle))', background: CANCEL_REST_BG, color: 'hsl(var(--muted-foreground))', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.5 : 1 }}
-            onMouseEnter={e => { if (!loading) e.currentTarget.style.background = CANCEL_HOVER_BG; }}
+            disabled={busy}
+            style={{ whiteSpace: 'nowrap', fontSize: 13, padding: '9px 16px', borderRadius: 9, border: '1px solid hsl(var(--border-subtle))', background: CANCEL_REST_BG, color: 'hsl(var(--muted-foreground))', cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.5 : 1 }}
+            onMouseEnter={e => { if (!busy) e.currentTarget.style.background = CANCEL_HOVER_BG; }}
             onMouseLeave={e => { e.currentTarget.style.background = CANCEL_REST_BG; }}
           >
             {cancelLabel}
           </button>
+          {sif.active && (
+            <button
+              type="button"
+              data-testid="confirm-modal-sif-back-btn"
+              onClick={sif.back}
+              disabled={loading}
+              style={{ whiteSpace: 'nowrap', fontSize: 13, padding: '9px 16px', borderRadius: 9, border: '1px solid hsl(var(--border-subtle))', background: CANCEL_REST_BG, color: 'hsl(var(--muted-foreground))', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.5 : 1 }}
+            >
+              {ui('back')}
+            </button>
+          )}
           <button
             type="button"
             data-testid="confirm-modal-confirm-btn"
-            onClick={handleConfirm}
+            onClick={onPrimary}
             disabled={confirmDisabled}
-            style={{ height: 38, display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, padding: '0 18px', borderRadius: 9, border: 'none', background: confirmRestBg, color: 'hsl(var(--card))', cursor: confirmDisabled ? 'not-allowed' : 'pointer', transition: 'background .15s' }}
+            style={{ whiteSpace: 'nowrap', height: 38, display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, padding: '0 18px', borderRadius: 9, border: 'none', background: confirmRestBg, color: 'hsl(var(--card))', cursor: confirmDisabled ? 'not-allowed' : 'pointer', transition: 'background .15s' }}
             onMouseEnter={e => { if (!confirmDisabled) e.currentTarget.style.background = CONFIRM_HOVER_BG; }}
             onMouseLeave={e => { e.currentTarget.style.background = confirmRestBg; }}
           >
-            {loading ? (
-              <>
-                <Spinner data-testid="Spinner__3b3aca" />
-                {processingLabel || primaryLabel}
-              </>
-            ) : (
-              <>
-                <svg width="14" height="11" viewBox="0 0 14 11" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="1 5.5 5 9.5 13 1" />
-                </svg>
-                {primaryLabel}
-              </>
-            )}
+            <ConfirmButtonContent
+              busy={busy}
+              label={primaryLabel}
+              processingLabel={processingLabel}
+              data-testid="ConfirmButtonContent__3b3aca" />
           </button>
         </div>
       </div>
     </div>,
     document.body,
+  );
+}
+
+/**
+ * The "create the invoice too" switch card: icon, title, description and the toggle. Extracted
+ * from the modal (Sonar S3776), which only decides whether it shows.
+ */
+function InvoiceToggleCard({ on, onToggle, title, description }) {
+  return (
+    <div
+      role="switch"
+      aria-checked={on}
+      data-testid="confirm-modal-invoice-toggle"
+      tabIndex={0}
+      onClick={onToggle}
+      onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); onToggle(); } }}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer', borderRadius: 10,
+        padding: on ? '13px 15px' : '14px 16px',
+        border: on ? '2px solid var(--status-info-border)' : '1px solid hsl(var(--border-subtle))',
+        background: on ? 'var(--status-info-bg)' : 'hsl(var(--card))',
+        transition: 'border-color .15s, background .15s',
+        outline: 'none',
+      }}
+      onFocus={e => { e.currentTarget.style.boxShadow = '0 0 0 3px hsl(var(--focus-ring) / 0.22)'; }}
+      onBlur={e => { e.currentTarget.style.boxShadow = 'none'; }}
+    >
+      <div style={{ width: 38, height: 38, borderRadius: 9, background: 'var(--status-info-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--status-info-fg)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="16" y1="13" x2="8" y2="13" />
+          <line x1="16" y1="17" x2="8" y2="17" />
+        </svg>
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: on ? 'var(--status-info-fg)' : 'hsl(var(--foreground))', lineHeight: 1.3 }}>
+          {title}
+        </div>
+        <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 3, lineHeight: 1.45 }}>
+          {description}
+        </div>
+      </div>
+      <ToggleSwitch on={on} data-testid="ToggleSwitch__3b3aca" />
+    </div>
+  );
+}
+
+/**
+ * The header's "number · partner · total" line, the first part in bold; nothing when there is no
+ * part. Extracted from the modal (Sonar S3776).
+ */
+function DocInfoSubtitle({ parts }) {
+  if (parts.length === 0) return null;
+  return (
+    <div data-testid="confirm-modal-doc-info" style={{ marginTop: 6, fontSize: 13, color: 'hsl(var(--muted-foreground))', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+      {parts.map((part, i) => (
+        <span key={part} style={{ display: 'contents' }}>
+          {i > 0 && <span style={{ color: 'hsl(var(--text-disabled))', userSelect: 'none' }}>·</span>}
+          <span style={i === 0 ? { fontWeight: 700, color: 'hsl(var(--foreground))' } : undefined}>{part}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The primary button's content: a spinner with the processing label while busy, else a check
+ * mark with the label. Extracted from the modal (Sonar S3776).
+ */
+function ConfirmButtonContent({ busy, label, processingLabel }) {
+  if (busy) {
+    return (
+      <>
+        <Spinner data-testid="Spinner__3b3aca" />
+        {processingLabel || label}
+      </>
+    );
+  }
+  return (
+    <>
+      <svg width="14" height="11" viewBox="0 0 14 11" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="1 5.5 5 9.5 13 1" />
+      </svg>
+      {label}
+    </>
   );
 }
 

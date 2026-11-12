@@ -153,6 +153,7 @@ The MCP publishes `documentAction`, `createPurchaseInvoice` and `cloneRecord` fo
 - **ETP-4028 — Currency-filtered imports**: `artifacts/goods-receipt/custom/ImportFromPurchaseOrderModal.jsx` and `ImportFromPurchaseInvoiceModal.jsx` fetch the receipt header for `etgoCurrency` and filter candidate documents by matching currency (superseded by ETP-6099: server-side filter, header read only when nothing is listed), computing `statusAndBpCandidates` first and then narrowing by currency (so the "excluded by currency" empty state only fires when status/BP-eligible documents exist but none match the currency).
 - **ETP-5178 — Free-typing quantity field in import modals**: the shared `tools/app-shell/src/components/contract-ui/ImportLinesModal.jsx` per-line quantity input (used here by `ImportFromPurchaseOrderModal.jsx` / `ImportFromPurchaseInvoiceModal.jsx`) no longer clamps the value on every keystroke — typing, select-all, delete, and decimal entry all work freely. Range/validity (numeric, non-zero, magnitude ≤ the line's available quantity, i.e. the modal-calculated remaining-to-receive amount described above) is checked only on `onBlur`: an invalid value reverts to the last committed value and shows a `toast.error`, either `qtyMaxAllowed` ("The maximum allowed is {max}" / "El máximo permitido es {max}") when it exceeds the available quantity, or `qtyMustBePositive` ("The quantity must be greater than 0" / "La cantidad debe ser mayor a 0") for zero/negative/empty/non-numeric input. Fixed once in the shared component; applies identically across sales-invoice, purchase-invoice, and goods-shipment.
 - **ETP-5828 — Figma look of the shared import popup**: the import modals of this window use the redesigned `ImportLinesModal` (fixed 800 × 648 dialog, «Seleccionar todo / Deseleccionar todo», expand button + checkbox per document, bordered lines table with a master checkbox and a −/+ quantity stepper, pill buttons). Behaviour is unchanged except that a line already imported is never selected by its document or by select-all. Reference: `docs/ui-customization.md` §23.
+- **ETP-5828 QA (UI-3) — ticking a document not opened yet**: in the import popups of this window built on `ImportLinesModal` with lazy lines, ticking a document whose lines are not loaded yet loads AND selects them in the same click (before, the first tick only unfolded it). Reference: `docs/ui-customization.md` §23.
 - **ETP-4028 — Price-list picker at invoice time**: `GoodsReceiptActions.jsx` wires the shared `CreateInvoiceConfirmModal` (`showPriceListPicker`, `isSOTrx={false}`) and forwards `priceListId` to the `createPurchaseInvoice` endpoint. `CreatePurchaseInvoiceHandler.java` gained `applyPriceListOverride`/`resolvePriceListOverride` helpers, applied in the linked-PO path (before `createInvoiceLinesFromDocumentLines`) and threaded through the no-PO fallback (`createFromReceiptNoPo`, now 3-arg, with a backward-compatible 2-arg overload), where it takes precedence over the vendor's default purchase price list when provided.
 - **ETP-4706 QA follow-up — posting cost-message fallback**: core Etendo can return `InvalidCostWhichProduct` as the raw English text `There is no cost defined for the product: @Product@ on @Date@` with unresolved placeholders. The SPA maps that exact backend literal through `tools/app-shell/src/lib/backendErrors.js` to the existing user-facing `backendError.costNotCalculated` message, so Spanish users see the friendly retry guidance instead of costing-rule internals. The same follow-up retires the old R18 Average-cost data-fix and replaces it with a Standard-cost anchor data-fix for current Etendo Go tenants.
 - **ETP-5051 — plan-quota refusal on the document actions:** when a plan quota refuses one of this window's document-creating actions (403 `QUOTA_EXCEEDED`, or 500 `QUOTA_CHECK_FAILED`), the action shows the translated quota sentence instead of "Error (403)" or the raw backend text, and the quota banner refreshes at once. Paths: the Confirm popup's invoice leg (`ConfirmInOutModal`), Create Invoice (`GoodsReceiptActions.jsx`) and its bulk version (`BulkInvoiceFromReceipt.jsx`), and Clone (`CloneOrderModal`, and the older `CloneReceiptModal` in `GoodsReceiptActions.jsx`). Mechanism and the full list: `app-shell-functional-flows.md` §3.2a-ter.
@@ -819,3 +820,24 @@ With a record id, `createPurchaseInvoice` is `availableNow:false` once nothing i
 ## Alternative units hidden from agents — ETP-5852
 
 `lines.operativeUOM` and `lines.operativeQuantity` carry a field-level `MCP_CONFIG` (`fields.visibility:"discarded"`, `included:false`): agents do not see them in `etendo_schema`, cannot send them, and `etendo_defaults` no longer offers them. Exposed, it suggested an unrelated operative unit (Centímetro for a beer). The app and REST are unchanged; the form already hid them. Feedback M-119.
+
+## Fiscal data step before the invoice is created — ETP-6179
+
+- **Confirmar** with the invoice toggle on (`ConfirmGoodsReceiptModal` → `ConfirmInOutModal`) and
+  **Crear factura de compra** on a confirmed receipt (`GoodsReceiptActions`), including the bulk
+  "Crear factura" of several receipts into ONE invoice (`BulkInvoiceFromReceipt`).
+- Purchase invoices only carry SII fields (Fecha operación, Tipo factura, Descripción SII,
+  Autorización, Fecha registro contable): VERI*FACTU never sends purchases, and TicketBAI/Batuz has no
+  editable field on the SIF tab. The document type is never a return/rectificative one.
+  Defaults: Tipo factura `F1`, Autorización unticked, Fecha registro contable today (empty when the
+  organization's SII configuration declares posted invoices), Fecha operación and Descripción SII
+  from the order when the invoice carries one, else today and the organization's default purchase
+  description.
+- The bulk "Crear factura" builds ONE invoice, so it shows the same editable step, asked with the
+  same `receiptIds`. Several receipts are invoiced with **no order on the invoice header**, so their
+  preview carries no order either (organization's description, today); a single receipt with an
+  order (or whose lines point to one) takes the order's values, as its invoice does
+  (`PurchaseInvoiceSifTarget`, review W2).
+
+How the step itself works — the backend `sifDefaults` preview, when it appears, the
+`sifFields` it sends and the fail-open rule — is described once in [sales-order.md → Fiscal data step before the invoice is created](sales-order.md#fiscal-data-step-before-the-invoice-is-created--etp-6179).
