@@ -67,7 +67,34 @@ pruebas, en cualquier momento del trimestre.
 | **Holded Only** | Solo Holded puede hacerla con su MCP | paso 0 |
 | Empate | Ambos pueden y nada los separa | paso 5 |
 
-**Titular:** `(Etendo Win + Etendo Only) ÷ pruebas evaluadas`. Meta: 80 %.
+**Titular (cambiado por Valentin el 2026-11-04):** `Etendo Win ÷ pruebas posibles en ambas`
+(Etendo Win + Holded Win + empates). Meta: 80 %. Hasta el reporte v6 era
+`(Etendo Win + Etendo Only) ÷ pruebas evaluadas`.
+
+**Por qué:** una prueba que una sola plataforma puede hacer no dice cuál MCP es mejor. Etendo Only
+y Holded Only salen del número y pasan a las **notas** del reporte, cada una con su id: lo que
+Etendo Go tiene y Holded no, y lo que Holded tiene y Etendo Go no.
+
+**Prueba posible en parte:** si una parte se puede hacer en ambas y otra no, se divide en dos.
+La parte común es una prueba aparte, marcada como *parte posible en ambas*, y cuenta para el
+número; la original se mantiene y cae en las notas.
+
+**Posible = hacerlo y comprobarlo con el propio MCP (decidido por Valentin el 2026-11-04).** Una
+plataforma puede hacer una prueba solo si su MCP permite llegar al resultado **y** leerlo después:
+la verificación (`expectEffect`) usa una herramienta del mismo MCP. Si el MCP crea algo que no puede
+leer, esa prueba no es posible en esa plataforma y va a las notas. No se verifica por fuera del MCP
+(API REST u otra vía), y una respuesta del agente (`expectAnswer`) no reemplaza leer el efecto de una
+escritura. Lo mismo vale para la parte común de una prueba dividida: solo se separa si se puede
+verificar en ambas.
+
+**Cada MCP se mide con su catálogo completo.** Lo que una plataforma "no puede" se decide contra todo
+lo que su MCP ofrece, no contra lo que dejó ver una credencial recortada. El MCP de Holded muestra
+solo las herramientas de los permisos concedidos al conectarlo (Analyst, Operator o Custom): se
+conecta como **Operator** (lectura y escritura), con un usuario sin restricciones, y el catálogo se
+compara con la referencia pública (https://www.holded.com/en-us/developers/mcp/tools, 366
+herramientas el 2026-11-04). El 2026-11-04 la credencial del harness veía 169: módulos con permisos
+de solo lectura (facturas, compras, tesorería) y otros de solo escritura (contactos, inventario,
+proyectos). Las corridas hechas con esa credencial no valen para comparar.
 
 **Empate — contemplado, pero no esperado.** La intención es que cada prueba tenga un ganador; la
 regla de decisión (pasos 1–4) debería separarlos casi siempre. Si igual sale un empate, cuenta en
@@ -80,14 +107,14 @@ aplicarse nunca, y si aparece una, se revisa la prueba.
 
 **Secundarios, siempre al lado del titular:**
 
-- **Cantidad de pruebas** de la suite.
-- **Etendo Only** y **Etendo Win**, por separado: cuánto del % es capacidad y cuánto es calidad
-  del MCP. Las features nuevas del Q4 (T3) van a sumar casi todo en Only.
-- **Holded Only**: funcionalidades que Etendo Go no tiene o no expone por MCP. No es solo una
-  pérdida del KR, es **input de producto** — cada una se revisa y puede generar un issue.
+- **Cantidad de pruebas** de la suite y cuántas son posibles en ambas.
+- **Notas — Etendo Only:** capacidad que Holded no tiene. Las features nuevas del Q4 (T3) van a
+  sumar casi todo acá, sin mover el titular.
+- **Notas — Holded Only:** funcionalidades que Etendo Go no tiene o no expone por MCP. Son
+  **input de producto** — cada una se revisa y puede generar un issue.
 
-Ejemplo de cómo se lee: *"82 % sobre 34 pruebas — 12 Etendo Only, 16 Etendo Win, 3 Holded Win,
-2 Holded Only, 1 empate"*.
+Ejemplo de cómo se lee: *"84 % sobre 19 pruebas posibles en ambas — 16 Etendo Win, 2 Holded Win,
+1 empate. Notas: 12 Etendo Only, 2 Holded Only"*.
 
 **Origen de cada prueba** (registrado al proponerla, antes de correrla):
 
@@ -109,14 +136,21 @@ Contar **llamadas** antes que **tokens** castiga el diseño de Etendo: cuenta el
 costo y no ve que Holded lo pre-pagó cargando su catálogo en cada turno. Además cada prueba arranca
 en frío, así que Etendo paga el discovery en todas, cuando en una sesión real lo reutiliza.
 
-**Regla nueva (`RULE_VERSION = 2`):**
+**Regla vigente (`RULE_VERSION = 3`, Valentin, 2026-11-05):**
 
 0. Capacidad → Only.
-1. Éxito (más corridas exitosas de 3).
-2. Errores no recuperados (menos).
-3. **Tokens totales de la conversación** (mediana sobre corridas exitosas, margen 10 %).
-4. Llamadas (mediana, margen 20 %).
-5. Desempate (§3.5).
+1. **Etendo tiene que andar bien siempre:** si en algún intento Etendo no logra el resultado, la
+   prueba es Holded Win, sin importar lo que hizo Holded (aunque también haya fallado). Un error que
+   el agente recuperó no cuenta como falla. El harness marca el paso como `1-subjectFailed`.
+2. Éxito (más corridas exitosas de 3).
+3. Errores no recuperados (menos).
+4. **Tokens totales de la conversación** (mediana sobre corridas exitosas, margen 10 %).
+5. Llamadas (mediana, margen 20 %).
+6. Desempate (§3.5).
+
+La regla 2 era la misma sin el paso 1: una falla de Etendo solo perdía si Holded tenía más éxitos.
+Cada intento fallido de Etendo se reporta además con `etendo_feedback`, fuera de la medición, para
+tener la información para arreglarlo (`feedback_on_failure` en la config del target).
 
 **Tokens = los de la conversación completa**, input + output de todo el loop, que ya incluyen el
 catálogo en cada turno: una sola unidad mide catálogo y pasos a la vez. El harness ya lo suma

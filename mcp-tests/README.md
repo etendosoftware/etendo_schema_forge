@@ -167,21 +167,35 @@ otherwise `UNOFFICIAL`, and the figure is still fully reported but is not a KR n
 run whose targets could not check some entities because their MCP does not offer the tool says so:
 `OFFICIAL — 10 entities not verifiable on holded (tools not offered)`. Read it as official, with the
 listed entities taken on trust: their freshness rests on the account having been freshly
-initialized and seeded, not on a read. The KR line (plan `2026-10-22-mcp-okr-metric-base-plan.md`
-§3.3) is *(Etendo Win + Etendo Only) / evaluated tasks* against an 80 % target, always followed by
-the five results, because they say different things about the product:
+initialized and seeded, not on a read. The KR line is *Etendo Win / tasks both platforms can do*
+(Etendo Win + Holded Win + empate) against an 80 % target (Valentin, 2026-11-04; it was
+*(Etendo Win + Etendo Only) / evaluated* until report v6, plan `2026-10-22-mcp-okr-metric-base-plan.md`
+§3.3):
 
-- **Etendo Only / Holded Only** — the other platform declared the task `notPossible` (rule step 0);
-- **Etendo Win / Holded Win** — both sides ran it and rule 2 decided: successes, unrecovered errors,
-  median total tokens of the conversation (catalogue included) with a 10 % margin, then median calls
-  with a 20 % margin;
-- **empate** — nothing separated them.
+- **Etendo Win / Holded Win** — both sides ran it and rule 3 decided. First, **Etendo has to work
+  every time** (rule 3, Valentin 2026-11-05): an Etendo attempt without success loses the task to
+  Holded, whatever Holded did, decided as `1-subjectFailed` (an error the agent recovered from is
+  not a failure). Then successes, unrecovered errors, median total tokens of the conversation
+  (catalogue included) with a 10 % margin, then median calls with a 20 % margin;
+- **empate** — nothing separated them; it counts in the denominator.
 
-Rule 2 requires real token usage: a task where a side has a success without it is *not evaluable*
-(there is no byte fallback — bytes leave the tool catalogue out).
+**Failure feedback.** A target with `feedback_on_failure = "<tool>"` in `config.toml` (the Etendo
+targets set `etendo_feedback`) reports every failed attempt through that tool, after the
+measurement and in a session of its own, so it costs the comparison nothing: the agent's own report
+plus what the harness saw (the effect not found, a wrong answer, tool calls that returned an
+error), with the run, probe and attempt in the summary. The call and its answer are kept in the
+attempt file as `failureFeedback`. A harness error is not a product failure and is not reported.
 
-Ties count in the denominator; not-evaluable and excluded tasks do not. The next line pins the rule
-version, its parameters sha, `REPEAT` and the report version.
+The next line, **Notas**, names the tasks only one platform can do: **Etendo Only / Holded Only**,
+where the other platform declared the task `notPossible` (rule step 0). They do not move the
+number — a task one side cannot do says nothing about which MCP is better — and are listed by id
+so each one can be reviewed as product input. A task part of which both can do is split in the
+suite: the shared part is its own task and counts; the original stays and lands in the notes.
+
+The rule requires real token usage: a task where a side has a success without it is *not evaluable*
+(there is no byte fallback — bytes leave the tool catalogue out). Not-evaluable and excluded tasks
+are out of both the number and the notes. The line after the notes pins the rule version, its
+parameters sha, `REPEAT` and the report version.
 
 **Freshness.** One row per target (`fresh` > `clean` > `unverified` > `dirty`, from least to most
 severe; `unknown` = no checklist), with the initialization instant, `seedId` and the number of
