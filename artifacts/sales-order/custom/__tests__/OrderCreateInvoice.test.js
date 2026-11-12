@@ -611,7 +611,10 @@ describe('OrderCreateInvoice', () => {
 
         it('hides the button behind loading, not behind a tick', () => {
           assert.equal(docsDecision({ ...state, loading: true }).bailsOut, true);
-          assert.match(createDocsSrc, /data-testid="sales-order-manage-docs-submit"[\s\S]*?disabled=\{loading \|\| !canCreate\}/);
+          // ETP-6179: the gate also waits for the "Datos fiscales" step; loading and !canCreate
+          // still disable it.
+          assert.match(createDocsSrc, /data-testid="sales-order-manage-docs-submit"[\s\S]*?disabled=\{submitDisabled\}/);
+          assert.match(createDocsSrc, /const submitDisabled = loading \|\| !canCreate \|\|/);
         });
       });
     }

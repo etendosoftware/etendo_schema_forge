@@ -23,6 +23,13 @@ import { useGLItemLookup } from '@/hooks/useMovementLookups.js';
 import { ACCOUNT_TYPE } from '@/components/financial-accounts/tokens';
 import { canConnectToSaltEdge } from '@/components/financial-accounts/saltEdgeEligibility.js';
 import { LastSyncLabel } from '@/components/financial-accounts/LastSyncLabel.jsx';
+import { BankSyncIcon } from '@/components/financial-accounts/BankSyncIcon.jsx';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { normalizeIban } from '@/lib/validateIban.js';
 import {
   stripTrailingPeriods,
@@ -36,6 +43,8 @@ import { validateIbanForCountry, countryLacksIbanConfig } from '@/lib/countryIba
 import { formatCalendarDate, calendarISODaysAgo } from '@/lib/dateOnly.js';
 import { useSplitButtonDropdown } from './useSplitButtonDropdown';
 import BankConnectionDeleteConfirmModal from './BankConnectionDeleteConfirmModal';
+import { useBankSync } from './BankSyncContext.jsx';
+import { BankSyncBanner } from './BankSyncBanner.jsx';
 
 const EDIT_TAB_GENERAL = 'general';
 const EDIT_TAB_ACCOUNTING = 'accounting';
@@ -266,25 +275,6 @@ const BANNER_TONE_CLASSES = {
   info: { bg: 'bg-[var(--status-info-bg)]', fg: 'text-[var(--status-info-fg)]' },
 };
 
-/** Maps the bridge sync result ({status, message}) to a toast. */
-function notifySyncResult(res, ui) {
-  // ETP-4891 follow-up: com.etendoerp.psd2 ships no real es_ES translation for these AD_MESSAGEs
-  // (see backendErrors.js), so Core always resolves the English text regardless of session
-  // locale — route it through the same frontend translation map every other untranslated backend
-  // message uses, same fix as ImportedStatementsTab's identical sync-result handler.
-  const msg = res?.message ? translateBackendError(res.message, ui) : res?.message;
-  if (res?.status === 'ERROR') {
-    toast.error(msg || ui('financeAccountsBankConnectionSyncError'));
-  } else if (res?.status === 'WARNING') {
-    // ETP-5181: a WARNING carries something the user has to act on — most often "your import
-    // range reaches further back than this provider serves" — so it must not read as a neutral
-    // notice. The sync itself did complete; only the wording is downgraded, not the outcome.
-    toast.warning(msg || ui('financeAccountsBankConnectionSyncDone'));
-  } else {
-    toast.success(msg || ui('financeAccountsBankConnectionSyncDone'));
-  }
-}
-
 async function copyIbanToClipboard(account, ui) {
   try {
     await navigator.clipboard.writeText((account.iban || '').replace(/\s+/g, ''));
@@ -356,24 +346,26 @@ async function persistAccountEdits({
  *
  * `beforeSync` is a REF, not a plain callback: it is filled in by the modal body, which is where
  * the other form hooks (fields / reconciliation / accounting) are declared — long after this hook
- * runs. It throws to abort, which is exactly what the `catch` below already handles.
+ * runs. It throws to abort; an error carrying `handled` was already reported with the save path's
+ * own wording, so it is not toasted a second time.
+ *
+ * ETP-6154: the sync itself goes through the window's shared BankSyncContext, which owns the
+ * in-flight guard (no second request while one runs, from here or any other entry point), the
+ * polling of a sync still running server side, and the one result toast (bankSyncNotify.js). This
+ * function only says what to reload once the sync is over — `refresh()` and `onSaved`, exactly as
+ * before, however long that takes.
  */
-async function runSync({ account, sync, refresh, onSaved, ui, setBusy, beforeSync }) {
-  setBusy(true);
-  try {
-    await beforeSync?.current?.();
-    const res = await sync(account.id);
-    await refresh();
-    onSaved?.();
-    notifySyncResult(res, ui);
-  } catch (err) {
-    // `handled` marks a failure beforeSync already reported with the save path's own wording —
-    // toasting `err.message` on top of it would show the same problem twice, the second time raw.
-    if (err?.handled) return;
-    toast.error(err.message === 'BANK_CONNECTION_TIMEOUT' ? ui('financeAccountsBankConnectionTimeout') : err.message);
-  } finally {
-    setBusy(false);
-  }
+async function runSync({ account, startSync, refresh, onSaved, beforeSync }) {
+  // No modal-wide `busy` here (ETP-6154, product decision): while the sync runs only "Sincronizar
+  // ahora" is disabled — it reads the shared `syncing` state — and the rest of the modal stays
+  // usable. The save-before-sync step still locks the form on its own, through `saving`.
+  await startSync(account.id, {
+    beforeSync: () => beforeSync?.current?.(),
+    onDone: async () => {
+      await refresh();
+      onSaved?.();
+    },
+  });
 }
 
 async function runReconnect({ account, reconnect, finishReconnect, refresh, onSaved, ui, setBusy }) {
@@ -669,7 +661,10 @@ function useBankConnection(
   open, account, bankConnected, onSaved, onClose, bankReconnectable, beforeSync,
 ) {
   const ui = useUI();
-  const { fetchStatus, sync, disconnect, reconnect, finishReconnect } = useBankConnectionActions();
+  const { fetchStatus, disconnect, reconnect, finishReconnect } = useBankConnectionActions();
+  const bankSync = useBankSync();
+  const { startSync } = bankSync;
+  const syncing = bankSync.isSyncing(account?.id);
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -721,9 +716,9 @@ function useBankConnection(
         toast.error(ui('financeAccountsBankConnectionImportRangeInvalid'));
         return Promise.resolve();
       }
-      return runSync({ account, sync, refresh, onSaved, ui, setBusy, beforeSync });
+      return runSync({ account, startSync, refresh, onSaved, beforeSync });
     },
-    [account, sync, refresh, onSaved, ui, form, beforeSync],
+    [account, startSync, refresh, onSaved, ui, form, beforeSync],
   );
   const handleReconnect = useCallback(
     () => runReconnect({ account, reconnect, finishReconnect, refresh, onSaved, ui, setBusy }),
@@ -757,7 +752,9 @@ function useBankConnection(
   );
 
   return {
-    status, loading, busy, form, setForm, refresh, connected, reconnectable,
+    status, loading, busy, syncing, form, setForm, refresh, connected, reconnectable,
+    // For the in-panel BankSyncBanner: this account only, named.
+    syncingAccounts: syncing && account ? [{ id: account.id, name: account.name || null }] : [],
     hasBankLink: liveHasBankLink, settingsDirty, rangeInvalid: isImportRangeInvalid(form),
     // Derived from `form`, not from `initial`, so it covers both halves of the requirement with
     // no extra wiring: `form` is hydrated from GET status when the modal opens (so an account
@@ -1874,6 +1871,51 @@ function BankConnectionSection({
   );
 }
 
+/**
+ * "Sincronizar ahora" inside the bank connection panel.
+ *
+ * ETP-6154: disabled, with its icon bobbing, while a fetch of this account runs — `bankConnection.syncing`
+ * is the window's shared bank-sync state, so a sync started from the list row or the statements
+ * tab counts too. The tooltip trigger is a wrapper span because a disabled button fires no pointer
+ * events, which would hide the "in progress" tooltip exactly when it matters.
+ */
+// ETP-6154 — while fetching the button must read BUSY, not merely disabled: info-tinted, full
+// opacity, a progress cursor, the bobbing icon and "Trayendo extractos…". Two whole class strings rather
+// than overrides, so no two utilities compete for the same property.
+const SYNC_BTN_BASE = 'inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]';
+const SYNC_BTN_IDLE = `${SYNC_BTN_BASE} border-[hsl(var(--border-control))] bg-card text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] disabled:opacity-50`;
+const SYNC_BTN_SYNCING = `${SYNC_BTN_BASE} border-status-info-border bg-status-info text-status-info-foreground cursor-progress`;
+
+function BankSyncButton({ ui, bankConnection, busy }) {
+  const { syncing } = bankConnection;
+  const tooltip = ui(syncing ? 'financeAccountsBankSyncInProgress' : 'financeAccountsBankSyncTooltip');
+  return (
+    <TooltipProvider data-testid="TooltipProvider__73027d">
+      <Tooltip delayDuration={0} data-testid="Tooltip__73027d">
+        <TooltipTrigger asChild data-testid="TooltipTrigger__73027d">
+          <span className="inline-flex shrink-0" data-testid="bank-connection-edit-sync-wrap">
+            <button
+              type="button"
+              disabled={busy || syncing || !bankConnection.connected}
+              aria-busy={syncing}
+              onClick={bankConnection.handleSync}
+              data-testid="bank-connection-edit-sync"
+              className={syncing ? SYNC_BTN_SYNCING : SYNC_BTN_IDLE}
+            >
+              <BankSyncIcon
+                spinning={syncing}
+                className={syncing ? 'h-4 w-4' : 'h-4 w-4 text-[hsl(var(--text-disabled))]'}
+                data-testid="bank-connection-edit-sync-icon" />
+              {ui(syncing ? 'financeAccountsBankSyncBadge' : 'financeAccountsMenuSyncNow')}
+            </button>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent data-testid="TooltipContent__73027d">{tooltip}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 function BankConnectionPanel({ ui, bankConnection, busy, reauthMessage, reauthTone = 'info' }) {
   const reauthToneClasses = BANNER_TONE_CLASSES[reauthTone] ?? BANNER_TONE_CLASSES.info;
   // `AlertTriangle` on a blue banner reads as a mismatch — same call BlockingBpBanner.jsx made when
@@ -1886,7 +1928,9 @@ function BankConnectionPanel({ ui, bankConnection, busy, reauthMessage, reauthTo
           <span className="text-sm font-semibold text-[hsl(var(--foreground))]">
             {bankConnection.status?.providerName || ui('financeAccountsBankConnectionStatusConnected')}
           </span>
-          {bankConnection.connected ? (
+          {/* ETP-6154 — hidden while a sync runs: the age is about to change, and the banner
+              below already says what is happening. */}
+          {bankConnection.connected && !bankConnection.syncing ? (
             <LastSyncLabel
               date={bankConnection.status?.lastSyncDate}
               prefixKey="financeAccountsLastSyncAgo"
@@ -1895,17 +1939,14 @@ function BankConnectionPanel({ ui, bankConnection, busy, reauthMessage, reauthTo
             />
           ) : null}
         </div>
-        <button
-          type="button"
-          disabled={busy || !bankConnection.connected}
-          onClick={bankConnection.handleSync}
-          data-testid="bank-connection-edit-sync"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 py-1.5 text-sm font-medium text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))] disabled:opacity-50"
-        >
-          <RefreshCw className="h-4 w-4 text-[hsl(var(--text-disabled))]" data-testid="RefreshCw__73027d" />
-          {ui('financeAccountsMenuSyncNow')}
-        </button>
+        <BankSyncButton ui={ui} bankConnection={bankConnection} busy={busy} data-testid="BankSyncButton__73027d" />
       </div>
+
+      {/* ETP-6154 — the list's banner sits behind this modal's overlay, so the panel shows its
+          own, scoped to this account. */}
+      <BankSyncBanner
+        accounts={bankConnection.syncingAccounts}
+        data-testid="bank-connection-edit-sync-banner" />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <DateInput

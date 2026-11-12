@@ -164,6 +164,7 @@ async function completeOnboardingForm(page, emailPrefix, locale = 'es_ES') {
   await expect(page.getByRole('heading', { name: labels.heading })).toBeVisible();
   await page.getByRole('textbox', { name: labels.name }).fill('QA Onboarding User');
   await page.getByRole('textbox', { name: labels.email }).fill(`${emailPrefix}-${suffix}@example.com`);
+  await page.getByTestId('sector-select').selectOption('servicios');
   await page.getByRole('button', { name: labels.createAccount }).click();
 
   await expect(page.getByText(labels.intro)).toBeVisible();
@@ -203,6 +204,7 @@ test.describe('Onboarding with mocked Schema Forge backend boundary', () => {
 
     await page.getByRole('textbox', { name: labels.name }).fill('QA Onboarding User');
     await page.getByRole('textbox', { name: labels.email }).fill(`qa-onboarding-en-${suffix}@example.com`);
+    await page.getByTestId('sector-select').selectOption('servicios');
     await page.getByRole('button', { name: labels.createAccount }).click();
 
     await expect(page.getByText(labels.intro)).toBeVisible();

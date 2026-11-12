@@ -78,6 +78,20 @@ export function pickMessage(node) {
     return pickMessageFromObject(node);
 }
 
+// ETP-6140 — `pickMessage` of a NEO `error` node, minus its machine code: the flat code string
+// itself, or the `code` key of the nested object (which `pickMessageFromObject` would otherwise
+// return when the object has no message).
+function pickReadableError(node, code) {
+    if (!code) return pickMessage(node);
+    if (node === code) return null;
+    if (node && typeof node === 'object' && !Array.isArray(node)) {
+        const rest = { ...node };
+        delete rest.code;
+        return pickMessage(rest);
+    }
+    return pickMessage(node);
+}
+
 /**
  * Extract a human-readable error message from a NEO Headless error response.
  */
@@ -265,8 +279,13 @@ export async function extractErrorMessage(res, ui) {
         };
 
 
+        // ETP-6140 — the error code (flat IMP-5 `{error:"stale_record", message}` or nested
+        // `{error:{code, message}}`) is a discriminator for the caller, not text for the user:
+        // it is skipped while a readable message exists and only shown as the last resort.
+        const errorCode = extractBackendErrorCode(data);
+
         // NEO Headless top-level error: { error: { message, status } }
-        const neoError = pickMessage(data?.error);
+        const neoError = pickReadableError(data?.error, errorCode);
         if (neoError) return normalizeServerError(neoError) || neoError;
 
         // Etendo JsonDataService wraps errors in response.error
@@ -283,6 +302,8 @@ export async function extractErrorMessage(res, ui) {
         if (data?.response?.status === -4) {
             return translate('validationError', 'Validation error');
         }
+
+        if (errorCode) return normalizeServerError(errorCode) || errorCode;
     } catch { /* body not JSON */
     }
     return `${translate('error', 'Error')} ${res.status}`;
@@ -1681,6 +1702,25 @@ export function useEntity(entity, childEntity, {
         loadList(false);
     }, [loadList, skipListFetch]);
 
+    // The child rows of `parentId` (normalized), through the cache like every read. Shared by
+    // fetchChildren and the forced fetchById, which must commit them with the header.
+    const childrenKey = useCallback((parentId) => (cacheScope
+        ? createQueryKey({ ...cacheScope, apiBase: apiBaseUrl, spec: specName, entity: childEntity, parentId, filters: { childSortBy } })
+        : null), [cacheScope, apiBaseUrl, specName, childEntity, childSortBy]);
+
+    const queryChildren = useCallback((parentId, { force = false } = {}) => {
+        // NEO Headless uses ?parentId= to filter child entity records
+        const key = childrenKey(parentId);
+        const sortParam = childSortBy ? `&_sortBy=${childSortBy}` : '';
+        const fetcher = (signal) => apiFetch(`/${childEntity}?parentId=${parentId}${sortParam}`, { signal })
+            .then(res => {
+                if (!res.ok) throw new Error(`${res.status}`);
+                return res.json();
+            })
+            .then(data => normalizeRows(data?.response?.data ?? (Array.isArray(data) ? data : []), childEntity));
+        return runQuery(key, fetcher, { force });
+    }, [childEntity, apiFetch, childSortBy, runQuery, childrenKey]);
+
     const fetchChildren = useCallback((parentId, { silent = false, force = false } = {}) => {
         if (!childEntity || !parentId) {
             setChildren([]);
@@ -1697,24 +1737,13 @@ export function useEntity(entity, childEntity, {
         // purchase-invoice-import-from-receipt.mocked.spec.js and
         // return-to-vendor-shipment.mocked.spec.js.
         if (!silent) setChildrenLoading(true);
-        // NEO Headless uses ?parentId= to filter child entity records
-        const key = cacheScope
-            ? createQueryKey({ ...cacheScope, apiBase: apiBaseUrl, spec: specName, entity: childEntity, parentId, filters: { childSortBy } })
-            : null;
-        const sortParam = childSortBy ? `&_sortBy=${childSortBy}` : '';
-        const fetcher = (signal) => apiFetch(`/${childEntity}?parentId=${parentId}${sortParam}`, { signal })
-            .then(res => {
-                if (!res.ok) throw new Error(`${res.status}`);
-                return res.json();
-            })
-            .then(data => normalizeRows(data?.response?.data ?? (Array.isArray(data) ? data : []), childEntity));
-        runQuery(key, fetcher, { force })
+        queryChildren(parentId, { force })
             .then(rows => setChildren(rows))
             // Silent refreshes must not blank a table the user is already looking
             // at just because one background request failed transiently (ETP-4512).
             .catch(() => { if (!silent) setChildren([]); })
             .finally(() => { if (!silent) setChildrenLoading(false); });
-    }, [apiBaseUrl, childEntity, apiFetch, childSortBy, cacheScope, specName, runQuery]);
+    }, [childEntity, queryChildren]);
 
     // HandleDefaults: fetch backend-resolved defaults for a NEW child line under the
     // given parent and normalize them (dates, booleans, enum ints) exactly as
@@ -1807,13 +1836,39 @@ export function useEntity(entity, childEntity, {
         // promise handed out always settles as fulfilled and can never surface as an
         // unhandled rejection in a caller that ignores it. The `if (!id) return;` guard
         // above still returns undefined, exactly as before.
+        // ETP-5828 (QA UI-1) — a forced re-read follows a server-side change that usually rewrote
+        // header AND lines together (an import, a document action). Committing the header first
+        // and the lines one round trip later left a frame where the totals panel mixed the new
+        // header totals with the old lines (subtotal 0 next to the new grand total, ~1 s). The
+        // lines are therefore read IN PARALLEL with the header and committed in the same tick.
+        // `null` = the lines read failed: they are cleared, as a non-silent fetchChildren does.
+        // Known window: while this forced lines GET is in flight, a NON-forced reader of the same
+        // lines key (fetchChildren without force, a plain fetchById/handleSelect) is handed this
+        // same in-flight request by the cache's dedup, so after a mutation it can still show the
+        // pre-mutation lines; evicting the entry below cannot help once the promise is shared.
+        // Starting the lines read with the header widened that window by about one header round
+        // trip. The proper fix belongs in schema_forge_core `queryCache.fetchQuery` (do not hand a
+        // non-forced reader an in-flight request started before an invalidation).
+        const linesRead = force && childEntity
+            ? queryChildren(id, { force: true }).catch(() => null)
+            : undefined;
+        // The lines entry this forced read populated, evicted whenever its lines are dropped
+        // instead of committed: the cache stores the response even when the read is discarded,
+        // and an entry written after an invalidation is fresh, so the next reader would get the
+        // pre-mutation lines (an invalidation only marks the entries already stored).
+        const dropLinesEntry = () => {
+            const linesKey = linesRead ? childrenKey(id) : null;
+            if (linesKey) dataCache?.cache?.remove(linesKey);
+        };
         return runQuery(key, fetcher, { force })
-            .then(row => {
+            .then(row => (linesRead ? linesRead.then(lines => ({ row, lines })) : { row, lines: undefined }))
+            .then(({ row, lines }) => {
                 if (!isCurrent()) return;
                 // ETP-4563: a mutation superseded this read while it was in flight: drop the
                 // (now stale) result and evict the cache entry it just populated.
                 if (opSeqRef.current !== seqAtStart) {
                     if (key) dataCache?.cache?.remove(key);
+                    dropLinesEntry();
                     setLoading(false);
                     return;
                 }
@@ -1823,6 +1878,7 @@ export function useEntity(entity, childEntity, {
                 // staleTime, so the next navigation re-asks (matches pre-cache behavior).
                 if (!row || row.id == null) {
                     if (key) dataCache?.cache?.remove(key);
+                    dropLinesEntry();
                     setRecordError('notFound');
                     setSelected(null);
                     setEditing(null);
@@ -1834,8 +1890,10 @@ export function useEntity(entity, childEntity, {
                 // ETP-5602: a forced re-read follows a server-side change (a document action,
                 // a process), which may have rewritten the lines too — reactivating an invoice
                 // bumps UPDATED on every line. Serving the cached lines kept their old version,
-                // so the first line edit failed with 409 stale_record.
-                fetchChildren(row.id, { force });
+                // so the first line edit failed with 409 stale_record. The forced path already
+                // re-read them above (same tick as the header); the plain one reads them now.
+                if (lines !== undefined) setChildren(lines ?? []);
+                else fetchChildren(row.id, { force });
                 setLoading(false);
             })
             .catch(err => {
@@ -1848,7 +1906,7 @@ export function useEntity(entity, childEntity, {
                 setEditing(null);
                 setLoading(false);
             });
-    }, [apiBaseUrl, entity, apiFetch, fetchChildren, cacheScope, specName, runQuery, dataCache, neutralizePendingDefaults]);
+    }, [apiBaseUrl, entity, apiFetch, fetchChildren, queryChildren, childrenKey, childEntity, cacheScope, specName, runQuery, dataCache, neutralizePendingDefaults]);
 
     // Lightweight header refresh used after line add/update/delete operations.
     // Unlike fetchById, this preserves fields the user has explicitly edited (tracked in

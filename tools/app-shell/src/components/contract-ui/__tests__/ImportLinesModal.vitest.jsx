@@ -866,7 +866,8 @@ describe('ImportLinesModal', () => {
       });
     });
 
-    it('expands and fetches lines on demand when the doc-level checkbox is clicked before lines exist (toggleDoc empty-lines branch)', async () => {
+    // ETP-5828 (QA UI-3): the same click that loads the lines also selects them.
+    it('expands, fetches AND selects the lines when the doc-level checkbox is clicked before lines exist (toggleDoc empty-lines branch)', async () => {
       await renderWithLateDocuments();
 
       const docCheckbox = screen.getAllByTestId('checkbox')[0];
@@ -876,6 +877,43 @@ describe('ImportLinesModal', () => {
         expect(defaultProps.fetchLines).toHaveBeenCalledWith(expect.objectContaining({ docId: 'doc-1' }));
         expect(screen.getByText('Widget A')).toBeInTheDocument();
       });
+      await waitFor(() => expect(screen.getAllByTestId('ImportLinesModal__lineRow')
+        .map(r => r.getAttribute('data-selected'))).toEqual(['true', 'true']));
+    });
+
+    // S1: a tick whose read failed is forgotten, so a later successful expand selects nothing.
+    it('a tick whose line read failed does not auto-select on a later expand', async () => {
+      const flakyFetchLines = vi.fn()
+        .mockRejectedValueOnce(new Error('network fail'))
+        .mockResolvedValue(LINE_ROWS);
+      await renderWithLateDocuments({ fetchLines: flakyFetchLines });
+
+      fireEvent.click(screen.getAllByTestId('checkbox')[0]);
+      await waitFor(() => expect(flakyFetchLines).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(screen.queryByText('loadingLines')).not.toBeInTheDocument());
+      // Collapse, then expand again: the second read succeeds.
+      const docRow = screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]');
+      fireEvent.click(docRow);
+      fireEvent.click(docRow);
+      await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument());
+      expect(screen.getAllByTestId('ImportLinesModal__lineRow').map(r => r.getAttribute('data-selected')))
+        .toEqual(['false', 'false']);
+    });
+
+    // The tick also counts when the chevron already started the read: it selects on arrival.
+    it('selects on arrival when the checkbox is ticked while the lines are still loading', async () => {
+      let resolveLines;
+      const pendingFetchLines = vi.fn(() => new Promise(resolve => { resolveLines = resolve; }));
+      await renderWithLateDocuments({ fetchLines: pendingFetchLines });
+
+      fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
+      await waitFor(() => expect(screen.getByText('loadingLines')).toBeInTheDocument());
+      fireEvent.click(screen.getAllByTestId('checkbox')[0]);
+      resolveLines(LINE_ROWS);
+
+      await waitFor(() => expect(screen.getAllByTestId('ImportLinesModal__lineRow')
+        .map(r => r.getAttribute('data-selected'))).toEqual(['true', 'true']));
+      expect(pendingFetchLines).toHaveBeenCalledTimes(1);
     });
 
     it('shows the per-document "loading lines" indicator while an on-demand fetch is pending, and clears it once resolved', async () => {
@@ -953,7 +991,7 @@ describe('ImportLinesModal', () => {
 
       const lineRow = screen.getByText('Widget A').closest('[data-testid="ImportLinesModal__lineRow"]');
       fireEvent.click(lineRow);
-      expect(screen.getByText('selected:{"count":1}')).toBeInTheDocument();
+      expect(screen.getByText('selected:{\"count\":1}')).toBeInTheDocument();
 
       fireEvent.click(lineRow);
       expect(screen.getByText('selectLinesToImport')).toBeInTheDocument();
@@ -1230,7 +1268,7 @@ describe('ImportLinesModal', () => {
 
       await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument());
       // Both lines auto-selected -> footer shows the count.
-      await waitFor(() => expect(screen.getByText('selected:{"count":2}')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText('selected:{\"count\":2}')).toBeInTheDocument());
     });
 
     it('does NOT auto-select lines on expand when false (default)', async () => {
@@ -1242,7 +1280,7 @@ describe('ImportLinesModal', () => {
 
       await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument());
       // No line selected -> the footer still shows the "nothing selected" prompt,
-      // not the `selected:{"count":N}` label autoSelectOnExpand would produce.
+      // not the line count autoSelectOnExpand would produce.
       expect(screen.getByText('selectLinesToImport')).toBeInTheDocument();
     });
   });
@@ -1379,7 +1417,7 @@ describe('ImportLinesModal', () => {
       expect(toggle).toHaveTextContent('selectAll');
       fireEvent.click(toggle);
       expect(toggle).toHaveTextContent('deselectAll');
-      expect(screen.getByText('selected:{"count":2}')).toBeInTheDocument();
+      expect(screen.getByText('selected:{\"count\":2}')).toBeInTheDocument();
 
       fireEvent.click(screen.getByTestId('ImportLinesModal__import'));
       await waitFor(() => expect(submitImport).toHaveBeenCalled());
@@ -1395,7 +1433,7 @@ describe('ImportLinesModal', () => {
       await renderSettled();
       fireEvent.change(screen.getByPlaceholderText('searchOrders'), { target: { value: 'INV-002' } });
       fireEvent.click(screen.getByTestId('ImportLinesModal__selectAll'));
-      expect(screen.getByText('selected:{"count":2}')).toBeInTheDocument();
+      expect(screen.getByText('selected:{\"count\":2}')).toBeInTheDocument();
     });
 
     it('loads and selects the lines of documents not loaded yet (eagerLoadLines off)', async () => {
@@ -1405,23 +1443,58 @@ describe('ImportLinesModal', () => {
       expect(defaultProps.fetchLines).not.toHaveBeenCalled();
 
       fireEvent.click(screen.getByTestId('ImportLinesModal__selectAll'));
-      await waitFor(() => expect(screen.getByText('selected:{"count":4}')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText('selected:{\"count\":4}')).toBeInTheDocument());
       expect(defaultProps.fetchLines).toHaveBeenCalledTimes(2);
     });
 
-    it('counts DOCUMENTS in the footer and the import button when selectedDocumentsKey is given', async () => {
+    // ETP-5828 (QA UI-6): opt-in `countLinesInFooter` (the order popups) counts the selected
+    // LINES with singular/plural wording; without it the generic «N Seleccionados» stays.
+    it('countLinesInFooter: counts the selected LINES in the footer, singular and plural', async () => {
       defaultProps.fetchLines.mockImplementation(linesPerDoc);
-      await renderSettled({ selectedDocumentsKey: 'importOrdersSelectedCount', importButtonKey: 'importSelectedOrders' });
+      await renderSettled({ countLinesInFooter: true });
 
       fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
       await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument());
-      // Two lines of ONE order: «1 pedido(s) seleccionado(s)», «Importar seleccionados (1)».
-      fireEvent.click(screen.getAllByTestId('checkbox')[0]);
-
       const hint = screen.getByTestId('ImportLinesModal__selectionHint');
-      expect(hint).toHaveTextContent('importOrdersSelectedCount:{"count":1}');
-      expect(hint).toHaveTextContent('importSelectedSuffix');
-      expect(screen.getByTestId('ImportLinesModal__import')).toHaveTextContent('importSelectedOrders:{"count":" (1)"}');
+
+      fireEvent.click(screen.getByText('Widget A').closest('[data-testid="ImportLinesModal__lineRow"]'));
+      expect(hint).toHaveTextContent('importLinesSelectedCountOne:{"count":1}');
+      expect(hint).toHaveTextContent('importLinesSelectedSuffixOne');
+
+      // Two lines of ONE document: «2 líneas seleccionadas», «Importar seleccionadas (2)».
+      fireEvent.click(screen.getByText('Widget B').closest('[data-testid="ImportLinesModal__lineRow"]'));
+      expect(hint).toHaveTextContent('importLinesSelectedCountMany:{"count":2}');
+      expect(hint).toHaveTextContent('importLinesSelectedSuffixMany');
+      expect(screen.getByTestId('ImportLinesModal__import')).toHaveTextContent('importSelected:{"count":" (2)"}');
+    });
+
+    it('without countLinesInFooter the footer keeps the generic «N Seleccionados»', async () => {
+      defaultProps.fetchLines.mockImplementation(linesPerDoc);
+      await renderSettled();
+      fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
+      await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument());
+      fireEvent.click(screen.getByText('Widget A').closest('[data-testid="ImportLinesModal__lineRow"]'));
+      const hint = screen.getByTestId('ImportLinesModal__selectionHint');
+      expect(hint).toHaveTextContent('selected:{"count":1}');
+      expect(hint).not.toHaveTextContent('importLinesSelected');
+    });
+
+    it('describeLine replaces the note under a greyed-out line (null keeps «ya importado») and adds one to a selectable line', async () => {
+      defaultProps.fetchLines.mockResolvedValue([
+        { ...LINE_ROWS[0], id: 'x1', _alreadyImported: true, _heldBy: 'FV1' },
+        { ...LINE_ROWS[1], id: 'x2', _alreadyImported: true },
+        { ...LINE_ROWS[0], id: 'x3', _productName: 'Widget C' },
+        { ...LINE_ROWS[0], id: 'x4', _productName: 'Widget D', _heldBy: 'FV9' },
+      ]);
+      await renderSettled({ describeLine: (line) => (line._heldBy ? `held:${line._heldBy}` : null) });
+      fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
+      await waitFor(() => expect(screen.getAllByTestId('ImportLinesModal__importedNote')).toHaveLength(2));
+      expect(screen.getAllByTestId('ImportLinesModal__importedNote').map(n => n.textContent))
+        .toEqual(['held:FV1', 'alreadyImported']);
+      // Only the selectable line with a note gets one (none for Widget C), with its tooltip.
+      const lineNotes = screen.getAllByTestId('ImportLinesModal__lineNote');
+      expect(lineNotes.map(n => n.textContent)).toEqual(['held:FV9']);
+      expect(lineNotes[0]).toHaveAttribute('title', 'held:FV9');
     });
   });
 });

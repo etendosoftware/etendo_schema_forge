@@ -1,5 +1,6 @@
 // @covers tools/app-shell/src/components/contract-ui/useWindowImportDialog.js
-import { describe, it, expect, vi } from 'vitest';
+// @covers tools/app-shell/src/lib/importCapabilities.js
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
 // ETP-4669: ListView is the functional side of the two-repo import contract — it builds the
@@ -73,7 +74,13 @@ vi.mock('@etendosoftware/app-shell-core/components/import/ImportDialog.jsx', () 
   },
 }));
 
+// ETP-6206: the AuthContext capabilities the hook hands to plain import descriptors. Defaults to
+// the same frozen `{}` useCapabilitiesSafe returns without an AuthProvider.
+const capabilitiesState = vi.hoisted(() => ({ value: Object.freeze({}) }));
+vi.mock('@/hooks/useCapabilitiesSafe.js', () => ({ useCapabilitiesSafe: () => capabilitiesState.value }));
+
 import { ListView } from '../ListView.jsx';
+import { hasImportCapability, resetImportCapabilitiesForTests } from '@/lib/importCapabilities.js';
 
 function MockTable() {
   return <table data-testid="mock-table"><tbody /></table>;
@@ -237,5 +244,24 @@ describe('ListView — import postBatch asks for ids only', () => {
 
     expect(runBatchMock.mock.calls[0][1].onProgress).toBe(onProgress);
     expect(runBatchMock.mock.calls[0][1].async).toBe(true);
+  });
+});
+
+// ETP-6206 — a descriptor reads capabilities through importCapabilities, which only this hook
+// feeds. A missed publish fails closed, so Contacts would silently send the legacy address.
+describe('ListView — import publishes the session capabilities to descriptors', () => {
+  afterEach(() => {
+    capabilitiesState.value = Object.freeze({});
+    resetImportCapabilitiesForTests();
+  });
+
+  it('publishes the AuthContext capabilities and re-publishes when they change', () => {
+    capabilitiesState.value = { structuredAddressForSepa: true };
+    const view = render(<ListView {...defaultProps} />);
+    expect(hasImportCapability('structuredAddressForSepa')).toBe(true);
+
+    capabilitiesState.value = { structuredAddressForSepa: false };
+    view.rerender(<ListView {...defaultProps} />);
+    expect(hasImportCapability('structuredAddressForSepa')).toBe(false);
   });
 });

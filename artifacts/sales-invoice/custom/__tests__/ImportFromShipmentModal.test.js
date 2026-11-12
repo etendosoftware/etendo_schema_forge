@@ -1,3 +1,5 @@
+// @covers artifacts/sales-invoice/custom/ImportFromShipmentModal.jsx
+// @covers tools/app-shell/src/windows/custom/shared/importActionClient.js
 import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { join, dirname } from 'node:path';
@@ -7,22 +9,17 @@ import {
   apiFetchToGlobalFetch,
 } from '../../../_test-support/loadCustomModule.js';
 import { orderLineApiKey } from '../../../_test-support/contractApiKey.js';
+import { listAll, listLines, newestCreatedFirst } from '../../../../tools/app-shell/src/windows/custom/shared/importActionClient.js';
+import { pricingContextOf } from '../../../../tools/app-shell/src/windows/custom/shared/invoiceImportPricing.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// The REAL production helpers, evaluated straight out of the .jsx — not a copy.
-// See artifacts/_test-support/loadCustomModule.js (ETP-5381).
 const { helpers, source: src } = loadCustomModule(
   join(__dirname, '..', 'ImportFromShipmentModal.jsx'),
-  // The prelude calls `moduleApiFetch` (imported from '@/auth/api.js', a
-  // binding the loader strips); the stub forwards to `globalThis.fetch`,
-  // which is what the mocks below install.
-  { moduleApiFetch: apiFetchToGlobalFetch },
+  { moduleApiFetch: apiFetchToGlobalFetch, listAll, listLines, pricingContextOf, newestCreatedFirst },
 );
-const { fetchDocuments, buildLineBody } = helpers;
+const { fetchDocuments, fetchLines, buildLineBody, getDocDisplay } = helpers;
 
-// The invoice-line -> order-line FK key, read from the generated contract
-// (ETGO_SF_FIELD.java_qualifier for C_INVOICELINE.C_OrderLine_ID).
 const ORDER_LINE_FK = orderLineApiKey('sales-invoice');
 
 describe('ImportFromShipmentModal — source shape', () => {
@@ -36,10 +33,10 @@ describe('ImportFromShipmentModal — source shape', () => {
     assert.match(src, /<ImportLinesModal[\s\S]*\{\.\.\.props\}/);
   });
 
-  it('fetches shipments and existing invoice lines in parallel', () => {
-    assert.match(src, /Promise\.all/);
-    assert.match(src, /goods-shipment\/goodsShipment/);
-    assert.match(src, /sales-invoice\/lines\?parentId=/);
+  it('lists shipments through the invoice availableShipments action, covered ones included', () => {
+    assert.match(src, /action: 'availableShipments', params: \{ includeCovered: true, detail: true \}/);
+    assert.match(src, /eagerLoadLines=\{false\}/);
+    assert.match(src, /isDocumentCovered=\{isShipmentCovered\}/);
   });
 
   it('wires the shipment-specific i18n keys for search and empty states', () => {
@@ -48,10 +45,10 @@ describe('ImportFromShipmentModal — source shape', () => {
     assert.match(src, /noSearchResultsKey="noShipmentsMatchYourSearch"/);
   });
 
-  it('fetches shipment lines on expand with callout price enrichment', () => {
-    assert.match(src, /fetchLines/);
-    assert.match(src, /goods-shipment\/goodsShipmentLine\?parentId=/);
-    assert.match(src, /resolveLinePrice/);
+  it('reads shipment lines on expand through availableShipmentLines and prices on expand and at import', () => {
+    assert.match(src, /action: 'availableShipmentLines', params: \{ shipmentId: docId, includeCovered: true, detail: true \}/);
+    assert.match(src, /const fetchLines[\s\S]*resolveLinePrice/);
+    assert.match(src, /const buildLineBody[\s\S]*resolveLinePrice/);
   });
 
   it('wires the success message key so the shared modal can toast on success', () => {
@@ -60,8 +57,8 @@ describe('ImportFromShipmentModal — source shape', () => {
   });
 
   it('injects fetch/build callbacks so the shared modal can drive line selection', () => {
-    assert.match(src, /fetchDocuments=\{fetchDocuments\}/);
-    assert.match(src, /fetchLines=\{fetchLines\}/);
+    assert.match(src, /fetchDocuments=\{handlers\.fetchDocuments\}/);
+    assert.match(src, /fetchLines=\{handlers\.fetchLines\}/);
     assert.match(src, /getDocDisplay=\{getDocDisplay\}/);
     assert.match(src, /buildLineBody=\{buildLineBody\}/);
   });
@@ -70,8 +67,6 @@ describe('ImportFromShipmentModal — source shape', () => {
     assert.match(src, /noCurrencyMatchMessageKey="noShipmentsMatchCurrency"/);
   });
 
-  // ETP-5381: `cOrderlineId` is not a key of the sales-invoice NEO spec, and
-  // NeoFieldFilter.filterRecord drops unknown body keys silently.
   it('never mentions the non-existent cOrderlineId key', () => {
     assert.doesNotMatch(src, /cOrderlineId/);
   });
@@ -85,16 +80,30 @@ function mockResSingle(ok, item) {
   return { ok, json: async () => ({ response: { data: item ? [item] : [] } }) };
 }
 
-function installFetch({ shipments = [], invLines = [], invoiceHeader = {}, orders = {} }) {
-  globalThis.fetch = mock.fn(async (url) => {
-    if (url.includes('/goods-shipment/goodsShipment?')) return mockRes(true, shipments);
-    if (url.includes('/sales-invoice/lines?parentId=')) return mockRes(true, invLines);
-    if (url.includes('/sales-invoice/lines?criteria=')) return mockRes(true, []);
+/**
+ * ETP-6099 — the fixtures are the shipments and orders as stored; this mock plays the server's
+ * `availableShipments` (completed, the invoice partner's, not invoiced, in the invoice's currency —
+ * a shipment's currency being its order's here) and the shipment read the popup makes only to tell
+ * a currency-emptied list apart. com.etendoerp.go covers the real rule.
+ */
+function installFetch({ shipments = [], shipmentLines = [], invoiceHeader = {}, orders = {}, bpId = 'bp1' }) {
+  const currencyOf = (s) => (s.salesOrder ? orders[s.salesOrder]?.currency : invoiceHeader.currency) || null;
+  const candidates = shipments.filter(s => s.documentStatus === 'CO' && s.businessPartner === bpId && s.invoiced !== true);
+  globalThis.fetch = mock.fn(async (url, options) => {
+    if (url.endsWith('/action/availableShipments')) {
+      const listed = candidates.filter(s => !invoiceHeader.currency || currencyOf(s) === invoiceHeader.currency);
+      return { ok: true, json: async () => ({ response: { hasMore: false, data: listed.map(s => ({ ...s, date: s.movementDate, pendingLines: 1 })) } }) };
+    }
+    if (url.endsWith('/action/availableShipmentLines')) {
+      assert.equal(JSON.parse(options.body).includeCovered, true);
+      return mockRes(true, shipmentLines);
+    }
+    if (url.includes('/goods-shipment/goodsShipment?criteria=')) {
+      return mockRes(true, candidates.filter(s => currencyOf(s) && currencyOf(s) !== invoiceHeader.currency));
+    }
     if (url.includes('/sales-invoice/lines/selectors/')) return { ok: true, json: async () => ({ items: [] }) };
     if (url.includes('/sales-invoice/lines/callout')) return { ok: false, json: async () => ({}) };
     if (url.includes('/sales-invoice/header/')) return mockResSingle(true, invoiceHeader);
-    const orderMatch = url.match(/\/sales-order\/header\/([^/?]+)/);
-    if (orderMatch) return mockResSingle(true, orders[orderMatch[1]] || null);
     throw new Error(`Unexpected fetch: ${url}`);
   });
 }
@@ -205,25 +214,46 @@ describe('ImportFromShipmentModal — fetchDocuments filtering', () => {
   });
 });
 
-describe('ImportFromShipmentModal — duplicate detection via the order line FK', () => {
+describe('ImportFromShipmentModal — lines shown on expand', () => {
   afterEach(() => {
     mock.reset();
   });
 
-  it('builds the already-imported order line set from the spec API key', async () => {
-    installFetch({
-      invLines: [{ id: 'il1', goodsShipmentLine: 'sl1', [ORDER_LINE_FK]: 'ol1' }],
-    });
-    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
-    assert.ok(result.sharedContext.alreadyImportedOrderLines.has('ol1'));
+  const row = (over) => ({
+    id: 'sl1', lineNo: 10, product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1',
+    movementQuantity: 5, pendingQuantity: 5, orderLine: 'ol1', orderLineDiscount: 10,
+    importedHere: false, invoicedElsewhere: false, ...over,
+  });
+  const linesOf = async (rows) => {
+    installFetch({ shipmentLines: rows });
+    return fetchLines({ base: '/b', headers: {}, docId: 's1', sharedContext: { invoiceId: 'inv1' } });
+  };
+
+  it('offers the pending quantity and carries the order line under the spec key and its discount', async () => {
+    const [line] = await linesOf([row({ pendingQuantity: 3 })]);
+    assert.equal(line._maxQty, 3);
+    assert.equal(line._alreadyImported, false);
+    assert.equal(line[ORDER_LINE_FK], 'ol1');
+    assert.equal(line._orderDiscount, 10);
+    assert.equal(line._productName, 'Widget');
   });
 
-  it('ignores the legacy cOrderlineId key, which NEO never returns', async () => {
-    installFetch({
-      invLines: [{ id: 'il1', goodsShipmentLine: 'sl1', cOrderlineId: 'ol9' }],
+  const cases = [
+    { name: 'a line this invoice already holds is greyed at its shipped quantity', over: { importedHere: true, pendingQuantity: 0 }, imported: true, max: 5 },
+    { name: 'a line another invoice holds is greyed', over: { invoicedElsewhere: true, pendingQuantity: 2 }, imported: true, max: 5 },
+    { name: 'a line with nothing left is greyed', over: { pendingQuantity: 0 }, imported: true, max: 5 },
+  ];
+  for (const c of cases) {
+    it(c.name, async () => {
+      const [line] = await linesOf([row(c.over)]);
+      assert.equal(line._alreadyImported, c.imported);
+      assert.equal(line._maxQty, c.max);
     });
-    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
-    assert.equal(result.sharedContext.alreadyImportedOrderLines.has('ol9'), false);
+  }
+
+  it('shows the order number of the shipment as its secondary text', () => {
+    assert.deepEqual(getDocDisplay({ id: 's1', documentNo: 'GS-1', movementDate: '2026-01-02', orderDocumentNo: 'SO-7' }),
+      { docNo: 'GS-1', date: '2026-01-02', secondary: '#SO-7' });
   });
 });
 
@@ -242,10 +272,6 @@ describe('ImportFromShipmentModal — buildLineBody order line FK (ETP-5381)', (
     headers: {},
   });
 
-  // ETP-5381 REGRESSION GUARD — the FK must travel under the spec's key.
-  // Under the old `cOrderlineId`, NeoFieldFilter dropped it silently (HTTP 200,
-  // line created, C_OrderLine_ID NULL), which kept M_MATCHSO empty and skipped
-  // `UPDATE C_ORDERLINE SET QtyInvoiced`, leaving the order invoiceable forever.
   it('sends the shipment line source order line under the spec API key for C_OrderLine_ID', async () => {
     installFetch({});
     const body = await buildLineBody(buildArgs({

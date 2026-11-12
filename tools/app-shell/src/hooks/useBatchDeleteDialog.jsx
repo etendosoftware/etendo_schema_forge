@@ -39,6 +39,8 @@ import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
  *   - all succeeded  → host clears the selection.
  *   - partial failure → host keeps only the failed items selected.
  *   - all failed      → host leaves the selection untouched.
+ *   - outcome unknown (ETP-6143, bulk path only) → `onOutcome([], [], { outcomeUnknown: true })`:
+ *     the host re-fetches and clears the selection.
  * The host is expected to re-fetch its list (when at least one item
  * succeeded) inside `onOutcome` — that naturally drops the deleted items and
  * leaves the failed ones in place, no manual list surgery needed here.
@@ -51,13 +53,46 @@ import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
  * grid), and it gives the caller no way to decline the delete after the user has confirmed — which
  * the Movimientos kebab needs for a row its client-side pre-check has already ruled out.
  */
-export function useBatchDeleteDialog({ deleteOneFn, onOutcome, renderDialog, testIdScope } = {}) {
+/**
+ * ETP-6143 — runs a whole selection through `bulkDeleteFn` (ONE request, server-paced) and never
+ * rejects, like `runBatchDelete`. A rejection is NOT a confirmed failure: the job may have been
+ * accepted and still be running on the server (e.g. `useBatch` gave up after five failed status
+ * polls), so it answers `{ outcomeUnknown: true }` instead of marking every item failed. The
+ * caller then refreshes rather than keeping a selection that may already be deleted.
+ */
+async function runBulkDelete(items, bulkDeleteFn, onProgress) {
+  try {
+    return await bulkDeleteFn(items, { onProgress });
+  } catch (err) {
+    console.error('[useBatchDeleteDialog] bulk delete outcome unknown', err);
+    return { succeeded: [], failed: [], errors: [], outcomeUnknown: true };
+  }
+}
+
+/**
+ * ETP-6143 — the single toast for a settled batch. An unknown outcome gets its own warning: the
+ * three-outcome counters would claim a result nobody has confirmed.
+ */
+function toastOutcome(ui, outcome, total) {
+  if (outcome.outcomeUnknown) {
+    toast.warning(ui('bulkDeleteOutcomeUnknown', { count: total }));
+    return;
+  }
+  toastBatchDeleteOutcome(ui, { ...outcome, total });
+}
+
+export function useBatchDeleteDialog({
+  deleteOneFn, bulkDeleteFn, onOutcome, renderDialog, testIdScope,
+} = {}) {
   const ui = useUI();
   // `{ items, deleteOneFn?, onOutcome? }` — the per-request overrides travel with the items so
   // ONE hook instance can serve several targets (DetailView's primary lines + every secondary
   // tab), each with its own endpoint and its own outcome handling.
   const [pending, setPending] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  // ETP-6143 — `{ processed, total }` while a `bulkDeleteFn` job runs; `null` otherwise (the
+  // per-row path has no server-side progress to report).
+  const [progress, setProgress] = useState(null);
   // State-driven `disabled` only lands after a render commits; the ref closes the gap so two
   // clicks dispatched in the same tick can never start two batches.
   const inFlightRef = useRef(false);
@@ -69,7 +104,12 @@ export function useBatchDeleteDialog({ deleteOneFn, onOutcome, renderDialog, tes
     if (inFlightRef.current) return;
     const list = (items || []).filter(Boolean);
     if (!list.length) return;
-    setPending({ items: list, deleteOneFn: options.deleteOneFn, onOutcome: options.onOutcome });
+    setPending({
+      items: list,
+      deleteOneFn: options.deleteOneFn,
+      bulkDeleteFn: options.bulkDeleteFn,
+      onOutcome: options.onOutcome,
+    });
   }, []);
 
   const close = useCallback(() => {
@@ -81,16 +121,30 @@ export function useBatchDeleteDialog({ deleteOneFn, onOutcome, renderDialog, tes
     const items = pending?.items;
     if (!items?.length || inFlightRef.current) return;
     const runOne = pending.deleteOneFn ?? deleteOneFn;
+    // ETP-6143 — a per-request `deleteOneFn` targets a different endpoint than the hook-level
+    // bulk path, so the hook-level `bulkDeleteFn` applies only when the request did not override
+    // `deleteOneFn`. One record keeps the plain DELETE: a job buys nothing for it.
+    const runBulk = pending.bulkDeleteFn
+      ?? (pending.deleteOneFn ? undefined : bulkDeleteFn);
+    const useBulk = Boolean(runBulk) && items.length > 1;
     const report = pending.onOutcome ?? onOutcome;
     inFlightRef.current = true;
     setDeleting(true);
+    if (useBulk) setProgress({ processed: 0, total: items.length });
     try {
       // ETP-5758 — the dialog stays OPEN (and read-only, see DeleteConfirmDialog) while every
       // DELETE runs; it closes only once the whole batch has settled.
-      const { succeeded, failed, errors } = await runBatchDelete(items, runOne);
-      toastBatchDeleteOutcome(ui, { succeeded, failed, errors, total: items.length });
+      const outcome = useBulk
+        ? await runBulkDelete(items, runBulk, ({ processed, total }) => {
+          setProgress({ processed: processed ?? 0, total: total || items.length });
+        })
+        : await runBatchDelete(items, runOne);
+      toastOutcome(ui, outcome, items.length);
       setPending(null);
-      report?.(succeeded, failed);
+      // ETP-6143 — the third argument tells the host the result is unknown (some, all or none
+      // of the items may be gone): it must refetch and drop the selection, not retry it.
+      if (outcome.outcomeUnknown) report?.([], [], { outcomeUnknown: true });
+      else report?.(outcome.succeeded, outcome.failed);
     } catch (err) {
       // `runBatchDelete` never rejects, so this is the host's `onOutcome` (or the toast) throwing
       // — e.g. a cache update on a hook that is gone. Without this the click handler ended in an
@@ -102,8 +156,9 @@ export function useBatchDeleteDialog({ deleteOneFn, onOutcome, renderDialog, tes
     } finally {
       inFlightRef.current = false;
       setDeleting(false);
+      setProgress(null);
     }
-  }, [pending, deleteOneFn, ui, onOutcome]);
+  }, [pending, deleteOneFn, bulkDeleteFn, ui, onOutcome]);
 
   const pendingItems = pending?.items ?? null;
   const count = pendingItems?.length ?? 0;
@@ -123,6 +178,7 @@ export function useBatchDeleteDialog({ deleteOneFn, onOutcome, renderDialog, tes
     count,
     items: pendingItems || [],
     deleting,
+    progress,
     onConfirm: confirm,
     onClose: close,
   };
@@ -133,6 +189,7 @@ export function useBatchDeleteDialog({ deleteOneFn, onOutcome, renderDialog, tes
         open={dialogProps.open}
         count={count}
         deleting={deleting}
+        progress={progress}
         onConfirm={confirm}
         onClose={close}
         testIdScope={testIdScope}

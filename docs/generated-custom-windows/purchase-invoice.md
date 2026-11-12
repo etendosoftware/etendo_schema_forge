@@ -502,27 +502,29 @@ ids, so the chips refresh when the header is re-read after an import from order.
 (`listInvoices`, `OrderInvoiceListSupport`) already joined through the invoice lines.
 
 **Import from Purchase Order** (`artifacts/purchase-invoice/custom/ImportFromPurchaseOrderModal.jsx`, a thin entry point since ETP-5828: `<InvoiceOrderImportModal direction="purchase" />`):
-- The SAME popup as sales invoices (`tools/app-shell/src/windows/custom/shared/InvoiceOrderImportModal.jsx`, data side `invoiceOrderImport.js`); the specs (`purchase-order` → `purchase-invoice`), the labels and, for now, the data path (`importVia: 'client'`, below) differ. Layout, notice area, footer and decisions: «Unified «Importar desde pedido» popup (ETP-5828)» in `docs/generated-custom-windows/sales-invoice.md`.
-- Lists completed purchase orders (`documentStatus=CO`) of the same supplier with `invoiceStatus < 100`, in the invoice's currency.
-- Already-imported lines (matched via `salesOrderLine` / `C_OrderLine_ID` on existing invoice lines) are greyed, labelled "ya importado" and never selected.
-- **Client-side import, for now (ETP-5828, pending the MCP-2 decision).** The unified popup has one data-path switch, `INVOICE_ORDER_IMPORT.purchase.importVia` in `tools/app-shell/src/windows/custom/shared/invoiceOrderImport.js`, set to `'client'` until QA decides whether draft invoices count against an order's pending (MCP-2): the selectable quantity is the order line's ordered − invoiced (no `availableOrderLines` call, so other drafts are NOT subtracted); each selected line is POSTed to `/purchase-invoice/lines` by `buildOrderInvoiceLineBody` (as before the unification: `salesOrderLine`, `invoicedQuantity`, `unitPrice`, `listPrice` — rebuilt as `unitPrice / (1 − discount/100)` at 6 decimals when the order line has none, ETP-5710 — `etgoDiscount`, `tax`, `uOM`, `lineNo`); then, when the carry applies and the invoice has no % yet, the hook's `afterImport` re-reads the header and PATCHes `etgoTotalDiscount` (`shouldPatchInvoiceGlobalDiscount`); a failed PATCH keeps the lines and warns «Líneas importadas, pero no se pudo aplicar el descuento global del X % a la factura». The toast follows the browser's prediction. **QA UI-1 is therefore still open on purchases**: until the PATCH lands the totals show a mix of discounted and undiscounted values for a few seconds. The look is the same Figma popup as sales. Flipping purchases to the server action (`importOrderLines` + `availableOrderLines`, which the backend already serves for `purchase-invoice`) is that one line.
-- Global discount carry-over: the «% Dto. global X%» badge, the row total (the plain sum of its lines, no global discount applied — ETP-5828, QA obs. 3), the carry toggle and the three warnings (texts in the sales-invoice guide; the «orders with different %» one is generic and lists no orders since the ETP-5828 QA decision) are those of `useOrderGlobalDiscountImport.jsx`, decided by `resolveOrderGlobalDiscount` and sent as `carryGlobalDiscount`; on the client path there is no server refusal: a failed line POST is counted in the modal's «Se importaron N línea(s) con M error(es)» warning.
-- **Currency filter — ETP-4029:** the modal fetches the invoice's own header (`GET purchase-invoice/header/{id}`) and keeps only candidate orders whose `currency` matches the invoice's current header currency (purchase orders carry `currency` directly). Empty-state message when candidates exist but none match: `noPurchaseOrdersMatchCurrency`.
+- The SAME popup as sales invoices (`tools/app-shell/src/windows/custom/shared/InvoiceOrderImportModal.jsx`, data side `invoiceOrderImport.js`); only the specs (`purchase-order` → `purchase-invoice`) and the labels differ — since ETP-5828 QA MCP-2 also the listing rule and the import path are the same as sales and the MCP. Layout, notice area, footer and decisions: «Unified «Importar desde pedido» popup (ETP-5828)» in `docs/generated-custom-windows/sales-invoice.md`.
+- **Listed through the invoice's actions (ETP-6099).** Like sales, the orders come from this invoice's `availableOrders` action (`{ limit: 1000, includeCovered: true, detail: true }`, every page: the supplier's completed orders in the invoice's currency with something pending) and each order's lines from ONE `availableOrderLines` call (`{ orderId, includeCovered: true }`), read when the order is expanded or ticked (`eagerLoadLines={false}`; the row hides an order with `pendingLines: 0` and shows the row's `amount` as its total). This replaced the company-wide 500-order GET filtered in the browser and one order-lines GET per order at opening: calls at opening 3 + N → 3 (the list, plus this invoice's lines and header GETs, which feed the global-discount notice). Only when the list is empty is the supplier's order list read (server-filtered by partner and `CO`), to tell «no orders in this currency» apart. A failed read shows the load-error toast (`describeLoadFailure`) and an empty list. **Pending rule = the server's (ETP-5828 QA MCP-2):** ordered − invoiced − what any draft invoice already holds, as on sales and through the MCP. Until then the popup asked `pendingBasis: 'classic'` (no draft deduction) and offered lines another draft purchase invoice already held; the classic rule of these two order actions was removed from the backend. The action answers newest by order date; the popup re-sorts by the row's `creationDate` (the reason for `detail` on the list, `newestCreatedFirst`), so the order stays newest created first.
+- Lines with nothing left are greyed and never selected. Under the product: «ya importado» when the line is on THIS invoice (matched via `salesOrderLine` / `C_OrderLine_ID` on its lines) or fully invoiced; «en factura borrador FV…» (several: «en facturas borrador FV1, FV2») when OTHER draft invoices took it — from the line's `inDraftInvoices` (ETP-5828 QA UI-4, `orderLineNote`).
+- A line other draft invoices hold only PART of stays selectable at the reduced quantity and says how much and where: «1 en factura borrador FC1000020» / «3 en facturas borrador FC1000020, FC1000023» (ETP-5828 QA OBS-2, from the per-draft `quantity` of `inDraftInvoices`). Every note wraps onto at most two lines inside the product column, with the full text as a tooltip (QA BUG-1: it was cut at «…borrador FV1…»); the row keeps its fixed height.
+- **Server-side import (ETP-5828 QA MCP-2).** The selection is imported with ONE `POST purchase-invoice/header/{id}/action/importOrderLines` call (`{ orders: [{ orderId, lines: [{ sourceLineId, quantity }] }], carryGlobalDiscount }`), the action the MCP uses: the server copies price, discount, tax and UoM from the order line, distributes each quantity first over the order line's completed, not yet invoiced receipt lines (one invoice line per receipt line) and invoices the rest against the order line, and carries the global discount in the same transaction; a refusal (more than pending, a discount conflict) imports nothing. It replaced one `POST /purchase-invoice/lines` per line plus a browser-side header PATCH of `etgoTotalDiscount` (`buildOrderInvoiceLineBody`, the hook's `afterImport` and `shouldPatchInvoiceGlobalDiscount` were removed), which also closes QA UI-1 on purchases: the totals no longer show a mix while the PATCH lands. The toast reports what the server says it did (`globalDiscount` of the answer).
+- Global discount carry-over: the «% Dto. global X%» badge, the row total (the plain sum of its lines, no global discount applied — ETP-5828, QA obs. 3), the carry toggle and the three warnings (texts in the sales-invoice guide; the «orders with different %» one is generic and lists no orders since the ETP-5828 QA decision) are those of `useOrderGlobalDiscountImport.jsx`, decided by `resolveOrderGlobalDiscount` and sent as `carryGlobalDiscount`; a conflict the server finds anyway answers 422 `globalDiscountConflict` and imports nothing, as on sales.
+- **Currency filter — ETP-4029:** `availableOrders` only lists orders in the invoice's current currency; when it lists none, the popup compares the supplier's completed orders with the invoice header's currency (`GET purchase-invoice/header/{id}`, read at opening for the global-discount notice anyway). Empty-state message when candidates exist but none match: `noPurchaseOrdersMatchCurrency`.
 
 **Import from Goods Receipt** (`artifacts/purchase-invoice/custom/ImportFromGoodsReceiptModal.jsx`):
-- Lists completed goods receipts (`documentStatus=CO`) for the same supplier with `invoiced !== true`.
-- Each receipt row shows its backing purchase order number (`salesOrder$_identifier`) as the secondary label (right side of the row), not the line total.
-- Receipt lines carry no price; prices are resolved via the `/purchase-invoice/lines/callout` cascade (same pattern as `ImportFromShipmentModal` on the sales side).
-- Already-imported lines are detected via `goodsShipmentLine` / `M_InOutLine_ID` on existing invoice lines.
-- The backing PO line (`salesOrderLine` on the receipt line) is looked up in `/purchase-order/lines/{id}` to carry the line-level discount into the invoice.
+- **Listed through the invoice's actions (ETP-6099, speed):** opens with ONE call, the invoice's `availableReceipts` action (`POST purchase-invoice/header/{id}/action/availableReceipts`, `{ limit: 1000, includeCovered: true, detail: true, pendingBasis: 'classic' }`, paged by `importActionClient.listAll`): the supplier's completed receipts in the invoice's currency with something to invoice, re-sorted newest-created first (`creationDate`). The 500-receipt GET, the invoice-line and header GETs, the product selector download and the per-order currency GETs are gone from the opening. A receipt with nothing left (`pendingLines: 0`) is hidden from its own row (`isDocumentCovered`). Lines load on expand (`eagerLoadLines={false}`), ONE `availableReceiptLines` call per receipt (`includeCovered: true, detail: true, pendingBasis: 'classic'`). A failed read shows the `describeLoadFailure` toast and an empty list.
+- Each receipt row shows its backing purchase order number (`orderDocumentNo`) as the secondary label (right side of the row), not the line total.
+- Receipt lines carry no price; prices are resolved via the `/purchase-invoice/lines/callout` cascade (same pattern as `ImportFromShipmentModal` on the sales side) on EXPAND (row total) and again per selected line at IMPORT; the invoice header and product selector are read once, on the first expand/import (shared `invoiceImportPricing.js`).
+- Already-imported lines come flagged by the server (`importedHere`: this invoice holds the receipt line or its order line) and are greyed at their received quantity; the others offer the server's pending quantity. **Pending rule unchanged from before (`pendingBasis: 'classic'`, product decision):** a line offers its full received (movement) quantity and is greyed only when THIS invoice already holds it — draft invoices are NOT deducted, and a receipt invoiced elsewhere is listed again, as before ETP-6099.
+- The backing PO line and its discount come on the line row (`orderLine`, `orderLineDiscount`), no `/purchase-order/lines/{id}` GET.
 - POST body: `goodsShipmentLine`, `salesOrderLine`, `invoicedQuantity`, `unitPrice`, `listPrice`, `etgoDiscount`, `tax`, `uOM`, `lineNo`.
-- **Currency filter — ETP-4029:** `M_InOut` (goods receipts) has no `C_Currency_ID` column, so currency is resolved through the receipt's linked purchase order; candidates whose linked order currency does not match the invoice's current header currency are excluded, and candidates with no linked order are never excluded. Empty-state message when candidates exist but none match: `noGoodsReceiptsMatchCurrency`. Both import modals share the `noCurrencyMatchMessageKey`/`excludedByCurrency` mechanism on the generic `ImportLinesModal.jsx`, and both re-read the invoice's current header currency on every fetch, so switching the header currency and reopening the modal re-filters immediately.
+- **Currency filter — ETP-4029:** `M_InOut` (goods receipts) has no `C_Currency_ID` column, so currency was resolved through the receipt's linked purchase order; since ETP-6099 the server compares the receipt's own `etgoCurrency` (accepted change). When `availableReceipts` lists nothing, the popup reads the header currency and the supplier's completed receipts in another `etgoCurrency` to choose the empty-state message: `noGoodsReceiptsMatchCurrency`. Both import modals share the `noCurrencyMatchMessageKey`/`excludedByCurrency` mechanism on the generic `ImportLinesModal.jsx`, and both re-read the invoice's current header currency on every fetch, so switching the header currency and reopening the modal re-filters immediately.
 
 **`PurchaseInvoiceBottomPanel.jsx`** was rewritten to wire both modals:
 - `PurchaseInvoiceLinesEmptyState`: shows "Importar desde envío" (receipt) and "Importar desde pedido" (order) buttons when `isDraft && canAddLine && bpId`. Receipt button is first (mirrors sales-invoice order).
 - `PurchaseInvoiceLineActions` (forwardRef): exposes `openImportReceiptModal` and `openImportOrderModal` via `useImperativeHandle` for use from the "+ Añadir línea" dropdown.
 - `PurchaseInvoiceBottomPanel.lineMenuActions`: returns `[{ key:'import-receipt', … }, { key:'import-order', … }]`.
 - **Save-remount modal-type gotcha — ETP-4583:** clicking either import button on a brand-new (unsaved) invoice calls `onSave('order'|'receipt')`, which auto-saves and navigates to the persisted record, remounting `PurchaseInvoiceBottomPanel`. The remount resets the local `pendingModal` ref to its default, so the just-clicked button's modal type would otherwise be lost. Both `PurchaseInvoiceLinesEmptyState` and `PurchaseInvoiceLineActions` now pass the modal type explicitly into `onSave(...)` (never a bare `onSave()`), and the post-remount effect trusts the `forceOpen` prop — carried through `location.state.openImportModal` — over `pendingModal.current` when both are present. Identical fix already landed on the sibling `sales-invoice`'s `InvoiceBottomPanel.jsx` (ETP-4459); the two components are separate copies (not shared code), so the same latent bug had to be fixed independently here. Any future window with an import/action button that can trigger a save-and-navigate on an unsaved record must carry its explicit type through navigation state rather than a component-local ref, since that ref does not survive the remount.
+- **No save on opening a clean invoice's import popup — ETP-6099:** all four «Importar desde…» popups (receipt, order, return, source invoice) of `PurchaseInvoiceBottomPanel.jsx` now pass the shared frozen `IMPORT_SAVE_OPTIONS` (`{ skipSaveWhenClean: true }`, `tools/app-shell/src/windows/custom/shared/importSaveOptions.js`) to DetailView's shared `handleImportClick`, whether opened from the empty-state buttons or from the «+ Añadir línea» menu (`lineMenuActions` → `importRef.current.open*Modal`). On an existing invoice with no unsaved header edits the popup opens without saving or re-reading the invoice, so the «Registro guardado» toast no longer appears. With pending header edits the header is saved first, and on a new invoice the header is created and the popup reopens after navigation (`forceOpen`), both exactly as before. Same opt-in as sales-invoice «Importar desde pedido» (ETP-5828), now applied to every import popup of sales/purchase invoice, goods shipment and goods receipt.
 
 **`DetailView.jsx` — `onRefresh` after import** now calls both `hook.fetchChildren` (lines) and `hook.fetchById` (header) so the `etgoTotalDiscount` the import wrote (server-side since ETP-5828) is immediately reflected in the `DocumentTotalsPanel` without requiring a manual page reload.
 
@@ -535,7 +537,7 @@ ids, so the chips refresh when the header is re-read after an import from order.
 
 **`ImportLinesModal.jsx` — free-typing quantity field, ETP-5178:** the per-line quantity input in both `ImportFromPurchaseOrderModal` and `ImportFromGoodsReceiptModal` no longer clamps the value on every keystroke — typing, select-all, delete, and decimal entry all work freely. Range/validity (numeric, non-zero, magnitude ≤ the line's available quantity) is checked only on `onBlur`: an invalid value reverts to the last committed value and shows a `toast.error`, either `qtyMaxAllowed` ("The maximum allowed is {max}" / "El máximo permitido es {max}") when the value exceeds the available quantity, or `qtyMustBePositive` ("The quantity must be greater than 0" / "La cantidad debe ser mayor a 0") for zero/negative/empty/non-numeric input. Fixed once in the shared component, so it applies identically to every import modal that embeds it.
 
-**`ImportLinesModal.jsx` — generic extension props, ETP-5828:** `initialExtraState`, `renderDocAdornment`, `renderSelectionPanel`, `selectedDocumentsKey`, `importButtonKey` and `getSuccessToast` (all optional, defaulting to the previous behaviour; `getSelectionHint`, `selectionPanelMinHeight` and `getDocTotal` were removed), and the per-line path's `afterImport` — used here by the order import while purchases import client-side — also receives `documents`, `extraState` and `selectedDocIds` and returns a value handed to `getSuccessToast`. The Figma redesign (fixed 800 × 648 dialog, select-all, master checkbox, −/+ stepper, fixed notice area) applies to every popup of this window built on it, the receipt, return and source-invoice imports included. Prop table: `docs/ui-customization.md` §23.
+**`ImportLinesModal.jsx` — generic extension props, ETP-5828:** `initialExtraState`, `renderDocAdornment`, `renderSelectionPanel`, `importButtonKey`, `getSuccessToast`, `countLinesInFooter` and `describeLine` (all optional, defaulting to the previous behaviour; `getSelectionHint`, `selectionPanelMinHeight`, `getDocTotal` and — QA UI-6 — `selectedDocumentsKey` were removed), and the per-line path's `afterImport` also receives `documents`, `extraState` and `selectedDocIds` and returns a value handed to `getSuccessToast`. Only «Importar desde pedido» sets `countLinesInFooter`, so its footer counts the selected LINES, singular or plural («1 línea seleccionada», «2 líneas seleccionadas»); the receipt, return and source-invoice popups keep «N Seleccionados». Ticking a document whose lines are not loaded yet loads AND selects them in the same click (QA UI-3). The Figma redesign (fixed 800 × 648 dialog, select-all, master checkbox, −/+ stepper, fixed notice area) applies to every popup of this window built on it, the receipt, return and source-invoice imports included. Prop table: `docs/ui-customization.md` §23.
 
 **Automated evidence (ETP-3908)**:
 - `e2e/tests/flows/purchase-invoice-import-from-order.mocked.spec.js` — 4 mocked Playwright tests: single line (asserts POST body fields), multiple lines (asserts 2 POSTs), line-level discount (asserts `etgoDiscount: 15` in POST), order-level discount (asserts header PATCH with `etgoTotalDiscount: 15`).
@@ -1611,7 +1613,14 @@ name is already a proper Spanish display string and needs no translation).
     `purchase-invoice/lines/callout` cascade `ImportFromGoodsReceiptModal` uses. Imported
     lines always carry a **negative** invoiced quantity (mirrors sales-invoice's
     `ImportFromReturnShipmentModal` for its `ARI_RM` case) — consistent with "a rectificative
-    invoice generated from a return must always have a negative total."
+    invoice generated from a return must always have a negative total." **ETP-6099:** the popup
+    opens with ONE `availableReturns` call on the invoice (`includeCovered: true, detail: true`;
+    the supplier, status and `invoiceStatus < 100` rules are the server's; re-sorted by
+    `creationDate`; secondary text = `sourceDocumentNo`), loads lines on expand with ONE
+    `availableReturnLines` call (`blockedReason: importedHere` greys a line this invoice holds,
+    at its returned quantity), hides a return with `pendingLines: 0`, and runs the price callout
+    on expand (the row total) and per selected line at import (header and product selector read
+    once, `shared/invoiceImportPricing.js`). A failed read shows the `describeLoadFailure` toast.
   - **"Import from Source Invoice"** (`ImportFromSourceInvoiceModal.jsx`) — lists this
     supplier's own **completed, FAC-subtype only** purchase invoices
     (`getApSubtype(inv) === 'FAC'`, filtered **client-side** because `apInvoiceSubtype` is a
@@ -1627,6 +1636,21 @@ name is already a proper Spanish display string and needs no translation).
     imported from via `C_Invoice_Reverse` — independent of, and does not interfere with, the
     separate "Reversed Invoices" / 349-boxes tab on the same table. `RelatedDocuments.jsx`
     renders one chip per linked origin.
+    **ETP-6099 (speed):** the candidates now come from this invoice's `availableOriginInvoices`
+    action (`{ limit: 1000, includeCovered: true, detail: true }`, every page; FAC-only, own
+    supplier, completed, no currency filter — decided server-side, so the client-side
+    `getApSubtype()` filter is gone) and each source invoice's lines from ONE
+    `availableOriginInvoiceLines` call (`{ invoiceId, includeCovered: true, detail: true }`),
+    read when the invoice is expanded or selected (`eagerLoadLines={false}`). Calls at opening:
+    2 + N (company-wide 500-invoice GET, this invoice's lines GET, one lines GET per candidate)
+    → **1**. The row hides an invoice with `pendingLines: 0` and shows its total from the row's
+    `amount` (unsigned Σ unitPrice × |qty| over all its lines, shown negated). A line already
+    imported here comes with `importedHere: true` and stays greyed with its own quantity. The
+    product callout still runs per selected line at IMPORT time and the header `originInvoices`
+    PATCH is unchanged. A failed read shows the load-error toast and an empty list. Edge
+    differences: lines without a product / with quantity 0 are no longer listed, the row total
+    does not follow a quantity edited in the popup. The list is re-sorted newest created first by
+    the row's `creationDate`, as before.
   - Both modals are wired into all three surfaces FAC's own import options use: the empty-state
     buttons (`PurchaseInvoiceLinesEmptyState`), the ongoing "+ Añadir línea" dropdown trigger
     (`PurchaseInvoiceLineActions`/`detailExtraActions`), and the line kebab menu
@@ -1848,6 +1872,26 @@ surfaces the error instead of proceeding with stale data. **ETP-5700:** the topb
 carried `onSave`/`isDirty` was removed; the form kebab entry's host does not receive them, so the
 kebab entry is disabled while the header is dirty instead (see "Unsaved header edits block the form
 send" in the ETP-5700 section).
+
+**Classic fiscal messages reworded for GO (ETP-6158):** the SII, AEAT 349 and (on a Bizkaia/Batuz
+organisation) TicketBAI messages this window can raise whose Classic text names Classic-only UI
+reach the user reworded with GO's labels, in the UI language, with their AD_MESSAGE key in
+`messageKeys` (REST: the `error` object; MCP: the root of the error result). Done server-side at
+NEO's exit by `ClassicMessageRemap` (`com.etendoerp.go` `docs/neo-headless.md` §4.17: full catalog,
+matching rules, how to add an entry); the Classic `AD_MESSAGE` rows are unchanged. Keys a user can
+meet here: SII `AEATSII_EmptyCertificatePath`, `AEATSII_InvoiceManualSending`,
+`AEATSII_SII_ACCRUAL_DATE_EMPTY`, and the literals `siiMissingInvoiceType` ("Tipo factura", SIF tab)
+and `siiMissingDocumentNo` (below); AEAT 349 `AEAT349_CINVREV_CHECK` (Rectificaciones tab); on
+Batuz, `TBAI_ConfigNotFound` (`PurchaseInvoiceBatuzRegister`) and `TBAI_CertificateNotValid`.
+VERI\*FACTU never applies to purchases, and the TicketBAI recipient checks (`TBAI_EmptyNifCode`,
+`TBAI_EmptyPostalCode`, `TBAI_EmptyDir`) are sales-only (`ProcessInvoiceTbaiHook` checks only
+sales invoices) — see `sales-invoice.md`.
+
+> **Superseded in part by ETP-6158:** the "Nº documento" sentence below is now the literal entry
+> `siiMissingDocumentNo` of that catalog; `remapDriftedFieldLabels` only delegates to it. Only the
+> matched sentence is replaced, not the whole `message`, and the language is captured for every
+> request right after authentication (`NeoLanguage.captureRequestCode()`), not only in
+> `SiiSendHandler`.
 
 **Vendor-reference validation message fully replaced with a bilingual GO sentence (ETP-5745, 5th
 fix) — this is the authoritative note, verified live against this window.** Classic's purchase-only
@@ -3009,7 +3053,9 @@ The `id` of every call is the draft purchase invoice. `lines` omitted imports ev
 - **Answer:** the same envelope as on the sales invoice — see the «Answer» entry of the MCP section in
   `docs/generated-custom-windows/sales-invoice.md`, which documents it once for both directions (`order` / `salesOrder`,
   `globalDiscount`, and the `amount` / `unitPrice` / `discount` figures of the discovery actions). On a purchase invoice
-  `salesOrder` names the purchase order. The window reads none of it while purchases import client-side (MCP-2).
+  `salesOrder` names the purchase order. The window's popup imports through this same action since ETP-5828 QA MCP-2,
+  and its toast follows `globalDiscount`. `availableOrderLines` also names the OTHER draft invoices holding a line
+  (`inDraftInvoices: [{id, documentNo}]`, QA UI-4), so the agent can tell the user where a missing quantity is.
 - The classic `Createfromorders`, `Createfrominouts` and `CreateFrom` buttons are redirected to the import actions
   through `MCP_CONFIG`. `createPurchaseInvoice` on the purchase order or the goods receipt (created AND completed in one call) remain the one-step alternatives. The spec prompt (`agent-prompts/purchase-invoice/spec.md`)
   describes the flow.
@@ -3138,3 +3184,9 @@ An issued invoice is voided with a credit note (factura rectificativa), never by
 - the agentic docs page `etendo-go-docs/agentic/finance/invoices.md` walks the five calls.
 
 **Verify:** `etendo_action(spec: "purchase-invoice", id: <completed invoice>, action: "documentAction", parameters: {docAction: "VO"})` answers 422 naming the credit note; re-run the okr probe `f-void-invoice`.
+
+## One label format for the SIF tab's selects — ETP-6179
+
+The purchase invoice mounts the same shared `SifTab`, so its SII *Tipo factura* options (F6, LC, F5,
+F1) read "CODE - Label" with the code once, exactly like the sales invoice; see
+[sales-invoice.md → One label format for the SIF tab's selects](sales-invoice.md#one-label-format-for-the-sif-tabs-selects--etp-6179).

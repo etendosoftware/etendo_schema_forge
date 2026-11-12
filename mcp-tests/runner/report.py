@@ -49,8 +49,11 @@ from . import decide as rule
 #: v6 (plan 2026-10-22 §3.3, rule 2): every decided task carries `result`
 #: (subjectOnly | subjectWin | referenceWin | referenceOnly | tie) and the KR
 #: block counts them in `results`; the capability / measurement split is gone.
-REPORT_VERSION = 6
-SUMMARY_SCHEMA_VERSION = 6
+#: v7 (Valentin, 2026-11-04): the headline is subject Win / tasks both platforms
+#: can do (`bothPossible` = Win + Win + tie). Only-results leave the number and
+#: are listed by name in `subjectOnlyTasks` / `referenceOnlyTasks` (the notes).
+REPORT_VERSION = 7
+SUMMARY_SCHEMA_VERSION = 7
 STABILITY_TARGET = 0.90
 
 #: The KR2.1 target (plan 2026-10-22 §3.3).
@@ -58,6 +61,9 @@ KR_TARGET = 0.80
 
 #: The five results a decided task can have, in report order (plan §3.3).
 RESULTS = ("subjectOnly", "subjectWin", "referenceWin", "referenceOnly", "tie")
+
+#: The results that count in the KR2.1 number: both platforms can do the task.
+HEAD_TO_HEAD = ("subjectWin", "referenceWin", "tie")
 
 #: How a platform is named in the KR line ("Etendo Only", "Holded Win").
 PLATFORM_LABELS = {"etendo-go": "Etendo", "holded": "Holded"}
@@ -555,17 +561,19 @@ def build_summary(compare_dir: Path) -> dict[str, Any]:
 
     decided = [r for r in task_rows if r["status"] == "decided"]
     counts = {key: sum(1 for r in decided if r["result"] == key) for key in RESULTS}
-    s_wins = counts["subjectOnly"] + counts["subjectWin"]
+    # Valentin, 2026-11-04: the comparison is only head-to-head. A task one platform cannot do
+    # says nothing about which MCP is better, so it leaves the number and becomes a note.
+    both_possible = counts["subjectWin"] + counts["referenceWin"] + counts["tie"]
     kr = {
         "subject": subject.name, "reference": reference.name,
         "subjectLabel": platform_label(subject_meta), "referenceLabel": platform_label(reference_meta),
-        "tasks": len(task_rows), "evaluated": len(decided),
-        # Plan 2026-10-22 §3.3: the headline is (subject Win + subject Only) / evaluated; the five
-        # results are always shown beside it.
+        "tasks": len(task_rows), "evaluated": len(decided), "bothPossible": both_possible,
         "results": counts,
-        "winRate": round(s_wins / len(decided), 4) if decided else None,
+        "winRate": round(counts["subjectWin"] / both_possible, 4) if both_possible else None,
         "target": KR_TARGET,
         "fragile": sum(1 for r in decided if r["fragile"]),
+        "subjectOnlyTasks": [r["task"] for r in decided if r["result"] == "subjectOnly"],
+        "referenceOnlyTasks": [r["task"] for r in decided if r["result"] == "referenceOnly"],
     }
 
     stumbles = {}
@@ -697,9 +705,15 @@ def render_markdown(summary: dict[str, Any]) -> str:
     lines = [
         f"# MCP comparison {summary['compareId']} — {label}",
         "",
-        f"**KR2.1: {_pct(kr['winRate'])} sobre {kr['evaluated']} pruebas** (meta {_pct(kr['target'])}) — "
-        + ", ".join(f"{kr['results'][key]} {_result_name(key, kr)}" for key in RESULTS)
+        f"**KR2.1: {_pct(kr['winRate'])} sobre {kr['bothPossible']} pruebas posibles en ambas** "
+        f"(meta {_pct(kr['target'])}) — "
+        + ", ".join(f"{kr['results'][key]} {_result_name(key, kr)}" for key in HEAD_TO_HEAD)
         + f". {kr['tasks']} en la suite, {kr['fragile']} frágiles.",
+        "",
+        f"Notas — {_result_name('subjectOnly', kr)} ({len(kr['subjectOnlyTasks'])}): "
+        + (", ".join(f"`{t}`" for t in kr["subjectOnlyTasks"]) or "ninguna")
+        + f". {_result_name('referenceOnly', kr)} ({len(kr['referenceOnlyTasks'])}): "
+        + (", ".join(f"`{t}`" for t in kr["referenceOnlyTasks"]) or "ninguna") + ".",
         "",
         f"Rule v{summary['rule']['version']} (parameters {summary['rule']['parametersSha']}: "
         + ", ".join(f"{k}={v:g}" for k, v in summary["rule"]["parameters"].items())
@@ -969,7 +983,7 @@ def main(argv: list[str] | None = None) -> int:
             summary = write_summary(compare_dir)
             kr = summary["kr"]
             print(f"{'official' if summary['official'] else 'UNOFFICIAL'} · KR {_pct(kr['winRate'])} "
-                  f"({kr['results']['subjectOnly'] + kr['results']['subjectWin']}/{kr['evaluated']}) "
+                  f"({kr['results']['subjectWin']}/{kr['bothPossible']} possible on both) "
                   f"-> {compare_dir / 'summary.md'}")
             return 0
         result = stability(build_summary(comparison(args.a)), build_summary(comparison(args.b)))

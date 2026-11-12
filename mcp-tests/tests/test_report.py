@@ -155,7 +155,7 @@ class SummaryTest(unittest.TestCase):
             "w-invoice-one-product-issued": ("decided", "subject", "0-capability", "subjectOnly"),
             "q-product-prices-stock": ("decided", "subject", "1-success", "subjectWin"),
             "f-process-sales-order": ("decided", "subject", "3-tokens", "subjectWin"),
-            "e-unknown-document": ("decided", "tie", "1-noSuccess", "tie"),
+            "e-unknown-document": ("decided", "reference", "1-subjectFailed", "referenceWin"),
             "q-both-not-possible": ("excluded", None, None, None),
             "q-short-of-attempts": ("notEvaluable", None, None, None),
             "q-tokens-missing": ("notEvaluable", None, None, None),
@@ -163,17 +163,23 @@ class SummaryTest(unittest.TestCase):
         reasons = {r["task"]: r["reason"] for r in self.summary["notEvaluable"]}
         self.assertEqual(reasons["q-tokens-missing"], "reference: token usage missing")
 
-    def test_kr_headline_counts_the_five_results(self):
+    def test_kr_headline_is_wins_over_tasks_both_platforms_can_do(self):
         kr = self.summary["kr"]
         self.assertEqual((kr["tasks"], kr["evaluated"]), (7, 4),
-                         "excluded and not-evaluable tasks are out of the denominator")
-        self.assertEqual(kr["results"], {"subjectOnly": 1, "subjectWin": 2, "referenceWin": 0,
-                                         "referenceOnly": 0, "tie": 1})
-        self.assertEqual((kr["winRate"], kr["target"]), (0.75, 0.8))
+                         "excluded and not-evaluable tasks are out of the count")
+        # Rule 3: e-unknown-document is 0/3 on both sides, a loss for the subject (it was a tie).
+        self.assertEqual(kr["results"], {"subjectOnly": 1, "subjectWin": 2, "referenceWin": 1,
+                                         "referenceOnly": 0, "tie": 0})
+        # The Etendo Only task leaves the number: 2 wins over the 3 tasks both can do.
+        self.assertEqual((kr["bothPossible"], kr["winRate"], kr["target"]), (3, 0.6667, 0.8))
+        self.assertEqual((kr["subjectOnlyTasks"], kr["referenceOnlyTasks"]),
+                         (["w-invoice-one-product-issued"], []))
         self.assertEqual((kr["subjectLabel"], kr["referenceLabel"]), ("Etendo", "Holded"))
-        headline = report.render_markdown(self.summary).splitlines()[2]
-        self.assertEqual(headline, "**KR2.1: 75 % sobre 4 pruebas** (meta 80 %) — 1 Etendo Only, 2 Etendo Win, "
-                                   "0 Holded Win, 0 Holded Only, 1 empate. 7 en la suite, 1 frágiles.")
+        lines = report.render_markdown(self.summary).splitlines()
+        self.assertEqual(lines[2], "**KR2.1: 67 % sobre 3 pruebas posibles en ambas** (meta 80 %) — "
+                                   "2 Etendo Win, 1 Holded Win, 0 empate. 7 en la suite, 1 frágiles.")
+        self.assertEqual(lines[4], "Notas — Etendo Only (1): `w-invoice-one-product-issued`. "
+                                   "Holded Only (0): ninguna.")
 
     def test_a_reference_win_by_capability_is_holded_only(self):
         self.assertEqual(report.task_result(rule.Decision("decided", rule.REFERENCE, "0-capability")),
@@ -329,7 +335,7 @@ class SummaryTest(unittest.TestCase):
         self.assertEqual(unescaped(row), unescaped(header))
 
     def test_rule_version_and_parameters_are_recorded(self):
-        self.assertEqual(self.summary["rule"]["version"], 2)
+        self.assertEqual(self.summary["rule"]["version"], 3)
         self.assertEqual(self.summary["rule"]["parameters"]["callsMargin"], 0.2)
         self.assertEqual(self.summary["pins"]["rule"], {k: self.summary["rule"][k]
                                                         for k in ("version", "parameters", "parametersSha")})

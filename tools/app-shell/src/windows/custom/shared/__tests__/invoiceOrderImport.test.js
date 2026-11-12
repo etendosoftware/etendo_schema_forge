@@ -2,6 +2,7 @@
 // @covers artifacts/sales-invoice/custom/ImportFromOrderModal.jsx
 // @covers artifacts/purchase-invoice/custom/ImportFromPurchaseOrderModal.jsx
 // @covers tools/app-shell/src/windows/custom/shared/InvoiceOrderImportModal.jsx
+// @covers tools/app-shell/src/windows/custom/shared/importActionClient.js
 import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -15,10 +16,13 @@ import {
   fetchOrderLines,
   submitOrderImport as submitWith,
   discountOutcome,
-  buildOrderInvoiceLineBody,
+  orderLineNote,
   MAX_LISTED_ORDERS,
   OrderImportLoadError,
   describeLoadFailure,
+  isOrderCovered,
+  getOrderTotal,
+  newestCreatedFirst,
 } from '../invoiceOrderImport.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -53,18 +57,21 @@ describe('invoice order import — one popup, two directions', () => {
     });
   }
 
-  // The one switch of the data path (MCP-2, `importVia`): sales list and read pending through the
-  // invoice's actions (ETP-5828: availableOrders for the orders, ONE availableOrderLines per order),
-  // purchases from the order GETs until QA decides whether drafts count as pending.
-  for (const [direction, viaServer] of [['sales', true], ['purchase', false]]) {
+  // Both directions list and read pending through the invoice's actions (ETP-5828 for sales,
+  // ETP-6099 for purchases: availableOrders for the orders, ONE availableOrderLines per order), and
+  // since QA MCP-2 with the SAME rule: purchases asked `pendingBasis: 'classic'` (no draft
+  // deduction), so their popup offered lines another draft invoice already held.
+  for (const direction of ['sales', 'purchase']) {
     const config = INVOICE_ORDER_IMPORT[direction];
     const invoice = config.invoiceSpec;
     const order = config.orderSpec;
 
-    it(`${direction}: ${viaServer ? 'lists through availableOrders and availableOrderLines' : 'reads the order GETs, pending = ordered − invoiced, no action call'}`, async () => {
+    it(`${direction}: lists through availableOrders and availableOrderLines, never the order GETs`, async () => {
       const urls = [];
-      const stub = async (url) => {
+      const bodies = [];
+      const stub = async (url, opts) => {
         urls.push(url);
+        if (opts?.body) bodies.push([url, JSON.parse(opts.body)]);
         if (url.endsWith('/availableOrders')) return mockRes(true, [{ id: 'o1', documentNo: 'SO-1', date: '2026-11-01' }]);
         if (url.endsWith('/availableOrderLines')) return mockRes(true, [{ id: 'ol1', pendingQuantity: 1 }]);
         if (url.includes(`/${order}/lines`)) return mockRes(true, [{ id: 'ol1', orderedQuantity: 5, invoicedQuantity: 2, unitPrice: 10 }]);
@@ -72,28 +79,35 @@ describe('invoice order import — one popup, two directions', () => {
       };
       await fetchOrderDocuments({ apiFetch: stub, config, base: '/b', bpId: 'bp1', invoiceId: 'inv1' });
       const lines = await fetchOrderLines({ apiFetch: stub, config, base: '/b', docId: 'o1', sharedContext: { invoiceId: 'inv1' } });
-      assert.deepEqual(urls.map(u => u.split('?')[0]), viaServer
-        ? [`/b/${invoice}/header/inv1/action/availableOrders`, `/b/${invoice}/lines`, `/b/${invoice}/header/inv1`,
-          `/b/${invoice}/header/inv1/action/availableOrderLines`]
-        : [`/b/${order}/header`, `/b/${invoice}/lines`, `/b/${invoice}/header/inv1`, `/b/${order}/lines`]);
-      assert.equal(lines[0]._maxQty, viaServer ? 1 : 3);
+      assert.deepEqual(urls.map(u => u.split('?')[0]),
+        [`/b/${invoice}/header/inv1/action/availableOrders`, `/b/${invoice}/lines`, `/b/${invoice}/header/inv1`,
+          `/b/${invoice}/header/inv1/action/availableOrderLines`]);
+      assert.equal(lines[0]._maxQty, 1);
+      // Both directions ask `detail` on the list: the creationDate purchases sort by, and a
+      // pendingLines that leaves out the lines already on this invoice (so an order with nothing
+      // selectable is hidden at open, as before the lines loaded lazily). No `pendingBasis`: the
+      // server rule, drafts deducted, as the MCP gets it.
+      assert.deepEqual(bodies.find(([u]) => u.endsWith('/availableOrders'))[1],
+        { limit: MAX_LISTED_ORDERS, includeCovered: true, detail: true });
+      assert.deepEqual(bodies.find(([u]) => u.endsWith('/availableOrderLines'))[1],
+        { orderId: 'o1', includeCovered: true });
+    });
+
+    it(`${direction}: imports through the ${invoice} importOrderLines action, in ONE call`, async () => {
+      const calls = [];
+      const stub = async (url, opts) => { calls.push([url, opts]); return mockRes(true, { importedCount: 1 }); };
+      const result = await submitWith({
+        apiFetch: stub, config, base: '/b', invoiceId: 'inv1', selection: {},
+        lines: [{ line: { id: 'ol1' }, qty: 1, docId: 'o1' }],
+        serverCarry: () => ({ carryGlobalDiscount: false, afterImportResult: { carried: false } }),
+        ui: k => k,
+      });
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0][0], `/b/${invoice}/header/inv1/action/importOrderLines`);
+      assert.equal(calls[0][1].method, 'POST');
+      assert.equal(result.ok, true);
     });
   }
-
-  it('sales: imports through the sales-invoice importOrderLines action', async () => {
-    const calls = [];
-    const stub = async (url, opts) => { calls.push([url, opts]); return mockRes(true, { importedCount: 1 }); };
-    const result = await submitWith({
-      apiFetch: stub, config: SALES, base: '/b', invoiceId: 'inv1', selection: {},
-      lines: [{ line: { id: 'ol1' }, qty: 1, docId: 'o1' }],
-      serverCarry: () => ({ carryGlobalDiscount: false, afterImportResult: { carried: false } }),
-      ui: k => k,
-    });
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0][0], '/b/sales-invoice/header/inv1/action/importOrderLines');
-    assert.equal(calls[0][1].method, 'POST');
-    assert.equal(result.ok, true);
-  });
 });
 
 function mockRes(ok, data) {
@@ -160,7 +174,8 @@ describe('invoice order import (sales) — fetchDocuments lists through availabl
     assert.equal(url, '/b/sales-invoice/header/inv1/action/availableOrders');
     assert.equal(opts.method, 'POST');
     assert.equal(opts.refreshVersion, false);
-    assert.deepEqual(JSON.parse(opts.body), { limit: MAX_LISTED_ORDERS });
+    // `detail`: pendingLines leaves out the lines already on this invoice (ETP-6099).
+    assert.deepEqual(JSON.parse(opts.body), { limit: MAX_LISTED_ORDERS, includeCovered: true, detail: true });
     assert.equal(globalThis.fetch.mock.calls.some(c => String(c.arguments[0]).includes('/sales-order/header')), false,
       'a non-empty list never reads the order GET');
     assert.deepEqual(result.documents.map(d => [d.id, d.orderDate, d.documentNo]),
@@ -168,11 +183,43 @@ describe('invoice order import (sales) — fetchDocuments lists through availabl
     assert.deepEqual(result.sharedContext.orderDiscountMap, { o2: 10 });
     assert.equal(result.excludedByCurrency, false);
   });
+
+  // ETP-6099 — the actions answer newest by document date; the popups listed newest created.
+  it('newestCreatedFirst re-sorts by creationDate and keeps the server order without it', () => {
+    const rows = [{ id: 'a', creationDate: '2026-01-01T10:00:00' }, { id: 'b', creationDate: '2026-03-01T10:00:00' },
+      { id: 'c', creationDate: '2026-02-01T10:00:00' }];
+    assert.deepEqual(newestCreatedFirst(rows).map(r => r.id), ['b', 'c', 'a']);
+    const plain = [{ id: 'x' }, { id: 'y' }];
+    assert.equal(newestCreatedFirst(plain), plain);
+  });
+
+  for (const [name, rows, expected] of [
+    ['equal timestamps keep the server order (stable)',
+      [{ id: 'a', creationDate: '2026-01-01T10:00:00' }, { id: 'b', creationDate: '2026-01-01T10:00:00' }], ['a', 'b']],
+    ['rows without creationDate go last, in server order',
+      [{ id: 'n1' }, { id: 'a', creationDate: '2026-01-01T10:00:00' }, { id: 'n2' },
+        { id: 'b', creationDate: '2026-02-01T10:00:00' }], ['b', 'a', 'n1', 'n2']],
+    ['an unparseable creationDate sorts like a missing one',
+      [{ id: 'bad', creationDate: 'not a date' }, { id: 'a', creationDate: '2026-01-01T10:00:00' }], ['a', 'bad']],
+  ]) {
+    it(`newestCreatedFirst: ${name}`, () => {
+      assert.deepEqual(newestCreatedFirst(rows).map(r => r.id), expected);
+    });
+  }
+
+  // ETP-6099 — lines are read on expand, so the row decides from the availableOrders row.
+  it('the row hides an order with pendingLines 0 and totals it from amount', () => {
+    assert.equal(isOrderCovered({ pendingLines: 0 }), true);
+    assert.equal(isOrderCovered({ pendingLines: 2 }), false);
+    assert.equal(isOrderCovered({}), false);
+    assert.equal(getOrderTotal({ amount: '45.5' }), 45.5);
+    assert.equal(getOrderTotal({}), null);
+  });
 });
 
-// ETP-5828 — on the SALES (server) path a failed availableOrders / availableOrderLines read is not
-// "nothing to import": it rejects with OrderImportLoadError carrying the body. The purchase (client)
-// path still reads a failed order list as an empty one.
+// ETP-5828 — a failed availableOrders / availableOrderLines read is not "nothing to import": it
+// rejects with OrderImportLoadError carrying the body. ETP-6099: purchases too (they list through
+// the same actions), so the popup toasts it instead of showing an empty list in silence.
 describe('invoice order import — a failed list read', () => {
   afterEach(() => {
     mock.reset();
@@ -187,9 +234,9 @@ describe('invoice order import — a failed list read', () => {
   for (const [name, read, rejects] of [
     ['sales availableOrders', () => fetchDocuments({ base: '/b', bpId: 'bp1', invoiceId: 'inv1' }), true],
     ['sales availableOrderLines', () => fetchLines({ base: '/b', docId: 'o1', sharedContext: { invoiceId: 'inv1' } }), true],
-    ['purchase order list', () => fetchOrderDocuments({
+    ['purchase availableOrders', () => fetchOrderDocuments({
       apiFetch, config: invoiceOrderImportConfig('purchase'), base: '/b', bpId: 'bp1', invoiceId: 'inv1',
-    }), false],
+    }), true],
   ]) {
     it(`${name}: ${rejects ? 'rejects with OrderImportLoadError carrying the body' : 'resolves to no documents, as before'}`, async () => {
       globalThis.fetch = failingFetch();
@@ -230,6 +277,9 @@ describe('invoice order import (sales) — fetchDocuments currency filter', () =
     const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
     assert.equal(result.documents.length, 1);
     assert.equal(result.documents[0].id, 'o1');
+    // Not offered by the action even with includeCovered: nothing to import, the row hides it.
+    assert.equal(result.documents[0].pendingLines, 0);
+    assert.equal(isOrderCovered(result.documents[0]), true);
     assert.equal(result.excludedByCurrency, false);
   });
 
@@ -400,6 +450,53 @@ describe('invoice order import (sales) — submitOrderImport (importOrderLines a
   });
 });
 
+// ETP-5828 (QA UI-4) — a line taken by OTHER draft invoices names them (`inDraftInvoices` of
+// availableOrderLines) instead of a bare «ya importado»; on THIS invoice or fully invoiced it
+// still says «ya importado».
+describe('invoice order import — what a taken line says', () => {
+  const ui = (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key);
+
+  it('keeps the drafts holding a line, by document number', async () => {
+    const stub = async () => mockRes(true, [
+      { id: 'ol1', pendingQuantity: 0, inDraftInvoices: [{ id: 'i2', documentNo: 'FV1000002', quantity: 2 }] },
+      { id: 'ol2', pendingQuantity: 3 },
+      { id: 'ol3', pendingQuantity: 1,
+        inDraftInvoices: [{ id: 'i3', documentNo: 'FC1', quantity: 1 }, { id: 'i4', documentNo: 'FC2', quantity: 2.5 }] },
+    ]);
+    const lines = await fetchOrderLines({
+      apiFetch: stub, config: SALES, base: '/b', docId: 'o1', sharedContext: { invoiceId: 'inv1' },
+    });
+    assert.deepEqual(lines.map(l => l._inDraftInvoices), [['FV1000002'], [], ['FC1', 'FC2']]);
+    assert.deepEqual(lines.map(l => l._heldByDrafts), [2, 0, 3.5]);
+  });
+
+  for (const [name, line, expected] of [
+    ['held by one other draft', { _inDraftInvoices: ['FV1000002'] }, 'inDraftInvoiceOne:{"documentNo":"FV1000002"}'],
+    ['held by two other drafts', { _inDraftInvoices: ['FV1', 'FV2'] }, 'inDraftInvoiceMany:{"documentNos":"FV1, FV2"}'],
+    ['on THIS invoice (also held elsewhere)', { _alreadyInCurrent: true, _inDraftInvoices: ['FV1'] }, 'alreadyImported'],
+    ['fully invoiced (no draft holds it)', { _inDraftInvoices: [] }, 'alreadyImported'],
+  ]) {
+    it(`orderLineNote (greyed out): ${name}`, () => {
+      assert.equal(orderLineNote(line, { imported: true }, ui), expected);
+    });
+  }
+
+  // QA OBS-2 — a line other drafts hold only PART of stays selectable and says how much and where.
+  const fmtQty = (q) => `#${q}`;
+  for (const [name, line, expected] of [
+    ['partly held by one other draft', { _inDraftInvoices: ['FC1000020'], _heldByDrafts: 1 },
+      'partlyInDraftInvoiceOne:{"quantity":"#1","documentNo":"FC1000020"}'],
+    ['partly held by two other drafts', { _inDraftInvoices: ['FC1', 'FC2'], _heldByDrafts: 3 },
+      'partlyInDraftInvoiceMany:{"quantity":"#3","documentNos":"FC1, FC2"}'],
+    ['held by no other draft', { _inDraftInvoices: [], _heldByDrafts: 0 }, null],
+    ['older backend: no per-draft quantity', { _inDraftInvoices: ['FC1'], _heldByDrafts: 0 }, null],
+  ]) {
+    it(`orderLineNote (selectable): ${name}`, () => {
+      assert.equal(orderLineNote(line, { imported: false }, ui, fmtQty), expected);
+    });
+  }
+});
+
 describe('invoice order import (sales) — duplicate detection via the order line FK', () => {
   afterEach(() => {
     mock.reset();
@@ -465,57 +562,6 @@ describe('invoice order import (sales) — fetchDocuments invoice global-discoun
       assert.equal(sharedContext.invoiceGlobalDiscount, expected.invoiceGlobalDiscount);
       assert.equal(sharedContext.invoiceHasLines, expected.invoiceHasLines);
       assert.equal(sharedContext.invoiceStateKnown, expected.invoiceStateKnown);
-    });
-  }
-});
-
-// Restored from the pre-unification purchase popup tests (ImportFromPurchaseOrderModal.test.js):
-// the CLIENT path (purchases, importVia 'client') still builds and POSTs each invoice line.
-describe('invoice order import (purchase, client path) — buildOrderInvoiceLineBody', () => {
-  const buildLineBody = (args) => buildOrderInvoiceLineBody(args);
-  const PURCHASE_ORDER_LINE_FK = orderLineApiKey('purchase-invoice');
-  const line = {
-    id: 'ol1',
-    product: 'p1',
-    description: 'Entrega especial',
-    unitPrice: 10,
-    listPrice: 10,
-    tax: 't1',
-    uOM: 'u1',
-  };
-
-  it('carries the order line description into the built invoice line body', () => {
-    const result = buildLineBody({ line, qty: 2, invoiceId: 'inv1', lineNo: 10 });
-    assert.equal(result.description, 'Entrega especial');
-  });
-
-  it('computes the line net amount from the unit price and the imported quantity', () => {
-    const result = buildLineBody({ line, qty: 3, invoiceId: 'inv1', lineNo: 10 });
-    assert.equal(result.invoicedQuantity, 3);
-    assert.equal(result.lineNetAmount, 30);
-  });
-
-  // ETP-5381 REGRESSION GUARD: posting the FK under a key the spec does not declare makes
-  // NeoFieldFilter drop it silently (HTTP 200, line created, C_OrderLine_ID NULL).
-  it('sends the source order line under the spec API key for C_OrderLine_ID', () => {
-    const result = buildLineBody({ line, qty: 2, invoiceId: 'inv1', lineNo: 10 });
-    assert.equal(result[PURCHASE_ORDER_LINE_FK], 'ol1');
-    assert.equal(Object.hasOwn(result, 'cOrderlineId'), false);
-  });
-
-  // ETP-5710: an order line without a list price but with a discount used to post U == L +
-  // etgoDiscount, which the server reads as "not yet discounted" and discounts a second time.
-  for (const [name, input, listPrice] of [
-    ['reconstructs the list price when the order line has none and a discount', { unitPrice: 90, listPrice: 0, discount: 10 }, 100],
-    ['keeps the order line list price when it has one', { unitPrice: 90, listPrice: 100, discount: 10 }, 100],
-    ['falls back to the unit price without a discount', { unitPrice: 10, listPrice: 0 }, 10],
-    ['falls back to the unit price with a 100 percent discount', { unitPrice: 0, listPrice: 0, discount: 100 }, 0],
-    ['rounds the reconstructed list price to 6 decimals', { unitPrice: 10, listPrice: 0, discount: 3 }, 10.309278],
-  ]) {
-    it(name, () => {
-      const result = buildLineBody({ line: { ...line, ...input }, qty: 1, invoiceId: 'inv1', lineNo: 10 });
-      assert.equal(result.listPrice, listPrice);
-      if (input.discount && input.discount < 100) assert.equal(result.etgoDiscount, input.discount);
     });
   }
 });

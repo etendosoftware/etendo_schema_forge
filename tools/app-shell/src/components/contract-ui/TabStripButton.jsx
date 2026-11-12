@@ -15,7 +15,7 @@ export const tabStripButtonBaseCls = (paddingY = 'py-2.5', showHoverLine = false
 export const TAB_COUNT_CHIP_CLS = 'inline-flex items-center justify-center h-5 min-w-[1.25rem] px-1 text-xs rounded-full bg-muted text-muted-foreground';
 
 export default function TabStripButton({
-  iconKey, label, count, isActive, onClick,
+  iconKey, icon = null, label, count, isActive, onClick,
   paddingY = 'py-2.5', showHoverLine = true, indicatorCls, tMenu, testId, disabledHint = null,
   hoverDarkText = false,
 }) {
@@ -37,7 +37,7 @@ export default function TabStripButton({
         disabled && 'opacity-50 cursor-not-allowed',
       ].filter(Boolean).join(' ')}
     >
-      {React.createElement(resolveTabIcon(iconKey), { className: 'h-4 w-4' })}
+      {React.createElement(resolveTabIcon(iconKey, icon), { className: 'h-4 w-4' })}
       {tMenu(label)}
       {count != null && (
         <span className={TAB_COUNT_CHIP_CLS}>

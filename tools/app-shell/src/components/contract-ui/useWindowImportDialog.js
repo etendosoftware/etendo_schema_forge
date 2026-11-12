@@ -8,6 +8,8 @@ import { IMPORT_BATCH_SIZE } from '@/lib/flags/flag-keys.js';
 import { resolveImportBatchSize } from '@/lib/importBatchSize.js';
 import { track } from '@/lib/observability.js';
 import { OBSERVABILITY_EVENTS, buildObservabilityEvent } from '@/lib/observability/events.js';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { publishImportCapabilities } from '@/lib/importCapabilities.js';
 
 /**
  * Accent- and case-insensitive label comparison, matching how `mapColumns.normalizeHeader`
@@ -55,6 +57,14 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
   //
   // The wait (429 back-off, polling) stops when the owner of this hook unmounts: the controller is
   // created inside the effect so React StrictMode's mount/cleanup/mount cycle gets a fresh one.
+  // ETP-6206 — a plain import descriptor cannot read AuthContext, yet a backend capability can
+  // change the payload it must build (Contacts' `structuredAddressForSepa`). Every import dialog is
+  // built from this hook, so it is the one place that hands the live map over. An effect is early
+  // enough: descriptors and row validators only run after the user has picked a file.
+  const capabilities = useCapabilitiesSafe();
+  useEffect(() => {
+    publishImportCapabilities(capabilities);
+  }, [capabilities]);
   const abortRef = useRef(null);
   useEffect(() => {
     const controller = new AbortController();

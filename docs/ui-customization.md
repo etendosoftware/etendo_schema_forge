@@ -364,7 +364,7 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 - `bottomSection`: `payment-in` (`PaymentBottomPanel`), `sales-invoice` (`InvoiceBottomPanel`)
 - `sidePanel`: `payment-in` (`PaymentActivityPanel`)
 - `newRecordComponent`: `payment-in` (`NewPaymentModal`), `chart-of-accounts` (`NewSubAccountCreateModal`, ETP-5593 — reads the tree's selected row from `chartOfAccountsTreeStore.js`, see `docs/generated-custom-windows/chart-of-accounts.md`)
-- `headerTable`: `sales-invoice` (`InvoiceHeaderTable`), `user` (`UserHeaderTable`, ETP-4906 — swaps in a role-chips cell + toolbar role filter, see `docs/generated-custom-windows/user.md`); `chart-of-accounts` (`AccountTreeView`, a self-fetching tree whose controls are its `ToolbarQuickFilter` static slot, ETP-5593, see `docs/generated-custom-windows/chart-of-accounts.md`); `business-partner-category` (`BpCategoryTable`, ETP-5791 — wraps the generated table and hides columns by the `contact-category-type` flag through `hiddenColumns`, see `docs/generated-custom-windows/business-partner-category.md`)
+- `headerTable`: `sales-invoice` (`InvoiceHeaderTable`), `user` (`UserHeaderTable`, ETP-4906 — swaps in a role-chips cell + toolbar role filter, see `docs/generated-custom-windows/user.md`); `chart-of-accounts` (`AccountTreeView`, a self-fetching tree whose controls are its `ToolbarQuickFilter` static slot, ETP-5593, see `docs/generated-custom-windows/chart-of-accounts.md`); `business-partner-category` (`BpCategoryTable`, ETP-5791 — flag `contact-category-type` off: wraps the generated table and hides the flag-only columns through `hiddenColumns`; on: declares its own columns (fixed widths, one `grow` column) and a contact-type `ToolbarQuickFilter` whose value the window wrapper passes to ListView as `baseFilter`, see `docs/generated-custom-windows/business-partner-category.md`)
 
 **`subHeader` is the slot for a page-wide notice** (ETP-5245). Use it when the message belongs to the whole record rather than to one field: a blocking warning, a state explanation, a "this record is locked because…" strip. The generator emits it as `DetailView`'s `headerContent` prop, so it renders above the form, above the primary-tab content, and at full content width — the same place the built-in credit-limit / BP-on-hold banner (`BlockingBpBanner.jsx`) occupies. The component receives only `data` (the current record), so any other state it needs must be derived from the record or fetched by the component itself. Return `null` to render nothing — the slot has no visibility gate of its own. Pair it with the shared `InfoBanner` primitive (`@/components/InfoBanner`) rather than a bespoke box, and pick the tone deliberately: `info` (blue) for a notice, `warning` (amber) when the condition also blocks an action, `danger` for an error. If the notice must also **prevent saving**, keep the banner and the save gate reading one shared predicate (product puts it in `lib/productCostRequirement.js`, consumed by both `ProductCostBanner.jsx` and `useEntity.js`) so the two can never disagree.
 
@@ -789,9 +789,45 @@ multi-record delete goes through the generic hook:
 | `DetailView` lines bulk delete — primary lines (classic toolbar **and** inlineEditable toolbar) and every secondary table tab | ONE `useBatchDeleteDialog` per DetailView; each request carries its own `deleteOneFn` (`buildChildRowDeleteFn` in `lib/batchDelete.js`) and `onOutcome`, testids `lines-bulk-delete-*` |
 | `amortization` lines table, `assets` Amortización panel | `useBatchDeleteDialog` directly, testids `batch-delete-*` |
 
-`requestBatchDelete(items, { deleteOneFn, onOutcome })` — the optional second
+`requestBatchDelete(items, { deleteOneFn, bulkDeleteFn, onOutcome })` — the optional second
 argument overrides the hook-level functions for that request only, which is how
 one DetailView dialog serves the primary lines and every secondary tab.
+
+**Server-side bulk delete with progress (ETP-6143).** `useBatchDeleteDialog` also accepts a
+`bulkDeleteFn(items, { onProgress })` that deletes the whole selection in ONE request. It is used
+only for two or more items, and only when the request did not override `deleteOneFn` (a
+per-request `deleteOneFn` targets another endpoint). `useBulkRowDelete` supplies one whenever its
+`apiBaseUrl` is a spec URL (`${getNeoBaseUrl()}/<spec>`, the shape `getSpecBaseUrl` builds;
+`specFromBaseUrl` in `lib/neoBaseUrl.js` is its strict inverse):
+
+- The selection is sent as one asynchronous `POST /sws/neo/batch` job with one
+  `{ spec, entity, method: 'DELETE', recordId }` operation per row (`buildBulkDeleteOperations`
+  in `lib/batchDelete.js`), through `useBatch` with `async: true`. The server deletes the rows
+  one at a time, each in its own transaction, so a refused row never blocks the others, and it
+  caps concurrent jobs per user and per client (a `429` is waited out and resubmitted).
+- While the job runs, the hook polls `GET /sws/neo/batch/jobs/{jobId}` every 750 ms
+  (`BULK_DELETE_POLL_INTERVAL_MS`) and the locked dialog shows *"Eliminando {processed} de
+  {total} registros…"* (`bulkDeleteProgressMessage`) plus a progress bar
+  (`<scope>-progress`, `role="progressbar"`).
+- The finished job is mapped back per row (`outcomeFromBulkDeleteEnvelope`) into the same
+  three-outcome contract and toast as the per-row path. A refused row keeps the server's status
+  and message, so a one-row reason still reaches the toast.
+- Once at least one row may have been deleted, the caches that depend on the spec are marked
+  stale exactly as a per-row `DELETE` through `useApiFetch` would do
+  (`invalidateAfterWrite` with `{apiBaseUrl}/{entity}`). This keeps, for example, the contact
+  selectors from offering a deleted contact. The batch POST names no spec, so without this the
+  dependants were never invalidated.
+- **Unknown outcome.** If the job's status cannot be read (five consecutive failed polls, or the
+  connection dropping after the job was accepted), the job may still be running on the server. The
+  rows are then **not** reported as failed. The dialog shows the `bulkDeleteOutcomeUnknown`
+  warning, and the host receives `onOutcome([], [], { outcomeUnknown: true })`. `ListView` and
+  `ListModalWindow` respond by refetching and clearing the selection, so rows that may already be
+  deleted are not left selected for a retry.
+- **Fallback to per-row DELETEs:** a single selected row, a base URL that is not a spec URL, or a
+  request that overrides `deleteOneFn`.
+- **Deployment requirement:** the backend must support `DELETE` operations in `/sws/neo/batch`
+  (com.etendoerp.go, `docs/neo-headless.md` §4.3.7, ETP-6143). Ship both changes together. An
+  older backend rejects every DELETE operation and the dialog reports every row as failed.
 
 **The in-progress state lives in `DeleteConfirmDialog` (ETP-5758).** After the
 user confirms, the dialog does **not** close: the destructive button turns into
@@ -906,8 +942,9 @@ no configuration needed):**
   check-before-navigate/close rule.
 
 **Bulk-delete outcome contract — exactly ONE toast per outcome (never one per
-row):** `useBulkRowDelete` issues one `DELETE` per selected row in parallel
-(`Promise.allSettled`), then reports a single combined toast:
+row):** `useBulkRowDelete` deletes the selection, either with one `DELETE` per row in parallel
+(`Promise.allSettled`) or as one server-side batch job for a spec URL with two or more rows
+(ETP-6143, see above). Either way it reports a single combined toast:
 
 | Outcome | Toast | i18n key |
 |---------|-------|----------|
@@ -1734,13 +1771,16 @@ Default: `"classic"`. Validator F12 enforces the enum (`"classic"` | `"inlineEdi
 - Inline edit covers all column types: `string`, `number`, `amount`, `percent`, `date`, `selector` and `search`. Selector/search columns use `InlineSearchCombo` — a compact text input with server-side search (`?q=term`) and portal dropdown — so FK fields with many options (e.g., tax rates) are filterable by typing. Lookup/popup columns (e.g., product) continue to open `ProductSearchDrawer`.
   - **The current selection is identified when the selector is reopened (ETP-5846).** Reopening an `InlineSearchCombo` (chip click, cell focus, chevron toggle) always shows an **empty** search box and the full list (ETP-4600), and the committed label becomes the input's placeholder (ETP-5005). On top of that, the option that currently holds the value is now **marked**: `aria-selected="true"` on that `role="option"`, a check icon inside the row, and the panel is scrolled so that row sits in its vertical **centre** (ETP-5903; `centerOptionInPanel` sets the panel's own `scrollTop`, so the page behind the portalled panel never moves). Centring happens once per open and never after the user has typed or pressed a key. This state is derived from the `value` prop alone (`resolveSelectedIndex`), never from the keyboard state, so it cannot drift from what the parent holds.
   - **Two independent per-row states, deliberately not conflated.** `aria-selected` means *"this is your committed value"*; the keyboard/hover highlight is a separate `data-highlighted` marker plus the info background, exposed to assistive tech through `aria-activedescendant` on the input. Before ETP-5846 a single `aria-selected` was derived from the highlight index, so neither was readable — and since opening resets the highlight to `-1`, nothing could ever mean "the value you already chose". A row may legitimately be both (you arrowed onto your own value).
-  - **Locating the value in place before pinning it (ETP-5903).** The list pages 50 rows at a time, so a committed value can be anywhere in the catalog. On open, with an empty query, the selector first **walks** the list: it loads the next page through the normal "load more" path until the value shows up, the list ends, `LOCATE_SELECTION_MAX_PAGES` (6 pages, 300 rows) is reached, or the user types or presses a key (`shouldKeepLocating` in `contract-ui/selectorSelection.js`). Found that way, the value is shown **at its real position**, centred, with the rows before and after it. Only when the walk ends without it is the pin below used. The walk relies on every selector page having a total order — the backend breaks display-name ties by id (`SelectorQueryExecutor`, `ListReferenceSelectorExecutor`, `PaymentMethodSelectorSupport`; see `com.etendoerp.go/docs/neo-headless.md`), otherwise a row could move between pages and be skipped. The same walk, centring and pin apply to `CreatableSearchSelect` (form foreign keys, server-search mode), and the walk alone to `SelectorInput` (Radix `Select`, which already marks and focuses its checked item).
+  - **Locating the value in place before pinning it (ETP-5903).** The list pages 50 rows at a time, so a committed value can be anywhere in the catalog. On open, with an empty query, the selector first **walks** the list: it loads the next page through the normal "load more" path until the value shows up, the list ends, the walk total is reached (`locateMaxRows`: `LOCATE_WALK_MAX_ROWS`, 1000 rows, with the bigger pages below; `LOCATE_SELECTION_MAX_PAGES` x the page size for a picker that opts out of them), or the user types or presses a key (`shouldKeepLocating` in `contract-ui/selectorSelection.js`). Found that way, the value is shown **at its real position**, centred, with the rows before and after it. Only when the walk ends without it is the pin below used. The walk relies on every selector page having a total order — the backend breaks display-name ties by id (`SelectorQueryExecutor`, `ListReferenceSelectorExecutor`, `PaymentMethodSelectorSupport`; see `com.etendoerp.go/docs/neo-headless.md`), otherwise a row could move between pages and be skipped. The same walk, centring and pin apply to `CreatableSearchSelect` (form foreign keys, server-search mode), and the walk alone to `SelectorInput` (Radix `Select`, which already marks and focuses its checked item).
   - **The same reopen contract in Moneda, the product drawers and the account popup (ETP-5948).** Four more pickers now open on the committed value with the same marker (check + `aria-selected`), centring, arrow start and `aria-activedescendant` contract:
     - `CurrencyRatePicker` (Moneda on invoices, orders, quotations) — a non-paged list, so there is no walk. If the committed currency is not in the loaded list, it is pinned on top from `value` + `displayValue`. Picking the committed row again only closes the panel.
     - `SearchPopup` (the account/lookup popup behind `AccountSelect`, `AccountLookupPopup` and the report filters in `ReportViewerPage`) — callers pass `value` and `valueLabel`. It walks and pins like `InlineSearchCombo`, through an id-strict `loadPage(term, 0)`. The selector search matches each identifier column on its own, so a `"<code> - <name>"` label finds nothing as a whole. When the full label returns no row with that id, the pin retries with each ` - ` segment in turn, up to three, and stops at the first one that returns the id (`pinSearchTerms` in `selectorSelection.js`). For an account the code segment is the one that matches. For a tax label (`"21% - <name> - <category>"`) it is the name.
     - `ProductSearchDrawer` / `ProductStockSearchDrawer` (through `ProductDrawerShell`), opened from `LookupTrigger` (lines), `LookupFormField` and `PopupSearchInput` (forms). They take `value`, `valueLabel` and, for the stock drawer, `committedItem`. Pages are 30 rows (`PRODUCT_SELECTOR_PAGE_SIZE`). The walk cap counts raw backend rows, because the drawers deduplicate. A failed page ends the walk, and a page that arrives after the drawer was closed or the query changed is dropped (generation guard).
     - The stock drawer lists one row per location, so the product id alone does not identify the saved row. `committedItemFromRow(field, row, value)` (`contract-ui/selectorSelection.js`) rebuilds the committed item by reversing the field's `onSelectMappings`, with no entity named in shared code. Generated grid columns carry no `onSelectMappings`: the inline commit applies them from the entry fields (`addRow.fields`), so `InlineLinesPanel` takes them from the same place for a column that lacks its own. While the add-row form is open the wrapper strips `addRow`, so in that state the drawer marks the product group instead. When the saved location row is loaded, it is marked. Otherwise the product group is expanded, its header gets the check, and its first row is centred.
     - Known limit: the stock walk stops as soon as the product appears. A saved location on a later page therefore falls back to the group mark.
+    - **Big pages and a hold while it locates (ETP-6103).** A value that is not on the first page used to show the list from the top, stretch the scrollbar page by page and then jump, and a value among the last loaded rows jumped twice. Two rules in `useLocateCommittedValue` fix it for all four paged pickers (`SearchPopup`, `InlineSearchCombo`, `CreatableSearchSelect`, `ProductDrawerShell`):
+      - *Bigger pages.* An open with a committed value and no typed search asks for 100 rows in its first page (`firstPageLimit`). If the value is not there, the walk's second request asks for all the rest of the walk total in one go (`locatePageLimit`: 900 rows, so 1000 in all, which is the selector cap of the server, `MAX_LIMIT` in `NeoSelectorService`). A typical tenant's ~650-account catalogue is therefore located in two requests, and a value beyond 1000 rows is pinned on top. A 100-row request costs about the same as a 30-row one. Typed searches, opens without a value and infinite scroll keep the own size. `ProductDrawerShell` opts out (`largePages: false`) because every mounted row fetches its own avatar: it keeps its own page size and the old walk total of `LOCATE_SELECTION_MAX_PAGES` x that size, but it still holds. Each picker takes `hasMore` from the server's answer when it carries one, else judges it against the limit it actually requested, and an empty page never has more; it advances its offset by the rows it received. A page that adds no rows ends the walk (and the extra-page centring), so a server answering an empty page with `hasMore: true` cannot make it loop. `SearchPopup`'s `loadPage(query, offset, signal, { limit })` gets the size as a fourth argument; a loader may ignore it. The backend must carry the 1000 cap (ETP-6103) before this frontend: an older backend clamps the request to 100 rows.
+      - *The hold.* The hook returns `{ locating }`. While it is true the caller keeps its rows laid out but `invisible` (so the centring can measure them), hides the scrollbar (`overflow-hidden`) and renders `<LocatingNotice />` with the existing `loading` text. It starts once the first page has landed and ends when the value is centred, or when it was not found (the pin takes over), the list ended, a page failed, the page cap was hit, the user typed or pressed a key, or the picker closed. A value among the last loaded rows stays held until one more page arrives or the list ends. The hook requests that page at the picker's own size, not the rest of the walk: the value is already found and only needs rows below it. Centring runs in a layout effect so the first painted frame is already centred. A new picker built on the hook must wire `locating` the same way.
     - **Enforced for new pickers.** `tools/app-shell/test/committed-selection-policy.test.js` fails the build when (A) a source file renders `role="option"` without importing `selectorSelection.js` (directly or through `useLocateCommittedValue`), or (B) a JSX use of `SearchPopup`, `AccountLookupPopup`, `ProductSearchDrawer`, `ProductStockSearchDrawer`, `ProductDrawerShell` or a drawer taken from `lookupDrawers.js` passes no `value=`. Both scan `tools/app-shell/src` and `artifacts/`. The way out is a `committed-selection-ok: <reason>` comment, anywhere in the file for (A) and on or up to two lines above the tag for (B). It is meant for lists with no single committed value, or short, fully rendered lists that already set `aria-selected` from their value. The opt-outs in place today are the list-filter menus (`ListModalToolbarFilter`, `AccountTypeFilter`, `DistinctValuesList`), three fiscal custom lists, and the add-row `LookupButton` in `DataTable`. `DistinctValuesList` is paged and does not scroll to the active filter, which is a known gap noted in its opt-out.
     - In the default product drawer, the check marks what *is* chosen (the committed value, or the multi-select picks of the report picker). A click that is still in flight keeps only its border and background.
   - **Arrows start from the current value (ETP-5903).** With an empty query and nothing highlighted yet, the first `ArrowDown` lands on the row **after** the committed one and `ArrowUp` on the row before it (`nextActiveIndex`); with no committed value, or after typing, arrows start from the top as before. Typing a query also scrolls the panel back to the top, so the first match is in view.
@@ -1932,11 +1972,11 @@ tools/app-shell/src/components/contract-ui/
 
 The "missing" check needs each row's tax record without an extra per-tax fetch. Instead of enriching every line's own GET response, the hook reads the whole tax catalog from the SAME tax selector (`{apiBaseUrl}/lines/selectors/C_Tax_ID`) the tax field's own search combo uses, **paging through it** with an `offset`/`hasMore` loop until the server reports `hasMore: false` — the backend (`InvoiceLineTaxSifSelectorPolicy` in `com.etendoerp.go`, a `SelectorEnrichmentPolicy`) projects `taxExempt`/`notTaxable` plus the TBAI/Verifactu key columns onto each selector item, scoped via `NeoSelectorService.SOURCE_WINDOW_ID_PARAM` to exactly the in-scope windows' `AD_Window_Id`s so no other window's tax/product selectors are affected. As of the ETP-4888 follow-up round `IN_SCOPE_WINDOW_IDS` covers all four consuming windows — sales-invoice (`167`), purchase-invoice (`183`), sales-order (`143`), purchase-order (`181`) — the class/file name stays invoice-flavored (kept as a single diff, not a rename; a spec-neutral rename is a reasonable future Alex-review call). The frontend then re-runs `selectSifFields()` against each enriched tax row and flags it "missing" when any resolved field's value is blank — the same pure function decides WHICH fields apply on both the Tax window's own form and this modal, so the business rule is never duplicated.
 
-The paging loop is NOT premature generality: `NeoSelectorService.MAX_LIMIT` (100) silently clamps whatever `limit` the client asks for, so the hook's requested `TAX_SELECTOR_PAGE_LIMIT = 200` never actually returns more than 100 items. A client whose catalog exceeds one page (seen live: 179 taxes) came back truncated with `hasMore: true`, and every tax outside the first page was silently treated as "nothing to fix" — the ETP-4888 bug the loop exists to prevent. Consequences of that clamp, all handled in `loadTaxCatalog()`:
-- `offset` advances by **each page's own item count**, never by the requested `limit`, so the cursor stays correct despite the server-side clamp.
+The paging loop is NOT premature generality: the server clamps whatever `limit` the client asks for to `NeoSelectorService.MAX_LIMIT`. That cap was 100 when ETP-4888 hit it: a client with 179 taxes came back truncated with `hasMore: true`, and every tax outside the first page was silently treated as "nothing to fix" — the bug the loop exists to prevent. Since ETP-6103 the cap is 1000, so the requested `TAX_SELECTOR_PAGE_LIMIT = 200` is honoured and a catalog over 200 taxes still pages. Handled in `loadTaxCatalog()`:
+- `offset` advances by **each page's own item count**, never by the requested `limit`, so the cursor stays correct whatever the server clamps to.
 - The loop stops as soon as `hasMore` is false or a page comes back empty, so the common single-page case still costs exactly ONE selector request — the paging only kicks in for large catalogs.
 - A failed/malformed page (non-OK response, or a body with no `items`) also stops the loop, but — unlike a total failure fetching page 1 — it does **not** discard pages already collected: `loadTaxCatalog()` breaks out and commits whatever `allItems` holds so far, emitting a `console.warn` naming the failed page number and offset. This degrades the completeness check to a partial catalog instead of silently reporting nothing needs fixing, which is what an earlier version did by returning on the first failed page (ETP-4888 QA finding).
-- `TAX_SELECTOR_MAX_PAGES = 20` caps the iterations as a termination guard (in case `hasMore` ever misbehaves), emitting a `console.warn` when hit so an operator can tell the completeness check ran on a partial catalog.
+- `TAX_SELECTOR_MAX_PAGES = 20` caps the iterations as a termination guard (in case `hasMore` ever misbehaves; 20 pages of 200 is 4000 taxes), emitting a `console.warn` when hit so an operator can tell the completeness check ran on a partial catalog.
 
 One more request precedes the paging: the selector **fails closed** (returns an EMPTY catalog, not the full one) unless it receives the same context params `InlineSearchCombo` sends in edit mode (`parentId`, `isSOTrx`/`IsSOTrx`, `priceList`, `DateInvoiced`, `C_BPartner_Location_ID`, `currency`). The hook therefore fetches the invoice's own header record (`{apiBaseUrl}/header/{recordId}`, unwrapping NEO's `{ response: { data: [...] } }` envelope) and feeds it to `buildLineSelectorContext` — the SAME helper `DetailView.jsx` uses — rather than hand-rolling a second context builder.
 
@@ -3140,6 +3180,87 @@ primary blue with the same classes as the shared default Button (`bg-primary`, `
 Pure helpers `getConfirmResultTypeConfig(type)` and `getConfirmResultCopy(docs, ui)` are exported for
 reuse and tests. Unit coverage: `tools/app-shell/src/components/contract-ui/__tests__/ConfirmResultModal.vitest.jsx`.
 
+### 21b. Invoice-creating modals — the "Datos fiscales" step (`InvoiceSifStep`, ETP-6179)
+
+**Rule: every modal that creates AND completes an invoice in one call MUST show the shared
+"Datos fiscales" step before it confirms anything.** Those flows build the invoice on the server and
+complete it at once, so the user never sees the invoice's SIF tab; without the step a factura
+rectificativa was completed as an ordinary `F1` with no SII motive and no TicketBAI code. The step
+lives in `tools/app-shell/src/windows/custom/shared/InvoiceSifStep.jsx` and is already wired into
+every current flow:
+
+| Flow | Where the step is wired |
+|---|---|
+| Confirm with invoice (orders, shipments, receipts, returns) | `ConfirmInOutModal` (also behind `ConfirmWithCreditButtonBase`), the order `ConfirmModal`s in `OrderCreateInvoice.jsx` / `PurchaseOrderActions.jsx` |
+| Create the invoice of a confirmed document (single and bulk ONE-invoice) | `CreateInvoiceConfirmModal` via its `sifDefaultsUrl` / `sifDefaultsBody` props; the orders' `CreateDocsModal` |
+| Quotation «Facturar directamente» | `QuotationConfirmModal` → `InvoiceSifStepModal` (its own dialog, because `ActionChoiceModal` cannot host it) |
+| Bulk "one invoice per selected order" | `BulkOrderMoreMenu` / `BulkPurchaseOrderMoreMenu` → `resolveBulkSifPreview` + `InvoiceSifStepModal` in `readOnly` mode |
+
+**The backend is the source of truth.** The step is built from the source record's
+`POST …/action/sifDefaults` (`InvoiceSifPreset` in `com.etendoerp.go`, `neo-headless.md` §4.12.36b):
+which fiscal systems are active (SII on both sides, TicketBAI and VERI\*FACTU on sales only), which
+SIF-tab fields are editable, their allowed codes and the value each would get. The values go back
+as `sifFields` in the invoice-creating action's body. A field the caller does not send gets its
+preview value on the server, so the screen and the API always produce the same invoice.
+
+**Wiring a NEW invoice-creating modal** (reuse a wired modal first; only build a new one when none fits):
+
+```jsx
+import { useInvoiceSifStep, InvoiceSifStepPanel, withSifFields, SIF_STEP_DIALOG_WIDTH }
+  from '@/windows/custom/shared/InvoiceSifStep.jsx';
+
+const sif = useInvoiceSifStep({
+  enabled: invoiceRequested,                                   // an invoice will be created at all
+  apiFetch,                                                    // from useApiFetch
+  defaultsUrl: `/${spec}/${entity}/${recordId}/action/sifDefaults`,
+  body: { shipmentIds },                                       // only when the action reads it
+});
+
+// Primary button: ONE handler. The first click fetches the preview and shows the step (or runs
+// handleConfirm straight away when no system is active); the click on the step confirms.
+<button onClick={() => sif.start(handleConfirm)} disabled={busy || (sif.active && !sif.valid)} />
+
+// While the step shows: title ui('invoiceSifStep.title'), width SIF_STEP_DIALOG_WIDTH, the panel
+// instead of the first screen, and a Back button (sif.back keeps the typed values).
+{sif.active && <InvoiceSifStepPanel sif={sif} />}
+
+// In handleConfirm: send the values.
+body: JSON.stringify(withSifFields({ ...yourBody }, sif)),
+```
+
+Behaviour the hook already owns — do not re-implement it:
+
+- **Fetched on the primary click, not on open**, so a flow that creates no invoice never asks and
+  the preview reflects the record at that moment. The answer is cached per URL + body, so Back →
+  Continue keeps what the user typed.
+- **Fails open.** A preview the server cannot answer skips the step and runs the flow; the backend
+  applies the same defaults and refuses an invalid invoice with its own 422.
+- **`sif.valid`** is false while a rectificative lacks a code of an active system (the primary
+  button is disabled and `invoiceSifStep.rectificationRequired` is shown). The server refuses the
+  same blank with 422 `ETGO_InvoiceRectificationCodeRequired`.
+- **`withSifFields`** adds `sifFields` only while the step was shown; with no active system the
+  body is byte-for-byte what it was before ETP-6179.
+- A modal that cannot host the panel (a shared first screen) renders `InvoiceSifStepModal`
+  (× / Cancelar / Atrás / confirm) instead; remember the option the user picked so Atrás returns to
+  it (`QuotationConfirmModal`'s `chosenOption`).
+- **Bulk, one invoice per document:** never an editable step per invoice. Fetch every preview with
+  `resolveBulkSifPreview(apiFetch, urls)`; on `kind: 'summary'` show
+  `InvoiceSifStepModal` with `sif={readOnlySifStep(preview, varying)}`, `readOnly`,
+  `notice={ui('invoiceSifStep.bulkNotice', …)}` and `onCancel`; a field that differs reads
+  "Según cada cliente" (SII key) or "Según cada pedido" (anything else). Each POST then sends its
+  OWN document's `previews[i].fields` as `sifFields`. On `kind: 'none'` run as before.
+- **Option labels:** any SIF select uses `sifOptionLabel(option, ui)` ("CODE - Label", the code
+  once), as the SIF tab does.
+
+The backend side of a new invoice-creating action must declare `InvoiceSifPreset.sifFieldsParam(sales)`
+in its contract, answer `sifDefaults` with the same target the creation builds, and run
+`InvoiceSifPreset` before completing (`neo-headless.md` §4.12.36b).
+
+Unit coverage: `tools/app-shell/src/windows/custom/shared/__tests__/InvoiceSifStep.vitest.jsx`,
+`orderConfirmModals.fiscalDataStep.vitest.jsx`, `bulkOrderMoreMenus.quotaRefusal.vitest.jsx`,
+`ConfirmInOutModal.spec.jsx`, `CreateInvoiceConfirmModal.vitest.jsx`,
+`QuotationConfirmModal.fiscalDataStep.vitest.jsx`.
+
 ### 22. Header currency and exchange rate — `CurrencyRatePicker` (ETP-5840)
 
 Not a `decisions.json` option: `EntityForm` swaps the header `C_Currency_ID` selector for
@@ -3226,14 +3347,17 @@ with the shared round `RowExpandToggle` (ETP-5593, sized 24 × 24 through `class
 adornment slot and the amount; an expanded document shows a bordered lines table with a master
 checkbox and a −/+ quantity stepper (`NumberStepperInput`, bounded by the line's available
 quantity, typed values still validated on blur); the footer has the selection hint and the
-«Cancelar» / primary pills.
+«Cancelar» / primary pills. The hint reads «N Seleccionados» (`selected`) and the primary button
+counts the selected lines; with `countLinesInFooter` the hint counts LINES with singular/plural
+wording instead (see the prop table).
 
 **Optional props added by ETP-5828** (all default to the previous behaviour):
 
 | Prop | Effect |
 |---|---|
 | `renderSelectionPanel(selection)` | Renders the fixed-height notice area under the list (`ImportLinesModal__selectionPanelSlot`). Return an `<ImportNotice tone="neutral"\|"warning" title body control? />` (exported from the same file); `null` shows the neutral «Información de importación» notice. Without the prop there is no notice area. |
-| `selectedDocumentsKey` | i18n key such as `importOrdersSelectedCount` («{count} pedido(s)»): the footer reads «**N pedido(s)** seleccionado(s)» and the import button counts DOCUMENTS with a selected line instead of lines. |
+| `countLinesInFooter` | Default `false` («N Seleccionados»). `true`: the footer reads «**1 línea** seleccionada» / «**N líneas** seleccionadas» (keys `importLinesSelectedCountOne/Many`, `importLinesSelectedSuffixOne/Many`). Opted in only by the invoices' «Importar desde pedido» (`InvoiceOrderImportModal`, ETP-5828 QA UI-6), which until then counted ORDERS through the removed `selectedDocumentsKey` prop («1 pedido(s)» with two lines). |
+| `describeLine(line, { imported })` | The note under a line's product. On a greyed-out line return a string (e.g. the order import's «en factura borrador FV1000002», from the line's `inDraftInvoices`, ETP-5828 QA UI-4) or `null` to keep the default («ya importado», or «en albarán: …» from `_inDraftShipments`) — `ImportLinesModal__importedNote`. On a selectable line a string adds a note (e.g. «1 en factura borrador FC1000020» for a line another draft holds part of, QA OBS-2), `null` shows none — `ImportLinesModal__lineNote`. Every note (the default one too) wraps onto at most 2 lines inside the fixed product column, so the 64 px row never grows, with its full text as a tooltip (`title`) — QA BUG-1: a single truncated line cut the draft number. |
 | `importButtonKey` | i18n key of the primary button (default `importSelected`; `{count}` receives `" (N)"` or `""`). |
 
 **The notice box (Figma «Alert»).** The slot is 92 px: a 12 px gap and an 80 px alert (padding 16,
@@ -3246,9 +3370,34 @@ no token has the identical value. Only ONE body line fits: a longer title or bod
 the full text in its `title` attribute — the box never grows. Keep notice texts within ~668 px of
 Inter 14 (~95 characters).
 
+**Lazy lines and server-listed documents (ETP-6099).** A popup that lists its documents through a
+server read action (`availableOrders`, `availableShipments`, `availableReceipts`, …) passes
+`eagerLoadLines={false}` so a document's lines are read only when it is expanded or selected, not
+one lines call per document at opening. Ticking a document whose lines are not loaded yet opens it,
+reads its lines AND selects them in that same click — also when the chevron already started the read
+(ETP-5828 QA UI-3; before, the first tick only unfolded it). Two optional props make that work without the lines:
+
+| Prop | Effect |
+|---|---|
+| `isDocumentCovered(doc)` | `true` hides the document from its own row as fully imported, without reading its lines (e.g. the action's `pendingLines === 0`). When every document is hidden, `allImportedMessageKey` is shown. |
+| `getDocumentTotal(doc)` | The row total while the document's lines are NOT loaded (e.g. the action row's `amount`). Once the lines are loaded, or when it returns `null`/a non-number, the row falls back to the sum of its lines. |
+
+The shared helpers for these popups live in `tools/app-shell/src/windows/custom/shared/`:
+`importActionClient.js` (calls the read actions with `refreshVersion: false`; `listAll` follows
+`nextOffset`; `newestCreatedFirst` re-sort; `describeLoadFailure` turns a refused read into a
+message), `inOutImport.js` (goods shipment / goods receipt listings, `isCoveredDocument`,
+`pendingDocumentTotal`), `invoiceImportPricing.js` (the invoice header and product selector read
+once per popup, to price shipment/receipt lines on expand and at import),
+`useImportLoadFailureToast.js` (wraps `fetchDocuments` / `fetchLines` so a refused read shows a
+toast and an empty list) and `importSaveOptions.js` (the frozen
+`IMPORT_SAVE_OPTIONS`, `{ skipSaveWhenClean: true }`, passed to DetailView's `handleImportClick`).
+Per-window behaviour: the sales-invoice, purchase-invoice, goods-shipment and goods-receipt guides
+under `docs/generated-custom-windows/`.
+
 **Document row total.** The row shows the plain sum of what its lines' «Importe» cells show (unit
 price × current quantity; `_lineNetAmount` only for a line without a unit price), so row and lines
-always add up; there is no total override.
+always add up once the lines are loaded. The only override is `getDocumentTotal` above, which
+stands in while the lines are not loaded yet.
 
 Removed by ETP-5828: `getDocTotal`, `selectionPanelMinHeight` (the notice area now always has its fixed height)
 and `getSelectionHint` (the footer follows the design). Stable test ids: `import-lines-modal`,
@@ -3509,8 +3658,12 @@ Rules, all in `ListView.jsx`:
   menu never shows an action that does nothing.
 - When the split menu offers the import, the **standalone import icon** in the toolbar
   (`ListView__importButton`) is **not rendered**, because the menu already offers it.
-- The standalone icon **stays** whenever the menu is unavailable (read-only window, `hideCreate`), so
-  the import is never left unreachable.
+- The standalone icon **stays** when the menu is unavailable only because of `hideCreate`, so the
+  import is never left unreachable. A **read-only** window (static `window.readOnly` or the runtime
+  Solo-lectura tier) gets no import at all: no icon, no menu item, no empty-state import (ETP-5830).
+- Related, in the shared `DataTable`: when `rowQuickActions.readOnly` or `windowReadOnly` is set,
+  `onDeleteRow`/`onEditRow` are dropped at the entry, so there is no legacy trash column, no hover
+  trash and no hover pencil. Row click still opens the record to view.
 
 The generator's own `window.newActions` (`docs/decisions-reference.md` → *New Actions*) still emits only
 `key`/`label`/`onClick`; `opensImportDialog` is set from the wrapper.
@@ -3579,6 +3732,14 @@ with a tab of that key gets the same icon. Current entries include `custom:attac
 `custom:pricing`, `products`, and the business-partner tabs `contact`, `bankAccount`, `locationAddress`,
 `customerAccounting`, `vendorAccounting`. The map lives outside `DetailView.jsx` because that file is
 under the no-growth guardrail (`.claude/hooks/check-detailview-growth.mjs`).
+
+**Per-window icon for the `CustomLines` tab — `tabIcon` static (ETP-5791).** The tab a
+`CustomLines` component replaces has the key `customLines` in EVERY window, so a `TAB_ICONS` entry
+would change all of them. Instead the component may declare its own icon:
+`MyLinesPanel.tabIcon = Calculator` (any icon component). `buildInitialTabs` copies it onto the tab
+object (`tab.icon`) and `resolveTabIcon(tabKey, icon)` prefers it over the key lookup, in the tab
+button, the width probe and the "More" menu. Without the static the tab resolves exactly as before.
+Reference: `business-partner-category`'s `BpCategoryAccountingPanel` (calculator icon).
 
 ---
 

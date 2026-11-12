@@ -81,6 +81,11 @@ const BACKEND_ERROR_MAP = {
   // matching and has to become a parameterized matcher.
   'No active bank connection found for financial account %s. Connect the account first.':
     'backendError.psd2NoActiveConnection',
+  // ETP-6154 — not backend copy: the sentinel useBankConnectionActions throws when its own
+  // AbortController fires (the bank service never answered). A protocol token, so it maps to our
+  // label instead of reaching the user verbatim — from every bank-sync entry point, through the one
+  // notifier (financial-account/bankSyncNotify.js).
+  BANK_CONNECTION_TIMEOUT: 'financeAccountsBankConnectionTimeout',
   // Multi-currency payment registration (com.etendoerp.go PaymentCurrencyConverter, ETP-4504) — plain
   // English literals with no AD_MESSAGE behind them. The modal mirrors the first two client-side and
   // keeps the buttons disabled, so they are mostly unreachable; the format/non-positive ones are
@@ -496,6 +501,15 @@ const BACKEND_ERROR_KEY_MAP = {
   // same rationale as the CashCloseSupport matchers below: a raw BigDecimal string pasted into
   // Spanish copy renders the wrong decimal separator and no currency symbol.
   ETGO_InvoiceRectificationExceedsOriginal: 'backendError.invoiceRectificationExceedsOriginal',
+  // ETP-5745 CP-26 — com.etendoerp.go RectificationFiscalCodeGuard: completing a NON-rectificative
+  // invoice whose VERI*FACTU `etvfacInvType` is still a stray R1-R5 (left over from an earlier
+  // choice, e.g. the document type was reverted through a channel that skipped the UI callout's
+  // own clear-on-revert, such as a direct MCP/REST write). BLOCKS instead of silently correcting
+  // it to F1 — unlike that callout, which may still auto-clear it in the SAME gesture the user
+  // just made (reverting the document type); this guard is the backstop for state the user
+  // already brought to "Confirm", so correcting it without saying anything would hide a real
+  // mistake instead of surfacing it.
+  ETGO_InvoiceVerifactuInvTypeNotRectificative: 'backendError.verifactuInvTypeNotRectificative',
   // ETP-5692 — core `PostedDocument` ("Document already Posted."), which DocumentPostingService
   // now names instead of the misleading "being posted by another process" when a post hits a
   // document someone else already posted. Resolved in the GO locale server-side, so mapping it
@@ -794,6 +808,28 @@ function translateInvoiceReactivateFiscalRectified(messageKeys, messageParams, t
     ? messageParams.rectificativas.join(', ')
     : messageParams.rectificativas;
   return resolveLocaleKey(t, 'backendError.invoiceReactivateFiscalRectified', { fiscalSystem, rectificativas });
+}
+
+const RECTIFICATION_CODE_REQUIRED_KEY = 'ETGO_InvoiceRectificationCodeRequired';
+
+/**
+ * `ETGO_InvoiceRectificationCodeRequired` (`RectificationFiscalCodeGuard.java`, ETP-5745 CP-19):
+ * same reason as {@link translateInvoiceReactivateFiscalRectified} just above — this message
+ * needs the locale-aware conjunction join ("SII y TicketBAI" / "SII and TicketBAI"), which the
+ * generic key route's `toInterpolationParams` (plain comma join) does not give. The backend's
+ * `message` field is deliberately English prose (the wire contract for MCP/scripts); the SPA
+ * never shows it — it renders this localized sentence from `messageParams.systems` instead, a
+ * raw JSON array of system names ("SII", "TicketBAI", "Verifactu"), in the dynamic subset the
+ * guard found still missing their own rectification code/motive.
+ */
+function translateRectificationCodeRequired(messageKeys, messageParams, t) {
+  if (!Array.isArray(messageKeys) || !messageKeys.includes(RECTIFICATION_CODE_REQUIRED_KEY)) return null;
+  if (!messageParams || typeof messageParams !== 'object') return null;
+  const systems = Array.isArray(messageParams.systems)
+    ? joinWithConjunction(messageParams.systems, t)
+    : messageParams.systems;
+  if (!systems) return null;
+  return resolveLocaleKey(t, 'backendError.rectificationCodeRequired', { systems });
 }
 
 // ETP-5840 — the exchange-rate refusals of com.etendoerp.go, rendered from their identity.
@@ -1851,7 +1887,17 @@ const GENERIC_CODE_MESSAGES = {
   forbidden: ['This action is not allowed for the current role.', 'backendError.forbidden'],
 };
 // service_unavailable carries a sanitized, non-fixed text, so it is translated by code alone.
-const CODE_ONLY_KEYS = { service_unavailable: 'backendError.serviceUnavailable' };
+// ETP-6154 — BANK_SYNC_LOCK_UNAVAILABLE: the PSD2 bridge could not take the per-account sync lock
+// (no pooled connection to hold it), so it refused rather than risk duplicated statement lines. Its
+// message is server prose; the code is the identity, and the refusal is retryable.
+// ETP-6154 — BANK_SYNC_DUPLICATE_CHECK_FAILED: the import could not verify whether some bank
+// transactions were already imported, so it skipped them rather than risk duplicates. Arrives on an
+// ERROR or WARNING sync result; same rule as the lock code.
+const CODE_ONLY_KEYS = {
+  service_unavailable: 'backendError.serviceUnavailable',
+  BANK_SYNC_LOCK_UNAVAILABLE: 'backendError.bankSyncLockUnavailable',
+  BANK_SYNC_DUPLICATE_CHECK_FAILED: 'backendError.bankSyncDuplicateCheckFailed',
+};
 
 function translateByCode(msg, t, code) {
   if (!code) return null;
@@ -2103,6 +2149,11 @@ export function translateBackendError(msg, t, options = {}) {
   const reactivateFiscal = translateInvoiceReactivateFiscalRectified(
     options.messageKeys, options.messageParams, t);
   if (reactivateFiscal !== null) return reactivateFiscal;
+
+  // ETP-5745 CP-19: same reason — translateRectificationCodeRequired's conjunction join too.
+  const rectificationCodeRequired = translateRectificationCodeRequired(
+    options.messageKeys, options.messageParams, t);
+  if (rectificationCodeRequired !== null) return rectificationCodeRequired;
 
   // Key route first: it is the only one that can resolve a message whose text is unmatchable by
   // construction. Runs even when `msg` is empty — the keys alone carry enough to say what failed.

@@ -1,5 +1,5 @@
 // @covers tools/app-shell/src/windows/custom/financial-account/EditAccountModal.jsx
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // Polyfill Pointer Capture / scrollIntoView (not implemented by jsdom) for the Radix-based
@@ -102,6 +102,9 @@ vi.mock('@/hooks/useMovementLookups.js', () => ({
 }));
 
 import { EditAccountModal, initialEditTab, isDeleteMode } from '../EditAccountModal.jsx';
+import {
+  BankSyncProvider, useBankSync, useBankSyncDone, useBankSyncStatus,
+} from '../BankSyncContext.jsx';
 
 // `countryIso: 'ES'` (the STORED country) makes this account eligible for the Salt Edge
 // connection, which is Spain-only since ETP-4896 — see saltEdgeEligibility.js. `countryId` is
@@ -3292,4 +3295,169 @@ describe('EditAccountModal', () => {
     });
   });
 
+});
+
+// ETP-6154 — "Sincronizar ahora" goes through the window's shared BankSyncContext: it is disabled
+// and spinning while a sync of the account runs from ANY entry point, the ETP-5104 save-before-sync
+// runs inside that sync (as its beforeSync) so the account already counts as syncing while it
+// saves, and the modal's own reloads are dropped once it is closed.
+describe('EditAccountModal — shared bank-sync state', () => {
+  const sibling = {};
+  function OtherEntryPoint({ onListen }) {
+    sibling.bankSync = useBankSync();
+    useBankSyncDone(sibling.bankSync, null, onListen ?? (() => {}));
+    return null;
+  }
+  function RowStatus() {
+    const { syncing } = useBankSyncStatus('acc-9');
+    return <span data-testid="row-status">{String(syncing)}</span>;
+  }
+
+  let finishSync;
+  beforeEach(() => {
+    [toastSuccess, toastError, toastWarning, toastInfo].forEach((fn) => fn.mockClear());
+    uiMock.mockReset();
+    uiMock.mockImplementation((key) => key);
+    fetchStatus.mockReset();
+    fetchStatus.mockResolvedValue(BASE_STATUS);
+    saveImportSettings.mockReset();
+    saveImportSettings.mockResolvedValue({});
+    updateAccount.mockReset();
+    fetchDefaults.mockReset();
+    fetchDefaults.mockResolvedValue({ currencies: [{ id: '102', iso: 'EUR' }] });
+    hasCapability.mockReset();
+    hasCapability.mockReturnValue(true);
+    sync.mockReset();
+    sync.mockImplementation(() => new Promise((resolve) => { finishSync = resolve; }));
+  });
+
+  function renderInWindow({ onSaved = vi.fn(), onListen, open = true } = {}) {
+    const ui = (shown) => (
+      <BankSyncProvider>
+        <OtherEntryPoint onListen={onListen} />
+        <RowStatus />
+        {shown ? (
+          <EditAccountModal
+            open
+            account={CONNECTED_ACCOUNT}
+            onClose={vi.fn()}
+            onSaved={onSaved}
+            onArchive={vi.fn()}
+            onConnect={vi.fn()}
+          />
+        ) : null}
+      </BankSyncProvider>
+    );
+    const result = render(ui(open));
+    return { ...result, hideModal: () => result.rerender(ui(false)) };
+  }
+
+  it('is enabled and idle, with the bank-sync icon and the PSD2 tooltip', async () => {
+    const user = userEvent.setup();
+    renderInWindow();
+    const button = await screen.findByTestId('bank-connection-edit-sync');
+
+    expect(button).toBeEnabled();
+    expect(button).toHaveAttribute('aria-busy', 'false');
+    expect(screen.getByTestId('bank-connection-edit-sync-icon')).toHaveAttribute('data-spinning', 'false');
+    await user.hover(screen.getByTestId('bank-connection-edit-sync-wrap'));
+    expect((await screen.findAllByText('financeAccountsBankSyncTooltip')).length).toBeGreaterThan(0);
+  });
+
+  it('is disabled and spinning, with the in-progress tooltip, while another entry point syncs the account', async () => {
+    const user = userEvent.setup();
+    renderInWindow();
+    await screen.findByTestId('bank-connection-edit-sync');
+
+    await act(async () => { sibling.bankSync.startSync('acc-9'); });
+
+    const button = screen.getByTestId('bank-connection-edit-sync');
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('aria-busy', 'true');
+    // ETP-6154 follow-up — while fetching the button reads busy: the icon bobs and the label
+    // becomes "Trayendo extractos…".
+    expect(screen.getByTestId('bank-connection-edit-sync-icon')).toHaveAttribute('data-spinning', 'true');
+    expect(button).toHaveTextContent('financeAccountsBankSyncBadge');
+    await user.hover(screen.getByTestId('bank-connection-edit-sync-wrap'));
+    expect((await screen.findAllByText('financeAccountsBankSyncInProgress')).length).toBeGreaterThan(0);
+
+    await user.click(button);
+    expect(sync).toHaveBeenCalledTimes(1);
+
+    await act(async () => { finishSync({ status: 'OK' }); });
+    expect(screen.getByTestId('bank-connection-edit-sync')).toBeEnabled();
+  });
+
+  it('its own sync spins the other entry points too, and reloads the modal only when it ends', async () => {
+    const user = userEvent.setup();
+    const onSaved = vi.fn();
+    renderInWindow({ onSaved });
+    await user.click(await screen.findByTestId('bank-connection-edit-sync'));
+
+    await waitFor(() => expect(sync).toHaveBeenCalledWith('acc-9'));
+    expect(screen.getByTestId('row-status')).toHaveTextContent('true');
+    expect(screen.getByTestId('bank-connection-edit-sync')).toBeDisabled();
+    expect(onSaved).not.toHaveBeenCalled();
+
+    await act(async () => { finishSync({ status: 'OK', message: 'done' }); });
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(fetchStatus).toHaveBeenCalledTimes(2);
+    expect(toastSuccess).toHaveBeenCalledWith('done');
+    expect(screen.getByTestId('row-status')).toHaveTextContent('false');
+  });
+
+  it('ETP-5104 save-before-sync runs inside the shared sync: syncing while it saves, request only after', async () => {
+    const user = userEvent.setup();
+    let finishSave;
+    saveImportSettings.mockImplementation(() => new Promise((resolve) => { finishSave = resolve; }));
+    renderInWindow();
+    await screen.findByTestId('bank-connection-edit-sync');
+
+    await typeImportDate(user, 'field-date-bank-connection-import-from', '15012026');
+    await user.click(screen.getByTestId('bank-connection-edit-sync'));
+
+    await waitFor(() => expect(saveImportSettings).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId('row-status')).toHaveTextContent('true');
+    expect(sync).not.toHaveBeenCalled();
+
+    // A second entry point cannot start a concurrent sync while the save is still pending.
+    await act(async () => { await sibling.bankSync.startSync('acc-9'); });
+    expect(sync).not.toHaveBeenCalled();
+    expect(toastInfo).toHaveBeenCalledWith('financeAccountsBankSyncInProgress');
+
+    await act(async () => { finishSave({}); });
+    await waitFor(() => expect(sync).toHaveBeenCalledTimes(1));
+    expect(saveImportSettings.mock.invocationCallOrder[0]).toBeLessThan(sync.mock.invocationCallOrder[0]);
+  });
+
+  it('a failed pre-sync save ends the shared sync without a request or a second toast', async () => {
+    const user = userEvent.setup();
+    saveImportSettings.mockRejectedValueOnce(Object.assign(new Error('boom'), { status: 500 }));
+    renderInWindow();
+    await screen.findByTestId('bank-connection-edit-sync');
+
+    await typeImportDate(user, 'field-date-bank-connection-import-from', '15012026');
+    await user.click(screen.getByTestId('bank-connection-edit-sync'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
+    expect(toastError).toHaveBeenCalledWith('boom');
+    expect(sync).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByTestId('row-status')).toHaveTextContent('false'));
+  });
+
+  it('drops its reloads once closed mid-sync, and the window listener reloads instead', async () => {
+    const user = userEvent.setup();
+    const onSaved = vi.fn();
+    const onListen = vi.fn();
+    const { hideModal } = renderInWindow({ onSaved, onListen });
+    await user.click(await screen.findByTestId('bank-connection-edit-sync'));
+    await waitFor(() => expect(sync).toHaveBeenCalledTimes(1));
+
+    hideModal();
+    await act(async () => { finishSync({ status: 'OK' }); });
+
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(onListen).toHaveBeenCalledWith('acc-9', { status: 'OK' });
+  });
 });

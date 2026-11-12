@@ -1,8 +1,8 @@
 {
   "version": "0.39.0",
   "generatedAt": "2026-07-30T22:14:36.474Z",
-  "updatedAt": "2026-10-30T14:08:54.788Z",
-  "checksum": "b52e3bb34c34381b",
+  "updatedAt": "2026-11-05T14:45:15.883Z",
+  "checksum": "c28ae4c44995f3e2",
   "frontendContract": {
     "window": {
       "id": "184",
@@ -644,7 +644,6 @@
             }
           }
         ],
-        "javaQualifier": "goodsReceiptHeaderHandler",
         "draftMode": {
           "enabled": true,
           "processField": "documentAction",
@@ -1744,8 +1743,7 @@
             "visibility": "editable",
             "required": true
           }
-        ],
-        "javaQualifier": "goodsReceiptHeaderHandler"
+        ]
       },
       "goodsReceiptLine": {
         "tableName": "M_InOutLine",

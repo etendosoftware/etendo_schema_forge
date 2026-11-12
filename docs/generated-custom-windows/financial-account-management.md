@@ -263,8 +263,9 @@ Field editability in the top section:
   provider's history deepens. The sync-side warning needed no new code: the module already
   downgrades `SUCCESS` to `WARNING` and appends `PSD2_ImportDateBeyondMaxInterval`, which
   `lib/backendErrors.js` already translates — ETP-5181 only changed the toast **type** from
-  `toast.info` to `toast.warning` in `notifySyncResult` and in `ImportedStatementsTab`, since a
-  WARNING is something the user has to act on. QA then rejected the *copy*: "sólo pueden estar
+  `toast.info` to `toast.warning` in `notifySyncResult` and in `ImportedStatementsTab` (both
+  replaced since ETP-6154 by the single notifier `bankSyncNotify.js`, which keeps
+  `toast.warning`, see *Bank sync* below), since a WARNING is something the user has to act on. QA then rejected the *copy*: "sólo pueden estar
   disponibles los movimientos de ese período" left it ambiguous whether the sync would still run, so
   `backendError.psd2ImportDateBeyondMaxInterval` now states the outcome — "**sólo se sincronizarán**
   los movimientos de ese período" (en_US: "only transactions from that period **will be
@@ -331,7 +332,8 @@ Field editability in the top section:
   save step reaches `useBankConnection` as a **ref** (`beforeSyncRef`), because that hook is
   declared before the hooks holding the rest of the form. If the form cannot be saved (blank name,
   invalid IBAN/tolerance/range) the sync is aborted rather than run against stale values, and a
-  failure is reported once — `runSync` skips its own toast for an error flagged `handled`.
+  failure is reported once: the save step is passed to the shared `startSync` as its `beforeSync`,
+  and an error flagged `handled` is not toasted a second time (ETP-6154, see *Bank sync* below).
 - **Save** persists every changed field across both tabs in one call: account fields via
   `updateAccount(id, payload)`, bank import settings via the bridge `import-settings` action, and
   (ETP-4530, extended ETP-4872) the accounting configuration via `saveAccountingConfiguration`.
@@ -753,7 +755,9 @@ native app-shell UI; only the bank login is an external popup.
 - **Sync statements:** bank-synced accounts run the PSD2 module per-account statement fetch (the
   Classic "Get Bank Statement" equivalent) from the row-hover sync icon, the kebab "Sincronizar
   ahora", the Edit modal "Sincronizar ahora", and — on the Imported Statements tab — a dedicated
-  "Sincronizar extractos" button that replaces the manual import/create split-button.
+  "Sincronizar extractos" button that replaces the manual import/create split-button. Since
+  ETP-6154 the four entry points share one state, so only one sync of an account runs at a time;
+  see [Bank sync: one at a time, shared by the four entry points](#bank-sync-one-at-a-time-shared-by-the-four-entry-points-etp-6154).
 - **Sync result messages are translated in the frontend, not by Core (ETP-4891, ETP-5109).** The
   bridge returns HTTP 200 with `{status, message}`, where `message` is the raw `AD_MESSAGE` text
   built by `SaltEdgeAccountLinkHelper.fetchAccountTransactions`. `com.etendoerp.psd2.bank.integration`
@@ -769,7 +773,10 @@ native app-shell UI; only the bank login is an external popup.
   knowing before touching either side: those English strings are a **de facto wire contract** —
   rewording one on the Java side silently un-translates the toast — and because the helper can
   append several messages into one newline-joined buffer, `translateBackendError` resolves the
-  string **line by line**.
+  string **line by line**. Since ETP-6154 the outcomes that did not come from a finished fetch
+  (another sync running, the lock unavailable, a failed duplicate check) arrive with the bridge's own
+  translated wording and a stable `code`, and every entry point toasts through one notifier,
+  `bankSyncNotify.js` (see *Bank sync* below).
 - **An empty account list explains itself with a CODE, not a sentence (ETP-5179).** Connecting a USD
   Financial Account to a bank that only exposes EUR accounts used to raise the very same generic
   toast ("No se encontraron cuentas bancarias compatibles para esta conexión") as a wrong account
@@ -827,9 +834,178 @@ native app-shell UI; only the bank login is an external popup.
   fall-through covers an unknown or absent reason, so the SPA keeps working against a backend that
   predates ETP-5179.
 - **Row actions:** account rows show on hover a pencil (Edit account) and, for connected accounts,
-  a sync icon, both with tooltips.
+  a sync button with the `BankSyncIcon` (ETP-6154, see *Bank sync* below), both with tooltips.
 - **Sidebar:** the "Pendientes por conciliar" card shows only "Cuentas con pendientes" (the former
   "Sugerencias listas" / "Por regla" indicators were removed).
+
+### Bank sync: one at a time, shared by the four entry points (ETP-6154)
+
+**The problem.** A manual sync runs synchronously inside the HTTP request. The SPA gave up after 45 s
+while the server kept going, so a retry started a second sync of the same account that overlapped
+the first, and both imported the same movements. Each of the four entry points also fired its own
+request with no idea the others existed, and the row button and the kebab item had no busy state
+at all. A double click was enough to start two syncs.
+
+**Backend, in one paragraph.** The PSD2 module now runs every sync of an account under a
+per-account, non-waiting advisory lock (`AccountSyncLock`) and commits the imported lines before
+releasing it. This covers this window, the MCP, Classic's *Get Bank Statement* and the scheduled
+processes. A second sync of a locked account does not wait: the bridge answers `IN_PROGRESS` at
+once. A new `syncStatus` action of the bridge tells, per account, whether a sync is running and how
+the last fetch ended. Contract and codes: `com.etendoerp.go/docs/neo-headless.md` §4.12.1.8. Lock,
+duplicate check and timeouts: the PSD2 module's `README.md` → *One synchronization per account*.
+
+**Entry points.** All four read and drive the same per-account state, so they disable and spin
+together, whichever one started the sync:
+
+| Entry point | Component | Test ids | Label | Tooltip |
+|---|---|---|---|---|
+| List row, sync button (on hover) | `components/financial-accounts/AccountRowActions.jsx` | `account-row-refresh-{id}` (button), `account-row-refresh-wrap-{id}` (tooltip trigger), `account-row-refresh-icon-{id}` | `aria-label` = the tooltip text | `financeAccountsBankSyncTooltip`, or `financeAccountsBankSyncInProgress` while syncing |
+| Row kebab, "Sincronizar ahora" | `SyncNowMenuItem` in `components/financial-accounts/AccountRowMenu.jsx` | `account-row-menu-sync-{id}`, `account-row-menu-sync-icon-{id}` | `financeAccountsMenuSyncNow`, or `financeAccountsBankSyncInProgress` while syncing | a native `title` with the same two texts (a Radix tooltip inside a menu item would fight the menu for focus and hover) |
+| Imported statements toolbar, "Sincronizar extractos" | `SyncStatementsButton` in `windows/custom/financial-account/StatementsToolbar.jsx`, driven by `ImportedStatementsTab.jsx` | `statements-bank-sync-button`, `statements-bank-sync-wrap`, `statements-bank-sync-icon` | `financeAccountStatementsBankConnectionSync` | `financeAccountsBankSyncTooltip` / `financeAccountsBankSyncInProgress` |
+| Edit account modal, "Sincronizar ahora" | `BankSyncButton` in `windows/custom/financial-account/EditAccountModal.jsx` | `bank-connection-edit-sync`, `bank-connection-edit-sync-wrap`, `bank-connection-edit-sync-icon` | `financeAccountsMenuSyncNow` | `financeAccountsBankSyncTooltip` / `financeAccountsBankSyncInProgress` |
+
+While a sync of the account runs, each entry point is `disabled` with `aria-busy="true"` and its
+icon badge spinning. The modal button is also disabled, as before, while the modal is `busy` or the
+account is not connected. A disabled button fires no pointer events, so the row, toolbar and modal
+buttons sit inside a `<span>` that is the Radix tooltip trigger: without it, the "in progress"
+tooltip would never show exactly when it matters.
+
+The account's status line says it too. `SyncStatusInline` (list row and detail header) shows
+`financeAccountsBankSyncInProgress` with a pulsing dot (`account-sync-in-progress-{id}`,
+`aria-live="polite"`) instead of the last-sync age, which is about to change. The detail header is
+rendered in the page chrome through `useSetPageMeta`, outside the provider, so
+`FinancialAccountDetail` passes it the state explicitly through the `syncing` prop.
+
+**What is NOT disabled, by decision.** Only the sync actions are locked. Edit, disconnect, delete
+connection, reconnect, import settings, Save in the modal and every other action stay available
+during a sync.
+
+**Shared state: `BankSyncContext.jsx`.** `windows/custom/financial-account/BankSyncContext.jsx`
+owns "is this account syncing?" for the whole window. `FinancialAccountWindow` (`index.jsx`) mounts
+`BankSyncProvider` once at its root, so the list, the detail tabs and the Edit modal share it.
+
+| Export | Used by | What it does |
+|---|---|---|
+| `BankSyncProvider` | `index.jsx` | Mounts one controller for the window |
+| `useBankSync()` | `AccountsHeaderTable`, `FinancialAccountDetail`, `ImportedStatementsTab`, `EditAccountModal` | `{isSyncing(id), startSync(id, options), track(ids), subscribe(id, cb)}`. Its `startSync` drops the caller's `onDone` once the caller unmounts. Outside a provider (a component rendered on its own, as in unit tests) it falls back to a controller private to the caller: same behaviour, not shared |
+| `useBankSyncStatus(id)` | the row button, the kebab item, `SyncStatusInline` | Read-only `{syncing}`, no request, no fallback controller. Outside a provider it is always "not syncing" |
+| `useBankSyncTracking(bankSync, ids)` | `AccountsHeaderTable` (bank-connected rows on screen), `FinancialAccountDetail` (its account, when connected) | Declares the accounts a host shows, for discovery (below) |
+| `useBankSyncDone(bankSync, id, cb)` | `AccountsHeaderTable` (every account: reload the list), `FinancialAccountDetail` (its account: `reloadAccountAndList`) | Host-level reload for a finished sync nobody else reloads for |
+
+Lifecycle of one account:
+
+```
+startSync(id)
+  │  already running for id?  ── yes ──▶ no request; the caller's onDone joins the running sync;
+  │                                      info toast "in progress"; returns {status: IN_PROGRESS}
+  ▼ no (the Map entry is written synchronously, before any await: a double click cannot pass)
+beforeSync?()  ── throws ──▶ drop; toast unless the error is flagged `handled`; no callbacks
+  ▼
+POST ?action=sync
+  ├─ OK / WARNING / ERROR ─────────────▶ finish: callbacks, then ONE result toast
+  ├─ IN_PROGRESS (another tab, user, ──▶ info toast, then poll
+  │   MCP or scheduled run holds it)
+  ├─ BANK_CONNECTION_TIMEOUT (45 s) ───▶ poll silently (the server keeps going)
+  └─ any other error ──────────────────▶ finish: error toast, no callbacks
+
+poll: GET ?action=syncStatus every 3 s, paused while the tab is hidden
+  ├─ inProgress === false ─────────────▶ finish with resultOfFinishedSync(state, startedAt)
+  └─ 10 min elapsed, or 3 consecutive ─▶ give up: finish with no result (the timeout toast if the
+     failed or empty reads                request had timed out, nothing otherwise); reloads still run
+```
+
+- **Re-entry guard.** The controller keeps a `Map` of running syncs in a ref and writes the entry
+  before the first `await`. A second `startSync` for the same account, from the same button or any
+  other entry point, sends nothing.
+- **Polling.** `BANK_SYNC_POLL_INTERVAL_MS` = 3 s, `BANK_SYNC_POLL_GIVE_UP_MS` = 10 min,
+  `BANK_SYNC_POLL_MAX_FAILURES` = 3 consecutive reads that failed or omitted the account. It stops
+  while `document.visibilityState` is `hidden` and resumes on `visibilitychange`.
+- **What a polled sync ended with: `resultOfFinishedSync`.** The bridge's `lastResult` is the Salt
+  Edge fetch health, not the outcome of our import, so it can describe an older fetch. It is
+  trusted only when its `at` is not older than the moment this tab started (or discovered) the sync,
+  with 60 s of tolerance for clock skew. Otherwise a `lastSyncDate` that moved since then means the
+  import ran (`OK`). Neither: the outcome is unknown, no toast is shown, and the reloads show
+  whatever landed. These are instant comparisons, not calendar days, so there is no timezone trap.
+  A polled result never carries a `code`: `BANK_SYNC_DUPLICATE_CHECK_FAILED` only arrives on the
+  direct `sync` answer, so a sync followed after the 45 s timeout cannot report it.
+- **Discovery on mount.** The first time a host tracks an account id, its status is read once
+  (`syncStatus` for the new ids). An account found `inProgress` is marked as syncing and polled, so
+  reloading the page in the middle of a sync still shows it running. A sync discovered this way
+  finishes **silently** (this tab did not ask for it), but its reloads run. A failed discovery read
+  un-marks the ids, so the next tracking change retries them. Discovery is one read per id: a sync
+  started elsewhere after the page loaded is only noticed when someone here starts one (the bridge
+  then answers `IN_PROGRESS` and this tab joins it).
+- **Who reloads what.** When a sync finishes, the `onDone` callbacks of the components that asked
+  for it or joined it, and are still mounted, run. Only when there is none do the host listeners
+  (`useBankSyncDone`) run instead, so each reload runs once:
+
+  | Started from | `onDone` | Reload |
+  |---|---|---|
+  | List row or kebab | none | the list's `useBankSyncDone` → `reload()` |
+  | Imported statements toolbar | `refreshStatements()` + `onSynced()` | statements, lines and the account's `lastSyncDate` |
+  | Edit account modal | `refresh()` + `onSaved()` | the modal's status, then the host's own `onSaved` |
+  | Discovered (reload, another user, MCP, scheduled) | none | the host listeners: list reload, or `reloadAccountAndList` in the detail |
+
+**`syncStatus` on the client.** `useBankConnectionActions().syncStatus(ids)` sends
+`GET ?action=syncStatus&financialAccountIds=a,b`, not the `POST` form: a `POST` on this report spec
+needs write access to the Financial Account window, so read-only roles got 403 and never saw
+"in progress". The ids are deduplicated and split into chunks of `SYNC_STATUS_MAX_IDS` (200, the
+bridge's limit; it answers 400 above that), the chunks run in parallel and their maps are merged.
+The accounts list can grow past 200 through "load more", which is why chunking exists. Each read has
+a 15 s timeout: it runs every few seconds while a sync is pending, so a slow answer is dropped and
+retried on the next tick. The bridge omits the ids this session cannot read. A refused request now
+also carries the `code` of its error body as `err.code`.
+
+**One notifier: `bankSyncNotify.js`.** `windows/custom/financial-account/bankSyncNotify.js` is the
+only place a sync outcome becomes a toast. It replaces three hand-copied handlers that had drifted
+apart (the list toasted a WARNING with `toast.info`, the statements tab showed
+`BANK_CONNECTION_TIMEOUT` raw):
+
+| Outcome | Toast | Text |
+|---|---|---|
+| `IN_PROGRESS` (or a second click joining a running sync) | `toast.info` | always our own `financeAccountsBankSyncInProgress`, never the bridge's |
+| `ERROR` | `toast.error` | the translated message, else `financeAccountsBankConnectionSyncError` |
+| `WARNING` | `toast.warning` (ETP-5181) | the translated message, else `financeAccountsBankConnectionSyncDone` |
+| `OK` or no status | `toast.success` | the translated message, else `financeAccountsBankConnectionSyncDone` |
+| A request that threw (network, HTTP error, client timeout) | `toast.error` | through `notifyBankSyncError` |
+
+`translateBankSyncMessage(message, code, ui)` decides the text. A message that the
+`lib/backendErrors.js` map knows word for word is shown in its own translation. Any other prose
+gives way to the code's label, so the raw text of a coded result is never shown. Codes are
+translated by identity (`CODE_ONLY_KEYS`): `BANK_SYNC_LOCK_UNAVAILABLE` →
+`backendError.bankSyncLockUnavailable`, `BANK_SYNC_DUPLICATE_CHECK_FAILED` →
+`backendError.bankSyncDuplicateCheckFailed`. The client's own timeout sentinel
+`BANK_CONNECTION_TIMEOUT` is now in the message map (`financeAccountsBankConnectionTimeout`), and a
+bare code with no label yields the generic text, so no protocol token ever reaches the user.
+
+**The icon: `BankSyncIcon`.** `components/financial-accounts/BankSyncIcon.jsx` is the icon of the
+four entry points: a `Landmark` (the glyph this window already uses for the bank connection) with a
+small `ArrowDownUp` badge in its bottom-right corner. It replaces `RefreshCw`, which read as "reload
+the screen" and looked the same as the toolbar's refresh button next to it. While syncing
+(`spinning`), only the badge turns, so the bank stays legible. It is `aria-hidden`: the button that
+hosts it carries the accessible name. The badge's backdrop (`badgeClassName`) must match the surface
+behind it so the badge reads as cut out of the bank: the hovered row's `--row-hover-bg` on the
+list, `bg-popover` (focused: `bg-accent`) in the kebab, `bg-primary` on the toolbar's primary
+button, and the default `bg-card` in the modal. Rows and the toolbar size it `h-5 w-5`; the kebab
+and the modal use `h-4 w-4`.
+
+**i18n.** New keys, in `en_US.json`, `es_ES.json` and `es_AR.json`:
+
+| Key | es_ES | en_US |
+|---|---|---|
+| `financeAccountsBankSyncTooltip` | Sincronizar movimientos bancarios (PSD2) | Sync bank transactions (PSD2) |
+| `financeAccountsBankSyncInProgress` | Sincronización en curso, por favor espere… | Sync in progress, please wait… |
+| `backendError.bankSyncLockUnavailable` | No se pudo iniciar la sincronización bancaria en este momento. Inténtalo de nuevo en unos instantes. | The bank sync could not start right now. Try again in a moment. |
+| `backendError.bankSyncDuplicateCheckFailed` | No se pudo comprobar si algunos movimientos bancarios ya estaban importados y no se importaron. Vuelve a sincronizar. | Some bank transactions could not be checked for duplicates and were not imported. Try syncing again. |
+
+Reused: `financeAccountsMenuSyncNow`, `financeAccountStatementsBankConnectionSync`,
+`financeAccountsBankConnectionSyncDone`, `financeAccountsBankConnectionSyncError`,
+`financeAccountsBankConnectionTimeout`. The bridge's own `IN_PROGRESS` message
+(`psd2BankSyncInProgress` in com.etendoerp.go's `neo_hints_es.properties`) carries the same es_ES
+text, but the SPA never shows it: the notifier uses its own key.
+
+All of this is custom window code: no `decisions.json` change and no `make regen`. Every request
+goes through `useApiFetch` (via `useBankConnectionActions`).
 
 ### Disconnecting: two modes (ETP-4764)
 
@@ -883,11 +1059,16 @@ the follow-up call the connection stays inactive and a deactivated account can n
 
 Bridge actions: `connect` (optional `financialAccountId` → provider preselect) · `accounts` ·
 `providers` · `link` · `createAndLink` · `reconnect` · `reconnect-callback` · `disconnect`
-(optional `permanentDeletion`, default `false`) · `sync` · `import-settings` · `status` (returns
-`reconnectable`).
+(optional `permanentDeletion`, default `false`) · `sync` (`status` `OK|WARNING|ERROR|IN_PROGRESS`,
+ETP-6154) · `syncStatus` (`POST` with `financialAccountIds[]` or `GET` with
+`?financialAccountIds=a,b`, at most 200 ids, ETP-6154) · `import-settings` · `status` (returns
+`reconnectable`). Contract of `sync` and `syncStatus`: `com.etendoerp.go/docs/neo-headless.md`
+§4.12.1.8.
 Frontend: `hooks/useBankConnectionActions.js`, `hooks/useBankConnectionFlow.js`,
 `pages/BankConnectionCallbackPage.jsx`, `windows/custom/financial-account/BankConnectionFlowUI.jsx`,
-`windows/custom/financial-account/BankConnectionDeleteConfirmModal.jsx`.
+`windows/custom/financial-account/BankConnectionDeleteConfirmModal.jsx`; for the sync (ETP-6154)
+`windows/custom/financial-account/BankSyncContext.jsx`, `windows/custom/financial-account/bankSyncNotify.js`
+and `components/financial-accounts/BankSyncIcon.jsx`.
 
 ### Widget language and the waiting overlay (ETP-5102)
 
@@ -1339,18 +1520,38 @@ Posting stays on `financial-account/transaction` (`post` / `unpost`). Runtime re
 `com.etendoerp.go/docs/neo-headless.md` §4.12.1.4 (movements), §4.12.1.5 (transfers) and §4.12.9
 (differences with the SPA's route).
 
-## MCP / agent access to the bank connection (ETP-5804)
+## MCP / agent access to the bank connection (ETP-5804, ETP-6154)
 
 The two disconnect options of "Editar cuenta" and the row kebab (see "Disconnecting: two modes
-(ETP-4764)" above) are declared actions of `financial-account/account`, called with
+(ETP-4764)" above) and, since ETP-6154, the sync and its status are declared actions of
+`financial-account/account`, called with
 `etendo_action {spec:"financial-account", entity:"account", id:<financial account id>, action:...}`:
 
 | Action | Mode | Effect |
 |---|---|---|
 | `disconnectBank` | soft, reversible (`permanentDeletion=false`) | Sync stops; normally the account keeps its link and history and can be reconnected from the UI; a connection shared by several accounts is unlinked instead (`permanent:true, reconnectable:false`), so the agent reads `reconnectable`. Repeating it while the account is still soft-disconnected is safe (200); once the account is unlinked there is nothing left to disconnect and it answers 404. Releases the account for manual bank statements, which a connected account rejects with 409 |
 | `deleteBankConnection` | permanent, irreversible (`permanentDeletion=true`) | Deletes the connection at Salt Edge and unlinks the account; the bank connection then no longer blocks deleting it (other delete blockers may still apply). Its description instructs the agent to ask the user first and call it only after they confirm |
+| `syncBank` | write | Imports the account's new bank movements, exactly as the Sincronizar buttons do, synchronously. Answers `{status: OK\|WARNING\|ERROR\|IN_PROGRESS, code?, message, lastSyncDate}`. `IN_PROGRESS` means another sync of the account is running (from the UI, the scheduled import or another agent): none is started, and the agent polls `bankSyncStatus`. `code` is `BANK_SYNC_LOCK_UNAVAILABLE` or `BANK_SYNC_DUPLICATE_CHECK_FAILED`, both retriable |
+| `bankSyncStatus` | read | `{inProgress, lastSyncDate, lastResult: {status: OK\|ERROR\|null, message, at}}` for the account, without starting a sync. `lastResult` is the bank connection's last attempt to reach the bank, not the outcome of the import |
 
-Both answer `{disconnected, permanent, reconnectable}`; an account with no connection answers 404.
+The disconnect actions answer `{disconnected, permanent, reconnectable}`; an account with no
+connection answers 404.
+
+**There is no server-side MCP timeout.** `syncBank` waits for the bank, so the agent's client may
+give up while the sync keeps running on the server. The action descriptions and the entity's
+`AGENT_PROMPT` (`agent-prompts/financial-account/account.md`) tell the agent to poll
+`bankSyncStatus` every few seconds until `inProgress` is `false` after an `IN_PROGRESS` answer or a
+timeout, instead of calling `syncBank` again. `pSD2GetBankstatement` stays hidden
+(`MCP_CONFIG.actions.hidden`); it is protected by the same per-account lock anyway.
+
+**Role gate (ETP-6154).** All four actions now pass the check the SPA's own request passes:
+report-spec access to `financial-account-bank-connection`, as a `POST` for `syncBank`,
+`disconnectBank` and `deleteBankConnection` and as a `GET` for `bankSyncStatus`, else **403**. This
+closes a gap open since ETP-5804: the MCP authorizes `etendo_action` as a read of
+`financial-account`, so a role with read-only access to the Financial Account window could
+disconnect or delete a bank connection through the MCP although the UI never offers it to that
+role.
+
 Connecting and reconnecting stay hidden from the MCP: they need the account holder to authenticate at
 the bank (SCA). Runtime reference: `com.etendoerp.go/docs/neo-headless.md` §4.12.1.8.
 

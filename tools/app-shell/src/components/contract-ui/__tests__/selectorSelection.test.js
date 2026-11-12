@@ -10,6 +10,7 @@ import {
   LOCATE_SELECTION_MAX_PAGES, resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor,
   hasCommittedValue,
   shouldKeepLocating, centerOptionInPanel, committedItemFromRow, pinSearchTerms, committedIdSet,
+  locatePageLimit, locateMaxRows, firstPageLimit,
 } from '../selectorSelection.js';
 
 const ROWS = [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }];
@@ -162,4 +163,37 @@ test('committedIdSet is empty for no rows, null or undefined', () => {
   assert.equal(committedIdSet([], () => true, (r) => r.id).size, 0);
   assert.equal(committedIdSet(null, () => true, (r) => r.id).size, 0);
   assert.equal(committedIdSet(undefined, () => true, (r) => r.id).size, 0);
+});
+
+test('locatePageLimit: 100 rows first, then everything that is left of the 1000-row walk total', () => {
+  assert.equal(locatePageLimit(30, 0), 100);
+  assert.equal(locatePageLimit(30, 100), 900);
+  assert.equal(locatePageLimit(50, 100), 900);
+  assert.equal(locatePageLimit(50, 0), 100);
+});
+
+test('locatePageLimit never goes below the own page size (big pickers, end of the walk)', () => {
+  assert.equal(locatePageLimit(200, 0), 200);
+  assert.equal(locatePageLimit(30, 999), 30);
+});
+
+test('locateMaxRows: 1000 with big pages, 6 x own size without them (product drawers)', () => {
+  assert.equal(locateMaxRows(30), 1000);
+  assert.equal(locateMaxRows(30, false), 180);
+  assert.equal(locateMaxRows(50, false), 300);
+});
+
+test('shouldKeepLocating honours an explicit maxRows', () => {
+  const base = { found: false, hasMore: true, pageSize: 30, interacted: false, maxRows: 1000 };
+  assert.equal(shouldKeepLocating({ ...base, loadedRows: 100 }), true);
+  assert.equal(shouldKeepLocating({ ...base, loadedRows: 1000 }), false);
+});
+
+test('firstPageLimit is large only with a committed value and no typed search', () => {
+  assert.equal(firstPageLimit(30, 'x', ''), 100);
+  assert.equal(firstPageLimit(30, 'x', '  '), 100);
+  assert.equal(firstPageLimit(30, null, ''), 30);
+  assert.equal(firstPageLimit(30, '', ''), 30);
+  assert.equal(firstPageLimit(30, 'x', 'abc'), 30);
+  assert.equal(firstPageLimit(30, 'x', undefined), 100);
 });

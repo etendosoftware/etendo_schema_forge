@@ -49,11 +49,19 @@ function preventWhile(locked) {
  * }} props
  */
 export function DeleteConfirmDialog({
-  open, count, deleting = false, onConfirm, onClose, testIdScope = 'batch-delete',
+  open, count, deleting = false, progress = null, onConfirm, onClose, testIdScope = 'batch-delete',
 }) {
   const ui = useUI();
   const scope = testIdScope;
   const lock = preventWhile(deleting);
+  // ETP-6143 — a server-side bulk delete reports how far it got; the per-row path does not.
+  const total = progress?.total || count;
+  const processed = Math.min(progress?.processed ?? 0, total);
+  const showProgress = deleting && progress != null && total > 0;
+  const percent = showProgress ? Math.round((processed / total) * 100) : 0;
+  let description = ui('bulkDeleteConfirmMessage', { count });
+  if (showProgress) description = ui('bulkDeleteProgressMessage', { processed, total });
+  else if (deleting) description = ui('bulkDeleteInProgressMessage', { count });
 
   return (
     <Dialog
@@ -72,11 +80,22 @@ export function DeleteConfirmDialog({
         <DialogHeader data-testid={`DialogHeader__${scope}`}>
           <DialogTitle data-testid={`DialogTitle__${scope}`}>{ui('bulkDeleteConfirmTitle')}</DialogTitle>
           <DialogDescription aria-live="polite" data-testid={`DialogDescription__${scope}`}>
-            {deleting
-              ? ui('bulkDeleteInProgressMessage', { count })
-              : ui('bulkDeleteConfirmMessage', { count })}
+            {description}
           </DialogDescription>
         </DialogHeader>
+        {showProgress && (
+          <div
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={total}
+            aria-valuenow={processed}
+            className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+            data-testid={`${scope}-progress`}>
+            <div
+              className="h-full bg-destructive transition-[width] duration-300"
+              style={{ width: `${percent}%` }} />
+          </div>
+        )}
         <DialogFooter data-testid={`DialogFooter__${scope}`}>
           <DialogClose asChild data-testid={`DialogClose__${scope}`}>
             <Button
