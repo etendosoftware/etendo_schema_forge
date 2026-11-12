@@ -625,6 +625,34 @@ describe('createBillingPurchase', () => {
 
   // A duplicate is a domain answer, not a failure: the page reopens the purchase it is told about,
   // so the payload has to survive on the error object.
+  it('sends the explicitly confirmed predecessor when replacing an unpaid purchase', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ requestId: 'req-new', checkoutUrl: 'https://c.test/new' }));
+
+    await createBillingPurchase('', {
+      clientName: 'Acme', planKey: 'core-monthly', replacePurchaseId: 'req-old',
+    });
+
+    const body = JSON.parse(calls[0][1].body);
+    assert.equal(body.planKey, 'core-monthly');
+    assert.equal(body.replacePurchaseId, 'req-old');
+  });
+
+  it('preserves a commercial mismatch separately from an existing paid purchase', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({
+      purchaseId: 'req-old', status: 'CREATED', replacementAllowed: true,
+      error: { code: 'PURCHASE_SELECTION_CHANGED', message: 'Choose whether to replace it.' },
+    }, { ok: false, status: 409 }));
+
+    await assert.rejects(
+      () => createBillingPurchase('', { planKey: 'core-monthly' }),
+      error => error.code === UPGRADE_ERROR_CODES.purchaseSelectionChanged
+        && error.purchase.purchaseId === 'req-old'
+        && error.purchase.replacementAllowed === true,
+    );
+  });
+
   it('raises purchaseAlreadyExists with the purchase attached on a 409', async () => {
     declareCookieSession();
     installFetch(jsonResponse(

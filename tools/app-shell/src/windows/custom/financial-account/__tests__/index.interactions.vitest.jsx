@@ -15,7 +15,7 @@
  * Every child is stubbed (each has its own suite) so the assertions are about the
  * callbacks crossing the boundary, not about any child's internals.
  */
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { forwardRef, useImperativeHandle } from 'react';
 
 let currentSearchParams = new URLSearchParams();
@@ -30,6 +30,24 @@ vi.mock('react-router-dom', () => ({
 // The key itself.
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+  // SyncStatusInline's last-sync label (rendered from the page-meta title extra) reads the locale.
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
+}));
+
+// ETP-6154 — the bank-sync network edge. Left at "nothing running", it is never even reached
+// unless a test makes the account bank-connected (only those are tracked).
+const syncStatusMock = vi.fn();
+vi.mock('@/hooks/useBankConnectionActions.js', () => ({
+  useBankConnectionActions: () => ({ sync: vi.fn(), syncStatus: syncStatusMock }),
+}));
+
+// The account-list cache, so the "and the list" half of reloadAccountAndList is observable.
+// Stable object across renders — the hook memoizes on `cache`.
+const invalidateCacheMock = vi.fn();
+const dataCacheValue = { cache: { invalidate: (...a) => invalidateCacheMock(...a) } };
+vi.mock('@etendosoftware/app-shell-core/data', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useOptionalDataCache: () => dataCacheValue,
 }));
 
 let currentWindowAccessTier = 'full';
@@ -57,9 +75,11 @@ vi.mock('@/hooks/useReconciliationList', () => ({
 // `type` is undefined (a bank account) unless a test sets it — ETP-5457 flips it to CASH to mount
 // the cash-close branch of the reconciliation tab.
 let currentAccountType;
+// ETP-6154 — extra account fields (bankConnected) a test can set.
+let currentAccountExtra = {};
 vi.mock('@/hooks/useFinancialAccount', () => ({
   useFinancialAccount: () => ({
-    account: { id: 'acc-1', name: 'BBVA', pendingCount: 2, type: currentAccountType },
+    account: { id: 'acc-1', name: 'BBVA', pendingCount: 2, type: currentAccountType, ...currentAccountExtra },
     loading: false,
     error: null,
     reload: reloadAccountMock,
@@ -239,6 +259,8 @@ vi.mock('@/components/contract-ui/AutoMatchSuggestionModal', () => ({
 }));
 
 import { FinancialAccountDetail } from '../index.jsx';
+import { BankSyncProvider, BANK_SYNC_POLL_INTERVAL_MS } from '../BankSyncContext.jsx';
+import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { ACCOUNT_TYPE } from '@/components/financial-accounts/tokens';
 
 const WINDOW_ID = '94EAA455D2644E04AB25D93BE5157B6D';
@@ -247,6 +269,10 @@ beforeEach(() => {
   currentSearchParams = new URLSearchParams();
   currentWindowAccessTier = 'full';
   currentAccountType = undefined;
+  currentAccountExtra = {};
+  syncStatusMock.mockReset();
+  syncStatusMock.mockResolvedValue({});
+  invalidateCacheMock.mockClear();
   currentMovements = [{ id: 'm1' }];
   mockMovementsApi = { filtered: [{ id: 'm1' }] };
   mockStatementsApi = { selected: [], filtered: [] };
@@ -851,5 +877,90 @@ describe('FinancialAccountDetail — bounce-pair review (Revisar en el panel)', 
     fireEvent.click(screen.getByTestId('stub-automatch-review'));
     fireEvent.click(screen.getByTestId('stub-panel-focus-consumed'));
     expect(screen.getByTestId('tab-reconciliation')).toHaveAttribute('data-focus-line', '');
+  });
+});
+
+// ETP-6154 — the detail tracks its account in the window's shared bank-sync state, so a sync
+// already running when the page loads shows in the banner above the tabs and, when it ends, the
+// account and the list reload. The header line (page chrome, outside the BankSyncProvider) is
+// handed `syncing={false}` on purpose: it keeps the last-sync age, and the banner is this view's
+// only in-progress signal (product decision).
+describe('FinancialAccountDetail — bank sync already running (ETP-6154)', () => {
+  /** Renders the latest page-meta title extra on its own, as the chrome does: no provider. */
+  function renderHeaderExtra() {
+    const meta = useSetPageMeta.mock.calls.at(-1)[0];
+    return render(meta.titleExtra);
+  }
+
+  function renderDetail() {
+    return render(
+      <BankSyncProvider>
+        <FinancialAccountDetail recordId="acc-1" />
+      </BankSyncProvider>,
+    );
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('shows the sync banner above the tabs (not a header line) for a bank-connected account whose sync is running', async () => {
+    currentAccountExtra = { bankConnected: true };
+    syncStatusMock.mockResolvedValue({ 'acc-1': { inProgress: true } });
+
+    renderDetail();
+
+    await waitFor(() => expect(syncStatusMock).toHaveBeenCalledWith(['acc-1']));
+    expect(await screen.findByTestId('account-detail-bank-sync-banner')).toBeInTheDocument();
+    expect(useSetPageMeta.mock.calls.at(-1)[0].titleExtra.props.syncing).toBe(false);
+    renderHeaderExtra();
+    expect(screen.queryByTestId('account-sync-in-progress-acc-1')).toBeNull();
+    expect(reloadAccountMock).not.toHaveBeenCalled();
+  });
+
+  it('reloads the account and the list once that sync ends, and the banner goes away', async () => {
+    vi.useFakeTimers();
+    currentAccountExtra = { bankConnected: true, lastSyncDate: new Date(Date.now()).toISOString() };
+    syncStatusMock
+      .mockResolvedValueOnce({ 'acc-1': { inProgress: true } })
+      .mockResolvedValueOnce({ 'acc-1': { inProgress: false, lastSyncDate: new Date(Date.now() + 1000).toISOString() } });
+
+    renderDetail();
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(screen.getByTestId('account-detail-bank-sync-banner')).toBeInTheDocument();
+    invalidateCacheMock.mockClear();
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(BANK_SYNC_POLL_INTERVAL_MS); });
+
+    expect(reloadAccountMock).toHaveBeenCalledTimes(1);
+    expect(invalidateCacheMock).toHaveBeenCalledWith({ entity: 'account' });
+    expect(screen.queryByTestId('account-detail-bank-sync-banner')).toBeNull();
+    // Discovered, not asked for by this tab: no result toast.
+    expect(toastSuccessMock).not.toHaveBeenCalled();
+    expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+
+  it('never tracks an account that is not bank-connected', async () => {
+    vi.useFakeTimers();
+    currentAccountExtra = { bankConnected: false };
+    syncStatusMock.mockResolvedValue({ 'acc-1': { inProgress: true } });
+
+    renderDetail();
+    await act(async () => { await vi.advanceTimersByTimeAsync(BANK_SYNC_POLL_INTERVAL_MS * 3); });
+
+    expect(syncStatusMock).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('account-detail-bank-sync-banner')).toBeNull();
+    expect(reloadAccountMock).not.toHaveBeenCalled();
+  });
+
+  it('shows no sync banner and reloads nothing when the connected account is idle', async () => {
+    currentAccountExtra = { bankConnected: true };
+    syncStatusMock.mockResolvedValue({ 'acc-1': { inProgress: false } });
+
+    renderDetail();
+    await waitFor(() => expect(syncStatusMock).toHaveBeenCalledTimes(1));
+
+    expect(screen.queryByTestId('account-detail-bank-sync-banner')).toBeNull();
+    expect(reloadAccountMock).not.toHaveBeenCalled();
   });
 });

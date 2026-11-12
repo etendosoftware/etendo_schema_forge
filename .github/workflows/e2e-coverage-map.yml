@@ -48,8 +48,19 @@ jobs:
           cp .env.example .env
           make install
 
+      # No --with-deps, cached per Playwright version: see the same steps in mini-pipeline.yml.
+      - name: Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
       - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       - name: Mocked E2E with coverage
         continue-on-error: true

@@ -16,6 +16,7 @@ import http.server
 import inspect
 import json
 import os
+import re
 import secrets
 import shutil
 import socket
@@ -846,14 +847,21 @@ def _same(actual: Any, expected: Any) -> bool:
     return actual == expected
 
 
+#: A decimal comma with no grouping: Holded serialises amounts as "36,30" (ETP-5848).
+_DECIMAL_COMMA = re.compile(r"-?\d+,\d+")
+
+
 def _as_number(value: Any) -> float | None:
     if isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
         return float(value)
     if isinstance(value, str):
+        text = value.strip()
+        if _DECIMAL_COMMA.fullmatch(text):
+            text = text.replace(",", ".")
         try:
-            return float(value.strip())
+            return float(text)
         except ValueError:
             return None
     return None
