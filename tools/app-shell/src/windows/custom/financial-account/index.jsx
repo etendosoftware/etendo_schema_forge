@@ -19,6 +19,8 @@ import { ReconciliationTab } from './ReconciliationTab';
 import { CashCloseTab } from './CashClose/index.jsx';
 import { ReconciliationListTab } from './ReconciliationList/index.jsx';
 import { ImportedStatementsTab } from './ImportedStatementsTab';
+import { statementsTabBadge } from './statementsTabBadge';
+import { usePsd2ImportSettingsFlag } from '@/hooks/usePsd2ImportSettingsFlag';
 import { EditAccountModal } from './EditAccountModal.jsx';
 import { ArchiveAccountDialog } from './ArchiveAccountDialog.jsx';
 import { DeleteAccountDialog } from './DeleteAccountDialog.jsx';
@@ -430,7 +432,10 @@ export function FinancialAccountDetail({ recordId }) {
     reloadMovements();
     setReconciliationRefreshKey((k) => k + 1);
   }, [reloadAccountAndList, reloadAutoMatch, reloadMovements]);
-  const { statements } = useBankStatements(recordId);
+  // ETP-6151 — the same unfiltered headers feed the CSV-export fallback and (flag on) the
+  // Statements tab badge. The tab owns its own copy and tells us through `onStatementsChanged`.
+  const importSettingsEnabled = usePsd2ImportSettingsFlag();
+  const { statements, loading: statementsLoading, reload: reloadStatements } = useBankStatements(recordId);
   // Lifted out of ReconciliationListTab so the tab badge can show the count without the tab being
   // mounted — and without a second fetch of the same endpoint. Idle (`null`) on non-cash accounts,
   // which never render that tab.
@@ -597,8 +602,9 @@ export function FinancialAccountDetail({ recordId }) {
             badges={{
               movements: movements.length,
               reconciliation: account?.pendingCount ?? 0,
-              // No `statements` entry on purpose: the Imported statements tab has never carried a
-              // count badge, and a tab list where every trigger has a number reads as noise.
+              // ETP-6151: only behind the flag `psd2-statement-import-settings` (undefined = no
+              // badge, tab as on develop). Total statement headers of the account, unfiltered.
+              statements: statementsTabBadge(importSettingsEnabled, statements, statementsLoading),
               reconciliationList: reconciliations.length,
             }}
             data-testid="DetailTabs__f7dbb3" />
@@ -663,6 +669,7 @@ export function FinancialAccountDetail({ recordId }) {
               account={account}
               windowReadOnly={windowReadOnly}
               onSynced={reloadAccountAndList}
+              onStatementsChanged={reloadStatements}
               data-testid="ImportedStatementsTab__f7dbb3" />
           )}
           {activeTab === 'reconciliationList' && (
