@@ -90,7 +90,7 @@ export const SALES_RELATED_DOCS = {
     refreshEvent: 'sales-quotation:document-created',
     sources: [
       criteriaSource('orders', 'sales-order', 'sales-order', 'header', 'quotation'),
-      listInvoicesSource('invoices', 'sales-invoice', 'sales-quotation', 'quotation'),
+      listInvoicesSource('invoices', 'sales-invoice', 'sales-quotation', 'quotation', { excludeRectificatives: true }),
       // ETP-6002 CP-14 (QA criterion): a quotation's direct relations are its orders and invoices
       // only. A shipment made from an invoice that came straight from the quotation relates to that
       // invoice, never to the quotation, so there is no shipment / return source here.
@@ -106,7 +106,8 @@ export const SALES_RELATED_DOCS = {
     sources: [
       { key: 'quotation', type: 'sales-quotation', fetch: fetchSourceQuotation },
       criteriaSource('shipments', 'shipment', 'goods-shipment', 'goodsShipment', 'salesOrder'),
-      listInvoicesSource('invoices', 'sales-invoice', 'sales-order', 'header'),
+      // ETP-6002: a Pedido never lists a factura rectificativa (QA criterion).
+      listInvoicesSource('invoices', 'sales-invoice', 'sales-order', 'header', { excludeRectificatives: true }),
     ],
   },
 

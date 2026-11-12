@@ -22,13 +22,20 @@ export function criteriaSource(key, type, spec, entity, column) {
   };
 }
 
-/** Invoices of this order-like document through the `listInvoices` header action. */
-export function listInvoicesSource(key, type, spec, entity) {
+/**
+ * Invoices of this order-like document through the `listInvoices` header action.
+ * `excludeRectificatives` (ETP-6002, sales order and quotation) leaves out the rows the backend
+ * flags `isRectificative: true`: a rectificative is the original invoice's relation, not the
+ * order's. Without it (purchase) every row is kept, as before.
+ */
+export function listInvoicesSource(key, type, spec, entity, { excludeRectificatives = false } = {}) {
   return {
     key,
     type,
-    fetch: ({ id, token, apiBaseUrl }) =>
-      fetchListInvoices(spec, entity, id, token, apiBaseUrl),
+    fetch: async ({ id, token, apiBaseUrl }) => {
+      const rows = await fetchListInvoices(spec, entity, id, token, apiBaseUrl);
+      return excludeRectificatives ? asArray(rows).filter(row => row?.isRectificative !== true) : rows;
+    },
   };
 }
 

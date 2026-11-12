@@ -156,11 +156,28 @@ describe('SALES_RELATED_DOCS — resolved chips per spec', () => {
     {
       // ETP-6002 CP-14 (QA criterion): a quotation never lists a shipment or a return, even when
       // the record still carries `linkedShipments` (an older backend injected it).
-      name: 'sales-quotation: no shipment nor return chip, only its orders and invoices',
+      name: 'sales-quotation: no shipment, return nor rectificative chip, only its orders and invoices',
       spec: 'sales-quotation',
       record: { id: 'q1', linkedShipments: [{ id: 's1', isReturn: false }, { id: 'r1', isReturn: true }] },
-      backend: { listInvoices: { 'sales-quotation/quotation/q1': [{ id: 'i1' }] } },
+      backend: {
+        listInvoices: {
+          'sales-quotation/quotation/q1': [{ id: 'i1', isRectificative: false }, { id: 'ir', isRectificative: true }],
+        },
+      },
       expected: ['sales-invoice:i1'],
+    },
+    {
+      // ETP-6002 (QA criterion): a Pedido never lists a factura rectificativa; a row without the
+      // flag (an older backend) is kept.
+      name: 'sales-order: a rectificative from listInvoices is left out',
+      spec: 'sales-order',
+      record: { id: 'o1' },
+      backend: {
+        listInvoices: {
+          'sales-order/header/o1': [{ id: 'i1', isRectificative: false }, { id: 'ir', isRectificative: true }, { id: 'i2' }],
+        },
+      },
+      expected: ['sales-invoice:i1', 'sales-invoice:i2'],
     },
     {
       // ETP-6002 CP-14: a shipment's linkedOrders are orders; a leftover `isQuotation` flag (an
