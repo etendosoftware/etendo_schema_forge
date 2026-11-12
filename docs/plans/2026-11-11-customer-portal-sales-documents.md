@@ -1,7 +1,7 @@
 # Customer portal: every sales document, one link per send
 
-Status: **approved 2026-11-11 (all decisions below taken as proposed) · Part A implemented, Part B
-pending** · Created 2026-11-11 ·
+Status: **approved 2026-11-11 (all decisions below taken as proposed) · Part A implemented and
+approved, Part B implemented 2026-11-12** · Created 2026-11-11 ·
 Jira: **ETP-6209** (extends ETP-5267) · Flag: **`bp-portal-link`** (unchanged gate, now for all sales
 document sends) · Branches: `feature/ETP-6209` in `etendo_schema_forge` and `com.etendoerp.go`
 
@@ -656,4 +656,54 @@ Where the code differs from the text above, and why:
   already committed. A failed confirm is rolled back on its own and the session reopened.
 - **`POST /renew` extra answers:** `{state:"valid"}` when the link had not expired, `503` when the
   email could not be sent (the page offers a retry).
+
+## Part B — implementation notes (2026-11-12)
+
+**Design.** Built from the PO's six screens (desktop Inicio / Listado / Documento, mobile Inicio /
+Listado / Documento). Colours come from the app-shell semantic tokens (`bg-background`, `bg-card`,
+`bg-muted`, `border-border`, `text-muted-foreground`, `bg-primary`, the lime
+`--accent-highlight`), never from the design's hex values; statuses and payment states use the
+app's own helpers (`DocumentStatusPill` / `statusLabel`, `StatusTag` tones,
+`resolveInvoicePaymentBadge`, `getDueDateState`). Headings inherit Plus Jakarta Sans from the
+app's global `h1–h6` rule.
+
+**Scope decided with the user where the design and the ticket differ.**
+- **In:** home (pending-payment card with outstanding and overdue amount per currency, one tile
+  per kind with its count and highlight, recent documents — all server-side aggregates); a sidebar
+  with one list per kind (Presupuestos, Pedidos, Albaranes, Facturas — credit notes inside
+  Facturas, marked "Factura rectificativa"); mobile bottom navigation; per-list status tabs (the
+  kind's visible statuses), date range (default: rolling last month, D-2) and search by number or
+  reference; detail with summary, read-only lines, taxes, invoice payment block, navigable related
+  documents and "Ver PDF / Descargar PDF" (or "PDF no disponible"); greeting with the customer's
+  name; ES/EN switch; tenant logo and name on every view.
+- **Out, though the design shows them:** "Albaranes de devolución"; checkboxes and "Descargar
+  seleccionados"; the advanced "Filtros" button; Comentarios; Aceptar / Rechazar (Part C); the
+  account / user menu (the portal has no login).
+- **Also not built (design only, not in the ticket):** the home's "Facturado por mes" chart, the
+  "Pagado este año" figure and the header's global search; the "Creado con etendo.ai" footer.
+- **Orders tile has no highlight.** The design's "En curso" has no honest single figure in the data
+  (a completed order may already be delivered and invoiced), so the tile shows its total count.
+  Quotations highlight "Por responder" (`UE`), invoices "Vencidas" (an instalment past due with money
+  owed), shipments "Este mes" (movement date in the current month).
+- **The document sheet replaces the design's PDF canvas.** The left panel renders the document
+  from data (header, customer, lines, totals); "Ver PDF" opens the real printable in a dialog and
+  "Descargar PDF" saves it, both the main attachment the email's link serves (§B.7).
+
+**Backend (`com.etendoerp.go`).** `GET /sws/portal/home`, `GET /sws/portal/documents`,
+`GET /sws/portal/documents/{kind}/{id}` and `/pdf`, in `PortalDocumentsEndpoint`, all reads through
+`PortalDocumentQuery` (scope + per-kind discriminator + status allow-list of §B.1, HQL on the
+session) and related documents through `PortalDocumentLinks` (§B.6, each candidate re-scoped). No
+N+1: a list page is one query plus one grouped payment-schedule query plus one totals query; the
+home is a fixed number of aggregates. **`/invoices` and `/invoices/{id}/pdf` are kept** (existing
+tests and callers); the page no longer uses them.
+
+**Email (user-confirmed with the PO).** With `bp-portal-link` on, the four sales document emails
+make the portal link the call-to-action button ("Ver documento en el portal") and drop the
+"Descargar documento" button; `document.portal.intro` keeps the validity sentence. With the flag
+off, or for purchase and return contracts, the email is byte-identical. The base contract branches
+only on whether a link was minted.
+
+**Review fold-ins.** W-b: the renewal row lock is held across the provider call — documented on
+`PortalLinkService#renew` rather than a `lock_timeout`, so a waiting open gets the right answer
+instead of an error. S1: `validate`, `findSentLink` and `renew` enter admin mode themselves.
 

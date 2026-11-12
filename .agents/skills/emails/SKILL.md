@@ -272,8 +272,10 @@ stop it. If the guard fails, fix the copy; do not relax the test.
 ### The portal link inside the document emails (ETP-5267, ETP-6209)
 - `sales-quotation-send`, `sales-order-send`, `goods-shipment-send` and `sales-invoice-send` (credit
   notes included) declare `portalDocumentKind()`; when the `bp-portal-link` flag is on for the
-  sending account the email gets one extra paragraph, `document.portal.intro` +
-  `document.portal.cta`, with a link to the customer portal.
+  sending account the email gets the `document.portal.intro` sentence and **the portal becomes the
+  call-to-action button** (`document.portal.cta`, "Ver documento en el portal"); the "Descargar
+  documento" button is dropped (ETP-6209 Part B). The base contract branches only on whether a link
+  was minted.
 - **The link is per send.** Every send mints its own token; `document.portal.intro` states the
   link's validity in hours (`{0}`, from `etendo.go.portal.link.ttlMinutes`), so the copy must keep
   that placeholder and must not promise a permanent link. The link becomes valid only when the

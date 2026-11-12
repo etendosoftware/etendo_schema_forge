@@ -204,7 +204,10 @@ copy and the summary block, as an inline anchor rather than a second button, sin
 carries one call to action and it belongs to the document.
 
 Its copy is `document.portal.intro` (with the link's validity in hours) / `document.portal.cta` in
-both catalogs. The paragraph appears only when the `bp-portal-link` flag resolves true for the
+both catalogs. **Since ETP-6209 Part B, with a link the portal is the email's call-to-action
+button** ("Ver documento en el portal") **and the "Descargar documento" button is dropped** — the
+portal shows the same printable; the intro is a full sentence stating the validity. Without a link
+the email keeps the download button, byte-identical to before. The paragraph appears only when the `bp-portal-link` flag resolves true for the
 **sending account** (see `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md` →
 *Per-account targeting*); when it does not, the send is unchanged **and no `etgo_portal_link` row is
 minted**. Each send mints its own link, valid 48 hours from that send; a link minted for an email
