@@ -1,5 +1,6 @@
 // @covers tools/app-shell/src/windows/custom/shared/SifTab.jsx
 // @covers tools/app-shell/src/windows/custom/shared/useSifFieldPatcher.js
+// @covers tools/app-shell/src/windows/custom/shared/InvoiceSifStep.jsx
 // Mocks must be declared before any imports that pull in the mocked modules.
 
 import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
@@ -8,8 +9,11 @@ vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), warning: vi.fn(), error: vi.fn() },
 }));
 
+// Per-test translations: a key missing here comes back as itself (the usual convention); a test
+// that needs a real-looking label (one that already carries its code) sets it.
+const uiLabels = vi.hoisted(() => ({}));
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key) => uiLabels[key] ?? key,
   useLabel: () => (key) => key,
 }));
 
@@ -213,6 +217,7 @@ function renderControlled(overrides = {}, onChangeSpy) {
 describe('SifTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.keys(uiLabels).forEach((k) => { delete uiLabels[k]; });
   });
 
   afterEach(() => {
@@ -1150,6 +1155,18 @@ describe('SifTab', () => {
         expect(screen.getByText(`${v} - sifDataTabs.option.vf${v}`)).toBeInTheDocument();
       });
       expect(screen.queryByText(/^F3 - /)).not.toBeInTheDocument();
+    });
+
+    // One "CODE - Label" format: a locale label that already starts with its code
+    // ("F1 - Factura…", the real VERI*FACTU labels) is shown as it is, so the code never doubles.
+    it('shows the code once when the translated label already starts with it', () => {
+      uiLabels['sifDataTabs.option.vfF1'] = 'F1 - Factura (art. 6, 7.2 y 7.3 del RD 1619/2012)';
+      uiLabels['sifDataTabs.option.vfF2'] = 'Factura simplificada';
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', etvfacInvType: 'F1' } })} />);
+      expect(screen.getAllByText('F1 - Factura (art. 6, 7.2 y 7.3 del RD 1619/2012)').length).toBeGreaterThan(0);
+      expect(screen.queryByText(/^F1 - F1 - /)).not.toBeInTheDocument();
+      expect(screen.getByText('F2 - Factura simplificada')).toBeInTheDocument();
+      expect(document.querySelector('#sif-vfInvType')).toHaveTextContent(/^F1 - Factura \(art\. 6/);
     });
 
     // ETP-5117: a record whose etvfacInvType is still 'F3' (legacy/Classic value —
