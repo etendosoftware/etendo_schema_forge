@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronRight, Download, Eye, FileX } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
@@ -39,6 +39,9 @@ export default function PortalDocumentDetailView({
   const [pdfUrl, setPdfUrl] = useState(null);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfFailed, setPdfFailed] = useState(false);
+  // Read through a ref so a parent re-creating its callback never refetches the document.
+  const onLoadedRef = useRef(onLoaded);
+  onLoadedRef.current = onLoaded;
 
   useEffect(() => {
     let active = true;
@@ -48,7 +51,7 @@ export default function PortalDocumentDetailView({
       if (!active) return;
       setDocument(loaded);
       setState('ready');
-      onLoaded?.(loaded);
+      onLoadedRef.current?.(loaded);
     }).catch((error) => {
       if (!active) return;
       if (error?.code === PORTAL_ERROR.invalidLink) {
@@ -58,7 +61,7 @@ export default function PortalDocumentDetailView({
       setState(error?.status === 404 ? 'notFound' : 'failed');
     });
     return () => { active = false; };
-  }, [apiFetch, token, kind, id, onInvalid, onLoaded]);
+  }, [apiFetch, token, kind, id, onInvalid]);
 
   // An object URL pins its blob until released.
   useEffect(() => () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); }, [pdfUrl]);
