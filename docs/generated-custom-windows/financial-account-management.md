@@ -240,7 +240,8 @@ Field editability in the top section:
   - **Statement grouping** — required, one of `1BD` / `1BW` / `1BM` / `1BE`
     (`GROUPING_OPTIONS`). With the flag ON there is no empty "Default" option (the
     key `financeAccountsBankConnectionGroupingNone` stays in the locales for the OFF panel); in the connect modal it starts
-    empty and must be picked. Each field has a help line (`…ImportFromHelp`, `…GroupingHelp`, and
+    on `1BD` ("Diaria", Classic's default, constant `DEFAULT_STATEMENT_GROUPING` in `bankImportSettingsShared.js`)
+    and stays selectable among the four options. Each field has a help line (`…ImportFromHelp`, `…GroupingHelp`, and
     one per option `…GroupingHelp_1BD|1BW|1BM|1BE`) that says what it does: the grouping is decided
     by the day the sync RUNS, not by the transaction dates — `1BD` joins syncs made the same day,
     `1BW` the same Monday-based week, `1BM` the same month, `1BE` creates a statement per sync.
@@ -257,8 +258,8 @@ Field editability in the top section:
   error once the user has emptied it, or for every empty field when `showRequiredErrors` is set.
   - **Connect flow** (`BankConnectionFlowUI` account-selection modal; the block and the
     required-field gate on "Vincular cuenta" render only with the flag ON, via `usePsd2ImportSettingsFlag()`): the block sits under the
-    account list, is reset on every new selection, and "Vincular cuenta" stays disabled until an
-    account, a date and a grouping are set. `confirmSelection(saltEdgeAccountId, { importFromDate,
+    account list, is reset on every new selection (date back to day 1, grouping back to `1BD`), and "Vincular cuenta" is
+    enabled as soon as an account is selected (date and grouping carry defaults; emptying the date disables it again). `confirmSelection(saltEdgeAccountId, { importFromDate,
     statementGrouping })` forwards them to `link` / `createAndLink`. The modal warns BEFORE confirming
     when the date reaches further back than the bank serves, using `maxFetchInterval` from `accounts`.
     A failed link is now toasted through `translateBackendError(err.message, ui)` (it used to show

@@ -13,6 +13,7 @@ import {
   defaultImportFromDate,
   importSettingsIncomplete,
 } from './BankImportSettingsFields.jsx';
+import { DEFAULT_STATEMENT_GROUPING } from './bankImportSettingsShared.js';
 
 /**
  * Renders the two native surfaces of the bank connect flow driven by {@code useBankConnectionFlow}:
@@ -21,8 +22,8 @@ import {
  *
  * ETP-6151 — the selection modal also asks for the import settings the link persists in the same
  * transaction: "Importar desde" (defaults to the first day of the current month) and the statement
- * grouping (starts empty; required). "Vincular cuenta" stays disabled until an account, a date and
- * a grouping are set, and `confirmSelection` receives them as its second argument.
+ * grouping (starts on {@code DEFAULT_STATEMENT_GROUPING}, Classic's 1BD; required). "Vincular cuenta" is
+ * enabled as soon as an account is selected (date and grouping have defaults), and `confirmSelection` receives them as its second argument.
  *
  * @param {{ flow: ReturnType<typeof import('@/hooks/useBankConnectionFlow').useBankConnectionFlow> }} props
  */
@@ -69,16 +70,16 @@ function BankConnectionAccountSelectModal({ selection, onConfirm, onCancel }) {
   const [selected, setSelected] = useState(null);
   const [importSettings, setImportSettings] = useState(() => ({
     importFromDate: defaultImportFromDate(),
-    statementGrouping: '',
+    statementGrouping: DEFAULT_STATEMENT_GROUPING,
   }));
 
   // The modal stays mounted between flows, so every new selection starts from a clean slate: no
   // account picked, the date back on the first of the CURRENT month (the tab may have been open
-  // across a month change) and no grouping.
+  // across a month change) and the default grouping.
   useEffect(() => {
     if (!importSettingsEnabled || !selection) return;
     setSelected(null);
-    setImportSettings({ importFromDate: defaultImportFromDate(), statementGrouping: '' });
+    setImportSettings({ importFromDate: defaultImportFromDate(), statementGrouping: DEFAULT_STATEMENT_GROUPING });
   }, [selection, importSettingsEnabled]);
 
   const open = !!selection;

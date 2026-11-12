@@ -16,6 +16,12 @@ import { calendarISODaysAgo } from '@/lib/dateOnly.js';
 export const GROUPING_OPTIONS = ['1BD', '1BW', '1BM', '1BE'];
 
 /**
+ * Grouping a freshly opened bank connect modal starts with (ETP-6151): Classic's own default,
+ * `1BD` ("within 1 day"). Still required and selectable among {@link GROUPING_OPTIONS}.
+ */
+export const DEFAULT_STATEMENT_GROUPING = '1BD';
+
+/**
  * ETP-5181. Whether "Importar desde" reaches further back than the bank will serve, and from
  * which date it actually will.
  *

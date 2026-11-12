@@ -186,7 +186,7 @@ describe('BankConnectionFlowUI — account select modal', () => {
     expect(screen.queryByTestId(/^bank-connection-account-option-/)).not.toBeInTheDocument();
   });
 
-  it('disables confirm until an account and a grouping are picked', async () => {
+  it('disables confirm until an account is picked, then enables it (date and grouping default)', async () => {
     const user = userEvent.setup();
     renderFlow({ selection: { accounts: ACCOUNTS } });
 
@@ -194,12 +194,22 @@ describe('BankConnectionFlowUI — account select modal', () => {
     expect(confirm).toBeDisabled();
 
     await user.click(screen.getByTestId('bank-connection-account-option-se-2'));
-    // ETP-6151 — the grouping starts empty and is required.
-    expect(confirm).toBeDisabled();
 
-    await pickGrouping(user);
-
+    // ETP-6151 — the grouping starts on 1BD, so an account alone is enough.
     expect(confirm).toBeEnabled();
+  });
+
+  it('confirms with the default import settings (day 1 of the month, grouping 1BD)', async () => {
+    const user = userEvent.setup();
+    const { flow } = renderFlow({ selection: { accounts: ACCOUNTS } });
+
+    await user.click(screen.getByTestId('bank-connection-account-option-se-2'));
+    await user.click(screen.getByTestId('bank-connection-account-select-confirm'));
+
+    expect(flow.confirmSelection).toHaveBeenCalledWith('se-2', {
+      importFromDate: firstOfCurrentMonth(),
+      statementGrouping: '1BD',
+    });
   });
 
   it('confirms with the id of the picked account and the import settings', async () => {
@@ -222,7 +232,7 @@ describe('BankConnectionFlowUI — account select modal', () => {
 
     await user.click(screen.getByTestId('bank-connection-account-option-se-1'));
     await user.click(screen.getByTestId('bank-connection-account-option-se-3'));
-    await pickGrouping(user);
+    await pickGrouping(user, '1BM');
     await user.click(screen.getByTestId('bank-connection-account-select-confirm'));
 
     expect(flow.confirmSelection).toHaveBeenCalledTimes(1);
@@ -263,23 +273,23 @@ describe('BankConnectionFlowUI — import settings in the account select modal',
 
   const DATE_BOX = 'field-date-bank-connection-link-import-from';
 
-  it('starts with "Importar desde" on the first of the month and no grouping', () => {
+  it('starts with "Importar desde" on the first of the month and the 1BD grouping', () => {
     renderFlow({ selection: { connectionId: 'c-1', accounts: ACCOUNTS } });
 
     expect(screen.getByTestId(DATE_BOX)).not.toHaveValue('');
-    // No grouping: the empty input, not a chip with a value.
-    expect(screen.getByTestId('field-statementGrouping')).toHaveValue('');
-    expect(screen.queryByTestId('field-statementGrouping-chip')).toBeNull();
+    // Grouping preselected: a chip with the 1BD label, not the empty input.
+    expect(screen.getByTestId('field-statementGrouping-chip'))
+      .toHaveTextContent('financeAccountsBankConnectionGrouping_1BD');
     // Nothing is flagged until the user touches a field.
     expect(screen.queryByTestId('bank-connection-link-import-from-required')).toBeNull();
     expect(screen.queryByTestId('bank-connection-link-grouping-required')).toBeNull();
   });
 
-  it('keeps confirm disabled with a grouping but no account', async () => {
+  it('keeps confirm disabled with the defaults but no account', async () => {
     const user = userEvent.setup();
     renderFlow({ selection: { connectionId: 'c-1', accounts: ACCOUNTS } });
 
-    await pickGrouping(user);
+    await pickGrouping(user, '1BW');
 
     expect(screen.getByTestId('bank-connection-account-select-confirm')).toBeDisabled();
   });
@@ -288,7 +298,6 @@ describe('BankConnectionFlowUI — import settings in the account select modal',
     const user = userEvent.setup();
     const { flow } = renderFlow({ selection: { connectionId: 'c-1', accounts: ACCOUNTS } });
     await user.click(screen.getByTestId('bank-connection-account-option-se-1'));
-    await pickGrouping(user);
     const confirm = screen.getByTestId('bank-connection-account-select-confirm');
     expect(confirm).toBeEnabled();
 
@@ -334,7 +343,7 @@ describe('BankConnectionFlowUI — import settings in the account select modal',
       .not.toHaveTextContent('financeAccountsBankConnectionImportFromHelpLimit');
   });
 
-  it('starts every new selection from a clean slate: no account, no grouping, default date, no errors', async () => {
+  it('starts every new selection from a clean slate: no account, default grouping, default date, no errors', async () => {
     const user = userEvent.setup();
     const flow = makeFlow({ selection: { connectionId: 'c-1', accounts: ACCOUNTS } });
     const { rerender } = render(<BankConnectionFlowUI flow={flow} />);
@@ -349,12 +358,12 @@ describe('BankConnectionFlowUI — import settings in the account select modal',
     rerender(<BankConnectionFlowUI flow={{ ...flow, selection: { connectionId: 'c-2', accounts: ACCOUNTS } }} />);
 
     expect(screen.getByTestId(DATE_BOX)).toHaveValue(defaultDisplay);
-    expect(screen.getByTestId('field-statementGrouping')).toHaveValue('');
+    // The grouping the user changed to 1BW is back on the default.
+    expect(screen.getByTestId('field-statementGrouping-chip'))
+      .toHaveTextContent('financeAccountsBankConnectionGrouping_1BD');
     expect(screen.queryByTestId('bank-connection-link-import-from-required')).toBeNull();
     const confirm = screen.getByTestId('bank-connection-account-select-confirm');
-    expect(confirm).toBeDisabled();
-    // The account pick was dropped too: a grouping alone does not enable confirm.
-    await pickGrouping(user);
+    // The account pick was dropped too: defaults alone do not enable confirm.
     expect(confirm).toBeDisabled();
   });
 

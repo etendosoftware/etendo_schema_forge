@@ -179,6 +179,18 @@ describe('ImportedStatementsTab — account list cache invalidation (ETP-5522)',
       expect(reloadFn).toHaveBeenCalledTimes(1);
     });
 
+    it('tells the parent (tab badge source) through onStatementsChanged, only on a mutation', async () => {
+      const onStatementsChanged = vi.fn();
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} onStatementsChanged={onStatementsChanged} />);
+      expect(onStatementsChanged).not.toHaveBeenCalled();
+
+      await user.click(screen.getByTestId('toolbar-manual'));
+      await user.click(screen.getByTestId('manual-success'));
+
+      expect(onStatementsChanged).toHaveBeenCalledTimes(1);
+    });
+
     it('after a statement is edited through the manual modal', async () => {
       const user = userEvent.setup();
       render(<ImportedStatementsTab account={ACCOUNT} />);

@@ -35,8 +35,8 @@ import { openAccountRowMenu } from '../../helpers/financial-account-helpers.js';
  *
  * Flag ON covers three flows:
  *   1. connecting a bank account: the account picker asks for "Importar desde" (day 1 of the
- *      current month) and a required grouping, "Vincular cuenta" waits for account + date +
- *      grouping, the `link` request carries both, and a link advisory shows as a warning toast;
+ *      current month) and a required grouping (default 1BD), "Vincular cuenta" is enabled as soon as
+ *      an account is picked, the `link` request carries both (1BD unless changed), and a link advisory shows as a warning toast;
  *   2. deleting a statement of a bank-connected account: the trash is on a processed row, the
  *      confirm warns the movements come back (naming the date read from `status`), the delete is
  *      POSTed, and the posted refusal reaches the user translated;
@@ -293,7 +293,9 @@ async function connectUnlinkedAccount(page) {
 }
 
 async function pickGrouping(page, id) {
-  await page.getByTestId('field-statementGrouping').click();
+  // With a value the field is a chip (click it to search again); empty it is the input.
+  const chip = page.getByTestId('field-statementGrouping-chip');
+  await ((await chip.count()) ? chip : page.getByTestId('field-statementGrouping')).click();
   await page.getByTestId(`option-statementGrouping-${id}`).click();
 }
 
@@ -311,16 +313,18 @@ test.describe('PSD2 statement import settings — flag ON (mocked)', () => {
     const modal = await connectUnlinkedAccount(page);
     const { iso, display } = firstOfCurrentMonth();
 
-    // "Importar desde" defaults to day 1 of the current month; the grouping starts empty.
+    // "Importar desde" defaults to day 1 of the current month; the grouping starts on 1BD (Classic's default).
     await expect(modal.getByTestId('field-date-bank-connection-link-import-from')).toHaveValue(display);
-    await expect(modal.getByTestId('field-statementGrouping')).toHaveValue('');
+    await expect(modal.getByTestId('field-statementGrouping-chip')).toBeVisible();
+    await expect(modal.getByTestId('field-statementGrouping-chip')).toContainText(/Diaria|Daily/);
     await expect(modal.getByTestId('bank-connection-link-import-from-help')).toContainText('90');
 
-    // "Vincular cuenta" waits for the account AND the grouping (the date has its default).
+    // "Vincular cuenta" waits only for the account (date and grouping have their defaults).
     const confirm = modal.getByTestId('bank-connection-account-select-confirm');
     await expect(confirm).toBeDisabled();
     await modal.getByTestId('bank-connection-account-option-se-2').click();
-    await expect(confirm).toBeDisabled();
+    await expect(confirm).toBeEnabled();
+    // The grouping stays selectable among the four options.
     await pickGrouping(page, '1BW');
     await expect(confirm).toBeEnabled();
 

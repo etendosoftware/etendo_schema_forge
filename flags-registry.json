@@ -2299,6 +2299,7 @@
           "ETGO_FLAG_PSD2_STATEMENT_IMPORT_SETTINGS",
           "etendo.go.flags.psd2-statement-import-settings",
           "usePsd2ImportSettingsFlag",
+          "statementsTabBadge",
           "BankImportSettingsFields",
           "BankReimportNotice",
           "useBankImportFromDate",
@@ -2321,7 +2322,8 @@
           "tools/app-shell/src/hooks/usePsd2ImportSettingsFlag.js",
           "tools/app-shell/src/windows/custom/financial-account/BankImportSettingsFields.jsx",
           "tools/app-shell/src/windows/custom/financial-account/BankReimportNotice.jsx",
-          "tools/app-shell/src/windows/custom/financial-account/LegacyBankImportSettings.jsx"
+          "tools/app-shell/src/windows/custom/financial-account/LegacyBankImportSettings.jsx",
+          "tools/app-shell/src/windows/custom/financial-account/statementsTabBadge.js"
         ],
         "backend": [
           "src/com/etendoerp/go/schemaforge/Psd2ImportSettingsFlag.java",

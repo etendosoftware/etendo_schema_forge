@@ -90,9 +90,9 @@ import { BulkDeleteSelectionBar } from '@/components/financial-accounts';
  * mutating handlers return early. Filters, search, sort, refresh, row expansion, the lines sub-view
  * and the parent's CSV export (which, with no selection, exports the filtered headers) keep working.
  *
- * @param {{ account: object, windowReadOnly?: boolean }} props
+ * @param {{ account: object, windowReadOnly?: boolean, onSynced?: () => void, onStatementsChanged?: () => void }} props
  */
-export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({ account, windowReadOnly = false, onSynced }, ref) {
+export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({ account, windowReadOnly = false, onSynced, onStatementsChanged }, ref) {
   const ui = useUI();
   const { locale: appLocale } = useLocaleSwitch();
   // The `name` sort accessor formats a periodFrom–periodTo range for statements with no name,
@@ -199,7 +199,9 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
     invalidateAccountList();
     reload();
     setLinesRefreshToken((t) => t + 1);
-  }, [reload, invalidateAccountList]);
+    // ETP-6151 — lets the parent refresh its own statements copy (the tab badge count).
+    onStatementsChanged?.();
+  }, [reload, invalidateAccountList, onStatementsChanged]);
 
   // ETP-5111 — the bulk trash is no longer pre-disabled here. ETP-4921 blocked it up front for a
   // processed statement or a bank-connected (PSD2) account ("don't let them touch the trash
