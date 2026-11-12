@@ -67,11 +67,13 @@ export function StatementRowKebab({
   // Its own wording rather than the "already processed" one: the user must not be left thinking
   // this unblocks by processing or reactivating something. Nothing they can do in this window
   // unblocks it — the account is connected to the bank.
-  const reactivateTip = bankConnected
-    ? ui(importSettingsEnabled
+  let reactivateTipKey = 'financeAccountStatementsRowReactivateTooltip';
+  if (bankConnected) {
+    reactivateTipKey = importSettingsEnabled
       ? 'financeAccountStatementsRowBankSyncedEditTooltip'
-      : 'financeAccountStatementsRowBankSyncedTooltip')
-    : ui('financeAccountStatementsRowReactivateTooltip');
+      : 'financeAccountStatementsRowBankSyncedTooltip';
+  }
+  const reactivateTip = ui(reactivateTipKey);
 
   // A menu item active only when `enabled`, otherwise disabled with a tooltip.
   const gatedItem = ({ icon: Icon, label, onClick, testid, enabled, tip }) => {

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/financial-account/ImportedStatementsTab.jsx
 /**
  * ETP-5522 regression — creating / importing / syncing / processing / deleting a bank statement
  * from the account detail must mark the shared `account` cache entries stale, so the Cuentas list
