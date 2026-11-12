@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/hooks/useBankConnectionFlow.js
 import { renderHook, act } from '@testing-library/react';
 
 const { toast, connect, fetchAccounts, link, createAndLink, launchSaltEdgePopup, uiMock } = vi.hoisted(() => ({
@@ -11,6 +12,13 @@ const { toast, connect, fetchAccounts, link, createAndLink, launchSaltEdgePopup,
   // below overrides this to prove the ETP-4891 translateBackendError wiring actually threads `ui`
   // through, instead of just asserting the pre-existing "unmapped string passes through" case.
   uiMock: vi.fn((key) => key),
+}));
+
+// ETP-6151 — flag `psd2-statement-import-settings`, off by default (the pre-existing suites
+// describe the flag-off behaviour); the ETP-6151 block turns it on.
+const importSettingsFlag = vi.hoisted(() => ({ on: false }));
+vi.mock('../usePsd2ImportSettingsFlag.js', () => ({
+  usePsd2ImportSettingsFlag: () => importSettingsFlag.on,
 }));
 
 vi.mock('sonner', () => ({ toast }));
@@ -29,6 +37,7 @@ import { useBankConnectionFlow } from '../useBankConnectionFlow';
 beforeEach(() => {
   vi.clearAllMocks();
   uiMock.mockImplementation((key) => key);
+  importSettingsFlag.on = false;
 });
 
 describe('useBankConnectionFlow — initial state', () => {
@@ -437,5 +446,267 @@ describe('useBankConnectionFlow — empty account list reasons', () => {
 
     expect(toast.error).toHaveBeenCalledWith('financeAccountsBankConnectionNoAccounts');
     expect(toast.error).not.toHaveBeenCalledWith(expect.stringContaining('undefined'));
+  });
+});
+
+/**
+ * ETP-6151 — the link persists the PSD2 import settings in the same transaction, so both writes
+ * carry them; the bridge's non-blocking advisories (top-level `messages`) reach the user as
+ * warnings; and its validation 400s are translated instead of shown as raw English.
+ */
+describe('useBankConnectionFlow — import settings on the link (ETP-6151)', () => {
+  const SETTINGS = { importFromDate: '2026-11-01', statementGrouping: '1BM' };
+
+  beforeEach(() => {
+    importSettingsFlag.on = true;
+  });
+
+  async function openSelection(result, { mode = 'link', maxFetchInterval } = {}) {
+    launchSaltEdgePopup.mockResolvedValue('conn-1');
+    fetchAccounts.mockResolvedValue({
+      accounts: [{ id: 'se1' }], providerName: 'BBVA', providerLogoUrl: '', maxFetchInterval,
+    });
+    await act(async () => {
+      if (mode === 'link') await result.current.startConnect({ id: 'FA-1', type: 'B' });
+      else await result.current.startCreate('BANK');
+    });
+  }
+
+  async function confirm(result, settings = SETTINGS) {
+    await act(async () => {
+      await result.current.confirmSelection('se1', settings);
+    });
+  }
+
+  it('flag off: a link refusal is toasted raw, untranslated, as before ETP-6151', async () => {
+    importSettingsFlag.on = false;
+    const raw = 'The import from date is required';
+    uiMock.mockImplementation((key) => (key === 'financeAccountsBankConnectionImportFromRequired' ? 'TRANSLATED' : key));
+    link.mockRejectedValue(new Error(raw));
+    const { result } = renderHook(() => useBankConnectionFlow());
+    await openSelection(result);
+
+    await confirm(result);
+
+    expect(toast.error).toHaveBeenCalledWith(raw);
+    expect(toast.error).not.toHaveBeenCalledWith('TRANSLATED');
+  });
+
+  it('flag off: a link refusal with no message falls back to the generic link error', async () => {
+    importSettingsFlag.on = false;
+    link.mockRejectedValue(new Error(''));
+    const { result } = renderHook(() => useBankConnectionFlow());
+    await openSelection(result);
+
+    await confirm(result);
+
+    expect(toast.error).toHaveBeenCalledWith('financeAccountsBankConnectionLinkError');
+  });
+
+  it('flag off: link and createAndLink carry only the account, never the import settings', async () => {
+    importSettingsFlag.on = false;
+    link.mockResolvedValue({});
+    createAndLink.mockResolvedValue({});
+    const { result } = renderHook(() => useBankConnectionFlow());
+
+    await openSelection(result);
+    await confirm(result);
+    await openSelection(result, { mode: 'create' });
+    await confirm(result);
+
+    expect(link).toHaveBeenCalledWith({
+      financialAccountId: 'FA-1', connectionId: 'conn-1', saltEdgeAccountId: 'se1',
+    });
+    expect(createAndLink).toHaveBeenCalledWith({
+      type: 'BANK', connectionId: 'conn-1', saltEdgeAccountId: 'se1',
+    });
+  });
+
+  it('flag off: the bank limit is not kept on the selection and advisories raise no toast', async () => {
+    importSettingsFlag.on = false;
+    link.mockResolvedValue({ messages: [{ type: 'warning', text: 'Limited history.' }] });
+    const { result } = renderHook(() => useBankConnectionFlow());
+
+    await openSelection(result, { maxFetchInterval: 90 });
+    expect(result.current.selection).not.toHaveProperty('maxFetchInterval');
+    await confirm(result);
+
+    expect(toast.warning).not.toHaveBeenCalled();
+    expect(toast.success).toHaveBeenCalledWith('financeAccountsBankConnectionSuccess');
+  });
+
+  it('sends the date and the grouping on link', async () => {
+    link.mockResolvedValue({});
+    const { result } = renderHook(() => useBankConnectionFlow());
+    await openSelection(result);
+
+    await confirm(result);
+
+    expect(link).toHaveBeenCalledWith({
+      financialAccountId: 'FA-1',
+      connectionId: 'conn-1',
+      saltEdgeAccountId: 'se1',
+      importFromDate: '2026-11-01',
+      statementGrouping: '1BM',
+    });
+    expect(createAndLink).not.toHaveBeenCalled();
+  });
+
+  it('sends the date and the grouping on createAndLink', async () => {
+    createAndLink.mockResolvedValue({});
+    const { result } = renderHook(() => useBankConnectionFlow());
+    await openSelection(result, { mode: 'create' });
+
+    await confirm(result, { importFromDate: '2026-10-01', statementGrouping: '1BE' });
+
+    expect(createAndLink).toHaveBeenCalledWith({
+      type: 'BANK',
+      connectionId: 'conn-1',
+      saltEdgeAccountId: 'se1',
+      importFromDate: '2026-10-01',
+      statementGrouping: '1BE',
+    });
+    expect(link).not.toHaveBeenCalled();
+  });
+
+  it('keeps the bank limit on the selection, for the modal advisory', async () => {
+    const { result } = renderHook(() => useBankConnectionFlow());
+
+    await openSelection(result, { maxFetchInterval: 90 });
+
+    expect(result.current.selection.maxFetchInterval).toBe(90);
+  });
+
+  it('turns each warning advisory of the link response into a warning toast, then succeeds', async () => {
+    const onDone = vi.fn();
+    link.mockResolvedValue({
+      messages: [
+        { type: 'warning', text: 'This bank only provides the last 90 days.' },
+        { type: 'WARNING', text: 'Second advisory.' },
+      ],
+    });
+    const { result } = renderHook(() => useBankConnectionFlow({ onDone }));
+    await openSelection(result);
+
+    await confirm(result);
+
+    expect(toast.warning).toHaveBeenCalledTimes(2);
+    expect(toast.warning).toHaveBeenNthCalledWith(1, 'This bank only provides the last 90 days.');
+    expect(toast.warning).toHaveBeenNthCalledWith(2, 'Second advisory.');
+    expect(toast.success).toHaveBeenCalledWith('financeAccountsBankConnectionSuccess');
+    expect(onDone).toHaveBeenCalled();
+  });
+
+  it('shows the advisories of a createAndLink response too', async () => {
+    createAndLink.mockResolvedValue({ messages: [{ type: 'warning', text: 'Limited history.' }] });
+    const { result } = renderHook(() => useBankConnectionFlow());
+    await openSelection(result, { mode: 'create' });
+
+    await confirm(result);
+
+    expect(toast.warning).toHaveBeenCalledWith('Limited history.');
+  });
+
+  it('ignores non-warning and empty messages', async () => {
+    link.mockResolvedValue({
+      messages: [
+        { type: 'info', text: 'Just so you know.' },
+        { type: 'success', text: 'Done.' },
+        { type: 'warning', text: '' },
+        { type: 'warning' },
+        null,
+      ],
+    });
+    const { result } = renderHook(() => useBankConnectionFlow());
+    await openSelection(result);
+
+    await confirm(result);
+
+    expect(toast.warning).not.toHaveBeenCalled();
+    expect(toast.success).toHaveBeenCalledWith('financeAccountsBankConnectionSuccess');
+  });
+
+  it('tolerates a messages field that is not an array', async () => {
+    link.mockResolvedValue({ messages: 'oops' });
+    const { result } = renderHook(() => useBankConnectionFlow());
+    await openSelection(result);
+
+    await confirm(result);
+
+    expect(toast.warning).not.toHaveBeenCalled();
+    expect(toast.success).toHaveBeenCalled();
+  });
+
+  it('runs an advisory through translateBackendError before toasting it', async () => {
+    uiMock.mockImplementation((key) => (key === 'financeAccountsBankConnectionImportFromRequired'
+      ? 'Indica desde qué fecha importar los movimientos.'
+      : key));
+    link.mockResolvedValue({ messages: [{ type: 'warning', text: 'The import from date is required' }] });
+    const { result } = renderHook(() => useBankConnectionFlow());
+    await openSelection(result);
+
+    await confirm(result);
+
+    expect(toast.warning).toHaveBeenCalledWith('Indica desde qué fecha importar los movimientos.');
+  });
+
+  describe('translates the bridge validation refusals of the link', () => {
+    const LABELS = {
+      financeAccountsBankConnectionImportFromRequired: 'Indica desde qué fecha importar los movimientos.',
+      financeAccountsBankConnectionGroupingRequired: 'Elige cómo agrupar los extractos.',
+      financeAccountsBankConnectionImportRangeInvalid: 'La fecha «Importar desde» no puede ser posterior a «Importar hasta».',
+    };
+
+    beforeEach(() => {
+      uiMock.mockImplementation((key) => LABELS[key] ?? key);
+    });
+
+    it.each([
+      ['The import from date is required', 'financeAccountsBankConnectionImportFromRequired'],
+      ['The import from date is not a valid date (expected yyyy-MM-dd)', 'financeAccountsBankConnectionImportFromRequired'],
+      ['The statement grouping is required', 'financeAccountsBankConnectionGroupingRequired'],
+      ['The statement grouping must be one of 1BD, 1BW, 1BM, 1BE', 'financeAccountsBankConnectionGroupingRequired'],
+      ['The import from date cannot be later than the import to date', 'financeAccountsBankConnectionImportRangeInvalid'],
+    ])('"%s" → %s', async (raw, key) => {
+      const err = new Error(raw);
+      err.status = 400;
+      link.mockRejectedValue(err);
+      const { result } = renderHook(() => useBankConnectionFlow());
+      await openSelection(result);
+
+      await confirm(result);
+
+      expect(toast.error).toHaveBeenCalledWith(LABELS[key]);
+      expect(toast.error).not.toHaveBeenCalledWith(raw);
+      expect(toast.success).not.toHaveBeenCalled();
+    });
+
+    // The popup/bridge timeout sentinel must reach the user as its translated sentence.
+    it.each([
+      ['link', 'link', 'link'],
+      ['createAndLink', 'create', 'createAndLink'],
+    ])('translates a BANK_CONNECTION_TIMEOUT rejection of %s, never showing the raw sentinel', async (_n, mode, fn) => {
+      const labels = { financeAccountsBankConnectionTimeout: 'El banco no respondió a tiempo.' };
+      uiMock.mockImplementation((key) => labels[key] ?? key);
+      ({ link, createAndLink })[fn].mockRejectedValue(new Error('BANK_CONNECTION_TIMEOUT'));
+      const { result } = renderHook(() => useBankConnectionFlow());
+      await openSelection(result, { mode });
+
+      await confirm(result);
+
+      expect(toast.error).toHaveBeenCalledWith('El banco no respondió a tiempo.');
+      expect(toast.error).not.toHaveBeenCalledWith('BANK_CONNECTION_TIMEOUT');
+      expect(toast.success).not.toHaveBeenCalled();
+    });
+
+    it('shows an unmapped refusal as the bridge wrote it', async () => {
+      createAndLink.mockRejectedValue(new Error('Something the map does not know'));
+      const { result } = renderHook(() => useBankConnectionFlow());
+      await openSelection(result, { mode: 'create' });
+
+      await confirm(result);
+
+      expect(toast.error).toHaveBeenCalledWith('Something the map does not know');
+    });
   });
 });

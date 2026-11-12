@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { getApiBase } from './useNeoResource';
 import { openCenteredPopup } from '@/lib/popupWindow.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { usePsd2ImportSettingsFlag } from './usePsd2ImportSettingsFlag.js';
 
 const BASE_PATH = '/sws/neo/financial-account-bank-connection';
 
@@ -91,9 +92,11 @@ function waitForConnection(popup) {
  *
  * @returns {{
  *   connect: () => Promise<string>,
- *   fetchAccounts: (connectionId: string, type?: string, financialAccountId?: string) => Promise<Array<object>>,
- *   link: (payload: object) => Promise<object>,
- *   createAndLink: (payload: object) => Promise<object>,
+ *   fetchAccounts: (connectionId: string, type?: string, financialAccountId?: string) => Promise<object>,
+ *   link: (payload: {financialAccountId: string, connectionId: string, saltEdgeAccountId: string,
+ *     importFromDate: string, statementGrouping: string}) => Promise<object>,
+ *   createAndLink: (payload: {type: string, connectionId: string, saltEdgeAccountId: string,
+ *     importFromDate: string, statementGrouping: string}) => Promise<object>,
  *   reconnect: (financialAccountId: string) => Promise<string>,
  *   finishReconnect: (financialAccountId: string, connectionId: string) => Promise<object>,
  *   disconnect: (financialAccountId: string, opts?: {permanentDeletion?: boolean}) => Promise<object>,
@@ -110,7 +113,9 @@ export function useBankConnectionActions() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const call = useCallback(async (method, action, { query = {}, body = null, timeoutMs = 45000 } = {}) => {
+  const call = useCallback(async (method, action, {
+    query = {}, body = null, timeoutMs = 45000, includeMessages = false,
+  } = {}) => {
     setLoading(true);
     setError(null);
     const ctrl = new AbortController();
@@ -131,7 +136,14 @@ export function useBankConnectionActions() {
         if (json?.error?.code) err.code = json.error.code;
         throw err;
       }
-      return json?.response?.data ?? {};
+      const data = json?.response?.data ?? {};
+      // ETP-6151 — a write can carry non-blocking advisories (NeoHints) as a top-level
+      // `messages: [{ type, text }]`, next to `response`. Opt-in, so every other action keeps
+      // returning exactly its `data`.
+      if (includeMessages) {
+        return { ...data, messages: Array.isArray(json?.messages) ? json.messages : [] };
+      }
+      return data;
     } catch (err) {
       // Surface a clear message when the bank service (Salt Edge middleware) is unreachable
       // and the request is aborted by the timeout, instead of a generic abort error.
@@ -167,6 +179,10 @@ export function useBankConnectionActions() {
         // as "a reason is present but unknown", which maps to a different message.
         emptyReason: data.emptyReason,
         accountCurrency: data.accountCurrency,
+        // ETP-6151 — days of history the bank serves, for the connect modal's "Importar desde"
+        // advisory. Key absent when the bridge omits it (no published limit): the advisory
+        // treats a non-finite value as "nothing to warn about".
+        ...(Number.isFinite(data.maxFetchInterval) ? { maxFetchInterval: data.maxFetchInterval } : {}),
       };
     },
     [call],
@@ -182,11 +198,18 @@ export function useBankConnectionActions() {
     [call],
   );
 
-  const link = useCallback((payload) => call('POST', 'link', { body: payload }), [call]);
+  // ETP-6151 — both return the bridge's advisories in `messages` (the fetch-interval warning when
+  // "Importar desde" reaches further back than the bank serves), so the flow can show them.
+  // Flag `psd2-statement-import-settings` off: both return exactly the bridge's `data`, as before.
+  const importSettingsEnabled = usePsd2ImportSettingsFlag();
+  const link = useCallback(
+    (payload) => call('POST', 'link', { body: payload, includeMessages: importSettingsEnabled }),
+    [call, importSettingsEnabled],
+  );
 
   const createAndLink = useCallback(
-    (payload) => call('POST', 'createAndLink', { body: payload }),
-    [call],
+    (payload) => call('POST', 'createAndLink', { body: payload, includeMessages: importSettingsEnabled }),
+    [call, importSettingsEnabled],
   );
 
   /**

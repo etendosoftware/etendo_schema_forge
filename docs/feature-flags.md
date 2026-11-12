@@ -236,6 +236,38 @@ its behaviour is documented in its topic doc and in `com.etendoerp.go`
 | `product-movements-tab` | `product-movements-tab` | ETP-5889 (TTL placeholder 2027-01-31). Backend-only, per account: the browser reads `capabilities.productMovements` off `SFWindowAccessMap`; backend: `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md` |
 | `usage-aggregation-schedule` | `usage-aggregation-schedule` | [Usage measurement](usage-measurement.md) §7.1; go-live (flag plus production Process Request): "5.1 Turning the usage schedule on" in `com.etendoerp.go` `docs/plan-quotas.md`; behaviour: "`usage-aggregation-schedule` (ETP-5051)" in `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md` |
 
+### Backend flags that also have a web key
+
+One flag is evaluated on **both** ends with the same key and the same identity, so it is the exception
+to the rule above: `psd2-statement-import-settings` (ETP-6151, TTL placeholder 2026-12-31).
+
+| Key | Web key | Registry entry | What it gates |
+|---|---|---|---|
+| `psd2-statement-import-settings` | `PSD2_STATEMENT_IMPORT_SETTINGS` in `tools/app-shell/src/lib/flags/flag-keys.js` (default `false`), read only through `hooks/usePsd2ImportSettingsFlag.js` | `psd2-statement-import-settings` (roots `frontend` and `backend`) | Required "Importar desde" and statement grouping when linking a PSD2 bank account (connect modal and Edit-account panel), the `import-settings` / financial-account update validation, `maxFetchInterval` on `accounts`, and deleting statements of bank-connected accounts. Off (the default, and what an absent key means) reproduces the behaviour before ETP-6151 |
+
+The browser key is **visual gating only**: the backend (`Psd2ImportSettingsFlag`) evaluates the same
+key per account (targeting key = the account email, lowercase `email` attribute) and enforces the
+rules on its own, so both ends must be targeted with the same rules or the SPA shows fields the
+backend ignores, or the reverse. Backend: `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md`
+section "`psd2-statement-import-settings` (ETP-6151)". Feature behaviour:
+[financial-account](generated-custom-windows/financial-account.md) and
+[financial-account-management](generated-custom-windows/financial-account-management.md).
+
+**Ends can disagree.** SPA ON + backend OFF: link / createAndLink report success but the import-from date and
+grouping are not stored (the first sync imports everything), and delete shows the trash and notice but the
+backend answers the old 409. SPA OFF + backend ON: link / createAndLink with empty fields get a 400 whose
+English text shows raw in the toast (the SPA translates it only with its flag ON), and the trash for
+processed statements is hidden. ON to OFF for an account: the stored date and grouping stay and the PSD2
+sync keeps using them, while any grouping can be saved again. Hence: create the flag and its per-email rules
+(lowercase `email`) for **both ends at the same time**, enable a test email first, verify on SPA and backend,
+then widen. Details: `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md`.
+
+**Control-plane setup (not yet done in any environment):** create a **boolean** flag named exactly
+`psd2-statement-import-settings` in Datadog Feature Flags (and the same setting in ConfigCat as the
+fallback), **default `false`**, in each environment (production, experimental, staging, development),
+then add per-account targeting rules on the lowercase `email` attribute for the accounts to enable. Until
+the key exists it resolves to `false` and nobody is targeted.
+
 ## Personal business-grid views
 
 `GRID_COLUMN_VIEWS` (`grid-column-views`) is the single switch for personal column
