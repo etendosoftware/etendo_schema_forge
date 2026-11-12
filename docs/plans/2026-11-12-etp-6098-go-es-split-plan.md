@@ -355,7 +355,7 @@ not checked whether they are organisation or repository secrets), branch protect
 3. In staging and experimental `com.etendoerp.go.es` shows as installed (`AD_MODULE`) and everything
    works the same.
 4. With no branch of its own in `.es`, every pipeline falls back to `develop`, never to the epic.
-5. `.es` has the same PR checks as `go`, written by the `make` target; its `--check` mode passes.
+5. A PR in `.es` runs the same checks as a PR in `go`.
 
 This is the tanda that most needs team coordination (shared Jenkins repo, `go` and `schema_forge`
 workflows).
