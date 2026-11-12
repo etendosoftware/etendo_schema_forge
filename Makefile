@@ -1129,6 +1129,13 @@ mcp-report: ## Derive summary.json + summary.md of a comparison (RUN=<compareId>
 	@if [ -z "$(RUN)" ]; then echo "RUN is required, e.g. make mcp-report RUN=20261014T1000-cmp-a1b2"; exit 1; fi
 	cd mcp-tests && uv run python -m runner.report report $(RUN)
 
+# ETP-6236: the three columns side by side — Etendo, Etendo + rutina and the reference. BASE is a
+# comparison without routines (KR2.1), WITH one whose Etendo target has `routines = true` (child KR).
+.PHONY: mcp-report-routines
+mcp-report-routines: ## Etendo vs Etendo + rutina vs reference, per task (BASE=<compareId>, WITH=<compareId>)
+	@if [ -z "$(BASE)" ] || [ -z "$(WITH)" ]; then echo "BASE and WITH are required, e.g. make mcp-report-routines BASE=<compareId> WITH=<compareId>"; exit 1; fi
+	cd mcp-tests && uv run python -m runner.report routines $(BASE) $(WITH)
+
 .PHONY: mcp-stability
 mcp-stability: ## Winner agreement between two comparisons; exit 2 if pins differ or a run is unofficial (A=, B=)
 	@if [ -z "$(A)" ] || [ -z "$(B)" ]; then echo "A and B are required, e.g. make mcp-stability A=<compareId> B=<compareId>"; exit 1; fi

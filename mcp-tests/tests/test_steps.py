@@ -451,5 +451,38 @@ class SuiteV2Test(unittest.TestCase):
         self._rejects(v1, "where")
 
 
+    # ETP-6236: the routine of the "Etendo + routine" column.
+    ROUTINE = """
+        routine:
+          name: invoice-debt
+          description: Reads what an invoice still owes
+          params: { doc: { type: string, required: true, description: Document number } }
+          steps: [{ id: inv, tool: etendo_list, args: { filters: { documentNo: "$param.doc" } } }]
+"""
+
+    def test_a_routine_resolves_with_its_platform(self):
+        suite = self._load(V2.replace("        expectAnswer: [{ number: 121, tolerance: 0.01 }]\n",
+                                      "        expectAnswer: [{ number: 121, tolerance: 0.01 }]\n" + self.ROUTINE))
+        routine = suite.probes[0].for_platform("etendo-go").routine
+        self.assertEqual(routine.name, "invoice-debt")
+        self.assertEqual(routine.save_args(), {
+            "mode": "save", "name": "invoice-debt", "description": "Reads what an invoice still owes",
+            "steps": [{"id": "inv", "tool": "etendo_list",
+                       "args": {"filters": {"documentNo": "$param.doc"}}}],
+            "params": {"doc": {"type": "string", "required": True, "description": "Document number"}}})
+        self.assertIsNone(self._load(V2).probes[0].for_platform("etendo-go").routine)
+
+    def test_a_routine_is_etendo_only_and_well_formed(self):
+        holded = V2.replace(
+            '        notPossible: { kind: setup, reason: "no invoices", missingTools: [create_invoice] }\n',
+            "        expectAnswer: [{ number: 121, tolerance: 0.01 }]\n" + self.ROUTINE)
+        self._rejects(holded, "Etendo GO MCP feature")
+        anchor = "        expectAnswer: [{ number: 121, tolerance: 0.01 }]\n"
+        self._rejects(V2.replace(anchor, anchor + self.ROUTINE.replace("invoice-debt", "Invoice Debt")),
+                      "routine.name")
+        self._rejects(V2.replace(anchor, anchor + self.ROUTINE.replace(
+            "description: Reads what an invoice still owes", "description: ''")), "routine.description")
+
+
 if __name__ == "__main__":
     unittest.main()

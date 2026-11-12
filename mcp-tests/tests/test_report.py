@@ -706,6 +706,58 @@ class StabilityTest(unittest.TestCase):
                 self.assertNotIn("Traceback", err.getvalue())
 
 
+class RoutinesTest(unittest.TestCase):
+    """ETP-6236: the "Etendo + rutina" column — the child KR and the three-column view."""
+
+    TASK = "f-process-sales-order"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.dir = _copy_fixture()
+
+        def preload(compare):
+            subject = next(t for t in compare["targets"] if t["name"] == compare["subject"])
+            subject["routines"] = {cls.TASK: {"name": "process-order", "version": 1}}
+
+        _edit_compare(cls.dir, preload)
+        attempt = cls.dir / "targets" / "local" / "probes" / cls.TASK / "attempt-1.json"
+        record = json.loads(attempt.read_text())
+        record["toolCalls"].append({"id": "r", "tool": "etendo_routine",
+                                    "args": {"mode": "run", "name": "process-order"}})
+        attempt.write_text(json.dumps(record))
+        cls.summary = report.build_summary(cls.dir)
+        cls.base = report.build_summary(FIXTURE)
+
+    def test_a_subject_with_routines_is_the_child_kr(self):
+        kr = self.summary["kr"]
+        self.assertEqual((kr["variant"], kr["routineTasks"]), ("routines", [self.TASK]))
+        self.assertEqual(kr["subjectLabel"], "Etendo + rutina")
+        self.assertIsNone(self.base["kr"]["variant"])
+        self.assertEqual(_task(self.summary, self.TASK)["subject"]["items"]["routineRuns"], 1)
+        text = report.render_markdown(self.summary)
+        self.assertIn("**KR2.1 hijo (Etendo + rutina):", text)
+        self.assertIn("El agente ejecutó la rutina en 1 de 3 intentos", text)
+        self.assertNotIn("hijo", report.render_markdown(self.base))
+
+    def test_the_view_puts_the_three_columns_side_by_side(self):
+        view = report.routines_view(self.base, self.summary)
+        row = next(r for r in view["rows"] if r["task"] == self.TASK)
+        self.assertTrue(row["routine"])
+        self.assertEqual(row["etendo"]["target"], "local")
+        self.assertEqual(row["etendoRoutines"]["items"]["routineRuns"], 1)
+        self.assertEqual(row["reference"]["target"], "holded")
+        self.assertEqual(view["pinDifferences"], [])
+        text = report.render_routines_view(view)
+        self.assertIn("| Task | Rutina | Etendo | Etendo + rutina | Holded |", text)
+        self.assertIn("KR2.1 hijo (Etendo + rutina)", text)
+
+    def test_the_view_refuses_runs_in_the_wrong_order(self):
+        with self.assertRaises(ValueError):
+            report.routines_view(self.summary, self.summary)
+        with self.assertRaises(ValueError):
+            report.routines_view(self.base, self.base)
+
+
 class MakeTargetsTest(unittest.TestCase):
     """The Make wrappers refuse to run without their arguments (no uv call)."""
 
@@ -729,6 +781,13 @@ class MakeTargetsTest(unittest.TestCase):
                 done = self._make(*argv)
                 self.assertNotEqual(done.returncode, 0)
                 self.assertIn("A and B are required", done.stdout)
+
+    def test_mcp_report_routines_needs_both_runs(self):
+        for argv in (("mcp-report-routines",), ("mcp-report-routines", "BASE=x")):
+            with self.subTest(argv=argv):
+                done = self._make(*argv)
+                self.assertNotEqual(done.returncode, 0)
+                self.assertIn("BASE and WITH are required", done.stdout)
 
     def test_mcp_seed_needs_an_explicit_target(self):
         # `TARGET ?= local` serves mcp-test/mcp-login; seeding writes, so it must be named.

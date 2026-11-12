@@ -52,7 +52,7 @@ from . import decide as rule
 #: v7 (Valentin, 2026-11-04): the headline is subject Win / tasks both platforms
 #: can do (`bothPossible` = Win + Win + tie). Only-results leave the number and
 #: are listed by name in `subjectOnlyTasks` / `referenceOnlyTasks` (the notes).
-REPORT_VERSION = 7
+REPORT_VERSION = 8
 SUMMARY_SCHEMA_VERSION = 7
 STABILITY_TARGET = 0.90
 
@@ -80,8 +80,22 @@ def task_result(decision: "rule.Decision") -> str | None:
 
 
 def platform_label(meta: dict[str, Any]) -> str:
-    """Display name of a compared target: its platform's label, else its name."""
-    return PLATFORM_LABELS.get(meta.get("platform") or "", meta.get("name") or "?")
+    """Display name of a compared target: its platform's label, else its name.
+
+    ETP-6236: a target that ran with preloaded routines is "Etendo + rutina".
+    """
+    label = PLATFORM_LABELS.get(meta.get("platform") or "", meta.get("name") or "?")
+    return label + ROUTINES_SUFFIX if meta.get("routines") else label
+
+
+#: How the "Etendo + routine" column is named (ETP-6236, the child KR of KR2.1).
+ROUTINES_SUFFIX = " + rutina"
+
+
+def _routine_run(calls: list[dict[str, Any]]) -> bool:
+    """Whether the agent ran a saved routine (`etendo_routine` mode run) in this attempt."""
+    return any(c.get("tool") == "etendo_routine" and (c.get("args") or {}).get("mode") == "run"
+               for c in calls)
 
 
 def _result_name(key: str, kr: dict[str, Any]) -> str:
@@ -226,6 +240,7 @@ def measure_attempt(n: int, record: dict[str, Any]) -> dict[str, Any]:
         "wastedCalls": wasted,
         "stumbles": errors + wasted,
         "silentWrong": record.get("silentWrong"),
+        "routineRun": _routine_run(calls),
         "tokens": _usage_total(record, "loop"),
         "reportTokens": _usage_total(record, "report"),
         "turns": loop.get("turns"),
@@ -313,6 +328,8 @@ def aggregate_side(target: TargetRecords, probe_id: str, repeat: int,
                      "wastedCalls": sum(a["wastedCalls"] for a in counted),
                      "partlySelfReported": True},
         "silentWrong": sum(1 for a in counted if a["silentWrong"] is True),
+        # ETP-6236: attempts in which the agent ran a saved routine.
+        "routineRuns": sum(1 for a in counted if a["routineRun"]),
         "cost": {"medianTokens": median_tokens, "medianBytes": median_bytes,
                  "tokensAvailable": tokens_ok, "priming": priming},
     }
@@ -564,7 +581,12 @@ def build_summary(compare_dir: Path) -> dict[str, Any]:
     # Valentin, 2026-11-04: the comparison is only head-to-head. A task one platform cannot do
     # says nothing about which MCP is better, so it leaves the number and becomes a note.
     both_possible = counts["subjectWin"] + counts["referenceWin"] + counts["tie"]
+    routines = subject_meta.get("routines") or subject.run.get("routines")
     kr = {
+        # ETP-6236: "routines" when the subject ran with preloaded routines — the child KR of
+        # KR2.1 ("Etendo + rutina"), never the KR2.1 itself.
+        "variant": "routines" if routines else None,
+        "routineTasks": sorted(routines) if routines else [],
         "subject": subject.name, "reference": reference.name,
         "subjectLabel": platform_label(subject_meta), "referenceLabel": platform_label(reference_meta),
         "tasks": len(task_rows), "evaluated": len(decided), "bothPossible": both_possible,
@@ -699,13 +721,31 @@ def _side_cells(side: dict[str, Any]) -> list[str]:
     ]
 
 
+def _routine_lines(summary: dict[str, Any]) -> list[str]:
+    """ETP-6236: which tasks had a preloaded routine and how often the agent ran it."""
+    kr = summary["kr"]
+    if kr.get("variant") != "routines":
+        return []
+    used = attempts = 0
+    for row in summary["tasks"]:
+        if row["task"] in kr["routineTasks"]:
+            side = row["subject"]
+            items = side.get("items") or {}
+            used += items.get("routineRuns") or 0
+            attempts += (side.get("attempts") or {}).get("counted") or 0
+    return [f"Rutinas precargadas en {len(kr['routineTasks'])} pruebas: "
+            + (", ".join(f"`{t}`" for t in kr["routineTasks"]) or "ninguna")
+            + f". El agente ejecutó la rutina en {used} de {attempts} intentos de esas pruebas.", ""]
+
+
 def render_markdown(summary: dict[str, Any]) -> str:
     kr = summary["kr"]
     label = official_label(summary)
+    kr_name = "KR2.1 hijo (Etendo + rutina)" if kr.get("variant") == "routines" else "KR2.1"
     lines = [
         f"# MCP comparison {summary['compareId']} — {label}",
         "",
-        f"**KR2.1: {_pct(kr['winRate'])} sobre {kr['bothPossible']} pruebas posibles en ambas** "
+        f"**{kr_name}: {_pct(kr['winRate'])} sobre {kr['bothPossible']} pruebas posibles en ambas** "
         f"(meta {_pct(kr['target'])}) — "
         + ", ".join(f"{kr['results'][key]} {_result_name(key, kr)}" for key in HEAD_TO_HEAD)
         + f". {kr['tasks']} en la suite, {kr['fragile']} frágiles.",
@@ -715,6 +755,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
         + f". {_result_name('referenceOnly', kr)} ({len(kr['referenceOnlyTasks'])}): "
         + (", ".join(f"`{t}`" for t in kr["referenceOnlyTasks"]) or "ninguna") + ".",
         "",
+        *_routine_lines(summary),
         f"Rule v{summary['rule']['version']} (parameters {summary['rule']['parametersSha']}: "
         + ", ".join(f"{k}={v:g}" for k, v in summary["rule"]["parameters"].items())
         + f") · REPEAT={summary['repeat']} · report v{summary['reportVersion']}",
@@ -954,6 +995,77 @@ def render_stability(result: dict[str, Any]) -> str:
 # --------------------------------------------------------------------------- CLI
 
 
+def routines_view(base: dict[str, Any], with_routines: dict[str, Any]) -> dict[str, Any]:
+    """The three columns of ETP-6236: Etendo, Etendo + rutina and the reference, per task.
+
+    `base` is a comparison without routines (its KR is the KR2.1), `with_routines` one whose
+    subject preloaded routines (its KR is the child KR). Both must compare the same suite and the
+    same reference platform; the reference column is taken from `base`. Pins that differ are
+    listed, not refused: the view is for reading, the two KRs keep their own summaries.
+    """
+    if with_routines["kr"].get("variant") != "routines":
+        raise ValueError(f"{with_routines['compareId']} did not run with routines (kr.variant)")
+    if base["kr"].get("variant") == "routines":
+        raise ValueError(f"{base['compareId']} ran with routines; the base must run without them")
+    differences = [d["pin"] for d in pin_differences(base, with_routines)
+                   if not d["pin"].startswith(("compare.seed", "compare.routines", "compare.harness",
+                                               "compare.fixtureHashes", "targets.", "subject",
+                                               "reference", "concurrency."))]
+    plain = {r["task"]: r for r in base["tasks"]}
+    rows = []
+    for row in with_routines["tasks"]:
+        before = plain.get(row["task"])
+        rows.append({
+            "task": row["task"],
+            "routine": row["task"] in with_routines["kr"]["routineTasks"],
+            "base": before.get("result") or before.get("status") if before else None,
+            "withRoutines": row.get("result") or row.get("status"),
+            "etendo": (before or {}).get("subject") or {},
+            "etendoRoutines": row["subject"],
+            "reference": (before or {}).get("reference") or row["reference"],
+        })
+    return {"base": base["compareId"], "withRoutines": with_routines["compareId"],
+            "kr": base["kr"], "childKr": with_routines["kr"], "pinDifferences": differences,
+            "rows": rows}
+
+
+def render_routines_view(view: dict[str, Any]) -> str:
+    def cell(side: dict[str, Any]) -> str:
+        items = side.get("items") or {}
+        if not items:
+            return "—"
+        cost = items["cost"]
+        return (f"{items['success']}/{items['consistency']['of']} · {_fmt(items['medianCalls'])} llamadas · "
+                f"{_fmt(cost['medianTokens'])} tok"
+                + (f" · rutina {items.get('routineRuns', 0)}" if side.get("target") else ""))
+
+    kr, child = view["kr"], view["childKr"]
+    lines = [
+        f"# Etendo, Etendo + rutina y {kr['referenceLabel']} — {view['base']} / {view['withRoutines']}",
+        "",
+        f"**KR2.1: {_pct(kr['winRate'])}** ({kr['results']['subjectWin']}/{kr['bothPossible']}) · "
+        f"**KR2.1 hijo (Etendo + rutina): {_pct(child['winRate'])}** "
+        f"({child['results']['subjectWin']}/{child['bothPossible']}).",
+        "",
+    ]
+    if view["pinDifferences"]:
+        lines += ["Pins that differ between the two comparisons: "
+                  + ", ".join(f"`{p}`" for p in view["pinDifferences"]) + ".", ""]
+    lines += [f"| Task | Rutina | Etendo | Etendo + rutina | {kr['referenceLabel']} | Resultado | "
+              f"Resultado con rutina |", "|---|---|---|---|---|---|---|"]
+    for row in view["rows"]:
+        lines.append("| " + " | ".join([
+            row["task"], "sí" if row["routine"] else "—", cell(row["etendo"]),
+            cell(row["etendoRoutines"]), cell(row["reference"]),
+            _result_name(row["base"], kr) if row["base"] in RESULTS else _fmt(row["base"]),
+            _result_name(row["withRoutines"], child) if row["withRoutines"] in RESULTS
+            else _fmt(row["withRoutines"]),
+        ]) + " |")
+    lines += ["", "Celdas: éxitos/intentos · mediana de llamadas · mediana de tokens · intentos en "
+              "los que el agente ejecutó una rutina."]
+    return "\n".join(lines) + "\n"
+
+
 def resolve_compare_dir(value: str, runs_dir: Path) -> Path:
     path = Path(value)
     return path if path.is_dir() else runs_dir / value
@@ -968,6 +1080,9 @@ def main(argv: list[str] | None = None) -> int:
     stab.add_argument("a")
     stab.add_argument("b")
     stab.add_argument("--json", action="store_true", help="print the full result as JSON")
+    rout = sub.add_parser("routines", help="ETP-6236: Etendo, Etendo + rutina and the reference, per task")
+    rout.add_argument("base", help="comparison without routines (its KR is the KR2.1)")
+    rout.add_argument("with_routines", help="comparison whose subject preloaded routines (the child KR)")
     args = parser.parse_args(argv)
 
     def comparison(value: str) -> Path:
@@ -985,6 +1100,13 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{'official' if summary['official'] else 'UNOFFICIAL'} · KR {_pct(kr['winRate'])} "
                   f"({kr['results']['subjectWin']}/{kr['bothPossible']} possible on both) "
                   f"-> {compare_dir / 'summary.md'}")
+            return 0
+        if args.command == "routines":
+            target_dir = comparison(args.with_routines)
+            view = routines_view(build_summary(comparison(args.base)), build_summary(target_dir))
+            out = target_dir / "routines-vs-base.md"
+            out.write_text(render_routines_view(view), encoding="utf-8")
+            print(f"KR2.1 {_pct(view['kr']['winRate'])} · hijo {_pct(view['childKr']['winRate'])} -> {out}")
             return 0
         result = stability(build_summary(comparison(args.a)), build_summary(comparison(args.b)))
     except ValueError as exc:
