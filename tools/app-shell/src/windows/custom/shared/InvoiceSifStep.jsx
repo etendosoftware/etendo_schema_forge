@@ -364,7 +364,14 @@ function StepField({ spec, values, setValue, authorizationAvailable, ui, readOnl
         data-testid={`Varies__sifstep_${spec.name}`} />
     );
   } else if (spec.type === 'option') {
-    control = <OptionField id={id} spec={spec} value={value} onChange={v => setValue(spec.name, v)} ui={ui} disabled={readOnly} />;
+    control = <OptionField
+      id={id}
+      spec={spec}
+      value={value}
+      onChange={v => setValue(spec.name, v)}
+      ui={ui}
+      disabled={readOnly}
+      data-testid="invoice-sif-step-option" />;
   } else if (spec.type === 'date') {
     control = (
       <DateField
@@ -402,7 +409,13 @@ function StepField({ spec, values, setValue, authorizationAvailable, ui, readOnl
         data-testid={`Input__sifstep_${spec.name}`} />
     );
   }
-  return <FieldRow label={label} htmlFor={id} wide={spec.type === 'option' || spec.type === 'boolean'}>{control}</FieldRow>;
+  return (
+    <FieldRow
+      label={label}
+      htmlFor={id}
+      wide={spec.type === 'option' || spec.type === 'boolean'}
+      data-testid="invoice-sif-step-field">{control}</FieldRow>
+  );
 }
 
 // Narrow fields (dates, texts) pair up in two columns first; the long selects and the checkboxes
@@ -453,7 +466,8 @@ export function InvoiceSifStepPanel({ sif, readOnly = false, notice, 'data-testi
                   authorizationAvailable={preview.siiAuthorizationAvailable === true}
                   readOnly={readOnly}
                   varies={!!sif.varying?.[spec.name]}
-                  ui={ui} />
+                  ui={ui}
+                  data-testid="invoice-sif-step-step-field" />
               ))}
             </div>
           </section>
@@ -509,7 +523,11 @@ export function InvoiceSifStepModal({
           </button>
         </div>
         <div className="px-5 py-4 overflow-y-auto">
-          <InvoiceSifStepPanel sif={sif} readOnly={readOnly} notice={notice} />
+          <InvoiceSifStepPanel
+            sif={sif}
+            readOnly={readOnly}
+            notice={notice}
+            data-testid="invoice-sif-step-modal-panel" />
         </div>
         {error && (
           <div className="px-5 py-2 text-xs text-destructive whitespace-pre-line" data-testid="invoice-sif-step-modal-error">

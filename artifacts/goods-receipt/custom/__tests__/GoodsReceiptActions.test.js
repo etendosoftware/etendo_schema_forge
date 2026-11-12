@@ -1,3 +1,4 @@
+// @covers artifacts/goods-receipt/custom/GoodsReceiptActions.jsx
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
