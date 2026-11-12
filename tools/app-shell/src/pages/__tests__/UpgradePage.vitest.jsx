@@ -113,6 +113,7 @@ const PRODUCTIVE_PLAN = {
   displayPrice: '49.00',
   currency: 'EUR',
   billingInterval: 'month',
+  secondMonthFree: true,
 };
 
 function jsonResponse(data, { ok = true, status = 200 } = {}) {
@@ -1059,6 +1060,44 @@ describe('UpgradePage — plan catalog', () => {
  * requests CARRY.
  */
 describe('UpgradePage — what the checkout requests carry (ETP-4576)', () => {
+  it('does not promise an introductory offer that the server has not enabled', async () => {
+    installFetch({
+      environments: [{ clientName: 'Current Productive', clientId: 'CURRENT-PRODUCTIVE', plan: 'productive' }],
+      plans: [{ ...PRODUCTIVE_PLAN, secondMonthFree: false }],
+    });
+    await renderUpgradePage();
+    expect(screen.queryByTestId('upgrade-monthly-promotion')).not.toBeInTheDocument();
+  });
+  it('requires explicit confirmation before replacing a checkout with different conditions', async () => {
+    const user = userEvent.setup();
+    installFetch({
+      environments: [{ clientName: 'Current Productive', clientId: 'CURRENT-PRODUCTIVE', plan: 'productive' }],
+      checkoutError: {
+        purchaseId: 'old-annual', status: 'CREATED', replacementAllowed: true,
+        error: { code: 'PURCHASE_SELECTION_CHANGED', message: 'Different conditions' },
+      },
+    });
+    UPGRADE_SESSION.clientId = 'CURRENT-PRODUCTIVE';
+    await renderUpgradePage();
+    await user.type(screen.getByTestId('upgrade-tenant-name-input'), 'Checkout Target');
+    expect(screen.getByTestId('upgrade-monthly-promotion')).toHaveTextContent('upgradeMonthlyIntroductoryOffer');
+    await user.click(screen.getByTestId('upgrade-submit'));
+    const replaceButton = await screen.findByTestId('upgrade-replace-purchase');
+    expect(assignMock).not.toHaveBeenCalled();
+    expect(globalThis.fetch.mock.calls.filter(([url, init]) => String(url).includes('/billing/purchases') && init?.method === 'POST')).toHaveLength(1);
+
+    await user.click(replaceButton);
+
+    await waitFor(() => {
+      const writes = globalThis.fetch.mock.calls.filter(([url, init]) => String(url).includes('/billing/purchases') && init?.method === 'POST');
+      expect(writes).toHaveLength(2);
+      expect(JSON.parse(writes[1][1].body)).toMatchObject({
+        replacePurchaseId: 'old-annual', planKey: PRODUCTIVE_PLAN.planKey,
+      });
+    });
+    expect(assignMock).not.toHaveBeenCalled();
+  });
+
   /**
    * Drives the flow to the point where the checkout write has gone out.
    *
