@@ -569,6 +569,7 @@ probes:
           description: Crea un depósito (almacén) nuevo en una dirección que ya existe en el sistema.
           params:
             name: {type: string, required: true, description: Nombre del depósito}
+            code: {type: string, required: true, description: 'Código del depósito, único, de hasta 40 caracteres'}
             address: {type: string, required: true, description: 'Dirección ya cargada en el sistema, o parte de ella (calle
                 y número)'}
           steps:
@@ -580,7 +581,7 @@ probes:
             args:
               spec: warehouse
               entity: warehouse
-              fields: {name: $param.name, searchKey: $param.name, locationAddress: '$ref:loc.items[0].id'}
+              fields: {name: $param.name, searchKey: $param.code, locationAddress: '$ref:loc.items[0].id'}
             returnResult: true
         expectEffect:
           tool: etendo_list
@@ -779,6 +780,7 @@ probes:
             de venta principal).
           params:
             name: {type: string, required: true, description: Nombre del producto}
+            code: {type: string, required: true, description: 'Código del producto, único, de hasta 40 caracteres'}
             purchasePrice: {type: number, required: true, description: Precio de compra}
             salesPrice: {type: number, required: true, description: Precio de venta}
           steps:
@@ -787,7 +789,7 @@ probes:
             args:
               spec: product
               entity: product
-              fields: {name: $param.name, searchKey: $param.name}
+              fields: {name: $param.name, searchKey: $param.code}
           - id: salesList
             tool: etendo_list
             args:
