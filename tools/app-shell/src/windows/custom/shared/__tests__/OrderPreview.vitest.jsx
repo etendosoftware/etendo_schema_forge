@@ -52,8 +52,8 @@ vi.mock('../PreviewActionButtons.jsx', () => ({
   // disabled={!hasPdf || !onDownloadPdf} download gate (PreviewActionButtons.jsx,
   // ETP-4789) so tests can assert whether OrderPreview passed a truthy
   // onEmail/onDownloadPdf or not.
-  default: ({ onEmail, onDownloadPdf, hasPdf, sendLabel, downloadLabel, editLabel }) => (
-    <div data-testid="action-buttons">
+  default: ({ onEmail, onDownloadPdf, hasPdf, sendLabel, downloadLabel, editLabel, readOnly }) => (
+    <div data-testid="action-buttons" data-read-only={String(Boolean(readOnly))}>
       {onEmail && (
         <button data-testid="email-btn" onClick={onEmail}>
           {sendLabel}
@@ -576,6 +576,8 @@ describe('OrderPreview — Solo-Lectura tier (ETP-5205)', () => {
     expect(screen.queryByTestId('email-btn')).not.toBeInTheDocument();
     expect(screen.getByTestId('download-btn')).toBeEnabled();
     expect(vi.mocked(EmailsCard).mock.calls.at(-1)[0].onSend).toBeUndefined();
+    expect(screen.getByTestId('action-buttons')).toHaveAttribute('data-read-only', 'true');
+    expect(screen.getByTestId('edit-btn')).toHaveTextContent('view');
     expect(lastAttachmentConfig().readOnly).toBe(true);
     // storeCondition stays true: it also gates the READ of the cached PDF.
     expect(lastAttachmentConfig().storeCondition).toBe(true);

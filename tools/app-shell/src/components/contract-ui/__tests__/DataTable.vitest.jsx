@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -153,6 +154,31 @@ describe('DataTable', () => {
     );
     const deleteButtons = screen.getAllByTitle('deleteRowTooltip');
     expect(deleteButtons.length).toBe(2);
+  });
+
+  describe('rowQuickActions.readOnly drops the row write handlers', () => {
+    it('renders no legacy trash column when readOnly (quick actions have 0 buttons)', () => {
+      render(
+        <DataTable columns={COLUMNS} data={DATA} onDeleteRow={vi.fn()} rowQuickActions={{ readOnly: true }} />
+      );
+      expect(screen.queryAllByTitle('deleteRowTooltip')).toHaveLength(0);
+      expect(screen.queryByTestId('row-delete-1')).not.toBeInTheDocument();
+    });
+
+    it('renders no trash in hoverRowActions mode when readOnly', () => {
+      render(
+        <DataTable
+          columns={COLUMNS}
+          data={DATA}
+          hoverRowActions
+          selectable={false}
+          onDeleteRow={vi.fn()}
+          onEditRow={vi.fn()}
+          rowQuickActions={{ readOnly: true }}
+        />
+      );
+      expect(screen.queryByTestId('row-delete-1')).not.toBeInTheDocument();
+    });
   });
 
   it('renders boolean column as yes/no text', () => {
