@@ -2282,6 +2282,170 @@
       ]
     },
     {
+      "id": "psd2-statement-import-settings",
+      "description": "Import settings of PSD2 bank-connected financial accounts in Etendo (ETP-6151). With the flag on: linking a bank account (link / createAndLink) requires, validates and stores the import-from date and the statement grouping (a stale import-to date is cleared); import-settings requires an import-from date and a valid grouping and answers a malformed date with a coded 400; the PUT/PATCH of a financial account validates the PSD2 import keys; accounts answers maxFetchInterval so the selection modal can warn about the history the bank serves; and a statement of a bank-connected account can be deleted (a processed one is reactivated and deleted in one step; posted and matched-lines statements are refused). With the flag off every one of those answers as before ETP-6151, including the 409 'Statements from a bank-connected account cannot be deleted.'.",
+      "owner": "Agustin-Calderon",
+      "jira": "ETP-6151",
+      "created": "2026-11-12",
+      "flag": {
+        "key": "psd2-statement-import-settings",
+        "defaultValue": false,
+        "ttl": "2026-12-31",
+        "ttlNote": "PLACEHOLDER, not a commitment: end of the current quarter (Q4 2026), set on day one. Revisit it once the first account is targeted.",
+        "symbols": [
+          "psd2-statement-import-settings",
+          "PSD2_STATEMENT_IMPORT_SETTINGS",
+          "FLAG_PSD2_STATEMENT_IMPORT_SETTINGS",
+          "ETGO_FLAG_PSD2_STATEMENT_IMPORT_SETTINGS",
+          "etendo.go.flags.psd2-statement-import-settings",
+          "usePsd2ImportSettingsFlag",
+          "statementsTabBadge",
+          "BankImportSettingsFields",
+          "BankReimportNotice",
+          "useBankImportFromDate",
+          "LegacyBankImportSettings",
+          "bankImportSettingsShared",
+          "Psd2ImportSettingsFlag",
+          "BankImportSettingsRules",
+          "BankStatementDeletion",
+          "MSG_STATEMENT_BANK_CONNECTED",
+          "MSG_STATEMENT_POSTED_NOT_DELETABLE",
+          "parseImportSettingsDate",
+          "fetchProviderDisplay",
+          "maxFetchIntervalOfProvider"
+        ],
+        "$symbolsComment": "The backend evaluates the flag in ONE class, Psd2ImportSettingsFlag (com.etendoerp.go), per request and per account: FeatureFlagContext.forAccount(<ETGO_ACCOUNT email>), never cached. Toggle points (each action evaluates it once): FinancialAccountBankConnectionHandler link, createAndLink, import-settings and accounts; FinancialAccountHandler.validateAndEnrichUpdate; BankStatementsHandler.handleDelete through BankStatementDeletion.prepare. The SPA evaluates the SAME key with the account email as targeting key; the SPA symbols are the usePsd2ImportSettingsFlag hook and its toggle points (BankConnectionFlowUI, EditAccountModal, ImportedStatementsTab, StatementsTable, StatementRowKebab, useBankConnectionFlow, useBankConnectionActions)."
+      },
+      "$gatingComment": "Backend side of ETP-6151. ONE evaluator, Psd2ImportSettingsFlag. Targeted PER ACCOUNT: the ETGO_ACCOUNT email of the request user resolved as PortalLinkPolicy#currentAccountEmail does (GoAccountResolver.currentAccountEmail(), admin mode, null on failure); no account, no email or a failed lookup means OFF, never on. GATED: link / createAndLink (the import keys are required, validated, stored and a stale import-to cleared only with the flag on; with it off they are ignored), import-settings (required fields, grouping validation and the coded 400 for a malformed date only with the flag on), the financial-account PUT/PATCH validation of the PSD2 import keys, GET accounts maxFetchInterval (with the flag off the logo is answered through the single plain Salt Edge call it always was), and deleting a statement of a bank-connected account (flag off: only drafts, 409 on a connected account, as before). The MCP deleteStatement description is static, so it states both rules. Local: etendo.go.flags.psd2-statement-import-settings / ETGO_FLAG_PSD2_STATEMENT_IMPORT_SETTINGS (Tomcat restart). The non-blocking fetch-interval advisory of import-settings (ETP-5805) is not gated: it was already live.",
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/hooks/usePsd2ImportSettingsFlag.js",
+          "tools/app-shell/src/windows/custom/financial-account/BankImportSettingsFields.jsx",
+          "tools/app-shell/src/windows/custom/financial-account/BankReimportNotice.jsx",
+          "tools/app-shell/src/windows/custom/financial-account/LegacyBankImportSettings.jsx",
+          "tools/app-shell/src/windows/custom/financial-account/statementsTabBadge.js"
+        ],
+        "backend": [
+          "src/com/etendoerp/go/schemaforge/Psd2ImportSettingsFlag.java",
+          "src/com/etendoerp/go/schemaforge/BankImportSettingsRules.java",
+          "src/com/etendoerp/go/schemaforge/BankStatementDeletion.java"
+        ]
+      },
+      "$pathsComment": "Backend owned files only: they exist because the flag exists. The frontend list is filled by the SPA side of ETP-6151 with its own new files. The handlers (FinancialAccountBankConnectionHandler, FinancialAccountHandler, BankStatementsHandler) are shared and deliberately not listed: their toggle points are removal cost.",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/financial-account/__tests__/BankConnectionFlowUI.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/hooks/__tests__/useBankConnectionFlow.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/hooks/__tests__/useBankConnectionActions.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/financial-account/__tests__/EditAccountModal.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/financial-account/__tests__/StatementsTable.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/financial-account/__tests__/StatementRowKebab.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/financial-account/__tests__/ImportedStatementsTab.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/financial-account/__tests__/StatementConfirmDialog.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/DeleteConfirmDialog.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/financial-account/__tests__/BankImportSettingsFields.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/financial-account/__tests__/BankReimportNotice.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/lib/__tests__/backendErrors.statementBankConnected.test.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/lib/__tests__/backendErrors.test.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/locales/__tests__/etp5181-fetch-interval-key.vitest.js"
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/Psd2ImportSettingsFlagTest.java",
+            "expected": true,
+            "note": "Covered (New, copied from the bank-bounce-suggestions gate test): the ETGO_ACCOUNT email reaches the provider context as targeting key and Email/email attributes; a targeted account reads on, another reads off; no OBContext, no user, no account, a null email or a failed lookup read off and hand the provider no identity; unset, non-boolean and failing provider read off."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/FinancialAccountBankConnectionHandlerLinkTest.java",
+            "expected": true,
+            "note": "Covered (Extended): flag ON for the import-settings validation of link, createAndLink and import-settings; flag OFF: link and createAndLink ignore the import keys and write none, import-settings requires nothing and accepts a grouping outside the codes, a malformed date keeps the old 500; the flag is evaluated once per link request."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/FinancialAccountBankConnectionHandlerQueryTest.java",
+            "expected": true,
+            "note": "Covered (Extended): accounts answers maxFetchInterval with the flag on; flag OFF: no maxFetchInterval and the logo through the one plain providers/{code} call."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/FinancialAccountHandlerTest.java",
+            "expected": true,
+            "note": "Covered (Extended): PUT/PATCH import-key validation with the flag on; flag OFF: nothing validated or trimmed, clearing the keys of a connected account is allowed and no stored account is loaded."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/BankStatementsHandlerTest.java",
+            "expected": true,
+            "note": "Covered (Extended): delete of bank-connected statements with the flag on; flag OFF: a draft of a connected account answers the 409, a processed one the not-draft 400 and is never reactivated, and a draft of an unconnected account is still deleted."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/BankStatementAgentActionsContractTest.java",
+            "expected": true,
+            "note": "Covered (Extended): the static deleteStatement description states both the flag-off and the flag-on rule."
+          }
+        ],
+        "e2e": [
+          {
+            "root": "frontend",
+            "path": "e2e/tests/flows/finance/psd2-statement-import-settings.mocked.spec.js"
+          }
+        ]
+      },
+      "deferredItems": [
+        {
+          "id": "hosted-flag-setting-missing",
+          "kind": "precondition",
+          "note": "The hosted control plane (Datadog Feature Flags, ConfigCat as the fallback) has no boolean setting psd2-statement-import-settings yet, in any environment, and an undefined key resolves to the false default. AND THEREFORE: nobody can be targeted and the new behaviour stays off for everyone until the setting is created (default false) and given per-account targeting rules in each environment, on the backend and on the SPA with the same key.",
+          "refs": [
+            "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md \u2014 section '`psd2-statement-import-settings` (ETP-6151)'"
+          ]
+        }
+      ]
+    },
+    {
       "id": "sepa-remittances",
       "description": "SEPA remittances (epic ETP-3504, first task ETP-6148, from analysis ETP-6068): reuse Classic remittances (org.openbravo.module.remittance) from Etendo GO with as few new columns as possible -- none in com.etendoerp.go (an earlier iteration added FIN_FINANCIAL_ACCOUNT.EM_ETGO_ALLOW_REMITTANCE and an «Admite remesas» toggle; both were removed by a product decision). The remittance status is the remittance module's own column REM_REMITTANCE.REMITTANCE_STATUS (AD column Remittance_Status, DAL property remittanceStatus, reference REM_RemittanceStatus PE/PR/CT/PT/CP/PP/AN), added in ETP-6148 on feature/ETP-6148 and set by REM's own processes; the remittance PR must be merged and its module built before this com.etendoerp.go change is deployed (release-order dependency, see the release-order item: the module version is bumped when the module is published and GO's module.remittance floor is raised to it in the same release). Everything else is Classic data: creating a Bank financial account while the flag is on (manual create and bank-connection createAndLink) provisions lazily, per client, the In Remittance execution process, the REM_REM document type and sequence, the two remittance payment methods (CORE collection, SCT payment) and their REM_REMITTANCE_TYPE rows, marked by the type parameter ETGO_SEPA_SCHEME, and links both methods to the account; the CORE type carries Creditor_Business_Code=000 so the SEPA XML (another team) builds the creditor identifier from the organization tax ID. Also the default SEPA mandate of a customer (reusing the OBSEPAD mandate columns of C_BPARTNER) and the Remittance window with header, read-only lines and statuses (defined only, no transitions). Out of scope: due-date selection, the SEPA XML, reconciliation, returns, structured address. Backend-only flag evaluated per account. Off: Bank accounts are created without the remittance methods, every remittance-spec request answers 403 feature_disabled, the two mandate keys are silently dropped from a contacts write body (the structured-address-for-sepa precedent, never a 403), and the SPA hides the Remittance menu entry and page and the contact mandate section through capabilities.sepaRemittances (the SPA shows no creditor identifier and no schemes). The messages ship unconditionally, and REM's status column ships with REM: the flag gates behaviour, not schema.",
       "owner": "Agustin-Calderon",

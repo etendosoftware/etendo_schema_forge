@@ -195,7 +195,7 @@ Field editability in the top section:
   so past balances and journal entries stay consistent. `useAccountFields` exposes this as
   `fields.currencyEditable`.
 - **Connection block** (General tab, non-cash only): connected → live bank connection panel (provider, Sync
-  now, Import from/to dates, Statement grouping, re-authorization banner) + a Disconnect footer
+  now, Import from/to dates, Statement grouping — both import-from and grouping required with flag `psd2-statement-import-settings` ON, ETP-6151; with it OFF the pre-ETP-6151 panel —, re-authorization banner) + a Disconnect footer
   button; not connected → a single "Connect bank" button.
 - **Import date range** (ETP-5104). `Importar desde` / `Importar hasta` are validated as a pair by
   `isImportRangeInvalid`, which compares the ISO `yyyy-mm-dd` strings `DateInput` emits — in that
@@ -207,11 +207,14 @@ Field editability in the top section:
   `handleImportSettings` (400, `The import from date cannot be later than the import to date`) for
   callers that skip the form; it validates the *resulting* pair before touching the entity, since a
   body may carry only one bound and a managed instance would be flushed at commit even after a
-  rejection. That 400 is deliberately NOT mapped in `lib/backendErrors.js`: the modal is the only
-  caller of `import-settings` and it refuses the range before the request fires, so the message
-  cannot reach a toast — and every addition to that map lands inside a pre-existing CPD block
-  (~150 homogeneous `'string': 'key'` lines, 20.8% duplication), which fails the Sonar new-code
-  gate. Map it only once a surface exists that can actually surface it.
+  rejection. ETP-5104 left that 400 deliberately unmapped in `lib/backendErrors.js`: the edit modal was
+  the only caller of `import-settings` and refused the range before the request fired, so the
+  message could not reach a toast (and every addition to that map lands inside a pre-existing CPD
+  block that fails the Sonar new-code gate). **ETP-6151 created that surface** (with flag `psd2-statement-import-settings` ON) — `link` /
+  `createAndLink` toast the bridge's 400s (`link` no longer raises this one: it clears a stale "Importar
+  hasta" instead) — so the message is now mapped
+  to `financeAccountsBankConnectionImportRangeInvalid`, together with the four required/invalid
+  import-settings messages below.
 
   Why it is worth guarding twice: nothing downstream catches an inverted range usefully. The PSD2
   module validates it only at synchronization time
@@ -219,6 +222,94 @@ Field editability in the top section:
   `processProviderTransactions` and re-wrapped into
   `PSD2_ErrorRetrievingRransactionsForTheAccount` — so the user got an untranslated toast carrying
   the Salt Edge connection id and raw Java timestamps, far away from the field that caused it.
+- **Required import settings and the shared field block (ETP-6151, behind the flag
+  `psd2-statement-import-settings`).** **Everything in this bullet applies only when the per-account
+  flag is ON** (default OFF; see *Feature flag* below). **With the flag OFF the behaviour is that of
+  `develop`**: the connect modal asks only for the account (no date, no grouping; the link payload
+  carries neither key and `link` / `createAndLink` return the bridge's plain `data`, no advisory), the
+  Edit-account bank panel is the old one (`LegacyBankImportSettings.jsx`: Importar desde / Importar hasta
+  / grouping with the empty "Por defecto" option, key `financeAccountsBankConnectionGroupingNone`, no
+  help text, no required rule, `requiredMissing` always false), the ETP-5181 fetch-interval notice
+  is derived in `EditAccountModal` from `status.maxFetchInterval` as before, and the backend ignores the
+  import keys on `link` / `createAndLink`, validates nothing on `import-settings` and the
+  `PUT`/`PATCH`, and does not return `maxFetchInterval` from `accounts`. With the flag ON, connecting a bank account asks for the two
+  settings that decide what the first sync imports, so no synchronization — not even
+  the scheduled one — can run on a new connection without a lower bound:
+  - **"Importar desde"** — required, defaults to the first day of the current month
+    (`defaultImportFromDate()`, built from local calendar getters, never a parsed string).
+  - **Statement grouping** — required, one of `1BD` / `1BW` / `1BM` / `1BE`
+    (`GROUPING_OPTIONS`). With the flag ON there is no empty "Default" option (the
+    key `financeAccountsBankConnectionGroupingNone` stays in the locales for the OFF panel); in the connect modal it starts
+    on `1BD` ("Diaria", Classic's default, constant `DEFAULT_STATEMENT_GROUPING` in `bankImportSettingsShared.js`)
+    and stays selectable among the four options. Each field has a help line (`…ImportFromHelp`, `…GroupingHelp`, and
+    one per option `…GroupingHelp_1BD|1BW|1BM|1BE`) that says what it does: the grouping is decided
+    by the day the sync RUNS, not by the transaction dates — `1BD` joins syncs made the same day,
+    `1BW` the same Monday-based week, `1BM` the same month, `1BE` creates a statement per sync.
+    Changing the grouping later does not regroup statements already imported.
+
+  With the flag ON both surfaces render the same component, **`BankImportSettingsFields`**
+  (`windows/custom/financial-account/BankImportSettingsFields.jsx`), which also exports
+  `GROUPING_OPTIONS`, `defaultImportFromDate`, `importSettingsIncomplete` and
+  `importFromBeyondFetchInterval` (moved here from `EditAccountModal`). Props: `importFromDate`,
+  `statementGrouping`, `onChange(patch)`, `maxFetchInterval`, `showRequiredErrors`, `testIdPrefix`,
+  `gridClassName`, and the `children` (the edit panel slots "Importar hasta" between the two) and
+  `footer` (the range error) slots. It returns a fragment so the provider-history advisory stays an
+  immediate sibling of the re-authorization banner in the edit panel. A field shows its required
+  error once the user has emptied it, or for every empty field when `showRequiredErrors` is set.
+  - **Connect flow** (`BankConnectionFlowUI` account-selection modal; the block and the
+    required-field gate on "Vincular cuenta" render only with the flag ON, via `usePsd2ImportSettingsFlag()`): the block sits under the
+    account list, is reset on every new selection (date back to day 1, grouping back to `1BD`), and "Vincular cuenta" is
+    enabled as soon as an account is selected (date and grouping carry defaults; emptying the date disables it again). `confirmSelection(saltEdgeAccountId, { importFromDate,
+    statementGrouping })` forwards them to `link` / `createAndLink`. The modal warns BEFORE confirming
+    when the date reaches further back than the bank serves, using `maxFetchInterval` from `accounts`.
+    A failed link is now toasted through `translateBackendError(err.message, ui)` (it used to show
+    `err.message` raw), so the bridge's 400s above and the client's `BANK_CONNECTION_TIMEOUT` sentinel
+    (45 s) reach the user translated (`financeAccountsBankConnectionTimeout`); anything unmapped is
+    still shown as the bridge wrote it.
+  - **Edit panel** (`EditAccountModal` via `useBankConnectionPanel`; flag OFF renders
+    `LegacyBankImportSettings` instead): `bankConnection.requiredMissing
+    = importSettingsEnabled && settingsDirty && importSettingsIncomplete(form)` is OR-ed into `saveBlocked`. It applies **only
+    when the bank section is dirty**: a connection linked before the settings were mandatory may hold
+    a null date or an empty grouping, and that must not block saving the account's other fields.
+    Touching the section means saving it, and the bridge then requires both.
+
+  Server side — **flag ON only, evaluated per request by `Psd2ImportSettingsFlag` with the ETGO_ACCOUNT
+  email** (`FinancialAccountBankConnectionHandler`, rules in `BankImportSettingsRules`, shared by
+  four entry points so they answer with the same messages):
+  - `link` and `createAndLink` require `importFromDate` (`yyyy-MM-dd`) and `statementGrouping`
+    (one of the four codes); a missing or invalid value answers 400 **before** anything is written or
+    any Salt Edge call is made (`createAndLink` validates before it creates the account, so a bad
+    request leaves no account behind). Both are stored on the account in the same transaction as the
+    link. When the date is after the account's stored import-to date, `link` does not refuse: it clears
+    that stale import-to (sets it to null) in the same transaction and goes on.
+  - `import-settings` keeps "omitted key keeps its stored value", but the configuration it would
+    save must have an import-from date and a valid grouping (validated on the RESULTING values), and a
+    malformed date is now a 400 instead of a 500.
+  - The generic `PUT`/`PATCH` of `financial-account/account` validates `pSD2StatementFrequency` (a value
+    outside the four codes is refused on every account) and, on a connected account, refuses sending
+    it or `pSD2ImportFromDate` null/blank only when the stored value is non-null (it would clear a
+    real value). Echoing a null over a null passes, and accounts that are not connected may clear both.
+  - Wire messages (fixed English text, mapped by exact match in `lib/backendErrors.js`):
+
+    | Bridge message | SPA key |
+    |---|---|
+    | `The import from date is required` | `financeAccountsBankConnectionImportFromRequired` |
+    | `The import from date is not a valid date (expected yyyy-MM-dd)` | `financeAccountsBankConnectionImportFromRequired` |
+    | `The statement grouping is required` | `financeAccountsBankConnectionGroupingRequired` |
+    | `The statement grouping must be one of 1BD, 1BW, 1BM, 1BE` | `financeAccountsBankConnectionGroupingRequired` |
+    | `The import from date cannot be later than the import to date` | `financeAccountsBankConnectionImportRangeInvalid` |
+
+    The modal and the edit panel enforce both fields before sending, so these are a safety net.
+  - **Hook and keys.** The SPA reads the flag through `hooks/usePsd2ImportSettingsFlag.js`
+    (`useFeatureFlag(PSD2_STATEMENT_IMPORT_SETTINGS) === true`, key in `lib/flags/flag-keys.js`, default
+    `false`); toggle points: `BankConnectionFlowUI`, `EditAccountModal`, `ImportedStatementsTab`,
+    `StatementsTable`, `StatementRowKebab`, `useBankConnectionFlow`, `useBankConnectionActions`
+    (`includeMessages` only with the flag ON). The restored OFF keys are
+    `financeAccountsBankConnectionGroupingNone` and `backendError.statementBankConnectedNotDeletable`;
+    the edit-tooltip key `financeAccountStatementsRowBankSyncedEditTooltip` is new (ON only).
+  - An account linked before ETP-6151 with no import-from date keeps syncing without a lower bound;
+    it only has to provide one the next time it saves this configuration.
+
 - **Provider max fetch interval** (ETP-5181). PSD2 providers publish a `max_fetch_interval` — the
   most days of history they will serve (90 under the regulation's baseline, more for some banks) —
   stored on `PSD2_PROVIDER.MAX_FETCH_INTERVAL` and browsable in the AD window **Bank Provider**.
@@ -232,7 +323,12 @@ Field editability in the top section:
   disagree. The key sits **inside** the `connection != null` block (an account with no active
   connection cannot sync at all — `fetchAccountTransactions` throws
   `PSD2_NoActiveConnectionForAccount` before the interval check) and is **omitted**, never
-  defaulted, when the provider declares no limit or stores 0.
+  defaulted, when the provider declares no limit or stores 0. **ETP-6151 (flag ON only; OFF: no `maxFetchInterval`, the logo through the single plain
+  `providers/{code}` call as before):** `GET accounts` exposes the
+  same `maxFetchInterval` (a connection being linked has no account yet, so there is no `status`):
+  from the `PSD2_PROVIDER` row of the connection's provider code, else from the `max_fetch_interval`
+  of the Salt Edge `providers/{code}?include_ais_fields=true` answer that already carries the logo
+  (one call serves both, `fetchProviderDisplay`). Omitted when unknown, like in `status`.
 
   The SPA renders `bank-connection-import-fetch-interval-warning` as a **banner at the foot of the
   panel, stacked immediately above the re-authorization banner**, mirroring that banner's shape
@@ -283,6 +379,11 @@ Field editability in the top section:
   never the stored `Date`, so the server time zone cannot shift it). It is computed by
   `FinancialAccountBankConnectionSupport.findImportFromBeyondFetchInterval` from the same N as
   `GET status` → `maxFetchInterval`; no UI change, the SPA keeps its live as-you-type banner.
+  **ETP-6151 (flag ON only):** `link` and `createAndLink` return the same advisory (all three write actions share
+  `addFetchIntervalAdvisory`). `useBankConnectionActions` opts those two calls into `includeMessages`,
+  so their result carries the top-level `messages: [{ type, text }]`, and `useBankConnectionFlow`
+  toasts each `warning` after the link (`linkAdvisories`) — covering a bank never linked on this
+  instance, for which `accounts` could not publish the limit before the modal confirmed.
   `import-settings` evaluates the resulting from-date (also when only `importToDate` is sent), while
   the PUT branch is gated on the field being sent and skipped on a failed write.
   Placement: MCP puts `messages` inside core's `response` wrapper (flattened to the top level for the
@@ -339,8 +440,9 @@ Field editability in the top section:
   (ETP-4530, extended ETP-4872) the accounting configuration via `saveAccountingConfiguration`.
   Enabled purely on `dirty && !saving && !saveBlocked`, where `saveBlocked` is
   `fields.name.trim() === '' || fields.ibanInvalid || recon.amountToleranceInvalid ||
-  bankConnection.rangeInvalid` (ETP-5104 added the last term and split the predicate out so the
-  sync path can reuse it) — **no accounting field can block Save** (ETP-4872 dropped the
+  bankConnection.rangeInvalid || bankConnection.requiredMissing` (ETP-5104 added `rangeInvalid` and
+  split the predicate out so the sync path can reuse it; ETP-6151 added `requiredMissing`, which is
+  only true with the flag ON, when the bank section is dirty and "Importar desde" or the grouping is empty) — **no accounting field can block Save** (ETP-4872 dropped the
   old `fINAssetAcct`-required check). The former `accounting.assetAcctMissing` state, the
   field-level error inside `AccountingConfigurationSection`, and the cross-tab summary line
   (`edit-account-accounting-error-summary`, QA BUG-1) were all removed with it — see "Accounting
@@ -823,7 +925,8 @@ native app-shell UI; only the bank login is an external popup.
   **Frontend side.** `useBankConnectionActions.fetchAccounts` passes both fields through
   *without* defaulting them to `''` — the bridge omits them when there is nothing to explain, so
   `undefined` is semantic and an empty string would read as "a reason is present but unknown".
-  `useBankConnectionFlow` maps them in `NO_ACCOUNTS_REASON_KEYS` /
+  `fetchAccounts` also passes `maxFetchInterval` through (ETP-6151; `undefined` unless it is a finite
+  number, so the advisory stays silent when the bridge omits it; `useBankConnectionFlow` forwards it to the modal only with the flag ON). `useBankConnectionFlow` maps them in `NO_ACCOUNTS_REASON_KEYS` /
   `noAccountsMessage(emptyReason, accountCurrency, ui)` to
   `financeAccountsBankConnectionNoAccountsCurrency` / `…Type` / `…AllLinked`, added to `en_US.json`,
   `es_ES.json` and `es_AR.json`. Two deliberate fall-backs to the generic
@@ -1057,13 +1160,25 @@ mark the connection active again and refresh the consent expiry. Classic does no
 Edge redirects straight into `AisConnectionCallback`, which does the same work server-side. Without
 the follow-up call the connection stays inactive and a deactivated account can never be revived.
 
-Bridge actions: `connect` (optional `financialAccountId` → provider preselect) · `accounts` ·
-`providers` · `link` · `createAndLink` · `reconnect` · `reconnect-callback` · `disconnect`
+Bridge actions: `connect` (optional `financialAccountId` → provider preselect) · `accounts` (returns
+`maxFetchInterval` with flag `psd2-statement-import-settings` ON, ETP-6151) · `providers` · `link` and `createAndLink` (both require `importFromDate`
+and `statementGrouping` with the flag ON, ETP-6151; ignored with it OFF) · `reconnect` · `reconnect-callback` · `disconnect`
 (optional `permanentDeletion`, default `false`) · `sync` (`status` `OK|WARNING|ERROR|IN_PROGRESS`,
 ETP-6154) · `syncStatus` (`POST` with `financialAccountIds[]` or `GET` with
-`?financialAccountIds=a,b`, at most 200 ids, ETP-6154) · `import-settings` · `status` (returns
+`?financialAccountIds=a,b`, at most 200 ids, ETP-6154) · `import-settings` (needs a resulting from-date and a valid grouping with the flag ON, ETP-6151) · `status` (returns
 `reconnectable`). Contract of `sync` and `syncStatus`: `com.etendoerp.go/docs/neo-headless.md`
 §4.12.1.8.
+
+**Feature flag `psd2-statement-import-settings` (ETP-6151).** The import-settings fields of the
+connect flow, their validation and the `maxFetchInterval` of `accounts`, and the delete of statements
+of a bank-connected account (see `financial-account.md`) are all behind one boolean flag, evaluated per
+account (targeting key = the account email, lowercase `email` attribute) on the backend
+(`Psd2ImportSettingsFlag`) and in the SPA (`usePsd2ImportSettingsFlag`), default OFF; absent in the
+control plane means OFF for everyone, and OFF reproduces the pre-ETP-6151 behaviour. Registry entry
+`psd2-statement-import-settings` in `flags-registry.json` (TTL placeholder 2026-12-31); rollout
+prerequisite and local switches: `docs/feature-flags.md` and `com.etendoerp.go`
+`docs/feature-flags-and-tenant-upgrade.md`.
+
 Frontend: `hooks/useBankConnectionActions.js`, `hooks/useBankConnectionFlow.js`,
 `pages/BankConnectionCallbackPage.jsx`, `windows/custom/financial-account/BankConnectionFlowUI.jsx`,
 `windows/custom/financial-account/BankConnectionDeleteConfirmModal.jsx`; for the sync (ETP-6154)
@@ -1579,7 +1694,7 @@ and reads the catalogue (descriptions, `idDescription`, JSON-Schema parameters) 
 | `updateStatement` | write | bank statement (`FIN_BankStatement`) | `POST ?action=update` — drafts only; replaces the unmatched lines |
 | `processStatement` | write | bank statement | `POST ?action=process` |
 | `reactivateStatement` | write | bank statement | `POST ?action=reactivate` — does not reverse reconciliations |
-| `deleteStatement` | write | bank statement | `POST ?action=delete` — drafts only; 409 on a PSD2-connected account, 400 while matched lines remain |
+| `deleteStatement` | write | bank statement | `POST ?action=delete` — a draft; on a PSD2-connected account 409 with flag `psd2-statement-import-settings` OFF, and with it ON (ETP-6151) also a processed one (reactivated and deleted in one step); 400 when posted or while matched lines remain (a processed one on an unconnected account is 400 too). The action description is static and states both rules |
 
 Parameters, line shape and refusals are documented once, in the runtime reference
 (`com.etendoerp.go/docs/neo-headless.md` §4.12.1.2) and in the catalogue itself; this guide does not

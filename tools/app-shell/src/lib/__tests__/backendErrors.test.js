@@ -4219,6 +4219,56 @@ describe('translateBackendError — PSD2 bank sync sentinels and codes', () => {
   }
 });
 
+// ── ETP-6151: PSD2 import-settings refusals of link / createAndLink / import-settings ──
+// FinancialAccountBankConnectionHandler validates the two import settings the link now persists.
+// The connect modal and the edit panel enforce both fields before sending, so these are a safety
+// net; they reuse the fields' own required/range copy, which only en_US and es_ES ship.
+describe('translateBackendError — PSD2 import-settings refusals (ETP-6151)', () => {
+  const readLabels = (locale) => JSON.parse(
+    readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8')).genericLabels;
+  const CASES = [
+    ['The import from date is required', 'financeAccountsBankConnectionImportFromRequired'],
+    ['The import from date is not a valid date (expected yyyy-MM-dd)', 'financeAccountsBankConnectionImportFromRequired'],
+    ['The statement grouping is required', 'financeAccountsBankConnectionGroupingRequired'],
+    ['The statement grouping must be one of 1BD, 1BW, 1BM, 1BE', 'financeAccountsBankConnectionGroupingRequired'],
+    ['The import from date cannot be later than the import to date', 'financeAccountsBankConnectionImportRangeInvalid'],
+  ];
+
+  for (const [raw, key] of CASES) {
+    it(`maps "${raw}" to ${key}`, () => {
+      const requested = [];
+      const t = (k) => {
+        requested.push(k);
+        return `translated:${k}`;
+      };
+      assert.equal(translateBackendError(raw, t), `translated:${key}`);
+      assert.ok(requested.includes(key));
+    });
+
+    for (const locale of ['en_US', 'es_ES']) {
+      it(`resolves "${raw}" to a real ${locale} sentence`, () => {
+        const labels = readLabels(locale);
+        const translated = translateBackendError(raw, (k) => labels[k] ?? k);
+        assert.equal(translated, labels[key]);
+        assert.ok(typeof translated === 'string' && translated.trim());
+      });
+    }
+  }
+
+  it('tolerates surrounding whitespace', () => {
+    const labels = readLabels('es_ES');
+    assert.equal(
+      translateBackendError('  The statement grouping is required\n', (k) => labels[k] ?? k),
+      labels.financeAccountsBankConnectionGroupingRequired,
+    );
+  });
+
+  it('keeps the raw text when the label is missing (guard)', () => {
+    const raw = 'The import from date is required';
+    assert.equal(translateBackendError(raw, (k) => k), raw);
+  });
+});
+
 // ── ETP-5693: posting-account refusals on accounting fields, translated by identity ──
 describe('translateBackendError — posting-account refusals (ETP-5693)', () => {
   const es = localeTranslator('es_ES');
