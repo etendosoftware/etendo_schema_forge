@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/contacts/ContactsFinancialPanel.jsx
 // ETP-5255 / ETP-5263 regression — the contacts credit panel must save SINGLE-FLIGHT.
 //
 // The bug: `creditLimit` had TWO independent routes into the same save — the number input's

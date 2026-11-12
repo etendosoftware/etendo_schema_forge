@@ -773,6 +773,44 @@
         }
       ]
     },
+    "71ffdfc8865e7daf652e4f855e18d8bb6126fff59ba2b01e651989778533de54": {
+      "checksum": "ec900d235f3714719b6ba81bc7b2de19e279c363590c448c079ee9190d078265",
+      "params": [
+        "FF8080812E71F7C7012E71FD0499001B"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "FF8080812E71F7C7012E71FE49BB0021",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "name": "Remittance",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "FF8080812E71F7C7012E7202F3240031",
+          "ad_table_id": "FF8080812E6C2859012E6D063F5900B5",
+          "name": "Lines",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "FF8080813075578701307561B4550020",
+          "ad_table_id": "FF808081307557870130755E0F110009",
+          "name": "Bank Instructions",
+          "seqno": "30"
+        },
+        {
+          "ad_tab_id": "00ACA8F9B07E491483DD9EA4F8D93ED0",
+          "ad_table_id": "4E2A33FA8835466BAAA596A17D680E19",
+          "name": "Settled",
+          "seqno": "40"
+        },
+        {
+          "ad_tab_id": "BA373AF6034149378E1ACD65B0EEFE7D",
+          "ad_table_id": "379F8A7C50E3405E838CE94153025761",
+          "name": "Protested",
+          "seqno": "50"
+        }
+      ]
+    },
     "7a3f9d7a689e84e5d068b46c04ad4a3a05634954d924672e2d18f287019437e0": {
       "checksum": "b81562399e0338d237f21b218e139e1ba9f33cdb7aa9073a390c2766fe09ac80",
       "params": [

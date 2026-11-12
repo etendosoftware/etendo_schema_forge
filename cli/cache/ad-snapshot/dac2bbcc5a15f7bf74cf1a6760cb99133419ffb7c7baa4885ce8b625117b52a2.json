@@ -11642,6 +11642,350 @@
         }
       ]
     },
+    "71ffdfc8865e7daf652e4f855e18d8bb6126fff59ba2b01e651989778533de54": {
+      "checksum": "b2216e9781b456fdc59453103434220bd677286a63655df82b12a24bcb6b49bf",
+      "params": [
+        "FF8080812E71F7C7012E71FD0499001B"
+      ],
+      "rows": [
+        {
+          "column_id": "198D6FC30012483588C054EEF7127AFE",
+          "columnname": "AD_Org_ID",
+          "displaylogic": null,
+          "field_id": "B3F30167BC234E38B0281E5380F0B3EC",
+          "name": "Organization",
+          "readonlylogic": "@Processed@='Y'",
+          "tab_id": "FF8080812E71F7C7012E71FE49BB0021",
+          "tab_name": "Remittance",
+          "table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "table_name": "REM_Remittance"
+        },
+        {
+          "column_id": "9F16001CBBE9AA8CE040007F01003961",
+          "columnname": "C_Doctype_ID",
+          "displaylogic": null,
+          "field_id": "9F16064BE9C2F7F5E040007F0100395F",
+          "name": "Document Type",
+          "readonlylogic": "@Processed@='Y'",
+          "tab_id": "FF8080812E71F7C7012E71FE49BB0021",
+          "tab_name": "Remittance",
+          "table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "table_name": "REM_Remittance"
+        },
+        {
+          "column_id": "A64F725834214F93A848EB75735FF31C",
+          "columnname": "DocumentNo",
+          "displaylogic": null,
+          "field_id": "89470DD5D58D4D809ED3C3FC8285AF4B",
+          "name": "Document No.",
+          "readonlylogic": "@Processed@='Y'",
+          "tab_id": "FF8080812E71F7C7012E71FE49BB0021",
+          "tab_name": "Remittance",
+          "table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "table_name": "REM_Remittance"
+        },
+        {
+          "column_id": "919D46C1044747F9897910BF10217EAA",
+          "columnname": "REM_Remittance_Type_ID",
+          "displaylogic": null,
+          "field_id": "148B8AC029D54FE1AA1588D24888D87E",
+          "name": "Remittance Type",
+          "readonlylogic": "@Processed@='Y'",
+          "tab_id": "FF8080812E71F7C7012E71FE49BB0021",
+          "tab_name": "Remittance",
+          "table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "table_name": "REM_Remittance"
+        },
+        {
+          "column_id": "EA289F87868747E9A283347C6976560C",
+          "columnname": "Datetrx",
+          "displaylogic": null,
+          "field_id": "162827A901AC460387CF73ADF34CEB73",
+          "name": "Transaction Date",
+          "readonlylogic": "@Processed@='Y'",
+          "tab_id": "FF8080812E71F7C7012E71FE49BB0021",
+          "tab_name": "Remittance",
+          "table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "table_name": "REM_Remittance"
+        },
+        {
+          "column_id": "F2755BF33F0D4F61940AEAFF545D18B2",
+          "columnname": "Duedate",
+          "displaylogic": null,
+          "field_id": "0E00884A978F461680EE7C42A3974146",
+          "name": "Expected Date",
+          "readonlylogic": "@Processed@='Y'",
+          "tab_id": "FF8080812E71F7C7012E71FE49BB0021",
+          "tab_name": "Remittance",
+          "table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "table_name": "REM_Remittance"
+        },
+        {
+          "column_id": "F7D8E22D734A431599A138EE425B78AF",
+          "columnname": "Chargedate",
+          "displaylogic": "@ISDISCOUNT@='Y' & @REM_Remittance_Type_ID@ ! ''",
+          "field_id": "A73CE1EA0FF04345B817AF7A1E6697E0",
+          "name": "Discount Date",
+          "readonlylogic": "@Processed@='Y'",
+          "tab_id": "FF8080812E71F7C7012E71FE49BB0021",
+          "tab_name": "Remittance",
+          "table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "table_name": "REM_Remittance"
+        },
+        {
+          "column_id": "2465E204DD744DC193CE092E876B9C7D",
+          "columnname": "FIN_Financial_Account_ID",
+          "displaylogic": null,
+          "field_id": "4E253DDA20A744239A618B9901741DE4",
+          "name": "Financial Account",
+          "readonlylogic": "@Processed@='Y'",
+          "tab_id": "FF8080812E71F7C7012E71FE49BB0021",
+          "tab_name": "Remittance",
+          "table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "table_name": "REM_Remittance"
+        },
+        {
+          "column_id": "117FDF5C7B794C79B1C6789EBFA12E98",
+          "columnname": "SinglePayment",
+          "displaylogic": null,
+          "field_id": "EBBA9A838D254C4081126C2DF34D74E2",
+          "name": "SinglePayment",
+          "readonlylogic": "@Processed@='Y'",
+          "tab_id": "FF8080812E71F7C7012E71FE49BB0021",
+          "tab_name": "Remittance",
+          "table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "table_name": "REM_Remittance"
+        },
+        {
+          "column_id": "E6587142A1E749DB9C3939ED33A49FBD",
+          "columnname": "FIN_Payment_ID",
+          "displaylogic": "@FIN_Payment_ID@ ! null",
+          "field_id": "FDAD010992AB4E40B8D1653C5B13AB37",
+          "name": "Payment",
+          "readonlylogic": "@Processed@='Y'",
+          "tab_id": "FF8080812E71F7C7012E71FE49BB0021",
+          "tab_name": "Remittance",
+          "table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "table_name": "REM_Remittance"
+        },
+        {
+          "column_id": "9ED969BD38D96CC2E040007F010019E8",
+          "columnname": "Selectpayments",
+          "displaylogic": "@Processed@='N'",
+          "field_id": "9ED969BD39046CC2E040007F010019E8",
+          "name": "Select Payments",
+          "readonlylogic": null,
+          "tab_id": "FF8080812E71F7C7012E71FE49BB0021",
+          "tab_name": "Remittance",
+          "table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "table_name": "REM_Remittance"
+        },
+        {
+          "column_id": "03922FF896C4436FAEDDFF369706275E",
+          "columnname": "Createfrom",
+          "displaylogic": "@Processed@='N'",
+          "field_id": "E356BB811F7E4E038106A87DA849BF79",
+          "name": "Select Orders or Invoices",
+          "readonlylogic": null,
+          "tab_id": "FF8080812E71F7C7012E71FE49BB0021",
+          "tab_name": "Remittance",
+          "table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "table_name": "REM_Remittance"
+        },
+        {
+          "column_id": "49AA85B491A0479EA1EEE9700F06FE85",
+          "columnname": "Getfile",
+          "displaylogic": "@Processed@='Y'",
+          "field_id": "61C8EAA67DA64DB1A081289056E6244A",
+          "name": "Create Remittance File",
+          "readonlylogic": null,
+          "tab_id": "FF8080812E71F7C7012E71FE49BB0021",
+          "tab_name": "Remittance",
+          "table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "table_name": "REM_Remittance"
+        },
+        {
+          "column_id": "2321AC43002E4CF7ABB84F31E95A9109",
+          "columnname": "Posted",
+          "displaylogic": "@Processed@='Y'",
+          "field_id": "DF1DA501E0C841E88B3AE347B4C538DD",
+          "name": "Posted",
+          "readonlylogic": null,
+          "tab_id": "FF8080812E71F7C7012E71FE49BB0021",
+          "tab_name": "Remittance",
+          "table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "table_name": "REM_Remittance"
+        },
+        {
+          "column_id": "B7251D9D87EC48069CAE689320D0BD57",
+          "columnname": "selectInvoicesAndOrders",
+          "displaylogic": "@Processed@='N'",
+          "field_id": "F41919DA92D04076B25AB544B2D20922",
+          "name": "Select Invoices and Orders",
+          "readonlylogic": null,
+          "tab_id": "FF8080812E71F7C7012E71FE49BB0021",
+          "tab_name": "Remittance",
+          "table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "table_name": "REM_Remittance"
+        },
+        {
+          "column_id": "6ABCDDF9439F46209669EE29B61CF935",
+          "columnname": "EM_Etar_Automaticprocess",
+          "displaylogic": null,
+          "field_id": "6E6B06FBA8F54530AC0B18D20184CEB5",
+          "name": "Process Automated",
+          "readonlylogic": "@Processed@='Y'",
+          "tab_id": "FF8080812E71F7C7012E71FE49BB0021",
+          "tab_name": "Remittance",
+          "table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "table_name": "REM_Remittance"
+        },
+        {
+          "column_id": "F1D2B523DD964616ADC8EBE945C991CC",
+          "columnname": "AD_Client_ID",
+          "displaylogic": null,
+          "field_id": "402BEF62ACD4452CA691CCF8FD593747",
+          "name": "Client",
+          "readonlylogic": "@Processed@='Y'",
+          "tab_id": "FF8080812E71F7C7012E71FE49BB0021",
+          "tab_name": "Remittance",
+          "table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "table_name": "REM_Remittance"
+        },
+        {
+          "column_id": "BD126AD5527D418087696504359CC9DB",
+          "columnname": "EM_OBSEPAD_SeqTp",
+          "displaylogic": "@OBSEPAD_IS_DIRECT_DEBIT@='Y'",
+          "field_id": "64D648B68BD14D3C89A64FB22DA45F17",
+          "name": "Transaction Type",
+          "readonlylogic": null,
+          "tab_id": "FF8080813075578701307561B4550020",
+          "tab_name": "Bank Instructions",
+          "table_id": "FF808081307557870130755E0F110009",
+          "table_name": "REM_Instruction"
+        },
+        {
+          "column_id": "5DF8ECF2AE4F424EA8F81CFBAC88F776",
+          "columnname": "Line",
+          "displaylogic": null,
+          "field_id": "A2D452D7DECB4A44A9B322C89298FD37",
+          "name": "Line No.",
+          "readonlylogic": "@Processed@='Y'",
+          "tab_id": "00ACA8F9B07E491483DD9EA4F8D93ED0",
+          "tab_name": "Settled",
+          "table_id": "4E2A33FA8835466BAAA596A17D680E19",
+          "table_name": "REM_RemittanceLine_Cancel"
+        },
+        {
+          "column_id": "E8647DAFAB1E414D991A160C6B783731",
+          "columnname": "DateAcct",
+          "displaylogic": null,
+          "field_id": "6574C484341246F6BB9391E1270395A4",
+          "name": "Accounting Date",
+          "readonlylogic": "@Posted@='Y'",
+          "tab_id": "00ACA8F9B07E491483DD9EA4F8D93ED0",
+          "tab_name": "Settled",
+          "table_id": "4E2A33FA8835466BAAA596A17D680E19",
+          "table_name": "REM_RemittanceLine_Cancel"
+        },
+        {
+          "column_id": "40073E56875448078870C1275E2B6537",
+          "columnname": "FIN_Payment_ID",
+          "displaylogic": null,
+          "field_id": "38610D0487084AD4B1FADB105A2E07D5",
+          "name": "Payment",
+          "readonlylogic": "@Processed@='Y'",
+          "tab_id": "00ACA8F9B07E491483DD9EA4F8D93ED0",
+          "tab_name": "Settled",
+          "table_id": "4E2A33FA8835466BAAA596A17D680E19",
+          "table_name": "REM_RemittanceLine_Cancel"
+        },
+        {
+          "column_id": "AF3326BF665449E99A2519A9A48AC112",
+          "columnname": "Posted",
+          "displaylogic": "@Processed@='Y'",
+          "field_id": "F4B79FA85CBA4BCA908DE1C8B0196B95",
+          "name": "Posted",
+          "readonlylogic": null,
+          "tab_id": "00ACA8F9B07E491483DD9EA4F8D93ED0",
+          "tab_name": "Settled",
+          "table_id": "4E2A33FA8835466BAAA596A17D680E19",
+          "table_name": "REM_RemittanceLine_Cancel"
+        },
+        {
+          "column_id": "7A6D559F8F6B4589862B8D0ED7E73B7D",
+          "columnname": "Undo",
+          "displaylogic": "@Processed@='Y'",
+          "field_id": "F7421C8AB83942AB99B2C06F3FE85156",
+          "name": "Settle Undo",
+          "readonlylogic": null,
+          "tab_id": "00ACA8F9B07E491483DD9EA4F8D93ED0",
+          "tab_name": "Settled",
+          "table_id": "4E2A33FA8835466BAAA596A17D680E19",
+          "table_name": "REM_RemittanceLine_Cancel"
+        },
+        {
+          "column_id": "126604E50C8A4F6195AA208C3BA33FA7",
+          "columnname": "Line",
+          "displaylogic": null,
+          "field_id": "CE02C00F20B546038C5A79E52CE47815",
+          "name": "Line No.",
+          "readonlylogic": "@Processed@='Y'",
+          "tab_id": "BA373AF6034149378E1ACD65B0EEFE7D",
+          "tab_name": "Protested",
+          "table_id": "379F8A7C50E3405E838CE94153025761",
+          "table_name": "REM_RemittanceLine_Return"
+        },
+        {
+          "column_id": "886A86FE2E8B4F2FB2402191D5BA5A45",
+          "columnname": "DateAcct",
+          "displaylogic": null,
+          "field_id": "55DA508235F64980BD3FD096B43088A6",
+          "name": "Accounting Date",
+          "readonlylogic": "@Posted@='Y'",
+          "tab_id": "BA373AF6034149378E1ACD65B0EEFE7D",
+          "tab_name": "Protested",
+          "table_id": "379F8A7C50E3405E838CE94153025761",
+          "table_name": "REM_RemittanceLine_Return"
+        },
+        {
+          "column_id": "E74BD308410A4796A3AC6FD8C082A9BE",
+          "columnname": "FIN_Payment_ID",
+          "displaylogic": null,
+          "field_id": "EB3CF5E1A0FD42E59C81161FA541D197",
+          "name": "Payment",
+          "readonlylogic": "@Processed@='Y'",
+          "tab_id": "BA373AF6034149378E1ACD65B0EEFE7D",
+          "tab_name": "Protested",
+          "table_id": "379F8A7C50E3405E838CE94153025761",
+          "table_name": "REM_RemittanceLine_Return"
+        },
+        {
+          "column_id": "2C2FADF552AB42369EC9F51EA2F4B782",
+          "columnname": "Posted",
+          "displaylogic": "@Processed@='Y'",
+          "field_id": "0314F6F9F8AD44DB86D0C0CABE78CB18",
+          "name": "Posted",
+          "readonlylogic": null,
+          "tab_id": "BA373AF6034149378E1ACD65B0EEFE7D",
+          "tab_name": "Protested",
+          "table_id": "379F8A7C50E3405E838CE94153025761",
+          "table_name": "REM_RemittanceLine_Return"
+        },
+        {
+          "column_id": "28DF1A964BAE4CAAAE2670CCDCF92DDA",
+          "columnname": "Undo",
+          "displaylogic": "@Processed@='Y'",
+          "field_id": "6D32D2FA804046B29875BC221FA0EB50",
+          "name": "Protest Undo",
+          "readonlylogic": null,
+          "tab_id": "BA373AF6034149378E1ACD65B0EEFE7D",
+          "tab_name": "Protested",
+          "table_id": "379F8A7C50E3405E838CE94153025761",
+          "table_name": "REM_RemittanceLine_Return"
+        }
+      ]
+    },
     "7a3f9d7a689e84e5d068b46c04ad4a3a05634954d924672e2d18f287019437e0": {
       "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "params": [
@@ -20159,7 +20503,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
-      "checksum": "42d8254d665f7adc1c94f9a297454c55ca3716599918e8a9e6d22137d624838e",
+      "checksum": "e783b7fc6c942b2bf4ac90711cfc25c43f14b7d5f0049434ae7750c1f6b2ee44",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -21761,6 +22105,18 @@
           "table_name": "FIN_BankStatementLine"
         },
         {
+          "column_id": "7466157F80F24471B6F9011DFC5E7349",
+          "columnname": "EM_PSD2_Discard_Line",
+          "displaylogic": "@FIN_FinAcc_Transaction_ID@='' & @EM_PSD2_Transaction_Identifier@!''",
+          "field_id": "7A925F47D33C4A009AF9FB2F73CD2FE3",
+          "name": "Discard / Restore",
+          "readonlylogic": null,
+          "tab_id": "7F5E8E4C55914138A358F5087B532B59",
+          "tab_name": "Bank Statement Lines",
+          "table_id": "84203CBEBDA349C38319C0E549751546",
+          "table_name": "FIN_BankStatementLine"
+        },
+        {
           "column_id": "63454E73F07B4C908EB1268C41F5DE8A",
           "columnname": "Process_Reconciliation",
           "displaylogic": "@Processed@='Y'",
@@ -22015,7 +22371,7 @@
         {
           "column_id": "5DCF47CDFCB54C9DAF68855DE0D2C5CA",
           "columnname": "Reconnect_Conn",
-          "displaylogic": "@Connection_Status@='IN'",
+          "displaylogic": "@Connection_Status@='IN' | @Connection_Status@='DI' | @Last_Fail_Message@!''",
           "field_id": "B2F7495D724F499988C89CE8706E6F5B",
           "name": "Reconnect Account",
           "readonlylogic": null,

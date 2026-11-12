@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/contacts/ContactsFinancialPanel.jsx
 // ETP-5112 regression (bug 1) — the contacts credit/tax panel must send the business
 // partner's `updated` optimistic-locking token on its inline PATCH.
 //

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/hooks/useBankConnectionFlow.js
 import { renderHook, act } from '@testing-library/react';
 
 const { toast, connect, fetchAccounts, link, createAndLink, launchSaltEdgePopup, uiMock } = vi.hoisted(() => ({
