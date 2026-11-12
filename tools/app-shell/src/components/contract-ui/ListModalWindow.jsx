@@ -1311,7 +1311,7 @@ function ListModalGrid({
                 data-testid="list-modal-empty"
               >
                 <p className="text-sm font-medium">{ui('noRecordsYet')}</p>
-                <p className="mt-1 text-xs">{ui('createNewRecord')}</p>
+                {!readOnly && <p className="mt-1 text-xs">{ui('createNewRecord')}</p>}
               </TableCell>
             </TableRow>
           ) : data.map((row) => (
