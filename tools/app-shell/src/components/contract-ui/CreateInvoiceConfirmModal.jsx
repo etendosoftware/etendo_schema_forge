@@ -263,7 +263,7 @@ export default function CreateInvoiceConfirmModal({
         </div>}
 
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid hsl(var(--border-subtle))' }}>
-          <button type="button" onClick={onClose} disabled={loading} style={{ whiteSpace: 'nowrap', ...btnSecondaryStyle, opacity: loading ? 0.5 : 1 }}>
+          <button type="button" onClick={onClose} disabled={loading || sif.loading} style={{ whiteSpace: 'nowrap', ...btnSecondaryStyle, opacity: (loading || sif.loading) ? 0.5 : 1 }}>
             {ui('cancel')}
           </button>
           {sif.active && (

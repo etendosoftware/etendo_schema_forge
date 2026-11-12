@@ -125,6 +125,7 @@ export function useInvoiceSifStep({ enabled, apiFetch, defaultsUrl, body, absolu
   const cacheKey = `${defaultsUrl}|${bodyKey}`;
   const cacheRef = useRef(null);
   const aliveRef = useRef(true);
+  const previewRef = useRef(null);
 
   useEffect(() => {
     aliveRef.current = true;
@@ -152,10 +153,12 @@ export function useInvoiceSifStep({ enabled, apiFetch, defaultsUrl, body, absolu
     const data = await fetchPreview();
     if (!aliveRef.current) return undefined;
     if ((data?.systems?.length ?? 0) > 0) {
-      setPreview(prev => {
-        if (prev !== data) setValues({ ...(data.fields ?? {}) });
-        return data;
-      });
+      // A new preview resets the values; the same (cached) one keeps what the user typed.
+      if (previewRef.current !== data) {
+        previewRef.current = data;
+        setPreview(data);
+        setValues({ ...(data.fields ?? {}) });
+      }
       setPhase('active');
       return undefined;
     }
@@ -251,6 +254,8 @@ function mergePreviews(previews) {
   });
   const fields = {};
   const varying = {};
+  // Every spec'd field comes with its value from the backend (InvoiceSifPreset.defaults fills one
+  // per field spec), so a field missing from one preview means that invoice does not have it.
   specs.forEach(({ name }) => {
     const values = previews.map(p => JSON.stringify(p.fields?.[name] ?? null));
     const has = previews.every(p => Object.prototype.hasOwnProperty.call(p.fields ?? {}, name));
@@ -409,14 +414,15 @@ const byLayout = (a, b) => (FIELD_ORDER[a.type] ?? 0) - (FIELD_ORDER[b.type] ?? 
  * The step's body: one section per active system with its editable fields. A field shared by
  * two systems (the operation date) is shown once, under the first.
  */
-export function InvoiceSifStepPanel({ sif, readOnly = false, notice }) {
+export function InvoiceSifStepPanel({ sif, readOnly = false, notice, 'data-testid': hostTestId }) {
   const ui = useUI();
   const { preview, values, setValue } = sif;
   if (!preview) return null;
 
   const specs = preview.fieldSpecs ?? [];
   const systems = preview.systems ?? [];
-  return (
+  // The host's own test id (each modal passes one) wraps the panel, whose inner id stays stable.
+  const panel = (
     <div data-testid="invoice-sif-step" className="flex flex-col gap-5">
       {notice
         ? <InfoBanner dismissible={false} data-testid="invoice-sif-step-notice">{notice}</InfoBanner>
@@ -460,6 +466,7 @@ export function InvoiceSifStepPanel({ sif, readOnly = false, notice }) {
       )}
     </div>
   );
+  return hostTestId ? <div data-testid={hostTestId}>{panel}</div> : panel;
 }
 
 /**

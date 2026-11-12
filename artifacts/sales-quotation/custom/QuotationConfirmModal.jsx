@@ -93,9 +93,15 @@ export default function QuotationConfirmModal({
 
   // ETP-6179: «Facturar directamente» goes through the "Datos fiscales" step first (when a fiscal
   // system is active); «Crear pedido» never does.
-  const handleConfirm = (optionId) => (optionId === OPTION_INVOICE
-    ? sif.start(() => runConfirm(optionId))
-    : runConfirm(optionId));
+  // ETP-6179 review N1: the option the user picked survives the step, so "Atrás" returns to
+  // «Facturar directamente» instead of the recommended default.
+  const [chosenOption, setChosenOption] = useState(OPTION_ORDER);
+  const handleConfirm = (optionId) => {
+    setChosenOption(optionId);
+    return optionId === OPTION_INVOICE
+      ? sif.start(() => runConfirm(optionId))
+      : runConfirm(optionId);
+  };
 
   const runConfirm = async (optionId) => {
     if (loading) return;
@@ -327,7 +333,7 @@ export default function QuotationConfirmModal({
       summaryData={summaryData}
       question={ui('sqWhatToDo')}
       options={options}
-      defaultOptionId={OPTION_ORDER}
+      defaultOptionId={chosenOption}
       onCancel={onClose}
       onContinue={handleConfirm}
       loading={loading || sif.loading}
