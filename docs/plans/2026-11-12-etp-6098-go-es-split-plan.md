@@ -326,7 +326,34 @@ move back to `develop`, before tanda 1 is accepted.
 | Deploy to staging | `go/.github/workflows/deploy-staging.yml` | Copy `.es` into `etendo_core/modules/com.etendoerp.go.es`, same branch as `go` |
 | Deploy to experimental | `ExperimentalJenkinsfile` | Covered by `cloneModules.groovy` (the image is built from what was cloned) |
 | Developer tooling | `schema_forge/scripts/modules-policy.json`, `checkout-modules.js`, `check-modules.js`, `merge-block-check.sh` | Add `.es` as `base` |
-| Merge block and branches | `back-merge-main.yml`, `branch-merge-policy.yml`, `merge-block-helper` agent | Copy the workflows to the `.es` repo; add it as a repo of the merge block |
+| Merge block and branches | `merge-block-helper` agent | Add `.es` as a repo of the merge block (its own workflows: next section) |
+
+### CI of the `.es` repo: the same checks as `go`, brought by `make`
+
+`.es` gets the GitHub Actions of `go` (read from `go`'s `develop` on 2026-11-12), but not as
+hand-made copies: two copies drift apart as soon as one of them changes (a fixed script, a check
+that goes from annotate to blocking). One source, one `make` target that writes them into the
+`.es` checkout, like `make sync-regen-check-workflow` already does for `offline-regen-check.yml`
+(`scripts/sync-offline-regen-check.sh`: canonical file + per-repo header above a
+`# @mirror-shared-below` marker).
+
+New target in `schema_forge` (working name `make sync-go-es-workflows`): source = the files in
+`modules/com.etendoerp.go`, target = `modules/com.etendoerp.go.es`; it fails if a target was edited
+by hand (the generated file carries an "AUTO-GENERATED, do not edit" header) and has a `--check`
+mode for CI.
+
+| Group | Workflows (and what they need) | How |
+|---|---|---|
+| Generic, no reference to `go` | `git-police`, `branch-merge-policy`, `base-branch-health`, `auto-reviewer`, `xml-order-check`, `hooks-verification` (+ `.githooks/`, `scripts/verify-hooks-trailer.sh`), `back-merge-main` (+ `scripts/back-merge-main.sh`) | Copied verbatim by the target |
+| With their checker script | `test-hygiene`, `test-cells`, `unit-test-classification`, `extension-guardrails` (+ their `scripts/*.py` / `*.sh` and the scripts' tests; the guardrails allowlist starts empty in `.es`) | Copied verbatim; the allowlist is per repo, not copied |
+| Need a per-repo part | `mini-pipeline` (the PR's repo is `.es` at the PR commit, `go` and `schema_forge` as siblings PR branch → epic → `develop`/`main`; own Sonar project key), `full-pipeline-pilot` (paths and coverage of `.es`; uses `go`'s `etendo-env` action from the cloned `go` instead of a copy) | Header + `# @mirror-shared-below` marker, like `offline-regen-check` |
+| Already generated from `schema_forge` | `offline-regen-check` | Extend `scripts/sync-offline-regen-check.sh` to also write the `.es` copy (needed from tanda 3) |
+| Not for `.es` | `build-jsreport` (jsreport image of `go`), `deploy-staging` (disabled; deploys are in Jenkins) | — |
+
+Outside the files, set up in the new repo: secrets used by those workflows (`ETENDOBOT_TOKEN`,
+`NEXUS_USER` / `NEXUS_PASSWORD`, `BITBUCKET_SSH_KEY`, `SONAR_*`, `DOCKERHUB_*`, `OPENAI_API_KEY`;
+not checked whether they are organisation or repository secrets), branch protection on `main` and
+`develop` with the same required checks as `go`, and the Sonar project.
 
 ### Tanda 1 acceptance
 
@@ -336,6 +363,7 @@ move back to `develop`, before tanda 1 is accepted.
 3. In staging and experimental `com.etendoerp.go.es` shows as installed (`AD_MODULE`) and everything
    works the same.
 4. With no branch of its own in `.es`, every pipeline falls back to `develop`, never to the epic.
+5. `.es` has the same PR checks as `go`, written by the `make` target; its `--check` mode passes.
 
 This is the tanda that most needs team coordination (shared Jenkins repo, `go` and `schema_forge`
 workflows).
