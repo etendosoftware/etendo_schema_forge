@@ -82,7 +82,7 @@ describe('ListView export wiring', () => {
     // to export either. When the window offers import inside the split New menu
     // (`newActions[].opensImportDialog`), only the standalone import icon is hidden; export
     // stays on the plain import gate.
-    expect(src).toMatch(/const importEnabled = Boolean\(importConfig\?\.enabled\);/);
+    expect(src).toMatch(/const importEnabled = Boolean\(importConfig\?\.enabled\) && !windowReadOnly;/);
     expect(src).toMatch(/\{importEnabled && !importInNewMenu && \(\s*<Button(?:(?!<\/Button>)[\s\S])*?data-testid="ListView__importButton"/);
     expect(src).toMatch(/\{importConfig\?\.enabled && \(\s*<ListExportButton/);
   });

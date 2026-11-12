@@ -3211,7 +3211,7 @@ export function DataTable({
   selectorContext,
   onDataMutated,
   labelOverrides,
-  onDeleteRow,
+  onDeleteRow: onDeleteRowProp,
   onCloneRow,
   /**
    * Row Quick Actions overlay (ETP-3914 slice 2).
@@ -3251,7 +3251,7 @@ export function DataTable({
   hiddenColumns = [],
   linesLayout,
   hoverRowActions = false,
-  onEditRow = null,
+  onEditRow: onEditRowProp = null,
   editingRowId = null,
   onSaveRow = null,
   onCancelEdit = null,
@@ -3270,6 +3270,10 @@ export function DataTable({
   meta,
   gridView = null,
 }) {
+  // A read-only window drops the row write handlers once, at the entry: every branch below
+  // (legacy trash column, hover actions, row pencil) reads these two names.
+  const onDeleteRow = rowQuickActions?.readOnly ? null : onDeleteRowProp;
+  const onEditRow = rowQuickActions?.readOnly ? null : onEditRowProp;
   const t = useLabel(labelOverrides);
   const tMenu = useMenuLabel();
   const ui = useUI();
