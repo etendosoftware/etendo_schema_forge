@@ -2806,6 +2806,8 @@ function TableDataRow({
 }) {
   const isSelectedLine = selectedRowId != null && row.id === selectedRowId;
   const rowDisabled = isRowSelectable && !isRowSelectable(row);
+  // Read-only: the hover pencil is a write affordance; row click still opens the record to view.
+  const showHoverPencil = !rowQuickActions?.readOnly;
 
   return (
     <TableRow
@@ -2881,7 +2883,7 @@ function TableDataRow({
               >
                 <Check className="h-5 w-5" aria-hidden="true" data-testid="Check__eb5261" />
               </button>
-            ) : (
+            ) : showHoverPencil && (
               <button
                 type="button"
                 onClick={(e) => {

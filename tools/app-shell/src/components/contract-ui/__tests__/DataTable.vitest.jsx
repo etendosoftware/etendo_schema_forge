@@ -179,6 +179,15 @@ describe('DataTable', () => {
       );
       expect(screen.queryByTestId('row-delete-1')).not.toBeInTheDocument();
     });
+
+    it('renders no row pencil in hoverRowActions mode when readOnly, and keeps it otherwise', () => {
+      const props = { columns: COLUMNS, data: DATA, hoverRowActions: true, selectable: false, onEditRow: vi.fn() };
+      const { unmount } = render(<DataTable {...props} rowQuickActions={{ readOnly: true }} />);
+      expect(screen.queryAllByLabelText('edit')).toHaveLength(0);
+      unmount();
+      render(<DataTable {...props} />);
+      expect(screen.queryAllByLabelText('edit').length).toBeGreaterThan(0);
+    });
   });
 
   it('renders boolean column as yes/no text', () => {
