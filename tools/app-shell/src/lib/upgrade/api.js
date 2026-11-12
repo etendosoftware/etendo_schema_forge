@@ -30,6 +30,7 @@ export const UPGRADE_ERROR_CODES = {
   // retired by the first priced plan), so the copy tells the user to reload.
   planNotAvailable: 'upgradePlanNotAvailable',
   purchaseAlreadyExists: 'upgradePurchaseAlreadyExists',
+  purchaseSelectionChanged: 'upgradePurchaseSelectionChanged',
   sessionExpired: 'upgradeSessionExpired',
   // ETP-5443 REVIEW N3: a failed READ of the subscription, or a failed portal-session
   // creation, is neither a checkout nor a creation of anything — reusing
@@ -148,6 +149,7 @@ export async function createBillingPurchase(baseUrl, input = {}) {
       // A catalog KEY, never a price: pricing is server-owned and the browser has no field that
       // could influence it. Without one the server only sells under its legacy price fallback.
       ...(input.planKey ? { planKey: input.planKey } : {}),
+      ...(input.replacePurchaseId ? { replacePurchaseId: input.replacePurchaseId } : {}),
       ...(input.demoClientId ? { demoClientId: input.demoClientId } : {}),
       ...(input.dataTransfer && Object.keys(input.dataTransfer).length > 0
         ? { dataTransfer: input.dataTransfer }
@@ -170,6 +172,12 @@ export async function createBillingPurchase(baseUrl, input = {}) {
 
 /** Maps a refused billing purchase to its upgrade error; a 409 for an existing one carries it. */
 function billingPurchaseError(response, data) {
+  if (response.status === 409 && data?.error?.code === 'PURCHASE_SELECTION_CHANGED') {
+    const error = buildError(UPGRADE_ERROR_CODES.purchaseSelectionChanged,
+      data.error.message, response.status);
+    error.purchase = data?.purchaseId ? data : null;
+    return error;
+  }
   if (response.status === 409 && data?.purchaseId) {
     const error = buildError(UPGRADE_ERROR_CODES.purchaseAlreadyExists,
       data.status || 'Purchase already exists', response.status);
