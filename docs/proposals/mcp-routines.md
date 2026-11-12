@@ -192,7 +192,7 @@ After the tables are created, run `./gradlew export.database` in the Etendo root
 | P1 | Tools allowed as steps | Read tools plus create, update and action |
 | P2 | Failure semantics | Commit step by step; report completed and pending steps |
 | P3/P6 | Visibility and ownership | Personal routines; only the owner sees and changes them |
-| P4 | Discovery | Through `list`, with a reminder message |
+| P4 | Discovery | Through `list`, with a reminder message. Reconfirmed 2026-11-12 after a pilot where the agent never called `list` (2 of 2 attempts): the routines column measures whether the agent finds them on its own; no routine names in `tools/list` (a client caches it until it reconnects) nor in other answers |
 | P5 | Benchmark column | Reported separately as a child KR of KR2.1 |
 | P7 | Updates | Version history; older versions can run |
 | P8 | Response | `executionId`; `returnResult` per step, last step by default; `mode:"execution"` reads it all |
