@@ -173,14 +173,14 @@ Branch state of every module repo on the remote. **Fixed on epic** = the module'
 | `org.openbravo.sepa.iso20022.template` | GitHub etendosoftware | yes | yes | +3 | GO | fixed on epic |
 | `org.openbravo.sepa.iso20022.credittransfer.customertobank` | Bitbucket koodu_software | no (`master`) | yes | +8 | GO | fixed on epic |
 | `org.openbravo.sepa.iso20022.coredirectdebit.customertobank` | Bitbucket koodu_software | no (`master`) | yes | +7 | GO | fixed on epic |
+| `org.openbravo.module.remittance` | Bitbucket koodu_software | no (`master`) | yes (= `master`) | 0 (epic cut at `master` 5.2.0; ETP-6148 adds +3 once its PR merges) | GO | fixed on epic: ETP-6148 adds `REM_REMITTANCE.REMITTANCE_STATUS` (reference `REM_RemittanceStatus`), which `com.etendoerp.go` reads before any published remittance JAR carries it. The REM `feature/ETP-6148` PR targets `epic/ETP-3504`, and CI clones the module from source (GO's `jenkinsExtraModules.txt`: the PR branch when it exists, else the epic). Its version is bumped when the module is published, and `com.etendoerp.go`'s `module.remittance` floor is raised to that version in the same release |
 | `com.etendoerp.service.integration.amazon.s3` | Bitbucket koodu_software | no (`master`) | no | no `develop`; `epic` = `master`, 0 ahead | GO | fixed on epic |
 | `com.etendoerp.tomcat` | GitHub etendosoftware | yes | yes | 0 | none | usual model (epic exists, nothing ahead) |
 | `com.etendoerp.docker`, `com.etendoerp.copilot.devassistant` | GitHub etendosoftware | yes | yes | no epic | none | usual model; not tied to the DB model GO depends on |
 | `com.etendoerp.webhookevents` | GitHub etendosoftware | no | yes | no epic | none | usual model |
 | `org.openbravo.utility.hqlquerytool` | GitHub etendosoftware | yes | no | no epic | none | usual model |
 | `com.etendoerp.openapi` | GitHub etendosoftware | — | — | — | none | only if the build asks for it; `main` |
-| `org.openbravo.module.remittance` | Bitbucket koodu_software | no (`master` instead) | yes (`develop` = `master`) | no epic | none | usual model, but **modified by this epic**: ETP-6148 adds `REM_REMITTANCE.REMITTANCE_STATUS` (reference `REM_RemittanceStatus`) on `feature/ETP-6148`, cut from `develop`. The module version is bumped when the module is published, not in the feature branch, and `com.etendoerp.go`'s `module.remittance` floor is raised to that version in the same release. `com.etendoerp.go` depends on it in `build.gradle` only, so CI installs the published JAR. **The remittance PR must be merged and its module built before the `com.etendoerp.go` change that needs it is deployed** |
-| `org.openbravo.module.remittance.template` | Bitbucket koodu_software | no (`master`) | yes (= `master`) | no epic | none | usual model; dependency of `org.openbravo.module.remittance`, published JAR in CI |
+| `org.openbravo.module.remittance.template` | Bitbucket koodu_software | no (`master`) | yes (= `master`) | no epic | none | usual model; dependency of `org.openbravo.module.remittance` (`build.gradle`, 3.2.0), not modified by the epic, so CI resolves it as the published JAR even when the remittance module is built from source |
 
 Rule: **"fixed on epic" modules must be on the epic branch, pulled to its latest commit** (or on a branch cut from it). If one lags, `update.database` fails on a missing `AD_COLUMN` that an `ETGO_SF_FIELD` row references, or smartbuild fails on a missing getter. This table is a snapshot: when a module's epic work merges into `develop`/`main`, it leaves the "fixed on epic" group.
 
@@ -263,11 +263,14 @@ for m in org.openbravo.sepa.iso20022 \
   git clone -b epic/ETP-3504 git@bitbucket.org:koodu_software/$m.git
 done
 
-# Bitbucket modules on the usual model (no epic branch): SEPA remittances (ETP-6148).
-# Optional: without a checkout, the build resolves them as published JARs.
-for m in org.openbravo.module.remittance org.openbravo.module.remittance.template; do
-  git clone -b develop git@bitbucket.org:koodu_software/$m.git
-done
+# Bitbucket module on the epic: SEPA remittances (ETP-6148 adds REM_REMITTANCE.REMITTANCE_STATUS)
+git clone -b epic/ETP-3504 git@bitbucket.org:koodu_software/org.openbravo.module.remittance.git
+# Already cloned on develop? Switch it to the epic:
+#   git -C org.openbravo.module.remittance fetch origin && git -C org.openbravo.module.remittance checkout epic/ETP-3504
+
+# Bitbucket module on the usual model (no epic branch). Optional: without a checkout, the build
+# resolves it as the published JAR.
+git clone -b develop git@bitbucket.org:koodu_software/org.openbravo.module.remittance.template.git
 ```
 
 Check at any time which modules are off-branch or behind (from `etendo_core/modules`):
