@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/lib/portal/portalApi.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -5,7 +6,9 @@ import {
   fetchInvoicePdfBlob,
   fetchPortalIdentity,
   fetchPortalInvoices,
+  fetchPortalLogoBlob,
   normalizePortalInvoice,
+  renewPortalLink,
   resolvePortalBaseUrl,
 } from '../portalApi.js';
 
@@ -13,7 +16,7 @@ import {
  * Read-only client of the Business Partner portal (ETP-5267).
  *
  * Two properties carry the plan's security invariants and are asserted here rather than left to
- * the page: the token travels in the request OPTIONS and never in the URL (§5.4), and
+ * the page: the token travels in its own `X-Portal-Token` header and never in the URL (§5.4), and
  * unknown / revoked / out-of-scope collapse into one indistinguishable error code (§5.2), so
  * nothing downstream can branch on which of the three it was.
  */
@@ -77,17 +80,32 @@ function expectPortalError(code, { status = null } = {}) {
 }
 
 describe('portal request contract', () => {
-  it('sends the token as a request option, never in the URL', async () => {
+  it('sends the token in the X-Portal-Token header on every call, never in the URL', async () => {
     const { fetchImpl, calls } = recordingFetch(() => jsonResponse({}));
 
     await fetchPortalIdentity(fetchImpl, TOKEN);
     await fetchPortalInvoices(fetchImpl, TOKEN);
     await fetchInvoicePdfBlob(fetchImpl, TOKEN, 'inv-1');
+    await fetchPortalLogoBlob(fetchImpl, TOKEN);
+    await renewPortalLink(fetchImpl, TOKEN);
 
-    assert.equal(calls.length, 3);
+    // The header name is spelled out rather than taken from the module's constant: the servlet
+    // in com.etendoerp.go reads this exact spelling, so a rename here must fail a test. The
+    // header is what carries the token under the cookie credential scheme, where the shared
+    // helper drops an explicit `token`; `token` stays so a bearer GO JWT never rides along.
+    const getOptions = { token: TOKEN, headers: { 'X-Portal-Token': TOKEN }, on401: 'ignore' };
+    // Exact shape, not a superset: an extra option here would be a silent policy change.
+    assert.deepEqual(
+      calls.map((call) => ({ route: call.path.split('?')[0], options: call.options })),
+      [
+        { route: '/sws/portal/me', options: getOptions },
+        { route: '/sws/portal/invoices', options: getOptions },
+        { route: '/sws/portal/invoices/inv-1/pdf', options: getOptions },
+        { route: '/sws/portal/logo', options: getOptions },
+        { route: '/sws/portal/renew', options: { ...getOptions, method: 'POST' } },
+      ],
+    );
     for (const call of calls) {
-      // Exact shape, not a superset: an extra option here would be a silent policy change.
-      assert.deepEqual(call.options, { token: TOKEN, on401: 'ignore' });
       assert.ok(
         !call.path.includes(TOKEN),
         `token leaked into the URL: ${call.path}`,
@@ -132,16 +150,21 @@ describe('portal request contract', () => {
 });
 
 describe('fetchPortalIdentity', () => {
-  it('returns both names when the backend has them', async () => {
+  it('returns the link state, the entry document and both names when the backend has them', async () => {
     const { fetchImpl } = recordingFetch(() => jsonResponse({
+      state: 'expired',
+      entryDocument: { kind: ' invoice ', id: ' inv-9 ' },
       businessPartnerName: '  Cliente Uno  ',
       tenantName: 'Acme SA',
+      hasLogo: true,
     }));
 
     assert.deepEqual(await fetchPortalIdentity(fetchImpl, TOKEN), {
+      state: 'expired',
+      entryDocument: { kind: 'invoice', id: 'inv-9' },
       businessPartnerName: 'Cliente Uno',
       tenantName: 'Acme SA',
-      hasLogo: false,
+      hasLogo: true,
     });
   });
 
@@ -149,6 +172,8 @@ describe('fetchPortalIdentity', () => {
     const { fetchImpl } = recordingFetch(() => jsonResponse({ businessPartnerName: '   ' }));
 
     assert.deepEqual(await fetchPortalIdentity(fetchImpl, TOKEN), {
+      state: 'valid',
+      entryDocument: null,
       businessPartnerName: null,
       tenantName: null,
       hasLogo: false,
@@ -159,11 +184,77 @@ describe('fetchPortalIdentity', () => {
     const { fetchImpl } = recordingFetch(() => unparseableResponse());
 
     assert.deepEqual(await fetchPortalIdentity(fetchImpl, TOKEN), {
+      state: 'valid',
+      entryDocument: null,
       businessPartnerName: null,
       tenantName: null,
       hasLogo: false,
     });
   });
+
+  // The page branches on `state` (only `valid` may read documents) and must not choke on what a
+  // backend that predates link states sends: no state at all, which means a valid link.
+  for (const [label, body, expected] of [
+    ['passes unavailable through', { state: 'unavailable' }, { state: 'unavailable', entryDocument: null }],
+    ['defaults an unknown state to valid', { state: 'revoked' }, { state: 'valid', entryDocument: null }],
+    [
+      'drops an entry document that has no id',
+      { state: 'valid', entryDocument: { kind: 'invoice', id: '  ' } },
+      { state: 'valid', entryDocument: null },
+    ],
+  ]) {
+    it(label, async () => {
+      const { fetchImpl } = recordingFetch(() => jsonResponse(body));
+
+      const identity = await fetchPortalIdentity(fetchImpl, TOKEN);
+
+      assert.deepEqual(
+        { state: identity.state, entryDocument: identity.entryDocument },
+        expected,
+      );
+    });
+  }
+});
+
+describe('renewPortalLink', () => {
+  for (const [label, body, expected] of [
+    ['reports a new link sent', { state: 'renewed', renewal: 'sent' }, { state: 'renewed', renewal: 'sent' }],
+    [
+      'reports a link sent recently instead of a second email',
+      { state: 'renewed', renewal: 'recentlySent' },
+      { state: 'renewed', renewal: 'recentlySent' },
+    ],
+    ['nulls an unknown renewal value', { state: 'renewed', renewal: 'queued' }, { state: 'renewed', renewal: null }],
+    ['reports an unavailable customer with no renewal', { state: 'unavailable' }, { state: 'unavailable', renewal: null }],
+  ]) {
+    it(label, async () => {
+      const { fetchImpl } = recordingFetch(() => jsonResponse(body));
+
+      assert.deepEqual(await renewPortalLink(fetchImpl, TOKEN), expected);
+    });
+  }
+
+  for (const status of [401, 403]) {
+    it(`treats ${status} as a dead link`, async () => {
+      const { fetchImpl } = recordingFetch(() => jsonResponse({}, { status }));
+
+      await assert.rejects(
+        renewPortalLink(fetchImpl, TOKEN),
+        expectPortalError(PORTAL_ERROR.invalidLink, { status }),
+      );
+    });
+  }
+
+  for (const status of [500, 503]) {
+    it(`treats ${status} as a retryable loadFailed, not as a dead link`, async () => {
+      const { fetchImpl } = recordingFetch(() => jsonResponse({}, { status }));
+
+      await assert.rejects(
+        renewPortalLink(fetchImpl, TOKEN),
+        expectPortalError(PORTAL_ERROR.loadFailed, { status }),
+      );
+    });
+  }
 });
 
 describe('fetchPortalInvoices', () => {
