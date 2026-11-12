@@ -244,17 +244,18 @@ system-caller pattern of `DemoTrialNoticeEmailContract` (`:106-108`, `:211-219`)
   (`EmailThrottleRule.java:52-118`).
 - `onDelivered` confirms the renewal row (same §A.2.6 hook), then `portal.link.renewed` is emitted.
 
-### Renewal rate limit — configurable, decision for the user to confirm
+### Renewal rate limit — decided by the PO (2026-11-11): 15 min per link, no daily cap
 
 | Property (env) | Default | Meaning |
 |---|---|---|
-| `etendo.go.portal.renewal.cooldownMinutes` (`ETGO_PORTAL_RENEWAL_COOLDOWN_MINUTES`) | **60** | An expired link renews at most once per cool-down: a confirmed `RENEWAL` row with this `PARENT_LINK_ID` created inside the window ⇒ `recentlySent`, no email |
-| `etendo.go.portal.renewal.maxPerDay` (`ETGO_PORTAL_RENEWAL_MAX_PER_DAY`) | **5** | Confirmed renewals per `(AD_CLIENT_ID, C_BPARTNER_ID)` per rolling 24 h; above it ⇒ `recentlySent`. **`0` = no limit** |
+| `etendo.go.portal.renewal.cooldownMinutes` (`ETGO_PORTAL_RENEWAL_COOLDOWN_MINUTES`) | **15** | An expired link renews at most once per cool-down: a confirmed `RENEWAL` row with this `PARENT_LINK_ID` sent inside the window ⇒ `recentlySent`, no email, and the page still says a new link was sent. After the window, re-opening it sends a new email |
+| `etendo.go.portal.renewal.maxPerDay` (`ETGO_PORTAL_RENEWAL_MAX_PER_DAY`) | **0 (no limit)** | Optional operator cap, off by default — the story sets none: confirmed renewals per `(AD_CLIENT_ID, C_BPARTNER_ID)` per rolling 24 h; above it ⇒ `recentlySent` |
 
 `0` meaning "no limit" deliberately differs from the email throttle convention (non-positive ⇒
 default, `DefaultDocumentSendEmailContract.java:180-193`) because "no limit" is a legitimate PO
-answer here. Malformed ⇒ default with a WARN. **Defaults are conservative and are a decision for the
-user to confirm** (PO gave no value).
+answer here. Malformed ⇒ default with a WARN. The renewal contract's own email throttles
+(per recipient 20/h, per tenant 100/h, global 2000/min — the document-email ceilings) are the email
+system's anti-abuse backstop, not a product cap.
 
 ## A.5 Blocking checks before renewal (story 5)
 
@@ -377,7 +378,9 @@ JUnit test today** (no file under `src-test` references `PortalAccessService`, `
   event with the right `errorCode`; legacy tenant (null decision) ⇒ renews; enforcement kill switch
   on ⇒ renews.
 - `/renew`: recipients = original To+CC exactly; language = original; opener's identity unused;
-  cool-down and daily limit (incl. `0` = unlimited, malformed ⇒ default); renewal chain keeps
+  15-minute per-link cool-down (re-open inside it ⇒ `recentlySent`, no email; after it ⇒ new
+  email); daily cap off by default, honoured when configured (`0` = unlimited, malformed ⇒
+  default); renewal chain keeps
   `ROOT_LINK_ID`.
 - `portal-link-renewal` refuses a non-system caller (403) and caller-supplied recipients/edits.
 - KPI events emitted once per outcome with the documented fields; `UsageEventTypes` server-only.
@@ -591,7 +594,7 @@ PDF unavailable state.
 | D-1 | Apply blocked / inactive / plan-expired to **valid** links too, not only renewal | **Yes**: a still-valid link answers `unavailable` |
 | D-2 | "Last month" default range | **Rolling**: today − 1 month … today |
 | D-3 | Renewal email visible in the document's Emails card | **Yes** |
-| D-4 | Renewal limits | **Cool-down 60 min per link + 5 per BP per 24 h**, both configurable, `0` = unlimited |
+| D-4 | Renewal limits | **Decided by the PO (2026-11-11): 15 min per link, no daily cap.** Both remain configurable (`cooldownMinutes`, `maxPerDay`, `0` = unlimited, the default) |
 | D-5 | KPI headline unit | **Per send** (`ROOT_LINK_ID`) |
 | D-6 | Portal paragraph wording (ES/EN) | **The §A.2 draft**, with the validity stated in hours |
 
