@@ -800,3 +800,20 @@ body; the backend validates them with the same per-system rule as the invoice's 
 (`RectificationFiscalCodeGuard`, 422 `ETGO_InvoiceRectificationCodeRequired`). If the preview cannot
 be loaded the flow continues without the step: the backend applies the same defaults anyway.
 Backend reference: `com.etendoerp.go` `docs/neo-headless.md` §4.12.36b (ETP-6179).
+
+## Doc type and number survive picking the customer — ETP-5837 (QA round 1)
+
+Choosing the customer on a new return no longer switches the document to the shipment doc type. Before, the number
+preview jumped to the next "Albarán de venta" number (`<1000039>` became `<1000076>`), although the saved record still took
+the return number. `etendo_defaults` with a `recordContext.businessPartner` had the same bug. It returned
+`documentType: "Albarán de venta"` and the shipment number. An agent that copied that doc type into `etendo_create` would have
+created a return with the shipment doc type. Both paths now keep "Albarán de devolución de cliente" and its sequence, with or
+without the customer.
+
+The cause was in the shared `DocTypeResolver#dropDocTypesOutsideTabFilter` (`com.etendoerp.go`). It is meant to drop a callout's
+doc type that this tab's filter (`documentType.return=true`) does not allow. But it gave up on `M_InOut`, which has no
+`C_DocTypeTarget_ID` column. Reference: `modules/com.etendoerp.go/docs/neo-headless.md`, "Interactive callouts and the tab's
+doc-type filter".
+
+Manual check: Ventas → Albarán de devolución → Nuevo, note the number, pick a customer. The number and the doc type stay the
+same, and Save stores that number.
