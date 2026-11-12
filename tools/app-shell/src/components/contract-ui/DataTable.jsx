@@ -881,7 +881,7 @@ function TableSkeleton({ columns }) {
  * filters, where "create a new record" is wrong. `{ title, description?, action?, testId? }`;
  * `action` is any node (typically a "clear filters" button).
  */
-function EmptyState({ hasFilter, totalCount, override }) {
+function EmptyState({ hasFilter, totalCount, override, readOnly = false }) {
   const ui = useUI();
   if (override) {
     return (
@@ -906,7 +906,7 @@ function EmptyState({ hasFilter, totalCount, override }) {
       ) : (
         <>
           <p className="text-sm font-medium">{ui('noRecordsYet')}</p>
-          <p className="text-xs mt-1">{ui('createNewRecord')}</p>
+          {!readOnly && <p className="text-xs mt-1">{ui('createNewRecord')}</p>}
         </>
       )}
     </div>
@@ -3044,6 +3044,7 @@ function renderTableRows({
   emptyState,
   ...rowProps
 }) {
+  const { rowWritesOff } = rowProps;
   if (hideDataRows) return null;
   if (filteredData.length === 0 && !addRow?.active) {
     return (
@@ -3053,6 +3054,7 @@ function renderTableRows({
             hasFilter={hasActiveFilter}
             totalCount={data.length}
             override={emptyState}
+            readOnly={rowWritesOff}
             data-testid="EmptyState__eb5261" />
         </TableCell>
       </TableRow>

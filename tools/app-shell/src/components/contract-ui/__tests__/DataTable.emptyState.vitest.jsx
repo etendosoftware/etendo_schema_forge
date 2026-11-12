@@ -21,6 +21,12 @@ describe('DataTable — emptyState override (ETP-5591)', () => {
     expect(screen.getByText('createNewRecord')).toBeInTheDocument();
   });
 
+  it('hides the "create a new record" hint when the window is read-only', () => {
+    render(<DataTable columns={COLUMNS} data={[]} windowReadOnly />);
+    expect(screen.getByText('noRecordsYet')).toBeInTheDocument();
+    expect(screen.queryByText('createNewRecord')).not.toBeInTheDocument();
+  });
+
   it('renders the caller title, description and action instead of the built-in copy', () => {
     const onReset = vi.fn();
     render(
