@@ -649,7 +649,7 @@ The popup opened by "Crear Factura Rectificativa" on a completed (CO), not-yet-i
 - **Confirmar** with the rectificative-invoice toggle on and **Crear factura rectificativa** on a
   confirmed return, same components as the customer return.
 - Purchase rectificative: SII fields only, without a motive (purchase-side corrective support is not
-  implemented). `sifFields` and `sifDefaults` are declared on every channel, MCP included: the header
+  implemented), so the `R4` default of the customer return does not apply here. `sifFields` and `sifDefaults` are declared on every channel, MCP included: the header
   handler is bound by `@NeoExtension` since ETP-6179 (the row's `Java_Qualifier`, the class's
   `@Named` and the artifact's `javaQualifier` were removed).
 

@@ -828,6 +828,15 @@ With a record id, `createPurchaseInvoice` is `availableNow:false` once nothing i
 - Purchase invoices only carry SII fields (Fecha operación, Tipo factura, Descripción SII,
   Autorización, Fecha registro contable): VERI*FACTU never sends purchases, and TicketBAI/Batuz has no
   editable field on the SIF tab. The document type is never a return/rectificative one.
+  Defaults: Tipo factura `F1`, Autorización unticked, Fecha registro contable today (empty when the
+  organization's SII configuration declares posted invoices), Fecha operación and Descripción SII
+  from the order when the invoice carries one, else today and the organization's default purchase
+  description.
+- The bulk "Crear factura" builds ONE invoice, so it shows the same editable step, asked with the
+  same `receiptIds`. Several receipts are invoiced with **no order on the invoice header**, so their
+  preview carries no order either (organization's description, today); a single receipt with an
+  order (or whose lines point to one) takes the order's values, as its invoice does
+  (`PurchaseInvoiceSifTarget`, review W2).
 
 The step is shared (`tools/app-shell/src/windows/custom/shared/InvoiceSifStep.jsx`) and built
 from the backend's `sifDefaults` action, which answers which fiscal systems are active for the

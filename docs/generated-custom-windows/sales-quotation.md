@@ -628,7 +628,14 @@ configuration (`quotation` entity) withholds them with a reason, and `etendo_sch
 
 - **Confirmar → Facturar directamente** (`QuotationConfirmModal`) opens the step as its own dialog
   (`InvoiceSifStepModal`) before the invoice is created; *Crear pedido* never asks.
-- Normal invoice: VERI*FACTU type from the invoice's document type (`F1` fallback).
+- The dialog has × / *Cancelar* (close without creating anything), *Atrás* and *Facturar
+  directamente*. **Atrás** returns to the "¿Qué quieres hacer?" choice with *Facturar directamente*
+  still selected (not the recommended *Crear pedido* default) and keeps the values typed in the step,
+  so pressing *Continuar* again reopens the step as it was left.
+- Normal invoice: VERI*FACTU type from the invoice's document type (`F1` fallback); SII key the
+  customer's own default key when it declares one, else `F1`; SII description and operation date
+  from the quotation's own SII fields when it has them, else the organization's default
+  description and today.
 
 The step is shared (`tools/app-shell/src/windows/custom/shared/InvoiceSifStep.jsx`) and built
 from the backend's `sifDefaults` action, which answers which fiscal systems are active for the

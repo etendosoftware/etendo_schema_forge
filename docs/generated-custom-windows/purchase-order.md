@@ -740,7 +740,9 @@ shared by both handlers):
 
 - **Confirmar** with *Crear factura* ticked (`ConfirmModal` in `PurchaseOrderActions.jsx`) and
   **Gestionar documentos** on a confirmed order (`CreateDocsModal`).
-- SII fields only (see goods-receipt).
+- SII fields only (see goods-receipt for the defaults); no VERI*FACTU, no TicketBAI, no rectification
+  code. The invoice header carries the order, so Fecha operación and Descripción SII come from the
+  order when it has them.
 - The list's bulk "Crear facturas" (`BulkPurchaseOrderMoreMenu`, ONE invoice per selected order) reads the
   `sifDefaults` preview of every completed selected order first. Whenever a fiscal system is active
   it shows the fiscal data READ-ONLY (`InvoiceSifStepModal` in `readOnly` mode) with the notice "All
