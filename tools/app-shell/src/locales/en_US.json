@@ -20722,6 +20722,7 @@
     "recordsCouldNotBeDeleted": "{count} record(s) could not be deleted",
     "networkError": "Network error",
     "networkErrorRetry": "Could not complete the action. Try again.",
+    "staleSession": "Your session was opened in another tab or window. Reload the page to continue.",
     "savedButCannotOpenRecord": "The record was saved but could not be opened. Please refresh the list.",
     "savedButFollowUpActionFailed": "The record was saved, but a follow-up action failed: {detail}",
     "backendError.ibanRequired": "Using IBAN for generating the Displayed Account requires to introduce the IBAN",
