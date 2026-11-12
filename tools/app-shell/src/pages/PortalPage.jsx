@@ -1,29 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { AlertCircle, Ban, Download, FileText, Loader2, MailCheck, Receipt } from 'lucide-react';
-import { useLocaleSwitch, useUI } from '@/i18n';
+import { useParams, useSearchParams } from 'react-router-dom';
+import { AlertCircle, ArrowLeft, Ban, FileText, Loader2, MailCheck } from 'lucide-react';
+import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { StatusTag } from '@/components/ui/status-tag';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
 import { useApiFetch } from '@/auth/useApiFetch.js';
-import { formatCurrency } from '@/lib/formatCurrency.js';
-import { formatCalendarDate } from '@/lib/dateOnly.js';
 import {
   PORTAL_ERROR,
   PORTAL_LINK_STATE,
   PORTAL_RENEWAL,
-  fetchInvoicePdfBlob,
+  fetchPortalHome,
   fetchPortalIdentity,
-  fetchPortalInvoices,
   fetchPortalLogoBlob,
   renewPortalLink,
   resolvePortalBaseUrl,
 } from '@/lib/portal/portalApi.js';
-import { portalPdfFileName, resolveInvoiceStatus } from '@/lib/portal/portalInvoices.js';
-import { saveBlobAsFile } from '@/lib/portal/portalDownload.js';
+import PortalShell from './portal/PortalShell.jsx';
+import PortalHomeView from './portal/PortalHomeView.jsx';
+import PortalDocumentListView from './portal/PortalDocumentListView.jsx';
+import PortalDocumentDetailView from './portal/PortalDocumentDetailView.jsx';
+import {
+  PORTAL_KIND_META, documentLabelKey, readPortalView, writePortalView,
+} from './portal/portalPresentation.js';
 
 /**
  * Business Partner self-service portal — read-only MVP (ETP-5267).
@@ -101,183 +98,10 @@ function PortalNotice({ testId, icon, title, description, children }) {
   );
 }
 
-/**
- * Whose portal this is, then who is looking at it.
- *
- * The tenant identity leads deliberately. A customer arrives here from an email, with no app
- * context and possibly several suppliers who all use Etendo GO — so "which company am I looking
- * at" is the first question the page has to answer, before the greeting. The logo carries that
- * faster than any text, which is why it sits beside the name rather than decorating a corner.
- *
- * Every part degrades independently: no logo, no tenant name and no BP name each drop out on
- * their own rather than breaking the header.
- */
-function PortalHeader({ identity, logoUrl, ui }) {
-  const greeting = identity?.businessPartnerName
-    ? ui('portalGreeting', { name: identity.businessPartnerName })
-    : ui('portalPageTitle');
-  const intro = identity?.tenantName
-    ? ui('portalIntro', { tenantName: identity.tenantName })
-    : ui('portalIntroGeneric');
-
-  return (
-    <header className="space-y-3" data-testid="portal-header">
-      {(logoUrl || identity?.tenantName) && (
-        <div className="flex items-center gap-3" data-testid="portal-brand">
-          {logoUrl && (
-            <img
-              src={logoUrl}
-              // The tenant name, not "logo": a screen reader should say the company, and when the
-              // name is missing an empty alt correctly marks the image as decorative.
-              alt={identity?.tenantName ?? ''}
-              className="h-10 w-auto max-w-[160px] object-contain"
-              data-testid="portal-logo"
-            />
-          )}
-          {identity?.tenantName && (
-            <p className="text-base font-semibold text-foreground" data-testid="portal-tenant-name">
-              {identity.tenantName}
-            </p>
-          )}
-        </div>
-      )}
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground" data-testid="portal-greeting">
-          {greeting}
-        </h1>
-        <p className="text-sm text-muted-foreground" data-testid="portal-intro">{intro}</p>
-      </div>
-    </header>
-  );
-}
-
-/** One summary figure. */
-function PortalSummaryCard({ testId, title, value, hint }) {
-  return (
-    <Card data-testid={testId}>
-      <CardHeader className="pb-2" data-testid="CardHeader__3db5f6">
-        <CardTitle
-          className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
-          data-testid="CardTitle__3db5f6">
-          {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent data-testid="CardContent__3db5f6">
-        <p className="text-2xl font-semibold tabular-nums text-foreground" data-testid={`${testId}-value`}>
-          {value}
-        </p>
-        {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
-      </CardContent>
-    </Card>
-  );
-}
-
-/** Empty is not an error: a customer with nothing billed yet is a normal, correct state. */
-function PortalEmptyState({ ui }) {
-  return (
-    <div
-      className="flex flex-col items-center rounded-xl border border-dashed border-border bg-card px-6 py-12 text-center"
-      data-testid="portal-empty-state"
-    >
-      <Receipt className="h-8 w-8 text-muted-foreground" data-testid="Receipt__3db5f6" />
-      <p className="mt-4 text-base font-medium text-foreground">{ui('portalEmptyTitle')}</p>
-      <p className="mt-1 max-w-sm text-sm text-muted-foreground">{ui('portalEmptyDescription')}</p>
-    </div>
-  );
-}
-
-function PortalInvoiceRow({ invoice, locale, ui, downloading, onDownload }) {
-  const status = resolveInvoiceStatus(invoice);
-  const documentNo = invoice.documentNo || '—';
-
-  return (
-    <TableRow data-testid={`portal-invoice-row-${invoice.id}`}>
-      <TableCell className="font-medium" data-testid="portal-invoice-document-no">{documentNo}</TableCell>
-      <TableCell className="tabular-nums" data-testid="portal-invoice-date">
-        {formatCalendarDate(invoice.invoiceDate, locale)}
-      </TableCell>
-      <TableCell className="hidden tabular-nums sm:table-cell" data-testid="portal-invoice-due-date">
-        {formatCalendarDate(invoice.dueDate, locale)}
-      </TableCell>
-      <TableCell className="text-right tabular-nums" data-testid="portal-invoice-total">
-        {formatCurrency(invoice.currency, invoice.grandTotalAmount)}
-      </TableCell>
-      <TableCell className="hidden text-right tabular-nums sm:table-cell" data-testid="portal-invoice-outstanding">
-        {formatCurrency(invoice.currency, invoice.outstandingAmount)}
-      </TableCell>
-      <TableCell data-testid="portal-invoice-status">
-        {status && <StatusTag
-          tone={status.tone}
-          label={ui(status.labelKey)}
-          data-testid="StatusTag__3db5f6" />}
-      </TableCell>
-      <TableCell className="text-right" data-testid="TableCell__3db5f6">
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2"
-          disabled={downloading || !invoice.id}
-          onClick={() => onDownload(invoice)}
-          aria-label={ui('portalDownloadInvoice', { documentNo })}
-          data-testid={`portal-download-${invoice.id}`}
-        >
-          {downloading
-            ? <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__3db5f6" />
-            : <Download className="h-4 w-4" data-testid="Download__3db5f6" />}
-          <span className="hidden sm:inline">
-            {downloading ? ui('downloading') : ui('download')}
-          </span>
-        </Button>
-      </TableCell>
-    </TableRow>
-  );
-}
-
-/**
- * The invoice list.
- *
- * Wrapped in its own horizontal scroller: due date and outstanding amount already drop out
- * below `sm`, and the remaining columns must never make the page itself scroll sideways.
- */
-function PortalInvoiceTable({ invoices, locale, ui, downloadingId, onDownload }) {
-  return (
-    <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
-      <Table data-testid="portal-invoice-table">
-        <TableHeader data-testid="TableHeader__3db5f6">
-          <TableRow data-testid="TableRow__3db5f6">
-            <TableHead data-testid="TableHead__3db5f6">{ui('documentNo')}</TableHead>
-            <TableHead data-testid="TableHead__3db5f6">{ui('invoiceDate')}</TableHead>
-            <TableHead className="hidden sm:table-cell" data-testid="TableHead__3db5f6">{ui('dueDate')}</TableHead>
-            <TableHead className="text-right" data-testid="TableHead__3db5f6">{ui('total')}</TableHead>
-            <TableHead
-              className="hidden text-right sm:table-cell"
-              data-testid="TableHead__3db5f6">{ui('pendingPaymentColumn')}</TableHead>
-            <TableHead data-testid="TableHead__3db5f6">{ui('statusColumn')}</TableHead>
-            <TableHead className="text-right" data-testid="TableHead__3db5f6">{ui('download')}</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody data-testid="TableBody__3db5f6">
-          {invoices.map((invoice) => (
-            <PortalInvoiceRow
-              key={invoice.id || invoice.documentNo}
-              invoice={invoice}
-              locale={locale}
-              ui={ui}
-              downloading={downloadingId === invoice.id}
-              onDownload={onDownload}
-              data-testid="PortalInvoiceRow__3db5f6" />
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
 export default function PortalPage() {
   // The token arrives as a path segment because an email link cannot carry a header.
   const { token = '' } = useParams();
   const ui = useUI();
-  const { locale } = useLocaleSwitch();
   // `/sws/portal/*` is its own bounded context, so this is NOT the router's `apiBaseUrl`
   // (which already points at `/sws/neo`). Memoized because `apiFetch` is memoized on it.
   const baseUrl = useMemo(() => resolvePortalBaseUrl(), []);
@@ -285,12 +109,11 @@ export default function PortalPage() {
 
   const [view, setView] = useState(VIEW.loading);
   const [identity, setIdentity] = useState(null);
-  const [summary, setSummary] = useState(null);
+  const [home, setHome] = useState(null);
   const [attempt, setAttempt] = useState(0);
-  const [downloadingId, setDownloadingId] = useState(null);
-  const [downloadFailed, setDownloadFailed] = useState(false);
   const [logoUrl, setLogoUrl] = useState(null);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [detailTitle, setDetailTitle] = useState(null);
   // The renewal already requested in this page's life, `{ token, request }` (see renewOnce).
   const renewalRef = useRef(null);
 
@@ -305,7 +128,6 @@ export default function PortalPage() {
 
     let active = true;
     setView(VIEW.loading);
-    setDownloadFailed(false);
 
     const showError = (error) => {
       if (!active) return;
@@ -356,9 +178,10 @@ export default function PortalPage() {
         setView(VIEW.unavailable);
         return null;
       }
-      return fetchPortalInvoices(apiFetch, trimmed).then((loadedSummary) => {
+      // Part B: the home aggregates feed the home view and the sidebar's counts.
+      return fetchPortalHome(apiFetch, trimmed).then((loadedHome) => {
         if (!active) return;
-        setSummary(loadedSummary);
+        setHome(loadedHome);
         setView(VIEW.ready);
       });
     }).catch(showError);
@@ -386,48 +209,24 @@ export default function PortalPage() {
     };
   }, [identity?.hasLogo, apiFetch, token]);
 
-  /**
-   * Appends the next page.
-   *
-   * Accumulates rather than replacing: a customer reading a long history should not lose the rows
-   * above when asking for more. The whole-set totals come from the newest response and are
-   * therefore never recomputed from the accumulated rows — summing the page would turn the
-   * balance into "the balance of what is currently on screen".
-   */
-  const handleLoadMore = useCallback(async () => {
-    setLoadingMore(true);
-    try {
-      const next = await fetchPortalInvoices(apiFetch, token.trim(), {
-        offset: summary?.invoices?.length ?? 0,
-      });
-      setSummary((current) => (current ? {
-        ...next,
-        invoices: [...(current.invoices ?? []), ...next.invoices],
-      } : next));
-    } catch (error) {
-      if (error?.code === PORTAL_ERROR.invalidLink) setView(VIEW.invalid);
-      else setDownloadFailed(true);
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [apiFetch, token, summary?.invoices?.length]);
+  const trimmedToken = token.trim();
+  const showInvalid = useCallback(() => setView(VIEW.invalid), []);
 
-  const handleDownload = useCallback(async (invoice) => {
-    setDownloadingId(invoice.id);
-    setDownloadFailed(false);
-    try {
-      const blob = await fetchInvoicePdfBlob(apiFetch, token.trim(), invoice.id);
-      saveBlobAsFile(blob, portalPdfFileName(invoice));
-    } catch (error) {
-      // A token that stopped being valid mid-session takes the whole page to the generic
-      // screen — the same thing a reload would show. Anything else is one document failing,
-      // and the rest of the list stays usable.
-      if (error?.code === PORTAL_ERROR.invalidLink) setView(VIEW.invalid);
-      else setDownloadFailed(true);
-    } finally {
-      setDownloadingId(null);
-    }
-  }, [apiFetch, token]);
+  // The view lives in the search string (`?view=list&kind=INVOICE`), never the token: back and
+  // forward work, and the link the customer bookmarks still opens the document it was sent with.
+  const requested = readPortalView(searchParams);
+  const entry = identity?.entryDocument;
+  const current = requested
+    ?? (entry ? { view: 'doc', kind: entry.kind, id: entry.id } : { view: 'home' });
+
+  const navigate = useCallback((target) => {
+    setDetailTitle(null);
+    setSearchParams(writePortalView(target));
+  }, [setSearchParams]);
+
+  const onDetailLoaded = useCallback((document) => {
+    setDetailTitle(`${ui(documentLabelKey(document))} ${document.documentNo ?? ''}`.trim());
+  }, [ui]);
 
   if (view === VIEW.loading) {
     return (
@@ -569,78 +368,70 @@ export default function PortalPage() {
     );
   }
 
-  const invoices = summary?.invoices ?? [];
-  const summaryCurrency = summary?.currency || invoices[0]?.currency || null;
-  // Falls back to the loaded length so a backend that predates paging still reports a truthful
-  // count and offers no "load more" that would return nothing.
-  const totalCount = Number.isFinite(summary?.totalCount) ? summary.totalCount : invoices.length;
-  const hasMore = invoices.length < totalCount;
+  let title;
+  let subtitle;
+  let headerStart = null;
+  let body;
+  if (current.view === 'list') {
+    const plural = ui(PORTAL_KIND_META[current.kind].pluralKey);
+    title = plural;
+    subtitle = `${ui('portalNavMyDocuments')} / ${plural}`;
+    body = (
+      <PortalDocumentListView
+        apiFetch={apiFetch}
+        token={trimmedToken}
+        kind={current.kind}
+        onNavigate={navigate}
+        onInvalid={showInvalid}
+      />
+    );
+  } else if (current.view === 'doc') {
+    const plural = ui(PORTAL_KIND_META[current.kind].pluralKey);
+    title = detailTitle ?? ui(PORTAL_KIND_META[current.kind].singularKey);
+    subtitle = `${ui('portalNavMyDocuments')} / ${plural}`;
+    headerStart = (
+      <Button
+        variant="outline"
+        size="icon"
+        aria-label={ui('portalBack', { list: plural })}
+        onClick={() => navigate({ view: 'list', kind: current.kind })}
+        data-testid="portal-back"
+      >
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+      </Button>
+    );
+    body = (
+      <PortalDocumentDetailView
+        key={`${current.kind}:${current.id}`}
+        apiFetch={apiFetch}
+        token={trimmedToken}
+        kind={current.kind}
+        id={current.id}
+        identity={identity}
+        logoUrl={logoUrl}
+        onNavigate={navigate}
+        onInvalid={showInvalid}
+        onLoaded={onDetailLoaded}
+      />
+    );
+  } else {
+    title = ui('portalNavHome');
+    subtitle = ui('portalNavHome');
+    body = <PortalHomeView identity={identity} home={home} onNavigate={navigate} />;
+  }
 
   return (
-    <PortalFrame data-testid="PortalFrame__3db5f6">
-      <PortalHeader identity={identity} logoUrl={logoUrl} ui={ui} data-testid="PortalHeader__3db5f6" />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <PortalSummaryCard
-          testId="portal-outstanding"
-          title={ui('portalOutstandingTitle')}
-          value={formatCurrency(summaryCurrency, summary?.outstandingAmount)}
-          hint={ui('portalOutstandingHint')}
-          data-testid="PortalSummaryCard__3db5f6" />
-        <PortalSummaryCard
-          testId="portal-invoice-count"
-          title={ui('portalInvoiceCountTitle')}
-          // The whole-set count, not the number of rows loaded so far. Showing the loaded count
-          // would make the figure shrink-wrap to the page and quietly contradict the list below.
-          value={String(totalCount)}
-          data-testid="PortalSummaryCard__3db5f6" />
-      </div>
-      <section className="space-y-3" data-testid="portal-invoices-section">
-        <h2 className="text-base font-semibold text-foreground">{ui('portalInvoicesTitle')}</h2>
-
-        {downloadFailed && (
-          <div
-            className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
-            data-testid="portal-download-error"
-          >
-            <AlertCircle className="h-4 w-4 shrink-0" data-testid="AlertCircle__3db5f6" />
-            <span>{ui('portalDownloadFailed')}</span>
-          </div>
-        )}
-
-        {invoices.length === 0
-          ? <PortalEmptyState ui={ui} data-testid="PortalEmptyState__3db5f6" />
-          : (
-            <PortalInvoiceTable
-              invoices={invoices}
-              locale={locale}
-              ui={ui}
-              downloadingId={downloadingId}
-              onDownload={handleDownload}
-              data-testid="PortalInvoiceTable__3db5f6" />
-          )}
-
-        {hasMore && (
-          <div className="flex flex-col items-center gap-2 pt-2" data-testid="portal-pagination">
-            {/* Stated before the button, so the reader knows how much is left before clicking
-                rather than discovering it one page at a time. */}
-            <p className="text-xs text-muted-foreground" data-testid="portal-pagination-status">
-              {ui('portalShowingCount', { shown: invoices.length, total: totalCount })}
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleLoadMore}
-              // Disabled while in flight: without it, repeated clicks each fetch the same offset
-              // (the length has not changed yet) and append the same rows twice.
-              disabled={loadingMore}
-              data-testid="portal-load-more"
-            >
-              {loadingMore && <Loader2 className="mr-2 h-4 w-4 animate-spin" data-testid="Loader2__loadmore" />}
-              {loadingMore ? ui('loading') : ui('portalLoadMore')}
-            </Button>
-          </div>
-        )}
-      </section>
-    </PortalFrame>
+    <PortalShell
+      identity={identity}
+      logoUrl={logoUrl}
+      current={current}
+      tiles={home?.tiles}
+      onNavigate={navigate}
+      title={title}
+      subtitle={subtitle}
+      headerStart={headerStart}
+    >
+      {body}
+    </PortalShell>
   );
 }

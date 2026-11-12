@@ -313,3 +313,149 @@ export async function fetchInvoicePdfBlob(fetchImpl, token, invoiceId) {
   );
   return response.blob();
 }
+
+// ─── Part B (ETP-6209): home, per-kind lists, document detail and printable ──────────────────
+
+/** The four document kinds the portal shows; the API speaks them in lower case. */
+export const PORTAL_DOCUMENT_KINDS = Object.freeze(['QUOTATION', 'ORDER', 'SHIPMENT', 'INVOICE']);
+
+/**
+ * The home's aggregates: pending balance per currency, one tile per kind, recent documents.
+ * Every figure is computed server-side over the whole history, never summed here.
+ */
+export async function fetchPortalHome(fetchImpl, token) {
+  const response = await portalGet(fetchImpl, token, '/home');
+  const data = await response.json().catch(() => ({}));
+  return {
+    balances: Array.isArray(data?.balances) ? data.balances.map((b) => ({
+      currency: readableText(b?.currency),
+      outstanding: readableAmount(b?.outstanding),
+      pendingCount: Number.isFinite(b?.pendingCount) ? b.pendingCount : 0,
+      overdue: readableAmount(b?.overdue),
+      overdueCount: Number.isFinite(b?.overdueCount) ? b.overdueCount : 0,
+      overdueSince: readableText(b?.overdueSince),
+    })) : [],
+    tiles: data?.tiles && typeof data.tiles === 'object' ? data.tiles : {},
+    recent: Array.isArray(data?.recent) ? data.recent.map(normalizePortalDocument) : [],
+  };
+}
+
+/**
+ * One page of one kind. Filters go in the query string; the token never does (it rides the
+ * header). Dates are calendar days (`yyyy-MM-dd`), inclusive on both ends.
+ */
+export async function fetchPortalDocuments(fetchImpl, token, {
+  kind, statuses = [], dateFrom = null, dateTo = null, search = '', offset = 0,
+  limit = PORTAL_PAGE_SIZE,
+} = {}) {
+  const params = new URLSearchParams();
+  params.set('type', String(kind || '').toLowerCase());
+  if (statuses.length) params.set('status', statuses.join(','));
+  if (dateFrom) params.set('dateFrom', dateFrom);
+  if (dateTo) params.set('dateTo', dateTo);
+  if (search && search.trim()) params.set('q', search.trim());
+  params.set('limit', String(limit));
+  params.set('offset', String(offset));
+  const response = await portalGet(fetchImpl, token, `/documents?${params.toString()}`, {
+    invalidOn: INVALID_TOKEN_STATUSES_PDF,
+  });
+  const data = await response.json().catch(() => ({}));
+  const documents = Array.isArray(data?.documents) ? data.documents.map(normalizePortalDocument) : [];
+  return {
+    documents,
+    totalCount: Number.isFinite(data?.totalCount) ? data.totalCount : documents.length,
+    offset: Number.isFinite(data?.offset) ? data.offset : offset,
+    statuses: Array.isArray(data?.statuses) ? data.statuses : [],
+    totals: Array.isArray(data?.totals) ? data.totals.map((t) => ({
+      currency: readableText(t?.currency),
+      count: Number.isFinite(t?.count) ? t.count : 0,
+      taxBase: readableAmount(t?.taxBase),
+      grandTotal: readableAmount(t?.grandTotal),
+    })) : [],
+  };
+}
+
+/**
+ * One document's read-only detail. A 404 means this one document is not available (hidden,
+ * another customer's, or never existed) — not that the link died.
+ */
+export async function fetchPortalDocument(fetchImpl, token, kind, id) {
+  const response = await portalGet(
+    fetchImpl,
+    token,
+    `/documents/${encodeURIComponent(String(kind).toLowerCase())}/${encodeURIComponent(id)}`,
+    { invalidOn: INVALID_TOKEN_STATUSES_PDF },
+  );
+  const data = await response.json().catch(() => ({}));
+  return {
+    ...normalizePortalDocument(data),
+    description: readableText(data?.description),
+    paymentMethod: readableText(data?.paymentMethod),
+    paymentTerms: readableText(data?.paymentTerms),
+    scheduledDeliveryDate: readableText(data?.scheduledDeliveryDate),
+    issuer: readableText(data?.issuer),
+    customer: {
+      name: readableText(data?.customer?.name),
+      address: readableText(data?.customer?.address),
+    },
+    lines: Array.isArray(data?.lines) ? data.lines.map((line) => ({
+      product: readableText(line?.product),
+      productCode: readableText(line?.productCode),
+      description: readableText(line?.description),
+      uom: readableText(line?.uom),
+      quantity: readableAmount(line?.quantity),
+      unitPrice: readableAmount(line?.unitPrice),
+      discount: readableAmount(line?.discount),
+      tax: readableText(line?.tax),
+      amount: readableAmount(line?.amount),
+    })) : [],
+    taxes: Array.isArray(data?.taxes) ? data.taxes.map((tax) => ({
+      tax: readableText(tax?.tax),
+      taxableAmount: readableAmount(tax?.taxableAmount),
+      taxAmount: readableAmount(tax?.taxAmount),
+    })) : [],
+    installments: Array.isArray(data?.installments) ? data.installments.map((inst) => ({
+      dueDate: readableText(inst?.dueDate),
+      amount: readableAmount(inst?.amount),
+      paidAmount: readableAmount(inst?.paidAmount),
+      outstandingAmount: readableAmount(inst?.outstandingAmount),
+    })) : [],
+    related: Array.isArray(data?.related) ? data.related.map(normalizePortalDocument) : [],
+    hasPdf: data?.hasPdf === true,
+  };
+}
+
+/**
+ * The document's printable as a `Blob` — the same file the email's download link serves.
+ * A 404 is one missing printable, not a dead link.
+ */
+export async function fetchPortalDocumentPdf(fetchImpl, token, kind, id) {
+  const response = await portalGet(
+    fetchImpl,
+    token,
+    `/documents/${encodeURIComponent(String(kind).toLowerCase())}/${encodeURIComponent(id)}/pdf`,
+    { invalidOn: INVALID_TOKEN_STATUSES_PDF, failure: PORTAL_ERROR.downloadFailed },
+  );
+  return response.blob();
+}
+
+/** One document summary, every field coerced to the type the UI renders. */
+export function normalizePortalDocument(row) {
+  return {
+    kind: readableText(row?.kind),
+    id: readableText(row?.id),
+    documentNo: readableText(row?.documentNo),
+    isCreditNote: row?.isCreditNote === true,
+    reference: readableText(row?.reference),
+    date: readableText(row?.date),
+    validUntil: readableText(row?.validUntil),
+    documentStatus: readableText(row?.documentStatus),
+    currency: readableText(row?.currency),
+    taxBase: readableAmount(row?.taxBase),
+    grandTotal: readableAmount(row?.grandTotal),
+    outstandingAmount: readableAmount(row?.outstandingAmount),
+    dueDate: readableText(row?.dueDate),
+    overdue: row?.overdue === true,
+  };
+}
+
