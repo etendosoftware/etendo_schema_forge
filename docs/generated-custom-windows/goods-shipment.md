@@ -654,3 +654,23 @@ Documentos and the button is back.
 ## Agent prompts on value and dates — ETP-5852
 
 `header.agentPrompt` says a shipment carries quantities only (its value is the order lines' prices times the quantities, or the invoice made from it; M-71), and `movementDate.agentPrompt` that a completed shipment keeps its date: it is corrected with a return and a new shipment (M-163).
+
+## Fiscal data step before the invoice is created — ETP-6179
+
+- **Confirmar** with the invoice toggle on (`GoodsShipmentConfirmModal` → `ConfirmInOutModal`) and
+  **Crear factura de venta** on a confirmed shipment (`GoodsShipmentActions` →
+  `CreateInvoiceConfirmModal`), including the list's bulk "Crear factura" of several shipments into
+  ONE invoice (`BulkInvoiceFromShipment`, preview with the same `shipmentIds`).
+- The bulk "Crear factura" builds ONE invoice, so it shows the same editable step (not the
+  read-only summary of the order lists): the preview is asked with the same `shipmentIds` the
+  creation will send. Several shipments are invoiced with **no order on the invoice header**, so
+  their preview carries no order either: SII description = the organization's default one,
+  operation date = today. A single shipment with an order takes those values from the order, as
+  its invoice does (`CreateDraftInvoiceHandler.shipmentSifTarget`, review W2).
+- Normal invoice: VERI*FACTU type from the document type (`F1` fallback); SII key the customer's own
+  default key when it declares one, else `F1`.
+- The invoice's document type is never a return/rectificative one (`findARInvoiceDocType` skips
+  them since ETP-6179).
+
+How the step itself works — the backend `sifDefaults` preview, when it appears, the
+`sifFields` it sends and the fail-open rule — is described once in [sales-order.md → Fiscal data step before the invoice is created](sales-order.md#fiscal-data-step-before-the-invoice-is-created--etp-6179).
