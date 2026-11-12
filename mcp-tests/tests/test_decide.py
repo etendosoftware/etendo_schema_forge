@@ -1,4 +1,4 @@
-"""The versioned decision rule (rule 2): every step and its margin edges (plan §5.6, D47; plan 2026-10-22 §3.4).
+"""The versioned decision rule (rule 3): every step and its margin edges (plan §5.6, D47; plan 2026-10-22 §3.4).
 
 @covers mcp-tests/runner/decide.py
 """
@@ -45,18 +45,31 @@ class CapabilityStepTest(unittest.TestCase):
         self.assertTrue(d.reason.startswith("reference:"))
 
 
+class SubjectMustSucceedTest(unittest.TestCase):
+    """Rule 3 (Valentin, 2026-11-05): Etendo has to work every time, so a failed attempt loses."""
+
+    def test_one_failed_subject_attempt_loses_even_when_it_is_cheaper(self):
+        d = decide.decide(ok(successes=2, tokens=100), ok(successes=3, tokens=9000), P)
+        self.assertEqual((d.status, d.winner, d.decided_by), ("decided", "reference", "1-subjectFailed"))
+        self.assertEqual(d.margin, {"step": 1, "subject": 2, "attempts": 3, "reference": 3})
+
+    def test_it_loses_even_when_the_reference_failed_too(self):
+        for reference in (ok(successes=2), ok(successes=0, calls=None)):
+            d = decide.decide(ok(successes=2), reference, P)
+            self.assertEqual((d.winner, d.decided_by), ("reference", "1-subjectFailed"))
+        d = decide.decide(ok(successes=0, calls=None), ok(successes=0, calls=None, unrecovered=5), P)
+        self.assertEqual((d.winner, d.decided_by), ("reference", "1-subjectFailed"))
+
+    def test_a_recovered_error_is_not_a_failure(self):
+        d = decide.decide(ok(successes=3, unrecovered=0), ok(successes=3, tokens=5000), P)
+        self.assertEqual((d.winner, d.decided_by), ("subject", "3-tokens"))
+
+
 class SuccessStepTest(unittest.TestCase):
     def test_more_successes_wins_and_one_attempt_is_fragile(self):
         d = decide.decide(ok(successes=3), ok(successes=2, calls=1), P)
         self.assertEqual((d.winner, d.decided_by), ("subject", "1-success"))
         self.assertTrue(d.fragile)
-        d = decide.decide(ok(successes=1), ok(successes=3), P)
-        self.assertEqual(d.winner, "reference")
-        self.assertFalse(d.fragile)
-
-    def test_both_zero_of_n_is_a_tie_not_a_race_to_give_up(self):
-        d = decide.decide(ok(successes=0, calls=None), ok(successes=0, calls=None, unrecovered=5), P)
-        self.assertEqual((d.winner, d.decided_by), ("tie", "1-noSuccess"))
 
 
 class UnrecoveredStepTest(unittest.TestCase):
@@ -102,8 +115,9 @@ class TokensStepTest(unittest.TestCase):
             self.assertEqual((d.status, d.reason), ("notEvaluable", f"{who}: token usage missing"))
 
     def test_missing_tokens_do_not_matter_without_successes(self):
+        # A reference with no success needs no token usage: the subject wins on successes.
         none = Side(successes=0, attempts=3, median_calls=None, median_tokens=None)
-        self.assertEqual(decide.decide(none, none, P).decided_by, "1-noSuccess")
+        self.assertEqual(decide.decide(ok(), none, P).decided_by, "1-success")
 
 
 class CallsStepTest(unittest.TestCase):
@@ -133,7 +147,7 @@ class RuleOneRefusedTest(unittest.TestCase):
 
 class VersioningTest(unittest.TestCase):
     def test_parameters_come_from_the_declared_block(self):
-        params = decide.resolve_parameters({"ruleVersion": 2, "callsMargin": 0.5})
+        params = decide.resolve_parameters({"ruleVersion": 3, "callsMargin": 0.5})
         self.assertEqual(params["callsMargin"], 0.5)
         self.assertEqual(params["tokensMargin"], decide.DEFAULT_PARAMETERS["tokensMargin"])
         d = decide.decide(ok(calls=10), ok(calls=8), params)

@@ -165,7 +165,8 @@
         { "target": "lastName", "aliases": ["apellido de contacto"], "label": "Last Name", "example": "Fernández", "headerScope": "contact" },
         { "target": "phone", "aliases": ["telefono de contacto"], "label": "Phone", "example": "610 000 002", "headerScope": "contact" },
         { "target": "position", "aliases": ["cargo"], "label": "Position", "example": "Responsable de compras", "exampleKey": "importExampleContactPosition", "headerScope": "contact" },
-        { "target": "address", "aliases": ["direccion", "dirección"], "label": "Address", "example": "Calle Mayor 12", "exampleKey": "importExampleContactAddress", "labelKey": "importHeaderAddress", "headerScope": "address" },
+        { "target": "streetName", "aliases": ["calle", "nombre de la calle", "via", "vía", "street", "street name", "direccion", "dirección", "address"], "label": "Street", "example": "Calle Mayor", "exampleKey": "importExampleContactStreet", "labelKey": "importHeaderStreet", "headerScope": "address" },
+        { "target": "buildingNumber", "aliases": ["numero", "número", "num", "nº", "numero de calle", "número de calle", "number", "building number", "street number"], "label": "Number", "example": "12", "labelKey": "importHeaderBuildingNumber", "headerScope": "address" },
         { "target": "city", "aliases": ["ciudad"], "label": "City", "example": "Sevilla", "labelKey": "importHeaderCity", "headerScope": "address" },
         { "target": "postal", "aliases": ["codigo postal", "código postal", "cp"], "label": "Postal Code", "example": "41001", "labelKey": "importHeaderPostalCode", "headerScope": "address" },
         { "target": "country", "aliases": ["pais", "país"], "label": "Country", "matchEntity": "Country", "example": "España", "exampleKey": "importExampleContactCountry", "headerScope": "address", "labelKey": "importHeaderCountry" },
@@ -523,8 +524,7 @@
           "section": "principal",
           "displayLogic": "record.customer"
         }
-      },
-      "javaQualifier": "businessPartnerHandler"
+      }
     },
     "locationAddress": {
       "publicApi": {
@@ -594,8 +594,7 @@
         "taxLocation": {
           "publicApi": { "exposed": true, "name": "taxLocation" }
         }
-      },
-      "javaQualifier": "contactsLocationAddressHandler"
+      }
     },
     "contact": {
       "fields": {
