@@ -11,22 +11,36 @@ the ORDER of the steps, what a step compares, or how a margin is computed is a
 `RULE_VERSION` bump; changing a threshold is a parameter change, visible in the
 recorded parameters and their sha.
 
-Steps, subject vs reference:
+Steps, subject vs reference (rule 3, 2026-11-05; rule 2 was plan 2026-10-22 §3.4):
 
   0. Capability (D49): exactly one side `notPossible` -> the other wins.
      Both `notPossible` -> excluded (invalid task). A stale declaration
      (`invalidDeclaration`) or a side short of N measured, verified attempts
      -> not evaluable.
-  1. More successful attempts wins. Both 0/N -> tie: steps 2-4 would otherwise
-     reward whoever gives up faster.
-  2. Median calls over SUCCESSFUL attempts; the lower wins if the relative gap
-     |a-b| / max(a,b) >= callsMargin.
+  1. The subject must always succeed (rule 3, Valentin 2026-11-05): an attempt
+     of the SUBJECT without success loses the task to the reference, whatever
+     the reference did — even 0/N. An error the agent recovered from is not a
+     failure. Decided as `1-subjectFailed`.
+  2. More successful attempts wins. Both 0/N -> tie: later steps would
+     otherwise reward whoever gives up faster. After step 1 the subject has
+     N/N, so only a reference with fewer successes is decided here.
   3. Fewer unrecovered errors (summed over the measured attempts) wins.
-  4. Median total loop tokens over successful attempts (catalogue included);
-     the lower wins if the relative gap >= tokensMargin. When either side lacks
-     token usage on any successful attempt, the same comparison runs on summed
-     result bytes and `decidedBy` says `4-bytes`.
-  5. Otherwise a tie (it still counts in the KR denominator).
+  4. Median total loop tokens over successful attempts (input + output of the
+     whole conversation, so the tool catalogue sent every turn is included);
+     the lower wins if the relative gap |a-b| / max(a,b) >= tokensMargin.
+     Real token usage is required: when either side lacks it on any
+     successful attempt the task is not evaluable. There is no byte fallback,
+     because result bytes leave the catalogue out and would favour the
+     heavier catalogue.
+  5. Median calls over SUCCESSFUL attempts; the lower wins if the relative
+     gap >= callsMargin.
+  6. Otherwise a tie (it still counts in the KR denominator).
+
+The `decidedBy` labels keep the names of rule 2 (`1-success`, `2-unrecovered`,
+`3-tokens`, `4-calls`, `5-tie`) so summaries stay comparable; the new step is
+`1-subjectFailed`. Rule 1 (calls before errors before tokens, with a byte
+fallback) is retired: a suite declaring `ruleVersion: 1` is refused, and so is
+`ruleVersion: 2` now (rule 2 never lost a task to a failed subject attempt).
 """
 
 from __future__ import annotations
@@ -36,7 +50,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
-RULE_VERSION = 1
+RULE_VERSION = 3
 
 DEFAULT_PARAMETERS: dict[str, float] = {
     # Plan §5.6 / §9 decision 8.
@@ -160,6 +174,18 @@ def decide(subject: Side, reference: Side, params: dict[str, Any] | None = None)
         if side.not_evaluable:
             return Decision("notEvaluable", reason=f"{name}: {side.not_evaluable}")
 
+    # --- step 1 (rule 3): the subject must always succeed --------------------
+    if subject.successes < subject.attempts:
+        return Decision("decided", REFERENCE, "1-subjectFailed",
+                        margin={"step": 1, "subject": subject.successes, "attempts": subject.attempts,
+                                "reference": reference.successes})
+    # Tokens are required (plan §3.4): a side with successes but no real usage
+    # cannot be compared on cost, so the task is not evaluable rather than
+    # decided on something that leaves the catalogue out.
+    for name, side in (("subject", subject), ("reference", reference)):
+        if side.successes > 0 and side.median_tokens is None:
+            return Decision("notEvaluable", reason=f"{name}: token usage missing")
+
     fragile_reasons: list[str] = []
 
     # --- step 1: successes --------------------------------------------------
@@ -173,51 +199,43 @@ def decide(subject: Side, reference: Side, params: dict[str, Any] | None = None)
     if subject.successes == 0:
         return _done(TIE, "1-noSuccess", {"step": 1, "subject": 0, "reference": 0}, fragile_reasons)
 
-    # --- step 2: median calls over successful attempts ----------------------
-    a, b = subject.median_calls, reference.median_calls
-    gap = relative_gap(a, b)
-    calls_margin = params["callsMargin"]
-    margin2 = {"step": 2, "subject": a, "reference": b, "gap": round(gap, 6),
-               "threshold": calls_margin, "distance": round(gap - calls_margin, 6)}
-    if gap + _EPS >= calls_margin:
-        if gap - calls_margin < band - _EPS:
-            fragile_reasons.append("step 2 gap within the fragile band of its threshold")
-        return _done(_lower_wins(a, b), "2-calls", margin2, fragile_reasons)
-    if calls_margin - gap <= band + _EPS and gap > 0:
-        fragile_reasons.append("step 2 gap just under its threshold")
-
-    # --- step 3: unrecovered errors -----------------------------------------
+    # --- step 2: unrecovered errors -----------------------------------------
     if subject.unrecovered != reference.unrecovered:
         if abs(subject.unrecovered - reference.unrecovered) == 1:
-            fragile_reasons.append("step 3 decided by a single unrecovered error")
-        return _done(_lower_wins(subject.unrecovered, reference.unrecovered), "3-unrecovered",
-                     {"step": 3, "subject": subject.unrecovered, "reference": reference.unrecovered,
+            fragile_reasons.append("step 2 decided by a single unrecovered error")
+        return _done(_lower_wins(subject.unrecovered, reference.unrecovered), "2-unrecovered",
+                     {"step": 2, "subject": subject.unrecovered, "reference": reference.unrecovered,
                       "difference": abs(subject.unrecovered - reference.unrecovered)}, fragile_reasons)
 
-    # --- step 4: tokens, or bytes when tokens are missing --------------------
-    if subject.median_tokens is not None and reference.median_tokens is not None:
-        a, b, label = subject.median_tokens, reference.median_tokens, "4-tokens"
-    else:
-        # Past step 1 both sides have >= 1 success, and a successful attempt
-        # always has a byte sum (0 when it made no call), so a median is always
-        # there. Reaching None anyway means the aggregate is broken: say so
-        # instead of comparing 0 with 0 and calling it a measured tie.
-        if subject.median_bytes is None or reference.median_bytes is None:
-            raise ValueError("step 4 reached without a byte median on a side with successes")
-        a, b, label = subject.median_bytes, reference.median_bytes, "4-bytes"
-    gap = relative_gap(a, b)
-    tokens_margin = params["tokensMargin"]
-    margin4 = {"step": 4, "metric": label[2:], "subject": a, "reference": b, "gap": round(gap, 6),
-               "threshold": tokens_margin, "distance": round(gap - tokens_margin, 6)}
-    if gap + _EPS >= tokens_margin:
-        if gap - tokens_margin < band - _EPS:
-            fragile_reasons.append("step 4 gap within the fragile band of its threshold")
-        return _done(_lower_wins(a, b), label, margin4, fragile_reasons)
-    if tokens_margin - gap <= band + _EPS and gap > 0:
-        fragile_reasons.append("step 4 gap just under its threshold")
+    # --- step 3: total loop tokens ------------------------------------------
+    margin3, winner = _margin_step(3, "tokens", subject.median_tokens, reference.median_tokens,
+                                   params["tokensMargin"], band, fragile_reasons)
+    if winner:
+        return _done(winner, "3-tokens", margin3, fragile_reasons)
+
+    # --- step 4: median calls over successful attempts ----------------------
+    margin4, winner = _margin_step(4, "calls", subject.median_calls, reference.median_calls,
+                                   params["callsMargin"], band, fragile_reasons)
+    if winner:
+        return _done(winner, "4-calls", margin4, fragile_reasons)
 
     # --- step 5: tie ---------------------------------------------------------
-    return _done(TIE, "5-tie", {"step": 5, "calls": margin2, "cost": margin4}, fragile_reasons)
+    return _done(TIE, "5-tie", {"step": 5, "tokens": margin3, "calls": margin4}, fragile_reasons)
+
+
+def _margin_step(step: int, metric: str, a: float, b: float, threshold: float, band: float,
+                 fragile_reasons: list[str]) -> tuple[dict[str, Any], str | None]:
+    """Compare two medians on a relative margin; returns (margin record, winner or None)."""
+    gap = relative_gap(a, b)
+    margin = {"step": step, "metric": metric, "subject": a, "reference": b, "gap": round(gap, 6),
+              "threshold": threshold, "distance": round(gap - threshold, 6)}
+    if gap + _EPS >= threshold:
+        if gap - threshold < band - _EPS:
+            fragile_reasons.append(f"step {step} gap within the fragile band of its threshold")
+        return margin, _lower_wins(a, b)
+    if threshold - gap <= band + _EPS and gap > 0:
+        fragile_reasons.append(f"step {step} gap just under its threshold")
+    return margin, None
 
 
 def _done(winner: str, decided_by: str, margin: dict[str, Any], fragile_reasons: list[str]) -> Decision:

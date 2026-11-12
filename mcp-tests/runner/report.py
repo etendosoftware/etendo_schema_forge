@@ -46,9 +46,50 @@ from . import decide as rule
 #: v5 (plan §9 q14): freshness carries `unverifiable` — the entities a target
 #: could not check because its MCP does not offer their tool. A `fresh` target
 #: may have some; the official headline names how many, the table lists them.
-REPORT_VERSION = 5
-SUMMARY_SCHEMA_VERSION = 5
+#: v6 (plan 2026-10-22 §3.3, rule 2): every decided task carries `result`
+#: (subjectOnly | subjectWin | referenceWin | referenceOnly | tie) and the KR
+#: block counts them in `results`; the capability / measurement split is gone.
+#: v7 (Valentin, 2026-11-04): the headline is subject Win / tasks both platforms
+#: can do (`bothPossible` = Win + Win + tie). Only-results leave the number and
+#: are listed by name in `subjectOnlyTasks` / `referenceOnlyTasks` (the notes).
+REPORT_VERSION = 7
+SUMMARY_SCHEMA_VERSION = 7
 STABILITY_TARGET = 0.90
+
+#: The KR2.1 target (plan 2026-10-22 §3.3).
+KR_TARGET = 0.80
+
+#: The five results a decided task can have, in report order (plan §3.3).
+RESULTS = ("subjectOnly", "subjectWin", "referenceWin", "referenceOnly", "tie")
+
+#: The results that count in the KR2.1 number: both platforms can do the task.
+HEAD_TO_HEAD = ("subjectWin", "referenceWin", "tie")
+
+#: How a platform is named in the KR line ("Etendo Only", "Holded Win").
+PLATFORM_LABELS = {"etendo-go": "Etendo", "holded": "Holded"}
+
+
+def task_result(decision: "rule.Decision") -> str | None:
+    """Map a decided task to one of RESULTS; None when it is not decided."""
+    if decision.status != "decided":
+        return None
+    if decision.winner == rule.TIE:
+        return "tie"
+    side = "subject" if decision.winner == rule.SUBJECT else "reference"
+    return side + ("Only" if decision.decided_by == "0-capability" else "Win")
+
+
+def platform_label(meta: dict[str, Any]) -> str:
+    """Display name of a compared target: its platform's label, else its name."""
+    return PLATFORM_LABELS.get(meta.get("platform") or "", meta.get("name") or "?")
+
+
+def _result_name(key: str, kr: dict[str, Any]) -> str:
+    if key == "tie":
+        return "empate"
+    side = kr["subjectLabel"] if key.startswith("subject") else kr["referenceLabel"]
+    return f"{side} {'Only' if key.endswith('Only') else 'Win'}"
+
 
 # A characters-per-token estimate for the tool catalogue's priming share
 # (plan §5.7, the ACE convention: bytes / 4). Shown as an estimate, never
@@ -515,24 +556,24 @@ def build_summary(compare_dir: Path) -> dict[str, Any]:
         r_entry, r_side = aggregate_side(reference, task, repeat, reference_meta.get("platform"))
         decision = rule.decide(s_side, r_side, params)
         decisions[task] = decision
-        task_rows.append({"task": task, **decision.to_json(), "subject": s_entry, "reference": r_entry})
+        task_rows.append({"task": task, **decision.to_json(), "result": task_result(decision),
+                          "subject": s_entry, "reference": r_entry})
 
     decided = [r for r in task_rows if r["status"] == "decided"]
-    s_wins = [r for r in decided if r["winner"] == rule.SUBJECT]
-    r_wins = [r for r in decided if r["winner"] == rule.REFERENCE]
-    by_cap = lambda rows: sum(1 for r in rows if r["decidedBy"] == "0-capability")  # noqa: E731
+    counts = {key: sum(1 for r in decided if r["result"] == key) for key in RESULTS}
+    # Valentin, 2026-11-04: the comparison is only head-to-head. A task one platform cannot do
+    # says nothing about which MCP is better, so it leaves the number and becomes a note.
+    both_possible = counts["subjectWin"] + counts["referenceWin"] + counts["tie"]
     kr = {
         "subject": subject.name, "reference": reference.name,
-        "tasks": len(task_rows), "evaluated": len(decided),
-        "subjectWins": {"total": len(s_wins), "byCapability": by_cap(s_wins),
-                        "byMeasurement": len(s_wins) - by_cap(s_wins)},
-        "referenceWins": {"total": len(r_wins), "byCapability": by_cap(r_wins),
-                          "byMeasurement": len(r_wins) - by_cap(r_wins)},
-        "ties": sum(1 for r in decided if r["winner"] == rule.TIE),
-        "winRate": round(len(s_wins) / len(decided), 4) if decided else None,
-        "winRateByCapability": round(by_cap(s_wins) / len(decided), 4) if decided else None,
-        "winRateByMeasurement": round((len(s_wins) - by_cap(s_wins)) / len(decided), 4) if decided else None,
+        "subjectLabel": platform_label(subject_meta), "referenceLabel": platform_label(reference_meta),
+        "tasks": len(task_rows), "evaluated": len(decided), "bothPossible": both_possible,
+        "results": counts,
+        "winRate": round(counts["subjectWin"] / both_possible, 4) if both_possible else None,
+        "target": KR_TARGET,
         "fragile": sum(1 for r in decided if r["fragile"]),
+        "subjectOnlyTasks": [r["task"] for r in decided if r["result"] == "subjectOnly"],
+        "referenceOnlyTasks": [r["task"] for r in decided if r["result"] == "referenceOnly"],
     }
 
     stumbles = {}
@@ -664,13 +705,15 @@ def render_markdown(summary: dict[str, Any]) -> str:
     lines = [
         f"# MCP comparison {summary['compareId']} — {label}",
         "",
-        f"**KR2.1 ({kr['subject']} vs {kr['reference']}): {_pct(kr['winRate'])}** of "
-        f"{kr['evaluated']} evaluated tasks ({kr['tasks']} in the suite) — "
-        f"{kr['subjectWins']['byCapability']} won by capability ({_pct(kr['winRateByCapability'])}), "
-        f"{kr['subjectWins']['byMeasurement']} by measurement ({_pct(kr['winRateByMeasurement'])}). "
-        f"{kr['reference']} won {kr['referenceWins']['total']} "
-        f"({kr['referenceWins']['byCapability']} by capability), {kr['ties']} ties, "
-        f"{kr['fragile']} fragile.",
+        f"**KR2.1: {_pct(kr['winRate'])} sobre {kr['bothPossible']} pruebas posibles en ambas** "
+        f"(meta {_pct(kr['target'])}) — "
+        + ", ".join(f"{kr['results'][key]} {_result_name(key, kr)}" for key in HEAD_TO_HEAD)
+        + f". {kr['tasks']} en la suite, {kr['fragile']} frágiles.",
+        "",
+        f"Notas — {_result_name('subjectOnly', kr)} ({len(kr['subjectOnlyTasks'])}): "
+        + (", ".join(f"`{t}`" for t in kr["subjectOnlyTasks"]) or "ninguna")
+        + f". {_result_name('referenceOnly', kr)} ({len(kr['referenceOnlyTasks'])}): "
+        + (", ".join(f"`{t}`" for t in kr["referenceOnlyTasks"]) or "ninguna") + ".",
         "",
         f"Rule v{summary['rule']['version']} (parameters {summary['rule']['parametersSha']}: "
         + ", ".join(f"{k}={v:g}" for k, v in summary["rule"]["parameters"].items())
@@ -700,8 +743,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
               "|---" * 13 + "|"]
     for row in summary["tasks"]:
         if row["status"] == "decided":
-            winner = {"subject": row["subject"]["target"], "reference": row["reference"]["target"]}.get(
-                row["winner"], "tie") + (" (fragile)" if row["fragile"] else "")
+            winner = _result_name(row["result"], summary["kr"]) + (" (fragile)" if row["fragile"] else "")
             by = row["decidedBy"]
         else:
             winner, by = row["status"], row["reason"]
@@ -941,7 +983,8 @@ def main(argv: list[str] | None = None) -> int:
             summary = write_summary(compare_dir)
             kr = summary["kr"]
             print(f"{'official' if summary['official'] else 'UNOFFICIAL'} · KR {_pct(kr['winRate'])} "
-                  f"({kr['subjectWins']['total']}/{kr['evaluated']}) -> {compare_dir / 'summary.md'}")
+                  f"({kr['results']['subjectWin']}/{kr['bothPossible']} possible on both) "
+                  f"-> {compare_dir / 'summary.md'}")
             return 0
         result = stability(build_summary(comparison(args.a)), build_summary(comparison(args.b)))
     except ValueError as exc:

@@ -15,7 +15,7 @@ Per field, `entities.<entity>.fields.<field>.publicApi`:
 ```json
 "searchKey": {
   "visibility": "editable",
-  "publicApi": { "exposed": true, "name": "searchKey", "type": "passthrough", "handlerId": null }
+  "publicApi": { "exposed": true, "name": "searchKey" }
 }
 ```
 
@@ -44,16 +44,33 @@ Entity: only `GET`/`LIST`, every field `out`:
 "costing": { "publicApi": { "readOnly": true }, "fields": { } }
 ```
 
+## 2b. Mark a writable field as required
+
+Declare it on the field; the OpenAPI POST and PUT bodies then list it under `required` (a PATCH requires nothing):
+
+```json
+"searchKey": { "visibility": "editable", "publicApi": { "exposed": true, "required": true } }
+```
+
+Declare only fields the API really refuses to create without. The contract's own `required`
+is not used: it also covers fields NEO fills by itself (an order's address, price list or
+payment terms). A read-only field is never marked required.
+
 ## 3. Add input-only fields
 
 Values the API accepts that are not contract fields. `readable: true` also returns them on GET
 (`inout`); otherwise they are `in`. Ignored on a resource without write endpoints.
 
+`writable: false` declares a read-only value instead (`out`, never `required`): one the entity's
+handler adds to every read, published even on a resource without write endpoints (`readable` and `required` are ignored). The handler
+must really return it under `internalPath`, or the attribute never appears.
+
 ```json
 "locationAddress": {
   "publicApi": {
     "inputFields": [
-      { "name": "city_name", "internalPath": "cityName", "dataType": "string", "required": true, "readable": true }
+      { "name": "city_name", "internalPath": "cityName", "dataType": "string", "required": true, "readable": true },
+      { "name": "country_code", "internalPath": "countryCode", "dataType": "string", "writable": false }
     ]
   }
 }

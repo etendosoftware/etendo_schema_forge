@@ -325,10 +325,10 @@ describe('renderBooleanCell', () => {
       expect(screen.queryByText('—')).not.toBeInTheDocument();
     });
 
-    it("renders 'p' (period closed) destructive, like every other failed posting", () => {
+    it("renders 'p' (period closed) in the orange caution tone (ETP-5591)", () => {
       renderCell(renderBooleanCell({ ...baseContext, col: postedCol, rawValue: 'p' }));
 
-      expect(screen.getByTestId('status-tag')).toHaveAttribute('data-tone', 'destructive');
+      expect(screen.getByTestId('status-tag')).toHaveAttribute('data-tone', 'caution');
     });
 
     it("renders 'Y' as a success StatusTag with the window's badgeLabels wording", () => {

@@ -25350,7 +25350,7 @@
       ]
     },
     "c0351cd0caf4edf2a56beaafd358fe05567a911a68c5ab90cd866d785e6a9dfc": {
-      "checksum": "5a5258938d4e355e58fbb75e61086869368dd114825486f9ad17e70485d43caa",
+      "checksum": "2e73e9c8c10b17d069d40556ef27e747e32a077cd001a8fb2034ada94715e22d",
       "params": [
         "140"
       ],
@@ -26898,6 +26898,18 @@
           "position": "34"
         },
         {
+          "ad_column_id": "38B28A05149E440ABE1A37DACDD7EC39",
+          "ad_table_id": "329",
+          "columnname": "EM_Etgo_Warehouse_ID",
+          "position": "35"
+        },
+        {
+          "ad_column_id": "393F4245BB9349FEB5C1967C684FC4CC",
+          "ad_table_id": "329",
+          "columnname": "EM_Etgo_Doc_Kind",
+          "position": "36"
+        },
+        {
           "ad_column_id": "87EA9943323E40E38DBCF9863880E8E1",
           "ad_table_id": "329",
           "columnname": "TotalCost",
@@ -28294,6 +28306,194 @@
           "ad_table_id": "F27592C9833B4F58919199CCB7742EDC",
           "columnname": "M_Product_Category_ID",
           "position": "10"
+        }
+      ]
+    },
+    "d01d6bbdb647d8f235cf05767cb7e3b8fedecd48ddc2f90a6c39a4c16b91c599": {
+      "checksum": "116af576db677dc1e0d9ab9e15fcc4140fcaaaabd6c5b1670165766fc63cd257",
+      "params": [
+        "81AC659E93504927B459E0CAE80CE923"
+      ],
+      "rows": [
+        {
+          "ad_column_id": "75B034D3A9134A2DAD7A71A10F558406",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Etgo_Incoming_Document_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "01B0E8D3634347D6A531E4C582735D84",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "A61E6CD4AEE74E219551614790E21DEF",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "D35E64F4125C46CC951D6D2991967C4D",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Isactive",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "F8A2948F19E745EEB8E501DD63EB0553",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Created",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "CC176FD4D3BF487E93D6E085014B98CD",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Createdby",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "7F7D6DC9876E4E26B18C807989DEA0E4",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "A08EB958B1F9490DBC4E21AAD4269AD1",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Updatedby",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "50580A4BC94842FBABA57A23A81091DE",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Adjusted",
+          "position": null
+        },
+        {
+          "ad_column_id": "FE2A356287674882B7C9704143C434B4",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "C_BPartner_ID",
+          "position": null
+        },
+        {
+          "ad_column_id": "6BE813C5FFA341B9AD6ECC930D3CC8C9",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "C_Invoice_ID",
+          "position": null
+        },
+        {
+          "ad_column_id": "45AFC17BC9604AFB8E9C9052CA5167DC",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Current_Data",
+          "position": null
+        },
+        {
+          "ad_column_id": "B2D887FA2DE941FC98C90C341AF14220",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "DateInvoiced",
+          "position": null
+        },
+        {
+          "ad_column_id": "56FA793C7DEB497C847F5771E34FE76E",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Discarded_At",
+          "position": null
+        },
+        {
+          "ad_column_id": "B825F79A6A274182B7D3D6E51A722A96",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Duplicate_Invoice_ID",
+          "position": null
+        },
+        {
+          "ad_column_id": "EC9F01B708DE4A31814B7FCA7E5832BD",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Error_Code",
+          "position": null
+        },
+        {
+          "ad_column_id": "FEFF0B31557A4774AA97506E9813B57A",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Extracted_Data",
+          "position": null
+        },
+        {
+          "ad_column_id": "EE622F8DD55B415791AEFA6F9F561437",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Extracted_Name",
+          "position": null
+        },
+        {
+          "ad_column_id": "BCCE03DDBA204D1BB05DF3CCA96C5DA2",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Extracted_TaxID",
+          "position": null
+        },
+        {
+          "ad_column_id": "A90F19F4E6FD4B2781BAEEC5744C784A",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "File_Name",
+          "position": null
+        },
+        {
+          "ad_column_id": "BFE5FD2768634A1FA9DF5A13A27F3F5D",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "GrandTotal",
+          "position": null
+        },
+        {
+          "ad_column_id": "ED0EA698BFE3459A9B5CE7A711481E40",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "POReference",
+          "position": null
+        },
+        {
+          "ad_column_id": "05473CA1DB844B349FE874A90CE7B883",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Processed_At",
+          "position": null
+        },
+        {
+          "ad_column_id": "3C3E7A1DD19C48B0947FB271C3922633",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Processing_Attempts",
+          "position": null
+        },
+        {
+          "ad_column_id": "72BD6A48E5494E6184C260B9BD61C3C9",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Processing_Lease",
+          "position": null
+        },
+        {
+          "ad_column_id": "9F3F7C09812F4A1DBA42371EFD9907A9",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Reviewed",
+          "position": null
+        },
+        {
+          "ad_column_id": "EECE2EFC7F934B7C82C33C056305C725",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Sender",
+          "position": null
+        },
+        {
+          "ad_column_id": "69CBE6F6318647C893CC6147539F4665",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Source",
+          "position": null
+        },
+        {
+          "ad_column_id": "FF8F66218D9A46C8A19D7C9240436958",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Status",
+          "position": null
+        },
+        {
+          "ad_column_id": "83C5C8A10B914A7AB811404A1F142BA9",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Target_Type",
+          "position": null
         }
       ]
     },

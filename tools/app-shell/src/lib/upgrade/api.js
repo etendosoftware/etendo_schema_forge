@@ -30,6 +30,7 @@ export const UPGRADE_ERROR_CODES = {
   // retired by the first priced plan), so the copy tells the user to reload.
   planNotAvailable: 'upgradePlanNotAvailable',
   purchaseAlreadyExists: 'upgradePurchaseAlreadyExists',
+  purchaseSelectionChanged: 'upgradePurchaseSelectionChanged',
   sessionExpired: 'upgradeSessionExpired',
   // ETP-5443 REVIEW N3: a failed READ of the subscription, or a failed portal-session
   // creation, is neither a checkout nor a creation of anything — reusing
@@ -38,6 +39,10 @@ export const UPGRADE_ERROR_CODES = {
   // apart from "can't open the portal" apart from "checkout failed".
   subscriptionUnavailable: 'upgradeSubscriptionUnavailable',
   portalUnavailable: 'upgradePortalUnavailable',
+  // ETP-5051 O-1b: the portal found no subscription for the environment it was asked about
+  // (404 NO_SUBSCRIPTION) — a demo, or an environment with no purchase of its own. Not transient,
+  // so it is not `portalUnavailable`'s "please try again".
+  portalNoSubscription: 'upgradePortalNoSubscription',
   // ETP-5548: the account already has a productive environment with this company name. Refused
   // before the provider is contacted, because a paid checkout fixes its name.
   tenantNameInUse: 'upgradeTenantNameInUse',
@@ -144,6 +149,7 @@ export async function createBillingPurchase(baseUrl, input = {}) {
       // A catalog KEY, never a price: pricing is server-owned and the browser has no field that
       // could influence it. Without one the server only sells under its legacy price fallback.
       ...(input.planKey ? { planKey: input.planKey } : {}),
+      ...(input.replacePurchaseId ? { replacePurchaseId: input.replacePurchaseId } : {}),
       ...(input.demoClientId ? { demoClientId: input.demoClientId } : {}),
       ...(input.dataTransfer && Object.keys(input.dataTransfer).length > 0
         ? { dataTransfer: input.dataTransfer }
@@ -166,6 +172,12 @@ export async function createBillingPurchase(baseUrl, input = {}) {
 
 /** Maps a refused billing purchase to its upgrade error; a 409 for an existing one carries it. */
 function billingPurchaseError(response, data) {
+  if (response.status === 409 && data?.error?.code === 'PURCHASE_SELECTION_CHANGED') {
+    const error = buildError(UPGRADE_ERROR_CODES.purchaseSelectionChanged,
+      data.error.message, response.status);
+    error.purchase = data?.purchaseId ? data : null;
+    return error;
+  }
   if (response.status === 409 && data?.purchaseId) {
     const error = buildError(UPGRADE_ERROR_CODES.purchaseAlreadyExists,
       data.status || 'Purchase already exists', response.status);
@@ -242,9 +254,18 @@ export async function getBillingOverview(baseUrl) {
   return data || { purchases: [] };
 }
 
-/** Reads the authenticated account-level subscription projection. */
-export async function getSubscription(baseUrl) {
-  const response = await apiFetch('/sws/go/billing/subscription', { baseUrl, on401: 'ignore' });
+/**
+ * Reads the authenticated account-level subscription projection.
+ *
+ * ETP-6060 — with a `clientId` it is that company's own subscription (a "Mis empresas" row),
+ * whatever environment the session is in; the backend answers `hasSubscription: false` for a
+ * company the account did not buy. Without one, the session's environment's, else the newest.
+ */
+export async function getSubscription(baseUrl, clientId = null) {
+  const path = clientId
+    ? `/sws/go/billing/subscription?clientId=${encodeURIComponent(clientId)}`
+    : '/sws/go/billing/subscription';
+  const response = await apiFetch(path, { baseUrl, on401: 'ignore' });
   const data = await readJsonSafely(response);
   if (!response.ok) {
     throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
@@ -253,17 +274,35 @@ export async function getSubscription(baseUrl) {
   return data;
 }
 
-/** Creates an authenticated customer portal session for the account subscription. */
-export async function createPortalSession(baseUrl) {
+/** Backend code of the portal's "no subscription to manage" refusal (EtendoGoJwtServlet). */
+const NO_SUBSCRIPTION = 'NO_SUBSCRIPTION';
+
+function portalFailureCode(response, data) {
+  if (response.status === 401) return UPGRADE_ERROR_CODES.sessionExpired;
+  if (response.status === 404 && data?.error?.code === NO_SUBSCRIPTION) {
+    return UPGRADE_ERROR_CODES.portalNoSubscription;
+  }
+  return UPGRADE_ERROR_CODES.portalUnavailable;
+}
+
+/**
+ * Creates an authenticated customer portal session.
+ *
+ * ETP-5051 O-1b — with a `clientId` the portal is that environment's own (a "Mis empresas" row);
+ * the backend checks the account bought it and answers 404 NO_SUBSCRIPTION otherwise. Without one
+ * no body is sent and the backend picks the entered environment, or the account's newest purchase
+ * when none is entered (/account).
+ */
+export async function createPortalSession(baseUrl, clientId = null) {
   const response = await apiFetch('/sws/go/billing/subscription/portal', {
     method: 'POST',
     baseUrl,
     on401: 'ignore',
+    ...(clientId ? { body: JSON.stringify({ clientId }) } : {}),
   });
   const data = await readJsonSafely(response);
   if (!response.ok) {
-    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
-      : UPGRADE_ERROR_CODES.portalUnavailable, data?.error?.message, response.status);
+    throw buildError(portalFailureCode(response, data), data?.error?.message, response.status);
   }
   return data;
 }

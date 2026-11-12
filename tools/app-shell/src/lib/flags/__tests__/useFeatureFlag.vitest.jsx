@@ -1,6 +1,7 @@
 // @covers tools/app-shell/src/lib/flags/useFeatureFlag.js
 // @covers tools/app-shell/src/lib/flags/bootstrap.js
 // @covers tools/app-shell/src/lib/flags/flag-keys.js
+// @covers tools/app-shell/src/lib/flags/useAccountIdentity.js
 import { renderHook, act, waitFor } from '@testing-library/react';
 
 /**
@@ -16,6 +17,14 @@ import { renderHook, act, waitFor } from '@testing-library/react';
  * next test and the "no provider" cases silently pass for the wrong reason.
  */
 
+const authState = vi.hoisted(() => ({ current: {} }));
+const sessionFetch = vi.hoisted(() => vi.fn());
+vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => authState.current }));
+vi.mock('@/hooks/useNeoResource.js', () => ({ getApiBase: () => '' }));
+vi.mock('@etendosoftware/app-shell-core/auth/api', () => ({
+  apiFetch: sessionFetch,
+  authHeaders: token => token ? { Authorization: `Bearer ${token}` } : {},
+}));
 const trackMock = vi.fn();
 const identifyMock = vi.fn();
 const groupMock = vi.fn();
@@ -27,8 +36,9 @@ vi.mock('@/lib/observability.js', () => ({
   reset: vi.fn(),
 }));
 
-import { OpenFeature } from '@openfeature/web-sdk';
+import { OpenFeature, OpenFeatureEventEmitter, ProviderEvents } from '@openfeature/web-sdk';
 import { useFeatureFlag, useNumberFlag } from '../useFeatureFlag.js';
+import { useAccountIdentity } from '../useAccountIdentity.js';
 import {
   initFeatureFlags,
   setFeatureFlagContext,
@@ -43,6 +53,7 @@ import {
   PROOF_OF_CONCEPT_MENU,
   WEBMCP_AGENT_CHAT,
   IMPORT_BATCH_SIZE,
+  GRID_COLUMN_VIEWS,
   FLAG_DEFAULTS,
   defaultForFlag,
 } from '../flag-keys.js';
@@ -247,7 +258,7 @@ describe('refreshAccountIdentity — stale telemetry guard', () => {
     clearAccountIdentity(globalThis.localStorage);
     hook.after({ ...context, context: { targetingKey: 'account-2' } }, { value: true, variant: 'on' });
 
-    expect(trackMock).toHaveBeenCalledTimes(2);
+    expect(trackMock.mock.calls.filter(([name]) => name === 'feature_flag_evaluated')).toHaveLength(2);
   });
 });
 
@@ -317,21 +328,21 @@ describe('evaluation context', () => {
   it('omits keys with no value rather than sending empty strings', () => {
     expect(buildEvaluationContext({})).toEqual({});
     expect(buildEvaluationContext({ username: 'ada' })).toEqual({ targetingKey: 'ada' });
-    expect(buildEvaluationContext({ clientId: 'c1' })).toEqual({ account_id: 'c1' });
+    expect(buildEvaluationContext({ clientId: 'c1' })).toEqual({ account_id: 'c1', clientId: 'c1' });
   });
 
   // ETP-5751 — Datadog targeting rules compare `email` case-sensitively against lowercase values.
-  it('trims and lowercases the email attribute, leaving the targeting key untouched', () => {
+  it('uses the backend account email targeting key and normalizes the email attribute', () => {
     expect(buildEvaluationContext({ accountId: 'Acc-1', accountEmail: '  Ada.Lovelace@Example.COM ' }))
-      .toEqual({ targetingKey: 'Acc-1', accountId: 'Acc-1', email: 'ada.lovelace@example.com' });
+      .toEqual({ targetingKey: 'Ada.Lovelace@Example.COM', accountId: 'Acc-1', email: 'ada.lovelace@example.com', Email: 'Ada.Lovelace@Example.COM' });
     expect(buildEvaluationContext({ accountEmail: '   ' })).toEqual({});
   });
 
-  it('targets the normalized email after the account identity resolves', async () => {
+  it('targets the backend account email after the account identity resolves', async () => {
     setSessionIdentity({ username: 'ada', clientId: 'c1' });
     const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ accountId: 'Acc-1', accountEmail: 'Ada@Example.com' }) }));
     await refreshAccountIdentity({ fetchImpl, logger: silentLogger });
-    expect(OpenFeature.getContext()).toMatchObject({ targetingKey: 'Acc-1', email: 'ada@example.com' });
+    expect(OpenFeature.getContext()).toMatchObject({ targetingKey: 'Ada@Example.com', email: 'ada@example.com' });
   });
 
   it('re-targets after sign-in without throwing', async () => {
@@ -392,3 +403,394 @@ describe('numeric flags', () => {
   });
 });
 
+
+/** Remote-provider boundary: context changes request assignments; reads are local. */
+function contextRecordingProvider() {
+  return {
+    metadata: { name: 'context-recording' },
+    initialize: async () => {},
+    onContextChange: vi.fn(async () => {}),
+    resolveBooleanEvaluation: () => ({ value: true, reason: 'TARGETING_MATCH' }),
+  };
+}
+
+function deferredResult() {
+  let resolve;
+  const promise = new Promise(done => { resolve = done; });
+  return { promise, resolve };
+}
+
+describe('assignment requests follow identity changes', () => {
+  const identity = { username: 'admin', clientId: 'company-a', accountId: 'account-a', accountEmail: 'ana@example.com' };
+
+  it('does not request assignments again for an identical settled context', async () => {
+    const provider = contextRecordingProvider();
+    await OpenFeature.setProviderAndWait(provider);
+    await setFeatureFlagContext(identity);
+    await setFeatureFlagContext({ ...identity });
+    expect(provider.onContextChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('coalesces identical context updates while the assignment request is pending', async () => {
+    const provider = contextRecordingProvider();
+    const request = deferredResult();
+    provider.onContextChange.mockImplementation(() => request.promise);
+    await OpenFeature.setProviderAndWait(provider);
+    const first = setFeatureFlagContext(identity);
+    const second = setFeatureFlagContext({ ...identity });
+    request.resolve();
+    await Promise.all([first, second]);
+    expect(provider.onContextChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends the company under the clientId attribute used by backend targeting rules', () => {
+    expect(buildEvaluationContext(identity)).toMatchObject({ clientId: 'company-a' });
+  });
+
+  it('makes one assignment request when the same account changes company', async () => {
+    const provider = contextRecordingProvider();
+    await OpenFeature.setProviderAndWait(provider);
+    await setFeatureFlagContext(identity);
+    provider.onContextChange.mockClear();
+    await setFeatureFlagContext({ ...identity, clientId: 'company-b' });
+    expect(provider.onContextChange).toHaveBeenCalledTimes(1);
+    expect(OpenFeature.getContext()).toMatchObject({ accountId: 'account-a', account_id: 'company-b' });
+  });
+
+  it('does not turn repeated local flag reads into assignment requests', async () => {
+    const provider = contextRecordingProvider();
+    await OpenFeature.setProviderAndWait(provider);
+    await setFeatureFlagContext(identity);
+    provider.onContextChange.mockClear();
+    const { result, rerender } = renderHook(() => useFeatureFlag(PROOF_OF_CONCEPT_MENU));
+    rerender();
+    rerender();
+    expect(result.current).toBe(true);
+    expect(provider.onContextChange).not.toHaveBeenCalled();
+  });
+});
+
+describe('account lookup across company changes', () => {
+  it('ignores a late lookup response from the previous company', async () => {
+    const previous = deferredResult();
+    const started = deferredResult();
+    setSessionIdentity({ username: 'admin', clientId: 'company-a' });
+    const oldLookup = refreshAccountIdentity({ fetchImpl: () => { started.resolve(); return previous.promise; }, logger: silentLogger });
+    await started.promise;
+    setSessionIdentity({ username: 'admin', clientId: 'company-b' });
+    await refreshAccountIdentity({
+      fetchImpl: async () => ({ ok: true, json: async () => ({ accountId: 'account-b', accountEmail: 'b@example.com' }) }),
+      logger: silentLogger,
+    });
+    previous.resolve({ ok: true, json: async () => ({ accountId: 'account-a', accountEmail: 'a@example.com' }) });
+    await oldLookup;
+    expect(OpenFeature.getContext()).toMatchObject({ accountId: 'account-b', account_id: 'company-b', email: 'b@example.com' });
+    expect(localStorage.getItem('sf_account_id')).toBe('account-b');
+    expect(identifyMock).not.toHaveBeenCalledWith('account-a');
+  });
+
+  it('keeps the previous account and its flags cleared when lookup of the new account fails', async () => {
+    let acceptedContext = {};
+    const provider = contextRecordingProvider();
+    provider.onContextChange.mockImplementation(async (_previous, next) => { acceptedContext = next; });
+    provider.resolveBooleanEvaluation = () => ({ value: acceptedContext.accountId === 'account-a', reason: 'TARGETING_MATCH' });
+    await OpenFeature.setProviderAndWait(provider);
+    localStorage.setItem('sf_account_id', 'account-a');
+    localStorage.setItem('sf_account_email', 'a@example.com');
+    await setFeatureFlagContext({ username: 'admin', clientId: 'company-a', accountId: 'account-a', accountEmail: 'a@example.com' });
+    expect(OpenFeature.getClient().getBooleanValue(PROOF_OF_CONCEPT_MENU, false)).toBe(true);
+    await clearAccountIdentity();
+    setSessionIdentity({ username: 'admin', clientId: 'company-b' });
+    await refreshAccountIdentity({ fetchImpl: async () => ({ ok: false }), logger: silentLogger });
+    expect(OpenFeature.getContext()).toEqual({});
+    expect(OpenFeature.getClient().getBooleanValue(PROOF_OF_CONCEPT_MENU, false)).toBe(false);
+    expect(localStorage.getItem('sf_account_id')).toBeNull();
+    expect(identifyMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('provider availability changes', () => {
+  it('refreshes a mounted flag to its safe default when the provider reports an evaluation failure', async () => {
+    const provider = contextRecordingProvider();
+    provider.events = new OpenFeatureEventEmitter();
+    await OpenFeature.setProviderAndWait(provider);
+    const { result } = renderHook(() => useFeatureFlag(PROOF_OF_CONCEPT_MENU));
+    await act(async () => { await Promise.resolve(); });
+    expect(result.current).toBe(true);
+    await act(async () => {
+      provider.resolveBooleanEvaluation = () => { throw new Error('assignments unavailable'); };
+      provider.events.emit(ProviderEvents.Error, { message: 'assignments unavailable' });
+      await Promise.resolve();
+    });
+    expect(OpenFeature.getClient().getBooleanValue(PROOF_OF_CONCEPT_MENU, false)).toBe(false);
+    expect(result.current).toBe(false);
+  });
+
+  it('keeps the last accepted value when the provider reports stale cached assignments', async () => {
+    const provider = contextRecordingProvider();
+    provider.events = new OpenFeatureEventEmitter();
+    await OpenFeature.setProviderAndWait(provider);
+    const { result } = renderHook(() => useFeatureFlag(PROOF_OF_CONCEPT_MENU));
+    await act(async () => {
+      provider.events.emit(ProviderEvents.Stale);
+      await Promise.resolve();
+    });
+    expect(result.current).toBe(true);
+    expect(OpenFeature.getClient().getBooleanValue(PROOF_OF_CONCEPT_MENU, false)).toBe(true);
+  });
+});
+
+
+describe('authenticated account targeting integration', () => {
+  const account = { id: 'account-a', email: 'a@example.test' };
+
+  beforeEach(() => {
+    sessionFetch.mockReset();
+    authState.current = { isAuthenticated: true, token: null, username: 'admin', clientId: 'company-a', account };
+  });
+
+  it('updates company assignments once without resetting the same account', async () => {
+    const provider = contextRecordingProvider();
+    await OpenFeature.setProviderAndWait(provider);
+    const hook = renderHook(() => useAccountIdentity());
+    await waitFor(() => expect(OpenFeature.getContext()).toMatchObject({ accountId: 'account-a', clientId: 'company-a' }));
+    provider.onContextChange.mockClear();
+    identifyMock.mockClear();
+    authState.current = { ...authState.current, clientId: 'company-b' };
+    hook.rerender();
+    await waitFor(() => expect(OpenFeature.getContext()).toMatchObject({ accountId: 'account-a', clientId: 'company-b' }));
+    expect(provider.onContextChange).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem('sf_account_id')).toBe('account-a');
+    expect(groupMock).toHaveBeenLastCalledWith('account_id', 'company-b');
+    expect(sessionFetch).not.toHaveBeenCalled();
+  });
+
+  it('replaces account and email when ERP user and company stay the same', async () => {
+    const provider = contextRecordingProvider();
+    await OpenFeature.setProviderAndWait(provider);
+    const hook = renderHook(() => useAccountIdentity());
+    await waitFor(() => expect(OpenFeature.getContext()).toMatchObject({ accountId: 'account-a' }));
+    authState.current = { ...authState.current, account: { id: 'account-b', email: 'b@example.test' } };
+    hook.rerender();
+    await waitFor(() => expect(OpenFeature.getContext()).toMatchObject({ accountId: 'account-b', targetingKey: 'b@example.test' }));
+    expect(localStorage.getItem('sf_account_email')).toBe('b@example.test');
+    expect(identifyMock).toHaveBeenLastCalledWith('account-b');
+  });
+
+  it('discards a delayed legacy lookup after leaving and returning to the same company', async () => {
+    const old = deferredResult();
+    authState.current = { ...authState.current, account: undefined };
+    sessionFetch.mockReturnValueOnce(old.promise).mockResolvedValue({ ok: true, json: async () => ({ accountId: 'fresh-account', accountEmail: 'fresh@example.test' }) });
+    const hook = renderHook(() => useAccountIdentity());
+    await waitFor(() => expect(sessionFetch).toHaveBeenCalledTimes(1));
+    authState.current = { ...authState.current, clientId: 'company-b' };
+    hook.rerender();
+    await waitFor(() => expect(sessionFetch).toHaveBeenCalledTimes(2));
+    authState.current = { ...authState.current, clientId: 'company-a' };
+    hook.rerender();
+    await waitFor(() => expect(sessionFetch).toHaveBeenCalledTimes(3));
+    await act(async () => {
+      old.resolve({ ok: true, json: async () => ({ accountId: 'old-account', accountEmail: 'old@example.test' }) });
+      await old.promise;
+    });
+    expect(OpenFeature.getContext()).toMatchObject({ accountId: 'fresh-account', clientId: 'company-a' });
+    expect(localStorage.getItem('sf_account_id')).toBe('fresh-account');
+    expect(identifyMock).not.toHaveBeenCalledWith('old-account');
+  });
+
+  it('clears a different cached account before accepting the restored account', async () => {
+    const provider = contextRecordingProvider();
+    await OpenFeature.setProviderAndWait(provider);
+    localStorage.setItem('sf_account_id', 'previous-account');
+    localStorage.setItem('sf_account_email', 'previous@example.test');
+    renderHook(() => useAccountIdentity());
+    await waitFor(() => expect(OpenFeature.getContext()).toMatchObject({ accountId: 'account-a', targetingKey: 'a@example.test' }));
+    expect(provider.onContextChange.mock.calls.some(([, next]) => Object.keys(next).length === 0)).toBe(true);
+    expect(localStorage.getItem('sf_account_id')).toBe('account-a');
+  });
+
+  it('does not merge a previous account email into an incomplete new account', async () => {
+    localStorage.setItem('sf_account_id', 'previous-account');
+    localStorage.setItem('sf_account_email', 'previous@example.test');
+    await setFeatureFlagContext({ username: 'admin', clientId: 'company-a', accountId: 'new-account' });
+    expect(OpenFeature.getContext()).toMatchObject({ accountId: 'new-account' });
+    expect(OpenFeature.getContext().email).toBeUndefined();
+    expect(localStorage.getItem('sf_account_email')).toBeNull();
+  });
+
+  it('retries a failed context update for the same identity', async () => {
+    const provider = contextRecordingProvider();
+    provider.onContextChange.mockRejectedValueOnce(new Error('unavailable')).mockResolvedValue(undefined);
+    await OpenFeature.setProviderAndWait(provider);
+    const identity = { username: 'admin', clientId: 'company-a', accountId: account.id, accountEmail: account.email };
+    await setFeatureFlagContext(identity, silentLogger);
+    expect(OpenFeature.getProviderStatus()).toBe('ERROR');
+    await setFeatureFlagContext(identity, silentLogger);
+    expect(provider.onContextChange).toHaveBeenCalledTimes(2);
+    expect(OpenFeature.getProviderStatus()).toBe('READY');
+  });
+});
+
+describe('cached account ownership', () => {
+  it('does not restore an unverified cached account from a session telemetry context update', async () => {
+    await clearAccountIdentity();
+    localStorage.setItem('sf_account_id', 'previous-account');
+    localStorage.setItem('sf_account_email', 'previous@example.test');
+    setSessionIdentity({ username: 'admin', clientId: 'company-a' });
+    await setFeatureFlagContext({ username: 'admin', clientId: 'company-a' });
+    expect(OpenFeature.getContext().accountId).toBeUndefined();
+    expect(OpenFeature.getContext().email).toBeUndefined();
+    expect(OpenFeature.getContext().targetingKey).toBe('admin');
+  });
+
+  it('does not trust cached account fields at startup even after session metadata is present', async () => {
+    await clearAccountIdentity();
+    localStorage.setItem('sf_account_id', 'previous-account');
+    localStorage.setItem('sf_account_email', 'previous@example.test');
+    setSessionIdentity({ username: 'admin', clientId: 'company-a' });
+    await initFeatureFlags({ env: {}, logger: silentLogger });
+    expect(OpenFeature.getContext()).toMatchObject({ targetingKey: 'admin', clientId: 'company-a' });
+    expect(OpenFeature.getContext().accountId).toBeUndefined();
+    expect(OpenFeature.getContext().email).toBeUndefined();
+  });
+
+  it('detects a changed cached account before a legacy lookup replaces its ownership', async () => {
+    await clearAccountIdentity();
+    const provider = contextRecordingProvider();
+    await OpenFeature.setProviderAndWait(provider);
+    localStorage.setItem('sf_account_id', 'previous-account');
+    localStorage.setItem('sf_account_email', 'previous@example.test');
+    setSessionIdentity({ username: 'admin', clientId: 'company-a' });
+    const resolved = await refreshAccountIdentity({ fetchImpl: async () => ({ ok: true, json: async () => ({ accountId: 'new-account' }) }), logger: silentLogger });
+    expect(resolved).toMatchObject({ accountId: 'new-account', flagsResolved: true });
+    expect(identifyMock).toHaveBeenLastCalledWith('new-account');
+    expect(groupMock).toHaveBeenLastCalledWith('account_id', 'company-a');
+    expect(OpenFeature.getContext()).toMatchObject({ accountId: 'new-account' });
+    expect(OpenFeature.getContext().email).toBeUndefined();
+    expect(localStorage.getItem('sf_account_email')).toBeNull();
+    expect(provider.onContextChange.mock.calls.some(([, next]) => Object.keys(next).length === 0)).toBe(true);
+  });
+});
+
+describe('bounded cookie-context recovery', () => {
+  afterEach(() => vi.useRealTimers());
+
+  function cookieAccount(id = 'account-a') {
+    return { isAuthenticated: true, token: null, username: 'admin', clientId: 'company-a', account: { id, email: `${id}@example.test` } };
+  }
+
+  it('retries a failed cookie context and stops retrying after it becomes ready', async () => {
+    vi.useFakeTimers();
+    const provider = contextRecordingProvider();
+    provider.onContextChange.mockRejectedValueOnce(new Error('temporary outage')).mockResolvedValue(undefined);
+    await OpenFeature.setProviderAndWait(provider);
+    authState.current = cookieAccount();
+    await act(async () => { renderHook(() => useAccountIdentity()); });
+    expect(provider.onContextChange).toHaveBeenCalledTimes(1);
+    expect(OpenFeature.getProviderStatus()).toBe('ERROR');
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    expect(provider.onContextChange).toHaveBeenCalledTimes(2);
+    expect(OpenFeature.getProviderStatus()).toBe('READY');
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(provider.onContextChange).toHaveBeenCalledTimes(2);
+  });
+
+  it('bounds an unavailable cookie context to two automatic retries', async () => {
+    vi.useFakeTimers();
+    const provider = contextRecordingProvider();
+    provider.onContextChange.mockRejectedValue(new Error('offline'));
+    await OpenFeature.setProviderAndWait(provider);
+    authState.current = cookieAccount();
+    await act(async () => { renderHook(() => useAccountIdentity()); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1500); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
+    expect(provider.onContextChange).toHaveBeenCalledTimes(3);
+  });
+
+  it('cancels retry timers from an account that has been replaced', async () => {
+    vi.useFakeTimers();
+    const provider = contextRecordingProvider();
+    provider.onContextChange.mockRejectedValueOnce(new Error('temporary outage')).mockResolvedValue(undefined);
+    await OpenFeature.setProviderAndWait(provider);
+    authState.current = cookieAccount();
+    let hook;
+    await act(async () => { hook = renderHook(() => useAccountIdentity()); });
+    authState.current = cookieAccount('account-b');
+    await act(async () => { hook.rerender(); });
+    const callsAfterSwitch = provider.onContextChange.mock.calls.length;
+    await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
+    expect(provider.onContextChange).toHaveBeenCalledTimes(callsAfterSwitch);
+    expect(OpenFeature.getContext().accountId).toBe('account-b');
+  });
+});
+
+
+describe('returning to an earlier resolved company', () => {
+  it('restores company A after an unsuccessful transition to company B', async () => {
+    const provider = contextRecordingProvider();
+    provider.onContextChange.mockImplementation(async (_old, next) => {
+      if (next.clientId === 'company-b') throw new Error('company-b unavailable');
+    });
+    await OpenFeature.setProviderAndWait(provider);
+    authState.current = { isAuthenticated: true, token: null, username: 'admin', clientId: 'company-a', account: { id: 'account-a', email: 'a@example.test' } };
+    const hook = renderHook(() => useAccountIdentity());
+    await waitFor(() => expect(groupMock).toHaveBeenLastCalledWith('account_id', 'company-a'));
+    authState.current = { ...authState.current, clientId: 'company-b' };
+    hook.rerender();
+    await waitFor(() => expect(OpenFeature.getProviderStatus()).toBe('ERROR'));
+    authState.current = { ...authState.current, clientId: 'company-a' };
+    hook.rerender();
+    await waitFor(() => expect(OpenFeature.getContext().clientId).toBe('company-a'));
+    expect(OpenFeature.getProviderStatus()).toBe('READY');
+  });
+});
+
+
+describe('external identity epochs', () => {
+  it('does not adopt a new login epoch even when it restores the same account and company', async () => {
+    const started = deferredResult();
+    const release = deferredResult();
+    identifyMock.mockImplementationOnce(async () => { started.resolve(); await release.promise; });
+    setSessionIdentity({ username: 'admin', clientId: 'company-a' });
+    const staleLookup = refreshAccountIdentity({
+      fetchImpl: async () => ({ ok: true, json: async () => ({ accountId: 'account-a', accountEmail: 'a@example.test' }) }),
+      logger: silentLogger,
+    });
+    await started.promise;
+    await clearAccountIdentity();
+    setSessionIdentity({ username: 'admin', clientId: 'company-a' });
+    await setFeatureFlagContext({ username: 'admin', clientId: 'company-a', accountId: 'account-a', accountEmail: 'a@example.test' });
+    release.resolve();
+    expect(await staleLookup).toBeUndefined();
+    expect(groupMock).not.toHaveBeenCalled();
+    expect(OpenFeature.getContext()).toMatchObject({ accountId: 'account-a', clientId: 'company-a' });
+  });
+});
+
+describe('personal grid views — default off and explicit enable', () => {
+  it('ships the shared flag off when no provider is configured', () => {
+    const { result } = renderHook(() => useFeatureFlag(GRID_COLUMN_VIEWS));
+    expect(result.current).toBe(false);
+    expect(defaultForFlag(GRID_COLUMN_VIEWS)).toBe(false);
+    expect(buildInMemoryConfiguration()[GRID_COLUMN_VIEWS].defaultVariant).toBe('off');
+  });
+
+  it('honors an explicit true override for every grid surface', async () => {
+    await act(async () => {
+      await initFeatureFlags({
+        env: { VITE_FEATURE_FLAGS: JSON.stringify({ [GRID_COLUMN_VIEWS]: true }) },
+        logger: silentLogger,
+      });
+    });
+    const { result } = renderHook(() => useFeatureFlag(GRID_COLUMN_VIEWS));
+    expect(result.current).toBe(true);
+  });
+
+  it('keeps grid views off when provider startup fails', async () => {
+    vi.spyOn(OpenFeature, 'setProviderAndWait').mockRejectedValue(new Error('offline'));
+    await initFeatureFlags({ env: {}, logger: silentLogger });
+    const { result } = renderHook(() => useFeatureFlag(GRID_COLUMN_VIEWS));
+    expect(result.current).toBe(false);
+  });
+});

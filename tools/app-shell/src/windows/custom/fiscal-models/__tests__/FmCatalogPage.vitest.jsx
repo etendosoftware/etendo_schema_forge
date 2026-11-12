@@ -1,6 +1,7 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/FmCatalogPage.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/catalogAvailability.js
 // Vitest component tests for FmCatalogPage.jsx
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
@@ -26,12 +27,23 @@ vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
 
 // ETP-5716 — the organization's SII status (controls the 390 activation warning). Not in the SII
 // by default, so every pre-existing test toggles straight away.
-const sii = vi.hoisted(() => ({ active: false, since: null, calls: 0 }));
+const sii = vi.hoisted(() => ({ active: false, since: null, calls: 0, gate: null, rejectNext: false }));
 vi.mock('../useOrgSiiStatus.js', async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...actual,
-    default: () => () => { sii.calls += 1; return Promise.resolve({ active: sii.active, since: sii.since }); },
+    // `sii.gate` (a promise) holds the status read open, to click again while it is in flight.
+    default: () => () => {
+      sii.calls += 1;
+      // `sii.rejectNext` makes the next read reject once (a getSiiStatus that breaks its
+      // never-rejects contract), to check the in-flight lock is released on a failure too.
+      if (sii.rejectNext) {
+        sii.rejectNext = false;
+        return Promise.reject(new Error('sii status read failed'));
+      }
+      const answer = () => ({ active: sii.active, since: sii.since });
+      return sii.gate ? sii.gate.then(answer) : Promise.resolve(answer());
+    },
   };
 });
 
@@ -48,6 +60,8 @@ beforeEach(() => {
   sii.active = false;
   sii.since = null;
   sii.calls = 0;
+  sii.gate = null;
+  sii.rejectNext = false;
 });
 
 // ── Rendering ────────────────────────────────────────────────────────────────
@@ -177,87 +191,77 @@ describe('FmCatalogPage — toggle', () => {
     expect(locked.length).toBe(0);
   });
 
-  it('re-sorts cards so the still-active model renders first after a toggle', () => {
+  // ETP-5831 CP-21 — the order is by model code and never depends on the active state: toggling
+  // a model must not move its card (it used to jump, as the list sorted active models first).
+  const badgeOrder = (container) => Array.from(container.querySelectorAll('.fm-catalog-card__badge'))
+    .map(b => b.textContent);
+
+  it('keeps the cards in model-code order when a model is deactivated', () => {
     const { container } = render(<FmCatalogPage {...defaultProps} />);
-    // Initially 303 and 349 active — id order wins the tie-break (303 before 349); the inactive
-    // 390 (ETP-5716, not in activeModels) sorts after them.
-    let order = Array.from(container.querySelectorAll('.fm-catalog-card__badge'))
-      .map(b => b.textContent);
-    expect(order).toEqual(['303', '349', '390']);
+    expect(badgeOrder(container)).toEqual(['303', '349', '390']);
 
-    // Deactivate 303 (first switch) — 349 (still active) should now sort first.
-    const switches = container.querySelectorAll('[role="switch"]');
-    fireEvent.click(switches[0]);
+    fireEvent.click(container.querySelectorAll('[role="switch"]')[0]); // 303 off
+    expect(badgeOrder(container)).toEqual(['303', '349', '390']);
+  });
 
-    order = Array.from(container.querySelectorAll('.fm-catalog-card__badge'))
-      .map(b => b.textContent);
-    expect(order).toEqual(['349', '303', '390']);
+  it('keeps the cards in model-code order when a model is activated', () => {
+    const { container } = render(<FmCatalogPage {...defaultProps} activeModels={{ '390': true }} />);
+    // Active state at open time does not lead the order either.
+    expect(badgeOrder(container)).toEqual(['303', '349', '390']);
+
+    fireEvent.click(container.querySelectorAll('[role="switch"]')[1]); // 349 on
+    expect(badgeOrder(container)).toEqual(['303', '349', '390']);
   });
 });
 
-// ── Close / Save ──────────────────────────────────────────────────────────────
+// ── Save on toggle / close ────────────────────────────────────────────────────
 
-describe('FmCatalogPage — close and save', () => {
-  it('calls onSave and onBack when close button is clicked', () => {
+// ETP-5831 CP-22 — every toggle is saved right away with the full new selection; closing the
+// drawer only closes it. Saving on close lost every change made before a reload or a navigation
+// with the drawer open (the access log showed no PUT at all).
+describe('FmCatalogPage — save on toggle, close only closes', () => {
+  const switchOf = (container, id) => Array.from(container.querySelectorAll('.fm-catalog-card'))
+    .find(c => c.querySelector('.fm-catalog-card__badge')?.textContent === id)
+    .querySelector('[role="switch"]');
+
+  it('saves the full new selection as soon as a model is toggled, without closing', () => {
     const onBack = vi.fn();
     const onSave = vi.fn();
     const { container } = render(
       <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
     );
-    const closeBtn = container.querySelector('.fm-catalog-header__back');
-    fireEvent.click(closeBtn);
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ '303': true, '349': true }));
-    expect(onBack).toHaveBeenCalled();
+    fireEvent.click(switchOf(container, '303'));
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave).toHaveBeenCalledWith({ '303': false, '349': true });
+    expect(onBack).not.toHaveBeenCalled();
+    expect(container.querySelector('.fm-catalog-drawer')).not.toBeNull();
   });
 
-  it('passes updated activeModels to onSave after toggle', () => {
+  it('closing with the X button only closes: nothing is saved, with or without a previous toggle', () => {
     const onBack = vi.fn();
     const onSave = vi.fn();
     const { container } = render(
       <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
     );
-    const switches = container.querySelectorAll('[role="switch"]');
-    fireEvent.click(switches[0]); // toggle 303 off
-    const closeBtn = container.querySelector('.fm-catalog-header__back');
-    fireEvent.click(closeBtn);
-    const savedActive = onSave.mock.calls[0][0];
-    // After toggling 303 off it should be false
-    expect(savedActive['303']).toBe(false);
-    expect(savedActive['349']).toBe(true);
+    fireEvent.click(container.querySelector('.fm-catalog-header__back'));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(onBack).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(switchOf(container, '303'));
+    fireEvent.click(container.querySelector('.fm-catalog-header__back'));
+    expect(onSave).toHaveBeenCalledTimes(1); // the toggle, not the close
+    expect(onBack).toHaveBeenCalledTimes(2);
   });
 
-  // Regression: previously the backdrop overlay was rendered externally by
-  // FmListPage, so clicking it to close the drawer bypassed FmCatalogPage's
-  // onSave entirely and silently discarded toggled model states. Now
-  // FmCatalogPage owns its own overlay + drawer wrapper, and a single
-  // handleClose (calling onSave then onBack) backs BOTH the backdrop click
-  // and the X button, so both close paths save consistently.
-  it('calls onSave and onBack when the backdrop overlay is clicked (not just the X button)', () => {
+  it('closing via the backdrop overlay only closes: nothing is saved', () => {
     const onBack = vi.fn();
     const onSave = vi.fn();
     const { container } = render(
       <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
     );
-    const overlay = container.querySelector('.fm-catalog-overlay');
-    fireEvent.click(overlay);
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ '303': true, '349': true }));
-    expect(onBack).toHaveBeenCalled();
-  });
-
-  it('persists a toggle made before closing via the backdrop overlay (the actual bug being fixed)', () => {
-    const onBack = vi.fn();
-    const onSave = vi.fn();
-    const { container } = render(
-      <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
-    );
-    const switches = container.querySelectorAll('[role="switch"]');
-    fireEvent.click(switches[0]); // toggle 303 off
-    const overlay = container.querySelector('.fm-catalog-overlay');
-    fireEvent.click(overlay);
-    const savedActive = onSave.mock.calls[0][0];
-    expect(savedActive['303']).toBe(false);
-    expect(savedActive['349']).toBe(true);
-    expect(onBack).toHaveBeenCalled();
+    fireEvent.click(container.querySelector('.fm-catalog-overlay'));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(onBack).toHaveBeenCalledTimes(1);
   });
 
   it('does not close when clicking inside the drawer itself (stopPropagation on the drawer wrapper)', () => {
@@ -266,58 +270,49 @@ describe('FmCatalogPage — close and save', () => {
     const { container } = render(
       <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
     );
-    const drawer = container.querySelector('.fm-catalog-drawer');
-    fireEvent.click(drawer);
+    fireEvent.click(container.querySelector('.fm-catalog-drawer'));
     expect(onSave).not.toHaveBeenCalled();
     expect(onBack).not.toHaveBeenCalled();
   });
 
-  it('calls onSave/onBack with the unchanged activeModels when the backdrop is clicked without any toggle', () => {
-    // Edge case: closing via backdrop when `active` state is identical to the
-    // original `activeModels` prop — no toggles made before closing.
-    const onBack = vi.fn();
+  it('two fast toggles each save the cumulative selection, in order', () => {
     const onSave = vi.fn();
-    const original = { '303': true, '349': true };
     const { container } = render(
-      <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={original} />
+      <FmCatalogPage onBack={vi.fn()} onSave={onSave} activeModels={{ '303': true, '349': true }} />
     );
-    const overlay = container.querySelector('.fm-catalog-overlay');
-    fireEvent.click(overlay);
-    expect(onSave).toHaveBeenCalledTimes(1);
-    expect(onSave).toHaveBeenCalledWith({ '303': true, '349': true });
-    expect(onBack).toHaveBeenCalledTimes(1);
+    fireEvent.click(switchOf(container, '303'));
+    fireEvent.click(switchOf(container, '349'));
+    expect(onSave.mock.calls.map(([sel]) => sel)).toEqual([
+      { '303': false, '349': true },
+      { '303': false, '349': false },
+    ]);
   });
 
-  // Gap: handleClose has no idempotency guard (no "already closed" flag). In
-  // the real app this is masked because FmListPage unmounts FmCatalogPage on
-  // the first onBack, but the component itself does not protect against being
-  // invoked twice (e.g. two click events reaching it before that unmount
-  // commits). This test documents the current (unguarded) behavior — see
-  // BUG report to Forge for the risk assessment.
-  it('handleClose has no de-dup guard: firing the backdrop click twice invokes onSave/onBack twice', () => {
-    const onBack = vi.fn();
+  it('toggling a model on and back off saves twice and ends on the original value', () => {
     const onSave = vi.fn();
     const { container } = render(
-      <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
+      <FmCatalogPage onBack={vi.fn()} onSave={onSave} activeModels={{ '303': true }} />
     );
-    const overlay = container.querySelector('.fm-catalog-overlay');
-    fireEvent.click(overlay);
-    fireEvent.click(overlay);
+    fireEvent.click(switchOf(container, '349'));
+    fireEvent.click(switchOf(container, '349'));
     expect(onSave).toHaveBeenCalledTimes(2);
-    expect(onBack).toHaveBeenCalledTimes(2);
+    expect(onSave.mock.calls[1][0]).toEqual({ '303': true, '349': false });
   });
 
-  it('handleClose has no de-dup guard: firing the X button twice invokes onSave/onBack twice', () => {
-    const onBack = vi.fn();
+  // The page rolls a failed save back by handing the drawer the last confirmed catalog.
+  it('follows the activeModels prop, so a rolled-back toggle visibly flips back', () => {
     const onSave = vi.fn();
-    const { container } = render(
-      <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
+    const confirmed = { '303': true, '349': true };
+    const { container, rerender } = render(
+      <FmCatalogPage onBack={vi.fn()} onSave={onSave} activeModels={confirmed} />
     );
-    const closeBtn = container.querySelector('.fm-catalog-header__back');
-    fireEvent.click(closeBtn);
-    fireEvent.click(closeBtn);
-    expect(onSave).toHaveBeenCalledTimes(2);
-    expect(onBack).toHaveBeenCalledTimes(2);
+    fireEvent.click(switchOf(container, '303'));
+    expect(switchOf(container, '303').getAttribute('aria-checked')).toBe('false');
+    rerender(<FmCatalogPage onBack={vi.fn()} onSave={onSave} activeModels={{ ...confirmed }} />);
+    expect(switchOf(container, '303').getAttribute('aria-checked')).toBe('true');
+    // The next toggle builds on the rolled-back selection.
+    fireEvent.click(switchOf(container, '349'));
+    expect(onSave).toHaveBeenLastCalledWith({ '303': true, '349': false });
   });
 });
 
@@ -373,13 +368,15 @@ describe('FmCatalogPage — SII warning when activating the 390', () => {
       .find(c => c.querySelector('.fm-catalog-card__badge')?.textContent === '390');
     expect(card390().className).toContain('fm-catalog-card--attention');
     expect(switchOf(container, '390').getAttribute('aria-checked')).toBe('false');
+    expect(onSave).not.toHaveBeenCalled(); // nothing is saved while the warning is open
 
     fireEvent.click(screen.getByTestId('FmCatalogPage__siiConfirm'));
     expect(screen.queryByTestId('FmCatalogPage__siiWarning')).toBeNull();
     expect(card390().className).not.toContain('fm-catalog-card--attention');
     expect(switchOf(container, '390').getAttribute('aria-checked')).toBe('true');
-    fireEvent.click(container.querySelector('.fm-catalog-header__back'));
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ '390': true }));
+    // ETP-5831 CP-22 — "Activar" saves right away, with the full selection.
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave).toHaveBeenCalledWith({ '303': true, '349': true, '390': true });
   });
 
   it('organization that joined the SII this year: the warning says "since <date>", not exempt', async () => {
@@ -403,20 +400,110 @@ describe('FmCatalogPage — SII warning when activating the 390', () => {
     expect(warning.textContent).toBe('fm.catalog.sii_warning_title fm.catalog.sii_warning_bodyfm.action.cancelfm.catalog.activate');
   });
 
-  it('organization in the SII: "Cancelar" leaves it inactive', async () => {
+  it('organization in the SII: "Cancelar" leaves it inactive and saves nothing', async () => {
     sii.active = true;
-    const { container } = render(<FmCatalogPage {...defaultProps} />);
+    const onSave = vi.fn();
+    const { container } = render(<FmCatalogPage {...defaultProps} onSave={onSave} />);
     fireEvent.click(switchOf(container, '390'));
     fireEvent.click(await screen.findByTestId('FmCatalogPage__siiCancel'));
     expect(screen.queryByTestId('FmCatalogPage__siiWarning')).toBeNull();
     expect(switchOf(container, '390').getAttribute('aria-checked')).toBe('false');
+    expect(onSave).not.toHaveBeenCalled();
   });
 
-  it('organization outside the SII: activates without asking', async () => {
-    const { container } = render(<FmCatalogPage {...defaultProps} />);
+  it('organization outside the SII: activates without asking, and saves right away', async () => {
+    const onSave = vi.fn();
+    const { container } = render(<FmCatalogPage {...defaultProps} onSave={onSave} />);
     fireEvent.click(switchOf(container, '390'));
     await waitFor(() => expect(switchOf(container, '390').getAttribute('aria-checked')).toBe('true'));
     expect(screen.queryByTestId('FmCatalogPage__siiWarning')).toBeNull();
+    expect(onSave).toHaveBeenCalledWith({ '303': true, '349': true, '390': true });
+  });
+
+  // ETP-5831 (review W3) — the SII status is read across an await; a second click on the same
+  // switch during it used to take the activate branch again (double flip, two saves).
+  it('ignores a second click on the 390 while its SII status is still being read (outside the SII)', async () => {
+    let release;
+    sii.gate = new Promise((r) => { release = r; });
+    const onSave = vi.fn();
+    const { container } = render(<FmCatalogPage {...defaultProps} onSave={onSave} />);
+    fireEvent.click(switchOf(container, '390'));
+    fireEvent.click(switchOf(container, '390'));
+    release();
+    await waitFor(() => expect(switchOf(container, '390').getAttribute('aria-checked')).toBe('true'));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(sii.calls).toBe(1);
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave).toHaveBeenCalledWith({ '303': true, '349': true, '390': true });
+  });
+
+  it('ignores a second click on the 390 while its SII status is still being read (in the SII)', async () => {
+    sii.active = true;
+    let release;
+    sii.gate = new Promise((r) => { release = r; });
+    const onSave = vi.fn();
+    const { container } = render(<FmCatalogPage {...defaultProps} onSave={onSave} />);
+    fireEvent.click(switchOf(container, '390'));
+    fireEvent.click(switchOf(container, '390'));
+    release();
+    expect(await screen.findAllByTestId('FmCatalogPage__siiWarning')).toHaveLength(1);
+    expect(sii.calls).toBe(1);
+    expect(onSave).not.toHaveBeenCalled();
+    // Once the read settled, the switch answers clicks again.
+    fireEvent.click(screen.getByTestId('FmCatalogPage__siiConfirm'));
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  describe('when the SII status read rejects', () => {
+    // ETP-5831 — the per-model lock is released in a `finally`: a failed SII read must not leave
+    // the 390 switch dead for the rest of the drawer's life. `toggleModel` has no `catch` (the real
+    // getSiiStatus never rejects), so the switch's discarded promise rejects at process level; that
+    // expected rejection is swallowed for the duration of the test, as LifecycleConfirmModal does.
+    let ignoreExpectedRejection;
+    beforeEach(() => {
+      ignoreExpectedRejection = () => {};
+      process.on('unhandledRejection', ignoreExpectedRejection);
+    });
+    afterEach(() => {
+      process.removeListener('unhandledRejection', ignoreExpectedRejection);
+    });
+
+    it('releases the in-flight lock when the SII status read rejects, so the next click still saves', async () => {
+      sii.rejectNext = true;
+      const onSave = vi.fn();
+      const { container } = render(<FmCatalogPage {...defaultProps} onSave={onSave} />);
+      fireEvent.click(switchOf(container, '390'));
+      await waitFor(() => expect(sii.calls).toBe(1));
+      await new Promise(resolve => setTimeout(resolve, 0));
+      // The failed read toggles nothing and saves nothing.
+      expect(switchOf(container, '390').getAttribute('aria-checked')).toBe('false');
+      expect(onSave).not.toHaveBeenCalled();
+
+      // The second click is not swallowed by a stale lock: it reads the status again and activates.
+      fireEvent.click(switchOf(container, '390'));
+      await waitFor(() => expect(switchOf(container, '390').getAttribute('aria-checked')).toBe('true'));
+      expect(sii.calls).toBe(2);
+      expect(onSave).toHaveBeenCalledTimes(1);
+      expect(onSave).toHaveBeenCalledWith({ '303': true, '349': true, '390': true });
+    });
+
+    it('releases the in-flight lock when the SII status read rejects (in the SII): the next click asks', async () => {
+      sii.active = true;
+      sii.rejectNext = true;
+      const onSave = vi.fn();
+      const { container } = render(<FmCatalogPage {...defaultProps} onSave={onSave} />);
+      fireEvent.click(switchOf(container, '390'));
+      await waitFor(() => expect(sii.calls).toBe(1));
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(screen.queryByTestId('FmCatalogPage__siiWarning')).toBeNull();
+
+      fireEvent.click(switchOf(container, '390'));
+      fireEvent.click(await screen.findByTestId('FmCatalogPage__siiConfirm'));
+      expect(sii.calls).toBe(2);
+      expect(switchOf(container, '390').getAttribute('aria-checked')).toBe('true');
+      expect(onSave).toHaveBeenCalledTimes(1);
+      expect(onSave).toHaveBeenCalledWith({ '303': true, '349': true, '390': true });
+    });
   });
 
   it('never asks for 303/349, nor when deactivating the 390', async () => {
@@ -428,5 +515,68 @@ describe('FmCatalogPage — SII warning when activating the 390', () => {
     expect(switchOf(container, '349').getAttribute('aria-checked')).toBe('true');
     expect(screen.queryByTestId('FmCatalogPage__siiWarning')).toBeNull();
     expect(sii.calls).toBe(0);
+  });
+});
+
+// ── Models the backend marks unavailable (backend-only flag `fiscal-model-390`) ──
+
+describe('FmCatalogPage — unavailable models', () => {
+  const badges = (container) => Array.from(container.querySelectorAll('.fm-catalog-card__badge'))
+    .map(b => b.textContent);
+  // The header renders the catalog size in the badge next to the title, and the active count in
+  // the subtitle ("• N fm.catalog.active_count").
+  const headerTitleBadge = (container) =>
+    container.querySelector('.fm-catalog-header__titles span').textContent;
+  const headerActiveLine = (container) =>
+    container.querySelector('.fm-catalog-header__sub').textContent;
+
+  it('renders no 390 card when the 390 is unavailable', () => {
+    const { container } = render(<FmCatalogPage {...defaultProps} unavailableModels={['390']} />);
+    expect(badges(container).sort()).toEqual(['303', '349']);
+    expect(document.body.textContent).not.toContain('fm.catalog.390.name');
+  });
+
+  it('does not count the 390 in the header when it is unavailable', () => {
+    const { container } = render(<FmCatalogPage {...defaultProps} unavailableModels={['390']} />);
+    expect(headerTitleBadge(container)).toBe('2');
+    expect(headerActiveLine(container)).toContain('2');
+  });
+
+  it('does not save a 390 value when it is unavailable and there is no stored catalog', () => {
+    const onSave = vi.fn();
+    const { container } = render(
+      <FmCatalogPage onBack={vi.fn()} onSave={onSave} activeModels={undefined} unavailableModels={['390']} />
+    );
+    fireEvent.click(container.querySelectorAll('[role="switch"]')[0]); // a toggle saves right away
+    const saved = onSave.mock.calls[0][0];
+    expect('390' in saved).toBe(false);
+    expect(Object.keys(saved).sort()).toEqual(['303', '349']);
+  });
+
+  it('does not save a 390 value after toggling the other models while it is unavailable', () => {
+    const onSave = vi.fn();
+    const { container } = render(
+      <FmCatalogPage onBack={vi.fn()} onSave={onSave} activeModels={{ '303': true }} unavailableModels={['390']} />
+    );
+    const card349 = Array.from(container.querySelectorAll('.fm-catalog-card'))
+      .find(c => c.querySelector('.fm-catalog-card__badge')?.textContent === '349');
+    fireEvent.click(card349.querySelector('[role="switch"]'));
+    expect(onSave).toHaveBeenCalledWith({ '303': true, '349': true });
+  });
+
+  it('shows the 390 card, counts it and saves it when it is available (no marker)', () => {
+    const onSave = vi.fn();
+    const { container } = render(
+      <FmCatalogPage onBack={vi.fn()} onSave={onSave} activeModels={undefined} unavailableModels={[]} />
+    );
+    expect(badges(container).sort()).toEqual(['303', '349', '390']);
+    expect(headerTitleBadge(container)).toBe('3');
+    fireEvent.click(container.querySelectorAll('[role="switch"]')[0]); // a toggle saves right away
+    expect(onSave.mock.calls[0][0]).toHaveProperty('390');
+  });
+
+  it('treats a missing unavailableModels prop as nothing unavailable', () => {
+    const { container } = render(<FmCatalogPage {...defaultProps} />);
+    expect(badges(container)).toContain('390');
   });
 });

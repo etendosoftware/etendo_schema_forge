@@ -1,12 +1,21 @@
-import { describe, it, expect } from 'vitest';
+// @covers tools/app-shell/src/runtime-routes.jsx
+import { describe, it, expect, afterEach } from 'vitest';
+import { createElement } from 'react';
+import { render, screen } from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { buildRuntimeRoutes } from '../runtime-routes.jsx';
+import { applySupportSessionFromServer, resetSupportSessionForTests } from '../lib/supportSession.js';
 import { defaultNavigation, optionalNavigation } from '../windows/__tests__/navigationExpectations.js';
-
 describe('buildRuntimeRoutes', () => {
   it('keeps synthetic navigation destinations explicitly registered and protected', () => {
     const routes = buildRuntimeRoutes({ windowMap: {}, apiBaseUrl: '/sws/neo' });
+    // Custom windows gated by `accessWindowId` that the registry loads by name: they are served
+    // by the `:windowName` route, not by a path of their own. Keep this list explicit and short;
+    // every other entry without a windowId must have its own route.
+    const servedByWindowRoute = new Set(['invoice-inbox']);
     const synthetic = [...defaultNavigation.filter(entry => !entry.windowId && !entry.obuiappProcessId),
-      ...optionalNavigation.filter(entry => !entry.app)];
+      ...optionalNavigation.filter(entry => !entry.app)].filter(entry => !servedByWindowRoute.has(entry.name));
+    expect(routes.find(candidate => candidate.path === ':windowName')?.public).toBe(false);
     for (const entry of synthetic) {
       const route = routes.find(candidate => candidate.path === entry.path.split('?')[0]);
       expect(route, entry.name).toBeDefined();
@@ -86,6 +95,58 @@ describe('buildRuntimeRoutes', () => {
 
       expect(legacyIndex).toBeGreaterThanOrEqual(0);
       expect(legacyIndex).toBeLessThan(dynamicIndex);
+    });
+  });
+
+  // ETP-5351 — Classic's support handoff, and the routes a support session must not reach.
+  describe('support access', () => {
+    afterEach(() => {
+      resetSupportSessionForTests();
+    });
+
+    it('registers support-access as a public route ahead of the dynamic window routes', () => {
+      const routes = buildRuntimeRoutes({ windowMap: {}, apiBaseUrl: 'http://x/api' });
+      const supportIndex = routes.findIndex((route) => route.path === 'support-access');
+      const dynamicWindowIndex = routes.findIndex((route) => route.path === ':windowName/:recordId');
+
+      expect(supportIndex).toBeGreaterThanOrEqual(0);
+      expect(routes[supportIndex].public).toBe(true);
+      expect(supportIndex).toBeLessThan(dynamicWindowIndex);
+    });
+
+    it.each(['account', 'upgrade', 'api-keys', 'oauth2-clients'])(
+      'sends a support session that types /%s straight to the home page',
+      (path) => {
+        applySupportSessionFromServer(
+          { clientId: 'CLIENT-ACME', clientName: 'Acme Corp', expiresAt: '2026-10-05T11:00:00Z' },
+          { storage: localStorage },
+        );
+        const route = buildRuntimeRoutes({ windowMap: {}, apiBaseUrl: 'http://x/api' })
+          .find((candidate) => candidate.path === path);
+
+        render(createElement(
+          MemoryRouter,
+          { initialEntries: [`/${path}`] },
+          createElement(
+            Routes,
+            null,
+            createElement(Route, { path: `/${path}`, element: route.element }),
+            createElement(Route, { path: '/dashboard', element: createElement('div', { 'data-testid': 'home' }) }),
+          ),
+        ));
+
+        expect(screen.getByTestId('home')).toBeInTheDocument();
+      },
+    );
+
+    it('leaves the routes a support session may use unguarded', () => {
+      const routes = buildRuntimeRoutes({ windowMap: {}, apiBaseUrl: 'http://x/api' });
+      for (const path of ['roles', 'smart-scan', 'app-store']) {
+        const route = routes.find((candidate) => candidate.path === path);
+        expect(route.element.type.name, path).not.toBe('SupportRestrictedRoute');
+      }
+      expect(routes.find((candidate) => candidate.path === 'account').element.type.name)
+        .toBe('SupportRestrictedRoute');
     });
   });
 });

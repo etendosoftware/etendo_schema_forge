@@ -156,9 +156,17 @@ describe('Related documents — form section and list preview show the same docu
         id: 'i1',
         salesOrder: 'o1',
         linkedShipments: [doc('s1', 'SH-1', { isReturn: false }), doc('r1', 'RET-1', { isReturn: true })],
-        sourceInvoice: doc('i0', 'INV-0'),
+        // ETP-6002: the origin invoice comes from the C_Invoice_Reverse link, never from a
+        // deduced `sourceInvoice` (still present here to prove it is ignored).
+        originInvoices: [{ id: 'i0', documentNo: 'INV-0' }],
+        sourceInvoice: doc('i-deduced', 'INV-DEDUCED'),
       },
-      data: { byId: { 'sales-order/header/o1': doc('o1', 'SO-1') } },
+      data: {
+        byId: {
+          'sales-order/header/o1': doc('o1', 'SO-1'),
+          'sales-invoice/header/i0': doc('i0', 'INV-0'),
+        },
+      },
       expected: [
         '/sales-order/o1 | orderDoc SO-1',
         '/goods-shipment/s1 | shipmentDoc SH-1',

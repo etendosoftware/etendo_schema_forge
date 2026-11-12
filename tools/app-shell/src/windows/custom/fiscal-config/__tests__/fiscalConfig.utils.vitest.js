@@ -1,5 +1,5 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-config/fiscalConfig.utils.js
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   resolveSystem,
   detectProfile,
@@ -10,92 +10,21 @@ import {
   normalizeDateInputValue,
   normalizeVerifactuTaxType,
   getVerifactuTaxTypeLabel,
-  getAllowedSystemsForTerritory,
+  allowedSystemsFor,
+  territoryOfRecords,
   isProductionEnvironment,
   resolveRecordEnvironment,
   getCertificateContext,
-  todayIsoDate,
-  buildOnboardingPayloads,
   buildVerifactuUpdatePayload,
   getFiscalRecordId,
   mapSiiRecordToForm,
-  getTerritoryDefaults,
   isActiveRecord,
   activeOrNull,
   getChangeSifNoticeKey,
   getSystemsToDeactivate,
   parseApiError,
 } from '../fiscalConfig.utils.js';
-
-// ---------------------------------------------------------------------------
-// todayIsoDate
-// ---------------------------------------------------------------------------
-
-// Runs fn with process.env.TZ forced (same pattern as shared/__tests__/fiscalTargets.test.js),
-// so an east-of-UTC case is exercised whatever the host timezone is. Awaits async fns.
-async function withTimezone(tz, fn) {
-  const previous = process.env.TZ;
-  process.env.TZ = tz;
-  try {
-    return await fn();
-  } finally {
-    if (previous === undefined) delete process.env.TZ;
-    else process.env.TZ = previous;
-  }
-}
-
-// 00:30 on 2026-10-09 in Europe/Madrid (CEST, UTC+2). The UTC day is still 2026-10-08,
-// so the old `toISOString().slice(0, 10)` returned yesterday here.
-const MADRID_0030 = new Date('2026-10-08T22:30:00.000Z');
-
-describe('todayIsoDate', () => {
-  it('returns a string matching yyyy-mm-dd', () => {
-    expect(todayIsoDate()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-  });
-
-  // ETP-5700 — the LOCAL calendar day, never the UTC one (`toISOString().slice(0, 10)`),
-  // which east of UTC is still yesterday right after local midnight.
-  it('is the LOCAL calendar day, not the UTC one', () => {
-    vi.useFakeTimers();
-    try {
-      // 00:30 local on 2026-10-09: the UTC day is still 2026-10-08 east of UTC.
-      vi.setSystemTime(new Date(2026, 9, 9, 0, 30));
-      expect(todayIsoDate()).toBe('2026-10-09');
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('is the Madrid calendar day at 00:30 Madrid time, while the UTC day is still yesterday', async () => {
-    await withTimezone('Europe/Madrid', () => {
-      vi.useFakeTimers({ toFake: ['Date'] });
-      try {
-        vi.setSystemTime(MADRID_0030);
-        // Guard: proves the trap is armed — the UTC-based value is the previous day.
-        expect(new Date().toISOString().slice(0, 10)).toBe('2026-10-08');
-        expect(new Date().getHours()).toBe(0);
-        expect(todayIsoDate()).toBe('2026-10-09');
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-  });
-
-  it('stamps the onboarding SII and TBAI adoption dates with the Madrid day at 00:30', async () => {
-    await withTimezone('Europe/Madrid', () => {
-      vi.useFakeTimers({ toFake: ['Date'] });
-      try {
-        vi.setSystemTime(MADRID_0030);
-        const p = buildOnboardingPayloads('SII+TBAI', 'bizkaia');
-        expect(p.sii.fechaAcogidaSII).toBe('2026-10-09');
-        expect(p.sii.monitordate).toBe('2026-10-09');
-        expect(p.tbai.tbaisystemdate).toBe('2026-10-09');
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-  });
-});
+import { FISCAL_SYSTEM_CATALOG } from './fiscalSystemCatalog.fixture.js';
 
 // ---------------------------------------------------------------------------
 // isEtendoTrue / isEtendoFalse
@@ -224,30 +153,103 @@ describe('getVerifactuTaxTypeLabel', () => {
 // getAllowedSystemsForTerritory
 // ---------------------------------------------------------------------------
 
-describe('getAllowedSystemsForTerritory', () => {
-  it('returns ["SII"] for navarra', () => {
-    expect(getAllowedSystemsForTerritory('navarra')).toEqual(['SII']);
+// The rules come from the backend catalog (`fiscalSystemCatalog`, ETP-6053); the window keeps no
+// copy of them, so an unknown territory or a catalog not loaded yet allows nothing.
+describe('allowedSystemsFor', () => {
+  it.each([
+    ['navarra', ['SII']],
+    ['alava', ['TBAI', 'SII+TBAI']],
+    ['bizkaia', ['TBAI', 'SII+TBAI']],
+    ['gipuzkoa', ['TBAI', 'SII+TBAI']],
+    ['baleares', ['SII', 'VERIFACTU']],
+    ['canarias', ['SII', 'VERIFACTU']],
+    ['ceuta', ['VERIFACTU']],
+  ])('returns the catalog systems of %s', (territory, systems) => {
+    expect(allowedSystemsFor(FISCAL_SYSTEM_CATALOG, territory)).toEqual(systems);
   });
-  it('returns TBAI options for alava', () => {
-    expect(getAllowedSystemsForTerritory('alava')).toEqual(['TBAI', 'SII+TBAI']);
+
+  it('returns whatever the catalog says, not a local table', () => {
+    const catalog = { territories: [{ territory: 'navarra', systems: ['VERIFACTU'] }] };
+    expect(allowedSystemsFor(catalog, 'navarra')).toEqual(['VERIFACTU']);
   });
-  it('returns TBAI options for bizkaia', () => {
-    expect(getAllowedSystemsForTerritory('bizkaia')).toEqual(['TBAI', 'SII+TBAI']);
+
+  it('returns an empty array for a territory the catalog does not list', () => {
+    expect(allowedSystemsFor(FISCAL_SYSTEM_CATALOG, 'madrid')).toEqual([]);
   });
-  it('returns TBAI options for gipuzkoa', () => {
-    expect(getAllowedSystemsForTerritory('gipuzkoa')).toEqual(['TBAI', 'SII+TBAI']);
+
+  it('returns an empty array while the catalog is not loaded', () => {
+    expect(allowedSystemsFor(null, 'navarra')).toEqual([]);
+    expect(allowedSystemsFor(undefined, 'navarra')).toEqual([]);
+    expect(allowedSystemsFor({}, 'navarra')).toEqual([]);
   });
-  it('returns SII+VERIFACTU options for baleares', () => {
-    expect(getAllowedSystemsForTerritory('baleares')).toEqual(['SII', 'VERIFACTU']);
+
+  it('returns an empty array for a catalog entry without systems', () => {
+    expect(allowedSystemsFor({ territories: [{ territory: 'navarra' }] }, 'navarra')).toEqual([]);
   });
-  it('returns SII+VERIFACTU options for canarias', () => {
-    expect(getAllowedSystemsForTerritory('canarias')).toEqual(['SII', 'VERIFACTU']);
+});
+
+// The territory of a stored configuration, read through the catalog's per-territory values.
+describe('territoryOfRecords', () => {
+  const C = FISCAL_SYSTEM_CATALOG;
+
+  it.each([
+    ['ARABA', 'alava'],
+    ['BIZKAIA', 'bizkaia'],
+    ['GIPUZKOA', 'gipuzkoa'],
+    ['bizkaia', 'bizkaia'],
+  ])('maps the TicketBAI territory %s to %s', (etsgSifTerritory, territory) => {
+    expect(territoryOfRecords(C, { tbai: { etsgSifTerritory } })).toBe(territory);
   });
-  it('returns VERIFACTU-only for ceuta (SII cannot represent IPSI, ETP-5272 pt.4)', () => {
-    expect(getAllowedSystemsForTerritory('ceuta')).toEqual(['VERIFACTU']);
+
+  it('takes the TicketBAI territory before the SII flags', () => {
+    // SII + TicketBAI in Álava: the SII record alone (IVA, no flags) would read as Baleares.
+    expect(territoryOfRecords(C, { sii: { taxtype: 'IVA' }, tbai: { etsgSifTerritory: 'ARABA' } })).toBe('alava');
   });
-  it('returns empty array for unknown territory', () => {
-    expect(getAllowedSystemsForTerritory('madrid')).toEqual([]);
+
+  it('maps an SII record flagged navarra to navarra', () => {
+    expect(territoryOfRecords(C, { sii: { navarra: 'Y', taxtype: 'IVA' } })).toBe('navarra');
+  });
+
+  it('maps an SII record flagged guipuzcoa to gipuzkoa', () => {
+    expect(territoryOfRecords(C, { sii: { guipuzcoa: true, taxtype: 'IVA' } })).toBe('gipuzkoa');
+  });
+
+  it('maps an SII record with IGIC to canarias, case-insensitively', () => {
+    expect(territoryOfRecords(C, { sii: { taxtype: 'igic' } })).toBe('canarias');
+  });
+
+  it('prefers a territory where SII stands alone for an unflagged IVA record (baleares, not alava)', () => {
+    expect(territoryOfRecords(C, { sii: { navarra: 'N', guipuzcoa: 'N', taxtype: 'IVA' } })).toBe('baleares');
+  });
+
+  it('falls back to the first candidate when no territory allows SII alone', () => {
+    const catalog = { territories: C.territories.filter(t => !['navarra', 'baleares', 'canarias'].includes(t.territory)) };
+    expect(territoryOfRecords(catalog, { sii: { taxtype: 'IVA' } })).toBe('alava');
+  });
+
+  it.each([
+    ['01', 'baleares'],
+    ['02', 'ceuta'],
+    ['03', 'canarias'],
+  ])('maps the VERI*FACTU tax type %s to %s', (tAXType, territory) => {
+    expect(territoryOfRecords(C, { verifactu: { tAXType } })).toBe(territory);
+  });
+
+  it('returns null for an unknown VERI*FACTU tax type', () => {
+    expect(territoryOfRecords(C, { verifactu: { tAXType: '99' } })).toBeNull();
+  });
+
+  it('returns null for an SII record no territory matches (no tax type)', () => {
+    expect(territoryOfRecords(C, { sii: { navarra: 'N' } })).toBeNull();
+  });
+
+  it('returns null without records', () => {
+    expect(territoryOfRecords(C, {})).toBeNull();
+  });
+
+  it('returns null while the catalog is not loaded', () => {
+    expect(territoryOfRecords(null, { tbai: { etsgSifTerritory: 'ARABA' } })).toBeNull();
+    expect(territoryOfRecords(null, { sii: { navarra: 'Y', taxtype: 'IVA' } })).toBeNull();
   });
 });
 
@@ -301,36 +303,43 @@ describe('resolveSystem', () => {
     expect(resolveSystem({ regime: 'unknown', alsoNational: null, volume: null, lowChoice: null })).toBeNull();
   });
 
-  // ETP-5272 point 4 — territory-based system veto (SII cannot represent IPSI)
-  describe('territory veto (ETP-5272 point 4)', () => {
-    it('ceuta: forces VERIFACTU even with high volume (which would otherwise mean SII)', () => {
-      expect(resolveSystem({ regime: 'siiver', alsoNational: null, volume: 'high', lowChoice: null, territory: 'ceuta' })).toBe('VERIFACTU');
+  // ETP-5272 point 4 — SII is vetoed where the catalog does not allow it (Ceuta/Melilla: IPSI).
+  // ETP-6053: the allowed systems come from the backend catalog (allowedSystemsFor).
+  describe('allowed-systems veto', () => {
+    const ceuta = ['VERIFACTU'];
+    const canarias = ['SII', 'VERIFACTU'];
+
+    it('forces VERIFACTU even with high volume (which would otherwise mean SII)', () => {
+      expect(resolveSystem({ regime: 'siiver', alsoNational: null, volume: 'high', lowChoice: null, allowedSystems: ceuta })).toBe('VERIFACTU');
     });
 
-    it('ceuta: forces VERIFACTU even when lowChoice explicitly picked sii', () => {
-      expect(resolveSystem({ regime: 'siiver', alsoNational: null, volume: 'low', lowChoice: 'sii', territory: 'ceuta' })).toBe('VERIFACTU');
+    it('forces VERIFACTU even when lowChoice explicitly picked sii', () => {
+      expect(resolveSystem({ regime: 'siiver', alsoNational: null, volume: 'low', lowChoice: 'sii', allowedSystems: ceuta })).toBe('VERIFACTU');
     });
 
-    it('ceuta: still VERIFACTU with no volume answer at all (sub-question is skipped for this territory)', () => {
-      expect(resolveSystem({ regime: 'siiver', alsoNational: null, volume: null, lowChoice: null, territory: 'ceuta' })).toBe('VERIFACTU');
+    it('still VERIFACTU with no volume answer at all (the sub-question is skipped)', () => {
+      expect(resolveSystem({ regime: 'siiver', alsoNational: null, volume: null, lowChoice: null, allowedSystems: ceuta })).toBe('VERIFACTU');
     });
 
-    it('canarias (IGIC, SII-supported): high volume still resolves to SII — no regression', () => {
-      expect(resolveSystem({ regime: 'siiver', alsoNational: null, volume: 'high', lowChoice: null, territory: 'canarias' })).toBe('SII');
+    it('high volume still resolves to SII where SII is allowed', () => {
+      expect(resolveSystem({ regime: 'siiver', alsoNational: null, volume: 'high', lowChoice: null, allowedSystems: canarias })).toBe('SII');
     });
 
-    it('canarias: low volume + lowChoice=sii still resolves to SII — no regression', () => {
-      expect(resolveSystem({ regime: 'siiver', alsoNational: null, volume: 'low', lowChoice: 'sii', territory: 'canarias' })).toBe('SII');
+    it('low volume + lowChoice=sii still resolves to SII where SII is allowed', () => {
+      expect(resolveSystem({ regime: 'siiver', alsoNational: null, volume: 'low', lowChoice: 'sii', allowedSystems: canarias })).toBe('SII');
     });
 
-    it('baleares (IVA, SII-supported): high volume still resolves to SII — no regression', () => {
-      expect(resolveSystem({ regime: 'siiver', alsoNational: null, volume: 'high', lowChoice: null, territory: 'baleares' })).toBe('SII');
-    });
-
-    it('omitting territory preserves old regime-only behavior (backward compatible)', () => {
+    it('does not veto while the catalog is not loaded (empty list) — the volume answer decides', () => {
+      expect(resolveSystem({ regime: 'siiver', alsoNational: null, volume: 'high', lowChoice: null, allowedSystems: [] })).toBe('SII');
       expect(resolveSystem({ regime: 'siiver', alsoNational: null, volume: 'high', lowChoice: null })).toBe('SII');
     });
+
+    it('feeds from the catalog: ceuta resolves to VERIFACTU through allowedSystemsFor', () => {
+      const allowedSystems = allowedSystemsFor(FISCAL_SYSTEM_CATALOG, 'ceuta');
+      expect(resolveSystem({ regime: 'siiver', alsoNational: null, volume: 'high', lowChoice: null, allowedSystems })).toBe('VERIFACTU');
+    });
   });
+
 });
 
 // ---------------------------------------------------------------------------
@@ -376,117 +385,6 @@ describe('detectProfile', () => {
 
   it('guipuzcoa=true (boolean) also triggers sii+tbai', () => {
     expect(detectProfile({ guipuzcoa: true }, null, null)).toBe('sii+tbai');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// buildOnboardingPayloads
-// ---------------------------------------------------------------------------
-
-describe('buildOnboardingPayloads — SII', () => {
-  it('navarra: sets navarra=Y, taxtype=IVA with forced defaults', () => {
-    const p = buildOnboardingPayloads('SII', 'navarra');
-    expect(p.sii).toEqual(expect.objectContaining({ navarra: 'Y', taxtype: 'IVA', acogidaAlSII: 'N', entornoDeProduccin: 'Y', adjuntarArchivosXML: 'Y' }));
-    expect(p.sii.fechaAcogidaSII).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(p.tbai).toBeNull();
-    expect(p.verifactu).toBeNull();
-  });
-
-  it('gipuzkoa: sets guipuzcoa=Y, taxtype=IVA with forced defaults', () => {
-    const p = buildOnboardingPayloads('SII', 'gipuzkoa');
-    expect(p.sii).toEqual(expect.objectContaining({ guipuzcoa: 'Y', taxtype: 'IVA', acogidaAlSII: 'N' }));
-  });
-
-  it('baleares: IVA with forced defaults', () => {
-    expect(buildOnboardingPayloads('SII', 'baleares').sii).toEqual(expect.objectContaining({ taxtype: 'IVA', acogidaAlSII: 'N' }));
-  });
-
-  it('canarias: IGIC with forced defaults', () => {
-    expect(buildOnboardingPayloads('SII', 'canarias').sii).toEqual(expect.objectContaining({ taxtype: 'IGIC', acogidaAlSII: 'N' }));
-  });
-
-  it('ceuta: SII returns sii=null (IPSI unsupported by SII, ETP-5272 pt.4)', () => {
-    expect(buildOnboardingPayloads('SII', 'ceuta')).toEqual({ sii: null, tbai: null, verifactu: null });
-  });
-
-  it('unknown territory returns all null', () => {
-    const p = buildOnboardingPayloads('SII', 'unknown');
-    expect(p).toEqual({ sii: null, tbai: null, verifactu: null });
-  });
-});
-
-describe('buildOnboardingPayloads — TBAI', () => {
-  it('alava: sets etsgSifTerritory=ARABA with tbaisystemdate', () => {
-    const p = buildOnboardingPayloads('TBAI', 'alava');
-    expect(p.tbai.etsgSifTerritory).toBe('ARABA');
-    expect(p.tbai.tbaisystemdate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(p.sii).toBeNull();
-    expect(p.verifactu).toBeNull();
-  });
-
-  it('bizkaia: sets BIZKAIA', () => {
-    expect(buildOnboardingPayloads('TBAI', 'bizkaia').tbai.etsgSifTerritory).toBe('BIZKAIA');
-  });
-
-  it('gipuzkoa: sets GIPUZKOA', () => {
-    expect(buildOnboardingPayloads('TBAI', 'gipuzkoa').tbai.etsgSifTerritory).toBe('GIPUZKOA');
-  });
-
-  it('unknown territory returns all null', () => {
-    expect(buildOnboardingPayloads('TBAI', 'unknown')).toEqual({ sii: null, tbai: null, verifactu: null });
-  });
-});
-
-describe('buildOnboardingPayloads — SII+TBAI', () => {
-  it('alava: sets sii taxtype=IVA and tbai ARABA with forced defaults', () => {
-    const p = buildOnboardingPayloads('SII+TBAI', 'alava');
-    expect(p.sii).toEqual(expect.objectContaining({ taxtype: 'IVA', acogidaAlSII: 'N' }));
-    expect(p.tbai.etsgSifTerritory).toBe('ARABA');
-    expect(p.tbai.productionEnv).toBe('Y');
-    expect(p.verifactu).toBeNull();
-  });
-
-  it('bizkaia: sii IVA + BIZKAIA with forced defaults', () => {
-    const p = buildOnboardingPayloads('SII+TBAI', 'bizkaia');
-    expect(p.sii).toEqual(expect.objectContaining({ taxtype: 'IVA', acogidaAlSII: 'N' }));
-    expect(p.tbai.etsgSifTerritory).toBe('BIZKAIA');
-  });
-
-  it('gipuzkoa: sii guipuzcoa=Y + GIPUZKOA with forced defaults', () => {
-    const p = buildOnboardingPayloads('SII+TBAI', 'gipuzkoa');
-    expect(p.sii).toEqual(expect.objectContaining({ guipuzcoa: 'Y', taxtype: 'IVA', acogidaAlSII: 'N' }));
-    expect(p.tbai.etsgSifTerritory).toBe('GIPUZKOA');
-  });
-
-  it('unknown territory returns all null', () => {
-    expect(buildOnboardingPayloads('SII+TBAI', 'unknown')).toEqual({ sii: null, tbai: null, verifactu: null });
-  });
-});
-
-describe('buildOnboardingPayloads — VERIFACTU', () => {
-  it('baleares: tAXType=01 with defaultQR=Y forced', () => {
-    const p = buildOnboardingPayloads('VERIFACTU', 'baleares');
-    expect(p.verifactu).toEqual(expect.objectContaining({ tAXType: '01', nextSendWaitTime: '60', defaultQR: 'Y' }));
-    expect(p.sii).toBeNull();
-    expect(p.tbai).toBeNull();
-  });
-
-  it('canarias: tAXType=03', () => {
-    expect(buildOnboardingPayloads('VERIFACTU', 'canarias').verifactu.tAXType).toBe('03');
-  });
-
-  it('ceuta: tAXType=02', () => {
-    expect(buildOnboardingPayloads('VERIFACTU', 'ceuta').verifactu.tAXType).toBe('02');
-  });
-
-  it('unknown territory returns all null', () => {
-    expect(buildOnboardingPayloads('VERIFACTU', 'unknown')).toEqual({ sii: null, tbai: null, verifactu: null });
-  });
-});
-
-describe('buildOnboardingPayloads — unknown system', () => {
-  it('returns all null for unknown system', () => {
-    expect(buildOnboardingPayloads('UNKNOWN', 'baleares')).toEqual({ sii: null, tbai: null, verifactu: null });
   });
 });
 
@@ -616,91 +514,6 @@ describe('mapSiiRecordToForm', () => {
   it('normalizes datetime fechaAcogidaSII to date only', () => {
     const form = mapSiiRecordToForm({ fechaAcogidaSII: '2025-01-15T10:00:00Z' });
     expect(form.fechaAcogidaSII).toBe('2025-01-15');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// getTerritoryDefaults
-// ---------------------------------------------------------------------------
-
-describe('getTerritoryDefaults', () => {
-  it('baleares + inSii=true → sii IVA, no verifactu', () => {
-    const d = getTerritoryDefaults('baleares', true);
-    expect(d.sii).toEqual({ taxtype: 'IVA' });
-    expect(d.verifactu).toBeNull();
-    expect(d.tbai).toBeNull();
-  });
-
-  it('baleares + inSii=false → verifactu 01, no sii', () => {
-    const d = getTerritoryDefaults('baleares', false);
-    expect(d.sii).toBeNull();
-    expect(d.verifactu).toEqual({ tAXType: '01' });
-  });
-
-  it('canarias + inSii=true → IGIC', () => {
-    expect(getTerritoryDefaults('canarias', true).sii).toEqual({ taxtype: 'IGIC' });
-  });
-
-  it('canarias + inSii=false → verifactu 03', () => {
-    expect(getTerritoryDefaults('canarias', false).verifactu).toEqual({ tAXType: '03' });
-  });
-
-  it('ceuta + inSii=true → still verifactu 02, sii null (IPSI unsupported by SII, ETP-5272 pt.4)', () => {
-    const d = getTerritoryDefaults('ceuta', true);
-    expect(d.sii).toBeNull();
-    expect(d.verifactu).toEqual({ tAXType: '02' });
-  });
-
-  it('ceuta + inSii=false → verifactu 02, sii null', () => {
-    const d = getTerritoryDefaults('ceuta', false);
-    expect(d.sii).toBeNull();
-    expect(d.verifactu).toEqual({ tAXType: '02' });
-  });
-
-  it('navarra → navarra=Y IVA regardless of inSii', () => {
-    const d = getTerritoryDefaults('navarra', false);
-    expect(d.sii).toEqual({ navarra: 'Y', taxtype: 'IVA' });
-    expect(d.verifactu).toBeNull();
-  });
-
-  it('alava + inSii=true → sii IVA + tbai ARABA', () => {
-    const d = getTerritoryDefaults('alava', true);
-    expect(d.sii).toEqual({ taxtype: 'IVA' });
-    expect(d.tbai).toEqual({ etsgSifTerritory: 'ARABA' });
-  });
-
-  it('alava + inSii=false → only tbai ARABA', () => {
-    const d = getTerritoryDefaults('alava', false);
-    expect(d.sii).toBeNull();
-    expect(d.tbai).toEqual({ etsgSifTerritory: 'ARABA' });
-  });
-
-  it('bizkaia + inSii=true → sii IVA + BIZKAIA', () => {
-    const d = getTerritoryDefaults('bizkaia', true);
-    expect(d.tbai).toEqual({ etsgSifTerritory: 'BIZKAIA' });
-  });
-
-  it('bizkaia + inSii=false → only BIZKAIA', () => {
-    const d = getTerritoryDefaults('bizkaia', false);
-    expect(d.sii).toBeNull();
-    expect(d.tbai).toEqual({ etsgSifTerritory: 'BIZKAIA' });
-  });
-
-  it('gipuzkoa + inSii=true → guipuzcoa=Y + GIPUZKOA', () => {
-    const d = getTerritoryDefaults('gipuzkoa', true);
-    expect(d.sii).toEqual({ guipuzcoa: 'Y', taxtype: 'IVA' });
-    expect(d.tbai).toEqual({ etsgSifTerritory: 'GIPUZKOA' });
-  });
-
-  it('gipuzkoa + inSii=false → only GIPUZKOA', () => {
-    const d = getTerritoryDefaults('gipuzkoa', false);
-    expect(d.sii).toBeNull();
-    expect(d.tbai).toEqual({ etsgSifTerritory: 'GIPUZKOA' });
-  });
-
-  it('unknown territory returns all null', () => {
-    const d = getTerritoryDefaults('unknown', true);
-    expect(d).toEqual({ sii: null, verifactu: null, tbai: null });
   });
 });
 

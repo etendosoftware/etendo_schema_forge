@@ -79,7 +79,6 @@
   "entities": {
     "header": {
       "name": "returnMaterialReceipt",
-      "javaQualifier": "returnMaterialReceiptHeaderHandler",
       "virtualFields": [
         {
           "name": "sourceShipmentDocNo",

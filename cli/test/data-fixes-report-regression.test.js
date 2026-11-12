@@ -208,6 +208,12 @@ const FIXES_WITH_REPORT = new Set([
   // R56 (ETP-5791) flags every custom N/N category from its contacts; its @report lists what each
   // category received and why (rows this run wrote, selected by updated = now()).
   '20261026T130000Z__R56-bp-category-custom-flags-from-contacts',
+  // R57 (ETP-5837) gives the sales-quotation series the PR prefix; its @report lists a quotation
+  // sequence left unprefixed because a non-quotation doctype also uses it (shared series).
+  '20261106T120000Z__R57-quotation-sequence-pr-prefix',
+  // R58 (ETP-5837) sets STARTNO 1000000 on the Quotation sequence only where it is still the
+  // dataset's 10000; its @report lists a Quotation sequence left on a STARTNO someone chose.
+  '20261112T120000Z__R58-quotation-sequence-startno',
 ]);
 
 async function loadCatalogFiles() {

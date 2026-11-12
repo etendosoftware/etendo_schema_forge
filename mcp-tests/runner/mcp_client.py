@@ -16,6 +16,7 @@ import http.server
 import inspect
 import json
 import os
+import re
 import secrets
 import shutil
 import socket
@@ -181,15 +182,29 @@ def _resource_metadata_url(mcp_url: str) -> str:
             raise AuthError(f"{mcp_url} answered {exc.code}, expected a 401 challenge.") from exc
         header = exc.headers.get("WWW-Authenticate", "")
 
-    for part in header.split(","):
-        key, _, value = part.strip().partition("=")
-        if key.strip().lower() == "resource_metadata":
-            return value.strip().strip('"')
+    pointer = _challenge_resource_metadata(header)
+    if pointer:
+        return pointer
     raise AuthError(
         f"{mcp_url} challenged without a resource_metadata pointer: {header!r}. "
         "For the local target this usually means the frontend dev server (port 3100) "
         "is not running — Tomcat does not serve the .well-known documents."
     )
+
+
+def _challenge_resource_metadata(header: str) -> str | None:
+    """The `resource_metadata` parameter of a WWW-Authenticate header, or None.
+
+    The first parameter is glued to the scheme (`Bearer resource_metadata="..."`,
+    as Holded sends it), so the key is the last word before `=`, not the whole
+    segment.
+    """
+    for part in header.split(","):
+        key, _, value = part.strip().partition("=")
+        words = key.split()
+        if words and words[-1].lower() == "resource_metadata":
+            return value.strip().strip('"')
+    return None
 
 
 def _authorization_server_metadata(issuer: str) -> dict[str, Any]:
@@ -801,6 +816,20 @@ def _path(row: Any, dotted: str) -> Any:
     return value
 
 
+def rows_at(payload: Any, dotted: str) -> list[Any]:
+    """The rows under `dotted` in an answer (`expectEffect.rowsAt`, ETP-5848).
+
+    A key the answer does not have, or one that is not a list, raises — not
+    verifiable — instead of counting 0, the same rule `matching_rows` keeps for a
+    `where` path: with `expect: none` a silent 0 would pass a check that never ran.
+    """
+    value = _path(payload, dotted)
+    if not isinstance(value, list):
+        keys = sorted(payload) if isinstance(payload, dict) else type(payload).__name__
+        raise VerificationError(f"`rowsAt` {dotted!r} is not a list in the answer (keys {keys})")
+    return value
+
+
 _MISSING = object()
 
 
@@ -818,14 +847,21 @@ def _same(actual: Any, expected: Any) -> bool:
     return actual == expected
 
 
+#: A decimal comma with no grouping: Holded serialises amounts as "36,30" (ETP-5848).
+_DECIMAL_COMMA = re.compile(r"-?\d+,\d+")
+
+
 def _as_number(value: Any) -> float | None:
     if isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
         return float(value)
     if isinstance(value, str):
+        text = value.strip()
+        if _DECIMAL_COMMA.fullmatch(text):
+            text = text.replace(",", ".")
         try:
-            return float(value.strip())
+            return float(text)
         except ValueError:
             return None
     return None

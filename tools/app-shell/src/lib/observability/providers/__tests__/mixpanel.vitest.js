@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/lib/observability/providers/mixpanel.js
 import { createMixpanelProvider } from '../mixpanel.js';
 
 function makeClient(overrides = {}) {
@@ -19,6 +20,12 @@ describe('createMixpanelProvider — construction', () => {
     const provider = createMixpanelProvider();
     expect(provider.name).toBe('mixpanel');
     expect(provider.enabled).toBe(false);
+  });
+
+  // ETP-5351 — the flag the observability core silences during a support session. Without it
+  // Mixpanel would be treated as monitoring and keep receiving the operator's events.
+  it('declares itself as product analytics', () => {
+    expect(createMixpanelProvider({ enabled: true, token: 't' }).analytics).toBe(true);
   });
 
   it('is disabled when enabled=true but token is missing, and warns', () => {

@@ -490,7 +490,7 @@ For SII rows, the spec hint (`'sales-invoice'` or `'purchase-invoice'`) is deriv
 
 `FiscalMonitorPage.jsx` renders `<CertExpiryBanner daysLeft={certDaysLeft} variant="subtle" />` immediately after the `OrgLead` header bar. The subtle variant is a thin strip (no icon card), less intrusive than the prominent variant used in fiscal-config.
 
-`useCertExpiry.js` fetches cert status on mount and is shared between both fiscal pages. See the [fiscal-config](fiscal-config.md#certificate-expiry-banner-certexpirybanner) doc for threshold details and i18n keys.
+`useCertExpiry.js` fetches cert status on mount and is shared between both fiscal pages. See the [fiscal-config](fiscal-config.md#certificate-expiry-banner-certexpirybanner) doc for threshold details and i18n keys. The subtle strip uses the same copy as the prominent card, including the expired, "vence hoy" and singular-day texts (ETP-6053), and the same non-dismissable rule for every critical case.
 
 Debug: the debug panel exposes a "Cert expiry" toggle (None / 45d warn / 20d crit) that bypasses the API call and injects a mock `daysLeft` directly.
 
@@ -626,3 +626,9 @@ i18n keys: `invoicePreview.fiscalStatus.sii`, `invoicePreview.fiscalStatus.tbai`
 - `tools/app-shell/src/windows/custom/shared/__tests__/SifSendingModal.test.js` — 22 component source-guard tests: props contract (no `headers` — auth via `useApiFetch`), three-phase state machine, progress bar formula/cap/snap, `callProcess` action columns, results display, `onAfterSend` callback.
 - `e2e/tests/flows/fiscal-monitor.mocked.spec.js` — 13 Playwright mocked E2E tests: no-org, unconfigured, SII/TBAI/Verifactu/combined/conflict profiles, KPI card → tab sync, period toggle; all assertions use `t()` i18n helper.
 - i18n: 40+ `fiscalMonitor.*` keys in `en_US.json` / `es_ES.json`; all user-visible strings go through `useUI()`. E2E tests resolved via `e2e/tests/helpers/i18n.js` (locale-switchable).
+
+## Bespoke grid personal views
+
+The bespoke TBAI and SII lists use the existing personal-view contract. TBAI keeps `tbai-facturas-enviadas` / `sincronización`; SII uses `sii-monitor` and the active existing invoice entity (`issuedInvoices`, `receivedInvoices` or its previous-period counterpart). Selection stays fixed, and invoice/status actions, filtering, pagination and export retain their behavior. Verifactu remains blocked because its combined status rows span multiple entities.
+
+The full app-shell `npm run test:all` suite and `npm run build` passed. Browser smoke covered Sales Order only, not these grids; authenticated preference persistence and human QA remain pending. See [the bespoke-grid inventory](../bespoke-grid-views.md) for verification boundaries.

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Loader2, MailOpen, MoreHorizontal, Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2, MailOpen, MoreHorizontal, Plus } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,11 +13,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { SubscriptionSection } from '@/components/account/SubscriptionSection.jsx';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 import { detectBasePath } from '@/lib/neoBaseUrl.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
-import { createPortalSession, getSubscription } from '@/lib/upgrade/api.js';
-import { RENEWING_STATUSES } from '@/lib/upgrade/subscriptionStatus.js';
+import { UPGRADE_ERROR_CODES, createPortalSession } from '@/lib/upgrade/api.js';
 import {
   environmentCommercialLabel,
   environmentPlanLabelKey,
@@ -27,10 +27,15 @@ import {
 import { ADMIN_NAME_I18N_KEY, resolveRoleDisplayName } from '@/lib/roleNameI18n.js';
 import { fetchCompanyEnvironments, fetchMyInvitations } from '@/lib/myCompanies/api.js';
 import { groupCompanies } from '@/lib/myCompanies/companies.js';
+import { FROM_QUERY_PARAM, SUBSCRIPTION_QUERY_PARAM } from '@/lib/myCompanies/subscriptionPath.js';
 import {
+  SUBSCRIPTION_MANAGE_SOURCES,
+  myCompaniesSource,
   trackMyCompaniesEnterClicked,
   trackMyCompaniesEnterFailed,
+  trackMyCompaniesSubscriptionOpened,
   trackMyCompaniesViewed,
+  trackSubscriptionManageClicked,
 } from '@/lib/myCompanies/telemetry.js';
 
 const SHORT_DATE = { day: 'numeric', month: 'short', year: 'numeric' };
@@ -49,28 +54,25 @@ function roleLabel(env, ui) {
 }
 
 /**
- * The renewal cell of an owned company: the live renewal date of the subscription for the
- * productive environment it pays for, the trial countdown for a demo, plus the commercial warning
- * (payment grace, suspended) when the backend reports one. No amount: there is one subscription
- * per account and it is not per company.
+ * The renewal cell of an owned company: the renewal date of the productive environment's OWN
+ * subscription, the trial countdown for a demo, plus the commercial warning (payment grace,
+ * suspended) when the backend reports one. No amount.
  *
- * Never the environment's `renewalDueAt`: that is the payment-grace anchor, empty while the
- * subscription is current and the end of the last paid period once it is past due. And only for a
- * subscription that is actually renewing, the rule of the Subscription page: a past-due
- * `renewalAt` is a retry date and a scheduled cancellation does not renew.
+ * ETP-5051 O-1b — per row, whatever environment the session is in: the date is the row's
+ * `renewalAt` from `GET /sws/go/environments`, which the backend sets only while that
+ * environment's subscription is actually renewing (active or trialing, not past due, not
+ * scheduled to cancel) and sends as null otherwise; the null check stays as a guard for an older
+ * backend with no key. Never the environment's `renewalDueAt`: that is the payment-grace anchor,
+ * empty while the subscription is current and the end of the last paid period once it is past due.
  */
-function renewalLabel(env, subscription, ui, locale) {
+function renewalLabel(env, ui, locale) {
   if (!isProductiveEnvironment(env)) return environmentTrialLabel(env, ui) || '—';
-  const renews = subscription?.clientId === env.clientId
-    && subscription.renewalAt
-    && subscription.cancelAtPeriodEnd !== true
-    && RENEWING_STATUSES.has(subscription.status);
-  return renews ? formatCalendarDate(subscription.renewalAt, locale, SHORT_DATE) : '—';
+  return env.renewalAt ? formatCalendarDate(env.renewalAt, locale, SHORT_DATE) : '—';
 }
 
-function RenewalCell({ env, subscription, ui, locale }) {
+function RenewalCell({ env, ui, locale }) {
   const commercial = environmentCommercialLabel(env, ui);
-  const primary = renewalLabel(env, subscription, ui, locale);
+  const primary = renewalLabel(env, ui, locale);
   return (
     <div className="flex flex-col">
       <span>{primary}</span>
@@ -114,9 +116,55 @@ function CompanyName({ env, isCurrent, ui }) {
   );
 }
 
+/**
+ * ETP-6060 — the toggle that unfolds a productive owned row into that company's own subscription
+ * (plan, status, renewal, limits and their usage). Only rows where something was paid offer it,
+ * the same rule as the manage action; invited companies never do.
+ */
+function SubscriptionToggle({ env, expanded, onToggle, ui }) {
+  const Icon = expanded ? ChevronDown : ChevronRight;
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      aria-expanded={expanded}
+      onClick={() => onToggle(env.clientId)}
+      data-testid={`my-companies-subscription-toggle-${env.clientId}`}
+    >
+      <Icon className="mr-1 h-4 w-4" data-testid="SubscriptionToggle__icon" />
+      {ui(expanded ? 'myCompaniesHideSubscription' : 'myCompaniesShowSubscription')}
+    </Button>
+  );
+}
+
 function OwnedCompaniesTable({
-  companies, subscription, currentClientId, switching, onEnter, onManage, managing, ui, locale,
+  companies, currentClientId, switching, onEnter, onManage, managing, ui, locale, initiallyExpanded,
 }) {
+  // Folded by default: each unfolded row reads its subscription live from the provider. A billing
+  // banner's CTA names the company to unfold (`?subscription=<clientId>`).
+  const [expanded, setExpanded] = useState(
+    () => new Set(initiallyExpanded ? [initiallyExpanded] : []),
+  );
+  const toggle = useCallback((clientId) => {
+    // Only an opening counts; read from the render's set, outside the state updater.
+    if (!expanded.has(clientId)) trackMyCompaniesSubscriptionOpened('toggle');
+    setExpanded((previous) => {
+      const next = new Set(previous);
+      if (next.has(clientId)) next.delete(clientId);
+      else next.add(clientId);
+      return next;
+    });
+  }, [expanded]);
+  // A billing CTA that opened the page with a row unfolded counts once, as a 'link' opening.
+  const linkTracked = useRef(false);
+  useEffect(() => {
+    if (linkTracked.current || !initiallyExpanded) return;
+    if (companies.some((env) => env.clientId === initiallyExpanded && isProductiveEnvironment(env))) {
+      linkTracked.current = true;
+      trackMyCompaniesSubscriptionOpened('link');
+    }
+  }, [companies, initiallyExpanded]);
   return (
     <Table data-testid="my-companies-owned-table">
       <TableHeader data-testid="TableHeader__44c7f5">
@@ -127,55 +175,84 @@ function OwnedCompaniesTable({
           <TableHead data-testid="TableHead__44c7f5">{ui('myCompaniesColUsers')}</TableHead>
           <TableHead className="w-0" data-testid="TableHead__44c7f5" />
           <TableHead className="w-0" data-testid="TableHead__44c7f5" />
+          <TableHead className="w-0" data-testid="TableHead__44c7f5" />
         </TableRow>
       </TableHeader>
       <TableBody data-testid="TableBody__44c7f5">
         {companies.map((env) => {
           const isCurrent = env.clientId === currentClientId;
-          // The billing portal is account-level and only meaningful for the paid environment.
+          // ETP-5051 O-1b — the portal opened from a row is that row's environment's own (the
+          // client id travels with the request), so it is offered only where something was paid.
           const canManage = isProductiveEnvironment(env);
+          const isExpanded = canManage && expanded.has(env.clientId);
           return (
-            <TableRow key={env.clientId} data-testid={`my-companies-owned-${env.clientId}`}>
-              <TableCell data-testid="TableCell__44c7f5"><CompanyName env={env} isCurrent={isCurrent} ui={ui} data-testid="CompanyName__44c7f5" /></TableCell>
-              <TableCell data-testid="TableCell__44c7f5">{ui(environmentPlanLabelKey(env))}</TableCell>
-              <TableCell data-testid="TableCell__44c7f5"><RenewalCell env={env} subscription={subscription} ui={ui} locale={locale} data-testid="RenewalCell__44c7f5" /></TableCell>
-              <TableCell data-testid="TableCell__44c7f5">{Number.isInteger(env.userCount) ? env.userCount : '—'}</TableCell>
-              <TableCell className="text-right" data-testid="TableCell__44c7f5">
-                <EnterButton
-                  env={env}
-                  isCurrent={isCurrent}
-                  switching={switching}
-                  onEnter={onEnter}
-                  ui={ui}
-                  data-testid="EnterButton__44c7f5" />
-              </TableCell>
-              <TableCell data-testid="TableCell__44c7f5">
-                {canManage && (
-                  <DropdownMenu data-testid="DropdownMenu__44c7f5">
-                    <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__44c7f5">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label={ui('myCompaniesActions')}
-                        data-testid={`my-companies-actions-${env.clientId}`}
-                      >
-                        <MoreHorizontal className="h-4 w-4" data-testid="MoreHorizontal__my-companies" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" data-testid="DropdownMenuContent__44c7f5">
-                      <DropdownMenuItem
-                        disabled={managing}
-                        onSelect={onManage}
-                        data-testid={`my-companies-manage-${env.clientId}`}
-                      >
-                        {ui('myCompaniesManageSubscription')}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-              </TableCell>
-            </TableRow>
+            <Fragment key={env.clientId}>
+              <TableRow data-testid={`my-companies-owned-${env.clientId}`}>
+                <TableCell data-testid="TableCell__44c7f5"><CompanyName env={env} isCurrent={isCurrent} ui={ui} data-testid="CompanyName__44c7f5" /></TableCell>
+                <TableCell data-testid="TableCell__44c7f5">{ui(environmentPlanLabelKey(env))}</TableCell>
+                <TableCell data-testid="TableCell__44c7f5"><RenewalCell env={env} ui={ui} locale={locale} data-testid="RenewalCell__44c7f5" /></TableCell>
+                <TableCell data-testid="TableCell__44c7f5">{Number.isInteger(env.userCount) ? env.userCount : '—'}</TableCell>
+                <TableCell data-testid="TableCell__44c7f5">
+                  {canManage && (
+                    <SubscriptionToggle
+                      env={env}
+                      expanded={isExpanded}
+                      onToggle={toggle}
+                      ui={ui}
+                      data-testid="SubscriptionToggle__44c7f5" />
+                  )}
+                </TableCell>
+                <TableCell className="text-right" data-testid="TableCell__44c7f5">
+                  <EnterButton
+                    env={env}
+                    isCurrent={isCurrent}
+                    switching={switching}
+                    onEnter={onEnter}
+                    ui={ui}
+                    data-testid="EnterButton__44c7f5" />
+                </TableCell>
+                <TableCell data-testid="TableCell__44c7f5">
+                  {canManage && (
+                    <DropdownMenu data-testid="DropdownMenu__44c7f5">
+                      <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__44c7f5">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={ui('myCompaniesActions')}
+                          data-testid={`my-companies-actions-${env.clientId}`}
+                        >
+                          <MoreHorizontal className="h-4 w-4" data-testid="MoreHorizontal__my-companies" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" data-testid="DropdownMenuContent__44c7f5">
+                        <DropdownMenuItem
+                          disabled={managing}
+                          onSelect={() => onManage(env)}
+                          data-testid={`my-companies-manage-${env.clientId}`}
+                        >
+                          {ui('myCompaniesManageSubscription')}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </TableCell>
+              </TableRow>
+              {isExpanded && (
+                <TableRow
+                  className="hover:bg-transparent"
+                  data-testid={`my-companies-subscription-${env.clientId}`}
+                >
+                  <TableCell colSpan={7} className="bg-muted/30 p-4" data-testid="TableCell__44c7f5">
+                    <SubscriptionSection
+                      apiBaseUrl={detectBasePath().apiBase}
+                      clientId={env.clientId}
+                      manageSource={SUBSCRIPTION_MANAGE_SOURCES.MY_COMPANIES_SECTION}
+                      data-testid={`SubscriptionSection__company-${env.clientId}`} />
+                  </TableCell>
+                </TableRow>
+              )}
+            </Fragment>
           );
         })}
       </TableBody>
@@ -270,38 +347,37 @@ export default function MyCompaniesPage() {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { switchTo, switching, currentClientId } = useEnvironmentSwitch({ enabled: false });
   // 'loading' | 'loaded' | 'error'
   const [status, setStatus] = useState('loading');
   const [groups, setGroups] = useState({ owned: [], invited: [], pendingInvitations: [] });
-  const [subscription, setSubscription] = useState(null);
   const [managing, setManaging] = useState(false);
   // One view per visit: a retry after a load error must not count the visit twice.
   const viewTracked = useRef(false);
+
+  const viewSource = myCompaniesSource(searchParams.get(FROM_QUERY_PARAM));
 
   const load = useCallback(async () => {
     const { apiBase } = detectBasePath();
     setStatus('loading');
     try {
-      const [environments, invitations, liveSubscription] = await Promise.all([
+      const [environments, invitations] = await Promise.all([
         fetchCompanyEnvironments(apiBase),
-        // Invitations and the renewal date are secondary: failing to read them must not hide
-        // the companies.
+        // Invitations are secondary: failing to read them must not hide the companies.
         fetchMyInvitations(apiBase).catch(() => []),
-        getSubscription(apiBase).catch(() => null),
       ]);
       const grouped = groupCompanies(environments, invitations);
       setGroups(grouped);
-      setSubscription(liveSubscription?.hasSubscription ? liveSubscription : null);
       setStatus('loaded');
       if (!viewTracked.current) {
         viewTracked.current = true;
-        trackMyCompaniesViewed(grouped.owned.length + grouped.invited.length);
+        trackMyCompaniesViewed(grouped.owned.length + grouped.invited.length, viewSource);
       }
     } catch {
       setStatus('error');
     }
-  }, []);
+  }, [viewSource]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -315,14 +391,18 @@ export default function MyCompaniesPage() {
     }
   }, [switchTo, ui]);
 
-  const handleManage = useCallback(async () => {
+  const handleManage = useCallback(async (env) => {
+    trackSubscriptionManageClicked(SUBSCRIPTION_MANAGE_SOURCES.MY_COMPANIES_MENU);
     setManaging(true);
     try {
-      const session = await createPortalSession(detectBasePath().apiBase);
+      const session = await createPortalSession(detectBasePath().apiBase, env.clientId);
       if (!session?.url) throw new Error('Portal session carried no url');
       window.location.assign(session.url);
-    } catch {
-      toast.error(ui('subscriptionManageError'));
+    } catch (err) {
+      // A row with no subscription of its own is not a transient failure: no "please try again".
+      toast.error(ui(err?.code === UPGRADE_ERROR_CODES.portalNoSubscription
+        ? UPGRADE_ERROR_CODES.portalNoSubscription
+        : 'subscriptionManageError'));
     } finally {
       setManaging(false);
     }
@@ -385,7 +465,6 @@ export default function MyCompaniesPage() {
                 <CardContent className="p-0" data-testid="CardContent__44c7f5">
                   <OwnedCompaniesTable
                     companies={owned}
-                    subscription={subscription}
                     currentClientId={currentClientId}
                     switching={switching}
                     onEnter={handleEnter}
@@ -393,6 +472,7 @@ export default function MyCompaniesPage() {
                     managing={managing}
                     ui={ui}
                     locale={locale}
+                    initiallyExpanded={searchParams.get(SUBSCRIPTION_QUERY_PARAM)}
                     data-testid="OwnedCompaniesTable__44c7f5" />
                 </CardContent>
               </Card>

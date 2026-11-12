@@ -12,9 +12,15 @@ import { ReconciliationSplitPanel } from '@/components/contract-ui/Reconciliatio
  * panel, which closes every write path under it (reconcile, un-reconcile, post a difference, store
  * the difference account) while leaving browsing and selection available.
  *
- * @param {{ account: object|null, paymentMethods?: Array<object>, onReconcileSuccess?: () => void, windowReadOnly?: boolean }} props
+ * `bounceReview` (ETP-5581) is the detail view's bounce-pair state, shared with the
+ * automatch modal: the line "Revisar en el panel" asked to show, and the pairs dismissed with
+ * "No es un rechazo". Handed straight to the split panel.
+ *
+ * @param {{ account: object|null, paymentMethods?: Array<object>, onReconcileSuccess?: () => void, windowReadOnly?: boolean, bounceReview?: object|null }} props
  */
-export function ReconciliationTab({ account, paymentMethods, onReconcileSuccess, windowReadOnly = false }) {
+export function ReconciliationTab({
+  account, paymentMethods, onReconcileSuccess, windowReadOnly = false, bounceReview = null,
+}) {
   const navigate = useNavigate();
 
   return (
@@ -41,6 +47,7 @@ export function ReconciliationTab({ account, paymentMethods, onReconcileSuccess,
         onBack={() => navigate(-1)}
         onReconcileSuccess={onReconcileSuccess}
         windowReadOnly={windowReadOnly}
+        bounceReview={bounceReview}
         data-testid="ReconciliationSplitPanel__46a213" />
     </div>
   );

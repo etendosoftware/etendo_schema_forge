@@ -24,6 +24,8 @@ from pathlib import Path
 from unittest import mock
 
 from runner import cli
+from runner import matcher
+from runner.suite import attempt_marker, load_suite
 from runner import fixture as fixtures
 from runner.agent import ProbeAborted
 from runner.mcp_client import AuthError
@@ -67,6 +69,9 @@ OUTCOME = {
     "verdict": {"outcome": "OKAY", "summary": "done"},
     "toolCallCount": 3,
     "toolCalls": [],
+    # Rule 2 decides on real token usage and refuses to compare without it.
+    "usage": {"loop": {"turns": 2, "turnsWithUsage": 2, "inputTokens": 900, "outputTokens": 100,
+                       "totalTokens": 1000, "cachedInputTokens": 0}, "report": None},
 }
 
 
@@ -76,6 +81,7 @@ class Harness:
         self.tmp = tmp
         (tmp / "suite.yaml").write_text(textwrap.dedent(suite), encoding="utf-8")
         (tmp / "config.toml").write_text(CONFIG, encoding="utf-8")
+        self.config_extra = ""
         self.calls: list[tuple[str, dict]] = []
         self.order: list[str] = []
         self.prompts: list[str] = []
@@ -133,6 +139,8 @@ class Harness:
             return None
 
         runs = self.tmp / "runs"
+        if self.config_extra:
+            (self.tmp / "config.toml").write_text(CONFIG + self.config_extra, encoding="utf-8")
         self.stdout, self.stderr = io.StringIO(), io.StringIO()
         with mock.patch.dict(os.environ, {"MCP_TESTS_FAKE_KEY": "k", "MCP_TESTS_FAKE_TOKEN": "t"}), \
              mock.patch.object(cli, "RUNS_DIR", runs), \
@@ -168,7 +176,7 @@ class CliStepsTest(unittest.TestCase):
         h = Harness(self.tmp, SUITE)
         probe = h.run()
         self.assertEqual(h.order, ["etendo_create", "agent", "etendo_list", "etendo_delete"])
-        marker = f"{probe['runId']}-p-a1"
+        marker = attempt_marker(probe["runId"], "p", 1)
         self.assertEqual(probe["marker"], marker)
         self.assertEqual(h.calls[0], ("etendo_create", {"description": marker}))
         # Setup results reach the prompt, the effect check and teardown.
@@ -331,7 +339,7 @@ class CliStepsTest(unittest.TestCase):
         self.assertEqual([a["attempt"] for a in h.attempts], [1, 2, 3])
         markers = [a["marker"] for a in h.attempts]
         run_id = h.attempts[0]["runId"]
-        self.assertEqual(markers, [f"{run_id}-p-a{n}" for n in (1, 2, 3)])
+        self.assertEqual(markers, [attempt_marker(run_id, "p", n) for n in (1, 2, 3)])
         # Each attempt's setup got its own marker; each teardown ran.
         creates = [args["description"] for name, args in h.calls if name == "etendo_create"]
         self.assertEqual(creates, markers)
@@ -432,6 +440,115 @@ class CliStepsTest(unittest.TestCase):
         probe = h.run()
         self.assertEqual(h.order, ["agent"])
         self.assertEqual((probe["setup"], probe["teardown"], probe["teardownClean"]), ([], [], None))
+
+
+class FailureFeedbackTest(unittest.TestCase):
+    """Valentin, 2026-11-05: a failed attempt is reported through the target's feedback tool,
+    after the measurement; a successful one, or a target without the setting, sends nothing."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def test_a_failed_attempt_is_reported_after_the_check(self):
+        h = Harness(self.tmp, SUITE, answers={"etendo_create": {"id": "INV1", "documentNo": "FV9"},
+                                              "etendo_list": {"totalRows": 0}, "etendo_delete": {},
+                                              "etendo_feedback": {"received": True}})
+        h.config_extra = 'feedback_on_failure = "etendo_feedback"\n'
+        probe = h.run()
+        self.assertFalse(probe["success"])
+        self.assertEqual(h.order[-1], "etendo_feedback")
+        args = h.calls[-1][1]
+        self.assertEqual(args["outcome"], "ERROR")
+        self.assertIn("expected effect was not found", args["summary"])
+        self.assertIn("The agent reported OKAY", args["summary"])
+        self.assertEqual(probe["failureFeedback"]["ok"], True)
+
+    def test_a_success_or_a_target_without_the_setting_sends_nothing(self):
+        for rows, extra in ((1, 'feedback_on_failure = "etendo_feedback"\n'), (0, "")):
+            tmp = Path(tempfile.mkdtemp())
+            h = Harness(tmp, SUITE, answers={"etendo_create": {"id": "INV1", "documentNo": "FV9"},
+                                             "etendo_list": {"totalRows": rows}, "etendo_delete": {}})
+            h.config_extra = extra
+            probe = h.run()
+            self.assertNotIn("etendo_feedback", h.order)
+            self.assertNotIn("failureFeedback", probe)
+
+
+class ProbeSelectionTest(unittest.TestCase):
+    def test_several_probes_comma_separated_keep_suite_order(self):
+        suite = load_suite(Path(__file__).resolve().parent.parent / "suites/okr.yaml")
+        picked = cli._selected_probes(suite, "w-customer-crud, q-hello")
+        self.assertEqual([p.id for p in picked], ["q-hello", "w-customer-crud"])
+        self.assertEqual(len(cli._selected_probes(suite, None)), len(suite.probes))
+        with self.assertRaises(KeyError):
+            cli._selected_probes(suite, "q-hello,no-such-probe")
+
+
+class EffectAnyOfTest(unittest.TestCase):
+    """ETP-5848: a platform that records one result in two ways (Holded books a transfer as bank
+    movements or as a ledger entry) is checked with `expectEffect.anyOf`."""
+
+    SUITE = """
+schemaVersion: 2
+window: w
+probes:
+  - id: p
+    category: flow
+    mode: write
+    prompt: "Traspaso {{marker}}"
+    platforms:
+      holded:
+        expectEffect:
+          anyOf:
+            - { tool: list_movements, args: {}, where: { amount: 500 } }
+            - { tool: list_ledger, args: {}, where: { debit: 500 } }
+"""
+
+    def _verify(self, answers):
+        path = Path(tempfile.mkdtemp()) / "s.yaml"
+        path.write_text(self.SUITE, encoding="utf-8")
+        probe = load_suite(path).probes[0].for_platform("holded")
+        calls = []
+
+        @asynccontextmanager
+        async def session(_target):
+            yield "s"
+
+        async def call_tool(_session, name, _args):
+            calls.append(name)
+            answer = answers[name]
+            if isinstance(answer, Exception):
+                raise answer
+            return answer
+
+        with mock.patch.object(cli, "mcp_session", session), mock.patch.object(cli, "call_tool", call_tool):
+            result = asyncio.run(cli._verify_effect(probe, {"name": "h"}, run_id="r", timestamp="2026-11-05T00:00:00Z"))
+        return result, calls
+
+    def test_the_second_way_counts_and_the_first_is_not_required(self):
+        (verified, detail, error), calls = self._verify({"list_movements": {"items": []},
+                                                         "list_ledger": {"items": [{"debit": "500.00"}]}})
+        self.assertEqual((verified, error), (True, None))
+        self.assertEqual(calls, ["list_movements", "list_ledger"])
+        self.assertEqual([d["rows"] for d in detail["anyOf"]], [0, 1])
+
+    def test_absent_only_when_every_way_was_read(self):
+        (verified, detail, error), _ = self._verify({"list_movements": {"items": []}, "list_ledger": {"items": []}})
+        self.assertEqual((verified, error), (False, None))
+        (verified, detail, error), _ = self._verify({"list_movements": {"items": []},
+                                                     "list_ledger": RuntimeError("503")})
+        self.assertIsNone(verified, "one way could not be read: not verifiable, never absent")
+        self.assertEqual(error["kind"], "verification")
+
+    def test_alternatives_are_validated(self):
+        bad = ("anyOf: [{ tool: a, args: {} }]",
+               "anyOf: [{ tool: a, args: {} }, { tool: b, args: {}, expect: none }]")
+        for effect in bad:
+            path = Path(tempfile.mkdtemp()) / "s.yaml"
+            path.write_text(self.SUITE.split("        expectEffect:")[0] + f"        expectEffect:\n          {effect}\n",
+                            encoding="utf-8")
+            with self.subTest(effect=effect), self.assertRaises(ValueError):
+                load_suite(path)
 
 
 class HarnessRevisionTest(unittest.TestCase):
@@ -542,11 +659,11 @@ class CompareTest(unittest.TestCase):
             self.assertEqual(len(h.attempts_of(name)), 2)
 
     def test_compare_json_carries_what_the_report_reads(self):
-        h = CompareHarness(self.tmp, "decision: { ruleVersion: 1, callsMargin: 0.3 }\n" + SUITE)
+        h = CompareHarness(self.tmp, "decision: { ruleVersion: 3, callsMargin: 0.3 }\n" + SUITE)
         compare = h.compare("--repeat", "2", "--seed", "7", "--concurrency", "3", "--subject", "h")
         self.assertEqual(compare["subject"], "h")
         self.assertEqual(compare["repeat"], 2)
-        self.assertEqual(compare["decision"], {"ruleVersion": 1, "callsMargin": 0.3})
+        self.assertEqual(compare["decision"], {"ruleVersion": 3, "callsMargin": 0.3})
         self.assertEqual(compare["probes"], ["p"])
         self.assertIsNotNone(compare["startedAt"])
         self.assertIsNotNone(compare["finishedAt"])
@@ -564,7 +681,7 @@ class CompareTest(unittest.TestCase):
         cid = compare["compareId"]
         for name in ("t", "h"):
             markers = sorted(a["marker"] for a in h.attempts_of(name))
-            self.assertEqual(markers, [f"{cid}-p-a1", f"{cid}-p-a2"])
+            self.assertEqual(markers, [attempt_marker(cid, "p", 1), attempt_marker(cid, "p", 2)])
         self.assertEqual(sorted(h.prompts_by_target["t"]), sorted(h.prompts_by_target["h"]))
 
     def test_each_attempt_records_its_real_schedule(self):
@@ -669,7 +786,7 @@ class CompareTest(unittest.TestCase):
         compare = h.compare("--repeat", "3", "--seed", "11", "--concurrency", "1")
         cid = compare["compareId"]
         probes = load_suite(self.tmp / "suite.yaml").probes
-        expected = [f"{cid}-{w.probe.id}-a{w.attempt}" for w in cli.build_worklist(probes, 3, 11)]
+        expected = [attempt_marker(cid, w.probe.id, w.attempt) for w in cli.build_worklist(probes, 3, 11)]
         self.assertNotEqual(expected, sorted(expected), "the seed must actually shuffle")
         self.assertEqual(h.prompts_by_target["t"], expected)
         self.assertEqual(h.prompts_by_target["h"], expected)
@@ -1084,7 +1201,7 @@ class SuiteV2CompareTest(unittest.TestCase):
         self.assertEqual((record["check"], record["catalogueSha"]), ("ok", SERVER["catalogue"]["sha"]))
         self.assertEqual(h.attempts("h", "q"), [])
         self.assertIsNone(h.not_possible("t", "q"))
-        self.assertEqual(compare["pins"]["matcherVersion"], 4)
+        self.assertEqual(compare["pins"]["matcherVersion"], matcher.MATCHER_VERSION)
         self.assertEqual(compare["suite"]["schemaVersion"], 2)
 
     def test_the_answer_decides_success_on_a_read(self):
@@ -1256,6 +1373,60 @@ probes:
                 self.assertIn("status.cod", attempts[0]["harnessError"]["detail"])
                 self.assertIsNone(attempts[0]["effectVerified"])
 
+    LOOKUP_SUITE = """
+schemaVersion: 2
+probes:
+  - id: w
+    category: write
+    mode: write
+    prompt: "Dale acceso a {{marker}}@x.es"
+    platforms:
+      etendo-go:
+        expectEffect:
+          lookup:
+            - { tool: etendo_list, args: { filters: { email: "{{marker}}@x.es" } }, saveAs: user }
+          tool: etendo_action
+          args: { id: "{{steps.user.data.0.id}}", action: roles }
+          rowsAt: roles
+          where: { name: Sales }
+      holded:
+        notPossible: { kind: goal, reason: "no users" }
+"""
+
+    def _lookup(self, users, roles):
+        h = V2Harness(self.tmp, self.LOOKUP_SUITE)
+
+        async def call_tool(session, name, args):
+            if name in ("etendo_list", "etendo_action"):
+                h.calls.append((name, args))
+                return {"data": list(users)} if name == "etendo_list" else {"roles": list(roles)}
+            return await V2Harness.call_tool(h, session, name, args)
+
+        h.call_tool = call_tool
+        h.compare("--repeat", "1")
+        return h, h.attempts("t", "w")
+
+    def test_lookup_feeds_the_check_with_what_the_agent_created(self):
+        # ETP-5848: the check needs the id of the user the agent created.
+        h, attempts = self._lookup([{"id": "U9"}], [{"id": "S", "name": "Sales"}])
+        self.assertTrue(attempts[0]["effectVerified"])
+        action = [args for name, args in h.calls if name == "etendo_action"]
+        self.assertEqual(action[-1]["id"], "U9")
+        self.assertIn("@x.es", [a for n, a in h.calls if n == "etendo_list"][0]["filters"]["email"])
+
+    def test_a_user_without_the_role_is_an_absent_effect(self):
+        _h, attempts = self._lookup([{"id": "U9"}], [{"id": "F", "name": "Finance"}])
+        self.assertFalse(attempts[0]["effectVerified"])
+
+    def test_a_lookup_that_finds_nothing_is_an_absent_effect_not_a_harness_error(self):
+        # No user created: nothing to check, so the effect did not happen.
+        h, attempts = self._lookup([], [{"id": "S", "name": "Sales"}])
+        self.assertEqual(len(attempts), 1, "not replaced: it is a real failure")
+        self.assertFalse(attempts[0]["effectVerified"])
+        self.assertIsNone(attempts[0].get("harnessError"))
+        self.assertTrue(attempts[0]["effectCheck"]["lookupFoundNothing"])
+        self.assertEqual([n for n, _ in h.calls], ["etendo_list"], "the check itself never ran")
+
     def test_an_unresolvable_answer_ref_is_a_harness_error_and_replaced(self):
         h = V2Harness(self.tmp, V2_SUITE.replace("{{steps.inv.total}}", "{{steps.nope.total}}"))
         h.compare("--repeat", "1")
@@ -1308,7 +1479,7 @@ probes:
         summary = json.loads((h.compare_dir / "summary.json").read_text())
         row = summary["tasks"][0]
         self.assertEqual((row["winner"], row["decidedBy"]), ("reference", "0-capability"))
-        self.assertEqual(summary["kr"]["referenceWins"]["byCapability"], 1)
+        self.assertEqual(summary["kr"]["results"]["referenceOnly"], 1)
 
     def test_not_possible_on_both_platforms_is_excluded(self):
         suite = V2_SUITE.split("  - id: w")[0].replace("""        setup: [{ tool: etendo_create, args: { description: "{{marker}}" }, saveAs: inv }]

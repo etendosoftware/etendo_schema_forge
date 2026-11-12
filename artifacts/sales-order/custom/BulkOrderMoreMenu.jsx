@@ -23,6 +23,7 @@
 // full-reload handoff survives only as a fallback for hosts outside that slot.
 
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 // ETP-4576 - module-level helpers cannot hold a hook, so they take the module-level
 // apiFetch: same credential, same CSRF proof, resolved from the published session.
 import { apiFetch as moduleApiFetch } from '@/auth/api.js';
@@ -35,27 +36,15 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu.jsx';
 import { useUI } from '@/i18n';
-import { translateBackendErrorBody } from '@/lib/backendErrors.js';
 import { trackDocumentCreated } from '@/lib/observability/health-events.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { showBulkActionToast, persistBulkActionResult } from '@/hooks/useBulkActionToast';
+import { joinWithConjunction, translateBackendErrorBody, translateQuotaRefusalBody } from '@/lib/backendErrors.js';
+import {
+  InvoiceSifStepModal, readOnlySifStep, resolveBulkSifPreview,
+} from '@/windows/custom/shared/InvoiceSifStep.jsx';
 const COMPLETED = 'CO';
 const DRAFT = 'DR';
-
-// Reuses the existing checkDraftInvoice NeoHandler endpoint that returns
-// { exists, count, id?, documentNo? } for a single sales-order ID. On a network
-// error the check fails open (lets the create call proceed) — matching the
-// "fail-open" pattern in OrderCreateInvoice.jsx.
-async function hasDraftInvoice(orderId, apiBaseUrl) {
-  try {
-    const res = await moduleApiFetch(`${apiBaseUrl}/header/${orderId}/action/checkDraftInvoice`);
-    if (!res.ok) return false;
-    const data = (await res.json())?.response?.data;
-    return Boolean(data?.exists);
-  } catch {
-    return false;
-  }
-}
 
 // No checkDraftShipment endpoint exists yet, so we query the goods-shipment
 // entity directly filtered by salesOrder — same pattern used in
@@ -75,7 +64,28 @@ async function hasDraftShipment(orderId, apiBaseUrl) {
   }
 }
 
-async function runBulkOrderAction({ rows, action, apiBaseUrl, token, ui }) {
+// ETP-6179: the fiscal systems' display names, in the order the preview lists them.
+const SYSTEM_LABEL_KEYS = {
+  SII: 'sifDataTabs.tab.sii',
+  TicketBAI: 'sifDataTabs.tab.tbai',
+  Verifactu: 'sifDataTabs.tab.verifactu',
+};
+
+/**
+ * ETP-6179: the preview of the invoices this run would create — one `sifDefaults` per COMPLETED
+ * selected order (the others fail before reaching the backend anyway) — plus, per order id, the
+ * values that order's POST sends as its own `sifFields`.
+ */
+async function previewBulkInvoices(rows, apiBaseUrl) {
+  const completed = rows.filter(row => (row.documentStatus || row.docStatus) === COMPLETED);
+  const bulk = await resolveBulkSifPreview(moduleApiFetch,
+    completed.map(row => `${apiBaseUrl}/header/${row.id}/action/sifDefaults`));
+  const fieldsByOrderId = Object.fromEntries(
+    completed.map((row, i) => [row.id, bulk.previews[i]?.fields ?? null]));
+  return { ...bulk, fieldsByOrderId };
+}
+
+async function runBulkOrderAction({ rows, action, apiBaseUrl, token, ui, sifFieldsByOrderId }) {
   const isInvoice = action === 'createDraftInvoice';
 
   const outcomes = await Promise.allSettled(
@@ -87,27 +97,32 @@ async function runBulkOrderAction({ rows, action, apiBaseUrl, token, ui }) {
         );
       }
 
-      // Skip orders that already have a DR invoice/shipment to avoid generating
-      // duplicate drafts. Orders with only CO documents and pending qty/amount
-      // proceed; the backend handler then rejects with "no pending lines" for
-      // fully-fulfilled orders, which we surface as the row failure message.
-      const alreadyHasDraft = isInvoice
-        ? await hasDraftInvoice(row.id, apiBaseUrl)
-        : await hasDraftShipment(row.id, apiBaseUrl);
-      if (alreadyHasDraft) {
-        const messageKey = isInvoice ? 'soBulkOrderHasDraftInvoice' : 'soBulkOrderHasDraftShipment';
-        throw new Error(ui(messageKey).replace('{documentNo}', row.documentNo || row.id));
+      // Skip orders that already have a DR shipment to avoid generating duplicate drafts.
+      // ETP-5828 — invoices are NOT pre-skipped any more: the backend is the source of truth and
+      // invoices what is pending net of the order's draft invoices. An order whose drafts hold only
+      // part of it is invoiced for the rest; one whose drafts hold everything left is refused with
+      // the translated "a draft invoice … already covers what is left" sentence, and a fully
+      // invoiced one with "no lines to invoice", both surfaced as the row failure message.
+      if (!isInvoice && await hasDraftShipment(row.id, apiBaseUrl)) {
+        throw new Error(ui('soBulkOrderHasDraftShipment').replace('{documentNo}', row.documentNo || row.id));
       }
 
       const res = await moduleApiFetch(`${apiBaseUrl}/header/${row.id}/action/${action}`, {
         method: 'POST',
         
-        body: JSON.stringify({}),
+        // ETP-6179: each order's OWN fiscal data, as its preview gave it (the summary showed
+        // the values they share and "per customer / per order" for the ones they do not).
+        body: JSON.stringify(isInvoice && sifFieldsByOrderId?.[row.id]
+          ? { sifFields: sifFieldsByOrderId[row.id] } : {}),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        // ETP-5714: read error.message too and translate it (the 409 draftInvoiceExists refusal
-        // arrives as { error: { code, message } } with the draft numbers in the sentence).
+        // ETP-5051 — a plan-quota refusal reads as the translated quota sentence, and is flagged so
+        // a multi-row summary can still name it (useBulkActionToast).
+        const quotaText = translateQuotaRefusalBody(err, ui);
+        if (quotaText) throw Object.assign(new Error(quotaText), { quotaRefusal: true });
+        // ETP-5714: read error.message too and translate it. ETP-5828: the draft-covers 400 arrives
+        // as { status, message } with the draft numbers in the sentence (backendErrors.js).
         throw new Error(translateBackendErrorBody(err, ui, `Error (${res.status})`));
       }
       trackDocumentCreated(isInvoice ? 'sales-invoice' : 'goods-shipment');
@@ -121,6 +136,7 @@ async function runBulkOrderAction({ rows, action, apiBaseUrl, token, ui }) {
     .map(({ o, row }) => ({
       documentNo: row.documentNo || row.id,
       message: o.reason?.message || 'Unknown error',
+      ...(o.reason?.quotaRefusal ? { quotaRefusal: true } : {}),
     }));
   const ok = outcomes.length - failed.length;
 
@@ -133,13 +149,16 @@ async function runBulkOrderAction({ rows, action, apiBaseUrl, token, ui }) {
 export default function BulkOrderMoreMenu({ selectedRows, clearSelection, token, apiBaseUrl, refresh, windowReadOnly }) {
   const ui = useUI();
   const [running, setRunning] = useState(false);
+  // ETP-6179: the read-only fiscal-data summary shown before creating the invoices.
+  const [sifSummary, setSifSummary] = useState(null);
 
   if (!selectedRows || selectedRows.length === 0 || windowReadOnly) return null;
 
-  const handleSelect = (action) => async () => {
-    if (running) return;
+  const run = async (action, sifFieldsByOrderId) => {
     setRunning(true);
-    const result = await runBulkOrderAction({ rows: selectedRows, action, apiBaseUrl, token, ui });
+    const result = await runBulkOrderAction({
+      rows: selectedRows, action, apiBaseUrl, token, ui, sifFieldsByOrderId,
+    });
     setRunning(false);
 
     // ETP-5302 — refetch the rows in place rather than reloading the whole browser page,
@@ -159,7 +178,39 @@ export default function BulkOrderMoreMenu({ selectedRows, clearSelection, token,
     }, 600);
   };
 
+  // ETP-6179: before creating one invoice per order, show the fiscal data they will get, read-only,
+  // whenever a fiscal system is active: a field's value when it is the same for every order, "per
+  // customer" (SII key) or "per order" when it differs. With no system active, or a preview that
+  // could not be read, the run goes on as before and each invoice gets its backend defaults.
+  const handleSelect = (action) => async () => {
+    if (running) return;
+    if (action === 'createDraftInvoice') {
+      setRunning(true);
+      const bulk = await previewBulkInvoices(selectedRows, apiBaseUrl);
+      setRunning(false);
+      if (bulk.kind === 'summary') {
+        setSifSummary(bulk);
+        return;
+      }
+    }
+    await run(action);
+  };
+
+  const confirmSifSummary = async () => {
+    const summary = sifSummary;
+    await run('createDraftInvoice', summary?.fieldsByOrderId);
+    setSifSummary(null);
+  };
+
+  const summaryNotice = sifSummary
+    ? ui('invoiceSifStep.bulkNotice', {
+      systems: joinWithConjunction(
+        (sifSummary.preview?.systems ?? []).map(system => ui(SYSTEM_LABEL_KEYS[system] ?? system)), ui),
+    })
+    : null;
+
   return (
+    <>
     <DropdownMenu data-testid="DropdownMenu__3f1293">
       <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__3f1293">
         <Button
@@ -189,5 +240,19 @@ export default function BulkOrderMoreMenu({ selectedRows, clearSelection, token,
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    {sifSummary && createPortal(
+      <InvoiceSifStepModal
+        sif={readOnlySifStep(sifSummary.preview, sifSummary.varying)}
+        readOnly
+        notice={summaryNotice}
+        confirmLabel={`${ui('soBulkCreateInvoices')} (${selectedRows.length})`}
+        loading={running}
+        onConfirm={confirmSifSummary}
+        onCancel={() => setSifSummary(null)}
+        onClose={() => setSifSummary(null)}
+        data-testid="InvoiceSifStepModal__bulk6179" />,
+      document.body,
+    )}
+    </>
   );
 }

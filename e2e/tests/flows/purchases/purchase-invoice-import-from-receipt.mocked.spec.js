@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test';
+// @covers artifacts/purchase-invoice/custom/ImportFromGoodsReceiptModal.jsx
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 import { clickLastCheckbox } from '../../helpers/selectors.js';
 
@@ -7,8 +8,10 @@ import { clickLastCheckbox } from '../../helpers/selectors.js';
  *
  * Covers:
  *   1. Single line — POST body matches original PO values resolved via callout
- *   2. Secondary text shows the PO reference from the receipt header
- *   3. Already-imported receipt lines are grayed and show "already imported" label
+ *   2. A receipt with nothing left to import is hidden from the list
+ *
+ * ETP-6099: the popup reads the invoice's availableReceipts / availableReceiptLines actions
+ * (rows in the action contract's shape, `detail: true`); the price callout runs at import only.
  *
  * Note: "completing a receipt" is not tested here because that flow may not be
  * implemented yet. Tests start from a pre-mocked completed (CO) goods receipt.
@@ -57,31 +60,33 @@ const DRAFT_INVOICE = {
 const RECEIPT_HEADER = {
   id: RECEIPT_ID,
   documentNo: 'GR-TEST-001',
-  documentStatus: 'CO',
+  date: '2026-05-01',
   businessPartner: BP_ID,
   'businessPartner$_identifier': 'Proveedor Test',
-  invoiced: false,
-  movementDate: '2026-05-01',
-  'salesOrder$_identifier': 'PO-TEST-001',
+  currency: 'eur-1',
+  pendingLines: 1,
+  order: 'po-1',
+  orderDocumentNo: 'PO-TEST-001',
+  amount: 200,
 };
 
 const RECEIPT_LINE_1 = {
   id: RECEIPT_LINE_ID,
+  lineNo: 10,
   product: 'prod-1',
   'product$_identifier': 'Test Product',
-  movementQuantity: 2,
   uOM: 'uom-1',
-  salesOrderLine: PO_LINE_ID_REF,
-  purchaseOrderLine: PO_LINE_ID_REF,
+  pendingQuantity: 2,
+  movementQuantity: 2,
+  orderLine: PO_LINE_ID_REF,
+  orderLineDiscount: 0,
+  importedHere: false,
+  invoicedElsewhere: false,
 };
 
-// An existing invoice line that references the receipt line — used for already-imported detection
-const EXISTING_INVOICE_LINE = {
-  id: 'existing-inv-line-001',
-  goodsShipmentLine: RECEIPT_LINE_ID,
-  product: 'prod-1',
-  invoicedQuantity: 2,
-};
+// A receipt whose only line this invoice already holds: nothing left (`pendingLines: 0`).
+const RECEIPT_HEADER_COVERED = { ...RECEIPT_HEADER, pendingLines: 0 };
+const RECEIPT_LINE_IMPORTED = { ...RECEIPT_LINE_1, pendingQuantity: 0, importedHere: true };
 
 // Callout response: resolves unitPrice and listPrice for the product
 const CALLOUT_RESPONSE = {
@@ -106,13 +111,9 @@ const CALLOUT_RESPONSE = {
  * @param {object} opts
  * @param {object}   opts.receipt            - receipt header
  * @param {Array}    opts.receiptLines       - receipt lines to return when expanded
- * @param {Array}    opts.alreadyImported    - invoice lines to return when fetchDocuments
- *                                             queries existing lines (for already-imported detection).
- *                                             These are NOT shown in the detail view — detail view
- *                                             always gets an empty list so LinesEmptyState renders.
  * @param {object}   opts.state              - mutable object to capture intercepted requests
  */
-async function installMocks(page, { receipt, receiptLines, alreadyImported = [], state = {} }) {
+async function installMocks(page, { receipt, receiptLines, state = {} }) {
   // Invoice header — GET (detail page fetch + post-import reload via fetchById)
   await page.route(`**/sws/neo/purchase-invoice/header/${INV_ID}`, async (route) => {
     const method = route.request().method();
@@ -137,21 +138,12 @@ async function installMocks(page, { receipt, receiptLines, alreadyImported = [],
     route.fallback();
   });
 
-  // Invoice lines GET — differentiate detail view vs modal fetchDocuments by _endRow:
-  //   - Detail view does NOT include _startRow/_endRow on first load (from useEntity.js)
-  //     or uses _endRow=74 (BATCH_SIZE-1)
-  //   - Modal fetchDocuments uses _endRow=200 (from ImportFromGoodsReceiptModal.js)
-  // Detail view returns empty so LinesEmptyState renders.
-  // Modal fetchDocuments returns alreadyImported so the already-imported detection works.
+  // Invoice lines GET — the detail view's own fetch: empty, so LinesEmptyState renders.
+  // (ETP-6099: the popup no longer reads the invoice lines; the server flags `importedHere`.)
   await page.route('**/sws/neo/purchase-invoice/lines{/**,}**', async (route) => {
     const method = route.request().method();
     if (method !== 'GET') return route.fallback();
-    const url = route.request().url();
-    const isModalFetch = url.includes('_endRow=200') || url.includes('_endRow=199');
-    // For the detail view, return empty (so LinesEmptyState is shown).
-    // For the modal's fetchDocuments, return alreadyImported.
-    // Do NOT use state.importedLines here — that tracks POST-created lines only.
-    const data = isModalFetch ? alreadyImported : [];
+    const data = [];
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -173,8 +165,7 @@ async function installMocks(page, { receipt, receiptLines, alreadyImported = [],
     });
   });
 
-  // Callout endpoint — resolves prices per product.
-  // Installed early because fetchLines calls callout per line asynchronously.
+  // Callout endpoint — resolves prices per product, at import time (buildLineBody).
   await page.route('**/sws/neo/purchase-invoice/lines/callout', async (route) => {
     if (route.request().method() !== 'POST') return route.fallback();
     if (state.calloutCalls) state.calloutCalls.push(true);
@@ -195,43 +186,15 @@ async function installMocks(page, { receipt, receiptLines, alreadyImported = [],
     });
   });
 
-  // Goods receipt header list — ImportFromGoodsReceiptModal.fetchDocuments
-  await page.route('**/sws/neo/goods-receipt/goodsReceipt{/**,}**', async (route) => {
-    if (route.request().method() !== 'GET') return route.fallback();
+  // The invoice's availableReceipts / availableReceiptLines actions —
+  // ImportFromGoodsReceiptModal.fetchDocuments / fetchLines
+  await page.route(`**/sws/neo/purchase-invoice/header/${INV_ID}/action/availableReceipt*`, async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    const isLines = route.request().url().endsWith('/availableReceiptLines');
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ response: { data: [receipt] } }),
-    });
-  });
-
-  // Goods receipt lines — ImportFromGoodsReceiptModal.fetchLines
-  await page.route('**/sws/neo/goods-receipt/goodsReceiptLine{/**,}**', async (route) => {
-    if (route.request().method() !== 'GET') return route.fallback();
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ response: { data: receiptLines } }),
-    });
-  });
-
-  // Purchase order line GET — used by fetchLines to resolve discount from the originating PO line
-  await page.route(`**/sws/neo/purchase-order/lines/${PO_LINE_ID_REF}`, async (route) => {
-    if (route.request().method() !== 'GET') return route.fallback();
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        response: {
-          data: [{
-            id: PO_LINE_ID_REF,
-            orderedQuantity: 2,
-            listPrice: 100,
-            unitPrice: 100,
-            discount: 0,
-          }],
-        },
-      }),
+      body: JSON.stringify({ response: { data: isLines ? receiptLines : [receipt], hasMore: false, nextOffset: null } }),
     });
   });
 }
@@ -287,7 +250,7 @@ test.describe('Purchase Invoice — Import from Goods Receipt (mocked)', () => {
     await openImportFromReceiptModal(page);
     await expandFirstDocRow(page, 'GR-TEST-001');
 
-    // Product line appears after callout resolves prices (async per-line)
+    // Product line appears once the lines action answers
     await expect(page.getByText('Test Product').first()).toBeVisible({ timeout: 10_000 });
 
     // Qty input pre-filled with movementQuantity=2
@@ -313,15 +276,14 @@ test.describe('Purchase Invoice — Import from Goods Receipt (mocked)', () => {
   });
 
   test('receipt with all lines already imported is hidden from the modal list', async ({ page }) => {
-    // ETP-4299: ImportLinesModal now eager-loads all lines and filters out receipts
-    // where every line is already imported, so users never see a receipt they can't use.
+    // ETP-4299 hid a receipt whose every line is already imported, so users never see a
+    // receipt they can't use. ETP-6099: decided from the row (`pendingLines: 0`), no line read.
     const state = { calloutCalls: [], importedLines: [] };
 
     await login(page);
     await installMocks(page, {
-      receipt: RECEIPT_HEADER,
-      receiptLines: [RECEIPT_LINE_1],
-      alreadyImported: [EXISTING_INVOICE_LINE],
+      receipt: RECEIPT_HEADER_COVERED,
+      receiptLines: [RECEIPT_LINE_IMPORTED],
       state,
     });
 
@@ -383,38 +345,37 @@ const PINV_SRC_HEADER = {
 // Plain "Factura" (FAC) purchase invoice — the only subtype the picker offers (per
 // ETP-4737's "solo facturas de Tipo Factura" acceptance criteria). No apInvoiceSubtype
 // set — getApSubtype() falls back to FAC when no rectificative hint is present.
+// What the rectificative's `availableOriginInvoices` action lists (ETP-6099): the server already
+// keeps the supplier's completed FAC invoices only.
 const SOURCE_PINV_DOC = {
   id: SOURCE_PINV_ID,
   documentNo: 'SRC-PINV-001',
-  documentStatus: 'CO',
   businessPartner: BP_ID,
   'businessPartner$_identifier': 'Proveedor Test',
-  invoiceDate: '2026-04-01',
+  date: '2026-04-01',
+  pendingLines: 1,
 };
 
 // Already imported into PINV_SRC_HEADER — must appear grayed out in the picker.
 const SOURCE_PLINE_1_IMPORTED = {
   id: SRC_PLINE_1_ID,
+  lineNo: 10,
   product: 'prod-a',
   'product$_identifier': 'Producto Origen A',
   invoicedQuantity: -2,
+  pendingQuantity: 0,
+  importedHere: true,
 };
 
 // Not yet imported — selectable, and used to assert the negative quantity stepper.
 const SOURCE_PLINE_2_AVAILABLE = {
   id: SRC_PLINE_2_ID,
+  lineNo: 20,
   product: 'prod-b',
   'product$_identifier': 'Producto Origen B',
   invoicedQuantity: -3,
-};
-
-// Current invoice's own existing line — its sourceInvoiceLineId points back at
-// SRC_PLINE_1_ID, which is how fetchDocuments builds the alreadyImported set.
-const EXISTING_PLINE_LINKING_SOURCE_1 = {
-  id: 'existing-pline-1',
-  product: 'prod-a',
-  sourceInvoiceLineId: SRC_PLINE_1_ID,
-  invoicedQuantity: -2,
+  pendingQuantity: 3,
+  importedHere: false,
 };
 
 // Classifies a `.../{entity}/header...` request URL as the plain 'detail' GET/PATCH
@@ -447,11 +408,29 @@ function isPlainLinesPath(url) {
 }
 
 async function installSourceInvoiceMocks(page, state) {
-  // Header: detail GET, candidate-list GET, and the afterImport PATCH that links
-  // originInvoice back to the source invoice.
+  // Header: detail GET, the popup's read actions (ETP-6099: availableOriginInvoices for the
+  // candidates, availableOriginInvoiceLines for the source's lines, already-imported ones marked
+  // `importedHere`), and the afterImport PATCH that links originInvoice back to the source invoice.
   await page.route('**/sws/neo/purchase-invoice/header{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
+    const { pathname } = new URL(url);
+    if (req.method() === 'POST' && pathname.endsWith(`/header/${PINV_SRC_ID}/action/availableOriginInvoices`)) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [SOURCE_PINV_DOC], hasMore: false } }),
+      });
+      return;
+    }
+    if (req.method() === 'POST' && pathname.endsWith(`/header/${PINV_SRC_ID}/action/availableOriginInvoiceLines`)) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [SOURCE_PLINE_1_IMPORTED, SOURCE_PLINE_2_AVAILABLE], hasMore: false } }),
+      });
+      return;
+    }
     const kind = classifyHeaderRequest(url, PINV_SRC_ID);
     if (req.method() === 'PATCH') {
       if (kind !== 'detail') return route.fallback();
@@ -473,21 +452,10 @@ async function installSourceInvoiceMocks(page, state) {
       });
       return;
     }
-    if (kind === 'list') {
-      // fetchDocuments' candidate-invoices lookup (no server-side criteria;
-      // FAC-only filtering happens client-side via getApSubtype()).
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ response: { data: [SOURCE_PINV_DOC] } }),
-      });
-      return;
-    }
     route.fallback();
   });
 
-  // Lines: detail view's own (empty) fetch, modal fetchDocuments' own-lines lookup
-  // (for alreadyImported detection), the source invoice's own lines (fetchLines), and POST.
+  // Lines: detail view's own (empty) fetch and the import's line POST.
   await page.route('**/sws/neo/purchase-invoice/lines{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
@@ -503,25 +471,7 @@ async function installSourceInvoiceMocks(page, state) {
       return;
     }
     if (req.method() !== 'GET') return route.fallback();
-    if (url.includes(`parentId=${SOURCE_PINV_ID}`)) {
-      // fetchLines(docId=SOURCE_PINV_ID) — the source invoice's own lines.
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ response: { data: [SOURCE_PLINE_1_IMPORTED, SOURCE_PLINE_2_AVAILABLE] } }),
-      });
-      return;
-    }
     if (url.includes(`parentId=${PINV_SRC_ID}`)) {
-      if (url.includes('_endRow=200')) {
-        // Modal fetchDocuments' own-lines lookup — builds alreadyImportedSourceLineIds.
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ response: { data: [EXISTING_PLINE_LINKING_SOURCE_1] } }),
-        });
-        return;
-      }
       // Detail view's own lines fetch — empty so LinesEmptyState (and its import button) renders.
       await route.fulfill({
         status: 200,
@@ -572,8 +522,9 @@ test.describe('Purchase Invoice — Import from Source Invoice (ETP-4737)', () =
     // Assertion: the already-imported source line is grayed out / cannot be re-selected.
     await expect(page.getByText(/already imported|ya importado/i)).toBeVisible();
     const checkboxes = page.getByRole('checkbox');
-    // nth(0) = document-level checkbox, nth(1) = line 1 (already imported), nth(2) = line 2.
-    await expect(checkboxes.nth(1)).toBeDisabled();
+    // nth(0) = document-level checkbox, nth(1) = the lines table's master checkbox,
+    // nth(2) = line 1 (already imported), nth(3) = line 2.
+    await expect(checkboxes.nth(2)).toBeDisabled();
 
     // Assertion: the quantity stepper displays a NEGATIVE value (negativeQuantity prop) —
     // checked on the selectable line (invoicedQuantity=-3 → maxQty=3 → displayed as -3).
@@ -584,7 +535,7 @@ test.describe('Purchase Invoice — Import from Source Invoice (ETP-4737)', () =
     // as the shared clickLastCheckbox() helper) instead of Playwright's actionability
     // click — the Checkbox's 1px visual target is frequently occluded by its own
     // decorative wrapper div, which fails Playwright's pointer-events hit test.
-    await checkboxes.nth(2).evaluate((el) => el.click());
+    await checkboxes.nth(3).evaluate((el) => el.click());
     const importSelectedBtn = page.getByRole('button', { name: /Import.*selected|Importar.*seleccionadas/i });
     await expect(importSelectedBtn).toBeEnabled({ timeout: 3_000 });
     await importSelectedBtn.click();

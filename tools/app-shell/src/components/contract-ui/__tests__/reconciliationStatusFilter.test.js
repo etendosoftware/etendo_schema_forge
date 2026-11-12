@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/reconciliationStatusFilter.js
 /**
  * Unit tests for `reconciliationStatusFilter.js` — the pure membership logic behind the bank
  * reconciliation left-panel status filter.
@@ -20,10 +21,14 @@ import {
   STATUS_MEMBERS,
   matchesStatus,
   countForStatus,
+  visibleStatusCodes,
 } from '../reconciliationStatusFilter.js';
 
-/** The five exclusive states the backend can put on a line. */
-const STATES = ['pending', 'suggested', 'byRule', 'difference', 'reconciled'];
+/**
+ * The exclusive states the backend can put on a line. `bounce` (flag `bank-bounce-suggestions` on)
+ * and `discarded` (served only by `pendingLines?status=discarded`) were added by ETP-5581.
+ */
+const STATES = ['pending', 'suggested', 'byRule', 'difference', 'bounce', 'reconciled', 'discarded'];
 
 /**
  * The contract as a table: for each line state, exactly which filter codes must show it.
@@ -34,18 +39,24 @@ const EXPECTED_MATCHES = {
   suggested: ['pending', 'suggested'],
   byRule: ['pending', 'byRule'],
   difference: ['pending', 'difference'],
+  // A possible bounce still needs the user to act, so it is a kind of pending.
+  bounce: ['pending', 'bounce'],
   reconciled: ['reconciled'],
+  // A discarded line is out of the reconciliation: only its own filter shows it.
+  discarded: ['discarded'],
 };
 
 describe('STATUS_CODES', () => {
-  it('lists the five filter codes in dropdown order', () => {
-    assert.deepEqual(STATUS_CODES, ['pending', 'suggested', 'byRule', 'difference', 'reconciled']);
+  // ETP-5581 added `bounce` and `discarded` (last); the dropdown offers them only when the backend
+  // reports them (visibleStatusCodes).
+  it('lists the filter codes in dropdown order', () => {
+    assert.deepEqual(STATUS_CODES, ['pending', 'suggested', 'byRule', 'difference', 'bounce', 'reconciled', 'discarded']);
   });
 });
 
 describe('STATUS_MEMBERS', () => {
   it('maps pending to every non-reconciled state', () => {
-    assert.deepEqual(STATUS_MEMBERS.pending, ['pending', 'suggested', 'byRule', 'difference']);
+    assert.deepEqual(STATUS_MEMBERS.pending, ['pending', 'suggested', 'byRule', 'difference', 'bounce']);
   });
 
   it('keeps the other codes as strict single-state subsets', () => {
@@ -65,6 +76,67 @@ describe('STATUS_MEMBERS', () => {
     for (const code of ['pending', 'suggested', 'byRule', 'difference']) {
       assert.ok(!STATUS_MEMBERS[code].includes('reconciled'), `${code} must not cover reconciled`);
     }
+  });
+
+  it('keeps bounce and discarded as strict single-state codes', () => {
+    assert.deepEqual(STATUS_MEMBERS.bounce, ['bounce']);
+    assert.deepEqual(STATUS_MEMBERS.discarded, ['discarded']);
+  });
+
+  it('never puts a discarded line under any other code', () => {
+    for (const code of STATUS_CODES.filter((c) => c !== 'discarded')) {
+      assert.ok(!STATUS_MEMBERS[code].includes('discarded'), `${code} must not cover discarded`);
+    }
+  });
+});
+
+describe('visibleStatusCodes — the dropdown entries offered for the counts (ETP-5581)', () => {
+  /** The five entries an account without the flag and without discarded lines had before. */
+  const FLAG_OFF_CODES = ['pending', 'suggested', 'byRule', 'difference', 'reconciled'];
+
+  it('offers exactly the five previous codes when the backend reports neither bounce nor discarded', () => {
+    const counts = { all: 4, pending: 2, suggested: 1, byRule: 0, difference: 1, reconciled: 0 };
+    assert.deepEqual(visibleStatusCodes(counts, 'pending'), FLAG_OFF_CODES);
+  });
+
+  it('offers the five codes for absent counts', () => {
+    assert.deepEqual(visibleStatusCodes(undefined, 'pending'), FLAG_OFF_CODES);
+    assert.deepEqual(visibleStatusCodes(null, null), FLAG_OFF_CODES);
+  });
+
+  it('offers the five codes when counts.discarded is 0 and there is no counts.bounce', () => {
+    assert.deepEqual(visibleStatusCodes({ pending: 1, discarded: 0 }, 'pending'), FLAG_OFF_CODES);
+  });
+
+  // The backend only sends counts.discarded with the flag on, next to counts.bounce; reading a
+  // positive count on its own as "offer the entry" is a defensive fallback, not a real answer.
+  it('adds discarded (last) for a positive discarded count even without counts.bounce (defensive)', () => {
+    assert.deepEqual(
+      visibleStatusCodes({ pending: 1, discarded: 2 }, 'pending'),
+      [...FLAG_OFF_CODES, 'discarded'],
+    );
+  });
+
+  it('reads a numeric-string discarded count', () => {
+    assert.ok(visibleStatusCodes({ discarded: '3' }, 'pending').includes('discarded'));
+  });
+
+  it('adds bounce and discarded when counts.bounce is present, even at 0', () => {
+    assert.deepEqual(
+      visibleStatusCodes({ pending: 1, bounce: 0 }, 'pending'),
+      ['pending', 'suggested', 'byRule', 'difference', 'bounce', 'reconciled', 'discarded'],
+    );
+  });
+
+  it('keeps the active code even when the counts would hide it', () => {
+    // After restoring the last discarded line the filter is still `discarded`: the trigger must
+    // never name an entry the list no longer has.
+    assert.ok(visibleStatusCodes({ pending: 1, discarded: 0 }, 'discarded').includes('discarded'));
+    assert.ok(visibleStatusCodes({ pending: 1 }, 'bounce').includes('bounce'));
+  });
+
+  it('keeps the dropdown order when the active code is re-added', () => {
+    assert.deepEqual(visibleStatusCodes({}, 'bounce'), ['pending', 'suggested', 'byRule', 'difference', 'bounce', 'reconciled']);
   });
 });
 
@@ -157,6 +229,23 @@ describe('matchesStatus — an unknown filter code falls back to strict equality
   });
 });
 
+describe('matchesStatus — bounce and discarded lines (ETP-5581)', () => {
+  it('shows a bounce line under pending, the default filter', () => {
+    assert.equal(matchesStatus('bounce', 'pending'), true);
+  });
+
+  it('hides a discarded line under pending and under the strict codes', () => {
+    for (const code of ['pending', 'suggested', 'byRule', 'difference', 'bounce', 'reconciled']) {
+      assert.equal(matchesStatus('discarded', code), false, `discarded under '${code}'`);
+    }
+  });
+
+  it('hides a stateless line under bounce and discarded', () => {
+    assert.equal(matchesStatus(undefined, 'bounce'), false);
+    assert.equal(matchesStatus(undefined, 'discarded'), false);
+  });
+});
+
 describe('countForStatus', () => {
   /** The counts payload the backend returns alongside the lines. */
   const COUNTS = { all: 5, pending: 3, suggested: 1, byRule: 0, difference: 1, reconciled: 0 };
@@ -171,6 +260,13 @@ describe('countForStatus', () => {
     assert.equal(countForStatus(COUNTS, 'byRule'), 0);
     assert.equal(countForStatus(COUNTS, 'difference'), 1);
     assert.equal(countForStatus(COUNTS, 'reconciled'), 0);
+  });
+
+  it('adds counts.bounce to the pending sum and never counts.discarded', () => {
+    // 3 + 1 + 0 + 1 + 2 bounce = 7; the 4 discarded lines are not pending.
+    assert.equal(countForStatus({ ...COUNTS, bounce: 2, discarded: 4 }, 'pending'), 7);
+    assert.equal(countForStatus({ ...COUNTS, bounce: 2, discarded: 4 }, 'bounce'), 2);
+    assert.equal(countForStatus({ ...COUNTS, bounce: 2, discarded: 4 }, 'discarded'), 4);
   });
 
   it('excludes reconciled from the pending sum', () => {

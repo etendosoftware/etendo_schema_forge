@@ -422,7 +422,7 @@ Messages are English literals in Java on purpose (no `AD_MESSAGE` rows), localiz
 The rectificative invoice now arrives confirmed, so the "review the draft before
 confirming" step is gone. To change it the user **reactivates** it from the
 `purchase-invoice` window (`reactivate` menu action, `documentAction: 'RE'`,
-`preUnpost: true`, visible at `DocStatus='CO'`) — the only route back to `DR`.
+visible at `DocStatus='CO'`) — the only route back to `DR`.
 
 **Known residual gap (UI copy, not behavior):** the confirm card still describes
 the outcome as a draft —
@@ -549,6 +549,14 @@ works; one document may now have several returns (the old 409 "A return already 
   the returned total is read, so two simultaneous creates/imports cannot both pass the cap. A reversed return still
   counts as returned (only a voided one frees the quantity). `reason` over the description length answers 422
   `returnReasonTooLong`. See `neo-headless.md` §4.12.32.
+- **Source line and quantities for MCP (ETP-6054).** `canceledInoutLine` (the goods receipt line a return line returns) was
+  `discarded`; it is now `visibility: "readOnly"`, `grid: false`, `form: false` in `decisions.json` (entity `lines`), so
+  `etendo_get` / `etendo_list` of `returnToVendorShipmentLine` return it while the screen shows no new column, field or input
+  (the generated diff is one `selectors` entry that is only read for a rendered field, plus mock data). `orderQuantity`
+  keeps its name: it is the quantity RECEIVED on the source receipt line, the "Cant. recibida orig." column. `availableReceiptLines`
+  adds `receivedQuantity` next to `movementQuantity` (still returnable). The `createPurchaseReturn` 201 lists per line
+  `alreadyReturnedQuantity` and the `returns` that hold it. To publish the new field to the runtime:
+  `make regen ONLY=return-to-vendor-shipment PUSH_TO_NEO=1` and `./gradlew export.database`.
 - **Published to MCP.** `availableReceipts`, `availableReceiptLines` (`receiptId` + `businessPartner`),
   `importReceiptLines`, `rectifiableInvoices`, `createReturnInvoice` and `documentAction` (CO) are declared by
   `ReturnToVendorShipmentHeaderHandler.actionContracts()`; the spec `agentPrompt`
@@ -635,3 +643,15 @@ An `unpost` of a return that is not posted is refused with **422** (`ETGO_GoodsU
 ## "Generar factura rectificativa" title on the post-confirm invoice popup — ETP-5688
 
 The popup opened by "Crear Factura Rectificativa" on a completed (CO), not-yet-invoiced return is the shared `CreateInvoiceConfirmModal`, which was titled with the generic `soManageDocsTitle` ("Generar factura"). It now accepts an optional `title` prop (default unchanged for every other consumer); `ConfirmWithCreditButtonBase` forwards its new `createInvoiceModalTitle` prop, which this window supplies as `returnToVendor.createCreditNoteTitle` ("Generar factura rectificativa"). `cardTitle` is NOT used for this: it belongs to the draft-time `ConfirmInOutModal`, whose title ("¿Gestionar factura rectificativa?") is unchanged. The row-hover Confirmar (`ReturnToVendorShipmentRowConfirmModal`) only opens that draft-time modal, so it never shows this popup.
+
+## Fiscal data step before the invoice is created — ETP-6179
+
+- **Confirmar** with the rectificative-invoice toggle on and **Crear factura rectificativa** on a
+  confirmed return, same components as the customer return.
+- Purchase rectificative: SII fields only, without a motive (purchase-side corrective support is not
+  implemented), so the `R4` default of the customer return does not apply here. `sifFields` and `sifDefaults` are declared on every channel, MCP included: the header
+  handler is bound by `@NeoExtension` since ETP-6179 (the row's `Java_Qualifier`, the class's
+  `@Named` and the artifact's `javaQualifier` were removed).
+
+How the step itself works — the backend `sifDefaults` preview, when it appears, the
+`sifFields` it sends and the fail-open rule — is described once in [sales-order.md → Fiscal data step before the invoice is created](sales-order.md#fiscal-data-step-before-the-invoice-is-created--etp-6179).

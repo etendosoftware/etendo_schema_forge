@@ -3223,3 +3223,125 @@ realizar esta acción."), because that is the one the new read-only gating surfa
 
 **Lesson:** when adding a `backendError.*` key, add it to es_AR too. A guardrail test comparing the
 `backendError.*` sets of es_ES and es_AR would stop the gap from growing.
+
+---
+
+## [2026-10-28] ETP-5978 — Two `make regen` quirks found while regenerating payment-term (known, not fixed)
+
+**Component:** `sf-regen-all` (`cli/src/regen-all.js` in `schema_forge_core`), driven by `make regen`.
+
+### 1. `SKIP_EXTRACT=1` still reads the DB
+
+**Symptom:** `make regen ONLY=<window> SKIP_EXTRACT=1` (seen with `LOCAL_CORE=1`) still logs
+`[F1a] Extracting fields...` / `[F1b] Extracting rules...` and rewrites `schema-raw.json` /
+`rules-raw.json` from the live DB, although `make regen-help` describes the flag as "Skip the DB
+extraction step (reuse existing schema-raw.json)". Already noticed, and not chased, in the
+`dimensionsPanel` regen entry above.
+
+**Root cause:** not specific to `LOCAL_CORE`. `--skip-extract` only guards step F0 (the raw CSV dump
+into `raw-query-results/`). F1a (`extract-fields.js`) and F1b (`extract-rules.js`) always open a DB
+pool. The published `@etendosoftware/schema-forge-cli` (0.3.84) has the same code.
+
+**Workaround (not fixed):** to keep the DB out of the run, use `FROM_CACHE=1`, which reads the
+cached AD snapshot the same way CI's offline check does. Otherwise review the `schema-raw.json` /
+`rules-raw.json` diff before committing. A local DB with incomplete data can change them without
+any warning.
+
+### 2. The contract version moves on a regen that changes no content
+
+**Symptom:** regenerating a window with no new decisions change still bumps the minor `version`
+(and `updatedAt`) of `contract.mcp.json`. Commit `9c64f814c` ("Sync payment-term MCP contract
+version") was nothing but that bump. Across ETP-5978's regens payment-term went from `0.8.0` to
+`0.12.0` (`contract.json`), and the two files do not always land on the same number in the working
+tree.
+
+**Root cause:** not diagnosed. Start with `splitWindowContractArtifacts()` in
+`cli/src/generate-contract.js`, where the MCP contract takes its version from `contract.version`,
+as called from `regen-all.js`.
+
+**Workaround (not fixed):** before committing, check that a regen diff on `contract.mcp.json` is
+version / `updatedAt` / checksum only. Treat `make regen-check ONLY=<window> FROM_CACHE=1` (what the
+pre-push hook and CI's offline drift check compute) as the authoritative result, and commit what it
+produces.
+
+## [2026-11-02] ETP-5831 — Two known gaps left open (root fix deferred)
+
+### 1. Dev server loads `@radix-ui/react-dismissable-layer` twice (page freeze after a menu → dialog)
+
+**Symptom:** in `make dev` only, confirming "Cambiar SIF" in Fiscal Configuration left
+`pointer-events: none` on `<body>`; the wizard appeared but nothing responded until a full reload.
+Production builds are not affected.
+
+**Root cause:** `@radix-ui/react-dialog` is pre-bundled by Vite (something in `src/` imports it
+directly, e.g. via `FileLightbox`), while `@radix-ui/react-dropdown-menu` is served raw through
+`@etendosoftware/app-shell-core`, which `tools/app-shell/vite.config.js` excludes from
+`optimizeDeps`. The two therefore load separate copies of `@radix-ui/react-dismissable-layer`, each
+with its own layer stack. The modal menu locked the body, the dialog saved that lock as the
+"original" value and restored it on close.
+
+**Workaround (in place):** the fiscal-config kebab is `DropdownMenu modal={false}`, so it never takes
+the lock. Any other hand-written menu that opens a dialog needs the same (see
+`docs/ui-customization.md` → kebab menu gotcha). Covered by TC2 in
+`e2e/tests/flows/fiscal/fiscal-config.mocked.spec.js`.
+
+**Root fix (deferred by the user to another ticket):** add the `@radix-ui/*` packages to
+`optimizeDeps.include` in `tools/app-shell/vite.config.js`, so dev resolves a single copy.
+
+### 2. `FiscalDefaultsSection` reads the full fiscal config on every contact view (QA F-3)
+
+**Symptom:** none visible; a cost. Contacts → Financiero now gates its "Valores por Defecto SIF"
+blocks on the active SIF of the selected organization (see `generated-custom-windows/contacts.md`
+→ "ETP-5831 (CP-20) — SIF-gated blocks"), and reads it through `useFiscalConfig`, which fetches the
+three fiscal config entities (SII, TicketBAI, VERI\*FACTU) each time a contact's Financial tab is
+mounted. There is no cache shared across contacts.
+
+**Status:** accepted for now, deferred. A shared, org-keyed cache (or a single lightweight
+"active SIF" read) would remove the repeated requests.
+
+## [2026-11-10] ETP-5831 — NEO tenant write guard vs. core preferences (catalog save lost, QA CP-22)
+
+**Component:** `NeoFiscalModelsCatalogService` (`com.etendoerp.go`) + `FmListPage.jsx` catalog `onSave`.
+
+**Symptom:** deactivating Modelo 390 (or 303) in Modelos fiscales → Catálogo de modelos looked saved,
+but after a reload the change was gone, and the Organization window kept showing "Actividades IAE"
+and "Representante legal / Modelo 390". The Tomcat access log showed `PUT
+/sws/neo/fiscal-models-catalog → 403`; the last stored value predated ETP-5819.
+
+**Root cause:** core's `Preferences.setPreferenceValue` creates (or updates) the `AD_Preference` row at
+client `0` / org `0`, visible at the tenant. ETP-5819's `NeoTenantWriteGuard`, wrapped around every
+NEO dispatch, refuses on flush any row whose client is not the request's → `OBSecurityException` →
+403. The SPA swallowed the failed `PUT` after an optimistic update, so nothing told the user.
+
+**Fix:** the service writes the preference **and flushes** inside
+`NeoTenantWriteGuard.allowingSystemRows` (client `0` only, never another tenant; the check runs on
+flush, so the flush must be inside the scope). `FmListPage` now undoes the optimistic update and
+shows `fm.catalog.save_failed` (or the `NetworkError` message) on any failed `PUT`.
+
+**Lesson:** any NEO code that writes through a core helper storing System rows (preferences, role
+template accesses, client-0 audit records) must do it inside `allowingSystemRows`. Other NEO
+preference writers through the same helper — `NeoFavoritesService`, `NeoFiltersService`,
+`NeoGridViewsService` — were not checked here and may hit the same 403. And never swallow a failed
+save after an optimistic update: it turns a backend refusal into silent data loss.
+
+## [2026-11-10] ETP-5831 — `FmCatalogPage.toggleModel` relies on `getSiiStatus` never rejecting
+
+**Component:** `tools/app-shell/src/windows/custom/fiscal-models/FmCatalogPage.jsx` (`toggleModel`)
+and `useOrgSiiStatus.js` (`fetchOrgSiiStatus`).
+
+**Observation (review/QA of the CP-22 fixes):** when a `siiWarningOnActivate` model (the 390) is
+switched on, `toggleModel` awaits `getSiiStatus()` inside a `try { … } finally { … }` with **no
+`catch`**. The `finally` releases the per-model double-click lock (`siiCheckInFlight`), but a
+rejection would still propagate out of the async switch handler as an **unhandled promise
+rejection**: the switch would stay off, nothing would be saved and the user would get no toast.
+
+**Why it is safe today:** `fetchOrgSiiStatus` never rejects. It catches every failure (no
+organization, non-ok answer, network error, bad JSON) and resolves `SII_STATUS_OFF`, so the
+documented "status unknown → activate right away" path is always taken.
+
+**Risk:** the safety is an implicit contract of `fetchOrgSiiStatus`, not something `toggleModel`
+enforces. If that function (or `useOrgSiiStatus`'s memoised `getSiiStatus`) is ever changed to
+reject, the catalog toggle breaks silently.
+
+**Status:** noted, not fixed (no behaviour change in ETP-5831). The fix, if the contract ever
+changes, is a `catch` in `toggleModel` that treats a failed read as "not in the SII" (same as
+`fetchOrgSiiStatus` does now) or shows an error toast.

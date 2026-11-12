@@ -2,7 +2,7 @@
 // @covers tools/app-shell/src/locales/en_US.json
 // @covers tools/app-shell/src/locales/es_ES.json
 // @covers tools/app-shell/src/locales/es_AR.json
-import { describe, it } from 'node:test';
+import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
@@ -15,7 +15,12 @@ import {
   parseBackendError,
   translateBackendErrorResponse,
   translateBackendErrorBody,
+  translateImportRefusal,
+  isImportRefusalCode,
+  translateQuotaRefusalBody,
+  quotaRefusalFields,
 } from '../backendErrors.js';
+import { QUOTA_REFUSED_EVENT } from '../planQuotas.js';
 
 /**
  * Unit tests for translateBackendError.
@@ -766,6 +771,70 @@ describe('translateBackendErrorBody', () => {
   }
 });
 
+describe('bank bounce-pair refusals (ETP-5581)', () => {
+  // com.etendoerp.go BankBounceErrors / StatementLineDiscard: each coded refusal carries its
+  // English AD_MESSAGE key in error.messageKeys; the SPA translates it with translateBackendErrorBody.
+  const KEYED = [
+    ['LINE_DISCARDED', 'ETGO_StatementLineDiscarded', 'backendError.bankLineDiscarded',
+      'This bank statement line is discarded, so it cannot be reconciled. Restore it first.'],
+    ['BOUNCE_SUGGESTIONS_OFF', 'ETGO_BounceSuggestionsOff', 'backendError.bounceSuggestionsOff',
+      'Bounce suggestions are not enabled for this account.'],
+    ['SIGN_MISMATCH', 'ETGO_BounceSignMismatch', 'backendError.bounceSignMismatch',
+      'The two lines of a bounce must have opposite signs: one takes the money out and the other brings it back.'],
+    ['AMOUNT_MISMATCH', 'ETGO_BounceAmountMismatch', 'backendError.bounceAmountMismatch',
+      'The two lines of a bounce must have exactly the same amount.'],
+    ['HAS_PAYMENT', 'ETGO_BounceHasPayment', 'backendError.bounceHasPayment',
+      'One of the lines is the bank movement of a payment registered in Etendo. Discarding it would leave that payment without its bank movement, so this bounce cannot be discarded.'],
+    ['LINE_NOT_PENDING', 'ETGO_BounceLineNotPending', 'backendError.bounceLineNotPending',
+      'One of the lines is not pending reconciliation: its bank statement is in draft, it is part of a partially reconciled line, or another suggestion already uses it.'],
+    ['DISCARD_NOT_ALLOWED', 'ETGO_BounceDiscardNotAllowed', 'backendError.bounceDiscardNotAllowed',
+      'This bounce cannot be discarded. Both lines must be unreconciled lines imported from the bank, and the later one must be dated at most 60 days after the earlier one.'],
+  ];
+
+  for (const [code, messageKey, localeKey, english] of KEYED) {
+    it(`routes ${messageKey} (${code}) to ${localeKey}`, () => {
+      const body = { error: { code, message: english, messageKeys: [messageKey] } };
+      assert.equal(translateBackendErrorBody(body, (k) => `translated:${k}`, 'fallback'), `translated:${localeKey}`);
+    });
+  }
+
+  it('routes each refusal to its own locale key', () => {
+    const keys = KEYED.map(([code, messageKey]) => translateBackendErrorBody(
+      { error: { code, message: 'x', messageKeys: [messageKey] } }, (k) => `translated:${k}`, 'f'));
+    assert.equal(new Set(keys).size, KEYED.length);
+  });
+
+  it('maps the LINE_DISCARDED English sentence by text, for the paths that forward only the message', () => {
+    const [, , localeKey, english] = KEYED[0];
+    assert.equal(translateBackendError(english, (k) => `translated:${k}`), `translated:${localeKey}`);
+    assert.equal(translateBackendError(`  ${english}  `, (k) => `translated:${k}`), `translated:${localeKey}`);
+  });
+
+  it('does not map the other bounce sentences by text (they are routed by key only)', () => {
+    for (const [, , , english] of KEYED.slice(1)) {
+      assert.equal(translateBackendError(english, (k) => `translated:${k}`), english);
+    }
+  });
+
+  for (const locale of ['en_US', 'es_ES', 'es_AR']) {
+    it(`resolves every refusal to a non-empty ${locale} translation`, () => {
+      const json = JSON.parse(readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'));
+      const t = localeTranslator(locale);
+      for (const [code, messageKey, localeKey, english] of KEYED) {
+        const out = translateBackendErrorBody({ error: { code, message: english, messageKeys: [messageKey] } }, t, 'f');
+        assert.equal(out, json.genericLabels[localeKey], `${locale}.${localeKey}`);
+        assert.ok(out.trim(), `${locale}.${localeKey} is blank`);
+        if (locale !== 'en_US') {
+          assert.notEqual(out, english, `${locale}.${localeKey} is untranslated`);
+          // The product wording is "rechazo" (bancario), never "rebote" nor "devolución".
+          assert.doesNotMatch(out, /devoluci/i, `${locale}.${localeKey} says devolución`);
+          assert.doesNotMatch(out, /rebote/i, `${locale}.${localeKey} says rebote`);
+        }
+      }
+    });
+  }
+});
+
 describe('translateBackendError — legacy "Account could not be found" text, new EN wording (ETP-5175)', () => {
   const es = localeTranslator('es_ES');
 
@@ -1391,6 +1460,14 @@ describe('translateBackendError — country/IBAN validation (ETP-4896)', () => {
         assert.equal(translateBackendError(spanishProse, es), spanishProse);
       });
     });
+  });
+
+  // ETP-5684 — a post/unpost refused for a role without Show Accounting Fields (403).
+  it('ETGO_AccountingAccessDenied: maps the accounting refusal by key', () => {
+    const ui = fakeUiTranslator({ 'backendError.accountingAccessDenied': 'Tu rol no puede ver la contabilidad' });
+    const body = { success: false, message: 'Access denied to accounting for current role',
+      messageKeys: ['ETGO_AccountingAccessDenied'] };
+    assert.equal(translateBackendErrorBody(body, ui, 'fallback'), 'Tu rol no puede ver la contabilidad');
   });
 });
 
@@ -3486,6 +3563,10 @@ describe('translateBackendError — invoice post/unpost refusals by identity (ET
       'Cost calculation looks stalled: transactions have been waiting for their cost for a long time, so repeating the post will not help. An administrator must check the Costing Background process and the pending transactions.'],
     ['NotCalculatedCost', 'backendError.costNotCalculated',
       'Cost has not yet been calculated for all products in the document.'],
+    // ETP-5591: a disabled document, generic or with its certain reason.
+    ['DocumentDisabled', 'backendError.documentDisabledForAccounting', 'Document disabled for accounting'],
+    ['TotalGrossIsZero', 'backendError.invoiceTotalIsZero',
+      'Total Gross Amount of the invoice is zero. Invoice is disabled for accounting.'],
   ];
 
   for (const [messageKey, i18nKey, prose] of CASES) {
@@ -3500,6 +3581,23 @@ describe('translateBackendError — invoice post/unpost refusals by identity (ET
       assert.notEqual(esText, enText, `es_ES.${i18nKey} is still English`);
     });
   }
+
+  it('names the financial account missing its deposit or withdrawal account (ETP-5591)', () => {
+    const prose = 'The financial account Caja has no deposit account in its accounting.';
+    const params = { financialAccount: 'Caja' };
+    assert.equal(
+      translateBackendError(prose, es, { messageKeys: ['ETGO_PostingDisabledNoDepositAccount'], messageParams: params }),
+      es('backendError.finAccNoDepositAccount', params));
+    assert.match(
+      translateBackendError(prose, es, { messageKeys: ['ETGO_PostingDisabledNoWithdrawalAccount'], messageParams: params }),
+      /Caja.*cuenta de retirada/);
+  });
+
+  it('keeps the backend text when the caller dropped the params a translation needs (ETP-5591)', () => {
+    const prose = 'La cuenta financiera Caja no tiene cuenta de depósito en su contabilidad.';
+    assert.equal(
+      translateBackendError(prose, es, { messageKeys: ['ETGO_PostingDisabledNoDepositAccount'] }), prose);
+  });
 
   it('speaks the accountants’ Spanish: Descontabilizar / contabilizada / asientos', () => {
     assert.match(es('backendError.invoicePostedFieldsLocked'), /contabilizada.*Descontabil/);
@@ -3628,6 +3726,83 @@ describe('translateBackendError — invoice reactivate fiscal-rectified refusal 
       messageKeys: [KEY], messageParams: { fiscalSystem: 'SII', rectificativas: ['REC-1'] },
     });
     assert.equal(arrayText, bareText);
+  });
+});
+
+// ── ETP-5745 CP-19/CP-23: rectification fiscal-code-required refusal (RectificationFiscalCodeGuard)
+// — `messageParams.systems` is a raw array of ACTIVE fiscal systems still missing their own
+// rectification code/motive, joined with the SAME locale-aware conjunction as fiscalSystem above
+// (the backend's own `message` field is deliberately plain English prose — the wire contract for
+// MCP/scripts; the SPA never shows it, it renders this localized sentence instead).
+describe('translateBackendError — rectification fiscal-code-required refusal (ETP-5745)', () => {
+  const es = localeTranslator('es_ES');
+  const en = localeTranslator('en_US');
+  const KEY = 'ETGO_InvoiceRectificationCodeRequired';
+
+  it('renders the key in es_ES and en_US, never the raw key or the backend prose', () => {
+    const prose = 'Select a rectification reason/code in the SIF tab for SII.';
+    const esText = translateBackendError(prose, es, { messageKeys: [KEY], messageParams: { systems: ['SII'] } });
+    const enText = translateBackendError(prose, en, { messageKeys: [KEY], messageParams: { systems: ['SII'] } });
+    assert.notEqual(esText, 'backendError.rectificationCodeRequired');
+    assert.notEqual(enText, 'backendError.rectificationCodeRequired');
+    assert.notEqual(esText, enText);
+  });
+
+  it('names a single missing system with no conjunction needed', () => {
+    const text = translateBackendError('ignored', es, { messageKeys: [KEY], messageParams: { systems: ['Verifactu'] } });
+    assert.match(text, /Verifactu/);
+  });
+
+  it('joins a 2-element systems array with the real es_ES/en_US conjunction, not a comma', () => {
+    const params = { systems: ['SII', 'TicketBAI'] };
+    const esText = translateBackendError('ignored', es, { messageKeys: [KEY], messageParams: params });
+    const enText = translateBackendError('ignored', en, { messageKeys: [KEY], messageParams: params });
+    assert.match(esText, /SII y TicketBAI/);
+    assert.match(enText, /SII and TicketBAI/);
+    assert.doesNotMatch(esText, /SII, TicketBAI/);
+  });
+
+  it('joins a 3-element systems array with no Oxford comma before the conjunction', () => {
+    const params = { systems: ['SII', 'TicketBAI', 'Verifactu'] };
+    const esText = translateBackendError('ignored', es, { messageKeys: [KEY], messageParams: params });
+    const enText = translateBackendError('ignored', en, { messageKeys: [KEY], messageParams: params });
+    assert.match(esText, /SII, TicketBAI y Verifactu/);
+    assert.match(enText, /SII, TicketBAI and Verifactu/);
+  });
+
+  it('keeps the backend prose when the locale has no entry for the key', () => {
+    const prose = 'raw backend prose';
+    assert.equal(translateBackendError(prose, (k) => k, {
+      messageKeys: [KEY], messageParams: { systems: ['SII'] },
+    }), prose);
+  });
+});
+
+// ── ETP-5745 CP-26: a non-rectificative invoice with a stray VERI*FACTU R1-R5 code BLOCKS
+// completion instead of being silently corrected (reverted from the original CP-20 behavior).
+// No dynamic messageParams — a single fixed sentence naming one field on one system, resolved
+// through the generic BACKEND_ERROR_KEY_MAP route (not a dedicated composer).
+describe('translateBackendError — Verifactu invoice type not rectificative (ETP-5745 CP-26)', () => {
+  const es = localeTranslator('es_ES');
+  const en = localeTranslator('en_US');
+  const KEY = 'ETGO_InvoiceVerifactuInvTypeNotRectificative';
+
+  it('renders the key in es_ES and en_US, never the raw key or the backend prose', () => {
+    const prose = 'The VERI*FACTU invoice type cannot be a rectification code (R1-R5) on an '
+      + 'invoice that is not rectificative. Fix it in the SIF tab before confirming.';
+    const esText = translateBackendError(prose, es, { messageKeys: [KEY] });
+    const enText = translateBackendError(prose, en, { messageKeys: [KEY] });
+    assert.notEqual(esText, 'backendError.verifactuInvTypeNotRectificative');
+    assert.notEqual(enText, 'backendError.verifactuInvTypeNotRectificative');
+    assert.notEqual(esText, prose);
+    assert.notEqual(esText, enText);
+    assert.match(esText, /Verifactu|VERI\*FACTU/i);
+    assert.match(esText, /rectificaci/i);
+  });
+
+  it('keeps the backend prose when the locale has no entry for the key', () => {
+    const prose = 'raw backend prose';
+    assert.equal(translateBackendError(prose, (k) => k, { messageKeys: [KEY] }), prose);
   });
 });
 
@@ -3838,6 +4013,79 @@ describe('extractBackendErrorCode (ETP-5782)', () => {
   });
 });
 
+// ── PSD2 bank sync: the client timeout sentinel and the lock refusal code ──────────
+describe('translateBackendError — PSD2 bank sync sentinels and codes', () => {
+  const LOCALES = ['en_US', 'es_ES', 'es_AR'];
+  const readLabels = (locale) => JSON.parse(
+    readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8')).genericLabels;
+
+  it('maps the BANK_CONNECTION_TIMEOUT sentinel to the timeout label, never the raw token', () => {
+    const es = fakeUiTranslator({ financeAccountsBankConnectionTimeout: 'El banco no respondió a tiempo.' });
+    assert.equal(translateBackendError('BANK_CONNECTION_TIMEOUT', es), 'El banco no respondió a tiempo.');
+  });
+
+  it('translates BANK_SYNC_LOCK_UNAVAILABLE by its code alone, whatever prose the server sent', () => {
+    for (const locale of LOCALES) {
+      const labels = readLabels(locale);
+      const t = (key) => labels[key] ?? key;
+      assert.equal(
+        translateBackendError('Could not acquire the sync lock for account X', t, { code: 'BANK_SYNC_LOCK_UNAVAILABLE' }),
+        labels['backendError.bankSyncLockUnavailable'],
+        locale,
+      );
+    }
+  });
+
+  it('translates BANK_SYNC_DUPLICATE_CHECK_FAILED by its code alone, English or server-translated prose', () => {
+    for (const locale of LOCALES) {
+      const labels = readLabels(locale);
+      const t = (key) => labels[key] ?? key;
+      for (const prose of [
+        'Could not verify whether 3 transactions were already imported; they were skipped.',
+        'No se pudo verificar si 3 movimientos ya estaban importados.',
+      ]) {
+        assert.equal(
+          translateBackendError(prose, t, { code: 'BANK_SYNC_DUPLICATE_CHECK_FAILED' }),
+          labels['backendError.bankSyncDuplicateCheckFailed'],
+          `${locale}: ${prose}`,
+        );
+      }
+    }
+  });
+
+  it('a message BACKEND_ERROR_MAP knows word for word keeps its own translation over the duplicate-check code', () => {
+    const labels = readLabels('es_ES');
+    const t = (key) => labels[key] ?? key;
+    const known = 'No active bank connection found for financial account %s. Connect the account first.';
+    assert.equal(
+      translateBackendError(known, t, { code: 'BANK_SYNC_DUPLICATE_CHECK_FAILED' }),
+      labels['backendError.psd2NoActiveConnection'],
+    );
+  });
+
+  it('keeps the server prose when the lock label is missing (guard)', () => {
+    const prose = 'Could not acquire the sync lock';
+    assert.equal(translateBackendError(prose, (k) => k, { code: 'BANK_SYNC_LOCK_UNAVAILABLE' }), prose);
+  });
+
+  for (const key of [
+    'financeAccountsBankSyncTooltip',
+    'financeAccountsBankSyncInProgress',
+    'backendError.bankSyncLockUnavailable',
+    'backendError.bankSyncDuplicateCheckFailed',
+  ]) {
+    it(`ships ${key} in every locale, translated in the Spanish ones`, () => {
+      const en = readLabels('en_US')[key];
+      assert.ok(typeof en === 'string' && en.trim(), `en_US.${key}`);
+      for (const locale of ['es_ES', 'es_AR']) {
+        const text = readLabels(locale)[key];
+        assert.ok(typeof text === 'string' && text.trim(), `${locale}.${key}`);
+        assert.notEqual(text, en, `${locale}.${key} is untranslated`);
+      }
+    });
+  }
+});
+
 // ── ETP-5693: posting-account refusals on accounting fields, translated by identity ──
 describe('translateBackendError — posting-account refusals (ETP-5693)', () => {
   const es = localeTranslator('es_ES');
@@ -3960,6 +4208,417 @@ describe('translateBackendError — payment-term refusals', () => {
   });
 });
 
+// ── Plan-quota write refusal (403 QUOTA_EXCEEDED) ────────────────────────────────
+//
+// A NEO write refused because a plan quota is exhausted answers 403 with
+// `{ error: { code: 'QUOTA_EXCEEDED', message: 'Quota exceeded: <name> (<c>/<i> <unit>)', quota } }`.
+// The SPA owns the sentence: from the structured `quota` when the caller has the body, from the
+// English prose when it forwarded only the message. Real locale files, so the wording is pinned.
+describe('translateBackendError — plan-quota refusal (QUOTA_EXCEEDED)', () => {
+  const es = localeTranslator('es_ES');
+  const ar = localeTranslator('es_AR');
+  const en = localeTranslator('en_US');
+  const prose = 'Quota exceeded: Posted sales invoices (100/100 Inv)';
+  const quota = {
+    resourceKey: 'POSTED_SALES_INVOICES',
+    resourceName: 'Posted sales invoices',
+    unitLabel: 'Inv',
+    includedQty: 100,
+    enforcementMode: 'block',
+    warningThreshold: 80,
+    period: 'month',
+    consumed: 100,
+    verdict: 'DENY',
+  };
+  const refusalBody = { error: { message: prose, status: 403, code: 'QUOTA_EXCEEDED', quota } };
+
+  describe('from the structured quota', () => {
+    it('builds the sentence in every shipped locale', () => {
+      assert.equal(translateBackendError(prose, es, { quota }),
+        'Posted sales invoices: has alcanzado el límite de tu plan (100 de 100 Inv). '
+        + 'No se pueden crear más registros de este tipo.');
+      assert.equal(translateBackendError(prose, ar, { quota }),
+        'Posted sales invoices: alcanzaste el límite de tu plan (100 de 100 Inv). '
+        + 'No se pueden crear más registros de este tipo.');
+      assert.equal(translateBackendError(prose, en, { quota }),
+        'Posted sales invoices: your plan limit has been reached (100 of 100 Inv). '
+        + 'New records of this kind cannot be created.');
+    });
+
+    it('uses the catalog name and numbers of the quota, not of the prose', () => {
+      const other = { ...quota, resourceName: 'Facturas emitidas', consumed: 1500, includedQty: 1500, unitLabel: 'fact.' };
+      assert.equal(translateBackendError('Quota exceeded: something else (1/2 x)', es, { quota: other }),
+        'Facturas emitidas: has alcanzado el límite de tu plan (1.500 de 1.500 fact.). '
+        + 'No se pueden crear más registros de este tipo.');
+    });
+
+    it('drops the unit when the quota has none', () => {
+      assert.equal(translateBackendError(prose, es, { quota: { ...quota, unitLabel: null } }),
+        'Posted sales invoices: has alcanzado el límite de tu plan (100 de 100). '
+        + 'No se pueden crear más registros de este tipo.');
+    });
+
+    it('omits the usage when the quota carries no included quantity', () => {
+      assert.equal(translateBackendError(prose, es, { quota: { ...quota, includedQty: null } }),
+        'Posted sales invoices: has alcanzado el límite de tu plan. No se pueden crear más registros de este tipo.');
+    });
+
+    it('names the resource by its key when the catalog name is blank, as the banner and /account do', () => {
+      assert.equal(translateBackendError(prose, es, { quota: { ...quota, resourceName: '  ' } }),
+        'POSTED_SALES_INVOICES: has alcanzado el límite de tu plan (100 de 100 Inv). '
+        + 'No se pueden crear más registros de este tipo.');
+    });
+
+    it('gives the generic sentence for an empty quota object, or one with neither a name nor a key', () => {
+      const generic = 'Has alcanzado el límite de tu plan para este tipo de registro. '
+        + 'No se pueden crear más registros de este tipo.';
+      assert.equal(translateBackendError(prose, es, { quota: {} }), generic);
+      assert.equal(translateBackendError(prose, es, { quota: { ...quota, resourceName: '  ', resourceKey: '' } }), generic);
+      assert.equal(translateBackendErrorBody({ error: { code: 'QUOTA_EXCEEDED', message: 'x' } }, es, 'Error (403)'), generic);
+    });
+
+    it('wins over the message keys of the same body', () => {
+      assert.equal(
+        translateBackendError(prose, es, { quota, messageKeys: ['ETGO_InvoiceFieldsLockedPosted'], messageParams: {} }),
+        translateBackendError(prose, es, { quota }),
+      );
+    });
+  });
+
+  describe('from the message prose alone', () => {
+    it('parses name, consumed, included and unit', () => {
+      assert.equal(translateBackendError('Quota exceeded: Posted sales invoices (87/100 Inv)', es),
+        'Posted sales invoices: has alcanzado el límite de tu plan (87 de 100 Inv). '
+        + 'No se pueden crear más registros de este tipo.');
+    });
+
+    it('trims surrounding whitespace before matching', () => {
+      assert.equal(translateBackendError(`  ${prose}  `, en),
+        'Posted sales invoices: your plan limit has been reached (100 of 100 Inv). '
+        + 'New records of this kind cannot be created.');
+    });
+
+    it('keeps a resource name that itself contains " ("', () => {
+      assert.equal(translateBackendError('Quota exceeded: Invoices (EU) (5/5 Inv)', en),
+        'Invoices (EU): your plan limit has been reached (5 of 5 Inv). New records of this kind cannot be created.');
+    });
+
+    it('treats the literal "null" unit as no unit', () => {
+      const translated = translateBackendError('Quota exceeded: Users (3/3 null)', en);
+      assert.equal(translated,
+        'Users: your plan limit has been reached (3 of 3). New records of this kind cannot be created.');
+      assert.doesNotMatch(translated, /null/);
+    });
+
+    it('reads a message with no unit at all', () => {
+      assert.equal(translateBackendError('Quota exceeded: Users (3/3)', es),
+        'Users: has alcanzado el límite de tu plan (3 de 3). No se pueden crear más registros de este tipo.');
+    });
+
+    it('leaves a message that only resembles the refusal untouched', () => {
+      for (const msg of [
+        'Quota exceeded: Users',
+        'Quota exceeded: Users (three)',
+        'Quota exceeded: (3/3 Inv)',
+        'Quota exceeded for Users (3/3)',
+      ]) {
+        assert.equal(translateBackendError(msg, es), msg, msg);
+      }
+    });
+
+    it('keeps the prose when the locale has no quota keys (t echoes keys)', () => {
+      assert.equal(translateBackendError(prose, (key) => key), prose);
+    });
+  });
+
+  describe('never the generic no-access message', () => {
+    it('a 403 quota body does not read as "you do not have access"', async () => {
+      const noAccess = es('backendError.accessDeniedToSpec');
+      const viaBody = translateBackendErrorBody(refusalBody, es, 'Error (403)');
+      const viaResponse = await translateBackendErrorResponse({ status: 403, json: async () => refusalBody }, es);
+      const viaProse = translateBackendError(prose, es);
+      for (const text of [viaBody, viaResponse, viaProse]) {
+        assert.notEqual(text, noAccess);
+        assert.match(text, /^Posted sales invoices: has alcanzado el límite de tu plan/);
+      }
+    });
+
+    it('reads the refusal inside a batch failure envelope (error.detail.error)', () => {
+      const batch = { committed: false, error: { message: prose, detail: refusalBody } };
+      assert.equal(translateBackendErrorBody(batch, es, 'Error'), translateBackendError(prose, es, { quota }));
+    });
+  });
+
+  describe('parseBackendError', () => {
+    const jsonResponse = (body, status = 403) => ({ status, json: async () => body });
+
+    it('adds the quota to the parsed refusal', async () => {
+      const parsed = await parseBackendError(jsonResponse(refusalBody));
+      assert.equal(parsed.message, prose);
+      assert.deepEqual(parsed.quota, quota);
+    });
+
+    it('keeps the three-field shape, with no quota key, for any other body', async () => {
+      const body = { error: { status: 403, message: 'Access denied to spec for current role' } };
+      const parsed = await parseBackendError(jsonResponse(body));
+      assert.equal(Object.hasOwn(parsed, 'quota'), false);
+      assert.deepEqual(Object.keys(parsed).sort(), ['message', 'messageKeys', 'messageParams']);
+      assert.equal(parsed.message, 'Access denied to spec for current role');
+      assert.equal(
+        await translateBackendErrorResponse(jsonResponse(body), es),
+        es('backendError.accessDeniedToSpec'),
+      );
+    });
+  });
+
+  // ETP-5051 — translating a refusal is where the app hears about it: `translateQuotaExceeded`
+  // announces it (QUOTA_REFUSED_EVENT) so the environment list is re-read and the banner turns red.
+  // Both ways in must announce. `node --test` has no window, so one is installed from a real
+  // EventTarget for these cases only. `announceQuotaRefusal` dedupes per resource and counts for
+  // 30 s across the whole process, so every case refuses a resource of its own.
+  describe('announces the refusal to the app', () => {
+    let heard;
+    const count = () => { heard += 1; };
+    let target;
+
+    beforeEach(() => {
+      heard = 0;
+      target = new EventTarget();
+      target.addEventListener(QUOTA_REFUSED_EVENT, count);
+      globalThis.dispatchEvent = target.dispatchEvent.bind(target);
+    });
+
+    afterEach(() => {
+      delete globalThis.dispatchEvent;
+    });
+
+    it('announces a structured QUOTA_EXCEEDED body', () => {
+      const own = { ...quota, resourceKey: 'ANNOUNCE_STRUCTURED', resourceName: 'Structured' };
+      const text = translateBackendErrorBody(
+        { error: { message: prose, status: 403, code: 'QUOTA_EXCEEDED', quota: own } }, es, 'Error (403)',
+      );
+      assert.match(text, /^Structured: has alcanzado el límite de tu plan/);
+      assert.equal(heard, 1);
+    });
+
+    it('announces a refusal known only from its message prose', () => {
+      const text = translateBackendError('Quota exceeded: Prose only resource (7/7 Inv)', es);
+      assert.match(text, /^Prose only resource: has alcanzado el límite de tu plan/);
+      assert.equal(heard, 1);
+    });
+
+    // An already-shown error re-renders and is translated again: still one announcement.
+    it('announces the same refusal once when it is translated again', () => {
+      const own = { ...quota, resourceKey: 'ANNOUNCE_RERENDER', resourceName: 'Rerendered' };
+      translateBackendError(prose, es, { quota: own });
+      translateBackendError(prose, es, { quota: own });
+      translateBackendError(prose, en, { quota: { ...own } });
+      assert.equal(heard, 1);
+    });
+
+    it('announces nothing for a message that only resembles the refusal, or for another error', () => {
+      translateBackendError('Quota exceeded: Users', es);
+      translateBackendError('Access denied to spec for current role', es);
+      translateBackendErrorBody({ error: { message: 'boom', status: 500, code: 'QUOTA_CHECK_FAILED' } }, es, 'Error');
+      assert.equal(heard, 0);
+    });
+  });
+
+  it('every quota backendError key exists in all three locales with its placeholders', () => {
+    for (const locale of ['en_US', 'es_ES', 'es_AR']) {
+      const labels = JSON.parse(readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8')).genericLabels;
+      assert.match(labels['backendError.quotaExceeded'], /\{resource\}.*\{usage\}/, locale);
+      assert.match(labels['backendError.quotaExceededNoUsage'], /\{resource\}/, locale);
+      assert.doesNotMatch(labels['backendError.quotaExceededNoUsage'], /\{usage\}/, locale);
+      assert.ok(labels['backendError.quotaExceededGeneric']?.trim(), locale);
+      assert.doesNotMatch(labels['backendError.quotaExceededGeneric'], /\{/, locale);
+    }
+  });
+});
+
+// ETP-5051 — the quota check itself failed (e.g. a database error): HTTP 500, nothing was saved.
+// It must read as its own translated sentence, never as the generic 500 text or the English prose.
+describe('translateBackendError — failed quota check (QUOTA_CHECK_FAILED)', () => {
+  const es = localeTranslator('es_ES');
+  const ar = localeTranslator('es_AR');
+  const en = localeTranslator('en_US');
+  const prose = 'The quota check failed; nothing was saved. Try again.';
+  const body = { error: { message: prose, status: 500, code: 'QUOTA_CHECK_FAILED' } };
+
+  it('translates the structured refusal in every shipped locale', () => {
+    assert.equal(translateBackendErrorBody(body, es, 'Error 500'), es('backendError.quotaCheckFailed'));
+    assert.equal(translateBackendErrorBody(body, ar, 'Error 500'), ar('backendError.quotaCheckFailed'));
+    assert.equal(translateBackendErrorBody(body, en, 'Error 500'), en('backendError.quotaCheckFailed'));
+    assert.notEqual(translateBackendErrorBody(body, es, 'Error 500'), prose);
+  });
+
+  it('translates it from the code even when the message is not the known sentence', () => {
+    const other = { error: { message: 'Internal error', status: 500, code: 'QUOTA_CHECK_FAILED' } };
+    assert.equal(translateBackendErrorBody(other, es, 'Error 500'), es('backendError.quotaCheckFailed'));
+    assert.equal(translateBackendError('Internal error', es, { quotaCheckFailed: true }),
+      es('backendError.quotaCheckFailed'));
+  });
+
+  it('translates the bare backend sentence for callers that forward only the message', () => {
+    assert.equal(translateBackendError(prose, es), es('backendError.quotaCheckFailed'));
+    assert.equal(translateBackendError(`  ${prose}  `, en), en('backendError.quotaCheckFailed'));
+  });
+
+  it('reads it inside a batch failure envelope (error.detail.error)', () => {
+    const batch = { committed: false, error: { message: "Operation 'inv' rejected by server", detail: body } };
+    assert.equal(translateBackendErrorBody(batch, es, 'Error'), es('backendError.quotaCheckFailed'));
+  });
+
+  it('flags it in parseBackendError and translates it through translateBackendErrorResponse', async () => {
+    const response = () => ({ status: 500, json: async () => body });
+    const parsed = await parseBackendError(response());
+    assert.equal(parsed.quotaCheckFailed, true);
+    assert.equal(Object.hasOwn(parsed, 'quota'), false);
+    assert.equal(await translateBackendErrorResponse(response(), es), es('backendError.quotaCheckFailed'));
+  });
+
+  it('leaves an unrelated 500 alone', () => {
+    const other = { error: { message: 'Something else broke', status: 500 } };
+    assert.equal(translateBackendErrorBody(other, es, 'Error 500'), 'Something else broke');
+  });
+
+  it('ships the key in all three locales, with no placeholders', () => {
+    for (const locale of ['en_US', 'es_ES', 'es_AR']) {
+      const labels = JSON.parse(readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8')).genericLabels;
+      assert.ok(labels['backendError.quotaCheckFailed']?.trim(), locale);
+      assert.doesNotMatch(labels['backendError.quotaCheckFailed'], /\{/, locale);
+    }
+  });
+});
+
+// ETP-5051 — the action paths (Create Invoice / Shipment, the bulk menus, clone, import, follow-up
+// documents) read only `response.message` / `message` and showed "Error (403)" for a plan-quota
+// refusal. `translateQuotaRefusalBody(body, ui) || <what the caller showed before>` gives the quota
+// sentence for those bodies and `null` for every other one, so a caller's other errors are
+// untouched. `quotaRefusalFields` carries the identity on a thrown Error for a caller that
+// translates later. Real locale files, so the sentence is the shipped one.
+describe('translateQuotaRefusalBody / quotaRefusalFields (ETP-5051)', () => {
+  const es = localeTranslator('es_ES');
+  const quota = {
+    resourceKey: 'REFUSAL_BODY_INVOICES',
+    resourceName: 'Facturas de venta',
+    unitLabel: 'fact.',
+    includedQty: 100,
+    consumed: 100,
+    verdict: 'DENY',
+  };
+  const exceeded = {
+    error: { message: 'Quota exceeded: Facturas de venta (100/100 fact.)', status: 403, code: 'QUOTA_EXCEEDED', quota },
+  };
+  const checkFailed = {
+    error: { message: 'The quota check failed; nothing was saved. Try again.', status: 500, code: 'QUOTA_CHECK_FAILED' },
+  };
+  const sentence = 'Facturas de venta: has alcanzado el límite de tu plan (100 de 100 fact.). '
+    + 'No se pueden crear más registros de este tipo.';
+
+  describe('translateQuotaRefusalBody', () => {
+    it('gives the quota sentence for a 403 QUOTA_EXCEEDED body', () => {
+      assert.equal(translateQuotaRefusalBody(exceeded, es), sentence);
+    });
+
+    it('gives the check-failed sentence for a 500 QUOTA_CHECK_FAILED body', () => {
+      assert.equal(translateQuotaRefusalBody(checkFailed, es), es('backendError.quotaCheckFailed'));
+    });
+
+    it('reads both inside a /sws/neo/batch failure envelope', () => {
+      const batch = (detail) => ({ committed: false, error: { message: "Operation 'inv' rejected by server", detail } });
+      assert.equal(translateQuotaRefusalBody(batch(exceeded), es), sentence);
+      assert.equal(translateQuotaRefusalBody(batch(checkFailed), es), es('backendError.quotaCheckFailed'));
+    });
+
+    it('gives the generic quota sentence for a refusal that carries no quota', () => {
+      assert.equal(translateQuotaRefusalBody({ error: { code: 'QUOTA_EXCEEDED', message: 'x' } }, es),
+        es('backendError.quotaExceededGeneric'));
+    });
+
+    // The caller keeps whatever it showed before: `null` is what makes `|| <old message>` fall through.
+    it('is null for any other body, so the caller keeps its own message', () => {
+      for (const body of [
+        { error: { message: 'Business partner on hold', status: 409 } },
+        { response: { status: -1, message: 'No pending lines to invoice' } },
+        { error: { code: 'OTHER', message: 'x' } },
+        { message: 'plain' },
+        { committed: false, error: { message: 'boom', detail: { error: { code: 'OTHER' } } } },
+        null,
+        undefined,
+        'Quota exceeded: Users (3/3)',
+      ]) {
+        assert.equal(translateQuotaRefusalBody(body, es), null, JSON.stringify(body));
+      }
+    });
+
+    it('is null without a translator function', () => {
+      assert.equal(translateQuotaRefusalBody(exceeded, undefined), null);
+      assert.equal(translateQuotaRefusalBody(exceeded, 'es_ES'), null);
+    });
+
+    describe('announcing the refusal', () => {
+      let heard;
+      const count = () => { heard += 1; };
+
+      beforeEach(() => {
+        heard = 0;
+        const target = new EventTarget();
+        target.addEventListener(QUOTA_REFUSED_EVENT, count);
+        globalThis.dispatchEvent = target.dispatchEvent.bind(target);
+      });
+
+      afterEach(() => {
+        delete globalThis.dispatchEvent;
+      });
+
+      it('announces a quota refusal once, even when the same body is translated again', () => {
+        const own = { ...exceeded, error: { ...exceeded.error, quota: { ...quota, resourceKey: 'REFUSAL_BODY_ANNOUNCE' } } };
+        translateQuotaRefusalBody(own, es);
+        translateQuotaRefusalBody(own, es);
+        assert.equal(heard, 1);
+      });
+
+      it('announces nothing for a body it does not translate', () => {
+        translateQuotaRefusalBody({ error: { message: 'Business partner on hold', status: 409 } }, es);
+        translateQuotaRefusalBody(null, es);
+        assert.equal(heard, 0);
+      });
+    });
+  });
+
+  describe('quotaRefusalFields', () => {
+    it('gives the quota of a QUOTA_EXCEEDED body', () => {
+      assert.deepEqual(quotaRefusalFields(exceeded), { quota });
+    });
+
+    it('flags a QUOTA_CHECK_FAILED body', () => {
+      assert.deepEqual(quotaRefusalFields(checkFailed), { quotaCheckFailed: true });
+    });
+
+    it('reads both inside a batch envelope', () => {
+      assert.deepEqual(quotaRefusalFields({ error: { message: 'x', detail: exceeded } }), { quota });
+      assert.deepEqual(quotaRefusalFields({ error: { message: 'x', detail: checkFailed } }), { quotaCheckFailed: true });
+    });
+
+    it('gives an empty quota object for a refusal with no quota, so it is still recognised', () => {
+      assert.deepEqual(quotaRefusalFields({ error: { code: 'QUOTA_EXCEEDED' } }), { quota: {} });
+    });
+
+    // Spread onto an Error: for any other body nothing is added, so that Error is unchanged.
+    it('is empty for any other body', () => {
+      for (const body of [{ error: { message: 'x', status: 409 } }, { message: 'x' }, null, undefined]) {
+        assert.deepEqual(quotaRefusalFields(body), {}, JSON.stringify(body));
+      }
+    });
+
+    it('lets the translator render the sentence later from the message and the fields', () => {
+      const err = Object.assign(new Error(exceeded.error.message), quotaRefusalFields(exceeded));
+      assert.equal(translateBackendError(err.message, es, { quota: err.quota, quotaCheckFailed: err.quotaCheckFailed }), sentence);
+    });
+  });
+});
+
 // OrderInvoiceDuplicateGuard.java (com.etendoerp.go — ETP-5714): `error.code = draftInvoiceExists`.
 // The bulk order menus read it from the 409 body; the draft numbers are one opaque {docs} param.
 describe('translateBackendError — draft invoice already exists (ETP-5714)', () => {
@@ -3996,5 +4655,133 @@ describe('translateBackendError — draft invoice already exists (ETP-5714)', ()
     }
     const ar = readFileSync(new URL('../../locales/es_AR.json', import.meta.url), 'utf8');
     assert.ok(ar.includes('Confirmala o eliminala antes de generar otra'));
+  });
+
+  // ETP-5828 — the sales order's "Generar factura" answers 400 with this sentence when its draft
+  // invoices already hold everything left (OrderDocumentAvailability.draftCoversInvoiceReason).
+  const coversEs = fakeUiTranslator({
+    'backendError.draftInvoiceCoversPending': 'La factura borrador {docs} ya cubre lo que queda por facturar. Confírmala o elimínala en lugar de generar otra.',
+    'backendError.draftInvoiceCoversPendingUnnamed': 'Una factura borrador ya cubre lo que queda por facturar. Confírmala o elimínala en lugar de generar otra.',
+  });
+  const covers = (docs) => `A draft invoice (${docs}) already covers what is left to invoice; complete or delete it instead of creating another one.`;
+  // DRAFT_COVERS_INVOICE_UNNAMED: no covering draft is readable by the role, so no numbers at all.
+  const coversUnnamed = 'A draft invoice already covers what is left to invoice; complete or delete it instead of creating another one.';
+
+  for (const [label, message, expected] of [
+    ['numbered drafts keep their numbers', covers('FV-1, FV-2'),
+      'La factura borrador FV-1, FV-2 ya cubre lo que queda por facturar. Confírmala o elimínala en lugar de generar otra.'],
+    ['the unnamed sentence gets its own sentence', coversUnnamed,
+      'Una factura borrador ya cubre lo que queda por facturar. Confírmala o elimínala en lugar de generar otra.'],
+    ['empty parentheses stay untouched', covers(''), covers('')],
+  ]) {
+    it(`translates the draft-covers 400 from the { status, message } body — ${label}`, () => {
+      assert.equal(translateBackendErrorBody({ status: 'error', message }, coversEs, 'Error (400)'), expected);
+    });
+  }
+
+  it('ships backendError.draftInvoiceCoversPending with {docs} and its unnamed form in en_US, es_ES and es_AR (es_AR in voseo)', () => {
+    for (const loc of ['en_US', 'es_ES', 'es_AR']) {
+      const flat = readFileSync(new URL(`../../locales/${loc}.json`, import.meta.url), 'utf8');
+      assert.ok(flat.match(/"backendError\.draftInvoiceCoversPending":\s*"[^"]*\{docs\}/), `${loc} lost {docs}`);
+      assert.ok(flat.match(/"backendError\.draftInvoiceCoversPendingUnnamed":\s*"[^"{]+"/), `${loc} lacks the unnamed sentence`);
+    }
+    const ar = readFileSync(new URL('../../locales/es_AR.json', import.meta.url), 'utf8');
+    assert.ok(ar.includes('Confirmala o eliminala en lugar de generar otra'));
+  });
+});
+
+// Line-import action refusals (ETP-6002): `{ error: { code, message, product, requested, pending } }`
+// from DocumentLineImport / InvoiceGlobalDiscountRule. The code picks the SPA sentence; the server's
+// English `message` must never reach the user.
+describe('translateImportRefusal / isImportRefusalCode — line-import refusals (ETP-6002)', () => {
+  const loadLabels = (locale) => JSON.parse(
+    readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'),
+  ).genericLabels;
+  const esLabels = loadLabels('es_ES');
+  const es = fakeUiTranslator(esLabels);
+  const FALLBACK = 'No se pudieron importar las líneas';
+  const DETAILS = { product: 'Fernet', requested: 9, pending: 2 };
+  const refusal = (code, details = DETAILS) => ({
+    error: { status: 409, code, message: `English prose for ${code}`, ...details },
+  });
+
+  // code -> i18n key. `globalDiscountConflict` is the one code outside the `import*` prefix.
+  const MAPPED = [
+    ['importTargetNotDraft', 'backendError.importTargetNotDraft'],
+    ['importSourceNotCompleted', 'backendError.importSourceNotCompleted'],
+    ['importBusinessPartnerMismatch', 'backendError.importBusinessPartnerMismatch'],
+    ['importCurrencyMismatch', 'backendError.importCurrencyMismatch'],
+    ['importDirectionMismatch', 'backendError.importDirectionMismatch'],
+    ['importQuantityExceedsPending', 'backendError.importQuantityExceedsPending'],
+    ['importLineNotInDocument', 'backendError.importLineNotInDocument'],
+    ['importNothingPending', 'backendError.importNothingPending'],
+    ['importInvalidLine', 'backendError.importInvalidLine'],
+    ['importDocumentNotFound', 'backendError.importDocumentNotFound'],
+    ['importPriceListRequired', 'backendError.importPriceListRequired'],
+    ['importQuantityNotHonoured', 'backendError.importQuantityNotHonoured'],
+    ['importNoStorageBin', 'backendError.importNoStorageBin'],
+    ['globalDiscountConflict', 'backendError.importGlobalDiscountConflict'],
+  ];
+  const NOTHING_PENDING_ON_LINE = 'backendError.importQuantityNothingPendingOnLine';
+
+  for (const [code, key] of MAPPED) {
+    it(`${code} renders ${key} with its details, never the server prose`, () => {
+      const expected = esLabels[key]
+        .replace('{product}', 'Fernet').replace('{requested}', '9').replace('{pending}', '2');
+      const result = translateImportRefusal(refusal(code), es, FALLBACK);
+      assert.equal(result, expected);
+      assert.doesNotMatch(result, /English prose|\{(product|requested|pending)\}/);
+      assert.equal(isImportRefusalCode(code), true);
+    });
+  }
+
+  it('importQuantityExceedsPending with pending 0 (number or string) uses the nothing-pending sentence', () => {
+    for (const pending of [0, '0']) {
+      assert.equal(
+        translateImportRefusal(refusal('importQuantityExceedsPending', { ...DETAILS, pending }), es, FALLBACK),
+        'No se pueden importar 9 de Fernet: no queda nada pendiente en esta línea '
+          + '(las cantidades ya incluidas en documentos en borrador cuentan como usadas).',
+        `pending=${JSON.stringify(pending)}`,
+      );
+    }
+  });
+
+  it('an unmapped import* code falls back to the given message, not to the English prose', () => {
+    assert.equal(isImportRefusalCode('importSomethingNew'), true);
+    assert.equal(translateImportRefusal(refusal('importSomethingNew'), es, FALLBACK), FALLBACK);
+  });
+
+  it('a mapped code whose key is missing from the locale, or with no translator, falls back', () => {
+    assert.equal(translateImportRefusal(refusal('importTargetNotDraft'), fakeUiTranslator({}), FALLBACK), FALLBACK);
+    assert.equal(translateImportRefusal(refusal('importTargetNotDraft'), undefined, FALLBACK), FALLBACK);
+  });
+
+  it('isImportRefusalCode is false outside the family', () => {
+    for (const code of ['important', 'draftInvoiceExists', 'stale_record', '', undefined, null, 42]) {
+      assert.equal(isImportRefusalCode(code), false, String(code));
+    }
+  });
+
+  it('a non-import body is translated exactly as translateBackendErrorBody does', () => {
+    const t = fakeUiTranslator({
+      'backendError.draftInvoiceExists': 'El pedido ya tiene una factura en borrador ({docs}). Confírmala o elimínala antes de generar otra.',
+    });
+    const body = { error: { status: 409, code: 'draftInvoiceExists', message: 'This order already has a draft invoice (INV-9).' } };
+    const result = translateImportRefusal(body, t, FALLBACK);
+    assert.equal(result, 'El pedido ya tiene una factura en borrador (INV-9). Confírmala o elimínala antes de generar otra.');
+    assert.equal(result, translateBackendErrorBody(body, t, FALLBACK));
+  });
+
+  it('every mapped key exists in en_US and es_ES; the quantity sentences keep their placeholders', () => {
+    const keys = [...MAPPED.map(([, key]) => key), NOTHING_PENDING_ON_LINE];
+    for (const locale of ['en_US', 'es_ES']) {
+      const labels = loadLabels(locale);
+      for (const key of keys) {
+        assert.equal(typeof labels[key], 'string', `${locale}: ${key}`);
+        assert.ok(labels[key].trim().length > 0, `${locale}: ${key} is empty`);
+      }
+      assert.match(labels['backendError.importQuantityExceedsPending'], /\{requested\}.*\{product\}.*\{pending\}/, locale);
+      assert.match(labels[NOTHING_PENDING_ON_LINE], /\{requested\}.*\{product\}/, locale);
+    }
   });
 });

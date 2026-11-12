@@ -72,11 +72,17 @@
   "entities": {
     "header": {
       "name": "goodsShipment",
-      "javaQualifier": "goodsShipmentHeaderHandler",
+      "agentPrompt": "A goods shipment carries quantities only, no amounts, as in the app. Its value is each line's movementQuantity times the unit price of the sales order line it delivers (salesOrderLine, read in sales-order/lines); once invoiced, the invoice created from it has the amounts.",
       "draftMode": {
         "enabled": false
       },
       "fields": {
+        "etblkpAccountingstatus": {
+          "visibleWhenCapability": "showAccountingFields"
+        },
+        "invoice": {
+          "agentPrompt": "Legacy column, always empty: a shipment can be invoiced by several invoices and an invoice can cover several shipments, so nothing fills it. Whether the shipment is invoiced is invoiceStatus (0-100); which invoices cover it is linkedInvoices, on etendo_list and etendo_get."
+        },
         "documentNo": {
           "visibility": "readOnly",
           "grid": true,
@@ -99,7 +105,8 @@
           "searchable": true,
           "inputMode": "date",
           "section": "principal",
-          "seq": 30
+          "seq": 30,
+          "agentPrompt": "The date the goods left. It can be changed only while the shipment is a draft: a completed shipment cannot be reactivated or edited, in the app either. To correct one, return the goods (a customer return) and make a new shipment with the right date, or tell the user it stays as it is."
         },
         "warehouse": {
           "grid": true,
@@ -386,7 +393,8 @@
           "visibility": "discarded"
         },
         "salesOrderLine": {
-          "visibility": "system"
+          "visibility": "system",
+          "agentPrompt": "The sales order line this shipment line delivers. A shipment line has no price of its own: the price is on this order line (read it in sales-order/lines). An invoice created from the shipment takes its prices from these order lines."
         },
         "project": {
           "visibility": "editable",
@@ -403,7 +411,8 @@
         "invoiceQuantity": {
           "visibility": "discarded"
         }
-      }
+      },
+      "agentPrompt": "Lots, serial numbers and expiry dates are not handled in Etendo GO yet: a shipment line cannot carry them. Tell the user they cannot be recorded here."
     },
     "accounting": {
       "exclude": true

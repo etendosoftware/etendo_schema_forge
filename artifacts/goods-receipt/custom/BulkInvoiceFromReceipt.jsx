@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { FilePlus } from 'lucide-react';
 import { useUI } from '@/i18n';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import { translateBackendError, translateQuotaRefusalBody } from '@/lib/backendErrors.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
@@ -264,7 +264,13 @@ export default function BulkInvoiceFromReceipt({ selectedRows, clearSelection, t
         ? ui('selectReceiptsSameCurrency')
         : undefined;
 
-  const handleCreate = async (priceListId) => {
+  // ETP-6179: the ONE invoice these documents become gets the modal's "Datos fiscales" step.
+  const sifIds = invoiceableRows.map(r => r.id);
+  const sifDefaultsUrl = sifIds.length > 0
+    ? `${base}/goods-receipt/goodsReceipt/${sifIds[0]}/action/sifDefaults`
+    : undefined;
+
+  const handleCreate = async (priceListId, _originInvoices, sifFields) => {
     if (creating) return;
     setCreating(true);
     try {
@@ -274,12 +280,16 @@ export default function BulkInvoiceFromReceipt({ selectedRows, clearSelection, t
           method: 'POST',
           baseUrl: '',
           token,
-          body: JSON.stringify({ receiptIds: invoiceableRows.map(r => r.id), priceListId }),
+          body: JSON.stringify({
+            receiptIds: invoiceableRows.map(r => r.id), priceListId, ...(sifFields ? { sifFields } : {}),
+          }),
         },
       );
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        throw new Error(err?.response?.message || err?.message || `Failed (${res.status})`);
+        // ETP-5051 — a plan-quota refusal reads as the translated quota sentence.
+        throw new Error(translateQuotaRefusalBody(err, ui)
+          || err?.response?.message || err?.message || `Failed (${res.status})`);
       }
       const json = await res.json();
       setShowModal(false);
@@ -329,6 +339,8 @@ export default function BulkInvoiceFromReceipt({ selectedRows, clearSelection, t
           isSOTrx={false}
           apiBaseUrl={apiBaseUrl}
           token={token}
+          sifDefaultsUrl={sifDefaultsUrl}
+          sifDefaultsBody={{ receiptIds: sifIds }}
           onConfirm={handleCreate}
           onClose={() => setShowModal(false)}
           onPriceListChange={setSelectedPriceListId}

@@ -33,21 +33,24 @@
           "required": true,
           "section": "principal",
           "seq": 10,
-          "_note": "ETP-5806 structured SEPA field, published as 'streetName' (see AddressVirtualSelectorPolicy#PUBLISHED_NAME_OVERRIDES and BpLocationHandler). Mandatory together with buildingNumber/cityName/country — enforced by BpLocationHandler, not by AD_Column.IsMandatory (still 'N' on EM_OBSEPA_StrtNm, so this 'required' flag is documentation only until a push-to-neo migration curates the live ETGO_SF_FIELD row)."
+          "name": "streetName",
+          "_note": "ETP-5806 structured SEPA field, published as 'streetName' via the curated 'name' override, which push-to-neo turns into ETGO_SF_FIELD.java_qualifier='streetName' (same mapping AddressVirtualSelectorPolicy#PUBLISHED_NAME_OVERRIDES already uses for MCP). At runtime NeoFieldFilter aliases the wire key 'streetName' to the real DAL property oBSEPAStreetName before BpLocationHandler ever sees the body, so the handler keeps working in terms of oBSEPAStreetName unchanged; its multi-spelling tolerance is now defense-in-depth, not the fix. Mandatory together with buildingNumber/cityName/country — enforced by BpLocationHandler, not by AD_Column.IsMandatory (still 'N' on EM_OBSEPA_StrtNm, so this 'required' flag is documentation only until a push-to-neo migration curates the live ETGO_SF_FIELD row)."
         },
         "oBSEPABuildingNumber": {
           "visibility": "editable",
           "required": true,
           "section": "principal",
           "seq": 20,
-          "_note": "Published as 'buildingNumber'. See oBSEPAStreetName note."
+          "name": "buildingNumber",
+          "_note": "Published as 'buildingNumber' via the curated 'name' override. See oBSEPAStreetName note."
         },
         "oBSEPABuildingName": {
           "visibility": "editable",
           "required": false,
           "section": "principal",
           "seq": 25,
-          "_note": "Published as 'buildingName'. Optional, matching every other ETP-5806 address surface."
+          "name": "buildingName",
+          "_note": "Published as 'buildingName' via the curated 'name' override. Optional, matching every other ETP-5806 address surface. See oBSEPAStreetName note."
         },
         "city": {
           "visibility": "discarded"

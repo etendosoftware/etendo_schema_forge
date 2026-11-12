@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/support/SupportChatContext.jsx
 import { renderHook, act } from '@testing-library/react';
 
 const mockApiFetch = vi.fn();
@@ -21,6 +22,7 @@ vi.mock('../chatSounds.js', () => ({
 }));
 
 import { SupportChatProvider, useSupportChat } from '../SupportChatContext.jsx';
+import { applySupportSessionFromServer, resetSupportSessionForTests } from '@/lib/supportSession.js';
 
 function jsonResponse(body, ok = true) {
   return { ok, json: async () => body };
@@ -913,6 +915,59 @@ describe('SupportChatContext', () => {
       mockApiFetch.mockResolvedValueOnce(jsonResponse({ conversations: [{ id: 'c1', subject: 'Ya existente' }] }));
       const { result } = await renderSupportChat();
       expect(result.current.state.conversations).toEqual([{ id: 'c1', subject: 'Ya existente' }]);
+    });
+  });
+
+  // ETP-5351 — the operator in a support session IS support, and the conversations belong to the
+  // customer: the provider must not read them, poll them, or open the chat for anyone who asks.
+  describe('in a support session', () => {
+    const SESSION = { clientId: 'CLIENT-ACME', clientName: 'Acme Corp', expiresAt: '2026-10-05T11:00:00Z' };
+
+    beforeEach(() => {
+      localStorage.clear();
+      applySupportSessionFromServer(SESSION, { storage: localStorage });
+    });
+
+    afterEach(() => {
+      resetSupportSessionForTests();
+    });
+
+    it('sends no conversation request on mount nor on any poll tick', async () => {
+      await renderSupportChat();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3 * 60000);
+      });
+
+      expect(mockApiFetch).not.toHaveBeenCalled();
+    });
+
+    it('cannot be opened, even by a caller that asks directly', async () => {
+      const { result } = await renderSupportChat();
+      act(() => result.current.actions.open());
+
+      expect(result.current.state.isOpen).toBe(false);
+    });
+
+    it('closes an open chat when the tab learns it is a support session', async () => {
+      resetSupportSessionForTests();
+      const { result } = await renderSupportChat();
+      act(() => result.current.actions.open());
+      expect(result.current.state.isOpen).toBe(true);
+
+      act(() => applySupportSessionFromServer(SESSION, { storage: localStorage }));
+
+      expect(result.current.state.isOpen).toBe(false);
+    });
+
+    it('starts loading again once /me confirms there is no support session', async () => {
+      await renderSupportChat();
+      expect(mockApiFetch).not.toHaveBeenCalled();
+
+      await act(async () => {
+        applySupportSessionFromServer(null, { storage: localStorage });
+      });
+
+      expect(mockApiFetch).toHaveBeenCalledWith('/sws/support/conversations');
     });
   });
 });

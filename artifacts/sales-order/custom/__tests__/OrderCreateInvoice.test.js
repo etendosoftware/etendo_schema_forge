@@ -611,7 +611,10 @@ describe('OrderCreateInvoice', () => {
 
         it('hides the button behind loading, not behind a tick', () => {
           assert.equal(docsDecision({ ...state, loading: true }).bailsOut, true);
-          assert.match(createDocsSrc, /data-testid="sales-order-manage-docs-submit"[\s\S]*?disabled=\{loading \|\| !canCreate\}/);
+          // ETP-6179: the gate also waits for the "Datos fiscales" step; loading and !canCreate
+          // still disable it.
+          assert.match(createDocsSrc, /data-testid="sales-order-manage-docs-submit"[\s\S]*?disabled=\{submitDisabled\}/);
+          assert.match(createDocsSrc, /const submitDisabled = loading \|\| !canCreate \|\|/);
         });
       });
     }
@@ -1048,11 +1051,13 @@ describe('OrderCreateInvoice', () => {
       const { formatCurrency } = await import('../../../../tools/app-shell/src/lib/formatCurrency.js');
       const block = extractSubtitleBlock('invoiceSubtitle', 'soCreateInvoiceCheckDesc');
       // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
+      // ETP-5828: the block reads `pendingToInvoice` (the backend figure, else totalPending), declared
+      // just above it; bound here to the totalPending fallback a record without the figure gets.
       const fn = new Function(
-        'totalOrder', 'totalInvoiced', 'totalPending', 'currency', 'ui', 'fmtNum', 'formatCurrency',
+        'totalOrder', 'totalInvoiced', 'totalPending', 'pendingToInvoice', 'currency', 'ui', 'fmtNum', 'formatCurrency',
         `${block}\nreturn invoiceSubtitle;`,
       );
-      const result = fn(-100, 0, -100, 'EUR', mockUi, fmtNum, formatCurrency);
+      const result = fn(-100, 0, -100, -100, 'EUR', mockUi, fmtNum, formatCurrency);
       assert.notEqual(result, 'soCreateInvoiceCheckDesc');
       assert.match(result, /soAmountPendingInvoice/);
     });
@@ -1215,7 +1220,12 @@ describe('OrderCreateInvoice', () => {
 
       function resolveMessage(e, res) {
         const expr = extractCallExprAfter(createDocsModalSrc, 'action/createDraftInvoice', 'throw new Error(');
-        return new Function('e', 'res', `return ${expr};`)(e, res);
+        // ETP-5051: the expression first asks translateQuotaRefusalBody(e, ui) for a plan-quota
+        // sentence; this body is no quota refusal, so the stub answers null, as the real one does.
+        // ETP-5828: the fallback then goes through translateBackendErrorBody (message + identity),
+        // bound to the real one, as in the ConfirmModal Step 1 block above.
+        return new Function('e', 'res', 'ui', 'translateQuotaRefusalBody', 'translateBackendErrorBody',
+          `return ${expr};`)(e, res, (k) => k, () => null, translateBackendErrorBody);
       }
 
       it('surfaces the real backend message for a flat {status,message} 400 body', () => {

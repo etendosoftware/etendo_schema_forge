@@ -119,7 +119,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   6. Sign in as a user with no role assigned (or a role with zero window/process access) and confirm the "No access" screen renders instead of the sidebar, and that navigating directly to a known window URL (e.g. `/sales-order`) also lands on the blocking screen rather than the window.
   7. Repeat step 6 with `?embedded=1` appended to the URL and confirm the blocking screen still renders (not the bare routed page or a blank frame).
   8. While signed in as a user with an assigned role and visible sidebar, have an administrator revoke that role (or drop it to zero window/process access) in another session, then trigger a fresh role-menu fetch (e.g. reload or navigate) and confirm the sidebar is replaced by the blocking screen rather than staying visible alongside it.
-  9. As a non-admin with a non-empty role menu, check Finance Reports, Inventory Reports, and Smart Scan against that role's permission-anchor grants: `full` or `read-only` shows the entry; a missing grant hides it even though the route is a custom page. Confirm granted entries also open successfully. Since ETP-5830 no system role template grants Smart Scan, so a role built from a template does not see it; only Admin/client-admin (sidebar exemption above) or a role with a hand-made grant does.
+  9. As a non-admin with a non-empty role menu, check Finance Reports, Inventory Reports, and Smart Scan against that role's permission-anchor grants: `full` or `read-only` shows the entry; a missing grant hides it even though the route is a custom page. Confirm granted entries also open successfully. Since ETP-5830 no system role template grants Smart Scan, so a role built from a template does not see it. It is blocked for every role, Admin/client-admin included: the admin `windowAccess` map only contains a permission-anchor window on which some role holds an active grant, and since ETP-5830 no role does, so the anchor resolves to `none` for Admin too. Only a hand-made grant on some role brings it back, and then for Admin as well.
   10. As GOAdmin or GOClient Admin, confirm all three anchor entries are visible and open successfully. On a fresh load, confirm menu-tree entries wait for `SFListMenu`, while capability/anchor entries wait for their own maps or the admin exemption; neither nullable map state should briefly expose restricted entries.
 
 ### 3. Generated/custom window loading
@@ -240,7 +240,9 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   `formatCalendarDate` in the UI locale.
   - Owner (`ownedByAccount: true`, the signal ETP-5742 gates re-subscription on, via
     `ownsEnvironmentSubscription`): **Update payment** → `/account`, where the Subscription section
-    opens the Stripe Customer Portal.
+    opens the Stripe Customer Portal. With the `my-companies-page` flag on (ETP-6060) it leads to
+    `/companies?subscription=<clientId>` instead, which opens "Mis empresas" with that company's
+    subscription unfolded (`useSubscriptionPath`, `lib/myCompanies/subscriptionPath.js`).
   - Anyone else: *"Contact your company's administrator."*, no button.
 - **Escalation:** more than 3 days (`BILLING_WARNING_ESCALATION_DAYS`) before `graceEndsAt` it is
   amber and can be dismissed for the browser session (sessionStorage key
@@ -251,23 +253,222 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   shows the grace countdown next to the portal button. `/upgrade` is a full-screen overlay
   (`upgrade-page-shell`, `fixed inset-0 z-50`) drawn over the layout, so the banner would be
   invisible there yet still in the accessibility tree — escalated, an unseen `role="alert"`. It
-  stays on `/companies` and on every in-environment page, where nothing else says it.
-- **Known limitation — the kill switch (accepted, not a bug to fix here):** with the backend kill
-  switch `environment-access-enforcement-off` on for the tenant, the environment is **not** blocked
-  on `graceEndsAt`, but the banner still says it will be; after that date the banner hides itself
-  and no blocked screen follows, so the tenant keeps working with no warning. The banner cannot
-  know: during grace `accessState` is `ALLOWED` whether or not the switch is on (the switch is
-  consulted only when access would be refused), and no other field of `GET /sws/go/environments`
-  reveals it. Accepted because the switch is a rare incident lever and the failed payment is still
-  real. A fix would need a backend field (e.g. `accessEnforced` per environment) for the banner to
-  read. Full record: `com.etendoerp.go/docs/open-and-notable-topics.md` §4.17.
+  stays on `/companies` and on every in-environment page, where nothing else says it. With the
+  `my-companies-page` flag on, the CTA's destination is `/companies`, so it is hidden there and on
+  `/upgrade`, and shown on `/account`, which no longer carries the subscription.
+- **The kill switch — neutral wording (ETP-5051, `open-and-notable-topics.md` §4.17):** with the
+  backend kill switch `environment-access-enforcement-off` on for the tenant, the environment is
+  **not** blocked on `graceEndsAt`. `GET /sws/go/environments` now carries `accessEnforced` per
+  environment; when it is explicitly `false`, `paymentGraceWarning` returns a `neutral` warning and
+  the banner reads *"Your last payment failed and is still overdue."* — no block date, never
+  escalated (amber, dismissible), and it stays up for as long as the subscription is `PAST_DUE`,
+  also past `graceEndsAt`, because no blocked screen will take over. A backend that does not send
+  the field is treated as enforcing (today's behaviour).
 - **Test ids:** `billing-status-banner` (with `data-variant`), `billing-status-banner-message`,
   `billing-status-banner-cta`, `billing-status-banner-member-hint`,
   `billing-status-banner-dismiss`.
-- **i18n keys:** `billingPaymentFailedBanner`, `billingUpdatePaymentCta`,
-  `billingPaymentFailedContactAdmin` (en_US, es_ES, es_AR).
+- **i18n keys:** `billingPaymentFailedBanner`, `billingPaymentOverdueBanner` (neutral),
+  `billingUpdatePaymentCta`, `billingPaymentFailedContactAdmin` (en_US, es_ES, es_AR).
 - **Manual verification path:** `docs/stripe-local-testing.md`, the end-to-end walk-through,
   Step 5; or the local lifecycle tool (`docs/etp-5396-local-lifecycle-tool.md`, check 3).
+
+#### 3.2a-bis The plan-quota banner (`QuotaStatusBanner`, ETP-5051)
+
+- **Why:** a plan quota in `block` mode refuses new records of its kind once reached (403
+  `QUOTA_EXCEEDED`). Entering the environment is never refused for a quota (report-only), so this
+  banner is where the user first hears that a limit is close or reached.
+- **Where:** `tools/app-shell/src/components/billing/QuotaStatusBanner.jsx`, mounted by
+  `AppLayoutInner` right under `BillingStatusBanner`, normal layout only (not embedded).
+- **Data:** the current environment's `quotas` in `GET /sws/go/environments` (`useEnvironmentSwitch`)
+  — only its `WARN`/`DENY` items, `[]` when there is nothing to report — read exactly like the
+  payment banner reads `graceEndsAt`. `POST /sws/go/session/environment` carries the same list,
+  but core's `loginEnvironment()` discards that answer before the post-entry page load, so the
+  list is the SPA's source (contract amendment §4b). No client-side stash is involved.
+- **One read per page load (ETP-5051 O-3):** both banners, `SideMenu`, `TopBar`, `useTenantPlan`
+  and `AppLayout` mount `useEnvironmentSwitch`, and every listing instance shares one
+  `GET /sws/go/environments` through the app's `DataProvider` query cache (in-flight sharing plus
+  the provider's record stale time, 30 s by default). That matters because each call runs the live
+  quota counts of every listed tenant. The `etendo:refresh-environments` event
+  (`ENVIRONMENT_LIST_REFRESH_EVENT`) forces one new read that every instance receives. A failed read
+  is never cached, and the cache is cleared and re-keyed when the session identity changes (logout,
+  another account); a tenant switch is a hard navigation. Without a `DataProvider` each instance
+  reads the network itself, as before.
+- **Freshness (ETP-5051):** the shared read is repeated, still as ONE forced read every instance
+  joins, by `useEnvironmentListFreshness`, mounted once in `AppLayoutInner` (not in embedded
+  windows). It fires `ENVIRONMENT_LIST_REFRESH_EVENT` when the tab regains focus
+  (`focus` / `visibilitychange`), every 5 minutes while the tab is visible (both at least 30 s
+  apart, counted from the page-load read), and right after a write is refused with 403
+  `QUOTA_EXCEEDED`. The refusal is announced by `announceQuotaRefusal` (`lib/planQuotas.js`,
+  window event `etendo:quota-refused`), called from `translateQuotaExceeded` in
+  `lib/backendErrors.js`, which every path that classifies the refusal goes through; the same
+  refusal (resource and counts) is announced at most once per 30 s, so re-rendering an error
+  cannot turn into a stream of reads. **After a successful NEO write (ETP-6060)** — a create, a
+  save, a document action such as completing an invoice — it re-reads once more, 1.5 s after the
+  last write of a burst and at least 5 s after the previous read, so the banner shows the quota a
+  write just reached without a reload. `useApiFetch` announces every `ok` non-read response under
+  `/sws/neo/` (`announceRecordWrite`, window event `etendo:records-written`; `callout` and
+  `evaluate-display` are reads). The core query cache has no refetch-on-focus or interval
+  option, hence the single app-level owner.
+- **Copy:** one line per item, DENY first, built from the resource name (`quotaResourceLabel`,
+  see the per-row note in §3.2a-quater), `consumed`,
+  `includedQty`, the unit (`quotaUnitLabel`) and the period word (`quotaBannerDeny` / `quotaBannerOver` for a
+  `warn`-mode quota already past its limit / `quotaBannerWarn`). Red with `role="alert"` when any
+  item is DENY, amber otherwise.
+- **Dismissal (per plan quota since ETP-6060):** each item is shown as its plan quota says —
+  `warningAlert` before the limit, `limitAlert` at it (a DENY, or a `warn` quota past its limit):
+  `pinned`, `dismissible` or `hidden` (`quotaAlertBehavior`, `lib/planQuotas.js`). A `hidden`
+  item is not listed; a banner with any `pinned` item has **no close button** and ignores a stored
+  dismissal; otherwise it is dismissible for the browser session, and the dismissal key names the
+  reported verdicts, so a new alert (another resource, or a WARN turning into a DENY) shows again.
+  The colour still follows the verdict (red with any DENY). Left empty, a DENY is pinned and a
+  WARN dismissible — Martin's decision during ETP-5051 manual testing. Presentation only: a
+  hidden or dismissible DENY still refuses new records. The dismissal was not what hid a later DENY
+  there until the next login: the key already named the verdicts, so a WARN turning into a DENY
+  would have shown again. The banner still showed the environment list read at page load, which
+  nothing re-read while the app stayed open; the **Freshness** triggers above fix that.
+- **CTA:** the owner (`ownsEnvironmentSubscription`) gets **View plan usage** → `/account`; anyone
+  else reads *"Contact your company's administrator."*. Hidden on `/account` and `/upgrade`, for the
+  same reasons as the payment banner. With the `my-companies-page` flag on (ETP-6060), the CTA goes
+  to `/companies?subscription=<clientId>` and the hidden paths become `/companies` and `/upgrade`,
+  exactly as the payment banner; the blocked-access screen's **Manage subscription** follows the
+  same rule.
+- **Test ids:** `quota-status-banner` (with `data-variant`), `quota-status-banner-items`,
+  `quota-status-banner-item` (with `data-verdict`), `quota-status-banner-cta`,
+  `quota-status-banner-member-hint`, `quota-status-banner-dismiss` (WARN-only banners).
+
+#### 3.2a-ter Write refused by a plan quota (ETP-5051)
+
+- A NEO write (REST single, `/sws/neo/batch`, MCP) refused because a quota is exhausted answers
+  **403** with `error.code === 'QUOTA_EXCEEDED'` and `error.quota` (the quota item).
+- `translateBackendError` (`lib/backendErrors.js`) turns it into
+  `backendError.quotaExceeded` — *"{resource}: your plan limit has been reached ({usage}). New
+  records of this kind cannot be created."* — from the structured `quota` when the caller has the
+  body (`translateBackendErrorBody`, `parseBackendError`/`translateBackendErrorResponse`, the
+  `useEntity` save path), and from the fixed prose `Quota exceeded: <name> (<consumed>/<included>
+  <unit>)` when a caller forwards only the message. It is never shown as the generic
+  "no access" refusal, and it cannot open the blocked-environment screen (that one is the 402 in
+  core's `apiFetch`).
+- **Failed quota check:** when the check itself fails (e.g. a database error), the write answers
+  **500** with `error.code === 'QUOTA_CHECK_FAILED'` and nothing is saved. It reads as
+  `backendError.quotaCheckFailed` — *"We could not check your plan limits, so nothing was saved.
+  Try again."* — never as the generic 500 text or the English prose. Same paths as
+  `QUOTA_EXCEEDED`: the code (`isQuotaCheckFailed` in `lib/planQuotas.js`) through
+  `translateBackendErrorBody`, `parseBackendError`/`translateBackendErrorResponse` and the
+  `useEntity` save path, or the backend's fixed sentence for callers that forward only the
+  message; `RecordCreateModal` and the OCR batch toast included.
+- **Batch writes:** in a `/sws/neo/batch` failure envelope the refusal sits one level down, at
+  `error.detail.error`, for both codes (`extractQuotaExceeded` / `isQuotaCheckFailed` read both
+  places). The OCR purchase-invoice ingest (`useOcrFlow`) shows the translated sentence in its
+  failure toast.
+- **Document-creating actions:** the NEO actions that create documents refuse with the same 403
+  `QUOTA_EXCEEDED` / 500 `QUOTA_CHECK_FAILED`. Every SPA button that runs one shows the translated
+  sentence, never "Error (403)" or the raw prose, and so announces the refusal to the quota banner
+  (§3.2a-bis). The paths that read only `response.message` / `message` go through
+  `translateQuotaRefusalBody(body, ui)` (`lib/backendErrors.js`), which hands a quota body to
+  `translateBackendErrorBody` and answers `null` for any other body, so every other error reads
+  exactly as before; a helper with no `ui` at the throw site puts `quotaRefusalFields(body)` on
+  its Error and the caller translates later. Covered: `ConfirmInOutModal` (`buildBackendError`:
+  shipment, receipt and return confirm with invoice, `buildReturnRowConfirmModal`,
+  `ConfirmWithCreditButtonBase`), `useConfirmWithCredit`, the sales-order create-documents modal
+  (`createDraftInvoice`), the sales- and purchase-order bulk menus, Create Invoice on goods
+  shipment / goods receipt and their bulk versions, `CloneOrderModal` and the goods-receipt clone,
+  the return-lines import (`importReturnLinesHelpers` → `ImportLinesModal`) and the follow-up
+  documents (`followUpErrorMessage`). A multi-row bulk summary still shows only counts, except
+  that a quota refusal among the failures is named once as the toast description
+  (`useBulkActionToast`, rows flagged `quotaRefusal`).
+  The generic CSV/XLSX import (`ImportDialog` in `@etendosoftware/app-shell-core`) still
+  classifies it as its generic row error: its row message is decided inside core's
+  `importEngine.classifyImportError`, which has no quota case yet; the fix is owed to ETP-5911
+  (`com.etendoerp.go` `docs/open-and-notable-topics.md` §5.18). Which writes a quota can refuse at all, and which it
+  only reports: `com.etendoerp.go` `docs/plan-quotas.md` §2.
+
+#### 3.2a-quater The plan and its quotas on `/account` (Subscription section, ETP-5051)
+
+- **Where:** `tools/app-shell/src/components/account/SubscriptionSection.jsx` (`PlanQuotas`), on
+  `/account`. Read-only.
+- **Data:** `GET /sws/go/billing/subscription` — `planName` (the catalog plan; the live Stripe
+  product name `plan` is the fallback) and `planQuotas[]`, every active quota of the plan with its
+  current-period `consumed` and `verdict`.
+- **Which subscription (ETP-5051 O-1):** inside an environment the endpoint answers the entered
+  environment's own subscription; only a session with no environment entered falls back to the
+  account's newest one. An environment with no purchase of its own (a demo, one the user was
+  invited into) answers `hasSubscription: false` even when the account pays for another, so
+  `SubscriptionSection__none` reads "This environment has no subscription."
+  (`subscriptionNoneInEnvironment`) when the session has an entered environment (auth `clientId`),
+  and keeps "You don't have an active subscription." (`subscriptionNoActive`) without one. The
+  Manage (portal) button is not shown in either no-subscription state.
+- **Per quota row:** the resource name and unit in the UI language. The catalog stores
+  `resourceName`/`unitLabel` in one language only, so the resources the plans ship with are
+  translated by `resourceKey` (`SALES_INVOICES`, `USERS` → `quotaResource*` / `quotaUnit*` keys,
+  `quotaResourceLabel` / `quotaUnitLabel` in `lib/planQuotas.js`, ETP-6060); any other resource
+  shows its catalog name (its `resourceKey` when the name is blank). The banner, the 403 sentence
+  and the plan cards of `/upgrade` use the same labels.
+  "`consumed` of `includedQty` unit" followed by the period word. Plan limits count over the
+  subscription year whatever the billing interval, so every quota reads "per year", a monthly plan's
+  included (the backend sends `period: "year"`; only a subscription without a start date sends the
+  billing interval — `open-and-notable-topics.md` §5.5, §5.8); "(not measured yet)" when `consumed` is
+  null; a badge for WARN ("Near the limit", or "Over the limit" once a `warn`-mode quota has passed
+  it) and DENY ("Limit reached"), none for ALLOW or a quota in mode `off`. The counted window
+  (`periodStart`–`periodEnd`, day-level, `formatCalendarDate`: the current subscription year) is
+  shown once above the list.
+- **Unlimited:** a plan with an empty `planQuotas` reads "Your plan has no usage limits." (§5.1).
+  No plan (`planName` null) shows no quota block at all.
+- **Grace with enforcement off:** with `accessEnforced: false` on the same response (contract
+  §4c), the grace countdown and "access is paused" give way to one neutral line,
+  `subscriptionPaymentOverdue` (test id `SubscriptionSection__paymentOverdue`).
+- **Test ids:** `SubscriptionSection__plan`, `SubscriptionSection__quotas`,
+  `SubscriptionSection__quotasUnlimited`, `SubscriptionSection__quotaPeriod`,
+  `SubscriptionSection__quota` (with `data-verdict`), `SubscriptionSection__quotaName`,
+  `SubscriptionSection__quotaUsage`, `SubscriptionSection__quotaNotMeasured`,
+  `SubscriptionSection__quotaState`.
+
+#### 3.2a-quinquies Owned companies on "Mis empresas": one row, one environment (ETP-5051 O-1b)
+
+- **Where:** `tools/app-shell/src/pages/MyCompaniesPage.jsx` (`/companies`), the owned-companies
+  table.
+- **Rule:** every row describes and manages its OWN environment, whatever environment the session
+  is in. On load the page reads no subscription: the row data comes from `GET /sws/go/environments`.
+- **Renewal column:** a productive row shows its own `renewalAt` from `GET /sws/go/environments`
+  (`formatCalendarDate`, short date). The backend sends it only while that environment's
+  subscription is renewing (active or trialing, not past due, not scheduled to cancel) and `null`
+  otherwise, which reads "—". Never `renewalDueAt` (the payment-grace anchor). A demo row shows the
+  trial countdown instead.
+- **Manage subscription** (row menu, productive rows only, test id
+  `my-companies-manage-<clientId>`): `createPortalSession(apiBase, env.clientId)` posts
+  `{ "clientId": … }`, so the Stripe portal that opens is that row's environment's, even from
+  another environment. A 404 `NO_SUBSCRIPTION` (the environment has no purchase of its own) toasts
+  "This company has no subscription to manage." (`upgradePortalNoSubscription`); any other failure
+  keeps `subscriptionManageError`. `/account` still posts no body and gets the entered
+  environment's portal.
+- **Subscription per owned company (ETP-6060):** a productive owned row has a **Show subscription**
+  toggle (test id `my-companies-subscription-toggle-<clientId>`, `aria-expanded`). Unfolding it
+  adds a row (`my-companies-subscription-<clientId>`) with `SubscriptionSection` for that company
+  (`clientId` prop): plan, amount, status, renewal, grace, limits and their usage, and its own
+  Manage button. The section reads `GET /sws/go/billing/subscription?clientId=<clientId>` and posts
+  the same `clientId` to the portal, so it describes that company even from another environment;
+  a company the account did not buy reads "This environment has no subscription.". Rows start
+  folded, so the page makes no provider call until the user asks. Demo rows and invited companies
+  never offer it.
+- **`/account` and the `my-companies-page` flag (ETP-6060):** with the flag on, `/account` no
+  longer hosts the Subscription section; it shows a notice (`account-settings-subscription-moved`,
+  `accountSubscriptionMoved`) with a **Go to My companies** button
+  (`account-settings-go-to-companies` → `/companies`). With the flag off, `/account` keeps the
+  section exactly as before (the entered environment's subscription, else the newest).
+- **`?subscription=<clientId>` (ETP-6060):** opens the page with that productive owned row already
+  unfolded; the billing banners' and the blocked screen's CTAs send it. A demo or unknown id is
+  ignored.
+- **Status label (ETP-6060):** Stripe's `active` reads **Active** / **Activa**
+  (`subscriptionActive`), no longer the stored projection's "Current" / "Actual". A cancellation
+  scheduled from the portal keeps `active` until it happens; the "Cancels on {date}" line says so.
+- **Telemetry (ETP-6060, Mixpanel, `lib/myCompanies/telemetry.js`):**
+  - `my_companies_viewed` gains `source`: `direct`, or the CTA named by `?from=` (`quota_banner`,
+    `billing_banner`, `blocked_screen`); an unknown value reads `direct`.
+  - `my_companies_subscription_opened` (`source`: `toggle`, or `link` when a CTA opened the page
+    with the row unfolded). Only openings count, not foldings.
+  - `subscription_manage_clicked` (`source`: `my_companies_menu`, `my_companies_section`,
+    `account`), sent before the portal session is requested.
+  - `account_subscription_moved_clicked`, the "Go to My companies" button on `/account`.
+  - No event carries a company id or name.
 
 #### 3.2b Global header layout at the 1280×720 minimum (ETP-5504)
 
@@ -920,26 +1121,22 @@ Developer contract (the slot's context object, the mandatory fallback branch,
 `showBulkActionToast` vs `useBulkActionToast`): [`../ui-customization.md`](../ui-customization.md)
 §9e.
 
-## Reversing a posted document before reactivating it lives in one helper — ETP-5302
+## Reversing a posted document before reactivating it runs on the server — ETP-5302 / ETP-5684
 
-**Applies to every window whose `decisions.json` carries `preUnpost: true` on a menu action**
-(today sales-invoice, purchase-invoice, amortization). The rule — *reactivating an
-already-posted record unposts it first* — is implemented exactly once, in
-`tools/app-shell/src/lib/preUnpost.js`, and both surfaces call it: the detail kebab
-(`DetailMoreActionsMenu.jsx`) and the list's bulk bar (`BulkDocumentAction.jsx`, via its
-`preUnpostActions` prop).
+**Applies to sales-invoice, purchase-invoice and amortization.** The rule — *reactivating an
+already-posted record unposts it first* — was implemented in the SPA from ETP-5302 on, in a
+shared `runPreUnpost` helper called by the detail kebab, the row kebab and the bulk bar
+(a `preUnpost: true` flag on the menu action, a `preUnpostActions` prop on the bulk bar).
 
-This is a rule that was previously implemented in one surface only, and the divergence was
-invisible until a user hit it: reactivating a posted invoice from the form worked, while the
-very same invoice reactivated from the list's bulk bar failed with "Factura contabilizada",
-because the bulk path sent a bare `docAction: 'RE'` that Core's `C_INVOICE_POST` rejects.
-Two implementations of one rule is what let them diverge, so there is now one.
-
-It is **opt-in per window**, and deliberately so: orders do not carry `preUnpostActions`
-because `C_ORDER_POST1` has no posted-state guard on its `RE` branch, making an unpost there
-a gratuitous accounting reversal. Full reference, including the `isPosted` /
-`runPreUnpost` contracts and why the helper is a plain module rather than a hook:
-[`../ui-customization.md`](../ui-customization.md) §9e.
+**ETP-5684 moved it to the server.** `unpost` now needs the `showAccountingFields` capability,
+which a Sales or Purchasing role does not have, while reactivating is still theirs to do. The
+invoice and amortization handlers of com.etendoerp.go un-post the record themselves
+(`ReactivationUnpost`), as the last step before the reactivation runs, for REST and MCP
+alike. Every SPA surface now sends the reactivation alone, so the three surfaces cannot
+diverge again. The flag, the prop and the helper were removed; do not reintroduce a
+client-side `unpost` before `RE`: it is refused with a 403 for exactly the roles that need it.
+Reference: [`../ui-customization.md`](../ui-customization.md) §9e, *Reactivating a posted
+document*.
 
 ## Read-only role access — every write path is gated — ETP-5830
 
@@ -957,7 +1154,9 @@ What a read-only role gets, surface by surface:
 | `/new` reached by URL | redirected to the list, with no defaults fetch (skipped for `?embedded=1`) | `useNewRouteEditingReset` in `detailViewHelpers.jsx` |
 | "Open the add row" hand-offs (`openAddSecondaryLine`, `openCustomTabAdd` router state on `/{id}`) | not gated: they are router state, not URL, and only an in-app save sets them, which a read-only role cannot do | `DetailView.jsx` deep-link effect |
 | Sub-tab tables (inline and non-inline) | no "+ Añadir", no inline edit, no delete, no hover pencil; an empty tab shows an empty table, not the add illustration (same as `readOnlyLogic` tabs) | `SecondaryTableTab` — `tabReadOnly = windowReadOnly \|\| readOnlyLogic` |
+| List (`ListView` + shared `DataTable`) | no row trash (legacy column or hover), no hover pencil, no import (toolbar icon, "Nuevo" split-menu item, empty-state import). The empty state drops its "Crea un nuevo registro para empezar." create hint and keeps only the "no records yet" text (list-modal windows do the same under `window.readOnly`). Row click still opens the record to view, so the hidden pencil (whose no-handler fallback was the same open) is not a regression | `DataTable` `rowWritesOff`, `ListView` `importEnabled` |
 | Sub-tab sidebar detail / form sub-tabs | read-only form, no Save/Delete | sidebar + `SecondaryFormTab` |
+| Row preview (Order, Purchase order, Quotation) | the primary button reads "Ver" with an eye icon instead of "Editar"; same action, opens the locked form | `PreviewActionButtons` `readOnly` |
 | Sub-tabs with a `customAddModal` (Contactos → Dirección) | row click opens nothing — the address modal has no read-only mode | `resolveSecondaryRowClickHandler` |
 | Custom `Panel` sub-tabs and `CustomLines` | receive `editing=false` / `readOnly` | `SecondaryPanelTab`, primary Panel |
 | Attachments tab | no upload dropzone, no delete, no description edit; download and preview kept | `AttachmentsTab` `accessReadOnly` |
@@ -966,7 +1165,15 @@ What a read-only role gets, surface by surface:
 dropzone. A completed document keeps accepting attachments (`isDocumentReadOnly` is ignored,
 ETP-5526), and `readOnly` alone removes deletion only (ETP-5432). Attachment errors now go through
 `translateBackendError`, so the backend's `accessDeniedToSpec` 403 shows as a translated toast,
-not the raw English message.
+not the raw English message. `extractApiErrorMessage(res, t)` (`lib/apiError.js`) gives the same
+result to the other callers that pass the UI translator (`ContactsTable` delete,
+`BillingPreferencesForm`, `useRepresentantesLegales`): without `t` it keeps the raw backend text.
+
+On the list, the gate lives in `DataTable` itself: when `rowQuickActions.readOnly` or
+`windowReadOnly` is set (`ListView` passes both, from the static `window.readOnly` or the runtime
+Solo-lectura tier), `onDeleteRow` and `onEditRow` are dropped at the entry, so a custom header table
+that passes its own handler cannot reopen the trash. `hideCreate` alone (no read-only) still keeps the
+standalone import icon.
 
 Custom panels that write on their own each take the signal explicitly: Contactos → Financiero
 (`BillingPreferencesForm`, `FiscalDefaultsSection`), Calendario → Períodos
@@ -1000,3 +1207,26 @@ nothing if X has nothing to render there.
   the Financiero panel is all disabled, the attachments tab shows files but no dropzone. Open
   `/contacts/new` directly and confirm it lands on the list. Repeat the attachments check on
   Payment terms, Product category and Business partner category.
+
+## Personal grid-column views
+
+Supported standard ListView lists and ListModalWindow grids offer Columns and Save
+view under the single `grid-column-views` flag (disabled by default; see the rollout notes in [feature flags](../feature-flags.md#personal-business-grid-views)). Users can hide
+optional data columns, reorder them and adjust their widths, then explicitly save
+for their own user/spec/entity. Selection checkboxes and action columns remain
+available outside the saved data-column list. Required/locked columns keep the
+existing useGridView restrictions. Filters, sort order, selection and business
+records are unaffected by saving a view.
+
+Generated/custom entry points use explicit source classification plus loaded
+contract checks; unknown/custom layouts and unaudited custom header tables do not acquire
+controls automatically. See [feature-flags.md](../feature-flags.md#personal-business-grid-views)
+for the audited wrappers and modal identity requirements. A view-load failure
+keeps the default grid visible and offers Retry; a save failure preserves current
+changes. Test execution and QA are pending for this integration.
+
+Toolbar visibility and scroll ownership do not disable an audited ListView table's
+personal views. If the resolved `hideListBar` hides the normal toolbar, the same
+Columns/Save view controls appear once above the grid, outside either scroll host.
+Direct props and `listViewOptions` use the existing option precedence; switching
+to an actual gallery hides the controls in either placement.

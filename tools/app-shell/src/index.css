@@ -179,6 +179,21 @@ h6 {
 }
 
 /*
+ * ETP-6154 — the "busy" motion of BankSyncIcon (FileDown): a gentle vertical bob, ±2px over 1 s,
+ * instead of a rotation (a down arrow that spins reads as broken). Referenced from the component
+ * as the arbitrary utility `animate-[bank-sync-bob_1s_ease-in-out_infinite]`, so
+ * `motion-reduce:animate-none` (same utility family) switches it off for reduced-motion users.
+ */
+@keyframes bank-sync-bob {
+  0%, 100% {
+    transform: translateY(-2px);
+  }
+  50% {
+    transform: translateY(2px);
+  }
+}
+
+/*
  * SelectionToolbar contrast fix (ETP-4972 review round — Alex/live-QA finding).
  *
  * Callers frequently pass a shared shadcn `<Button>` as SelectionToolbar

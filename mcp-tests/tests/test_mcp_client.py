@@ -167,6 +167,27 @@ class DescribeServerTest(unittest.TestCase):
         self.assertEqual(out["catalogue"]["toolCount"], 2)
 
 
+class RowsAtTest(unittest.TestCase):
+    """`expectEffect.rowsAt` (ETP-5848): rows under a key the list shapes do not cover."""
+
+    def test_reads_the_rows_under_the_key_and_where_applies_to_them(self):
+        preview = {"preview": True, "history": [
+            {"status": "SENT", "to": ["compras@mcpflow.test"]},
+            {"status": "FAILED", "to": ["compras@mcpflow.test"]},
+        ]}
+        rows = mcp_client.rows_at(preview, "history")
+        self.assertEqual(mcp_client.count_rows(rows), 2)
+        self.assertEqual(mcp_client.count_matching(
+            rows, {"status": "SENT", "to.0": "compras@mcpflow.test"}), 1)
+        self.assertEqual(mcp_client.count_rows(mcp_client.rows_at({"history": []}, "history")), 0)
+
+    def test_a_missing_or_non_list_key_is_not_verifiable(self):
+        # A silent 0 would pass `expect: none` on a check that never ran.
+        for payload in ({"preview": True}, {"history": "none"}, {"status": 409, "error": "no_pdf"}):
+            with self.subTest(payload=payload), self.assertRaises(mcp_client.VerificationError):
+                mcp_client.rows_at(payload, "history")
+
+
 
 class WhereTest(unittest.TestCase):
     """Suite v2 `expectEffect.where`: exact-match filtering by the runner."""
@@ -185,6 +206,9 @@ class WhereTest(unittest.TestCase):
         self.assertEqual(mcp_client.count_matching([{"a": True}], {"a": 1}), 0)
         self.assertEqual(mcp_client.count_matching([{"a": "x"}], {"a": "X"}), 0)
         self.assertEqual(mcp_client.count_matching([{"a": [{"b": 2}]}], {"a.0.b": 2}), 1)
+        # Holded writes amounts with a decimal comma ("36,30"); a grouped "1,234.5" stays text.
+        self.assertEqual(mcp_client.count_matching([{"a": "36,30"}], {"a": 36.3}), 1)
+        self.assertEqual(mcp_client.count_matching([{"a": "1,234.5"}], {"a": 1234.5}), 0)
 
     def test_a_partial_page_is_not_verifiable(self):
         payload = {"data": [{"a": 1}], "totalRows": 50}
@@ -239,6 +263,23 @@ class WhereTest(unittest.TestCase):
     def test_an_unknown_payload_shape_is_an_error_not_zero(self):
         with self.assertRaises(mcp_client.VerificationError):
             mcp_client.count_matching({"totalRows": 3}, {"a": 1})
+
+
+class ChallengeResourceMetadataTest(unittest.TestCase):
+    URL = "https://mcp.example/.well-known/oauth-protected-resource"
+
+    def test_pointer_as_first_parameter_glued_to_scheme(self):
+        # Holded's shape (2026-10-23): the only parameter, right after "Bearer".
+        header = f'Bearer resource_metadata="{self.URL}"'
+        self.assertEqual(mcp_client._challenge_resource_metadata(header), self.URL)
+
+    def test_pointer_after_other_parameters(self):
+        header = f'Bearer realm="mcp", error="invalid_token", resource_metadata="{self.URL}"'
+        self.assertEqual(mcp_client._challenge_resource_metadata(header), self.URL)
+
+    def test_no_pointer(self):
+        self.assertIsNone(mcp_client._challenge_resource_metadata('Bearer realm="mcp"'))
+        self.assertIsNone(mcp_client._challenge_resource_metadata(""))
 
 
 if __name__ == "__main__":

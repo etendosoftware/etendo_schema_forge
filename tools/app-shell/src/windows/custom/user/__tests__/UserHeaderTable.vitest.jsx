@@ -84,6 +84,8 @@ vi.mock('../UserDebugPanel.jsx', () => ({
 }));
 
 import UserHeaderTable from '../UserHeaderTable.jsx';
+import { applySupportSessionFromServer, resetSupportSessionForTests } from '@/lib/supportSession.js';
+
 
 // ETP-4906 DEV wave 7 — `useUserRoleGridData` (RoleChipsCell.jsx) now combines the 4
 // system-level templates from `fetchTemplateRoles()` with `fetchRolesOverview()`'s
@@ -160,6 +162,20 @@ describe('UserHeaderTable — layout', () => {
     const col = tableProps.columns.find((c) => c.key === 'active');
     expect(col.type).toBe('boolean');
     expect(col.toggle).toBe(true);
+  });
+
+  // ETP-5351 — the backend refuses changing `active` for a support session.
+  it('drops the inline active toggle in a support session', async () => {
+    mockDataOk();
+    applySupportSessionFromServer({ clientId: '1', clientName: 'Acme', expiresAt: '2099-01-01T00:00:00Z' }, { storage: localStorage });
+    try {
+      render(<UserHeaderTable data={ROWS} />);
+      await screen.findByTestId('data-table');
+      expect(tableProps.columns.find((c) => c.key === 'active').toggle).toBe(false);
+    } finally {
+      resetSupportSessionForTests();
+      localStorage.clear();
+    }
   });
 
   // ETP-5188 (Point 3) — "Rol por Defecto" must NOT appear in "Filtros avanzados" any

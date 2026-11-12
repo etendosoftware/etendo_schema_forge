@@ -196,6 +196,26 @@ describe('ReportViewerPage — popup-single selector (SelectorPopup)', () => {
     expect(screen.getAllByText('Cash')).toHaveLength(1);
   });
 
+  // ETP-6103 — the real loader must pass the walk's page size through, or every report popup
+  // still walks 30 rows at a time behind the hold.
+  it('asks the report selector for 100 rows when the popup opens on a committed value', async () => {
+    const user = userEvent.setup();
+    mockSearchParams = new URLSearchParams({ report: 'report-1', acctId: 'a2', _display_acctId: 'Bank' });
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(POPUP_REPORT));
+      return Promise.resolve(makeSelectorResponse([{ id: 'a1', name: 'Cash' }, { id: 'a2', name: 'Bank' }]));
+    });
+
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('Account')).toBeInTheDocument());
+    await user.click(screen.getByText('Bank'));
+
+    await waitFor(() => expect(globalThis.fetch.mock.calls.some(([u]) => String(u).includes('/sws/report-selectors/account'))).toBe(true));
+    const url = globalThis.fetch.mock.calls.map(([u]) => String(u)).find((u) => u.includes('/sws/report-selectors/account'));
+    expect(url).toContain('limit=100');
+    expect(url).toContain('offset=0');
+  });
+
   it('shows noResults when the popup search returns nothing', async () => {
     const user = userEvent.setup();
     globalThis.fetch = vi.fn().mockImplementation((url) => {

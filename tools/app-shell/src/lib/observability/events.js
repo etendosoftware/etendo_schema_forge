@@ -56,6 +56,8 @@ const OBSERVABILITY_PROPERTY_VALUES = Object.freeze({
   TAGS: 'tags',
   TOTAL: 'total',
   SPEC_NAME: 'specName',
+  // ETP-6080: random per report session (crypto.randomUUID), never a user or record id.
+  REPORT_SESSION_ID: 'reportSessionId',
   STATUS: 'status',
   STEP: 'step',
   STEP_ID: 'stepId',
@@ -64,6 +66,11 @@ const OBSERVABILITY_PROPERTY_VALUES = Object.freeze({
   USERNAME: 'username',
   VALUE: 'value',
   VARIANT: 'variant',
+  // ETP-5581 — bounce suggestions of the automatch modal: counts of pairs and how the modal opened.
+  PAIRS_SHOWN: 'pairs_shown',
+  PAIRS_PRESELECTED: 'pairs_preselected',
+  PAIRS_CHECKED_AT_CLOSE: 'pairs_checked_at_close',
+  AUTO_OPENED: 'auto_opened',
 });
 
 function defineEvent(name, { channels = [], properties = [] } = {}) {
@@ -108,6 +115,23 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
       OBSERVABILITY_PROPERTY_KEYS.VARIANT,
       OBSERVABILITY_PROPERTY_KEYS.PROVIDER,
       OBSERVABILITY_PROPERTY_KEYS.USERNAME,
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.VALUE,
+      OBSERVABILITY_PROPERTY_KEYS.REASON,
+      OBSERVABILITY_PROPERTY_KEYS.ERROR_CODE,
+    ],
+  }),
+  FEATURE_FLAGS_DIAGNOSTIC: defineEvent('feature_flags_diagnostic', {
+    channels: [OBSERVABILITY_CHANNELS.RUM, OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.OPERATION,
+      OBSERVABILITY_PROPERTY_KEYS.OUTCOME,
+      OBSERVABILITY_PROPERTY_KEYS.PROVIDER,
+      OBSERVABILITY_PROPERTY_KEYS.DURATION_MS,
+      OBSERVABILITY_PROPERTY_KEYS.REASON,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.FLAG_KEY,
     ],
   }),
   // --- generic import (ETP-5676) --------------------------------------------
@@ -265,6 +289,42 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
       OBSERVABILITY_PROPERTY_KEYS.SOURCE,
       OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
       OBSERVABILITY_PROPERTY_KEYS.TYPE,
+    ],
+  }),
+  // ETP-5581 — the bounce suggestions of the bank-reconciliation automatch modal (KPI "suggestions
+  // closed without deciding", roadmap #15). `viewed`: once per opening of the modal with at least
+  // one bounce pair; `dismissed`: that opening closed without applying (best effort — a closed tab
+  // says nothing). Counts and a boolean only, plus the tenant: never a line id, amount,
+  // counterparty or statement text.
+  BOUNCE_SUGGESTIONS_VIEWED: defineEvent('bounce_suggestions_viewed', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.PAIRS_SHOWN,
+      OBSERVABILITY_PROPERTY_KEYS.PAIRS_PRESELECTED,
+      OBSERVABILITY_PROPERTY_KEYS.AUTO_OPENED,
+    ],
+  }),
+  BOUNCE_SUGGESTIONS_DISMISSED: defineEvent('bounce_suggestions_dismissed', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.PAIRS_SHOWN,
+      OBSERVABILITY_PROPERTY_KEYS.PAIRS_CHECKED_AT_CLOSE,
+      OBSERVABILITY_PROPERTY_KEYS.AUTO_OPENED,
+    ],
+  }),
+  // ETP-5889 — one event per activation of the product Movements tab. `source` says how the user
+  // got there ('tab' | 'side_panel_link'). The tenant only (`account_id`): no user, role, product
+  // or record identifier, which the payload policy does not allow.
+  PRODUCT_MOVEMENTS_TAB_OPENED: defineEvent('product_movements_tab_opened', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.ENTITY,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
     ],
   }),
   TIME_TO_CREATE: defineEvent('time_to_create', {
@@ -713,10 +773,13 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
   // Rollout funnel: exposed (flag exposure) -> viewed -> entered another company.
   // `count` is the number of companies the account can enter (owned + invited,
   // pending invitations excluded), so the >=2-companies cohort can be isolated.
+  // ETP-6060 — `source` is how the visit started: 'direct' (menu or URL), or the CTA of
+  // 'quota_banner' | 'billing_banner' | 'blocked_screen' (the `from` query parameter).
   MY_COMPANIES_VIEWED: defineEvent('my_companies_viewed', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
     properties: [
       OBSERVABILITY_PROPERTY_KEYS.COUNT,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
     ],
   }),
   // Emitted BEFORE the switch: a successful switch is a full navigation that
@@ -733,6 +796,82 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
     properties: [
       OBSERVABILITY_PROPERTY_KEYS.TYPE,
+    ],
+  }),
+  // --- Subscription per owned company on "Mis empresas" (ETP-6060) ---------
+  // Adoption funnel: my_companies_viewed -> subscription_opened -> manage_clicked.
+  // An owned company's subscription unfolded. `source`: 'toggle' (the user pressed
+  // "Ver suscripción") | 'link' (a billing CTA opened the page with the row unfolded).
+  // No company id: the events carry the tenant like every other one.
+  MY_COMPANIES_SUBSCRIPTION_OPENED: defineEvent('my_companies_subscription_opened', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+    ],
+  }),
+  // "Gestionar suscripción" pressed, before the portal session is requested. `source`:
+  // 'my_companies_menu' (row menu) | 'my_companies_section' (unfolded row) | 'account'.
+  SUBSCRIPTION_MANAGE_CLICKED: defineEvent('subscription_manage_clicked', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+    ],
+  }),
+  // "Ir a Mis empresas" pressed on /account, where the flag replaced the subscription.
+  ACCOUNT_SUBSCRIPTION_MOVED_CLICKED: defineEvent('account_subscription_moved_clicked', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+  }),
+  // --- interactive reports (ETP-6080, flag `dynamic-reports`; KPI analysis PR #25) -----------
+  // Every event carries `specName` (the report id) and `reportSessionId`. `errorCode` is a class
+  // (`network`, `http_500`, `org_access_denied`), never a message.
+  // Once per report session, when the first result is visible. `source`: 'menu' | 'deep_link'.
+  REPORT_OPENED: defineEvent('report_opened', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+      OBSERVABILITY_PROPERTY_KEYS.REPORT_SESSION_ID,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.OUTCOME,
+      OBSERVABILITY_PROPERTY_KEYS.DURATION_MS,
+      OBSERVABILITY_PROPERTY_KEYS.ERROR_CODE,
+    ],
+  }),
+  // One per user change, once its result is visible or its request failed; never for the defaults,
+  // "Limpiar filtros" or an aborted request. `type`: 'period' | 'organization' | 'account_level' |
+  // 'business_partner' | 'product' | 'comparison'.
+  REPORT_FILTER_APPLIED: defineEvent('report_filter_applied', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+      OBSERVABILITY_PROPERTY_KEYS.REPORT_SESSION_ID,
+      OBSERVABILITY_PROPERTY_KEYS.TYPE,
+      OBSERVABILITY_PROPERTY_KEYS.OUTCOME,
+      OBSERVABILITY_PROPERTY_KEYS.DURATION_MS,
+      OBSERVABILITY_PROPERTY_KEYS.ERROR_CODE,
+    ],
+  }),
+  // `type`: 'expand' | 'collapse' | 'expand_all' | 'collapse_all'. `outcome` is always 'success':
+  // the interactions KPI only counts events with it.
+  REPORT_GROUP_TOGGLED: defineEvent('report_group_toggled', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+      OBSERVABILITY_PROPERTY_KEYS.REPORT_SESSION_ID,
+      OBSERVABILITY_PROPERTY_KEYS.TYPE,
+      OBSERVABILITY_PROPERTY_KEYS.OUTCOME,
+    ],
+  }),
+  // `type`: 'ledger' | 'entry' (with `durationMs`, click to detail visible) | 'document' (when the
+  // tab opens, no duration). `outcome`: 'success' | 'error' | 'no_document'.
+  REPORT_DRILLDOWN: defineEvent('report_drilldown', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+      OBSERVABILITY_PROPERTY_KEYS.REPORT_SESSION_ID,
+      OBSERVABILITY_PROPERTY_KEYS.TYPE,
+      OBSERVABILITY_PROPERTY_KEYS.OUTCOME,
+      OBSERVABILITY_PROPERTY_KEYS.DURATION_MS,
+      OBSERVABILITY_PROPERTY_KEYS.ERROR_CODE,
     ],
   }),
 });

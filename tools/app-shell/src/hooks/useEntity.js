@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { resolveBackendSort, buildBackendFilter } from '@/lib/gridQuery.js';
 import { translateBackendError, extractBackendMessageKeys, extractBackendMessageParams, extractBackendErrorCode } from '@/lib/backendErrors.js';
+import { extractQuotaExceeded, isQuotaCheckFailed } from '@/lib/planQuotas.js';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { trackDocumentCreated, trackTransactionPosted } from '@/lib/observability/health-events.js';
@@ -74,6 +75,20 @@ export function pickMessage(node) {
         return null;
     }
     return pickMessageFromObject(node);
+}
+
+// ETP-6140 — `pickMessage` of a NEO `error` node, minus its machine code: the flat code string
+// itself, or the `code` key of the nested object (which `pickMessageFromObject` would otherwise
+// return when the object has no message).
+function pickReadableError(node, code) {
+    if (!code) return pickMessage(node);
+    if (node === code) return null;
+    if (node && typeof node === 'object' && !Array.isArray(node)) {
+        const rest = { ...node };
+        delete rest.code;
+        return pickMessage(rest);
+    }
+    return pickMessage(node);
 }
 
 /**
@@ -251,15 +266,25 @@ export async function extractErrorMessage(res, ui) {
             const raw = decoded.replace(/\s+/g, ' ').trim();
             // ETP-5692 — the body's identity rides along: the invoice write fence answers in
             // English plus `messageKeys`, and only the key can be translated.
+            // ETP-5051 — and so does a plan-quota refusal (403 QUOTA_EXCEEDED): its sentence is
+            // built from the quota the body carries, not from the English prose. A failed quota
+            // check (500 QUOTA_CHECK_FAILED) gets its own "nothing was saved" sentence.
             return translateBackendError(raw, ui, {
                 messageKeys: extractBackendMessageKeys(data),
                 messageParams: extractBackendMessageParams(data),
+                quota: extractQuotaExceeded(data),
+                quotaCheckFailed: isQuotaCheckFailed(data),
             }) || raw;
         };
 
 
+        // ETP-6140 — the error code (flat IMP-5 `{error:"stale_record", message}` or nested
+        // `{error:{code, message}}`) is a discriminator for the caller, not text for the user:
+        // it is skipped while a readable message exists and only shown as the last resort.
+        const errorCode = extractBackendErrorCode(data);
+
         // NEO Headless top-level error: { error: { message, status } }
-        const neoError = pickMessage(data?.error);
+        const neoError = pickReadableError(data?.error, errorCode);
         if (neoError) return normalizeServerError(neoError) || neoError;
 
         // Etendo JsonDataService wraps errors in response.error
@@ -276,6 +301,8 @@ export async function extractErrorMessage(res, ui) {
         if (data?.response?.status === -4) {
             return translate('validationError', 'Validation error');
         }
+
+        if (errorCode) return normalizeServerError(errorCode) || errorCode;
     } catch { /* body not JSON */
     }
     return `${translate('error', 'Error')} ${res.status}`;
@@ -799,8 +826,20 @@ export function getMethod(isNew) {
  * Keeps the create path's escape hatch, with the same correction: a value the app deliberately
  * forced through (a custom panel calling onChange) is never swallowed silently, but a value a
  * CALLOUT applied does not count as user-authored — see isUserAuthoredKey.
+ *
+ * ETP-5840 CP-B1 — the one case where a value EQUAL to `selected[key]` is still sent: the key
+ * is in `calloutTouchedKeysRef` (a callout wrote it since the last save) AND the user then
+ * authored it by hand (isUserAuthoredKey). Reason: the backend replays the invoice-date
+ * callout for API clients (com.etendoerp.go `mirrorInvoiceDateOnUpdate`) — when invoiceDate
+ * changes and accountingDate is ABSENT from the body, it copies invoiceDate into it. A user who
+ * let the form callout move accountingDate and then typed the stored value back ends with no
+ * diff, so the key was omitted and the server overwrote the retyped date. Sending it states the
+ * user's choice explicitly. A key only the callout touched (not retyped) that ends equal to
+ * stored is still NOT sent. `calloutTouchedKeysRef` is optional; null keeps the plain diff.
+ * A custom panel that echoes a value through onChange after a callout also counts as a retype
+ * and resends the value; that is harmless, since it is the value the record already holds.
  */
-export function buildPatchPayload(editing, selected, formFieldsRef, userChangedKeysRef, calloutAppliedKeysRef, contractFields = null) {
+export function buildPatchPayload(editing, selected, formFieldsRef, userChangedKeysRef, calloutAppliedKeysRef, contractFields = null, calloutTouchedKeysRef = null) {
     const isFieldExcluded = formFieldsRef && userChangedKeysRef
         ? buildPatchFieldExclusion(formFieldsRef, editing, contractFields)
         : null;
@@ -821,7 +860,9 @@ export function buildPatchPayload(editing, selected, formFieldsRef, userChangedK
         // "the caller chose this number", which suppresses its own re-numbering (ETP-5274).
         if (isSequencePlaceholder(value)) continue;
         if (isFieldExcluded && isFieldExcluded(key, userChangedKeysRef, calloutAppliedKeysRef)) continue;
-        if (value !== selected[key]) payload[key] = value;
+        if (value !== selected[key] || isRetypedAfterCallout(key, userChangedKeysRef, calloutAppliedKeysRef, calloutTouchedKeysRef)) {
+            payload[key] = value;
+        }
     }
     return payload;
 }
@@ -898,6 +939,15 @@ export function isUserAuthoredKey(key, userChangedKeysRef, calloutAppliedKeysRef
 }
 
 /**
+ * ETP-5840 CP-B1 — a callout wrote this key since the last save and the user then retyped it.
+ * See buildPatchPayload for why such a key travels even when it equals the stored value.
+ */
+function isRetypedAfterCallout(key, userChangedKeysRef, calloutAppliedKeysRef, calloutTouchedKeysRef) {
+    if (!calloutTouchedKeysRef?.current?.has(key)) return false;
+    return isUserAuthoredKey(key, userChangedKeysRef, calloutAppliedKeysRef);
+}
+
+/**
  * ETP-5537 — builds the create-time field-exclusion predicate that replaces the old
  * per-window allowlist (`CONTACTS_PRECREATE_BILLING_FIELDS`).
  *
@@ -960,9 +1010,10 @@ export function buildSavePayload({
     formFieldsRef,
     calloutAppliedKeysRef,
     contractFields,
+    calloutTouchedKeysRef = null,
 }) {
     if (!isNew && selected) {
-        return buildPatchPayload(editing, selected, formFieldsRef, userChangedKeysRef, calloutAppliedKeysRef, contractFields);
+        return buildPatchPayload(editing, selected, formFieldsRef, userChangedKeysRef, calloutAppliedKeysRef, contractFields, calloutTouchedKeysRef);
     }
 
     const payload = {};
@@ -1372,6 +1423,12 @@ export function useEntity(entity, childEntity, {
     // RESPONSE rather than by the user. `handleChange` is the single entry point for both, so
     // without this the two are indistinguishable — see handleChange's `origin` option.
     const calloutAppliedKeysRef = useRef(new Set());
+    // ETP-5840 CP-B1: keys a callout response wrote since the last save. Unlike
+    // calloutAppliedKeysRef, a later user edit does NOT remove the key — this records that the
+    // callout happened, not who wrote last. A successful save removes the keys its body carried
+    // (performSave), so it only affects the save right after a callout + retype sequence.
+    // See buildPatchPayload.
+    const calloutTouchedKeysRef = useRef(new Set());
     // `initialData` behind a ref so `handleNew` keeps a stable identity. It is read only at
     // the moment handleNew runs, and putting it in that callback's dependency array would
     // rebuild handleNew on every render for any caller passing an object literal — which
@@ -1427,6 +1484,22 @@ export function useEntity(entity, childEntity, {
 
     // True when editing has diverged from the last-saved selected state.
     const isDirtyHeader = useMemo(() => dirtyHeaderFieldKeys.length > 0, [dirtyHeaderFieldKeys]);
+
+    // ETP-5888: what the unsaved-changes guard asks — would leaving lose something the USER did?
+    // For a saved record it is the same answer as isDirtyHeader. For a new one it is not: the
+    // /defaults response and the callouts that run when the form opens fill fields before the
+    // user touches anything, so isDirtyHeader is true from the first render and every way out of
+    // an untouched new record prompted. Here a new record counts every key the user authored —
+    // seeded keys included, as handleNew marks them user-changed — and counts it even when the
+    // user EMPTIED it: clearing a defaulted field is an edit, while isDirtyHeader's "has a value"
+    // rule would miss it. isDirtyHeader itself is left alone, so the Save button and every other
+    // reader keep their current behaviour. The refs are read inside the memo safely: every write
+    // to them goes with a setEditing, and `editing` is a dependency.
+    const hasUserHeaderEdits = useMemo(() => {
+        if (selected) return dirtyHeaderFieldKeys.length > 0;
+        return [...userChangedKeysRef.current].some(
+            key => key !== 'id' && isUserAuthoredKey(key, userChangedKeysRef, calloutAppliedKeysRef));
+    }, [dirtyHeaderFieldKeys, editing, selected]);
 
     // ETP-4563: shared client-side cache (app-shell-core). Null when no
     // DataProvider is mounted (e.g. isolated unit tests) — every read below then
@@ -1611,6 +1684,25 @@ export function useEntity(entity, childEntity, {
         loadList(false);
     }, [loadList, skipListFetch]);
 
+    // The child rows of `parentId` (normalized), through the cache like every read. Shared by
+    // fetchChildren and the forced fetchById, which must commit them with the header.
+    const childrenKey = useCallback((parentId) => (cacheScope
+        ? createQueryKey({ ...cacheScope, apiBase: apiBaseUrl, spec: specName, entity: childEntity, parentId, filters: { childSortBy } })
+        : null), [cacheScope, apiBaseUrl, specName, childEntity, childSortBy]);
+
+    const queryChildren = useCallback((parentId, { force = false } = {}) => {
+        // NEO Headless uses ?parentId= to filter child entity records
+        const key = childrenKey(parentId);
+        const sortParam = childSortBy ? `&_sortBy=${childSortBy}` : '';
+        const fetcher = (signal) => apiFetch(`/${childEntity}?parentId=${parentId}${sortParam}`, { signal })
+            .then(res => {
+                if (!res.ok) throw new Error(`${res.status}`);
+                return res.json();
+            })
+            .then(data => normalizeRows(data?.response?.data ?? (Array.isArray(data) ? data : []), childEntity));
+        return runQuery(key, fetcher, { force });
+    }, [childEntity, apiFetch, childSortBy, runQuery, childrenKey]);
+
     const fetchChildren = useCallback((parentId, { silent = false, force = false } = {}) => {
         if (!childEntity || !parentId) {
             setChildren([]);
@@ -1627,24 +1719,13 @@ export function useEntity(entity, childEntity, {
         // purchase-invoice-import-from-receipt.mocked.spec.js and
         // return-to-vendor-shipment.mocked.spec.js.
         if (!silent) setChildrenLoading(true);
-        // NEO Headless uses ?parentId= to filter child entity records
-        const key = cacheScope
-            ? createQueryKey({ ...cacheScope, apiBase: apiBaseUrl, spec: specName, entity: childEntity, parentId, filters: { childSortBy } })
-            : null;
-        const sortParam = childSortBy ? `&_sortBy=${childSortBy}` : '';
-        const fetcher = (signal) => apiFetch(`/${childEntity}?parentId=${parentId}${sortParam}`, { signal })
-            .then(res => {
-                if (!res.ok) throw new Error(`${res.status}`);
-                return res.json();
-            })
-            .then(data => normalizeRows(data?.response?.data ?? (Array.isArray(data) ? data : []), childEntity));
-        runQuery(key, fetcher, { force })
+        queryChildren(parentId, { force })
             .then(rows => setChildren(rows))
             // Silent refreshes must not blank a table the user is already looking
             // at just because one background request failed transiently (ETP-4512).
             .catch(() => { if (!silent) setChildren([]); })
             .finally(() => { if (!silent) setChildrenLoading(false); });
-    }, [apiBaseUrl, childEntity, apiFetch, childSortBy, cacheScope, specName, runQuery]);
+    }, [childEntity, queryChildren]);
 
     // HandleDefaults: fetch backend-resolved defaults for a NEW child line under the
     // given parent and normalize them (dates, booleans, enum ints) exactly as
@@ -1737,13 +1818,39 @@ export function useEntity(entity, childEntity, {
         // promise handed out always settles as fulfilled and can never surface as an
         // unhandled rejection in a caller that ignores it. The `if (!id) return;` guard
         // above still returns undefined, exactly as before.
+        // ETP-5828 (QA UI-1) — a forced re-read follows a server-side change that usually rewrote
+        // header AND lines together (an import, a document action). Committing the header first
+        // and the lines one round trip later left a frame where the totals panel mixed the new
+        // header totals with the old lines (subtotal 0 next to the new grand total, ~1 s). The
+        // lines are therefore read IN PARALLEL with the header and committed in the same tick.
+        // `null` = the lines read failed: they are cleared, as a non-silent fetchChildren does.
+        // Known window: while this forced lines GET is in flight, a NON-forced reader of the same
+        // lines key (fetchChildren without force, a plain fetchById/handleSelect) is handed this
+        // same in-flight request by the cache's dedup, so after a mutation it can still show the
+        // pre-mutation lines; evicting the entry below cannot help once the promise is shared.
+        // Starting the lines read with the header widened that window by about one header round
+        // trip. The proper fix belongs in schema_forge_core `queryCache.fetchQuery` (do not hand a
+        // non-forced reader an in-flight request started before an invalidation).
+        const linesRead = force && childEntity
+            ? queryChildren(id, { force: true }).catch(() => null)
+            : undefined;
+        // The lines entry this forced read populated, evicted whenever its lines are dropped
+        // instead of committed: the cache stores the response even when the read is discarded,
+        // and an entry written after an invalidation is fresh, so the next reader would get the
+        // pre-mutation lines (an invalidation only marks the entries already stored).
+        const dropLinesEntry = () => {
+            const linesKey = linesRead ? childrenKey(id) : null;
+            if (linesKey) dataCache?.cache?.remove(linesKey);
+        };
         return runQuery(key, fetcher, { force })
-            .then(row => {
+            .then(row => (linesRead ? linesRead.then(lines => ({ row, lines })) : { row, lines: undefined }))
+            .then(({ row, lines }) => {
                 if (!isCurrent()) return;
                 // ETP-4563: a mutation superseded this read while it was in flight: drop the
                 // (now stale) result and evict the cache entry it just populated.
                 if (opSeqRef.current !== seqAtStart) {
                     if (key) dataCache?.cache?.remove(key);
+                    dropLinesEntry();
                     setLoading(false);
                     return;
                 }
@@ -1753,6 +1860,7 @@ export function useEntity(entity, childEntity, {
                 // staleTime, so the next navigation re-asks (matches pre-cache behavior).
                 if (!row || row.id == null) {
                     if (key) dataCache?.cache?.remove(key);
+                    dropLinesEntry();
                     setRecordError('notFound');
                     setSelected(null);
                     setEditing(null);
@@ -1764,8 +1872,10 @@ export function useEntity(entity, childEntity, {
                 // ETP-5602: a forced re-read follows a server-side change (a document action,
                 // a process), which may have rewritten the lines too — reactivating an invoice
                 // bumps UPDATED on every line. Serving the cached lines kept their old version,
-                // so the first line edit failed with 409 stale_record.
-                fetchChildren(row.id, { force });
+                // so the first line edit failed with 409 stale_record. The forced path already
+                // re-read them above (same tick as the header); the plain one reads them now.
+                if (lines !== undefined) setChildren(lines ?? []);
+                else fetchChildren(row.id, { force });
                 setLoading(false);
             })
             .catch(err => {
@@ -1778,7 +1888,7 @@ export function useEntity(entity, childEntity, {
                 setEditing(null);
                 setLoading(false);
             });
-    }, [apiBaseUrl, entity, apiFetch, fetchChildren, cacheScope, specName, runQuery, dataCache, neutralizePendingDefaults]);
+    }, [apiBaseUrl, entity, apiFetch, fetchChildren, queryChildren, childrenKey, childEntity, cacheScope, specName, runQuery, dataCache, neutralizePendingDefaults]);
 
     // Lightweight header refresh used after line add/update/delete operations.
     // Unlike fetchById, this preserves fields the user has explicitly edited (tracked in
@@ -1893,6 +2003,7 @@ export function useEntity(entity, childEntity, {
     const clearUserChangedKey = useCallback((key) => {
         userChangedKeysRef.current.delete(key);
         calloutAppliedKeysRef.current.delete(key);
+        calloutTouchedKeysRef.current.delete(key);
     }, []);
 
     const handleSelect = useCallback((row, { force = false } = {}) => {
@@ -1904,6 +2015,7 @@ export function useEntity(entity, childEntity, {
         neutralizePendingDefaults();
         userChangedKeysRef.current = new Set();
         calloutAppliedKeysRef.current = new Set();
+        calloutTouchedKeysRef.current = new Set();
         // ETP-5034: a record is being handed to us directly (list row click) — any
         // not-found state from a previous route is stale, and an in-flight fetchById for the
         // PREVIOUS record must not land on top of the one we are selecting now.
@@ -1936,6 +2048,7 @@ export function useEntity(entity, childEntity, {
         // dropping a seeded legacy-looking FK id out of the POST payload.
         userChangedKeysRef.current = new Set(Object.keys(seed));
         calloutAppliedKeysRef.current = new Set();
+        calloutTouchedKeysRef.current = new Set();
         setFieldErrors({});
         // ETP-5034: the creation route must never inherit a previous route's not-found state,
         // nor let an in-flight fetchById resolve into the empty creation form.
@@ -2024,8 +2137,10 @@ export function useEntity(entity, childEntity, {
      * genuine user edit and reclaims the key.
      */
     const handleChange = useCallback((field, value, { origin } = {}) => {
-        if (origin === 'callout') calloutAppliedKeysRef.current.add(field);
-        else calloutAppliedKeysRef.current.delete(field);
+        if (origin === 'callout') {
+            calloutAppliedKeysRef.current.add(field);
+            calloutTouchedKeysRef.current.add(field);
+        } else calloutAppliedKeysRef.current.delete(field);
         userChangedKeysRef.current.add(field);
         setEditing(prev => ({ ...prev, [field]: value }));
         // ETP-3894: clear the field-level error as soon as the user touches the field.
@@ -2093,6 +2208,7 @@ export function useEntity(entity, childEntity, {
             // leaving them would keep scoping format validation to fields nobody touched.
             userChangedKeysRef.current.clear();
             calloutAppliedKeysRef.current.clear();
+            calloutTouchedKeysRef.current.clear();
             setSaveError(null);
             setFieldErrors({});
             // Belt and braces: sonner already dismisses a toast when its action is clicked, but
@@ -2221,7 +2337,11 @@ export function useEntity(entity, childEntity, {
             formFieldsRef,
             calloutAppliedKeysRef,
             contractFields,
+            calloutTouchedKeysRef,
         });
+        // ETP-5840 CP-B1: the callout-touched keys this body actually carries, snapshotted NOW.
+        // Only these are forgotten on success — see the res.ok branch.
+        const travelledCalloutTouchedKeys = Object.keys(payload).filter(k => calloutTouchedKeysRef.current.has(k));
         try {
             // getUrl already returns the full ${apiBaseUrl}/... path, so baseUrl: ''
             // keeps it from being prefixed a second time. NEO Headless expects flat field
@@ -2230,6 +2350,12 @@ export function useEntity(entity, childEntity, {
             // filters missed gets dropped and the save retried once the backend names it.
             const res = await saveWithReadOnlyFieldRetry(apiFetch, url, method, payload);
             if (res.ok) {
+                // ETP-5840 CP-B1: a callout-touched key that travelled in this body must not keep
+                // forcing itself into later saves of this same visit, so it is forgotten here.
+                // Deliberately NOT clear(): a callout + retype that happened while this save was
+                // in flight was not in this body, and clearing the whole set would make the next
+                // save omit it again — the very bug this set exists to prevent.
+                travelledCalloutTouchedKeys.forEach(k => calloutTouchedKeysRef.current.delete(k));
                 const data = await res.json();
                 const saved = normalizeRecord(data?.response?.data?.[0] ?? data, entity);
                 const resolvedSaved = await resolveSavedRecordAfterSave(saved, {
@@ -2764,7 +2890,7 @@ export function useEntity(entity, childEntity, {
         recordError,
         runningProcess,
         blockingCondition, completionSignal,
-        isDirtyHeader, dirtyHeaderFieldKeys,
+        isDirtyHeader, dirtyHeaderFieldKeys, hasUserHeaderEdits,
         isValid, missingRequired, missingRequiredFields,
         fieldErrors, registerFields,
         handleSelect, handleNew, handleChange, handleSave, handleSaveAndProcess, handleDelete, handleProcess,

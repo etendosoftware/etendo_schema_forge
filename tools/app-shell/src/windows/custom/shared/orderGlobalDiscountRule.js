@@ -1,6 +1,6 @@
 /**
  * Decision rule for carrying an order's global discount (`etgoTotalDiscount`, a percentage) into
- * an invoice when its lines are imported with the "Add from order" popup (ETP-5828).
+ * an invoice when its lines are imported with the "Import from order" popup (ETP-5828).
  *
  * Shared by the sales-invoice and purchase-invoice import modals. Pure: no React, no I/O, so it
  * can be evaluated on every selection change and covered with plain `node --test`.
@@ -80,17 +80,4 @@ export function resolveOrderGlobalDiscount({ selectedOrders, invoicePct, invoice
  */
 export function isCarryingGlobalDiscount(decision, carryOn) {
   return decision?.kind === 'carry' && !!carryOn;
-}
-
-/**
- * Whether the invoice header must be PATCHed with the orders' %: only when carrying and the
- * invoice has no % yet. When the invoice already holds the same %, nothing is written; every
- * other outcome leaves the header untouched.
- *
- * @param {ReturnType<typeof resolveOrderGlobalDiscount>} decision
- * @param {boolean} carryOn the toggle state
- * @returns {boolean}
- */
-export function shouldPatchInvoiceGlobalDiscount(decision, carryOn) {
-  return isCarryingGlobalDiscount(decision, carryOn) && decision.invoicePct === 0;
 }

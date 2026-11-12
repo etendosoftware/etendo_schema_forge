@@ -6,7 +6,7 @@
   "subject": "local",
   "repeat": 3,
   "decision": {
-    "ruleVersion": 1,
+    "ruleVersion": 3,
     "callsMargin": 0.2,
     "tokensMargin": 0.1
   },

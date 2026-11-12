@@ -16,6 +16,9 @@ Spec (after `{{steps.*}}` refs are resolved by the caller):
         - { number: 3, near: "unidades" }     # small numbers need an anchor
         - { number: 21, percent: true }       # only matches "21 %"
         - { text: "Cliente Paridad" }
+        - anyOf:                 # one item, several acceptable readings: any of them passes
+            - { number: 4888.34, tolerance: 1 }
+            - { number: 4970.54, tolerance: 1 }
       none:                      # no item may be found
         - { text: "no encontré" }
 
@@ -39,7 +42,9 @@ from typing import Any
 #: v3: `near:` binds the anchor to its NEAREST number only (see _nearest).
 #: v4: document numbers after "Nº"/"No."/"núm."/"#", clock times and
 #: international phone numbers are not numbers either.
-MATCHER_VERSION = 4
+#: v5 (ETP-5848): an `all:` item may be `{anyOf: [item, ...]}`, found when any of its
+#: alternatives is — a question with two defensible readings (net or gross receivables).
+MATCHER_VERSION = 5
 
 #: A literal integer below this, with no `near:` anchor and no tolerance, is
 #: refused at load: "10" or "3" appears in almost any answer (a day, a line
@@ -217,6 +222,9 @@ def _expected_number(value: Any) -> float:
 
 
 def _check_item(item: dict[str, Any], folded: str, numbers: list[dict[str, Any]]) -> dict[str, Any]:
+    if "anyOf" in item:
+        checks = [_check_item(alternative, folded, numbers) for alternative in item["anyOf"]]
+        return {"anyOf": checks, "ok": any(c["ok"] for c in checks)}
     if "number" in item:
         expected = _expected_number(item["number"])
         tolerance = float(item.get("tolerance", 0))
@@ -276,6 +284,14 @@ def is_small_literal(item: dict[str, Any]) -> bool:
             and not item.get("near") and not item.get("tolerance") and not item.get("percent"))
 
 
+def _alternatives(item: dict[str, Any]) -> list[Any]:
+    """The alternatives of an `anyOf` item: a list of two or more, and nothing beside it."""
+    alternatives = item["anyOf"]
+    if set(item) != {"anyOf"} or not isinstance(alternatives, list) or len(alternatives) < 2:
+        raise ValueError(f"expectAnswer item {item!r}: `anyOf` is a list of two or more items, alone")
+    return alternatives
+
+
 def normalize_spec(spec: Any) -> dict[str, list[dict[str, Any]]]:
     """`{all, none}` from either a mapping or a bare list; validates every item."""
     if isinstance(spec, list):
@@ -285,7 +301,12 @@ def normalize_spec(spec: Any) -> dict[str, list[dict[str, Any]]]:
     out = {"all": list(spec.get("all") or []), "none": list(spec.get("none") or [])}
     if not out["all"] and not out["none"]:
         raise ValueError("expectAnswer declares no item")
-    for item in out["all"] + out["none"]:
+    for item in out["none"]:
+        if isinstance(item, dict) and "anyOf" in item:
+            raise ValueError("expectAnswer `anyOf` goes under `all:`; under `none:` list each item")
+    alternatives = [a for i in out["all"] if isinstance(i, dict) and "anyOf" in i for a in _alternatives(i)]
+    plain = [i for i in out["all"] if not (isinstance(i, dict) and "anyOf" in i)]
+    for item in plain + out["none"] + alternatives:
         if not isinstance(item, dict) or len({"number", "text"} & set(item)) != 1:
             raise ValueError(f"expectAnswer item {item!r} needs exactly one of `number:` or `text:`")
         if not set(item) <= {"number", "text", "tolerance", "near", "percent"}:

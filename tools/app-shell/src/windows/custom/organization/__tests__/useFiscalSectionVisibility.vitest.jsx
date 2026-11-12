@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/windows/custom/organization/useFiscalSectionVisibility.js
+// @covers tools/app-shell/src/windows/custom/fiscal-models/useFiscalModelsCatalog.js
 // Which fiscal sections of the Organization window (Certificado digital, Actividades IAE,
 // Representante legal / Modelo 390) are shown, from the fiscal models catalog and the
 // organization's SII / TicketBAI / VERI*FACTU configuration.
@@ -9,9 +10,16 @@ import { renderHook, waitFor, act } from '@testing-library/react';
 // state of each source. `isModelActive` is kept real — it is part of the rule under test.
 let catalogState;
 let fiscalState;
+// `useRealCatalog` switches the stub to the real catalog reader (driven through the mocked
+// useApiFetch), so a raw catalog answer — `_unavailable` marker included — goes through the same
+// split the page uses.
+let useRealCatalog = false;
 vi.mock('../../fiscal-models/useFiscalModelsCatalog.js', async (importOriginal) => {
   const actual = await importOriginal();
-  return { ...actual, useFiscalModelsCatalog: vi.fn(() => catalogState) };
+  return {
+    ...actual,
+    useFiscalModelsCatalog: vi.fn((...args) => (useRealCatalog ? actual.useFiscalModelsCatalog(...args) : catalogState)),
+  };
 });
 // `useRealFiscalConfig` switches the stub to the real reader (driven through a mocked
 // useApiFetch) for the organization-switch tests, which depend on how that reader moves from
@@ -253,5 +261,55 @@ describe('useFiscalSectionVisibility — switching organization', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(result.current).toEqual({ ...NOTHING, loading: false });
+  });
+});
+
+// Backend-only flag `fiscal-model-390`: with the flag off the catalog answers without the 390 and
+// with `"_unavailable": ["390"]`. The Organization's Modelo 390 section has no toggle point of its
+// own — it hides because the 390 is not active — so a raw answer is driven through the real reader.
+describe('useFiscalSectionVisibility — 390 marked unavailable by the catalog', () => {
+  const API = '/sws/neo/organization';
+  const catalogAnswer = (body) => {
+    mockApiFetch.mockImplementation((url) => (String(url).endsWith('/fiscal-models-catalog')
+      ? Promise.resolve({ ok: true, status: 200, json: async () => body })
+      : Promise.reject(new Error(`unmocked: ${url}`))));
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockApiFetch.mockReset();
+    useRealCatalog = true;
+    fiscalState = {
+      loading: false, error: null, profile: 'unconfigured',
+      siiRecord: null, tbaiRecord: null, verifactuRecord: null,
+    };
+  });
+
+  afterEach(() => {
+    useRealCatalog = false;
+  });
+
+  it('keeps show390 false when the answer marks the 390 unavailable', async () => {
+    catalogAnswer({ 303: true, _unavailable: ['390'] });
+    const { result } = renderHook(() => useFiscalSectionVisibility('ORG_1', API));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current).toEqual({ showIae: true, show390: false, showCert: true, loading: false });
+  });
+
+  it('does not let an unavailable 390 sent as active drive the 390 section, IAE or the certificate', async () => {
+    catalogAnswer({ 390: true, _unavailable: ['390'] });
+    const { result } = renderHook(() => useFiscalSectionVisibility('ORG_1', API));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current).toEqual({ ...NOTHING, loading: false });
+  });
+
+  it('shows the 390 section when the answer carries no marker (flag on)', async () => {
+    catalogAnswer({ 390: true });
+    const { result } = renderHook(() => useFiscalSectionVisibility('ORG_1', API));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current).toEqual({ showIae: true, show390: true, showCert: true, loading: false });
   });
 });

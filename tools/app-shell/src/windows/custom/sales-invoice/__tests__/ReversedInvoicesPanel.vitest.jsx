@@ -1,4 +1,13 @@
+const gridBoundary = await vi.hoisted(async () => (await import('@/test/gridViewTestDoubles.jsx')).createGridBoundary());
+vi.mock('@/lib/flags', async () => (await import('@/test/gridViewTestDoubles.jsx')).gridFlagsMock(() => gridBoundary.enabled));
+vi.mock('@/hooks/useGridView.js', async () => (await import('@/test/gridViewTestDoubles.jsx')).gridViewHookMock(gridBoundary));
+vi.mock('@/components/contract-ui/GridViewControls.jsx', async () => (await import('@/test/gridViewTestDoubles.jsx')).gridViewControlsMock());
+import { resetGridBoundary } from '@/test/gridViewTestDoubles.jsx';
+
+beforeEach(() => resetGridBoundary(gridBoundary));
+
 // @covers tools/app-shell/src/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx
+// @covers tools/app-shell/src/windows/custom/sales-invoice/SalesRectificationsTab.jsx
 //
 // ETP-4404 / ETP-5381 — ReversedInvoicesPanel unit suite (Jira TC map in each test title).
 //
@@ -631,16 +640,65 @@ describe('Model 349 catalog gating (ETP-4755) — "Correctiva del 349" checkbox 
     expect(screen.queryByTestId('checkbox__isCorrective')).not.toBeInTheDocument();
   });
 
-  it('leaves the read-only Modelo 349 grid-column badge unaffected by the catalog gate', async () => {
-    // Grid badge (CorrectivaBadge) reflects the row's own persisted aEAT349IsCorrective
-    // value — it is a display of past data, not the control that creates it, so the
-    // catalog gate (scoped to the checkbox inside ExpandedForm) must not hide it.
-    renderPanel({ lines: [LINE({ aEAT349IsCorrective: 'Y' })], activeModels: { '349': false } });
+  // ETP-5831 CP-14 — the "Modelo 349" grid column (header + badge cells) follows the same
+  // fail-closed catalog gate as the checkbox panel: shown only once the catalog confirms 349.
+  it('hides the whole Modelo 349 grid column (header + badge cells) when the catalog reports 349 inactive', async () => {
+    const { container } = renderPanel({ lines: [LINE({ aEAT349IsCorrective: 'Y' })], activeModels: { '349': false } });
     await screen.findAllByText('10000067');
 
-    expect(screen.getByText('rectCorrective349Badge')).toBeInTheDocument();
+    expect(screen.queryByText('rectColModel349')).not.toBeInTheDocument();
+    expect(screen.queryByText('rectCorrective349Badge')).not.toBeInTheDocument();
+    expect(container.querySelector('thead tr').children).toHaveLength(6);
+    expect(container.querySelector('tbody tr').children).toHaveLength(6);
+    // The remaining columns keep their cells: the total still lands in its own column.
+    expect(screen.getByText('rectColTotal')).toBeInTheDocument();
     await expandFirstRow();
+    expect(container.querySelector('tbody tr').nextElementSibling.querySelector('td')).toHaveAttribute('colspan', '6');
     expect(screen.queryByTestId('checkbox__isCorrective')).not.toBeInTheDocument();
+  });
+
+  it('hides the Modelo 349 grid column (fail-closed) when the catalog fetch fails', async () => {
+    renderPanel({ lines: [LINE({ aEAT349IsCorrective: 'Y' })], catalogOk: false });
+    await screen.findAllByText('10000067');
+
+    expect(screen.queryByText('rectColModel349')).not.toBeInTheDocument();
+    expect(screen.queryByText('rectCorrective349Badge')).not.toBeInTheDocument();
+  });
+
+  it('never flashes the Modelo 349 grid column while the catalog is still loading', async () => {
+    let releaseCatalog;
+    const catalogGate = new Promise(resolve => { releaseCatalog = resolve; });
+    installFetch({ lines: [LINE({ aEAT349IsCorrective: 'Y' })] });
+    const baseFetch = global.fetch;
+    global.fetch = vi.fn(async (url, opts) => {
+      if (String(url).includes('/fiscal-models-catalog')) await catalogGate;
+      return baseFetch(url, opts);
+    });
+    render(
+      <ReversedInvoicesPanel
+        recordId={RECORD_ID}
+        data={{ id: RECORD_ID, isRectificative: true, processed: false, documentStatus: 'DR', businessPartner: BP_ID }}
+        token="tkn"
+        apiBaseUrl={API_BASE}
+        api={{}}
+        catalogs={{}}
+        isActive
+      />
+    );
+    await screen.findAllByText('10000067');
+    expect(screen.queryByText('rectColModel349')).not.toBeInTheDocument();
+    expect(screen.queryByText('rectCorrective349Badge')).not.toBeInTheDocument();
+
+    releaseCatalog();
+    expect(await screen.findByText('rectColModel349')).toBeInTheDocument();
+    expect(screen.getByText('rectCorrective349Badge')).toBeInTheDocument();
+  });
+
+  it('shows the Modelo 349 grid column once the catalog confirms 349 active', async () => {
+    const { container } = renderPanel({ lines: [LINE({ aEAT349IsCorrective: 'Y' })] });
+    expect(await screen.findByText('rectColModel349')).toBeInTheDocument();
+    expect(screen.getByText('rectCorrective349Badge')).toBeInTheDocument();
+    expect(container.querySelector('thead tr').children).toHaveLength(7);
   });
 });
 
@@ -1488,5 +1546,100 @@ describe('ETP-5027 — the rejected draft is not re-saved on every outside click
     clickAnotherTab();
     await waitFor(() => expect(postCalls()).toHaveLength(2));
     expect(postCalls()[1].body).toEqual({ invoice: RECORD_ID, reversedInvoice: 'inv-orig-8' });
+  });
+});
+
+// ETP-6002 (CP-26) — the sales "Rectificaciones" tab is an extraTabs entry, always shown unless
+// its component reports onVisibilityChange(false). SalesRectificationsTab reports it from the
+// document type only.
+import SalesRectificationsTab, { isRectificationsTabVisible } from '../SalesRectificationsTab.jsx';
+
+describe('SalesRectificationsTab — visibility follows the document type (CP-26)', () => {
+  it.each([
+    ['a new invoice of type Factura', { transactionDocument$_identifier: 'Factura' }, false],
+    ['a new invoice of type Factura rectificativa', { transactionDocument$_identifier: 'Factura rectificativa' }, true],
+    ['a read FAC invoice nothing rectifies', { arInvoiceSubtype: 'FAC', rectifyingInvoices: [] }, false],
+    ['a read RECTIFICATIVA invoice', { arInvoiceSubtype: 'RECTIFICATIVA' }, true],
+    // ETP-6002 drops the CP-12 in-tab view: the original sees its rectificatives as chips only.
+    ['an original invoice a rectificative rectifies', { arInvoiceSubtype: 'FAC', rectifyingInvoices: [{ id: 'r1' }] }, false],
+  ])('%s → %s', (_name, data, expected) => {
+    expect(isRectificationsTabVisible(data)).toBe(expected);
+  });
+
+  it('hides itself and renders nothing on a plain invoice', () => {
+    const onVisibilityChange = vi.fn();
+    render(
+      <SalesRectificationsTab
+        recordId="new"
+        data={{ transactionDocument$_identifier: 'Factura' }}
+        apiBaseUrl="/sws/neo/sales-invoice"
+        onVisibilityChange={onVisibilityChange}
+      />,
+    );
+    expect(onVisibilityChange).toHaveBeenLastCalledWith(false);
+    expect(screen.queryByTestId('reversed-invoices-panel')).toBeNull();
+  });
+
+  // The other direction, on a READ record, and across a data change: DetailView only drops the
+  // tab (and moves off it when it was active — DetailView.render.vitest.jsx, "redirects to the
+  // first tab…") if the component reports the new visibility when the document type changes.
+  it('on a read record shows the panel for a rectificativa and reports hidden once the type becomes Factura', async () => {
+    installFetch();
+    const onVisibilityChange = vi.fn();
+    const props = { recordId: RECORD_ID, token: 'tkn', apiBaseUrl: API_BASE, api: {}, catalogs: {}, isActive: true, onVisibilityChange };
+    const base = { id: RECORD_ID, processed: false, documentStatus: 'DR', businessPartner: BP_ID };
+    const { rerender } = render(<SalesRectificationsTab {...props} data={{ ...base, arInvoiceSubtype: 'RECTIFICATIVA' }} />);
+
+    expect(onVisibilityChange).toHaveBeenLastCalledWith(true);
+    expect(await screen.findByTestId('reversed-invoices-panel')).toBeInTheDocument();
+
+    rerender(<SalesRectificationsTab {...props} data={{ ...base, arInvoiceSubtype: 'FAC' }} />);
+
+    await waitFor(() => expect(onVisibilityChange).toHaveBeenLastCalledWith(false));
+    expect(screen.queryByTestId('reversed-invoices-panel')).toBeNull();
+  });
+});
+
+describe('ReversedInvoicesPanel personal columns', () => {
+  it('keeps all columns and original actions with the flag off', async () => {
+    const { container } = renderPanel({ lines: [LINE()] });
+    await screen.findAllByText('10000067');
+    await screen.findByText('rectColModel349');
+    expect(container.querySelector('thead tr').children).toHaveLength(7);
+    expect(screen.getByTestId('btn__deleteLine')).toBeInTheDocument();
+    expect(screen.queryByTestId('grid-view-save')).not.toBeInTheDocument();
+    expect(gridBoundary.last.enabled).toBe(false);
+  });
+
+  it.each(['sales-invoice', 'purchase-invoice'])('preserves expansion and inline group edits after restoring the %s view', async (spec) => {
+    gridBoundary.enabled = true;
+    gridBoundary.active = true;
+    gridBoundary.keys = ['reversedGrandTotalAmount', 'reversedInvoice'];
+    gridBoundary.widths = { reversedGrandTotalAmount: 210 };
+    const { container } = renderPanel({ apiBaseUrl: `/sws/neo/${spec}`, lines: [LINE()], years: [{ id: 'y2026', fiscalYear: '2026' }] });
+    await screen.findAllByText('10000067');
+    const row = container.querySelector('tbody tr');
+    expect([...row.querySelectorAll('[data-grid-column]')].map(cell => cell.dataset.gridColumn)).toEqual([
+      'reversedGrandTotalAmount', 'reversedInvoice',
+    ]);
+    expect(row.children).toHaveLength(4);
+    expect(row.querySelector('[data-grid-column="reversedGrandTotalAmount"]')).toHaveStyle({ width: '210px' });
+    expect(screen.getByTestId('btn__deleteLine').closest('td')).toBe(row.lastElementChild);
+    await expandFirstRow();
+    expect(row.nextElementSibling.querySelector('td')).toHaveAttribute('colspan', '4');
+    fireEvent.click(screen.getByTestId('checkbox__isCorrective'));
+    await waitFor(() => expect(patchCalls()).toHaveLength(1));
+    expect(patchCalls()[0].url).toBe(`/sws/neo/${spec}/reversedInvoices/line-1`);
+    expect(patchCalls()[0].body).toEqual({ aEAT349IsCorrective: 'Y', aEAT349CYear: null, aEAT349Period: null });
+    expect(gridBoundary.last).toMatchObject({ spec, entity: 'reversedInvoices', enabled: true });
+  });
+
+  it('does not enable a preference scope for an unrecognized API base', async () => {
+    gridBoundary.enabled = true;
+    renderPanel({ apiBaseUrl: '/custom-invoice-api', lines: [LINE()] });
+    await screen.findAllByText('10000067');
+    expect(gridBoundary.last).toMatchObject({ spec: null, enabled: false });
+    expect(screen.queryByTestId('grid-view-save')).not.toBeInTheDocument();
+    expect(screen.getByText('rectColDate')).toBeInTheDocument();
   });
 });

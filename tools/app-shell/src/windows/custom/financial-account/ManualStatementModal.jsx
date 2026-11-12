@@ -76,11 +76,17 @@ function isoToLocal(iso) {
  * parent statement has been reactivated back to draft. Such a row renders read-only and is left
  * out of the save payload entirely (the backend keeps it as-is; see `deleteUnmatchedLines` in
  * BankStatementsHandler.java).
+ *
+ * `lineId` (ETP-5581) is the backend id of the line, kept apart from `id` (the row's local React
+ * key). It travels back as the body line's `id` on save: the update deletes and recreates the
+ * unmatched lines, and only a body line carrying the id of the line it replaces keeps what that
+ * line carried — the PSD2 transaction id, the PSD2 discard flag and the bounce-pair link.
  */
 function lineToRow(l) {
   lineSeq += 1;
   return {
     id: `e${lineSeq}`,
+    lineId: l.id ?? null,
     matched: !!l.matched,
     date: isoToLocal(l.date) || toLocalIso(new Date()),
     reference: l.reference && l.reference !== '**' ? l.reference : '',
@@ -830,6 +836,9 @@ export function ManualStatementModal({
       return;
     }
     const payloadLines = usable.map((r) => ({
+      // ETP-5581 — the existing line this row replaces, so the backend keeps its bank identity
+      // (see lineToRow). A line added in the editor has none and is created as new.
+      ...(r.lineId ? { id: r.lineId } : {}),
       date: toIsoUtc(r.date),
       reference: r.reference.trim(),
       description: r.description.trim(),

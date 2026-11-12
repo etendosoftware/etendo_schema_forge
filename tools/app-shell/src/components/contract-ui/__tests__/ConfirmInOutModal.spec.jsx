@@ -11,6 +11,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 const CONFIRM_UI_DICT = {
   'backendError.docLinesWithoutQuantity': 'Hay líneas sin cantidad.',
   'backendError.docLinesLockedProduct': 'Hay líneas con productos bloqueados que no pueden entregarse.',
+  'backendError.quotaExceeded': 'Has alcanzado el límite de tu plan.',
+  'backendError.quotaCheckFailed': 'No se pudo comprobar la cuota del plan; no se ha guardado nada.',
 };
 vi.mock('@/i18n', async (importOriginal) => {
   const actual = await importOriginal();
@@ -511,6 +513,121 @@ describe('ConfirmInOutModal', () => {
     });
   });
 
+  // ETP-5051 — the NEO actions that create documents refuse with 403
+  // `{ error: { code: 'QUOTA_EXCEEDED', message, quota } }`. buildBackendError read only
+  // `response.message` / `message`, so the user read "Error (403)" and the quota banner was never
+  // told. The refusal must render as the translated quota sentence and be announced.
+  describe('plan-quota refusal of a document-creating action (ETP-5051)', () => {
+    it('shows the translated quota message and announces the refusal', async () => {
+      const announced = vi.fn();
+      window.addEventListener('etendo:quota-refused', announced);
+      vi.stubGlobal('fetch', vi.fn((url) => {
+        const u = String(url);
+        if (u.includes('/action/documentAction')) {
+          return Promise.resolve({ ok: true, json: async () => ({ response: { data: {} } }) });
+        }
+        if (u.includes('/createInvoice')) {
+          return Promise.resolve({
+            ok: false,
+            status: 403,
+            json: async () => ({
+              error: {
+                code: 'QUOTA_EXCEEDED',
+                message: 'Quota exceeded: Posted sales invoices (100/100 Inv)',
+                quota: {
+                  resourceKey: 'CONFIRM_INOUT_INVOICES', resourceName: 'Posted sales invoices',
+                  unitLabel: 'Inv', includedQty: 100, consumed: 100, verdict: 'DENY',
+                },
+              },
+            }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({ response: { data: [] } }) });
+      }));
+      try {
+        render(<ConfirmInOutModal {...BASE_PROPS} defaultCreateInvoice={true} />);
+        fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+
+        await waitFor(() => expect(screen.getByText('Has alcanzado el límite de tu plan.')).toBeInTheDocument());
+        expect(screen.queryByText('Error (403)')).toBeNull();
+        expect(announced).toHaveBeenCalledTimes(1);
+      } finally {
+        window.removeEventListener('etendo:quota-refused', announced);
+      }
+    });
+
+    /** documentAction answers `docBody`/`docStatus`; the invoice action answers `invBody`/`invStatus`. */
+    function routeLegs({ docStatus = 200, docBody = { response: { data: {} } }, invStatus = 200, invBody = { response: { data: { id: 'INV-1' } } } }) {
+      vi.stubGlobal('fetch', vi.fn((url) => {
+        const u = String(url);
+        if (u.includes('/action/documentAction')) {
+          return Promise.resolve({ ok: docStatus < 400, status: docStatus, json: async () => docBody });
+        }
+        if (u.includes('/createInvoice')) {
+          return Promise.resolve({ ok: invStatus < 400, status: invStatus, json: async () => invBody });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({ response: { data: [] } }) });
+      }));
+    }
+    const calledAction = (name) => globalThis.fetch.mock.calls.some(([url]) => String(url).includes(`/action/${name}`));
+
+    it('shows the check-failed sentence for a 500 QUOTA_CHECK_FAILED on the invoice leg', async () => {
+      routeLegs({
+        invStatus: 500,
+        invBody: { error: { code: 'QUOTA_CHECK_FAILED', status: 500, message: 'The quota check failed; nothing was saved. Try again.' } },
+      });
+      render(<ConfirmInOutModal {...BASE_PROPS} defaultCreateInvoice={true} />);
+      fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+
+      await waitFor(() => expect(screen.getByText('No se pudo comprobar la cuota del plan; no se ha guardado nada.')).toBeInTheDocument());
+      expect(screen.queryByText('Error (500)')).toBeNull();
+    });
+
+    // Completing the document itself can be what the plan refuses: the invoice leg never runs.
+    it('shows the quota sentence when documentAction is refused, and creates no invoice', async () => {
+      const announced = vi.fn();
+      window.addEventListener('etendo:quota-refused', announced);
+      routeLegs({
+        docStatus: 403,
+        docBody: {
+          error: {
+            code: 'QUOTA_EXCEEDED', status: 403, message: 'Quota exceeded: Goods shipments (50/50)',
+            quota: { resourceKey: 'CONFIRM_INOUT_SHIPMENTS', resourceName: 'Goods shipments', includedQty: 50, consumed: 50, verdict: 'DENY' },
+          },
+        },
+      });
+      const onConfirmed = vi.fn();
+      try {
+        render(<ConfirmInOutModal {...BASE_PROPS} defaultCreateInvoice={true} onConfirmed={onConfirmed} />);
+        fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+
+        await waitFor(() => expect(screen.getByText('Has alcanzado el límite de tu plan.')).toBeInTheDocument());
+        expect(screen.queryByText('Error (403)')).toBeNull();
+        expect(calledAction('createInvoice')).toBe(false);
+        expect(onConfirmed).not.toHaveBeenCalled();
+        expect(announced).toHaveBeenCalledTimes(1);
+      } finally {
+        window.removeEventListener('etendo:quota-refused', announced);
+      }
+    });
+
+    // Any other 403 reads exactly as before this change, and is not announced as a quota refusal.
+    it('keeps "Error (403)" for a 403 that is not a quota refusal', async () => {
+      const announced = vi.fn();
+      window.addEventListener('etendo:quota-refused', announced);
+      routeLegs({ invStatus: 403, invBody: { error: { status: 403, message: 'Access denied' } } });
+      try {
+        render(<ConfirmInOutModal {...BASE_PROPS} defaultCreateInvoice={true} />);
+        fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+
+        await waitFor(() => expect(screen.getByText('Error (403)')).toBeInTheDocument());
+        expect(announced).not.toHaveBeenCalled();
+      } finally {
+        window.removeEventListener('etendo:quota-refused', announced);
+      }
+    });
+  });
+
   // ── ETP-5381 — rectifiable-invoice picker ──────────────────────────────────
   // The invoice this modal creates is now confirmed in the same request, and the
   // completion is rejected unless it declares which invoice it rectifies. So the
@@ -849,6 +966,138 @@ describe('ConfirmInOutModal', () => {
       fireEvent.mouseEnter(confirm);
       expect(confirm.style.background).toBe(CONFIRM_DISABLED);
       resolveFetch?.({ ok: true, json: async () => ({ response: { data: {} } }) });
+    });
+  });
+
+  // ETP-6179 — the mandatory "Datos fiscales" step: the source document is only completed once the
+  // invoice's SIF fields are settled, so nothing is written until the final confirm on the step.
+  describe('fiscal data step (ETP-6179)', () => {
+    const PREVIEW = {
+      systems: ['SII'],
+      rectificative: false,
+      fields: { etsgDateOperation: '2026-11-10', aeatsiiDescripcionSii: 'Venta' },
+      fieldSpecs: [
+        { name: 'etsgDateOperation', system: 'SII', type: 'date' },
+        { name: 'aeatsiiDescripcionSii', system: 'SII', type: 'text' },
+      ],
+      siiAuthorizationAvailable: false,
+    };
+    const SIF_PROPS = { ...BASE_PROPS, defaultCreateInvoice: true };
+
+    function mockSif(answer) {
+      const fetchMock = vi.fn((url) => {
+        if (String(url).includes('/action/sifDefaults')) return answer();
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ response: { data: { id: 'INV-001', documentNo: 'FAC-001', documentStatus: 'CO' } } }),
+        });
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      return fetchMock;
+    }
+    const ok = (data) => () => Promise.resolve({ ok: true, status: 200, json: async () => ({ response: { data } }) });
+    const callsTo = (fetchMock, action) => fetchMock.mock.calls.filter(([u]) => String(u).includes(`/action/${action}`));
+    const primary = () => screen.getByTestId('confirm-modal-confirm-btn');
+
+    it('shows the step when a system is active and writes nothing yet', async () => {
+      const fetchMock = mockSif(ok(PREVIEW));
+      render(<ConfirmInOutModal {...SIF_PROPS} />);
+      fireEvent.click(primary());
+
+      await screen.findByTestId('invoice-sif-step');
+      expect(screen.getByText('invoiceSifStep.title')).toBeInTheDocument();
+      expect(screen.queryByTestId('confirm-modal-invoice-toggle')).not.toBeInTheDocument();
+      expect(String(callsTo(fetchMock, 'sifDefaults')[0][0])).toBe('/sws/neo/goods-shipment/goodsShipment/REC-001/action/sifDefaults');
+      expect(callsTo(fetchMock, 'documentAction')).toHaveLength(0);
+      expect(callsTo(fetchMock, 'createInvoice')).toHaveLength(0);
+      expect(BASE_PROPS.onConfirmed).not.toHaveBeenCalled();
+    });
+
+    it('confirming on the step completes the document, then sends sifFields in the invoice POST', async () => {
+      const fetchMock = mockSif(ok(PREVIEW));
+      render(<ConfirmInOutModal {...SIF_PROPS} />);
+      fireEvent.click(primary());
+      await screen.findByTestId('invoice-sif-step');
+      fireEvent.change(screen.getByTestId('Input__sifstep_aeatsiiDescripcionSii'), { target: { value: 'Editada' } });
+      fireEvent.click(primary());
+
+      await waitFor(() => expect(BASE_PROPS.onConfirmed).toHaveBeenCalledTimes(1));
+      const order = fetchMock.mock.calls.map(([u]) => String(u).split('/action/')[1]);
+      expect(order).toEqual(['sifDefaults', 'documentAction', 'createInvoice']);
+      const [, init] = callsTo(fetchMock, 'createInvoice')[0];
+      expect(JSON.parse(init.body).sifFields).toEqual({ ...PREVIEW.fields, aeatsiiDescripcionSii: 'Editada' });
+    });
+
+    it('Atrás keeps the edits and shows the first screen again', async () => {
+      const fetchMock = mockSif(ok(PREVIEW));
+      render(<ConfirmInOutModal {...SIF_PROPS} />);
+      fireEvent.click(primary());
+      await screen.findByTestId('invoice-sif-step');
+      fireEvent.change(screen.getByTestId('Input__sifstep_aeatsiiDescripcionSii'), { target: { value: 'Editada' } });
+
+      fireEvent.click(screen.getByTestId('confirm-modal-sif-back-btn'));
+      expect(screen.queryByTestId('invoice-sif-step')).not.toBeInTheDocument();
+      expect(screen.getByTestId('confirm-modal-invoice-toggle')).toBeInTheDocument();
+      expect(screen.getByText('Confirm Shipment')).toBeInTheDocument();
+
+      fireEvent.click(primary());
+      await screen.findByTestId('invoice-sif-step');
+      expect(screen.getByTestId('Input__sifstep_aeatsiiDescripcionSii')).toHaveValue('Editada');
+      expect(callsTo(fetchMock, 'documentAction')).toHaveLength(0);
+    });
+
+    it('cancelling on the step closes without confirming the source document', async () => {
+      const fetchMock = mockSif(ok(PREVIEW));
+      render(<ConfirmInOutModal {...SIF_PROPS} />);
+      fireEvent.click(primary());
+      await screen.findByTestId('invoice-sif-step');
+      fireEvent.click(screen.getByTestId('confirm-modal-cancel-btn'));
+
+      expect(BASE_PROPS.onClose).toHaveBeenCalledTimes(1);
+      expect(callsTo(fetchMock, 'documentAction')).toHaveLength(0);
+      expect(callsTo(fetchMock, 'createInvoice')).toHaveLength(0);
+    });
+
+    it('never asks for the preview when the invoice toggle is off', async () => {
+      const fetchMock = mockSif(ok(PREVIEW));
+      render(<ConfirmInOutModal {...BASE_PROPS} />);
+      fireEvent.click(primary());
+      await waitFor(() => expect(BASE_PROPS.onConfirmed).toHaveBeenCalledTimes(1));
+      expect(callsTo(fetchMock, 'sifDefaults')).toHaveLength(0);
+      expect(screen.queryByTestId('invoice-sif-step')).not.toBeInTheDocument();
+    });
+
+    it('goes straight on, without sifFields, when no fiscal system is active', async () => {
+      const fetchMock = mockSif(ok({ systems: [], fields: {}, fieldSpecs: [] }));
+      render(<ConfirmInOutModal {...SIF_PROPS} />);
+      fireEvent.click(primary());
+      await waitFor(() => expect(BASE_PROPS.onConfirmed).toHaveBeenCalledTimes(1));
+      expect(screen.queryByTestId('invoice-sif-step')).not.toBeInTheDocument();
+      expect(JSON.parse(callsTo(fetchMock, 'createInvoice')[0][1].body)).not.toHaveProperty('sifFields');
+    });
+
+    it('fails open: a preview that fails goes straight on without the step', async () => {
+      const fetchMock = mockSif(() => Promise.reject(new TypeError('Failed to fetch')));
+      render(<ConfirmInOutModal {...SIF_PROPS} />);
+      fireEvent.click(primary());
+      await waitFor(() => expect(BASE_PROPS.onConfirmed).toHaveBeenCalledTimes(1));
+      expect(screen.queryByTestId('invoice-sif-step')).not.toBeInTheDocument();
+      expect(callsTo(fetchMock, 'documentAction')).toHaveLength(1);
+      expect(JSON.parse(callsTo(fetchMock, 'createInvoice')[0][1].body)).not.toHaveProperty('sifFields');
+    });
+
+    it('blocks the confirm on a rectificative until the rectification code is chosen', async () => {
+      mockSif(ok({
+        ...PREVIEW,
+        rectificative: true,
+        fields: { ...PREVIEW.fields, aeatsiiMotivoRectif: null },
+        fieldSpecs: [...PREVIEW.fieldSpecs, { name: 'aeatsiiMotivoRectif', system: 'SII', type: 'option' }],
+      }));
+      render(<ConfirmInOutModal {...SIF_PROPS} />);
+      fireEvent.click(primary());
+      await screen.findByTestId('invoice-sif-step');
+      expect(primary()).toBeDisabled();
+      expect(screen.getByTestId('invoice-sif-step-required')).toBeInTheDocument();
     });
   });
 });

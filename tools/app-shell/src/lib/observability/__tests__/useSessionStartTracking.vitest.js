@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/lib/observability/useSessionStartTracking.js
 /**
  * ETP-4210 — `useSessionStartTracking` hook coverage.
  *
@@ -8,6 +9,8 @@
  * `session_started` from the onboarding wizard, so a regular login by an
  * already-onboarded user never counted toward the Health Score's Login
  * dimension. See `../useSessionStartTracking.js` for the full rationale.
+ *
+ * ETP-6043 — it also keeps `role_groups` in the common event context.
  */
 import { renderHook } from '@testing-library/react';
 
@@ -19,6 +22,11 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 const trackSessionStartedMock = vi.fn().mockResolvedValue(undefined);
 vi.mock('../health-events.js', () => ({
   trackSessionStarted: (...args) => trackSessionStartedMock(...args),
+}));
+
+const setContextMock = vi.fn().mockResolvedValue(undefined);
+vi.mock('../../observability.js', () => ({
+  setContext: (...args) => setContextMock(...args),
 }));
 
 import { useSessionStartTracking } from '../useSessionStartTracking.js';
@@ -79,5 +87,49 @@ describe('useSessionStartTracking', () => {
       username: undefined,
       clientId: undefined,
     });
+  });
+
+  it('sets role_groups in the context before session_started fires', () => {
+    mockUseAuth.mockReturnValue({
+      username: 'alice',
+      clientId: 'client-123',
+      selectedRole: { id: 'R1', effectiveRoleNames: ['Sales', 'Inventory'] },
+    });
+
+    renderHook(() => useSessionStartTracking());
+
+    expect(setContextMock).toHaveBeenCalledWith({ role_groups: ['sales', 'warehouse'] });
+    expect(setContextMock.mock.invocationCallOrder[0])
+      .toBeLessThan(trackSessionStartedMock.mock.invocationCallOrder[0]);
+  });
+
+  it('leaves role_groups out while the role is unknown', () => {
+    mockUseAuth.mockReturnValue({ username: 'alice', clientId: 'client-123' });
+
+    renderHook(() => useSessionStartTracking());
+
+    expect(setContextMock).toHaveBeenCalledWith({ role_groups: undefined });
+  });
+
+  it('follows a role switch, but not a refresh that hands back an equal role', () => {
+    mockUseAuth.mockReturnValue({ selectedRole: { id: 'R1', effectiveRoleNames: ['Sales'] } });
+    const { rerender } = renderHook(() => useSessionStartTracking());
+
+    mockUseAuth.mockReturnValue({ selectedRole: { id: 'R1', effectiveRoleNames: ['Sales'] } });
+    rerender();
+    expect(setContextMock).toHaveBeenCalledOnce();
+
+    mockUseAuth.mockReturnValue({ selectedRole: { id: 'R2', isClientAdmin: true } });
+    rerender();
+    expect(setContextMock).toHaveBeenLastCalledWith({ role_groups: ['admin'] });
+  });
+
+  it('clears role_groups on unmount', () => {
+    mockUseAuth.mockReturnValue({ selectedRole: { id: 'R1', effectiveRoleNames: ['Inventory'] } });
+    const { unmount } = renderHook(() => useSessionStartTracking());
+
+    unmount();
+
+    expect(setContextMock).toHaveBeenLastCalledWith({ role_groups: undefined });
   });
 });

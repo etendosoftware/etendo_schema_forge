@@ -27,9 +27,18 @@
  * called". It also covers the documented fallback: no sibling host
  * registered → DataTable still renders its add-row standalone, unchanged.
  */
-import { render, screen, within } from '@testing-library/react';
+// @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
+import { render, screen, waitFor, within } from '@testing-library/react';
 import InlineLinesPanel from '../InlineLinesPanel.jsx';
 import { DataTable } from '../DataTable.jsx';
+
+const gridBoundary = vi.hoisted(() => ({ enabled: false, apiFetch: vi.fn() }));
+vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => gridBoundary.apiFetch }));
+vi.mock('@/lib/flags', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useFeatureFlag: () => gridBoundary.enabled,
+}));
+afterEach(() => { gridBoundary.enabled = false; });
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -140,6 +149,36 @@ function renderCombinedAddRowActive() {
 }
 
 describe('Combined mount — add-row scroll-sync via linesScrollHost (ETP-5133)', () => {
+  it('uses default tracks for the real add-row portal and restores the personal view afterward', async () => {
+    gridBoundary.enabled = true;
+    gridBoundary.apiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({
+      version: 1, surface: 'list', columns: [
+        { id: 'list:field:account', visible: false, order: 1, width: 380 },
+        { id: 'list:field:amount', visible: true, order: 0, width: 300 },
+      ],
+    }) });
+    const view = (active) => <>
+      <InlineLinesPanel {...inlineLinesPanelProps} specName="manual-journals" lineFormActive={active} />
+      {active && <DataTable entity="lines" columns={COLUMNS} data={[]}
+        addRow={{ active: true, fields: COLUMNS, onAdd: vi.fn(), onCancel: vi.fn(), catalogs: {} }}
+        selectable={false} hideHeader hideDataRows linesLayout="inlineEditable" />}
+    </>;
+    const { rerender } = render(view(false));
+    await waitFor(() => expect(screen.queryByTestId('column-header-account')).toBeNull());
+    expect(screen.getByTestId('column-header-amount').style.flex).toContain('300px');
+    rerender(view(true));
+    const host = screen.getByTestId('inline-add-row-host');
+    expect(host).toContainElement(screen.getByTestId('inline-add-row'));
+    expect(screen.getByTestId('column-header-account')).toBeInTheDocument();
+    expect(screen.getByTestId('column-header-amount').style.flex).not.toContain('300px');
+    expect(screen.getByTestId('grid-view-columns-trigger')).toBeDisabled();
+    rerender(view(false));
+    expect(screen.queryByTestId('inline-add-row')).toBeNull();
+    expect(screen.queryByTestId('column-header-account')).toBeNull();
+    expect(screen.getByTestId('column-header-amount').style.flex).toContain('300px');
+    expect(gridBoundary.apiFetch).toHaveBeenCalledTimes(1);
+  });
+
   it('registers a scroll-host anchor inside InlineLinesPanel’s own scrollable body while the add-row form is active', () => {
     renderCombinedAddRowActive();
     const panel = within(screen.getByTestId('inline-lines-panel'));

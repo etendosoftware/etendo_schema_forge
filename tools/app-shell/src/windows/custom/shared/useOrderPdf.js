@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useUI } from '@/i18n';
 import { buildOrderData, buildDocumentPdfLabels, useDocumentPdf } from './documentPdf.js';
+import { SALES_ORDER_PDF_LABEL_KEYS, resolveLabelKeys } from './printableSources.js';
 
 /**
  * The sales order's label overrides, as a plain function of `ui` — so the print flow
@@ -10,13 +11,9 @@ import { buildOrderData, buildDocumentPdfLabels, useDocumentPdf } from './docume
  * @param {(key: string) => string} ui
  */
 export function buildSalesOrderPdfLabels(ui) {
-  return buildDocumentPdfLabels(ui, {
-    title:           ui('orderPdfTitle'),
-    documentNo:      ui('orderPdfDocumentNo'),
-    documentSection: ui('orderPdfSection'),
-    date:            ui('orderPdfDate'),
-    colQty:          ui('orderPdfColQty'),
-  });
+  // Key map in printableSources.js, which the build also publishes for the server-side
+  // render (ETP-6013) — one definition, so the two cannot drift.
+  return buildDocumentPdfLabels(ui, resolveLabelKeys(ui, SALES_ORDER_PDF_LABEL_KEYS));
 }
 
 export function useOrderPdf(orderId, apiBaseUrl, token, currencyData = null, cacheConfig = null) {
@@ -27,5 +24,5 @@ export function useOrderPdf(orderId, apiBaseUrl, token, currencyData = null, cac
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [currencyData?.exchangeRate, currencyData?.orgCurrencyCode],
   );
-  return useDocumentPdf(orderId, apiBaseUrl, token, buildSalesOrderData, labels, cacheConfig);
+  return useDocumentPdf(orderId, apiBaseUrl, token, buildSalesOrderData, labels, cacheConfig, 'sales-order');
 }

@@ -1,6 +1,32 @@
+const gridBoundary = vi.hoisted(() => ({ enabled: false, active: false, keys: null, widths: {}, last: null, save: vi.fn() }));
+vi.mock('@/lib/flags', () => ({ GRID_COLUMN_VIEWS: 'grid-column-views', useFeatureFlag: () => gridBoundary.enabled }));
+vi.mock('@/hooks/useGridView.js', () => ({
+  useGridView: (options) => {
+    gridBoundary.last = options;
+    const columns = (gridBoundary.keys ?? options.columns.map(column => column.key))
+      .map(key => options.columns.find(column => column.key === key)).filter(Boolean)
+      .map(column => ({ ...column, gridViewId: column.key, gridUserWidthPx: gridBoundary.widths[column.key] }));
+    return { active: options.enabled && gridBoundary.active, columns, columnSizing: gridBoundary.widths, save: gridBoundary.save,
+      reorderable: () => false, isResizable: () => false };
+  },
+}));
+vi.mock('@/components/contract-ui/GridViewControls.jsx', () => ({
+  GridViewControls: ({ gridView }) => <button data-testid="grid-view-save" onClick={gridView.save}>gridViewSave</button>,
+}));
+
+beforeEach(() => {
+  gridBoundary.enabled = false;
+  gridBoundary.active = false;
+  gridBoundary.keys = null;
+  gridBoundary.widths = {};
+  gridBoundary.save.mockClear();
+});
+
+// @covers tools/app-shell/src/windows/custom/amortization/AmortizationLinesTable.jsx
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import userEvent from '@testing-library/user-event';
 
 // ── mock heavy children so we exercise AmortizationLinesTable's own logic ──
 vi.mock('@/i18n', () => ({
@@ -998,3 +1024,77 @@ describe('AmortizationLinesTable — bulk delete confirmation (ETP-5758)', () =>
   });
 });
 
+
+describe('AmortizationLinesTable personal columns', () => {
+  it('keeps default columns and structural cells with personalization disabled', async () => {
+    const { container } = renderInRouter(<AmortizationLinesTable {...BASE_PROPS} />);
+    await screen.findByText('AS_Module');
+    expect(container.querySelector('thead tr').children).toHaveLength(6);
+    expect(container.querySelector('[data-row-id="line-1"]').children).toHaveLength(6);
+    expect(screen.queryByTestId('grid-view-save')).not.toBeInTheDocument();
+    expect(gridBoundary.last.enabled).toBe(false);
+  });
+
+  it('moves the original editable cells and keeps expansion, selection and row actions fixed', async () => {
+    const user = userEvent.setup();
+    gridBoundary.enabled = true;
+    gridBoundary.active = true;
+    gridBoundary.keys = ['amortizationAmount', 'asset'];
+    gridBoundary.widths = { amortizationAmount: 230 };
+    const { container } = renderInRouter(<AmortizationLinesTable {...BASE_PROPS} />);
+    await screen.findByText('AS_Module');
+    const row = container.querySelector('[data-row-id="line-1"]');
+    expect([...row.querySelectorAll('[data-grid-column]')].map(cell => cell.dataset.gridColumn)).toEqual([
+      'amortizationAmount', 'asset',
+    ]);
+    expect(row.children).toHaveLength(5);
+    expect(row.children[2]).toHaveStyle({ width: '230px' });
+    expect(container.querySelector('th[data-grid-column="amortizationAmount"]')).toHaveStyle({ width: '230px' });
+    fireEvent.click(within(row.children[1]).getByRole('checkbox'));
+    expect(within(row.children[1]).getByRole('checkbox')).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(row);
+    expect(row.nextElementSibling.querySelector('td')).toHaveAttribute('colspan', '5');
+    fireEvent.click(getPencilButton(container, 'line-1'));
+    expect(within(row.querySelector('[data-grid-column="asset"]')).getByTestId('selector-asset')).toBeInTheDocument();
+    const input = within(row.querySelector('[data-grid-column="amortizationAmount"]')).getByTestId('field-number');
+    // The amount mask keeps raw typing only while focused; idle display has two decimals.
+    await user.click(input);
+    await user.clear(input);
+    await user.type(input, '600');
+    await user.tab();
+    await waitFor(() => expect(global.fetch.mock.calls.some(([, request]) => request?.method === 'PUT'
+      && JSON.parse(request.body).amortizationAmount === '600')).toBe(true));
+    expect(gridBoundary.last).toMatchObject({ spec: 'amortization', entity: 'lines', enabled: true });
+    expect(gridBoundary.last.columns.filter(column => column.required).map(column => column.key)).toEqual(['asset', 'amortizationAmount']);
+  });
+
+  it('keeps default cells while the personal view is unavailable', async () => {
+    gridBoundary.enabled = true;
+    gridBoundary.keys = ['asset'];
+    const { container } = renderInRouter(<AmortizationLinesTable {...BASE_PROPS} />);
+    await screen.findByText('AS_Module');
+    expect(container.querySelector('thead tr').children).toHaveLength(6);
+    expect(screen.getByText('Amortization_Percentage')).toBeInTheDocument();
+  });
+});
+
+
+describe('AmortizationLinesTable late personal view activation', () => {
+  it('preserves an unfinished inline amount edit when a saved column order arrives', async () => {
+    const user = userEvent.setup();
+    gridBoundary.enabled = true;
+    const { container, rerender } = renderInRouter(<AmortizationLinesTable {...BASE_PROPS} />);
+    await screen.findByText('AS_Module');
+    fireEvent.click(getPencilButton(container, 'line-1'));
+    const input = amountInputs(container)[1];
+    await user.click(input);
+    await user.clear(input);
+    await user.type(input, '777');
+    gridBoundary.active = true;
+    gridBoundary.keys = ['amortizationAmount', 'asset'];
+    rerender(<AmortizationLinesTable {...BASE_PROPS} />);
+    const row = container.querySelector('[data-row-id="line-1"]');
+    expect(within(row.querySelector('[data-grid-column="amortizationAmount"]')).getByTestId('field-number')).toHaveValue('777');
+    expect(getPencilButton(container, 'line-1')).not.toBeNull();
+  });
+});

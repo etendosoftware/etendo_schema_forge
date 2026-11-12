@@ -168,11 +168,11 @@ Proposed as new rows in the design's §10, each landing with the slice that impl
   suite keys its per-target blocks by platform. `local`, `experimental` and `staging` are all
   `etendo-go` and share one block.
 - **Holded target:** `[targets.holded] url = "https://mcp.holded.com/mcp"` with `platform = "holded"`.
-  Decided (§9): try the Holded API key as a bearer first — `auth = "bearer"`,
-  `token_env = "MCP_TEST_TARGET_HOLDED_TOKEN"`, which `mcp_client.py` already supports
-  (`mcp_client.py:76-94`, it sends `Authorization: Bearer`). If Holded rejects it, fall back to
-  `auth = "oauth"` (auth code + PKCE with dynamic client registration, already built). Whichever
-  works is written into `config.example.toml` in S3; no new auth code is planned.
+  Decided (§9, revised 2026-10-23): `auth = "oauth"`, the same flow as the Etendo Go targets
+  (auth code + PKCE with dynamic client registration, already built). Verified on 2026-10-23: the
+  401 points at `https://app.holded.com`, which advertises S256, public clients and a registration
+  endpoint; it ignores `scope` and grants no refresh token. The original "API key as bearer first"
+  was dropped. No new auth code was needed.
 
 ### 5.3 Vendor-neutral tasks with per-platform verification
 
@@ -212,6 +212,31 @@ probes:
   returned rows). Holded's list tools may not filter by a free-text field; matching client-side
   keeps the check deterministic without assuming server filters. `count_rows`
   (`mcp_client.py:664-676`) must learn Holded's payload shapes — unknown until probed (§9).
+- `expectEffect` also takes `rowsAt:` (ETP-5848): the key of the answer that holds the rows when a
+  tool does not answer with `data`/`items`/`results`/`records` — `w-send-invoice` reads the send
+  history that `etendo_send_document_email` lists under `history` with `preview:true`. A key the
+  answer lacks, or one that is not a list, is *not verifiable*, never a silent 0.
+- `expectEffect.lookup:` (ETP-5848) runs reads with the setup syntax (`saveAs`) in the check's own
+  session before the check, for a check that needs the id of something the *agent* created —
+  `w-company-users-numbering` finds the user by email, then reads its roles. A lookup that finds
+  nothing leaves the check's reference unresolved, which counts as the effect being absent (0
+  rows); a lookup call that fails is *not verifiable*.
+- A setup or lookup step takes `aggregate:` (ETP-5848, `runner/aggregate.py`): the runner sums a
+  value over the step's rows and saves `{sum, count}` — or, with `groupBy`/`top`, the groups from
+  the largest sum — instead of the rows. It is how a query probe gets its expected figure on Holded,
+  which only lists documents (Etendo reads a widget that is already summed), and how a stock check
+  gets "the stock before, plus 5". `value` is a field or arithmetic over fields
+  (`units * (price - cost_price)`); `rows` walks into the rows (`items.*.lines`) or into one record
+  (`warehouses`). A row with no number there, or a cursor page with more to come, fails the step:
+  a sum over part of the documents is not the figure.
+- Prompts and step args also take `{{today}}`, `{{monthStart}}` and `{{yearStart}}` (UTC dates of
+  the attempt), so a "this month" read covers the period the prompt asks about.
+- Holded writes amounts as strings with a decimal comma (`"36,30"`); `where` compares them as
+  numbers. A grouped `"1,234.5"` stays text.
+- An `expectAnswer` item may be `{anyOf: [item, item, ...]}` (matcher v5, ETP-5848): it passes
+  when any alternative is found. For a question with two defensible readings — receivables net of
+  the credit customers hold, or the outstanding invoices alone (`q-financial-reports`) — decided by
+  Valentin on 2026-11-05. Only under `all:`; under `none:` each item is listed on its own.
 - A task that one platform's MCP cannot do at all is declared, not attempted — see §5.10.
 
 ### 5.4 Identical starting data and isolation
@@ -586,7 +611,7 @@ the new targets.
 | 4 | The suite starts from the five `/mcp-comparison` tasks, rewritten to be isolated, and grows incrementally toward 30. The user approves each task; ids are permanent. | §5.8, S7 |
 | 5 | Official numbers run against a freshly initialized local Etendo and a freshly initialized Holded account, and the run records that both were fresh. | §5.9, D50, S6, S8 |
 | 6 | Model `openai/gpt-5.2`. | config |
-| 7 | Holded auth: API key as bearer first, OAuth as fallback. | §5.2, S3 |
+| 7 | Holded auth: OAuth, like Etendo Go (revised 2026-10-23; was "API key as bearer first"). | §5.2, S3 |
 | 8 | Both sides 0/N → tie; token margin 10 %; median calls over successful attempts only. | §5.6 |
 | 9 | Tokens decide on the total, tool catalogue included; the per-task breakdown (priming vs remainder) is shown. | §5.7 |
 | 10 | Item 4 = "the first call did not error". | §3 |

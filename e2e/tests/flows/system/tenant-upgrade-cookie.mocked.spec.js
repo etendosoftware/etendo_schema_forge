@@ -1,7 +1,9 @@
 // @covers tools/app-shell/src/pages/UpgradePage.jsx
 // @covers tools/app-shell/src/lib/upgrade/api.js
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login, declareCookieSession } from '../../helpers/auth.js';
+import { mkdir } from 'node:fs/promises';
+import { resolve } from 'node:path';
 // The upgrade submit stays disabled without a plan catalog (ETP-5046) — see the helper.
 import { installPlansMock, PRODUCTIVE_PLAN } from '../../helpers/plan-catalog-mock.js';
 
@@ -157,6 +159,57 @@ test.describe('Tenant upgrade — cookie session scheme', () => {
     expect(requests[0].body.dataTransfer).toEqual({ products: false, contacts: false });
     expect(requests[0].body.planKey).toBe(PRODUCTIVE_PLAN.planKey);
   });
+
+  test('a different pending plan requires explicit replacement before the selected monthly checkout opens', async ({ page }) => {
+    await installEnvironmentsMock(page, [CURRENT_ENV]);
+    await installPlansMock(page, [{ ...PRODUCTIVE_PLAN, secondMonthFree: true }]);
+    const requests = [];
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.route('**/sws/go/billing/purchases', async route => {
+      if (route.request().method() !== 'POST') return route.fallback();
+      requests.push(JSON.parse(route.request().postData() || '{}'));
+      return route.fulfill({
+        status: requests.length === 1 ? 409 : 201,
+        contentType: 'application/json',
+        body: JSON.stringify(requests.length === 1 ? {
+          purchaseId: 'pending-annual', status: 'CREATED', replacementAllowed: true,
+          error: { code: 'PURCHASE_SELECTION_CHANGED', message: 'Confirm replacement.' },
+        } : {
+          requestId: 'replacement-monthly',
+          checkoutUrl: new URL('/__mock-replacement-checkout__', route.request().url()).toString(),
+        }),
+      });
+    });
+    await page.route('**/__mock-replacement-checkout__', route => route.fulfill({
+      contentType: 'text/html',
+      body: '<!doctype html><html><body><h1>Mock monthly checkout</h1><p>49 EUR monthly. Second month free.</p></body></html>',
+    }));
+    await gotoUpgrade(page);
+    await reachPaymentStep(page, 'Acme Productive');
+    await expect(page.getByTestId('upgrade-monthly-promotion')).toBeVisible();
+    await page.getByTestId('upgrade-submit').click();
+    await expect(page.getByTestId('upgrade-replace-purchase')).toBeVisible();
+    await expect(page).toHaveURL(/\/upgrade$/);
+    expect(requests).toHaveLength(1);
+    expect(requests[0].planKey).toBe(PRODUCTIVE_PLAN.planKey);
+    expect(requests[0].replacePurchaseId).toBeUndefined();
+    if (process.env.E2E_CAPTURE_SCREENSHOTS === '1') {
+      const directory = resolve(import.meta.dirname, '../../../../artifacts/delivery-evidence/ETP-6216');
+      await mkdir(directory, { recursive: true });
+      await page.getByTestId('upgrade-checkout').screenshot({
+        path: resolve(directory, 'ETP-6216-confirm-pending-replacement.png'),
+      });
+    }
+    await page.getByTestId('upgrade-replace-purchase').click();
+    await expect(page).toHaveURL(/__mock-replacement-checkout__/);
+    expect(requests).toHaveLength(2);
+    expect(requests[1]).toMatchObject({
+      planKey: PRODUCTIVE_PLAN.planKey, clientName: 'Acme Productive',
+      replacePurchaseId: 'pending-annual',
+    });
+    expect(errors).toEqual([]);
+  });
 });
 
 /**
@@ -197,12 +250,16 @@ test.describe('Tenant upgrade — choosing among several catalog plans', () => {
 
     const catalog = page.getByTestId('upgrade-plan-catalog');
     await expect(catalog).toBeVisible();
-    await expect(catalog.locator('[data-testid^="upgrade-plan-card-"]')).toHaveCount(CATALOG.length);
-    for (const plan of CATALOG) {
-      const card = page.getByTestId(`upgrade-plan-card-${plan.planKey}`);
-      await expect(card.getByTestId('upgrade-plan-name')).toHaveText(plan.name);
-      await expect(card.getByTestId('upgrade-plan-description')).toHaveText(plan.description);
-      await expect(card).toHaveAttribute('data-selected', 'false');
+    // The Monthly/Yearly toggle shows one billing interval at a time, monthly first.
+    for (const interval of ['month', 'year']) {
+      await page.getByTestId(`upgrade-plan-interval-${interval}`).click();
+      const shown = CATALOG.filter(plan => plan.billingInterval === interval);
+      await expect(catalog.locator('[data-testid^="upgrade-plan-card-"]')).toHaveCount(shown.length);
+      for (const plan of shown) {
+        const card = page.getByTestId(`upgrade-plan-card-${plan.planKey}`);
+        await expect(card.getByTestId('upgrade-plan-name')).toHaveText(plan.name);
+        await expect(card).toHaveAttribute('data-selected', 'false');
+      }
     }
     await expect(page.getByTestId('upgrade-plan-selected-badge')).toHaveCount(0);
 
@@ -210,8 +267,10 @@ test.describe('Tenant upgrade — choosing among several catalog plans', () => {
     await expect(page.getByTestId('upgrade-checkout-summary-plan')).toHaveText(YEARLY_PLAN.name);
     await expect(page.getByTestId('upgrade-checkout-summary-price')).toContainText('490');
 
-    // Back on the Plan step, the chosen card carries the selection.
+    // Back on the Plan step, the toggle opens on the chosen plan's interval and its card carries
+    // the selection.
     await page.getByTestId('upgrade-checkout-step-plan').click();
+    await expect(page.getByTestId('upgrade-plan-interval-year')).toHaveAttribute('aria-checked', 'true');
     const chosen = page.getByTestId(`upgrade-plan-card-${YEARLY_PLAN.planKey}`);
     await expect(chosen).toHaveAttribute('data-selected', 'true');
     await expect(chosen.getByTestId('upgrade-plan-select')).toHaveAttribute('aria-pressed', 'true');

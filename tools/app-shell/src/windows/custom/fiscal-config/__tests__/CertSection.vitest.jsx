@@ -1,10 +1,15 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-config/CertSection.jsx
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // --- Mocks ----------------------------------------------------------------
 
-const stableUi = (key) => key;
+// Interpolation params are appended so a test can see the formatted date inside a message.
+const stableUi = (key, params) => (params ? `${key} ${Object.values(params).join(' ')}` : key);
+// `localeState.value` is the UI locale; es_ES unless a test switches it.
+const localeState = vi.hoisted(() => ({ value: 'es_ES' }));
 vi.mock('@/i18n', () => ({
   useUI: () => stableUi,
+  useLocaleSwitch: () => ({ locale: localeState.value }),
 }));
 
 vi.mock('@/components/ui/button', () => ({
@@ -147,7 +152,7 @@ describe('CertSection — cert loaded (exists: true)', () => {
   it('renders the valid-until date', async () => {
     render(<CertSection {...BASE_PROPS} />);
     await waitFor(() => {
-      expect(screen.getByText('fiscal.cert.validUntil')).toBeInTheDocument();
+      expect(screen.getByText('fiscal.cert.validUntil 31/12/2025')).toBeInTheDocument();
     });
   });
 
@@ -230,5 +235,82 @@ describe('CertSection — modal upload flow', () => {
     await waitFor(() => {
       expect(screen.getByText('fiscal.cert.replace')).toBeInTheDocument();
     });
+  });
+});
+
+// ETP-5831 — one certificate per organization, shown in the SII, TicketBAI and VERI*FACTU
+// sections: a replacement from one section is reported upwards and re-read by the others.
+describe('CertSection — shared certificate (ETP-5831)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useApiFetch).mockReturnValue(mockApiFetch);
+  });
+
+  it('reports a replacement through onUploaded', async () => {
+    mockApiFetch.mockResolvedValue(makeJsonResponse({ exists: true, validTo: '2027-07-01' }));
+    const onUploaded = vi.fn();
+    render(<CertSection {...BASE_PROPS} onUploaded={onUploaded} />);
+    fireEvent.click(await screen.findByText('fiscal.cert.replace'));
+    fireEvent.click(screen.getByText('upload-modal'));
+    expect(onUploaded).toHaveBeenCalledWith({ name: 'cert.pfx', validTo: '2026-01-01' });
+  });
+
+  it('re-reads the certificate when refreshKey changes', async () => {
+    mockApiFetch.mockResolvedValue(makeJsonResponse({ exists: false }));
+    const { rerender } = render(<CertSection {...BASE_PROPS} refreshKey={0} />);
+    await screen.findByText('fiscal.cert.dropzone.drag');
+    expect(mockApiFetch).toHaveBeenCalledTimes(1);
+
+    mockApiFetch.mockResolvedValue(makeJsonResponse({ exists: true, validTo: '2027-07-01' }));
+    rerender(<CertSection {...BASE_PROPS} refreshKey={1} />);
+    expect(await screen.findByText('fiscal.cert.replace')).toBeInTheDocument();
+    expect(mockApiFetch).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ETP-6053 — GET /certificate returns validTo as ISO yyyy-MM-dd; the row shows it in the UI
+// locale, so 1 July 2027 reads 01/07/2027 (it used to come as dd/MM/yyyy and render 07/01).
+describe('CertSection — validity date formatting (ETP-6053)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useApiFetch).mockReturnValue(mockApiFetch);
+  });
+
+  it('formats the loaded certificate validTo in the UI locale', async () => {
+    mockApiFetch.mockResolvedValue(makeJsonResponse({ exists: true, validTo: '2027-07-01' }));
+    render(<CertSection {...BASE_PROPS} />);
+    expect(await screen.findByText('fiscal.cert.validUntil 01/07/2027')).toBeInTheDocument();
+  });
+
+  it('formats the validTo reported by a fresh upload the same way', async () => {
+    mockApiFetch.mockResolvedValue(makeJsonResponse({ exists: true, validTo: '2027-07-01' }));
+    render(<CertSection {...BASE_PROPS} />);
+    fireEvent.click(await screen.findByText('fiscal.cert.replace'));
+    fireEvent.click(screen.getByText('upload-modal'));
+    expect(await screen.findByText('fiscal.cert.validUntil 01/01/2026')).toBeInTheDocument();
+  });
+
+  // The UI locale is passed through, not pinned to es_ES: en_US reads the same day month-first.
+  it('formats validTo month-first for en_US', async () => {
+    localeState.value = 'en_US';
+    try {
+      mockApiFetch.mockResolvedValue(makeJsonResponse({ exists: true, validTo: '2027-07-01' }));
+      render(<CertSection {...BASE_PROPS} />);
+      expect(await screen.findByText('fiscal.cert.validUntil 07/01/2027')).toBeInTheDocument();
+    } finally {
+      localeState.value = 'es_ES';
+    }
+  });
+
+  // Accepted behavior: an existing certificate whose date the backend does not report still shows
+  // the row, with the empty-date dash instead of a blank or "Invalid Date".
+  it.each([
+    ['no validTo', { exists: true }],
+    ['an empty validTo', { exists: true, validTo: '' }],
+  ])('renders "valid until —" for an existing certificate with %s', async (_label, payload) => {
+    mockApiFetch.mockResolvedValue(makeJsonResponse(payload));
+    render(<CertSection {...BASE_PROPS} />);
+    expect(await screen.findByText('fiscal.cert.validUntil —')).toBeInTheDocument();
+    expect(screen.getByText('fiscal.cert.loaded')).toBeInTheDocument();
   });
 });

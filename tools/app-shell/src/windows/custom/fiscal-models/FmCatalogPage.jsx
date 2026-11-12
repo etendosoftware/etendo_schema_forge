@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
@@ -7,6 +7,7 @@ import { ConfigDrawer } from './FmOverlays.jsx';
 import { showIaeActivityReminder } from './fiscalModelsUtils.js';
 import { listModels, getModel } from './modelRegistry.js';
 import useOrgSiiStatus, { isSiiJoinedDuringYear } from './useOrgSiiStatus.js';
+import { filterAvailableModels } from './catalogAvailability.js';
 
 // The catalog lists every registered model (id, periodicities, default state, lock, badge
 // variant) — see modelRegistry.js.
@@ -69,13 +70,26 @@ function ToggleSwitch({ checked, onChange, disabled }) {
   );
 }
 
-export default function FmCatalogPage({ onBack, onSave, activeModels, token, apiBaseUrl }) {
+export default function FmCatalogPage({ onBack, onSave, activeModels, unavailableModels, token, apiBaseUrl }) {
   const t = useUI();
+  // ETP-5716 — models the backend marks unavailable (catalogAvailability.js) are not offered.
+  const catalog = filterAvailableModels(CATALOG, unavailableModels);
   const { locale } = useLocaleSwitch();
   const navigate = useNavigate();
   const [active, setActive] = useState(
-    () => activeModels ?? Object.fromEntries(CATALOG.map(m => [m.id, m.defaultActive]))
+    () => activeModels ?? Object.fromEntries(catalog.map(m => [m.id, m.defaultActive]))
   );
+  // The selection the next toggle starts from. A ref, not the render's `active`: the SII path
+  // toggles after an await, and two fast clicks must each build on the previous one.
+  const activeRef = useRef(active);
+  // ETP-5831 CP-22 — the drawer follows the catalog the page holds: the optimistic value right
+  // after a toggle, and the last server-confirmed one when a save fails, so a failed toggle
+  // visibly flips back.
+  useEffect(() => {
+    if (!activeModels) return;
+    activeRef.current = activeModels;
+    setActive(activeModels);
+  }, [activeModels]);
   const [configModel, setConfigModel] = useState(null);
   // ETP-5716 — the model awaiting the SII confirmation (see SiiActivationWarning), or null, and
   // the formatted SII date when the organization joined during the current year.
@@ -83,26 +97,43 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, token, api
   const [siiSinceLabel, setSiiSinceLabel] = useState(null);
   const getSiiStatus = useOrgSiiStatus({ apiBaseUrl, enabled: ANY_SII_WARNING });
 
-  const handleClose = () => { onSave?.(active); onBack?.(); };
+  // ETP-5831 CP-22 — every toggle is saved right away (see applyToggle); closing only closes.
+  // Saving on close lost every change made before a reload or a navigation with the drawer open.
+  const handleClose = () => onBack?.();
 
   // ETP-5187 (adjacent scope) — Modelo 303 needs a default IAE activity configured for its
   // year-end declaration (see `showIaeActivityReminder`'s own doc comment in
   // `fiscalModelsUtils.js`). Only fires on the inactive → active transition of a model whose
   // registry entry asks for it (`iaeReminderOnActivate`: 303 only) — never on deactivation.
-  const applyToggle = (id) => setActive(prev => {
+  // ETP-5831 CP-22 — each toggle hands the full new selection to `onSave` immediately.
+  const applyToggle = (id) => {
+    const prev = activeRef.current;
     const next = { ...prev, [id]: !prev[id] };
+    activeRef.current = next;
+    setActive(next);
     if (getModel(id)?.iaeReminderOnActivate && !prev[id] && next[id]) showIaeActivityReminder(t, navigate);
-    return next;
-  });
+    onSave?.(next);
+  };
   // ETP-5716 — activating a `siiWarningOnActivate` model for an organization in the SII asks
   // first (SiiActivationWarning). Deactivating, or an organization outside the SII (or an SII
   // status that cannot be read), toggles right away.
+  // Models whose SII status is being read: a second click on the same switch during that await
+  // is ignored. Without it both clicks see the model inactive, both take the activate branch, and
+  // the model flips twice (two PUTs) or the warning opens twice.
+  const siiCheckInFlight = useRef(new Set());
   const toggleModel = async (id) => {
-    if (!getModel(id)?.siiWarningOnActivate || active[id]) {
+    if (siiCheckInFlight.current.has(id)) return;
+    if (!getModel(id)?.siiWarningOnActivate || activeRef.current[id]) {
       applyToggle(id);
       return;
     }
-    const status = await getSiiStatus();
+    siiCheckInFlight.current.add(id);
+    let status;
+    try {
+      status = await getSiiStatus();
+    } finally {
+      siiCheckInFlight.current.delete(id);
+    }
     if (!status?.active) {
       applyToggle(id);
       return;
@@ -111,16 +142,14 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, token, api
     setSiiSinceLabel(joinedThisYear ? formatCalendarDate(status.since, locale || 'es-ES') : null);
     setSiiPendingId(id);
   };
-  const lockedIds = new Set(CATALOG.filter(m => m.locked).map(m => m.id));
+  const lockedIds = new Set(catalog.filter(m => m.locked).map(m => m.id));
   const activeCount = Object.entries(active).filter(([id, v]) => v && !lockedIds.has(id)).length;
 
-  const modelSortKey = (m) => {
-    if (active[m.id] && !m.locked) return 0;
-    if (m.locked) return 2;
-    return 1;
-  };
-  const sortedCatalog = [...CATALOG].sort((a, b) =>
-    modelSortKey(a) - modelSortKey(b) || parseInt(a.id, 10) - parseInt(b.id, 10)
+  // ETP-5831 CP-21 — a stable order: locked ("Próximamente") models last, otherwise by model
+  // code. It never depends on the active state, so toggling a model does not move its card under
+  // the pointer (it used to sort active models first and re-sort on every toggle).
+  const sortedCatalog = [...catalog].sort((a, b) =>
+    Number(Boolean(a.locked)) - Number(Boolean(b.locked)) || parseInt(a.id, 10) - parseInt(b.id, 10)
   );
 
   return (
@@ -138,7 +167,7 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, token, api
                   background: 'hsl(var(--muted))', border: '1px solid hsl(var(--border-control))',
                   fontSize: 12, color: 'hsl(var(--muted-foreground))', fontWeight: 400, lineHeight: '16px',
                 }}>
-                  {CATALOG.length}
+                  {catalog.length}
                 </span>
               </div>
               <div className="fm-catalog-header__sub">

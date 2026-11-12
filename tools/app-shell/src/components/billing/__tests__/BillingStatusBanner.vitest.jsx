@@ -220,8 +220,84 @@ describe('BillingStatusBanner — the grace end date', () => {
   });
 });
 
+// accessEnforced: false — the per-tenant environment-access kill switch is on: nothing will be
+// blocked on graceEndsAt, so the banner must neither name a date nor escalate to the red alert.
+describe('BillingStatusBanner — access not enforced (neutral)', () => {
+  const message = () => screen.getByTestId('billing-status-banner-message');
+
+  it('says only that the payment is overdue, with no block date', () => {
+    withEnvironment({ accessEnforced: false });
+    render(<BillingStatusBanner />);
+    expect(message()).toHaveTextContent(/^billingPaymentOverdueBanner$/);
+    expect(message()).not.toHaveTextContent('billingPaymentFailedBanner');
+    expect(message()).not.toHaveTextContent('2026');
+  });
+
+  it('is never red, even inside the last 3 days, and stays dismissible', async () => {
+    const user = userEvent.setup();
+    withEnvironment({ accessEnforced: false, graceEndsAt: GRACE_NEAR });
+    render(<BillingStatusBanner />);
+    expect(banner()).toHaveAttribute('data-variant', 'warning');
+    expect(banner()).toHaveAttribute('role', 'status');
+    expect(banner().className).not.toMatch(/destructive/);
+
+    await user.click(screen.getByTestId('billing-status-banner-dismiss'));
+    expect(queryBanner()).not.toBeInTheDocument();
+    expect(sessionStorage.getItem(paymentGraceWarningDismissKey('CLIENT-1', GRACE_NEAR))).toBe('1');
+  });
+
+  it('stays up after graceEndsAt, since no blocked screen takes over', () => {
+    withEnvironment({ accessEnforced: false, graceEndsAt: new Date(2026, 9, 20).toISOString() });
+    render(<BillingStatusBanner />);
+    expect(message()).toHaveTextContent('billingPaymentOverdueBanner');
+    expect(banner()).toHaveAttribute('data-variant', 'warning');
+  });
+
+  it('still shows, and still dismisses for the session, with no graceEndsAt', async () => {
+    const user = userEvent.setup();
+    withEnvironment({ accessEnforced: false, graceEndsAt: null });
+    const { unmount } = render(<BillingStatusBanner />);
+    expect(message()).toHaveTextContent('billingPaymentOverdueBanner');
+
+    await user.click(screen.getByTestId('billing-status-banner-dismiss'));
+    expect(queryBanner()).not.toBeInTheDocument();
+    unmount();
+    render(<BillingStatusBanner />);
+    expect(queryBanner()).not.toBeInTheDocument();
+  });
+
+  it('keeps the owner CTA and the member hint', () => {
+    withEnvironment({ accessEnforced: false });
+    const { unmount } = render(<BillingStatusBanner />);
+    expect(screen.getByTestId('billing-status-banner-cta')).toBeInTheDocument();
+    unmount();
+
+    withEnvironment({ accessEnforced: false, ownedByAccount: false });
+    render(<BillingStatusBanner />);
+    expect(screen.getByTestId('billing-status-banner-member-hint'))
+      .toHaveTextContent('billingPaymentFailedContactAdmin');
+    expect(screen.queryByTestId('billing-status-banner-cta')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['missing', undefined],
+    ['true', true],
+  ])('keeps the dated, escalating banner when the field is %s', (_label, accessEnforced) => {
+    withEnvironment({ accessEnforced, graceEndsAt: GRACE_NEAR });
+    render(<BillingStatusBanner />);
+    expect(message()).toHaveTextContent('billingPaymentFailedBanner|');
+    expect(banner()).toHaveAttribute('data-variant', 'destructive');
+    expect(banner()).toHaveAttribute('role', 'alert');
+  });
+});
+
 describe('BillingStatusBanner — copy in every shipped locale', () => {
-  const KEYS = ['billingPaymentFailedBanner', 'billingUpdatePaymentCta', 'billingPaymentFailedContactAdmin'];
+  const KEYS = [
+    'billingPaymentFailedBanner',
+    'billingPaymentOverdueBanner',
+    'billingUpdatePaymentCta',
+    'billingPaymentFailedContactAdmin',
+  ];
 
   it.each([
     ['en_US', enUS],
@@ -233,5 +309,7 @@ describe('BillingStatusBanner — copy in every shipped locale', () => {
       expect(dict.genericLabels[key].trim(), key).not.toBe('');
     }
     expect(dict.genericLabels.billingPaymentFailedBanner).toContain('{date}');
+    // The neutral (enforcement off) message promises no block, so it names no date.
+    expect(dict.genericLabels.billingPaymentOverdueBanner).not.toContain('{date}');
   });
 });

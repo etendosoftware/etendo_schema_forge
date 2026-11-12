@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test';
+// @covers tools/app-shell/src/pages/OnboardingPage.jsx
+import { test, expect } from '../../helpers/test.js';
 import { declareNoSession } from '../../helpers/auth.js';
 
 /**
@@ -65,7 +66,7 @@ async function registerToProfile(page) {
   await page.getByTestId('action-switch-to-register').click();
   await page.locator('#reg-name').fill(ACCOUNT.name);
   await page.locator('#reg-email').fill(ACCOUNT.email);
-  await page.locator('#reg-password').fill('Qa-Resume-Pass!42');
+  await page.getByTestId('sector-select').selectOption('servicios');
   await page.getByTestId('action-register-submit').click();
   await expect(page.locator('#fullName')).toBeVisible();
 }

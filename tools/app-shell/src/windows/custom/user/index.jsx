@@ -12,6 +12,7 @@ import { resendInvitation } from '@/lib/resendInvitationApi.js';
 import { promoteUserToAdmin, demoteUserFromAdmin } from '@/lib/promoteUserRoleApi.js';
 import { fetchRolesOverview } from '@/lib/rolesApi.js';
 import { useViewerRole } from '@/hooks/useViewerRole.js';
+import { useSupportSession } from '@/hooks/useSupportSession.js';
 import { useAuth, decodeJwtUser } from '@/auth/AuthContext.jsx';
 import { resolveDefaultRoleId } from './RoleChipsCell.jsx';
 import { RECORD_SAVE_TOAST_ID } from '@/hooks/useEntity';
@@ -355,6 +356,7 @@ function useAdminPromotionExtraActions(adminRoleId, viewerRole, refreshRoleAssig
  * whole prop bag.
  */
 function TopbarExtra(props) {
+  const { isSupportMode } = useSupportSession();
   return (
     <div className="flex items-center gap-3" data-testid="UserTopbarExtra">
       <OwnerBadge
@@ -363,7 +365,8 @@ function TopbarExtra(props) {
       <PendingInvitationPill
         status={props.data?.invitationStatus}
         data-testid="PendingInvitationPill__toolbar" />
-      <ActiveStatusToggle {...props} data-testid="ActiveStatusToggle__toolbar" />
+      {/* ETP-5351 — the backend refuses changing `active` for a support session. */}
+      {!isSupportMode && <ActiveStatusToggle {...props} data-testid="ActiveStatusToggle__toolbar" />}
     </div>
   );
 }
@@ -419,6 +422,7 @@ export default function UserWindow(props) {
   const { recordId, token, apiBaseUrl, windowName = 'user' } = props;
   const ui = useUI();
   const navigate = useNavigate();
+  const { isSupportMode } = useSupportSession();
   const resendInvitationExtraActions = useResendInvitationExtraActions();
   const adminRoleId = useAdminRoleId();
   const viewerRole = useViewerRole();
@@ -461,8 +465,9 @@ export default function UserWindow(props) {
   // the single array `<UserPage>` renders, resend-invitation first (unchanged
   // ETP-4999 ordering), admin promote/demote appended after it.
   const combinedExtraActions = useCallback(
-    (args) => [...resendInvitationExtraActions(args), ...adminPromotionExtraActions(args)],
-    [resendInvitationExtraActions, adminPromotionExtraActions],
+    // ETP-5351 — resend and promote/demote are refused (403 SUPPORT_SESSION_FORBIDDEN) in support mode.
+    (args) => (isSupportMode ? [] : [...resendInvitationExtraActions(args), ...adminPromotionExtraActions(args)]),
+    [isSupportMode, resendInvitationExtraActions, adminPromotionExtraActions],
   );
 
   useEffect(() => {
@@ -668,6 +673,7 @@ export default function UserWindow(props) {
       <UserPage
         {...props}
         newLabel={ui('newUser')}
+        hideCreate={isSupportMode}
         topbarExtra={TopbarExtra}
         extraActions={combinedExtraActions}
         onAfterCreate={handleAfterCreate}

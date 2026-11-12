@@ -1,13 +1,23 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { useUI } from '@/i18n';
+import { useUI, useLocaleSwitch } from '@/i18n';
+import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { FileText, Upload } from 'lucide-react';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import CertModal from './CertModal.jsx';
 
-export default function CertSection({ context, orgId, apiBaseUrl }) {
+/**
+ * The organization's digital certificate: its state and "Reemplazar", or the upload dropzone.
+ * The org has ONE certificate shared by every fiscal system, so the same block appears in the SII,
+ * TicketBAI and VERI*FACTU sections (ETP-5831). `refreshKey` re-reads it (the page bumps it when the
+ * certificate is replaced from another section); `onUploaded` reports a replacement upwards.
+ * `validTo` arrives as ISO `yyyy-MM-dd` (both `GET /certificate` and the upload details) and is
+ * formatted for the UI locale here (ETP-6053).
+ */
+export default function CertSection({ context, orgId, apiBaseUrl, refreshKey = 0, onUploaded }) {
   const ui = useUI();
+  const { locale } = useLocaleSwitch();
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
   const [cert, setCert]   = useState(null);
   const [open, setOpen]   = useState(false);
@@ -21,7 +31,7 @@ export default function CertSection({ context, orgId, apiBaseUrl }) {
         if (data?.exists) setCert({ name: ui('fiscal.cert.loaded'), validTo: data.validTo ?? '' });
       })
       .catch(() => {});
-  }, [apiFetch, ui, orgId, apiBaseUrl]);
+  }, [apiFetch, ui, orgId, apiBaseUrl, refreshKey]);
 
   if (cert) {
     return (
@@ -35,7 +45,7 @@ export default function CertSection({ context, orgId, apiBaseUrl }) {
             <div>
               <div className="text-sm font-medium">{cert.name}</div>
               <div className="text-xs text-muted-foreground">
-                {ui('fiscal.cert.validUntil', { date: cert.validTo })}
+                {ui('fiscal.cert.validUntil', { date: formatCalendarDate(cert.validTo, locale || 'es_ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) })}
               </div>
             </div>
           </div>
@@ -53,7 +63,7 @@ export default function CertSection({ context, orgId, apiBaseUrl }) {
             orgId={orgId}
             apiBaseUrl={apiBaseUrl}
             onClose={() => setOpen(false)}
-            onUpload={(c) => { setCert(c); setOpen(false); }}
+            onUpload={(c) => { setCert(c); setOpen(false); onUploaded?.(c); }}
             data-testid="CertModal__e7cbc5" />
         )}
       </>
@@ -88,7 +98,7 @@ export default function CertSection({ context, orgId, apiBaseUrl }) {
           orgId={orgId}
           apiBaseUrl={apiBaseUrl}
           onClose={() => setOpen(false)}
-          onUpload={(c) => { setCert(c); setOpen(false); }}
+          onUpload={(c) => { setCert(c); setOpen(false); onUploaded?.(c); }}
           data-testid="CertModal__e7cbc5" />
       )}
     </>

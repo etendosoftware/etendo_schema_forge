@@ -6,6 +6,7 @@ import {
   fetchJson, fetchAll, fetchOptionalJson, fetchLocationAddress, fetchImageDataUrl,
   buildLocationAddressLines, renderPdf, renderHtml, usePdfGenerator,
 } from '../shared/pdfUtils.js';
+import { SHIPMENT_TEMPLATE_BODY, SHIPMENT_PDF_LABEL_KEYS, resolveLabelKeys } from '../shared/printableSources.js';
 
 // ---------------------------------------------------------------------------
 // Handlebars helpers — fmt formats as 0–3 decimal places (quantities, no prices)
@@ -26,42 +27,7 @@ function fmt(v) {
 const TEMPLATE = MOVEMENT_TEMPLATE_OPEN
 + MOVEMENT_TEMPLATE_HEADER
 + MOVEMENT_TEMPLATE_PARTIES
-+ `
-  <div class="doc-movement">
-    <div class="doc-movement-cell">
-      <div class="cell-label">{{labels.date}}</div>
-      <div class="cell-value">{{fmtDate movementDate}}</div>
-    </div>
-    <div class="doc-movement-cell">
-      <div class="cell-label">{{labels.salesOrder}}</div>
-      <div class="cell-value">{{#if salesOrderRef}}{{salesOrderRef}}{{else}}—{{/if}}</div>
-    </div>
-    <div class="doc-movement-cell">
-      <div class="cell-label">{{labels.warehouse}}</div>
-      <div class="cell-value">{{#if warehouse}}{{warehouse}}{{else}}—{{/if}}</div>
-    </div>
-  </div>
-
-  <table class="doc-table">
-    <thead>
-      <tr>
-        <th style="width:64px">{{labels.colCode}}</th>
-        <th>{{labels.colDescription}}</th>
-        <th class="num" style="width:110px">{{labels.colOrdered}}</th>
-        <th class="num" style="width:120px">{{labels.colDelivered}}</th>
-      </tr>
-    </thead>
-    <tbody>
-      {{#each lines}}
-      <tr>
-        <td class="code">{{this.productCode}}</td>
-        <td class="desc">{{this.productName}}</td>
-        <td class="num">{{fmt this.orderedQty}}</td>
-        <td class="num">{{fmt this.deliveredQty}}</td>
-      </tr>
-      {{/each}}
-    </tbody>
-  </table>`
++ SHIPMENT_TEMPLATE_BODY
 + MOVEMENT_TEMPLATE_SIGNATURE
 + MOVEMENT_TEMPLATE_NOTES
 + MOVEMENT_TEMPLATE_FOOTER;
@@ -141,23 +107,9 @@ export function useShipmentPdf(shipmentId, apiBaseUrl, token, cacheConfig = null
 }
 
 export function getShipmentPdfLabels(ui) {
-  return {
-    title:             ui('shipmentPdfTitle'),
-    taxId:             ui('invoicePdfTaxId'),
-    page:              ui('invoicePdfPage'),
-    issuerSection:     ui('shipmentPdfIssuerSection'),
-    deliverySection:   ui('shipmentPdfDeliverySection'),
-    salesOrder:        ui('shipmentPdfSalesOrder'),
-    date:              ui('shipmentPdfDate'),
-    warehouse:         ui('shipmentPdfWarehouse'),
-    colCode:           ui('invoicePdfColCode'),
-    colDescription:    ui('invoicePdfColDescription'),
-    colOrdered:        ui('shipmentPdfColOrdered'),
-    colDelivered:      ui('shipmentPdfColDelivered'),
-    notes:             ui('invoicePdfNotes'),
-    signatureReceiver: ui('shipmentPdfSignatureReceiver'),
-    signatureDate:     ui('shipmentPdfSignatureDate'),
-  };
+  // Key map in printableSources.js, which the build also publishes for the server-side
+  // render (ETP-6013) — one definition, so the two cannot drift.
+  return resolveLabelKeys(ui, SHIPMENT_PDF_LABEL_KEYS);
 }
 
 // ETP-4702 — kept for GoodsShipmentMoreMenu.jsx's "Download PDF" kebab-menu item,

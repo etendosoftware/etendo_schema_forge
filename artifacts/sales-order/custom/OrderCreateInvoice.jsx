@@ -9,10 +9,10 @@ import { ConfirmResultModal } from '@/components/contract-ui';
 import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { useOrderPdf } from '@/windows/custom/shared/useOrderPdf.js';
-import { readOrderPendingDocs } from '@/windows/custom/shared/orderPendingDocs.js';
+import { readOrderPendingDocs, readPendingInvoiceAmount, PENDING_INVOICE_AMOUNT } from '@/windows/custom/shared/orderPendingDocs.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { ETGO_DTO_PRODUCT_ID } from '@/lib/documentTotals.js';
-import { translateBackendError, translateBackendErrorBody } from '@/lib/backendErrors.js';
+import { translateBackendError, translateBackendErrorBody, translateQuotaRefusalBody } from '@/lib/backendErrors.js';
 // ETP-5024 x ETP-4576: this modal used to hand-build its headers, and they were missing
 // `Accept-Language` — the backend (NeoAuthenticator.applyRequestLanguage) silently falls
 // back to AD_User.AD_Language, so the "business partner is on hold" refusal from
@@ -21,6 +21,7 @@ import { translateBackendError, translateBackendErrorBody } from '@/lib/backendE
 // instead, which owns that header along with the credential and the CSRF proof, so there is
 // no longer any header-building in this file to get wrong.
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useInvoiceSifStep, InvoiceSifStepPanel, withSifFields, SIF_STEP_DIALOG_WIDTH } from '@/windows/custom/shared/InvoiceSifStep.jsx';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -284,6 +285,11 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
     // (legacy backend / unannotated spec): unlike the kebab, this component has already fetched
     // the real shipments, invoices and lines, so falling back costs nothing and keeps both the
     // label AND the modal's sections (`derived.needsShip` / `derived.needsInvoice` below) working.
+    //
+    // ETP-5828 — `needsInvoiceDoc` now follows the net-of-drafts rule of "Generar factura": a draft
+    // invoice only turns it off when it holds everything left to invoice. The fallback cannot see
+    // what a draft's lines hold (the invoice list carries headers only), so it keeps the
+    // conservative "any draft hides it"; the backend refuses with a translated reason anyway.
     const { needsPrimaryDoc, needsInvoiceDoc } = readOrderPendingDocs(data);
     const needsShip    = needsPrimaryDoc ?? (qtyPending !== 0 && shipmentsDraft.length === 0);
     const needsInvoice = needsInvoiceDoc ?? (totalPending !== 0 && !invoiceDraft);
@@ -366,6 +372,12 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
   const [orderConfirmed,  setOrderConfirmed]  = useState(false);
   const [shipmentResult,  setShipmentResult]  = useState(null);
   const [invoiceResult,   setInvoiceResult]   = useState(null);
+  // ETP-6179: the invoice's mandatory "Datos fiscales" step, BEFORE the order is confirmed.
+  const sif = useInvoiceSifStep({
+    enabled: createInvoice && !invoiceResult,
+    apiFetch,
+    defaultsUrl: `${apiBaseUrl}/header/${orderId}/action/sifDefaults`,
+  });
 
   // Fetch fresh record + line count on mount
   useEffect(() => {
@@ -506,7 +518,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
     if (createInvoice && !invoiceResult) {
       try {
         const res = await apiFetch(`${apiBaseUrl}/header/${orderId}/action/createDraftInvoice`,
-          { method: 'POST', body: JSON.stringify({}) });
+          { method: 'POST', body: JSON.stringify(withSifFields({}, sif)) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
           // ETP-5381: was the only branch here not running the backend message through
@@ -590,6 +602,8 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
   // modal opens with whatever exists and the page reloads on its own close.
   // Otherwise the order is silently in CO state but the UI keeps showing DR,
   // and reopening the modal would re-attempt step 1 → @AlreadyPosted@.
+  const confirmDisabled = loading || sif.loading || (sif.active && !sif.valid);
+
   const handleClose = () => {
     if (orderConfirmed || shipmentResult || invoiceResult) {
       // ETP-4779 — covers the partial-failure path: e.g. the shipment POST
@@ -612,18 +626,24 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
 
   return (
     <div data-testid="sales-order-confirm-modal" onClick={handleClose} style={overlayStyle}>
-      <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: 460 }}>
+      <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: sif.active ? SIF_STEP_DIALOG_WIDTH : 460, maxWidth: 'calc(100vw - 32px)' }}>
 
         {/* Title row */}
         <div style={{ padding: '16px 20px 14px', borderBottom: '0.5px solid hsl(var(--card))', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-            {ui('soConfirmTitle', { number: documentNo })}
+            {sif.active ? ui('invoiceSifStep.title') : ui('soConfirmTitle', { number: documentNo })}
           </div>
           <button type="button" onClick={handleClose} style={closeBtn}>&times;</button>
         </div>
 
+        {sif.active && (
+          <div style={{ padding: '14px 20px', overflowY: 'auto', minHeight: 0 }}>
+            <InvoiceSifStepPanel sif={sif} data-testid="InvoiceSifStepPanel__18d1f0" />
+          </div>
+        )}
+
         {/* Blue summary card */}
-        <div style={{ padding: '14px 20px' }}>
+        {!sif.active && <div style={{ padding: '14px 20px' }}>
           <div style={{ background: 'var(--status-info-bg)', border: '0.5px solid var(--status-info-border)', borderRadius: 10, padding: '14px 16px' }}>
             {bpName && (
               <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>
@@ -648,10 +668,10 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
               </span>
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* Checkboxes — both optional, both can be selected simultaneously */}
-        <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {!sif.active && <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>
             {ui('soGenerateDocs')}
           </div>
@@ -671,7 +691,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
             subtitle={invoiceResult ? ui('soAlreadyCreated') : ui('soCreateInvoiceCheckDesc')}
             disabled={Boolean(invoiceResult)}
             testId="sales-order-confirm-invoice-card" />
-        </div>
+        </div>}
 
         {error && (
           <div style={{ padding: '8px 20px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))', whiteSpace: 'pre-line' }}>
@@ -679,14 +699,19 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid hsl(var(--card))' }}>
-          <button type="button" onClick={handleClose} disabled={loading} style={{ ...btnSecondary, opacity: loading ? 0.5 : 1 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid hsl(var(--card))' }}>
+          <button type="button" onClick={handleClose} disabled={loading} style={{ whiteSpace: 'nowrap', ...btnSecondary, opacity: loading ? 0.5 : 1 }}>
             {ui('cancel')}
           </button>
-          <button type="button" data-testid="sales-order-confirm-submit" onClick={handleConfirm} disabled={loading}
-            style={{ ...btnPrimaryStyle, opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          {sif.active && (
+            <button type="button" data-testid="sales-order-confirm-sif-back" onClick={sif.back} disabled={loading} style={{ whiteSpace: 'nowrap', ...btnSecondary, opacity: loading ? 0.5 : 1 }}>
+              {ui('back')}
+            </button>
+          )}
+          <button type="button" data-testid="sales-order-confirm-submit" onClick={() => sif.start(handleConfirm)} disabled={confirmDisabled}
+            style={{ whiteSpace: 'nowrap', ...btnPrimaryStyle, opacity: confirmDisabled ? 0.6 : 1, cursor: confirmDisabled ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             {loading && <Spinner data-testid="Spinner__18d1f0" />}
-            {loading ? ui('soProcessing') : primaryLabel}
+            {(loading || sif.loading) ? ui('soProcessing') : primaryLabel}
           </button>
         </div>
       </div>
@@ -776,10 +801,15 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
         : ui('soQtyPendingDelivery', { pending: fmtNum(qtyPending, 0) }))
     : ui('soCreateShipmentCheckDesc');
 
+  // ETP-5828 — the pending figure is what «Generar factura» WOULD invoice now, computed by the
+  // backend with the action's own rule (net of draft invoices, shipment-scoped, global discount)
+  // and annotated on the order's single-record GET. Without it (a list row, a legacy backend) the
+  // old derivation stays: order total − completed invoices.
+  const pendingToInvoice = readPendingInvoiceAmount(d) ?? totalPending;
   const invoiceSubtitle = totalOrder !== 0
     ? (totalInvoiced > 0
-        ? ui('soAmountInvoicedOf', { invoiced: formatCurrency(currency, totalInvoiced), total: formatCurrency(currency, totalOrder), pending: formatCurrency(currency, totalPending) })
-        : ui('soAmountPendingInvoice', { pending: formatCurrency(currency, totalPending) }))
+        ? ui('soAmountInvoicedOf', { invoiced: formatCurrency(currency, totalInvoiced), total: formatCurrency(currency, totalOrder), pending: formatCurrency(currency, pendingToInvoice) })
+        : ui('soAmountPendingInvoice', { pending: formatCurrency(currency, pendingToInvoice) }))
     : ui('soCreateInvoiceCheckDesc');
 
   // ETP-5381: with only ONE action left, the tick is a confirmation of a confirmation. The user
@@ -790,6 +820,12 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
   const soleAction = needsShip !== needsInvoice;
   const shipWanted = soleAction ? needsShip : createShipment;
   const invoiceWanted = soleAction ? needsInvoice : createInvoice;
+  // ETP-6179: the invoice's mandatory "Datos fiscales" step.
+  const sif = useInvoiceSifStep({
+    enabled: invoiceWanted,
+    apiFetch,
+    defaultsUrl: `${base}/sales-order/header/${orderId}/action/sifDefaults`,
+  });
 
   const handleCreate = async () => {
     if (loading || (!shipWanted && !invoiceWanted)) return;
@@ -813,10 +849,13 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
 
       if (invoiceWanted) {
         const res = await apiFetch(`${base}/sales-order/header/${orderId}/action/createDraftInvoice`,
-          { method: 'POST', body: JSON.stringify({}) });
+          { method: 'POST', body: JSON.stringify(withSifFields({}, sif)) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`);
+          // ETP-5051 — a plan-quota refusal reads as the translated quota sentence. ETP-5828 —
+          // any other refusal (e.g. the draft-covers 400) is translated too, never shown raw.
+          throw new Error(translateQuotaRefusalBody(e, ui)
+            || translateBackendErrorBody(e, ui, `Error (${res.status})`));
         }
         const doc = (await res.json())?.response?.data;
         // ETP-5381: carry documentStatus so the result modal badges the invoice as Confirmada
@@ -834,21 +873,28 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
   };
 
   const canCreate = shipWanted || invoiceWanted;
+  const submitDisabled = loading || !canCreate || sif.loading || (sif.active && !sif.valid);
 
   return (
     <div data-testid="sales-order-manage-docs-modal" onClick={onClose} style={overlayStyle}>
-      <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: 460 }}>
+      <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: sif.active ? SIF_STEP_DIALOG_WIDTH : 460, maxWidth: 'calc(100vw - 32px)' }}>
 
         {/* Title row */}
         <div style={{ padding: '16px 20px 14px', borderBottom: '0.5px solid hsl(var(--card))', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-            {manageDocsLabel(ui, needsShip, needsInvoice) ?? ui('soManageDocsTitle')}
+            {sif.active ? ui('invoiceSifStep.title') : (manageDocsLabel(ui, needsShip, needsInvoice) ?? ui('soManageDocsTitle'))}
           </div>
           <button type="button" onClick={onClose} style={closeBtn}>&times;</button>
         </div>
 
+        {sif.active && (
+          <div style={{ padding: '14px 20px', overflowY: 'auto', minHeight: 0 }}>
+            <InvoiceSifStepPanel sif={sif} data-testid="InvoiceSifStepPanel__manageDocs" />
+          </div>
+        )}
+
         {/* Blue summary card — no warning since order is already confirmed */}
-        <div style={{ padding: '14px 20px' }}>
+        {!sif.active && <div style={{ padding: '14px 20px' }}>
           <div style={{ background: 'var(--status-info-bg)', border: '0.5px solid var(--status-info-border)', borderRadius: 10, padding: '14px 16px' }}>
             {bpName && (
               <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>
@@ -859,10 +905,10 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
               {formatCurrency(currency, grandTotal)}
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* Only show cards for pending actions; subtitle shows outstanding qty/amount */}
-        <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {!sif.active && <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>
             {/* "(optional)" is only true while there is something to opt out of. With one action
                 left it is not optional — it is what the button does. */}
@@ -888,7 +934,7 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
               implied={soleAction}
             testId="sales-order-manage-invoice-card" />
           )}
-        </div>
+        </div>}
 
         {error && (
           <div style={{ padding: '8px 20px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))', whiteSpace: 'pre-line' }}>
@@ -896,14 +942,19 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid hsl(var(--card))' }}>
-          <button type="button" onClick={onClose} disabled={loading} style={{ ...btnSecondary, opacity: loading ? 0.5 : 1 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid hsl(var(--card))' }}>
+          <button type="button" onClick={onClose} disabled={loading} style={{ whiteSpace: 'nowrap', ...btnSecondary, opacity: loading ? 0.5 : 1 }}>
             {ui('cancel')}
           </button>
-          <button type="button" data-testid="sales-order-manage-docs-submit" onClick={handleCreate} disabled={loading || !canCreate}
-            style={{ ...btnPrimaryStyle, opacity: (loading || !canCreate) ? 0.6 : 1, cursor: (loading || !canCreate) ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          {sif.active && (
+            <button type="button" data-testid="sales-order-manage-docs-sif-back" onClick={sif.back} disabled={loading} style={{ whiteSpace: 'nowrap', ...btnSecondary, opacity: loading ? 0.5 : 1 }}>
+              {ui('back')}
+            </button>
+          )}
+          <button type="button" data-testid="sales-order-manage-docs-submit" onClick={() => sif.start(handleCreate)} disabled={submitDisabled}
+            style={{ whiteSpace: 'nowrap', ...btnPrimaryStyle, opacity: submitDisabled ? 0.6 : 1, cursor: submitDisabled ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             {loading && <Spinner data-testid="Spinner__18d1f0" />}
-            {loading ? ui('soProcessing') : ui('soCreateDocsBtn')}
+            {(loading || sif.loading) ? ui('soProcessing') : ui('soCreateDocsBtn')}
           </button>
         </div>
       </div>
@@ -963,6 +1014,21 @@ const closeBtn = {
 // as still pending, and this launcher reads those same annotations. The silent close survives
 // only as the defence for the no-annotation fallback path and for a record that changed between
 // the list load and the click.
+/**
+ * ETP-5828 — `pendingInvoiceAmount` of one order, from its single-record GET (the only GET the
+ * backend annotates with it); `undefined` when absent or unreadable.
+ */
+async function fetchPendingInvoiceAmount(apiFetch, apiBaseUrl, orderId) {
+  try {
+    const res = await apiFetch(`${apiBaseUrl}/header/${orderId}`);
+    if (!res.ok) return undefined;
+    const record = (await res.json())?.response?.data?.[0];
+    return readPendingInvoiceAmount(record);
+  } catch {
+    return undefined;
+  }
+}
+
 export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, onCreated }) {
   const ui = useUI();
   const [fetched, setFetched] = useState(null);
@@ -981,16 +1047,20 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
     let cancelled = false;
     (async () => {
       try {
-        const [shipRes, linesRes, invRes] = await Promise.all([
+        const [shipRes, linesRes, invRes, pendingInvoiceAmount] = await Promise.all([
           apiFetch(`${base}/goods-shipment/goodsShipment?criteria=${CRITERIA('salesOrder', orderId)}&_limit=50`),
           apiFetch(`${apiBaseUrl}/lines?parentId=${orderId}&_startRow=0&_endRow=999`),
           apiFetch(`${apiBaseUrl}/header/${orderId}/action/listInvoices`),
+          // ETP-5828 — list rows are not annotated with `pendingInvoiceAmount` (performance), so
+          // the launcher reads it off the order's single-record GET. A failure only loses the
+          // figure: the modal then falls back to order total − completed invoices.
+          fetchPendingInvoiceAmount(apiFetch, apiBaseUrl, orderId),
         ]);
         if (cancelled) return;
         const shipments  = shipRes.ok  ? ((await shipRes.json())?.response?.data  ?? []) : [];
         const orderLines = linesRes.ok ? ((await linesRes.json())?.response?.data ?? []) : [];
         const invoices   = invRes.ok   ? ((await invRes.json())?.response?.data   ?? []) : [];
-        if (!cancelled) setFetched({ shipments, invoices, orderLines });
+        if (!cancelled) setFetched({ shipments, invoices, orderLines, pendingInvoiceAmount });
       } catch {
         if (!cancelled) setFetched({ shipments: [], invoices: [], orderLines: [] });
       }
@@ -1031,6 +1101,7 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
   // ends now read one value off one record instead of two independent computations.
   // `fetched != null` still gates both: while loading, neither "needs" flag may read true off the
   // placeholder empty arrays above, or the close-effect below could fire before data ever loads.
+  // ETP-5828 — same net-of-drafts annotation and same conservative fallback as the button above.
   const { needsPrimaryDoc, needsInvoiceDoc } = readOrderPendingDocs(data);
   const needsShip    = fetched != null && (needsPrimaryDoc ?? (qtyPending !== 0 && shipmentsDraft.length === 0));
   const needsInvoice = fetched != null && (needsInvoiceDoc ?? (totalPending !== 0 && !invoiceDraft));
@@ -1070,7 +1141,9 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
   return createPortal(
     <CreateDocsModal
       orderId={orderId}
-      data={data}
+      // ETP-5828: the row plus the single-record GET's pendingInvoiceAmount, when it came back
+      data={fetched.pendingInvoiceAmount === undefined ? data
+        : { ...data, [PENDING_INVOICE_AMOUNT]: fetched.pendingInvoiceAmount }}
       base={base}
       currency={data?.['currency$_identifier'] || ''}
       derived={derived}

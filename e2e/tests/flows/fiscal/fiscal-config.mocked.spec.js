@@ -1,6 +1,21 @@
-import { test, expect } from '@playwright/test';
+// @covers tools/app-shell/src/windows/custom/fiscal-config/FiscalConfigPage.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-config/OnboardingWizard.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-config/CertModal.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-config/ChangeSifDialog.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-config/fiscalSystemApi.js
+// @covers tools/app-shell/src/windows/custom/fiscal-config/useFiscalCatalog.js
+// @covers tools/app-shell/src/windows/custom/fiscal-config/CertSection.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-config/FiscalStatusSummary.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-config/useCertExpiry.js
+// @covers tools/app-shell/src/windows/custom/fiscal-config/CertExpiryBanner.jsx
+import { test, expect } from '../../helpers/test.js';
 import { login, navigateTo, MOCK_ORG_ID } from '../../helpers/auth.js';
 import { t } from '../../helpers/i18n.js';
+import {
+  installFiscalCatalogMock,
+  installConfigureFiscalSystemMock,
+  NEO_ACCESS_DENIED_MESSAGE,
+} from '../../helpers/fiscal-config-mocks.js';
 
 // ── NEO API response envelope ─────────────────────────────────────────────────
 
@@ -41,8 +56,20 @@ const VERIFACTU_RECORD = {
 
 // ── Route helpers ─────────────────────────────────────────────────────────────
 
+// The organization's fiscal actions live on sii-config too
+// (`…/sii-config/siiConfiguration/{orgId}/action/…`, ETP-6053) and have their own mocks
+// (fiscal-config-mocks.js). A `sii-config/**` catch-all registered after them would win
+// (Playwright matches routes in reverse registration order), so every such catch-all hands the
+// action requests back with this guard.
+async function handOffFiscalAction(route) {
+  if (!route.request().url().includes('/action/')) return false;
+  await route.fallback();
+  return true;
+}
+
 async function installFiscalConfigMocks(page, { sii = null, tbai = null, verifactu = null } = {}) {
   await page.route('**/sws/neo/sii-config/**', async route => {
+    if (await handOffFiscalAction(route)) return;
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -67,13 +94,20 @@ async function installFiscalConfigMocks(page, { sii = null, tbai = null, verifac
   });
 }
 
-async function loginWithOrg(page) {
+async function loginWithOrg(page, { catalog = {} } = {}) {
   await page.addInitScript(() => {
     localStorage.setItem('sf_auth_selected_role', JSON.stringify({ id: 'r1', name: 'Admin', orgList: [] }));
     localStorage.setItem('sf_auth_rolelist', JSON.stringify([{ id: 'r1', name: 'Admin', orgList: [] }]));
     localStorage.setItem('sf_auth_selected_org', JSON.stringify({ id: 'ORG_E2E', name: 'E2E Test Org' }));
   });
   await login(page);
+  // ETP-6053 — the territory × system rules come from the backend catalog; every test needs it
+  // (the manual screen's choices, the wizard's Ceuta veto, the "Estado" territory).
+  if (catalog) await installFiscalCatalogMock(page, catalog);
+}
+
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // ── Kebab menu helper ─────────────────────────────────────────────────────────
@@ -134,11 +168,13 @@ test.describe('Fiscal Config — wizard interaction', () => {
 // ── Certificate upload helpers ────────────────────────────────────────────────
 
 const FAKE_P12 = Buffer.from('fakep12content');
+// The upload details carry ISO yyyy-MM-dd dates (ETP-6053). Day ≠ month, so a swapped day and
+// month in the done step would show.
 const FAKE_CERT_DETAILS = {
   subject: 'CN=Empresa Test S.L., O=Test',
   issuer: 'CN=FNMT Clase 2 CA',
-  validFrom: '2024-01-01',
-  validTo: '2026-01-01',
+  validFrom: '2025-07-02',
+  validTo: '2027-07-01',
   algorithm: 'SHA256withRSA',
 };
 
@@ -224,6 +260,10 @@ test.describe('Fiscal Config — certificate upload flow', () => {
     // Verify spinner appears briefly, then done screen
     await expect(page.getByText(t('fiscal.cert.success.title'))).toBeVisible({ timeout: 6_000 });
     await expect(page.getByRole('button', { name: t('fiscal.cert.btn.use') })).toBeVisible();
+    // The ISO validity dates are shown in the UI locale (es_ES: dd/MM/yyyy).
+    await expect(page.getByText('02/07/2025', { exact: true })).toBeVisible();
+    await expect(page.getByText('01/07/2027', { exact: true })).toBeVisible();
+    await expect(page.getByText(FAKE_CERT_DETAILS.validTo)).toHaveCount(0);
   });
 
   test('confirmNif path: POST returns pendingNifConfirmation → user confirms → done', async ({ page }) => {
@@ -307,6 +347,7 @@ test.describe('Fiscal Config — certificate upload flow', () => {
 async function installChangeSifMocks(page, { spec, record }) {
   const state = { deactivated: false };
   await page.route(`**/sws/neo/${spec}/**`, async route => {
+    if (await handOffFiscalAction(route)) return;
     const req = route.request();
     const method = req.method();
     if (method === 'GET') {
@@ -328,9 +369,10 @@ async function installChangeSifMocks(page, { spec, record }) {
     return route.fallback();
   });
   for (const other of ['sii-config', 'tbai-config', 'verifactu-config'].filter(s => s !== spec)) {
-    await page.route(`**/sws/neo/${other}/**`, route =>
-      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(neoOk([])) }),
-    );
+    await page.route(`**/sws/neo/${other}/**`, async route => {
+      if (await handOffFiscalAction(route)) return;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(neoOk([])) });
+    });
   }
   return state;
 }
@@ -385,6 +427,20 @@ test.describe('Fiscal Config — Change SIF (ETP-4785)', () => {
       // onboarding wizard reappears (TC2 end-state + TC4 valid no-SIF state).
       await expect(page.getByText(t('fiscal.onboarding.territory.title'))).toBeVisible({ timeout: 8_000 });
       await expect(page.getByText(c.detailFieldLabel)).toHaveCount(0);
+
+      // ETP-5831 — the page must stay interactive after the swap to the wizard: no modal
+      // leftover (overlay, body `pointer-events: none`, `inert` / `aria-hidden` siblings) may
+      // survive the dialog unmounting. Before the fix the screen froze until a full reload.
+      await expect(page.getByTestId('ChangeSifDialog__content')).toHaveCount(0);
+      await expect.poll(() => page.evaluate(() => ({
+        pointerEvents: document.body.style.pointerEvents,
+        inert: document.querySelectorAll('[inert]').length,
+        ariaHidden: [...document.body.children].filter(el => el.getAttribute('aria-hidden') === 'true').length,
+        overlays: document.querySelectorAll('[role="dialog"], [data-state="open"][data-radix-dialog-overlay], .fixed.inset-0[data-state]').length,
+      }))).toEqual({ pointerEvents: '', inert: 0, ariaHidden: 0, overlays: 0 });
+      await page.getByRole('button', { name: new RegExp(t('fiscal.territory.navarra')) }).click({ timeout: 3_000 });
+      await page.getByRole('button', { name: t('fiscal.onboarding.continue') }).click({ timeout: 3_000 });
+      await expect(page.getByText(t('fiscal.onboarding.confirm.title'))).toBeVisible({ timeout: 5_000 });
     });
   }
 
@@ -411,37 +467,47 @@ test.describe('Fiscal Config — Change SIF (ETP-4785)', () => {
 
 // ── Onboarding save regression (ETP-4401) ─────────────────────────────────────
 //
-// Real flow exercised: territory pick → confirm → createRecords() POSTs the new
-// record → getFiscalRecordId(created) reads its id → GET by id → detail screen →
+// Real flow exercised: territory pick → confirm → createRecords() calls the
+// configureFiscalSystem action (ETP-6053), which reports the created record's id →
+// GET by id → detail screen →
 // Save PUTs to `/{spec}/{entity}/{id}`. Before the fix, getFiscalRecordId() looked
 // for the stale per-system PK field names (tbaiConfigID / configuracinSII /
 // verifactuConfig), which the backend no longer returns — recordId was always
 // null and the section's save() threw a "record id not found" error instead of
 // completing. Asserting the PUT request URL contains the record's `id` is the
-// direct regression signal for the bug; reaching the applied screen confirms the
-// save actually completed instead of throwing.
+// direct regression signal for the bug; reaching the configured page (with its "Estado" panel,
+// ETP-5831 — the wizard no longer has an applied screen) confirms the save actually completed
+// instead of throwing.
 
-async function installOnboardingRecordMock(page, { spec, record }) {
+async function installOnboardingRecordMock(page, { spec, system, record }) {
+  // Once the action has created the record, the page's re-read after the wizard (ETP-5831) lists
+  // it, so the page leaves the wizard for the configured view.
+  let created = false;
   await page.route(`**/sws/neo/${spec}/**`, async route => {
+    if (await handOffFiscalAction(route)) return;
     const req = route.request();
     const method = req.method();
     const url = req.url();
     if (method === 'GET') {
-      // useFiscalConfig()'s initial list load always sends `organization=`;
-      // createAndFetchRecord()'s post-create fetch-by-id never does.
+      // useFiscalConfig()'s list load always sends `organization=`; the post-create read-back by
+      // id (fetchCreatedRecords) never does.
       const isListLoad = url.includes('organization=');
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(neoOk(isListLoad ? [] : [record])),
+        body: JSON.stringify(neoOk(isListLoad && !created ? [] : [record])),
       });
     }
-    // POST (create) and PUT (update) both echo back the full record.
+    // PUT (the detail save) echoes back the full record.
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(neoOk([record])),
     });
+  });
+  return installConfigureFiscalSystemMock(page, {
+    ids: { [system]: record.id },
+    onCreate: () => { created = true; },
   });
 }
 
@@ -449,6 +515,8 @@ const ONBOARDING_SAVE_CASES = [
   {
     label: 'TBAI',
     spec: 'tbai-config',
+    system: 'TBAI',
+    action: { system: 'TBAI', territory: 'alava' },
     territoryLabel: t('fiscal.territory.alava'),
     hasSubquestion: true,
     subquestionPickLabel: t('fiscal.onboarding.subq.tbai.label'), // "TicketBAI only" → alsoNational=false
@@ -468,6 +536,8 @@ const ONBOARDING_SAVE_CASES = [
   {
     label: 'SII',
     spec: 'sii-config',
+    system: 'SII',
+    action: { system: 'SII', territory: 'navarra' },
     territoryLabel: t('fiscal.territory.navarra'),
     hasSubquestion: false,
     detailFieldLabel: t('fiscal.sii.legend.specialAuth'),
@@ -492,6 +562,8 @@ const ONBOARDING_SAVE_CASES = [
   {
     label: 'VERIFACTU',
     spec: 'verifactu-config',
+    system: 'VERIFACTU',
+    action: { system: 'VERIFACTU', territory: 'baleares' },
     territoryLabel: t('fiscal.territory.espania'),
     hasSubquestion: true,
     subquestionVolumeLow: true, // "No, no estoy obligado al SII" then choose VERI*FACTU
@@ -510,7 +582,9 @@ test.describe('Fiscal Config — onboarding save regression (ETP-4401)', () => {
     test(`${testCase.label}: completes onboarding and saves using the record's universal id`, async ({ page }) => {
       await loginWithOrg(page);
       await installFiscalConfigMocks(page); // unconfigured → wizard
-      await installOnboardingRecordMock(page, { spec: testCase.spec, record: testCase.record });
+      const actionBodies = await installOnboardingRecordMock(page, {
+        spec: testCase.spec, system: testCase.system, record: testCase.record,
+      });
       await navigateTo(page, 'fiscal-config');
 
       await expect(page.getByText(t('fiscal.onboarding.territory.title'))).toBeVisible({ timeout: 8_000 });
@@ -535,13 +609,16 @@ test.describe('Fiscal Config — onboarding save regression (ETP-4401)', () => {
 
       await expect(page.getByText(t('fiscal.onboarding.confirm.title'))).toBeVisible({ timeout: 5_000 });
 
-      // Confirm → createRecords() → POST creates the record (this is what used to
-      // silently produce a record with no reachable id under the old field names).
+      // Confirm → createRecords() → the configureFiscalSystem action creates the record from the
+      // resolved system and territory (ETP-6053); the wizard never POSTs a config record itself.
+      const posts = [];
+      page.on('request', req => { if (req.method() === 'POST') posts.push(req.url()); });
       const [createReq] = await Promise.all([
-        page.waitForRequest(req => req.method() === 'POST' && req.url().includes(`/${testCase.spec}/`)),
+        page.waitForRequest(req => req.method() === 'POST' && req.url().includes('/action/configureFiscalSystem')),
         page.getByRole('button', { name: t('fiscal.onboarding.confirm.btn') }).click(),
       ]);
-      expect(createReq.url()).toContain(testCase.spec);
+      expect(createReq.url()).toContain(`/sii-config/siiConfiguration/${MOCK_ORG_ID}/action/configureFiscalSystem`);
+      expect(JSON.parse(createReq.postData() || '{}')).toEqual(testCase.action);
 
       // Detail screen — the created record (fetched back by its universal `id`) is mounted.
       await expect(page.getByText(testCase.detailFieldLabel)).toBeVisible({ timeout: 8_000 });
@@ -554,83 +631,170 @@ test.describe('Fiscal Config — onboarding save regression (ETP-4401)', () => {
       ]);
       expect(putReq.url()).toContain(testCase.record.id);
 
-      // Success — reaches the applied screen instead of throwing "record id not found".
-      await expect(page.getByText(t('fiscal.onboarding.applied.title'))).toBeVisible({ timeout: 8_000 });
+      // Success — hands over to the configured page with its "Estado" panel (ETP-5831: no
+      // applied screen) instead of throwing "record id not found".
+      await expect(page.getByTestId('FiscalStatusSummary__panel')).toBeVisible({ timeout: 8_000 });
+      expect(actionBodies).toEqual([testCase.action]);
+      // The action itself lives on sii-config (…/action/configureFiscalSystem); any other POST
+      // to the spec would be a config record written by the window.
+      expect(posts.filter(url => url.includes(`/${testCase.spec}/`) && !url.includes('/action/'))).toEqual([]);
     });
   }
 });
 
-// ── Add complementary SIF flow (ETP-4785) ─────────────────────────────────────
+// ── Wizard ↔ backend action (ETP-6053) ────────────────────────────────────────
+
+test.describe('Fiscal Config — wizard activates through configureFiscalSystem', () => {
+  test('Ceuta / Melilla activates VERI*FACTU with no sub-question', async ({ page }) => {
+    await loginWithOrg(page);
+    await installFiscalConfigMocks(page);
+    const bodies = await installConfigureFiscalSystemMock(page, { refusal: 'stop-here' });
+    await navigateTo(page, 'fiscal-config');
+
+    await expect(page.getByText(t('fiscal.onboarding.territory.title'))).toBeVisible({ timeout: 8_000 });
+    await page.getByRole('button', { name: new RegExp(escapeRegExp(t('fiscal.territory.ceuta'))) }).click();
+    await page.getByRole('button', { name: t('fiscal.onboarding.continue') }).click();
+    await expect(page.getByText(t('fiscal.onboarding.confirm.title'))).toBeVisible({ timeout: 5_000 });
+
+    await page.getByTestId('OnboardingWizard__confirmActivateButton').click();
+    await expect.poll(() => bodies.length).toBe(1);
+    expect(bodies[0]).toEqual({ system: 'VERIFACTU', territory: 'ceuta' });
+  });
+
+  test('shows the backend refusal message on the confirm step', async ({ page }) => {
+    const refusal = 'Ya hay un sistema de facturación activo para esta organización.';
+    await loginWithOrg(page);
+    await installFiscalConfigMocks(page);
+    await installConfigureFiscalSystemMock(page, { refusal });
+    await navigateTo(page, 'fiscal-config');
+
+    await expect(page.getByText(t('fiscal.onboarding.territory.title'))).toBeVisible({ timeout: 8_000 });
+    await page.getByRole('button', { name: new RegExp(t('fiscal.territory.navarra')) }).click();
+    await page.getByRole('button', { name: t('fiscal.onboarding.continue') }).click();
+    await page.getByTestId('OnboardingWizard__confirmActivateButton').click();
+
+    await expect(page.getByText(refusal)).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText(t('fiscal.onboarding.confirm.title'))).toBeVisible();
+  });
+
+  test('a role refused by NEO (403 without messageKeys) sees the translated no-permission message', async ({ page }) => {
+    await loginWithOrg(page);
+    await installFiscalConfigMocks(page);
+    const bodies = await installConfigureFiscalSystemMock(page, { forbidden: true });
+    await navigateTo(page, 'fiscal-config');
+
+    await expect(page.getByText(t('fiscal.onboarding.territory.title'))).toBeVisible({ timeout: 8_000 });
+    await page.getByRole('button', { name: new RegExp(t('fiscal.territory.navarra')) }).click();
+    await page.getByRole('button', { name: t('fiscal.onboarding.continue') }).click();
+    await page.getByTestId('OnboardingWizard__confirmActivateButton').click();
+
+    await expect(page.getByText(t('fiscal.err.noPermission'))).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText(NEO_ACCESS_DENIED_MESSAGE)).toHaveCount(0);
+    await expect(page.getByText(t('fiscal.onboarding.confirm.title'))).toBeVisible();
+    expect(bodies).toHaveLength(1);
+  });
+
+  test('the manual screen offers only the catalog systems of the territory', async ({ page }) => {
+    await loginWithOrg(page);
+    await installFiscalConfigMocks(page);
+    await navigateTo(page, 'fiscal-config');
+
+    await expect(page.getByText(t('fiscal.onboarding.territory.title'))).toBeVisible({ timeout: 8_000 });
+    await page.getByText(t('fiscal.onboarding.territory.prefer.manual.link')).click();
+    await expect(page.getByText(t('fiscal.onboarding.manual.title'))).toBeVisible();
+
+    await page.getByRole('button', { name: new RegExp(escapeRegExp(t('fiscal.territory.ceuta'))) }).click();
+    await expect(page.getByRole('button', { name: /^VERI\*FACTU/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^SII/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^TicketBAI/ })).toHaveCount(0);
+  });
+
+  test('shows the catalog-load warning when the catalog cannot be read', async ({ page }) => {
+    await loginWithOrg(page, { catalog: { errorMessage: 'Could not read the fiscal system catalog.' } });
+    await installFiscalConfigMocks(page);
+    await navigateTo(page, 'fiscal-config');
+
+    const banner = page.getByTestId('OnboardingWizard__catalogErrorBanner');
+    await expect(banner).toBeVisible({ timeout: 8_000 });
+    await expect(banner).toContainText(t('fiscal.catalog.err.load', { error: 'Could not read the fiscal system catalog.' }));
+  });
+});
+
+// ── Add complementary SIF flow (ETP-4785, ETP-6053) ──────────────────────────
 //
 // When a user has only TBAI configured (effectiveProfile === 'tbai'), an "Add SII"
-// button is shown. Clicking it:
-//   1. POSTs to /sws/neo/sii-config/siiConfiguration to create a new empty SII record.
-//   2. Switches renderProfile to 'sii+tbai' — two tab buttons appear (SII tab, TBAI tab).
-//   3. The user can then save (PUT) both records via the normal Save button.
+// item is in the kebab. Clicking it:
+//   1. calls the organization's configureFiscalSystem action with `{ system: 'SII' }` —
+//      no territory: the server takes TicketBAI's and builds the SII record (ETP-6053);
+//   2. reads the created SII record back and switches renderProfile to 'sii+tbai' — two
+//      tab buttons appear (SII tab, TBAI tab);
+//   3. the user can then save (PUT) both records via the normal Save button.
+// A refusal shows the server's message in the page's error banner.
 //
-// The button must NOT appear when the profile is SII-only or Verifactu.
+// The item must NOT appear when the profile is SII-only or Verifactu.
 
 const NEW_SII_RECORD = {
   id: 'e2e-new-sii-001',
-  acogidaAlSII: 'N',
+  acogidaAlSII: 'Y',
   entornoDeProduccin: 'N',
   navarra: 'N',
   guipuzcoa: 'N',
+  taxtype: 'IVA',
 };
+
+async function installAddSiiMocks(page, { refusal = null } = {}) {
+  // Stateful: before the action, sii-config lists nothing; after it, the new record (the
+  // read-back by id and any later re-read both return it).
+  let siiCreated = false;
+
+  await page.route('**/sws/neo/tbai-config/**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(neoOk([TBAI_RECORD])),
+    });
+  });
+
+  await page.route('**/sws/neo/sii-config/**', async route => {
+    if (await handOffFiscalAction(route)) return;
+    const req = route.request();
+    if (req.method() === 'GET') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(neoOk(siiCreated ? [NEW_SII_RECORD] : [])),
+      });
+    }
+    return route.fallback();
+  });
+
+  await page.route('**/sws/neo/verifactu-config/**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(neoOk([])),
+    });
+  });
+
+  return installConfigureFiscalSystemMock(page, {
+    refusal,
+    ids: { SII: NEW_SII_RECORD.id },
+    onCreate: () => { siiCreated = true; },
+  });
+}
 
 test.describe('Fiscal Config — Add complementary SIF (ETP-4785)', () => {
 
-  test('happy path: clicking "Add SII" POSTs to sii-config and switches layout to sii+tbai', async ({ page }) => {
-    // Stateful mock: before the POST, sii-config returns empty; after, returns the
-    // newly-created record. This mirrors the real flow where createComplementary()
-    // receives the POST response and immediately mounts the new SII section without
-    // a refetch — the subsequent GET (if any) will also return the record.
-    let siiCreated = false;
-
+  test('happy path: "Add SII" calls configureFiscalSystem with {system: SII} and switches layout to sii+tbai', async ({ page }) => {
     await loginWithOrg(page);
-
-    // Install the TBAI mock first (existing record)
-    await page.route('**/sws/neo/tbai-config/**', async route => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify(neoOk([TBAI_RECORD])),
-      });
-    });
-
-    // Install the stateful SII mock:
-    //   GET before POST → empty list (no SII yet)
-    //   POST           → creates and returns the new SII record
-    //   GET after POST → returns the new SII record
-    await page.route('**/sws/neo/sii-config/**', async route => {
-      const req = route.request();
-      if (req.method() === 'POST') {
-        siiCreated = true;
-        return route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(neoOk([NEW_SII_RECORD])),
-        });
+    const bodies = await installAddSiiMocks(page);
+    const configPosts = [];
+    page.on('request', req => {
+      // The action itself lives on sii-config (…/action/…); only a record POST counts here.
+      if (req.method() === 'POST' && /\/(sii|tbai|verifactu)-config\//.test(req.url()) && !req.url().includes('/action/')) {
+        configPosts.push(req.url());
       }
-      if (req.method() === 'GET') {
-        return route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(neoOk(siiCreated ? [NEW_SII_RECORD] : [])),
-        });
-      }
-      return route.fallback();
     });
-
-    // Verifactu always returns empty (not relevant to this test)
-    await page.route('**/sws/neo/verifactu-config/**', async route => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify(neoOk([])),
-      });
-    });
-
     await navigateTo(page, 'fiscal-config');
 
     // TBAI section loads and the "Add SII" item is in the kebab.
@@ -638,19 +802,15 @@ test.describe('Fiscal Config — Add complementary SIF (ETP-4785)', () => {
     await openActionsMenu(page);
     await expect(page.getByTestId('FiscalConfigPage__addComplementary')).toBeVisible();
 
-    // Click "Add SII" — intercept the POST to sii-config.
-    const [postReq] = await Promise.all([
-      page.waitForRequest(
-        req => req.method() === 'POST' && req.url().includes('/sii-config/'),
-      ),
+    const [actionReq] = await Promise.all([
+      page.waitForRequest(req => req.method() === 'POST' && req.url().includes('/action/configureFiscalSystem')),
       page.getByTestId('FiscalConfigPage__addComplementary').click(),
     ]);
 
-    // The POST must target the sii-config spec
-    expect(postReq.url()).toContain('/sii-config/');
-    expect(postReq.method()).toBe('POST');
+    expect(actionReq.url()).toContain(`/sii-config/siiConfiguration/${MOCK_ORG_ID}/action/configureFiscalSystem`);
+    expect(JSON.parse(actionReq.postData() || '{}')).toEqual({ system: 'SII' });
 
-    // After the POST the layout switches to sii+tbai:
+    // After the action the layout switches to sii+tbai:
     //   renderProfile becomes 'sii+tbai', which renders the TabBar with both tabs.
     await expect(
       page.getByRole('button', { name: t('fiscal.tab.sii') }),
@@ -661,6 +821,23 @@ test.describe('Fiscal Config — Add complementary SIF (ETP-4785)', () => {
 
     // The "Add SII" button itself disappears (addingComplementary is now set)
     await expect(page.getByTestId('FiscalConfigPage__addComplementary')).toHaveCount(0);
+    expect(bodies).toEqual([{ system: 'SII' }]);
+    // No config record is POSTed by the window: the server built it.
+    expect(configPosts).toEqual([]);
+  });
+
+  test('a refused "Add SII" shows the server message in the error banner and keeps TicketBAI only', async ({ page }) => {
+    const refusal = 'El modo prueba está forzado: no se puede activar SII.';
+    await loginWithOrg(page);
+    await installAddSiiMocks(page, { refusal });
+    await navigateTo(page, 'fiscal-config');
+
+    await expect(page.getByText(t('fiscal.tbai.field.autoSend'))).toBeVisible({ timeout: 8_000 });
+    await openActionsMenu(page);
+    await page.getByTestId('FiscalConfigPage__addComplementary').click();
+
+    await expect(page.getByText(t('fiscal.addComplementary.err.createFailed', { error: refusal }))).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole('button', { name: t('fiscal.tab.sii') })).toHaveCount(0);
   });
 });
 
@@ -682,6 +859,7 @@ test.describe('Fiscal Config — Add complementary SIF (ETP-4785)', () => {
 async function installChangeSifDeletedMocks(page, { spec, record }) {
   const state = { deleted: false };
   await page.route(`**/sws/neo/${spec}/**`, async route => {
+    if (await handOffFiscalAction(route)) return;
     const req = route.request();
     const method = req.method();
     if (method === 'GET') {
@@ -712,9 +890,10 @@ async function installChangeSifDeletedMocks(page, { spec, record }) {
     return route.fallback();
   });
   for (const other of ['sii-config', 'tbai-config', 'verifactu-config'].filter(s => s !== spec)) {
-    await page.route(`**/sws/neo/${other}/**`, route =>
-      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(neoOk([])) }),
-    );
+    await page.route(`**/sws/neo/${other}/**`, async route => {
+      if (await handOffFiscalAction(route)) return;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(neoOk([])) });
+    });
   }
   return state;
 }
@@ -825,4 +1004,138 @@ test.describe('Fiscal Config — ChangeSifDialog notice per SIF profile', () => 
       await expect(page.getByTestId('ChangeSifDialog__content')).toHaveCount(0);
     });
   }
+});
+
+// ── Save gating, unsaved-changes guard and the "Estado" panel (ETP-5831) ───────
+//
+// A configured TicketBAI org: "Guardar" is enabled only while a section has unsaved changes; an
+// in-app navigation with unsaved changes opens the shared prompt, whose "Save and continue" goes
+// through the page save (PUT) and then navigates; the "Estado" panel is shown beside the form.
+
+async function installTbaiSaveMocks(page) {
+  const puts = [];
+  await page.route('**/sws/neo/tbai-config/**', async route => {
+    const req = route.request();
+    if (req.method() === 'PUT') {
+      const body = JSON.parse(req.postData() || '{}');
+      puts.push({ url: req.url(), body });
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify(neoOk([{ ...TBAI_RECORD, ...body }])),
+      });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(neoOk([TBAI_RECORD])) });
+  });
+  for (const other of ['sii-config', 'verifactu-config']) {
+    await page.route(`**/sws/neo/${other}/**`, async route => {
+      if (await handOffFiscalAction(route)) return;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(neoOk([])) });
+    });
+  }
+  await page.route('**/certificate{/**,}**', route =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ exists: false }) }),
+  );
+  return puts;
+}
+
+test.describe('Fiscal Config — Save gating, unsaved-changes guard and status panel (ETP-5831)', () => {
+  // The page Save is the only button carrying `data-dirty`.
+  const pageSave = (page) => page.locator('button[data-dirty]');
+  const autoSendSwitch = (page) => page.getByTestId('Switch__f06d4b');
+
+  test('shows the "Estado" panel for an org that already has a fiscal configuration', async ({ page }) => {
+    await loginWithOrg(page);
+    await installTbaiSaveMocks(page);
+    await navigateTo(page, 'fiscal-config');
+
+    const panel = page.getByTestId('FiscalStatusSummary__panel');
+    await expect(panel).toBeVisible({ timeout: 8_000 });
+    await expect(panel.getByTestId('FiscalStatusSummary__row-territory')).toContainText(t('fiscal.territory.alava'));
+    await expect(panel.getByTestId('FiscalStatusSummary__envBadge')).toHaveText(t('fiscal.onboarding.applied.env.sandbox'));
+  });
+
+  test('Save is disabled on load and enabled after an edit', async ({ page }) => {
+    await loginWithOrg(page);
+    await installTbaiSaveMocks(page);
+    await navigateTo(page, 'fiscal-config');
+
+    await expect(autoSendSwitch(page)).toBeVisible({ timeout: 8_000 });
+    await expect(pageSave(page)).toBeDisabled();
+    await expect(pageSave(page)).toHaveAttribute('data-dirty', 'false');
+
+    await autoSendSwitch(page).click();
+    await expect(pageSave(page)).toBeEnabled();
+    await expect(pageSave(page)).toHaveAttribute('data-dirty', 'true');
+  });
+
+  test('navigating away while dirty prompts, and "Save and continue" PUTs the change then navigates', async ({ page }) => {
+    await loginWithOrg(page);
+    const puts = await installTbaiSaveMocks(page);
+    await navigateTo(page, 'fiscal-config');
+
+    await expect(autoSendSwitch(page)).toBeVisible({ timeout: 8_000 });
+    await autoSendSwitch(page).click();
+    await expect(pageSave(page)).toBeEnabled();
+
+    await page.getByTestId('menu-item-dashboard').click();
+    const prompt = page.getByTestId('unsaved-navigation-dialog');
+    await expect(prompt).toBeVisible();
+    // The prompt holds the navigation: still on the fiscal configuration.
+    await expect(page).toHaveURL(/\/fiscal-config/);
+
+    const [putReq] = await Promise.all([
+      page.waitForRequest(req => req.method() === 'PUT' && req.url().includes('/tbai-config/')),
+      prompt.getByTestId('unsaved-navigation-save').click(),
+    ]);
+    expect(putReq.url()).toContain(TBAI_RECORD.id);
+    expect(JSON.parse(putReq.postData() || '{}').autoSendInvoices).toBe(true);
+
+    await expect(page).toHaveURL(/\/dashboard/);
+    await expect(prompt).toHaveCount(0);
+    expect(puts).toHaveLength(1);
+  });
+});
+
+// ETP-6053 — GET /certificate returns validTo as ISO yyyy-MM-dd. The "Estado" panel and the
+// certificate section show it in the UI locale, and the expiry banner counts the days from it.
+test.describe('Fiscal Config — certificate validity from GET /certificate', () => {
+  async function setupWithCertificate(page, validTo) {
+    await loginWithOrg(page);
+    await installTbaiSaveMocks(page);
+    // Registered after installTbaiSaveMocks' exists:false handler, so it wins.
+    await page.route('**/certificate{/**,}**', route => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ exists: true, validTo }),
+      });
+    });
+    await navigateTo(page, 'fiscal-config');
+  }
+
+  test('the status panel and the certificate section show validTo as dd/MM/yyyy', async ({ page }) => {
+    await setupWithCertificate(page, '2027-07-01');
+    const validUntil = t('fiscal.cert.validUntil', { date: '01/07/2027' });
+
+    const panel = page.getByTestId('FiscalStatusSummary__panel');
+    await expect(panel).toBeVisible({ timeout: 8_000 });
+    await expect(panel.getByTestId('FiscalStatusSummary__row-cert')).toContainText(validUntil);
+
+    // The certificate section: the "Certificado cargado" name and its date share one block.
+    const certRow = page.getByText(t('fiscal.cert.loaded'), { exact: true }).locator('..');
+    await expect(certRow).toContainText(validUntil);
+    // More than 60 days ahead: no expiry banner.
+    await expect(page.getByText(t('fiscal.cert.expiry.body'))).toHaveCount(0);
+  });
+
+  test('a certificate expiring in 15 days shows the critical expiry banner', async ({ page }) => {
+    // daysUntil counts in UTC calendar days, so the fixture date is built the same way.
+    const in15Days = new Date(Date.now() + 15 * 86_400_000).toISOString().slice(0, 10);
+    await setupWithCertificate(page, in15Days);
+
+    await expect(page.getByText(t('fiscal.cert.expiry.critical.title', { days: 15 })).first())
+      .toBeVisible({ timeout: 8_000 });
+    // Critical (≤ 30 days): it cannot be dismissed.
+    await expect(page.getByRole('button', { name: t('fiscal.cert.expiry.dismiss'), exact: true })).toHaveCount(0);
+  });
 });

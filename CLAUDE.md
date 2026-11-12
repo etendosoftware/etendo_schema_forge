@@ -287,6 +287,8 @@ A computed column that reads a table from **another module** needs that module d
 
 **Every user-visible string MUST be translated.** The app is primarily used in Spanish by real clients. Hardcoded English strings are treated as bugs. See `docs/i18n-guide.md` for the full reference (hooks, locale JSON structure, rules for adding keys). Key hooks: `useUI()` for generic labels, `useLabel()` for AD fields, `useMenuLabel()` for menus/tabs. All new keys must be added to BOTH `en_US.json` and `es_ES.json`.
 
+**A Classic `AD_MESSAGE` that reads wrong in GO** (it names a Classic tab, process or field label) is reworded in `com.etendoerp.go`, never by editing the Classic row (shared with Classic) and never in `backendErrors.js`: add it to `ClassicMessageRemap` and both `neo_hints_{es,en}.properties`, only if a GO user can trigger it. Full rule: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §4.17.
+
 ## Currency & Amount Formatting
 
 **Every monetary value MUST be formatted through the canonical currency utilities — never a hand-rolled `Intl.NumberFormat`/`toLocaleString` call.** A hardcoded locale (`'en-US'`, unpinned `undefined`) or a missing `useGrouping: true` silently drops the thousands separator or renders the wrong decimal comma — this exact bug shipped repeatedly across the codebase before ETP-4314 centralized it. Treat any new ad-hoc money formatter as a bug, not a style nit.
@@ -294,6 +296,7 @@ A computed column that reads a table from **another module** needs that module d
 - **Browser (React components):** `formatCurrency(currencyCode, value)` and `getCurrencySymbol(currencyCode)` from `tools/app-shell/src/lib/formatCurrency.js`. Never format an amount with `.toFixed()`, `toLocaleString()`, or your own `Intl.NumberFormat` for currency/amount display.
 - **jsreport / PDF / printed reports:** `buildJsreportHelpersString()` from `templates/reports/helpers/report-html-helpers.js` — this is the only helper string that may cross the HTTP boundary into the jsreport container. Never write a second `formatCurrency`/`formatNumber` Handlebars helper by hand.
 - Both read the instance-wide thousands/decimal separators from one shared NEO config source (`GET /sws/neo/currency-format`, `currencyFormatConfig.js`) — see `docs/plans/2026-07-28-currency-format-centralization-proposal.md` for the full architecture.
+- **Quantities, counts, ratios and percentages that are NOT money** (stock units, order quantities, a %): `formatGroupedNumber(value, { minimumFractionDigits, maximumFractionDigits })` (grouped with the instance thousands separator) or `formatPlainDecimal(value)` (ungrouped, for field values), both from `tools/app-shell/src/lib/formatCurrency.js`. Never `toLocaleString`/`Intl.NumberFormat`. Both read the same instance-wide separators as `formatCurrency` through `getCurrencyFormatConfig()`, so panel, modal and tooltip agree. **Trap:** `formatGroupedNumber` defaults to 0 decimals, so a quantity that can be fractional (kg, m, hours) must pass an explicit `maximumFractionDigits` (the Movements tab uses 2) or it is silently rounded to an integer.
 - Before adding a new component or report that displays an amount, **grep for `formatCurrency` first** — there is almost certainly an existing pattern to copy in a sibling window/component.
 
 ## Date-Only Parsing & Formatting

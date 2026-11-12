@@ -57,6 +57,9 @@ export const IMPORT_BATCH_SIZE = 'import-batch-size';
  */
 export const MY_COMPANIES_PAGE = 'my-companies-page';
 
+/** Enables personal column views on supported business grids (ETP-5835). */
+export const GRID_COLUMN_VIEWS = 'grid-column-views';
+
 /**
  * ETP-5791 — the contact category decides the contact type. On: the Contact Category window shows
  * the required "Tipo de contacto" group (Cliente / Proveedor-Acreedor), the accounting tab grouped
@@ -68,6 +71,24 @@ export const MY_COMPANIES_PAGE = 'my-companies-page';
  * contact-type rules on its own, so this default must stay `false` until both ends are ready.
  */
 export const CONTACT_CATEGORY_TYPE = 'contact-category-type';
+
+/**
+ * ETP-5988 — choose the printed template of the commercial documents (sales invoice, sales order,
+ * purchase order, quotation) per organization: variant (classic / compact / modern), logo and
+ * footer, read from `GET /sws/neo/doctemplateconfig`. On: the shared document template is rendered
+ * with the organization's saved choice, and the cached PDF is not served (it would hide a changed
+ * choice). Off: the current template, byte for byte, and no request is made.
+ * Visual gating only: the endpoint authorizes every read and write on its own.
+ */
+export const DOC_TEMPLATE_SELECTION = 'doc-template-selection';
+
+/**
+ * ETP-6080 — interactive accounting reports. On: Profit & Loss opens the dynamic view (filters apply
+ * on change, the tree folds, variation columns, per-account split, side-panel drill-down). Off:
+ * today's ReportViewerPage, byte for byte. Visual gating only: the `/query` route and the `/render`
+ * organization check enforce access on their own, whatever this flag says.
+ */
+export const DYNAMIC_REPORTS = 'dynamic-reports';
 
 /**
  * Telemetry kill switches (ETP-4578, D2). They are "kill" flags: `true` STOPS telemetry, so the
@@ -99,7 +120,10 @@ export const FLAG_DEFAULTS = Object.freeze({
   [UNIFIED_CALENDAR_POC]: false,
   [IMPORT_BATCH_SIZE]: 0,
   [MY_COMPANIES_PAGE]: false,
+  [GRID_COLUMN_VIEWS]: false,
   [CONTACT_CATEGORY_TYPE]: false,
+  [DOC_TEMPLATE_SELECTION]: false,
+  [DYNAMIC_REPORTS]: false,
   [TELEMETRY_KILL_ALL]: false,
   ...Object.fromEntries(Object.values(TELEMETRY_KILL_PROVIDER_FLAGS).map((key) => [key, false])),
 });

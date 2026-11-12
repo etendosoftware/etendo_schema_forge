@@ -21,6 +21,7 @@ import { ListFilterBar } from './ListFilterBar.jsx';
 import { buildDatePresetFilter } from './datePresetFilter.js';
 import { ListSortPopover } from './ListSortPopover.jsx';
 import { ListProgressBar } from './ListProgressBar.jsx';
+import { GridViewControls } from './GridViewControls.jsx';
 import SelectionToolbar from './SelectionToolbar.jsx';
 import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/ImportDialog.jsx';
 import { ScrollPane } from '@etendosoftware/app-shell-core/components/ui/scroll-pane.jsx';
@@ -38,7 +39,11 @@ import {
   sanitizeFilterIndices,
 } from '@/lib/listViewSession.js';
 import { useWindowFilterPresets } from '@/hooks/useWindowFilterPresets';
+import { useGridView } from '@/hooks/useGridView.js';
 import { trackSearchPerformed, trackWindowOpened } from '@/lib/productUsageTelemetry.js';
+import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
+import { columnMinWidthPx, listHeaderFont, listHeaderMinWidthPx } from '@/lib/linesColumnWidth.js';
+import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -413,6 +418,10 @@ function canCreateRecords(hideCreate, windowReadOnly) {
   return !hideCreate && !windowReadOnly;
 }
 
+function isImportOffered(importConfig, windowReadOnly) {
+  return Boolean(importConfig?.enabled) && !windowReadOnly;
+}
+
 function offersImportInNewMenu(canCreate, visibleNewActions) {
   return canCreate && visibleNewActions.some((action) => action.opensImportDialog);
 }
@@ -514,6 +523,7 @@ export function ListView({
   // row-eligibility gate on this button would put a third delete pattern back in the codebase;
   // `ListView.bulkDelete.vitest.jsx` asserts the button is never disabled by row eligibility.
   listViewOptions = {},
+  gridColumnViewsSurface = false,
   baseFilter = null,
   quickFilters = null,
   initialQuickFilterIndex = null,
@@ -635,6 +645,12 @@ export function ListView({
   // all read these columns too. Gate them once here so a role without the capability
   // cannot filter, sort or export by a column it cannot see.
   const capabilities = useCapabilitiesSafe();
+  const gridColumnViewsFlag = useFeatureFlag(GRID_COLUMN_VIEWS);
+  const gridViewSurfaceEligible = gridColumnViewsFlag
+    && Boolean(windowName && entity)
+    // Explicit caller opt-in is the invariant: never infer rollout scope from
+    // React function names, which minifiers may rewrite and custom tables may mimic.
+    && gridColumnViewsSurface;
   const tableColumns = useMemo(
     () => reportedColumns.filter(c => isCapabilityVisible(capabilities, c.visibleWhenCapability)),
     [reportedColumns, capabilities],
@@ -1029,6 +1045,29 @@ export function ListView({
   const tMenu = useMenuLabel();
   const t = useLabel(labelOverrides);
   const ui = useUI();
+  const gridHeaderFont = listHeaderFont();
+  const gridColumns = useMemo(() => tableColumns.map((column) => {
+    const explicitWidth = Number(column.minWidth);
+    const headerMinWidthPx = listHeaderMinWidthPx(
+      column,
+      resolveColumnLabel(column, locale, t),
+      gridHeaderFont,
+    );
+    return {
+      ...column,
+      gridDefaultWidthPx: Number.isFinite(explicitWidth) && explicitWidth > 0
+        ? explicitWidth
+        : columnMinWidthPx({ ...column, headerMinWidthPx }),
+    };
+  }), [tableColumns, locale, t, gridHeaderFont]);
+  const gridView = useGridView({
+    spec: windowName,
+    entity,
+    columns: gridViewSurfaceEligible ? gridColumns : [],
+    data: hook.items,
+    enabled: gridViewSurfaceEligible && gridColumns.length > 0,
+    apiBaseUrl,
+  });
 
   // ETP-5190 — the ImportDialog wiring (labels, field labels, existing-key lookup, batch
   // poster) moved to `useWindowImportDialog` so the First Steps checklist can drive the very
@@ -1129,8 +1168,10 @@ export function ListView({
   // selectionBarRightActions consumer that runs its own delete loop but still
   // wants the same reselect-only-the-failed-rows behavior (see
   // `reselectFailed` passed into selectionBarRightActions further down).
-  const applyBulkDeleteOutcome = useCallback((succeeded, failed) => {
-    if (succeeded.length > 0) hook.refresh();
+  // ETP-6143 — `outcomeUnknown`: a bulk-delete job whose result could not be read may have
+  // deleted any of the rows, so refetch and (failed is empty) clear the selection.
+  const applyBulkDeleteOutcome = useCallback((succeeded, failed, { outcomeUnknown } = {}) => {
+    if (succeeded.length > 0 || outcomeUnknown) hook.refresh();
     if (failed.length === 0) {
       clearSelection();
     } else {
@@ -1237,9 +1278,9 @@ export function ListView({
   // A `newActions` item may declare `opensImportDialog: true` instead of an `onClick`: it then
   // opens this window's own import dialog (`window.import`). It is dropped when the window has
   // no enabled import. When the split menu offers the import, the standalone import icon is
-  // redundant and is not rendered; it stays whenever the menu is unavailable (read-only
-  // window, `hideCreate`), so the import is never left unreachable.
-  const importEnabled = Boolean(importConfig?.enabled);
+  // redundant and is not rendered; it stays when the menu is unavailable (`hideCreate`), so the
+  // import is never left unreachable. A read-only window offers no import at all: it creates records.
+  const importEnabled = isImportOffered(importConfig, windowReadOnly);
   const visibleNewActions = newActions.filter((action) => !action.opensImportDialog || importEnabled);
   const isSplitNew = visibleNewActions.length > 0;
   const importInNewMenu = offersImportInNewMenu(canCreate, visibleNewActions);
@@ -1312,6 +1353,21 @@ export function ListView({
     deselectTrigger,
     deselectRowIds,
     rowQuickActions: effectiveRowQuickActions,
+    gridView: {
+      active: gridView.active,
+      columns: gridView.columns,
+      availableIds: gridView.availableIds,
+      availableKeys: gridView.availableKeys,
+      columnSizing: gridView.columnSizing,
+      resizeHandler: gridView.resizeHandler,
+      resizeBy: gridView.resizeBy,
+      isResizable: gridView.isResizable,
+      widthBounds: gridView.widthBounds,
+      reorderable: gridView.reorderable,
+      moveColumn: gridView.moveColumn,
+      moveByKeyboard: gridView.moveByKeyboard,
+      labelFor: gridView.labelFor,
+    },
     hiddenColumns,
     emptyListContext,
   };
@@ -1527,6 +1583,14 @@ export function ListView({
                     deletePreset={deletePreset}
                     labelOverrides={labelOverrides}
                     data-testid="ListFilterBarSection__620cbc" />
+                  {gridView.enabled && !(viewMode === 'gallery' && galleryRenderer) && (
+                    <GridViewControls
+                      gridView={gridView}
+                      gridColumns={gridColumns}
+                      ui={ui}
+                      t={t}
+                      data-testid="GridViewControls__620cbc" />
+                  )}
                   <ViewToggle
                     galleryRenderer={galleryRenderer}
                     onSelectList={() => handleViewMode('list')}
@@ -1669,6 +1733,19 @@ export function ListView({
               financial-account detail tabs) can show the same affordance. */}
           {hook.loading && hook.items.length > 0 && (
             <ListProgressBar data-testid="ListProgressBar__620cbc" />
+          )}
+
+          {/* A custom toolbar may hide the native list bar while still forwarding gridView
+              to DataTable. Keep personal-view controls reachable above either scroll host. */}
+          {listBarHidden && gridView.enabled && !(viewMode === 'gallery' && galleryRenderer) && (
+            <div className="flex shrink-0 items-center px-2 py-2" data-testid="grid-view-fallback-controls">
+              <GridViewControls
+                gridView={gridView}
+                gridColumns={gridColumns}
+                ui={ui}
+                t={t}
+                data-testid="GridViewControls__620cbc" />
+            </div>
           )}
 
           {/* Table region (ScrollPane, or a bounded flex box when the table owns its

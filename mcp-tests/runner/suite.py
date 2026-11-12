@@ -40,7 +40,11 @@ _TOOL_SHAPED = re.compile(r"\b(?:etendo|neo)_[a-z_]+\b", re.IGNORECASE)
 # let one probe's effect check pass on another probe's record. Because the
 # marker still STARTS with the run id, the run-wide sweep
 # (`description LIKE '%<runId>%'`) keeps working unchanged.
-_TOKEN_RE = re.compile(r"\{\{\s*(marker|runId|probeId|timestamp)\s*\}\}")
+#
+# {{today}}, {{monthStart}} and {{yearStart}} (YYYY-MM-DD, UTC, from {{timestamp}}) bound "this
+# month" / "this year" reads in a setup, so a query probe's expected figure covers the same period
+# the prompt asks about (ETP-5848).
+_TOKEN_RE = re.compile(r"\{\{\s*(marker|runId|probeId|timestamp|today|monthStart|yearStart)\s*\}\}")
 
 
 @dataclass(frozen=True)
@@ -62,6 +66,20 @@ class ExpectEffect:
     # returned rows (dotted paths allowed). For tools that cannot filter by the
     # field server-side; keeps the check deterministic without assuming filters.
     where: dict[str, Any] | None = None
+    # ETP-5848: the key of the answer that holds the rows, for a tool whose rows are
+    # not under data/items/results/records — the send tool's preview lists past
+    # sends under `history`. Dotted paths allowed.
+    rows_at: str | None = None
+    # ETP-5848: reads run in the check's own session BEFORE the check, with the setup
+    # syntax (`saveAs`), for a check that needs the id of something the AGENT created —
+    # `w-company-users-numbering` finds the user by email, then reads its roles. A
+    # lookup that finds nothing leaves the check's reference unresolved: the effect is
+    # absent (0 rows), never "not verifiable".
+    lookup: tuple[Step, ...] = ()
+    # ETP-5848: two or more ways the platform records the same result (Holded books a
+    # transfer as bank movements or as a ledger entry): verified when any one is. The
+    # container carries no check of its own; `tool` is empty and `expect` atLeastOne.
+    any_of: tuple["ExpectEffect", ...] = ()
 
 
 @dataclass(frozen=True)
@@ -180,6 +198,16 @@ class Suite:
 def _parse_effect(raw: Any, probe_id: str, *, allow_where: bool) -> ExpectEffect | None:
     if not raw:
         return None
+    if "anyOf" in raw:
+        alternatives = raw["anyOf"]
+        if not allow_where or set(raw) != {"anyOf"} or not isinstance(alternatives, list) or len(alternatives) < 2:
+            raise ValueError(f"Probe {probe_id!r}: expectEffect.anyOf is a list of two or more effects, "
+                             f"alone (suite v2 only).")
+        parsed = tuple(_parse_effect(a, probe_id, allow_where=allow_where) for a in alternatives)
+        if any(p is None or p.any_of or p.expect != "atLeastOne" for p in parsed):
+            raise ValueError(f"Probe {probe_id!r}: each expectEffect.anyOf alternative is a plain "
+                             f"`atLeastOne` check (an absence is one check with expect: none).")
+        return ExpectEffect(tool="", args={}, expect="atLeastOne", any_of=parsed)
     expect = raw.get("expect", "atLeastOne")
     if expect not in ("atLeastOne", "none"):
         raise ValueError(
@@ -189,7 +217,15 @@ def _parse_effect(raw: Any, probe_id: str, *, allow_where: bool) -> ExpectEffect
     where = raw.get("where")
     if where is not None and (not allow_where or not isinstance(where, dict) or not where):
         raise ValueError(f"Probe {probe_id!r}: expectEffect.where is a non-empty mapping (suite v2 only).")
-    return ExpectEffect(tool=raw["tool"], args=raw.get("args", {}), expect=expect, where=where)
+    rows_at = raw.get("rowsAt")
+    if rows_at is not None and (not allow_where or not isinstance(rows_at, str) or not rows_at):
+        raise ValueError(f"Probe {probe_id!r}: expectEffect.rowsAt is a non-empty key (suite v2 only).")
+    lookup = raw.get("lookup")
+    if lookup is not None and not allow_where:
+        raise ValueError(f"Probe {probe_id!r}: expectEffect.lookup needs a v2 suite.")
+    return ExpectEffect(tool=raw["tool"], args=raw.get("args", {}), expect=expect, where=where,
+                        rows_at=rows_at,
+                        lookup=tuple(parse_steps(lookup, probe_id=probe_id, phase="lookup")))
 
 
 def load_suite(path: str | Path) -> Suite:
@@ -353,7 +389,8 @@ def _parse_block(raw: dict[str, Any], where: str, *, mode: str = "read") -> Plat
             spec = normalize_spec(answer)
         except ValueError as exc:
             raise ValueError(f"Probe {where}: {exc}") from exc
-        loose = [i for i in spec["all"] + spec["none"] if is_small_literal(i)]
+        items = [a for i in spec["all"] + spec["none"] for a in (i.get("anyOf") if "anyOf" in i else [i])]
+        loose = [i for i in items if is_small_literal(i)]
         if loose:
             raise ValueError(
                 f"Probe {where}: expectAnswer number(s) {[i['number'] for i in loose]} are small "
@@ -390,7 +427,9 @@ def _suite_tools(probe: Probe) -> set[str]:
     for block in (probe.platforms or {}).values():
         names.update(s.tool for s in block.setup + block.teardown)
         if block.expect_effect:
-            names.add(block.expect_effect.tool)
+            for effect in block.expect_effect.any_of or (block.expect_effect,):
+                names.add(effect.tool)
+                names.update(s.tool for s in effect.lookup)
         if block.not_possible:
             names.update(block.not_possible.missing_tools)
     return names
@@ -417,16 +456,26 @@ def _lint_prompt(probe: Probe) -> None:
                          f"prompt is vendor-neutral and never names a tool (plan §5.3).")
 
 
+def probe_tag(probe_id: str) -> str:
+    """Six hex characters that stand for a probe id inside a marker (stable: a hash, not a position)."""
+    return hashlib.sha256(probe_id.encode("utf-8")).hexdigest()[:6]
+
+
 def attempt_marker(prefix: str, probe_id: str, attempt: int) -> str:
-    """`{{marker}}` for one attempt (D43, plan §5.1): `<prefix>-<probeId>-a<n>`.
+    """`{{marker}}` for one attempt (D43, plan §5.1): `<prefix>-<probe tag>-a<n>`.
 
     Unique per probe AND attempt, so one attempt's effect check can never pass on
     a sibling attempt's record. `prefix` is the run id today; a comparison (S3)
     passes its compareId, which keeps the marker — and so the prompt text —
     byte-identical across targets for the same attempt. It still starts with the
     prefix, so the leftover sweep of design §8 keeps matching it.
+
+    The probe is named by `probe_tag`, not its id (ETP-5848): a record name like
+    "Cliente {{marker}} Norte" must fit Etendo's 60-character name column, and a
+    24-character compareId plus a 26-character probe id did not. The marker is
+    now at most 34 characters.
     """
-    return f"{prefix}-{probe_id}-a{attempt}"
+    return f"{prefix}-{probe_tag(probe_id)}-a{attempt}"
 
 
 def interpolate(
@@ -442,6 +491,9 @@ def interpolate(
         "runId": run_id,
         "probeId": probe_id,
         "timestamp": timestamp,
+        "today": timestamp[:10],
+        "monthStart": f"{timestamp[:7]}-01",
+        "yearStart": f"{timestamp[:4]}-01-01",
     }
     return _TOKEN_RE.sub(lambda m: values[m.group(1)], prompt)
 
