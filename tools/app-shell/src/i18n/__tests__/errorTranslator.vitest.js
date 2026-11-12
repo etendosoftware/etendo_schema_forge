@@ -1,9 +1,12 @@
+// @covers tools/app-shell/src/i18n/errorTranslator.js
+// @covers tools/app-shell/src/locales/es_ES.json
 import { afterEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   NETWORK_ERROR_FALLBACK, NetworkError, resetErrorTranslatorForTests,
+  STALE_SESSION_ERROR_FALLBACK, STALE_SESSION_ERROR_KEY, staleSessionError,
 } from '@etendosoftware/app-shell-core/auth';
 import esES from '../../locales/es_ES.json';
 
@@ -13,12 +16,16 @@ import esES from '../../locales/es_ES.json';
  * the RENDERED locale's dictionary with the same lookup `useUI` uses, so a dropped connection
  * reads in the language every other string on screen is in.
  *
+ * ETP-5763 — the same registration now also localizes the superseded-session error (the same
+ * user working in two tabs), which used to carry a hardcoded English sentence.
+ *
  * The module is loaded lazily so each case fails on its own while it does not exist yet,
  * rather than the whole file failing to link.
  */
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SPANISH = 'No se pudo completar la acción. Intenta nuevamente.';
+const SPANISH_STALE = 'Tu sesión se abrió en otra pestaña o ventana. Recarga la página para continuar.';
 
 // A literal specifier makes Vite fail the whole file at transform time while the module is
 // missing; a variable one is resolved at call time, so only the cases that need it fail.
@@ -69,6 +76,40 @@ describe('installErrorTranslator', () => {
     installErrorTranslator({ genericLabels: { networkErrorRetry: 'primero' } });
     installErrorTranslator({ genericLabels: { networkErrorRetry: SPANISH } });
     expect(new NetworkError({ reason: 'offline' }).message).toBe(SPANISH);
+  });
+});
+
+describe('installErrorTranslator — the superseded-session error (ETP-5763)', () => {
+  it('makes the stale-session error read in the installed locale', async () => {
+    const { installErrorTranslator } = await loadErrorTranslator();
+    installErrorTranslator({ genericLabels: { staleSession: SPANISH_STALE } });
+    expect(staleSessionError().message).toBe(SPANISH_STALE);
+  });
+
+  it('uses the real es_ES dictionary once the key exists there', async () => {
+    const { installErrorTranslator } = await loadErrorTranslator();
+    installErrorTranslator(esES);
+    expect(staleSessionError().message).toBe(SPANISH_STALE);
+  });
+
+  it('falls back to the English default when the dictionary lacks the key', async () => {
+    const { installErrorTranslator } = await loadErrorTranslator();
+    installErrorTranslator({ genericLabels: {} });
+    expect(staleSessionError().message).toBe(STALE_SESSION_ERROR_FALLBACK);
+  });
+
+  it('falls back when there is no dictionary at all (locale still loading)', async () => {
+    const { installErrorTranslator } = await loadErrorTranslator();
+    installErrorTranslator(null);
+    expect(staleSessionError().message).toBe(STALE_SESSION_ERROR_FALLBACK);
+  });
+
+  it('keeps the AbortError identity the swallow-sites branch on', async () => {
+    const { installErrorTranslator } = await loadErrorTranslator();
+    installErrorTranslator(esES);
+    const err = staleSessionError();
+    expect(err.name).toBe('AbortError');
+    expect(err.messageKey).toBe(STALE_SESSION_ERROR_KEY);
   });
 });
 

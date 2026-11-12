@@ -20386,6 +20386,7 @@
     "recordsCouldNotBeDeleted": "{count} registro(s) no pudieron ser eliminados",
     "networkError": "Error de red",
     "networkErrorRetry": "No se pudo completar la acción. Intenta nuevamente.",
+    "staleSession": "Tu sesión se abrió en otra pestaña o ventana. Recargá la página para continuar.",
     "backendError.ibanRequired": "Para generar la Cuenta Mostrada con IBAN es necesario introducir el IBAN",
     "backendError.genericAccountRequired": "Para generar la Cuenta Mostrada con Número de Cuenta Genérica es necesario introducir un Número de Cuenta Genérica",
     "backendError.countryIban": "Se necesita el País para una cuenta IBAN.",

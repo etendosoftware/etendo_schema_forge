@@ -21319,6 +21319,7 @@
     "recordsCouldNotBeDeleted": "{count} registro(s) no pudieron ser eliminados",
     "networkError": "Error de red",
     "networkErrorRetry": "No se pudo completar la acción. Intenta nuevamente.",
+    "staleSession": "Tu sesión se abrió en otra pestaña o ventana. Recarga la página para continuar.",
     "savedButCannotOpenRecord": "El registro se guardó pero no se pudo abrir. Actualiza el listado.",
     "savedButFollowUpActionFailed": "El registro se guardó, pero una acción posterior falló: {detail}",
     "backendError.ibanRequired": "Para generar la Cuenta Mostrada con IBAN es necesario introducir el IBAN",
