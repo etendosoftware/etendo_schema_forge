@@ -3109,6 +3109,16 @@ function renderFooterCell({ col, totals, serverTotals, filteredData, sessionCurr
  * there is nothing to total or the caller opted out via `showFooterTotals`.
  * Extracted so its column-mapping branches don't nest inside DataTable.
  */
+// Row write handlers are dropped when the window or its quick actions are read-only (ETP-5830).
+function gateRowWriteHandlers(rowQuickActions, windowReadOnly, onDeleteRowProp, onEditRowProp) {
+  const rowWritesOff = !!(rowQuickActions?.readOnly || windowReadOnly);
+  return {
+    rowWritesOff,
+    onDeleteRow: rowWritesOff ? null : onDeleteRowProp,
+    onEditRow: rowWritesOff ? null : onEditRowProp,
+  };
+}
+
 function renderFooterRow({
   totals, showFooterTotals, selectable, visibleColumns, filteredData,
   hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled,
@@ -3277,9 +3287,9 @@ export function DataTable({
 }) {
   // A read-only window drops the row write handlers once, at the entry: every branch below
   // (legacy trash column, hover actions, row pencil) reads these names.
-  const rowWritesOff = !!(rowQuickActions?.readOnly || windowReadOnly);
-  const onDeleteRow = rowWritesOff ? null : onDeleteRowProp;
-  const onEditRow = rowWritesOff ? null : onEditRowProp;
+  const { rowWritesOff, onDeleteRow, onEditRow } = gateRowWriteHandlers(
+    rowQuickActions, windowReadOnly, onDeleteRowProp, onEditRowProp,
+  );
   const t = useLabel(labelOverrides);
   const tMenu = useMenuLabel();
   const ui = useUI();

@@ -418,6 +418,10 @@ function canCreateRecords(hideCreate, windowReadOnly) {
   return !hideCreate && !windowReadOnly;
 }
 
+function isImportOffered(importConfig, windowReadOnly) {
+  return Boolean(importConfig?.enabled) && !windowReadOnly;
+}
+
 function offersImportInNewMenu(canCreate, visibleNewActions) {
   return canCreate && visibleNewActions.some((action) => action.opensImportDialog);
 }
@@ -1276,7 +1280,7 @@ export function ListView({
   // no enabled import. When the split menu offers the import, the standalone import icon is
   // redundant and is not rendered; it stays when the menu is unavailable (`hideCreate`), so the
   // import is never left unreachable. A read-only window offers no import at all: it creates records.
-  const importEnabled = Boolean(importConfig?.enabled) && !windowReadOnly;
+  const importEnabled = isImportOffered(importConfig, windowReadOnly);
   const visibleNewActions = newActions.filter((action) => !action.opensImportDialog || importEnabled);
   const isSplitNew = visibleNewActions.length > 0;
   const importInNewMenu = offersImportInNewMenu(canCreate, visibleNewActions);
