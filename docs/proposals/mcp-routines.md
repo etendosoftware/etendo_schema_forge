@@ -91,7 +91,7 @@ stops and reports completed and pending steps. No atomicity is claimed.
 
 ### 3.3 Storage, ownership and versions
 
-New tables in `com.etendoerp.go`:
+New tables in `com.etendoerp.go`. Like `ETGO_BATCH_JOB`, they are plain tables written over JDBC on their own pooled connection (no AD dictionary entry, no DAL entity), so storing a routine or an execution never joins the steps' business transaction:
 
 | Table | Content |
 |---|---|
