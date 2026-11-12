@@ -2973,7 +2973,16 @@
           "reference": null
         }
       },
-      "processes": [],
+      "processes": [
+        {
+          "action": "complete",
+          "method": "POST",
+          "path": "/header/:id/action/documentAction",
+          "body": {
+            "docAction": "CO"
+          }
+        }
+      ],
       "functional": {
         "functionalName": "Purchase Order",
         "functionalSummary": "This window should let a buyer prepare a supplier order, maintain its commercial header and line details, confirm it, and then follow the downstream procurement flow through receipts, purchase invoices, and payments.",
@@ -4353,7 +4362,16 @@
           "reference": null
         }
       },
-      "processes": [],
+      "processes": [
+        {
+          "action": "complete",
+          "method": "POST",
+          "path": "/header/:id/action/documentAction",
+          "body": {
+            "docAction": "CO"
+          }
+        }
+      ],
       "functional": {
         "functionalName": "Sales Order",
         "functionalSummary": "This window should let a user create, review, confirm, and manage sales orders from one workspace. The primary outcome is turning a customer request into an order whose lines, fulfillment progress, invoicing progress, and related commercial documents remain visible from the order itself.",
