@@ -1060,6 +1060,20 @@ from another field's callout in **both** directions. `accountingDate` on invoice
 such a case: only one direction (document date → accounting date) exists at all, and it is meant
 to run.
 
+### Callout updates: forced vs suggested values (ETP-6148)
+
+A callout `updates` entry may carry `suggested: true`: `{ "value": "…", "suggested": true }`. The
+first user is the remittance name proposed from the due date. The SPA's header form
+(`applyCalloutFieldUpdates` in `tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx`)
+applies a suggested value **only to a field the user has not touched in this form session**.
+Touched means the field went through the form's change handler (`userTouchedRef`), and that
+includes a field the user cleared to empty, so a deliberate clear is never refilled. Without the
+flag the value is forced and keeps the existing rules unchanged: the trigger field always wins, and
+a collateral update skips a touched field only while it still holds a value. The flag reaches the
+helper untouched (`useCallout` passes `updates` through as is). Only the header form honours it:
+the line path (`lib/lineFieldChange.js` → `normalizeCalloutResponse`) flattens entries to their
+value and ignores the flag.
+
 ### Pre-hook: Intercept Completion to Preserve Classic Hooks/Extension Points
 
 **Trigger condition:** suspect this problem whenever a document's `DocAction` column is backed by

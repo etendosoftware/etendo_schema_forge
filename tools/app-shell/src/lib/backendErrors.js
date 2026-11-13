@@ -561,6 +561,58 @@ const BACKEND_ERROR_KEY_MAP = {
   ETGO_FinAccCountryRequired: 'backendError.countryRequired',
   ETGO_FinAccInvalidCountry: 'backendError.invalidCountry',
   ETGO_FinAccIbanRequiresCountry: 'backendError.countryIban',
+  // ETP-6148 — every remittance endpoint answers 403 with this key while the sepa-remittances flag
+  // is off (SepaRemittancesFlag.featureDisabled).
+  ETGO_SepaRemittancesDisabled: 'backendError.sepaRemittancesDisabled',
+  // ETP-6148 — the remittance header's account refusals (RemittanceHeaderHandler, 422 on a create or
+  // update that sets financialAccount): not a bank account, no valid IBAN, or no remittance payment
+  // methods linked (an account created before the feature, or with the flag off; no backfill).
+  // There is no per-account «Admite remesas» switch any more: Bank accounts get the methods when
+  // they are created, and that create answers 409 ETGO_RemittanceProvisioningConflict on a race
+  // (retry).
+  ETGO_RemittanceAccountNotBank: 'backendError.remittanceAccountNotBank',
+  ETGO_RemittanceAccountIbanRequired: 'backendError.remittanceAccountIbanRequired',
+  ETGO_RemittanceAccountNotAllowed: 'backendError.remittanceAccountNotAllowed',
+  ETGO_RemittanceProvisioningConflict: 'backendError.remittanceProvisioningConflict',
+  // ETP-6148 — FinancialAccountHandler: a financial-account update that changes `type` from Bank
+  // to Cash or Card while the account has open SEPA remittances (REM status PE, PR, CP or PP of a
+  // provisioned type), 422. Not gated by the flag. The backend embeds the open count as `{0}` and
+  // sends no `messageParams`, so the sentence takes `{count}`: while the param is absent the key
+  // route yields (UNFILLED_PARAM) and the backend's own text, already in the request language and
+  // carrying the count, is shown — never a sentence without the number.
+  ETGO_RemittanceAccountTypeChangeBlocked: 'backendError.remittanceAccountTypeChangeBlocked',
+  // ETP-6148 — RemittanceMethodLinkObserver (DAL): a SEPA remittance payment method added to, or
+  // reactivated on, a non-Bank account (financial-account paymentMethod tab, MCP etendo_create /
+  // etendo_update, or Classic). 422 business_rule.
+  ETGO_RemittanceMethodAccountNotAllowed: 'backendError.remittanceMethodAccountNotAllowed',
+  // ETP-6148 — RemittanceHeaderHandler: a new or changed «Fecha de cargo/abono» earlier than
+  // today (422). The SPA blocks it first through the field's `minDate`; this is the safety net.
+  ETGO_RemittanceDueDatePast: 'backendError.remittanceDueDatePast',
+  // ETP-6148 — «Seleccionar desde factura» refusals (RemittanceHeaderHandler availableDueItems /
+  // selectDueItems / syncDueItems, 422). ETGO_RemittanceDueItemsSelectionFailed embeds the cause as `{0}` and the
+  // backend sends no `messageParams`, so its sentence takes a `{detail}` param: while the param is
+  // absent the key route yields (UNFILLED_PARAM) and the backend's own text, already in the request
+  // language and carrying the cause, is shown instead.
+  ETGO_RemittanceProcessedNotEditable: 'backendError.remittanceProcessedNotEditable',
+  ETGO_RemittanceTypeOrAccountMissing: 'backendError.remittanceTypeOrAccountMissing',
+  ETGO_RemittanceDueItemsRequired: 'backendError.remittanceDueItemsRequired',
+  ETGO_RemittanceDueItemNotAvailable: 'backendError.remittanceDueItemNotAvailable',
+  ETGO_RemittanceDueItemsSelectionFailed: 'backendError.remittanceDueItemsSelectionFailed',
+  // ETP-6148 round 3 — «A remesar» edits (lines PATCH) and the picker sync (syncDueItems, 422).
+  // The amount refusal's sentence takes no number: the SPA has already refused the same values
+  // inline (lib/boundedAmount.js) with the exact maximum, so this is the safety net.
+  ETGO_RemittanceLineAmountInvalid: 'backendError.remittanceLineAmountInvalid',
+  ETGO_RemittanceLineAmountNotEditable: 'backendError.remittanceLineAmountNotEditable',
+  ETGO_RemittanceDueItemNotIncluded: 'backendError.remittanceDueItemNotIncluded',
+  // ETP-6148 — «Procesar» / «Reactivar» (RemittanceHeaderHandler process / reactivate, 422). The
+  // two *Failed keys carry REM's own text as `{0}` with no `messageParams`, so their sentences
+  // take `{detail}`: without the param the key route yields and REM's text, already in the
+  // request language, is shown (same rule as SelectionFailed above).
+  ETGO_RemittanceAlreadyProcessed: 'backendError.remittanceAlreadyProcessed',
+  ETGO_RemittanceNoLines: 'backendError.remittanceNoLines',
+  ETGO_RemittanceProcessFailed: 'backendError.remittanceProcessFailed',
+  ETGO_RemittanceNotProcessed: 'backendError.remittanceNotProcessed',
+  ETGO_RemittanceReactivateFailed: 'backendError.remittanceReactivateFailed',
   // ETP-5684 — NeoAccountingAccessPolicy (com.etendoerp.go): a post/unpost from a role without
   // Show Accounting Fields. The SPA hides those actions, so this reaches only a stale screen.
   ETGO_AccountingAccessDenied: 'backendError.accountingAccessDenied',
@@ -1951,6 +2003,20 @@ export function translateImportRefusal(body, t, fallback) {
 
 export function isDuplicateConflict(status, code) {
   return status === 409 && (!code || code === 'duplicate_key');
+}
+
+/**
+ * ETP-6148 — whether a refusal names a backend message this module translates by key
+ * (BACKEND_ERROR_KEY_MAP). A code-less 409 is read as «duplicate name» by isDuplicateConflict, but
+ * a 409 sent through NeoMessageText (e.g. ETGO_RemittanceProvisioningConflict, a «try again» on a
+ * Bank account create) has no `code` and DOES carry its identity in `messageKeys`; callers check
+ * this first so such a refusal is translated instead of being shown as «the name already exists».
+ *
+ * @param {string[]|undefined} messageKeys - from extractBackendMessageKeys
+ * @returns {boolean}
+ */
+export function hasMappedMessageKey(messageKeys) {
+  return Array.isArray(messageKeys) && messageKeys.some((key) => Boolean(BACKEND_ERROR_KEY_MAP[key]));
 }
 
 function codeEntry(data) {

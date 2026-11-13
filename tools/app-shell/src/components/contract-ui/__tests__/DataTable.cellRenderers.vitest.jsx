@@ -170,6 +170,39 @@ describe('renderStatusCell', () => {
     const tag = screen.getByTestId('status-tag');
     expect(tag).toHaveAttribute('data-tone', 'success');
   });
+
+  // ETP-6148 — a status code is not globally unique (PR/AN/CP differ per window), so a column
+  // colours its own codes through `enumVariants`; undeclared codes keep the global catalog.
+  describe('per-column tones (col.enumVariants)', () => {
+    const renderTone = (status, enumVariants) => {
+      renderCell(renderStatusCell({
+        ...baseContext,
+        row: { id: '1', status },
+        col: { key: 'status', type: 'status', enumVariants },
+      }));
+      return screen.getByTestId('status-tag').getAttribute('data-tone');
+    };
+
+    it('uses the tone the column declares for the code', () => {
+      expect(renderTone('PR', { PR: 'info', AN: 'destructive' })).toBe('info');
+    });
+
+    it('maps a declared Tag variant (red) to its tone', () => {
+      expect(renderTone('AN', { AN: 'red' })).toBe('destructive');
+    });
+
+    it('overrides the global catalog for a declared code', () => {
+      expect(renderTone('CO', { CO: 'caution' })).toBe('caution');
+    });
+
+    it('keeps the global tone for a code the column does not declare', () => {
+      expect(renderTone('CO', { PR: 'info' })).toBe('success');
+    });
+
+    it('keeps the global tone without enumVariants', () => {
+      expect(renderTone('VO', undefined)).toBe('destructive');
+    });
+  });
 });
 
 // Test id set on <ProgressCircle> inside renderPercentCell (arc id is `<id>-arc`).

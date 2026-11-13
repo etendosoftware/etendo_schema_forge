@@ -1570,7 +1570,7 @@ addLineGuard={(_, children) => children.length < 0}   // maxDetailLines: 0 — a
   - passes `canAddLine={false}` to the lines empty state — the shared `LinesEmptyState` hides its primary `+ Add Lines` button and keeps `secondaryAction` (typically an import button), which becomes the only way to create lines;
   - never renders the add-line area below the lines table (`canShowAddLineArea` requires `canAddLines`), which also hides the inline `detailExtraActions` trigger and the add-line kebab fed by `lineMenuActions`, since both live inside that area — `DetailView` itself renders no line-creation control once lines exist (see the panel-rendered pattern below to keep import available).
 
-**Keeping import available once lines exist (window-scoped, panel-rendered pattern):** because the suppressed add-line area is also where `detailExtraActions` renders, a window that must allow importing MORE lines into a draft that already has lines re-renders its import trigger from its own `customComponents.bottomSection` panel — the bottom section always renders below the lines area and receives `lines`, `data`, `recordId`, `token`, and `apiBaseUrl` from `DetailView`:
+**Keeping import available once lines exist (window-scoped, panel-rendered pattern):** because the suppressed add-line area is also where `detailExtraActions` renders, a window that must allow importing MORE lines into a draft that already has lines re-renders its import trigger from its own `customComponents.bottomSection` panel — the bottom section always renders below the lines area and receives `lines`, `data`, `recordId`, `token`, and `apiBaseUrl` from `DetailView`. The same applies to a lines entity that is read-only (`entities.lines.readOnly` / `methods: ["GET", …]`), whose lines only come from a picker. An example is the remittance's «Seleccionar desde factura» (`artifacts/remittance/custom/RemittanceBottomPanel.jsx`, ETP-6148), which opens the generic `DocumentPickerModal` (see *Document picker modal* below):
 
 ```jsx
 export default function MyBottomPanel(props) {
@@ -3832,3 +3832,99 @@ else — no `decisions.json` key, no generator change, no regeneration of the wi
 
 > Watch out for `stopPropagation()` in the grid: without it a cell click also triggers the
 > row's own `onNavigate`, which wins and sends the user to *this* window's record instead.
+
+### Per-column link (`link` in `decisions.json`) — ETP-6148
+
+The registry above is shared: an entry changes every window that has that AD column. When
+ONE window wants ONE grid column to open another record, declare it on the field instead:
+
+```json
+"invoiceDocumentNo": {
+  "link": {
+    "idField": "invoice",
+    "window": { "field": "invoiceSalesTransaction", "values": { "true": "sales-invoice", "false": "purchase-invoice" } }
+  }
+}
+```
+
+- `idField` — the row key that holds the target record id (often a hidden read-only field,
+  e.g. a `propertyPath` field reaching the invoice).
+- `window` — the target route segment (spec name), or `{ field, values }` to pick it per row
+  from a sibling field's value (`true`/`false` also match `Y`/`N`).
+- The window names live in the window's own `decisions.json`, never in shared code.
+
+Rendering is the same underlined value + ↗ icon as the FK link above and the «Pago» column
+of Financial Account > Movimientos. `InlineLinesPanel` (`ReadCell` → `LinkedReadCell`) and
+`DataTable` (`renderCellValue`, before the registry) both resolve it through
+`resolveColumnLink()` in `fkNavigation.js`, and it fails closed in the same way: no id or
+no matching window means the plain cell. The panel renders the shared `RecordLink.jsx` (the
+only part that calls `useNavigate()`), mounted for a resolvable link only, so panels rendered
+without a Router are unaffected. A picker can render `RecordLink` with `resolveColumnLink` too. First consumer: the remittance lines' Factura column.
+
+### Lines grid without row edit, one amount editable in place — ETP-6148
+
+Two opt-ins in `decisions.json`, usable apart or together (the remittance lines use both):
+
+- **`entities.<name>.rowEdit: false`.** The grid has no row edit mode. `InlineLinesPanel` (the
+  default `inlineEditable` lines layout) normally lets a row be edited in place: the pencil in the
+  hover strip, or a click on a cell, turns the row into inputs. With this, the generator passes
+  `rowEditDisabled` in that entity's generated `<Entity>Table.jsx`. The panel hides the Edit action,
+  and neither the pencil nor a cell click enters edit mode. Delete and any caller `rowActions` stay.
+- **Field `editInPlace: { resetToField?, maxField? }`** (at least one of the two). An always-visible amount input for that
+  column (`ResettableAmountInput`), outside the row edit mode and even with `rowEditDisabled`.
+  - `resetToField` is the sibling field a small ↻ button restores. Its tooltip and `aria-label`
+    come from `resetAmountTo`, with the amount through `formatCurrency`. The button is always
+    rendered when there is a reset value. While the amount already equals it, the button is
+    disabled (muted, `aria-disabled`, a click does nothing), so the number never shifts between
+    rows.
+  - `maxField` is the sibling field the amount may not exceed in magnitude, and whose sign it must
+    have.
+  - The rules live in `lib/boundedAmount.js` (`validateBoundedAmount`): not empty, not 0, the
+    bound's sign, `|amount| <= |bound|`. A refused value shows a red border, the message as
+    tooltip and as an alert, and a toast. It stays on screen and is not sent.
+  - A valid, changed value is committed on blur or Enter through the panel's `commitField` →
+    `onUpdateRow`, the generic inline PATCH.
+  - The column turns into plain read-only text when the document is read-only
+    (`isDocumentReadOnly`) or there is no `onUpdateRow`.
+  - The backend must accept the PATCH (`methods` with `PATCH`, the field `ISREADONLY = 'N'`) and
+    enforce the same rule.
+
+`ResettableAmountInput` is also the amount cell of `DocumentPickerModal` (below), so a grid and a
+picker refuse exactly the same values.
+
+### Badge on selector options (`optionBadge` in `decisions.json`) — ETP-6148
+
+A selector field can mark some of its options with a small neutral badge, driven by a key the
+selector endpoint already serves on each item:
+
+```json
+"financialAccount": { "optionBadge": { "field": "ibanValid", "equals": false, "labelKey": "remittanceAccountNoIbanBadge" } }
+```
+
+`EntityForm` builds a `renderOption` for `CreatableSearchSelect` (`buildOptionBadgeRenderer`): the
+option's name, plus the badge when `item[field] === equals`. Fields without the option keep the
+default row. The committed-value marking of the picker is untouched; only the row content changes.
+First consumer: remittance's Cuenta («Sin IBAN»).
+
+### Document picker modal (`DocumentPickerModal`) — ETP-6148
+
+`components/contract-ui/DocumentPickerModal.jsx` picks documents (or their dues) from a server-driven
+list and says how much of each to take. It uses the frame of the sales invoice «Importar desde
+pedido» popup (`ImportLinesModal`): title and subtitle, search, «Seleccionar todo», the list, a
+notice (the exported `ImportNotice`), a footer status, Cancelar + the primary. It has no per-line
+sub-selection: one row is one pick. `ImportLinesModal` is not changed.
+
+- The caller owns the data: `rows`, `loading`, `loadingMore`, `search` / `onSearchChange`,
+  `onReachBottom`.
+- The caller owns the columns: `{ key, labelKey, align, width, render(row, { close }) }`. `close`
+  lets a `RecordLink` leave the modal.
+- The last column is the editable amount: `amount = { labelKey, getMax, getReset, getCurrency }`.
+- The modal owns the selection and the amounts.
+- Committed rows (`isCommitted(row)`) open checked and `aria-selected`, through `committedIdSet`
+  in `selectorSelection.js`, with `getInitialAmount(row)`.
+- `onConfirm({ add, update, remove })` receives the difference with the committed set
+  (`diffSelection`). Only rows that were loaded take part, so a paged, searchable list never drops
+  a committed row the user did not see.
+- The primary button is disabled while nothing changed, while any selected amount is invalid, and
+  while the confirm runs.
+- First consumer: remittance «Seleccionar desde factura» (`artifacts/remittance/custom/SelectDueItemsModal.jsx`).

@@ -1925,6 +1925,86 @@
         }
       ]
     },
+    "71ffdfc8865e7daf652e4f855e18d8bb6126fff59ba2b01e651989778533de54": {
+      "checksum": "e892b6d0c70e12aa1df3a0a94d3172d3530127a43b75420998cd2dda496fae3b",
+      "params": [
+        "FF8080812E71F7C7012E71FD0499001B"
+      ],
+      "rows": [
+        {
+          "classname": null,
+          "column_name": "Getfile",
+          "mechanism": "classic_process",
+          "name": "Create Remittance File",
+          "obuiapp_process_id": null,
+          "process_id": "FF8080812EB06FB0012EB072D2A2000A"
+        },
+        {
+          "classname": null,
+          "column_name": "Process_Remittance",
+          "mechanism": "classic_process",
+          "name": "Process Remittance",
+          "obuiapp_process_id": null,
+          "process_id": "FF8080812E77C0AF012E77C585600014"
+        },
+        {
+          "classname": null,
+          "column_name": "Undo",
+          "mechanism": "classic_process",
+          "name": "Protest Undo",
+          "obuiapp_process_id": null,
+          "process_id": "FF808081312D066101312D0D9EB60016"
+        },
+        {
+          "classname": null,
+          "column_name": "Createfrom",
+          "mechanism": "classic_process",
+          "name": "Select Orders or Invoices",
+          "obuiapp_process_id": null,
+          "process_id": "FF8080812E7CD815012E7CE8F7260045"
+        },
+        {
+          "classname": null,
+          "column_name": "Undo",
+          "mechanism": "classic_process",
+          "name": "Settle Undo",
+          "obuiapp_process_id": null,
+          "process_id": "FF808081312D066101312D0C3AD60009"
+        },
+        {
+          "classname": "com.etendoerp.automated.remittance.process.AutomatedReturnProcess",
+          "column_name": "EM_Etar_ReturnReceipt",
+          "mechanism": "obuiapp_process",
+          "name": "Protest Remittance",
+          "obuiapp_process_id": "8575D1B51F534818B4843FD101AA4715",
+          "process_id": null
+        },
+        {
+          "classname": "org.openbravo.module.remittance.ad_actionbutton.REMSelectInvoicesAndOrders",
+          "column_name": "selectInvoicesAndOrders",
+          "mechanism": "obuiapp_process",
+          "name": "Select Invoices and Orders",
+          "obuiapp_process_id": "99E532BA0306450A839F5DE238375238",
+          "process_id": null
+        },
+        {
+          "classname": "org.openbravo.module.remittance.process.SelectPaymentsPickEditLines",
+          "column_name": "Selectpayments",
+          "mechanism": "obuiapp_process",
+          "name": "Select Payments Pick and Edit",
+          "obuiapp_process_id": "C88AB6CBA1694000AFF5706A31B08AE1",
+          "process_id": null
+        },
+        {
+          "classname": null,
+          "column_name": null,
+          "mechanism": "tab_process",
+          "name": "Remittance printed",
+          "obuiapp_process_id": null,
+          "process_id": "FF8080812EDA2AA4012EDA357AE40010"
+        }
+      ]
+    },
     "7a3f9d7a689e84e5d068b46c04ad4a3a05634954d924672e2d18f287019437e0": {
       "checksum": "3c53d42c12662ed20c3378418679c6d79cde7c32b530c2fff71f896ddc4e5fab",
       "params": [
@@ -3288,7 +3368,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
-      "checksum": "29006e55845566f179599a4bf1bc8e64b1db6fc66c7fce21d9423dee0be3178c",
+      "checksum": "49778c14387e5247633432b0b55f290123b21e7d2ccc6ec553a61507089838fb",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -3419,6 +3499,14 @@
           "mechanism": "obuiapp_process",
           "name": "Connect Account",
           "obuiapp_process_id": "C580B3B60DA5484387493A74CEB00D13",
+          "process_id": null
+        },
+        {
+          "classname": "com.etendoerp.psd2.bank.integration.actionhandler.DiscardBankStatementLine",
+          "column_name": "EM_PSD2_Discard_Line",
+          "mechanism": "obuiapp_process",
+          "name": "Discard / Restore Bank Statement Line",
+          "obuiapp_process_id": "4CE3F562002C459E860C97E5C3E44FF9",
           "process_id": null
         },
         {

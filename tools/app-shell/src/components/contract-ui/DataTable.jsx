@@ -25,7 +25,7 @@ import { DateField } from '@/components/ui/date-field';
 import { CELL_RENDERERS, renderNeutralTagCell } from './DataTable.cellRenderers.jsx';
 import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from './GridColumnHeaderControls.jsx';
 import { tagColumnsFromAux } from '@/lib/auxReference.js';
-import { resolveFkNavigation } from './fkNavigation.js';
+import { resolveColumnLink, resolveFkNavigation } from './fkNavigation.js';
 import { getEmailFieldError, getPhoneFieldError, getWebsiteFieldError } from './recipientEdits.js';
 import { getContactsTextFieldError, filterContactsInputValue } from './contactsFieldValidation.js';
 import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
@@ -3526,7 +3526,9 @@ export function DataTable({
     // column works whatever cell type it resolves to. Fails closed: no registry entry, no
     // resolvable id, or no `navigate` prop (DataTable is deliberately Router-agnostic) all
     // fall through to the renderer's own output, untouched.
-    const navigateTo = navigate ? resolveFkNavigation(col.column, row) : null;
+    // ETP-6148 — a column's own declarative `link` (decisions.json) wins over the shared
+    // AD-column registry; both fail closed.
+    const navigateTo = navigate ? (resolveColumnLink(col.link, row) ?? resolveFkNavigation(col.column, row)) : null;
     const rendered = renderer({
       row,
       col,
