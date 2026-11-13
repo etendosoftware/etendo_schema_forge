@@ -305,6 +305,10 @@ async def _describe_target(target: dict[str, Any]) -> dict[str, Any]:
 
 #: The Etendo GO MCP tool that runs and stores routines (ETP-6236).
 ROUTINE_TOOL = "etendo_routine"
+#: Appended to the prompt of a task whose routine was preloaded (Valentin, 2026-11-13): the child KR
+#: measures what the routine is worth when the user knows it exists, not whether the agent finds it
+#: on its own (it did not, 0 of 2, in the 2026-11-12 pilot). Names no tool (the prompt lint).
+ROUTINE_HINT = "Tenés una rutina guardada para esto: revisá tus rutinas."
 
 
 async def _routine_call(session: Any, args: dict[str, Any]) -> tuple[bool, Any]:
@@ -525,6 +529,8 @@ def _run_header(
         # ETP-6236: the routines preloaded for the "Etendo + routine" column, {probeId: {name,
         # version}}; null when the target ran without routines.
         "routines": routines,
+        # ...and the sentence appended to their prompts.
+        "routineHint": ROUTINE_HINT if routines else None,
     }
 
 
@@ -776,6 +782,8 @@ class AttemptContext:
     tag: str = ""
     #: The target's platform when the suite is v2; None for a v1 suite.
     platform: str | None = None
+    #: ETP-6236: the preloaded routines, {probeId: {name, version}}; their prompts get ROUTINE_HINT.
+    routines: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -831,8 +839,11 @@ async def run_attempt(
     timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     started_at = _now_ms()
     marker = attempt_marker(ctx.marker_prefix, probe.id, attempt)
+    text = probe.prompt
+    if ctx.routines and probe.id in ctx.routines:
+        text = f"{text} {ROUTINE_HINT}"
     prompt = interpolate(
-        probe.prompt, run_id=ctx.token_run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
+        text, run_id=ctx.token_run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
     )
     tag = f"{ctx.tag}{probe.id} a{attempt}"
     again = f", replaces {replaces}" if replaces else ""
@@ -1445,6 +1456,7 @@ def _open_target_run(
         preflight_error=preflight_error,
         tag=f"[{target['name']}] " if compare_id else "",
         platform=platform,
+        routines=routines,
     )
 
 

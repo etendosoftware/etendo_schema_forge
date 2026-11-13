@@ -1821,5 +1821,34 @@ class RoutinePreparationTest(unittest.TestCase):
         self.assertEqual(self.calls, [])
 
 
+class RoutineHintTest(unittest.TestCase):
+    """ETP-6236: a task whose routine was preloaded gets the hint; every other prompt is unchanged."""
+
+    def _prompt(self, routines):
+        from runner.suite import load_suite
+
+        tmp = Path(tempfile.mkdtemp())
+        h = Harness(tmp, SUITE)
+        probe = load_suite(tmp / "suite.yaml").probes[0]
+        ctx = cli.AttemptContext(
+            target={"name": "t"}, provider={}, run_id="r", run_dir=tmp / "run", events=_Events(),
+            max_steps=1, max_result_chars=100, repeat=1, marker_prefix="r", token_run_id="r",
+            routines=routines,
+        )
+        with mock.patch.object(cli, "mcp_session", h.session), \
+             mock.patch.object(cli, "call_tool", h.call_tool), \
+             mock.patch.object(cli, "run_probe", h.run_probe), \
+             redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            record, _stop = asyncio.run(cli.run_attempt(ctx, probe, 1, None))
+        self.assertEqual(record["prompt"], h.prompts[0])
+        return h.prompts[0]
+
+    def test_only_a_task_with_a_preloaded_routine_gets_the_hint(self):
+        with_routine = self._prompt({"p": {"name": "cobrar", "version": 1}})
+        self.assertTrue(with_routine.endswith(" " + cli.ROUTINE_HINT), with_routine)
+        self.assertNotIn(cli.ROUTINE_HINT, self._prompt(None))
+        self.assertNotIn(cli.ROUTINE_HINT, self._prompt({"other": {"name": "x", "version": 1}}))
+
+
 if __name__ == "__main__":
     unittest.main()

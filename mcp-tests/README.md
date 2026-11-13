@@ -163,8 +163,11 @@ reuses run A's `seedId` on any target. Concurrency may differ; it is shown, not 
 The Etendo GO MCP can save **routines** (`etendo_routine`): a known flow run in one call with
 parameters. A task's `platforms.etendo-go` block may declare the routine that solves it
 (`routine: {name, description, params, steps}`, the arguments of `etendo_routine` mode save; only
-Etendo blocks may). The prompt does not change: the agent learns a routine exists only from
-`etendo_routine` mode list, as a real user's agent would.
+Etendo blocks may). On a target with routines, the prompt of a task whose routine was preloaded
+ends with a fixed hint, *"Tenés una rutina guardada para esto: revisá tus rutinas."* (recorded in
+`run.json` as `routineHint`): the child KR measures what the routine is worth when the user knows
+it exists. Without the hint the agent did not look for routines (0 of 2 in the 2026-11-12 pilot),
+which the KR2.1 already measures. Every other prompt is unchanged.
 
 - A target with `routines = true` in `config.toml` (Etendo GO only) installs every selected task's
   routine under its user before the first attempt (replacing one of the same name) and deletes them
