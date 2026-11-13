@@ -49,7 +49,7 @@ function isScrolledToEnd(el) {
 /**
  * ETP-6148 — a GENERIC document picker: pick documents (or their dues) from a server-driven list
  * and say how much of each to take, in the frame of the «Importar desde pedido» popup (title and
- * subtitle, search, «Seleccionar todo», the list, a notice, a footer status, Cancelar + the
+ * subtitle, search, the select-all checkbox, the list, a notice, a footer status, Cancelar + the
  * primary). Unlike that popup there is no per-line sub-selection: one row is one pick.
  *
  * The caller owns the data and the columns; this component owns the selection and the amounts.
