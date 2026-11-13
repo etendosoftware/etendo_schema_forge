@@ -124,7 +124,7 @@ export default function PortalDocumentListView({ apiFetch, token, kind, onNaviga
             </button>
           ))}
         </div>
-        <DateRangePopover value={range} onChange={setRange} />
+        <DateRangePopover value={range} onChange={setRange} testId="portal-date-range" />
         <label className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-full bg-muted px-3.5 sm:max-w-xs">
           <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <input

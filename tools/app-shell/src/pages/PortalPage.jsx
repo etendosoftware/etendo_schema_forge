@@ -231,9 +231,11 @@ export default function PortalPage() {
   const entry = identity?.entryDocument;
   // An entry document of a kind this page does not know (a backend newer than the bundle) falls
   // back to home rather than indexing PORTAL_KIND_META with it, as readPortalView does for the URL.
-  // A link whose own document is no longer visible (entryDocument null) opens that kind's list,
-  // or home when the kind is unknown, with a notice (plan §A.8.8).
-  const entryHidden = !requested && identity?.state === PORTAL_LINK_STATE.valid && !entry;
+  // A link whose own document is no longer visible (entryDocument null, entryKind set) opens that
+  // kind's list, or home when the kind is unknown, with a notice (plan §A.8.8).
+  // Only when the backend said so (entryKind): a valid link with neither field just opens home.
+  const entryHidden = !requested && identity?.state === PORTAL_LINK_STATE.valid && !entry
+    && Boolean(identity?.entryKind);
   const fallbackKind = PORTAL_KIND_META[identity?.entryKind] ? identity.entryKind : null;
   let current = { view: 'home' };
   if (requested) {

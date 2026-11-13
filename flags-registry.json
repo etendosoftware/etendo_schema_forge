@@ -483,12 +483,11 @@
         "e2e": [
           {
             "root": "frontend",
-            "path": "e2e/tests/flows/bp-portal.mocked.spec.js",
-            "expected": true
+            "path": "e2e/tests/flows/sales/bp-portal.mocked.spec.js"
           }
         ]
       },
-      "$testSpecsComment": "expected:true means agreed but not yet written (pending Tester); every unit entry exists today, the mocked E2E is still planned. Paths follow each suite's existing naming convention. The two load-bearing portal assertions: cross-BP isolation (neither token can reach the other's documents or PDF under any endpoint), and no ETGO_PORTAL_LINK row is minted while the gate is closed -- asserted on the row count, not the email body. A THIRD load-bearing case belongs to the platform suite (PropertiesFeatureProviderTest / GoFeatureFlags) and not here: provider selection, where a blank or wrong ConfigCat SDK key must resolve every flag to false and never to true, and a provider that fails to install must leave flags false rather than propagate into an invoice send."
+      "$testSpecsComment": "expected:true means agreed but not yet written (pending Tester); every entry exists today. Paths follow each suite's existing naming convention. The two load-bearing portal assertions: cross-BP isolation (neither token can reach the other's documents or PDF under any endpoint), and no ETGO_PORTAL_LINK row is minted while the gate is closed -- asserted on the row count, not the email body. A THIRD load-bearing case belongs to the platform suite (PropertiesFeatureProviderTest / GoFeatureFlags) and not here: provider selection, where a blank or wrong ConfigCat SDK key must resolve every flag to false and never to true, and a provider that fails to install must leave flags false rather than propagate into an invoice send."
     },
     {
       "id": "lookup-create-product",
