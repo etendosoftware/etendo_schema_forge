@@ -251,6 +251,12 @@ function DesktopTable({ kind, page, documents, onOpen }) {
   // Every column keeps its content width on one line; "Referencia" alone takes what is left and
   // truncates (full text as a tooltip), so the amounts at the right always fit at 1280 px.
   const td = 'whitespace-nowrap px-2 py-2.5';
+  // Invoices carry three more columns than the design's quotation list (due date, payment state,
+  // outstanding). Up to and including a 1280 px screen the tax base gives way (shown from 2xl,
+  // 1536 px), so "Imp. total" and "Pendiente" always fit and "Referencia" keeps a usable width;
+  // the tax base is still in the detail's summary. Tailwind's xl starts AT 1280, so it would not
+  // hide the column at 1280.
+  const taxBaseVisibility = isInvoice ? 'hidden 2xl:table-cell' : '';
   return (
     <div className="hidden overflow-x-auto md:block">
       <table className="w-full border-collapse" data-testid="portal-document-table">
@@ -263,7 +269,7 @@ function DesktopTable({ kind, page, documents, onOpen }) {
             {isInvoice ? <th className={th}>{ui('portalColDueDate')}</th> : null}
             <th className={th}>{ui('portalColStatus')}</th>
             {isInvoice ? <th className={th}>{ui('portalColPaymentStatus')}</th> : null}
-            {hasAmounts ? <th className={`${th} text-right`}>{ui('portalColTaxBase')}</th> : null}
+            {hasAmounts ? <th className={`${th} ${taxBaseVisibility} text-right`}>{ui('portalColTaxBase')}</th> : null}
             {hasAmounts ? <th className={`${th} pr-3 text-right`}>{ui('portalColTotal')}</th> : null}
             {isInvoice ? <th className={`${th} pr-3 text-right`}>{ui('portalColOutstanding')}</th> : null}
           </tr>
@@ -288,7 +294,7 @@ function DesktopTable({ kind, page, documents, onOpen }) {
                   {document.documentNo}
                 </button>
                 {/* The app's own "Factura rectificativa" pill, inline so the row stays one line. */}
-                {document.isCreditNote ? <PortalCreditNoteBadge className="ml-2 align-middle" /> : null}
+                {document.isCreditNote ? <PortalCreditNoteBadge short className="ml-2 align-middle" /> : null}
               </td>
               <td className={`${td} w-full max-w-0 truncate text-muted-foreground`} title={document.reference || undefined}>{document.reference || '—'}</td>
               {isQuotation ? <td className={`${td} tabular-nums`}><PortalValidUntil document={document} /></td> : null}
@@ -296,7 +302,7 @@ function DesktopTable({ kind, page, documents, onOpen }) {
               <td className={td}><PortalDocumentStatus status={document.documentStatus} /></td>
               {isInvoice ? <td className={td}><PortalPaymentStatus document={document} /></td> : null}
               {hasAmounts ? (
-                <td className={`${td} text-right tabular-nums`}>
+                <td className={`${td} ${taxBaseVisibility} text-right tabular-nums`}>
                   <PortalMoney currency={document.currency} value={document.taxBase} />
                 </td>
               ) : null}
@@ -315,7 +321,7 @@ function DesktopTable({ kind, page, documents, onOpen }) {
           {singleTotal && hasAmounts ? (
             <tr className="font-semibold" data-testid="portal-document-totals">
               <td colSpan={leadingColumns} />
-              <td className="px-2 py-3 text-right tabular-nums">
+              <td className={`px-2 py-3 ${taxBaseVisibility} text-right tabular-nums`}>
                 <PortalMoney currency={singleTotal.currency} value={singleTotal.taxBase} />
               </td>
               <td className="px-2 py-3 pr-3 text-right tabular-nums">
@@ -368,7 +374,7 @@ function MobileCard({ document, kind, onOpen }) {
       <span className="flex items-center justify-between gap-3">
         <span className="flex min-w-0 items-center gap-2">
           <span className="font-semibold">{document.documentNo}</span>
-          {document.isCreditNote ? <PortalCreditNoteBadge /> : null}
+          {document.isCreditNote ? <PortalCreditNoteBadge short /> : null}
         </span>
         {/* An invoice shows its payment state; its document status too when it is not the plain
             "completed" every listed invoice shares (closed, voided), like the table. */}

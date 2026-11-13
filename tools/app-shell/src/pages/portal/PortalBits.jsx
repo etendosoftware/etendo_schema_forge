@@ -162,14 +162,17 @@ export const PORTAL_SECTION_TITLE = "font-['Inter',sans-serif] text-[13px] font-
  * list's document-type column (`artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx`,
  * `transactionDocument`) — primary text on a primary tint, same label key.
  */
-export function PortalCreditNoteBadge({ className }) {
+export function PortalCreditNoteBadge({ className, short = false }) {
   const ui = useUI();
+  // `short` (the lists): the app's short "Rectificativa" (`rectificativeLabel`), with the full
+  // "Factura rectificativa" as the tooltip, so the number column stays narrow.
   return (
     <span
       className={cn('inline-block whitespace-nowrap rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary', className)}
+      title={short ? ui('rectificativeInvoicesTab') : undefined}
       data-testid="portal-credit-note-badge"
     >
-      {ui('rectificativeInvoicesTab')}
+      {ui(short ? 'rectificativeLabel' : 'rectificativeInvoicesTab')}
     </span>
   );
 }
