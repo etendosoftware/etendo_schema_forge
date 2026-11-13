@@ -413,6 +413,7 @@ export default function PortalPage() {
         token={trimmedToken}
         kind={current.kind}
         group={current.group ?? null}
+        identity={identity}
         onNavigate={navigate}
         onInvalid={showInvalid}
       />

@@ -839,7 +839,10 @@ mobile headers, as the boards do; the shell is only the sidebar and the bottom b
   language works as in the app: the trigger (`Languages` icon, current flag and name) opens the
   app's `DropdownMenu` with the user menu's own "Idioma" section (`LanguageMenuSection`, extracted
   from `UserAvatarButton` with its `APP_LOCALES`: English, Español); on mobile the same trigger
-  sits in the top bar. Home: the uppercase
+  sits in the top bar. The design's user (the sidebar's user row, the mobile "VG" avatar) shows the
+  customer the link belongs to (`/me` `businessPartnerName`): a person icon and the name (ellipsis,
+  full name as tooltip) above the language trigger, and an initials avatar on the right of the
+  mobile top bars. Informative only — no chevron, no menu, nothing to click; nothing without a name. Home: the uppercase
   section titles are set in Inter like the design's (the global `h1–h6` Plus Jakarta Sans rule ran
   their words together); "Requiere tu atención" and "Tu saldo" hug their content; desktop "Tu
   saldo" is pending + paid pills only (the overdue line is mobile-only); the chart's axis uses the

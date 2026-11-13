@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  FileText, Home, Languages, LayoutGrid, Receipt, Search, ShoppingBag, Truck,
+  FileText, Home, Languages, LayoutGrid, Receipt, Search, ShoppingBag, Truck, User,
 } from 'lucide-react';
 import { useLocaleSwitch, useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -129,6 +129,45 @@ export function PortalLanguageSwitch({ align = 'start', side = 'top' }) {
 }
 
 /**
+ * The customer the link belongs to (`/me`'s `businessPartnerName`), shown where the design puts
+ * its user (Main: the sidebar's user row; Movil-*: the avatar on the top bar's right). Purely
+ * informative: the portal has no login, so there is no account menu, no chevron and nothing to
+ * click. Nothing renders without a name.
+ *
+ * The app has no shared initials helper — `UserAvatarButton` takes the first letter inline and
+ * `OrgLogoField` keeps its own private function — so the initials come from this file's
+ * `initialsOf` (the logo tile's fallback), and the styles from `UserAvatarButton`: its sidebar row
+ * (person icon on a muted circle, then the name) and its round initials avatar.
+ *
+ * @param {'row'|'avatar'} variant the sidebar row (desktop) or the round avatar (mobile)
+ */
+export function PortalCustomer({ identity, variant = 'row' }) {
+  const name = identity?.businessPartnerName;
+  if (!name) return null;
+  if (variant === 'avatar') {
+    return (
+      <span
+        role="img"
+        aria-label={name}
+        title={name}
+        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-semibold text-background"
+        data-testid="portal-customer-avatar"
+      >
+        {initialsOf(name)}
+      </span>
+    );
+  }
+  return (
+    <div className="flex min-w-0 items-center gap-2.5" title={name} data-testid="portal-customer">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        <User className="h-4 w-4" aria-hidden="true" />
+      </span>
+      <span className="min-w-0 flex-1 truncate" data-testid="portal-customer-name">{name}</span>
+    </div>
+  );
+}
+
+/**
  * The mobile top bar of Inicio (design Movil-Inicio): the brand, a search button and the language
  * switch in place of the design's account avatar (the portal has no account).
  */
@@ -153,6 +192,7 @@ export function PortalMobileBrandBar({ identity, logoUrl, onSearch }) {
           </button>
         ) : null}
         <PortalLanguageSwitch align="end" side="bottom" />
+        <PortalCustomer identity={identity} variant="avatar" />
       </div>
     </header>
   );
@@ -239,8 +279,9 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
           </div>
         </div>
         <div className="flex-1" />
-        {/* The language toggle on its own line above the credit, so both read in full at 216 px. */}
+        {/* Customer, then language, then the credit — one line each, so all read in full at 216 px. */}
         <div className="flex flex-col gap-2 border-t border-border px-4 pt-2.5">
+          <PortalCustomer identity={identity} />
           <PortalLanguageSwitch />
           <span className="flex items-center gap-2 text-xs text-muted-foreground" data-testid="portal-created-with">
             <img src="/logo-etendo-ai.png" alt="" className="h-3.5 w-3.5 shrink-0 object-contain" />

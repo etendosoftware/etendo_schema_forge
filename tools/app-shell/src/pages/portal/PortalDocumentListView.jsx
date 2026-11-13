@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { DateRangePopover } from '@/components/ui/date-range-popover';
 import { getDateBounds } from '@/lib/dateRangeBounds.js';
 import { PORTAL_ERROR, fetchPortalDocuments } from '@/lib/portal/portalApi.js';
-import { PortalLanguageSwitch } from './PortalShell.jsx';
+import { PortalCustomer, PortalLanguageSwitch } from './PortalShell.jsx';
 import {
   PortalCountChip, PortalDate, PortalDesktopHeader, PortalDocumentStatus, PortalDueDate, PortalMain,
   PortalMoney, PortalPaymentStatus, PortalRowBadge, PortalSearchPill, PortalValidUntil,
@@ -32,7 +32,7 @@ const SEARCH_DEBOUNCE_MS = 300;
  * "Filtros" are agreed OUT items.
  */
 export default function PortalDocumentListView({
-  apiFetch, token, kind, group = null, onNavigate, onInvalid,
+  apiFetch, token, kind, group = null, identity = null, onNavigate, onInvalid,
 }) {
   const ui = useUI();
   const [range, setRange] = useState(() => initialPortalRange(group));
@@ -192,7 +192,10 @@ export default function PortalDocumentListView({
             <h1 className="font-['Plus_Jakarta_Sans',Inter,sans-serif] text-[28px] font-bold leading-9">{plural}</h1>
             <PortalCountChip count={totalCount} />
           </div>
-          <PortalLanguageSwitch align="end" side="bottom" />
+          <div className="flex items-center gap-2">
+            <PortalLanguageSwitch align="end" side="bottom" />
+            <PortalCustomer identity={identity} variant="avatar" />
+          </div>
         </div>
         <div className="flex gap-2.5">{searchPill(true)}</div>
         {renderTabs(true)}
