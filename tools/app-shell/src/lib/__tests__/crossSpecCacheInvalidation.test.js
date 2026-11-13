@@ -15,8 +15,8 @@
  *   3. Both lookups ignore inherited Object.prototype keys (`constructor`, `__proto__`).
  *   4. `invalidateAfterWrite(cache, request)` — when the cache is actually touched (write methods
  *      only, any case; never without a cache) and with which pattern (`{ spec }` vs `{ entity }`).
- *      `isWriteMethod` and `isReadOnlySubEndpoint` (POSTs to `evaluate-display` / `callout`
- *      are reads) are exercised through it.
+ *      `isWriteMethod` and `isReadOnlySubEndpoint` (POSTs to `evaluate-display` / `callout` /
+ *      `sifDefaults` are reads) are exercised through it.
  * The `useApiFetch` wiring (base-URL composition, ok-only) is covered in
  * `src/auth/__tests__/useApiFetch.vitest.jsx`.
  */
@@ -145,6 +145,10 @@ describe('invalidateAfterWrite', () => {
     ['contacts evaluate-display', '/sws/neo/contacts/businessPartner/evaluate-display'],
     ['contacts callout (query + fragment stripped)', '/sws/neo/contacts/businessPartner/callout?x=1#y'],
     ['goods-shipment callout', '/sws/neo/goods-shipment/header/callout'],
+    // ETP-6179: the invoice SIF preview (`InvoiceSifStep`) POSTs `sifDefaults` when an
+    // invoice-creating modal opens — it builds JSON only, it creates nothing.
+    ['goods-shipment sifDefaults', '/sws/neo/goods-shipment/header/REC-001/action/sifDefaults'],
+    ['sales-order sifDefaults', '/sws/neo/sales-order/header/SO-1/action/sifDefaults'],
   ]) {
     it(`POST to a read-only sub-endpoint (${label}) is not a write — cache untouched`, () => {
       const cache = fakeCache();
