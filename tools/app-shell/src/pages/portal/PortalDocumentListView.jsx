@@ -13,7 +13,8 @@ import {
   PORTAL_ROW_FOCUS, PortalInvoiceTypeBadge, portalRowActivation,
 } from './PortalBits.jsx';
 import {
-  PORTAL_KIND_GROUPS, PORTAL_KIND_META, documentLabelKey, quotationValidity, toCalendarParam,
+  PORTAL_KIND_GROUPS, PORTAL_KIND_META, documentLabelKey, initialPortalRange, quotationValidity,
+  toCalendarParam,
 } from './portalPresentation.js';
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -23,8 +24,8 @@ const SEARCH_DEBOUNCE_MS = 300;
  *
  * The header carries the title with the count chip, the breadcrumb and the search (by number or
  * reference) as a centred pill. The toolbar: the kind's status groups as segmented tabs (the
- * customer-facing groups of `PORTAL_KIND_GROUPS`, the tab in the URL), the date button ("all
- * time" by default, as the design's "Cualquier fecha") and refresh. Columns follow the design,
+ * customer-facing groups of `PORTAL_KIND_GROUPS`, the tab in the URL), the date button (the
+ * rolling last month by default, D-2; all time when the link named a group) and refresh. Columns follow the design,
  * adapted per kind: quotations show "Válido hasta" with its dot, invoices their due date,
  * payment state and outstanding; shipments carry no amounts. A totals row closes the table and
  * "Todos los registros cargados" the list. Checkboxes, "Descargar seleccionados" and the advanced
@@ -34,7 +35,7 @@ export default function PortalDocumentListView({
   apiFetch, token, kind, group = null, onNavigate, onInvalid,
 }) {
   const ui = useUI();
-  const [range, setRange] = useState(null);
+  const [range, setRange] = useState(() => initialPortalRange(group));
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(null);
@@ -43,11 +44,14 @@ export default function PortalDocumentListView({
   const [loadingMore, setLoadingMore] = useState(false);
   const [reload, setReload] = useState(0);
 
-  // A new kind starts from the defaults.
+  // A new kind starts from the defaults: the rolling last month, or all time when the link named a
+  // status group (`initialPortalRange`). Switching tabs inside the list keeps the chosen range.
   useEffect(() => {
-    setRange(null);
+    setRange(initialPortalRange(group));
     setSearchInput('');
     setSearch('');
+    // Only a new kind resets the range: a tab (group) change keeps what the customer chose.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind]);
 
   useEffect(() => {

@@ -148,6 +148,30 @@ export function invoicePaymentState(document, installments = null) {
   }
 }
 
+/**
+ * The default list range (decision D-2, the ticket's "el listado por defecto muestra el último
+ * mes"): the rolling last month, today − 1 month … today, as the `{ from, to }` value
+ * `DateRangePopover` takes. The day is clamped to the target month's length (31 Mar → 28/29 Feb),
+ * like `presetBounds`' last3m/last6m.
+ */
+export function defaultPortalRange(reference = new Date()) {
+  const today = new Date(reference.getFullYear(), reference.getMonth(), reference.getDate());
+  const lastDayOfTarget = new Date(today.getFullYear(), today.getMonth(), 0).getDate();
+  const from = new Date(today.getFullYear(), today.getMonth() - 1,
+    Math.min(today.getDate(), lastDayOfTarget));
+  return { from, to: today };
+}
+
+/**
+ * The range a list opens with: the rolling last month (D-2), unless the link that opened it names
+ * a status group. A group link — a home tile ("Por responder", "Vencidas", "En curso") or "Ver
+ * facturas pendientes" — asks for everything in that state, which may be older than a month, so it
+ * opens on all time (`null`). Either way the customer can pick any other range.
+ */
+export function initialPortalRange(group, reference = new Date()) {
+  return group ? null : defaultPortalRange(reference);
+}
+
 /** A local `Date` as the `yyyy-MM-dd` calendar day the API expects. */
 export function toCalendarParam(date) {
   return date instanceof Date ? todayCalendarISO(date) : null;

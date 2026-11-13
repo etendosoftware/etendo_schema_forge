@@ -637,7 +637,7 @@ PDF unavailable state.
 | Id | Decision | Decided |
 |---|---|---|
 | D-1 | Apply blocked / inactive / plan-expired to **valid** links too, not only renewal | **Yes**: a still-valid link answers `unavailable` |
-| D-2 | "Last month" default range | **Rolling**: today − 1 month … today. **Superseded 2026-11-13** by the design rework: the lists open on "all time", the board's "Cualquier fecha" |
+| D-2 | "Last month" default range | **Rolling**: today − 1 month … today (the ticket's "el listado por defecto muestra el último mes"). A link that names a status group opens on all time — see Part B notes |
 | D-3 | Renewal email visible in the document's Emails card | **Yes** |
 | D-4 | Renewal limits | **Decided by the PO (2026-11-11): 15 min per link, no daily cap.** Both remain configurable (`cooldownMinutes`, `maxPerDay`, `0` = unlimited, the default) |
 | D-5 | KPI headline unit | **Per send** (`ROOT_LINK_ID`) |
@@ -745,8 +745,13 @@ mobile headers, as the boards do; the shell is only the sidebar and the bottom b
   documents; no chart and no "Tu saldo" card, as on the board.
 - **Listados (Listado / Movil-Listado).** Header: title + count chip + breadcrumb, the search by
   number or reference as the centred pill. Toolbar: the status groups as segmented tabs, the date
-  button and refresh. **The date range now defaults to "all time"**, the board's "Cualquier fecha"
-  (this replaces D-2's rolling last month). Columns as the board — "Fecha de <tipo>", "Nº
+  button and refresh. **The date range opens on the rolling last month (D-2)**, already applied in the date button;
+  the customer can pick any other range, "all time" included. A list opened from a link that names
+  a status group — the home tiles ("Por responder", "Vencidas", "En curso") and "Ver facturas
+  pendientes" — opens on all time instead: those links ask for everything in that state, and an
+  overdue or unanswered document may be older than a month. "Ver todos", the sidebar and the
+  bottom bar open the plain list, so the last month. (A first rework opened every list on "all
+  time" after the board's "Cualquier fecha"; reverted, it broke the ticket's acceptance criterion.) Columns as the board — "Fecha de <tipo>", "Nº
   documento", "Referencia", quotations "Válido hasta" with its dot (foreground while it can still be
   answered, destructive once past, plain muted text once answered), "Estado", "Base imponible",
   "Imp. total" — with, for invoices, "Vencimiento" (the app's due-date dot), "Estado de pago" and
