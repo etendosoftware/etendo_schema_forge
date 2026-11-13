@@ -117,7 +117,8 @@ graph LR
   class LAYOUT,PROVIDER,SMTP hub
 ```
 
-**6 verified, 16 migrated, 25 total** (the 25th, `portal-link-renewal`, ETP-6209, is described in
+**6 verified, 16 migrated, 27 total** (the 25th to 27th — `portal-link-renewal`,
+`portal-quotation-decision-confirm`, `portal-quotation-decision-notice`, ETP-6209 — are described in
 §3.A and not yet verified in an inbox). The account greens were opened in a real inbox on 2026-08-25:
 the invitation (including the resend path), the password reset stating its true 30-minute window,
 and — from one run of a fresh admin through sign-up and onboarding — the welcome and the
@@ -219,6 +220,17 @@ opened it). Copy: `portal-link-renewal.*` in both catalogs. It is refused for an
 `PortalRenewalScope`, and is recorded in the document's own send history, so it shows in the
 document's Emails card next to the original send. Contract: `contracts/PortalLinkRenewalEmailContract.java`;
 trigger: `POST /sws/portal/renew` (`com.etendoerp.go/src/com/etendoerp/go/portal/PortalLinkService.java`).
+
+**`portal-quotation-decision-confirm` and `portal-quotation-decision-notice` (ETP-6209 Part C)**
+are two more portal emails. The *confirm* email goes when a customer asks to accept / reject a
+quotation in the portal: only to the **first To of the original send** (never CC), it carries a
+single-use, never-expiring confirmation link (`/portal/decision/<token>`, the token's hash is the
+only thing stored, in `ETGO_PORTAL_DECISION`). The *notice* goes to the user who sent the quotation
+(their ETGO_ACCOUNT email) once the customer confirmed. Copy: `portal-quotation-decision.*` in both
+catalogs; both refuse any caller outside `PortalDecisionScope` and file under the quotation's send
+history. Contracts: `contracts/PortalDecisionConfirmEmailContract.java`,
+`contracts/PortalDecisionNoticeEmailContract.java`; trigger: `POST /sws/portal/quotations/{id}/decision`
+and `POST /sws/portal/decisions/confirm` (`portal/PortalDecisionService.java`). Not yet verified in an inbox.
 
 > ⚠ **The default subject and body exist in two places.** When the operator sends without editing
 > anything, the backend composes the copy from the catalog above — but the modal shows the operator
@@ -379,7 +391,7 @@ recipients, subject, the operator's message and the signed download link are sto
 **per tenant**, under **client-level AD security**. The justification is narrow and worth keeping
 in view — an operator must be able to prove to their own customer what was sent, to whom and when,
 and a hash cannot do that. The scope is correspondingly narrow: only the eight document-send
-contracts and `portal-link-renewal` (ETP-6209) opt in.
+contracts, `portal-link-renewal` and the two Part C quotation-decision emails (ETP-6209) opt in.
 
 - **Gate:** `EmailContract#logsSendHistory()` defaults to `false`.
   `DefaultDocumentSendEmailContract` overrides it to `true`, so the eight document-send contracts

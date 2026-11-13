@@ -155,6 +155,17 @@ through the GO provider. It is a fallback, not an override — SMTP wins when pr
 - Rules, thresholds and local verification: `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md`
   → *Trial notices* and `docs/etp-5396-local-lifecycle-tool.md`.
 
+### portal-quotation-decision-confirm / -notice (ETP-6209 Part C)
+- **confirm**: sent when a customer asks, in the portal, to accept or reject a quotation
+  (`POST /sws/portal/quotations/{id}/decision`). Only to the **first To of the original send** —
+  never CC, never an address from the caller (re-derived from the link's root row). It carries a
+  single-use, never-expiring confirmation link; the decision row is minted pending in `resolve` and
+  usable from `onDelivered`. Opening the link applies nothing; the landing's button confirms.
+- **notice**: to the user who sent the quotation, at their ETGO_ACCOUNT email (`AD_User.Email` is
+  not filled by onboarding), after the confirmation's commit. No account: no notice, logged.
+- Both refuse any caller outside `PortalDecisionScope` (403) and file under the quotation's send
+  history. Copy: `portal-quotation-decision.*` (formal "usted" for the customer, as the renewal).
+
 ### portal-link-renewal (ETP-6209)
 - Sent when a customer opens an **expired** customer portal link: the portal page calls
   `POST /sws/portal/renew`, which emails a new link. Never sent from the browser or the

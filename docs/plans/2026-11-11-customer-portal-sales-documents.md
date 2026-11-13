@@ -1168,6 +1168,32 @@ definition.
 | Q2 | Reject reasons | The tenant's reject-reason list (`C_Reject_Reason`), with the six fixed reasons created if missing, and the "Otros" text in the quotation's notes |
 | Q3 | Which statuses can be decided | Only `UE` (as the app's reject); `CO` is not offered |
 
+## C.12 Implementation notes (2026-11-13, built; PO questions Q1–Q3 still open)
+
+Built in both repos following C.0–C.11, with the three PO-dependent points behind one seam each.
+
+- **Backend (`com.etendoerp.go`).** Table `ETGO_PORTAL_DECISION` (`src-db/.../tables/ETGO_PORTAL_DECISION.xml`,
+  native SQL only, no AD registration — **needs `update.database` then `export.database`**).
+  `QuotationDecisions` (sales-quotation customization): `isDecidable` (Q3: `UE`), `reject` (the
+  app's own writes, now also used by `RejectQuotationHandler`, behaviour unchanged), `accept` with
+  `STATUS_ACCEPTED = "ETGO_AC"` (Q1). `RejectQuotationHandler` keeps its `@Named`: it is a CDI bean
+  injected by type into `SalesQuotationHeaderHandler`, not bound through `ETGO_SF_ENTITY.Java_Qualifier`
+  (no row names it), so no NeoExtension migration applies. `PortalDecisionService` (request, mint,
+  markSent, view, confirm, the first-confirmed-wins transaction), `PortalDecisionScope`,
+  `PortalDecisionEvents` (KPI hook points, empty), two contracts in `email/contracts`, copy in
+  `emails_{es_ES,en_US}.properties`, routes in `PortalServlet`, the detail's `decision` block.
+- **SPA.** `PortalDecisionActions` (desktop panel row before "Descargar PDF"; mobile bottom bar),
+  the portal reject modal (six fixed reasons, "Otros" requires text), the masked "correo enviado"
+  state, `PortalDecisionPage` at `/portal/decision/:token`, i18n in three locales.
+- **Seams.** Q1: `QuotationDecisions.STATUS_ACCEPTED` + `PortalDecisionService.ACCEPT_AVAILABLE =
+  false` (backend refuses accepts, 409 `accept_unavailable`) + `PORTAL_ACCEPT_ENABLED = false`
+  (`pages/portal/portalPresentation.js`, hides "Aceptar"). Answering Q1 = flip both, add the
+  `ETGO_AC` list value with translations, and the app's convert gate (C.1). Q2:
+  `PortalDecisionService#rejectReasonFor` returns `null` (the reason and "Otros" text are in the
+  quotation's notes). Q3: `QuotationDecisions.isDecidable`.
+- **Not built:** the `ETGO_AC` list value and the app/MCP convert gate (Q1); the tenant reject-reason
+  mapping (Q2); KPI event names (PO).
+
 ---
 
 ## Still open
@@ -1177,7 +1203,7 @@ are closed or moved to their own ticket.
 
 | Item | State | Notes |
 |---|---|---|
-| **Part C — accept / reject a quotation from the portal** | **Planned, not built** | See [Part C](#part-c--accept--reject-a-quotation-from-the-portal-plan-2026-11-13-not-built): plan pending review with the PO (open questions C.11). |
+| **Part C — accept / reject a quotation from the portal** | **Built (reject); accept behind the Q1 seam** | See [Part C](#part-c--accept--reject-a-quotation-from-the-portal-plan-2026-11-13-not-built): plan pending review with the PO (open questions C.11). |
 | **KPI semantics** | **Pending the PO** | The four events of §A.7 ship (`portal.link.sent`, `portal.link.opened`, `portal.link.renewed`, `portal.document.downloaded`, server-only). D-5 took *per send* (`ROOT_LINK_ID`) as the headline unit as proposed; the PO has not yet confirmed the metric definitions — per send vs per document, and whether opens by link scanners that run JS (counted today, §A.7) are filtered. Changing the reading needs no code: the events carry both `ROOT_LINK_ID` and `documentId`. |
 | **Retention / purge job for `ETGO_PORTAL_LINK`** | **Asked of the PO** | Nothing deletes rows today. Pending rows (the email never left) are invalid forever and harmless (§A.2.7); expired rows are kept because **an expired link can be renewed at any age** — there is no maximum. The PO was asked the maximum age after which an expired link should no longer renew; that answer decides both the renewal cut-off and how long rows must be kept. |
 | **Plain-text 500 on the portal PDF route** | Optional cleanup | `GET /sws/portal/documents/{kind}/{id}/pdf` streams through `AnonymousAttachmentStreamer`, whose failure path writes a `text/plain` body (`writePlainError`) — the email download link's format — while every other portal error is JSON. The page only reads the status, so nothing is broken; aligning it would mean a JSON error for the portal caller without changing the email link's answers. |
