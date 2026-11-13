@@ -34,7 +34,8 @@ export default function InvoiceInboxReviewBanners({ review }) {
                 key="confirmed"
                 tone="success"
                 testId="invoice-inbox-review-banner-confirmed"
-                title={ui('invoiceInboxReviewConfirmedTitle', { doc })}>
+                title={ui('invoiceInboxReviewConfirmedTitle', { doc })}
+                data-testid="ReviewBanner__838958">
                 {ui('invoiceInboxReviewConfirmedBody')}
               </ReviewBanner>
             );
@@ -45,7 +46,8 @@ export default function InvoiceInboxReviewBanners({ review }) {
                 key="unreadable"
                 tone="destructive"
                 testId="invoice-inbox-review-banner-unreadable"
-                title={ui('invoiceInboxReviewUnreadableTitle')}>
+                title={ui('invoiceInboxReviewUnreadableTitle')}
+                data-testid="ReviewBanner__838958">
                 {ui('invoiceInboxReviewUnreadableBody')}
               </ReviewBanner>
             );
@@ -55,7 +57,8 @@ export default function InvoiceInboxReviewBanners({ review }) {
                 key="error"
                 tone="destructive"
                 testId={`invoice-inbox-review-banner-error-${banner.code}`}
-                title={ui(errorCodeLabelKey(banner.code))} />
+                title={ui(errorCodeLabelKey(banner.code))}
+                data-testid="ReviewBanner__838958" />
             );
           case 'duplicate':
             return (
@@ -63,7 +66,8 @@ export default function InvoiceInboxReviewBanners({ review }) {
                 key="duplicate"
                 tone="warning"
                 testId="invoice-inbox-review-banner-duplicate"
-                title={ui('invoiceInboxReviewDuplicateTitle')}>
+                title={ui('invoiceInboxReviewDuplicateTitle')}
+                data-testid="ReviewBanner__838958">
                 {ui('invoiceInboxReviewDuplicateBody', {
                   doc: banner.invoice.documentNo ?? '',
                   no: header?.documentNo ?? '',
@@ -76,7 +80,8 @@ export default function InvoiceInboxReviewBanners({ review }) {
                 key="duplicateInbox"
                 tone="warning"
                 testId="invoice-inbox-review-banner-duplicate-inbox"
-                title={ui('invoiceInboxReviewDuplicateInboxTitle')}>
+                title={ui('invoiceInboxReviewDuplicateInboxTitle')}
+                data-testid="ReviewBanner__838958">
                 {ui('invoiceInboxReviewDuplicateInboxBody', {
                   files: banner.files.map((file) => file.fileName).filter(Boolean).join(', '),
                 })}
@@ -106,7 +111,8 @@ export function InvoiceInboxReviewMismatchBanner({ review, currency }) {
     <ReviewBanner
       tone="warning"
       testId="invoice-inbox-review-banner-mismatch"
-      title={ui('invoiceInboxReviewMismatchTitle')}>
+      title={ui('invoiceInboxReviewMismatchTitle')}
+      data-testid="ReviewBanner__838958">
       {ui('invoiceInboxReviewMismatchBody', {
         lines: formatCurrency(currency, mismatch.lines),
         doc: formatCurrency(currency, mismatch.document),

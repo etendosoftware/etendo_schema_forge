@@ -95,7 +95,7 @@ export default function InvoiceInboxReviewDrawer({
           className={DRAWER_CLASS}
           onCloseAutoFocus={(event) => { event.preventDefault(); nav.restoreFocus(); }}
           data-testid="invoice-inbox-review-drawer">
-        <SheetDescription className="sr-only">{ui('invoiceInboxReviewAria')}</SheetDescription>
+        <SheetDescription className="sr-only" data-testid="SheetDescription__b26584">{ui('invoiceInboxReviewAria')}</SheetDescription>
         <InvoiceInboxReviewHeader
           document={headerDocument}
           position={nav.position}

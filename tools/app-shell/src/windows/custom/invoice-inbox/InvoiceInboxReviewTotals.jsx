@@ -30,7 +30,8 @@ export default function InvoiceInboxReviewTotals({ header, lines, currency }) {
         first
         label={ui('invoiceInboxReviewTotalBase')}
         value={formatCurrency(currency, totals.base)}
-        testId="invoice-inbox-review-total-base" />
+        testId="invoice-inbox-review-total-base"
+        data-testid="TotalRow__9b4c54" />
       {totals.taxes.map((tax) => (
         <TotalRow
           key={tax.rate}
@@ -39,7 +40,8 @@ export default function InvoiceInboxReviewTotals({ header, lines, currency }) {
             base: formatCurrency(currency, tax.base),
           })}
           value={formatCurrency(currency, tax.amount)}
-          testId={`invoice-inbox-review-total-tax-${tax.rate}`} />
+          testId={`invoice-inbox-review-total-tax-${tax.rate}`}
+          data-testid="TotalRow__9b4c54" />
       ))}
       <div className="flex items-baseline justify-between border-t border-border bg-muted/50 px-3.5 py-3">
         <span className="text-[15px] font-bold leading-tight" data-testid="invoice-inbox-review-total-label">

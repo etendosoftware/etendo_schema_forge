@@ -76,14 +76,16 @@ export default function InvoiceInboxReviewFooter({ review, onDiscard, discarding
         <SoonButton
           label={ui('invoiceInboxReviewMarkReviewed')}
           variant="secondary"
-          testId="invoice-inbox-review-mark-reviewed" />
+          testId="invoice-inbox-review-mark-reviewed"
+          data-testid="SoonButton__822e07" />
       )}
       {!locked && (
         <SoonButton
           label={ui('invoiceInboxReviewConfirm')}
           icon={Check}
           variant="default"
-          testId="invoice-inbox-review-confirm" />
+          testId="invoice-inbox-review-confirm"
+          data-testid="SoonButton__822e07" />
       )}
     </footer>
   );

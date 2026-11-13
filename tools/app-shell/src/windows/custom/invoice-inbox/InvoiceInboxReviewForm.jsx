@@ -38,14 +38,17 @@ function HeaderSection({ review, currency, missing, readOnly, locked, locale }) 
     : (header?.invoiceDateRaw ?? '');
   return (
     <section className="flex flex-col gap-3" data-testid="invoice-inbox-review-header-section">
-      <SectionTitle testId="invoice-inbox-review-header-title">{ui('invoiceInboxReviewSectionHeader')}</SectionTitle>
+      <SectionTitle
+        testId="invoice-inbox-review-header-title"
+        data-testid="SectionTitle__fd4b42">{ui('invoiceInboxReviewSectionHeader')}</SectionTitle>
       <div className="grid grid-cols-2 gap-3.5">
         <ReviewField
           label={ui('invoiceInboxReviewFieldInvoiceNo')}
           value={header?.documentNo}
           readOnly={readOnly}
           disabled={locked}
-          testId="invoice-inbox-review-invoice-no" />
+          testId="invoice-inbox-review-invoice-no"
+          data-testid="ReviewField__fd4b42" />
         <ReviewField
           label={ui('invoiceInboxReviewFieldInvoiceDate')}
           value={date}
@@ -55,10 +58,15 @@ function HeaderSection({ review, currency, missing, readOnly, locked, locale }) 
           icon={DATE_FIELD_ICON}
           invalid={dateMissing}
           tag={dateMissing
-            ? <ReviewTag tone="warning" label={ui('invoiceInboxReviewReviewTag')} testId="invoice-inbox-review-invoice-date-tag" />
+            ? <ReviewTag
+            tone="warning"
+            label={ui('invoiceInboxReviewReviewTag')}
+            testId="invoice-inbox-review-invoice-date-tag"
+            data-testid="ReviewTag__fd4b42" />
             : null}
           error={dateMissing ? ui('invoiceInboxReviewDateRequired') : null}
-          testId="invoice-inbox-review-invoice-date" />
+          testId="invoice-inbox-review-invoice-date"
+          data-testid="ReviewField__fd4b42" />
         <CurrencyField review={review} currency={currency} data-testid="CurrencyField__review" />
       </div>
     </section>

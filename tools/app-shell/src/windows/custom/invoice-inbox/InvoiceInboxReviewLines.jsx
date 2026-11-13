@@ -52,8 +52,13 @@ function ProductPanel({ line, position, readOnly, state }) {
                 readOnly={readOnly}
                 testId={`invoice-inbox-review-line-${position}-candidate-${candidate.id}`}
                 badge={index === 0
-                  ? <ReviewTag tone="info" label={ui('invoiceInboxReviewMostLikely')} testId={`invoice-inbox-review-line-${position}-likely`} />
-                  : null}>
+                  ? <ReviewTag
+                  tone="info"
+                  label={ui('invoiceInboxReviewMostLikely')}
+                  testId={`invoice-inbox-review-line-${position}-likely`}
+                  data-testid="ReviewTag__21702d" />
+                  : null}
+                data-testid="OptionRow__21702d">
                 <span className="block truncate text-[13px] font-semibold">{candidate.name}</span>
                 <span className="block truncate font-mono text-[11px] text-muted-foreground">
                   {joinMeta([candidate.searchKey, candidate.category, candidate.uom])}
@@ -64,7 +69,8 @@ function ProductPanel({ line, position, readOnly, state }) {
               compact
               value={NONE_VALUE}
               readOnly={readOnly}
-              testId={`invoice-inbox-review-line-${position}-none-option`}>
+              testId={`invoice-inbox-review-line-${position}-none-option`}
+              data-testid="OptionRow__21702d">
               <span className="block text-[13px] font-medium text-primary">{ui('invoiceInboxReviewProductCreateNew')}</span>
             </OptionRow>
           </div>
@@ -116,7 +122,8 @@ function ChipBody({ line, state, position }) {
           label={count === 1
             ? ui('invoiceInboxReviewProductAmbiguousTagOne')
             : ui('invoiceInboxReviewProductAmbiguousTag', { count })}
-          testId={`invoice-inbox-review-line-${position}-product-tag`} />
+          testId={`invoice-inbox-review-line-${position}-product-tag`}
+          data-testid="AiChip__21702d" />
         <span className="text-xs font-medium text-status-warning-foreground">{ui('invoiceInboxReviewProductPickOne')}</span>
       </>
     );
@@ -129,7 +136,8 @@ function ChipBody({ line, state, position }) {
           tone="info"
           label={ui('invoiceInboxReviewProductNewTag')}
           icon={PackagePlus}
-          testId={`invoice-inbox-review-line-${position}-product-tag`} />
+          testId={`invoice-inbox-review-line-${position}-product-tag`}
+          data-testid="ReviewTag__21702d" />
         <span className="min-w-0 truncate text-xs text-muted-foreground">
           {joinMeta([fresh.category, fresh.uom, ui('invoiceInboxReviewProductWillCreate')])}
         </span>
@@ -269,14 +277,21 @@ function ReadOnlyLines({ lines, currency }) {
   );
 }
 
+/** "Resuelve el producto de {n} línea(s)": the singular for one line, null when none is unresolved. */
+function unresolvedProductsError(unresolved, ui) {
+  if (unresolved <= 0) return null;
+  const key = unresolved === 1
+    ? 'invoiceInboxReviewProductsUnresolvedOne'
+    : 'invoiceInboxReviewProductsUnresolvedMany';
+  return ui(key, { count: unresolved });
+}
+
 /** The one red line under the table: the active errors joined with " · " (product, tax, amount). */
 function lineErrors(document, ui) {
   const missing = missingSet(document);
   const unresolved = unresolvedProductCount(document);
   return [
-    unresolved > 0
-      ? ui(unresolved === 1 ? 'invoiceInboxReviewProductsUnresolvedOne' : 'invoiceInboxReviewProductsUnresolvedMany', { count: unresolved })
-      : null,
+    unresolvedProductsError(unresolved, ui),
     hasMissingTax(document) ? ui('invoiceInboxReviewTaxMissingError') : null,
     missing.has('amount') ? ui('invoiceInboxReviewNoAmount') : null,
   ].filter(Boolean);
@@ -307,7 +322,9 @@ export default function InvoiceInboxReviewLines({
   const errors = lineErrors(document, ui);
   return (
     <section className="flex flex-col gap-3" data-testid="invoice-inbox-review-lines">
-      <SectionTitle testId="invoice-inbox-review-lines-title">
+      <SectionTitle
+        testId="invoice-inbox-review-lines-title"
+        data-testid="SectionTitle__21702d">
         {ui('invoiceInboxReviewSectionLines', { count: lines.length })}
       </SectionTitle>
       {locked ? (
@@ -340,7 +357,9 @@ export default function InvoiceInboxReviewLines({
             </ul>
           )}
           {errors.length > 0 && (
-            <FieldError testId="invoice-inbox-review-lines-error">{errors.join(' · ')}</FieldError>
+            <FieldError
+              testId="invoice-inbox-review-lines-error"
+              data-testid="FieldError__21702d">{errors.join(' · ')}</FieldError>
           )}
           {showActions && (
             <Button

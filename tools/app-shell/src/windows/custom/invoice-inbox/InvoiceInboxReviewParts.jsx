@@ -63,7 +63,10 @@ export function ReviewField({
   return (
     <div className={className} data-testid={`${testId}-field`}>
       <div className="mb-1.5 flex items-center justify-between gap-2">
-        <Label htmlFor={testId} className="text-sm font-medium text-foreground">
+        <Label
+          htmlFor={testId}
+          className="text-sm font-medium text-foreground"
+          data-testid="Label__a14703">
           {label}
           {required && <span className="ml-0.5 text-destructive" aria-hidden="true">*</span>}
         </Label>
@@ -87,7 +90,7 @@ export function ReviewField({
             data-testid={`${testId}-icon`} />
         )}
       </div>
-      <FieldError testId={`${testId}-error`}>{error}</FieldError>
+      <FieldError testId={`${testId}-error`} data-testid="FieldError__a14703">{error}</FieldError>
     </div>
   );
 }

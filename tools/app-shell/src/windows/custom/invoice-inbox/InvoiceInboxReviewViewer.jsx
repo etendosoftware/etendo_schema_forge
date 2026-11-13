@@ -118,7 +118,9 @@ export default function InvoiceInboxReviewViewer({ documentId, fileName, token =
 
   if (!storedFile && isBusy) {
     return (
-      <Centered testId="invoice-inbox-review-viewer-loading">
+      <Centered
+        testId="invoice-inbox-review-viewer-loading"
+        data-testid="Centered__e8a41d">
         <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" data-testid="Loader2__review-viewer" />
         <span className="text-xs">{ui('invoiceInboxReviewViewerLoading')}</span>
       </Centered>
@@ -126,7 +128,7 @@ export default function InvoiceInboxReviewViewer({ documentId, fileName, token =
   }
   if (!storedFile) {
     return (
-      <Centered testId="invoice-inbox-review-viewer-empty">
+      <Centered testId="invoice-inbox-review-viewer-empty" data-testid="Centered__e8a41d">
         <FileText className="h-8 w-8 opacity-40" aria-hidden="true" data-testid="FileText__review-viewer" />
         <span className="text-xs">{ui('invoiceInboxReviewViewerEmpty')}</span>
       </Centered>
@@ -144,7 +146,8 @@ export default function InvoiceInboxReviewViewer({ documentId, fileName, token =
           label={ui('pdfViewerZoomOut')}
           onClick={zoomOut}
           disabled={zoom <= ZOOM_MIN}
-          testId="invoice-inbox-review-viewer-zoom-out">
+          testId="invoice-inbox-review-viewer-zoom-out"
+          data-testid="ToolbarButton__e8a41d">
           <ZoomOut className="h-4 w-4" aria-hidden="true" data-testid="ZoomOut__review-viewer" />
         </ToolbarButton>
         <span className="w-11 text-center font-mono text-xs font-medium tabular-nums" data-testid="invoice-inbox-review-viewer-zoom">
@@ -154,7 +157,8 @@ export default function InvoiceInboxReviewViewer({ documentId, fileName, token =
           label={ui('pdfViewerZoomIn')}
           onClick={zoomIn}
           disabled={zoom >= ZOOM_MAX}
-          testId="invoice-inbox-review-viewer-zoom-in">
+          testId="invoice-inbox-review-viewer-zoom-in"
+          data-testid="ToolbarButton__e8a41d">
           <ZoomIn className="h-4 w-4" aria-hidden="true" data-testid="ZoomIn__review-viewer" />
         </ToolbarButton>
         {storedFile.objectUrl && (
@@ -162,7 +166,8 @@ export default function InvoiceInboxReviewViewer({ documentId, fileName, token =
             asChild
             variant="ghost"
             size="icon"
-            className="h-[30px] w-[30px] flex-none">
+            className="h-[30px] w-[30px] flex-none"
+            data-testid="Button__e8a41d">
             <a
               href={storedFile.objectUrl}
               download={downloadName}
@@ -189,7 +194,9 @@ export default function InvoiceInboxReviewViewer({ documentId, fileName, token =
         ) : (
           <Suspense
             fallback={(
-              <Centered testId="invoice-inbox-review-viewer-suspense">
+              <Centered
+                testId="invoice-inbox-review-viewer-suspense"
+                data-testid="Centered__e8a41d">
                 <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" data-testid="Loader2__review-viewer-lazy" />
               </Centered>
             )}

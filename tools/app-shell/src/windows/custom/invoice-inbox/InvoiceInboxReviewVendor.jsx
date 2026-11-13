@@ -56,11 +56,16 @@ function LinkedVendor({ view }) {
         )}
       </div>
       {matchedKey && (
-        <ReviewTag tone="success" label={ui(matchedKey)} testId="invoice-inbox-review-vendor-matched-by" />
+        <ReviewTag
+          tone="success"
+          label={ui(matchedKey)}
+          testId="invoice-inbox-review-vendor-matched-by"
+          data-testid="ReviewTag__3b4318" />
       )}
       <InertButton
         label={ui('invoiceInboxReviewVendorChange')}
-        testId="invoice-inbox-review-vendor-change" />
+        testId="invoice-inbox-review-vendor-change"
+        data-testid="InertButton__3b4318" />
     </div>
   );
 }
@@ -89,7 +94,8 @@ function AmbiguousVendor({ view, missing, readOnly }) {
           label={candidates.length === 1
             ? ui('invoiceInboxReviewVendorAmbiguousTitleOne')
             : ui('invoiceInboxReviewVendorAmbiguousTitle', { count: candidates.length })}
-          testId="invoice-inbox-review-vendor-ambiguous-title" />
+          testId="invoice-inbox-review-vendor-ambiguous-title"
+          data-testid="AiChip__3b4318" />
         <span className="min-w-0 text-xs text-muted-foreground [overflow-wrap:anywhere]" data-testid="invoice-inbox-review-vendor-in-document">
           {ui('invoiceInboxReviewVendorInDocument', { name: extracted.name ?? '' })}
           {!String(extracted.taxId ?? '').trim() && ui('invoiceInboxReviewVendorNoTaxId')}
@@ -103,8 +109,13 @@ function AmbiguousVendor({ view, missing, readOnly }) {
             readOnly={readOnly}
             testId={`invoice-inbox-review-vendor-candidate-${candidate.id}`}
             badge={position === 0
-              ? <ReviewTag tone="info" label={ui('invoiceInboxReviewMostLikely')} testId={`invoice-inbox-review-vendor-likely-${candidate.id}`} />
-              : null}>
+              ? <ReviewTag
+              tone="info"
+              label={ui('invoiceInboxReviewMostLikely')}
+              testId={`invoice-inbox-review-vendor-likely-${candidate.id}`}
+              data-testid="ReviewTag__3b4318" />
+              : null}
+            data-testid="OptionRow__3b4318">
             <span className="block truncate text-sm font-semibold">{candidate.name}</span>
             <span className="block truncate font-mono text-xs text-muted-foreground">
               {joinMeta([candidate.taxId, candidate.city])}
@@ -114,12 +125,15 @@ function AmbiguousVendor({ view, missing, readOnly }) {
         <OptionRow
           value={NONE_VALUE}
           readOnly={readOnly}
-          testId="invoice-inbox-review-vendor-none-option">
+          testId="invoice-inbox-review-vendor-none-option"
+          data-testid="OptionRow__3b4318">
           <span className="block text-sm font-medium text-primary">{ui('invoiceInboxReviewVendorCreateNew')}</span>
         </OptionRow>
       </div>
       {missing.has('vendor') && (
-        <FieldError testId="invoice-inbox-review-vendor-error">{ui('invoiceInboxReviewVendorPickError')}</FieldError>
+        <FieldError
+          testId="invoice-inbox-review-vendor-error"
+          data-testid="FieldError__3b4318">{ui('invoiceInboxReviewVendorPickError')}</FieldError>
       )}
     </div>
   );
@@ -146,7 +160,8 @@ function NewVendor({ view, missing, readOnly }) {
         <InertButton
           label={ui('invoiceInboxReviewVendorSearchExisting')}
           testId="invoice-inbox-review-vendor-search-existing"
-          icon={<Search className="h-3.5 w-3.5" aria-hidden="true" data-testid="Search__review-vendor" />} />
+          icon={<Search className="h-3.5 w-3.5" aria-hidden="true" data-testid="Search__review-vendor" />}
+          data-testid="InertButton__3b4318" />
       </div>
       <ReviewField
         label={ui('invoiceInboxReviewFieldName')}
@@ -155,35 +170,41 @@ function NewVendor({ view, missing, readOnly }) {
         required
         invalid={noName}
         error={noName ? ui('invoiceInboxReviewVendorRequired') : null}
-        testId="invoice-inbox-review-vendor-new-name" />
+        testId="invoice-inbox-review-vendor-new-name"
+        data-testid="ReviewField__3b4318" />
       <div className="grid grid-cols-[160px_minmax(0,1fr)] gap-3">
         <ReviewField
           label={ui('invoiceInboxReviewFieldTaxId')}
           value={extracted.taxId}
           readOnly={readOnly}
-          testId="invoice-inbox-review-vendor-new-taxid" />
+          testId="invoice-inbox-review-vendor-new-taxid"
+          data-testid="ReviewField__3b4318" />
         <ReviewField
           label={ui('invoiceInboxReviewFieldAddress')}
           value={extracted.address}
           readOnly={readOnly}
-          testId="invoice-inbox-review-vendor-new-address" />
+          testId="invoice-inbox-review-vendor-new-address"
+          data-testid="ReviewField__3b4318" />
       </div>
       <div className="grid grid-cols-[160px_minmax(0,1fr)_minmax(0,1fr)] gap-3">
         <ReviewField
           label={ui('invoiceInboxReviewFieldPostalCode')}
           value={extracted.postalCode}
           readOnly={readOnly}
-          testId="invoice-inbox-review-vendor-new-postalcode" />
+          testId="invoice-inbox-review-vendor-new-postalcode"
+          data-testid="ReviewField__3b4318" />
         <ReviewField
           label={ui('invoiceInboxReviewFieldCity')}
           value={extracted.city}
           readOnly={readOnly}
-          testId="invoice-inbox-review-vendor-new-city" />
+          testId="invoice-inbox-review-vendor-new-city"
+          data-testid="ReviewField__3b4318" />
         <ReviewField
           label={ui('invoiceInboxReviewFieldCountry')}
           value={country}
           readOnly={readOnly}
-          testId="invoice-inbox-review-vendor-new-country" />
+          testId="invoice-inbox-review-vendor-new-country"
+          data-testid="ReviewField__3b4318" />
       </div>
     </div>
   );
@@ -202,7 +223,9 @@ function NoVendor({ missing }) {
         className={missing.has('vendor') ? 'border-destructive' : undefined}
         data-testid="invoice-inbox-review-vendor-none-hint" />
       {missing.has('vendor') && (
-        <FieldError testId="invoice-inbox-review-vendor-error">{ui('invoiceInboxReviewVendorRequired')}</FieldError>
+        <FieldError
+          testId="invoice-inbox-review-vendor-error"
+          data-testid="FieldError__3b4318">{ui('invoiceInboxReviewVendorRequired')}</FieldError>
       )}
     </div>
   );
@@ -223,12 +246,22 @@ export default function InvoiceInboxReviewVendor({ document, missing, readOnly =
   const view = vendorView(document);
   return (
     <section className="flex flex-col gap-3" data-testid="invoice-inbox-review-vendor" data-state={view.state}>
-      <SectionTitle testId="invoice-inbox-review-vendor-title">{ui('invoiceInboxReviewSectionVendor')}</SectionTitle>
-      {locked && <PlainVendor view={view} />}
-      {!locked && view.state === 'linked' && <LinkedVendor view={view} />}
-      {!locked && view.state === 'ambiguous' && <AmbiguousVendor view={view} missing={missing} readOnly={readOnly} />}
-      {!locked && view.state === 'new' && <NewVendor view={view} missing={missing} readOnly={readOnly} />}
-      {!locked && view.state === 'none' && <NoVendor missing={missing} />}
+      <SectionTitle
+        testId="invoice-inbox-review-vendor-title"
+        data-testid="SectionTitle__3b4318">{ui('invoiceInboxReviewSectionVendor')}</SectionTitle>
+      {locked && <PlainVendor view={view} data-testid="PlainVendor__3b4318" />}
+      {!locked && view.state === 'linked' && <LinkedVendor view={view} data-testid="LinkedVendor__3b4318" />}
+      {!locked && view.state === 'ambiguous' && <AmbiguousVendor
+        view={view}
+        missing={missing}
+        readOnly={readOnly}
+        data-testid="AmbiguousVendor__3b4318" />}
+      {!locked && view.state === 'new' && <NewVendor
+        view={view}
+        missing={missing}
+        readOnly={readOnly}
+        data-testid="NewVendor__3b4318" />}
+      {!locked && view.state === 'none' && <NoVendor missing={missing} data-testid="NoVendor__3b4318" />}
     </section>
   );
 }

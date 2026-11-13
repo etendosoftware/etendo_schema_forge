@@ -87,10 +87,20 @@ export default function InvoiceInboxReviewHeader({
           {ui('invoiceInboxReviewPosition', { n: position, total })}
         </span>
       )}
-      <IconButton label={ui('invoiceInboxReviewPrevious')} onClick={onPrev} disabled={!canPrev} testId="invoice-inbox-review-prev">
+      <IconButton
+        label={ui('invoiceInboxReviewPrevious')}
+        onClick={onPrev}
+        disabled={!canPrev}
+        testId="invoice-inbox-review-prev"
+        data-testid="IconButton__abf2a4">
         <ChevronLeft className="h-4 w-4" aria-hidden="true" data-testid="ChevronLeft__review-header" />
       </IconButton>
-      <IconButton label={ui('next')} onClick={onNext} disabled={!canNext} testId="invoice-inbox-review-next">
+      <IconButton
+        label={ui('next')}
+        onClick={onNext}
+        disabled={!canNext}
+        testId="invoice-inbox-review-next"
+        data-testid="IconButton__abf2a4">
         <ChevronRight className="h-4 w-4" aria-hidden="true" data-testid="ChevronRight__review-header" />
       </IconButton>
       <SheetClose asChild data-testid="SheetClose__review-header">
