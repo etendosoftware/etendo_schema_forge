@@ -235,6 +235,30 @@ describe('PlanChangeDialog', () => {
     expect(requestPlanChange).toHaveBeenCalledWith('/api', 'pro-yearly', null, null);
   });
 
+  it('says a past-due subscription cannot change plan, and offers nothing', async () => {
+    getPlanChanges.mockResolvedValue({ hasSubscription: true, subscriptionStatus: 'past_due',
+      changes: [PRO, CORE] });
+    renderDialog();
+
+    expect(await screen.findByTestId('PlanChangeDialog__notCurrent'))
+      .toHaveTextContent('planChangeNotCurrent');
+    expect(screen.queryByTestId('PlanChangeDialog__option')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('PlanChangeDialog__confirm')).not.toBeInTheDocument();
+  });
+
+  it('shows a refused quote as the refusal and does not let the customer confirm', async () => {
+    getPlanChanges.mockResolvedValue({ hasSubscription: true, changes: [PRO] });
+    previewPlanChange.mockRejectedValue(Object.assign(new Error('past due'),
+      { status: 409, code: 'planChangeNotCurrent' }));
+    renderDialog();
+
+    await userEvent.click((await screen.findAllByTestId('PlanChangeDialog__option'))[0]);
+
+    expect(await screen.findByTestId('PlanChangeDialog__error')).toHaveTextContent('planChangeNotCurrent');
+    expect(screen.queryByTestId('PlanChangeDialog__charge')).not.toBeInTheDocument();
+    expect(screen.getByTestId('PlanChangeDialog__confirm')).toBeDisabled();
+  });
+
   it('previews nothing for a downgrade, which charges nothing today', async () => {
     getPlanChanges.mockResolvedValue({ hasSubscription: true, changes: [CORE] });
     renderDialog();

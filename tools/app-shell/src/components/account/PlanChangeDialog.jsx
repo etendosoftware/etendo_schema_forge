@@ -37,6 +37,9 @@ const REFUSAL_CODES = new Set([
   UPGRADE_ERROR_CODES.planChangeNotAllowed, UPGRADE_ERROR_CODES.planChangeNotCurrent,
 ]);
 
+/** Subscription statuses that can change plan; anything else is refused by the backend. */
+const CURRENT_STATUSES = new Set(['active', 'trialing']);
+
 /** The line a refused or failed change request shows: its own code for a refusal, else generic. */
 function errorKeyOf(err) {
   return REFUSAL_CODES.has(err?.code) ? err.code : UPGRADE_ERROR_CODES.planChangeFailed;
@@ -88,6 +91,7 @@ function cardBrandLabel(brand) {
  */
 function chargeText(preview, ui) {
   if (preview.status === 'loading') return ui('planChangeChargeLoading');
+  if (preview.status === 'refused') return null;
   const data = preview.data;
   if (preview.status !== 'loaded' || !data?.amountDue || !data?.currency) {
     return ui('planChangeChargeUnknown');
@@ -186,6 +190,7 @@ export function PlanChangeDialog({
       return undefined;
     }
     let cancelled = false;
+    setErrorKey(null);
     setPreview({ status: 'loading', data: null });
     previewPlanChange(apiBaseUrl, selectedKey, clientId)
       .then((data) => { if (!cancelled) setPreview({ status: 'loaded', data }); })
@@ -196,11 +201,21 @@ export function PlanChangeDialog({
           onOpenChange?.(false);
           return;
         }
+        if (REFUSAL_CODES.has(err?.code)) {
+          // The backend would refuse the change itself (past due, not allowed): say why and do
+          // not let the customer confirm, instead of pretending only the amount is unknown.
+          setErrorKey(err.code);
+          setPreview({ status: 'refused', data: null });
+          return;
+        }
         setPreview({ status: 'failed', data: null });
       });
     return () => { cancelled = true; };
   }, [apiBaseUrl, clientId, selectedKey, selectedTiming, onSessionExpired, onOpenChange]);
   const pending = offer?.pendingChange || null;
+  // A past-due or canceled subscription cannot change plan: say so up front, offer nothing.
+  const notCurrent = status === 'loaded' && Boolean(offer?.subscriptionStatus)
+    && !CURRENT_STATUSES.has(offer.subscriptionStatus);
   const periodEndDate = periodEnd ? formatCalendarDate(periodEnd, locale) : null;
 
   const handleConfirm = useCallback(async () => {
@@ -294,13 +309,19 @@ export function PlanChangeDialog({
           </p>
         )}
 
-        {status === 'loaded' && !done && changes.length === 0 && (
+        {notCurrent && !done && (
+          <p className="text-sm text-destructive" data-testid="PlanChangeDialog__notCurrent">
+            {ui('planChangeNotCurrent')}
+          </p>
+        )}
+
+        {status === 'loaded' && !notCurrent && !done && changes.length === 0 && (
           <p className="text-sm text-muted-foreground" data-testid="PlanChangeDialog__none">
             {ui('planChangeNone')}
           </p>
         )}
 
-        {status === 'loaded' && !done && changes.length > 0 && (
+        {status === 'loaded' && !notCurrent && !done && changes.length > 0 && (
           <ul className="divide-y overflow-hidden rounded-md border" data-testid="PlanChangeDialog__options">
             {changes.map((change) => {
               const isSelected = change.planKey === selectedKey;
@@ -349,7 +370,7 @@ export function PlanChangeDialog({
             <p data-testid="PlanChangeDialog__timingNote">
               {timingNote(selected, ui, periodEndDate, pending)}
             </p>
-            {selected.timing === TIMING_IMMEDIATE && (
+            {selected.timing === TIMING_IMMEDIATE && preview.status !== 'refused' && (
               <p className="font-medium" data-testid="PlanChangeDialog__charge"
                 data-preview-status={preview.status}>
                 {chargeText(preview, ui)}
@@ -394,9 +415,10 @@ export function PlanChangeDialog({
             onClick={() => onOpenChange?.(false)} data-testid="PlanChangeDialog__close">
             {ui(done ? 'close' : 'cancel')}
           </Button>
-          {status === 'loaded' && !done && changes.length > 0 && (
+          {status === 'loaded' && !notCurrent && !done && changes.length > 0 && (
             <Button type="button"
-              disabled={!selected || submitting || preview.status === 'loading'}
+              disabled={!selected || submitting || preview.status === 'loading'
+                || preview.status === 'refused'}
               onClick={handleConfirm}
               data-testid="PlanChangeDialog__confirm">
               {submitting
