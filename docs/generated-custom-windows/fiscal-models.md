@@ -4276,7 +4276,7 @@ certificate) and downloads it in every case. The validation is a warning, never 
 | no answer (`connection_failure` / `not_validated`) | the file; result step with an amber banner saying it could not be validated and was downloaded without validation; the stored incidents are left as they were |
 
 An accepted validation (with or without warnings) also attaches the validator's draft PDF to the
-declaration as `VALIDACION-justificante-390-<año>-0A.pdf`: it shows in the Justificante tab (the
+declaration as `VALIDACION-390-<año>-0A.pdf`: it shows in the Justificante tab (the
 page refreshes its list and counter) as proof that the file was validated, and each accepted
 validation replaces the previous one. It is not a filing receipt: the declaration stays a draft
 and nothing reads attachments to decide a status.
@@ -4303,6 +4303,17 @@ or Presentar (`ruleBlockingCount` counts the model's own rules only). Pieces:
 `FileGenModal390.jsx` (loading + result step), `FmModel390Page.handleGenerate` (resolves the
 validation to the popup). 303 and 349 generate exactly as
 before. Contract: `{etendo_root}/modules/com.etendoerp.go/docs/aeat-390-endpoints.md`.
+
+**Validation before a real presentation (ETP-5716, 303 and 390).** When the user presents WITHOUT
+"Validar sin presentar", the server first has the AEAT validator check the very file it is about to
+send, in the same request (`FiscalAeatSubmissionSupport.validateBeforeSubmission`, after every
+guard): no errors (warnings allowed) → the presentation goes ahead as before; errors → nothing is
+presented, the declaration stays a draft, the errors go to Incidencias and `AeatSubmitFlow` shows its
+error result titled "Declaración no presentada: la AEAT ha detectado errores al validarla"
+(`stage: "validation"` in the answer); no answer from the validator → the presentation goes ahead
+(server constant `PRESENT_WHEN_VALIDATOR_UNANSWERED`; when false, `VALIDATION_UNAVAILABLE`). While it
+runs the button reads "Validando y presentando en la AEAT…" (one request, so one text). The check
+"Validar sin presentar" itself is unchanged. No PDF is attached for this implicit validation.
 
 **AEAT attempt log (ETP-5716).** Every attempt against the AEAT — a direct presentation, a
 "Validar sin presentar" and this pre-download validation, for 303 and 390 — leaves a row in the

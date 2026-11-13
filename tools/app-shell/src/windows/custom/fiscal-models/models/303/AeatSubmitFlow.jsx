@@ -129,6 +129,9 @@ export function classifySubmitOutcome(data) {
 export function resolveErrorCodeKey(errorCode) {
   if (errorCode === 'MISSING_PRESENTER') return 'fm.aeat.error.missingPresenter';
   if (errorCode === 'NO_CERTIFICATE') return 'fm.aeat.error.noCertificate';
+  // ETP-5716: the validation that precedes a real presentation got no answer and the server
+  // is set to stop (FiscalAeatSubmissionSupport.PRESENT_WHEN_VALIDATOR_UNANSWERED = false).
+  if (errorCode === 'VALIDATION_UNAVAILABLE') return 'fm.aeat.error.validationUnavailable';
   if (errorCode === 'ALREADY_SUBMITTED') return 'fm.aeat.error.alreadySubmitted';
   // Modelo 390 only (ETP-5716): the backend refuses a filing with blocking incidents.
   if (errorCode === 'BLOCKING_INCIDENTS') return 'fm.aeat.error.blockingIncidents';
@@ -633,7 +636,11 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
                 <Banner
                   tone="danger"
                   icon={<OctagonAlert size={18} data-testid="OctagonAlert__aeatError" />}
-                  title={t('fm.aeat.result.error.title') ?? 'The submission could not be completed'}
+                  title={response?.stage === 'validation' && !specificKey
+                    // ETP-5716: the server validates before a real presentation; the validator's
+                    // errors stopped it — nothing was presented.
+                    ? (t('fm.aeat.result.validation_rejected.title') ?? 'Declaration not submitted: the AEAT found errors when validating it')
+                    : (t('fm.aeat.result.error.title') ?? 'The submission could not be completed')}
                   data-testid="Banner__aeatError">
                   {errorBody}
                 </Banner>
@@ -683,7 +690,8 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
                 ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__aeatSubmitting" />
                 : <Landmark size={14} data-testid="Landmark__aeatSubmit" />}
               {submitting
-                ? (t('fm.aeat.action.submitting') ?? 'Submitting to AEAT…')
+                // A real presentation is validated first by the server, in the same request.
+                ? (t(testMode ? 'fm.aeat.action.submitting' : 'fm.aeat.action.validating_submitting') ?? 'Submitting to AEAT…')
                 : (t('fm.aeat.action.submit') ?? 'Submit to AEAT')}
             </button>
           )}
