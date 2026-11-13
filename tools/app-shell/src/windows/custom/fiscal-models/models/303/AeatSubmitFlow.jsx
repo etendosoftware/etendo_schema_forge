@@ -408,7 +408,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
         {/* Header */}
         <div className="fm-config-modal__header">
           <div className="fm-config-modal__titles">
-            <div className="fm-config-modal__title">{t('fm.aeat.title') ?? 'AEAT electronic submission'}</div>
+            <div className="fm-config-modal__title">{t('fm.aeat.title') ?? 'AEAT direct submission'}</div>
             {step === 'confirm' && (
               <div className="fm-config-modal__sub">
                 {t('fm.aeat.confirm.subtitle') ?? 'Review the data before sending to the Tax Agency'}

@@ -627,7 +627,7 @@ variant for the primary. The status chip is the list's own chip (`FmStatusChip`)
 with no "Estado:" prefix. See "Detail page header, action bar and 1280×720 layout (ETP-5584)" below.
 The handlers, gates and data-safety behaviour described in the rest of this section are unchanged.
 
-Left to right (pre-ETP-5584 order): **Cancelar** (`onBack`) and a status pill (since ETP-5584 the `FmStatusChip`), then — right-aligned — **Guardar** (`Save`/`Loader2` icon, `handleSave` — ETP-5338, leftmost of the right-aligned group, replacing an earlier go-back button that used to sit next to Cancelar, see below), **Calcular** (`handleComputeClick` — triggers the actual box recompute via `handleCompute` first, then persists the freshly-recomputed `identChecks`/`manualOverrides` via the same `persistEditableFields()` helper Guardar uses, fire-and-forget; spinner while `computing`. **Order matters here (ETP-5431 pt.5, see "Box 111 autocompletion" below): recompute always runs before the persist reads its snapshot** — an earlier version launched both in parallel, so the save's snapshot almost always raced the recompute and persisted box 111's pre-recompute value), a standalone **"Generar fichero 303"** button, and a single **"Registrar/Presentar"** button (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) opening `PresentModal`, which on this page passes `showAeatPath` so its 3rd card ("Presentación telemática AEAT" / `aeat_telematic`) is available — see "AEAT electronic submission" below for how that card routes into `AeatSubmitFlow`. There is deliberately no separate standalone AEAT button in the action bar; a brief ETP-5229 iteration split it into one, but the modal was reunified with a single renamed trigger instead. **All four of these buttons — Guardar, Calcular, "Generar fichero 303", and "Registrar/Presentar" — are wrapped `{!isSubmitted && ...}` (ETP-5438): once the declaration reaches a submitted-family status, the action bar reduces to just Cancelar and the status pill.** "Generar fichero 303" used to be unconditionally visible regardless of submission status before this fix — see "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" above for the full rationale and the matching backend guard. The page has no in-page kebab: favourites and page help are in the app TopBar kebab (see "'More options' kebab — favorites and help").
+Left to right (pre-ETP-5584 order): **Cancelar** (`onBack`) and a status pill (since ETP-5584 the `FmStatusChip`), then — right-aligned — **Guardar** (`Save`/`Loader2` icon, `handleSave` — ETP-5338, leftmost of the right-aligned group, replacing an earlier go-back button that used to sit next to Cancelar, see below), **Calcular** (`handleComputeClick` — triggers the actual box recompute via `handleCompute` first, then persists the freshly-recomputed `identChecks`/`manualOverrides` via the same `persistEditableFields()` helper Guardar uses, fire-and-forget; spinner while `computing`. **Order matters here (ETP-5431 pt.5, see "Box 111 autocompletion" below): recompute always runs before the persist reads its snapshot** — an earlier version launched both in parallel, so the save's snapshot almost always raced the recompute and persisted box 111's pre-recompute value), a standalone **"Generar fichero 303"** button, and a single **"Registrar/Presentar"** button (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) opening `PresentModal`, which on this page passes `showAeatPath` so its 3rd card ("Presentación directa AEAT" / `aeat_telematic`) is available — see "AEAT electronic submission" below for how that card routes into `AeatSubmitFlow`. There is deliberately no separate standalone AEAT button in the action bar; a brief ETP-5229 iteration split it into one, but the modal was reunified with a single renamed trigger instead. **All four of these buttons — Guardar, Calcular, "Generar fichero 303", and "Registrar/Presentar" — are wrapped `{!isSubmitted && ...}` (ETP-5438): once the declaration reaches a submitted-family status, the action bar reduces to just Cancelar and the status pill.** "Generar fichero 303" used to be unconditionally visible regardless of submission status before this fix — see "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" above for the full rationale and the matching backend guard. The page has no in-page kebab: favourites and page help are in the app TopBar kebab (see "'More options' kebab — favorites and help").
 
 **Guardar's position (ETP-5338 pt.6; superseded by the ETP-5584 order above, where Guardar sits right before the primary action).** Guardar briefly landed in the old go-back slot (left, next to Cancelar) when it first replaced go-back, then moved into the right-aligned primary-action group — leftmost of it, before "Calcular" — to match `saveActions.jsx`'s established Save-before-Confirm ordering convention used by every AD-window's generic DetailView toolbar. It is not grouped with Cancelar: Cancelar discards/navigates away, Guardar persists and stays, and the two are visually separated by the `flex: 1` spacer between the left-aligned pair (Cancelar + status pill) and the right-aligned action cluster.
 
@@ -2115,7 +2115,7 @@ but was never handed `manualOverrides` as a prop at all — so any manually-over
 via `applyBoxParams`) but silently diverged from what the actual AEAT telematic filing received.
 This is functionally the most serious of the three sync gaps documented here: it is not a UI
 staleness bug that a reload or a re-save can correct — it means a REAL "Registrar/Presentar" →
-"Presentación telemática AEAT" submission could file a declaration with AEAT that numerically
+"Presentación directa AEAT" submission could file a declaration with AEAT that numerically
 disagreed with the `.303` file the user had just reviewed, with no error or warning at any point.
 Fixed by exporting `applyBoxParams` from `fiscalModelsUtils.js` (previously private to that module)
 and threading a new `manualOverrides` prop from `FmModel303Page.jsx` into `AeatSubmitFlow`, which
@@ -2933,7 +2933,7 @@ A `GET /session` call on mount populates the NIF/nombre fields used in the gener
 ### AEAT electronic submission (`AeatSubmitFlow`) — ETP-4456
 
 `PresentModal` (`FmOverlays.jsx`) has a 3rd, opt-in path (`showAeatPath` prop, only passed by
-`FmModel303Page`): **"Presentación telemática AEAT"**. It reports the sentinel status
+`FmModel303Page`): **"Presentación directa AEAT"** (renamed from "Presentación telemática AEAT", ETP-5716: "Presentación Directa" is the AEAT's own name for the service; the sentinel and the stored value keep their `aeat_telematic` identifier). It reports the sentinel status
 `aeat_telematic` — never a real declaration status — which `FmModel303Page.handlePresent`
 intercepts to open `models/303/AeatSubmitFlow.jsx` instead of changing the status directly (the
 other 2 manual paths still call `handleStatusChange` as before). A 4th path, "Otra Plataforma"
@@ -2978,7 +2978,7 @@ divider was redundant; sibling modals (`FileGenModal`, `NewDeclModal`) keep it.
 
 **Trigger path (and the REVIEW-cycle bug fixed in it):** the AEAT path is a card inside
 `PresentModal`, not a separate button — the user opens "Registrar/Presentar" (`PresentModal`), picks the
-3rd card ("Presentación telemática AEAT" / `aeat_telematic`), and confirms. `handlePresent` in
+3rd card ("Presentación directa AEAT" / `aeat_telematic`), and confirms. `handlePresent` in
 `FmModel303Page.jsx` intercepts that sentinel status and opens `AeatSubmitFlow` **instead of**
 changing the status directly, like the other 2 manual paths do. Alex's REVIEW (cycle 1) found a
 real blocker here: the original code opened `AeatSubmitFlow` but never called
@@ -3004,7 +3004,7 @@ resurfaced the stale path-selection screen instead of returning to the main page
 ### Popups — layout, stable size and 1280×720 (ETP-5584)
 
 `PresentModal` (303: "Registrar/Presentar"; 349: `fm.present.title_register_only`, "Registrar
-presentación", see "349 popup is 'Registrar presentación'"), `AeatSubmitFlow` ("Presentación telemática
+presentación", see "349 popup is 'Registrar presentación'"), `AeatSubmitFlow` ("Presentación directa
 AEAT") and the `ConfigDrawer` modal are built on the window's standard `.fm-config-modal` shell
 (header / scrollable body / footer, 20px gutters) — the same shell as `NewDeclModal`,
 `FileGenModal` and `FileGenModal303`. They do not use the Radix `Dialog` from
@@ -4260,9 +4260,26 @@ the backend forwards them to the classic generator: ordinary → `ISSUPPLEMENTAR
 |---|---|
 | Guardar | `PUT manualData` |
 | Calcular | `GET /fiscal390/preload` (applied to the unmodified inputs), then `GET /fiscal390/boxes` with the on-screen inputs as query params (the backend overrides the stored ones with them), then `PUT manualData` when dirty |
-| Generar fichero 390 | `PUT manualData` when dirty (a failed save aborts) → `GET /fiscal390/generate` (reads the STORED inputs; body read as a Blob, ISO-8859-1 untouched; default name `390_0A_<año>.txt`, editable in `FileGenModal390`) |
+| Generar fichero 390 | `PUT manualData` when dirty (a failed save aborts) → `POST /fiscal390/generate-validated` (reads the STORED inputs; the file comes as base64 of its ISO-8859-1 bytes and becomes a Blob untouched; default name `390_0A_<año>.txt`, editable in `FileGenModal390`). The backend has the AEAT validator check the file first; the file downloads whatever it says — see "390 file validated before download" |
 | Presentar a la AEAT | `PUT manualData` when dirty (a failed save aborts) → `AeatSubmitFlow` → `POST /fiscal390/submit` (the backend files the STORED inputs and freezes the snapshot from them) |
 | Con / Sin acuse de recibo | `PUT manualData` with `submission` (and the pending inputs) → upload of the acuse (con acuse) → a SEPARATE `PUT status` (`submitted_ack`/`manual_ack` con acuse, `submitted`/`manual_no_receipt` sin acuse) — never the same PUT: the backend freezes the submission snapshot from the stored inputs before applying a same-request manualData |
+
+**390 file validated before download (ETP-5716).** "Generar fichero 390" sends the generated file
+to the AEAT validation service (ServValiDos — the one "Validar sin presentar" uses; no
+certificate) and downloads it in every case. The validation is a warning, never a block:
+
+| Validator | What the user gets |
+|---|---|
+| no errors (`accepted`) | the file, nothing else (as before) |
+| errors (`rejected`) | the file + a warning `InfoBanner` above the cards (`FileValidationNotice390`) listing each error with its AEAT code and a "Ver incidencias" button; the errors are stored as the declaration's AEAT incidents (`AEAT-<code>`), like after a direct presentation, and the page re-reads them |
+| no answer (`connection_failure` / `not_validated`) | the file + a warning banner saying it could not be validated; the stored incidents are left as they were |
+
+The backend bounds the wait (10 s to connect + 30 s to read). An AEAT answer REPLACES the
+declaration's previous AEAT incidents (same rule as every AEAT attempt); these never gate Generar
+or Presentar (`ruleBlockingCount` counts the model's own rules only). Pieces:
+`fileValidation390.js` (outcomes + `fileValidationOf`), `fm390Api.generate390File`,
+`FileValidationNotice390.jsx`, `FmModel390Page.handleGenerate`. 303 and 349 generate exactly as
+before. Contract: `{etendo_root}/modules/com.etendoerp.go/docs/aeat-390-endpoints.md`.
 
 Every successful save invalidates the list's session cache for the declaration
 (`invalidateFiscalComputeCache`), patches the list (`onManualDataSaved`) and recomputes the
@@ -5212,7 +5229,7 @@ recorded here so a future pass doesn't have to rediscover them from scratch.
 | `GET` | `/fiscal349/modified?year=&period=&since=` | `checkModified349` |
 | `GET` | `/fiscal390/boxes?year=&period=0A[&<input>=…]` | `fetchBoxes390` (list "Resultado" and the 390 page; the page's "Calcular" sends the on-screen inputs) |
 | `GET` | `/fiscal390/modified?year=&period=0A&since=` | `checkModified390` |
-| `GET` | `/fiscal390/generate?year=&period=0A` | `generate390File` — reads the STORED inputs, so the page saves first |
+| `POST` | `/fiscal390/generate-validated?year=&period=0A&id=` | `generate390File` — reads the STORED inputs, so the page saves first; answers the file plus the AEAT validator's outcome (ETP-5716) |
 | `GET` | `/fiscal390/incidents?id=` | `fetchDeclarationIncidents(id, { model: '390' })` |
 | `GET` | `/sii-config/siiConfiguration?organization=` | `useOrgSiiStatus` — catalog SII warning |
 | `POST` | `/fiscal349/generate` (body: year, period, phone, contact, fileName, substitutive, formerStatement, representativeTaxId, navarra, guipuzcoa) | `generate349File` |

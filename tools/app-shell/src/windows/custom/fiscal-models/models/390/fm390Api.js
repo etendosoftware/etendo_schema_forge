@@ -4,8 +4,9 @@
 // A plain module: it uses the core `apiFetch` (never a bare `fetch`, see docs/request-policy.md),
 // with the explicit `token` the callers already hold as an override.
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
-import { incidentsFromRows, triggerDownload } from '../../fiscalModelsUtils.js';
+import { base64ToBlob, incidentsFromRows, triggerDownload } from '../../fiscalModelsUtils.js';
 import { ANNUAL_PERIOD } from '../../fiscalPeriods.js';
+import { fileValidationOf } from './fileValidation390.js';
 import { incompleteFiscalYearOf } from './incompleteYear390.js';
 
 /** `error.code` of the 409 `generate` / `submit` answer while a blocking rule holds. */
@@ -109,19 +110,24 @@ export function generatedFileName(decl, typed) {
 }
 
 /**
- * `GET /fiscal390/generate` — downloads the AEAT TXT file. The inputs are read by the backend
- * from the STORED `manualData.aeatInputs`, so the caller saves pending changes first. The body is
- * ISO-8859-1: it is read as a Blob (never as text) so no byte is re-encoded.
- * Resolves `{ ok: true }`, `{ ok: false, error: 'blocking_incidents', incidents }` (409 — the
- * backend re-evaluates the blocking rules from the stored inputs, ETP-5716) or
- * `{ ok: false, error: 'incomplete_fiscal_year', year, missingPeriods }` (422, the calendar lacks
- * periods) or `{ ok: false, error, serverMessage }` (409 when already submitted).
+ * `POST /fiscal390/generate-validated` — generates the AEAT TXT file, has the AEAT validator
+ * check it (bounded wait, no certificate) and downloads it WHATEVER the validator said: the
+ * validation is a warning, never a block. The inputs are read by the backend from the STORED
+ * `manualData.aeatInputs`, so the caller saves pending changes first. The file travels as base64
+ * of its ISO-8859-1 bytes and becomes a Blob as it is (never text), so no byte is re-encoded.
+ * Resolves `{ ok: true, validation }` (`fileValidationOf`: accepted / rejected with the AEAT
+ * errors / connection_failure / not_validated), `{ ok: false, error: 'blocking_incidents',
+ * incidents }` (409 — the backend re-evaluates the blocking rules from the stored inputs,
+ * ETP-5716) or `{ ok: false, error: 'incomplete_fiscal_year', year, missingPeriods }` (422, the
+ * calendar lacks periods) or `{ ok: false, error, serverMessage }` (409 when already submitted).
  */
 export async function generate390File(decl, { token, apiBaseUrl, fileName } = {}) {
   if (!apiBaseUrl) return { ok: false, error: 'no_token' };
   try {
-    const res = await apiFetch(`${neoRoot(apiBaseUrl)}/fiscal390/generate?${periodParams(decl)}`, {
-      baseUrl: '', token, timeout: 0,
+    const params = periodParams(decl);
+    if (decl.id) params.set('id', decl.id);
+    const res = await apiFetch(`${neoRoot(apiBaseUrl)}/fiscal390/generate-validated?${params}`, {
+      method: 'POST', baseUrl: '', token, timeout: 0,
     });
     if (!res.ok) {
       const raw = await res.text().catch(() => '');
@@ -133,9 +139,10 @@ export async function generate390File(decl, { token, apiBaseUrl, fileName } = {}
       if (incomplete) return { ok: false, error: 'incomplete_fiscal_year', ...incomplete };
       return { ok: false, error: `http_${res.status}`, serverMessage: messageOf(raw) };
     }
-    const blob = await res.blob();
-    triggerDownload(blob, generatedFileName(decl, fileName));
-    return { ok: true };
+    const body = await res.json().catch(() => null);
+    if (typeof body?.fileBase64 !== 'string' || !body.fileBase64) return { ok: false, error: 'no_file' };
+    triggerDownload(base64ToBlob(body.fileBase64, 'text/plain'), generatedFileName(decl, fileName));
+    return { ok: true, validation: fileValidationOf(body.validation) };
   } catch (_) {
     return { ok: false, error: 'network' };
   }
