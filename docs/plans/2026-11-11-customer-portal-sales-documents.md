@@ -515,7 +515,9 @@ app's sources:
   month to today. *Interpretation to confirm (D-2)*: "last month" could also mean the previous
   calendar month.
 - Amounts via `formatCurrency`; dates via `parseCalendarDate`/`formatCalendarDate` (repo rules).
-- Mobile: below `sm` rows collapse to cards (number, type, date, total, status).
+- Mobile: below `md` (768 px) rows collapse to cards (number, type, date, total, status). The
+  same breakpoint swaps the sidebar for the bottom navigation, so list and shell change layout
+  together; `sm` (640 px) would leave a 640-767 px band with the bottom bar over a desktop table.
 - Empty state per filter; summary card of outstanding balance stays.
 
 ## B.5 Document detail (read-only)
@@ -723,6 +725,10 @@ instead of an error. S1: `validate`, `findSentLink` and `renew` enter admin mode
 - **"Ver PDF" (N-d).** The blob is rebuilt as `application/pdf` before it gets an object URL, so the
   dialog's iframe can only ever render a PDF whatever type the response declared. No `sandbox`:
   Chromium's built-in PDF viewer refuses to render inside a sandboxed frame.
+- **Unknown entry kind.** An entry document whose kind the page does not know opens home instead
+  of failing, as an unknown kind in the URL already did.
+- **Dead code.** `portalInvoices.js` keeps only `portalPdfFileName`; the MVP's
+  `resolveInvoiceStatus` / `PORTAL_INVOICE_STATUS` went with the `/invoices` list.
 - **Rate limits (N-e).** Every token-validating endpoint is rate limited per IP, each with its own
   counter: `GET /me` 30/min, `POST /renew` 30/min, and the data reads (`/home`, `/documents*`)
   120/min shared, since paging, filtering and opening documents make several calls a minute.

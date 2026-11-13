@@ -216,8 +216,12 @@ export default function PortalPage() {
   // forward work, and the link the customer bookmarks still opens the document it was sent with.
   const requested = readPortalView(searchParams);
   const entry = identity?.entryDocument;
+  // An entry document of a kind this page does not know (a backend newer than the bundle) falls
+  // back to home rather than indexing PORTAL_KIND_META with it, as readPortalView does for the URL.
   const current = requested
-    ?? (entry ? { view: 'doc', kind: entry.kind, id: entry.id } : { view: 'home' });
+    ?? (entry?.id && PORTAL_KIND_META[entry.kind]
+      ? { view: 'doc', kind: entry.kind, id: entry.id }
+      : { view: 'home' });
 
   const navigate = useCallback((target) => {
     setDetailTitle(null);
