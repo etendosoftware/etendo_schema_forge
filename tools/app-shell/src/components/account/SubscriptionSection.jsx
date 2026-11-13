@@ -473,6 +473,7 @@ export function SubscriptionSection({
                 periodEnd={subscription.renewalAt || null}
                 onChanged={refresh}
                 onSessionExpired={onSessionExpired}
+                currentPlanKey={subscription.planKey || null}
                 data-testid="PlanChangeDialog__769a8e"
               />
             )}

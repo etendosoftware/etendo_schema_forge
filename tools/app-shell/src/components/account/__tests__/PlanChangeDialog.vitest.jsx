@@ -75,9 +75,17 @@ const PRO_YEARLY = {
 function renderDialog(props = {}) {
   const onOpenChange = vi.fn();
   const onChanged = vi.fn();
-  render(<PlanChangeDialog open apiBaseUrl="/api" periodEnd="2026-12-01T00:00:00Z"
-    onOpenChange={onOpenChange} onChanged={onChanged} {...props} />);
-  return { onOpenChange, onChanged };
+  const dialog = (more = {}) => (
+    <PlanChangeDialog open apiBaseUrl="/api" periodEnd="2026-12-01T00:00:00Z"
+      onOpenChange={onOpenChange} onChanged={onChanged} {...props} {...more} />
+  );
+  const view = render(dialog());
+  return { onOpenChange, onChanged, rerender: (more) => view.rerender(dialog(more)) };
+}
+
+/** The customer comes back to this tab (from the provider's invoice page in another one). */
+function returnToTab() {
+  document.dispatchEvent(new Event('visibilitychange'));
 }
 
 const PRORATION_DATE = 1794527600;
@@ -288,6 +296,41 @@ describe('PlanChangeDialog', () => {
     expect(link).toHaveAttribute('href', 'https://invoice.stripe.com/i/abc');
     expect(link).toHaveAttribute('target', '_blank');
     expect(screen.queryByText(/planChangeDoneImmediate/)).not.toBeInTheDocument();
+  });
+
+  it('rechecks on returning to the tab and confirms once the paid upgrade has applied', async () => {
+    getPlanChanges.mockResolvedValue({ hasSubscription: true, changes: [PRO] });
+    requestPlanChange.mockResolvedValue({ planKey: 'pro', planName: 'Pro', timing: 'immediate',
+      effectiveAt: '2026-10-31T10:00:00Z', alreadyPending: false, paymentRequired: true,
+      paymentUrl: 'https://invoice.stripe.com/i/abc' });
+    const { onChanged, rerender } = renderDialog({ currentPlanKey: 'core' });
+
+    await userEvent.click((await screen.findAllByTestId('PlanChangeDialog__option'))[0]);
+    await screen.findByText(/planChangeChargeTodayCard/);
+    await userEvent.click(screen.getByTestId('PlanChangeDialog__confirm'));
+    await screen.findByTestId('PlanChangeDialog__completePayment');
+    // The invoice page never sends the customer back: the dialog says how to return.
+    expect(screen.getByTestId('PlanChangeDialog__paymentReturnHint'))
+      .toHaveTextContent('planChangePaymentReturnHint');
+    expect(onChanged).toHaveBeenCalledTimes(1);
+
+    // Back in this tab, not paid yet (the host still reports the old plan): ask again, keep waiting.
+    returnToTab();
+    expect(onChanged).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId('PlanChangeDialog__title')).toHaveTextContent('planChangeTitle');
+
+    // Paid: the reloaded subscription is on the target plan, so the change has applied.
+    rerender({ currentPlanKey: 'pro' });
+    expect(await screen.findByTestId('PlanChangeDialog__title'))
+      .toHaveTextContent('planChangeDoneTitle');
+    expect(screen.getByTestId('PlanChangeDialog__done'))
+      .toHaveTextContent('Pro:planChangeDoneImmediate');
+    expect(screen.queryByTestId('PlanChangeDialog__completePayment')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('PlanChangeDialog__paymentReturnHint')).not.toBeInTheDocument();
+
+    // Nothing outstanding any more: returning to the tab reloads nothing.
+    returnToTab();
+    expect(onChanged).toHaveBeenCalledTimes(2);
   });
 
   it('confirms an upgrade, reports the new plan and tells its host to reload', async () => {

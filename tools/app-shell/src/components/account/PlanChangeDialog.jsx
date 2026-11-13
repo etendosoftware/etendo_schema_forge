@@ -134,10 +134,16 @@ export function planPriceLabel(plan, ui) {
  * applied now, was scheduled, or waits for a payment the customer has to complete (a decline, or
  * the bank asks to authenticate): then nothing changed yet and the dialog links to the provider's
  * invoice page. The host reloads the subscription (`onChanged`).
+ *
+ * That invoice page opens in its own tab and never sends the customer back (the provider's hosted
+ * invoice page has no return address). While the payment is outstanding, every time this tab
+ * becomes visible again the dialog asks the host to reload the subscription; once the host's
+ * `currentPlanKey` is the target plan (the paid invoice applied the change and its webhook updated
+ * the subscription) the dialog turns into the "plan changed" confirmation.
  */
 export function PlanChangeDialog({
   open, onOpenChange, apiBaseUrl, clientId = null, periodEnd = null, onChanged,
-  onSessionExpired,
+  onSessionExpired, currentPlanKey = null,
 }) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
@@ -212,6 +218,28 @@ export function PlanChangeDialog({
       });
     return () => { cancelled = true; };
   }, [apiBaseUrl, clientId, selectedKey, selectedTiming, onSessionExpired, onOpenChange]);
+  // ETP-5053 — the customer pays in another tab: re-read the subscription whenever this one is
+  // shown again, until the change has applied.
+  const awaitingPayment = Boolean(open && done?.paymentRequired);
+  useEffect(() => {
+    if (!awaitingPayment) return undefined;
+    const recheck = () => {
+      if (document.visibilityState === 'visible') onChanged?.(done);
+    };
+    document.addEventListener('visibilitychange', recheck);
+    window.addEventListener('focus', recheck);
+    return () => {
+      document.removeEventListener('visibilitychange', recheck);
+      window.removeEventListener('focus', recheck);
+    };
+  }, [awaitingPayment, done, onChanged]);
+
+  useEffect(() => {
+    if (done?.paymentRequired && currentPlanKey && currentPlanKey === done.planKey) {
+      setDone({ ...done, paymentRequired: false, paymentUrl: null });
+    }
+  }, [done, currentPlanKey]);
+
   const pending = offer?.pendingChange || null;
   // A past-due or canceled subscription cannot change plan: say so up front, offer nothing.
   const notCurrent = status === 'loaded' && Boolean(offer?.subscriptionStatus)
@@ -296,6 +324,12 @@ export function PlanChangeDialog({
                   {ui('planChangeCompletePayment')}
                 </a>
               </Button>
+            )}
+            {done.paymentRequired && done.paymentUrl && (
+              <p className="text-sm text-muted-foreground"
+                data-testid="PlanChangeDialog__paymentReturnHint">
+                {ui('planChangePaymentReturnHint')}
+              </p>
             )}
           </div>
         )}

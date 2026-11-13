@@ -510,7 +510,12 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   or the bank asks to authenticate) the answer has `paymentRequired: true`: the dialog says
   `planChangePaymentRequired` and offers **Complete the payment**
   (`PlanChangeDialog__completePayment`, the provider's invoice page in a new tab); the plan changes
-  as soon as it is paid. Otherwise the answer is
+  as soon as it is paid. That page has no return address, so the dialog adds
+  `planChangePaymentReturnHint` (close the payment tab and come back) and, while the payment is
+  outstanding, asks the section to re-read the subscription every time the tab becomes visible
+  again (`visibilitychange`/`focus` → `onChanged`); once the section's `planKey` is the target
+  (the paid invoice applied the change and its webhook updated the row) the dialog turns into the
+  **Plan changed** confirmation. Otherwise the answer is
   shown in place (`PlanChangeDialog__done`: `planChangeDoneImmediate` with the new plan, or
   `planChangeDoneScheduled` with the date; `planChangeAlreadyPending` when the same downgrade was
   already scheduled) and the section re-reads the subscription in the background (`onChanged` →

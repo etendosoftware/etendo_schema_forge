@@ -26347,6 +26347,7 @@
     "planChangeChargeUnknown": "We couldn't calculate the amount; the difference will be charged today on your saved payment method.",
     "planChangePaymentRequired": "Your payment needs your confirmation. Your plan changes to {plan} as soon as it is paid.",
     "planChangeCompletePayment": "Complete the payment",
+    "planChangePaymentReturnHint": "Once you have paid, close the payment tab and come back here: this page updates by itself.",
     "planChangeTimingKeep": "Keeps your plan",
     "planChangeKeepNote": "Cancels the scheduled change to {plan}. You stay on your current plan and nothing is charged.",
     "planChangePendingCancelled": "The scheduled change was cancelled. Your plan stays {plan}.",

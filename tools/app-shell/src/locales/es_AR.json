@@ -22762,6 +22762,7 @@
     "planChangeChargeUnknown": "No pudimos calcular el monto; la diferencia se va a cobrar hoy en tu medio de pago guardado.",
     "planChangePaymentRequired": "Tu pago necesita tu confirmación. Tu plan va a cambiar a {plan} apenas se pague.",
     "planChangeCompletePayment": "Completar el pago",
+    "planChangePaymentReturnHint": "Cuando hayas pagado, cerrá la pestaña del pago y volvé acá: esta página se actualiza sola.",
     "planChangeTimingKeep": "Mantiene tu plan",
     "planChangeKeepNote": "Cancela el cambio programado a {plan}. Seguís en tu plan actual y no se cobra nada.",
     "planChangePendingCancelled": "Se canceló el cambio programado. Tu plan sigue siendo {plan}.",
