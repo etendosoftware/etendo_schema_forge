@@ -170,6 +170,10 @@ ends with a fixed hint, *"Tenés una rutina guardada para esto: revisá tus ruti
 it exists. Without the hint the agent did not look for routines (0 of 2 in the 2026-11-12 pilot),
 which the KR2.1 already measures. Every other prompt is unchanged.
 
+- `etendo_routine` is behind the backend flag `mcp-routines` (off by default, per account): turn it
+  on for the account of every Etendo target that runs with routines
+  (`etendo.go.flags.mcp-routines=true` locally). Without the tool a `routines = true` target is
+  refused before anything is measured.
 - A target with `routines = true` in `config.toml` (Etendo GO only) installs every selected task's
   routine under its user before the first attempt (replacing one of the same name) and deletes them
   at the end. `run.json` and `compare.json` record what was installed; a server that refuses a
