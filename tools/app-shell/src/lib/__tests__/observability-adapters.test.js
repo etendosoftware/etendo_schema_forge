@@ -405,7 +405,8 @@ describe('browser observability config', () => {
   // configuration. (Sentry was the one exception, mandatory with a DSN; ETP-5605 removed it.)
   describe('optional providers are off by default', () => {
     const enabledOf = (env) => Object.fromEntries(
-      buildBrowserObservabilityConfig({ env, location: { hostname: 'h' }, logger: silent })
+      // A production host (ETP-5466), so only the switches and configuration decide.
+      buildBrowserObservabilityConfig({ env, location: { hostname: 'app.etendo.software' }, logger: silent })
         .providers.map((provider) => [provider.name, provider.enabled]),
     );
     const RUM_IDS = { VITE_RUM_APP_MONITOR_ID: 'monitor-id', VITE_RUM_IDENTITY_POOL_ID: 'pool-id' };

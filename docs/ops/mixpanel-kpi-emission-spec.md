@@ -25,17 +25,26 @@ Frontend Mixpanel uses Vite variables:
 | `VITE_MIXPANEL_TOKEN` | Browser project token. |
 | `VITE_MIXPANEL_DEBUG` | Optional browser SDK debug flag. |
 | `VITE_MIXPANEL_API_HOST` | Optional Mixpanel API host, for example EU ingest. |
+| `VITE_MIXPANEL_ALLOW_LOCAL` | `true` lets a non-production host emit, to validate emission locally. Off by default; never set in a deployment. |
+
+**Production hosts only (ETP-5466).** The browser provider emits only when the page is served
+from `app.etendo.software` or `app.etendo.ai` (`MIXPANEL_ALLOWED_HOSTS`, exact hostnames). On
+`localhost`, `127.0.0.1`, staging, experimental or any other host it stays disabled even with
+`VITE_MIXPANEL_ENABLED=true` and a token, unless `VITE_MIXPANEL_ALLOW_LOCAL=true`. Before this
+rule, local development and Playwright runs (each test a new device) made up ~99% of the
+project's `page_view` devices; the historical localhost data is not deleted and must still be
+excluded by report filters.
 
 Backend Mixpanel must not read `VITE_*` values. It uses backend runtime
 properties:
 
 | Property | Environment variable | Purpose |
 | --- | --- | --- |
-| `etendo.go.mixpanel.enabled` | `ETGO_MIXPANEL_ENABLED` | Enables backend Mixpanel submission. Defaults to `true`. |
+| `etendo.go.mixpanel.enabled` | `ETGO_MIXPANEL_ENABLED` | Enables backend Mixpanel submission (`true` / `Y`). Defaults to `false` since ETP-5466: only an environment that sets it explicitly emits, a token alone does not. |
 | `etendo.go.mixpanel.token` | `ETGO_MIXPANEL_TOKEN` | Backend project token. Required. |
 | `etendo.go.mixpanel.apiHost` | `ETGO_MIXPANEL_API_HOST` | Mixpanel API host. Defaults to `https://api-eu.mixpanel.com`. |
 | `etendo.go.mixpanel.timeoutMs` | `ETGO_MIXPANEL_TIMEOUT_MS` | HTTP connect/read timeout. Defaults to `5000`. |
-| `etendo.go.mixpanel.distinctId` | `ETGO_MIXPANEL_DISTINCT_ID` | Stable backend identity. Defaults to `neo-backend`. |
+| `etendo.go.mixpanel.distinctId` | `ETGO_MIXPANEL_DISTINCT_ID` | Stable backend identity. Defaults to `neo-backend`. Each emitting environment sets its own (a local validation uses `neo-backend-localhost`). |
 
 Backend token values must remain outside committed source files.
 

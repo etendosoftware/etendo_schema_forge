@@ -98,6 +98,7 @@ describe('useQuotationPdf — end-to-end productCode wiring (ETP-4941)', () => {
 
     const { result } = renderHook(() => useQuotationPdf('q-2', API_BASE, TOKEN));
     await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(jsreportCalls).toHaveLength(1));
 
     const { lines: renderedLines } = jsreportCalls[0].data;
     expect(renderedLines[0].productCode).toBe('SKU-X');
