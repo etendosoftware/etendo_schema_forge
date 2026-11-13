@@ -10,7 +10,7 @@ import {
 import { formatCurrency, formatGroupedNumber } from '@/lib/formatCurrency.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 import {
-  PORTAL_CHART_MONTHS, PORTAL_DOCUMENT_KINDS, PORTAL_ERROR, searchPortalDocuments,
+  PORTAL_CHART_MONTHS, PORTAL_ERROR, searchPortalDocuments,
 } from '@/lib/portal/portalApi.js';
 import { PORTAL_KIND_ICONS, PortalMobileBrandBar } from './PortalShell.jsx';
 import {
@@ -20,6 +20,9 @@ import {
 import { PORTAL_HIGHLIGHTS, PORTAL_KIND_META, documentLabelKey } from './portalPresentation.js';
 
 const SEARCH_DEBOUNCE_MS = 300;
+
+/** The tiles' order in the design (Main / Movil-Inicio): what most often needs the customer first. */
+const TILE_ORDER = Object.freeze(['QUOTATION', 'INVOICE', 'ORDER', 'SHIPMENT']);
 
 /**
  * "Inicio" (design Main / Movil-Inicio), every figure from `GET /sws/portal/home`, aggregated
@@ -87,7 +90,7 @@ export default function PortalHomeView({
               <h2 className="text-xs font-medium uppercase leading-4">{ui('portalAttentionTitle')}</h2>
             </div>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fit,minmax(150px,1fr))] md:p-3">
-              {PORTAL_DOCUMENT_KINDS.map((kind) => (
+              {TILE_ORDER.map((kind) => (
                 <KindTile key={kind} kind={kind} tile={tiles[kind]} onNavigate={onNavigate} />
               ))}
             </div>
@@ -372,7 +375,7 @@ function KindTile({ kind, tile, onNavigate }) {
         {shown ? tile.highlight.count : (tile?.count ?? 0)}
       </span>
       {shown ? (
-        <PortalTag tone={highlight.tone} className="self-start">{ui(highlight.labelKey)}</PortalTag>
+        <PortalTag tone={highlight.tone} className="max-w-full self-start whitespace-normal">{ui(highlight.labelKey)}</PortalTag>
       ) : (
         <span className="text-xs text-muted-foreground">{ui('portalTileTotal')}</span>
       )}
@@ -475,9 +478,12 @@ function InvoicedChart({ chart, year }) {
           className="grid gap-4 px-2.5 text-center text-[11px] text-muted-foreground"
           style={{ gridTemplateColumns: `repeat(${Math.max(bars.length, 1)}, minmax(0, 1fr))` }}
         >
-          {bars.map((bar) => (
-            <span key={bar.month} className="truncate">
-              {formatCalendarDate(`${bar.month}-01`, bcpLocale, { month: 'short' })}
+          {/* Short month names without the trailing dot; with more than 6 bars every other label is
+              shown, so none is ever cut. */}
+          {bars.map((bar, index) => (
+            <span key={bar.month} className="whitespace-nowrap" data-testid="portal-chart-label">
+              {bars.length > 6 && index % 2 === 1 ? ''
+                : formatCalendarDate(`${bar.month}-01`, bcpLocale, { month: 'short' }).replace(/\.$/, '')}
             </span>
           ))}
         </div>

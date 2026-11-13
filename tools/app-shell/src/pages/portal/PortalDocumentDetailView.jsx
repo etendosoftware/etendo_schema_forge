@@ -307,10 +307,12 @@ function Summary({ document }) {
   const taxesTotal = document.taxes.reduce((sum, tax) => sum + (tax.taxAmount ?? 0), 0);
   const taxLabel = document.taxes.length === 1 && document.taxes[0].tax
     ? `${ui('portalFieldTaxes')} (${document.taxes[0].tax})` : ui('portalFieldTaxes');
+  // One line per row, as the design: the label never wraps (a long one, a tax name, truncates
+  // with its full text as the tooltip) and the value takes the rest, right-aligned.
   const row = (label, value, testId) => (
     <>
-      <dt className="text-muted-foreground">{label}:</dt>
-      <dd className="text-right" data-testid={testId}>{value}</dd>
+      <dt className="max-w-[11rem] truncate whitespace-nowrap text-muted-foreground" title={`${label}:`}>{label}:</dt>
+      <dd className="min-w-0 truncate whitespace-nowrap text-right" data-testid={testId}>{value}</dd>
     </>
   );
   return (
@@ -337,7 +339,7 @@ function Summary({ document }) {
           />
         </div>
       ) : null}
-      <dl className="grid grid-cols-[auto_1fr] items-center gap-3 px-5 py-4 md:gap-2.5 md:px-3 md:py-2.5">
+      <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 px-5 py-4 md:gap-2.5 md:px-3 md:py-2.5">
         {row(ui('portalFieldDate'), <PortalDate value={document.date} />)}
         {document.kind === 'QUOTATION' ? row(ui('portalColValidUntil'), <PortalValidUntil document={document} />) : null}
         {document.scheduledDeliveryDate ? row(ui('portalFieldDeliveryDate'), <PortalDate value={document.scheduledDeliveryDate} />) : null}
@@ -437,8 +439,10 @@ function RelatedDocuments({ document, onNavigate }) {
       <div className="rounded-xl border border-border bg-card py-1.5 md:rounded-lg">
         <div className="flex items-center gap-3 px-5 py-3 md:gap-2 md:px-3 md:py-1.5">
           <FileText className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
-          <span className="min-w-0 flex-1 truncate">{ui(documentLabelKey(document))} #{document.documentNo}</span>
-          <span className="text-sm text-muted-foreground md:text-xs">{ui('portalThisDocument')}</span>
+          {/* The name never truncates (the number is what the customer looks for); it wraps if it
+              must, and the meta on the right gives way first. */}
+          <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{ui(documentLabelKey(document))} #{document.documentNo}</span>
+          <span className="shrink-0 text-sm text-muted-foreground md:text-xs">{ui('portalThisDocument')}</span>
         </div>
         {document.related.map((related) => (
           <button
@@ -449,8 +453,10 @@ function RelatedDocuments({ document, onNavigate }) {
             data-testid="portal-related-document"
           >
             <FileText className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
-            <span className="min-w-0 flex-1 truncate">{ui(documentLabelKey(related))} #{related.documentNo}</span>
-            <PortalRowBadge document={related} />
+            <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{ui(documentLabelKey(related))} #{related.documentNo}</span>
+            <span className="flex min-w-0 max-w-[45%] justify-end">
+              <PortalRowBadge document={related} className="whitespace-normal text-right" />
+            </span>
             <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           </button>
         ))}

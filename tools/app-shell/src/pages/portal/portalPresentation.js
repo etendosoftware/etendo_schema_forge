@@ -188,7 +188,9 @@ export function toCalendarParam(date) {
  */
 export function readPortalView(searchParams) {
   const view = searchParams.get('view');
-  const kind = searchParams.get('kind');
+  // Case-insensitive, so a hand-written `?view=list&kind=quotation` works like the `QUOTATION`
+  // this page writes.
+  const kind = searchParams.get('kind')?.toUpperCase() ?? null;
   const id = searchParams.get('id');
   const group = searchParams.get('group');
   if (view === 'list' && PORTAL_KIND_META[kind]) {
