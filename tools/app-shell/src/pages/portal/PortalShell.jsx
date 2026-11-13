@@ -12,6 +12,9 @@ import { APP_LOCALES, LanguageMenuSection } from '@/components/LanguageMenuSecti
 import { PortalTag } from './PortalBits.jsx';
 import { PORTAL_HIGHLIGHTS, PORTAL_KIND_META } from './portalPresentation.js';
 
+/** The credit links to the product's site (no shared constant exists for it). */
+const ETENDO_AI_URL = 'https://etendo.ai';
+
 /** Icon per destination; the design's own glyphs, from the app's icon family (Lucide). */
 export const PORTAL_KIND_ICONS = Object.freeze({
   QUOTATION: FileText,
@@ -289,10 +292,16 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
         <div className="flex flex-col gap-2 border-t border-border px-4 pt-2.5">
           <PortalCustomer identity={identity} />
           <PortalLanguageSwitch />
-          <span className="flex items-center gap-2 text-xs text-muted-foreground" data-testid="portal-created-with">
+          <a
+            href={ETENDO_AI_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground hover:underline"
+            data-testid="portal-created-with"
+          >
             <img src="/logo-etendo-ai.png" alt="" className="h-3.5 w-3.5 shrink-0 object-contain" />
             {ui('portalCreatedWith')}
-          </span>
+          </a>
         </div>
       </nav>
 
