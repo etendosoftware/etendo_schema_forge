@@ -56,8 +56,7 @@ vi.mock('lucide-react', () => ({
   Box: (props) => <span {...props} data-testid="icon-box" />,
   Calendar: (props) => <span {...props} data-testid="icon-calendar" />,
   ChevronDown: (props) => <span {...props} data-testid="icon-chevron" />,
-  PanelRightClose: (props) => <span {...props} data-testid="icon-panel-close" />,
-  PanelRightOpen: (props) => <span {...props} data-testid="icon-panel-open" />,
+  ArrowRightToLine: (props) => <span {...props} data-testid="icon-arrow-to-line" />,
   Package: (props) => <span {...props} data-testid="icon-package" />,
   Warehouse: (props) => <span {...props} data-testid="icon-warehouse" />,
 }));

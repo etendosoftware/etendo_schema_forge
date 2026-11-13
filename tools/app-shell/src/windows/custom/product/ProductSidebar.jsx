@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Maximize2, Box, Calendar, ChevronDown, PanelRightClose } from 'lucide-react';
+import { Maximize2, Box, Calendar, ChevronDown } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { SIDEBAR_PERIOD_OPTIONS, DEFAULT_SIDEBAR_PERIOD, formatPeriodRange } from './productSidebarPeriod';
@@ -16,9 +17,12 @@ import { resolveVisible, isolate, activeHighlight, dimmedOpacity, filterVisibleS
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import ProductSidebarCollapsed from './ProductSidebarCollapsed';
 import ViewMovementsLink from './ViewMovementsLink';
+import ProductSidebarDividerToggle, { SIDEBAR_PANEL_ID } from './ProductSidebarDividerToggle';
 import { useSidebarCollapsed } from './useSidebarCollapsed';
+import { chartSeriesColor, CHART_AREA_OPACITY_VAR } from '@/lib/chartPalette';
 
-const DOT_COLORS = ['#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#14b8a6', '#f97316', '#6366f1'];
+// Series fill colour (legend dots, swatches, warehouse card indicator) of the i-th warehouse.
+const seriesFill = (i) => chartSeriesColor(i).fill;
 
 // Exact range (DD/MM/AAAA – DD/MM/AAAA) covered by the selected period (ETP-5908 RF-05).
 function PeriodRangeLabel({ period, className = '' }) {
@@ -81,36 +85,54 @@ function SidebarPeriodSelector({ period, onChangePeriod, ui, disabled = false })
   );
 }
 
-// Horizontal availability widget: icon box + label + locations link/badge + big number.
-// With `onBadgeClick` the badge is a real button (RF-06: opens the Warehouses tab).
-function AvailabilityWidget({ label, value, badge, onBadgeClick }) {
+// The big number of the widget: a placeholder bar while loading, a labelled dash when the stock read failed,
+// a plain dash when there is no value.
+function AvailabilityValue({ value, loading, unavailable, ui }) {
+  if (loading) {
+    return <Skeleton className="my-2 h-5 w-16" aria-hidden="true" data-testid="AvailabilityValueSkeleton" />;
+  }
+  if (unavailable) {
+    return <span className="text-muted-foreground" role="img" aria-label={ui('stockUnavailable')} title={ui('stockUnavailable')} data-testid="AvailabilityUnavailable">—</span>;
+  }
+  if (value === null) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  return value;
+}
+
+const CARD_BASE = 'flex-1 w-full flex items-center gap-2.5 pl-3 pr-2 py-2 bg-card border border-border-subtle rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] text-left';
+const CARD_CLICKABLE = 'cursor-pointer transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring';
+// "N locations" / warehouse name: a plain, non-interactive label (info tokens), never a link.
+const PILL_CLASS = 'px-1.5 py-0.5 rounded-full bg-[var(--info-label-bg)] text-[var(--info-label-fg)] text-xs font-medium whitespace-nowrap';
+// A count is never cut ("3 ubicaciones" drops under the label when the row is too narrow); a long warehouse NAME still ellipsizes.
+const COUNT_PILL_CLASS = `${PILL_CLASS} shrink-0`;
+const NAME_PILL_CLASS = `${PILL_CLASS} truncate min-w-0 max-w-full`;
+
+// Horizontal availability widget: icon box + label + locations pill + big number.
+// With `onClick` the WHOLE card is a real button (opens the Warehouses tab); without it (loading / unavailable) it is plain.
+function AvailabilityWidget({ label, value, badge, badgeIsName = false, onClick, loading = false, unavailable = false }) {
+  const ui = useUI();
+  const Root = onClick ? 'button' : 'div';
+  const rootProps = onClick
+    ? { type: 'button', onClick, className: `${CARD_BASE} ${CARD_CLICKABLE}` }
+    : { className: CARD_BASE };
   return (
-    <div className="flex-1 flex items-center gap-3 pl-3 pr-2 py-2 bg-card border border-border-subtle rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]">
+    <Root {...rootProps} data-testid={onClick ? 'AvailabilityCardButton' : 'AvailabilityCard'}>
       <div className="w-10 h-10 shrink-0 flex items-center justify-center bg-card border border-border-control rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]">
         <Box className="w-6 h-6 text-disabled" data-testid="Box__59b33d" />
       </div>
       <div className="flex-1 min-w-0 flex flex-col">
-        <div className="flex items-center gap-1 min-w-0">
-          <span className="text-xs text-muted-foreground shrink-0">{badge && onBadgeClick ? `${label} ·` : label}</span>
-          {badge && onBadgeClick && (
-            <button
-              type="button"
-              onClick={onBadgeClick}
-              className="text-xs text-status-info-foreground underline underline-offset-2 whitespace-nowrap rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-              data-testid="AvailabilityLocationsLink"
-            >
-              {badge}
-            </button>
-          )}
-          {badge && !onBadgeClick && (
-            <span className="ml-1 px-2 py-1 rounded-full bg-muted text-xs text-muted-foreground whitespace-nowrap truncate min-w-0 max-w-full" title={typeof badge === 'string' ? badge : undefined} data-testid="AvailabilityWarehousePill">{badge}</span>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0" data-testid="AvailabilityLabelRow">
+          <span className="text-xs text-muted-foreground shrink-0">{label}</span>
+          {badge && (
+            <span className={badgeIsName ? NAME_PILL_CLASS : COUNT_PILL_CLASS} title={badgeIsName ? badge : undefined} data-testid="AvailabilityWarehousePill">{badge}</span>
           )}
         </div>
         <span className="text-2xl font-medium tracking-[-0.01em] text-foreground leading-9">
-          {value === null ? <span className="text-muted-foreground">—</span> : value}
+          <AvailabilityValue value={value} loading={loading} unavailable={unavailable} ui={ui} data-testid="AvailabilityValue__59b33d" />
         </span>
       </div>
-    </div>
+    </Root>
   );
 }
 
@@ -124,12 +146,12 @@ function smoothPath(xs, ys) {
   return d.join(' ');
 }
 
-function ChartSVG({ range, series, W, H, PAD_X, PAD_Y, gradId, fontSize = 10, PAD_R = PAD_X, highlight = null, onClick, className = 'cursor-crosshair', preserveAspectRatio = 'xMidYMid meet' }) {
+function ChartSVG({ range, series, W, H, PAD_X, PAD_Y, fontSize = 10, PAD_R = PAD_X, highlight = null, onClick, className = 'cursor-crosshair', preserveAspectRatio = 'xMidYMid meet' }) {
   const [hoveredDay, setHoveredDay] = useState(null);
   const ui = useUI();
   const { locale } = useLocaleSwitch();
 
-  // A single unnamed series (aggregated line) keeps the original blue look; named ones are per-warehouse.
+  // A single unnamed series is the aggregated line; named ones are per-warehouse. Both take their palette colours from the model.
   const multi = series.length > 0 && series[0].name != null;
 
   // Global Y scale spanning every series. Baseline is always 0 (stock can't be negative);
@@ -148,7 +170,7 @@ function ChartSVG({ range, series, W, H, PAD_X, PAD_Y, gradId, fontSize = 10, PA
     const ys = s.points.map(p => toY(p.value));
     const linePath = smoothPath(xs, ys);
     const areaPath = `${linePath} L${xs[xs.length - 1]},${H} L${xs[0]},${H} Z`;
-    return { color: s.color, idx, linePath, areaPath, opacity: dimmedOpacity(s.name, highlight), emphasis: highlight != null && s.name === highlight };
+    return { fill: s.fill, line: s.line, idx, linePath, areaPath, opacity: dimmedOpacity(s.name, highlight), emphasis: highlight != null && s.name === highlight };
   });
 
   const yLabels = yTicks.map(t => ({ v: t, label: formatStockQuantity(t) }));
@@ -171,14 +193,6 @@ function ChartSVG({ range, series, W, H, PAD_X, PAD_Y, gradId, fontSize = 10, PA
     <svg viewBox={`0 0 ${W} ${H + 20 + fontSize + 2}`} preserveAspectRatio={preserveAspectRatio} className={`w-full h-full ${className}`}
       onClick={onClick}
       onMouseMove={handleMouseMove} onMouseLeave={() => setHoveredDay(null)}>
-      <defs>
-        {paths.map((p) => (
-          <linearGradient key={p.idx} id={`${gradId}-${p.idx}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={p.color} stopOpacity="0.2" />
-            <stop offset="100%" stopColor={p.color} stopOpacity="0.02" />
-          </linearGradient>
-        ))}
-      </defs>
       {yLabels.map((yl) => (
         <line key={yl.v} x1={PAD_X} y1={toY(yl.v)} x2={W - PAD_R} y2={toY(yl.v)} stroke="hsl(var(--border-subtle))" strokeWidth="1" strokeDasharray="4,3" />
       ))}
@@ -186,17 +200,17 @@ function ChartSVG({ range, series, W, H, PAD_X, PAD_Y, gradId, fontSize = 10, PA
         <text key={yl.label} x={PAD_X - 5} y={toY(yl.v) + 4} textAnchor="end" fontSize={fontSize} fill="hsl(var(--text-disabled))">{yl.label}</text>
       ))}
       {paths.map((p) => (
-        <path key={`area-${p.idx}`} d={p.areaPath} fill={`url(#${gradId}-${p.idx})`} opacity={p.opacity} />
+        <path key={`area-${p.idx}`} d={p.areaPath} fill={p.fill} style={{ fillOpacity: CHART_AREA_OPACITY_VAR }} opacity={p.opacity} data-testid="StockChartArea" />
       ))}
       {paths.map((p) => (
-        <path key={`line-${p.idx}`} d={p.linePath} fill="none" stroke={p.color} strokeWidth={p.emphasis ? 3 : 2} opacity={p.opacity}
+        <path key={`line-${p.idx}`} d={p.linePath} fill="none" stroke={p.line} strokeWidth={p.emphasis ? 3 : 2} opacity={p.opacity}
           strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
       ))}
       {hoveredDay !== null && (
         <>
           <line x1={hx} y1={PAD_Y} x2={hx} y2={H} stroke="hsl(var(--text-disabled))" strokeWidth="1" strokeDasharray="3,2" />
           {series.map((s) => (
-            <circle key={s.name ?? 'single'} cx={hx} cy={toY(valueAtDay(s.points, hoveredDay))} r={multi ? 4 : 5} fill="white" stroke={s.color} strokeWidth="2" />
+            <circle key={s.name ?? 'single'} cx={hx} cy={toY(valueAtDay(s.points, hoveredDay))} r={multi ? 4 : 5} fill="white" stroke={s.line} strokeWidth="2" />
           ))}
           <StockChartTooltip model={tooltipModel} hx={hx} W={W} PAD_X={PAD_X} PAD_R={PAD_R} PAD_Y={PAD_Y} fontSize={fontSize} data-testid="StockChartTooltip__59b33d" />
         </>
@@ -238,6 +252,15 @@ function StockEmptyState({ onAdjustStock, onReplenish }) {
           {ui('replenishStock')}
         </button>
       </div>
+    </div>
+  );
+}
+
+// A failed read of the stock or of the movement history: never drawn as 0 or as an empty product.
+function StockUnavailableNote({ message }) {
+  return (
+    <div className="px-4 py-6 flex items-center justify-center" role="status" data-testid="StockUnavailableNote">
+      <span className="text-xs text-muted-foreground text-center">{message}</span>
     </div>
   );
 }
@@ -290,7 +313,7 @@ function StockChart({
   const sortedRows = [...locationRows].sort((a, b) => b.quantityOnHand - a.quantityOnHand);
   const modalMonths = SIDEBAR_PERIOD_OPTIONS.find(o => o.value === period)?.months ?? 6;
   const modelOf = (months) => buildChartModel({
-    transactions, currentStock, warehouses: sortedRows, locatorToWarehouse, months, today: new Date(), colors: DOT_COLORS,
+    transactions, currentStock, warehouses: sortedRows, locatorToWarehouse, months, today: new Date(),
   });
   // Inline chart (panel period) and modal chart (its own period): both slice the same loaded history.
   const chart = modelOf(inlineMonths);
@@ -298,7 +321,7 @@ function StockChart({
 
   if (!chart) return null;
 
-  const legendItems = sortedRows.map((b, i) => ({ name: b.binName, color: DOT_COLORS[i % DOT_COLORS.length] }));
+  const legendItems = sortedRows.map((b, i) => ({ name: b.binName, color: seriesFill(i) }));
   const large = chartLarge ?? chart;
   const allKeys = sortedRows.map(b => b.binName);
   const panelShown = resolveVisible(panelVisible, allKeys);
@@ -336,7 +359,6 @@ function StockChart({
             PAD_X={46}
             PAD_R={8}
             PAD_Y={12}
-            gradId="sbGrad"
             fontSize={10}
             preserveAspectRatio="none"
             onClick={() => setInternalOpen(true)}
@@ -382,12 +404,11 @@ function StockChart({
                 H={250}
                 PAD_X={60}
                 PAD_Y={16}
-                gradId="sbGradLarge"
                 fontSize={13}
                 data-testid="ChartSVG__59b33d" />
             </div>
             {sortedRows.length > 0 && (
-              <StockWarehouseList rows={sortedRows} colors={DOT_COLORS} visible={modalShown} onSelect={handleModalSelect} total={currentStock} data-testid="StockWarehouseList__59b33d" />
+              <StockWarehouseList rows={sortedRows} colors={sortedRows.map((_, i) => seriesFill(i))} visible={modalShown} onSelect={handleModalSelect} total={currentStock} data-testid="StockWarehouseList__59b33d" />
             )}
           </div>
         </DialogContent>
@@ -404,12 +425,12 @@ function WarehouseCards({ rows, ui, fmt }) {
   return (
     <div className="flex flex-col gap-[10px]" data-testid="WarehouseCards">
       {rows.map((b, i) => (
-        <div key={b.binName} className="flex flex-col gap-2 bg-muted rounded-lg p-3" data-testid="WarehouseCard">
+        <div key={b.binName} className="flex flex-col gap-2 bg-[var(--surface-subtle)] rounded-lg p-3" data-testid="WarehouseCard">
           <div className="flex items-center gap-1 h-6">
             <span className="w-6 h-6 flex items-center justify-center flex-shrink-0">
               <span
-                className="w-2 h-2 rounded-full"
-                style={{ backgroundColor: DOT_COLORS[i % DOT_COLORS.length] }}
+                className="w-2.5 h-2.5 rounded-[3px]"
+                style={{ backgroundColor: seriesFill(i) }}
                 data-testid="WarehouseCardDot"
               />
             </span>
@@ -425,14 +446,56 @@ function WarehouseCards({ rows, ui, fmt }) {
   );
 }
 
+const UNKNOWN_LOCATION = 'Unknown';
+
+// Storage bin -> warehouse name, for the bins that carry one.
+function buildLocatorToWarehouse(stockRows) {
+  return (stockRows ?? []).reduce((map, r) => {
+    if (r.storageBin) map[r.storageBin] = r['warehouse$_identifier'] ?? r.warehouse ?? UNKNOWN_LOCATION;
+    return map;
+  }, {});
+}
+
+// Quantity on hand per location, keeping only the locations that hold stock.
+function buildLocationRows(stockRows) {
+  const binMap = (stockRows ?? []).reduce((acc, r) => {
+    const binName = r['warehouse$_identifier'] ?? r.warehouse ?? r['storageBin$_identifier'] ?? r.storageBin ?? UNKNOWN_LOCATION;
+    if (!acc[binName]) acc[binName] = { binName, quantityOnHand: 0 };
+    acc[binName].quantityOnHand += Number(r.quantityOnHand) || 0;
+    return acc;
+  }, {});
+  return Object.values(binMap).filter(b => b.quantityOnHand > 0);
+}
+
+// Subtitle of the "Available" card: the single location's name, or how many locations hold stock.
+function resolveOnHandSubtitle(locationRows, ui) {
+  if (locationRows.length === 1) return locationRows[0]?.binName ?? null;
+  if (locationRows.length > 1) return ui('stockLocationsCount', { count: locationRows.length });
+  return null;
+}
+
+// What replaces the chart: a failure note, the empty-state call to action, or nothing while the history loads.
+function StockFallback({ stockFailed, historyFailed, historyLoaded, ui, navigate }) {
+  if (stockFailed || historyFailed) {
+    const messageKey = stockFailed ? 'stockUnavailableDesc' : 'stockHistoryUnavailable';
+    return <StockUnavailableNote message={ui(messageKey)} data-testid="StockUnavailableNote__59b33d" />;
+  }
+  if (!historyLoaded) return null;
+  return <StockEmptyState
+    onAdjustStock={() => navigate('/physical-inventory/new')}
+    onReplenish={() => navigate('/purchase-order/new')}
+    data-testid="StockEmptyState__59b33d" />;
+}
+
 export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
   const ui = useUI();
   const apiFetch = useApiFetch(apiBaseUrl);
-  const { stockRows, transactions, partial } = useStockHistory(recordId, apiFetch);
+  const { stockRows, transactions, partial, stockFailed, historyFailed } = useStockHistory(recordId, apiFetch);
   const [activeTab, setActiveTab] = useState('summary');
   // RF-16: collapsed is only different markup; every hook above/below stays mounted, so period, hidden series and history survive.
   const [collapsed, setCollapsed] = useSidebarCollapsed();
-  // Focus handoff: the toggled button unmounts, so after a USER toggle focus moves to its counterpart (never on mount).
+  // Focus handoff: a strip tab icon unmounts when it reopens the panel, so focus moves to the matching tab (never on mount).
+  // The divider button stays mounted, so it keeps its own focus (focusTestId null).
   const pendingFocus = useRef(null);
   const toggle = (next, focusTestId) => { pendingFocus.current = focusTestId; setCollapsed(next); };
   useEffect(() => {
@@ -445,27 +508,21 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
 
   const onHand = stockRows?.reduce((s, r) => s + (Number(r.quantityOnHand) || 0), 0) ?? null;
 
-  const locatorToWarehouse = (stockRows ?? []).reduce((map, r) => {
-    if (r.storageBin) map[r.storageBin] = r['warehouse$_identifier'] ?? r.warehouse ?? 'Unknown';
-    return map;
-  }, {});
-
-  const binMap = (stockRows ?? []).reduce((acc, r) => {
-    const binName = r['warehouse$_identifier'] ?? r.warehouse ?? r['storageBin$_identifier'] ?? r.storageBin ?? 'Unknown';
-    if (!acc[binName]) acc[binName] = { binName, quantityOnHand: 0 };
-    acc[binName].quantityOnHand += Number(r.quantityOnHand) || 0;
-    return acc;
-  }, {});
-  const locationRows = Object.values(binMap).filter(b => b.quantityOnHand > 0);
-  const binCount = locationRows.length;
+  const locatorToWarehouse = buildLocatorToWarehouse(stockRows);
+  const locationRows = buildLocationRows(stockRows);
 
   const fmt = v => (v === null ? null : formatStockQuantity(v));
 
-  let onHandSubtitle = null;
-  if (binCount === 1) onHandSubtitle = locationRows[0]?.binName ?? null;
-  else if (binCount > 1) onHandSubtitle = ui('stockLocationsCount', { count: binCount });
+  const onHandSubtitle = resolveOnHandSubtitle(locationRows, ui);
 
-  const hasChart = transactions !== null && transactions.length > 0;
+  // Without a trusted stock there is no anchor for the series: no chart rather than a flat zero one.
+  const hasChart = transactions !== null && transactions.length > 0 && !stockFailed;
+  // The stock is still being read: the "Available" value shows a placeholder bar instead of a number.
+  // The card shows whenever the stock rows loaded, whatever the history did (a failed history only replaces the chart).
+  const stockKnown = stockRows !== null;
+  const stockLoading = (stockRows === null && !stockFailed) || transactions === null;
+  // The "Available" card: with a chart, while the stock is read, or when something failed (stock, or history over known stock).
+  const showAvailability = hasChart || stockLoading || stockFailed || (stockKnown && historyFailed);
   const sortedRows = [...locationRows].sort((a, b) => b.quantityOnHand - a.quantityOnHand);
   const navigate = useNavigate();
 
@@ -494,17 +551,24 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
   // show (ETP-4606, extended to Expense/Resource in ETP-5091).
   if (['S', 'E', 'R'].includes(data?.productType)) return null;
 
+  // ONE button on the divider in both states (a sibling of the content, portalled out of the scroll column).
+  const dividerToggle = <ProductSidebarDividerToggle collapsed={collapsed} onToggle={() => toggle(!collapsed, null)} data-testid="ProductSidebarDividerToggle__d1v7e2" />;
+
   if (collapsed) {
     return (
-      <ProductSidebarCollapsed
-        onOpen={() => toggle(false, 'ProductSidebarCollapseButton')}
-        onSelectTab={(tab) => { setActiveTab(tab); toggle(false, `ProductSidebarTab-${tab}`); }}
-        data-testid="ProductSidebarCollapsed__59b33d" />
+      <>
+        {dividerToggle}
+        <ProductSidebarCollapsed
+          onSelectTab={(tab) => { setActiveTab(tab); toggle(false, `ProductSidebarTab-${tab}`); }}
+          data-testid="ProductSidebarCollapsed__59b33d" />
+      </>
     );
   }
 
   return (
-    <div className="flex flex-col gap-3" data-product-sidebar-collapsed="false">
+    <>
+    {dividerToggle}
+    <div id={SIDEBAR_PANEL_ID} className="flex flex-col gap-3" data-product-sidebar-collapsed="false">
       {/* ── Inventory overview ── */}
       <div>
 
@@ -528,17 +592,6 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
               </button>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={() => toggle(true, 'ProductSidebarOpenButton')}
-            title={ui('hidePanel')}
-            aria-label={ui('hidePanel')}
-            aria-expanded="true"
-            className="inline-flex items-center justify-center w-8 h-8 shrink-0 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-            data-testid="ProductSidebarCollapseButton"
-          >
-            <PanelRightClose size={20} aria-hidden="true" data-testid="PanelRightClose__59b33d" />
-          </button>
         </div>
 
         {/* Summary tab content */}
@@ -550,11 +603,14 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
               ui={ui}
               disabled={!hasChart}
               data-testid="SidebarPeriodSelector__59b33d" />
-            {hasChart && <AvailabilityWidget
-              label={ui('stockAvailableLabel')}
-              value={fmt(onHand)}
+            {showAvailability && <AvailabilityWidget
+              label={ui('productSidebarStockAvailable')}
+              value={stockLoading ? null : fmt(onHand)}
+              loading={stockLoading}
+              unavailable={stockFailed}
               badge={onHandSubtitle}
-              onBadgeClick={binCount > 1 ? () => setActiveTab('warehouses') : undefined}
+              badgeIsName={locationRows.length === 1}
+              onClick={stockLoading || stockFailed ? undefined : () => setActiveTab('warehouses')}
               data-testid="AvailabilityWidget__59b33d" />}
           </div>
         )}
@@ -568,6 +624,7 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
               ui={ui}
               disabled={!hasChart}
               data-testid="SidebarPeriodSelector__59b33d" />
+            {stockFailed && <StockUnavailableNote message={ui('stockUnavailableDesc')} data-testid="StockUnavailableNote__59b33d" />}
             <WarehouseCards rows={sortedRows} ui={ui} fmt={fmt} data-testid="WarehouseCards__59b33d" />
           </div>
         )}
@@ -581,10 +638,13 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
       {/* ── Stock movement or empty state ── */}
       {hasChart
         ? <StockChart {...stockChartProps} data-testid="StockChart__59b33d" />
-        : transactions !== null && <StockEmptyState
-        onAdjustStock={() => navigate('/physical-inventory/new')}
-        onReplenish={() => navigate('/purchase-order/new')}
-        data-testid="StockEmptyState__59b33d" />
+        : <StockFallback
+          stockFailed={stockFailed}
+          historyFailed={historyFailed}
+          historyLoaded={transactions !== null}
+          ui={ui}
+          navigate={navigate}
+          data-testid="StockFallback__59b33d" />
       }
       {/* ETP-5908: under the chart, in both tabs (once: the hidden chart below is only a modal host) */}
       {hasChart && <ViewMovementsLink period={period} data-testid="ViewMovementsLink__59b33d" />}
@@ -595,5 +655,6 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
         </div>
       )}
     </div>
+    </>
   );
 }

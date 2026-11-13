@@ -35,6 +35,22 @@
   --eg-ink: #1B1A1F;
   --eg-yellow: var(--brand-lime-hex);
   --ai-accent: var(--brand-lavender-hex);
+
+  /* ETP-5889 Product design tokens (hex, same style as --status-*-fg; use via bg-[var(--x)]). */
+  --surface-subtle: #F5F7F9;
+  --quantity-negative-fg: #B82E00;
+  --info-label-bg: #EBEFFF;
+  --info-label-fg: #253884;
+  --primary-hover-strong: #2B48BC;
+  --chart-area-opacity: 0.32;
+  --chart-series-1-fill: #B8FA50; --chart-series-1-line: #89B741;
+  --chart-series-2-fill: #B3A1FF; --chart-series-2-line: #8578BC;
+  --chart-series-3-fill: #325CFF; --chart-series-3-line: #2849CC;
+  --chart-series-4-fill: #2DD4BF; --chart-series-4-line: #0F766E;
+  --chart-series-5-fill: #FBBF24; --chart-series-5-line: #B45309;
+  --chart-series-6-fill: #F472B6; --chart-series-6-line: #BE185D;
+  --chart-series-7-fill: #818CF8; --chart-series-7-line: #4338CA;
+  --chart-series-8-fill: #FB923C; --chart-series-8-line: #C2410C;
 }
 
 .dark {
@@ -51,6 +67,12 @@
   --accent-highlight-foreground: var(--brand-ink);
   --eg-yellow: var(--brand-lime-hex);
   --ai-accent: var(--brand-lavender-hex);
+
+  --surface-subtle: #1E293B;
+  --quantity-negative-fg: #FDBA8C;
+  --info-label-bg: #1E2A5E;
+  --info-label-fg: #C7D2FE;
+  --primary-hover-strong: #2B48BC;
 }
 
 body {
