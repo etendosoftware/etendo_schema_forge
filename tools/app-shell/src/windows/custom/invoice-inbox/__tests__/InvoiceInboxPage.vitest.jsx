@@ -11,6 +11,8 @@
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxUploadResult.jsx
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/useInvoiceInboxUploadResult.js
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxUploadLog.js
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewDrawer.jsx
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/useInvoiceInboxReviewNav.js
 import { useEffect, useState } from 'react';
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 
@@ -20,6 +22,7 @@ const mockApi = {
   fetchRowsById: vi.fn(),
   uploadInboxFile: vi.fn(),
   discardInboxDocument: vi.fn(),
+  fetchReview: vi.fn(),
 };
 vi.mock('../invoiceInboxApi.js', () => ({
   fetchNextPage: (...a) => mockApi.fetchNextPage(...a),
@@ -29,7 +32,10 @@ vi.mock('../invoiceInboxApi.js', () => ({
   fetchRowsByIdChunked: (api, ids) => mockApi.fetchRowsById(api, ids),
   uploadInboxFile: (...a) => mockApi.uploadInboxFile(...a),
   discardInboxDocument: (...a) => mockApi.discardInboxDocument(...a),
+  fetchReview: (...a) => mockApi.fetchReview(...a),
 }));
+vi.mock('../InvoiceInboxReviewViewer.jsx', () => ({ default: ({ documentId }) => <div data-testid="viewer-stub" data-doc={documentId} /> }));
+vi.mock('@/hooks/useCurrencyPrecision.js', () => ({ useCurrencyPrecision: () => 2 }));
 
 let mockAuth = null;
 vi.mock('@etendosoftware/app-shell-core/auth', async (importOriginal) => ({
@@ -56,7 +62,7 @@ vi.mock('@/components/contract-ui/SelectionToolbar.jsx', () => ({
 }));
 // A light DataTable: renders each column's cell and a checkbox only for selectable rows.
 vi.mock('@/components/contract-ui', () => ({
-  DataTable: function DataTable({ columns, data, loading, isRowSelectable, onSelectionChange, clearSelectionTrigger, emptyState, rowQuickActions }) {
+  DataTable: function DataTable({ columns, data, loading, isRowSelectable, onSelectionChange, clearSelectionTrigger, emptyState, rowQuickActions, onRowClick }) {
     const [selected, setSelected] = useState([]);
     useEffect(() => { setSelected([]); onSelectionChange?.([]); }, [clearSelectionTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
     const toggle = (row) => {
@@ -70,7 +76,7 @@ vi.mock('@/components/contract-ui', () => ({
       <table>
         <tbody>
           {data.map((row) => (
-            <tr key={row.id} data-testid={`row-${row.id}`}>
+            <tr key={row.id} data-testid={`row-${row.id}`} onClick={() => onRowClick?.(row)}>
               <td>{isRowSelectable(row) && <input type="checkbox" data-testid={`check-${row.id}`} checked={selected.includes(row.id)} onChange={() => toggle(row)} />}</td>
               {columns.map((c) => <td key={c.key} data-col={c.key}>{c.render(row)}</td>)}
               <td data-col="actions">{rowQuickActions?.render?.(row)}</td>
@@ -107,6 +113,16 @@ const ROWS = [
 ];
 const page = (rows, more = false) => ({ rows, cursor: { index: 1, offset: 0 }, more });
 
+const reviewOf = (id, over = {}) => ({
+  id, status: 'READY', editable: true, fileName: `${id}.pdf`, source: 'UPLOAD', created: '2026-08-10T09:30:00Z',
+  currency: { id: 'E', isoCode: 'EUR' },
+  document: {
+    header: { vendor: { state: 'none' }, documentNo: `N-${id}`, invoiceDate: '2026-08-01', totalAmount: 0, duplicate: { state: 'none' } },
+    lines: [], validation: { missing: [] },
+  },
+  ...over,
+});
+
 const AUTH = { clientId: 'C1', account: { id: 'A1' } };
 
 beforeEach(() => {
@@ -116,6 +132,7 @@ beforeEach(() => {
   mockApi.fetchCounts.mockResolvedValue(COUNTS);
   mockApi.fetchNextPage.mockResolvedValue(page(ROWS));
   mockApi.fetchRowsById.mockResolvedValue([]);
+  mockApi.fetchReview.mockImplementation(async (_f, id) => ({ status: 'ok', review: reviewOf(id) }));
 });
 
 async function renderPage() {
@@ -556,5 +573,139 @@ describe('InvoiceInboxPage — upload result panel and batch filter', () => {
     fireEvent.click(screen.getByTestId('invoice-inbox-result-dismiss'));
     await waitFor(() => expect(screen.queryByTestId('invoice-inbox-result')).toBeNull());
     expect(localStorage.getItem(KEY)).toBeNull();
+  });
+});
+
+
+describe('InvoiceInboxPage — document numbers from the list', () => {
+  it('CONFIRMED rows show the plain invoice number, and the duplicate icon the plain duplicate number', async () => {
+    mockApi.fetchNextPage.mockResolvedValue(page([
+      { id: 'c1', status: 'CONFIRMED', fileName: 'c.pdf', 'invoice$documentNo': '10000007', 'invoice$_identifier': '10000007 - 2026-08-10 - 1.00' },
+      { id: 'd1', status: 'READY', fileName: 'd.pdf', duplicateOfInvoice: 'i', 'duplicateOfInvoice$documentNo': '10000003', 'duplicateOfInvoice$_identifier': '10000003 - x' },
+    ]));
+    render(<InvoiceInboxPage apiBaseUrl="/sws/neo/invoice-inbox" />);
+    await screen.findByTestId('row-c1');
+    expect(within(screen.getByTestId('invoice-inbox-status-c1')).getByText(/invoiceInboxConfirmedAs.*10000007/)).toBeInTheDocument();
+    expect(screen.getByTestId('invoice-inbox-status-c1')).not.toHaveTextContent('2026-08-10');
+    expect(screen.getByTestId('invoice-inbox-duplicate-d1')).toHaveAttribute('aria-label', expect.stringContaining('10000003'));
+    expect(screen.getByTestId('invoice-inbox-duplicate-d1').getAttribute('aria-label')).not.toContain('- x');
+  });
+});
+
+describe('InvoiceInboxPage — review panel', () => {
+  const drawer = () => screen.queryByTestId('invoice-inbox-review-drawer');
+
+  it('a row click opens the panel on that document and reads it with GET review', async () => {
+    await renderPage();
+    fireEvent.click(screen.getByTestId('row-r3'));
+    await screen.findByTestId('invoice-inbox-review-form');
+    expect(mockApi.fetchReview).toHaveBeenCalledTimes(1);
+    expect(mockApi.fetchReview.mock.calls[0][1]).toBe('r3');
+    expect(screen.getByTestId('viewer-stub')).toHaveAttribute('data-doc', 'r3');
+    expect(screen.getByTestId('invoice-inbox-review-invoice-no')).toHaveValue('N-r3');
+  });
+
+  it('the pencil opens it too (and the row click handler does not fire twice)', async () => {
+    await renderPage();
+    fireEvent.click(screen.getByTestId('invoice-inbox-row-edit-r2'));
+    await screen.findByTestId('invoice-inbox-review-form');
+    expect(mockApi.fetchReview).toHaveBeenCalledTimes(1);
+    expect(mockApi.fetchReview.mock.calls[0][1]).toBe('r2');
+  });
+
+  it('a PROCESSING row does not open it', async () => {
+    await renderPage();
+    fireEvent.click(screen.getByTestId('row-p1'));
+    expect(drawer()).toBeNull();
+    expect(mockApi.fetchReview).not.toHaveBeenCalled();
+  });
+
+  it('the kebab stays inert: it opens nothing', async () => {
+    await renderPage();
+    fireEvent.click(screen.getByTestId('invoice-inbox-row-more-r2'));
+    expect(drawer()).toBeNull();
+    expect(mockApi.fetchReview).not.toHaveBeenCalled();
+  });
+
+  it('shows "n de total" over the openable rows and next skips to the following openable row', async () => {
+    await renderPage();
+    fireEvent.click(screen.getByTestId('row-r2'));
+    await screen.findByTestId('invoice-inbox-review-form');
+    // p1 (PROCESSING) is not counted: 6 openable rows.
+    expect(screen.getByTestId('invoice-inbox-review-position')).toHaveTextContent('invoiceInboxReviewPosition:{"n":1,"total":6}');
+    fireEvent.click(screen.getByTestId('invoice-inbox-review-next'));
+    await waitFor(() => expect(screen.getByTestId('viewer-stub')).toHaveAttribute('data-doc', 'r3'));
+    fireEvent.click(screen.getByTestId('invoice-inbox-review-prev'));
+    await waitFor(() => expect(screen.getByTestId('viewer-stub')).toHaveAttribute('data-doc', 'r2'));
+  });
+
+  it('next at the end of the loaded rows loads the next page and moves on', async () => {
+    mockApi.fetchNextPage.mockResolvedValueOnce(page([{ id: 'a1', status: 'READY', fileName: 'a.pdf' }], true));
+    mockApi.fetchNextPage.mockResolvedValueOnce(page([{ id: 'a2', status: 'READY', fileName: 'b.pdf' }], false));
+    render(<InvoiceInboxPage apiBaseUrl="/sws/neo/invoice-inbox" />);
+    await screen.findByTestId('row-a1');
+    fireEvent.click(screen.getByTestId('row-a1'));
+    await screen.findByTestId('invoice-inbox-review-form');
+    fireEvent.click(screen.getByTestId('invoice-inbox-review-next'));
+    await waitFor(() => expect(screen.getByTestId('viewer-stub')).toHaveAttribute('data-doc', 'a2'));
+    expect(mockApi.fetchNextPage).toHaveBeenCalledTimes(2);
+  });
+
+  it('closing re-reads the opened rows and the counters', async () => {
+    await renderPage();
+    fireEvent.click(screen.getByTestId('row-r2'));
+    await screen.findByTestId('invoice-inbox-review-form');
+    fireEvent.click(screen.getByTestId('invoice-inbox-review-next'));
+    await waitFor(() => expect(screen.getByTestId('viewer-stub')).toHaveAttribute('data-doc', 'r3'));
+    mockApi.fetchCounts.mockClear();
+    mockApi.fetchRowsById.mockResolvedValue([{ id: 'r3', status: 'READY', fileName: 'x.pdf', orderReference: 'F-FRESH' }]);
+    fireEvent.click(screen.getByTestId('invoice-inbox-review-close'));
+    await waitFor(() => expect(drawer()).toBeNull());
+    await waitFor(() => expect(mockApi.fetchRowsById).toHaveBeenCalled());
+    expect([...mockApi.fetchRowsById.mock.calls.at(-1)[1]].sort()).toEqual(['r2', 'r3']);
+    await waitFor(() => expect(mockApi.fetchCounts).toHaveBeenCalled());
+    await waitFor(() => expect(within(screen.getByTestId('row-r3')).getByText('F-FRESH')).toBeInTheDocument());
+  });
+
+  it('discard from the footer reuses the dialog: one POST, the panel closes, list and counters refresh', async () => {
+    mockApi.discardInboxDocument.mockResolvedValue({ status: 'discarded' });
+    await renderPage();
+    fireEvent.click(screen.getByTestId('row-r2'));
+    await screen.findByTestId('invoice-inbox-review-form');
+    fireEvent.click(screen.getByTestId('invoice-inbox-review-discard'));
+    expect(screen.getByTestId('invoice-inbox-discard-dialog-title')).toHaveTextContent('invoiceInboxDiscardTitleOne');
+    mockApi.fetchNextPage.mockClear();
+    mockApi.fetchCounts.mockClear();
+    fireEvent.click(screen.getByTestId('invoice-inbox-discard-confirm'));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('invoiceInboxDiscardedOne:{}'));
+    expect(mockApi.discardInboxDocument).toHaveBeenCalledTimes(1);
+    expect(mockApi.discardInboxDocument.mock.calls[0][1]).toBe('r2');
+    await waitFor(() => expect(drawer()).toBeNull());
+    await waitFor(() => expect(mockApi.fetchNextPage).toHaveBeenCalled());
+    await waitFor(() => expect(mockApi.fetchCounts).toHaveBeenCalled());
+  });
+
+  it('a failing discard keeps the panel open', async () => {
+    mockApi.discardInboxDocument.mockResolvedValue({ status: 'failed', code: 'not_discardable', httpStatus: 409 });
+    await renderPage();
+    fireEvent.click(screen.getByTestId('row-r2'));
+    await screen.findByTestId('invoice-inbox-review-form');
+    fireEvent.click(screen.getByTestId('invoice-inbox-review-discard'));
+    fireEvent.click(screen.getByTestId('invoice-inbox-discard-confirm'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(mockApi.discardInboxDocument).toHaveBeenCalledTimes(1);
+    expect(drawer()).not.toBeNull();
+    expect(screen.getByTestId('invoice-inbox-review-form')).toBeInTheDocument();
+  });
+
+  it('opening, navigating and closing fire no write request', async () => {
+    await renderPage();
+    fireEvent.click(screen.getByTestId('row-r2'));
+    await screen.findByTestId('invoice-inbox-review-form');
+    fireEvent.click(screen.getByTestId('invoice-inbox-review-next'));
+    fireEvent.click(screen.getByTestId('invoice-inbox-review-close'));
+    await waitFor(() => expect(drawer()).toBeNull());
+    expect(mockApi.discardInboxDocument).not.toHaveBeenCalled();
+    expect(mockApi.uploadInboxFile).not.toHaveBeenCalled();
   });
 });
