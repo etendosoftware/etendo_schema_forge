@@ -160,6 +160,12 @@ function blobResponse(blob, { status = 200 } = {}) {
 /** Marker for a request that never completes — transient, and never a dead link. */
 const NETWORK_FAILURE = Symbol('network failure');
 
+/** Answers in order, repeating the last one: what `/me` says on the first load, then on a re-check. */
+function sequence(...answers) {
+  let next = 0;
+  return () => answers[Math.min(next++, answers.length - 1)];
+}
+
 /** What each endpoint answers; a test reassigns a field before rendering. */
 let responses;
 
@@ -225,7 +231,7 @@ beforeEach(() => {
     const [route, query = ''] = path.split('?');
     const documentMatch = route.match(/\/documents\/([^/]+)\/([^/]+?)(\/pdf)?$/);
     let answer;
-    if (route.endsWith('/me')) answer = responses.me;
+    if (route.endsWith('/me')) answer = typeof responses.me === 'function' ? responses.me() : responses.me;
     else if (route.endsWith('/home')) answer = responses.home;
     else if (route.endsWith('/renew')) answer = responses.renew;
     else if (route.endsWith('/logo')) answer = responses.logo;
@@ -366,6 +372,26 @@ describe('PortalPage — view in the URL', () => {
       expect(apiFetchMock.mock.calls.some(([path]) => path.includes('/documents/'))).toBe(false);
     });
   }
+
+  it('opens the list of the entry kind, with a notice, when the entry document is gone', async () => {
+    responses.me = jsonResponse({ ...IDENTITY, entryKind: 'ORDER' });
+    renderPortal();
+
+    await waitFor(() => expect(screen.getByTestId('portal-document-list')).toHaveAttribute('data-kind', 'ORDER'));
+    const notice = screen.getByTestId('portal-entry-unavailable');
+    expect(notice).toHaveAttribute('role', 'status');
+    expect(notice.textContent).toBe('portalEntryDocumentUnavailable');
+  });
+
+  it('opens home, with the notice, when the gone entry document is of an unknown kind', async () => {
+    responses.me = jsonResponse({ ...IDENTITY, entryKind: 'PAYMENT' });
+    renderPortal();
+    await shellReady();
+
+    expect(screen.getByTestId('portal-home')).toBeInTheDocument();
+    expect(screen.getByTestId('portal-entry-unavailable')).toBeInTheDocument();
+    expect(callsTo('/documents')).toHaveLength(0);
+  });
 
   it('lets a view in the URL win over the entry document', async () => {
     responses.me = jsonResponse(WITH_ENTRY);
@@ -583,6 +609,29 @@ describe('PortalPage — mobile layout', () => {
       .toHaveLength(screen.getAllByTestId('portal-document-row').length);
   });
 
+  it('shows on each invoice card the status when it is not completed, and what is still owed', async () => {
+    responses.documents = () => jsonResponse({
+      documents: [
+        { ...INVOICES[1], overdue: false },
+        { ...INVOICES[0], id: 'inv-9', documentNo: 'FV/0009', documentStatus: 'CL' },
+      ],
+      totalCount: 2,
+      statuses: ['CO', 'CL'],
+    });
+    renderPortal(`/portal/${TOKEN}?view=list&kind=INVOICE`);
+    await listReady();
+
+    const [completed, closed] = screen.getAllByTestId('portal-document-card');
+    // Completed is what every listed invoice is: the card shows the payment state instead.
+    expect(within(completed).queryByTestId('portal-document-status')).not.toBeInTheDocument();
+    expect(within(completed).getByTestId('portal-payment-status')).toHaveAttribute('data-state', 'pending');
+    expect(within(completed).getByTestId('portal-card-outstanding').textContent)
+      .toBe(`portalColOutstanding ${eur('500,00')}`);
+    expect(within(closed).getByTestId('portal-document-status')).toHaveAttribute('data-status', 'CL');
+    expect(within(closed).getByTestId('portal-card-outstanding').textContent)
+      .toBe(`portalColOutstanding ${eur('0,00')}`);
+  });
+
   it('shows the bottom navigation below the breakpoint and the sidebar above it', async () => {
     const user = userEvent.setup();
     renderPortal();
@@ -723,17 +772,25 @@ describe('PortalPage — document detail', () => {
     expect(saveBlobAsFile).not.toHaveBeenCalled();
   });
 
-  it('takes the whole page to the dead-link screen when the printable rejects the token', async () => {
+  it('re-checks the link once when the printable rejects the token, and gives up on the second refusal', async () => {
     const user = userEvent.setup();
     responses.pdf = jsonResponse({}, { status: 401 });
     responses.me = jsonResponse(WITH_ENTRY);
     renderPortal();
     await detailReady();
 
+    // First refusal: /me is asked again and still says "valid", so the document comes back.
     await user.click(screen.getByTestId('portal-download-pdf'));
+    await waitFor(() => expect(callsTo('/me')).toHaveLength(2));
+    await detailReady();
+    expect(screen.queryByTestId('portal-invalid-link')).not.toBeInTheDocument();
 
+    // Second refusal without navigating: the dead-link screen, and no third /me.
+    await user.click(screen.getByTestId('portal-download-pdf'));
     await waitFor(() => expect(screen.getByTestId('portal-invalid-link')).toBeInTheDocument());
     expect(screen.queryByTestId('portal-document-detail')).not.toBeInTheDocument();
+    expect(callsTo('/me')).toHaveLength(2);
+    expect(saveBlobAsFile).not.toHaveBeenCalled();
   });
 
   it('says the document is not available when it is not found', async () => {
@@ -743,6 +800,58 @@ describe('PortalPage — document detail', () => {
       .toHaveTextContent('portalDocumentNotFoundTitle'));
     expect(screen.queryByTestId('portal-invalid-link')).not.toBeInTheDocument();
   });
+});
+
+describe('PortalPage — a read refused after a valid /me', () => {
+  /**
+   * The link can change state mid-session (it expires, the customer is blocked). A data read that
+   * answers 401 after /me said "valid" re-runs /me once and follows what it says now; only a second
+   * refusal ends on the dead-link page. The refused read here is the entry document itself.
+   */
+  const CASES = [
+    {
+      label: 'goes to the renewal when the link has expired meanwhile',
+      recheck: jsonResponse({ ...WITH_ENTRY, state: 'expired' }),
+      testId: 'portal-renewed',
+      renewals: 1,
+      documentReads: 1,
+    },
+    {
+      label: 'goes to the unavailable screen when the customer was blocked meanwhile',
+      recheck: jsonResponse({ ...WITH_ENTRY, state: 'unavailable' }),
+      testId: 'portal-unavailable',
+      renewals: 0,
+      documentReads: 1,
+    },
+    {
+      label: 'goes to the dead-link screen when /me refuses the token too',
+      recheck: jsonResponse({}, { status: 401 }),
+      testId: 'portal-invalid-link',
+      renewals: 0,
+      documentReads: 1,
+    },
+    {
+      label: 'goes to the dead-link screen when /me still accepts it but the read is refused again',
+      recheck: jsonResponse(WITH_ENTRY),
+      testId: 'portal-invalid-link',
+      renewals: 0,
+      documentReads: 2,
+    },
+  ];
+
+  for (const row of CASES) {
+    it(row.label, async () => {
+      responses.me = sequence(jsonResponse(WITH_ENTRY), row.recheck);
+      responses.document = () => jsonResponse({}, { status: 401 });
+      renderPortal();
+
+      await waitFor(() => expect(screen.getByTestId(row.testId)).toBeInTheDocument());
+      // Exactly one re-check, whatever it said: the page never loops on a refusing backend.
+      expect(callsTo('/me')).toHaveLength(2);
+      expect(callsTo('/documents/invoice/inv-1')).toHaveLength(row.documentReads);
+      expect(callsTo('/renew')).toHaveLength(row.renewals);
+    });
+  }
 });
 
 describe('PortalPage — link states', () => {

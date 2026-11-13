@@ -152,6 +152,7 @@ describe('fetchPortalIdentity', () => {
     assert.deepEqual(await fetchPortalIdentity(fetchImpl, TOKEN), {
       state: 'expired',
       entryDocument: { kind: 'invoice', id: 'inv-9' },
+      entryKind: null,
       businessPartnerName: 'Cliente Uno',
       tenantName: 'Acme SA',
       hasLogo: true,
@@ -164,6 +165,7 @@ describe('fetchPortalIdentity', () => {
     assert.deepEqual(await fetchPortalIdentity(fetchImpl, TOKEN), {
       state: 'valid',
       entryDocument: null,
+      entryKind: null,
       businessPartnerName: null,
       tenantName: null,
       hasLogo: false,
@@ -176,6 +178,7 @@ describe('fetchPortalIdentity', () => {
     assert.deepEqual(await fetchPortalIdentity(fetchImpl, TOKEN), {
       state: 'valid',
       entryDocument: null,
+      entryKind: null,
       businessPartnerName: null,
       tenantName: null,
       hasLogo: false,
@@ -202,6 +205,26 @@ describe('fetchPortalIdentity', () => {
         { state: identity.state, entryDocument: identity.entryDocument },
         expected,
       );
+    });
+  }
+});
+
+describe('fetchPortalIdentity — entry kind', () => {
+  // `entryKind` names the list to open when the link's own document is no longer visible. It is
+  // meaningful only then: next to a visible entry document it would be a second, conflicting answer.
+  for (const [label, body, expected] of [
+    ['passes the kind through when the entry document is gone', { entryKind: ' ORDER ' }, 'ORDER'],
+    [
+      'ignores it while the entry document is still visible',
+      { entryDocument: { kind: 'INVOICE', id: 'inv-1' }, entryKind: 'ORDER' },
+      null,
+    ],
+    ['is null when the backend sends none', {}, null],
+  ]) {
+    it(label, async () => {
+      const { fetchImpl } = recordingFetch(() => jsonResponse(body));
+
+      assert.equal((await fetchPortalIdentity(fetchImpl, TOKEN)).entryKind, expected);
     });
   }
 });
