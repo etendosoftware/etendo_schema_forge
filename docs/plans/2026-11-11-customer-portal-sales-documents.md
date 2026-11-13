@@ -814,7 +814,9 @@ mobile headers, as the boards do; the shell is only the sidebar and the bottom b
   state, outstanding, payment method, tax base, taxes); shipments use `MovementSummaryCard`, like
   the app's shipment/receipt previews. Related documents use the shared `RelatedDocumentsCard` in
   its new **pre-resolved items mode** (`items` + `onOpen`: same rows, no NEO fetch, no refresh, no
-  app navigation; without `items` the card is unchanged for every app caller). This replaces the
+  app navigation, and a row that wraps rather than shortening its status tag; without `items` the
+  card is unchanged for every app caller). The panel is 380 px wide, the app preview panel's width
+  (`GenericPreviewModal`), and the rows the portal adds end in a colon like the card's own. This replaces the
   portal's own summary and its "Este" / dashed chain-step rows. `PaymentsCard` is not reused: it
   renders `FIN_Payment` records and opens them in the internal payment windows, while the portal
   has (and shows) the invoice's instalments; exposing payments would need a new read of internal

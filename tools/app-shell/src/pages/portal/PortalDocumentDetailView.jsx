@@ -210,7 +210,7 @@ export default function PortalDocumentDetailView({
         </section>
 
         {/* Right pane */}
-        <aside className="flex min-w-0 flex-col gap-4 md:w-80 md:flex-none md:gap-0 md:overflow-y-auto md:border-l md:border-border">
+        <aside className="flex min-w-0 flex-col gap-4 md:w-[380px] md:flex-none md:gap-0 md:overflow-y-auto md:border-l md:border-border">
           <div className="hidden flex-col gap-2.5 border-b border-border p-3.5 md:flex">
             <div className="flex flex-col">
               <span className="text-base font-semibold leading-6">{title}</span>
@@ -396,6 +396,9 @@ function PortalSummary({ document }) {
   const isInvoice = document.kind === 'INVOICE';
   const taxesTotal = document.taxes.reduce((sum, tax) => sum + (tax.taxAmount ?? 0), 0);
   const money = (value) => (value == null ? '—' : formatCurrency(document.currency, value));
+  // The card's own labels end in a colon ("Contacto:", "Fecha:", "Estado:"); the rows the portal
+  // adds follow it.
+  const rowLabel = (key) => `${ui(key)}:`;
 
   if (document.kind === 'SHIPMENT') {
     return (
@@ -425,14 +428,14 @@ function PortalSummary({ document }) {
       dueDate={isInvoice ? (document.dueDate ?? null) : undefined}
     >
       {isInvoice ? (
-        <InfoRow label={ui('portalColPaymentStatus')}>
+        <InfoRow label={rowLabel('portalColPaymentStatus')}>
           <PortalPaymentStatus document={document} installments={document.installments} className="whitespace-normal text-right" />
         </InfoRow>
       ) : null}
-      {isInvoice ? <InfoRow label={ui('portalColOutstanding')} value={money(document.outstandingAmount)} /> : null}
-      {document.paymentMethod ? <InfoRow label={ui('portalFieldPaymentMethod')} value={document.paymentMethod} /> : null}
-      <InfoRow label={ui('portalColTaxBase')} value={money(document.taxBase)} />
-      <InfoRow label={ui('portalFieldTaxes')} value={money(taxesTotal)} />
+      {isInvoice ? <InfoRow label={rowLabel('portalColOutstanding')} value={money(document.outstandingAmount)} /> : null}
+      {document.paymentMethod ? <InfoRow label={rowLabel('portalFieldPaymentMethod')} value={document.paymentMethod} /> : null}
+      <InfoRow label={rowLabel('portalColTaxBase')} value={money(document.taxBase)} />
+      <InfoRow label={rowLabel('portalFieldTaxes')} value={money(taxesTotal)} />
     </SummaryCard>
   );
 }

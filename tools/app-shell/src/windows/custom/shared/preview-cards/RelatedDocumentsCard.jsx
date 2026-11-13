@@ -50,7 +50,7 @@ function SkeletonRow() {
   );
 }
 
-function DocRow({ type, doc, ui, navigate, onOpen }) {
+function DocRow({ type, doc, ui, navigate, onOpen, wrap = false }) {
   const cfg = DOCUMENT_CHIP_TYPES[type];
   if (!cfg) return null;
 
@@ -70,7 +70,9 @@ function DocRow({ type, doc, ui, navigate, onOpen }) {
       onClick={() => (onOpen ? onOpen(type, doc) : navigate(`${cfg.routePrefix}/${doc.id}`))}
       // One line always (ETP-5527): the title and amount are never cut; when the row is too
       // narrow, the status tag is what shrinks, with an ellipsis and the full text on hover.
-      className="flex justify-between items-center py-2 w-full text-left hover:bg-muted rounded -mx-1 px-1 transition-colors"
+      // `wrap` (pre-resolved items only, the customer portal): the row may wrap and the status tag
+      // is never shortened, so a narrow panel moves the tag to its own line instead of cutting it.
+      className={`flex justify-between items-center py-2 w-full text-left hover:bg-muted rounded -mx-1 px-1 transition-colors${wrap ? ' flex-wrap gap-y-1' : ''}`}
     >
       <div className="flex items-center gap-2 shrink-0">
         <span className={`shrink-0 ${CHIP_COLORS[cfg.iconKey] ?? 'text-muted-foreground'}`}>
@@ -82,13 +84,13 @@ function DocRow({ type, doc, ui, navigate, onOpen }) {
         )}
       </div>
       {statusCode && (
-        <span className="flex justify-end min-w-0 ml-2" title={statusLabel}>
+        <span className={wrap ? 'flex justify-end ml-auto pl-2' : 'flex justify-end min-w-0 ml-2'} title={statusLabel}>
           {/* StatusTag renders its label as a text node of an inline-flex span, where an
               ellipsis cannot apply; the label is wrapped in its own truncating span. */}
           <StatusTag
             status={statusCode}
-            label={<span className="truncate min-w-0">{statusLabel}</span>}
-            className="max-w-full min-w-0"
+            label={wrap ? statusLabel : <span className="truncate min-w-0">{statusLabel}</span>}
+            className={wrap ? undefined : 'max-w-full min-w-0'}
             data-testid="StatusTag__685328" />
         </span>
       )}
@@ -216,6 +218,7 @@ export default function RelatedDocumentsCard({ documentId, token, apiBaseUrl, sp
           ui={ui}
           navigate={navigate}
           onOpen={onOpen}
+          wrap={preResolved}
           data-testid="DocRow__685328" />
       ))}
     </SectionCard>
