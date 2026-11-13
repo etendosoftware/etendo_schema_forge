@@ -1,6 +1,9 @@
 // @covers tools/app-shell/src/lib/observability/providers/mixpanel.js
 import { createMixpanelProvider } from '../mixpanel.js';
 
+// ETP-5466 — Mixpanel only emits from a production host.
+const PROD_HOST = 'app.etendo.software';
+
 function makeClient(overrides = {}) {
   return {
     init: vi.fn(),
@@ -25,12 +28,12 @@ describe('createMixpanelProvider — construction', () => {
   // ETP-5351 — the flag the observability core silences during a support session. Without it
   // Mixpanel would be treated as monitoring and keep receiving the operator's events.
   it('declares itself as product analytics', () => {
-    expect(createMixpanelProvider({ enabled: true, token: 't' }).analytics).toBe(true);
+    expect(createMixpanelProvider({ hostname: PROD_HOST, enabled: true, token: 't' }).analytics).toBe(true);
   });
 
   it('is disabled when enabled=true but token is missing, and warns', () => {
     const logger = { warn: vi.fn() };
-    const provider = createMixpanelProvider({ enabled: true, logger });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: true, logger });
     expect(provider.enabled).toBe(false);
     expect(logger.warn).toHaveBeenCalledWith(
       expect.stringContaining('Mixpanel is enabled but VITE_MIXPANEL_TOKEN is missing'),
@@ -39,30 +42,66 @@ describe('createMixpanelProvider — construction', () => {
 
   it('does not warn when disabled and token is also missing', () => {
     const logger = { warn: vi.fn() };
-    createMixpanelProvider({ enabled: false, logger });
+    createMixpanelProvider({ hostname: PROD_HOST, enabled: false, logger });
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
   it('is enabled when enabled=true (boolean) and a token is present', () => {
-    const provider = createMixpanelProvider({ enabled: true, token: 'tok' });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: true, token: 'tok' });
     expect(provider.enabled).toBe(true);
   });
 
   it('is enabled when enabled="true" (string) and a token is present', () => {
-    const provider = createMixpanelProvider({ enabled: 'true', token: 'tok' });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: 'true', token: 'tok' });
     expect(provider.enabled).toBe(true);
   });
 
   it('is disabled when enabled is a truthy non-"true" string', () => {
-    const provider = createMixpanelProvider({ enabled: 'yes', token: 'tok' });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: 'yes', token: 'tok' });
     expect(provider.enabled).toBe(false);
+  });
+});
+
+// ETP-5466 — only production hosts emit; a developer machine needs the explicit override.
+describe('createMixpanelProvider — production host allowlist', () => {
+  it.each(['app.etendo.software', 'app.etendo.ai'])('is enabled on %s', (hostname) => {
+    expect(createMixpanelProvider({ hostname, enabled: true, token: 'tok' }).enabled).toBe(true);
+  });
+
+  it.each(['localhost', '127.0.0.1', 'go.staging.etendo.cloud', 'evil.app.etendo.ai', ''])(
+    'is disabled on %s even with enabled=true and a token, without warning',
+    (hostname) => {
+      const logger = { warn: vi.fn() };
+      expect(createMixpanelProvider({ hostname, enabled: true, token: 'tok', logger }).enabled).toBe(false);
+      expect(logger.warn).not.toHaveBeenCalled();
+    },
+  );
+
+  it('reads the hostname from window.location by default (localhost under test)', () => {
+    expect(globalThis.location.hostname).toBe('localhost');
+    expect(createMixpanelProvider({ enabled: true, token: 'tok' }).enabled).toBe(false);
+  });
+
+  it('is enabled on localhost when allowLocal opts in', () => {
+    expect(createMixpanelProvider({ hostname: 'localhost', allowLocal: 'true', enabled: true, token: 'tok' }).enabled)
+      .toBe(true);
+    expect(createMixpanelProvider({ hostname: 'localhost', allowLocal: 'yes', enabled: true, token: 'tok' }).enabled)
+      .toBe(false);
+  });
+
+  it('never loads the SDK on a non-production host', async () => {
+    const loader = vi.fn();
+    const provider = createMixpanelProvider({ hostname: 'localhost', enabled: true, token: 'tok', loader });
+    await provider.init();
+    await provider.track('event');
+    expect(loader).not.toHaveBeenCalled();
   });
 });
 
 describe('createMixpanelProvider — init', () => {
   it('does nothing when the provider is disabled (loader never called)', async () => {
     const loader = vi.fn();
-    const provider = createMixpanelProvider({ enabled: false, loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: false, loader });
     await provider.init();
     expect(loader).not.toHaveBeenCalled();
   });
@@ -71,6 +110,7 @@ describe('createMixpanelProvider — init', () => {
     const client = makeClient();
     const loader = vi.fn().mockResolvedValue({ default: client });
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: true, token: 'tok-1', apiHost: 'https://api.mixpanel.test', debug: true, loader,
     });
 
@@ -91,7 +131,7 @@ describe('createMixpanelProvider — init', () => {
   it('omits api_host from normalized options when not provided', async () => {
     const client = makeClient();
     const loader = vi.fn().mockResolvedValue({ default: client });
-    const provider = createMixpanelProvider({ enabled: true, token: 'tok-1', loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: true, token: 'tok-1', loader });
 
     await provider.init();
 
@@ -102,7 +142,7 @@ describe('createMixpanelProvider — init', () => {
   it('caches the client across repeated calls (loader called only once)', async () => {
     const client = makeClient();
     const loader = vi.fn().mockResolvedValue({ default: client });
-    const provider = createMixpanelProvider({ enabled: true, token: 'tok', loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: true, token: 'tok', loader });
 
     await provider.init();
     await provider.track('event_a');
@@ -114,7 +154,7 @@ describe('createMixpanelProvider — init', () => {
   it('supports a loader module without a default export', async () => {
     const client = makeClient();
     const loader = vi.fn().mockResolvedValue(client); // no `.default`
-    const provider = createMixpanelProvider({ enabled: true, token: 'tok', loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: true, token: 'tok', loader });
 
     await provider.init();
 
@@ -126,7 +166,7 @@ describe('createMixpanelProvider — track', () => {
   it('does nothing when disabled', async () => {
     const client = makeClient();
     const loader = vi.fn().mockResolvedValue({ default: client });
-    const provider = createMixpanelProvider({ enabled: false, loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: false, loader });
     await provider.track('event');
     expect(client.track).not.toHaveBeenCalled();
   });
@@ -134,7 +174,7 @@ describe('createMixpanelProvider — track', () => {
   it('calls client.track with event name, properties, and a resolving callback', async () => {
     const client = makeClient();
     const loader = vi.fn().mockResolvedValue({ default: client });
-    const provider = createMixpanelProvider({ enabled: true, token: 'tok', loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: true, token: 'tok', loader });
 
     await provider.track('button_click', { action: 'click' });
 
@@ -146,7 +186,7 @@ describe('createMixpanelProvider — track', () => {
   it('does nothing when the client has no track method', async () => {
     const client = makeClient({ track: undefined });
     const loader = vi.fn().mockResolvedValue({ default: client });
-    const provider = createMixpanelProvider({ enabled: true, token: 'tok', loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: true, token: 'tok', loader });
 
     await expect(provider.track('event')).resolves.toBeUndefined();
   });
@@ -156,7 +196,7 @@ describe('createMixpanelProvider — page', () => {
   it('tracks a page_view event with route and routePattern', async () => {
     const client = makeClient();
     const loader = vi.fn().mockResolvedValue({ default: client });
-    const provider = createMixpanelProvider({ enabled: true, token: 'tok', loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: true, token: 'tok', loader });
 
     await provider.page('/sales-order/:recordId', { windowName: 'sales-order' });
 
@@ -170,7 +210,7 @@ describe('createMixpanelProvider — page', () => {
   it('does nothing when disabled', async () => {
     const client = makeClient();
     const loader = vi.fn().mockResolvedValue({ default: client });
-    const provider = createMixpanelProvider({ enabled: false, loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: false, loader });
     await provider.page('/x');
     expect(client.track).not.toHaveBeenCalled();
   });
@@ -178,7 +218,7 @@ describe('createMixpanelProvider — page', () => {
   it('does nothing when the client has no track method', async () => {
     const client = makeClient({ track: undefined });
     const loader = vi.fn().mockResolvedValue({ default: client });
-    const provider = createMixpanelProvider({ enabled: true, token: 'tok', loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: true, token: 'tok', loader });
 
     await expect(provider.page('/x')).resolves.toBeUndefined();
   });
@@ -188,7 +228,7 @@ describe('createMixpanelProvider — identify', () => {
   it('calls client.identify and client.people.set when both exist', async () => {
     const client = makeClient();
     const loader = vi.fn().mockResolvedValue({ default: client });
-    const provider = createMixpanelProvider({ enabled: true, token: 'tok', loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: true, token: 'tok', loader });
 
     await provider.identify('user-1', { role: 'admin' });
 
@@ -199,7 +239,7 @@ describe('createMixpanelProvider — identify', () => {
   it('skips people.set when the client has no people API', async () => {
     const client = makeClient({ people: undefined });
     const loader = vi.fn().mockResolvedValue({ default: client });
-    const provider = createMixpanelProvider({ enabled: true, token: 'tok', loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: true, token: 'tok', loader });
 
     await expect(provider.identify('user-1')).resolves.toBeUndefined();
     expect(client.identify).toHaveBeenCalledWith('user-1');
@@ -208,7 +248,7 @@ describe('createMixpanelProvider — identify', () => {
   it('skips identify() call when the client has no identify method', async () => {
     const client = makeClient({ identify: undefined });
     const loader = vi.fn().mockResolvedValue({ default: client });
-    const provider = createMixpanelProvider({ enabled: true, token: 'tok', loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: true, token: 'tok', loader });
 
     await provider.identify('user-1', { role: 'admin' });
     expect(client.people.set).toHaveBeenCalledWith({ role: 'admin' });
@@ -217,7 +257,7 @@ describe('createMixpanelProvider — identify', () => {
   it('does nothing when disabled', async () => {
     const client = makeClient();
     const loader = vi.fn().mockResolvedValue({ default: client });
-    const provider = createMixpanelProvider({ enabled: false, loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: false, loader });
     await provider.identify('user-1');
     expect(client.identify).not.toHaveBeenCalled();
   });
@@ -227,7 +267,7 @@ describe('createMixpanelProvider — group / groupSet', () => {
   it('calls client.set_group when present', async () => {
     const client = makeClient();
     const loader = vi.fn().mockResolvedValue({ default: client });
-    const provider = createMixpanelProvider({ enabled: true, token: 'tok', loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: true, token: 'tok', loader });
 
     await provider.group('account_id', 'client-1');
 
@@ -237,7 +277,7 @@ describe('createMixpanelProvider — group / groupSet', () => {
   it('does nothing for group() when set_group is missing', async () => {
     const client = makeClient({ set_group: undefined });
     const loader = vi.fn().mockResolvedValue({ default: client });
-    const provider = createMixpanelProvider({ enabled: true, token: 'tok', loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: true, token: 'tok', loader });
 
     await expect(provider.group('account_id', 'client-1')).resolves.toBeUndefined();
   });
@@ -245,7 +285,7 @@ describe('createMixpanelProvider — group / groupSet', () => {
   it('does nothing for group() when disabled', async () => {
     const client = makeClient();
     const loader = vi.fn().mockResolvedValue({ default: client });
-    const provider = createMixpanelProvider({ enabled: false, loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: false, loader });
     await provider.group('account_id', 'client-1');
     expect(client.set_group).not.toHaveBeenCalled();
   });
@@ -253,7 +293,7 @@ describe('createMixpanelProvider — group / groupSet', () => {
   it('overwrites the set_group array fallback with the scalar value via register()', async () => {
     const client = makeClient();
     const loader = vi.fn().mockResolvedValue({ default: client });
-    const provider = createMixpanelProvider({ enabled: true, token: 'tok', loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: true, token: 'tok', loader });
 
     await provider.group('account_id', 'client-1');
 
@@ -263,7 +303,7 @@ describe('createMixpanelProvider — group / groupSet', () => {
   it('does nothing when client.register is missing (group() still succeeds)', async () => {
     const client = makeClient({ register: undefined });
     const loader = vi.fn().mockResolvedValue({ default: client });
-    const provider = createMixpanelProvider({ enabled: true, token: 'tok', loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: true, token: 'tok', loader });
 
     await expect(provider.group('account_id', 'client-1')).resolves.toBeUndefined();
   });
@@ -272,7 +312,7 @@ describe('createMixpanelProvider — group / groupSet', () => {
     const groupSetFn = vi.fn();
     const client = makeClient({ get_group: vi.fn(() => ({ set: groupSetFn })) });
     const loader = vi.fn().mockResolvedValue({ default: client });
-    const provider = createMixpanelProvider({ enabled: true, token: 'tok', loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: true, token: 'tok', loader });
 
     await provider.groupSet('account_id', 'client-1', { plan: 'gold' });
 
@@ -283,7 +323,7 @@ describe('createMixpanelProvider — group / groupSet', () => {
   it('does nothing for groupSet() when get_group returns undefined', async () => {
     const client = makeClient({ get_group: vi.fn(() => undefined) });
     const loader = vi.fn().mockResolvedValue({ default: client });
-    const provider = createMixpanelProvider({ enabled: true, token: 'tok', loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: true, token: 'tok', loader });
 
     await expect(provider.groupSet('account_id', 'client-1')).resolves.toBeUndefined();
   });
@@ -291,7 +331,7 @@ describe('createMixpanelProvider — group / groupSet', () => {
   it('does nothing for groupSet() when the returned group has no set method', async () => {
     const client = makeClient({ get_group: vi.fn(() => ({})) });
     const loader = vi.fn().mockResolvedValue({ default: client });
-    const provider = createMixpanelProvider({ enabled: true, token: 'tok', loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: true, token: 'tok', loader });
 
     await expect(provider.groupSet('account_id', 'client-1')).resolves.toBeUndefined();
   });
@@ -299,7 +339,7 @@ describe('createMixpanelProvider — group / groupSet', () => {
   it('does nothing for groupSet() when disabled', async () => {
     const client = makeClient();
     const loader = vi.fn().mockResolvedValue({ default: client });
-    const provider = createMixpanelProvider({ enabled: false, loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: false, loader });
     await provider.groupSet('account_id', 'client-1');
     expect(client.get_group).not.toHaveBeenCalled();
   });
@@ -309,7 +349,7 @@ describe('createMixpanelProvider — flush', () => {
   it('calls client.flush when it is a function', async () => {
     const client = makeClient();
     const loader = vi.fn().mockResolvedValue({ default: client });
-    const provider = createMixpanelProvider({ enabled: true, token: 'tok', loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: true, token: 'tok', loader });
 
     await provider.init();
     await provider.flush();
@@ -320,14 +360,14 @@ describe('createMixpanelProvider — flush', () => {
   it('does nothing when the client has no flush method', async () => {
     const client = makeClient({ flush: undefined });
     const loader = vi.fn().mockResolvedValue({ default: client });
-    const provider = createMixpanelProvider({ enabled: true, token: 'tok', loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: true, token: 'tok', loader });
 
     await expect(provider.flush()).resolves.toBeUndefined();
   });
 
   it('does nothing when disabled (client is never loaded)', async () => {
     const loader = vi.fn();
-    const provider = createMixpanelProvider({ enabled: false, loader });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: false, loader });
     await expect(provider.flush()).resolves.toBeUndefined();
     expect(loader).not.toHaveBeenCalled();
   });
