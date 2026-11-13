@@ -396,13 +396,15 @@ function RecentDocuments({ recent, onOpen }) {
             data-testid="portal-recent-document"
           >
             {/* Fixed-width cells, as on the board, so number, status and amount line up row to
-                row: a long number truncates (tooltip), a long status wraps inside its cell, and
-                every amount (or a shipment's "—") is right-aligned in a 110 px pill. */}
+                row, each packed to the right of its cell so the group sits together on the right:
+                a long number truncates (tooltip); the status cell is as wide as the common badges
+                ("Por responder", "Pago parcial", "En evaluación") and a rare long label wraps in
+                it; every amount (or a shipment's "—") is right-aligned in a 110 px pill. */}
             <span className="min-w-0 flex-1 truncate">{ui(documentLabelKey(document))}</span>
-            <span className="flex w-24 shrink-0">
+            <span className="flex w-24 shrink-0 justify-end">
               <PortalTag className="block max-w-full truncate font-normal" title={document.documentNo}>{document.documentNo}</PortalTag>
             </span>
-            <span className="flex w-36 shrink-0">
+            <span className="flex w-28 shrink-0 justify-end">
               <PortalRowBadge document={document} useServerOverdue className="whitespace-normal font-normal" />
             </span>
             <span className="w-[110px] shrink-0 rounded-lg border border-border px-2 py-0.5 text-right text-xs leading-4 tabular-nums">
