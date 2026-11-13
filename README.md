@@ -181,6 +181,7 @@ Branch state of every module repo on the remote. **Fixed on epic** = the module'
 | `org.openbravo.utility.hqlquerytool` | GitHub etendosoftware | yes | no | no epic | none | usual model |
 | `com.etendoerp.openapi` | GitHub etendosoftware | — | — | — | none | only if the build asks for it; `main` |
 | `org.openbravo.module.remittance.template` | Bitbucket koodu_software | no (`master`) | yes (= `master`) | no epic | none | usual model; dependency of `org.openbravo.module.remittance` (`build.gradle`, 3.2.0), not modified by the epic, so CI resolves it as the published JAR even when the remittance module is built from source |
+| `com.etendoerp.automated.remittance` | Bitbucket koodu_software | yes | yes (= `main`) | no epic | none | usual model; published JAR in CI (`com.etendoerp:automated.remittance:3.2.0` in `com.etendoerp.go`'s `build.gradle`). A dependency of `com.etendoerp.go` because ETP-6148 references its `EM_Etar_*` columns from the `remittance` spec (`ETGO_SF_FIELD` rows on `REM_Remittance` / the settled lines); the automated-remittance work in GO is planned. Optional checkout: without one, the build resolves the JAR |
 
 Rule: **"fixed on epic" modules must be on the epic branch, pulled to its latest commit** (or on a branch cut from it). If one lags, `update.database` fails on a missing `AD_COLUMN` that an `ETGO_SF_FIELD` row references, or smartbuild fails on a missing getter. This table is a snapshot: when a module's epic work merges into `develop`/`main`, it leaves the "fixed on epic" group.
 
@@ -268,9 +269,10 @@ git clone -b epic/ETP-3504 git@bitbucket.org:koodu_software/org.openbravo.module
 # Already cloned on develop? Switch it to the epic:
 #   git -C org.openbravo.module.remittance fetch origin && git -C org.openbravo.module.remittance checkout epic/ETP-3504
 
-# Bitbucket module on the usual model (no epic branch). Optional: without a checkout, the build
-# resolves it as the published JAR.
+# Bitbucket modules on the usual model (no epic branch). Optional: without a checkout, the build
+# resolves them as published JARs.
 git clone -b develop git@bitbucket.org:koodu_software/org.openbravo.module.remittance.template.git
+git clone -b main git@bitbucket.org:koodu_software/com.etendoerp.automated.remittance.git
 ```
 
 Check at any time which modules are off-branch or behind (from `etendo_core/modules`):
