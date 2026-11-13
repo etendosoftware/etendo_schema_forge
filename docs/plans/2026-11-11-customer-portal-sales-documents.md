@@ -779,7 +779,11 @@ mobile headers, as the boards do; the shell is only the sidebar and the bottom b
 - **Documento (Documento / Movil-Documento).** Header: back, "<Tipo> <Nº>", "Mis documentos /
   <Tipo> / <Nº>". Left pane: **the real printable** — the main attachment, the very file the email
   links to (§B.7) — in the app's `PdfViewer` with the board's three controls (zoom in, full screen
-  through the app's `FileLightbox`, zoom out); the blob is still rebuilt as `application/pdf` (N-d).
+  through the app's `FileLightbox`, zoom out) on the page's top-right corner; the blob is still
+  rebuilt as `application/pdf` (N-d). The page is a centred white card on the grey canvas: by
+  default the first page fits the visible height, never wider than 720 px nor than the pane minus
+  its 20 px gutters (so a narrow pane fits the width), and zoom scales that default — the size is
+  handed to `PdfViewer`, no CSS transform.
   Only when the document has no printable (or it fails to load) does the pane show a sheet drawn
   from the data, under "PDF no disponible". Right pane: title + "Emitido por <organización>",
   "Descargar PDF", the summary card (Total; Fecha, Válido hasta, Estado, Base imponible, Impuestos —

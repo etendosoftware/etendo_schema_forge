@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft, ChevronRight, Download, FileText, FileX, Maximize, Square, ZoomIn, ZoomOut,
 } from 'lucide-react';
@@ -268,33 +268,78 @@ function DesktopHeader({ title, breadcrumb, plural, onBack }) {
   );
 }
 
+/** The page card's default width in the design's preview (Documento: a moderate, centred page). */
+const PREVIEW_PAGE_WIDTH = 720;
+/** Grey canvas around the page, on every side. */
+const PREVIEW_GUTTER = 20;
+/** Portrait A4, height / width: the first page's assumed shape for fit-to-page. */
+const A4_ASPECT = 842 / 595;
+/** `PdfViewer` fits the page to its box ("width" mode); the box carries the size. */
+const FIT_BOX_ZOOM = Object.freeze({ scale: 1, fitMode: 'width' });
+
 /**
  * The printable in the app's PDF viewer (`PdfViewer`, as the invoice and file previews use it),
- * with the design's three controls: zoom in, full screen (the app's `FileLightbox`), zoom out.
+ * laid out as the design's preview pane: a grey canvas with the page as a centred white card, and
+ * the three controls — zoom in, full screen (the app's `FileLightbox`), zoom out — on the page's
+ * top-right corner.
+ *
+ * The page's width is computed here and handed to `PdfViewer` as the width of its box: by default
+ * the first page fits the visible height (fit-to-page) and is never wider than
+ * {@link PREVIEW_PAGE_WIDTH} nor than the pane minus its gutters, so on a narrow pane it fits the
+ * width; `usePdfZoom`'s scale multiplies that default. No CSS transform: the PDF is rendered at
+ * the size shown.
  */
 function PortalPdfPreview({ url, onFullScreen }) {
   const ui = useUI();
-  const zoom = usePdfZoom();
+  const zoom = usePdfZoom({ initialFitMode: 'page' });
+  const paneRef = useRef(null);
+  const [pane, setPane] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const element = paneRef.current;
+    if (!element) return undefined;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setPane({ width: entry.contentRect.width, height: entry.contentRect.height });
+      }
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  const fitWidth = Math.max(pane.width - 2 * PREVIEW_GUTTER, 0);
+  const fitHeight = Math.max(pane.height - 2 * PREVIEW_GUTTER, 0) / A4_ASPECT;
+  const baseWidth = Math.min(PREVIEW_PAGE_WIDTH, fitWidth, fitHeight || fitWidth);
+  const pageWidth = Math.round(baseWidth * zoom.scale);
   const control = 'flex h-8 w-8 items-center justify-center text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40';
+
   return (
-    <div className="relative min-h-0 flex-1">
-      <div className="absolute right-5 top-5 z-10 flex rounded-md border border-border bg-card" data-testid="portal-pdf-controls">
-        <button type="button" onClick={zoom.zoomIn} disabled={!zoom.canZoomIn} aria-label={ui('pdfViewerZoomIn')} className={control} data-testid="portal-pdf-zoom-in">
-          <ZoomIn className="h-3.5 w-3.5" aria-hidden="true" />
-        </button>
-        <button type="button" onClick={onFullScreen} aria-label={ui('portalFullScreen')} className={control} data-testid="portal-pdf-full-screen">
-          <Maximize className="h-3.5 w-3.5" aria-hidden="true" />
-        </button>
-        <button type="button" onClick={zoom.zoomOut} disabled={!zoom.canZoomOut} aria-label={ui('pdfViewerZoomOut')} className={control} data-testid="portal-pdf-zoom-out">
-          <ZoomOut className="h-3.5 w-3.5" aria-hidden="true" />
-        </button>
-      </div>
-      <PdfViewer
-        url={url}
-        zoom={zoom}
-        hideToolbar
-        contentPadding={{ top: 20, right: 20, bottom: 20, left: 20 }}
-      />
+    <div ref={paneRef} className="min-h-0 flex-1 overflow-x-auto" data-testid="portal-pdf-pane">
+      {pageWidth > 0 ? (
+        <div className="relative mx-auto h-full" style={{ width: pageWidth }}>
+          <div
+            className="absolute right-2.5 z-10 flex rounded-md border border-border bg-card"
+            style={{ top: PREVIEW_GUTTER + 10 }}
+            data-testid="portal-pdf-controls"
+          >
+            <button type="button" onClick={zoom.zoomIn} disabled={!zoom.canZoomIn} aria-label={ui('pdfViewerZoomIn')} className={control} data-testid="portal-pdf-zoom-in">
+              <ZoomIn className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+            <button type="button" onClick={onFullScreen} aria-label={ui('portalFullScreen')} className={control} data-testid="portal-pdf-full-screen">
+              <Maximize className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+            <button type="button" onClick={zoom.zoomOut} disabled={!zoom.canZoomOut} aria-label={ui('pdfViewerZoomOut')} className={control} data-testid="portal-pdf-zoom-out">
+              <ZoomOut className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </div>
+          <PdfViewer
+            url={url}
+            zoom={FIT_BOX_ZOOM}
+            hideToolbar
+            contentPadding={{ top: PREVIEW_GUTTER, right: 0, bottom: PREVIEW_GUTTER, left: 0 }}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
