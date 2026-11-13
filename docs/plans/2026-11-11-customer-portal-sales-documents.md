@@ -734,3 +734,29 @@ instead of an error. S1: `validate`, `findSentLink` and `renew` enter admin mode
   120/min shared, since paging, filtering and opening documents make several calls a minute.
   Over the ceiling the answer is `429`. The W6 debt (keyed on `getRemoteAddr()`, wrong behind a
   load balancer) applies to all three.
+
+**QA cycle 1 fold-ins (Parts A+B, 2026-11-13).**
+- **PDF without a session (BUG-1).** The portal resolved the main attachment through
+  `NeoAttachmentsHelper.handleGetMain` and streamed it through `NeoAttachmentsDownloader`, both
+  tenant-of-the-session APIs; a portal request has no tenant, so `hasPdf` read false and `/pdf`
+  answered 404. Both now use the email download link's session-less path, extracted from
+  `NeoDocumentDownloadService` into `AnonymousAttachmentStreamer` (one implementation, two callers):
+  native-SQL lookup of the main attachment plus an explicit check that it belongs to the link's
+  client, then the handler-level stream. The email link answers exactly as before. To be confirmed
+  live on a tenant with a real (non-`*`) organization.
+- **Mid-session closure (BUG-2).** A data read answering 401 after `/me` said "valid" re-runs `/me`
+  once, so an expired link renews and an unavailable one shows its screen; only a token still
+  refused after that re-check ends on the dead-link page. One re-check per navigation, no loop.
+- **Issuing company (BUG-4).** The logo resolves from the organization of the document the link was
+  sent for (`CompanyLogoResolver` with the link's organization, falling back as it does). **Decision:
+  the document scope stays client-wide**: every tenant has a single organization today; if
+  multi-organization tenants appear, scoping the lists by organization is a separate change.
+- **Download event (BUG-5).** `portal.document.downloaded` is emitted only after the file was
+  actually streamed; a failed read emits nothing.
+- **Mobile invoice card (BUG-6).** Shows the outstanding amount under the total, and the document
+  status next to the payment state when it is not `CO` (closed, voided), as the table does.
+- **Hidden entry document (BUG-7, §A.8.8).** `/me` answers `entryDocument: null` when the link's own
+  document is no longer in its scope, plus `entryKind`; the page opens that kind's list (home when
+  the kind is unknown) with the notice "El documento de este enlace ya no está disponible…".
+- **Status filter.** `?status=` values are trimmed one by one; empty values are dropped.
+- **Dead MVP copy (BUG-8).** The MVP's invoice-only i18n keys were removed from the three locales.

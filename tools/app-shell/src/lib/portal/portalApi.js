@@ -176,7 +176,11 @@ async function portalGet(fetchImpl, token, path, {
  * for a valid link.
  *
  * @returns {Promise<{ state: string, businessPartnerName: string|null, tenantName: string|null,
- *   hasLogo: boolean, entryDocument: { kind: string, id: string }|null }>}
+ *   hasLogo: boolean, entryDocument: { kind: string, id: string }|null,
+ *   entryKind: string|null }>}
+ *
+ * `entryKind` is set only when the link's own document is no longer visible (`entryDocument`
+ * null on a valid link): the kind of list to open instead, with a notice (plan §A.8.8).
  */
 export async function fetchPortalIdentity(fetchImpl, token) {
   const response = await portalGet(fetchImpl, token, '/me');
@@ -186,6 +190,7 @@ export async function fetchPortalIdentity(fetchImpl, token) {
   return {
     state: readLinkState(data?.state),
     entryDocument: entryKind && entryId ? { kind: entryKind, id: entryId } : null,
+    entryKind: entryKind && entryId ? null : readableText(data?.entryKind),
     businessPartnerName: readableText(data?.businessPartnerName),
     tenantName: readableText(data?.tenantName),
     // The backend says whether there is a logo, so the page never requests one that does not

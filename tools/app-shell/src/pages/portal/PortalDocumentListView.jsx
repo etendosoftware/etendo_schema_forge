@@ -249,9 +249,15 @@ export default function PortalDocumentListView({ apiFetch, token, kind, onNaviga
                 >
                   <span className="flex items-center justify-between gap-2">
                     <span className="font-semibold">{document.documentNo}</span>
-                    {isInvoice
-                      ? <PortalPaymentStatus document={document} />
-                      : <PortalDocumentStatus status={document.documentStatus} />}
+                    {/* An invoice shows its payment state; its document status only when it is not the
+                        plain "completed" every listed invoice shares (closed, voided), like the
+                        table's own status column. */}
+                    <span className="flex flex-wrap items-center justify-end gap-1">
+                      {!isInvoice || document.documentStatus !== 'CO'
+                        ? <PortalDocumentStatus status={document.documentStatus} />
+                        : null}
+                      {isInvoice ? <PortalPaymentStatus document={document} /> : null}
+                    </span>
                   </span>
                   {document.reference ? <span className="truncate text-sm text-muted-foreground">{document.reference}</span> : null}
                   {document.isCreditNote ? <span className="text-xs text-muted-foreground">{ui(documentLabelKey(document))}</span> : null}
@@ -265,11 +271,23 @@ export default function PortalDocumentListView({ apiFetch, token, kind, onNaviga
                         <span>{ui('portalDueOnPrefix')} <PortalDate value={document.dueDate} /></span>
                       ) : null}
                     </span>
-                    <PortalMoney
-                      currency={document.currency}
-                      value={document.grandTotal}
-                      className="text-sm font-semibold tabular-nums text-foreground"
-                    />
+                    <span className="flex flex-col items-end">
+                      <PortalMoney
+                        currency={document.currency}
+                        value={document.grandTotal}
+                        className="text-sm font-semibold tabular-nums text-foreground"
+                      />
+                      {isInvoice ? (
+                        <span data-testid="portal-card-outstanding">
+                          {ui('portalColOutstanding')}{' '}
+                          <PortalMoney
+                            currency={document.currency}
+                            value={document.outstandingAmount}
+                            className="tabular-nums"
+                          />
+                        </span>
+                      ) : null}
+                    </span>
                   </span>
                 </button>
               </li>

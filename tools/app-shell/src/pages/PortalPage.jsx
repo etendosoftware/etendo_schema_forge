@@ -210,7 +210,20 @@ export default function PortalPage() {
   }, [identity?.hasLogo, apiFetch, token]);
 
   const trimmedToken = token.trim();
-  const showInvalid = useCallback(() => setView(VIEW.invalid), []);
+  // A data read answering 401 after /me said "valid" means the link changed state mid-session
+  // (expired, or the customer was blocked): re-run /me once, so the expired path renews and the
+  // unavailable path shows its own screen. Only a token that is still refused after that re-check
+  // ends on the dead-link page. One re-check per navigation, so a backend that keeps refusing a
+  // read /me accepts cannot loop the page.
+  const recheckedRef = useRef(false);
+  const showInvalid = useCallback(() => {
+    if (recheckedRef.current) {
+      setView(VIEW.invalid);
+      return;
+    }
+    recheckedRef.current = true;
+    setAttempt((value) => value + 1);
+  }, []);
 
   // The view lives in the search string (`?view=list&kind=INVOICE`), never the token: back and
   // forward work, and the link the customer bookmarks still opens the document it was sent with.
@@ -218,13 +231,22 @@ export default function PortalPage() {
   const entry = identity?.entryDocument;
   // An entry document of a kind this page does not know (a backend newer than the bundle) falls
   // back to home rather than indexing PORTAL_KIND_META with it, as readPortalView does for the URL.
-  const current = requested
-    ?? (entry?.id && PORTAL_KIND_META[entry.kind]
-      ? { view: 'doc', kind: entry.kind, id: entry.id }
-      : { view: 'home' });
+  // A link whose own document is no longer visible (entryDocument null) opens that kind's list,
+  // or home when the kind is unknown, with a notice (plan §A.8.8).
+  const entryHidden = !requested && identity?.state === PORTAL_LINK_STATE.valid && !entry;
+  const fallbackKind = PORTAL_KIND_META[identity?.entryKind] ? identity.entryKind : null;
+  let current = { view: 'home' };
+  if (requested) {
+    current = requested;
+  } else if (entry?.id && PORTAL_KIND_META[entry.kind]) {
+    current = { view: 'doc', kind: entry.kind, id: entry.id };
+  } else if (entryHidden && fallbackKind) {
+    current = { view: 'list', kind: fallbackKind };
+  }
 
   const navigate = useCallback((target) => {
     setDetailTitle(null);
+    recheckedRef.current = false;
     setSearchParams(writePortalView(target));
   }, [setSearchParams]);
 
@@ -435,6 +457,15 @@ export default function PortalPage() {
       subtitle={subtitle}
       headerStart={headerStart}
     >
+      {entryHidden && (
+        <p
+          role="status"
+          className="rounded-lg border border-border bg-muted px-4 py-3 text-sm text-muted-foreground"
+          data-testid="portal-entry-unavailable"
+        >
+          {ui('portalEntryDocumentUnavailable')}
+        </p>
+      )}
       {body}
     </PortalShell>
   );
