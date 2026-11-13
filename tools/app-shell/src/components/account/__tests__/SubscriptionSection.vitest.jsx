@@ -467,6 +467,16 @@ describe('SubscriptionSection', () => {
       expect(screen.getByTestId('PlanChangeDialog__stub')).toBeInTheDocument();
     });
 
+    it('shows no pending change and offers no change while a cancellation is scheduled', async () => {
+      getSubscription.mockResolvedValue({ ...ACTIVE, planName: 'Pro', cancelAtPeriodEnd: true,
+        pendingChange: { planKey: 'core', planName: 'Core', effectiveAt: '2027-10-23T00:00:00Z' } });
+      renderSection();
+
+      await screen.findByTestId('SubscriptionSection__plan');
+      expect(screen.queryByTestId('SubscriptionSection__pendingChange')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('SubscriptionSection__changePlan')).not.toBeInTheDocument();
+    });
+
     it('offers no change action on a past-due or canceled subscription, nor without a catalog plan', async () => {
       getSubscription.mockResolvedValue({ ...ACTIVE, planName: 'Pro', status: 'past_due' });
       const { unmount } = renderSection();

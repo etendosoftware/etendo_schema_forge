@@ -262,12 +262,14 @@ export function SubscriptionSection({
   // ETP-5053 — a downgrade scheduled at the provider (`pendingChange` of the subscription
   // payload): shown persistently until it applies or an upgrade releases it. The change action is
   // offered only on a renewing subscription with a catalog plan: a past-due or canceled one is
-  // refused by the backend anyway (SUBSCRIPTION_NOT_CURRENT), so it is not offered.
-  const pendingChange = subscription?.pendingChange || null;
+  // refused by the backend anyway (SUBSCRIPTION_NOT_CURRENT), so it is not offered. A subscription
+  // whose cancellation is scheduled renews into nothing: it shows no pending change (the portal's
+  // cancel releases the downgrade schedule) and offers no change until it is reactivated.
+  const pendingChange = cancelsAtPeriodEnd ? null : subscription?.pendingChange || null;
   const pendingChangeDate = pendingChange?.effectiveAt
     ? formatCalendarDate(pendingChange.effectiveAt, locale) : null;
   const offersPlanChange = Boolean(subscription?.planName)
-    && RENEWING_STATUSES.has(subscription?.status);
+    && RENEWING_STATUSES.has(subscription?.status) && !cancelsAtPeriodEnd;
 
   // ETP-5443 REVIEW W5: "renews on X" is a promise the subscription will still be charged on
   // that date, which is only true for a status that is actually renewing. Showing it for e.g.
