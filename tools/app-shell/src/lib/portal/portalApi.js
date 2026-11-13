@@ -526,6 +526,8 @@ function normalizeDecision(data) {
   const state = readableText(data?.state);
   return {
     state: Object.values(PORTAL_DECISION_STATE).includes(state) ? state : PORTAL_DECISION_STATE.notPending,
+    // true only on the answer of the call that applied it (a re-opened link answers false).
+    appliedNow: data?.appliedNow === true,
     decision: readableText(data?.decision),
     reasonCode: readableText(data?.reasonCode),
     reasonText: readableText(data?.reasonText),
@@ -542,7 +544,11 @@ export async function fetchPortalDecision(fetchImpl, decisionToken) {
   return normalizeDecision(await response.json().catch(() => ({})));
 }
 
-/** Confirms the decision (single use; the first confirmed request of a quotation wins). */
+/**
+ * Confirms the decision (single use; the first confirmed request of a quotation wins). The landing
+ * sends it by script as soon as it opens: one step from the email's button, while a link scanner
+ * that only GETs the URL applies nothing.
+ */
 export async function confirmPortalDecision(fetchImpl, decisionToken) {
   const response = await portalGet(fetchImpl, null, '/decisions/confirm', {
     method: 'POST',
