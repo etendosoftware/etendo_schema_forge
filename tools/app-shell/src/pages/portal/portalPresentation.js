@@ -94,12 +94,12 @@ export function quotationValidity(document) {
 }
 
 /**
- * <b>PO question Q1 (ETP-6209 Part C, Jira comment 149513) — the accept status.</b> The portal's
- * "Aceptar" stays hidden until the PO fixes the status an accepted quotation takes; the backend
- * refuses accepts meanwhile too (`PortalDecisionService.ACCEPT_AVAILABLE`, which the detail also
- * reports as `decision.acceptAvailable`). Flip both together.
+ * Whether the portal offers "Aceptar" (ETP-6209 Part C, PO answer to Q1: a confirmed accept moves
+ * the quotation to `ETGO_AC` "Aceptado", still convertible in the app). Kept as a switch with the
+ * backend's `PortalDecisionService.ACCEPT_AVAILABLE` (reported as `decision.acceptAvailable`);
+ * the button shows only when both are on.
  */
-export const PORTAL_ACCEPT_ENABLED = false;
+export const PORTAL_ACCEPT_ENABLED = true;
 
 /** The fixed reject reasons (PO spec), with the API codes; "Otros" requires a text. */
 export const PORTAL_REJECT_REASONS = Object.freeze([

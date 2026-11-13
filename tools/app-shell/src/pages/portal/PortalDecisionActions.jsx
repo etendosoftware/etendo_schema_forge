@@ -29,7 +29,7 @@ const ERROR_KEYS = Object.freeze({
  *
  * Shown only when the detail says `decision.canDecide`; when it cannot be decided for a reason the
  * customer can act on (no recipient, expired) the reason is shown instead. "Aceptar" is behind
- * {@link PORTAL_ACCEPT_ENABLED} (PO question Q1) and the backend's `acceptAvailable`. A request
+ * {@link PORTAL_ACCEPT_ENABLED} (PO answer to Q1: on) and the backend's `acceptAvailable`. A request
  * never applies anything: it emails a confirmation to the main recipient of the original send, and
  * the panel then says where it went (masked).
  *

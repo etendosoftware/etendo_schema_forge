@@ -18643,6 +18643,7 @@
     "statusClosed": "Cerrado",
     "statusOrderCreated": "Cerrado - Pedido creado",
     "statusInvoiceCreated": "Cerrado - Factura creada",
+    "statusAccepted": "Aceptado",
     "statusRejected": "Cerrado - Rechazado",
     "statusPaid": "Pagado",
     "statusPending": "Pendiente",
@@ -22099,6 +22100,8 @@
     "quotationStatus.CL": "Cerrado",
     "quotationStatus.CA": "Cerrado - Pedido creado",
     "quotationStatus.CJ": "Cerrado - Rechazado",
+    "quotationStatus.ETGO_AC": "Aceptado",
+    "quotationStatus.ETGO_CI": "Cerrado - Factura creada",
     "quotationStatus.DR": "Borrador",
     "quotationStatus.ME": "Evaluación manual",
     "quotationStatus.NA": "No aceptado",
@@ -28116,6 +28119,9 @@
     },
     "ETGO_CI": {
       "label": "Cerrado - Factura creada"
+    },
+    "ETGO_AC": {
+      "label": "Aceptado"
     },
     "IP": {
       "label": "En curso"

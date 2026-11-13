@@ -20,6 +20,7 @@ export const STATUS_KEYS = {
   UE: 'statusUnderEvaluation',
   CJ: 'statusRejected',
   ETGO_CI: 'statusInvoiceCreated',
+  ETGO_AC: 'statusAccepted',
   RPPC: 'statusReceived',
   RPR: 'statusReceived',
   PPM: 'statusPaid',

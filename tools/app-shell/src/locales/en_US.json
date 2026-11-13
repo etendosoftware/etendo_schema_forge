@@ -18411,6 +18411,7 @@
     "statusClosed": "Closed",
     "statusOrderCreated": "Closed - Order Created",
     "statusInvoiceCreated": "Closed - Invoice Created",
+    "statusAccepted": "Accepted",
     "statusRejected": "Closed - Rejected",
     "statusPaid": "Paid",
     "statusPending": "Pending",
@@ -21863,6 +21864,8 @@
     "quotationStatus.CL": "Closed",
     "quotationStatus.CA": "Closed - Order Created",
     "quotationStatus.CJ": "Closed - Rejected",
+    "quotationStatus.ETGO_AC": "Accepted",
+    "quotationStatus.ETGO_CI": "Closed - Invoice Created",
     "quotationStatus.DR": "Draft",
     "quotationStatus.ME": "Manual Evaluation",
     "quotationStatus.NA": "Not Accepted",
@@ -27818,6 +27821,9 @@
     },
     "ETGO_CI": {
       "label": "Closed - Invoice Created"
+    },
+    "ETGO_AC": {
+      "label": "Accepted"
     },
     "IP": {
       "label": "Under Way"
