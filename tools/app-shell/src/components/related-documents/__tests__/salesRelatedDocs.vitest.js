@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/components/related-documents/salesRelatedDocs.js
+// @covers tools/app-shell/src/components/related-documents/relatedSources.js
 // ETP-5527 — SALES_RELATED_DOCS is the single definition behind both the form's
 // "Related documents" section and the list preview card. These tests resolve each
 // definition against a fake backend (the helpers are mocked by their exact arguments,
