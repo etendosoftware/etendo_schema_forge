@@ -836,9 +836,12 @@ mobile headers, as the boards do; the shell is only the sidebar and the bottom b
   their words together); "Requiere tu atención" and "Tu saldo" hug their content; desktop "Tu
   saldo" is pending + paid pills only (the overdue line is mobile-only); the chart's axis uses the
   dashboard's `niceScale` / `formatDashboardAxisTick` (round ticks); "1 factura" through the app's
-  `_one` / `_plural` keys. Invoices: credit notes carry the app's own "Factura rectificativa" pill
-  (the sales-invoice list's document-type badge) inline, table and mobile card; table headers do
-  not wrap. Mobile: the status tabs scroll sideways instead of wrapping, and the mobile base text
+  `_one` / `_plural` keys. Invoices: a "Tipo de documento" column between the date and the number,
+  as in the app's sales-invoice list, with that list's own badge (`transactionDocument`:
+  "Factura" info pill, "Factura rectificativa" primary pill; the portal row's `isCreditNote` is the
+  server's answer for the same rule), also on the mobile card; table cells do not wrap, "Referencia"
+  takes the leftover width with an ellipsis, and up to 1280 px the invoice list drops "Base
+  imponible" (back from 1536 px; it stays in the detail) so "Imp. total" and "Pendiente" fit. Mobile: the status tabs scroll sideways instead of wrapping, and the mobile base text
   is 16 px as on the boards.
 
 **Agreed OUT items (the only design elements not built).** The account / user menu (no login);

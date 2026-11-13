@@ -158,21 +158,29 @@ export function portalRowActivation(onActivate, label) {
 export const PORTAL_SECTION_TITLE = "font-['Inter',sans-serif] text-[13px] font-medium uppercase leading-[18px] tracking-normal [word-spacing:normal] md:text-xs md:leading-4";
 
 /**
- * A credit note's marker, the app's own: the "Factura rectificativa" pill of the sales-invoice
- * list's document-type column (`artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx`,
- * `transactionDocument`) — primary text on a primary tint, same label key.
+ * An invoice's document type, as the app's sales-invoice list shows it in its "Tipo de documento"
+ * column. Mirrors the `transactionDocument` column's renderer of
+ * `artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx` (not imported: it lives in that window's
+ * own code, and the portal must not depend on a window): a rectificative invoice gets the primary
+ * pill labelled `rectificativeInvoicesTab`, any other invoice the info pill labelled
+ * `invoicesTab`, same classes and same no-wrap. The app decides rectificative through
+ * `getArSubtype` (`invoiceSubtype.js`), backed by the server's subtype; the portal's row carries
+ * the server's own answer for the same rule, `isCreditNote` (`PortalDocumentKind#isCreditNote`:
+ * the ARC / ARI_RM categories or the localization's rectificative flag).
  */
-export function PortalCreditNoteBadge({ className, short = false }) {
+export function PortalInvoiceTypeBadge({ document, className }) {
   const ui = useUI();
-  // `short` (the lists): the app's short "Rectificativa" (`rectificativeLabel`), with the full
-  // "Factura rectificativa" as the tooltip, so the number column stays narrow.
+  const cfg = document?.isCreditNote
+    ? { color: 'hsl(var(--primary))', bg: 'hsl(var(--primary) / 0.1)', labelKey: 'rectificativeInvoicesTab' }
+    : { color: 'var(--status-info-fg)', bg: 'var(--status-info-bg)', labelKey: 'invoicesTab' };
   return (
     <span
-      className={cn('inline-block whitespace-nowrap rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary', className)}
-      title={short ? ui('rectificativeInvoicesTab') : undefined}
-      data-testid="portal-credit-note-badge"
+      className={cn('inline-block rounded-full px-2 py-0.5 text-xs font-medium', className)}
+      style={{ color: cfg.color, backgroundColor: cfg.bg, whiteSpace: 'nowrap' }}
+      data-testid="portal-invoice-type"
+      data-credit-note={document?.isCreditNote ? 'true' : 'false'}
     >
-      {ui(short ? 'rectificativeLabel' : 'rectificativeInvoicesTab')}
+      {ui(cfg.labelKey)}
     </span>
   );
 }

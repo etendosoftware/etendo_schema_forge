@@ -10,7 +10,7 @@ import { PortalLanguageSwitch } from './PortalShell.jsx';
 import {
   PortalCountChip, PortalDate, PortalDesktopHeader, PortalDocumentStatus, PortalDueDate, PortalMain,
   PortalMoney, PortalPaymentStatus, PortalRowBadge, PortalSearchPill, PortalValidUntil,
-  PORTAL_ROW_FOCUS, PortalCreditNoteBadge, portalRowActivation,
+  PORTAL_ROW_FOCUS, PortalInvoiceTypeBadge, portalRowActivation,
 } from './PortalBits.jsx';
 import {
   PORTAL_KIND_GROUPS, PORTAL_KIND_META, documentLabelKey, quotationValidity, toCalendarParam,
@@ -245,7 +245,9 @@ function DesktopTable({ kind, page, documents, onOpen }) {
   const isQuotation = kind === 'QUOTATION';
   const hasAmounts = kind !== 'SHIPMENT';
   const singleTotal = (page?.totals ?? []).length === 1 ? page.totals[0] : null;
-  const leadingColumns = 4 + (isQuotation || isInvoice ? 1 : 0) + (isInvoice ? 1 : 0);
+  // Columns before the amounts: date, number, reference, status, plus validity / due date, and
+  // for invoices the document type and the payment state.
+  const leadingColumns = 4 + (isQuotation || isInvoice ? 1 : 0) + (isInvoice ? 2 : 0);
   // Headers stay on one line, as the design's (L2): the table scrolls sideways before it wraps.
   const th = 'whitespace-nowrap px-2 py-3 font-semibold';
   // Every column keeps its content width on one line; "Referencia" alone takes what is left and
@@ -263,6 +265,8 @@ function DesktopTable({ kind, page, documents, onOpen }) {
         <thead>
           <tr className="border-b border-border text-left text-xs leading-4">
             <th className={`${th} pl-3`}>{ui(PORTAL_KIND_META[kind].dateColumnKey)}</th>
+            {/* The app's sales-invoice list: date, document type, number (`InvoiceHeaderTable`). */}
+            {isInvoice ? <th className={th}>{ui('documentType')}</th> : null}
             <th className={th}>{ui('portalColDocumentNo')}</th>
             <th className={`${th} w-full`}>{ui('portalColReference')}</th>
             {isQuotation ? <th className={th}>{ui('portalColValidUntil')}</th> : null}
@@ -283,6 +287,7 @@ function DesktopTable({ kind, page, documents, onOpen }) {
               data-testid="portal-document-row"
             >
               <td className={`${td} pl-3 tabular-nums`}><PortalDate value={document.date} /></td>
+              {isInvoice ? <td className={td}><PortalInvoiceTypeBadge document={document} /></td> : null}
               <td className={`${td} whitespace-nowrap`}>
                 {/* The number stays its own link-like control; the row opens the same document. */}
                 <button
@@ -293,8 +298,6 @@ function DesktopTable({ kind, page, documents, onOpen }) {
                 >
                   {document.documentNo}
                 </button>
-                {/* The app's own "Factura rectificativa" pill, inline so the row stays one line. */}
-                {document.isCreditNote ? <PortalCreditNoteBadge short className="ml-2 align-middle" /> : null}
               </td>
               <td className={`${td} w-full max-w-0 truncate text-muted-foreground`} title={document.reference || undefined}>{document.reference || '—'}</td>
               {isQuotation ? <td className={`${td} tabular-nums`}><PortalValidUntil document={document} /></td> : null}
@@ -374,7 +377,7 @@ function MobileCard({ document, kind, onOpen }) {
       <span className="flex items-center justify-between gap-3">
         <span className="flex min-w-0 items-center gap-2">
           <span className="font-semibold">{document.documentNo}</span>
-          {document.isCreditNote ? <PortalCreditNoteBadge short /> : null}
+          {isInvoice ? <PortalInvoiceTypeBadge document={document} /> : null}
         </span>
         {/* An invoice shows its payment state; its document status too when it is not the plain
             "completed" every listed invoice shares (closed, voided), like the table. */}
