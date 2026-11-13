@@ -225,7 +225,9 @@ trigger: `POST /sws/portal/renew` (`com.etendoerp.go/src/com/etendoerp/go/portal
 are two more portal emails. The *confirm* email goes when a customer asks to accept / reject a
 quotation in the portal: only to the **first To of the original send** (never CC), it carries a
 single-use, never-expiring confirmation link (`/portal/decision/<token>`, the token's hash is the
-only thing stored, in `ETGO_PORTAL_DECISION`). The *notice* goes to the user who sent the quotation
+only thing stored, in `ETGO_PORTAL_DECISION`). Its button names the decision ("Confirmar rechazo" /
+"Confirmar aceptación") and is the confirmation itself: the landing page sends the confirm POST by
+script on open and shows the result; a bare GET of the link (a mail scanner) applies nothing. The *notice* goes to the user who sent the quotation
 (their ETGO_ACCOUNT email) once the customer confirmed. Copy: `portal-quotation-decision.*` in both
 catalogs; both refuse any caller outside `PortalDecisionScope` and file under the quotation's send
 history. Contracts: `contracts/PortalDecisionConfirmEmailContract.java`,

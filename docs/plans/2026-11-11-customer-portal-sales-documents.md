@@ -954,10 +954,10 @@ instead of an error. S1: `validate`, `findSentLink` and `renew` enter admin mode
 
 ---
 
-# Part C — Accept / reject a quotation from the portal (PLAN, 2026-11-13, not built)
+# Part C — Accept / reject a quotation from the portal (planned and built 2026-11-13; PO answers in C.13)
 
-PO spec: Isa, Jira comment 149221 + the rewritten description. **Plan only — nothing below is
-implemented.** Evidence paths: `go/` = `com.etendoerp.go`, `sf/` = this repo, `core/` = Etendo core.
+PO spec: Isa, Jira comment 149221 + the rewritten description. C.0–C.11 are the plan as written
+before the PO's answers; what was built is in C.12 and C.13. Evidence paths: `go/` = `com.etendoerp.go`, `sf/` = this repo, `core/` = Etendo core.
 
 ## C.0 Scope
 
@@ -1160,39 +1160,79 @@ KPI: only the hook points (`decision.requested`, `decision.confirmed`, `decision
 `decision.not_applied` call sites in the service), names and semantics per the PO's new KPI
 definition.
 
-**Open for the PO:**
+**Answered by the PO (Jira) and agreed with the user on a call, 2026-11-13** — see C.13:
 
-| Id | Question | Proposal |
+| Id | Question | Proposal (original) |
 |---|---|---|
 | Q1 | Status of a quotation accepted without an order | New module value `ETGO_AC` "Aceptado" (like `ETGO_CI`), convertible later from the app. Fallback: stay in `UE` and record the acceptance only in `ETGO_PORTAL_DECISION` (the app then shows nothing) |
 | Q2 | Reject reasons | The tenant's reject-reason list (`C_Reject_Reason`), with the six fixed reasons created if missing, and the "Otros" text in the quotation's notes |
 | Q3 | Which statuses can be decided | Only `UE` (as the app's reject); `CO` is not offered |
 
-## C.12 Implementation notes (2026-11-13, built; PO questions Q1–Q3 still open)
+## C.12 Implementation notes (2026-11-13, built; PO answers applied the same day, C.13)
 
-Built in both repos following C.0–C.11, with the three PO-dependent points behind one seam each.
+Built in both repos following C.0–C.11.
 
 - **Backend (`com.etendoerp.go`).** Table `ETGO_PORTAL_DECISION` (`src-db/.../tables/ETGO_PORTAL_DECISION.xml`,
   native SQL only, no AD registration — **needs `update.database` then `export.database`**).
-  `QuotationDecisions` (sales-quotation customization): `isDecidable` (Q3: `UE`), `reject` (the
-  app's own writes, now also used by `RejectQuotationHandler`, behaviour unchanged), `accept` with
-  `STATUS_ACCEPTED = "ETGO_AC"` (Q1). `RejectQuotationHandler` keeps its `@Named`: it is a CDI bean
-  injected by type into `SalesQuotationHeaderHandler`, not bound through `ETGO_SF_ENTITY.Java_Qualifier`
-  (no row names it), so no NeoExtension migration applies. `PortalDecisionService` (request, mint,
-  markSent, view, confirm, the first-confirmed-wins transaction), `PortalDecisionScope`,
-  `PortalDecisionEvents` (KPI hook points, empty), two contracts in `email/contracts`, copy in
-  `emails_{es_ES,en_US}.properties`, routes in `PortalServlet`, the detail's `decision` block.
+  `QuotationDecisions` (sales-quotation customization): `isDecidable` (`UE`), `reject` (the app's
+  own writes, also used by `RejectQuotationHandler`, behaviour unchanged), `accept` (`ETGO_AC`).
+  `RejectQuotationHandler` keeps its `@Named`: it is a CDI bean injected by type into
+  `SalesQuotationHeaderHandler`, not bound through `ETGO_SF_ENTITY.Java_Qualifier` (no row names
+  it), so no NeoExtension migration applies. `PortalDecisionService` (request, mint, markSent, view,
+  confirm, the first-confirmed-wins transaction), `PortalDecisionScope`, `PortalDecisionEvents` (KPI
+  hook points, empty), two contracts in `email/contracts`, copy in `emails_{es_ES,en_US}.properties`,
+  routes in `PortalServlet`, the detail's `decision` block.
 - **SPA.** `PortalDecisionActions` (desktop panel row before "Descargar PDF"; mobile bottom bar),
-  the portal reject modal (six fixed reasons, "Otros" requires text), the masked "correo enviado"
-  state, `PortalDecisionPage` at `/portal/decision/:token`, i18n in three locales.
-- **Seams.** Q1: `QuotationDecisions.STATUS_ACCEPTED` + `PortalDecisionService.ACCEPT_AVAILABLE =
-  false` (backend refuses accepts, 409 `accept_unavailable`) + `PORTAL_ACCEPT_ENABLED = false`
-  (`pages/portal/portalPresentation.js`, hides "Aceptar"). Answering Q1 = flip both, add the
-  `ETGO_AC` list value with translations, and the app's convert gate (C.1). Q2:
-  `PortalDecisionService#rejectReasonFor` returns `null` (the reason and "Otros" text are in the
-  quotation's notes). Q3: `QuotationDecisions.isDecidable`.
-- **Not built:** the `ETGO_AC` list value and the app/MCP convert gate (Q1); the tenant reject-reason
-  mapping (Q2); KPI event names (PO).
+  the portal reject modal (six fixed reasons; the "Otros" text is shown, required and sent only for
+  "Otros", cleared when another reason is picked — the server also drops it), the masked "correo
+  enviado" state, `PortalDecisionPage` at `/portal/decision/:token`, i18n in three locales.
+
+## C.13 PO answers applied (2026-11-13)
+
+1. **Q1 — accept → `ETGO_AC` "Aceptado".** One `AD_REF_LIST` row of the module in the order status
+   list (`FF80818130217A350130218D802B0011`, id `7BD5D4F5C69F426C879D5F22823C6C3D`). Its Spanish name
+   ("Aceptado", es_ES and es_AR) and the fixed `ETGO_CI` one ("Cerrado - Factura creada") are written by
+   the module script `EnsureDocumentStatusTranslationsScript` on every `update.database`: the module
+   ships no translation module, so `export.database` never exports `_TRL` rows (the
+   `EnsureSupportAccessSeedScript` precedent). `PortalDecisionService.ACCEPT_AVAILABLE` and
+   `PORTAL_ACCEPT_ENABLED` stay as switches, now `true`. The app converts an `ETGO_AC` quotation like a
+   `UE` one: Confirmar (`QuotationTopbarActions`, the row kebab, `QUOTATION_CONFIRMABLE_STATUSES`),
+   `createDraftInvoice` (`requireQuotationInvoiceable`), `Convertquotation` (no status check); the MCP's
+   refusal texts name it. Label/tone: `statusAccepted`, `statuses.ETGO_AC`, `quotationStatus.ETGO_AC`,
+   success; `STATUS_KEYS` of related documents. Print shows on it (`hidePrintWhen`). The portal lists it
+   in its allow-list and the "Aceptados" group. **Reject on `ETGO_AC`:** not offered (the app's rule
+   stays `UE` only — menu, `RJ`, `rejectQuotation`, portal); nothing depends on rejecting an accepted
+   quotation. Not done: `STATUS_ORDER` in `lib/statusBadge.js` (the list sort order) is mirrored in
+   app-shell-core and pinned by a parity test, so `ETGO_AC` sorts as an unknown code until core adds it.
+2. **Q3 — only `UE`, not expired.** Unchanged.
+3. **Reject reasons (replaces Q2).** The portal reason is never mapped to the tenant's
+   `C_Reject_Reason` (tenant reasons can be internal, e.g. "deudor", and must never reach the customer);
+   "Otros" never creates one. The reason and the "Otros" text go to the quotation's notes, as before.
+   The seam `rejectReasonFor` was removed (it returned `null`); the decision is documented at the call.
+   The app lets the seller **edit** `rejectReason` on a rejected (`CJ`) quotation:
+   `decisions.json` → `visibility: editable`, `readOnlyLogic: @DocStatus@!'CJ'` (the AD logic locked it
+   exactly on `CJ`), a plain Save limited to that field (`keepSaveWhenCompletedFields`, `CJ` out of
+   `hideSaveStatuses`). The ETP-4006 trap (an editable table-reference field gets the defaults'
+   first-option fallback) is closed in `SalesQuotationHeaderHandler.afterHandle` (DEFAULTS drop
+   `rejectReason`). Needs `make regen ONLY=sales-quotation PUSH_TO_NEO=1` + `export.database` (the NEO
+   field is still read-only until pushed).
+4. **Quotation PDF "Motivo".** The commercial template prints `Description` as its notes, so a portal
+   rejection already prints "Rechazado por el cliente desde el portal. Motivo: …". **Not built:** the
+   asked rule "tenant reason when set, else the portal reason" would print an internal reason on a PDF
+   the customer downloads from the portal and receives by email, contradicting point 3. Proposed rule,
+   pending a product decision: the printable never prints the tenant reason; the portal's notes line is
+   the customer-facing reason (`docs/document-printables.md` D30). **Cache:** the app's preview already
+   re-renders a stale stored PDF; the portal did not — `/pdf` now re-renders a stored PDF older than the
+   document before serving it (D29).
+5. **One step for the 2FA.** The confirmation email's button names the decision ("Confirmar rechazo" /
+   "Confirmar aceptación") and is the confirmation: the landing's script sends `POST /decisions/confirm`
+   on open (once per open, also under StrictMode) and shows the result ("Has rechazado el presupuesto
+   {n}", already applied, superseded, no longer pending, expired; a failed POST offers a retry). A bare
+   GET applies nothing. Confirm answers `appliedNow` (true only on the applying call; a re-open no longer
+   re-sends the seller's notice). The portal's "sent" message tells the customer to press the button in
+   the email.
+6. **Footer.** "Creado con etendo.ai" links to `https://etendo.ai` (new tab, `noopener noreferrer`); no
+   shared constant existed.
 
 ---
 
@@ -1203,7 +1243,7 @@ are closed or moved to their own ticket.
 
 | Item | State | Notes |
 |---|---|---|
-| **Part C — accept / reject a quotation from the portal** | **Built (reject); accept behind the Q1 seam** | See [Part C](#part-c--accept--reject-a-quotation-from-the-portal-plan-2026-11-13-not-built): plan pending review with the PO (open questions C.11). |
+| **Part C — accept / reject a quotation from the portal** | **Built, PO answers applied** | See Part C, C.13. Open: the PDF "Motivo" rule (C.13 point 4, pending a product decision) and `ETGO_AC` in the core `STATUS_ORDER` (sort order only). |
 | **KPI semantics** | **Pending the PO** | The four events of §A.7 ship (`portal.link.sent`, `portal.link.opened`, `portal.link.renewed`, `portal.document.downloaded`, server-only). D-5 took *per send* (`ROOT_LINK_ID`) as the headline unit as proposed; the PO has not yet confirmed the metric definitions — per send vs per document, and whether opens by link scanners that run JS (counted today, §A.7) are filtered. Changing the reading needs no code: the events carry both `ROOT_LINK_ID` and `documentId`. |
 | **Retention / purge job for `ETGO_PORTAL_LINK`** | **Asked of the PO** | Nothing deletes rows today. Pending rows (the email never left) are invalid forever and harmless (§A.2.7); expired rows are kept because **an expired link can be renewed at any age** — there is no maximum. The PO was asked the maximum age after which an expired link should no longer renew; that answer decides both the renewal cut-off and how long rows must be kept. |
 | **Plain-text 500 on the portal PDF route** | Optional cleanup | `GET /sws/portal/documents/{kind}/{id}/pdf` streams through `AnonymousAttachmentStreamer`, whose failure path writes a `text/plain` body (`writePlainError`) — the email download link's format — while every other portal error is JSON. The page only reads the status, so nothing is broken; aligning it would mean a JSON error for the portal caller without changing the email link's answers. |

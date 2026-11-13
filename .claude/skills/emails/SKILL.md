@@ -160,7 +160,10 @@ through the GO provider. It is a fallback, not an override — SMTP wins when pr
   (`POST /sws/portal/quotations/{id}/decision`). Only to the **first To of the original send** —
   never CC, never an address from the caller (re-derived from the link's root row). It carries a
   single-use, never-expiring confirmation link; the decision row is minted pending in `resolve` and
-  usable from `onDelivered`. Opening the link applies nothing; the landing's button confirms.
+  usable from `onDelivered`. The button is explicit per decision (`confirm.cta.ACCEPT` / `.REJECT`:
+  "Confirmar aceptación" / "Confirmar rechazo") and is the one step: the landing's script sends the
+  confirm POST on open (never a GET side effect, so a link scanner applies nothing) and shows the
+  result. A re-opened link answers "ya estaba aplicada" (`appliedNow: false`).
 - **notice**: to the user who sent the quotation, at their ETGO_ACCOUNT email (`AD_User.Email` is
   not filled by onboarding), after the confirmation's commit. No account: no notice, logged.
 - Both refuse any caller outside `PortalDecisionScope` (403) and file under the quotation's send
