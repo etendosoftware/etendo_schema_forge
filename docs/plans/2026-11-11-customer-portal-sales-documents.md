@@ -527,6 +527,10 @@ app's sources:
 
 ## B.4 List
 
+> **As built (2026-11-13 design rework):** status *groups* as tabs, "all time" by default, and
+> the board's columns — see "Design rework" in the Part B implementation notes, which supersedes
+> the design text below.
+
 - Columns: **Type**, **Number**, **Date** (quotation/order `DateOrdered`, shipment `MovementDate`,
   invoice `DateInvoiced`), **Total**, **Status**; invoices additionally **Payment status**, **Due
   date** (dot), **Outstanding**. **Shipments have no total** (`M_InOut` carries no amount) ⇒ "—".
@@ -541,6 +545,9 @@ app's sources:
 - Empty state per filter; summary card of outstanding balance stays.
 
 ## B.5 Document detail (read-only)
+
+> **As built (2026-11-13 design rework):** the left pane is the real printable in the app's PDF
+> viewer; see "Design rework" in the Part B implementation notes.
 
 Entry: the link opens the detail of `entryDocument`; "All my documents" goes to the list; links
 navigate to other details. State kept in the SPA (`?view=list` / `?doc=<kind>:<id>` on
@@ -630,7 +637,7 @@ PDF unavailable state.
 | Id | Decision | Decided |
 |---|---|---|
 | D-1 | Apply blocked / inactive / plan-expired to **valid** links too, not only renewal | **Yes**: a still-valid link answers `unavailable` |
-| D-2 | "Last month" default range | **Rolling**: today − 1 month … today |
+| D-2 | "Last month" default range | **Rolling**: today − 1 month … today. **Superseded 2026-11-13** by the design rework: the lists open on "all time", the board's "Cualquier fecha" |
 | D-3 | Renewal email visible in the document's Emails card | **Yes** |
 | D-4 | Renewal limits | **Decided by the PO (2026-11-11): 15 min per link, no daily cap.** Both remain configurable (`cooldownMinutes`, `maxPerDay`, `0` = unlimited, the default) |
 | D-5 | KPI headline unit | **Per send** (`ROOT_LINK_ID`) |
@@ -713,29 +720,94 @@ app's own helpers (`DocumentStatusPill` / `statusLabel`, `StatusTag` tones,
 `resolveInvoicePaymentBadge`, `getDueDateState`). Headings inherit Plus Jakarta Sans from the
 app's global `h1–h6` rule.
 
-**Scope decided with the user where the design and the ticket differ.**
-- **In:** home (pending-payment card with outstanding and overdue amount per currency, one tile
-  per kind with its count and highlight, recent documents — all server-side aggregates); a sidebar
-  with one list per kind (Presupuestos, Pedidos, Albaranes, Facturas — credit notes inside
-  Facturas, marked "Factura rectificativa"); mobile bottom navigation; per-list status tabs (the
-  kind's visible statuses), date range (default: rolling last month, D-2) and search by number or
-  reference; detail with summary, read-only lines, taxes, invoice payment block, navigable related
-  documents and "Ver PDF / Descargar PDF" (or "PDF no disponible"); greeting with the customer's
-  name; ES/EN switch; tenant logo and name on every view.
-- **Out, though the design shows them:** "Albaranes de devolución"; checkboxes and "Descargar
-  seleccionados"; the advanced "Filtros" button; Comentarios; Aceptar / Rechazar (Part C); the
-  account / user menu (the portal has no login).
-- **Also not built (design only, not in the ticket):** the home's "Facturado por mes" chart, the
-  "Pagado este año" figure and the header's global search; the "Creado con etendo.ai" footer.
-- **Orders tile has no highlight.** The design's "En curso" has no honest single figure in the data
-  (a completed order may already be delivered and invoiced), so the tile shows its total count.
-  Quotations highlight "Por responder" (`UE`), invoices "Vencidas" (an instalment past due with money
-  owed), shipments "Este mes" (movement date in the current month).
-- **The document sheet replaces the design's PDF canvas.** The left panel renders the document
-  from data (header, customer, lines, totals); "Ver PDF" opens the real printable in a dialog and
-  "Descargar PDF" saves it, both the main attachment the email's link serves (§B.7).
+**Design rework (2026-11-13, user: "hacelo como está en el diseño").** The first build did not
+match the six boards; every screen was redone to match them 1:1 in layout, structure, spacing,
+components and copy, colours through the app-shell tokens (`--status-*` for every badge, the lime
+`--accent-highlight`, `bg-muted`, `bg-card`, `bg-primary`). Each view draws its own desktop and
+mobile headers, as the boards do; the shell is only the sidebar and the bottom bar.
 
-**Backend (`com.etendoerp.go`).** `GET /sws/portal/home`, `GET /sws/portal/documents`,
+- **Inicio (Main / Movil-Inicio).** Header: title and breadcrumb, and the **search across every
+  kind** as a centred pill (`GET /sws/portal/search?q=`, newest matches first, 8 at most).
+  Greeting "Hola, <cliente>" + "Esto es lo que tienes pendiente con <empresa>", and the period
+  button ("Últimos 3 / 6 / 12 meses", default 12), which drives the chart. "Requiere tu atención":
+  one tile per kind with the figure it calls out — quotations "Por responder" (the `awaiting`
+  group), invoices "Vencidas" (`overdue`), **orders "En curso"** (completed and not yet fully
+  delivered or invoiced: a line with `orderedQuantity ≠ deliveredQuantity` or `≠
+  invoicedQuantity`), shipments "Este mes" — and a click opens that list on the matching tab. "Tu
+  saldo": "Pendiente de pago" (per currency, with its overdue part) and **"Pagado este año"**
+  (`Invoice.totalPaid` over the completed and closed invoices issued this calendar year, per
+  currency; the chip counts those invoices). "Documentos recientes" ("Ver todos" opens the list of
+  the newest document's kind) and **"Facturado por mes"** (grand total of the completed and closed
+  invoices per month over the chosen period, in the currency invoiced in most months, empty months
+  at 0) with "Al día con X de Y facturas del año" (Y: this year's invoices; X: those with no
+  instalment past due and owing). Mobile: brand bar with a search button, the dark "Pendiente de
+  pago" card ("Ver facturas pendientes" opens Facturas · Pendientes), the 2×2 tiles and the recent
+  documents; no chart and no "Tu saldo" card, as on the board.
+- **Listados (Listado / Movil-Listado).** Header: title + count chip + breadcrumb, the search by
+  number or reference as the centred pill. Toolbar: the status groups as segmented tabs, the date
+  button and refresh. **The date range now defaults to "all time"**, the board's "Cualquier fecha"
+  (this replaces D-2's rolling last month). Columns as the board — "Fecha de <tipo>", "Nº
+  documento", "Referencia", quotations "Válido hasta" with its dot (foreground while it can still be
+  answered, destructive once past, plain muted text once answered), "Estado", "Base imponible",
+  "Imp. total" — with, for invoices, "Vencimiento" (the app's due-date dot), "Estado de pago" and
+  "Pendiente"; a totals row; "Todos los registros cargados" when everything is loaded. Mobile:
+  header with title, count, search pill and full-width tabs; one card per document (number, badge,
+  reference, date and a second line: quotations "Pedido <nº>" once an order was generated from them
+  — the list now returns `orderNo` for quotations — "Caducó el <fecha>" when open and past, or
+  "Válido hasta <fecha>"; invoices "Vence el <fecha>" and the outstanding).
+- **Status groups (the tabs).** Customer-facing groups, defined once in
+  `PortalDocumentQuery.GROUPS` (`?group=`, each a subset of the kind's allow-list plus, where the
+  status cannot say it, a condition on the document); badges inside keep the app's own status
+  labels:
+
+  | Kind | Tab | Statuses | Extra condition |
+  |---|---|---|---|
+  | Presupuestos | Por responder | `UE`, `CO` | — (`CO` is completed but not answered: the app's convert / reject actions accept it) |
+  | | Aceptados | `CA`, `ETGO_CI` | — |
+  | | Rechazados | `CJ` | — |
+  | Pedidos | En curso | `CO` | a line not fully delivered or not fully invoiced |
+  | | Completados | `CO`, `CL` | `CL`, or no such line |
+  | | Anulados | `VO` | — |
+  | Albaranes | Entregados | `CO`, `CL` | — |
+  | | Anulados | `VO` | — |
+  | Facturas | Pendientes | `CO`, `CL` | `outstandingAmount ≠ 0` (overdue included) |
+  | | Vencidas | `CO`, `CL` | an instalment past due with money owed |
+  | | Pagadas | `CO`, `CL` | `outstandingAmount = 0` |
+
+  "Todos" is every visible status. Quotations `CL` and `VO`, and voided invoices, appear under
+  "Todos" only.
+- **Documento (Documento / Movil-Documento).** Header: back, "<Tipo> <Nº>", "Mis documentos /
+  <Tipo> / <Nº>". Left pane: **the real printable** — the main attachment, the very file the email
+  links to (§B.7) — in the app's `PdfViewer` with the board's three controls (zoom in, full screen
+  through the app's `FileLightbox`, zoom out); the blob is still rebuilt as `application/pdf` (N-d).
+  Only when the document has no printable (or it fails to load) does the pane show a sheet drawn
+  from the data, under "PDF no disponible". Right pane: title + "Emitido por <organización>",
+  "Descargar PDF", the summary card (Total; Fecha, Válido hasta, Estado, Base imponible, Impuestos —
+  plus Vencimiento, Estado de pago and Pendiente for invoices, and the instalments when more than
+  one) and "Documentos relacionados": this document ("Este"), the real related ones (each opens its
+  own preview), then the chain steps that do not exist yet, dashed (quotation → pedido →
+  albarán · factura; nothing for a voided, rejected or closed document). Mobile: top bar with back,
+  title, "Emitido por" and a download button; the summary card; "Líneas" with "Ver PDF" (full
+  screen); the related documents.
+- **Sidebar.** Brand, "General · Inicio", "Mis documentos" with the count chips (quotations to
+  answer, overdue invoices), and at the bottom the ES/EN switch and "Creado con etendo.ai". Mobile
+  bottom bar: Inicio, Presupuestos, Facturas, "Más" (Pedidos, Albaranes).
+- **"Válido hasta" shows "—" (investigated).** The backend sends it (`Order.validUntil`,
+  `C_Order.ValidUntil`, on every quotation row and detail). The data is empty: on the local
+  database all 29 sales quotations have `ValidUntil` null, because the quotation window never fills
+  it — its decisions declare a `ValidUntil_Default` rule (order date + 30 days) that the generated
+  form does not apply (`docs/generated-custom-windows/sales-quotation.md`). Not a portal bug; the
+  default belongs to the sales-quotation window.
+
+**Agreed OUT items (the only design elements not built).** The account / user menu (no login);
+"Ayuda y soporte"; "Albaranes de devolución" (returns are out of scope); the checkboxes and
+"Descargar seleccionados"; the advanced "Filtros"; "Comentarios"; Aceptar / Rechazar and the
+quotation's "Al aceptar" hint (Part C).
+
+**Design deviations.** None beyond the agreed OUT items above.
+
+**Backend (`com.etendoerp.go`).** `GET /sws/portal/home?months=`, `GET /sws/portal/search?q=`,
+`GET /sws/portal/documents?group=`,
 `GET /sws/portal/documents/{kind}/{id}` and `/pdf`, in `PortalDocumentsEndpoint`, all reads through
 `PortalDocumentQuery` (scope + per-kind discriminator + status allow-list of §B.1, HQL on the
 session) and related documents through `PortalDocumentLinks` (§B.6, each candidate re-scoped). No

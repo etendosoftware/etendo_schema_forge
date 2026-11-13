@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronRight, Download, Eye, FileX } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  ArrowLeft, ChevronRight, Download, FileText, FileX, Maximize, Square, ZoomIn, ZoomOut,
+} from 'lucide-react';
 import { useUI } from '@/i18n';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import PdfViewer, { usePdfZoom } from '@/windows/custom/shared/PdfViewer.jsx';
+import FileLightbox from '@/windows/custom/shared/FileLightbox.jsx';
 import { formatCurrency, formatGroupedNumber } from '@/lib/formatCurrency.js';
 import {
   PORTAL_ERROR, fetchPortalDocument, fetchPortalDocumentPdf,
@@ -10,10 +14,10 @@ import {
 import { portalPdfFileName } from '@/lib/portal/portalInvoices.js';
 import { saveBlobAsFile } from '@/lib/portal/portalDownload.js';
 import {
-  PortalDate, PortalDocumentStatus, PortalDueDate, PortalMoney, PortalPaymentStatus,
-  PortalSection,
+  PortalDate, PortalDocumentStatus, PortalDueDate, PortalMain, PortalMoney, PortalPaymentStatus,
+  PortalRowBadge, PortalSection, PortalValidUntil,
 } from './PortalBits.jsx';
-import { documentLabelKey } from './portalPresentation.js';
+import { PORTAL_KIND_META, documentLabelKey, pendingChainSteps } from './portalPresentation.js';
 
 /** Quantities may be fractional (kg, hours): never round them to an integer. */
 function formatQuantity(value) {
@@ -21,27 +25,34 @@ function formatQuantity(value) {
     : formatGroupedNumber(value, { minimumFractionDigits: 0, maximumFractionDigits: 4 });
 }
 
+/** Money inside a sentence ("2 × 75,00 €"), through the same canonical formatter. */
+function formatMoneyText(currency, value) {
+  return value == null ? '—' : formatCurrency(currency, value);
+}
+
 /**
- * One document, read-only (design Documento / Movil-Documento): a document sheet with the header
- * data, the lines and the totals; a side panel with the summary, the payment block for invoices
- * (§B.2), the related documents (§B.6, navigable) and the printable (§B.7) — the same file the
- * email's download link serves, or "PDF no disponible" when the document has none.
+ * One document, read-only (design Documento / Movil-Documento).
  *
- * Comments and Accept/Reject (quotations) are not part of this story; the design shows them for
- * later work.
+ * Desktop: the header (back, "<Kind> <Nº>", breadcrumb); the real printable on the left — the
+ * document's main attachment, the very file the email links to — in the app's PDF viewer with
+ * zoom in / full screen / zoom out; on the right the title with "Emitido por", "Descargar PDF",
+ * the summary card and "Documentos relacionados". Only when the document has no printable does
+ * the left pane fall back to a sheet drawn from the data, under a "PDF no disponible" note.
+ *
+ * Mobile: a top bar with back, title, "Emitido por" and a download button; the summary card;
+ * the lines with "Ver PDF" (the printable at full screen); the related documents.
+ *
+ * Comments and Accept / Reject (quotations) are agreed OUT items (Part C), so their slots are
+ * left out.
  */
 export default function PortalDocumentDetailView({
-  apiFetch, token, kind, id, identity, logoUrl, onNavigate, onInvalid, onLoaded,
+  apiFetch, token, kind, id, identity, logoUrl, onNavigate, onInvalid,
 }) {
   const ui = useUI();
   const [document, setDocument] = useState(null);
   const [state, setState] = useState('loading');
-  const [pdfUrl, setPdfUrl] = useState(null);
-  const [pdfBusy, setPdfBusy] = useState(false);
-  const [pdfFailed, setPdfFailed] = useState(false);
-  // Read through a ref so a parent re-creating its callback never refetches the document.
-  const onLoadedRef = useRef(onLoaded);
-  onLoadedRef.current = onLoaded;
+  const [pdf, setPdf] = useState({ status: 'idle', blob: null, url: null });
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -51,7 +62,6 @@ export default function PortalDocumentDetailView({
       if (!active) return;
       setDocument(loaded);
       setState('ready');
-      onLoadedRef.current?.(loaded);
     }).catch((error) => {
       if (!active) return;
       if (error?.code === PORTAL_ERROR.invalidLink) {
@@ -63,327 +73,489 @@ export default function PortalDocumentDetailView({
     return () => { active = false; };
   }, [apiFetch, token, kind, id, onInvalid]);
 
-  // An object URL pins its blob until released.
-  useEffect(() => () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); }, [pdfUrl]);
-
-  const loadPdf = useCallback(async () => {
-    setPdfBusy(true);
-    setPdfFailed(false);
-    try {
-      return await fetchPortalDocumentPdf(apiFetch, token, kind, id);
-    } catch (error) {
-      if (error?.code === PORTAL_ERROR.invalidLink) onInvalid();
-      else setPdfFailed(true);
-      return null;
-    } finally {
-      setPdfBusy(false);
-    }
-  }, [apiFetch, token, kind, id, onInvalid]);
-
   /**
-   * Opens the printable in the dialog's iframe. The blob is rebuilt as `application/pdf` whatever
-   * the server labelled it, so a main attachment that is not a PDF (an HTML file, say) is handed to
-   * the browser's PDF viewer — where it fails to render — and never parsed as a document that could
-   * run script in the SPA's origin (review N-d). The iframe is not `sandbox`ed on top: Chromium's
-   * built-in PDF viewer refuses to load inside a sandboxed frame, which would break every legitimate
-   * preview; the forced type is what neutralises the content.
+   * The printable is fetched as soon as the detail says there is one: it is the left pane itself.
+   * The blob is rebuilt as `application/pdf` whatever the server labelled it, so a main attachment
+   * that is not a PDF is handed to the PDF renderer — where it fails to render — and never parsed
+   * as a document that could run script in the SPA's origin (review N-d).
    */
-  const viewPdf = useCallback(async () => {
-    const blob = await loadPdf();
-    if (blob) setPdfUrl(URL.createObjectURL(new Blob([blob], { type: 'application/pdf' })));
-  }, [loadPdf]);
+  useEffect(() => {
+    if (!document?.hasPdf) return undefined;
+    let active = true;
+    let objectUrl = null;
+    setPdf({ status: 'loading', blob: null, url: null });
+    fetchPortalDocumentPdf(apiFetch, token, kind, id).then((blob) => {
+      if (!active) return;
+      const typed = new Blob([blob], { type: 'application/pdf' });
+      objectUrl = URL.createObjectURL(typed);
+      setPdf({ status: 'ready', blob: typed, url: objectUrl });
+    }).catch((error) => {
+      if (!active) return;
+      if (error?.code === PORTAL_ERROR.invalidLink) {
+        onInvalid();
+        return;
+      }
+      setPdf({ status: 'failed', blob: null, url: null });
+    });
+    // An object URL pins its blob until released.
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [apiFetch, token, kind, id, document?.hasPdf, onInvalid]);
 
-  const downloadPdf = useCallback(async () => {
-    const blob = await loadPdf();
-    if (blob) saveBlobAsFile(blob, portalPdfFileName(document ?? { id }));
-  }, [loadPdf, document, id]);
+  const fileName = portalPdfFileName(document ?? { id });
+  const downloadPdf = useCallback(() => {
+    if (pdf.blob) saveBlobAsFile(pdf.blob, fileName);
+  }, [pdf.blob, fileName]);
 
-  if (state === 'loading') {
-    return <p className="p-6 text-sm text-muted-foreground" data-testid="portal-document-loading">{ui('loading')}</p>;
-  }
-  if (state === 'notFound' || state === 'failed') {
+  const plural = ui(PORTAL_KIND_META[kind].pluralKey);
+  const back = () => onNavigate({ view: 'list', kind });
+
+  if (state !== 'ready') {
     return (
-      <div className="flex flex-col items-center px-6 py-12 text-center" data-testid="portal-document-unavailable">
-        <FileX className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
-        <p className="mt-3 font-medium">
-          {ui(state === 'notFound' ? 'portalDocumentNotFoundTitle' : 'portalLoadErrorTitle')}
-        </p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {ui(state === 'notFound' ? 'portalDocumentNotFoundDescription' : 'portalLoadErrorDescription')}
-        </p>
-        <Button variant="outline" className="mt-4" onClick={() => onNavigate({ view: 'home' })}>
-          {ui('portalBackToHome')}
-        </Button>
-      </div>
+      <>
+        <DesktopHeader title={ui(PORTAL_KIND_META[kind].singularKey)} breadcrumb={`${ui('portalNavMyDocuments')} / ${plural}`} plural={plural} onBack={back} />
+        <PortalMain className="p-6">
+          {state === 'loading' ? (
+            <p className="text-sm text-muted-foreground" data-testid="portal-document-loading">{ui('loading')}</p>
+          ) : (
+            <div className="flex flex-col items-center px-6 py-12 text-center" data-testid="portal-document-unavailable">
+              <FileX className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
+              <p className="mt-3 font-medium">
+                {ui(state === 'notFound' ? 'portalDocumentNotFoundTitle' : 'portalLoadErrorTitle')}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {ui(state === 'notFound' ? 'portalDocumentNotFoundDescription' : 'portalLoadErrorDescription')}
+              </p>
+              <Button variant="outline" className="mt-4" onClick={() => onNavigate({ view: 'home' })}>
+                {ui('portalBackToHome')}
+              </Button>
+            </div>
+          )}
+        </PortalMain>
+      </>
     );
   }
 
-  const isInvoice = document.kind === 'INVOICE';
-  const hasAmounts = document.kind !== 'SHIPMENT';
-  const typeLabel = ui(documentLabelKey(document));
-  const taxesTotal = document.taxes.reduce((sum, tax) => sum + (tax.taxAmount ?? 0), 0);
+  const title = `${ui(documentLabelKey(document))} ${document.documentNo ?? ''}`.trim();
+  const issuer = document.issuer || identity?.tenantName || '';
+  const pdfReady = pdf.status === 'ready';
+  const showSheet = !document.hasPdf || pdf.status === 'failed';
 
-  const pdfActions = document.hasPdf ? (
-    <div className="flex flex-wrap gap-2">
-      <Button variant="outline" onClick={viewPdf} disabled={pdfBusy} data-testid="portal-view-pdf">
-        <Eye className="mr-2 h-4 w-4" aria-hidden="true" />{ui('portalViewPdf')}
-      </Button>
-      <Button onClick={downloadPdf} disabled={pdfBusy} data-testid="portal-download-pdf">
-        <Download className="mr-2 h-4 w-4" aria-hidden="true" />{ui('portalDownloadPdf')}
-      </Button>
-    </div>
-  ) : (
-    <p className="text-sm text-muted-foreground" data-testid="portal-pdf-unavailable">
-      <span className="font-medium text-foreground">{ui('portalPdfUnavailable')}</span>
-      {' · '}{ui('portalPdfUnavailableHint')}
-    </p>
-  );
-
-  return (
-    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px]" data-testid="portal-document-detail">
-      {/* Document sheet (the design's preview panel), desktop only: mobile shows the lines below. */}
-      <article className="hidden min-w-0 flex-col gap-5 rounded-lg border border-border p-6 lg:flex" data-testid="portal-document-sheet">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            {logoUrl ? <img src={logoUrl} alt="" className="h-10 w-10 rounded-lg object-contain" /> : null}
-            <span className="font-semibold">{document.issuer || identity?.tenantName}</span>
-          </div>
-          <div className="flex flex-col items-end text-sm">
-            <span className="font-semibold">{typeLabel}</span>
-            <span className="text-muted-foreground">{document.documentNo}</span>
-            {document.currency ? <span className="text-xs text-muted-foreground">{document.currency}</span> : null}
-          </div>
-        </div>
-        <div className="grid gap-4 text-sm sm:grid-cols-2">
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-semibold uppercase text-muted-foreground">{ui('portalCustomerData')}</span>
-            <span><b>{ui('portalCustomerLabel')}:</b> {document.customer.name}</span>
-            {document.customer.address ? <span><b>{ui('portalAddressLabel')}:</b> {document.customer.address}</span> : null}
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-semibold uppercase text-muted-foreground">{ui('portalDocumentData')}</span>
-            <span><b>{ui('portalFieldDate')}:</b> <PortalDate value={document.date} /></span>
-            {document.validUntil ? <span><b>{ui('portalColValidUntil')}:</b> <PortalDate value={document.validUntil} /></span> : null}
-            {document.paymentMethod ? <span><b>{ui('portalFieldPaymentMethod')}:</b> {document.paymentMethod}</span> : null}
-          </div>
-        </div>
-        <LinesTable document={document} />
-        {hasAmounts ? (
-          <div className="ml-auto flex w-64 flex-col gap-1 text-sm">
-            <Row label={ui('portalSubtotal')} value={<PortalMoney currency={document.currency} value={document.taxBase} />} />
-            <Row label={ui('portalFieldTaxes')} value={<PortalMoney currency={document.currency} value={taxesTotal} />} />
-            <Row strong label={ui('portalTotal')} value={<PortalMoney currency={document.currency} value={document.grandTotal} />} />
-          </div>
-        ) : null}
-      </article>
-
-      {/* Side panel */}
-      <aside className="flex min-w-0 flex-col gap-3">
-        <div className="flex flex-col gap-3 rounded-lg border border-border p-3.5" data-testid="portal-document-summary">
-          <div className="flex flex-col">
-            <span className="font-semibold">{typeLabel} {document.documentNo}</span>
-            <span className="text-xs text-muted-foreground">
-              {ui('portalIssuedBy', { name: document.issuer || identity?.tenantName || '' })}
-            </span>
-          </div>
-          {pdfActions}
-          {pdfFailed ? <p className="text-xs text-destructive" role="alert">{ui('portalDownloadFailed')}</p> : null}
-          {hasAmounts ? (
-            <div className="flex items-baseline justify-between">
-              <span className="text-sm text-muted-foreground">{ui('portalTotal')}</span>
-              <PortalMoney currency={document.currency} value={document.grandTotal} className="text-xl font-semibold tabular-nums" testId="portal-document-total" />
-            </div>
-          ) : null}
-          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-sm">
-            <dt className="text-muted-foreground">{ui('portalFieldDate')}:</dt>
-            <dd><PortalDate value={document.date} /></dd>
-            {document.validUntil ? (<><dt className="text-muted-foreground">{ui('portalColValidUntil')}:</dt><dd><PortalDate value={document.validUntil} /></dd></>) : null}
-            {document.scheduledDeliveryDate ? (<><dt className="text-muted-foreground">{ui('portalFieldDeliveryDate')}:</dt><dd><PortalDate value={document.scheduledDeliveryDate} /></dd></>) : null}
-            <dt className="text-muted-foreground">{ui('portalColStatus')}:</dt>
-            <dd><PortalDocumentStatus status={document.documentStatus} /></dd>
-            {document.paymentMethod ? (<><dt className="text-muted-foreground">{ui('portalFieldPaymentMethod')}:</dt><dd>{document.paymentMethod}</dd></>) : null}
-            {document.paymentTerms ? (<><dt className="text-muted-foreground">{ui('portalFieldPaymentTerms')}:</dt><dd>{document.paymentTerms}</dd></>) : null}
-            {hasAmounts ? (<><dt className="text-muted-foreground">{ui('portalColTaxBase')}:</dt><dd><PortalMoney currency={document.currency} value={document.taxBase} /></dd></>) : null}
-            {document.taxes.map((tax) => (
-              <TaxRow key={tax.tax} tax={tax} currency={document.currency} />
-            ))}
-          </dl>
-        </div>
-
-        {isInvoice ? <PaymentBlock document={document} /> : null}
-
-        {/* Mobile lines */}
-        <PortalSection title={ui('portalLines')} className="lg:hidden" testId="portal-document-lines-mobile">
-          {document.lines.length === 0 ? (
-            <p className="px-3.5 py-4 text-sm text-muted-foreground">{ui('portalNoLines')}</p>
-          ) : (
-            <ul className="divide-y divide-border">
-              {document.lines.map((line, index) => (
-                <li key={index} className="flex items-start justify-between gap-3 px-3.5 py-2.5 text-sm">
-                  <span className="flex min-w-0 flex-col">
-                    <span className="font-medium">{line.product || line.description}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {[line.productCode,
-                        hasAmounts
-                          ? `${formatQuantity(line.quantity)} × ${formatMoneyText(document.currency, line.unitPrice)}`
-                          : `${formatQuantity(line.quantity)} ${line.uom ?? ''}`.trim(),
-                        line.tax].filter(Boolean).join(' · ')}
-                    </span>
-                  </span>
-                  {hasAmounts ? <PortalMoney currency={document.currency} value={line.amount} className="tabular-nums" /> : null}
-                </li>
-              ))}
-            </ul>
-          )}
-        </PortalSection>
-
-        <PortalSection title={ui('portalRelatedDocuments')} testId="portal-related">
-          {document.related.length === 0 ? (
-            <p className="px-3.5 py-4 text-sm text-muted-foreground">{ui('portalNoRelated')}</p>
-          ) : (
-            <ul className="py-1">
-              {document.related.map((related) => (
-                <li key={`${related.kind}:${related.id}`}>
-                  <button
-                    type="button"
-                    onClick={() => onNavigate({ view: 'doc', kind: related.kind, id: related.id })}
-                    className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-sm hover:bg-muted"
-                    data-testid="portal-related-document"
-                  >
-                    <span className="min-w-0 flex-1">
-                      {ui(documentLabelKey(related))} <span className="text-muted-foreground">{related.documentNo}</span>
-                    </span>
-                    {related.kind === 'INVOICE'
-                      ? <PortalPaymentStatus document={related} />
-                      : <PortalDocumentStatus status={related.documentStatus} />}
-                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </PortalSection>
-      </aside>
-
-      <Dialog open={Boolean(pdfUrl)} onOpenChange={(openState) => { if (!openState) setPdfUrl(null); }}>
-        <DialogContent className="flex h-[90vh] max-w-5xl flex-col" data-testid="portal-pdf-dialog">
-          <DialogHeader>
-            <DialogTitle>{typeLabel} {document.documentNo}</DialogTitle>
-          </DialogHeader>
-          {pdfUrl ? (
-            <iframe title={`${typeLabel} ${document.documentNo}`} src={pdfUrl} className="min-h-0 w-full flex-1 rounded-md border border-border" />
-          ) : null}
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
-/** Money inside a sentence ("2 × 75,00 €"), through the same canonical formatter. */
-function formatMoneyText(currency, value) {
-  return value == null ? '—' : formatCurrency(currency, value);
-}
-
-function Row({ label, value, strong = false }) {
-  return (
-    <div className={`flex justify-between gap-4 ${strong ? 'border-t border-border pt-1 font-semibold' : ''}`}>
-      <span>{label}</span>
-      <span className="tabular-nums">{value}</span>
-    </div>
-  );
-}
-
-function TaxRow({ tax, currency }) {
   return (
     <>
-      <dt className="text-muted-foreground">{tax.tax}:</dt>
-      <dd><PortalMoney currency={currency} value={tax.taxAmount} /></dd>
+      {/* Mobile top bar (design Movil-Documento) */}
+      <header className="flex h-20 shrink-0 items-center gap-3 border-b border-border bg-card px-4 md:hidden">
+        <button
+          type="button"
+          aria-label={ui('portalBack', { list: plural })}
+          onClick={back}
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[10px]"
+          data-testid="portal-back-mobile"
+        >
+          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+        </button>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <h1 className="truncate text-xl font-semibold leading-7">{title}</h1>
+          <span className="truncate text-[13px] leading-[18px] text-muted-foreground">{ui('portalIssuedBy', { name: issuer })}</span>
+        </div>
+        {document.hasPdf ? (
+          <button
+            type="button"
+            aria-label={ui('portalDownloadPdf')}
+            onClick={downloadPdf}
+            disabled={!pdfReady}
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[10px] border border-border bg-card disabled:opacity-50"
+            data-testid="portal-download-pdf-mobile"
+          >
+            <Download className="h-5 w-5" aria-hidden="true" />
+          </button>
+        ) : null}
+      </header>
+
+      <DesktopHeader
+        title={title}
+        breadcrumb={`${ui('portalNavMyDocuments')} / ${plural} / ${document.documentNo ?? ''}`}
+        plural={plural}
+        onBack={back}
+      />
+
+      <main
+        className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 pb-28 pt-5 md:flex-row md:gap-0 md:overflow-hidden md:rounded-lg md:bg-card md:p-0"
+        data-testid="portal-document-detail"
+      >
+        {/* Left pane: the printable, or the data sheet when there is none */}
+        <section
+          aria-label={ui('portalPreviewLabel')}
+          className="relative hidden min-w-0 flex-1 overflow-y-auto bg-muted md:flex md:flex-col"
+          data-testid="portal-document-preview"
+        >
+          {showSheet ? (
+            <div className="flex flex-col gap-3 p-5">
+              <p className="mx-auto w-full max-w-[640px] text-sm text-muted-foreground" data-testid="portal-pdf-unavailable">
+                <span className="font-medium text-foreground">{ui('portalPdfUnavailable')}</span>
+                {' · '}{ui(pdf.status === 'failed' ? 'portalDownloadFailed' : 'portalPdfUnavailableHint')}
+              </p>
+              <DocumentSheet document={document} issuer={issuer} logoUrl={logoUrl} />
+            </div>
+          ) : (pdfReady ? (
+            <PortalPdfPreview url={pdf.url} onFullScreen={() => setLightboxOpen(true)} />
+          ) : (
+            <p className="m-auto text-sm text-muted-foreground" data-testid="portal-pdf-loading">{ui('loading')}</p>
+          ))}
+        </section>
+
+        {/* Right pane */}
+        <aside className="flex min-w-0 flex-col gap-4 md:w-80 md:flex-none md:gap-0 md:overflow-y-auto md:border-l md:border-border">
+          <div className="hidden flex-col gap-2.5 border-b border-border p-3.5 md:flex">
+            <div className="flex flex-col">
+              <span className="text-base font-semibold leading-6">{title}</span>
+              <span className="text-xs leading-4 text-muted-foreground">{ui('portalIssuedBy', { name: issuer })}</span>
+            </div>
+            {document.hasPdf ? (
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" onClick={downloadPdf} disabled={!pdfReady} data-testid="portal-download-pdf">
+                  <Download className="mr-1.5 h-4 w-4" aria-hidden="true" />{ui('portalDownloadPdf')}
+                </Button>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="flex flex-col gap-4 md:gap-3.5 md:p-3.5">
+            <Summary document={document} />
+            {document.kind === 'INVOICE' && document.installments.length > 1 ? <Installments document={document} /> : null}
+            <MobileLines
+              document={document}
+              canViewPdf={pdfReady}
+              onViewPdf={() => setLightboxOpen(true)}
+            />
+            <RelatedDocuments document={document} onNavigate={onNavigate} />
+          </div>
+        </aside>
+      </main>
+
+      {pdfReady ? (
+        <FileLightbox
+          open={lightboxOpen}
+          onClose={() => setLightboxOpen(false)}
+          file={{ objectUrl: pdf.url, fileName, mimeType: 'application/pdf' }}
+          data-testid="portal-pdf-lightbox"
+        />
+      ) : null}
     </>
   );
 }
 
-/** The lines table of the document sheet. */
-function LinesTable({ document }) {
+function DesktopHeader({ title, breadcrumb, plural, onBack }) {
   const ui = useUI();
-  const hasAmounts = document.kind !== 'SHIPMENT';
-  if (document.lines.length === 0) {
-    return <p className="text-sm text-muted-foreground">{ui('portalNoLines')}</p>;
-  }
   return (
-    <table className="w-full border-collapse text-sm" data-testid="portal-document-lines">
-      <thead>
-        <tr className="border-b border-border text-left text-xs">
-          <th className="py-2 pr-2 font-semibold">{ui('portalLineCode')}</th>
-          <th className="py-2 pr-2 font-semibold">{ui('portalLineDescription')}</th>
-          <th className="py-2 pr-2 text-right font-semibold">{ui('portalLineQuantity')}</th>
-          {hasAmounts ? <th className="py-2 pr-2 text-right font-semibold">{ui('portalLinePrice')}</th> : null}
-          {document.kind === 'QUOTATION' || document.kind === 'ORDER'
-            ? <th className="py-2 pr-2 text-right font-semibold">{ui('portalLineDiscount')}</th> : null}
-          {hasAmounts ? <th className="py-2 pr-2 font-semibold">{ui('portalLineTax')}</th> : null}
-          {hasAmounts ? <th className="py-2 text-right font-semibold">{ui('portalLineAmount')}</th> : null}
-        </tr>
-      </thead>
-      <tbody>
-        {document.lines.map((line, index) => (
-          <tr key={index} className="border-b border-border">
-            <td className="py-2 pr-2 text-muted-foreground">{line.productCode || '—'}</td>
-            <td className="py-2 pr-2">{line.product || line.description}</td>
-            <td className="py-2 pr-2 text-right tabular-nums">
-              {formatQuantity(line.quantity)}{!hasAmounts && line.uom ? ` ${line.uom}` : ''}
-            </td>
-            {hasAmounts ? (
-              <td className="py-2 pr-2 text-right tabular-nums">
-                <PortalMoney currency={document.currency} value={line.unitPrice} />
-              </td>
-            ) : null}
-            {document.kind === 'QUOTATION' || document.kind === 'ORDER' ? (
-              <td className="py-2 pr-2 text-right tabular-nums">
-                {line.discount ? formatGroupedNumber(line.discount, { maximumFractionDigits: 2 }) : '–'}
-              </td>
-            ) : null}
-            {hasAmounts ? <td className="py-2 pr-2">{line.tax || '—'}</td> : null}
-            {hasAmounts ? (
-              <td className="py-2 text-right tabular-nums">
-                <PortalMoney currency={document.currency} value={line.amount} />
-              </td>
-            ) : null}
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <header className="hidden items-center gap-3 px-1 pb-3 pt-1 md:flex" data-testid="portal-view-header">
+      <button
+        type="button"
+        aria-label={ui('portalBack', { list: plural })}
+        onClick={onBack}
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card"
+        data-testid="portal-back"
+      >
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+      </button>
+      <div className="flex min-w-0 flex-col">
+        <h1 className="truncate text-lg font-semibold leading-7" data-testid="portal-view-title">{title}</h1>
+        <span className="truncate text-xs leading-4 text-muted-foreground" data-testid="portal-breadcrumb">{breadcrumb}</span>
+      </div>
+    </header>
   );
 }
 
-/** §B.2: the invoice's payment state, due date, outstanding and instalments, as in the app. */
-function PaymentBlock({ document }) {
+/**
+ * The printable in the app's PDF viewer (`PdfViewer`, as the invoice and file previews use it),
+ * with the design's three controls: zoom in, full screen (the app's `FileLightbox`), zoom out.
+ */
+function PortalPdfPreview({ url, onFullScreen }) {
+  const ui = useUI();
+  const zoom = usePdfZoom();
+  const control = 'flex h-8 w-8 items-center justify-center text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40';
+  return (
+    <div className="relative min-h-0 flex-1">
+      <div className="absolute right-5 top-5 z-10 flex rounded-md border border-border bg-card" data-testid="portal-pdf-controls">
+        <button type="button" onClick={zoom.zoomIn} disabled={!zoom.canZoomIn} aria-label={ui('pdfViewerZoomIn')} className={control} data-testid="portal-pdf-zoom-in">
+          <ZoomIn className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+        <button type="button" onClick={onFullScreen} aria-label={ui('portalFullScreen')} className={control} data-testid="portal-pdf-full-screen">
+          <Maximize className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+        <button type="button" onClick={zoom.zoomOut} disabled={!zoom.canZoomOut} aria-label={ui('pdfViewerZoomOut')} className={control} data-testid="portal-pdf-zoom-out">
+          <ZoomOut className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+      </div>
+      <PdfViewer
+        url={url}
+        zoom={zoom}
+        hideToolbar
+        contentPadding={{ top: 20, right: 20, bottom: 20, left: 20 }}
+      />
+    </div>
+  );
+}
+
+/** The summary card: Total, then the document's dates, status and amounts (design "Total"). */
+function Summary({ document }) {
+  const ui = useUI();
+  const hasAmounts = document.kind !== 'SHIPMENT';
+  const isInvoice = document.kind === 'INVOICE';
+  const taxesTotal = document.taxes.reduce((sum, tax) => sum + (tax.taxAmount ?? 0), 0);
+  const taxLabel = document.taxes.length === 1 && document.taxes[0].tax
+    ? `${ui('portalFieldTaxes')} (${document.taxes[0].tax})` : ui('portalFieldTaxes');
+  const row = (label, value, testId) => (
+    <>
+      <dt className="text-muted-foreground">{label}:</dt>
+      <dd className="text-right" data-testid={testId}>{value}</dd>
+    </>
+  );
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-card md:rounded-lg" data-testid="portal-document-summary">
+      {hasAmounts ? (
+        <div className="flex items-center justify-between border-b border-border p-5 md:px-3 md:py-2.5">
+          {/* Mobile: "Total" over the big amount, the badge on the right (Movil-Documento). */}
+          <div className="flex flex-col gap-1.5 md:hidden">
+            <span className="text-sm text-muted-foreground">{ui('portalTotal')}</span>
+            <PortalMoney
+              currency={document.currency}
+              value={document.grandTotal}
+              className="font-['Plus_Jakarta_Sans',Inter,sans-serif] text-4xl font-bold leading-[44px] tabular-nums"
+            />
+          </div>
+          <PortalRowBadge document={document} className="text-[13px] leading-[18px] md:hidden" />
+          {/* Desktop: "Total" and the amount on one line (Documento). */}
+          <span className="hidden font-semibold md:inline">{ui('portalTotal')}</span>
+          <PortalMoney
+            currency={document.currency}
+            value={document.grandTotal}
+            className="hidden text-base font-semibold tabular-nums md:inline"
+            testId="portal-document-total"
+          />
+        </div>
+      ) : null}
+      <dl className="grid grid-cols-[auto_1fr] items-center gap-3 px-5 py-4 md:gap-2.5 md:px-3 md:py-2.5">
+        {row(ui('portalFieldDate'), <PortalDate value={document.date} />)}
+        {document.kind === 'QUOTATION' ? row(ui('portalColValidUntil'), <PortalValidUntil document={document} />) : null}
+        {document.scheduledDeliveryDate ? row(ui('portalFieldDeliveryDate'), <PortalDate value={document.scheduledDeliveryDate} />) : null}
+        {isInvoice ? row(ui('portalColDueDate'), <PortalDueDate document={document} />) : null}
+        {row(ui('portalColStatus'), <PortalDocumentStatus status={document.documentStatus} />)}
+        {isInvoice ? row(ui('portalColPaymentStatus'), <PortalPaymentStatus document={document} installments={document.installments} />) : null}
+        {document.paymentMethod ? row(ui('portalFieldPaymentMethod'), document.paymentMethod) : null}
+        {hasAmounts ? row(ui('portalColTaxBase'), <PortalMoney currency={document.currency} value={document.taxBase} />) : null}
+        {hasAmounts ? row(taxLabel, <PortalMoney currency={document.currency} value={taxesTotal} />) : null}
+        {isInvoice ? row(ui('portalColOutstanding'), <PortalMoney currency={document.currency} value={document.outstandingAmount} className="font-semibold" />, 'portal-payment-outstanding') : null}
+      </dl>
+    </div>
+  );
+}
+
+/** An invoice's instalments, when there is more than one. */
+function Installments({ document }) {
   const ui = useUI();
   return (
-    <PortalSection title={ui('portalPaymentTitle')} testId="portal-payment">
-      <div className="flex flex-col gap-3 p-3.5 text-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <PortalPaymentStatus document={document} installments={document.installments} />
-          <PortalDueDate document={document} />
-        </div>
-        <div className="flex items-baseline justify-between">
-          <span className="text-muted-foreground">{ui('portalColOutstanding')}</span>
-          <PortalMoney currency={document.currency} value={document.outstandingAmount} className="font-semibold tabular-nums" testId="portal-payment-outstanding" />
-        </div>
-        {document.installments.length > 1 ? (
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-semibold uppercase text-muted-foreground">{ui('portalInstallments')}</span>
-            {document.installments.map((installment, index) => (
-              <div key={index} className="flex justify-between gap-3 text-xs tabular-nums" data-testid="portal-installment">
-                <PortalDate value={installment.dueDate} />
-                <span>
-                  <PortalMoney currency={document.currency} value={installment.amount} />
-                  {' · '}{ui('portalColOutstanding')}{' '}
-                  <PortalMoney currency={document.currency} value={installment.outstandingAmount} />
-                </span>
-              </div>
-            ))}
+    <div className="flex flex-col gap-2">
+      <h2 className="text-[13px] font-medium uppercase leading-[18px] text-muted-foreground md:text-xs md:leading-4">{ui('portalInstallments')}</h2>
+      <div className="flex flex-col gap-1.5 rounded-xl border border-border bg-card px-3 py-2.5 md:rounded-lg">
+        {document.installments.map((installment, index) => (
+          <div key={index} className="flex justify-between gap-3 text-sm tabular-nums" data-testid="portal-installment">
+            <PortalDate value={installment.dueDate} />
+            <span>
+              <PortalMoney currency={document.currency} value={installment.amount} />
+              {' · '}{ui('portalColOutstanding')}{' '}
+              <PortalMoney currency={document.currency} value={installment.outstandingAmount} />
+            </span>
           </div>
-        ) : null}
+        ))}
       </div>
+    </div>
+  );
+}
+
+/** Mobile only: the lines, with "Ver PDF" (design Movil-Documento). */
+function MobileLines({ document, canViewPdf, onViewPdf }) {
+  const ui = useUI();
+  const hasAmounts = document.kind !== 'SHIPMENT';
+  return (
+    <PortalSection
+      title={ui('portalLines')}
+      action={document.hasPdf ? (
+        <button
+          type="button"
+          onClick={onViewPdf}
+          disabled={!canViewPdf}
+          className="text-sm font-medium disabled:opacity-50"
+          data-testid="portal-view-pdf"
+        >
+          {ui('portalViewPdf')}
+        </button>
+      ) : null}
+      className="rounded-xl md:hidden"
+      testId="portal-document-lines-mobile"
+    >
+      {document.lines.length === 0 ? (
+        <p className="px-5 py-4 text-sm text-muted-foreground">{ui('portalNoLines')}</p>
+      ) : (
+        <ul className="divide-y divide-border">
+          {document.lines.map((line, index) => (
+            <li key={index} className="flex justify-between gap-3 px-5 py-4">
+              <span className="flex min-w-0 flex-col">
+                <span className="font-medium">{line.product || line.description}</span>
+                <span className="text-sm text-muted-foreground">
+                  {[line.productCode,
+                    hasAmounts
+                      ? `${formatQuantity(line.quantity)} × ${formatMoneyText(document.currency, line.unitPrice)}`
+                      : `${formatQuantity(line.quantity)} ${line.uom ?? ''}`.trim(),
+                    line.tax].filter(Boolean).join(' · ')}
+                </span>
+              </span>
+              {hasAmounts ? <PortalMoney currency={document.currency} value={line.amount} className="font-medium tabular-nums" /> : null}
+            </li>
+          ))}
+        </ul>
+      )}
     </PortalSection>
+  );
+}
+
+/**
+ * "Documentos relacionados" (design): this document first ("Este"), then the real related
+ * documents — each one opens its own preview — then the steps of the chain that do not exist yet,
+ * dashed.
+ */
+function RelatedDocuments({ document, onNavigate }) {
+  const ui = useUI();
+  const steps = pendingChainSteps(document);
+  return (
+    <div className="flex flex-col gap-2" data-testid="portal-related">
+      <h2 className="text-[13px] font-medium uppercase leading-[18px] text-muted-foreground md:text-xs md:leading-4">
+        {ui('portalRelatedDocuments')}
+      </h2>
+      <div className="rounded-xl border border-border bg-card py-1.5 md:rounded-lg">
+        <div className="flex items-center gap-3 px-5 py-3 md:gap-2 md:px-3 md:py-1.5">
+          <FileText className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+          <span className="min-w-0 flex-1 truncate">{ui(documentLabelKey(document))} #{document.documentNo}</span>
+          <span className="text-sm text-muted-foreground md:text-xs">{ui('portalThisDocument')}</span>
+        </div>
+        {document.related.map((related) => (
+          <button
+            key={`${related.kind}:${related.id}`}
+            type="button"
+            onClick={() => onNavigate({ view: 'doc', kind: related.kind, id: related.id })}
+            className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-muted md:gap-2 md:px-3 md:py-1.5"
+            data-testid="portal-related-document"
+          >
+            <FileText className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate">{ui(documentLabelKey(related))} #{related.documentNo}</span>
+            <PortalRowBadge document={related} />
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          </button>
+        ))}
+        {steps.map((step) => (
+          <div
+            key={step.id}
+            className="flex items-center gap-3 px-5 py-3 text-muted-foreground md:gap-2 md:px-3 md:py-1.5"
+            data-testid="portal-related-pending-step"
+          >
+            <Square className="h-3.5 w-3.5 shrink-0 [stroke-dasharray:3_3]" aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate">{step.labelKeys.map((key) => ui(key)).join(' · ')}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** The fallback left pane when the document has no printable: a sheet drawn from its data. */
+function DocumentSheet({ document, issuer, logoUrl }) {
+  const ui = useUI();
+  const hasAmounts = document.kind !== 'SHIPMENT';
+  const taxesTotal = document.taxes.reduce((sum, tax) => sum + (tax.taxAmount ?? 0), 0);
+  const label = 'text-[10px] uppercase tracking-[0.06em] text-muted-foreground';
+  return (
+    <article
+      className="mx-auto flex w-full max-w-[640px] flex-col gap-5 rounded-md bg-card px-10 py-9 text-xs leading-[18px] shadow-sm"
+      data-testid="portal-document-sheet"
+    >
+      <div className="flex items-center justify-between gap-4 rounded-[10px] border border-border px-5 py-[18px]">
+        <div className="flex items-center gap-3.5">
+          {logoUrl ? <img src={logoUrl} alt="" className="h-11 w-11 rounded-lg object-contain" /> : null}
+          <b className="text-sm font-semibold">{issuer}</b>
+        </div>
+        <div className="flex flex-col items-end border-l border-border pl-[18px]">
+          <span className={label}>{ui(documentLabelKey(document))}</span>
+          <span className="text-xl font-bold leading-[26px]">{document.documentNo}</span>
+          {document.currency ? <span className="text-muted-foreground">{document.currency}</span> : null}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3.5">
+        <div className="flex flex-col gap-0.5 rounded-[10px] border border-border px-4 py-3.5">
+          <span className={cn(label, 'mb-1.5')}>{ui('portalCustomerData')}</span>
+          <span><b className="font-semibold">{ui('portalCustomerLabel')}:</b> {document.customer.name}</span>
+          {document.customer.address ? <span><b className="font-semibold">{ui('portalAddressLabel')}:</b> {document.customer.address}</span> : null}
+        </div>
+        <div className="flex flex-col gap-0.5 rounded-[10px] border border-border px-4 py-3.5">
+          <span className={cn(label, 'mb-1.5')}>{ui('portalDocumentData')}</span>
+          <span><b className="font-semibold">{ui('portalFieldDate')}:</b> <PortalDate value={document.date} /></span>
+          {document.validUntil ? <span><b className="font-semibold">{ui('portalColValidUntil')}:</b> <PortalDate value={document.validUntil} /></span> : null}
+          {document.paymentMethod ? <span><b className="font-semibold">{ui('portalFieldPaymentMethod')}:</b> {document.paymentMethod}</span> : null}
+        </div>
+      </div>
+      {document.lines.length === 0 ? (
+        <p className="text-muted-foreground">{ui('portalNoLines')}</p>
+      ) : (
+        <table className="w-full border-collapse" data-testid="portal-document-lines">
+          <thead>
+            <tr className={cn(label, 'border-b border-border text-left')}>
+              <th className="py-2 pr-1.5 font-medium">{ui('portalLineCode')}</th>
+              <th className="px-1.5 py-2 font-medium">{ui('portalLineDescription')}</th>
+              <th className="px-1.5 py-2 text-right font-medium">{ui('portalLineQuantity')}</th>
+              {hasAmounts ? <th className="px-1.5 py-2 text-right font-medium">{ui('portalLinePrice')}</th> : null}
+              {document.kind === 'QUOTATION' || document.kind === 'ORDER'
+                ? <th className="px-1.5 py-2 text-right font-medium">{ui('portalLineDiscount')}</th> : null}
+              {hasAmounts ? <th className="px-1.5 py-2 font-medium">{ui('portalLineTax')}</th> : null}
+              {hasAmounts ? <th className="py-2 pl-1.5 text-right font-medium">{ui('portalTotal')}</th> : null}
+            </tr>
+          </thead>
+          <tbody>
+            {document.lines.map((line, index) => (
+              <tr key={index}>
+                <td className="py-2.5 pr-1.5 text-muted-foreground">{line.productCode || '—'}</td>
+                <td className="px-1.5 py-2.5 font-semibold">{line.product || line.description}</td>
+                <td className="px-1.5 py-2.5 text-right tabular-nums">
+                  {formatQuantity(line.quantity)}{!hasAmounts && line.uom ? ` ${line.uom}` : ''}
+                </td>
+                {hasAmounts ? (
+                  <td className="px-1.5 py-2.5 text-right tabular-nums"><PortalMoney currency={document.currency} value={line.unitPrice} /></td>
+                ) : null}
+                {document.kind === 'QUOTATION' || document.kind === 'ORDER' ? (
+                  <td className="px-1.5 py-2.5 text-right tabular-nums">
+                    {line.discount ? formatGroupedNumber(line.discount, { maximumFractionDigits: 2 }) : '–'}
+                  </td>
+                ) : null}
+                {hasAmounts ? <td className="px-1.5 py-2.5">{line.tax || '—'}</td> : null}
+                {hasAmounts ? (
+                  <td className="py-2.5 pl-1.5 text-right tabular-nums"><PortalMoney currency={document.currency} value={line.amount} /></td>
+                ) : null}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {hasAmounts ? (
+        <div className="flex justify-end border-t border-border pt-3">
+          <div className="flex w-[260px] flex-col gap-1">
+            <div className="flex justify-between"><span>{ui('portalSubtotal')}</span><PortalMoney currency={document.currency} value={document.taxBase} /></div>
+            <div className="flex justify-between"><span>{ui('portalFieldTaxes')}</span><PortalMoney currency={document.currency} value={taxesTotal} /></div>
+            <div className="mt-1 flex justify-between border-t border-border pt-2 text-sm font-bold">
+              <span>{ui('portalTotal')}</span><PortalMoney currency={document.currency} value={document.grandTotal} />
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </article>
   );
 }

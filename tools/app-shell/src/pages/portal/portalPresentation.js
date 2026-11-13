@@ -35,6 +35,89 @@ export const PORTAL_KIND_META = Object.freeze({
   },
 });
 
+/**
+ * The list tabs per kind (design Listado: "Todos / Por responder / Aceptados / Rechazados"): the
+ * customer-facing status groups the backend defines (`PortalDocumentQuery.GROUPS`), each with its
+ * label. "All" is the implicit first tab. The mapping is recorded in the plan (§B.4); the badges in
+ * the rows keep the app's own status labels.
+ */
+export const PORTAL_KIND_GROUPS = Object.freeze({
+  QUOTATION: [
+    { code: 'awaiting', labelKey: 'portalGroupAwaiting' },
+    { code: 'accepted', labelKey: 'portalGroupAccepted' },
+    { code: 'rejected', labelKey: 'portalGroupRejected' },
+  ],
+  ORDER: [
+    { code: 'inProgress', labelKey: 'portalGroupInProgress' },
+    { code: 'completed', labelKey: 'portalGroupCompleted' },
+    { code: 'voided', labelKey: 'portalGroupVoided' },
+  ],
+  SHIPMENT: [
+    { code: 'delivered', labelKey: 'portalGroupDelivered' },
+    { code: 'voided', labelKey: 'portalGroupVoided' },
+  ],
+  INVOICE: [
+    { code: 'pending', labelKey: 'portalGroupPending' },
+    { code: 'overdue', labelKey: 'portalGroupOverdue' },
+    { code: 'paid', labelKey: 'portalGroupPaid' },
+  ],
+});
+
+/** Whether `group` is one of `kind`'s tabs. */
+export function isPortalGroup(kind, group) {
+  return Boolean(group) && (PORTAL_KIND_GROUPS[kind] ?? []).some((g) => g.code === group);
+}
+
+/**
+ * The "Requiere tu atención" tiles: the figure each kind calls out (the backend's `highlight`),
+ * its badge, and the list tab a click opens — the same set, so the tile and the tab agree.
+ */
+export const PORTAL_HIGHLIGHTS = Object.freeze({
+  awaitingAnswer: { labelKey: 'portalHighlightAwaitingAnswer', tone: 'info', group: 'awaiting' },
+  overdue: { labelKey: 'portalHighlightOverdue', tone: 'destructive', group: 'overdue' },
+  inProgress: { labelKey: 'portalHighlightInProgress', tone: 'warning', group: 'inProgress' },
+  thisMonth: { labelKey: 'portalHighlightThisMonth', tone: 'neutral', group: null },
+});
+
+/**
+ * A quotation's "Válido hasta" as the design draws it: a dot while the customer can still answer
+ * (`UE`/`CO`) — the foreground colour, or the destructive one once the date is past — and plain
+ * muted text once answered. `null` when the quotation has no validity date.
+ *
+ * @returns {{ state: 'open'|'expired'|'answered' }|null}
+ */
+export function quotationValidity(document) {
+  if (document?.kind !== 'QUOTATION' || !document.validUntil) return null;
+  const open = document.documentStatus === 'UE' || document.documentStatus === 'CO';
+  if (!open) return { state: 'answered' };
+  return { state: getCalendarDateRelation(document.validUntil) === 'past' ? 'expired' : 'open' };
+}
+
+/**
+ * The next steps of a document's chain that do not exist yet, for the design's dashed rows under
+ * "Documentos relacionados" (quotation → order → shipment · invoice). Nothing for a voided,
+ * rejected or closed document, whose chain will not continue.
+ *
+ * @returns {Array<{ id: string, labelKeys: string[] }>}
+ */
+export function pendingChainSteps(document) {
+  if (!document || ['VO', 'CJ', 'CL'].includes(document.documentStatus)) return [];
+  const has = (kind) => (document.related ?? []).some((related) => related.kind === kind);
+  const steps = [];
+  if (document.kind === 'QUOTATION') {
+    if (!has('ORDER')) steps.push({ id: 'order', labelKeys: ['portalKindOrder'] });
+    if (!has('SHIPMENT') && !has('INVOICE')) {
+      steps.push({ id: 'delivery', labelKeys: ['portalKindShipment', 'portalKindInvoice'] });
+    }
+  } else if (document.kind === 'ORDER') {
+    if (!has('SHIPMENT')) steps.push({ id: 'shipment', labelKeys: ['portalKindShipment'] });
+    if (!has('INVOICE')) steps.push({ id: 'invoice', labelKeys: ['portalKindInvoice'] });
+  } else if (document.kind === 'SHIPMENT' && !has('INVOICE')) {
+    steps.push({ id: 'invoice', labelKeys: ['portalKindInvoice'] });
+  }
+  return steps;
+}
+
 /** The singular label key of one document, telling a credit note from an invoice. */
 export function documentLabelKey(document) {
   if (document?.kind === 'INVOICE' && document?.isCreditNote) return 'portalKindCreditNote';
@@ -90,19 +173,6 @@ export function invoicePaymentState(document, installments = null) {
   }
 }
 
-/**
- * The default list range (decision D-2): the rolling last month, today − 1 month … today, as the
- * `{ from, to }` value `DateRangePopover` takes. The day is clamped to the target month's length
- * (31 Mar → 28/29 Feb), like `presetBounds`' last3m/last6m.
- */
-export function defaultPortalRange(reference = new Date()) {
-  const today = new Date(reference.getFullYear(), reference.getMonth(), reference.getDate());
-  const lastDayOfTarget = new Date(today.getFullYear(), today.getMonth(), 0).getDate();
-  const from = new Date(today.getFullYear(), today.getMonth() - 1,
-    Math.min(today.getDate(), lastDayOfTarget));
-  return { from, to: today };
-}
-
 /** A local `Date` as the `yyyy-MM-dd` calendar day the API expects. */
 export function toCalendarParam(date) {
   return date instanceof Date ? todayCalendarISO(date) : null;
@@ -113,24 +183,28 @@ export function toCalendarParam(date) {
  * (`/portal/:token`) and never here.
  *
  * - `{ view: 'home' }`
- * - `{ view: 'list', kind }`
+ * - `{ view: 'list', kind, group? }` — `group` one of the kind's tabs ({@link PORTAL_KIND_GROUPS})
  * - `{ view: 'doc', kind, id }`
  */
 export function readPortalView(searchParams) {
   const view = searchParams.get('view');
   const kind = searchParams.get('kind');
   const id = searchParams.get('id');
-  if (view === 'list' && PORTAL_KIND_META[kind]) return { view: 'list', kind };
+  const group = searchParams.get('group');
+  if (view === 'list' && PORTAL_KIND_META[kind]) {
+    return isPortalGroup(kind, group) ? { view: 'list', kind, group } : { view: 'list', kind };
+  }
   if (view === 'doc' && PORTAL_KIND_META[kind] && id) return { view: 'doc', kind, id };
   if (view === 'home') return { view: 'home' };
   return null;
 }
 
-/** The search string of a view (see {@link readPortalView}). */
+/** The search string of a view (see {@link readPortalView}): view, kind, id and group only. */
 export function writePortalView(target) {
   const params = new URLSearchParams();
   params.set('view', target.view);
   if (target.kind) params.set('kind', target.kind);
   if (target.id) params.set('id', target.id);
+  if (target.group) params.set('group', target.group);
   return params;
 }

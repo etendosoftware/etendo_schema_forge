@@ -258,12 +258,16 @@ export async function fetchPortalLogoBlob(fetchImpl, token) {
 /** The four document kinds the portal shows; the API speaks them in lower case. */
 export const PORTAL_DOCUMENT_KINDS = Object.freeze(['QUOTATION', 'ORDER', 'SHIPMENT', 'INVOICE']);
 
+/** Periods the home's "Facturado por mes" chart offers, in months. */
+export const PORTAL_CHART_MONTHS = Object.freeze([3, 6, 12]);
+
 /**
- * The home's aggregates: pending balance per currency, one tile per kind, recent documents.
- * Every figure is computed server-side over the whole history, never summed here.
+ * The home's aggregates: pending balance per currency, one tile per kind, recent documents, what
+ * was paid this year, and the invoiced-per-month chart over `months` (3, 6 or 12). Every figure
+ * is computed server-side over the whole history, never summed here.
  */
-export async function fetchPortalHome(fetchImpl, token) {
-  const response = await portalGet(fetchImpl, token, '/home');
+export async function fetchPortalHome(fetchImpl, token, { months = 12 } = {}) {
+  const response = await portalGet(fetchImpl, token, `/home?months=${encodeURIComponent(months)}`);
   const data = await response.json().catch(() => ({}));
   return {
     balances: Array.isArray(data?.balances) ? data.balances.map((b) => ({
@@ -276,7 +280,39 @@ export async function fetchPortalHome(fetchImpl, token) {
     })) : [],
     tiles: data?.tiles && typeof data.tiles === 'object' ? data.tiles : {},
     recent: Array.isArray(data?.recent) ? data.recent.map(normalizePortalDocument) : [],
+    paidThisYear: Array.isArray(data?.paidThisYear) ? data.paidThisYear.map((p) => ({
+      currency: readableText(p?.currency),
+      paid: readableAmount(p?.paid),
+      count: Number.isFinite(p?.count) ? p.count : 0,
+    })) : [],
+    invoicesThisYear: {
+      total: Number.isFinite(data?.invoicesThisYear?.total) ? data.invoicesThisYear.total : 0,
+      upToDate: Number.isFinite(data?.invoicesThisYear?.upToDate)
+        ? data.invoicesThisYear.upToDate : 0,
+    },
+    chart: {
+      months: Number.isFinite(data?.chart?.months) ? data.chart.months : months,
+      currency: readableText(data?.chart?.currency),
+      bars: Array.isArray(data?.chart?.bars) ? data.chart.bars.map((bar) => ({
+        month: readableText(bar?.month),
+        amount: readableAmount(bar?.amount) ?? 0,
+      })) : [],
+    },
   };
+}
+
+/**
+ * The header search across every kind: newest matches first, a handful at most. A blank query
+ * resolves to an empty list without a request.
+ */
+export async function searchPortalDocuments(fetchImpl, token, query) {
+  const trimmed = String(query ?? '').trim();
+  if (!trimmed) return [];
+  const response = await portalGet(fetchImpl, token, `/search?q=${encodeURIComponent(trimmed)}`, {
+    invalidOn: INVALID_TOKEN_STATUSES_PDF,
+  });
+  const data = await response.json().catch(() => ({}));
+  return Array.isArray(data?.documents) ? data.documents.map(normalizePortalDocument) : [];
 }
 
 /**
@@ -284,11 +320,12 @@ export async function fetchPortalHome(fetchImpl, token) {
  * header). Dates are calendar days (`yyyy-MM-dd`), inclusive on both ends.
  */
 export async function fetchPortalDocuments(fetchImpl, token, {
-  kind, statuses = [], dateFrom = null, dateTo = null, search = '', offset = 0,
+  kind, group = null, statuses = [], dateFrom = null, dateTo = null, search = '', offset = 0,
   limit = PORTAL_PAGE_SIZE,
 } = {}) {
   const params = new URLSearchParams();
   params.set('type', String(kind || '').toLowerCase());
+  if (group) params.set('group', group);
   if (statuses.length) params.set('status', statuses.join(','));
   if (dateFrom) params.set('dateFrom', dateFrom);
   if (dateTo) params.set('dateTo', dateTo);
@@ -305,6 +342,8 @@ export async function fetchPortalDocuments(fetchImpl, token, {
     totalCount: Number.isFinite(data?.totalCount) ? data.totalCount : documents.length,
     offset: Number.isFinite(data?.offset) ? data.offset : offset,
     statuses: Array.isArray(data?.statuses) ? data.statuses : [],
+    // The kind's customer-facing status groups (the list's tabs), "all" excluded.
+    groups: Array.isArray(data?.groups) ? data.groups.filter((g) => typeof g === 'string') : [],
     totals: Array.isArray(data?.totals) ? data.totals.map((t) => ({
       currency: readableText(t?.currency),
       count: Number.isFinite(t?.count) ? t.count : 0,
@@ -395,6 +434,9 @@ export function normalizePortalDocument(row) {
     outstandingAmount: readableAmount(row?.outstandingAmount),
     dueDate: readableText(row?.dueDate),
     overdue: row?.overdue === true,
+    // A quotation's generated order, when there is one in scope (the mobile card's "Pedido …").
+    orderId: readableText(row?.orderId),
+    orderNo: readableText(row?.orderNo),
   };
 }
 

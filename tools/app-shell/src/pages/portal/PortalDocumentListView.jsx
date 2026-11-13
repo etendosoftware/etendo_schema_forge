@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Search } from 'lucide-react';
-import { useLocale, useUI } from '@/i18n';
+import { RefreshCw } from 'lucide-react';
+import { useUI } from '@/i18n';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { DateRangePopover } from '@/components/ui/date-range-popover';
-import { statusLabel } from '@/lib/statusBadge.js';
 import { getDateBounds } from '@/lib/dateRangeBounds.js';
 import { PORTAL_ERROR, fetchPortalDocuments } from '@/lib/portal/portalApi.js';
+import { PortalLanguageSwitch } from './PortalShell.jsx';
 import {
-  PortalDate, PortalDocumentStatus, PortalDueDate, PortalMoney, PortalPaymentStatus,
+  PortalCountChip, PortalDate, PortalDesktopHeader, PortalDocumentStatus, PortalDueDate, PortalMain,
+  PortalMoney, PortalPaymentStatus, PortalRowBadge, PortalSearchPill, PortalValidUntil,
 } from './PortalBits.jsx';
 import {
-  PORTAL_KIND_META, defaultPortalRange, documentLabelKey, toCalendarParam,
+  PORTAL_KIND_GROUPS, PORTAL_KIND_META, documentLabelKey, quotationValidity, toCalendarParam,
 } from './portalPresentation.js';
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -18,17 +20,20 @@ const SEARCH_DEBOUNCE_MS = 300;
 /**
  * One document kind's list (design Listado / Movil-Listado).
  *
- * Quick filters only, per the PO: status tabs (the kind's visible statuses, as the backend lists
- * them), a date range defaulting to the rolling last month (D-2) and a search by number or
- * reference. Columns follow the design, adapted per kind: invoices add payment status, due date
- * and outstanding; shipments carry no amounts ("—"). Checkboxes, "Descargar seleccionados" and
- * the advanced "Filtros" are out of scope.
+ * The header carries the title with the count chip, the breadcrumb and the search (by number or
+ * reference) as a centred pill. The toolbar: the kind's status groups as segmented tabs (the
+ * customer-facing groups of `PORTAL_KIND_GROUPS`, the tab in the URL), the date button ("all
+ * time" by default, as the design's "Cualquier fecha") and refresh. Columns follow the design,
+ * adapted per kind: quotations show "Válido hasta" with its dot, invoices their due date,
+ * payment state and outstanding; shipments carry no amounts. A totals row closes the table and
+ * "Todos los registros cargados" the list. Checkboxes, "Descargar seleccionados" and the advanced
+ * "Filtros" are agreed OUT items.
  */
-export default function PortalDocumentListView({ apiFetch, token, kind, onNavigate, onInvalid }) {
+export default function PortalDocumentListView({
+  apiFetch, token, kind, group = null, onNavigate, onInvalid,
+}) {
   const ui = useUI();
-  const dictionary = useLocale();
-  const [status, setStatus] = useState(null);
-  const [range, setRange] = useState(() => defaultPortalRange());
+  const [range, setRange] = useState(null);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(null);
@@ -37,10 +42,9 @@ export default function PortalDocumentListView({ apiFetch, token, kind, onNaviga
   const [loadingMore, setLoadingMore] = useState(false);
   const [reload, setReload] = useState(0);
 
-  // A new kind starts from the defaults: its statuses differ, and so does what "all" means.
+  // A new kind starts from the defaults.
   useEffect(() => {
-    setStatus(null);
-    setRange(defaultPortalRange());
+    setRange(null);
     setSearchInput('');
     setSearch('');
   }, [kind]);
@@ -54,12 +58,12 @@ export default function PortalDocumentListView({ apiFetch, token, kind, onNaviga
     const { from, to } = getDateBounds(range);
     return {
       kind,
-      statuses: status ? [status] : [],
+      group,
       dateFrom: toCalendarParam(from),
       dateTo: toCalendarParam(to),
       search,
     };
-  }, [kind, status, range, search]);
+  }, [kind, group, range, search]);
 
   useEffect(() => {
     let active = true;
@@ -99,217 +103,287 @@ export default function PortalDocumentListView({ apiFetch, token, kind, onNaviga
 
   const documents = page?.documents ?? [];
   const totalCount = page?.totalCount ?? 0;
-  const statuses = page?.statuses ?? [];
   const hasMore = documents.length < totalCount;
-  const isInvoice = kind === 'INVOICE';
-  const isShipment = kind === 'SHIPMENT';
-  const singleTotal = (page?.totals ?? []).length === 1 ? page.totals[0] : null;
+  const plural = ui(PORTAL_KIND_META[kind].pluralKey);
   const open = (document) => onNavigate({ view: 'doc', kind: document.kind || kind, id: document.id });
+  const selectGroup = (code) => onNavigate(code ? { view: 'list', kind, group: code } : { view: 'list', kind });
 
-  return (
-    <div className="flex flex-col gap-3" data-testid="portal-document-list" data-kind={kind}>
-      <div className="flex flex-wrap items-center gap-2">
-        <div role="tablist" aria-label={ui('portalColStatus')} className="flex flex-wrap gap-0.5 rounded-lg bg-muted p-1">
-          {[null, ...statuses].map((code) => (
-            <button
-              key={code ?? 'all'}
-              type="button"
-              role="tab"
-              aria-selected={status === code}
-              onClick={() => setStatus(code)}
-              className={`h-8 rounded-lg px-3 text-sm font-medium ${status === code ? 'bg-card shadow-sm' : 'text-foreground/80 hover:text-foreground'}`}
-              data-testid={`portal-status-tab-${(code ?? 'all').toLowerCase()}`}
-            >
-              {code ? statusLabel(code, dictionary, ui) : ui('portalStatusAll')}
-            </button>
-          ))}
-        </div>
-        <DateRangePopover value={range} onChange={setRange} testId="portal-date-range" />
-        <label className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-full bg-muted px-3.5 sm:max-w-xs">
-          <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <input
-            type="search"
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-            aria-label={ui('portalSearchPlaceholder')}
-            placeholder={ui('portalSearchPlaceholder')}
-            className="min-w-0 flex-1 border-0 bg-transparent text-sm outline-none"
-            data-testid="portal-search"
-          />
-        </label>
-        <Button
-          variant="outline"
-          size="icon"
-          aria-label={ui('portalRefresh')}
-          onClick={() => setReload((value) => value + 1)}
-          data-testid="portal-refresh"
-        >
-          <RefreshCw className="h-4 w-4" aria-hidden="true" />
+  const tabs = [{ code: null, labelKey: 'portalStatusAll' }, ...(PORTAL_KIND_GROUPS[kind] ?? [])];
+  const renderTabs = (mobile) => (
+    <div
+      role="tablist"
+      aria-label={ui('portalColStatus')}
+      className={cn('flex rounded-[10px] bg-muted p-1 md:rounded-lg', mobile ? 'gap-1' : 'gap-0.5')}
+    >
+      {tabs.map((tab) => {
+        const selected = (group ?? null) === tab.code;
+        return (
+          <button
+            key={tab.code ?? 'all'}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            onClick={() => selectGroup(tab.code)}
+            className={cn(
+              'rounded-lg font-medium text-foreground',
+              mobile ? 'h-11 flex-1 text-[15px]' : 'h-8 px-3',
+              selected ? 'bg-card shadow-sm' : '',
+            )}
+            data-testid={`portal-status-tab-${(tab.code ?? 'all').toLowerCase()}${mobile ? '-mobile' : ''}`}
+          >
+            {ui(tab.labelKey)}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const searchPill = (mobile) => (
+    <PortalSearchPill
+      value={searchInput}
+      onChange={setSearchInput}
+      placeholder={ui('portalSearchPlaceholder')}
+      testId={mobile ? 'portal-search-mobile' : 'portal-search'}
+      className={mobile ? 'flex-1' : undefined}
+    />
+  );
+
+  const footer = documents.length > 0 ? (
+    <div className="flex flex-col items-center gap-2" data-testid="portal-pagination">
+      <p className="text-sm text-muted-foreground md:text-xs">
+        {hasMore
+          ? ui('portalShowingDocuments', { shown: documents.length, total: totalCount })
+          : ui('portalAllLoaded')}
+      </p>
+      {hasMore ? (
+        <Button variant="outline" onClick={loadMore} disabled={loadingMore} data-testid="portal-load-more">
+          {ui('portalLoadMore')}
         </Button>
-      </div>
-
-      {failed ? (
-        <p className="text-sm text-destructive" role="alert" data-testid="portal-list-error">
-          {ui('portalLoadErrorDescription')}
-        </p>
-      ) : null}
-
-      {!loading && documents.length === 0 && !failed ? (
-        <div className="flex flex-col items-center px-6 py-12 text-center" data-testid="portal-list-empty">
-          <p className="font-medium">{ui('portalListEmpty')}</p>
-          <p className="mt-1 text-sm text-muted-foreground">{ui('portalListEmptyHint')}</p>
-        </div>
-      ) : null}
-
-      {documents.length > 0 ? (
-        <>
-          {/* Desktop table */}
-          <div className="hidden overflow-x-auto md:block">
-            <table className="w-full border-collapse text-sm" data-testid="portal-document-table">
-              <thead>
-                <tr className="border-b border-border text-left text-xs leading-4">
-                  <th className="px-2 py-3 pl-3 font-semibold">{ui(PORTAL_KIND_META[kind].dateColumnKey)}</th>
-                  <th className="px-2 py-3 font-semibold">{ui('portalColDocumentNo')}</th>
-                  <th className="px-2 py-3 font-semibold">{ui('portalColReference')}</th>
-                  {kind === 'QUOTATION' ? <th className="px-2 py-3 font-semibold">{ui('portalColValidUntil')}</th> : null}
-                  {isInvoice ? <th className="px-2 py-3 font-semibold">{ui('portalColDueDate')}</th> : null}
-                  <th className="px-2 py-3 font-semibold">{ui('portalColStatus')}</th>
-                  {isInvoice ? <th className="px-2 py-3 font-semibold">{ui('portalColPaymentStatus')}</th> : null}
-                  {!isShipment ? <th className="px-2 py-3 text-right font-semibold">{ui('portalColTaxBase')}</th> : null}
-                  {!isShipment ? <th className="px-2 py-3 pr-3 text-right font-semibold">{ui('portalColTotal')}</th> : null}
-                  {isInvoice ? <th className="px-2 py-3 pr-3 text-right font-semibold">{ui('portalColOutstanding')}</th> : null}
-                </tr>
-              </thead>
-              <tbody>
-                {documents.map((document) => (
-                  <tr key={document.id} className="border-b border-border" data-testid="portal-document-row">
-                    <td className="px-2 py-2.5 pl-3 tabular-nums"><PortalDate value={document.date} /></td>
-                    <td className="px-2 py-2.5">
-                      <button
-                        type="button"
-                        onClick={() => open(document)}
-                        className="font-medium hover:text-primary"
-                        data-testid="portal-document-open"
-                      >
-                        {document.documentNo}
-                      </button>
-                      {document.isCreditNote ? (
-                        <span className="ml-2 text-xs text-muted-foreground">{ui('portalKindCreditNote')}</span>
-                      ) : null}
-                    </td>
-                    <td className="max-w-[16rem] truncate px-2 py-2.5 text-muted-foreground">{document.reference || '—'}</td>
-                    {kind === 'QUOTATION' ? (
-                      <td className="px-2 py-2.5 tabular-nums"><PortalDate value={document.validUntil} /></td>
-                    ) : null}
-                    {isInvoice ? <td className="px-2 py-2.5 tabular-nums"><PortalDueDate document={document} /></td> : null}
-                    <td className="px-2 py-2.5"><PortalDocumentStatus status={document.documentStatus} /></td>
-                    {isInvoice ? <td className="px-2 py-2.5"><PortalPaymentStatus document={document} /></td> : null}
-                    {!isShipment ? (
-                      <td className="px-2 py-2.5 text-right tabular-nums">
-                        <PortalMoney currency={document.currency} value={document.taxBase} />
-                      </td>
-                    ) : null}
-                    {!isShipment ? (
-                      <td className="px-2 py-2.5 pr-3 text-right tabular-nums">
-                        <PortalMoney currency={document.currency} value={document.grandTotal} />
-                      </td>
-                    ) : null}
-                    {isInvoice ? (
-                      <td className="px-2 py-2.5 pr-3 text-right tabular-nums">
-                        <PortalMoney currency={document.currency} value={document.outstandingAmount} />
-                      </td>
-                    ) : null}
-                  </tr>
-                ))}
-                {singleTotal && !isShipment ? (
-                  <tr className="font-semibold" data-testid="portal-document-totals">
-                    <td colSpan={isInvoice ? 6 : (kind === 'QUOTATION' ? 5 : 4)} />
-                    <td className="px-2 py-2.5 text-right tabular-nums">
-                      <PortalMoney currency={singleTotal.currency} value={singleTotal.taxBase} />
-                    </td>
-                    <td className="px-2 py-2.5 pr-3 text-right tabular-nums">
-                      <PortalMoney currency={singleTotal.currency} value={singleTotal.grandTotal} />
-                    </td>
-                    {isInvoice ? <td /> : null}
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Mobile cards */}
-          <ul className="flex flex-col gap-2 md:hidden" data-testid="portal-document-cards">
-            {documents.map((document) => (
-              <li key={document.id}>
-                <button
-                  type="button"
-                  onClick={() => open(document)}
-                  className="flex w-full flex-col gap-1.5 rounded-lg border border-border p-3 text-left"
-                  data-testid="portal-document-card"
-                >
-                  <span className="flex items-center justify-between gap-2">
-                    <span className="font-semibold">{document.documentNo}</span>
-                    {/* An invoice shows its payment state; its document status only when it is not the
-                        plain "completed" every listed invoice shares (closed, voided), like the
-                        table's own status column. */}
-                    <span className="flex flex-wrap items-center justify-end gap-1">
-                      {!isInvoice || document.documentStatus !== 'CO'
-                        ? <PortalDocumentStatus status={document.documentStatus} />
-                        : null}
-                      {isInvoice ? <PortalPaymentStatus document={document} /> : null}
-                    </span>
-                  </span>
-                  {document.reference ? <span className="truncate text-sm text-muted-foreground">{document.reference}</span> : null}
-                  {document.isCreditNote ? <span className="text-xs text-muted-foreground">{ui(documentLabelKey(document))}</span> : null}
-                  <span className="flex items-end justify-between gap-2 text-xs text-muted-foreground">
-                    <span className="flex flex-col">
-                      <PortalDate value={document.date} />
-                      {kind === 'QUOTATION' && document.validUntil ? (
-                        <span>{ui('portalColValidUntil')} <PortalDate value={document.validUntil} /></span>
-                      ) : null}
-                      {isInvoice && document.dueDate ? (
-                        <span>{ui('portalDueOnPrefix')} <PortalDate value={document.dueDate} /></span>
-                      ) : null}
-                    </span>
-                    <span className="flex flex-col items-end">
-                      <PortalMoney
-                        currency={document.currency}
-                        value={document.grandTotal}
-                        className="text-sm font-semibold tabular-nums text-foreground"
-                      />
-                      {isInvoice ? (
-                        <span data-testid="portal-card-outstanding">
-                          {ui('portalColOutstanding')}{' '}
-                          <PortalMoney
-                            currency={document.currency}
-                            value={document.outstandingAmount}
-                            className="tabular-nums"
-                          />
-                        </span>
-                      ) : null}
-                    </span>
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </>
-      ) : null}
-
-      {documents.length > 0 ? (
-        <div className="flex flex-col items-center gap-2 pt-1" data-testid="portal-pagination">
-          <p className="text-xs text-muted-foreground">
-            {hasMore
-              ? ui('portalShowingDocuments', { shown: documents.length, total: totalCount })
-              : ui('portalAllLoaded')}
-          </p>
-          {hasMore ? (
-            <Button variant="outline" onClick={loadMore} disabled={loadingMore} data-testid="portal-load-more">
-              {loadingMore ? ui('loading') : ui('portalLoadMore')}
-            </Button>
-          ) : null}
-        </div>
       ) : null}
     </div>
+  ) : null;
+
+  const state = failed ? (
+    <p className="text-sm text-destructive" role="alert" data-testid="portal-list-error">
+      {ui('portalLoadErrorDescription')}
+    </p>
+  ) : (!loading && documents.length === 0 ? (
+    <div className="flex flex-col items-center px-6 py-12 text-center" data-testid="portal-list-empty">
+      <p className="font-medium">{ui('portalListEmpty')}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{ui('portalListEmptyHint')}</p>
+    </div>
+  ) : null);
+
+  return (
+    <>
+      {/* Mobile header (design Movil-Listado) */}
+      <header className="flex shrink-0 flex-col gap-3.5 border-b border-border bg-card px-6 py-4 md:hidden">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <h1 className="font-['Plus_Jakarta_Sans',Inter,sans-serif] text-[28px] font-bold leading-9">{plural}</h1>
+            <PortalCountChip count={totalCount} />
+          </div>
+          <PortalLanguageSwitch />
+        </div>
+        <div className="flex gap-2.5">{searchPill(true)}</div>
+        {renderTabs(true)}
+      </header>
+
+      <PortalDesktopHeader
+        title={plural}
+        count={totalCount}
+        breadcrumb={`${ui('portalNavMyDocuments')} / ${plural}`}
+        search={searchPill(false)}
+      />
+
+      <PortalMain className="overflow-y-auto px-6 pb-28 pt-5 md:pb-3 md:pt-3" testId="portal-document-list">
+        <div className="hidden flex-wrap items-center gap-2 md:flex" data-kind={kind}>
+          {renderTabs(false)}
+          <DateRangePopover value={range} onChange={setRange} testId="portal-date-range" />
+          <div className="flex-1" />
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-10 w-10"
+            aria-label={ui('portalRefresh')}
+            onClick={() => setReload((value) => value + 1)}
+            data-testid="portal-refresh"
+          >
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        </div>
+
+        {state}
+
+        {documents.length > 0 ? (
+          <>
+            <DesktopTable kind={kind} page={page} documents={documents} onOpen={open} />
+            <ul className="flex flex-col gap-3 md:hidden" data-testid="portal-document-cards">
+              {documents.map((document) => (
+                <li key={document.id}>
+                  <MobileCard document={document} kind={kind} onOpen={open} />
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+
+        {footer}
+      </PortalMain>
+    </>
+  );
+}
+
+function DesktopTable({ kind, page, documents, onOpen }) {
+  const ui = useUI();
+  const isInvoice = kind === 'INVOICE';
+  const isQuotation = kind === 'QUOTATION';
+  const hasAmounts = kind !== 'SHIPMENT';
+  const singleTotal = (page?.totals ?? []).length === 1 ? page.totals[0] : null;
+  const leadingColumns = 4 + (isQuotation || isInvoice ? 1 : 0) + (isInvoice ? 1 : 0);
+  const th = 'px-2 py-3 font-semibold';
+  const td = 'px-2 py-2.5';
+  return (
+    <div className="hidden overflow-x-auto md:block">
+      <table className="w-full border-collapse" data-testid="portal-document-table">
+        <thead>
+          <tr className="border-b border-border text-left text-xs leading-4">
+            <th className={`${th} pl-3`}>{ui(PORTAL_KIND_META[kind].dateColumnKey)}</th>
+            <th className={th}>{ui('portalColDocumentNo')}</th>
+            <th className={th}>{ui('portalColReference')}</th>
+            {isQuotation ? <th className={th}>{ui('portalColValidUntil')}</th> : null}
+            {isInvoice ? <th className={th}>{ui('portalColDueDate')}</th> : null}
+            <th className={th}>{ui('portalColStatus')}</th>
+            {isInvoice ? <th className={th}>{ui('portalColPaymentStatus')}</th> : null}
+            {hasAmounts ? <th className={`${th} text-right`}>{ui('portalColTaxBase')}</th> : null}
+            {hasAmounts ? <th className={`${th} pr-3 text-right`}>{ui('portalColTotal')}</th> : null}
+            {isInvoice ? <th className={`${th} pr-3 text-right`}>{ui('portalColOutstanding')}</th> : null}
+          </tr>
+        </thead>
+        <tbody>
+          {documents.map((document) => (
+            <tr key={document.id} className="border-b border-border" data-testid="portal-document-row">
+              <td className={`${td} pl-3 tabular-nums`}><PortalDate value={document.date} /></td>
+              <td className={td}>
+                <button
+                  type="button"
+                  onClick={() => onOpen(document)}
+                  className="hover:text-primary"
+                  data-testid="portal-document-open"
+                >
+                  {document.documentNo}
+                </button>
+                {document.isCreditNote ? (
+                  <span className="ml-2 text-xs text-muted-foreground">{ui('portalKindCreditNote')}</span>
+                ) : null}
+              </td>
+              <td className={`${td} max-w-[16rem] truncate text-muted-foreground`}>{document.reference || '—'}</td>
+              {isQuotation ? <td className={`${td} tabular-nums`}><PortalValidUntil document={document} /></td> : null}
+              {isInvoice ? <td className={`${td} tabular-nums`}><PortalDueDate document={document} /></td> : null}
+              <td className={td}><PortalDocumentStatus status={document.documentStatus} /></td>
+              {isInvoice ? <td className={td}><PortalPaymentStatus document={document} /></td> : null}
+              {hasAmounts ? (
+                <td className={`${td} text-right tabular-nums`}>
+                  <PortalMoney currency={document.currency} value={document.taxBase} />
+                </td>
+              ) : null}
+              {hasAmounts ? (
+                <td className={`${td} pr-3 text-right tabular-nums`}>
+                  <PortalMoney currency={document.currency} value={document.grandTotal} />
+                </td>
+              ) : null}
+              {isInvoice ? (
+                <td className={`${td} pr-3 text-right tabular-nums`}>
+                  <PortalMoney currency={document.currency} value={document.outstandingAmount} />
+                </td>
+              ) : null}
+            </tr>
+          ))}
+          {singleTotal && hasAmounts ? (
+            <tr className="font-semibold" data-testid="portal-document-totals">
+              <td colSpan={leadingColumns} />
+              <td className="px-2 py-3 text-right tabular-nums">
+                <PortalMoney currency={singleTotal.currency} value={singleTotal.taxBase} />
+              </td>
+              <td className="px-2 py-3 pr-3 text-right tabular-nums">
+                <PortalMoney currency={singleTotal.currency} value={singleTotal.grandTotal} />
+              </td>
+              {isInvoice ? <td /> : null}
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** The line under a mobile card's date: validity, the generated order, or the due date. */
+function CardSecondaryLine({ document }) {
+  const ui = useUI();
+  if (document.kind === 'QUOTATION') {
+    if (document.orderNo) return <span>{ui('portalKindOrder')} {document.orderNo}</span>;
+    const validity = quotationValidity(document);
+    if (validity?.state === 'expired') {
+      return (
+        <span className="text-destructive">
+          {ui('portalExpiredOnPrefix')} <PortalDate value={document.validUntil} />
+        </span>
+      );
+    }
+    if (document.validUntil) {
+      return <span>{ui('portalColValidUntil')} <PortalDate value={document.validUntil} /></span>;
+    }
+    return null;
+  }
+  if (document.kind === 'INVOICE' && document.dueDate) {
+    return <span>{ui('portalDueOnPrefix')} <PortalDate value={document.dueDate} /></span>;
+  }
+  return null;
+}
+
+/** One mobile card (design Movil-Listado). */
+function MobileCard({ document, kind, onOpen }) {
+  const ui = useUI();
+  const isInvoice = kind === 'INVOICE';
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(document)}
+      className="flex w-full flex-col gap-3 rounded-xl border border-border bg-card p-[18px] text-left"
+      data-testid="portal-document-card"
+    >
+      <span className="flex items-center justify-between gap-3">
+        <span className="font-semibold">{document.documentNo}</span>
+        {/* An invoice shows its payment state; its document status too when it is not the plain
+            "completed" every listed invoice shares (closed, voided), like the table. */}
+        <span className="flex flex-wrap items-center justify-end gap-1">
+          {isInvoice && document.documentStatus !== 'CO'
+            ? <PortalDocumentStatus status={document.documentStatus} className="text-[13px] leading-[18px]" />
+            : null}
+          <PortalRowBadge document={document} className="text-[13px] leading-[18px]" />
+        </span>
+      </span>
+      {document.reference ? <span className="truncate text-muted-foreground">{document.reference}</span> : null}
+      {document.isCreditNote ? <span className="text-xs text-muted-foreground">{ui(documentLabelKey(document))}</span> : null}
+      <span className="flex items-end justify-between border-t border-border pt-3">
+        <span className="flex flex-col text-sm">
+          <span className="text-muted-foreground"><PortalDate value={document.date} /></span>
+          <CardSecondaryLine document={document} />
+        </span>
+        <span className="flex flex-col items-end">
+          <PortalMoney
+            currency={document.currency}
+            value={document.grandTotal}
+            className="text-xl font-semibold leading-7 tabular-nums"
+          />
+          {isInvoice ? (
+            <span className="text-sm text-muted-foreground" data-testid="portal-card-outstanding">
+              {ui('portalColOutstanding')}{' '}
+              <PortalMoney currency={document.currency} value={document.outstandingAmount} className="tabular-nums" />
+            </span>
+          ) : null}
+        </span>
+      </span>
+    </button>
   );
 }

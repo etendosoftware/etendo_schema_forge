@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { AlertCircle, ArrowLeft, Ban, FileText, Loader2, MailCheck } from 'lucide-react';
+import { AlertCircle, Ban, FileText, Loader2, MailCheck } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -19,7 +19,7 @@ import PortalHomeView from './portal/PortalHomeView.jsx';
 import PortalDocumentListView from './portal/PortalDocumentListView.jsx';
 import PortalDocumentDetailView from './portal/PortalDocumentDetailView.jsx';
 import {
-  PORTAL_KIND_META, documentLabelKey, readPortalView, writePortalView,
+  PORTAL_KIND_META, readPortalView, writePortalView,
 } from './portal/portalPresentation.js';
 
 /**
@@ -113,7 +113,10 @@ export default function PortalPage() {
   const [attempt, setAttempt] = useState(0);
   const [logoUrl, setLogoUrl] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
-  const [detailTitle, setDetailTitle] = useState(null);
+  // The home chart's period ("Últimos 12 meses"); a change refetches only the home aggregates.
+  const [months, setMonths] = useState(12);
+  const monthsRef = useRef(months);
+  monthsRef.current = months;
   // The renewal already requested in this page's life, `{ token, request }` (see renewOnce).
   const renewalRef = useRef(null);
 
@@ -179,7 +182,7 @@ export default function PortalPage() {
         return null;
       }
       // Part B: the home aggregates feed the home view and the sidebar's counts.
-      return fetchPortalHome(apiFetch, trimmed).then((loadedHome) => {
+      return fetchPortalHome(apiFetch, trimmed, { months: monthsRef.current }).then((loadedHome) => {
         if (!active) return;
         setHome(loadedHome);
         setView(VIEW.ready);
@@ -210,6 +213,7 @@ export default function PortalPage() {
   }, [identity?.hasLogo, apiFetch, token]);
 
   const trimmedToken = token.trim();
+
   // A data read answering 401 after /me said "valid" means the link changed state mid-session
   // (expired, or the customer was blocked): re-run /me once, so the expired path renews and the
   // unavailable path shows its own screen. Only a token that is still refused after that re-check
@@ -224,6 +228,14 @@ export default function PortalPage() {
     recheckedRef.current = true;
     setAttempt((value) => value + 1);
   }, []);
+
+  // A new period refetches the home aggregates alone: the page stays where it is.
+  const changeMonths = useCallback((next) => {
+    setMonths(next);
+    fetchPortalHome(apiFetch, trimmedToken, { months: next }).then(setHome).catch((error) => {
+      if (error?.code === PORTAL_ERROR.invalidLink) showInvalid();
+    });
+  }, [apiFetch, trimmedToken, showInvalid]);
 
   // The view lives in the search string (`?view=list&kind=INVOICE`), never the token: back and
   // forward work, and the link the customer bookmarks still opens the document it was sent with.
@@ -247,14 +259,9 @@ export default function PortalPage() {
   }
 
   const navigate = useCallback((target) => {
-    setDetailTitle(null);
     recheckedRef.current = false;
     setSearchParams(writePortalView(target));
   }, [setSearchParams]);
-
-  const onDetailLoaded = useCallback((document) => {
-    setDetailTitle(`${ui(documentLabelKey(document))} ${document.documentNo ?? ''}`.trim());
-  }, [ui]);
 
   if (view === VIEW.loading) {
     return (
@@ -396,38 +403,21 @@ export default function PortalPage() {
     );
   }
 
-  let title;
-  let subtitle;
-  let headerStart = null;
+  // Each view draws its own headers (desktop and mobile) and content card, as the design does:
+  // they differ per screen (search pill, count chip, back button, mobile top bars).
   let body;
   if (current.view === 'list') {
-    const plural = ui(PORTAL_KIND_META[current.kind].pluralKey);
-    title = plural;
-    subtitle = `${ui('portalNavMyDocuments')} / ${plural}`;
     body = (
       <PortalDocumentListView
         apiFetch={apiFetch}
         token={trimmedToken}
         kind={current.kind}
+        group={current.group ?? null}
         onNavigate={navigate}
         onInvalid={showInvalid}
       />
     );
   } else if (current.view === 'doc') {
-    const plural = ui(PORTAL_KIND_META[current.kind].pluralKey);
-    title = detailTitle ?? ui(PORTAL_KIND_META[current.kind].singularKey);
-    subtitle = `${ui('portalNavMyDocuments')} / ${plural}`;
-    headerStart = (
-      <Button
-        variant="outline"
-        size="icon"
-        aria-label={ui('portalBack', { list: plural })}
-        onClick={() => navigate({ view: 'list', kind: current.kind })}
-        data-testid="portal-back"
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-      </Button>
-    );
     body = (
       <PortalDocumentDetailView
         key={`${current.kind}:${current.id}`}
@@ -439,13 +429,22 @@ export default function PortalPage() {
         logoUrl={logoUrl}
         onNavigate={navigate}
         onInvalid={showInvalid}
-        onLoaded={onDetailLoaded}
       />
     );
   } else {
-    title = ui('portalNavHome');
-    subtitle = ui('portalNavHome');
-    body = <PortalHomeView identity={identity} home={home} onNavigate={navigate} />;
+    body = (
+      <PortalHomeView
+        apiFetch={apiFetch}
+        token={trimmedToken}
+        identity={identity}
+        logoUrl={logoUrl}
+        home={home}
+        months={months}
+        onMonthsChange={changeMonths}
+        onNavigate={navigate}
+        onInvalid={showInvalid}
+      />
+    );
   }
 
   return (
@@ -455,14 +454,11 @@ export default function PortalPage() {
       current={current}
       tiles={home?.tiles}
       onNavigate={navigate}
-      title={title}
-      subtitle={subtitle}
-      headerStart={headerStart}
     >
       {entryHidden && (
         <p
           role="status"
-          className="rounded-lg border border-border bg-muted px-4 py-3 text-sm text-muted-foreground"
+          className="mx-6 mt-4 rounded-lg border border-border bg-muted px-4 py-3 text-sm text-muted-foreground md:mx-1 md:mb-2 md:mt-0"
           data-testid="portal-entry-unavailable"
         >
           {ui('portalEntryDocumentUnavailable')}
