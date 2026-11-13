@@ -501,7 +501,12 @@ export async function requestPortalDecision(fetchImpl, token, quotationId, {
         token,
         headers: { [PORTAL_TOKEN_HEADER]: token, 'Content-Type': 'application/json' },
         on401: 'ignore',
-        body: JSON.stringify({ decision, reasonCode, reasonText }),
+        // Only the fields that have a value: a JSON null was read as the text "null" (ETP-6209).
+        body: JSON.stringify({
+          decision,
+          ...(reasonCode ? { reasonCode } : {}),
+          ...(reasonText && reasonText.trim() ? { reasonText: reasonText.trim() } : {}),
+        }),
       },
     );
   } catch (cause) {
