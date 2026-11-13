@@ -10,6 +10,7 @@ vi.mock('@/lib/observability.js', () => ({
 import {
   isCompletionProcess,
   trackDocumentCompleted,
+  trackInvoiceInboxOpened,
   trackProductMovementsTabOpened,
   trackRecordCreated,
   trackRecordUpdated,
@@ -108,6 +109,34 @@ describe('productUsageTelemetry', () => {
       expect(Object.keys(properties).sort()).toEqual(
         ['account_id', 'category', 'entity', 'source'],
       );
+    });
+  });
+
+  describe('invoice inbox opened (ETP-6050)', () => {
+    afterEach(() => {
+      clearSessionIdentity();
+    });
+
+    it('tracks the opening with the tenant, the category and the spec', () => {
+      setSessionIdentity({ clientId: 'client-1' });
+
+      trackInvoiceInboxOpened();
+
+      expect(observabilityMocks.track).toHaveBeenCalledTimes(1);
+      expect(observabilityMocks.track).toHaveBeenCalledWith('invoice_inbox_opened', {
+        account_id: 'client-1',
+        category: 'product_usage',
+        specName: 'invoice-inbox',
+      });
+    });
+
+    it('omits the account when nobody is signed in', () => {
+      trackInvoiceInboxOpened();
+
+      const [name, properties] = observabilityMocks.track.mock.calls[0];
+      expect(name).toBe('invoice_inbox_opened');
+      expect(properties).not.toHaveProperty('account_id');
+      expect(properties).toMatchObject({ category: 'product_usage', specName: 'invoice-inbox' });
     });
   });
 
