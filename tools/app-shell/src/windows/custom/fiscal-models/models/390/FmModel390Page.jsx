@@ -703,6 +703,8 @@ export default function FmModel390Page({
         if (clean) toast.success(t('fm.m390.file_validation.accepted'));
         const answered = [FILE_VALIDATION.ACCEPTED, FILE_VALIDATION.REJECTED].includes(result.validation?.outcome);
         if (answered) setIncidentsVersion(v => v + 1);
+        // An accepted file leaves the validator's PDF (VALIDACION-…) in the Justificante tab.
+        if (result.validation?.outcome === FILE_VALIDATION.ACCEPTED) listReceipts?.();
         return result.validation ?? null;
       }
       return null;

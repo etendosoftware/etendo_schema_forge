@@ -4275,6 +4275,12 @@ certificate) and downloads it in every case. The validation is a warning, never 
 | errors (`rejected`) | the file; result step with the red banner of the direct presentation listing each error with its AEAT code, a line saying the file was downloaded anyway and the errors are in Incidencias, any AEAT warning below, "Ver incidencias" and "Cerrar". The errors are stored as blocking-severity AEAT incidents (`AEAT-<code>`), like after a direct presentation, and the page re-reads them |
 | no answer (`connection_failure` / `not_validated`) | the file; result step with an amber banner saying it could not be validated and was downloaded without validation; the stored incidents are left as they were |
 
+An accepted validation (with or without warnings) also attaches the validator's draft PDF to the
+declaration as `VALIDACION-justificante-390-<año>-0A.pdf`: it shows in the Justificante tab (the
+page refreshes its list and counter) as proof that the file was validated, and each accepted
+validation replaces the previous one. It is not a filing receipt: the declaration stays a draft
+and nothing reads attachments to decide a status.
+
 The result step reuses the banner of the direct presentation's result (`models/303/AeatResultBanner.jsx`,
 extracted from `AeatSubmitFlow`); there is no page banner (the former `FileValidationNotice390`
 was removed).
