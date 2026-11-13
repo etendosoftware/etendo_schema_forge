@@ -123,6 +123,33 @@ export function PortalValidUntil({ document }) {
   );
 }
 
+/** Focus ring every clickable portal row shows when reached by keyboard. */
+export const PORTAL_ROW_FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+/**
+ * Makes a whole table row open its document, as the app's list rows do (`DataTable`: the row is
+ * the click target, with a pointer cursor). A `<tr>` is not a native control, so the row is also
+ * given what a button would have: a link role, a tab stop, Enter / Space and a focus ring.
+ *
+ * @param {Function} onActivate opens the document
+ * @param {string} label the accessible name ("Factura FV/0001")
+ */
+export function portalRowActivation(onActivate, label) {
+  return {
+    role: 'link',
+    tabIndex: 0,
+    'aria-label': label,
+    onClick: onActivate,
+    onKeyDown: (event) => {
+      if (event.target !== event.currentTarget) return;
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        onActivate();
+      }
+    },
+  };
+}
+
 /** A section with the design's grey header band. */
 export function PortalSection({ title, action, children, className = '', testId }) {
   return (

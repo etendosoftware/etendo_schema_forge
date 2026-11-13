@@ -10,6 +10,7 @@ import { PortalLanguageSwitch } from './PortalShell.jsx';
 import {
   PortalCountChip, PortalDate, PortalDesktopHeader, PortalDocumentStatus, PortalDueDate, PortalMain,
   PortalMoney, PortalPaymentStatus, PortalRowBadge, PortalSearchPill, PortalValidUntil,
+  PORTAL_ROW_FOCUS, portalRowActivation,
 } from './PortalBits.jsx';
 import {
   PORTAL_KIND_GROUPS, PORTAL_KIND_META, documentLabelKey, quotationValidity, toCalendarParam,
@@ -262,12 +263,18 @@ function DesktopTable({ kind, page, documents, onOpen }) {
         </thead>
         <tbody>
           {documents.map((document) => (
-            <tr key={document.id} className="border-b border-border" data-testid="portal-document-row">
+            <tr
+              key={document.id}
+              className={`cursor-pointer border-b border-border hover:bg-muted ${PORTAL_ROW_FOCUS}`}
+              {...portalRowActivation(() => onOpen(document), `${ui(documentLabelKey(document))} ${document.documentNo ?? ''}`.trim())}
+              data-testid="portal-document-row"
+            >
               <td className={`${td} pl-3 tabular-nums`}><PortalDate value={document.date} /></td>
               <td className={td}>
+                {/* The number stays its own link-like control; the row opens the same document. */}
                 <button
                   type="button"
-                  onClick={() => onOpen(document)}
+                  onClick={(event) => { event.stopPropagation(); onOpen(document); }}
                   className="hover:text-primary"
                   data-testid="portal-document-open"
                 >
@@ -349,7 +356,7 @@ function MobileCard({ document, kind, onOpen }) {
     <button
       type="button"
       onClick={() => onOpen(document)}
-      className="flex w-full flex-col gap-3 rounded-xl border border-border bg-card p-[18px] text-left"
+      className={`flex w-full cursor-pointer flex-col gap-3 rounded-xl border border-border bg-card p-[18px] text-left ${PORTAL_ROW_FOCUS}`}
       data-testid="portal-document-card"
     >
       <span className="flex items-center justify-between gap-3">

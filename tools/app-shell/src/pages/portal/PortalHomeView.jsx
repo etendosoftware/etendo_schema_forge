@@ -15,7 +15,7 @@ import {
 import { PORTAL_KIND_ICONS, PortalMobileBrandBar } from './PortalShell.jsx';
 import {
   PortalDate, PortalDesktopHeader, PortalMain, PortalMoney, PortalRowBadge, PortalSearchPill,
-  PortalSection, PortalTag, usePortalLocale,
+  PortalSection, PortalTag, PORTAL_ROW_FOCUS, usePortalLocale,
 } from './PortalBits.jsx';
 import { PORTAL_HIGHLIGHTS, PORTAL_KIND_META, documentLabelKey } from './portalPresentation.js';
 
@@ -178,7 +178,7 @@ function SearchResults({ search, onOpen }) {
           key={`${document.kind}:${document.id}`}
           type="button"
           onClick={() => onOpen(document)}
-          className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-sm hover:bg-muted"
+          className={`flex w-full cursor-pointer items-center gap-2.5 px-3.5 py-2 text-left text-sm hover:bg-muted ${PORTAL_ROW_FOCUS}`}
           data-testid="portal-search-result"
         >
           <span className="min-w-0 flex-1 truncate">
@@ -396,7 +396,7 @@ function RecentDocuments({ recent, onOpen }) {
           <button
             type="button"
             onClick={() => onOpen(document)}
-            className="hidden w-full items-center gap-2.5 px-3.5 py-2 text-left hover:bg-muted md:flex"
+            className={`hidden w-full cursor-pointer items-center gap-2.5 px-3.5 py-2 text-left hover:bg-muted md:flex ${PORTAL_ROW_FOCUS}`}
             data-testid="portal-recent-document"
           >
             <span className="min-w-0 flex-1 truncate">{ui(documentLabelKey(document))}</span>
@@ -410,7 +410,7 @@ function RecentDocuments({ recent, onOpen }) {
           <button
             type="button"
             onClick={() => onOpen(document)}
-            className="flex w-full items-center gap-3.5 px-[18px] py-4 text-left md:hidden"
+            className={`flex w-full cursor-pointer items-center gap-3.5 px-[18px] py-4 text-left md:hidden ${PORTAL_ROW_FOCUS}`}
             data-testid="portal-recent-document-mobile"
           >
             <span className="flex min-w-0 flex-1 flex-col">

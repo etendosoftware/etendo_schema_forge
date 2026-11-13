@@ -814,13 +814,19 @@ mobile headers, as the boards do; the shell is only the sidebar and the bottom b
   state, outstanding, payment method, tax base, taxes); shipments use `MovementSummaryCard`, like
   the app's shipment/receipt previews. Related documents use the shared `RelatedDocumentsCard` in
   its new **pre-resolved items mode** (`items` + `onOpen`: same rows, no NEO fetch, no refresh, no
-  app navigation, and a row that wraps rather than shortening its status tag; without `items` the
-  card is unchanged for every app caller). The panel is 380 px wide, the app preview panel's width
+  app navigation; the rows are the app's own, layout included; without `items` the card is
+  unchanged for every app caller). The panel is 380 px wide, the app preview panel's width
   (`GenericPreviewModal`), and the rows the portal adds end in a colon like the card's own. This replaces the
   portal's own summary and its "Este" / dashed chain-step rows. `PaymentsCard` is not reused: it
   renders `FIN_Payment` records and opens them in the internal payment windows, while the portal
   has (and shows) the invoice's instalments; exposing payments would need a new read of internal
   financial records. `EmailsCard` and the app's action buttons stay out (internal only).
+
+- **Whole rows open the document.** Every list row (desktop table, mobile cards, recent
+  documents, search results, related documents) opens that document's preview anywhere it is
+  clicked, as the app's list rows do; the document number keeps its own control. The table rows,
+  which are not native controls, also take a link role, a tab stop, Enter / Space and a focus ring
+  (`portalRowActivation`); the others are buttons and get the same focus ring.
 
 **Agreed OUT items (the only design elements not built).** The account / user menu (no login);
 "Ayuda y soporte"; "Albaranes de devolución" (returns are out of scope); the checkboxes and
