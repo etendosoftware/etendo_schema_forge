@@ -962,7 +962,7 @@ implemented.** Evidence paths: `go/` = `com.etendoerp.go`, `sf/` = this repo, `c
 ## C.0 Scope
 
 In: Aceptar / Rechazar on a quotation that is pending and not expired; a mandatory reason on
-reject (fixed list, "Otros" + free text); confirmation by email to the quotation's main contact
+reject (fixed list, "Otros" + free text); confirmation by email to the quotation's original To recipient
 only (single-use, never-expiring link); on confirmation, re-check and apply (first confirmed
 wins); notice email to the user who sent the quotation; KPI hook points.
 Out (PO): generating the order, changing a confirmed decision, in-app notification, KPI semantics.
@@ -974,21 +974,28 @@ Out (PO): generating the order, changing a confirmed decision, in-app notificati
 | Reject | `sf/artifacts/sales-quotation/custom/RejectQuotationModal.jsx:116-136` posts `…/quotation/{id}/action/rejectQuotation` with `{rejectReason: <C_Reject_Reason_ID>}`; reasons come from the tenant's `C_Reject_Reason` selector (`:52`), creatable inline (`CreateRejectReasonModal`) | `go/…/schemaforge/RejectQuotationHandler.java:132-176` (`reject`): requires `UE` (`:74-75`, `:150`), an active reason (`:154-157`); writes `C_Reject_Reason_ID`, `DocStatus = CJ`, `Processed = Y` by DAL (`:159-163`), no `C_Order_Post`. Also reached by `DocAction = RJ` (`SalesQuotationHeaderHandler.java:150`) | `CJ` "Cerrado - Rechazado"; the reason is stored in **`C_Order.C_Reject_Reason_ID`** (a tenant-defined list, not free text) |
 | "Accept" | Confirmar (`QuotationTopbarActions.jsx:26`, only for `CO`/`UE`) opens `QuotationConfirmModal`: **Pedido** → `action/Convertquotation` (`QuotationConfirmModal.jsx:138`), **Factura** → `action/createDraftInvoice` (`:191`) | `core/src/org/openbravo/erpCommon/ad_process/ConvertQuotationIntoOrder.java:302` sets the quotation to `CA`; the invoice path marks it `ETGO_CI` (`CreateDraftInvoiceHandler#markQuotationAsInvoiceCreated`) | **The app has no "accepted without an order" state**: accepting *is* converting (`CA` / `ETGO_CI`) |
 
-**Proposal for "accepted, no order": `DocStatus = AP`.** `AP` "Accepted / Aprobado" already exists in
-the order status list (`AD_Reference FF80818130217A350130218D802B0011`, read-only DB check) and is
-unused by quotations today. Written the same way the app's reject writes `CJ` (DAL, `Processed = Y`,
-no `C_Order_Post`), in a new method next to `reject` in the sales-quotation customization (see C.8).
-Consequences, all in scope of Part C:
-- the app must let the seller **convert an `AP` quotation** to an order or invoice later: Confirmar
-  opens only for `CO`/`UE` (`QuotationTopbarActions.jsx:26`). `ConvertQuotationIntoOrder` itself
-  does not check the status (only `:302` writes `CA`), so the change is the window's gate plus the
-  MCP's advertised actions (`SalesQuotationHeaderHandler.java:144-150`);
-- the app's status label: `statusLabel` (`sf/tools/app-shell/src/lib/statusBadge.js:207-208`) maps
-  no `AP`; the AD list's translation ("Aprobado") is used when present, else a key must be added;
-- the portal: `AP` joins the quotation allow-list (`go/…/portal/PortalDocumentQuery.java:62`) and
+**Proposal for "accepted, no order": a new status `ETGO_AC` "Aceptado" / "Accepted", added by
+com.etendoerp.go to the order status list** (`AD_Reference FF80818130217A350130218D802B0011`). The
+core value `AP` "Approved / Aprobado" is in that list but **inactive** (`isactive='N'`, module `0`,
+read-only DB check), and Classic rows are never reactivated or edited. The precedent is the
+module's own `ETGO_CI` "Closed - Invoice Created" (`go/src-db/database/sourcedata/AD_REF_LIST.xml:267`),
+added to the same list for the invoice path. `ETGO_AC` is written the way the app's reject writes
+`CJ` (DAL, `Processed = Y`, no `C_Order_Post`), in a new method next to `reject` in the
+sales-quotation customization (see C.8).
+- **AD:** one `AD_REF_LIST` row (`make uuid`) in the module, plus its translations (es_ES
+  "Aceptado", en_US "Accepted"; es_AR as es_ES). Note `ETGO_CI` itself has **no real es_ES
+  translation** in the DB (its es_ES name is still "Closed - Invoice Created") — the same gap to avoid
+  here, and worth fixing for `ETGO_CI` in the same change if the translation path is the same.
+  **Needs `update.database` and `export.database`.**
+- **App:** Confirmar (convert to order or invoice) must open for `ETGO_AC` too —
+  `QuotationTopbarActions.jsx:26` gates it to `CO`/`UE`; `ConvertQuotationIntoOrder` does not check
+  the status (it only writes `CA`, `:302`), but the createDraftInvoice path and the backend/MCP
+  advertised actions (`SalesQuotationHeaderHandler.java:144-150`) must accept it as well. The
+  status label: `statusLabel` (`sf/tools/app-shell/src/lib/statusBadge.js:207-208`) and the related
+  documents' `STATUS_KEYS` map no `ETGO_AC` → add `statusAccepted` (three locales) and its tone
+  (`getStatusTone`: success, like `CA`).
+- **Portal:** `ETGO_AC` joins the quotation allow-list (`go/…/portal/PortalDocumentQuery.java:62`) and
   the "Aceptados" group (`:90`).
-**Alternative** (if the PO prefers): keep `UE` and mark the acceptance only in the new decision
-table — no status change in the app, but then the app shows nothing. → **Open question Q1.**
 
 **Reject reason.** The app stores a *reference* to a tenant-defined `C_Reject_Reason`, not text; the
 PO asks for a fixed list and for the reason "in the quotation's notes". Proposal: (1) resolve the
@@ -1009,21 +1016,25 @@ pre-seeded list; language of the stored reason name).
 - **Expired = `ValidUntil` < today (server calendar day).** **`ValidUntil` null = not expired.** On the
   local DB all 29 sales quotations have it null: the window never fills it (its `ValidUntil_Default`
   rule is declared but not applied, `sf/docs/generated-custom-windows/sales-quotation.md:148`).
-  Treating null as expired would hide the buttons everywhere. → **Q4** (confirm; and whether the
-  window's default should finally be applied).
+  Treating null as expired would hide the buttons everywhere. **Decided (user, 2026-11-13): no
+  `ValidUntil` = not expired.**
 
-## C.3 Main contact and its email
+## C.3 Who confirms — the original To recipient (decided, user 2026-11-13)
 
-`C_Order.AD_User_ID` ("userContact") is a *system* field in the quotation window (not shown) and is
-null on all 29 local quotations (read-only DB check). The address the app sends the quotation to by
-default is resolved by `SalesDocumentEmailRecipientResolver.java:29-43`: the BP's `EM_Etgo_Email`,
-else the first active contact with an email. Proposal: **main contact email = `C_Order.AD_User_ID`'s
-email when set and active, else that same resolver's address** (one rule with the app's own send).
-Never CC. If none resolves: the buttons are **shown disabled** with
-"No podemos confirmar tu decisión: {empresa} no tiene un correo de contacto tuyo. Ponte en contacto
-con {empresa}." (the customer needs to know why). → **Q5** (fallback acceptable? disabled vs hidden).
-The address shown in the portal ("Se ha enviado un correo a …") is **masked** (`v•••@dominio.com`):
-the portal is reachable by anyone holding a forwarded link. → **Q6**.
+The confirmation email goes to **the address the quotation was sent to**: the To recipients stored
+on the portal link's **root send**, `ETGO_PORTAL_LINK.RECIPIENTS_TO` of the row named by the session's
+`ROOT_LINK_ID` (a renewal copies the original recipients, so the root is the send itself). Never the
+CC recipients, and not a separately resolved contact (the quotation's `C_Order.AD_User_ID` is a hidden
+field and empty on all 29 local quotations).
+- **Several To addresses: the first one.** It is the primary recipient the sender put first in the
+  send modal (whose default is the customer's own address, `SalesDocumentEmailRecipientResolver.java:29-43`).
+  Mailing all of them would let any of several people confirm for the company and turns the
+  first-confirmed-wins rule into a race between them; one confirmer keeps the two-factor meaning of
+  the PO's spec. The stored order of `RECIPIENTS_TO` is the send's order.
+- **Empty To** (should not happen for a sent link, but the column is a list): the buttons are shown
+  **disabled** with "No podemos confirmar tu decisión desde aquí. Ponte en contacto con {empresa}."
+- **Masked in the portal (decided):** "Se ha enviado un correo a v•••@dominio.com para confirmar la
+  decisión." — the portal is reachable by anyone holding a forwarded link.
 
 ## C.4 Data model — `ETGO_PORTAL_DECISION` (new table, `update.database` + `export.database`)
 
@@ -1037,7 +1048,7 @@ the portal is reachable by anyone holding a forwarded link. → **Q6**.
 | `REASON_CODE` | list `PRICE`, `DELIVERY`, `PAYMENT_TERMS`, `OTHER_SUPPLIER`, `NOT_NEEDED`, `OTHER` | reject only |
 | `REASON_TEXT` | varchar(2000) | required when `OTHER` |
 | `TOKEN_HASH` | varchar(64), unique | SHA-256 of a 256-bit token (as `PortalTokens`); the token itself is only in the email |
-| `RECIPIENT_EMAIL` | varchar | the resolved main contact, for audit |
+| `RECIPIENT_EMAIL` | varchar | the first To recipient of the root send (C.3), for audit |
 | `STATUS` | list `PENDING` / `CONFIRMED` / `VOIDED` / `NOT_APPLIED` | `NOT_APPLIED`: opened when the quotation was no longer pending / was expired |
 | `REQUESTED_AT`, `CONFIRMED_AT`, `VOIDED_AT` | timestamps | |
 | `ETGO_EMAIL_SEND_LOG_ID` | FK | the confirmation email |
@@ -1054,8 +1065,8 @@ pending-until-sent rule), so a failed send leaves no usable token.
 ## C.5 Endpoints (`/sws/portal/*`, `PortalServlet`, isolated from NEO)
 
 - **`POST /quotations/{id}/decision`** — `X-Portal-Token`, body `{decision, reasonCode?, reasonText?}`.
-  Scope: `findInScope(session, QUOTATION, id)`; then pending + not expired + contact email (else
-  409 `not_pending` / `expired` / `no_contact`). Rate limits: the data limiter **plus** a per-quotation
+  Scope: `findInScope(session, QUOTATION, id)`; then pending + not expired + a To recipient on the
+  root send (else 409 `not_pending` / `expired` / `no_recipient`). Rate limits: the data limiter **plus** a per-quotation
   cool-down (e.g. 2 min, configurable like `PortalLinkConfig.java:48-50`) so the button cannot be used
   to spam the contact. Answers `{state: "sent", maskedEmail}`. Requires `validate` = valid (an
   expired link renews first, as today).
@@ -1067,20 +1078,22 @@ pending-until-sent rule), so a failed send leaves no usable token.
   States: `pending` (show + confirm button), `confirmed` (already applied: says which),
   `voided` (another request was confirmed first), `not_applied` (no longer pending / expired),
   unknown token → the same generic invalid page as the portal. Rate-limited like `/me`.
-  → **Q7**: the PO says "when it is opened, re-check … and apply". The proposal adds one click on
-  the landing (scanner-safe); one-step apply on open is possible but any link scanner would confirm.
+  **Decided (user, 2026-11-13): one click on the landing confirms; opening the link alone never
+  applies the decision** (mail scanners pre-fetch links). The re-check of the PO's spec runs on that
+  click.
 
 ## C.6 Emails (transactional contracts, `emails` skill)
 
-- **`portal-quotation-decision-confirm`** — to the main contact only (no CC), language = the link's
-  email language. ES: subject "Confirma tu decisión sobre el presupuesto {numero}"; body "Has pedido
+- **`portal-quotation-decision-confirm`** — to the first To recipient of the root send only (C.3; no
+  CC), language = the link's email language. ES: subject "Confirma tu decisión sobre el presupuesto {numero}"; body "Has pedido
   {aceptar|rechazar} el presupuesto {numero} de {empresa}{, motivo: …}. Pulsa el botón para
   confirmarlo. Si no lo has pedido tú, ignora este correo." CTA "Confirmar decisión". EN mirror.
 - **`portal-quotation-decision-notice`** — to the user who sent the quotation (the root link's
   `CREATEDBY`, as the PDF render, `go/…/portal/PortalPrintable.java`), at the **ETGO_ACCOUNT email**
   (`go/…/common/GoAccountResolver.java:76`, `findAccountByUsername`) — `AD_User.Email` is not filled
   by onboarding. ES: "{cliente} ha {aceptado|rechazado} el presupuesto {numero}{ — motivo: …}." EN mirror.
-  No sender resolvable: no notice, logged (→ **Q8**: fallback to the org's sales contact?).
+  No sender resolvable (a system-created root, an inactive user, no account): no notice, logged —
+  the decision still applies and shows in the app.
 - **Structure yes, identity no:** both are their own contracts in the portal's bounded context
   (like `PortalLinkRenewalEmailContract`); the shared send path is untouched and names no window.
   The accept/reject writes live in the sales-quotation customization, not in shared code.
@@ -1090,8 +1103,8 @@ pending-until-sent rule), so a failed send leaves no usable token.
 - **Detail (desktop):** Aceptar (primary) and Rechazar (outline) in the right panel's header row,
   before "Descargar PDF", exactly where the board draws them; **mobile:** the board's bottom action bar
   ("Al aceptar, {empresa} recibirá tu confirmación…", Rechazar | Aceptar presupuesto). Shown only when
-  the detail says `canDecide` (new detail field computed server-side: pending + not expired + contact
-  email; plus `decisionBlockedReason` for the disabled state of C.3).
+  the detail says `canDecide` (new detail field computed server-side: pending + not expired + a To
+  recipient on the root send; plus `decisionBlockedReason` for the disabled state of C.3).
 - **Reject modal:** the app's `RejectQuotationModal` cannot be reused as is — it selects tenant
   reasons through NEO and can create them (`RejectQuotationModal.jsx:52`, `:288`). A portal modal with
   the same frame and classes, a radio list of the six fixed reasons and a required textarea for
@@ -1100,53 +1113,60 @@ pending-until-sent rule), so a failed send leaves no usable token.
   {maskedEmail} para confirmar la decisión." and a pending note until the page reloads.
 - **Landing `/portal/decision/:token`:** brand + document + decision + reason + "Confirmar" →
   result screen per state of C.5. Route registered next to `/portal/:token` (`runtime-routes.jsx`).
-- After a confirmed decision the quotation simply shows its new status (`AP` / `CJ`); no buttons.
+- After a confirmed decision the quotation simply shows its new status (`ETGO_AC` / `CJ`); no buttons.
 
 ## C.8 Backend placement and MCP parity
 
 - Accept/reject writes: a small public method pair on the sales-quotation customization —
   `RejectQuotationHandler#reject` refactored to expose `rejectQuotation(Order, RejectReason)` and a new
-  `acceptQuotation(Order)` (`AP`). **`RejectQuotationHandler` is still `@Named`-bound**
+  `acceptQuotation(Order)` (`ETGO_AC`). **`RejectQuotationHandler` is still `@Named`-bound**
   (`RejectQuotationHandler.java:69`): touching it means migrating its pair to `@NeoExtension` in the
   same PR (CLAUDE.md, ETP-5588). The portal calls these methods directly (in admin mode, the
   quotation's client/org), never through NEO.
 - **MCP / app parity:** the app and MCP reject flows are unchanged. New for the app/MCP only if Q1 =
-  `AP`: Convertquotation must be offered on `AP` in the window and in the MCP's advertised actions
+  `ETGO_AC`: Convertquotation must be offered on `ETGO_AC` in the window and in the MCP's advertised actions
   (`SalesQuotationHeaderHandler.java:144-150`); declare it in `neo-headless.md` §4.12.9 if any channel
   differs. No new MCP tool.
 
 ## C.9 Tests (for the testers) and effort
 
 - go (JUnit): decision request (scope, pending/expired/no-contact refusals, cool-down, rate limit);
-  confirm (apply accept → `AP`, reject → `CJ` + reason + notes; first-confirmed-wins with two pending;
+  confirm (apply accept → `ETGO_AC`, reject → `CJ` + reason + notes; first-confirmed-wins with two pending;
   idempotent second open; `not_applied` after a status change / expiry; unknown token = generic 401);
-  token hash only stored; emails (recipient = main contact only, no CC; notice to the sender's account
-  email; ES/EN); reason find-or-create; `AP` convertible in `SalesQuotationHeaderHandler`.
+  token hash only stored; emails (recipient = first To of the root send only, no CC; notice to the sender's account
+  email; ES/EN); reason find-or-create; `ETGO_AC` convertible (order and invoice) and advertised in `SalesQuotationHeaderHandler`; first To
+  recipient chosen, CC never mailed, empty To refused.
 - sf (Vitest): buttons only with `canDecide`, disabled reason, reject modal validation ("Otros"
   requires text), sent state with masked email, landing states; mocked E2E: request → landing → confirm.
-- **Effort (rough):** backend 4–5 d (table + AD, endpoints, lock, two contracts, quotation methods +
-  `@NeoExtension` migration), SPA 2–3 d, tests 2–3 d, docs 0.5 d → **~9–11 d**, before Q1–Q8.
+- **Effort (rough):** backend 4.5–5.5 d (table + AD, the `ETGO_AC` list value and translations,
+  endpoints, lock, two contracts, quotation methods + `@NeoExtension` migration, convert on
+  `ETGO_AC`), SPA 2.5–3 d (portal, plus the app's Confirmar gate and status labels), tests 2–3 d,
+  docs 0.5 d → **~10–12 d**. If Q1 falls back to "stay in UE", subtract ~1 d.
 
 ## C.10 User-visible changes
 
 Portal: Aceptar/Rechazar on pending quotations; reject modal; "correo enviado" state; the
 confirmation landing; the new status shown after confirmation. Customer's inbox: the confirmation
-email. Seller's inbox: the decision notice. App (if Q1 = `AP`): quotations in "Aprobado", with
+email. Seller's inbox: the decision notice. App (if Q1 = `ETGO_AC`): quotations in "Aceptado", with
 Confirmar (convert) available on them; rejected ones show the portal reason and the note.
 
-## C.11 Open questions for the PO
+## C.11 Decisions and open questions
+
+**Decided (user, 2026-11-13):** a quotation with no `ValidUntil` is not expired (C.2); the
+confirmation goes to the first To recipient of the root send, never CC, buttons disabled when there is
+none (C.3); the portal shows the address masked (C.3); one click on the landing confirms, opening the
+link never applies (C.5). By this plan: no sender notice when the sender cannot be resolved (C.6);
+KPI: only the hook points (`decision.requested`, `decision.confirmed`, `decision.voided`,
+`decision.not_applied` call sites in the service), names and semantics per the PO's new KPI
+definition.
+
+**Open for the PO:**
 
 | Id | Question | Proposal |
 |---|---|---|
-| Q1 | Accepted status without an order | `AP` "Aprobado" (existing list value), convertible later from the app |
-| Q2 | Reject reasons: tenant `C_Reject_Reason` rows vs a fixed list | Find-or-create the 6 fixed reasons per tenant + text in the notes |
-| Q3 | Do `CO` quotations get the buttons? | No (only `UE`, as the app's reject) |
-| Q4 | `ValidUntil` null | Not expired |
-| Q5 | Main contact when the quotation has none | The app's default send address; else buttons disabled with a message |
-| Q6 | Show the full email or masked | Masked |
-| Q7 | Apply on open vs confirm on the landing | One click on the landing (scanner-safe) |
-| Q8 | Notice when the sender cannot be resolved | Skip and log (or the org's contact) |
-| Q9 | KPI events | Hook points only: `decision.requested`, `decision.confirmed`, `decision.voided`, `decision.not_applied` call sites in the service; names/semantics per the PO's new KPI definition |
+| Q1 | Status of a quotation accepted without an order | New module value `ETGO_AC` "Aceptado" (like `ETGO_CI`), convertible later from the app. Fallback: stay in `UE` and record the acceptance only in `ETGO_PORTAL_DECISION` (the app then shows nothing) |
+| Q2 | Reject reasons | The tenant's reject-reason list (`C_Reject_Reason`), with the six fixed reasons created if missing, and the "Otros" text in the quotation's notes |
+| Q3 | Which statuses can be decided | Only `UE` (as the app's reject); `CO` is not offered |
 
 ---
 
