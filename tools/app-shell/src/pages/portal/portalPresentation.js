@@ -93,31 +93,6 @@ export function quotationValidity(document) {
   return { state: getCalendarDateRelation(document.validUntil) === 'past' ? 'expired' : 'open' };
 }
 
-/**
- * The next steps of a document's chain that do not exist yet, for the design's dashed rows under
- * "Documentos relacionados" (quotation → order → shipment · invoice). Nothing for a voided,
- * rejected or closed document, whose chain will not continue.
- *
- * @returns {Array<{ id: string, labelKeys: string[] }>}
- */
-export function pendingChainSteps(document) {
-  if (!document || ['VO', 'CJ', 'CL'].includes(document.documentStatus)) return [];
-  const has = (kind) => (document.related ?? []).some((related) => related.kind === kind);
-  const steps = [];
-  if (document.kind === 'QUOTATION') {
-    if (!has('ORDER')) steps.push({ id: 'order', labelKeys: ['portalKindOrder'] });
-    if (!has('SHIPMENT') && !has('INVOICE')) {
-      steps.push({ id: 'delivery', labelKeys: ['portalKindShipment', 'portalKindInvoice'] });
-    }
-  } else if (document.kind === 'ORDER') {
-    if (!has('SHIPMENT')) steps.push({ id: 'shipment', labelKeys: ['portalKindShipment'] });
-    if (!has('INVOICE')) steps.push({ id: 'invoice', labelKeys: ['portalKindInvoice'] });
-  } else if (document.kind === 'SHIPMENT' && !has('INVOICE')) {
-    steps.push({ id: 'invoice', labelKeys: ['portalKindInvoice'] });
-  }
-  return steps;
-}
-
 /** The singular label key of one document, telling a credit note from an invoice. */
 export function documentLabelKey(document) {
   if (document?.kind === 'INVOICE' && document?.isCreditNote) return 'portalKindCreditNote';

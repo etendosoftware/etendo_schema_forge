@@ -50,7 +50,7 @@ function SkeletonRow() {
   );
 }
 
-function DocRow({ type, doc, ui, navigate }) {
+function DocRow({ type, doc, ui, navigate, onOpen }) {
   const cfg = DOCUMENT_CHIP_TYPES[type];
   if (!cfg) return null;
 
@@ -67,7 +67,7 @@ function DocRow({ type, doc, ui, navigate }) {
   return (
     <button
       type="button"
-      onClick={() => navigate(`${cfg.routePrefix}/${doc.id}`)}
+      onClick={() => (onOpen ? onOpen(type, doc) : navigate(`${cfg.routePrefix}/${doc.id}`))}
       // One line always (ETP-5527): the title and amount are never cut; when the row is too
       // narrow, the status tag is what shrinks, with an ellipsis and the full text on hover.
       className="flex justify-between items-center py-2 w-full text-left hover:bg-muted rounded -mx-1 px-1 transition-colors"
@@ -112,7 +112,19 @@ function DocRow({ type, doc, ui, navigate }) {
  *                it. Omit it and the card loads the detail record itself — list rows
  *                lack the fields the backend injects on the detail GET only.
  */
-export default function RelatedDocumentsCard({ documentId, token, apiBaseUrl, specs = [], fetchExtra, docsRefreshSignal, definition, record }) {
+/**
+ * The "Documentos relacionados" card of the app's document previews.
+ *
+ * Two modes:
+ * - **Fetching** (every app preview): `definition` (or the legacy `specs`) resolves the related
+ *   documents through NEO for `documentId`, and a row navigates to the document's app route.
+ * - **Pre-resolved items** (`items` + `onOpen`, the customer portal, ETP-6209): the caller hands
+ *   the rows as `[{ type, doc }]` — `type` a `DOCUMENT_CHIP_TYPES` key, `doc` carrying that type's
+ *   fields — and the card renders the same rows without fetching, without a refresh button and
+ *   without navigating: a click calls `onOpen(type, doc)`. For a caller with no NEO session and
+ *   no app routes. Without `items` the card behaves exactly as before.
+ */
+export default function RelatedDocumentsCard({ documentId, token, apiBaseUrl, specs = [], fetchExtra, docsRefreshSignal, definition, record, items: providedItems, onOpen }) {
   const ui = useUI();
   const navigate = useNavigate();
   const [legacyItems, setLegacyItems] = useState([]);
@@ -135,7 +147,7 @@ export default function RelatedDocumentsCard({ documentId, token, apiBaseUrl, sp
   });
 
   useEffect(() => {
-    if (definition) return;
+    if (definition || providedItems) return;
     if (!documentId || specs.length === 0) { setLegacyLoading(false); return; }
     setLegacyLoading(true);
     const specPromises = specs.map(s =>
@@ -153,14 +165,24 @@ export default function RelatedDocumentsCard({ documentId, token, apiBaseUrl, sp
       .finally(() => setLegacyLoading(false));
   }, [documentId, token, apiBaseUrl, refreshKey, docsRefreshSignal, definition]);
 
-  if (!documentId || (!definition && specs.length === 0)) return null;
+  const preResolved = Array.isArray(providedItems);
+  if (!preResolved && (!documentId || (!definition && specs.length === 0))) return null;
 
-  const items = definition ? related.items : legacyItems;
-  const loading = definition ? related.loading : legacyLoading;
+  let items = legacyItems;
+  let loading = legacyLoading;
+  if (preResolved) {
+    items = providedItems;
+    loading = false;
+  } else if (definition) {
+    items = related.items;
+    loading = related.loading;
+  }
   // With a definition, refreshing only makes sense when it has fetched sources (same rule
   // as RelatedDocumentsSection); a record-only one (e.g. return material receipt) has
   // nothing to refetch. The legacy specs path always offers it, as before.
-  const refreshable = !definition || (definition.sources ?? []).some(s => typeof s.fetch === 'function');
+  // Pre-resolved items have nothing to refetch: the caller owns them.
+  const refreshable = !preResolved
+    && (!definition || (definition.sources ?? []).some(s => typeof s.fetch === 'function'));
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -193,6 +215,7 @@ export default function RelatedDocumentsCard({ documentId, token, apiBaseUrl, sp
           doc={doc}
           ui={ui}
           navigate={navigate}
+          onOpen={onOpen}
           data-testid="DocRow__685328" />
       ))}
     </SectionCard>

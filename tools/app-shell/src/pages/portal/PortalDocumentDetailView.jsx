@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ArrowLeft, ChevronRight, Download, FileText, FileX, Maximize, Square, ZoomIn, ZoomOut,
+  ArrowLeft, Download, FileX, Maximize, ZoomIn, ZoomOut,
 } from 'lucide-react';
-import { useUI } from '@/i18n';
+import { useLocale, useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import PdfViewer, { usePdfZoom } from '@/windows/custom/shared/PdfViewer.jsx';
 import FileLightbox from '@/windows/custom/shared/FileLightbox.jsx';
+import SummaryCard, { InfoRow, MovementSummaryCard } from '@/windows/custom/shared/preview-cards/SummaryCard.jsx';
+import RelatedDocumentsCard from '@/windows/custom/shared/preview-cards/RelatedDocumentsCard.jsx';
+import { STATUS_BADGE } from '@/components/related-documents/constants.jsx';
+import { statusLabel } from '@/lib/statusBadge.js';
 import { formatCurrency, formatGroupedNumber } from '@/lib/formatCurrency.js';
 import {
   PORTAL_ERROR, fetchPortalDocument, fetchPortalDocumentPdf,
@@ -14,10 +18,9 @@ import {
 import { portalPdfFileName } from '@/lib/portal/portalInvoices.js';
 import { saveBlobAsFile } from '@/lib/portal/portalDownload.js';
 import {
-  PortalDate, PortalDocumentStatus, PortalDueDate, PortalMain, PortalMoney, PortalPaymentStatus,
-  PortalRowBadge, PortalSection, PortalValidUntil,
+  PortalDate, PortalMain, PortalMoney, PortalPaymentStatus, PortalSection,
 } from './PortalBits.jsx';
-import { PORTAL_KIND_META, documentLabelKey, pendingChainSteps } from './portalPresentation.js';
+import { PORTAL_KIND_META, documentLabelKey } from './portalPresentation.js';
 
 /** Quantities may be fractional (kg, hours): never round them to an integer. */
 function formatQuantity(value) {
@@ -182,7 +185,7 @@ export default function PortalDocumentDetailView({
       />
 
       <main
-        className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 pb-28 pt-5 md:flex-row md:gap-0 md:overflow-hidden md:rounded-lg md:bg-card md:p-0"
+        className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-2 pb-28 pt-1 md:flex-row md:gap-0 md:overflow-hidden md:rounded-lg md:bg-card md:p-0"
         data-testid="portal-document-detail"
       >
         {/* Left pane: the printable, or the data sheet when there is none */}
@@ -222,15 +225,25 @@ export default function PortalDocumentDetailView({
             ) : null}
           </div>
 
-          <div className="flex flex-col gap-4 md:gap-3.5 md:p-3.5">
-            <Summary document={document} />
-            {document.kind === 'INVOICE' && document.installments.length > 1 ? <Installments document={document} /> : null}
-            <MobileLines
-              document={document}
-              canViewPdf={pdfReady}
-              onViewPdf={() => setLightboxOpen(true)}
+          {/* The app's own preview cards (`windows/custom/shared/preview-cards`), as the quotation,
+              order, invoice and shipment previews use them; they bring their own margins. */}
+          <div className="flex flex-col pb-4" data-testid="portal-document-cards-panel">
+            <PortalSummary document={document} />
+            {document.kind === 'INVOICE' && document.installments.length > 1 ? (
+              <div className="mx-4 mt-5"><Installments document={document} /></div>
+            ) : null}
+            <div className="mx-4 mt-5 md:hidden">
+              <MobileLines
+                document={document}
+                canViewPdf={pdfReady}
+                onViewPdf={() => setLightboxOpen(true)}
+              />
+            </div>
+            <RelatedDocumentsCard
+              items={document.related.map(toRelatedItem)}
+              onOpen={(type, doc) => onNavigate({ view: 'doc', kind: doc.portalKind, id: doc.id })}
+              data-testid="portal-related"
             />
-            <RelatedDocuments document={document} onNavigate={onNavigate} />
           </div>
         </aside>
       </main>
@@ -346,62 +359,81 @@ function PortalPdfPreview({ url, onFullScreen }) {
   );
 }
 
-/** The summary card: Total, then the document's dates, status and amounts (design "Total"). */
-function Summary({ document }) {
+/** Portal kind → the app's related-document chip type (`DOCUMENT_CHIP_TYPES`). */
+const CHIP_TYPE_OF_KIND = Object.freeze({
+  QUOTATION: 'sales-quotation',
+  ORDER: 'sales-order',
+  SHIPMENT: 'shipment',
+  INVOICE: 'sales-invoice',
+});
+
+/** A portal related document as the shared card's `{ type, doc }` row, in the app's field names. */
+function toRelatedItem(related) {
+  return {
+    type: CHIP_TYPE_OF_KIND[related.kind] ?? 'sales-invoice',
+    doc: {
+      id: related.id,
+      portalKind: related.kind,
+      documentNo: related.documentNo,
+      grandTotalAmount: related.grandTotal,
+      'currency$_identifier': related.currency,
+      documentStatus: related.documentStatus,
+    },
+  };
+}
+
+/**
+ * The summary: the app's own `SummaryCard`, fed the props each app preview passes for its kind
+ * (QuotationPreview: valid until; InvoicePreview: due date), with the rows the portal adds as the
+ * app adds its own (`InfoRow` children: payment state, outstanding, payment method, tax base,
+ * taxes). A shipment has no amount, so — like the app's shipment and receipt previews — it uses
+ * `MovementSummaryCard`.
+ */
+function PortalSummary({ document }) {
   const ui = useUI();
-  const hasAmounts = document.kind !== 'SHIPMENT';
+  const dictionary = useLocale();
+  const statusText = statusLabel(document.documentStatus, dictionary, ui);
   const isInvoice = document.kind === 'INVOICE';
   const taxesTotal = document.taxes.reduce((sum, tax) => sum + (tax.taxAmount ?? 0), 0);
-  const taxLabel = document.taxes.length === 1 && document.taxes[0].tax
-    ? `${ui('portalFieldTaxes')} (${document.taxes[0].tax})` : ui('portalFieldTaxes');
-  // One line per row, as the design. The label gives way first: it never wraps and truncates at
-  // 9rem (a tax name), with its full text as the tooltip. The value is never cut: it takes the
-  // rest, right-aligned, and a badge too wide for it wraps its own text (`wrap` below) rather
-  // than being clipped by the panel.
-  const row = (label, value, testId) => (
-    <>
-      <dt className="max-w-[9rem] truncate whitespace-nowrap text-muted-foreground" title={`${label}:`}>{label}:</dt>
-      <dd className="min-w-0 text-right [overflow-wrap:anywhere]" data-testid={testId}>{value}</dd>
-    </>
-  );
-  const wrap = 'whitespace-normal text-right';
+  const money = (value) => (value == null ? '—' : formatCurrency(document.currency, value));
+
+  if (document.kind === 'SHIPMENT') {
+    return (
+      <MovementSummaryCard
+        title={ui('shipmentPreviewStatus')}
+        rows={[
+          { label: ui('shipmentPreviewDocNo'), value: document.documentNo || '—' },
+          { label: ui('shipmentPreviewContact'), value: document.customer.name || '—' },
+          { label: ui('shipmentPreviewDate'), value: <PortalDate value={document.date} /> },
+        ]}
+        statusRowLabel={ui('shipmentPreviewStatus')}
+        statusLabel={statusText}
+        statusBadgeClass={STATUS_BADGE[document.documentStatus] || 'bg-muted text-muted-foreground border-border-subtle'}
+      />
+    );
+  }
+
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-card md:rounded-lg" data-testid="portal-document-summary">
-      {hasAmounts ? (
-        <div className="flex items-center justify-between border-b border-border p-5 md:px-3 md:py-2.5">
-          {/* Mobile: "Total" over the big amount, the badge on the right (Movil-Documento). */}
-          <div className="flex flex-col gap-1.5 md:hidden">
-            <span className="text-sm text-muted-foreground">{ui('portalTotal')}</span>
-            <PortalMoney
-              currency={document.currency}
-              value={document.grandTotal}
-              className="font-['Plus_Jakarta_Sans',Inter,sans-serif] text-4xl font-bold leading-[44px] tabular-nums"
-            />
-          </div>
-          <PortalRowBadge document={document} className="text-[13px] leading-[18px] md:hidden" />
-          {/* Desktop: "Total" and the amount on one line (Documento). */}
-          <span className="hidden font-semibold md:inline">{ui('portalTotal')}</span>
-          <PortalMoney
-            currency={document.currency}
-            value={document.grandTotal}
-            className="hidden text-base font-semibold tabular-nums md:inline"
-            testId="portal-document-total"
-          />
-        </div>
+    <SummaryCard
+      currencyCode={document.currency ?? ''}
+      grandTotal={document.grandTotal}
+      contact={document.customer.name}
+      date={document.date}
+      statusCode={document.documentStatus}
+      statusLabel={statusText}
+      validUntil={document.kind === 'QUOTATION' ? (document.validUntil || null) : undefined}
+      dueDate={isInvoice ? (document.dueDate ?? null) : undefined}
+    >
+      {isInvoice ? (
+        <InfoRow label={ui('portalColPaymentStatus')}>
+          <PortalPaymentStatus document={document} installments={document.installments} className="whitespace-normal text-right" />
+        </InfoRow>
       ) : null}
-      <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 px-5 py-4 md:gap-2.5 md:px-3 md:py-2.5">
-        {row(ui('portalFieldDate'), <PortalDate value={document.date} />)}
-        {document.kind === 'QUOTATION' ? row(ui('portalColValidUntil'), <PortalValidUntil document={document} />) : null}
-        {document.scheduledDeliveryDate ? row(ui('portalFieldDeliveryDate'), <PortalDate value={document.scheduledDeliveryDate} />) : null}
-        {isInvoice ? row(ui('portalColDueDate'), <PortalDueDate document={document} />) : null}
-        {row(ui('portalColStatus'), <PortalDocumentStatus status={document.documentStatus} className={wrap} />)}
-        {isInvoice ? row(ui('portalColPaymentStatus'), <PortalPaymentStatus document={document} installments={document.installments} className={wrap} />) : null}
-        {document.paymentMethod ? row(ui('portalFieldPaymentMethod'), document.paymentMethod) : null}
-        {hasAmounts ? row(ui('portalColTaxBase'), <PortalMoney currency={document.currency} value={document.taxBase} />) : null}
-        {hasAmounts ? row(taxLabel, <PortalMoney currency={document.currency} value={taxesTotal} />) : null}
-        {isInvoice ? row(ui('portalColOutstanding'), <PortalMoney currency={document.currency} value={document.outstandingAmount} className="font-semibold" />, 'portal-payment-outstanding') : null}
-      </dl>
-    </div>
+      {isInvoice ? <InfoRow label={ui('portalColOutstanding')} value={money(document.outstandingAmount)} /> : null}
+      {document.paymentMethod ? <InfoRow label={ui('portalFieldPaymentMethod')} value={document.paymentMethod} /> : null}
+      <InfoRow label={ui('portalColTaxBase')} value={money(document.taxBase)} />
+      <InfoRow label={ui('portalFieldTaxes')} value={money(taxesTotal)} />
+    </SummaryCard>
   );
 }
 
@@ -470,58 +502,6 @@ function MobileLines({ document, canViewPdf, onViewPdf }) {
         </ul>
       )}
     </PortalSection>
-  );
-}
-
-/**
- * "Documentos relacionados" (design): this document first ("Este"), then the real related
- * documents — each one opens its own preview — then the steps of the chain that do not exist yet,
- * dashed.
- */
-function RelatedDocuments({ document, onNavigate }) {
-  const ui = useUI();
-  const steps = pendingChainSteps(document);
-  return (
-    <div className="flex flex-col gap-2" data-testid="portal-related">
-      <h2 className="text-[13px] font-medium uppercase leading-[18px] text-muted-foreground md:text-xs md:leading-4">
-        {ui('portalRelatedDocuments')}
-      </h2>
-      <div className="rounded-xl border border-border bg-card py-1.5 md:rounded-lg">
-        <div className="flex items-center gap-3 px-5 py-3 md:gap-2 md:px-3 md:py-1.5">
-          <FileText className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
-          {/* The name never truncates (the number is what the customer looks for); it wraps if it
-              must, and the meta on the right gives way first. */}
-          <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{ui(documentLabelKey(document))} #{document.documentNo}</span>
-          <span className="shrink-0 text-sm text-muted-foreground md:text-xs">{ui('portalThisDocument')}</span>
-        </div>
-        {document.related.map((related) => (
-          <button
-            key={`${related.kind}:${related.id}`}
-            type="button"
-            onClick={() => onNavigate({ view: 'doc', kind: related.kind, id: related.id })}
-            className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-muted md:gap-2 md:px-3 md:py-1.5"
-            data-testid="portal-related-document"
-          >
-            <FileText className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
-            <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{ui(documentLabelKey(related))} #{related.documentNo}</span>
-            <span className="flex min-w-0 max-w-[45%] justify-end">
-              <PortalRowBadge document={related} className="whitespace-normal text-right" />
-            </span>
-            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-          </button>
-        ))}
-        {steps.map((step) => (
-          <div
-            key={step.id}
-            className="flex items-center gap-3 px-5 py-3 text-muted-foreground md:gap-2 md:px-3 md:py-1.5"
-            data-testid="portal-related-pending-step"
-          >
-            <Square className="h-3.5 w-3.5 shrink-0 [stroke-dasharray:3_3]" aria-hidden="true" />
-            <span className="min-w-0 flex-1 truncate">{step.labelKeys.map((key) => ui(key)).join(' · ')}</span>
-          </div>
-        ))}
-      </div>
-    </div>
   );
 }
 

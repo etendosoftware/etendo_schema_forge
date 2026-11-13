@@ -806,6 +806,20 @@ mobile headers, as the boards do; the shell is only the sidebar and the bottom b
   form does not apply (`docs/generated-custom-windows/sales-quotation.md`). Not a portal bug; the
   default belongs to the sales-quotation window.
 
+- **Detail side panel = the app's own preview cards (user decision, 2026-11-13).** Below the
+  panel header ("<Tipo> <Nº>", "Emitido por", "Descargar PDF") the portal renders the shared
+  `windows/custom/shared/preview-cards` the app's QuotationPreview / OrderPreview / InvoicePreview
+  use: `SummaryCard` with the props each app preview passes for its kind (contact, date, status,
+  valid until for quotations, due date for invoices) plus `InfoRow` rows the portal adds (payment
+  state, outstanding, payment method, tax base, taxes); shipments use `MovementSummaryCard`, like
+  the app's shipment/receipt previews. Related documents use the shared `RelatedDocumentsCard` in
+  its new **pre-resolved items mode** (`items` + `onOpen`: same rows, no NEO fetch, no refresh, no
+  app navigation; without `items` the card is unchanged for every app caller). This replaces the
+  portal's own summary and its "Este" / dashed chain-step rows. `PaymentsCard` is not reused: it
+  renders `FIN_Payment` records and opens them in the internal payment windows, while the portal
+  has (and shows) the invoice's instalments; exposing payments would need a new read of internal
+  financial records. `EmailsCard` and the app's action buttons stay out (internal only).
+
 **Agreed OUT items (the only design elements not built).** The account / user menu (no login);
 "Ayuda y soporte"; "Albaranes de devolución" (returns are out of scope); the checkboxes and
 "Descargar seleccionados"; the advanced "Filtros"; "Comentarios"; Aceptar / Rechazar and the
