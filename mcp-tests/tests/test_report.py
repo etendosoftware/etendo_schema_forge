@@ -751,6 +751,21 @@ class RoutinesTest(unittest.TestCase):
         self.assertIn("| Task | Rutina | Etendo | Etendo + rutina | Holded |", text)
         self.assertIn("KR2.1 hijo (Etendo + rutina)", text)
 
+    def test_the_child_kr_takes_the_routine_result_only_where_there_is_a_routine(self):
+        with_routines = copy.deepcopy(self.summary)
+        for row in with_routines["tasks"]:
+            if row["task"] == self.TASK:
+                row["result"] = "referenceWin"        # the routine run lost this one
+            elif row["task"] == "q-product-prices-stock":
+                row["result"] = "referenceWin"        # no routine: must stay as in the base
+        view = report.routines_view(self.base, with_routines)
+        child, base = view["childKr"], self.base["kr"]
+        self.assertEqual(child["fromRoutineRun"], [self.TASK])
+        self.assertEqual(child["results"]["subjectWin"], base["results"]["subjectWin"] - 1)
+        self.assertEqual(child["results"]["referenceWin"], base["results"]["referenceWin"] + 1)
+        self.assertEqual(child["bothPossible"], base["bothPossible"])
+        self.assertEqual(child["subjectLabel"], "Etendo + rutina")
+
     def test_the_view_refuses_runs_in_the_wrong_order(self):
         with self.assertRaises(ValueError):
             report.routines_view(self.summary, self.summary)

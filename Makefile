@@ -1101,8 +1101,8 @@ SEED        ?=
 # mcp-test. Every target needs `platform` in config.toml. Pass SEED=<run A's
 # seed> to start the second run of a stability pair.
 .PHONY: mcp-compare
-mcp-compare: ## Compare two MCP targets (SUITE=, TARGETS=a,b, SUBJECT=, REPEAT=, CONCURRENCY=, SEED=, MODEL=)
-	cd mcp-tests && uv run python -m runner.cli --targets $(TARGETS) --suite $(SUITE) $(if $(SUBJECT),--subject $(SUBJECT)) $(if $(REPEAT),--repeat $(REPEAT)) $(if $(CONCURRENCY),--concurrency $(CONCURRENCY)) $(if $(SEED),--seed $(SEED)) $(if $(MODEL),--model $(MODEL))
+mcp-compare: ## Compare two MCP targets (SUITE=, TARGETS=a,b, SUBJECT=, PROBE=, REPEAT=, CONCURRENCY=, SEED=, MODEL=)
+	cd mcp-tests && uv run python -m runner.cli --targets $(TARGETS) --suite $(SUITE) $(if $(SUBJECT),--subject $(SUBJECT)) $(if $(PROBE),--probe $(PROBE)) $(if $(REPEAT),--repeat $(REPEAT)) $(if $(CONCURRENCY),--concurrency $(CONCURRENCY)) $(if $(SEED),--seed $(SEED)) $(if $(MODEL),--model $(MODEL))
 
 # Plan §5.4 / §5.9 (S6): load the baseline dataset into a FRESHLY INITIALIZED target through its
 # own MCP, and record a seed manifest (.seeds/<target>.json). Order for an official comparison:

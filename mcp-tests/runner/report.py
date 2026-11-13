@@ -996,12 +996,14 @@ def render_stability(result: dict[str, Any]) -> str:
 
 
 def routines_view(base: dict[str, Any], with_routines: dict[str, Any]) -> dict[str, Any]:
-    """The three columns of ETP-6236: Etendo, Etendo + rutina and the reference, per task.
+    """The three columns of ETP-6236 and the child KR they make.
 
-    `base` is a comparison without routines (its KR is the KR2.1), `with_routines` one whose
-    subject preloaded routines (its KR is the child KR). Both must compare the same suite and the
-    same reference platform; the reference column is taken from `base`. Pins that differ are
-    listed, not refused: the view is for reading, the two KRs keep their own summaries.
+    `base` is a comparison without routines: its KR is the KR2.1. `with_routines` is one whose
+    Etendo target preloaded routines; it may run only the tasks that have one (`--probe`). The
+    child KR ("Etendo + rutina") takes, task by task, the result with the routine where the task
+    has one and was decided in `with_routines`, and the base result everywhere else — the tasks
+    Etendo already wins without a routine are not run twice. Same formula as the KR2.1.
+    Pins that differ are listed, not refused.
     """
     if with_routines["kr"].get("variant") != "routines":
         raise ValueError(f"{with_routines['compareId']} did not run with routines (kr.variant)")
@@ -1011,22 +1013,38 @@ def routines_view(base: dict[str, Any], with_routines: dict[str, Any]) -> dict[s
                    if not d["pin"].startswith(("compare.seed", "compare.routines", "compare.harness",
                                                "compare.fixtureHashes", "targets.", "subject",
                                                "reference", "concurrency."))]
-    plain = {r["task"]: r for r in base["tasks"]}
-    rows = []
-    for row in with_routines["tasks"]:
-        before = plain.get(row["task"])
+    routine_tasks = set(with_routines["kr"]["routineTasks"])
+    rerun = {r["task"]: r for r in with_routines["tasks"]}
+    rows, child_results = [], []
+    for before in base["tasks"]:
+        after = rerun.get(before["task"]) if before["task"] in routine_tasks else None
+        base_result = before.get("result") or before.get("status")
+        routine_result = (after.get("result") or after.get("status")) if after else None
+        # The child KR counts the task with the routine only when that run decided it.
+        child = after if after is not None and after["status"] == "decided" else before
+        if child["status"] == "decided":
+            child_results.append(child["result"])
         rows.append({
-            "task": row["task"],
-            "routine": row["task"] in with_routines["kr"]["routineTasks"],
-            "base": before.get("result") or before.get("status") if before else None,
-            "withRoutines": row.get("result") or row.get("status"),
-            "etendo": (before or {}).get("subject") or {},
-            "etendoRoutines": row["subject"],
-            "reference": (before or {}).get("reference") or row["reference"],
+            "task": before["task"],
+            "routine": before["task"] in routine_tasks,
+            "base": base_result,
+            "withRoutines": routine_result,
+            "childFrom": "routine" if child is after else "base",
+            "etendo": before.get("subject") or {},
+            "etendoRoutines": (after or {}).get("subject") or {},
+            "reference": before.get("reference") or {},
         })
+    counts = {key: child_results.count(key) for key in RESULTS}
+    both = counts["subjectWin"] + counts["referenceWin"] + counts["tie"]
+    child_kr = {
+        **{k: base["kr"][k] for k in ("subjectLabel", "referenceLabel", "target")},
+        "subjectLabel": base["kr"]["subjectLabel"] + ROUTINES_SUFFIX,
+        "results": counts, "bothPossible": both,
+        "winRate": round(counts["subjectWin"] / both, 4) if both else None,
+        "fromRoutineRun": sorted(r["task"] for r in rows if r["childFrom"] == "routine"),
+    }
     return {"base": base["compareId"], "withRoutines": with_routines["compareId"],
-            "kr": base["kr"], "childKr": with_routines["kr"], "pinDifferences": differences,
-            "rows": rows}
+            "kr": base["kr"], "childKr": child_kr, "pinDifferences": differences, "rows": rows}
 
 
 def render_routines_view(view: dict[str, Any]) -> str:
@@ -1046,6 +1064,10 @@ def render_routines_view(view: dict[str, Any]) -> str:
         f"**KR2.1: {_pct(kr['winRate'])}** ({kr['results']['subjectWin']}/{kr['bothPossible']}) · "
         f"**KR2.1 hijo (Etendo + rutina): {_pct(child['winRate'])}** "
         f"({child['results']['subjectWin']}/{child['bothPossible']}).",
+        "",
+        f"El KR hijo toma el resultado con rutina en {len(child['fromRoutineRun'])} pruebas ("
+        + (", ".join(f"`{t}`" for t in child["fromRoutineRun"]) or "ninguna")
+        + ") y el resultado sin rutina en las demás.",
         "",
     ]
     if view["pinDifferences"]:

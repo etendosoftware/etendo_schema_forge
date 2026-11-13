@@ -172,11 +172,20 @@ Etendo blocks may). The prompt does not change: the agent learns a routine exist
   routine aborts the run (exit 2).
 - Any **other** Etendo GO target whose MCP offers `etendo_routine` must have **no** routine saved:
   the KR2.1 is measured without them. A leftover aborts the run and is named.
-- The comparison of such a target against Holded is the **child KR** ("KR2.1 hijo (Etendo +
-  rutina)" in `summary.md`), never the KR2.1. Its summary lists the tasks with a routine and in
-  how many attempts the agent ran it (`items.routineRuns`). A comparison with routines never pairs
-  with one without them in `mcp-stability`.
-- `make mcp-report-routines BASE=<compareId> WITH=<compareId>` puts both runs side by side.
+- **The child KR ("KR2.1 hijo (Etendo + rutina)")** takes, task by task, the result with the routine
+  where the task has one, and the KR2.1 result everywhere else: only the tasks with a routine (the
+  ones Etendo loses without it) are measured again. Run them alone (`PROBE=`):
+
+  ```bash
+  make mcp-compare SUITE=okr TARGETS=local,holded REPEAT=3                         # KR2.1
+  make mcp-compare SUITE=okr TARGETS=local-routines,holded REPEAT=3 \
+       PROBE=w-product-crud,w-warehouse-crud,w-commercial-setup,f-physical-inventory,f-warehouse-transfer,f-internal-consumption
+  make mcp-report-routines BASE=<first compareId> WITH=<second compareId>         # both KRs
+  ```
+
+  The second run's own summary is headed "KR2.1 hijo" and lists in how many attempts the agent ran
+  the routine (`items.routineRuns`); the composed child KR is in `routines-vs-base.md`. A comparison
+  with routines never pairs with one without them in `mcp-stability`.
 
 Tasks without a routine run as plain Etendo in the routines column. The routines in `okr.yaml`
 were each run with `etendo_routine` mode run on a local environment before being committed.
