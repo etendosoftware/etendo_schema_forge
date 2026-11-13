@@ -17,6 +17,9 @@ const TEMPLATES = {
   planChangeDoneImmediate: '{plan}:planChangeDoneImmediate',
   planChangeDoneScheduled: '{plan}@{date}:planChangeDoneScheduled',
   planChangeAlreadyPending: '{date}:planChangeAlreadyPending',
+  planChangeChargeToday: '{amount}:planChangeChargeToday',
+  planChangeChargeTodayCard: '{amount}@{brand}/{last4}:planChangeChargeTodayCard',
+  planChangePaymentRequired: '{plan}:planChangePaymentRequired',
   upgradePlanPriceMonthly: '{amount} per month',
   upgradePlanPriceYearly: '{amount} per year',
 };
@@ -34,8 +37,10 @@ vi.mock('@/i18n', () => ({
 
 const getPlanChanges = vi.fn();
 const requestPlanChange = vi.fn();
+const previewPlanChange = vi.fn();
 vi.mock('@/lib/upgrade/api.js', () => ({
   getPlanChanges: (...args) => getPlanChanges(...args),
+  previewPlanChange: (...args) => previewPlanChange(...args),
   requestPlanChange: (...args) => requestPlanChange(...args),
   UPGRADE_ERROR_CODES: {
     sessionExpired: 'upgradeSessionExpired',
@@ -73,9 +78,16 @@ function renderDialog(props = {}) {
   return { onOpenChange, onChanged };
 }
 
+const PRORATION_DATE = 1794527600;
+const PREVIEW = {
+  planKey: 'pro', timing: 'immediate', amountDue: '458.29', currency: 'EUR',
+  prorationDate: PRORATION_DATE, paymentMethod: { brand: 'visa', last4: '4242' },
+};
+
 describe('PlanChangeDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    previewPlanChange.mockResolvedValue(PREVIEW);
   });
 
   it('loads the offered changes for the dialog and lists them with timing and price', async () => {
@@ -141,7 +153,7 @@ describe('PlanChangeDialog', () => {
     expect(screen.queryByTestId('PlanChangeDialog__quotaFine')).not.toBeInTheDocument();
   });
 
-  it('says a monthly-to-annual change restarts billing and the quota year today', async () => {
+  it('says a monthly-to-annual change applies now and keeps the usage of the year', async () => {
     getPlanChanges.mockResolvedValue({ hasSubscription: true, changes: [PRO_YEARLY] });
     renderDialog();
 
@@ -149,7 +161,61 @@ describe('PlanChangeDialog', () => {
 
     expect(screen.getByTestId('PlanChangeDialog__timingNote'))
       .toHaveTextContent('planChangeIntervalNote');
-    expect(screen.queryByTestId('PlanChangeDialog__quotaKept')).not.toBeInTheDocument();
+    // Flexible billing keeps the billing date, so the quota year does not restart either.
+    expect(screen.getByTestId('PlanChangeDialog__quotaKept')).toBeInTheDocument();
+  });
+
+  it('quotes the amount charged today and the saved card before an upgrade is confirmed', async () => {
+    getPlanChanges.mockResolvedValue({ hasSubscription: true, changes: [PRO] });
+    renderDialog({ clientId: 'CLIENT-1' });
+
+    await userEvent.click((await screen.findAllByTestId('PlanChangeDialog__option'))[0]);
+
+    const charge = await screen.findByText(/planChangeChargeTodayCard/);
+    expect(charge).toHaveTextContent('458');
+    expect(charge).toHaveTextContent('@Visa/4242');
+    expect(previewPlanChange).toHaveBeenCalledWith('/api', 'pro', 'CLIENT-1');
+  });
+
+  it('falls back to a generic charge line when the amount cannot be read', async () => {
+    getPlanChanges.mockResolvedValue({ hasSubscription: true, changes: [PRO] });
+    previewPlanChange.mockRejectedValue(Object.assign(new Error('down'), { status: 502 }));
+    renderDialog();
+
+    await userEvent.click((await screen.findAllByTestId('PlanChangeDialog__option'))[0]);
+
+    await waitFor(() => expect(screen.getByTestId('PlanChangeDialog__charge'))
+      .toHaveTextContent('planChangeChargeUnknown'));
+    expect(screen.getByTestId('PlanChangeDialog__confirm')).toBeEnabled();
+  });
+
+  it('previews nothing for a downgrade, which charges nothing today', async () => {
+    getPlanChanges.mockResolvedValue({ hasSubscription: true, changes: [CORE] });
+    renderDialog();
+
+    await userEvent.click((await screen.findAllByTestId('PlanChangeDialog__option'))[0]);
+
+    expect(screen.queryByTestId('PlanChangeDialog__charge')).not.toBeInTheDocument();
+    expect(previewPlanChange).not.toHaveBeenCalled();
+  });
+
+  it('links to the invoice page when the upgrade waits for a payment the customer completes', async () => {
+    getPlanChanges.mockResolvedValue({ hasSubscription: true, changes: [PRO] });
+    requestPlanChange.mockResolvedValue({ planKey: 'pro', planName: 'Pro', timing: 'immediate',
+      effectiveAt: '2026-10-31T10:00:00Z', alreadyPending: false, paymentRequired: true,
+      paymentUrl: 'https://invoice.stripe.com/i/abc' });
+    renderDialog();
+
+    await userEvent.click((await screen.findAllByTestId('PlanChangeDialog__option'))[0]);
+    await screen.findByText(/planChangeChargeTodayCard/);
+    await userEvent.click(screen.getByTestId('PlanChangeDialog__confirm'));
+
+    expect(await screen.findByTestId('PlanChangeDialog__done'))
+      .toHaveTextContent('Pro:planChangePaymentRequired');
+    const link = screen.getByTestId('PlanChangeDialog__completePayment');
+    expect(link).toHaveAttribute('href', 'https://invoice.stripe.com/i/abc');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(screen.queryByText(/planChangeDoneImmediate/)).not.toBeInTheDocument();
   });
 
   it('confirms an upgrade, reports the new plan and tells its host to reload', async () => {
@@ -159,11 +225,14 @@ describe('PlanChangeDialog', () => {
     const { onChanged } = renderDialog({ clientId: 'CLIENT-1' });
 
     await userEvent.click((await screen.findAllByTestId('PlanChangeDialog__option'))[0]);
+    await screen.findByText(/planChangeChargeTodayCard/);
     await userEvent.click(screen.getByTestId('PlanChangeDialog__confirm'));
 
     expect(await screen.findByTestId('PlanChangeDialog__done'))
       .toHaveTextContent('Pro:planChangeDoneImmediate');
-    expect(requestPlanChange).toHaveBeenCalledWith('/api', 'pro', 'CLIENT-1');
+    // Charged at the quoted proration instant, so the amount equals the one shown.
+    expect(requestPlanChange).toHaveBeenCalledWith('/api', 'pro', 'CLIENT-1', PRORATION_DATE);
+    expect(screen.queryByTestId('PlanChangeDialog__completePayment')).not.toBeInTheDocument();
     expect(onChanged).toHaveBeenCalled();
     expect(screen.queryByTestId('PlanChangeDialog__confirm')).not.toBeInTheDocument();
     expect(screen.getByTestId('PlanChangeDialog__close')).toHaveTextContent('close');

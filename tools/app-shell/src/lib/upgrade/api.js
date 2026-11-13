@@ -351,17 +351,45 @@ export async function getPlanChanges(baseUrl, clientId = null) {
 }
 
 /**
- * ETP-5053 — asks for a plan change. An upgrade applies now (the answer carries
- * `timing: "immediate"`); a downgrade is scheduled for the end of the current period
- * (`timing: "period_end"`, `effectiveAt`). Repeating a request is safe: the same downgrade answers
- * `alreadyPending: true`, and an upgrade is idempotent at the provider.
+ * ETP-5053 — what a plan change would cost, before the customer confirms it. For an upgrade:
+ * `amountDue` (a plain decimal string) and `currency` charged today on the saved payment method,
+ * that method (`paymentMethod: { brand, last4 }` or null) and the `prorationDate` the amount was
+ * computed at — pass it back to `requestPlanChange` so the charge equals the amount shown. A
+ * downgrade charges nothing today: those are null and `effectiveAt` says when it applies.
+ * Refusals as for the change itself.
  */
-export async function requestPlanChange(baseUrl, planKey, clientId = null) {
-  const response = await apiFetch('/sws/go/billing/subscription/plan-change', {
+export async function previewPlanChange(baseUrl, planKey, clientId = null) {
+  const response = await apiFetch('/sws/go/billing/subscription/plan-change/preview', {
     method: 'POST',
     baseUrl,
     on401: 'ignore',
     body: JSON.stringify(clientId ? { planKey, clientId } : { planKey }),
+  });
+  const data = await readJsonSafely(response);
+  if (!response.ok) {
+    throw buildError(planChangeFailureCode(response, data), data?.error?.message, response.status);
+  }
+  return data;
+}
+
+/**
+ * ETP-5053 — asks for a plan change. An upgrade is charged now on the saved payment method and
+ * applies once paid (`timing: "immediate"`); when that payment needs the customer (a decline, or
+ * the bank asks to authenticate) nothing changes yet and the answer carries
+ * `paymentRequired: true` with the provider's invoice page in `paymentUrl`. A downgrade is
+ * scheduled for the end of the current period (`timing: "period_end"`, `effectiveAt`). Repeating
+ * a request is safe: the same downgrade answers `alreadyPending: true`, and an upgrade is
+ * idempotent at the provider for the same `prorationDate` (from `previewPlanChange`).
+ */
+export async function requestPlanChange(baseUrl, planKey, clientId = null, prorationDate = null) {
+  const body = { planKey };
+  if (clientId) body.clientId = clientId;
+  if (prorationDate) body.prorationDate = prorationDate;
+  const response = await apiFetch('/sws/go/billing/subscription/plan-change', {
+    method: 'POST',
+    baseUrl,
+    on401: 'ignore',
+    body: JSON.stringify(body),
   });
   const data = await readJsonSafely(response);
   if (!response.ok) {

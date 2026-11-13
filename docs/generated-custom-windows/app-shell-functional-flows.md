@@ -486,16 +486,31 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   (`PlanChangeDialog__none` when the list is empty).
 - **Before confirming** (`PlanChangeDialog__consequences`), for the chosen target: the timing note
   (`planChangeImmediateNote` for an upgrade — applies now, the difference invoiced today, the billing
-  date unchanged; `planChangeIntervalNote` for monthly → annual — billing switches to yearly today,
-  charged upfront, the yearly quota restarts today; `planChangePeriodEndNote` with the current
-  period end for a downgrade — nothing changes before then), the quota note (`planChangeQuotaKept`
-  unless the interval changes), and **one line per exceeded quota of the target**
+  date unchanged; `planChangeIntervalNote` for monthly → annual — billing switches to yearly and
+  keeps the billing date, today the yearly price minus the unused part of the period;
+  `planChangePeriodEndNote` with the current period end for a downgrade — nothing changes before
+  then), for an upgrade **the charge line** (`PlanChangeDialog__charge`: `planChangeChargeTodayCard`
+  "You will be charged {amount} today on your {brand} ending in {last4}", `planChangeChargeToday`
+  without a saved card, `planChangeChargeLoading` while it is quoted, `planChangeChargeUnknown`
+  when the quote fails — the confirm stays enabled then), the quota note (`planChangeQuotaKept`,
+  always: the quota year follows the billing period, which flexible billing keeps), and **one line
+  per exceeded quota of the target**
   (`PlanChangeDialog__quotaExceededItem`, `planChangeQuotaExceeded`: "{resource}: you have used
   {consumed} of the {included} included in {plan}. New records of this kind will be refused from the
   effective date until your next anniversary; existing data stays available."), or
   `planChangeQuotaFine` when nothing is exceeded. The numbers are today's: usage at the period end
   will be higher, so the copy says "you have used", never a promise about the boundary.
-- **Confirm:** `POST /sws/go/billing/subscription/plan-change` (`requestPlanChange`). The answer is
+- **Quote:** selecting an upgrade posts `POST /sws/go/billing/subscription/plan-change/preview`
+  (`previewPlanChange`): `amountDue`, `currency`, `paymentMethod` and the `prorationDate` it was
+  computed at. A downgrade charges nothing today and is not quoted. The confirm button waits for
+  the quote.
+- **Confirm:** `POST /sws/go/billing/subscription/plan-change` (`requestPlanChange`, with the
+  quote's `prorationDate`, so the charge equals the amount shown). The saved card is charged at
+  once; the plan changes only when that payment succeeds. When it needs the customer (a decline,
+  or the bank asks to authenticate) the answer has `paymentRequired: true`: the dialog says
+  `planChangePaymentRequired` and offers **Complete the payment**
+  (`PlanChangeDialog__completePayment`, the provider's invoice page in a new tab); the plan changes
+  as soon as it is paid. Otherwise the answer is
   shown in place (`PlanChangeDialog__done`: `planChangeDoneImmediate` with the new plan, or
   `planChangeDoneScheduled` with the date; `planChangeAlreadyPending` when the same downgrade was
   already scheduled) and the section reloads (`onChanged` → `load`), so the plan, the quotas and the
@@ -512,7 +527,8 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
 - **Test ids:** `PlanChangeDialog__root`, `__loading`, `__unavailable`, `__retry`, `__none`,
   `__pending`, `__options`, `__option` (with `data-plan-key`, `data-timing`), `__optionName`,
   `__optionPrice`, `__optionTiming`, `__consequences`, `__timingNote`, `__quotaKept`, `__quotaFine`,
-  `__quotaExceeded`, `__quotaExceededItem`, `__error`, `__done`, `__confirm`, `__close`.
+  `__charge` (with `data-preview-status`), `__quotaExceeded`, `__quotaExceededItem`, `__error`,
+  `__doneBlock`, `__done`, `__completePayment`, `__confirm`, `__close`.
 - **Backend reference:** `com.etendoerp.go/docs/plan-changes.md`.
 
 #### 3.2b Global header layout at the 1280×720 minimum (ETP-5504)

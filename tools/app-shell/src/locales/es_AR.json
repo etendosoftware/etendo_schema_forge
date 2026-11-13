@@ -22743,7 +22743,7 @@
     "planChangeTimingImmediate": "Se aplica ahora",
     "planChangeTimingPeriodEnd": "Se aplica al final del periodo",
     "planChangeImmediateNote": "Se aplica ahora. La diferencia se factura hoy y tu fecha de facturación no cambia.",
-    "planChangeIntervalNote": "Se aplica ahora. La facturación pasa a anual desde hoy, cobrada por adelantado, y tu cuota anual vuelve a empezar hoy.",
+    "planChangeIntervalNote": "Se aplica ahora. La facturación pasa a anual y mantiene tu fecha de facturación; hoy pagás el precio anual menos la parte no usada de tu período actual.",
     "planChangePeriodEndNote": "Se aplica el {date}, cuando termina el periodo actual. Hasta entonces nada cambia.",
     "planChangeQuotaKept": "Lo consumido este año se conserva; tu cuota anual no vuelve a empezar.",
     "planChangeQuotaFine": "Tu uso actual entra dentro de los límites de este plan.",
@@ -22755,6 +22755,12 @@
     "planChangeNotAllowed": "Este cambio de plan no está disponible para tu suscripción.",
     "planChangeNotCurrent": "Tu suscripción debe estar al día antes de cambiar de plan. Regularizá primero cualquier pago pendiente.",
     "planChangeFailed": "No pudimos cambiar tu plan. Intentalo de nuevo.",
+    "planChangeChargeToday": "Hoy se te van a cobrar {amount}.",
+    "planChangeChargeTodayCard": "Hoy se te van a cobrar {amount} en tu {brand} terminada en {last4}.",
+    "planChangeChargeLoading": "Calculando el monto…",
+    "planChangeChargeUnknown": "No pudimos calcular el monto; la diferencia se va a cobrar hoy en tu medio de pago guardado.",
+    "planChangePaymentRequired": "Tu pago necesita tu confirmación. Tu plan va a cambiar a {plan} apenas se pague.",
+    "planChangeCompletePayment": "Completar el pago",
     "myCompaniesEnterError": "No pudimos abrir {company}. Puede que todavía no tengas un rol asignado ahí."
   },
   "menus": {

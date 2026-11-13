@@ -17,6 +17,7 @@ import {
   getCheckoutStatus,
   getSubscription,
   getPlanChanges,
+  previewPlanChange,
   requestPlanChange,
   createPortalSession,
   createSubscriptionReactivation,
@@ -159,6 +160,7 @@ describe('the module surface', () => {
       'getCheckoutStatus',
       'getPlanChanges',
       'getSubscription',
+      'previewPlanChange',
       'requestPlanChange',
       'runPaidOnboarding',
     ]);
@@ -952,6 +954,31 @@ describe('the account subscription', () => {
 
     await requestPlanChange('https://api.test', 'pro', 'CLIENT-1');
     assert.deepEqual(JSON.parse(calls[1][1].body), { planKey: 'pro', clientId: 'CLIENT-1' });
+
+    // The quoted proration instant goes back with the change, so the charge equals the preview.
+    await requestPlanChange('https://api.test', 'pro', 'CLIENT-1', 1794527600);
+    assert.deepEqual(JSON.parse(calls[2][1].body),
+      { planKey: 'pro', clientId: 'CLIENT-1', prorationDate: 1794527600 });
+  });
+
+  it('previews a plan change with a POST and reads the charge, the card and the proration date', async () => {
+    declareCookieSession();
+    const answer = { planKey: 'pro', timing: 'immediate', amountDue: '458.29', currency: 'EUR',
+      prorationDate: 1794527600, paymentMethod: { brand: 'visa', last4: '4242' } };
+    installFetch(jsonResponse(answer));
+
+    const result = await previewPlanChange('https://api.test', 'pro', 'CLIENT-1');
+
+    assert.deepEqual(result, answer);
+    assert.equal(calls[0][0], 'https://api.test/sws/go/billing/subscription/plan-change/preview');
+    assert.equal(calls[0][1].method, 'POST');
+    assert.deepEqual(JSON.parse(calls[0][1].body), { planKey: 'pro', clientId: 'CLIENT-1' });
+    assert.equal(headersOf()['x-go-csrf'], CSRF);
+
+    installFetch(jsonResponse({ error: { code: 'PLAN_CHANGE_NOT_ALLOWED' } },
+      { ok: false, status: 409 }));
+    await assert.rejects(() => previewPlanChange('', 'gold'),
+      (error) => error.code === UPGRADE_ERROR_CODES.planChangeNotAllowed);
   });
 
   it('tells a refused plan change apart from a failed one by the backend code', async () => {

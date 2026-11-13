@@ -13,7 +13,9 @@ import {
 } from '@/components/ui/dialog.jsx';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
-import { getPlanChanges, requestPlanChange, UPGRADE_ERROR_CODES } from '@/lib/upgrade/api.js';
+import {
+  getPlanChanges, previewPlanChange, requestPlanChange, UPGRADE_ERROR_CODES,
+} from '@/lib/upgrade/api.js';
 import {
   formatQuotaQuantity,
   isQuotaOverLimit,
@@ -33,9 +35,13 @@ function errorKeyOf(err) {
   return REFUSAL_CODES.has(err?.code) ? err.code : UPGRADE_ERROR_CODES.planChangeFailed;
 }
 
-/** What happened, once the backend answered: applied now, scheduled, or already pending. */
+/**
+ * What happened, once the backend answered: applied now, waiting for its payment, scheduled, or
+ * already pending.
+ */
 function doneText(done, ui, locale) {
   const plan = done.planName || done.planKey;
+  if (done.paymentRequired) return ui('planChangePaymentRequired', { plan });
   if (done.timing !== TIMING_PERIOD_END) return ui('planChangeDoneImmediate', { plan });
   const date = done.effectiveAt ? formatCalendarDate(done.effectiveAt, locale) : '';
   const key = done.alreadyPending ? 'planChangeAlreadyPending' : 'planChangeDoneScheduled';
@@ -56,6 +62,29 @@ function timingNote(selected, ui, periodEndDate) {
   return ui(selected.intervalChange ? 'planChangeIntervalNote' : 'planChangeImmediateNote');
 }
 
+/** `Visa` from the provider's `visa`; the brand as given when it is not a plain word. */
+function cardBrandLabel(brand) {
+  if (!brand) return '';
+  return /^[a-z]+$/.test(brand) ? brand.charAt(0).toUpperCase() + brand.slice(1) : brand;
+}
+
+/**
+ * The charge line of an upgrade: the amount today and the card it goes on, while it is
+ * computed, or the fallback when the amount could not be read.
+ */
+function chargeText(preview, ui) {
+  if (preview.status === 'loading') return ui('planChangeChargeLoading');
+  const data = preview.data;
+  if (preview.status !== 'loaded' || !data?.amountDue || !data?.currency) {
+    return ui('planChangeChargeUnknown');
+  }
+  const amount = formatCurrency(data.currency, data.amountDue);
+  const card = data.paymentMethod;
+  return card?.last4
+    ? ui('planChangeChargeTodayCard', { amount, brand: cardBrandLabel(card.brand), last4: card.last4 })
+    : ui('planChangeChargeToday', { amount });
+}
+
 /** `{amount} per month` from the catalog's string amount and currency; '' when unpriced. */
 export function planPriceLabel(plan, ui) {
   if (!plan?.displayPrice || !plan?.currency) return '';
@@ -71,16 +100,20 @@ export function planPriceLabel(plan, ui) {
  * the active *Allowed plan changes* rows of the current plan), and before the customer confirms it
  * states, for the chosen target:
  *
- * - the direction and timing: an upgrade applies now, the difference is invoiced today and the
- *   billing date does not move; a monthly-to-annual change applies now and restarts billing and
- *   the quota year today; a downgrade applies at the end of the current period (`periodEnd`);
+ * - the direction and timing: an upgrade applies now and the billing date does not move; a
+ *   monthly-to-annual change applies now and keeps the billing date; a downgrade applies at the
+ *   end of the current period (`periodEnd`);
+ * - for an upgrade, the amount charged today and the saved card it goes on, quoted by the backend
+ *   (`POST …/plan-change/preview`) and charged at that same proration instant on confirm;
  * - the quota consequence: usage so far carries over (the yearly quota does not restart) and,
  *   for every quota of the target the tenant has already exceeded, the numbers ("you have used X
  *   of the Y included in Z") with the warning that creates of that resource will be refused from
  *   the effective date until the next anniversary.
  *
  * Confirming posts `POST /sws/go/billing/subscription/plan-change`; the answer says whether it
- * applied now or was scheduled, and the host reloads the subscription (`onChanged`).
+ * applied now, was scheduled, or waits for a payment the customer has to complete (a decline, or
+ * the bank asks to authenticate): then nothing changed yet and the dialog links to the provider's
+ * invoice page. The host reloads the subscription (`onChanged`).
  */
 export function PlanChangeDialog({
   open, onOpenChange, apiBaseUrl, clientId = null, periodEnd = null, onChanged,
@@ -95,6 +128,8 @@ export function PlanChangeDialog({
   const [submitting, setSubmitting] = useState(false);
   const [errorKey, setErrorKey] = useState(null);
   const [done, setDone] = useState(null);
+  // 'idle' | 'loading' | 'loaded' | 'failed', for the selected upgrade only
+  const [preview, setPreview] = useState({ status: 'idle', data: null });
 
   const load = useCallback(async () => {
     setStatus('loading');
@@ -127,6 +162,28 @@ export function PlanChangeDialog({
     [offer],
   );
   const selected = changes.find((c) => c.planKey === selectedKey) || null;
+  const selectedTiming = selected?.timing || null;
+
+  useEffect(() => {
+    if (!selectedKey || selectedTiming !== TIMING_IMMEDIATE) {
+      setPreview({ status: 'idle', data: null });
+      return undefined;
+    }
+    let cancelled = false;
+    setPreview({ status: 'loading', data: null });
+    previewPlanChange(apiBaseUrl, selectedKey, clientId)
+      .then((data) => { if (!cancelled) setPreview({ status: 'loaded', data }); })
+      .catch((err) => {
+        if (cancelled) return;
+        if (err?.status === 401) {
+          onSessionExpired?.();
+          onOpenChange?.(false);
+          return;
+        }
+        setPreview({ status: 'failed', data: null });
+      });
+    return () => { cancelled = true; };
+  }, [apiBaseUrl, clientId, selectedKey, selectedTiming, onSessionExpired, onOpenChange]);
   const pending = offer?.pendingChange || null;
   const periodEndDate = periodEnd ? formatCalendarDate(periodEnd, locale) : null;
 
@@ -135,7 +192,10 @@ export function PlanChangeDialog({
     setSubmitting(true);
     setErrorKey(null);
     try {
-      const result = await requestPlanChange(apiBaseUrl, selected.planKey, clientId);
+      const prorationDate = selected.timing === TIMING_IMMEDIATE
+        ? preview.data?.prorationDate || null : null;
+      const result = await requestPlanChange(apiBaseUrl, selected.planKey, clientId,
+        prorationDate);
       setDone(result);
       onChanged?.(result);
     } catch (err) {
@@ -148,7 +208,7 @@ export function PlanChangeDialog({
     } finally {
       setSubmitting(false);
     }
-  }, [apiBaseUrl, clientId, selected, onChanged, onSessionExpired, onOpenChange]);
+  }, [apiBaseUrl, clientId, selected, preview, onChanged, onSessionExpired, onOpenChange]);
 
   const exceeded = exceededQuotasOf(selected);
 
@@ -186,9 +246,18 @@ export function PlanChangeDialog({
         )}
 
         {status === 'loaded' && done && (
-          <p className="text-sm" data-testid="PlanChangeDialog__done">
-            {doneText(done, ui, locale)}
-          </p>
+          <div className="space-y-3" data-testid="PlanChangeDialog__doneBlock">
+            <p className="text-sm" data-testid="PlanChangeDialog__done">
+              {doneText(done, ui, locale)}
+            </p>
+            {done.paymentRequired && done.paymentUrl && (
+              <Button asChild size="sm" data-testid="PlanChangeDialog__completePayment">
+                <a href={done.paymentUrl} target="_blank" rel="noopener noreferrer">
+                  {ui('planChangeCompletePayment')}
+                </a>
+              </Button>
+            )}
+          </div>
         )}
 
         {status === 'loaded' && !done && pending && (
@@ -245,11 +314,15 @@ export function PlanChangeDialog({
             <p data-testid="PlanChangeDialog__timingNote">
               {timingNote(selected, ui, periodEndDate)}
             </p>
-            {!selected.intervalChange && (
-              <p className="text-muted-foreground" data-testid="PlanChangeDialog__quotaKept">
-                {ui('planChangeQuotaKept')}
+            {selected.timing === TIMING_IMMEDIATE && (
+              <p className="font-medium" data-testid="PlanChangeDialog__charge"
+                data-preview-status={preview.status}>
+                {chargeText(preview, ui)}
               </p>
             )}
+            <p className="text-muted-foreground" data-testid="PlanChangeDialog__quotaKept">
+              {ui('planChangeQuotaKept')}
+            </p>
             {exceeded.length === 0 && Array.isArray(selected.quotas) && selected.quotas.length > 0 && (
               <p className="text-muted-foreground" data-testid="PlanChangeDialog__quotaFine">
                 {ui('planChangeQuotaFine')}
@@ -285,7 +358,9 @@ export function PlanChangeDialog({
             {ui(done ? 'close' : 'cancel')}
           </Button>
           {status === 'loaded' && !done && changes.length > 0 && (
-            <Button type="button" disabled={!selected || submitting} onClick={handleConfirm}
+            <Button type="button"
+              disabled={!selected || submitting || preview.status === 'loading'}
+              onClick={handleConfirm}
               data-testid="PlanChangeDialog__confirm">
               {submitting
                 ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__plan-change-confirm" />

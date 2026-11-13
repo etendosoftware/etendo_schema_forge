@@ -18,6 +18,8 @@ const KEYS = [
   'planChangePeriodEndNote', 'planChangeQuotaKept', 'planChangeQuotaFine', 'planChangeQuotaExceeded',
   'planChangeConfirm', 'planChangeDoneImmediate', 'planChangeDoneScheduled',
   'planChangeAlreadyPending', 'planChangeNotAllowed', 'planChangeNotCurrent', 'planChangeFailed',
+  'planChangeChargeToday', 'planChangeChargeTodayCard', 'planChangeChargeLoading',
+  'planChangeChargeUnknown', 'planChangePaymentRequired', 'planChangeCompletePayment',
 ];
 
 const read = (locale, key) => locale.genericLabels?.[key];
