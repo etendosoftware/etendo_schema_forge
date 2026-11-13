@@ -248,7 +248,9 @@ function DesktopTable({ kind, page, documents, onOpen }) {
   const leadingColumns = 4 + (isQuotation || isInvoice ? 1 : 0) + (isInvoice ? 1 : 0);
   // Headers stay on one line, as the design's (L2): the table scrolls sideways before it wraps.
   const th = 'whitespace-nowrap px-2 py-3 font-semibold';
-  const td = 'px-2 py-2.5';
+  // Every column keeps its content width on one line; "Referencia" alone takes what is left and
+  // truncates (full text as a tooltip), so the amounts at the right always fit at 1280 px.
+  const td = 'whitespace-nowrap px-2 py-2.5';
   return (
     <div className="hidden overflow-x-auto md:block">
       <table className="w-full border-collapse" data-testid="portal-document-table">
@@ -256,7 +258,7 @@ function DesktopTable({ kind, page, documents, onOpen }) {
           <tr className="border-b border-border text-left text-xs leading-4">
             <th className={`${th} pl-3`}>{ui(PORTAL_KIND_META[kind].dateColumnKey)}</th>
             <th className={th}>{ui('portalColDocumentNo')}</th>
-            <th className={th}>{ui('portalColReference')}</th>
+            <th className={`${th} w-full`}>{ui('portalColReference')}</th>
             {isQuotation ? <th className={th}>{ui('portalColValidUntil')}</th> : null}
             {isInvoice ? <th className={th}>{ui('portalColDueDate')}</th> : null}
             <th className={th}>{ui('portalColStatus')}</th>
@@ -288,7 +290,7 @@ function DesktopTable({ kind, page, documents, onOpen }) {
                 {/* The app's own "Factura rectificativa" pill, inline so the row stays one line. */}
                 {document.isCreditNote ? <PortalCreditNoteBadge className="ml-2 align-middle" /> : null}
               </td>
-              <td className={`${td} max-w-[16rem] truncate text-muted-foreground`}>{document.reference || '—'}</td>
+              <td className={`${td} w-full max-w-0 truncate text-muted-foreground`} title={document.reference || undefined}>{document.reference || '—'}</td>
               {isQuotation ? <td className={`${td} tabular-nums`}><PortalValidUntil document={document} /></td> : null}
               {isInvoice ? <td className={`${td} tabular-nums`}><PortalDueDate document={document} /></td> : null}
               <td className={td}><PortalDocumentStatus status={document.documentStatus} /></td>

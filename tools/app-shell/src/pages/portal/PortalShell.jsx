@@ -268,12 +268,13 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
           </div>
         </div>
         <div className="flex-1" />
-        <div className="flex items-center justify-between gap-2 border-t border-border px-4 pt-2.5">
-          <span className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground" data-testid="portal-created-with">
-            <img src="/logo-etendo-ai.png" alt="" className="h-3.5 w-3.5 shrink-0 object-contain" />
-            <span className="truncate">{ui('portalCreatedWith')}</span>
-          </span>
+        {/* The language toggle on its own line above the credit, so both read in full at 216 px. */}
+        <div className="flex flex-col gap-2 border-t border-border px-4 pt-2.5">
           <PortalLanguageSwitch compact />
+          <span className="flex items-center gap-2 text-xs text-muted-foreground" data-testid="portal-created-with">
+            <img src="/logo-etendo-ai.png" alt="" className="h-3.5 w-3.5 shrink-0 object-contain" />
+            {ui('portalCreatedWith')}
+          </span>
         </div>
       </nav>
 
