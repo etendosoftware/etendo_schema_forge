@@ -180,7 +180,15 @@ function PortalRejectModal({ open, busy, documentNo, onClose, onSubmit }) {
                 name="portal-reject-reason"
                 value={option.code}
                 checked={reason === option.code}
-                onChange={() => setReason(option.code)}
+                onChange={() => {
+                  setReason(option.code);
+                  // The text belongs to "Otros" only: leaving it clears it, so nothing typed there
+                  // can travel with another reason.
+                  if (option.code !== PORTAL_REJECT_REASON_OTHER) {
+                    setText('');
+                    setTouched(false);
+                  }
+                }}
                 data-testid={`portal-reject-reason-${option.code.toLowerCase()}`}
               />
               {ui(option.labelKey)}
