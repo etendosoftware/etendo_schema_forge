@@ -34,9 +34,9 @@ export function PortalDocumentStatus({ status }) {
 }
 
 /** An invoice's payment state, as the app shows it (see `invoicePaymentState`). */
-export function PortalPaymentStatus({ document }) {
+export function PortalPaymentStatus({ document, installments = null }) {
   const ui = useUI();
-  const state = invoicePaymentState(document);
+  const state = invoicePaymentState(document, installments);
   if (!state) return null;
   return (
     <span data-testid="portal-payment-status" data-state={state.id}>

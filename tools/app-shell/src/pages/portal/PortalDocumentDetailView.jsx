@@ -80,9 +80,17 @@ export default function PortalDocumentDetailView({
     }
   }, [apiFetch, token, kind, id, onInvalid]);
 
+  /**
+   * Opens the printable in the dialog's iframe. The blob is rebuilt as `application/pdf` whatever
+   * the server labelled it, so a main attachment that is not a PDF (an HTML file, say) is handed to
+   * the browser's PDF viewer — where it fails to render — and never parsed as a document that could
+   * run script in the SPA's origin (review N-d). The iframe is not `sandbox`ed on top: Chromium's
+   * built-in PDF viewer refuses to load inside a sandboxed frame, which would break every legitimate
+   * preview; the forced type is what neutralises the content.
+   */
   const viewPdf = useCallback(async () => {
     const blob = await loadPdf();
-    if (blob) setPdfUrl(URL.createObjectURL(blob));
+    if (blob) setPdfUrl(URL.createObjectURL(new Blob([blob], { type: 'application/pdf' })));
   }, [loadPdf]);
 
   const downloadPdf = useCallback(async () => {
@@ -353,7 +361,7 @@ function PaymentBlock({ document }) {
     <PortalSection title={ui('portalPaymentTitle')} testId="portal-payment">
       <div className="flex flex-col gap-3 p-3.5 text-sm">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <PortalPaymentStatus document={document} />
+          <PortalPaymentStatus document={document} installments={document.installments} />
           <PortalDueDate document={document} />
         </div>
         <div className="flex items-baseline justify-between">

@@ -1,6 +1,6 @@
 // Relative imports, not the `@/` alias: keeps this module loadable by plain `node --test`.
 import { resolveInvoicePaymentBadge } from '../../windows/custom/shared/invoicePaymentBadge.js';
-import { todayCalendarISO } from '../../lib/dateOnly.js';
+import { getCalendarDateRelation, todayCalendarISO } from '../../lib/dateOnly.js';
 
 /**
  * Presentation rules of the customer portal (ETP-6209 Part B) — pure, no React.
@@ -42,15 +42,27 @@ export function documentLabelKey(document) {
 }
 
 /**
- * The payment state of an invoice row as the app shows it, plus overdue.
+ * The payment state of an invoice as the app shows it.
  *
- * `resolveInvoicePaymentBadge` decides paid / partial / pending / credit; an invoice the backend
- * reports with an instalment past due and money still owed is shown as overdue, exactly the
- * priority the invoice topbar gives it (`InvoiceTopbarExtra`: overdue before partial).
+ * Source of truth, since no shared helper maps a payment badge to a tag (each window renders its
+ * own): the states come from `resolveInvoicePaymentBadge` (`windows/custom/shared/
+ * invoicePaymentBadge.js`), and the labels are the ones the sales invoice topbar uses for them
+ * (`artifacts/sales-invoice/custom/InvoiceTopbarExtra.jsx`: `statusPaid`, `statusPartial`,
+ * `statusPending`, `statusOverdue`, `cpFavorBadge`, `cpCreditFullyApplied`), with the app's
+ * `StatusTag` tones.
  *
+ * **Overdue is decided like the app, in the browser's calendar day** (ETP-6209 review N-b):
+ * - with the instalments (the document detail), like the topbar — overdue when any instalment
+ *   still owing money is past due (`getCalendarDateRelation`, local-day parsing);
+ * - without them (lists, home, related), like the invoice list grid — the badge shows no overdue,
+ *   and the due-date column's dot (`getDueDateState`) carries it.
+ *
+ * @param {object} document a portal document
+ * @param {Array<{dueDate: string, outstandingAmount: number}>} [installments] the detail's
+ *   instalments, when known
  * @returns {{ id: string, labelKey: string, tone: string }|null} null when not an invoice
  */
-export function invoicePaymentState(document) {
+export function invoicePaymentState(document, installments = null) {
   if (document?.kind !== 'INVOICE') return null;
   const badge = resolveInvoicePaymentBadge({
     grandTotalAmount: document.grandTotal,
@@ -58,7 +70,10 @@ export function invoicePaymentState(document) {
     documentStatus: document.documentStatus,
   });
   if (badge.kind === 'draft') return null;
-  if (!badge.isCredit && document.overdue && (badge.kind === 'pending' || badge.kind === 'partial')) {
+  const overdue = Array.isArray(installments) && installments.some((installment) => (
+    (installment.outstandingAmount ?? 0) > 0
+      && getCalendarDateRelation(installment.dueDate) === 'past'));
+  if (!badge.isCredit && overdue && (badge.kind === 'pending' || badge.kind === 'partial')) {
     return { id: 'overdue', labelKey: 'statusOverdue', tone: 'destructive' };
   }
   switch (badge.kind) {

@@ -694,8 +694,10 @@ app's global `h1–h6` rule.
 `PortalDocumentQuery` (scope + per-kind discriminator + status allow-list of §B.1, HQL on the
 session) and related documents through `PortalDocumentLinks` (§B.6, each candidate re-scoped). No
 N+1: a list page is one query plus one grouped payment-schedule query plus one totals query; the
-home is a fixed number of aggregates. **`/invoices` and `/invoices/{id}/pdf` are kept** (existing
-tests and callers); the page no longer uses them.
+home is a fixed number of aggregates. The MVP's `/invoices` and `/invoices/{id}/pdf` (and
+`PortalInvoiceQuery`, `fetchPortalInvoices`, `fetchInvoicePdfBlob`) were **removed** in review
+cycle 1 (W1): they applied a second, narrower scope rule (completed invoices only) and nothing
+called them any more.
 
 **Email (user-confirmed with the PO).** With `bp-portal-link` on, the four sales document emails
 make the portal link the call-to-action button ("Ver documento en el portal") and drop the
@@ -707,3 +709,22 @@ only on whether a link was minted.
 `PortalLinkService#renew` rather than a `lock_timeout`, so a waiting open gets the right answer
 instead of an error. S1: `validate`, `findSentLink` and `renew` enter admin mode themselves.
 
+**Review cycle 1 fold-ins (Part B).**
+- **Returns are out of scope (N-a, PO decision).** The order list excludes the return-material
+  orders (`DocSubTypeSO = 'RM'`) besides the quotations (`PortalDocumentQuery.NON_ORDER_SUBTYPES`).
+- **Overdue (N-b).** The home's overdue balance and "Vencidas" highlight are server aggregates, so
+  they use the server's calendar day. The per-document badge and due-date dot are decided in the
+  browser's local day like the app: the badge says "Vencida" only on the detail, from the
+  instalments (as the invoice topbar does); lists carry overdue on the due-date dot only (as the
+  invoice list grid does). Around midnight the two can differ by one day for a customer in
+  another time zone; accepted.
+- **Badge mapping (N-c).** No shared payment-kind-to-tag helper exists; `portalPresentation.js`
+  points at its source of truth (`invoicePaymentBadge.js` and the invoice topbar labels).
+- **"Ver PDF" (N-d).** The blob is rebuilt as `application/pdf` before it gets an object URL, so the
+  dialog's iframe can only ever render a PDF whatever type the response declared. No `sandbox`:
+  Chromium's built-in PDF viewer refuses to render inside a sandboxed frame.
+- **Rate limits (N-e).** Every token-validating endpoint is rate limited per IP, each with its own
+  counter: `GET /me` 30/min, `POST /renew` 30/min, and the data reads (`/home`, `/documents*`)
+  120/min shared, since paging, filtering and opening documents make several calls a minute.
+  Over the ceiling the answer is `429`. The W6 debt (keyed on `getRemoteAddr()`, wrong behind a
+  load balancer) applies to all three.
