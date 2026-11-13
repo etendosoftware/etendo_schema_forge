@@ -612,6 +612,13 @@ function buildRowCriteria(col, row) {
     return buildMultiValueCriteria(val, fieldName, op);
   }
 
+  // Free-text fallback (ETP-5009 CP-10): "Es"/"No es" on a text column takes
+  // a comma-separated list ("A,B" = A or B; negated = neither). Sent as one
+  // iEquals with the whole string it matched nothing.
+  if (mode === 'text' && (op === 'iEquals' || op === 'iNotEqual') && typeof val === 'string' && val.includes(',')) {
+    return buildMultiValueCriteria(splitAndTrimString(val).filter(Boolean), fieldName, op);
+  }
+
   if (val === null || val === undefined || val === '') return null;
 
   if (mode === 'numeric') {
