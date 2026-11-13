@@ -191,7 +191,7 @@ export default function PortalDocumentListView({
           {/* At 360 px the title steps down to 24 px so it, the count, the language and the avatar
               share one line; the board's 28 px from 640 up. */}
           <div className="flex min-w-0 items-center gap-2.5">
-            <h1 className="truncate font-['Plus_Jakarta_Sans',Inter,sans-serif] text-2xl font-bold leading-9 sm:text-[28px]">{plural}</h1>
+            <h1 className="truncate text-2xl font-bold leading-9 sm:text-[28px]">{plural}</h1>
             <PortalCountChip count={totalCount} />
           </div>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">

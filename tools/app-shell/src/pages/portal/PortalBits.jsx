@@ -151,11 +151,13 @@ export function portalRowActivation(onActivate, label) {
 }
 
 /**
- * The uppercase section titles ("REQUIERE TU ATENCIÓN", "TU SALDO", …). Set in Inter like the
- * design's: the app's global `h1–h6` rule switches headings to Plus Jakarta Sans, whose word
- * space at 12px uppercase collapses visually and ran the words together ("REQUIERETUATENCIÓN").
+ * The uppercase section titles ("REQUIERE TU ATENCIÓN", "TU SALDO", …). Set in the body font
+ * (Inter, `index.css`) like the design's, by inheriting it instead of naming it: the app's global
+ * `h1–h6` rule switches headings to Plus Jakarta Sans, whose word space at 12px uppercase collapses
+ * visually and ran the words together ("REQUIERETUATENCIÓN"). Tailwind's `font-sans` is not mapped
+ * to Inter in this app, so `inherit` is what reaches the body font.
  */
-export const PORTAL_SECTION_TITLE = "font-['Inter',sans-serif] text-[13px] font-medium uppercase leading-[18px] tracking-normal [word-spacing:normal] md:text-xs md:leading-4";
+export const PORTAL_SECTION_TITLE = "[font-family:inherit] text-[13px] font-medium uppercase leading-[18px] tracking-normal [word-spacing:normal] md:text-xs md:leading-4";
 
 /**
  * An invoice's document type, as the app's sales-invoice list shows it in its "Tipo de documento"

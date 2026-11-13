@@ -208,10 +208,10 @@ function Greeting({ identity, months, onMonthsChange }) {
               {ui('portalGreeting', { name: identity.businessPartnerName })}
             </span>
           ) : null}
-          <h2 className="font-['Plus_Jakarta_Sans',Inter,sans-serif] text-[28px] font-bold leading-9 tracking-[-0.01em] md:hidden">
+          <h2 className="text-[28px] font-bold leading-9 tracking-[-0.01em] md:hidden">
             {ui('portalHomeHeadlineGeneric')}
           </h2>
-          <h2 className="hidden font-['Plus_Jakarta_Sans',Inter,sans-serif] text-lg font-semibold leading-7 md:block" data-testid="portal-headline">
+          <h2 className="hidden text-lg font-semibold leading-7 md:block" data-testid="portal-headline">
             {identity?.tenantName
               ? ui('portalHomeHeadline', { tenantName: identity.tenantName })
               : ui('portalHomeHeadlineGeneric')}
@@ -267,9 +267,10 @@ function MobilePendingHero({ balances, onNavigate }) {
                 { count: balance.pendingCount })}
             </span>
           </div>
-          <span className="font-['Plus_Jakarta_Sans',Inter,sans-serif] text-[44px] font-bold leading-[52px] tabular-nums">
+          {/* The card's key figure, set in the app's heading face by the global h1–h6 rule. */}
+          <h3 className="text-[44px] font-bold leading-[52px] tabular-nums">
             {formatCurrency(balance.currency, balance.outstanding)}
-          </span>
+          </h3>
           {balance.overdue > 0 ? (
             <span className="text-sm text-[var(--status-destructive-bg)]">
               {ui('portalOverdueSince', {
