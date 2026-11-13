@@ -351,6 +351,22 @@ describe('PortalPage — view in the URL', () => {
     expect(callsTo('/home')).toHaveLength(1);
   });
 
+  // A backend newer than the bundle may name a kind this page does not know; indexing the kind
+  // table with it would crash the page instead of showing anything.
+  for (const [label, entryDocument] of [
+    ['an unknown kind', { kind: 'PAYMENT', id: 'pay-1' }],
+    ['no id', { kind: 'INVOICE', id: '' }],
+  ]) {
+    it(`falls back to home when the entry document has ${label}`, async () => {
+      responses.me = jsonResponse({ ...IDENTITY, entryDocument });
+      renderPortal();
+      await shellReady();
+
+      expect(screen.getByTestId('portal-home')).toBeInTheDocument();
+      expect(apiFetchMock.mock.calls.some(([path]) => path.includes('/documents/'))).toBe(false);
+    });
+  }
+
   it('lets a view in the URL win over the entry document', async () => {
     responses.me = jsonResponse(WITH_ENTRY);
     renderPortal(`/portal/${TOKEN}?view=list&kind=INVOICE`);
