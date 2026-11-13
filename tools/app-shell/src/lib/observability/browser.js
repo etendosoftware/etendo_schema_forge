@@ -47,6 +47,8 @@ export function buildBrowserObservabilityConfig({
         apiHost: env.VITE_MIXPANEL_API_HOST,
         logger,
         storage,
+        hostname,
+        allowLocal: env.VITE_MIXPANEL_ALLOW_LOCAL,
       }),
     ],
   };

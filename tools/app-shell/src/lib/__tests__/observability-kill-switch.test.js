@@ -23,6 +23,9 @@ import {
 } from '../observability/killSwitch.js';
 import { buildBrowserObservabilityConfig, initBrowserObservability } from '../observability/browser.js';
 
+// ETP-5466 — Mixpanel only emits from a production host.
+const PROD_HOST = 'app.etendo.software';
+
 // ETP-4578 H5 — the telemetry kill switch: build default + OpenFeature flags, per provider and
 // global. Uses the real OpenFeature SDK, the real gateway and the real host providers; only the
 // vendor SDKs are counting fakes, because what is asserted is that they are never TOUCHED.
@@ -74,6 +77,7 @@ function countingProviders() {
     logger: silent,
   });
   const mixpanel = createMixpanelProvider({
+    hostname: PROD_HOST,
     enabled: 'true',
     token: 'fake-project-token',
     storage: { getItem: () => '1', setItem() {} },
