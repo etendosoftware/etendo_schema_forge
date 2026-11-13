@@ -167,6 +167,21 @@ describe('PlanChangeDialog', () => {
     expect(screen.getByTestId('PlanChangeDialog__quotaKept')).toBeInTheDocument();
   });
 
+  it('marks the chosen option as selected, and only that one', async () => {
+    getPlanChanges.mockResolvedValue({ hasSubscription: true, changes: [PRO, CORE] });
+    renderDialog();
+
+    const options = await screen.findAllByTestId('PlanChangeDialog__option');
+    expect(options.map((o) => o.getAttribute('data-selected'))).toEqual(['false', 'false']);
+    await userEvent.click(options[1]);
+
+    expect(options[1]).toHaveAttribute('data-selected', 'true');
+    expect(options[1]).toHaveAttribute('aria-pressed', 'true');
+    expect(within(options[1]).getByTestId('PlanChangeDialog__optionSelectedIcon')).toBeInTheDocument();
+    expect(options[0]).toHaveAttribute('data-selected', 'false');
+    expect(within(options[0]).queryByTestId('PlanChangeDialog__optionSelectedIcon')).not.toBeInTheDocument();
+  });
+
   it('quotes the amount charged today and the saved card before an upgrade is confirmed', async () => {
     getPlanChanges.mockResolvedValue({ hasSubscription: true, changes: [PRO] });
     renderDialog({ clientId: 'CLIENT-1' });

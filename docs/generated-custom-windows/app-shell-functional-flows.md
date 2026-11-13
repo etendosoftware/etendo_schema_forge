@@ -532,7 +532,8 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   `es_ES.json` and `es_AR.json` (`locales/__tests__/plan-change-locale-parity.vitest.js` pins parity).
 - **Test ids:** `PlanChangeDialog__root`, `__loading`, `__unavailable`, `__retry`, `__none`,
   `__pending`, `__options`, `__option` (with `data-plan-key`, `data-timing`), `__optionName`,
-  `__optionPrice`, `__optionTiming`, `__consequences`, `__timingNote`, `__quotaKept`, `__quotaFine`,
+  `__optionPrice`, `__optionTiming`, `__optionIcon` / `__optionSelectedIcon` (with `data-selected` on
+  the option), `__consequences`, `__timingNote`, `__quotaKept`, `__quotaFine`,
   `__charge` (with `data-preview-status`), `__quotaExceeded`, `__quotaExceededItem`, `__error`,
   `__doneBlock`, `__done`, `__completePayment`, `__confirm`, `__close`.
 - **Backend reference:** `com.etendoerp.go/docs/plan-changes.md`.

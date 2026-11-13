@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { CheckCircle2, Circle, Loader2 } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -292,26 +292,37 @@ export function PlanChangeDialog({
         )}
 
         {status === 'loaded' && !done && changes.length > 0 && (
-          <ul className="divide-y rounded-md border" data-testid="PlanChangeDialog__options">
+          <ul className="divide-y overflow-hidden rounded-md border" data-testid="PlanChangeDialog__options">
             {changes.map((change) => {
               const isSelected = change.planKey === selectedKey;
               return (
                 <li key={change.planKey}>
                   <button
                     type="button"
-                    className={`flex w-full flex-wrap items-center justify-between gap-2 px-3 py-2 text-left ${isSelected ? 'bg-accent' : ''}`}
+                    className={`flex w-full flex-wrap items-center justify-between gap-2 px-3 py-2 text-left transition-colors ${isSelected
+                      ? 'bg-primary/10 ring-2 ring-inset ring-primary'
+                      : 'hover:bg-muted/60'}`}
                     aria-pressed={isSelected}
                     onClick={() => setSelectedKey(change.planKey)}
                     data-testid="PlanChangeDialog__option"
                     data-plan-key={change.planKey}
                     data-timing={change.timing}
+                    data-selected={isSelected ? 'true' : 'false'}
                   >
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium" data-testid="PlanChangeDialog__optionName">
-                        {change.planName || change.planKey}
-                      </span>
-                      <span className="block text-xs text-muted-foreground" data-testid="PlanChangeDialog__optionPrice">
-                        {planPriceLabel(change, ui)}
+                    <span className="flex min-w-0 items-center gap-3">
+                      {isSelected
+                        ? <CheckCircle2 className="h-5 w-5 shrink-0 text-primary" aria-hidden="true"
+                          data-testid="PlanChangeDialog__optionSelectedIcon" />
+                        : <Circle className="h-5 w-5 shrink-0 text-muted-foreground/50" aria-hidden="true"
+                          data-testid="PlanChangeDialog__optionIcon" />}
+                      <span className="min-w-0">
+                        <span className={`block text-sm font-medium ${isSelected ? 'text-primary' : ''}`}
+                          data-testid="PlanChangeDialog__optionName">
+                          {change.planName || change.planKey}
+                        </span>
+                        <span className="block text-xs text-muted-foreground" data-testid="PlanChangeDialog__optionPrice">
+                          {planPriceLabel(change, ui)}
+                        </span>
                       </span>
                     </span>
                     <Badge variant="outline" data-testid="PlanChangeDialog__optionTiming">
