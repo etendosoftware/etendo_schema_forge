@@ -3,11 +3,12 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   PORTAL_ERROR,
-  fetchInvoicePdfBlob,
+  fetchPortalDocument,
+  fetchPortalDocumentPdf,
+  fetchPortalDocuments,
+  fetchPortalHome,
   fetchPortalIdentity,
-  fetchPortalInvoices,
   fetchPortalLogoBlob,
-  normalizePortalInvoice,
   renewPortalLink,
   resolvePortalBaseUrl,
 } from '../portalApi.js';
@@ -84,8 +85,10 @@ describe('portal request contract', () => {
     const { fetchImpl, calls } = recordingFetch(() => jsonResponse({}));
 
     await fetchPortalIdentity(fetchImpl, TOKEN);
-    await fetchPortalInvoices(fetchImpl, TOKEN);
-    await fetchInvoicePdfBlob(fetchImpl, TOKEN, 'inv-1');
+    await fetchPortalHome(fetchImpl, TOKEN);
+    await fetchPortalDocuments(fetchImpl, TOKEN, { kind: 'INVOICE', search: 'FV' });
+    await fetchPortalDocument(fetchImpl, TOKEN, 'INVOICE', 'inv-1');
+    await fetchPortalDocumentPdf(fetchImpl, TOKEN, 'INVOICE', 'inv-1');
     await fetchPortalLogoBlob(fetchImpl, TOKEN);
     await renewPortalLink(fetchImpl, TOKEN);
 
@@ -94,17 +97,21 @@ describe('portal request contract', () => {
     // header is what carries the token under the cookie credential scheme, where the shared
     // helper drops an explicit `token`; `token` stays so a bearer GO JWT never rides along.
     const getOptions = { token: TOKEN, headers: { 'X-Portal-Token': TOKEN }, on401: 'ignore' };
-    // Exact shape, not a superset: an extra option here would be a silent policy change.
+    // Exact shape, not a superset: an extra option here would be a silent policy change. Routes
+    // are compared before the query string; `/documents` filters are asserted on their own below.
     assert.deepEqual(
       calls.map((call) => ({ route: call.path.split('?')[0], options: call.options })),
       [
         { route: '/sws/portal/me', options: getOptions },
-        { route: '/sws/portal/invoices', options: getOptions },
-        { route: '/sws/portal/invoices/inv-1/pdf', options: getOptions },
+        { route: '/sws/portal/home', options: getOptions },
+        { route: '/sws/portal/documents', options: getOptions },
+        { route: '/sws/portal/documents/invoice/inv-1', options: getOptions },
+        { route: '/sws/portal/documents/invoice/inv-1/pdf', options: getOptions },
         { route: '/sws/portal/logo', options: getOptions },
         { route: '/sws/portal/renew', options: { ...getOptions, method: 'POST' } },
       ],
     );
+    // The token must never reach the URL, query string included (plan §5.4).
     for (const call of calls) {
       assert.ok(
         !call.path.includes(TOKEN),
@@ -113,33 +120,16 @@ describe('portal request contract', () => {
     }
   });
 
-  it('targets the portal servlet, never the shared NEO CRUD engine', async () => {
-    const { fetchImpl, calls } = recordingFetch(() => jsonResponse({}));
-
-    await fetchPortalIdentity(fetchImpl, TOKEN);
-    await fetchPortalInvoices(fetchImpl, TOKEN);
-    await fetchInvoicePdfBlob(fetchImpl, TOKEN, 'inv-1');
-
-    // Compared on the path before any query string: `/invoices` carries `?limit&offset` since
-    // paging landed, and pinning that here would make this test fail on an unrelated page-size
-    // change while still not guarding the thing it exists to guard.
-    assert.deepEqual(calls.map((call) => call.path.split('?')[0]), [
-      '/sws/portal/me',
-      '/sws/portal/invoices',
-      '/sws/portal/invoices/inv-1/pdf',
-    ]);
-    // The token must never reach the URL, query string included (plan §5.4).
-    for (const call of calls) {
-      assert.ok(!call.path.includes(TOKEN), `token leaked into ${call.path}`);
-    }
-  });
-
-  it('escapes the invoice id in the PDF path', async () => {
+  it('lower-cases the kind and escapes the id in the document and printable paths', async () => {
     const { fetchImpl, calls } = recordingFetch(() => blobResponse(null));
 
-    await fetchInvoicePdfBlob(fetchImpl, TOKEN, 'a/b c');
+    await fetchPortalDocument(fetchImpl, TOKEN, 'SHIPMENT', 'a/b c');
+    await fetchPortalDocumentPdf(fetchImpl, TOKEN, 'SHIPMENT', 'a/b c');
 
-    assert.equal(calls[0].path, '/sws/portal/invoices/a%2Fb%20c/pdf');
+    assert.deepEqual(calls.map((call) => call.path), [
+      '/sws/portal/documents/shipment/a%2Fb%20c',
+      '/sws/portal/documents/shipment/a%2Fb%20c/pdf',
+    ]);
   });
 
   it('resolves a base URL that is not the NEO one', () => {
@@ -257,87 +247,108 @@ describe('renewPortalLink', () => {
   }
 });
 
-describe('fetchPortalInvoices', () => {
-  it('returns the balance and the rows in the order the backend sent them', async () => {
+describe('fetchPortalDocuments', () => {
+  const queryOf = (calls) => Object.fromEntries(new URL(calls[0].path, 'http://portal').searchParams);
+
+  for (const [label, filters, expected] of [
+    [
+      'sends every filter, the kind lower-cased and the search trimmed',
+      {
+        kind: 'INVOICE', statuses: ['CO', 'CL'], dateFrom: '2026-07-12', dateTo: '2026-08-12',
+        search: '  FV/00  ', offset: 50, limit: 25,
+      },
+      {
+        type: 'invoice', status: 'CO,CL', dateFrom: '2026-07-12', dateTo: '2026-08-12', q: 'FV/00',
+        limit: '25', offset: '50',
+      },
+    ],
+    [
+      'omits empty filters, so "all statuses" asks for no status at all',
+      { kind: 'ORDER', statuses: [], search: '   ' },
+      { type: 'order', limit: '50', offset: '0' },
+    ],
+  ]) {
+    it(label, async () => {
+      const { fetchImpl, calls } = recordingFetch(() => jsonResponse({}));
+
+      await fetchPortalDocuments(fetchImpl, TOKEN, filters);
+
+      assert.deepEqual(queryOf(calls), expected);
+    });
+  }
+
+  it('normalizes the page and falls back to what arrived when the backend sends no count', async () => {
     const { fetchImpl } = recordingFetch(() => jsonResponse({
-      currency: 'EUR',
-      outstandingAmount: '1210.50',
-      invoices: [
-        { id: 'inv-1', documentNo: 'FV/0001', grandTotalAmount: 1000, outstandingAmount: 0 },
-        { id: 'inv-2', documentNo: 'FV/0002', grandTotalAmount: 500, outstandingAmount: 210.5 },
-      ],
+      documents: [{ kind: 'INVOICE', id: 'inv-1', documentNo: 'FV/0001', grandTotal: '1000.00', isCreditNote: true }],
+      statuses: ['CO'],
+      totals: [{ currency: 'EUR', count: 1, taxBase: '826.45', grandTotal: '1000' }],
     }));
 
-    const summary = await fetchPortalInvoices(fetchImpl, TOKEN);
+    const page = await fetchPortalDocuments(fetchImpl, TOKEN, { kind: 'INVOICE', offset: 50 });
 
-    assert.equal(summary.currency, 'EUR');
-    assert.equal(summary.outstandingAmount, 1210.5);
-    assert.deepEqual(summary.invoices.map((row) => row.documentNo), ['FV/0001', 'FV/0002']);
-  });
-
-  it('falls back to the payload currency for a row that omits it', async () => {
-    const { fetchImpl } = recordingFetch(() => jsonResponse({
-      currency: 'USD',
-      invoices: [{ id: 'inv-1' }, { id: 'inv-2', currency: 'EUR' }],
-    }));
-
-    const summary = await fetchPortalInvoices(fetchImpl, TOKEN);
-
-    assert.deepEqual(summary.invoices.map((row) => row.currency), ['USD', 'EUR']);
-  });
-
-  it('treats a payload with no invoice array as an empty list, not an error', async () => {
-    const { fetchImpl } = recordingFetch(() => jsonResponse({ outstandingAmount: 0 }));
-
-    const summary = await fetchPortalInvoices(fetchImpl, TOKEN);
-
-    assert.deepEqual(summary.invoices, []);
-    assert.equal(summary.outstandingAmount, 0);
-    assert.equal(summary.currency, null);
-  });
-
-  it('nulls an unreadable balance so the page renders a dash instead of NaN', async () => {
-    const { fetchImpl } = recordingFetch(() => jsonResponse({ outstandingAmount: 'n/a' }));
-
-    assert.equal((await fetchPortalInvoices(fetchImpl, TOKEN)).outstandingAmount, null);
+    assert.equal(page.totalCount, 1);
+    assert.equal(page.offset, 50);
+    assert.deepEqual(page.statuses, ['CO']);
+    assert.deepEqual(page.totals, [{ currency: 'EUR', count: 1, taxBase: 826.45, grandTotal: 1000 }]);
+    assert.deepEqual(
+      { grandTotal: page.documents[0].grandTotal, isCreditNote: page.documents[0].isCreditNote },
+      { grandTotal: 1000, isCreditNote: true },
+    );
   });
 });
 
-describe('normalizePortalInvoice', () => {
-  it('coerces every field to the type the table renders', () => {
-    assert.deepEqual(normalizePortalInvoice({
-      id: 'inv-1',
-      documentNo: 'FV/0001',
-      invoiceDate: '2026-08-01',
-      dueDate: '2026-08-31',
-      grandTotalAmount: '1000.00',
-      outstandingAmount: '0',
-      currency: 'EUR',
-    }), {
-      id: 'inv-1',
-      documentNo: 'FV/0001',
-      invoiceDate: '2026-08-01',
-      dueDate: '2026-08-31',
-      grandTotalAmount: 1000,
-      outstandingAmount: 0,
-      currency: 'EUR',
-    });
+describe('fetchPortalHome', () => {
+  it('coerces the balances and keeps the tiles and recent documents', async () => {
+    const tiles = { INVOICE: { count: 3, highlight: { code: 'overdue', count: 1 } } };
+    const { fetchImpl } = recordingFetch(() => jsonResponse({
+      balances: [{ currency: 'EUR', outstanding: '1210.50', pendingCount: 3, overdue: 'n/a' }],
+      tiles,
+      recent: [{ kind: 'ORDER', id: 'ord-1', documentNo: ' PV/0001 ' }],
+    }));
+
+    const home = await fetchPortalHome(fetchImpl, TOKEN);
+
+    assert.deepEqual(home.balances, [{
+      currency: 'EUR', outstanding: 1210.5, pendingCount: 3, overdue: null, overdueCount: 0, overdueSince: null,
+    }]);
+    assert.deepEqual(home.tiles, tiles);
+    assert.deepEqual(home.recent.map((doc) => [doc.kind, doc.id, doc.documentNo]), [['ORDER', 'ord-1', 'PV/0001']]);
   });
 
-  it('nulls every absent field, including an empty-string amount', () => {
-    assert.deepEqual(normalizePortalInvoice({ outstandingAmount: '' }), {
-      id: null,
-      documentNo: null,
-      invoiceDate: null,
-      dueDate: null,
-      grandTotalAmount: null,
-      outstandingAmount: null,
-      currency: null,
-    });
-  });
+  it('degrades an unparseable body to an empty home rather than to an error screen', async () => {
+    const { fetchImpl } = recordingFetch(() => unparseableResponse());
 
-  it('survives a missing row', () => {
-    assert.equal(normalizePortalInvoice(undefined).id, null);
+    assert.deepEqual(await fetchPortalHome(fetchImpl, TOKEN), { balances: [], tiles: {}, recent: [] });
+  });
+});
+
+describe('fetchPortalDocument', () => {
+  it('normalizes lines, related documents and the printable flag', async () => {
+    const { fetchImpl } = recordingFetch(() => jsonResponse({
+      kind: 'INVOICE',
+      id: 'inv-1',
+      lines: [{ product: 'Tornillo', quantity: '1.5', unitPrice: '10', amount: '15' }],
+      related: [{ kind: 'ORDER', id: 'ord-1' }],
+    }));
+
+    const document = await fetchPortalDocument(fetchImpl, TOKEN, 'INVOICE', 'inv-1');
+
+    assert.deepEqual(
+      [document.lines[0].quantity, document.lines[0].unitPrice, document.lines[0].amount],
+      [1.5, 10, 15],
+    );
+    assert.deepEqual(document.related.map((doc) => [doc.kind, doc.id]), [['ORDER', 'ord-1']]);
+    // A backend that does not say there is a printable shows "PDF no disponible", never a dead button.
+    assert.equal(document.hasPdf, false);
+  });
+});
+
+describe('fetchPortalDocumentPdf', () => {
+  it('returns the streamed blob', async () => {
+    const pdf = { size: 12, type: 'application/pdf' };
+    const { fetchImpl } = recordingFetch(() => blobResponse(pdf));
+
+    assert.equal(await fetchPortalDocumentPdf(fetchImpl, TOKEN, 'INVOICE', 'inv-1'), pdf);
   });
 });
 
@@ -351,15 +362,6 @@ describe('invalid-link collapse (plan 5.2)', () => {
 
       await assert.rejects(
         fetchPortalIdentity(fetchImpl, TOKEN),
-        expectPortalError(PORTAL_ERROR.invalidLink, { status }),
-      );
-    });
-
-    it(`maps ${status} on /invoices to the single invalid-link code`, async () => {
-      const { fetchImpl } = recordingFetch(() => jsonResponse({}, { status }));
-
-      await assert.rejects(
-        fetchPortalInvoices(fetchImpl, TOKEN),
         expectPortalError(PORTAL_ERROR.invalidLink, { status }),
       );
     });
@@ -390,60 +392,38 @@ describe('transient failures stay distinct from a dead link', () => {
       return true;
     });
   });
-
-  it('maps a server error to loadFailed, not to invalid-link', async () => {
-    const { fetchImpl } = recordingFetch(() => jsonResponse({}, { status: 500 }));
-
-    await assert.rejects(
-      fetchPortalInvoices(fetchImpl, TOKEN),
-      expectPortalError(PORTAL_ERROR.loadFailed, { status: 500 }),
-    );
-  });
 });
 
-describe('fetchInvoicePdfBlob', () => {
-  it('returns the streamed blob', async () => {
-    const pdf = { size: 12, type: 'application/pdf' };
-    const { fetchImpl } = recordingFetch(() => blobResponse(pdf));
+describe('error mapping of the home, list, detail and printable calls', () => {
+  // 401/403 always mean the token itself was rejected. A 404 is a dead link only on /home, which
+  // is scoped to the token alone; on a list, a document or its printable it is one missing
+  // record — the detail view tells "not available" from "failed" by that status.
+  const { invalidLink, loadFailed, downloadFailed } = PORTAL_ERROR;
+  const CALLS = [
+    ['/home', (f) => fetchPortalHome(f, TOKEN), { 404: invalidLink, 500: loadFailed, network: loadFailed }],
+    ['/documents', (f) => fetchPortalDocuments(f, TOKEN, { kind: 'ORDER' }), { 404: loadFailed, 500: loadFailed, network: loadFailed }],
+    ['a document', (f) => fetchPortalDocument(f, TOKEN, 'ORDER', 'ord-1'), { 404: loadFailed, 500: loadFailed, network: loadFailed }],
+    [
+      'a printable',
+      (f) => fetchPortalDocumentPdf(f, TOKEN, 'ORDER', 'ord-1'),
+      { 404: downloadFailed, 500: downloadFailed, network: downloadFailed },
+    ],
+  ];
 
-    assert.equal(await fetchInvoicePdfBlob(fetchImpl, TOKEN, 'inv-1'), pdf);
-  });
+  for (const [label, call, expected] of CALLS) {
+    for (const status of [401, 403, 404, 500]) {
+      const code = status === 401 || status === 403 ? invalidLink : expected[status];
+      it(`maps ${status} on ${label} to ${code}`, async () => {
+        const { fetchImpl } = recordingFetch(() => jsonResponse({}, { status }));
 
-  it('treats a 404 as one missing document, not as a dead link', async () => {
-    const { fetchImpl } = recordingFetch(() => jsonResponse({}, { status: 404 }));
+        await assert.rejects(call(fetchImpl), expectPortalError(code, { status }));
+      });
+    }
 
-    await assert.rejects(
-      fetchInvoicePdfBlob(fetchImpl, TOKEN, 'inv-1'),
-      expectPortalError(PORTAL_ERROR.downloadFailed, { status: 404 }),
-    );
-  });
+    it(`maps a request on ${label} that never completed to ${expected.network}`, async () => {
+      const { fetchImpl } = failingFetch();
 
-  for (const status of [401, 403]) {
-    it(`treats ${status} as a dead link, because the token itself was rejected`, async () => {
-      const { fetchImpl } = recordingFetch(() => jsonResponse({}, { status }));
-
-      await assert.rejects(
-        fetchInvoicePdfBlob(fetchImpl, TOKEN, 'inv-1'),
-        expectPortalError(PORTAL_ERROR.invalidLink, { status }),
-      );
+      await assert.rejects(call(fetchImpl), expectPortalError(expected.network));
     });
   }
-
-  it('maps a server error to downloadFailed', async () => {
-    const { fetchImpl } = recordingFetch(() => jsonResponse({}, { status: 500 }));
-
-    await assert.rejects(
-      fetchInvoicePdfBlob(fetchImpl, TOKEN, 'inv-1'),
-      expectPortalError(PORTAL_ERROR.downloadFailed, { status: 500 }),
-    );
-  });
-
-  it('maps a request that never completed to downloadFailed', async () => {
-    const { fetchImpl } = failingFetch();
-
-    await assert.rejects(
-      fetchInvoicePdfBlob(fetchImpl, TOKEN, 'inv-1'),
-      expectPortalError(PORTAL_ERROR.downloadFailed),
-    );
-  });
 });
