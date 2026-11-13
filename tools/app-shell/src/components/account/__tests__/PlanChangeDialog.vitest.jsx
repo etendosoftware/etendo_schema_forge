@@ -20,6 +20,8 @@ const TEMPLATES = {
   planChangeChargeToday: '{amount}:planChangeChargeToday',
   planChangeChargeTodayCard: '{amount}@{brand}/{last4}:planChangeChargeTodayCard',
   planChangePaymentRequired: '{plan}:planChangePaymentRequired',
+  planChangeKeepNote: '{plan}:planChangeKeepNote',
+  planChangePendingCancelled: '{plan}:planChangePendingCancelled',
   upgradePlanPriceMonthly: '{amount} per month',
   upgradePlanPriceYearly: '{amount} per year',
 };
@@ -187,6 +189,32 @@ describe('PlanChangeDialog', () => {
     await waitFor(() => expect(screen.getByTestId('PlanChangeDialog__charge'))
       .toHaveTextContent('planChangeChargeUnknown'));
     expect(screen.getByTestId('PlanChangeDialog__confirm')).toBeEnabled();
+  });
+
+  it('offers keeping the current plan while a downgrade is pending, and says it was cancelled', async () => {
+    const KEEP = { planKey: 'pro-yearly', planName: 'Pro yearly', billingInterval: 'year',
+      displayPrice: '990', currency: 'EUR', timing: 'keep', intervalChange: false, quotas: [] };
+    getPlanChanges.mockResolvedValue({ hasSubscription: true, changes: [KEEP, CORE],
+      pendingChange: { planKey: 'pro', planName: 'Pro', effectiveAt: '2027-10-23T00:00:00Z' } });
+    requestPlanChange.mockResolvedValue({ planKey: 'pro-yearly', planName: 'Pro yearly',
+      timing: 'immediate', alreadyPending: false, paymentRequired: false, pendingCancelled: true });
+    renderDialog();
+
+    const options = await screen.findAllByTestId('PlanChangeDialog__option');
+    expect(options[0]).toHaveAttribute('data-timing', 'keep');
+    expect(within(options[0]).getByTestId('PlanChangeDialog__optionTiming'))
+      .toHaveTextContent('planChangeTimingKeep');
+    await userEvent.click(options[0]);
+
+    expect(screen.getByTestId('PlanChangeDialog__timingNote')).toHaveTextContent('Pro:planChangeKeepNote');
+    // Keeping the plan charges nothing: no quote, no charge line.
+    expect(screen.queryByTestId('PlanChangeDialog__charge')).not.toBeInTheDocument();
+    expect(previewPlanChange).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByTestId('PlanChangeDialog__confirm'));
+    expect(await screen.findByTestId('PlanChangeDialog__done'))
+      .toHaveTextContent('Pro yearly:planChangePendingCancelled');
+    expect(requestPlanChange).toHaveBeenCalledWith('/api', 'pro-yearly', null, null);
   });
 
   it('previews nothing for a downgrade, which charges nothing today', async () => {

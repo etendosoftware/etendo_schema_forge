@@ -518,6 +518,11 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   it), so the plan, the quotas and the pending line follow. Refusals keep the dialog open with their own line: `planChangeNotAllowed`
   (409 `PLAN_CHANGE_NOT_ALLOWED`), `planChangeNotCurrent` (409 `SUBSCRIPTION_NOT_CURRENT`),
   `planChangeFailed` (anything else); a 401 is handed to the host as everywhere on the page.
+- **Keeping the current plan:** while a downgrade is pending the backend lists the changes of the
+  plan it moves to, with the current plan first as `timing: "keep"` (badge `planChangeTimingKeep`,
+  note `planChangeKeepNote` "Cancels the scheduled change to {plan}…", no charge line, no quote).
+  Confirming it cancels the scheduled downgrade; the answer has `pendingCancelled: true` and the
+  dialog says `planChangePendingCancelled`.
 - **Pending downgrade:** while `pendingChange` is set on `GET /billing/subscription`, the section
   shows `subscriptionPendingChange` ("Your plan changes to {plan} on {date}") persistently; the
   dialog repeats it (`PlanChangeDialog__pending`). It disappears when the change applies at the

@@ -26,6 +26,13 @@ import {
 const PRICE_LABEL_KEYS = { month: 'upgradePlanPriceMonthly', year: 'upgradePlanPriceYearly' };
 const TIMING_IMMEDIATE = 'immediate';
 const TIMING_PERIOD_END = 'period_end';
+/** The offered "change" that keeps the current plan: it cancels the pending downgrade. */
+const TIMING_KEEP = 'keep';
+const TIMING_BADGE_KEYS = {
+  [TIMING_IMMEDIATE]: 'planChangeTimingImmediate',
+  [TIMING_PERIOD_END]: 'planChangeTimingPeriodEnd',
+  [TIMING_KEEP]: 'planChangeTimingKeep',
+};
 const REFUSAL_CODES = new Set([
   UPGRADE_ERROR_CODES.planChangeNotAllowed, UPGRADE_ERROR_CODES.planChangeNotCurrent,
 ]);
@@ -41,6 +48,7 @@ function errorKeyOf(err) {
  */
 function doneText(done, ui, locale) {
   const plan = done.planName || done.planKey;
+  if (done.pendingCancelled) return ui('planChangePendingCancelled', { plan });
   if (done.paymentRequired) return ui('planChangePaymentRequired', { plan });
   if (done.timing !== TIMING_PERIOD_END) return ui('planChangeDoneImmediate', { plan });
   const date = done.effectiveAt ? formatCalendarDate(done.effectiveAt, locale) : '';
@@ -54,8 +62,14 @@ function exceededQuotasOf(selected) {
   return quotas.filter(isQuotaOverLimit);
 }
 
-/** The timing note of the chosen target: downgrade at the period end, interval change, upgrade. */
-function timingNote(selected, ui, periodEndDate) {
+/**
+ * The timing note of the chosen target: keep the current plan (cancels the pending change),
+ * downgrade at the period end, interval change, upgrade.
+ */
+function timingNote(selected, ui, periodEndDate, pending) {
+  if (selected.timing === TIMING_KEEP) {
+    return ui('planChangeKeepNote', { plan: pending?.planName || pending?.planKey || '' });
+  }
   if (selected.timing === TIMING_PERIOD_END) {
     return ui('planChangePeriodEndNote', { date: periodEndDate || '' });
   }
@@ -97,7 +111,9 @@ export function planPriceLabel(plan, ui) {
  * ETP-5053 — the change-plan dialog on `/account`.
  *
  * It offers only the targets the backend lists (`GET /sws/go/billing/subscription/plan-changes`,
- * the active *Allowed plan changes* rows of the current plan), and before the customer confirms it
+ * the active *Allowed plan changes* rows of the current plan — or, while a downgrade is pending, of
+ * the plan it moves to, with the current plan first as `timing: "keep"`, which cancels the
+ * scheduled change), and before the customer confirms it
  * states, for the chosen target:
  *
  * - the direction and timing: an upgrade applies now and the billing date does not move; a
@@ -299,8 +315,7 @@ export function PlanChangeDialog({
                       </span>
                     </span>
                     <Badge variant="outline" data-testid="PlanChangeDialog__optionTiming">
-                      {ui(change.timing === TIMING_IMMEDIATE
-                        ? 'planChangeTimingImmediate' : 'planChangeTimingPeriodEnd')}
+                      {ui(TIMING_BADGE_KEYS[change.timing] || 'planChangeTimingPeriodEnd')}
                     </Badge>
                   </button>
                 </li>
@@ -312,7 +327,7 @@ export function PlanChangeDialog({
         {status === 'loaded' && !done && selected && (
           <div className="space-y-2 rounded-md border p-3 text-sm" data-testid="PlanChangeDialog__consequences">
             <p data-testid="PlanChangeDialog__timingNote">
-              {timingNote(selected, ui, periodEndDate)}
+              {timingNote(selected, ui, periodEndDate, pending)}
             </p>
             {selected.timing === TIMING_IMMEDIATE && (
               <p className="font-medium" data-testid="PlanChangeDialog__charge"
@@ -320,9 +335,11 @@ export function PlanChangeDialog({
                 {chargeText(preview, ui)}
               </p>
             )}
-            <p className="text-muted-foreground" data-testid="PlanChangeDialog__quotaKept">
-              {ui('planChangeQuotaKept')}
-            </p>
+            {selected.timing !== TIMING_KEEP && (
+              <p className="text-muted-foreground" data-testid="PlanChangeDialog__quotaKept">
+                {ui('planChangeQuotaKept')}
+              </p>
+            )}
             {exceeded.length === 0 && Array.isArray(selected.quotas) && selected.quotas.length > 0 && (
               <p className="text-muted-foreground" data-testid="PlanChangeDialog__quotaFine">
                 {ui('planChangeQuotaFine')}
