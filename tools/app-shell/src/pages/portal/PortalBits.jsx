@@ -76,9 +76,9 @@ export function PortalDocumentStatus({ status, className }) {
 }
 
 /** An invoice's payment state, as the app shows it (see `invoicePaymentState`). */
-export function PortalPaymentStatus({ document, installments = null, className }) {
+export function PortalPaymentStatus({ document, installments = null, useServerOverdue = false, className }) {
   const ui = useUI();
-  const state = invoicePaymentState(document, installments);
+  const state = invoicePaymentState(document, installments, { useServerOverdue });
   if (!state) return null;
   return (
     <PortalTag tone={state.tone} className={className} testId="portal-payment-status" data-state={state.id}>
@@ -88,9 +88,9 @@ export function PortalPaymentStatus({ document, installments = null, className }
 }
 
 /** The badge a row shows: an invoice's payment state, any other document's status. */
-export function PortalRowBadge({ document, className }) {
+export function PortalRowBadge({ document, className, useServerOverdue = false }) {
   return document?.kind === 'INVOICE'
-    ? <PortalPaymentStatus document={document} className={className} />
+    ? <PortalPaymentStatus document={document} className={className} useServerOverdue={useServerOverdue} />
     : <PortalDocumentStatus status={document?.documentStatus} className={className} />;
 }
 

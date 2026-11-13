@@ -855,6 +855,15 @@ mobile headers, as the boards do; the shell is only the sidebar and the bottom b
   imponible" (back from 1536 px; it stays in the detail) so "Imp. total" and "Pendiente" fit. Mobile: the status tabs scroll sideways instead of wrapping, and the mobile base text
   is 16 px as on the boards.
 
+- **"Documentos recientes" (home).** Number, status and amount sit in fixed-width cells, as on the
+  board, so they line up row to row (amounts right-aligned in a 110 px pill; a long number
+  truncates with a tooltip, a long status wraps in its cell); "Ver todos" is an underlined link.
+  **Home-only exception to the overdue rule:** a recent invoice shows the app's "Vencida"
+  (`statusOverdue`, destructive) from the row's server `overdue` flag (an instalment past due with
+  money owed, server day), as the board does, because recent rows carry no instalments. The lists
+  keep the app grid's rule (no overdue badge, the due-date dot carries it) and the detail keeps
+  deciding it from its instalments.
+
 **Agreed OUT items (the only design elements not built).** The account / user menu (no login);
 "Ayuda y soporte"; "Albaranes de devolución" (returns are out of scope); the checkboxes and
 "Descargar seleccionados"; the advanced "Filtros"; "Comentarios"; Aceptar / Rechazar and the

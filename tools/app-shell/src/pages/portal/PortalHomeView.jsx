@@ -114,7 +114,7 @@ export default function PortalHomeView({
               <button
                 type="button"
                 onClick={viewAll}
-                className="text-sm font-medium hover:text-primary md:text-xs"
+                className="text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary md:text-xs"
                 data-testid="portal-recent-view-all"
               >
                 {ui('portalViewAll')}
@@ -392,13 +392,20 @@ function RecentDocuments({ recent, onOpen }) {
           <button
             type="button"
             onClick={() => onOpen(document)}
-            className={`hidden w-full cursor-pointer items-center gap-2.5 px-3.5 py-2 text-left hover:bg-muted md:flex ${PORTAL_ROW_FOCUS}`}
+            className={`hidden w-full cursor-pointer items-center gap-2 px-3.5 py-2 text-left hover:bg-muted md:flex ${PORTAL_ROW_FOCUS}`}
             data-testid="portal-recent-document"
           >
+            {/* Fixed-width cells, as on the board, so number, status and amount line up row to
+                row: a long number truncates (tooltip), a long status wraps inside its cell, and
+                every amount (or a shipment's "—") is right-aligned in a 110 px pill. */}
             <span className="min-w-0 flex-1 truncate">{ui(documentLabelKey(document))}</span>
-            <PortalTag className="font-normal">{document.documentNo}</PortalTag>
-            <PortalRowBadge document={document} className="font-normal" />
-            <span className="min-w-16 rounded-lg border border-border px-2 py-0.5 text-right text-xs leading-4 tabular-nums">
+            <span className="flex w-24 shrink-0">
+              <PortalTag className="block max-w-full truncate font-normal" title={document.documentNo}>{document.documentNo}</PortalTag>
+            </span>
+            <span className="flex w-36 shrink-0">
+              <PortalRowBadge document={document} useServerOverdue className="whitespace-normal font-normal" />
+            </span>
+            <span className="w-[110px] shrink-0 rounded-lg border border-border px-2 py-0.5 text-right text-xs leading-4 tabular-nums">
               <PortalMoney currency={document.currency} value={document.grandTotal} />
             </span>
             <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
@@ -419,7 +426,7 @@ function RecentDocuments({ recent, onOpen }) {
             </span>
             <span className="flex flex-col items-end gap-1">
               <PortalMoney currency={document.currency} value={document.grandTotal} className="font-semibold tabular-nums" />
-              <PortalRowBadge document={document} />
+              <PortalRowBadge document={document} useServerOverdue />
             </span>
           </button>
         </li>

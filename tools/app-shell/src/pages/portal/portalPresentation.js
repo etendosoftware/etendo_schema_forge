@@ -120,7 +120,7 @@ export function documentLabelKey(document) {
  *   instalments, when known
  * @returns {{ id: string, labelKey: string, tone: string }|null} null when not an invoice
  */
-export function invoicePaymentState(document, installments = null) {
+export function invoicePaymentState(document, installments = null, { useServerOverdue = false } = {}) {
   if (document?.kind !== 'INVOICE') return null;
   const badge = resolveInvoicePaymentBadge({
     grandTotalAmount: document.grandTotal,
@@ -128,9 +128,14 @@ export function invoicePaymentState(document, installments = null) {
     documentStatus: document.documentStatus,
   });
   if (badge.kind === 'draft') return null;
-  const overdue = Array.isArray(installments) && installments.some((installment) => (
-    (installment.outstandingAmount ?? 0) > 0
-      && getCalendarDateRelation(installment.dueDate) === 'past'));
+  // `useServerOverdue` — the home's "Documentos recientes" ONLY (design Main shows "Vencida"
+  // there): recent rows carry no instalments, so the row's server `overdue` flag (an instalment
+  // past due with money owed, server day) stands in for them. The lists keep the app grid's rule
+  // (no overdue badge, the due-date dot carries it).
+  const overdue = (useServerOverdue && document.overdue === true)
+    || (Array.isArray(installments) && installments.some((installment) => (
+      (installment.outstandingAmount ?? 0) > 0
+        && getCalendarDateRelation(installment.dueDate) === 'past')));
   if (!badge.isCredit && overdue && (badge.kind === 'pending' || badge.kind === 'partial')) {
     return { id: 'overdue', labelKey: 'statusOverdue', tone: 'destructive' };
   }
