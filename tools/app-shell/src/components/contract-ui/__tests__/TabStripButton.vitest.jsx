@@ -172,4 +172,30 @@ describe('TabStripButton', () => {
       expect(activeIndicator).not.toBeNull();
     });
   });
+
+  describe('activeAccent', () => {
+    it('keeps the dark foreground active style by default', () => {
+      const { button } = renderButton({ isActive: true });
+      expect(button.className).toContain('text-foreground');
+      expect(button.querySelector('span.bg-foreground')).not.toBeNull();
+    });
+
+    it("'primary' paints the active text and underline with the brand blue", () => {
+      const { button } = renderButton({ isActive: true, activeAccent: 'primary' });
+      expect(button.className).toContain('text-primary');
+      expect(button.className).not.toContain('text-foreground');
+      expect(button.querySelector('span.bg-primary')).not.toBeNull();
+      expect(button.querySelector('span.bg-foreground')).toBeNull();
+    });
+
+    it("'primary' also recolours a custom indicator when showHoverLine is false", () => {
+      const { button } = renderButton({ isActive: true, activeAccent: 'primary', showHoverLine: false, indicatorCls: 'absolute bottom-0 h-0.5 bg-foreground' });
+      expect(button.querySelector('span.bg-primary')).not.toBeNull();
+    });
+
+    it("'primary' leaves inactive tabs muted", () => {
+      const { button } = renderButton({ isActive: false, activeAccent: 'primary' });
+      expect(button.className).toContain('text-muted-foreground');
+    });
+  });
 });

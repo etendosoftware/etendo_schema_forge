@@ -57,7 +57,7 @@ The skill `stored-computed-column` states it explicitly: a value injected by `Ne
 | Sort Fecha, Cantidad, Costo | `movementDate`, `movementQuantity`, `transactionCost` (physical) | Yes |
 | Filter warehouse | `storageBin` `in` (bins of that warehouse); the warehouse is not a column of `M_Transaction` | Workable, with the `in` limit of 100 values |
 | Sort Almacén | warehouse name, reached through the bin: not physical | **No** |
-| Sort Tipo | physical `movementType` sorts by code, not by the label shown; the return/normal distinction (`C_DocType.IsReturn`) is not physical | **Only by code** |
+| Sort Tipo | physical `movementType` sorts by code, not by the label shown; the return/normal distinction (`C_DocType.IsReturn`) is not physical | **Superseded (ETP-5908):** the Type header now orders by the visible label. The SPA sends the order of the translated label buckets in the active language (`typeLabelOrder`) and `ProductTransactionsHandler#orderedPage` ranks the filtered set by it on the server (see `docs/generated-custom-windows/product.md`, Movements) |
 | Documento (label, link) | `afterHandle` (already works) | Display only; the task does not ask to sort it |
 | Stock resultante | running sum computed in `afterHandle` over the whole product history | Display only; the task says it is not sortable |
 
@@ -107,8 +107,9 @@ Differences with the written tasks:
 1. Period selector (3/6/12 months, default 12), exact date range under it, modal that inherits the period but keeps independent state.
 2. Per-warehouse series chart; month labels in the system language; X-axis rules; tooltip with sorted rows and a Total row.
 3. Interactive legend (panel and modal behave differently), at least one series always visible.
-4. Summary / Warehouses tabs, "N ubicaciones" link, warehouse cards, remove "Reserved".
-5. Collapse to a 48 px strip, state persisted across reloads.
+4. Summary / Warehouses tabs, "N ubicaciones" link (**superseded 2026-11-12:** the whole stock card is the button and "N ubicaciones" is a plain pill), warehouse cards, remove "Reserved".
+5. Collapse to a 48 px strip, state persisted across reloads (**control superseded 2026-11-12:** one 24 px circular button on the divider, strip with only the Resumen and Almacenes icons).
+6. **Design pass 2026-11-12** (designer Valeria, ETP-5889): server-side "Total del período" row (`etgoTotals`, neo-headless.md §5.3.4.b), 340 px table floor with full-width borderless table, same-line date/time and type/document cells, Etendo AI chart palette and tokens, strong primary Save and blue active tab (Product only). Details: `docs/generated-custom-windows/product.md`, last section.
 
 **Design verification (Claude Design board, 2026-11-02).** Checked in the board: RF-01 to RF-05, RF-09, RF-11, RF-12, RF-14 (click), RF-15 and RF-16 behave as written. Details left open:
 - The Y axis rescales when a series is hidden; the RFs say nothing about it.
@@ -146,7 +147,7 @@ The role is not an event property of this event: it travels on every event as th
 | Resulting stock with a warehouse filter | **Follows the filter**: per product and warehouse when a warehouse is selected, per product otherwise. Not computed for the count-only request |
 | Return types | `C_DocType.IsReturn`, resolved by the handler |
 | Sortable Almacén and Tipo | Two stored computed columns on `M_Transaction` (`EM_Etgo_Warehouse_ID`, `EM_Etgo_Doc_Kind`, `S`/`S`) |
-| Default periods (decided 2026-11-02) | The Movements tab keeps **last 7 days** (as built and as in the design); the side panel defaults to **12 months** with the exact range `DD/MM/AAAA – DD/MM/AAAA` under the selector (RF-01, RF-05). Neither default changes. The Jira text of ETP-5889 (scope item "Barra de filtros" and CP-07) was corrected by the user from "3 months" to "7 days" on 2026-11-02 |
+| Default periods (decided 2026-11-02) | **Superseded 2026-11-12: the Movements tab opens on the last 7 days again** (designer's final comment on ETP-5889; the 2026-11-11 30-day change is reversed, `DEFAULT_MOVEMENTS_PERIOD = last7`). The side panel stays on 12 months. History: ~~Amended 2026-11-11:~~ the Movements tab now opens on **last 30 days** (was 7): the designer changed it in the updated design (Producto - Panel lateral v2), and it means fewer empty opens for products without recent activity. Originally decided as last 7 days; the side panel defaults to **12 months** with the exact range `DD/MM/AAAA – DD/MM/AAAA` under the selector (RF-01, RF-05). Neither default changes. The Jira text of ETP-5889 (scope item "Barra de filtros" and CP-07) was corrected by the user from "3 months" to "7 days" on 2026-11-02 |
 | Flag for ETP-5908 (decided 2026-11-02) | Reuses the capability `productMovements`, no own flag; see section 4B for what depends on it |
 | Who sees the tab | A per-account feature flag, `product-movements-tab` (default off), evaluated only in the backend by `ProductMovementsPolicy` and published as the capability `productMovements`. The flag gates behaviour only: it is **not** access control (with it off the `transactions` rows stay readable under the role's access; only `etgoStockAfter` and `etgoTotalRows` are withheld) |
 
@@ -158,7 +159,7 @@ The role is not an event property of this event: it travels on every event as th
 - **Datadog**: the flag exists and has a targeting rule by account email in Production (two accounts); it must be widened for the KPIs to measure anything. A real TTL is still to be set (the registry holds a placeholder, 2027-01-31).
 - **First KPI value**: the collector reports the last complete Monday–Sunday week, so the first value appears on the Monday after the first complete week in which the tab was deployed and used (for the week of 2 to 8 November, on 2026-11-09). Until the event has been seen in production the KPIs are N/D, never 0.
 - **Analyst**: does the tenant admin count as a warehouse role; release date and cohort the 3-month target counts from; whether the KPI is restricted to accounts with the flag (with a gradual rollout the denominator includes devices that cannot see the tab).
-- ~~Default period of the tab~~: **closed 2026-11-02**, last 7 days; the Jira text was corrected (see "Decisions taken").
+- ~~Default period of the tab~~: **closed 2026-11-02** as last 7 days; changed 2026-11-11 to last 30 days, **reverted 2026-11-12 to last 7 days** by the designer's final call (superseded).
 - **`W+`/`W-` (Work Order) movements**: not in the type table and not excluded; not decided.
 - **Not verified**: MCP access (scope 12), a product with more than one page of movements, the flag off in a hosted environment, the event reaching Datadog and Mixpanel (nothing is configured locally), and the filter of the lists (`"x" in properties[…]`) in the collector's own segmentation query.
 - Optional hardening: a `RAISE WARNING` in the two PL/pgSQL functions instead of returning null on error (needs `update.database`).
@@ -167,7 +168,7 @@ The role is not an event property of this event: it travels on every event as th
 - KPIs, if any (use of the period selector, Expand, "Ver movimientos").
 - RF-12 gives the same example for Spanish and English ("23 Oct 2026" twice); confirm the intended format per language.
 - **STILL OPEN, needs the analyst: what "the period is synchronised with the side panel" means** (ETP-5889 acceptance criterion and CP-07). Facts: the design opens the panel on 12 months and the tab on 7 days; the tab has no 3/6/12-month presets (only 12 months, All time and a custom range), so the panel's 3/6/12 values do not map one to one onto the tab. **Reading 1 (recommended, not decided):** each opens on its own default and a change in one propagates to the other. Verified live on local on 2026-11-02 (product Fernet `SK-003`): changing the panel to 12 months left the tab on 7 days, so **no synchronisation exists today**. Per the flag decision, whatever is built here is gated by `productMovements`.
-- **UX finding (2026-11-02):** with the 7-day default, a product with no recent activity opens the tab empty ("Sin resultados para los filtros aplicados") while the counter says 10. Not decided whether this needs a change (for example, a hint to widen the period).
+- **UX finding (2026-11-02):** with the 7-day default, a product with no recent activity opens the tab empty ("Sin resultados para los filtros aplicados"; the counter no longer exists, and a product with no movement at all now shows the design's empty state, told apart by a one-record probe). Not decided whether this needs a change (for example, a hint to widen the period).
 - The "Expandir" control: ETP-5889 scope 13 renames it "Ver movimientos"; ETP-5908 RF-02/RF-07 keep a button called "Expandir". Resolved by the flag decision (section 4B): "Ver movimientos" with the flag on, "Expandir" with it off.
 - The panel gaps found on 2026-10-28 (section 3) and 2026-11-02 (section 4B) are still there.
 

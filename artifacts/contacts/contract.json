@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0",
+  "version": "0.8.0",
   "generatedAt": "2026-09-20T18:16:41.258Z",
-  "updatedAt": "2026-11-11T13:36:56.452Z",
-  "checksum": "82cecfcffa2b5efa",
+  "updatedAt": "2026-11-12T18:13:45.794Z",
+  "checksum": "b4de693813139470",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -1628,6 +1628,40 @@
             },
             "validation": {
               "maxLength": 32
+            }
+          },
+          {
+            "name": "obsepadMandateDate",
+            "apiKey": "obsepadMandateDate",
+            "column": "EM_Obsepad_Mandate_Date",
+            "label": "Mandate Date of Signature",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "section": "principal",
+            "visibleWhenCapability": "sepaRemittances",
+            "validation": {
+              "maxLength": 19
+            }
+          },
+          {
+            "name": "obsepadMandateIdentifier",
+            "apiKey": "obsepadMandateIdentifier",
+            "column": "EM_Obsepad_Mandate_Identifier",
+            "label": "Mandate Identification",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "section": "principal",
+            "visibleWhenCapability": "sepaRemittances",
+            "validation": {
+              "maxLength": 35
             }
           }
         ],
@@ -6822,6 +6856,22 @@
             "type": "foreignKey",
             "visibility": "readOnly",
             "required": false
+          },
+          {
+            "name": "obsepadMandateDate",
+            "apiKey": "obsepadMandateDate",
+            "column": "EM_Obsepad_Mandate_Date",
+            "type": "date",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "obsepadMandateIdentifier",
+            "apiKey": "obsepadMandateIdentifier",
+            "column": "EM_Obsepad_Mandate_Identifier",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
           }
         ]
       },
@@ -7724,6 +7774,22 @@
             "column": "em_etgo_location",
             "type": "foreignKey",
             "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "obsepadMandateDate",
+            "apiKey": "obsepadMandateDate",
+            "column": "EM_Obsepad_Mandate_Date",
+            "type": "date",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "obsepadMandateIdentifier",
+            "apiKey": "obsepadMandateIdentifier",
+            "column": "EM_Obsepad_Mandate_Identifier",
+            "type": "string",
+            "visibility": "discarded",
             "required": false
           }
         ]
@@ -8882,6 +8948,22 @@
             "column": "em_etgo_location",
             "type": "foreignKey",
             "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "obsepadMandateDate",
+            "apiKey": "obsepadMandateDate",
+            "column": "EM_Obsepad_Mandate_Date",
+            "type": "date",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "obsepadMandateIdentifier",
+            "apiKey": "obsepadMandateIdentifier",
+            "column": "EM_Obsepad_Mandate_Identifier",
+            "type": "string",
+            "visibility": "discarded",
             "required": false
           }
         ]
@@ -10048,6 +10130,22 @@
             "column": "em_etgo_location",
             "type": "foreignKey",
             "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "obsepadMandateDate",
+            "apiKey": "obsepadMandateDate",
+            "column": "EM_Obsepad_Mandate_Date",
+            "type": "date",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "obsepadMandateIdentifier",
+            "apiKey": "obsepadMandateIdentifier",
+            "column": "EM_Obsepad_Mandate_Identifier",
+            "type": "string",
+            "visibility": "discarded",
             "required": false
           }
         ]
@@ -14197,6 +14295,22 @@
         "description": "Field 'name2' should be present in businessPartner"
       },
       {
+        "id": "t-field-presence-businessPartner-obsepadMandateDate",
+        "category": "field-presence",
+        "entity": "businessPartner",
+        "field": "obsepadMandateDate",
+        "runner": "node",
+        "description": "Field 'obsepadMandateDate' should be present in businessPartner"
+      },
+      {
+        "id": "t-field-presence-businessPartner-obsepadMandateIdentifier",
+        "category": "field-presence",
+        "entity": "businessPartner",
+        "field": "obsepadMandateIdentifier",
+        "runner": "node",
+        "description": "Field 'obsepadMandateIdentifier' should be present in businessPartner"
+      },
+      {
         "id": "t-field-presence-businessPartner-oBTIKTaxIDKey",
         "category": "field-presence",
         "entity": "businessPartner",
@@ -15349,6 +15463,22 @@
         "description": "Field 'name2' should have type 'string' in businessPartner"
       },
       {
+        "id": "t-field-type-businessPartner-obsepadMandateDate",
+        "category": "field-type",
+        "entity": "businessPartner",
+        "field": "obsepadMandateDate",
+        "runner": "node",
+        "description": "Field 'obsepadMandateDate' should have type 'string' in businessPartner"
+      },
+      {
+        "id": "t-field-type-businessPartner-obsepadMandateIdentifier",
+        "category": "field-type",
+        "entity": "businessPartner",
+        "field": "obsepadMandateIdentifier",
+        "runner": "node",
+        "description": "Field 'obsepadMandateIdentifier' should have type 'string' in businessPartner"
+      },
+      {
         "id": "t-field-type-businessPartner-oBTIKTaxIDKey",
         "category": "field-type",
         "entity": "businessPartner",
@@ -16445,6 +16575,20 @@
         "rule": "contacts-Customer-EM_Aeatsii_Siikeylist-displayLogic",
         "runner": "node",
         "description": "Rule 'contacts-Customer-EM_Aeatsii_Siikeylist-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-contacts-Customer-EM-Obsepad-Mandate-Date-displayLogic",
+        "category": "rule-declared",
+        "rule": "contacts-Customer-EM_Obsepad_Mandate_Date-displayLogic",
+        "runner": "node",
+        "description": "Rule 'contacts-Customer-EM_Obsepad_Mandate_Date-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-contacts-Customer-EM-Obsepad-Mandate-Identifier-displayLogic",
+        "category": "rule-declared",
+        "rule": "contacts-Customer-EM_Obsepad_Mandate_Identifier-displayLogic",
+        "runner": "node",
+        "description": "Rule 'contacts-Customer-EM_Obsepad_Mandate_Identifier-displayLogic' (displayLogic) should be declared"
       },
       {
         "id": "t-rule-declared-contacts-Customer-FIN-Financial-Account-ID-displayLogic",
@@ -18805,6 +18949,22 @@
         "description": "System field 'numberOfCopies' should exist in backend but not frontend for customer"
       },
       {
+        "id": "t-system-field-customer-obsepadMandateDate",
+        "category": "system-field",
+        "entity": "customer",
+        "field": "obsepadMandateDate",
+        "runner": "node",
+        "description": "System field 'obsepadMandateDate' should exist in backend but not frontend for customer"
+      },
+      {
+        "id": "t-system-field-customer-obsepadMandateIdentifier",
+        "category": "system-field",
+        "entity": "customer",
+        "field": "obsepadMandateIdentifier",
+        "runner": "node",
+        "description": "System field 'obsepadMandateIdentifier' should exist in backend but not frontend for customer"
+      },
+      {
         "id": "t-system-field-customer-oBTIKTaxIDKey",
         "category": "system-field",
         "entity": "customer",
@@ -19771,6 +19931,22 @@
         "field": "numberOfCopies",
         "runner": "node",
         "description": "System field 'numberOfCopies' should exist in backend but not frontend for employee"
+      },
+      {
+        "id": "t-system-field-employee-obsepadMandateDate",
+        "category": "system-field",
+        "entity": "employee",
+        "field": "obsepadMandateDate",
+        "runner": "node",
+        "description": "System field 'obsepadMandateDate' should exist in backend but not frontend for employee"
+      },
+      {
+        "id": "t-system-field-employee-obsepadMandateIdentifier",
+        "category": "system-field",
+        "entity": "employee",
+        "field": "obsepadMandateIdentifier",
+        "runner": "node",
+        "description": "System field 'obsepadMandateIdentifier' should exist in backend but not frontend for employee"
       },
       {
         "id": "t-system-field-employee-oBTIKTaxIDKey",
@@ -21109,6 +21285,22 @@
         "description": "System field 'numberOfCopies' should exist in backend but not frontend for vendorCreditor"
       },
       {
+        "id": "t-system-field-vendorCreditor-obsepadMandateDate",
+        "category": "system-field",
+        "entity": "vendorCreditor",
+        "field": "obsepadMandateDate",
+        "runner": "node",
+        "description": "System field 'obsepadMandateDate' should exist in backend but not frontend for vendorCreditor"
+      },
+      {
+        "id": "t-system-field-vendorCreditor-obsepadMandateIdentifier",
+        "category": "system-field",
+        "entity": "vendorCreditor",
+        "field": "obsepadMandateIdentifier",
+        "runner": "node",
+        "description": "System field 'obsepadMandateIdentifier' should exist in backend but not frontend for vendorCreditor"
+      },
+      {
         "id": "t-system-field-vendorCreditor-oBTIKTaxIDKey",
         "category": "system-field",
         "entity": "vendorCreditor",
@@ -21503,23 +21695,23 @@
       }
     ],
     "summary": {
-      "total": 1155,
+      "total": 1167,
       "byCategory": {
         "action-endpoint": 6,
         "crud-flags": 15,
         "default-value-type": 50,
         "displaylogic-evaluable": 58,
         "displaylogic-valid": 58,
-        "field-presence": 144,
-        "field-type": 144,
-        "rule-declared": 104,
+        "field-presence": 146,
+        "field-type": 146,
+        "rule-declared": 106,
         "searchable-filters": 4,
         "selector-endpoint": 40,
-        "system-field": 517,
+        "system-field": 523,
         "visibility": 15
       },
       "byRunner": {
-        "node": 1155,
+        "node": 1167,
         "junit": 0
       }
     }

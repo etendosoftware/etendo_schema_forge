@@ -94,12 +94,12 @@ describe('row predicates', () => {
 describe('buildListQuery', () => {
   const criteria = [{ fieldName: 'status', operator: 'equals', value: 'ERROR' }];
 
-  it('pages newest first, with the vendor tax id extra property and no _noCount', () => {
+  it('pages newest first, with the vendor tax id and the invoice document-number extra properties and no _noCount', () => {
     const q = new URLSearchParams(buildListQuery({ criteria, startRow: 0, endRow: 50 }));
     assert.equal(q.get('_startRow'), '0');
     assert.equal(q.get('_endRow'), '50');
     assert.equal(q.get('_sortBy'), '-created');
-    assert.equal(q.get('_extraProperties'), 'businessPartner.taxID');
+    assert.equal(q.get('_extraProperties'), 'businessPartner.taxID,invoice.documentNo,duplicateOfInvoice.documentNo');
     assert.equal(q.has('_noCount'), false);
     assert.deepEqual(JSON.parse(q.get('criteria')), criteria);
   });

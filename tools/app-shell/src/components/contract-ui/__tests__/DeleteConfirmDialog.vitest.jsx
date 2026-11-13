@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DeleteConfirmDialog.jsx
 /**
  * ETP-5111 — `DeleteConfirmDialog`: the app's ONE delete-confirmation dialog.
  *
@@ -265,5 +266,57 @@ describe('DeleteConfirmDialog — testIdScope (ETP-5758)', () => {
     expect(screen.getByTestId('bulk-delete-confirm')).toBeInTheDocument();
     expect(screen.getByTestId('Button__bulk-delete-cancel')).toBeInTheDocument();
     expect(screen.getByTestId('DialogContent__bulk-delete')).toBeInTheDocument();
+  });
+});
+
+/**
+ * ETP-6151 — optional `notice`: a host-specific consequence rendered under the description (the
+ * Imported Statements tab warns that a bank-connected account re-imports deleted movements on the
+ * next sync). Omitted by default, so every other surface renders exactly as before.
+ */
+describe('DeleteConfirmDialog — notice', () => {
+  it('renders the notice under the description, before the buttons', () => {
+    render(<DeleteConfirmDialog {...baseProps} notice={<p data-testid="host-notice">Heads up</p>} />);
+
+    const notice = screen.getByTestId('host-notice');
+    const description = screen.getByText('Are you sure you want to delete 3 record(s)?');
+    const confirm = screen.getByTestId('batch-delete-confirm');
+    expect(notice).toHaveTextContent('Heads up');
+    // eslint-disable-next-line no-bitwise
+    expect(description.compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // eslint-disable-next-line no-bitwise
+    expect(notice.compareDocumentPosition(confirm) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Outside the description, so the polite live region does not re-read it on every state change.
+    expect(description).not.toContainElement(notice);
+  });
+
+  // Unchanged when null: the header is still followed directly by the footer, as before the prop.
+  it.each([
+    ['omitted', {}],
+    ['null', { notice: null }],
+  ])('adds nothing between the header and the footer when the notice is %s', (_label, extra) => {
+    render(<DeleteConfirmDialog {...baseProps} {...extra} />);
+
+    expect(screen.getByTestId('DialogHeader__batch-delete').nextElementSibling)
+      .toBe(screen.getByTestId('DialogFooter__batch-delete'));
+  });
+
+  it('keeps its original content classes when no notice is given, and adds bg-card only with one', () => {
+    const { unmount } = render(<DeleteConfirmDialog {...baseProps} />);
+    const plain = screen.getByTestId('DialogContent__batch-delete').className;
+    unmount();
+    expect(plain).toContain('max-w-sm');
+    expect(plain).not.toContain('bg-card');
+
+    render(<DeleteConfirmDialog {...baseProps} notice={<p>n</p>} />);
+    expect(screen.getByTestId('DialogContent__batch-delete').className).toContain('bg-card');
+  });
+
+  it('keeps the notice while deleting', () => {
+    render(
+      <DeleteConfirmDialog {...baseProps} deleting notice={<p data-testid="host-notice">Heads up</p>} />,
+    );
+
+    expect(screen.getByTestId('host-notice')).toBeInTheDocument();
   });
 });

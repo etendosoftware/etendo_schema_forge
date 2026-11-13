@@ -551,6 +551,21 @@ export function isRectificationCascadeTarget(key, triggerField) {
   return triggerField === 'transactionDocument' && RECTIFICATION_CASCADE_FIELDS.has(key);
 }
 
+/** True when a callout value actually carries something (neither `''` nor null/undefined). */
+function hasCalloutValue(value) {
+  return value !== '' && value != null;
+}
+
+/**
+ * ETP-6148 — a SUGGESTED value (`{ value, suggested: true }`, e.g. the remittance name proposed
+ * from the due date) only fills a field the user has never touched in this form session. Unlike
+ * the collateral guard in applyCalloutFieldUpdates, this skip does not require a current value:
+ * a field the user cleared on purpose stays empty. Forced (non-suggested) values are unaffected.
+ */
+function isSuggestionForTouchedField(entry, key, userTouchedRef) {
+  return entry?.suggested === true && userTouchedRef.current.has(key);
+}
+
 export function applyCalloutFieldUpdates(updates, ctx) {
   const { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs, dispatchSnapshot, fieldGenerationRef, documentDateField } = ctx;
   for (const [key, entry] of Object.entries(updates)) {
@@ -561,13 +576,17 @@ export function applyCalloutFieldUpdates(updates, ctx) {
     if (isStaleCalloutResponse(key, dispatchSnapshot, fieldGenerationRef)) {
       continue;
     }
+    // ETP-6148 — see isSuggestionForTouchedField. Forced values keep every rule below.
+    if (isSuggestionForTouchedField(entry, key, userTouchedRef)) {
+      continue;
+    }
     // Skip empty callout values if the field already has a non-empty value
     // (e.g., callout clears warehouse but defaults already set it)
     const currentVal = data[key];
-    const userHasValue = currentVal !== '' && currentVal != null;
+    const userHasValue = hasCalloutValue(currentVal);
     const isRateRecalc = isCurrencyRateRecalcTarget(key, triggerField, documentDateField);
     const isRectificationCascade = isRectificationCascadeTarget(key, triggerField);
-    if ((entry.value === '' || entry.value == null) && userHasValue && !isRateRecalc
+    if (!hasCalloutValue(entry.value) && userHasValue && !isRateRecalc
         && !isRectificationCascade) {
       continue;
     }
@@ -613,7 +632,7 @@ export function applyCalloutFieldUpdates(updates, ctx) {
     //
     // The empty write itself is still applied above — only the generation is left
     // alone, so ETP-4772's protection of a real user edit is untouched.
-    if (entry.value !== '' && entry.value != null) {
+    if (hasCalloutValue(entry.value)) {
       bumpFieldGeneration(key, fieldGenerationRef);
     }
   }

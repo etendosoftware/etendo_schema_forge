@@ -64,8 +64,9 @@ vi.mock('../ContactsEmptyState.jsx', () => ({
   default: ({ context }) => <div data-testid="contacts-empty-state-stub" data-has-create={String(Boolean(context?.onCreate))} />,
 }));
 
+const extractApiErrorMessage = vi.fn(async () => 'mock error');
 vi.mock('@/lib/apiError', () => ({
-  extractApiErrorMessage: async () => 'mock error',
+  extractApiErrorMessage: (...a) => extractApiErrorMessage(...a),
 }));
 
 // --- Import under test ---
@@ -120,6 +121,18 @@ describe('ContactsTable', () => {
       expect(toastSuccess).not.toHaveBeenCalled();
       expect(onDataMutated).not.toHaveBeenCalled();
     });
+  });
+
+  it('hands the response and the translator (ui) to extractApiErrorMessage on a 403 delete', async () => {
+    const res = { ok: false, status: 403 };
+    apiFetch.mockResolvedValueOnce(res);
+    render(<ContactsTable {...defaultProps} />);
+
+    fireEvent.click(screen.getByTestId('trigger-delete-row'));
+    fireEvent.click(screen.getByText('delete'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('mock error'));
+    expect(extractApiErrorMessage).toHaveBeenCalledWith(res, expect.any(Function));
   });
 
   it('renders DataTable without crashing', () => {

@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/components/related-documents/purchaseRelatedDocs.js
+// @covers tools/app-shell/src/components/related-documents/relatedSources.js
 // PURCHASE_RELATED_DOCS is the single definition behind both the form's "Related documents"
 // section and the list preview card of the four purchase documents. Mirrors
 // salesRelatedDocs.vitest.js: each definition is resolved against a fake backend (helpers

@@ -143,7 +143,7 @@ The two KPIs of the Movements tab (`eng_movements_tab_adoption`, `eng_movements_
 - Weeks start on Monday 00:00 in the time zone of the Mixpanel project (Europe/Madrid).
 - The KPIs are N/D, never 0, until `product_movements_tab_opened` has been seen in production and there are active devices of the role in the week.
 
-Ids, filters, the series-name contract and how to rebuild the reports are documented in `etendo-kpis`: [`docs/mixpanel-saved-reports.md`](https://github.com/etendosoftware/etendo-kpis/blob/main/docs/mixpanel-saved-reports.md).
+Ids, filters, the series-name contract and how to rebuild the reports are documented in `etendo-kpis`: [`docs/mixpanel-saved-reports.md`](https://github.com/etendo-ai/etendo-kpis/blob/main/docs/mixpanel-saved-reports.md).
 
 ## Next Implementation Work
 

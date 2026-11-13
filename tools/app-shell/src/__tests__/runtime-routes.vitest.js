@@ -12,7 +12,7 @@ describe('buildRuntimeRoutes', () => {
     // Custom windows gated by `accessWindowId` that the registry loads by name: they are served
     // by the `:windowName` route, not by a path of their own. Keep this list explicit and short;
     // every other entry without a windowId must have its own route.
-    const servedByWindowRoute = new Set(['invoice-inbox']);
+    const servedByWindowRoute = new Set(['invoice-inbox', 'remittance']);
     const synthetic = [...defaultNavigation.filter(entry => !entry.windowId && !entry.obuiappProcessId),
       ...optionalNavigation.filter(entry => !entry.app)].filter(entry => !servedByWindowRoute.has(entry.name));
     expect(routes.find(candidate => candidate.path === ':windowName')?.public).toBe(false);
