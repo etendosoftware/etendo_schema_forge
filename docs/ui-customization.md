@@ -3722,6 +3722,40 @@ action of the detail view passes `primarySave={true}` to keep the default filled
 Default `false`; it does not change the new-record path, where `hasExternalPrimaryAction` is the
 equivalent switch in the other direction.
 
+**`primarySave="strong"` (ETP-5889, Product).** The string value `'strong'` keeps the filled primary
+look AND adds `hover:!bg-[var(--primary-hover-strong)]` (#2B48BC), the darker hover of the
+designer's Save button. Any other truthy value behaves as `true`. Product passes it from
+`windows/custom/product/index.jsx`; no other window is affected.
+
+### `tabsActiveAccent="primary"` — blue active secondary tab (ETP-5889, Product)
+
+`DetailView` prop (default `'default'`), forwarded as `buttonProps.activeAccent` to `TabStripButton`.
+With `'primary'` the active secondary tab paints its text, icon and 2 px underline with `--primary`
+instead of the foreground colour. Opt-in per window; Product sets it in `windows/custom/product/index.jsx`.
+
+### A control that straddles a scrolling sidebar's border (portal from an anchor span)
+
+A control centred on the border between the form and a side panel (the Product collapse/expand
+circle, `windows/custom/product/ProductSidebarDividerToggle.jsx`) cannot live inside the panel: the
+panel column is `overflow-y-auto`, which clips any child that overhangs its box (and forces
+`overflow-x` to clip too). The pattern:
+
+1. Render a hidden anchor `<span hidden>` inside the panel as the DOM handle.
+2. From the anchor find the column: the closest ancestor with BOTH `border-l` and `overflow-y-auto`
+   (a bare `border-l` also matches other panels). If none matches, fall back to the parent and
+   `console.warn` once in dev. Its parent is the row that holds the form and the panel.
+3. Make the row the positioning context (`position: relative` if it is `static`, and restore the
+   inline style on unmount) and `createPortal`
+   the button into the row, `absolute`, at `left = column.offsetLeft - size/2` and a fixed `top`
+   offset from `column.offsetTop`.
+4. Re-measure with a `ResizeObserver` on the column and the row (and when the collapsed state
+   changes), so the control follows width changes.
+
+Do not add `overflow: visible` to the scrolling column to avoid the portal: the column must keep
+its own scroll. The button stays mounted across states, so it keeps keyboard focus. Give it a stable
+`aria-label` with `aria-expanded` and `aria-controls` (never a label that flips with the state); only
+the `title` tooltip changes.
+
 ### Bottom tab-strip icons — `components/contract-ui/tabIcons.js`
 
 The icon before each secondary-tab label in the detail view's bottom tab strip is resolved by
