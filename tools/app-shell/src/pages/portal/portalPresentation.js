@@ -93,6 +93,27 @@ export function quotationValidity(document) {
   return { state: getCalendarDateRelation(document.validUntil) === 'past' ? 'expired' : 'open' };
 }
 
+/**
+ * <b>PO question Q1 (ETP-6209 Part C, Jira comment 149513) — the accept status.</b> The portal's
+ * "Aceptar" stays hidden until the PO fixes the status an accepted quotation takes; the backend
+ * refuses accepts meanwhile too (`PortalDecisionService.ACCEPT_AVAILABLE`, which the detail also
+ * reports as `decision.acceptAvailable`). Flip both together.
+ */
+export const PORTAL_ACCEPT_ENABLED = false;
+
+/** The fixed reject reasons (PO spec), with the API codes; "Otros" requires a text. */
+export const PORTAL_REJECT_REASONS = Object.freeze([
+  { code: 'PRICE', labelKey: 'portalRejectReasonPrice' },
+  { code: 'DELIVERY', labelKey: 'portalRejectReasonDelivery' },
+  { code: 'PAYMENT_TERMS', labelKey: 'portalRejectReasonPaymentTerms' },
+  { code: 'OTHER_SUPPLIER', labelKey: 'portalRejectReasonOtherSupplier' },
+  { code: 'NOT_NEEDED', labelKey: 'portalRejectReasonNotNeeded' },
+  { code: 'OTHER', labelKey: 'portalRejectReasonOther' },
+]);
+
+/** The reject reason that requires a text. */
+export const PORTAL_REJECT_REASON_OTHER = 'OTHER';
+
 /** The singular label key of one document, telling a credit note from an invoice. */
 export function documentLabelKey(document) {
   if (document?.kind === 'INVOICE' && document?.isCreditNote) return 'portalKindCreditNote';

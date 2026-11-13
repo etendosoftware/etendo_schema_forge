@@ -143,6 +143,8 @@ async function portalGet(fetchImpl, token, path, {
   invalidOn = INVALID_TOKEN_STATUSES,
   failure = PORTAL_ERROR.loadFailed,
   method,
+  body,
+  headers,
 } = {}) {
   let response;
   try {
@@ -151,9 +153,10 @@ async function portalGet(fetchImpl, token, path, {
     // whatever the session credential scheme is — never in the URL.
     response = await fetchImpl(`${PORTAL_API_PREFIX}${path}`, {
       token,
-      headers: { [PORTAL_TOKEN_HEADER]: token },
+      headers: headers ?? { [PORTAL_TOKEN_HEADER]: token },
       on401: 'ignore',
       ...(method ? { method } : {}),
+      ...(body !== undefined ? { body } : {}),
     });
   } catch (cause) {
     // The request never completed (offline, DNS, aborted). That is transient and retryable,
@@ -400,6 +403,12 @@ export async function fetchPortalDocument(fetchImpl, token, kind, id) {
     })) : [],
     related: Array.isArray(data?.related) ? data.related.map(normalizePortalDocument) : [],
     hasPdf: data?.hasPdf === true,
+    // Part C: quotations only — whether the customer can accept / reject it now, and why not.
+    decision: data?.decision && typeof data.decision === 'object' ? {
+      canDecide: data.decision.canDecide === true,
+      blockedReason: readableText(data.decision.blockedReason),
+      acceptAvailable: data.decision.acceptAvailable === true,
+    } : null,
   };
 }
 
@@ -440,3 +449,99 @@ export function normalizePortalDocument(row) {
   };
 }
 
+// ─── Part C (ETP-6209): accept / reject a quotation, confirmed by email ─────────────────────────
+
+/**
+ * Header carrying the decision token on the confirmation landing — its own header, like
+ * {@link PORTAL_TOKEN_HEADER}, so the token never sits in a URL. Read by `PortalServlet`.
+ */
+export const PORTAL_DECISION_TOKEN_HEADER = 'X-Portal-Decision-Token';
+
+/** What a decision request can answer besides `sent` (the API's error codes). */
+export const PORTAL_DECISION_ERROR = Object.freeze({
+  notPending: 'not_pending',
+  expired: 'expired',
+  noRecipient: 'no_recipient',
+  acceptUnavailable: 'accept_unavailable',
+  invalidReason: 'invalid_reason',
+  cooldown: 'cooldown',
+  failed: 'failed',
+});
+
+/** The landing's states. */
+export const PORTAL_DECISION_STATE = Object.freeze({
+  pending: 'pending',
+  confirmed: 'confirmed',
+  voided: 'voided',
+  notPending: 'not_pending',
+  expired: 'expired',
+});
+
+/** The error code of a refused request, read from its JSON body. */
+async function decisionErrorOf(response) {
+  const data = await response.json().catch(() => ({}));
+  const code = readableText(data?.error);
+  return Object.values(PORTAL_DECISION_ERROR).includes(code) ? code : PORTAL_DECISION_ERROR.failed;
+}
+
+/**
+ * Asks to accept or reject a quotation; the confirmation goes by email to the main recipient.
+ * Resolves `{ ok: true, maskedEmail }` or `{ ok: false, error }` ({@link PORTAL_DECISION_ERROR});
+ * a dead link throws {@link PORTAL_ERROR.invalidLink} like every other read.
+ */
+export async function requestPortalDecision(fetchImpl, token, quotationId, {
+  decision, reasonCode = null, reasonText = null,
+} = {}) {
+  let response;
+  try {
+    response = await fetchImpl(
+      `${PORTAL_API_PREFIX}/quotations/${encodeURIComponent(quotationId)}/decision`,
+      {
+        method: 'POST',
+        token,
+        headers: { [PORTAL_TOKEN_HEADER]: token, 'Content-Type': 'application/json' },
+        on401: 'ignore',
+        body: JSON.stringify({ decision, reasonCode, reasonText }),
+      },
+    );
+  } catch (cause) {
+    throw portalError(PORTAL_ERROR.loadFailed, { cause });
+  }
+  if (response.status === 401 || response.status === 403) {
+    throw portalError(PORTAL_ERROR.invalidLink, { status: response.status });
+  }
+  if (response.ok) {
+    const data = await response.json().catch(() => ({}));
+    return { ok: true, maskedEmail: readableText(data?.maskedEmail) };
+  }
+  return { ok: false, error: await decisionErrorOf(response) };
+}
+
+function normalizeDecision(data) {
+  const state = readableText(data?.state);
+  return {
+    state: Object.values(PORTAL_DECISION_STATE).includes(state) ? state : PORTAL_DECISION_STATE.notPending,
+    decision: readableText(data?.decision),
+    reasonCode: readableText(data?.reasonCode),
+    reasonText: readableText(data?.reasonText),
+    documentNo: readableText(data?.documentNo),
+    tenantName: readableText(data?.tenantName),
+  };
+}
+
+/** The confirmation landing: what will be applied. Never applies anything. */
+export async function fetchPortalDecision(fetchImpl, decisionToken) {
+  const response = await portalGet(fetchImpl, null, '/decisions/view', {
+    headers: { [PORTAL_DECISION_TOKEN_HEADER]: decisionToken },
+  });
+  return normalizeDecision(await response.json().catch(() => ({})));
+}
+
+/** Confirms the decision (single use; the first confirmed request of a quotation wins). */
+export async function confirmPortalDecision(fetchImpl, decisionToken) {
+  const response = await portalGet(fetchImpl, null, '/decisions/confirm', {
+    method: 'POST',
+    headers: { [PORTAL_DECISION_TOKEN_HEADER]: decisionToken },
+  });
+  return normalizeDecision(await response.json().catch(() => ({})));
+}

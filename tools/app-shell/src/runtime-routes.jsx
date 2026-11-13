@@ -40,6 +40,7 @@ const InviteAcceptancePage = lazy(() => import('./pages/InviteAcceptancePage.jsx
 const DevLifecyclePage = import.meta.env.DEV
   ? lazy(() => import('./pages/DevLifecyclePage.jsx')) : null;
 const PortalPage = lazy(() => import('./pages/PortalPage.jsx'));
+const PortalDecisionPage = lazy(() => import('./pages/PortalDecisionPage.jsx'));
 const SupportAccessPage = lazy(() => import('./pages/SupportAccessPage.jsx'));
 
 const LOADING_FALLBACK = <div className="p-8 text-muted-foreground">Loading...</div>;
@@ -95,6 +96,11 @@ export function buildRuntimeRoutes({ windowMap, apiBaseUrl }) {
     // (docs/feature-flags.md, which registers `/upgrade` the same way and for the same reason).
     // Nothing here reads a flag.
     { path: 'portal/:token', public: true, element: portalElement },
+    // ETP-6209 Part C — the confirmation landing of a quotation decision, public like the portal:
+    // the token in the path is its whole credential, moved into a header by the page.
+    { path: 'portal/decision/:token', public: true, element: (
+        <Suspense fallback={LOADING_FALLBACK} data-testid="Suspense__e8c60d"><PortalDecisionPage data-testid="PortalDecisionPage__e8c60d" /></Suspense>
+      ) },
     // Tokenless `/portal` lands on the same page, which renders the generic
     // "link no longer valid" state — a truncated link deserves that message rather than the
     // catch-all route's blank fallback, and it says nothing a probe could learn from.

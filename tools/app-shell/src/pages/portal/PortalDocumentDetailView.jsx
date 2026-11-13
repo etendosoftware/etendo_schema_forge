@@ -21,6 +21,7 @@ import {
   PortalDate, PortalMain, PortalMoney, PortalPaymentStatus, PortalSection, PORTAL_SECTION_TITLE,
 } from './PortalBits.jsx';
 import { PORTAL_KIND_META, documentLabelKey } from './portalPresentation.js';
+import PortalDecisionActions from './PortalDecisionActions.jsx';
 
 /** Quantities may be fractional (kg, hours): never round them to an integer. */
 function formatQuantity(value) {
@@ -219,6 +220,14 @@ export default function PortalDocumentDetailView({
               <span className="text-base font-semibold leading-6">{title}</span>
               <span className="text-xs leading-4 text-muted-foreground">{ui('portalIssuedBy', { name: issuer })}</span>
             </div>
+            {/* Part C: Aceptar / Rechazar, where the board draws them (before Descargar PDF). */}
+            <PortalDecisionActions
+              apiFetch={apiFetch}
+              token={token}
+              document={document}
+              tenantName={identity?.tenantName}
+              onInvalid={onInvalid}
+            />
             {document.hasPdf ? (
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" onClick={downloadPdf} disabled={!pdfReady} data-testid="portal-download-pdf">
@@ -247,6 +256,17 @@ export default function PortalDocumentDetailView({
               onOpen={(type, doc) => onNavigate({ view: 'doc', kind: doc.portalKind, id: doc.id })}
               data-testid="portal-related"
             />
+            {/* Part C on mobile: the board's bottom action bar (Movil-Documento). */}
+            <div className="mx-4 mt-5 md:hidden">
+              <PortalDecisionActions
+                apiFetch={apiFetch}
+                token={token}
+                document={document}
+                tenantName={identity?.tenantName}
+                onInvalid={onInvalid}
+                variant="bar"
+              />
+            </div>
           </div>
         </aside>
       </main>
