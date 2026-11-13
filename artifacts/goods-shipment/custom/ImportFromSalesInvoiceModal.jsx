@@ -2,18 +2,20 @@ import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { apiFetch as moduleApiFetch } from '@/auth/api.js';
 import useImportLoadFailureToast from '@/windows/custom/shared/useImportLoadFailureToast.js';
-import { draftDocumentsOf, fetchInOutDocuments, fetchInOutLines, isCoveredDocument, pendingOf, zeroDocumentTotal } from '@/windows/custom/shared/inOutImport.js';
+import { draftDocumentsOf, fetchInOutDocuments, fetchInOutLines, isCoveredDocument, pendingDocumentTotal, pendingOf } from '@/windows/custom/shared/inOutImport.js';
 
 // ETP-6099 — the invoices and their lines come from the shipment's own read actions
 // (`availableInvoices` / `availableInvoiceLines`, inOutImport.js). The server applies what the
 // popup filtered here before: completed, plain invoices of the customer (not rectificative — ETP-6002
 // IMP-3: a rectificative delivers nothing) in the shipment's currency, newest created first, and the
-// pending per line — with an order line: invoiced − delivered − drafts (this shipment included);
-// without one: 0 once the invoice line points at a shipment line, else the invoiced quantity. The
-// covered invoices (`pendingLines: 0`) are listed too and hidden by `isDocumentCovered`, so the
-// popup still says «all already imported». Replaced: the company-wide invoice list (500), the
-// shipment header, the shipment list (100), the lines of every draft shipment and, per expanded
-// invoice, the lines of its sales order.
+// pending per line — ETP-6002 CP-22: invoiced − what the shipment lines linked to THAT invoice line
+// ship or hold (drafts included, this shipment too), capped by what its order line has left; an
+// invoice already shipped is no longer offered. The covered invoices (`pendingLines: 0`) are listed
+// too and hidden by `isDocumentCovered`, so the popup still says «all already imported». The row
+// total is the invoice's pending `amount` (`detail`, ETP-6002 CP-27; it used to be 0,00), and once
+// the lines are loaded it follows them, priced with their `unitPrice`, as the order popup does.
+// Replaced: the company-wide invoice list (500), the shipment header, the shipment list (100), the
+// lines of every draft shipment and, per expanded invoice, the lines of its sales order.
 const ENTITY = 'goodsShipment'; // the header entity of the action URLs
 const SPEC = 'goods-shipment';
 
@@ -34,13 +36,14 @@ const fetchDocuments = ({ base, bpId, invoiceId: shipmentId }) => fetchInOutDocu
 
 const toInvoiceLine = (l) => {
   const pending = pendingOf(l);
+  const unitPrice = Number(l.unitPrice) || 0;
   return {
     ...l,
     _orderLineId: l.orderLine || undefined,
     _productName: l['product$_identifier'] || l.id,
     _maxQty: pending,
-    _unitPrice: 0,
-    _lineNetAmount: 0,
+    _unitPrice: unitPrice,
+    _lineNetAmount: unitPrice * pending,
     _alreadyImported: pending === 0,
     _inDraftShipments: draftDocumentsOf(l),
   };
@@ -61,6 +64,8 @@ const buildLineBody = async ({ line, qty, invoiceId: shipmentId, lineNo }) => ({
   product: line.product,
   movementQuantity: qty,
   uOM: line.uOM || null,
+  // ETP-6002 CP-14: the server drops it when it is a QUOTATION line (GoodsShipmentLineHandler), so
+  // a shipment never marks a quotation delivered; a sales-order line is kept.
   ...(line._orderLineId ? { salesOrderLine: line._orderLineId } : {}),
   invoiceLineId: line.id,
   lineNo,
@@ -89,7 +94,7 @@ export default function ImportFromSalesInvoiceModal(props) {
       fetchLines={loaders.fetchLines}
       eagerLoadLines={false}
       isDocumentCovered={isCoveredDocument}
-      getDocumentTotal={zeroDocumentTotal}
+      getDocumentTotal={pendingDocumentTotal}
       getDocDisplay={getDocDisplay}
       buildLineBody={buildLineBody}
     />
