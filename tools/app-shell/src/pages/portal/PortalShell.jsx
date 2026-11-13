@@ -82,7 +82,7 @@ export function PortalBrand({ identity, logoUrl, size = 'sm' }) {
             {identity.tenantName}
           </span>
         ) : null}
-        <span className={cn('text-muted-foreground', large ? 'text-[13px] leading-[18px]' : 'text-xs leading-4')}>
+        <span className={cn('truncate whitespace-nowrap text-muted-foreground', large ? 'text-[13px] leading-[18px]' : 'text-xs leading-4')}>
           {ui('portalPageTitle')}
         </span>
       </div>
@@ -97,7 +97,7 @@ export function PortalBrand({ identity, logoUrl, size = 'sm' }) {
  * that same section (`LanguageMenuSection`: the app's `APP_LOCALES`, rows and active marker).
  * Spanish is the default; the choice is the viewer's.
  */
-export function PortalLanguageSwitch({ align = 'start', side = 'top' }) {
+export function PortalLanguageSwitch({ align = 'start', side = 'top', compact = false }) {
   const ui = useUI();
   const { locale, setLocale } = useLocaleSwitch();
   if (!setLocale) return null;
@@ -114,7 +114,9 @@ export function PortalLanguageSwitch({ align = 'start', side = 'top' }) {
         >
           <Languages className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span className="text-sm leading-none" aria-hidden="true">{current.flag}</span>
-          <span className="truncate">{current.label}</span>
+          {/* `compact` (mobile top bars): icon + flag only, so the brand keeps the room; the
+              trigger's label still names it, and the same menu opens. */}
+          {compact ? null : <span className="truncate">{current.label}</span>}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side={side} align={align} className="w-48">
@@ -150,7 +152,8 @@ export function PortalCustomer({ identity, variant = 'row' }) {
         role="img"
         aria-label={name}
         title={name}
-        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-semibold text-background"
+        // ≈40 px on a phone (360), the board's 48 px from 640 up (the 720 board).
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-semibold text-background sm:h-12 sm:w-12"
         data-testid="portal-customer-avatar"
       >
         {initialsOf(name)}
@@ -175,23 +178,26 @@ export function PortalMobileBrandBar({ identity, logoUrl, onSearch }) {
   const ui = useUI();
   return (
     <header
-      className="flex h-20 shrink-0 items-center justify-between gap-4 border-b border-border bg-card px-6 md:hidden"
+      className="flex h-20 shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 sm:gap-4 sm:px-6 md:hidden"
       data-testid="portal-mobile-topbar"
     >
-      <PortalBrand identity={identity} logoUrl={logoUrl} size="lg" />
-      <div className="flex items-center gap-2">
+      {/* The brand takes the room left by the controls and truncates only a very long name. */}
+      <div className="min-w-0 flex-1">
+        <PortalBrand identity={identity} logoUrl={logoUrl} size="lg" />
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
         {onSearch ? (
           <button
             type="button"
             aria-label={ui('portalSearch')}
             onClick={onSearch}
-            className="flex h-12 w-12 items-center justify-center rounded-[10px] border border-border bg-card"
+            className="flex h-10 w-10 items-center justify-center rounded-[10px] border border-border bg-card sm:h-12 sm:w-12"
             data-testid="portal-mobile-search"
           >
             <Search className="h-5 w-5" aria-hidden="true" />
           </button>
         ) : null}
-        <PortalLanguageSwitch align="end" side="bottom" />
+        <PortalLanguageSwitch align="end" side="bottom" compact />
         <PortalCustomer identity={identity} variant="avatar" />
       </div>
     </header>

@@ -186,14 +186,16 @@ export default function PortalDocumentListView({
   return (
     <>
       {/* Mobile header (design Movil-Listado) */}
-      <header className="flex shrink-0 flex-col gap-3.5 border-b border-border bg-card px-6 py-4 md:hidden">
+      <header className="flex shrink-0 flex-col gap-3.5 border-b border-border bg-card px-4 py-4 sm:px-6 md:hidden">
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <h1 className="font-['Plus_Jakarta_Sans',Inter,sans-serif] text-[28px] font-bold leading-9">{plural}</h1>
+          {/* At 360 px the title steps down to 24 px so it, the count, the language and the avatar
+              share one line; the board's 28 px from 640 up. */}
+          <div className="flex min-w-0 items-center gap-2.5">
+            <h1 className="truncate font-['Plus_Jakarta_Sans',Inter,sans-serif] text-2xl font-bold leading-9 sm:text-[28px]">{plural}</h1>
             <PortalCountChip count={totalCount} />
           </div>
-          <div className="flex items-center gap-2">
-            <PortalLanguageSwitch align="end" side="bottom" />
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+            <PortalLanguageSwitch align="end" side="bottom" compact />
             <PortalCustomer identity={identity} variant="avatar" />
           </div>
         </div>
