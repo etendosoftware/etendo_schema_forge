@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/components/contract-ui/EntityForm.jsx
+// @covers tools/app-shell/src/lib/dateFieldValidation.js
 import { render, screen, fireEvent } from '@testing-library/react';
 
 // Mock i18n hooks. useUI resolves a tiny dictionary and interpolates `{param}`
@@ -10,6 +11,8 @@ vi.mock('@/i18n', () => {
   const dict = {
     fieldMinValueError: 'Value must be at least {min}',
     fieldIntegerError: 'Value must be a whole number',
+    fieldMinDateError: 'The date cannot be earlier than today.',
+    fieldMinDateBeforeError: 'The date cannot be earlier than {min}.',
     qtyMaxAllowed: 'El máximo permitido es {max}',
     paymentTermDaysNotInteger: 'Whole days only',
   };
@@ -42,9 +45,30 @@ vi.mock('@/lib/resolveIdentifier.js', () => ({
 }));
 vi.mock('@/lib/selectorCatalog.js', () => ({ getCatalogOptions: () => [] }));
 
+// DateField (app-shell-core) is stubbed so the suite drives exactly the two callbacks EntityForm
+// wires — a committed value (onChange) and a typed value refused by the picker
+// (onMinDateRejected) — and can read the `minDate` it forwards. The picker's own minDate
+// behaviour is covered in schema_forge_core (date-field.test.js).
+vi.mock('@/components/ui/date-field', () => ({
+  DateField: ({ name, value, minDate, onChange, onMinDateRejected, disabled }) => (
+    <div data-testid={`field-${name}`} data-value={value} data-min-date={minDate ?? ''} data-disabled={String(!!disabled)}>
+      <input
+        data-testid={`date-commit-${name}`}
+        onChange={(e) => onChange?.(e.target.value)}
+      />
+      <button
+        type="button"
+        data-testid={`date-reject-${name}`}
+        onClick={(e) => onMinDateRejected?.(e.currentTarget.dataset.iso)}
+      />
+    </div>
+  ),
+}));
+
 import { toast } from 'sonner';
 import { EntityForm } from '../EntityForm.jsx';
 import { numericFieldToastId } from '@/lib/numericValidation.js';
+import { dateFieldToastId } from '@/lib/dateFieldValidation.js';
 
 /**
  * ETP-4542 — generic, declarative on-blur numeric validation (min / integer).
@@ -154,5 +178,95 @@ describe('EntityForm — stepper refusal messages', () => {
     render(<EntityForm fields={[{ ...stepper, max: 99 }]} data={{ days: '' }} onChange={vi.fn()} />);
     typeInto('100');
     expect(screen.getByTestId('field-days-rejected')).toHaveTextContent('El máximo permitido es 99');
+  });
+});
+
+// `minDate` on a date field: EntityForm forwards it to DateField and toasts (stable id shared
+// with the useEntity save gate) both a typed date the picker refused and a committed past date.
+// Only a NEW value is checked: the date the record was loaded with passes even when past.
+describe('EntityForm — date field minDate feedback', () => {
+  const PAST = '2000-01-15';
+  const FUTURE = '2999-12-31';
+  const dueDate = { key: 'dueDate', label: 'Due date', type: 'date', column: 'Duedate', minDate: 'today' };
+  const fixedMin = { key: 'startDate', label: 'Start', type: 'date', column: 'StartDate', minDate: '2999-01-01' };
+  const plainDate = { key: 'orderDate', label: 'Order date', type: 'date', column: 'DateOrdered' };
+
+  beforeEach(() => {
+    toast.error.mockClear();
+  });
+
+  const commit = (key, iso) => fireEvent.change(screen.getByTestId(`date-commit-${key}`), { target: { value: iso } });
+  const reject = (key, iso) => {
+    const button = screen.getByTestId(`date-reject-${key}`);
+    button.dataset.iso = iso;
+    fireEvent.click(button);
+  };
+
+  it('forwards minDate to DateField; a field without it forwards none', () => {
+    render(<EntityForm fields={[dueDate, plainDate]} data={{}} onChange={vi.fn()} />);
+    expect(screen.getByTestId('field-dueDate')).toHaveAttribute('data-min-date', 'today');
+    expect(screen.getByTestId('field-orderDate')).toHaveAttribute('data-min-date', '');
+  });
+
+  it('toasts fieldMinDateError when the picker refuses a typed earlier date', () => {
+    const onChange = vi.fn();
+    render(<EntityForm fields={[dueDate]} data={{}} onChange={onChange} />);
+    reject('dueDate', PAST);
+    expect(toast.error).toHaveBeenCalledWith('The date cannot be earlier than today.', { id: dateFieldToastId('dueDate') });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('toasts a committed past date on a new record and still forwards the value', () => {
+    const onChange = vi.fn();
+    render(<EntityForm fields={[dueDate]} data={{}} onChange={onChange} />);
+    commit('dueDate', PAST);
+    expect(toast.error).toHaveBeenCalledWith('The date cannot be earlier than today.', { id: dateFieldToastId('dueDate') });
+    expect(onChange).toHaveBeenCalledWith('dueDate', PAST, 'Duedate');
+  });
+
+  it('interpolates {min} for a fixed minDate', () => {
+    render(<EntityForm fields={[fixedMin]} data={{}} onChange={vi.fn()} />);
+    commit('startDate', PAST);
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    const [message, options] = toast.error.mock.calls[0];
+    expect(message).toMatch(/^The date cannot be earlier than .*2999.*\.$/);
+    expect(message).not.toContain('{min}');
+    expect(options).toEqual({ id: dateFieldToastId('startDate') });
+  });
+
+  it('does not toast a committed date on or after the minimum', () => {
+    const onChange = vi.fn();
+    render(<EntityForm fields={[dueDate]} data={{}} onChange={onChange} />);
+    commit('dueDate', FUTURE);
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(onChange).toHaveBeenCalledWith('dueDate', FUTURE, 'Duedate');
+  });
+
+  it('does not toast the past date an existing record was loaded with', () => {
+    render(<EntityForm fields={[dueDate]} data={{ id: 'R1', dueDate: PAST }} onChange={vi.fn()} />);
+    commit('dueDate', PAST);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('toasts when the loaded past date of an existing record is changed to another past date', () => {
+    render(<EntityForm fields={[dueDate]} data={{ id: 'R1', dueDate: PAST }} onChange={vi.fn()} />);
+    commit('dueDate', '2000-02-20');
+    expect(toast.error).toHaveBeenCalledWith('The date cannot be earlier than today.', { id: dateFieldToastId('dueDate') });
+  });
+
+  it('the loaded value is the first render of the record: a later re-render with a new past value is not whitelisted', () => {
+    const { rerender } = render(<EntityForm fields={[dueDate]} data={{ id: 'R1', dueDate: FUTURE }} onChange={vi.fn()} />);
+    // The parent applies the user's edit and re-renders the same record.
+    rerender(<EntityForm fields={[dueDate]} data={{ id: 'R1', dueDate: PAST }} onChange={vi.fn()} />);
+    commit('dueDate', PAST);
+    expect(toast.error).toHaveBeenCalledWith('The date cannot be earlier than today.', { id: dateFieldToastId('dueDate') });
+  });
+
+  it('a field without minDate never toasts, whatever date is committed', () => {
+    const onChange = vi.fn();
+    render(<EntityForm fields={[plainDate]} data={{}} onChange={onChange} />);
+    commit('orderDate', PAST);
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(onChange).toHaveBeenCalledWith('orderDate', PAST, 'DateOrdered');
   });
 });

@@ -73,6 +73,11 @@ export function getStatusTone(status) {
     s === 'paid' || s === 'true' || s === 'processed' || s === 'y' || s === 'yes'
   ) return 'success';
   if (s === 'rpr' || s === 'rpae') return 'success';
+  // ETP-6148 — Remittance module payment statuses. Unique codes (REM_ prefix), so they belong in
+  // the global catalog: settled in a remittance is done (green); sent in a remittance is waiting
+  // for the bank (amber).
+  if (s === 'rem_cancel') return 'success';
+  if (s === 'rem_sent') return 'warning';
   // PPM ("Payment Made") is confirmed but NOT withdrawn from the account, so it is amber, not
   // green: for a PIS transfer it is the state between the bank authorizing and the money moving.
   // See STATUS_PAYMENT_MADE in windows/custom/shared/paymentStatuses.js (ETP-4895).
@@ -210,6 +215,9 @@ export function statusLabel(status, dictionary, translate, enumLabels) {
     RPR: 'statusPaymentReceived', RPAE: 'statusAwaitingExecution', RPAP: 'statusAwaitingPayment',
     RPPC: 'statusPaymentCleared', RPVOID: 'statusVoid', ETGOERR: 'cpPaymentStateError',
     PPM: 'statusPaymentMade', PWNC: 'statusWithdrawnNotCleared', RDNC: 'statusDepositedNotCleared',
+    // ETP-6148 — the two codes the Remittance module adds to the payment status list. A payment
+    // in a remittance shows them in Payment In/Out and in the account's transactions.
+    REM_SENT: 'statusRemSent', REM_CANCEL: 'statusRemCancel',
   };
   const key = MAP[status];
   if (!key) return status;
