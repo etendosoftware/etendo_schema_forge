@@ -5,6 +5,7 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { Loader2, TriangleAlert, OctagonAlert, CircleCheck, Download, Landmark } from 'lucide-react';
+import { AeatResultBanner as Banner } from './AeatResultBanner.jsx';
 import { formatAmount, formatPeriod, triggerBase64Download, applyIdentParams, applyBoxParams, isBankIbanRequired, withBox111NonZeroFlag, DECLARATION_TYPE_INGRESO, showIaeActivityReminder } from '../../fiscalModelsUtils.js';
 import { isLastPeriodOfYear } from './fm303Layouts.js';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
@@ -258,26 +259,6 @@ function InfoRow({ label, value }) {
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '9px 0', borderBottom: '1px solid hsl(var(--border-subtle))', fontSize: 14 }}>
       <span style={{ color: 'hsl(var(--muted-foreground))' }}>{label}</span>
       <span style={{ color: 'hsl(var(--foreground))', fontWeight: 500, textAlign: 'right' }}>{value}</span>
-    </div>
-  );
-}
-
-function Banner({ tone, icon, title, body, children }) {
-  const vars = {
-    success: ['var(--fm-success-bg)', 'var(--fm-success-border)', 'var(--fm-success-fg)'],
-    warning: ['var(--fm-warning-bg)', 'var(--fm-warning-border)', 'var(--fm-warning-fg)'],
-    danger:  ['var(--fm-danger-bg)',  'var(--fm-danger-border)',  'var(--fm-danger-fg)'],
-    info:    ['var(--fm-info-bg)',    'var(--fm-info-border)',    'var(--fm-info-fg)'],
-  }[tone] ?? ['var(--fm-info-bg)', 'var(--fm-info-border)', 'var(--fm-info-fg)'];
-  const [bg, border, fg] = vars;
-  return (
-    <div style={{ padding: '12px 14px', background: bg, border: `1px solid ${border}`, borderRadius: 12, color: fg, display: 'flex', gap: 10 }}>
-      <span style={{ flexShrink: 0, marginTop: 1 }}>{icon}</span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 600 }}>{title}</div>
-        {body && <div style={{ fontSize: 13, marginTop: 4, lineHeight: '18px' }}>{body}</div>}
-        {children}
-      </div>
     </div>
   );
 }

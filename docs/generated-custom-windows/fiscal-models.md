@@ -4270,9 +4270,22 @@ certificate) and downloads it in every case. The validation is a warning, never 
 
 | Validator | What the user gets |
 |---|---|
-| no errors (`accepted`) | the file + the system success toast "Fichero validado por la AEAT sin errores." (`fm.m390.file_validation.accepted`) |
-| errors (`rejected`) | the file + a warning `InfoBanner` above the cards (`FileValidationNotice390`) listing each error with its AEAT code and a "Ver incidencias" button; the errors are stored as the declaration's AEAT incidents (`AEAT-<code>`), like after a direct presentation, and the page re-reads them |
-| no answer (`connection_failure` / `not_validated`) | the file + a warning banner saying it could not be validated; the stored incidents are left as they were |
+| no errors, no warnings (`accepted`) | the file; the popup closes and the system success toast says "Fichero validado por la AEAT sin errores." |
+| accepted with AEAT warnings (`avisos`) | the file; the popup moves to its result step: amber banner "Fichero validado por la AEAT con advertencias" listing each warning, "Ver incidencias" and "Cerrar". The warnings are stored as warning-severity AEAT incidents |
+| errors (`rejected`) | the file; result step with the red banner of the direct presentation listing each error with its AEAT code, a line saying the file was downloaded anyway and the errors are in Incidencias, any AEAT warning below, "Ver incidencias" and "Cerrar". The errors are stored as blocking-severity AEAT incidents (`AEAT-<code>`), like after a direct presentation, and the page re-reads them |
+| no answer (`connection_failure` / `not_validated`) | the file; result step with an amber banner saying it could not be validated and was downloaded without validation; the stored incidents are left as they were |
+
+The result step reuses the banner of the direct presentation's result (`models/303/AeatResultBanner.jsx`,
+extracted from `AeatSubmitFlow`); there is no page banner (the former `FileValidationNotice390`
+was removed).
+
+**Incidencias banner (shared `IncidentsTab`).** Its colour follows the severity of the rows: red
+when at least one row is blocking-severity (a model rule or an AEAT error), amber when there are
+only warnings. Only the red TEXT depends on what really gates the file: `gatingBlocking` (default:
+every blocking row) > 0 keeps "Resuélvelas antes de generar el fichero"; when the blocking rows gate
+nothing (390 passes `ruleBlockingCount`, so AEAT errors alone) it reads "Revísalas antes de presentar
+la declaración." (`fm.incidents.review_sub`). 303 and 349 do not pass the prop and are unchanged. The
+Incidencias card chip and tab badge use the same severity counts.
 
 While the file is generated and validated, `FileGenModal390` stays open on the loading state of
 the fiscal certificate upload (`fiscal-config/CircularProgress.jsx`, shared with `CertModal`) with
@@ -4281,7 +4294,8 @@ settles. The backend bounds the wait (10 s to connect + 30 s to read). An AEAT a
 declaration's previous AEAT incidents (same rule as every AEAT attempt); these never gate Generar
 or Presentar (`ruleBlockingCount` counts the model's own rules only). Pieces:
 `fileValidation390.js` (outcomes + `fileValidationOf`), `fm390Api.generate390File`,
-`FileValidationNotice390.jsx`, `FmModel390Page.handleGenerate`. 303 and 349 generate exactly as
+`FileGenModal390.jsx` (loading + result step), `FmModel390Page.handleGenerate` (resolves the
+validation to the popup). 303 and 349 generate exactly as
 before. Contract: `{etendo_root}/modules/com.etendoerp.go/docs/aeat-390-endpoints.md`.
 
 **AEAT attempt log (ETP-5716).** Every attempt against the AEAT — a direct presentation, a

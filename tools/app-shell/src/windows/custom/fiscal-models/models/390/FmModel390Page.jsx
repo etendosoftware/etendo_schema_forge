@@ -69,7 +69,6 @@ import FmBoxes390 from './FmBoxes390.jsx';
 import FmSources390 from './FmSources390.jsx';
 import { emptySourcesFilter, sourcesFilterForBox } from './sources390.js';
 import FileGenModal390 from './FileGenModal390.jsx';
-import FileValidationNotice390 from './FileValidationNotice390.jsx';
 import useOrg390Identity from './useOrg390Identity.js';
 import { FILE_VALIDATION } from './fileValidation390.js';
 import { fetchBoxes390, generate390File, validate390 } from './fm390Api.js';
@@ -491,8 +490,6 @@ export default function FmModel390Page({
   // keeps its frozen incidents. `incidentsVersion` re-reads them after an AEAT attempt (the
   // backend replaces the AEAT ones).
   const [incidentsVersion, setIncidentsVersion] = useState(0);
-  // What the AEAT validator said about the last generated file (null: nothing to tell).
-  const [fileValidation, setFileValidation] = useState(null);
   useEffect(() => {
     if (!apiBaseUrl) return undefined;
     let cancelled = false;
@@ -678,11 +675,11 @@ export default function FmModel390Page({
   // "Generar fichero 390": pending changes are saved FIRST — the backend generates from the
   // stored inputs — and a failed save stops the generation.
   // The file is downloaded whatever the AEAT validator said about it (ETP-5716): its answer is a
-  // notice above the cards (FileValidationNotice390) and, when the AEAT answered, the
-  // declaration's AEAT incidents — re-read here, the backend already replaced them.
+  // result step of the popup (FileGenModal390, which gets it as this function's result) and, when
+  // the AEAT answered, the declaration's AEAT incidents — re-read here, the backend already
+  // replaced them. Resolves null when there is no validation to show.
   async function handleGenerate({ fileName } = {}) {
     setGenerating(true);
-    setFileValidation(null);
     try {
       const saved = await persistIfDirty();
       if (!saved.ok) {
@@ -701,11 +698,14 @@ export default function FmModel390Page({
       } else if (!result.ok) {
         toast.error(result.serverMessage || t('fm.m390.generate_error'));
       } else {
-        setFileValidation(result.validation ?? null);
-        if (result.validation?.outcome === FILE_VALIDATION.ACCEPTED) toast.success(t('fm.m390.file_validation.accepted'));
+        // A clean file: the success toast. One accepted WITH AEAT warnings shows them in the popup.
+        const clean = result.validation?.outcome === FILE_VALIDATION.ACCEPTED && !(result.validation.warnings?.length > 0);
+        if (clean) toast.success(t('fm.m390.file_validation.accepted'));
         const answered = [FILE_VALIDATION.ACCEPTED, FILE_VALIDATION.REJECTED].includes(result.validation?.outcome);
         if (answered) setIncidentsVersion(v => v + 1);
+        return result.validation ?? null;
       }
+      return null;
     } finally {
       setGenerating(false);
     }
@@ -924,12 +924,6 @@ export default function FmModel390Page({
           t={t}
           bcpLocale={bcpLocale}
           data-testid="SubmissionCard390__74d2aa" />}
-        <FileValidationNotice390
-          validation={fileValidation}
-          onViewIncidents={() => setActiveTab('incidents')}
-          onDismiss={() => setFileValidation(null)}
-          t={t}
-          data-testid="FileValidationNotice390__74d2aa" />
         <SubstitutiveBanner
           identification={identification}
           concurso={isConcurso(aeatInputs)}
@@ -1065,6 +1059,7 @@ export default function FmModel390Page({
           <div className="fm-page__body" style={{ padding: 0 }}>
             <Incidents390Tab
               incidents={incidents}
+              gatingBlocking={ruleBlocking}
               onGoToBox={goToBoxOfIncident}
               onViewInvoices={viewInvoicesIfDraft}
               onViewSettlements={viewSettlements}
@@ -1096,6 +1091,7 @@ export default function FmModel390Page({
           typeLabel={typeLabel}
           resultLabel={resultLabel}
           onConfirm={handleGenerate}
+          onViewIncidents={() => setActiveTab('incidents')}
           onClose={() => setShowFilegen(false)}
           t={t}
           data-testid="FileGenModal390__74d2aa" />

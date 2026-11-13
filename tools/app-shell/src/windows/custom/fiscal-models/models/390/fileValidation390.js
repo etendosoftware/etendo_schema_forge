@@ -1,6 +1,6 @@
 // Modelo 390 — the AEAT validator's answer about the file "Generar fichero 390" produces
 // (ETP-5716): the outcomes and the normalised shape the page and its notice read. Pure — the
-// request lives in fm390Api.js (`generate390File`), the notice in FileValidationNotice390.jsx.
+// request lives in fm390Api.js (`generate390File`), the result step in FileGenModal390.jsx.
 
 /** `validation.outcome` of the generated file (backend `FiscalAeatValidationOutcome`). */
 export const FILE_VALIDATION = Object.freeze({

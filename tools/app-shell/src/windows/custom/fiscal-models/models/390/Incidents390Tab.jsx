@@ -46,12 +46,13 @@ function ActionButtons({ actions, handlers, t }) {
 
 /**
  * @param {object}   props.incidents        `{ blocking, warning, items }` of the declaration
+ * @param {number}   [props.gatingBlocking] blocking incidents that really gate Generar / Presentar
  * @param {Function} [props.onGoToBox]      (box) => void — "Ir a la casilla"
  * @param {Function} [props.onViewInvoices] (box) => void — "Ver facturas" (Facturas tab filtered)
  * @param {Function} [props.onViewSettlements] () => void — "Ver detalle por trimestre" (the year's 303s)
  * @param {Function} [props.onNavigate]     (path) => void — Organization / invoice lists
  */
-export default function Incidents390Tab({ incidents, onGoToBox, onViewInvoices, onViewSettlements, onNavigate, t }) {
+export default function Incidents390Tab({ incidents, gatingBlocking, onGoToBox, onViewInvoices, onViewSettlements, onNavigate, t }) {
   const normalized = normalizeIncidents390(incidents);
   const handlers = { onGoToBox, onViewInvoices, onViewSettlements, onNavigate };
   const renderAction = (item) => {
@@ -68,6 +69,7 @@ export default function Incidents390Tab({ incidents, onGoToBox, onViewInvoices, 
         decl={{ incidents: normalized }}
         blocking={normalized.blocking}
         warning={normalized.warning}
+        gatingBlocking={gatingBlocking}
         t={t}
         getMessage={(item) => incidentText390(item, t)}
         getOrigin={(item) => incidentOrigin390(item, t)}

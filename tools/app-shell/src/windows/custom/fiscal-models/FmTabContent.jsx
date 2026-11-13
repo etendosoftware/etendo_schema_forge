@@ -187,7 +187,7 @@ function defaultIncidentAction(inc, onGoToSources, t) {
  * @param {Function} [getOrigin]    (inc) => text of the Origen column (`null` → "—")
  * @param {Function} [renderAction] (inc) => node of the Acción column, or `null`
  */
-export function IncidentsTab({ decl, blocking, warning, t, onGoToSources, getMessage, getOrigin, renderAction }) {
+export function IncidentsTab({ decl, blocking, warning, gatingBlocking = blocking, t, onGoToSources, getMessage, getOrigin, renderAction }) {
   const incidents = decl.incidents?.items ?? [];
   // Per-session dismissal of the warning banner (no localStorage precedent found for
   // this pattern — see CertExpiryBanner.jsx, which also uses a plain local useState).
@@ -227,12 +227,18 @@ export function IncidentsTab({ decl, blocking, warning, t, onGoToSources, getMes
   // ETP-5597 — the banner follows the real severity: any blocking incident keeps the "resolve
   // before generating the file" text in the destructive role; warnings only get an amber,
   // non-blocking message (warnings never prevent file generation).
+  // ETP-5716 — the colour follows the severity of the rows (any blocking row → red). Only the
+  // TEXT depends on `gatingBlocking`, how many of them really gate the file (default: all): a
+  // model whose blocking rows do not all gate it (390: the AEAT errors, found on a file that was
+  // just generated) passes the smaller count and gets "review before presenting" instead of
+  // the false "resolve before generating".
   const hasBlocking = blocking > 0;
+  const blockText = gatingBlocking > 0 ? 'fm.incidents.block_sub' : 'fm.incidents.review_sub';
   const bannerBg = hasBlocking ? 'var(--status-destructive-bg)' : 'var(--status-warning-bg)';
   const bannerBorder = hasBlocking ? 'hsl(var(--destructive) / 0.3)' : 'var(--status-warning-border)';
   const bannerFg = hasBlocking ? 'hsl(var(--destructive))' : 'var(--status-warning-fg)';
   const bannerText = hasBlocking
-    ? (t('fm.incidents.block_sub') ?? 'Resuélvelas antes de generar el fichero')
+    ? (t(blockText) ?? 'Resuélvelas antes de generar el fichero')
     : (t('fm.incidents.warn_sub') ?? 'Revisa las advertencias. No impiden generar el fichero.');
 
   return (
