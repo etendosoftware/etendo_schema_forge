@@ -137,8 +137,7 @@ test.describe('Customer portal — mocked', () => {
       const params = new URL(request.url()).searchParams;
       return params.get('status') === 'CO' && params.get('dateFrom') !== initialFrom;
     });
-    // The date trigger has no data-testid; Radix marks its popover trigger with aria-haspopup.
-    await list.locator('button[aria-haspopup="dialog"]').click();
+    await list.getByTestId('portal-date-range').click();
     await page.getByRole('button', { name: /últimos 12 meses|last 12 months/i }).click();
     await byDate;
 

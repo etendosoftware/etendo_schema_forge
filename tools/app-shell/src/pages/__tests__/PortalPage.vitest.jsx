@@ -393,6 +393,14 @@ describe('PortalPage — view in the URL', () => {
     expect(callsTo('/documents')).toHaveLength(0);
   });
 
+  it('opens home without the notice when /me names neither an entry document nor an entry kind', async () => {
+    renderPortal();
+    await shellReady();
+
+    expect(screen.getByTestId('portal-home')).toBeInTheDocument();
+    expect(screen.queryByTestId('portal-entry-unavailable')).not.toBeInTheDocument();
+  });
+
   it('lets a view in the URL win over the entry document', async () => {
     responses.me = jsonResponse(WITH_ENTRY);
     renderPortal(`/portal/${TOKEN}?view=list&kind=INVOICE`);
