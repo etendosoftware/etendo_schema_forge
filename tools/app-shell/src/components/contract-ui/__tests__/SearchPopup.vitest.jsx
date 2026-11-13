@@ -219,13 +219,13 @@ describe('SearchPopup — committed value (ETP-5948)', () => {
     renderPopup({ loadPage, value: 'acc-1500', valueLabel: 'Account 1500' });
 
     await waitFor(() => expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'search-popup-option-acc-1500'),
-      { timeout: 25000 });
+      { timeout: 90000 }); // CPU-bound 34-page walk: ~3s idle, 11-19s under load+coverage, >25s on CI
     expect(screen.getByTestId('search-popup-option-acc-1500')).toHaveAttribute('aria-selected', 'true');
     // A loader that ignores the size hint walks 30 rows at a time up to the 1000-row walk total.
     expect(listOffsets(loadPage)).toEqual(Array.from({ length: 34 }, (_, i) => i * 30));
     expect(labelLookups(loadPage)).toHaveLength(1);
     expect(screen.getAllByRole('option')).toHaveLength(1021);
-  }, 30000);
+  }, 100000);
 
   // The backend matches each identifier column on its own, so "<code> - <name>" as a whole finds
   // nothing (seen live on the product account popup); the code alone does.
