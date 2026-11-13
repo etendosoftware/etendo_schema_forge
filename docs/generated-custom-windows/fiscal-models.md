@@ -4274,7 +4274,10 @@ certificate) and downloads it in every case. The validation is a warning, never 
 | errors (`rejected`) | the file + a warning `InfoBanner` above the cards (`FileValidationNotice390`) listing each error with its AEAT code and a "Ver incidencias" button; the errors are stored as the declaration's AEAT incidents (`AEAT-<code>`), like after a direct presentation, and the page re-reads them |
 | no answer (`connection_failure` / `not_validated`) | the file + a warning banner saying it could not be validated; the stored incidents are left as they were |
 
-The backend bounds the wait (10 s to connect + 30 s to read). An AEAT answer REPLACES the
+While the file is generated and validated, `FileGenModal390` stays open on the loading state of
+the fiscal certificate upload (`fiscal-config/CircularProgress.jsx`, shared with `CertModal`) with
+"Validando fichero con la AEAT…"; its buttons, close and overlay are disabled until the request
+settles. The backend bounds the wait (10 s to connect + 30 s to read). An AEAT answer REPLACES the
 declaration's previous AEAT incidents (same rule as every AEAT attempt); these never gate Generar
 or Presentar (`ruleBlockingCount` counts the model's own rules only). Pieces:
 `fileValidation390.js` (outcomes + `fileValidationOf`), `fm390Api.generate390File`,

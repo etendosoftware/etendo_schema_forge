@@ -22417,6 +22417,7 @@
     "fm.m390.substitutive.by_quotas": "Sustitutiva por rectificación de cuotas",
     "fm.m390.compute_error": "No se pudo calcular el Modelo 390. Inténtelo de nuevo.",
     "fm.m390.generate_error": "No se pudo generar el fichero 390. Inténtelo de nuevo.",
+    "fm.m390.file_validation.validating": "Validando fichero con la AEAT…",
     "fm.m390.file_validation.accepted": "Fichero validado por la AEAT sin errores.",
     "fm.m390.file_validation.rejected": "La AEAT ha detectado errores al validar el fichero. El fichero se ha descargado igualmente: revise las incidencias antes de presentarlo.",
     "fm.m390.file_validation.unavailable": "No se ha podido validar el fichero con la AEAT. El fichero se ha descargado sin validar.",
