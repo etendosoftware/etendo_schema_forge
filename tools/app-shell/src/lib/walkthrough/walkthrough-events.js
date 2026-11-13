@@ -22,10 +22,12 @@
  */
 import { recordFlowFinish } from '@etendosoftware/app-shell-core/walkthrough';
 import { track } from '@/lib/observability.js';
+import { getSessionIdentity } from '@/lib/sessionIdentity.js';
 import { OBSERVABILITY_EVENTS, buildObservabilityEvent } from '@/lib/observability/events.js';
 
 function emit(eventDefinition, properties = {}) {
-  const event = buildObservabilityEvent(eventDefinition, properties);
+  const { clientId } = getSessionIdentity();
+  const event = buildObservabilityEvent(eventDefinition, { ...(clientId ? { account_id: clientId } : {}), ...properties });
   Promise.resolve(track(event.name, event.properties)).catch(() => {});
 }
 
