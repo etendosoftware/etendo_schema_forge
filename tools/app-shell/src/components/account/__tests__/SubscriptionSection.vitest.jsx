@@ -447,6 +447,26 @@ describe('SubscriptionSection', () => {
       await waitFor(() => expect(getSubscription).toHaveBeenCalledTimes(2));
     });
 
+    it('refreshes after a change without unmounting the dialog that shows its confirmation', async () => {
+      getSubscription.mockResolvedValueOnce({ ...ACTIVE, planName: 'Pro' });
+      let answer;
+      getSubscription.mockReturnValueOnce(new Promise((resolve) => { answer = resolve; }));
+      renderSection();
+
+      await userEvent.click(await screen.findByTestId('SubscriptionSection__changePlan'));
+      await userEvent.click(screen.getByTestId('PlanChangeDialog__stub'));
+
+      // While the subscription is re-read the section neither shows its loading state nor drops
+      // the dialog (it would come back on its option list instead of the confirmation).
+      await waitFor(() => expect(getSubscription).toHaveBeenCalledTimes(2));
+      expect(screen.queryByTestId('SubscriptionSection__loading')).not.toBeInTheDocument();
+      expect(screen.getByTestId('PlanChangeDialog__stub')).toBeInTheDocument();
+
+      answer({ ...ACTIVE, planName: 'Pro yearly' });
+      expect(await screen.findByText(/Pro yearly/)).toBeInTheDocument();
+      expect(screen.getByTestId('PlanChangeDialog__stub')).toBeInTheDocument();
+    });
+
     it('offers no change action on a past-due or canceled subscription, nor without a catalog plan', async () => {
       getSubscription.mockResolvedValue({ ...ACTIVE, planName: 'Pro', status: 'past_due' });
       const { unmount } = renderSection();

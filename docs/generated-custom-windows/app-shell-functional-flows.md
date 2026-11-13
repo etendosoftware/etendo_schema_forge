@@ -513,8 +513,9 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   as soon as it is paid. Otherwise the answer is
   shown in place (`PlanChangeDialog__done`: `planChangeDoneImmediate` with the new plan, or
   `planChangeDoneScheduled` with the date; `planChangeAlreadyPending` when the same downgrade was
-  already scheduled) and the section reloads (`onChanged` → `load`), so the plan, the quotas and the
-  pending line follow. Refusals keep the dialog open with their own line: `planChangeNotAllowed`
+  already scheduled) and the section re-reads the subscription in the background (`onChanged` →
+  `refresh`, no loading state, so the dialog stays on its confirmation until the customer closes
+  it), so the plan, the quotas and the pending line follow. Refusals keep the dialog open with their own line: `planChangeNotAllowed`
   (409 `PLAN_CHANGE_NOT_ALLOWED`), `planChangeNotCurrent` (409 `SUBSCRIPTION_NOT_CURRENT`),
   `planChangeFailed` (anything else); a 401 is handed to the host as everywhere on the page.
 - **Pending downgrade:** while `pendingChange` is set on `GET /billing/subscription`, the section

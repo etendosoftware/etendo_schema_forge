@@ -205,6 +205,22 @@ export function SubscriptionSection({
     }
   }, [apiBaseUrl, clientId, onSessionExpired]);
 
+  // ETP-5053 — after a plan change the section re-reads the subscription WITHOUT going through
+  // 'loading': that state unmounts the section, the change-plan dialog with it, and the dialog
+  // would come back on its option list instead of the confirmation it is showing. A failed
+  // refresh keeps what is on screen; an expired session is still handed over.
+  const refresh = useCallback(async () => {
+    try {
+      const result = await getSubscription(apiBaseUrl, clientId);
+      setSubscription(result || null);
+    } catch (err) {
+      if (err?.status === 401) {
+        setStatus('sessionExpired');
+        onSessionExpired?.();
+      }
+    }
+  }, [apiBaseUrl, clientId, onSessionExpired]);
+
   useEffect(() => { load(); }, [load]);
 
   const handleManage = useCallback(async () => {
@@ -453,7 +469,7 @@ export function SubscriptionSection({
                 apiBaseUrl={apiBaseUrl}
                 clientId={subscription.clientId || null}
                 periodEnd={subscription.renewalAt || null}
-                onChanged={load}
+                onChanged={refresh}
                 onSessionExpired={onSessionExpired}
                 data-testid="PlanChangeDialog__769a8e"
               />
