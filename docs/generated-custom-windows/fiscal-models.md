@@ -4270,7 +4270,7 @@ certificate) and downloads it in every case. The validation is a warning, never 
 
 | Validator | What the user gets |
 |---|---|
-| no errors (`accepted`) | the file, nothing else (as before) |
+| no errors (`accepted`) | the file + the system success toast "Fichero validado por la AEAT sin errores." (`fm.m390.file_validation.accepted`) |
 | errors (`rejected`) | the file + a warning `InfoBanner` above the cards (`FileValidationNotice390`) listing each error with its AEAT code and a "Ver incidencias" button; the errors are stored as the declaration's AEAT incidents (`AEAT-<code>`), like after a direct presentation, and the page re-reads them |
 | no answer (`connection_failure` / `not_validated`) | the file + a warning banner saying it could not be validated; the stored incidents are left as they were |
 
@@ -4280,6 +4280,12 @@ or Presentar (`ruleBlockingCount` counts the model's own rules only). Pieces:
 `fileValidation390.js` (outcomes + `fileValidationOf`), `fm390Api.generate390File`,
 `FileValidationNotice390.jsx`, `FmModel390Page.handleGenerate`. 303 and 349 generate exactly as
 before. Contract: `{etendo_root}/modules/com.etendoerp.go/docs/aeat-390-endpoints.md`.
+
+**AEAT attempt log (ETP-5716).** Every attempt against the AEAT — a direct presentation, a
+"Validar sin presentar" and this pre-download validation, for 303 and 390 — leaves a row in the
+backend's append-only `ETGO_Fiscal_AEAT_Attempt` table, whatever happens to the incidents
+(which each attempt still replaces). It has no UI: it is read by SQL. Reference:
+`{etendo_root}/modules/com.etendoerp.go/docs/aeat-attempt-log.md`.
 
 Every successful save invalidates the list's session cache for the declaration
 (`invalidateFiscalComputeCache`), patches the list (`onManualDataSaved`) and recomputes the

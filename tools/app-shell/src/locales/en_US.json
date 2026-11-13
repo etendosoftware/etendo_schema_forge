@@ -22906,6 +22906,7 @@
     "fm.m390.substitutive.by_quotas": "Substitute due to quota rectification",
     "fm.m390.compute_error": "Form 390 could not be calculated. Please try again.",
     "fm.m390.generate_error": "The 390 file could not be generated. Please try again.",
+    "fm.m390.file_validation.accepted": "File validated by the AEAT with no errors.",
     "fm.m390.file_validation.rejected": "The AEAT found errors when validating the file. The file was downloaded anyway: review the incidents before filing it.",
     "fm.m390.file_validation.unavailable": "The file could not be validated with the AEAT. It was downloaded without validation.",
     "fm.m390.file_validation.view_incidents": "View incidents",

@@ -1,7 +1,8 @@
 // Modelo 390 — what the AEAT validator said about the file "Generar fichero 390" just downloaded
 // (ETP-5716). The file is downloaded in every case; this is the system notice banner telling the
 // user it carries AEAT errors (each with its AEAT code, also stored in Incidencias) or that it
-// could not be validated at all. A clean validation shows nothing: the download is the feedback.
+// could not be validated at all. A clean validation is confirmed by the page with the system
+// success toast (FmModel390Page.handleGenerate), not here.
 import React from 'react';
 import { ArrowRight, TriangleAlert } from 'lucide-react';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
