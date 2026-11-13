@@ -37,6 +37,12 @@ vi.mock('../invoiceInboxApi.js', () => ({
 vi.mock('../InvoiceInboxReviewViewer.jsx', () => ({ default: ({ documentId }) => <div data-testid="viewer-stub" data-doc={documentId} /> }));
 vi.mock('@/hooks/useCurrencyPrecision.js', () => ({ useCurrencyPrecision: () => 2 }));
 
+const mockTrackOpened = vi.fn();
+vi.mock('@/lib/productUsageTelemetry.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  trackInvoiceInboxOpened: (...a) => mockTrackOpened(...a),
+}));
+
 let mockAuth = null;
 vi.mock('@etendosoftware/app-shell-core/auth', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -173,6 +179,19 @@ describe('InvoiceInboxPage — header, tabs and counters', () => {
     const streams = mockApi.fetchNextPage.mock.calls[0][1];
     expect(streams).toEqual([[{ fieldName: 'status', operator: 'equals', value: 'ERROR' }]]);
     await waitFor(() => expect(screen.queryByTestId('invoice-inbox-selection-bar')).toBeNull());
+  });
+});
+
+describe('InvoiceInboxPage — opened telemetry', () => {
+  it('records one invoice_inbox_opened on mount and none on a tab change', async () => {
+    await renderPage();
+    expect(mockTrackOpened).toHaveBeenCalledTimes(1);
+
+    mockApi.fetchNextPage.mockClear();
+    fireEvent.click(screen.getByTestId('invoice-inbox-filter-error'));
+    await waitFor(() => expect(mockApi.fetchNextPage).toHaveBeenCalled());
+
+    expect(mockTrackOpened).toHaveBeenCalledTimes(1);
   });
 });
 
