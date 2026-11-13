@@ -1383,8 +1383,11 @@ probes:
         setup: *agua-stock
         expectEffect:
           tool: etendo_list
-          args: { spec: product, entity: stock, parentId: "{{steps.agua.data.0.id}}",
-                  filters: { warehouse: "{{steps.main.data.0.id}}", quantityOnHand: 280 } }
+          args: { spec: product, entity: stock, parentId: "{{steps.agua.data.0.id}}" }
+          # Applied by the runner, not the server: the stock list is served by a customization
+          # that ignores `filters` (ETP-6236 diagnosis), so as a filter this check passed whenever
+          # Agua had any stock at all.
+          where: { warehouse: "{{steps.main.data.0.id}}", quantityOnHand: 280 }
       holded:
         setup:
           - tool: list_products
