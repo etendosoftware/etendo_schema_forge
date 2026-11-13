@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/contacts/ContactsFinancialPanel.jsx
 // ETP-5255 / ETP-5263 regression — the contacts credit panel must save SINGLE-FLIGHT.
 //
 // The bug: `creditLimit` had TWO independent routes into the same save — the number input's
@@ -35,6 +36,7 @@ vi.mock('sonner', () => ({
 
 vi.mock('../BillingPreferencesForm', () => ({ default: () => <div data-testid="billing-form" /> }));
 vi.mock('../FiscalDefaultsSection', () => ({ default: () => <div data-testid="fiscal-defaults-section" /> }));
+vi.mock('../SepaMandateSection', () => ({ default: () => <div data-testid="sepa-mandate-section" /> }));
 
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import {

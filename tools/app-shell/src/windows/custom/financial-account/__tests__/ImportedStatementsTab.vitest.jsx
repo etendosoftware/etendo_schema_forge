@@ -11,6 +11,12 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 
+// ETP-6151 — flag `psd2-statement-import-settings`. Defaults to on (the ETP-6151 suites describe it); the flag-off test flips it.
+const importSettingsFlag = vi.hoisted(() => ({ on: true }));
+vi.mock('@/hooks/usePsd2ImportSettingsFlag.js', () => ({
+  usePsd2ImportSettingsFlag: () => importSettingsFlag.on,
+}));
+
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
 const toastWarning = vi.fn();
@@ -37,8 +43,12 @@ vi.mock('@/hooks/useStatementActions', () => ({
 // useBankConnectionActions calls useAuth internally; stub it so no AuthProvider is needed.
 const bankSync = vi.fn();
 const bankSyncStatus = vi.fn();
+// ETP-6151 — read on every delete request of a bank-connected account, for the re-import notice.
+const bankFetchStatus = vi.fn();
 vi.mock('@/hooks/useBankConnectionActions', () => ({
-  useBankConnectionActions: () => ({ sync: bankSync, syncStatus: bankSyncStatus }),
+  useBankConnectionActions: () => ({
+    sync: bankSync, syncStatus: bankSyncStatus, fetchStatus: bankFetchStatus,
+  }),
 }));
 
 // Capture the confirm dialog props so we can assert which action was requested.
@@ -48,6 +58,7 @@ vi.mock('../StatementConfirmDialog', () => ({
     confirmProps.value = props;
     return props.variant ? (
       <div data-testid="stub-confirm" data-variant={props.variant}>
+        {props.notice}
         <button type="button" data-testid="confirm-run" onClick={props.onConfirm} />
         <button type="button" data-testid="confirm-close" onClick={props.onClose} />
       </div>
@@ -246,6 +257,7 @@ describe('ImportedStatementsTab', () => {
     deleteStatement.mockReset();
     bankSync.mockReset();
     bankSync.mockResolvedValue({ status: 'OK', message: 'done' });
+    bankFetchStatus.mockReset();
     toastSuccess.mockReset();
     toastError.mockReset();
     toastWarning.mockReset();
@@ -901,7 +913,7 @@ describe('ImportedStatementsTab', () => {
    * is coherent with what this tab already does — it swaps "Importar / Nuevo extracto" for
    * "Sincronizar extractos", so a statement cannot be created by hand there either.
    */
-  describe('bank-connected account is read-only', () => {
+  describe('bank-connected account statements', () => {
     const CONNECTED = { ...ACCOUNT, bankConnected: true };
 
     it('forwards the flag to the table so the row affordances disappear', () => {
@@ -914,19 +926,18 @@ describe('ImportedStatementsTab', () => {
       expect(screen.getByTestId('stub-table')).toHaveAttribute('data-bank-connected', 'false');
     });
 
-    // ETP-5111 — the account-level PSD2 refusal moved to the BACKEND (BankStatementsHandler's new
-    // 409 guard, which is where it can actually be enforced for every caller). The trash is no
-    // longer greyed out here; a DRAFT of a connected account is attempted and refused with the
-    // bank-connected reason. `bankConnectionSynced` itself survives — it still drives the toolbar
-    // and the per-row affordances, which are out of scope.
-    it('attempts the delete and surfaces the bank-connected reason instead of disabling the trash', async () => {
-      const BANK_CONNECTED = 'Statements from a bank-connected account cannot be deleted.';
+    // ETP-5111 — the trash is never greyed out here: the delete is attempted and the backend's
+    // reason is what the user reads. ETP-6151 — a bank-connected account no longer refuses the
+    // delete outright; what it still refuses is a POSTED statement (and one with matched lines),
+    // and that reason reaches the toast translated.
+    it('attempts the delete and surfaces the posted reason instead of disabling the trash', async () => {
+      const POSTED = 'The statement is posted. Unpost it before deleting it.';
       uiMock.mockImplementation((key) => (
-        key === 'backendError.statementBankConnectedNotDeletable'
-          ? 'Los extractos de una cuenta conectada al banco no se pueden eliminar.'
+        key === 'backendError.statementPostedNotDeletable'
+          ? 'El extracto está contabilizado. Descontabilízalo antes de eliminarlo.'
           : key));
-      const rejection = new Error(BANK_CONNECTED);
-      rejection.status = 409;
+      const rejection = new Error(POSTED);
+      rejection.status = 400;
       deleteStatement.mockRejectedValue(rejection);
 
       const user = userEvent.setup();
@@ -943,9 +954,226 @@ describe('ImportedStatementsTab', () => {
 
       expect(deleteStatement).toHaveBeenCalledWith('s4');
       await waitFor(() => expect(toastError).toHaveBeenCalledWith(
-        'Los extractos de una cuenta conectada al banco no se pueden eliminar.',
+        'El extracto está contabilizado. Descontabilízalo antes de eliminarlo.',
       ));
-      expect(toastError).not.toHaveBeenCalledWith(BANK_CONNECTED);
+      expect(toastError).not.toHaveBeenCalledWith(POSTED);
+    });
+  });
+
+  /**
+   * ETP-6151 — deleting a statement of a bank-connected account is allowed, but whatever the bank
+   * still serves from the account's "Importar desde" onwards comes back on the next sync. Both
+   * delete confirmations (row and bulk) say so, naming that date, which is re-read from the bridge
+   * on every delete request because it can change in "Editar cuenta" meanwhile. Nothing is read
+   * or shown for an account that is not connected. The notice itself is covered in
+   * `BankReimportNotice.vitest.jsx`.
+   */
+  describe('bank re-import notice on delete (ETP-6151)', () => {
+    const CONNECTED = { ...ACCOUNT, bankConnected: true };
+    const NOTICE = 'statement-delete-bank-reimport-notice';
+
+    beforeEach(() => {
+      // Interpolating, so the date the notice names is observable.
+      uiMock.mockImplementation((key, vars) => (vars ? `${key}|${Object.values(vars).join(',')}` : key));
+    });
+
+    it('flag off: reads no status and shows no notice on a bank-connected delete', async () => {
+      importSettingsFlag.on = false;
+      try {
+        bankFetchStatus.mockResolvedValue({ connected: true, importFromDate: '2026-03-01' });
+        const user = userEvent.setup();
+        render(<ImportedStatementsTab account={CONNECTED} />);
+
+        await user.click(screen.getByTestId('row-delete-s1'));
+
+        expect(screen.getByTestId('stub-confirm')).toBeInTheDocument();
+        expect(screen.queryByTestId(NOTICE)).toBeNull();
+        expect(bankFetchStatus).not.toHaveBeenCalled();
+      } finally {
+        importSettingsFlag.on = true;
+      }
+    });
+
+    it('flag off: the bulk delete dialog of a bank-connected account is the stock one (no notice, no bg-card, no status read)', async () => {
+      importSettingsFlag.on = false;
+      try {
+        bankFetchStatus.mockResolvedValue({ connected: true, importFromDate: '2026-03-01' });
+        const user = userEvent.setup();
+        render(<ImportedStatementsTab account={CONNECTED} />);
+
+        await user.click(screen.getByTestId('row-select-s4'));
+        await user.click(screen.getByTestId('bulk-delete-selection-trigger'));
+
+        expect(await screen.findByTestId('batch-delete-confirm')).toBeInTheDocument();
+        expect(screen.queryByTestId(NOTICE)).toBeNull();
+        expect(screen.getByTestId('DialogContent__batch-delete').className).not.toContain('bg-card');
+        expect(bankFetchStatus).not.toHaveBeenCalled();
+      } finally {
+        importSettingsFlag.on = true;
+      }
+    });
+
+    it('reads the date on a row delete request and names it in the confirm', async () => {
+      bankFetchStatus.mockResolvedValue({ connected: true, importFromDate: '2026-03-01' });
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={CONNECTED} />);
+      expect(bankFetchStatus).not.toHaveBeenCalled();
+
+      await user.click(screen.getByTestId('row-delete-s1'));
+
+      expect(bankFetchStatus).toHaveBeenCalledWith('acc-1');
+      expect(await screen.findByText('financeAccountStatementsDeleteBankReimportNotice|01/03/2026'))
+        .toBeInTheDocument();
+      expect(screen.getByTestId('stub-confirm')).toContainElement(screen.getByTestId(NOTICE));
+    });
+
+    it('re-reads the date on every delete request, so a date changed meanwhile is the one named', async () => {
+      bankFetchStatus
+        .mockResolvedValueOnce({ importFromDate: '2026-03-01' })
+        .mockResolvedValueOnce({ importFromDate: '2026-06-01' });
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={CONNECTED} />);
+
+      await user.click(screen.getByTestId('row-delete-s1'));
+      await screen.findByText('financeAccountStatementsDeleteBankReimportNotice|01/03/2026');
+      await user.click(screen.getByTestId('confirm-close'));
+      await user.click(screen.getByTestId('row-delete-s2'));
+
+      expect(bankFetchStatus).toHaveBeenCalledTimes(2);
+      expect(await screen.findByText('financeAccountStatementsDeleteBankReimportNotice|01/06/2026'))
+        .toBeInTheDocument();
+    });
+
+    it('ignores the late answer of a read the next request superseded', async () => {
+      let resolveFirst;
+      bankFetchStatus
+        .mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve; }))
+        .mockResolvedValueOnce({ importFromDate: '2026-06-01' });
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={CONNECTED} />);
+
+      await user.click(screen.getByTestId('row-delete-s1'));
+      await user.click(screen.getByTestId('confirm-close'));
+      await user.click(screen.getByTestId('row-delete-s2'));
+      await screen.findByText('financeAccountStatementsDeleteBankReimportNotice|01/06/2026');
+
+      await act(async () => { resolveFirst({ importFromDate: '2025-01-01' }); });
+
+      expect(screen.getByTestId(NOTICE))
+        .toHaveTextContent('financeAccountStatementsDeleteBankReimportNotice|01/06/2026');
+    });
+
+    it('uses the date-less wording when the read fails', async () => {
+      bankFetchStatus.mockRejectedValue(new Error('boom'));
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={CONNECTED} />);
+
+      await user.click(screen.getByTestId('row-delete-s1'));
+
+      await waitFor(() => expect(bankFetchStatus).toHaveBeenCalled());
+      expect(screen.getByTestId(NOTICE))
+        .toHaveTextContent('financeAccountStatementsDeleteBankReimportNoticeNoDate');
+    });
+
+    it('uses the date-less wording when the connection holds no date', async () => {
+      bankFetchStatus.mockResolvedValue({ connected: true, importFromDate: null });
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={CONNECTED} />);
+
+      await user.click(screen.getByTestId('row-delete-s1'));
+
+      await waitFor(() => expect(bankFetchStatus).toHaveBeenCalled());
+      expect(screen.getByTestId(NOTICE))
+        .toHaveTextContent('financeAccountStatementsDeleteBankReimportNoticeNoDate');
+    });
+
+    it('shows no notice, and reads nothing, for an account that is not connected', async () => {
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+
+      await user.click(screen.getByTestId('row-delete-s1'));
+
+      expect(screen.getByTestId('stub-confirm')).toHaveAttribute('data-variant', 'delete');
+      expect(screen.queryByTestId(NOTICE)).toBeNull();
+      expect(bankFetchStatus).not.toHaveBeenCalled();
+    });
+
+    it.each(['process', 'reactivate'])('shows no notice on the %s confirm of a connected account', async (variant) => {
+      bankFetchStatus.mockResolvedValue({ importFromDate: '2026-03-01' });
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={CONNECTED} />);
+
+      await user.click(screen.getByTestId(`row-${variant}-s1`));
+
+      expect(screen.getByTestId('stub-confirm')).toHaveAttribute('data-variant', variant);
+      expect(screen.queryByTestId(NOTICE)).toBeNull();
+      expect(bankFetchStatus).not.toHaveBeenCalled();
+    });
+
+    it('carries the notice into the bulk delete dialog of a connected account', async () => {
+      bankFetchStatus.mockResolvedValue({ importFromDate: '2026-03-01' });
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={CONNECTED} />);
+
+      await user.click(screen.getByTestId('row-select-s4'));
+      await user.click(screen.getByTestId('bulk-delete-selection-trigger'));
+
+      expect(bankFetchStatus).toHaveBeenCalledWith('acc-1');
+      const confirm = await screen.findByTestId('batch-delete-confirm');
+      const notice = await screen.findByText('financeAccountStatementsDeleteBankReimportNotice|01/03/2026');
+      // eslint-disable-next-line no-bitwise
+      expect(notice.compareDocumentPosition(confirm) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('uses the date-less wording in the bulk dialog when the read fails', async () => {
+      bankFetchStatus.mockRejectedValue(new Error('boom'));
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={CONNECTED} />);
+
+      await user.click(screen.getByTestId('row-select-s4'));
+      await user.click(screen.getByTestId('bulk-delete-selection-trigger'));
+
+      await screen.findByTestId('batch-delete-confirm');
+      await waitFor(() => expect(bankFetchStatus).toHaveBeenCalled());
+      expect(screen.getByTestId(NOTICE))
+        .toHaveTextContent('financeAccountStatementsDeleteBankReimportNoticeNoDate');
+    });
+
+    it('leaves the bulk delete dialog of an unconnected account without the notice', async () => {
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+
+      await user.click(screen.getByTestId('row-select-s4'));
+      await user.click(screen.getByTestId('bulk-delete-selection-trigger'));
+
+      expect(await screen.findByTestId('batch-delete-confirm')).toBeInTheDocument();
+      expect(screen.queryByTestId(NOTICE)).toBeNull();
+      expect(bankFetchStatus).not.toHaveBeenCalled();
+    });
+
+    // A processed statement of a connected account is deleted in one step by the backend unless it
+    // is posted; that refusal reaches the row confirm's toast translated, not as raw English.
+    it('translates the posted refusal of a row delete', async () => {
+      const POSTED = 'The statement is posted. Unpost it before deleting it.';
+      uiMock.mockImplementation((key, vars) => {
+        if (key === 'backendError.statementPostedNotDeletable') {
+          return 'El extracto está contabilizado. Descontabilízalo antes de eliminarlo.';
+        }
+        return vars ? `${key}|${Object.values(vars).join(',')}` : key;
+      });
+      bankFetchStatus.mockResolvedValue({ importFromDate: '2026-03-01' });
+      deleteStatement.mockRejectedValueOnce(Object.assign(new Error(POSTED), { status: 400 }));
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={CONNECTED} />);
+
+      await user.click(screen.getByTestId('row-delete-s1'));
+      await user.click(screen.getByTestId('confirm-run'));
+
+      expect(deleteStatement).toHaveBeenCalledWith('s1');
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith(
+        'El extracto está contabilizado. Descontabilízalo antes de eliminarlo.',
+      ));
+      expect(toastError).not.toHaveBeenCalledWith(POSTED);
     });
   });
 

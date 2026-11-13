@@ -163,7 +163,7 @@ describe('ListView — a newActions item that opens the import dialog', () => {
     // [case, props, menu item shown, standalone import icon shown]
     ['the menu offers the import', { import: IMPORT }, true, false],
     ['hideCreate removes the menu', { import: IMPORT, hideCreate: true }, false, true],
-    ['a read-only window removes the menu', { import: IMPORT, window: { readOnly: true } }, false, true],
+    ['a read-only window removes the menu and the import', { import: IMPORT, window: { readOnly: true } }, false, false],
     ['the import is disabled', { import: { ...IMPORT, enabled: false } }, false, false],
   ])('offers the import exactly where it is reachable when %s', (_label, props, itemShown, iconShown) => {
     render(<ListView {...defaultProps} {...props} />);

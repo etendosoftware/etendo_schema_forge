@@ -225,6 +225,11 @@
     {
       "name": "invoice-inbox",
       "windowId": "81AC659E93504927B459E0CAE80CE923"
+    },
+    {
+      "name": "remittance",
+      "windowId": "FF8080812E71F7C7012E71FD0499001B",
+      "menuName": "Remittance"
     }
   ]
 }

@@ -2824,3 +2824,15 @@ An issued invoice is voided with a credit note (factura rectificativa), never by
 - the agentic docs page `etendo-go-docs/agentic/finance/invoices.md` walks the five calls.
 
 **Verify:** `etendo_action(spec: "sales-invoice", id: <completed invoice>, action: "documentAction", parameters: {docAction: "VO"})` answers 422 naming the credit note; re-run the okr probe `f-void-invoice`.
+
+## One label format for the SIF tab's selects — ETP-6179
+
+Every select of the SIF tab (`SifTab.jsx`: SII *Tipo factura*, SII *Motivo rectificación*,
+VERI\*FACTU *Tipo factura*, TicketBAI *Código factura rectificativa*) now renders its options as
+**"CODE - Label"**, with the code exactly once. Before, the tab prefixed every option with
+`"<code> — "`, so the labels whose locale text already starts with the code read twice
+("F1 — F1 - Factura (art. 6…)", "R4 — R4 - Resto"). The formatter is the shared
+`sifOptionLabel(option, ui)` exported by `tools/app-shell/src/windows/custom/shared/InvoiceSifStep.jsx`:
+a label that already starts with its code is shown as it is, any other one gets the `"CODE - "`
+prefix. The "Datos fiscales" step of the invoice-creating modals uses the same function, so the tab
+and the step always read alike. No locale key changed.

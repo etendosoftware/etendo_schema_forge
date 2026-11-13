@@ -31,6 +31,7 @@ import { useAccountMutations } from '@/hooks/useAccountMutations.js';
 import {
   translateBackendError,
   isDuplicateConflict,
+  hasMappedMessageKey,
   extractBackendMessageKeys,
   extractBackendMessageParams,
 } from '@/lib/backendErrors.js';
@@ -196,7 +197,10 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
       onCreated?.();
       onClose?.();
     } catch (err) {
-      if (isDuplicateConflict(err.status, err.code)) {
+      // ETP-6148 — a 409 that names a translated backend message (ETGO_RemittanceProvisioningConflict:
+      // the Bank account's remittance setup raced, retry) is not a duplicate name, even code-less.
+      const messageKeys = extractBackendMessageKeys(err.body);
+      if (isDuplicateConflict(err.status, err.code) && !hasMappedMessageKey(messageKeys)) {
         setFormError(ui('financeAccountsNewNameExists'));
       } else {
         // ETP-4896 QA follow-up: this used to show the backend's raw English literal. Routed
@@ -205,7 +209,7 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
         // `messageKeys`, so pass the identity along — the same call shape as EditAccountModal.
         toast.error(translateBackendError(err.message, ui, {
           code: err.code,
-          messageKeys: extractBackendMessageKeys(err.body),
+          messageKeys,
           messageParams: extractBackendMessageParams(err.body),
         }) || ui('financeAccountsNewCreateError'));
       }

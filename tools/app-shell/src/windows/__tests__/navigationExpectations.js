@@ -15,7 +15,7 @@ const groups = {
   Sales: 'sales-quotation sales-order goods-shipment sales-invoice return-material-receipt',
   Purchases: 'purchase-order goods-receipt purchase-invoice return-to-vendor-shipment matched-purchase-invoices invoice-inbox',
   Inventory: 'product product-category physical-inventory goods-movements internal-consumption warehouse report-viewer-inventory',
-  Finance: 'payment-in payment-out financial-account chart-of-accounts cost-center service-project general-ledger-configuration calendar assets asset-group amortization not-posted-documents manual-journals fiscal-monitor conversion-rates fiscal-models tax tax-category report-viewer-finance',
+  Finance: 'payment-in payment-out financial-account remittance chart-of-accounts cost-center service-project general-ledger-configuration calendar assets asset-group amortization not-posted-documents manual-journals fiscal-monitor conversion-rates fiscal-models tax tax-category report-viewer-finance',
   Connections: 'authorize',
   Settings: 'organization document-sequence price-list payment-term business-partner-category user roles api-keys document-templates acct-process-monitor fiscal-config',
 };
@@ -41,6 +41,9 @@ const exceptions = {
   // ETP-5988 — the document template selector, behind its own flag and admin-only.
   'document-templates': { capability: 'isAdminOrClientAdmin', flag: 'doc-template-selection' },
   'invoice-inbox': { accessWindowId: '81AC659E93504927B459E0CAE80CE923', capability: 'invoiceInbox' },
+  // ETP-6148 — SEPA remittances: the Classic Remittance window, behind the per-account
+  // sepa-remittances flag (capability) and the window grant, like invoice-inbox above.
+  remittance: { accessWindowId: 'FF8080812E71F7C7012E71FD0499001B', capability: 'sepaRemittances' },
   // ETP-5269. Synthetic destination (runtime-routes.jsx), no AD window of its own.
   // Additionally hidden behind the `acct-process-monitor` feature flag. That gate lives in
   // SideMenu and is invisible to buildMenuGroups — the boundary this catalog measures — so here

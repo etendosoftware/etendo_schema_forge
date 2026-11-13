@@ -47,7 +47,9 @@ export const businessPartner = [
     "pOPaymentMethod": "Sample pOPaymentMethod",
     "purchasePricelist": "Sample purchasePricelist",
     "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "eTGOLocation": "Sample eTGOLocation",
+    "obsepadMandateDate": "2026-01-15",
+    "obsepadMandateIdentifier": "Sample obsepadMandateIdentifier"
   },
   {
     "id": "mock-businessPartner-002",
@@ -95,7 +97,9 @@ export const businessPartner = [
     "pOPaymentMethod": "Sample pOPaymentMethod",
     "purchasePricelist": "Sample purchasePricelist",
     "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "eTGOLocation": "Sample eTGOLocation",
+    "obsepadMandateDate": "2026-01-16",
+    "obsepadMandateIdentifier": "Sample obsepadMandateIdentifier"
   },
   {
     "id": "mock-businessPartner-003",
@@ -143,7 +147,9 @@ export const businessPartner = [
     "pOPaymentMethod": "Sample pOPaymentMethod",
     "purchasePricelist": "Sample purchasePricelist",
     "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "eTGOLocation": "Sample eTGOLocation",
+    "obsepadMandateDate": "2026-01-17",
+    "obsepadMandateIdentifier": "Sample obsepadMandateIdentifier"
   },
   {
     "id": "mock-businessPartner-004",
@@ -191,7 +197,9 @@ export const businessPartner = [
     "pOPaymentMethod": "Sample pOPaymentMethod",
     "purchasePricelist": "Sample purchasePricelist",
     "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "eTGOLocation": "Sample eTGOLocation",
+    "obsepadMandateDate": "2026-01-18",
+    "obsepadMandateIdentifier": "Sample obsepadMandateIdentifier"
   },
   {
     "id": "mock-businessPartner-005",
@@ -239,7 +247,9 @@ export const businessPartner = [
     "pOPaymentMethod": "Sample pOPaymentMethod",
     "purchasePricelist": "Sample purchasePricelist",
     "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "eTGOLocation": "Sample eTGOLocation",
+    "obsepadMandateDate": "2026-01-19",
+    "obsepadMandateIdentifier": "Sample obsepadMandateIdentifier"
   },
   {
     "id": "mock-businessPartner-006",
@@ -287,7 +297,9 @@ export const businessPartner = [
     "pOPaymentMethod": "Sample pOPaymentMethod",
     "purchasePricelist": "Sample purchasePricelist",
     "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "eTGOLocation": "Sample eTGOLocation",
+    "obsepadMandateDate": "2026-01-20",
+    "obsepadMandateIdentifier": "Sample obsepadMandateIdentifier"
   },
   {
     "id": "mock-businessPartner-007",
@@ -335,7 +347,9 @@ export const businessPartner = [
     "pOPaymentMethod": "Sample pOPaymentMethod",
     "purchasePricelist": "Sample purchasePricelist",
     "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "eTGOLocation": "Sample eTGOLocation",
+    "obsepadMandateDate": "2026-01-21",
+    "obsepadMandateIdentifier": "Sample obsepadMandateIdentifier"
   },
   {
     "id": "mock-businessPartner-008",
@@ -383,7 +397,9 @@ export const businessPartner = [
     "pOPaymentMethod": "Sample pOPaymentMethod",
     "purchasePricelist": "Sample purchasePricelist",
     "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "eTGOLocation": "Sample eTGOLocation",
+    "obsepadMandateDate": "2026-01-22",
+    "obsepadMandateIdentifier": "Sample obsepadMandateIdentifier"
   },
   {
     "id": "mock-businessPartner-009",
@@ -431,7 +447,9 @@ export const businessPartner = [
     "pOPaymentMethod": "Sample pOPaymentMethod",
     "purchasePricelist": "Sample purchasePricelist",
     "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "eTGOLocation": "Sample eTGOLocation",
+    "obsepadMandateDate": "2026-01-23",
+    "obsepadMandateIdentifier": "Sample obsepadMandateIdentifier"
   },
   {
     "id": "mock-businessPartner-010",
@@ -479,7 +497,9 @@ export const businessPartner = [
     "pOPaymentMethod": "Sample pOPaymentMethod",
     "purchasePricelist": "Sample purchasePricelist",
     "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "eTGOLocation": "Sample eTGOLocation",
+    "obsepadMandateDate": "2026-01-24",
+    "obsepadMandateIdentifier": "Sample obsepadMandateIdentifier"
   },
   {
     "id": "mock-businessPartner-011",
@@ -527,7 +547,9 @@ export const businessPartner = [
     "pOPaymentMethod": "Sample pOPaymentMethod",
     "purchasePricelist": "Sample purchasePricelist",
     "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "eTGOLocation": "Sample eTGOLocation",
+    "obsepadMandateDate": "2026-01-25",
+    "obsepadMandateIdentifier": "Sample obsepadMandateIdentifier"
   },
   {
     "id": "mock-businessPartner-012",
@@ -575,7 +597,9 @@ export const businessPartner = [
     "pOPaymentMethod": "Sample pOPaymentMethod",
     "purchasePricelist": "Sample purchasePricelist",
     "vendorBlocking": "Sample vendorBlocking",
-    "eTGOLocation": "Sample eTGOLocation"
+    "eTGOLocation": "Sample eTGOLocation",
+    "obsepadMandateDate": "2026-01-26",
+    "obsepadMandateIdentifier": "Sample obsepadMandateIdentifier"
   }
 ];
 

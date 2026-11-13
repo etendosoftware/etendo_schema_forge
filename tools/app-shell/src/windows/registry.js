@@ -330,6 +330,9 @@ const customLoaders = {
   // ETP-6049 — Invoice Inbox: hand-written page (upload + status list) over the read-only
   // `invoice-inbox` spec; guarded by the window access and capabilities.invoiceInbox.
   'invoice-inbox': () => import('./custom/invoice-inbox/index.jsx'),
+  // ETP-6148 — SEPA remittances: the generated window behind a route guard that checks the
+  // window access and capabilities.sepaRemittances (the per-account sepa-remittances flag).
+  'remittance': () => import('./custom/remittance/index.jsx'),
   'assets': () => import('./custom/assets/index.jsx'),
   'user': () => import('./custom/user/index.jsx'),
   // ETP-5414 — bypasses the generated ListView branch only, to add the per-row

@@ -49,7 +49,12 @@ vi.mock('../CreatableSearchSelect.jsx', () => ({
     <div
       data-testid={`creatable-search-select-${props.field?.key ?? 'unknown'}`}
       data-server-search={props.serverSearch ? 'true' : 'false'}
+      data-has-render-option={props.renderOption ? 'true' : 'false'}
     >
+      {/* ETP-6148 — rows drawn through the field's renderOption (optionBadge), when it has one. */}
+      {props.renderOption && (props.staticOptions ?? []).map((opt) => (
+        <div key={`ro-${opt.id}`} data-testid={`render-option-${props.field?.key}-${opt.id}`}>{props.renderOption(opt)}</div>
+      ))}
       <span data-testid={`csrch-server-search-${props.field?.key}`}>{props.serverSearch ? 'true' : 'false'}</span>
       <span data-testid={`csrch-value-${props.field?.key}`}>{String(props.value ?? '')}</span>
       <span data-testid={`csrch-display-${props.field?.key}`}>{String(props.displayValue ?? '')}</span>
@@ -95,7 +100,7 @@ vi.mock('@/hooks/useCapabilitiesSafe.js', () => ({
   useCapabilitiesSafe: () => capabilityState.capabilities,
 }));
 
-import { EntityForm } from '../EntityForm.jsx';
+import { EntityForm, buildOptionBadgeRenderer } from '../EntityForm.jsx';
 
 // --- Shared fixtures ---
 
@@ -2600,5 +2605,52 @@ describe('EntityForm — compact variant, grid gap and stepper field', () => {
       expect(screen.getByTestId('field-days')).toBeInTheDocument();
       expect(screen.queryByTestId('field-days-increment')).toBeNull();
     });
+  });
+});
+
+// ETP-6148 — decisions.json `optionBadge` on a selector field (remittance's Cuenta: «Sin IBAN» when
+// the selector item has ibanValid === false), drawn through CreatableSearchSelect's renderOption.
+describe('EntityForm — buildOptionBadgeRenderer (optionBadge)', () => {
+  const BADGED = {
+    key: 'financialAccount', label: 'Account', type: 'selector', column: 'FIN_Financial_Account_ID', inputMode: 'selector',
+    optionBadge: { field: 'ibanValid', equals: false, labelKey: 'remittanceAccountNoIbanBadge' },
+  };
+  const ui = (key) => `T:${key}`;
+
+  it('returns undefined when the field declares no optionBadge, or an incomplete one', () => {
+    expect(buildOptionBadgeRenderer({ key: 'x' }, ui)).toBeUndefined();
+    expect(buildOptionBadgeRenderer(undefined, ui)).toBeUndefined();
+    expect(buildOptionBadgeRenderer({ key: 'x', optionBadge: { equals: false, labelKey: 'k' } }, ui)).toBeUndefined();
+    expect(buildOptionBadgeRenderer({ key: 'x', optionBadge: { field: 'ibanValid', equals: false } }, ui)).toBeUndefined();
+  });
+
+  it('shows the translated badge when the item field equals the declared value', () => {
+    const renderOption = buildOptionBadgeRenderer(BADGED, ui);
+    render(<div data-testid="row">{renderOption({ id: 'acc-1', name: 'Santander', ibanValid: false })}</div>);
+    expect(screen.getByTestId('row')).toHaveTextContent('Santander');
+    expect(screen.getByTestId('option-badge-financialAccount-acc-1')).toHaveTextContent('T:remittanceAccountNoIbanBadge');
+  });
+
+  it.each([
+    ['true', true],
+    ['missing', undefined],
+    ['a string "false"', 'false'],
+  ])('hides the badge when the item field is %s', (_label, value) => {
+    const renderOption = buildOptionBadgeRenderer(BADGED, ui);
+    render(<div data-testid="row">{renderOption({ id: 'acc-2', name: 'BBVA', ibanValid: value })}</div>);
+    expect(screen.getByTestId('row')).toHaveTextContent('BBVA');
+    expect(screen.queryByTestId('option-badge-financialAccount-acc-2')).toBeNull();
+  });
+
+  it('keeps the default row content, label prefix included', () => {
+    const renderOption = buildOptionBadgeRenderer(BADGED, ui);
+    render(<div data-testid="row">{renderOption({ id: 'a', name: 'Caixa', labelPrefix: '21%', ibanValid: true })}</div>);
+    expect(screen.getByTestId('row')).toHaveTextContent('21% - Caixa');
+  });
+
+  it('EntityForm hands the renderer to the field that declares optionBadge, and none to the others', () => {
+    renderForm({ fields: [BADGED, MIXED_FIELDS[5]], data: { financialAccount: '', bp: '' } });
+    expect(screen.getByTestId('creatable-search-select-financialAccount')).toHaveAttribute('data-has-render-option', 'true');
+    expect(screen.getByTestId('creatable-search-select-bp')).toHaveAttribute('data-has-render-option', 'false');
   });
 });

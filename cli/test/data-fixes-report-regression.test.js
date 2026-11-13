@@ -211,6 +211,9 @@ const FIXES_WITH_REPORT = new Set([
   // R57 (ETP-5837) gives the sales-quotation series the PR prefix; its @report lists a quotation
   // sequence left unprefixed because a non-quotation doctype also uses it (shared series).
   '20261106T120000Z__R57-quotation-sequence-pr-prefix',
+  // R58 (ETP-5837) sets STARTNO 1000000 on the Quotation sequence only where it is still the
+  // dataset's 10000; its @report lists a Quotation sequence left on a STARTNO someone chose.
+  '20261112T120000Z__R58-quotation-sequence-startno',
 ]);
 
 async function loadCatalogFiles() {
