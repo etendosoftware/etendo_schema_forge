@@ -1525,6 +1525,47 @@ redirects there) with active accounts in two currencies, e.g. EUR + USD under an
 
   Unchanged by this: `SaltEdgeAccountLinkHelper.populateBankIBANField` still reconciles a linked account's country against the IBAN Salt Edge returns and surfaces a mismatch as a **warning toast** (via `data.warning`) rather than blocking — that path now only matters for already-linked accounts, and no change was made to that helper.
 
+### SEPA remittances on Bank accounts (ETP-6148)
+
+There is no per-account «Admite remesas» switch and no `EM_ETGO_Allow_Remittance` column. The column,
+the `eTGOAllowRemittance` field, the «Remesas SEPA» section of «Editar cuenta» and its refusals were
+removed by a product decision; an earlier iteration of ETP-6148 had them.
+
+- **Automatic.** Creating a **Bank** (`B`) account while the `sepa-remittances` flag is on for the
+  user links the two SEPA remittance payment methods (collection and payment) to it. The client is
+  provisioned the first time. Both the manual create and the bank-connection `createAndLink` do
+  it, server-side (com.etendoerp.go). Cash and Card accounts are untouched.
+- **The only new create refusal** is 409 `ETGO_RemittanceProvisioningConflict` (a concurrent
+  provisioning; retry). It is mapped to `backendError.remittanceProvisioningConflict`.
+- **No backfill.** An account created before the feature, or while the flag was off, has no
+  remittance methods. The remittance header refuses it (see [remittance.md](remittance.md)).
+- **The SEPA creditor identifier is not part of this task** and is not stored on the account. It is
+  computed when the SEPA XML is built, from the organization tax ID (NIF) and the remittance type's
+  `Creditor_Business_Code` parameter, default `000`.
+- The remittance window that uses these accounts is described in [remittance.md](remittance.md).
+
+#### Transaction status: remittance codes (ETP-6148)
+
+The Remittance module adds two codes to the payment status list (the AD reference shared by
+`FIN_Finacc_Transaction.Status` and `FIN_Payment.Status`), so the transaction status enum now has
+11 codes.
+
+- **`enumValues` for all 11 codes.** `decisions.json` → `entities.transaction.fields.status`
+  declares every code, in AD order, with its genericLabels key as `name`: `statusRpap`,
+  `statusRpae`, `statusRpvoid`, `statusRemSent`, `statusPpm`, `statusRpr`, `statusRemCancel`,
+  `statusRdnc`, `statusPwnc`, `statusRppc` and `statusEtgoerr`.
+  - The grid column already used these keys.
+  - The override also makes the read-only form select resolve them (`tMenu`) in every locale. Before it, the select showed the AD names that have no es_ES translation: «Remitted», «Settled in Remittance» and «Payment Error».
+  - An override replaces the whole list, so a new code in the list has to be added here too.
+- **`REM_SENT`** («Remesado» / «Remitted», key `statusRemSent`) and **`REM_CANCEL`** («Liquidado en
+  remesa» / «Settled in remittance», key `statusRemCancel`) are in the global catalog of
+  `lib/statusBadge.js`. The codes are unique, so they belong there.
+  - `statusLabel` maps each code to its key.
+  - `getStatusTone` gives `REM_SENT` the **warning** tone (sent, waiting for the bank) and `REM_CANCEL` the **success** tone (settled).
+  - The same entries cover Payment In / Payment Out, whose hand-written status column (`PaymentHeaderTableBase`) has no entry for these codes.
+- Not covered: the Movements tab badge (`movementStatusConfig.js`) has no entry for either code, so it
+  shows no badge for them.
+
 Server-side IBAN/country validation helpers live in `FinancialAccountCountrySupport` (`com.etendoerp.go`), extracted out of `FinancialAccountHandler` to keep it under Sonar's method-count ceiling — same rationale as `FinancialAccountDeleteSupport`.
 
 **MCP hook parity (ETP-4239, runtime change):** `McpToolRouter` now resolves the entity's `NeoHandler` (annotation first, `Java_Qualifier` as fallback, through `NeoExtensionDispatcher`) and runs `handle()` (pre, may mutate the body) / `afterHandle()` (post) around `etendo_create` / `etendo_update` / `etendo_delete` — previously MCP writes bypassed ALL entity hooks (no validation, no derivation). This applies to every W spec, not just financial-account.
@@ -1810,6 +1851,11 @@ financeAccountsArchiveSuccess        "Account archived"
 financeAccountsArchiveOpenRecon      "Cannot archive an account with open reconciliations"
 financeAccountsMenuEdit              "Edit account"
 financeAccountsMenuArchive           "Archive account"
+financeAccountsRemittanceSection     "SEPA remittances"                (ETP-6148)
+financeAccountsRemittanceAllow       "Allows remittances"              (ETP-6148)
+financeAccountsRemittanceAllowHint   "Turning it on requires a valid IBAN and enables the remittance payment methods on this account." (ETP-6148)
+backendError.remittanceAccountNotBank, backendError.remittanceAccountIbanRequired,
+backendError.sepaRemittancesDisabled                                   (ETP-6148, see the refusals table above)
 ```
 
 ## Not implemented yet (follow-up tasks)

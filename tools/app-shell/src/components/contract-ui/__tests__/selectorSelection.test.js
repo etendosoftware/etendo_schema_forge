@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import {
   LOCATE_SELECTION_MAX_PAGES, resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor,
   hasCommittedValue,
-  shouldKeepLocating, centerOptionInPanel, committedItemFromRow, pinSearchTerms,
+  shouldKeepLocating, centerOptionInPanel, committedItemFromRow, pinSearchTerms, committedIdSet,
   locatePageLimit, locateMaxRows, firstPageLimit,
 } from '../selectorSelection.js';
 
@@ -137,6 +137,32 @@ test('pinSearchTerms tries the full label, then each " - " segment, capped', () 
   assert.deepEqual(pinSearchTerms('TestProduct'), ['TestProduct']);
   assert.deepEqual(pinSearchTerms(''), []);
   assert.deepEqual(pinSearchTerms(null), []);
+});
+
+// ETP-6148 — committedIdSet: the multi-select counterpart of resolveSelectedIndex. A reopened
+// multi-select picker (DocumentPickerModal) opens with exactly these rows checked.
+test('committedIdSet collects the ids of the committed rows, as strings', () => {
+  const rows = [{ id: 1, applied: true }, { id: 'b', applied: false }, { id: 'c', applied: true }];
+  const ids = committedIdSet(rows, (row) => row.applied, (row) => row.id);
+  assert.ok(ids instanceof Set);
+  assert.deepEqual([...ids], ['1', 'c']);
+});
+
+test('committedIdSet reads the committed state from the predicate only', () => {
+  const isCommitted = (row) => row.alreadyInRemittance === true;
+  const rows = [{ id: 'a', alreadyInRemittance: 'Y' }, { id: 'b', alreadyInRemittance: true }, { id: 'c' }];
+  assert.deepEqual([...committedIdSet(rows, isCommitted, (row) => row.id)], ['b']);
+});
+
+test('committedIdSet uses the given id accessor and de-duplicates', () => {
+  const rows = [{ key: 'x' }, { key: 'x' }, { key: 'y' }];
+  assert.deepEqual([...committedIdSet(rows, () => true, (row) => row.key)], ['x', 'y']);
+});
+
+test('committedIdSet is empty for no rows, null or undefined', () => {
+  assert.equal(committedIdSet([], () => true, (r) => r.id).size, 0);
+  assert.equal(committedIdSet(null, () => true, (r) => r.id).size, 0);
+  assert.equal(committedIdSet(undefined, () => true, (r) => r.id).size, 0);
 });
 
 test('locatePageLimit: 100 rows first, then everything that is left of the 1000-row walk total', () => {

@@ -35,6 +35,7 @@ import {
   stripTrailingPeriods,
   translateBackendError,
   isDuplicateConflict,
+  hasMappedMessageKey,
   extractBackendMessageKeys,
   extractBackendMessageParams,
 } from '@/lib/backendErrors.js';
@@ -1315,7 +1316,9 @@ export function EditAccountModal({
     // discriminator; the status is not.
     if (err.code === 'stale_record' || err.body?.error === 'stale_record') {
       setError(ui('financeAccountsEditStaleRecord'));
-    } else if (isDuplicateConflict(err.status, err.code)) {
+    } else if (isDuplicateConflict(err.status, err.code) && !hasMappedMessageKey(extractBackendMessageKeys(err.body))) {
+      // ETP-6148: a code-less 409 that names a translated message (ETGO_RemittanceProvisioningConflict)
+      // is not a duplicate name; it falls through to the translated toast below.
       // ETP-5782: only `duplicate_key` (or a legacy code-less 409) means "name taken"; any other
       // 409 (record in use, retryable conflict) falls through to the server's own message.
       setError(ui('financeAccountsNewNameExists'));

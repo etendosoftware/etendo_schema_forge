@@ -2444,6 +2444,305 @@
           ]
         }
       ]
+    },
+    {
+      "id": "sepa-remittances",
+      "description": "SEPA remittances (epic ETP-3504, first task ETP-6148, from analysis ETP-6068): reuse Classic remittances (org.openbravo.module.remittance) from Etendo GO with as few new columns as possible -- none in com.etendoerp.go (an earlier iteration added FIN_FINANCIAL_ACCOUNT.EM_ETGO_ALLOW_REMITTANCE and an «Admite remesas» toggle; both were removed by a product decision). The remittance status is the remittance module's own column REM_REMITTANCE.REMITTANCE_STATUS (AD column Remittance_Status, DAL property remittanceStatus, reference REM_RemittanceStatus PE/PR/CT/PT/CP/PP/AN), added in ETP-6148 on feature/ETP-6148 and set by REM's own processes; the remittance PR must be merged and its module built before this com.etendoerp.go change is deployed (release-order dependency, see the release-order item: the module version is bumped when the module is published and GO's module.remittance floor is raised to it in the same release). Everything else is Classic data: creating a Bank financial account while the flag is on (manual create and bank-connection createAndLink) provisions lazily, per client, the In Remittance execution process, the REM_REM document type and sequence, the two remittance payment methods (CORE collection, SCT payment) and their REM_REMITTANCE_TYPE rows, marked by the type parameter ETGO_SEPA_SCHEME, and links both methods to the account; the CORE type carries Creditor_Business_Code=000 so the SEPA XML (another team) builds the creditor identifier from the organization tax ID. Also the default SEPA mandate of a customer (reusing the OBSEPAD mandate columns of C_BPARTNER) and the Remittance window with header, read-only lines and statuses (defined only, no transitions). Out of scope: due-date selection, the SEPA XML, reconciliation, returns, structured address. Backend-only flag evaluated per account. Off: Bank accounts are created without the remittance methods, every remittance-spec request answers 403 feature_disabled, the two mandate keys are silently dropped from a contacts write body (the structured-address-for-sepa precedent, never a 403), and the SPA hides the Remittance menu entry and page and the contact mandate section through capabilities.sepaRemittances (the SPA shows no creditor identifier and no schemes). The messages ship unconditionally, and REM's status column ships with REM: the flag gates behaviour, not schema.",
+      "owner": "Agustin-Calderon",
+      "jira": "ETP-6148",
+      "created": "2026-11-05",
+      "flag": {
+        "key": "sepa-remittances",
+        "defaultValue": false,
+        "ttl": "2027-03-31",
+        "ttlNote": "PROVISIONAL, set on day one before any toggle point exists; to confirm with product (epic ETP-3504). Retirement means remittances ship to everyone: unwrap every call to SepaRemittancesFlag (the Bank-account remittance provisioning on create, mandate defaults, remittance header/line handlers), delete SepaRemittancesFlag.java and its test, delete FLAG_SEPA_REMITTANCES from GoFeatureFlags, remove the sepaRemittances capability from SFWindowAccessMap (SEPA_REMITTANCES constant and its put), the com.etendoerp.go docs section and configuration-table row, delete the hosted Datadog setting, and in the SPA drop the capability key from the menu.json item, the capability check of the remittance page guard and the contact section, SEPA_REMITTANCES_CAPABILITY from lib/capabilityVisibility.js and the visibleWhenCapability of the decisions.json fields; delete the flag object, keep this entry. Retirement does NOT remove the columns, the observers, the provisioning, SepaCreditorId or the remittance window.",
+        "symbols": [
+          "sepa-remittances",
+          "FLAG_SEPA_REMITTANCES",
+          "ETGO_FLAG_SEPA_REMITTANCES",
+          "etendo.go.flags.sepa-remittances",
+          "SepaRemittancesFlag",
+          "sepaRemittances",
+          "SEPA_REMITTANCES_CAPABILITY",
+          "SEPA_REMITTANCES"
+        ],
+        "$symbolsComment": "Backend-only flag: no key in flag-keys.js, on purpose (docs/feature-flags.md, backend-only flags). The frontend trail is the capability name: the browser reads capabilities.sepaRemittances off SFWindowAccessMap (SEPA_REMITTANCES_CAPABILITY in lib/capabilityVisibility.js, the capability key of the menu.json item, visibleWhenCapability in decisions.json). The property and env-var spellings are listed because a grep for the bare key misses Openbravo.properties and the ECS task definition. Per-account enablement leaves no grep trail: it is a targeting rule on the hosted control plane.",
+        "capability": {
+          "field": "sepaRemittances",
+          "sources": [
+            "com.etendoerp.go SFWindowAccessMap webhook response (capabilities.sepaRemittances, ETP-6148) -- SepaRemittancesFlag.isEnabledFor(account email) evaluated per account with the tenant as clientId, admins included"
+          ]
+        }
+      },
+      "$gatingComment": "ONE evaluator, the backend (SepaRemittancesFlag), evaluated at REQUEST ENTRY. Targeted PER ACCOUNT: FeatureFlagContext.forAccount(<ETGO_ACCOUNT email of the request user, via GoAccountResolver.currentAccountEmail()>).with(clientId); the targeting key, Email and lowercase email carry the account. Datadog rules are written on the lowercase email attribute only (never identifier, percentage or tenant attribute), because the web client and the backend use different targeting keys. With no resolvable account the context carries clientId only and the default stays off; never throws. Local: etendo.go.flags.sepa-remittances / ETGO_FLAG_SEPA_REMITTANCES (Tomcat restart). Hosted rollout: create the boolean setting sepa-remittances (default false) in Datadog Experimental/Production BEFORE targeting anyone. Toggle points: (1) the financial-account create (FinancialAccountHandler manual create and the bank-connection createAndLink) -- on, a Bank account gets the two SEPA remittance payment methods linked (lazy per-client provisioning, 409 ETGO_RemittanceProvisioningConflict on a race); off, it is created without them [backend wiring owned by developer-go-2]; (2) ContactSepaMandateDefaults from BusinessPartnerHandler (@NeoExtension(spec=contacts, entity=businessPartner)) -- on, it fills a customer's blank mandate; off, the mandate keys are dropped from the body, not refused; (3) RemittanceHeaderHandler and RemittanceLinesHandler (@NeoExtension(spec=remittance)) -- every request 403 feature_disabled; (4) removed: FinancialAccountsPageHandler no longer serialises allowRemittance; (5) SFWindowAccessMap publishes capabilities.sepaRemittances for the SPA (menu.json capability, the remittance page guard, the contact mandate section, decisions.json visibleWhenCapability). NOT gated: RemittanceMethodLinkObserver (a DAL observer, so on every write path: the financial-account paymentMethod tab, MCP etendo_create/etendo_update and Classic; it only refuses a SEPA remittance payment method added to or reactivated on a non-Bank account, 422 business_rule ETGO_RemittanceMethodAccountNotAllowed, mapped in the SPA) and REM's own Remittance_Status, which REM's processes set; remittance methods and types only exist where the flag was on.",
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/windows/custom/contacts/SepaMandateSection.jsx",
+          "tools/app-shell/src/windows/custom/remittance/index.jsx"
+        ],
+        "backend": [
+          "src/com/etendoerp/go/schemaforge/SepaRemittancesFlag.java",
+          "src/com/etendoerp/go/schemaforge/SepaCreditorId.java",
+          "src/com/etendoerp/go/schemaforge/FinancialAccountRemittanceSupport.java",
+          "src/com/etendoerp/go/schemaforge/RemittanceSepaProvisioning.java",
+          "src/com/etendoerp/go/schemaforge/RemittanceHeaderHandler.java",
+          "src/com/etendoerp/go/schemaforge/RemittanceLinesHandler.java",
+          "src/com/etendoerp/go/schemaforge/handlers/ContactSepaMandateDefaults.java",
+          "src/com/etendoerp/go/schemaforge/BusinessPartnerHandler.java",
+          "src/com/etendoerp/go/schemaforge/FinancialAccountHandler.java",
+          "src/com/etendoerp/go/schemaforge/FinancialAccountBankConnectionHandler.java",
+          "src/com/etendoerp/go/onboarding/OnboardingRemittanceSetupService.java",
+          "src/com/etendoerp/go/rest/EtendoGoJwtServlet.java"
+        ]
+      },
+      "$pathsComment": "Owned code only. BusinessPartnerHandler is listed because ETP-6148 migrated it to @NeoExtension(spec=contacts, entity=businessPartner) to host the mandate defaults; it predates the flag and stays after retirement (only its ContactSepaMandateDefaults call unwraps). FinancialAccountHandler (manual create), FinancialAccountBankConnectionHandler (createAndLink), OnboardingRemittanceSetupService (onboarding sample-data bank account) and EtendoGoJwtServlet (applyRemittanceSetupBestEffort) are listed for the same reason: only their call into the Bank-account remittance provisioning (FinancialAccountRemittanceSupport) unwraps on retirement. SPA files owned by the flag: the remittance route guard (windows/custom/remittance/index.jsx) and the contact mandate section; the generated window (artifacts/remittance/**) is not counted as flag code. The SPA has no creditor identifier: the JS port of SepaCreditorId was removed (no caller), the Java SepaCreditorId stays for the SEPA XML. Shared files the flag merely touches, not listed: lib/backendErrors.js (the ETGO_Remittance/SepaRemittances key routes), menu.json and windows/registry.js (the remittance entry and loader), TemplateRoleWindowAccess.java and EnsureSystemRoleTemplatesScript.java (Financiero gets the Remittance window FF8080812E71F7C7012E71FD0499001B), SFWindowAccessMap.java (capability), lib/capabilityVisibility.js (SEPA_REMITTANCES_CAPABILITY), GoFeatureFlags.java is framework. Schema shipped unconditionally and not counted as flag code: src-db/database/model/modifiedTables/FIN_FINANCIAL_ACCOUNT.xml and the AD_COLUMN / AD_ELEMENT / AD_REFERENCE / AD_REF_LIST / AD_MESSAGE rows of com.etendoerp.go. Removal cost also includes the Gradle-only dependency on org.openbravo.module.remittance (its REMITTANCE_STATUS was added in ETP-6148 on feature/ETP-6148; the remittance PR must be merged and its module built before this com.etendoerp.go change is deployed), org.openbravo.sepa.iso20022 and org.openbravo.sepa.iso20022.coredirectdebit.customertobank in build.gradle (no AD_MODULE_DEPENDENCY, by decision), which stays after retirement.",
+      "testSpecs": {
+        "$testSpecsComment": "Backend specs are tester-go's, frontend specs tester-functional's. Not listed because the file already exists and would score as present: SFWindowAccessMapTest is extended with capabilities.sepaRemittances on and off (restricted role and admin bypass, an explicit false when off, a null account evaluated without failing); TemplateRoleWindowAccessTest already counts the Remittance grant (35 Finance, 75 total, 43 distinct);  registry.vitest.jsx already carries remittance in the reviewed navigation baseline. The remittance status moved to org.openbravo.module.remittance (REMITTANCE_STATUS, RemittanceStatusUtil): its specs live in that module (RemittanceStatusUtilTest, plus the refresh call checks in REMSettleProtestTest and REMRemittanceProcessTest), not here, since root backend means com.etendoerp.go. Per the user's rule no new Playwright spec is planned; the UI is covered by Vitest.",
+        "unit": [
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/SepaRemittancesFlagTest.java",
+            "note": "Copy InvoiceInboxFlagTest: isEnabled(email, clientId) publishes the targeting key, Email and lowercase email plus clientId through GoFeatureFlags into a capturing provider; targeted account true, other false; blank or null email -> clientId only, default false; isEnabled() passes GoAccountResolver.currentAccountEmail() and the OBContext tenant; no OBContext -> null client id, no throw; unset, non-boolean and failing provider read false; local property arm true/false."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/SepaCreditorIdTest.java",
+            "note": "Parity with SEPAUtil.getAT02Identification on the developer-2 vectors (ES97000B12345678, DE98ZZZ09999999999, ...), blank vs format vs check digits, the 99/02 congruence rejected, build() null cases."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/FinancialAccountHandlerTest.java",
+            "note": "The FinancialAccountRemittanceSupport rules live here (the class @covers both). There is no per-account switch: a Bank account created with the flag on gets the two SEPA remittance methods; Cash and Card never do; existing accounts are never revisited. Through the handler hooks (flag and DAL seams stubbed): a valid Bank create with the flag on runs ensureClient in the pre-hook (same transaction as the insert) and links nothing yet; flag off or a Cash create provisions nothing; a unique violation while provisioning (SQLState 23505 in the cause or next-exception chain) rolls back and answers 409 ETGO_RemittanceProvisioningConflict, any other failure is rethrown without rollback; the post-hook of a Bank create runs provisionNewAccount then ensureAccountLinks, skips Cash accounts and the flag off, and swallows a link failure; an update never provisions nor links; moving a Bank account to another type with open remittances -> 422 ETGO_RemittanceAccountTypeChangeBlocked with the count, flag off included, while 0 open, staying Bank or an update without type pass with a single count at most; with 0 open the change deactivates the account's remittance links (deactivateAccountLinks) in the same pre-hook. Called directly: appliesTo is true only for type B with the flag on (C, CA, null, flag off -> false); provisionNewAccount returns null without provisioning for Card, Cash, no account or the flag off, provisions a Bank account once, answers 409 + rollback on a unique violation and rethrows anything else; linkNewAccount(null) reads no flag; checkTypeChange counts only when the type really leaves Bank (unknown account, non-Bank and B->B never query)."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/RemittanceSepaProvisioningTest.java",
+            "note": "Mockito over OBDal (recording OBQuery whose uniqueResult is resolved from entity + HQL + named parameters) and OBProvider (a mock per created entity): a fresh client gets the In Remittance exec process (+2 params), the REM_REM doc type + sequence, two methods with the OBSEPA template flags and two types each with the ETGO_SEPA_SCHEME marker, Creditor_Business_Code=000 on CORE only; a provisioned client gets nothing new; every lookup binds the marker, the Java class or the category, never a display name; names follow the client language; no GL category -> no doc type; createRemittanceLink sets exactly what REMRemittanceProcess.checkPMSetup reads (direction only, A, process, deferred, no multicurrency, not default); ensureAccountLinks creates a missing link per provisioned method or reactivates an inactive one with the setup re-applied, never deactivates nor deletes, and on an unprovisioned client links nothing and logs one WARN per missing scheme (CORE, then SCT) naming the account; provisionAccount runs ensureClient(account's client) before ensureAccountLinks(account); hasRemittanceMethodLink counts active links to marked methods (false for none, a null count, an unsaved or null account); countOpenRemittances binds PE/PR/CP/PP and the null+unprocessed case."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/onboarding/OnboardingRemittanceSetupServiceTest.java",
+            "note": "OnboardingRemittanceSetupService, the onboarding step for the sample data's «Cuenta de Banco»: flag off -> false with no query, no provisioning and no admin mode; no Bank account -> false; every Bank account of the tenant (client + type B, readable-client and readable-org filters off) is provisioned through RemittanceSepaProvisioning.provisionAccount and the step answers true; a provisioning failure propagates and restores the admin mode; the flag is read for the receiving account (targeting key = email) and the new tenant (clientId attribute), not the System user; a null tenant reads no flag. The servlet side lives in EtendoGoJwtServletSampleDataTest (true -> its own commit 'remittance setup', false -> no transaction call, a failure or a failing commit -> rollback, never escapes) and EtendoGoJwtServletTenantPoolTest (order: initial period state -> sample data import -> remittance setup -> costing schedule)."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/FinancialAccountRemittanceProvisioningIntegrationTest.java",
+            "note": "WeldBaseTest on the F&B sample client through the real NEO REST dispatch of financial-account/account (the @NeoExtension FinancialAccountHandler, via the shared NeoRestTestClient), caller-owned transaction so nothing commits, rolled back; the flag is the only stub (SepaRemittancesFlag.isEnabled() static mock). Green on 2026-11-12: a Bank account created with the flag on is linked to the CORE and SCT methods and each link passes Classic's checkPMSetup rule for its direction (allowed, deferred, executed A through a process); a Cash account created the same way gets none. A Bank account holding a real REM remittance in PE refuses PATCH {type:C} with 422 ETGO_RemittanceAccountTypeChangeBlocked and stays B; once the remittance is AN the same PATCH (with the updated value read through NEO) changes it to C, deactivates only the remittance links (kept, inactive; a link to another payment method stays active) and PATCH back to B does not reactivate them. The deactivation now runs in the post-hook, once the update succeeded: a type change through MCP etendo_update deactivates the remittance links too (another payment method stays active), and aRefusedTypeChangeLeavesTheRemittanceLinksActive — a single-request PATCH {type:C} refused by the generic write (no updated -> 400, stale -> 409) — leaves the account Bank with its links active (green 2026-11-12, 4/4). The /sws/neo/batch variant cannot be built: batch operations are create-only."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/ContactSepaMandateIntegrationTest.java",
+            "note": "WeldBaseTest (developer-go-3's, extended), real NEO REST dispatch of contacts/businessPartner, caller-owned transaction, rolled back; flag static mock; green 2026-11-12 (13/13). Flag on: a new customer stores its CIF and today; a sent mandate wins; a customer's first CIF on update becomes the ID and a later CIF change does not move it; a vendor's saves (a new CIF included) never fill, becoming a customer does (stored CIF, creation date); an unrelated save fills an empty mandate; an explicit clear holds for that save only. Flag off: no save fills, not even one giving the first CIF. Channels and shapes: an MCP etendo_update fills an empty mandate; a /sws/neo/batch create stores it (batch is create-only, so the create path; a probe operation reads the row and fails the batch, which rolls back); a create in a data envelope stores it (searchKey sent: the handler's placeholder only goes to the top level); a type inherited from the contact category (contact-category-type rules on) decides it — customer category yes, vendor-only no; GET defaults carries today's signature date only with the flag on."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/RemittanceSepaProvisioningIdempotencyIntegrationTest.java",
+            "note": "OBBaseTest on the F&B sample client, rolled back (setDoRollback): the rows ensureClient writes satisfy the real constraints and triggers and its HQL resolves against the real mapping; ensureClient twice -> exactly one exec process, one REM_REM doc type, two new methods, one ETGO_SEPA_SCHEME marker per scheme, Creditor_Business_Code=000 on CORE only; ensureAccountLinks links both methods with the checkPMSetup setup (hasRemittanceMethodLink true), and after both links are set inactive (hasRemittanceMethodLink false) a second call reactivates the same rows; countOpenRemittances runs and is 0 for a fresh type; against the real c_doctype_name index, a «Remesa» of another category or an inactive REM_REM in org 0 makes the provisioned (active, created once) document type «Remesa (SEPA)»."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/RemittanceMethodLinkObserverTest.java",
+            "note": "Active link of a remittance method to a non-Bank account (Cash C, Card CA) -> MessageKeyedException ETGO_RemittanceMethodAccountNotAllowed; a Bank account passes without asking whether the method is a remittance one; inactive link passes; non-remittance method passes; update that only changes another column passes; an update that reactivates the link is checked."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/RemittanceNameSuggestionTest.java",
+            "note": "RemittanceNameSuggestion: kindOf (pay-in only -> collection, pay-out only -> payment, both/neither/no type -> generic); suggest wording Cobros/Pagos/Remesa <mes> <año> in es_ES and es_AR, Collections/Payments/Remittance <Month> <year> in en_US, blank language = English; every language x kind x month fits 60 characters and is recognised by isSuggestion; isSuggestion accepts any month/year of both languages and rejects Mi remesa, Cobros noviembre, a two-digit year, an extra word, blank and null; parseDay reads the yyyy-MM-dd prefix of a date or timestamp and answers null otherwise."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/RemittanceDueItemsTest.java",
+            "note": "RemittanceDueItems (Mockito, HQL recorded): the candidate query states every rule (invoice schedules only via the inner join, a business partner, not paid / cancelled / invoice-paid, the org child tree, expectedDate < the day after the due date so the due day is included, the account currency, not in another unprocessed remittance) and the direction from the account-method link (pay-in -> sales, pay-out -> purchase, both/neither/none -> no filter); missing type, account, currency or date -> 422 ETGO_RemittanceTypeOrAccountMissing; list maps id/documentNo/businessPartner/dueDate/outstandingAmount/currency, alreadyInRemittance only for this remittance, total counts all (null -> 0), search iContains on invoice no. or partner, pageSize default 50 capped 200 and page from 1, query-string params typed; select: no ids -> 422 ETGO_RemittanceDueItemsRequired, any ineligible id -> 422 ETGO_RemittanceDueItemNotAvailable with invalidIds and no Classic call, valid ids -> _selection (paymentScheduleID, realpayment = outstandingamount, rest 0) without _allRows, inpRecordId and the header tab, created = line-count difference never negative, REM showMsgInView ERROR -> 422 ETGO_RemittanceDueItemsSelectionFailed with its text. Round 3: three contracts (syncDueItems with items/remove, isWrite for select and sync); a due already in this remittance stays a candidate past the due date (the exists clause); items carry invoiceId, salesTransaction, docTypeName, invoiceDate, businessPartnerId, grandTotalAmount, dueStatus (OVERDUE/DUE_TODAY/PENDING against today, no date PENDING) and, only when included, lineAmount = the sum of all its lines and lineIds in line order; sync: nothing -> 422 ETGO_RemittanceDueItemsRequired, a remove id not included or also in items -> 422 ETGO_RemittanceDueItemNotIncluded with invalidIds, a non-candidate item -> 422 NotAvailable, a bad amount (above the outstanding, 0, other sign, non-numeric) -> 422 ETGO_RemittanceLineAmountInvalid with invalidIds and error.max only for a single bad due, all before any write; a new due -> Classic selection with realpayment = the part and outstandingamount = the due, a changed amount -> its lines deleted then re-added (updated), the same amount -> untouched and no Classic call, a remove -> all its lines deleted without Classic; one call adds, changes and removes; a REM refusal rolls back. The rules are asserted as the query states them, not against real invoices."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/RemittanceProcessActionTest.java",
+            "note": "RemittanceProcessAction (run() stubbed through a CALLS_REAL_METHODS static mock): mutating contract with an optional grouping limited to P/GGPD; already processed -> 422 ETGO_RemittanceAlreadyProcessed and no active lines (0 or null) -> 422 ETGO_RemittanceNoLines, both without running Classic; grouping defaults to P (also for a blank one), GGPD passed through; REM OBError type Error (message, or title when there is none) or no answer -> 422 ETGO_RemittanceProcessFailed with REM's text; success (Success or Warning) -> {status, message} with the status read back from the reloaded remittance (null when it cannot be reloaded); reactivate: a contract without parameters, not processed -> 422 ETGO_RemittanceNotProcessed without running Classic, REM Error -> 422 ETGO_RemittanceReactivateFailed with REM's text, success -> {status PE, message} with run called with code R. run() itself (round 3 connection fix): the bundle is init on a DalConnectionProvider(false) — its AD_Process lookup runs on that connection and bundle.getConnection() is it — with REM_Remittance_ID and the grouping set after the init, REM's OBError returned as is; a throwing run -> Error result with the exception text; no OBError result -> null."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/RemittanceLineAmountTest.java",
+            "note": "RemittanceLineAmount, the one «A remesar» rule: isValid true for 0 < |amount| <= |outstanding| with the due's sign (positive and negative dues, the exact outstanding, scale-insensitive), false above it, at 0, of the other sign, for a 0 outstanding or a null side; parse reads numbers and numeric strings (trimmed), null for null/JSON null/blank/junk/decimal comma/boolean; invalid(max) -> 422 ETGO_RemittanceLineAmountInvalid with error.max and the max in the text, invalid(null) without max."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/RemittanceProcessActionPartialAmountIntegrationTest.java",
+            "note": "WeldBaseTest on the F&B sample client, rolled back; ran green on 2026-11-11 (2/2, goIsolatedDalTest). Fixture: a pay-out (SCT) remittance on F&B España's EUR account with one line on purchase invoice 10001723's due (EUR 133.10); F&B has no open sales dues, hence pay-out. Pinned by the run: the line edit refuses 133.11 with error.max 133.10 against the real detail and accepts 50; «Procesar» grouping P answers 200 status PR and creates one payment of 50, the payment engine splitting the detail into 50 paid and 83.10 open; REM_SettleProtest.cancelPayment leaves the schedule at 83.10 outstanding and 50 paid and the remittance PT (paid, the pay-out counterpart of a collection's CT); availableDueItems offers the schedule again with outstandingAmount 83.10. A line above its due is refused by REM (Out of range payment amount) -> 422 ETGO_RemittanceProcessFailed. Also the repro of the run() connection fix (ProcessBundle.init on a DAL connection)."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/RemittanceDueItemsQueryIntegrationTest.java",
+            "note": "OBBaseTest on the F&B sample client, rolled back, no invoice fixtures: for an unsaved remittance of a provisioned type the candidate HQL (list + count) resolves and executes with no direction filter (account not linked), with each direction (pay-in / pay-out links) and with a search and paging, and the selection re-check runs and refuses an unknown schedule with invalidIds; whatever the sample data yields is in the account currency, due on or before the remittance due date and not flagged alreadyInRemittance."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/RemittanceHeaderHandlerTest.java",
+            "note": "Flag off -> 403 on CRUD, selector, callout; the account must be a remittance account (accountRefusal, cheapest first: not Bank -> 422 ETGO_RemittanceAccountNotBank without any link query; a Bank account without a valid IBAN for its country — none, blank, no country, a broken checksum, another country's IBAN — -> 422 ETGO_RemittanceAccountIbanRequired; a valid Bank account without the remittance methods -> 422 ETGO_RemittanceAccountNotAllowed; the IBAN is read ignoring spaces and case), each refusal answered by a create with its own key before the type is read; DEFAULTS drops a non-remittance account (Cash, or Bank unlinked) and the type with their $_identifier, keeping the other defaults, and keeps a remittance account; type not provisioned or not linked -> 422 ETGO_RemittanceTypeNotAvailable; processed -> 422 on PUT/PATCH/DELETE; name blank / > 60 -> 400; the callout suggests the name on a dueDate/remittanceType change of a new remittance (updates.name {value, suggested:true}; empty for a typed name, an existing record, no due date, another field, an unreadable body, or an unchanged suggestion; 403 with the flag off); a REST create without a name but with a dueDate is saved with the suggestion, a sent name is kept, PUT/PATCH never change it; MCP resolveServerCreateFields fills a missing name, no-op with the flag off or without a dueDate, never throws; due date (today() pinned): a create or a changed dueDate earlier than today -> 422 ETGO_RemittanceDueDatePast (Spanish for es_ES/es_AR, English for en_US), today/later passes, no dueDate or an echo of the stored day passes (a rename of a remittance with a past date included), a timestamp is judged by its date part, an unparseable value is left to the generic write, a processed remittance answers ProcessedNotEditable first; account selector offers only Bank accounts with an IBAN and an active remittance-method link in one query, then drops an invalid IBAN in Java and pages after it (an offset past the end -> empty items, hasMore false, the real total); type selector empty without FIN_Financial_Account_ID, otherwise only linked provisioned types.; due-items actions: availableDueItems params from the query string, the request or a POST body, selectDueItems POST only (405 otherwise) with ids required by its contract, an unknown parameter 422, 404 unknown remittance, 422 processed, 403 flag off, 500 on an internal failure, another action not routed; process action: POST only (405 otherwise), an invalid grouping refused by the contract, the body passed to the process step as is, a processed remittance -> 422 ETGO_RemittanceAlreadyProcessed, 404 unknown, 403 flag off; reactivate action: POST only, no parameters (422 for any), routed with its answer as is, an unprocessed remittance -> 422 ETGO_RemittanceNotProcessed, 404, 403; syncDueItems: POST only (405 otherwise), routed with its body and its answer as is, 422 processed before the sync runs, 404 unknown, 403 flag off; an unknown action name is routed nowhere; an action context with an EMPTY query map reads the REST GET parameters from the servlet request; process/reactivate take a fieldValues body (flat still accepted): {fieldValues:{grouping:GGPD}} reaches the process step as GGPD, an unknown key inside fieldValues -> 422 unknownParameters, reactivate with {fieldValues:{}} passes validation, and only those two contracts unwrap it; sepaFileData (contract: accountId required, organizationId optional; read): for a new remittance (id new, REST or MCP origin) the account's organization, for a saved one the remittance's, an explicit organizationId as given (404 when the tenant does not own it), GET reads the query string (trimmed), flag off -> 403 without loading the account, no accountId -> 422 missingParameters, an account that is not a remittance account -> 422 with its key, a stored Creditor_Business_Code used and normalized (whitespace removed, first 3) with 000 for missing/blank and missing creditorBusinessCode for a malformed one, a tax ID over 28 characters -> creditorId null and missing orgTaxId; the account selector offers linked Bank accounts with or without a valid IBAN, each with iban/ibanValid; DEFAULTS also drop a linked account without a valid IBAN (none or a broken checksum)."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/RemittanceSepaFileDataTest.java",
+            "note": "RemittanceSepaFileData, the «Datos para el fichero SEPA» answer (pure): the action is a read with accountId required and organizationId optional; suffixOf normalizes the business code as Classic does (ABCD -> ABC, spaces removed, null/blank -> 000); everything present gives the AT-02 identifier and nothing missing; iban, orgTaxId and country are named in that order; a tax ID over 28 characters gives no identifier and missing orgTaxId; a malformed business code with good organization data gives missing creditorBusinessCode; the stored IBAN is shown trimmed and blank is null."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/RemittanceHeaderHandlerAccountsIntegrationTest.java",
+            "note": "WeldBaseTest on the F&B sample client, DAL fixtures (ensureClient, Bank accounts, links), rolled back; flag static mock; green on 2026-11-12 (5/5). Selector against the real HQL: offers linked Bank accounts with and without a valid IBAN (ibanValid false / true, iban null / stored), not an unlinked Bank account, one whose links were deactivated, nor one that is no longer Bank; search by name and limit/offset page the same list (totalCount, hasMore, an offset past the end empty). sepaFileData: an organization of another client (QA Testing) or an unknown id -> 404; a new remittance uses the account's organization; a real MCP etendo_action call (McpToolRouter.handleAction) with id new reaches the action and answers the account."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/FinancialAccountIbanCountryIntegrationTest.java",
+            "note": "WeldBaseTest on the F&B sample client through the real NEO REST dispatch, caller-owned transaction, rolled back. Guard of the ETP-5473 rule after the IBAN-prefix derivation was REVERTED (user decision, 2026-11-12): on a country-less Bank account created through the DAL, a PATCH {iBAN, updated} with no country key, and one with an explicit country:null, are both refused 400 ETGO_FinAccIbanRequiresCountry and save neither the country nor the IBAN; the same IBAN sent with its country (Spain) is saved and accepted by FIN_FINANCIAL_ACCOUNT_TRG2."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/NeoExtensionMigrationTest.java",
+            "note": "Shared migration spec; carries ETP-6148 B1: FinancialAccountBankConnectionHandler is bound by @NeoExtension(financial-account-bank-connection, financial-account-bank-connection) with no @Named and no row qualifier, resolves on every channel and through the entity-level readers, and is reached with no qualifier by the REST report route and by FinancialAccountBankConnectionEndpoint (REST and MCP origin)."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/RemittanceLinesHandlerTest.java",
+            "note": "RemittanceLinesHandler: flag off -> 403 feature_disabled (PUT/PATCH too, without loading the line); POST on CRUD (or no endpoint type) -> 405 ETGO_RemittanceLinesReadOnly; PUT/PATCH of amount (flat or wrapped in data): a part of the due's detail amount -> null (generic write), above it / 0 / negative / non-numeric -> 422 ETGO_RemittanceLineAmountInvalid with error.max, a line without a due -> 422 ETGO_RemittanceLineAmountNotEditable, a processed remittance -> 422 ETGO_RemittanceProcessedNotEditable whatever the body, a body without amount or an unknown line -> null, the same answer for REST and MCP; DELETE of a line of an unprocessed remittance -> null (generic delete), of a processed one -> 422 ETGO_RemittanceProcessedNotEditable, an unknown line or one without remittance -> null, flag off -> 403 without loading the line; reads and sub-endpoints pass through."
+          }
+        ]
+      },
+      "deferredItems": [
+        {
+          "id": "ttl-to-confirm",
+          "kind": "precondition",
+          "note": "The TTL 2027-03-31 is provisional and must be confirmed with product before the flag is turned on anywhere shared; until then nobody can plan the retirement.",
+          "refs": [
+            "ETP-3504",
+            "ETP-6148"
+          ]
+        },
+        {
+          "id": "release-order",
+          "kind": "precondition",
+          "note": "Release order across four repos; no repo enforces it. (1) Publish org.openbravo.module.remittance with a NEW version, because republishing 5.2.0 is refused. (2) Raise com.etendoerp.go build.gradle `module.remittance` to that version. GO's CI resolves the published JAR and does not compile against RemittanceStatusUtil / remittanceStatus until then. (3) Publish schema_forge_core TWICE, or once with both: (3a) `minDate` (schema-forge-cli, and DateField `minDate` in @etendosoftware/app-shell-core), already committed on core feature/ETP-6148; (3b) a SECOND core publish with the property-path fields, strictly per-field opt-in via the decision `propertyPath` (extract-fields `adPropertyPath` / resolve-curated / generate-contract / push-to-neo / neo-writer / neo-delta) in @etendosoftware/schema-forge-cli, plus round 3: the field options `link` and `editInPlace` and the entity option `rowEdit` (resolve-curated / generate-contract / generate-frontend); without them a regen drops the Factura link, the read-only lines and the «A remesar» input. (4) Bump schema_forge package.json, tools/app-shell/package.json and package-lock.json to the release that carries BOTH (3a) and (3b); a bump to the minDate-only release is not enough. Then, on a database where com.etendoerp.go's ETGO_SF_FIELD.PROPERTY_PATH column exists (update.database), run `make regen ONLY=remittance PUSH_TO_NEO=1` and export.database: the remittance lines' path rows need that column. And therefore: if any step is skipped or done out of order, GO fails to compile (1→2), or the published validator reports F16 on remittance and a regen with the old core drops `minDate` from the generated form (3a→4), or a regen with a core without (3b) drops the ten remittance line path fields (Factura, Fecha factura, Vencimiento, Cliente, Total factura, Pendiente, Estado del recibo, and the hidden invoice, invoiceSalesTransaction and dueOutstanding) and pushes no PROPERTY_PATH rows (3b→4).",
+          "refs": [
+            "README.md: Module repos (org.openbravo.module.remittance)",
+            "docs/generated-custom-windows/remittance.md: Regeneration",
+            "docs/decisions-reference.md: minDate"
+          ]
+        },
+        {
+          "id": "financiero-remittance-grant-not-compiled",
+          "kind": "open",
+          "note": "USER-ACCEPTED on 2026-11-06. The Financiero template's AD_WINDOW_ACCESS to the Remittance window (FF8080812E71F7C7012E71FD0499001B) was added to the source of TemplateRoleWindowAccess / EnsureSystemRoleTemplatesScript, but the committed modulescript classes (build/classes/.../modulescript/EnsureSystemRoleTemplatesScript*.class) predate this change: they were last compiled on 2026-10-21, for ETP-5830. And therefore: the grant is not applied on tenants, and only admins see the Remittance window, until `./gradlew compile.modulescript -Dmodule=com.etendoerp.go` is run and the classes are committed. Context, not this feature's gap: the ETP-6047 Invoice Inbox grant has the same pre-existing problem.",
+          "refs": [
+            "com.etendoerp.go TemplateRoleWindowAccess",
+            "com.etendoerp.go src-util/modulescript EnsureSystemRoleTemplatesScript",
+            "docs/generated-custom-windows/remittance.md: Access gate"
+          ]
+        },
+        {
+          "id": "mcp-exposes-fields-when-off",
+          "kind": "open",
+          "note": "With the flag off the MCP still advertises and returns the C_BPARTNER mandate fields (etendo_schema, etendo_get), because the NEO field configuration is not per account. The mandate keys are silently dropped from the write body (never persisted, never refused), so an agent sees fields it cannot use and, for the mandate, gets no signal that its value was ignored. And therefore: the MCP surface is not honest for accounts without the flag until the fields are hidden per capability or the flag retires.",
+          "refs": [
+            "FinancialAccountRemittanceSupport",
+            "ContactSepaMandateDefaults",
+            "BusinessPartnerHandler"
+          ]
+        },
+        {
+          "id": "existing-mandates-filled-on-next-save",
+          "kind": "cosmetic",
+          "note": "The default mandate (identifier = tax ID, date = creation date) is applied by the backend on save only, so existing customers get it on their next save, not retroactively. And therefore: a remittance for a customer nobody has edited since the flag went on has an empty mandate until someone saves the customer.",
+          "refs": [
+            "BusinessPartnerHandler"
+          ]
+        },
+        {
+          "id": "status-bypassed-by-sql",
+          "kind": "open",
+          "note": "The remittance status (the remittance module's REM_REMITTANCE.REMITTANCE_STATUS, added in ETP-6148 on feature/ETP-6148) is set by REM's own processes; settlement and return rows update it through REM_SettleProtest. An external writer of REM_REMITTANCELINE_CANCEL or REM_REMITTANCELINE_RETURN that skips REM_SettleProtest (a data-fix, a PL/SQL procedure, a future process) leaves a stale status with no error anywhere. And therefore: such a writer must go through REM_SettleProtest or recompute the status the way it does, or the open-remittance count (OPEN_STATUSES = PE, PR, CP, PP) reads the stale value.",
+          "refs": [
+            "org.openbravo.module.remittance (feature/ETP-6148): REM_SettleProtest",
+            "docs/feature-flags-and-tenant-upgrade.md: sepa-remittances, Module dependency (decision)"
+          ]
+        },
+        {
+          "id": "existing-remittances-not-backfilled",
+          "kind": "open",
+          "note": "USER-ACCEPTED on 2026-11-06 (no backfill; the PopulateRemittanceStatus module script was dropped). REM_REMITTANCE.REMITTANCE_STATUS arrives with the default PE on every remittance that existed before the column, and only one of REM's processes (process, reactivate, settle, return, or their undo) refreshes it. And therefore: an old processed or fully settled remittance shows «Pendiente» in the list, the detail pill and the status filter, and, when its remittance type is one Etendo GO provisioned (ETGO_SEPA_SCHEME marker), it counts as open (PE, PR, CP, PP) wherever Etendo GO asks whether a remittance is still open, until it goes through a REM process again (or a data-fix sets its status). The impact is installation-wide, not only Etendo GO. REMITTANCE_STATUS is NOT NULL with default 'PE', and REM adds a displayed «Remittance Status» field to the Classic Remittance window, so every REM installation, including Classic tenants without the flag, shows «Pending» on pre-existing processed or settled remittances. The cheap mitigation, an onCreateDefault of CASE WHEN PROCESSED='Y' THEN 'PR' ELSE 'PE' END for the column, was offered and declined by the user on 2026-11-06.",
+          "refs": [
+            "org.openbravo.module.remittance (feature/ETP-6148): REMITTANCE_STATUS",
+            "FinancialAccountRemittanceSupport.checkWrite",
+            "RemittanceSepaProvisioning.countOpenRemittances",
+            "docs/generated-custom-windows/remittance.md: Status"
+          ]
+        },
+        {
+          "id": "remittance-messages-catalog-only",
+          "kind": "open",
+          "note": "USER-DEFERRED on 2026-11-06 («luego vemos»). 13 new message keys exist only in com.etendoerp.go's neo_hints_{en,es}.properties, with no AD_MESSAGE row, unlike the first 15 ETGO_Remittance* keys: ETGO_RemittanceAlreadyProcessed, ETGO_RemittanceNoLines, ETGO_RemittanceProcessFailed, ETGO_RemittanceNotProcessed, ETGO_RemittanceReactivateFailed, ETGO_RemittanceDueDatePast, ETGO_RemittanceDueItemNotAvailable, ETGO_RemittanceDueItemsRequired, ETGO_RemittanceDueItemsSelectionFailed, ETGO_RemittanceTypeOrAccountMissing and the three ETGO_RemittanceName* hints. They work through NeoMessageText's catalog fallback. And therefore: they are not in the AD message catalog. Anything that resolves messages from AD_MESSAGE (Classic, OBMessageUtils, a translation pack) does not see them, and they only reach the en and es languages the properties files carry.",
+          "refs": [
+            "com.etendoerp.go src/com/etendoerp/go/schemaforge/messages/neo_hints_en.properties",
+            "NeoMessageText",
+            "src-db/database/sourcedata/AD_MESSAGE.xml"
+          ]
+        },
+        {
+          "id": "remittance-posting",
+          "kind": "open",
+          "note": "USER-DEFERRED on 2026-11-06. The remittance has no «Contabilizar» / «Descontabilizar» action and no posting-status (POSTED) column. Blocked by: the provisioned remittance types have ISPOSTINGALLOWED = 'N' (DocREMRemittance answers DocumentDisabled); there is no REM_Remittance_Type_Acct configuration; and the method/account link uses the upon-use values. Needs the accounting-defaults decision first. And therefore: remittances are never posted from Etendo GO. Once unblocked, the UI side is declarative: menuActions post/unpost, statusPills posted, and the posted field gated by showAccountingFields. The backend side is RemittanceHeaderHandler delegating post/unpost to DocumentPostingService.",
+          "refs": [
+            "RemittanceSepaProvisioning: setPostingAllowed",
+            "org.openbravo.module.remittance DocREMRemittance.getDocumentConfirmation",
+            "docs/decisions-reference.md: Posting-status fields"
+          ]
+        },
+        {
+          "id": "creditor-business-code-per-client",
+          "kind": "open",
+          "note": "The creditor identifier is not stored: the SEPA XML builds it from the organization tax ID and the Creditor_Business_Code parameter of the client's provisioned CORE remittance type (default 000, not Classic's ZZZ). That is one business code per client, not per account or organization, and nothing in Etendo GO lets the user change it yet. And therefore: a client that needs a different code per account or per organization cannot express it until a per-account setting is added.",
+          "refs": [
+            "RemittanceSepaProvisioning",
+            "SepaCreditorId"
+          ]
+        },
+        {
+          "id": "pre-feature-bank-accounts-not-provisioned",
+          "kind": "open",
+          "note": "There is no per-account switch and no backfill: only a Bank account CREATED while the sepa-remittances flag is on gets the two SEPA remittance payment methods (manual create and bank-connection createAndLink). A Bank account created before the feature, or while the flag was off for that user, has none, so the remittance header refuses it with 422 ETGO_RemittanceAccountNotAllowed and the Cuenta selector does not offer it. And therefore: an existing customer turned on later cannot remit from any of their existing bank accounts, and the SPA offers no way to provision one (no toggle any more); only a new account or a data-fix makes it usable. USER-DECIDED on 2026-11-11: they stay unprovisioned for now; a per-tenant data-fix only if a beta tester asks for it, and a one-off global data-fix as part of retiring the flag.",
+          "refs": [
+            "ETP-6148",
+            "RemittanceHeaderHandler",
+            "ETGO_RemittanceAccountNotAllowed"
+          ]
+        },
+        {
+          "id": "remittance-link-failure-after-commit",
+          "kind": "open",
+          "note": "USER-ACCEPTED on 2026-11-11. On the NEO create path the Bank account is committed first and the two SEPA remittance payment methods are linked afterwards; if that link step fails, the failure is only logged and the account stays without the methods, with no retry and no repair path in the SPA or MCP. And therefore: such an account is refused by the remittance header (422 ETGO_RemittanceAccountNotAllowed) and is not offered by the Cuenta selector, exactly like a pre-feature account (see pre-feature-bank-accounts-not-provisioned); only a data-fix makes it usable. The same gap covers the type change (W1, extended on 2026-11-12): when a Bank account becomes Cash or Card, its remittance-method links are deactivated in FinancialAccountHandler.afterHandle, after the update is committed (outside a batch), so that a refused update never deactivates them; if that step fails, the failure is only logged and the non-Bank account keeps active remittance links. And therefore: Classic keeps listing the two remittance methods on that cash/card account (the remittance window does not offer it, since it is not Bank), and RemittanceMethodLinkObserver does not catch it because it only judges link writes; only a data-fix deactivates them.",
+          "refs": [
+            "ETP-6148",
+            "FinancialAccountRemittanceSupport",
+            "FinancialAccountHandler",
+            "FinancialAccountBankConnectionHandler"
+          ]
+        },
+        {
+          "id": "header-callout-neutralized",
+          "kind": "open",
+          "note": "RemittanceHeaderHandler answers every interactive callout of the remittance header empty, because its only callout, Classic's REM_RemittanceType_FinAccount, works in the reverse order of the window (type -> account combo) and dereferences a cleared type. A callout added later to that header would be silenced too. And therefore: whoever adds a header callout must narrow the neutralization to REM_RemittanceType_FinAccount (the callout request body names the trigger field, which the pre-hook does not see today).",
+          "refs": [
+            "RemittanceHeaderHandler"
+          ]
+        },
+        {
+          "id": "path-field-selector-registered",
+          "kind": "open",
+          "note": "The generator registers selectors for the read-only property-path fields `businessPartner` and `invoice` of the remittance lines (api.selectors entries /sws/neo/remittance/lines/selectors/businessPartner and /selectors/invoice), because they are foreignKey fields with a selector/search inputMode. NEO cannot resolve them: neither is a REM_RemittanceLine column; they are the paths paymentScheduleDetail.businessPartner and paymentScheduleDetail.invoicePaymentSchedule.invoice. Unused today: both are read-only, the grid renders businessPartner$_identifier, and invoice is a hidden field that only feeds the Factura link. And therefore: anything that later opens that selector (an inline editor, a filter widget that asks the selector, an MCP etendo_selectors call) gets an error instead of options. Follow-up: skip selector registration for propertyPath fields in the core generator (generate-frontend.js / generate-contract.js selectors), then regen remittance.",
+          "refs": [
+            "ETP-6148",
+            "artifacts/remittance/generated/web/remittance/RemittancePage.jsx: api.selectors",
+            "schema_forge_core cli/src/generate-frontend.js"
+          ]
+        }
+      ]
     }
   ]
 }

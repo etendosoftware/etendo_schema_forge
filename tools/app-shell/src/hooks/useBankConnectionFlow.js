@@ -1,7 +1,12 @@
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import {
+  translateBackendError,
+  extractBackendMessageKeys,
+  extractBackendMessageParams,
+  hasMappedMessageKey,
+} from '@/lib/backendErrors.js';
 import { useBankConnectionActions, launchSaltEdgePopup } from './useBankConnectionActions';
 import { usePsd2ImportSettingsFlag } from './usePsd2ImportSettingsFlag.js';
 
@@ -108,11 +113,18 @@ export function useBankConnectionFlow({ onDone } = {}) {
       toast.success(ui('financeAccountsBankConnectionSuccess'));
       onDone?.();
     } catch (err) {
-      // The bridge's 400s (missing/invalid import date or grouping, inverted range) are mapped in
-      // backendErrors.js; anything unmapped is shown as the bridge wrote it.
-      // Flag off: the raw message, as before ETP-6151.
-      const message = importSettingsEnabled && err.message
-        ? translateBackendError(err.message, ui)
+      // ETP-6148 — a refusal that names a mapped message key (a 409 ETGO_RemittanceProvisioningConflict
+      // when the new Bank account's remittance setup races) is translated by that key whatever the
+      // flag below says. Otherwise (ETP-6151): the bridge's 400s (missing/invalid import date or
+      // grouping, inverted range) are mapped in backendErrors.js and anything unmapped is shown as
+      // the bridge wrote it; flag off, the raw message, as before ETP-6151.
+      const messageKeys = extractBackendMessageKeys(err.body);
+      const message = (importSettingsEnabled && err.message) || hasMappedMessageKey(messageKeys)
+        ? translateBackendError(err.message, ui, {
+          code: err.code,
+          messageKeys,
+          messageParams: extractBackendMessageParams(err.body),
+        })
         : err.message;
       toast.error(message || ui('financeAccountsBankConnectionLinkError'));
     }
