@@ -54,6 +54,12 @@ not survive (decision), so:
 - **Drop** `ETGO_PORTAL_ACCESS` (`go/src-db/database/model/tables/ETGO_PORTAL_ACCESS.xml`, its
   `AD_TABLE` row `ED56022BB69E483CBE96889616AE0F6D` in `AD_TABLE.xml:868-872` and its `AD_COLUMN`s).
   Renaming the entity makes every MVP call site fail to compile, which forces each to be reviewed.
+  **Revised (user, 2026-11-13): not dropped in this delivery.** The table shipped to `main` with the
+  MVP and nobody has checked whether production holds rows, so its model XML and its `AD_TABLE`,
+  `AD_COLUMN` and `AD_ELEMENT` rows are kept byte-identical to `develop` (`update.database` leaves
+  table and data untouched). The code stays removed (`PortalAccessService`, `PortalAccessDal`,
+  `SFPortalAccess`, the `portalaccess` route): nothing reads or writes it; only the generated DAL
+  class remains. Dropped in a follow-up once production is confirmed empty (see *Still open*).
 - `REVOKED_AT` (`ETGO_PORTAL_ACCESS.xml:48-51`) disappears with the table; nothing replaces it (§A.6).
 
 New AD ids come from `make uuid`. `update.database`, `export.database` and `generate.entities` are
@@ -1245,6 +1251,7 @@ are closed or moved to their own ticket.
 |---|---|---|
 | **Part C — accept / reject a quotation from the portal** | **Built, PO answers applied** | See Part C, C.13. Open: the PDF "Motivo" rule (C.13 point 4, pending a product decision) and `ETGO_AC` in the core `STATUS_ORDER` (sort order only). |
 | **KPI semantics** | **Pending the PO** | The four events of §A.7 ship (`portal.link.sent`, `portal.link.opened`, `portal.link.renewed`, `portal.document.downloaded`, server-only). D-5 took *per send* (`ROOT_LINK_ID`) as the headline unit as proposed; the PO has not yet confirmed the metric definitions — per send vs per document, and whether opens by link scanners that run JS (counted today, §A.7) are filtered. Changing the reading needs no code: the events carry both `ROOT_LINK_ID` and `documentId`. |
+| **Drop the unused `ETGO_PORTAL_ACCESS`** | **Follow-up, after a production check** | Kept as on `develop` in this delivery (§A.1, revised 2026-11-13). Check production for rows; if empty, drop the model XML and its dictionary rows in their own change. |
 | **Retention / purge job for `ETGO_PORTAL_LINK`** | **Asked of the PO** | Nothing deletes rows today. Pending rows (the email never left) are invalid forever and harmless (§A.2.7); expired rows are kept because **an expired link can be renewed at any age** — there is no maximum. The PO was asked the maximum age after which an expired link should no longer renew; that answer decides both the renewal cut-off and how long rows must be kept. |
 | **Plain-text 500 on the portal PDF route** | Optional cleanup | `GET /sws/portal/documents/{kind}/{id}/pdf` streams through `AnonymousAttachmentStreamer`, whose failure path writes a `text/plain` body (`writePlainError`) — the email download link's format — while every other portal error is JSON. The page only reads the status, so nothing is broken; aligning it would mean a JSON error for the portal caller without changing the email link's answers. |
 | Live check of the PDF on a real organization | To confirm | QA BUG-1 was fixed through the shared streamer; confirm `/pdf` and `hasPdf` live on a tenant whose documents sit in a real (non-`*`) organization. |
