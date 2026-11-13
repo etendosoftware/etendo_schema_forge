@@ -3345,3 +3345,41 @@ reject, the catalog toggle breaks silently.
 **Status:** noted, not fixed (no behaviour change in ETP-5831). The fix, if the contract ever
 changes, is a `catch` in `toggleModel` that treats a failed read as "not in the SII" (same as
 `fetchOrgSiiStatus` does now) or shows an error toast.
+
+## [2026-11-13] ETP-6229 — Popover inside a modal Dialog is dead under `make dev` (Radix split in the dev server)
+
+**Component:** `tools/app-shell/vite.config.js` (`optimizeDeps`, `resolve.dedupe`). Dev tooling only; no
+behaviour or window change.
+
+**Symptom:** in `make dev`, a Radix Popover opened inside a modal Radix Dialog never receives clicks.
+Seen in the `DateField` calendar of Cuenta → Nuevo movimiento, Editar cuenta (Importar desde/hasta) and
+Nuevo extracto (header and line): the picked day was not applied. The popper wrapper had
+`pointer-events: none`, `elementFromPoint` over a day returned the dialog body, and Escape did not
+dismiss layer by layer. Production builds are not affected (Rollup bundles one copy).
+
+**Root cause:** `@etendosoftware/app-shell-core` is in `optimizeDeps.exclude`, so Vite never discovers
+its Radix dependencies. A direct `@radix-ui/react-dialog` import in app code
+(`tools/app-shell/src/windows/custom/shared/FileLightbox.jsx`, ETP-5518) made Vite pre-bundle only the
+Dialog, while the Popover was served raw from `node_modules`. That leaves two instances of
+`react-dismissable-layer`, hence two layer registries: the popover never learns it sits above the
+modal and inherits the `pointer-events: none` that the modal Dialog sets on `<body>`. Same family as
+the ETP-5831 dropdown-menu freeze above.
+
+**Fix:** `CORE_RADIX_DEPS` in `tools/app-shell/vite.config.js` (the 10 `@radix-ui/*` packages of
+app-shell-core, also read from core's `peerDependencies`) is spread into both `resolve.dedupe` and
+`optimizeDeps.include`, so they are pre-bundled in one esbuild pass and share the layer chunks. A
+guardrail test in `tools/app-shell/test/report-api-session-auth.test.js` fails if core adds a Radix
+package missing from either list. After pulling the fix, clear `tools/app-shell/node_modules/.vite`
+once.
+
+**How to recognise it again:** a popover, select or tooltip that is dead only inside a modal and only
+under `make dev`. Check
+`getComputedStyle(document.querySelector('[data-radix-popper-content-wrapper]')).pointerEvents`, and
+which URL core's `popover.jsx` / `dialog.jsx` load `@radix-ui/*` from
+(`/node_modules/.vite/deps/...` vs `/@fs/.../node_modules/@radix-ui/...`).
+
+**Known residual gaps (not fixed here, separate tickets):**
+- A new direct `@radix-ui/*` import in app code that is not in the core's list could re-create the split.
+- A hand-rolled menu (`FooterSplitButton` in `EditAccountModal.jsx`) closes the whole modal on Escape.
+- Clicking the already-selected day in `DateField` deselects it (needs `required` on the Calendar in
+  core's `date-field.jsx`).
