@@ -41,8 +41,9 @@ Every bug in this area has been someone changing one and assuming the rest follo
 required QR that printed correctly but was missing from the copy emailed to the customer; a
 row-hover envelope silently attaching the wrong layout because one window never passed `usePdf`.
 
-Since ETP-6013 the backend also renders the commercial and movement templates **for the MCP only**
-(after an MCP Complete, or on an MCP PDF request): it fetches what the build publishes from
+Since ETP-6013 the backend also renders the commercial and movement templates **for the MCP and,
+since ETP-6209, the customer portal only** (after an MCP Complete, on an MCP PDF request, or on a
+portal PDF request for a document with no stored PDF — D28; same render, not a seventh producer): it fetches what the build publishes from
 `printableSources.js` (`dist/printables/<document>.json`) and ports only the data builders to Java.
 So:
 

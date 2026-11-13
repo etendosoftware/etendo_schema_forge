@@ -77,7 +77,8 @@ export default function PortalDocumentDetailView({
   }, [apiFetch, token, kind, id, onInvalid]);
 
   /**
-   * The printable is fetched as soon as the detail says there is one: it is the left pane itself.
+   * The printable is fetched as soon as the detail says there is one (stored, or renderable: the
+   * server renders and stores a missing one on this request, ETP-6209): it is the left pane itself.
    * The blob is rebuilt as `application/pdf` whatever the server labelled it, so a main attachment
    * that is not a PDF is handed to the PDF renderer — where it fails to render — and never parsed
    * as a document that could run script in the SPA's origin (review N-d).
@@ -98,7 +99,9 @@ export default function PortalDocumentDetailView({
         onInvalid();
         return;
       }
-      setPdf({ status: 'failed', blob: null, url: null });
+      // 404: the document has no printable and the server could not render one (ETP-6209: it
+      // renders a missing PDF on this request) — "PDF no disponible", not a download error.
+      setPdf({ status: error?.status === 404 ? 'unavailable' : 'failed', blob: null, url: null });
     });
     // An object URL pins its blob until released.
     return () => {
@@ -144,7 +147,7 @@ export default function PortalDocumentDetailView({
   const title = `${ui(documentLabelKey(document))} ${document.documentNo ?? ''}`.trim();
   const issuer = document.issuer || identity?.tenantName || '';
   const pdfReady = pdf.status === 'ready';
-  const showSheet = !document.hasPdf || pdf.status === 'failed';
+  const showSheet = !document.hasPdf || pdf.status === 'failed' || pdf.status === 'unavailable';
 
   return (
     <>

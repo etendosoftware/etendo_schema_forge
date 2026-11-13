@@ -596,6 +596,15 @@ Two consequences the user should know:
 - **A document never emailed or printed has no main attachment** (the SPA caches it before sending,
   `DefaultDocumentSendEmailContract.java:254-257`) ⇒ `hasPdf:false` and "PDF not available".
   Rendering server-side for those is out of scope here (would be a seventh producer of the printable).
+  **Changed by the user (2026-11-13):** the portal now shows and downloads the PDF of such a
+  document too, without a seventh producer — it reuses the MCP's server-side render (ETP-6013,
+  `NeoPrintableRenderer` on `NeoPrintAfterComplete`'s worker) on the first `/pdf` request and
+  stores the result as the main attachment, exactly as that render stores it. The render runs as
+  the user who sent the document (the root link's `CREATEDBY`) with their default (else first
+  active) role in the link's client, and the document's organization; the worker's D23 write
+  check, its in-JVM join and its advisory lock apply. `hasPdf` is true for a stored PDF or a
+  renderable kind; a render that cannot happen answers 404 and the page shows the data sheet with
+  "PDF no disponible". See go `docs/customer-portal.md` §5.
 - **Risk to verify in QA**: the emails skill records that the email download link answers 500 for
   documents in a real organization, because `AttachImplementationManager.download` checks readable
   orgs in a session-less request. The portal streams through the same call
