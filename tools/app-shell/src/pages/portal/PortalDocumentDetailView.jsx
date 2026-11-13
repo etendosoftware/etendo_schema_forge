@@ -307,14 +307,17 @@ function Summary({ document }) {
   const taxesTotal = document.taxes.reduce((sum, tax) => sum + (tax.taxAmount ?? 0), 0);
   const taxLabel = document.taxes.length === 1 && document.taxes[0].tax
     ? `${ui('portalFieldTaxes')} (${document.taxes[0].tax})` : ui('portalFieldTaxes');
-  // One line per row, as the design: the label never wraps (a long one, a tax name, truncates
-  // with its full text as the tooltip) and the value takes the rest, right-aligned.
+  // One line per row, as the design. The label gives way first: it never wraps and truncates at
+  // 9rem (a tax name), with its full text as the tooltip. The value is never cut: it takes the
+  // rest, right-aligned, and a badge too wide for it wraps its own text (`wrap` below) rather
+  // than being clipped by the panel.
   const row = (label, value, testId) => (
     <>
-      <dt className="max-w-[11rem] truncate whitespace-nowrap text-muted-foreground" title={`${label}:`}>{label}:</dt>
-      <dd className="min-w-0 truncate whitespace-nowrap text-right" data-testid={testId}>{value}</dd>
+      <dt className="max-w-[9rem] truncate whitespace-nowrap text-muted-foreground" title={`${label}:`}>{label}:</dt>
+      <dd className="min-w-0 text-right [overflow-wrap:anywhere]" data-testid={testId}>{value}</dd>
     </>
   );
+  const wrap = 'whitespace-normal text-right';
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card md:rounded-lg" data-testid="portal-document-summary">
       {hasAmounts ? (
@@ -344,8 +347,8 @@ function Summary({ document }) {
         {document.kind === 'QUOTATION' ? row(ui('portalColValidUntil'), <PortalValidUntil document={document} />) : null}
         {document.scheduledDeliveryDate ? row(ui('portalFieldDeliveryDate'), <PortalDate value={document.scheduledDeliveryDate} />) : null}
         {isInvoice ? row(ui('portalColDueDate'), <PortalDueDate document={document} />) : null}
-        {row(ui('portalColStatus'), <PortalDocumentStatus status={document.documentStatus} />)}
-        {isInvoice ? row(ui('portalColPaymentStatus'), <PortalPaymentStatus document={document} installments={document.installments} />) : null}
+        {row(ui('portalColStatus'), <PortalDocumentStatus status={document.documentStatus} className={wrap} />)}
+        {isInvoice ? row(ui('portalColPaymentStatus'), <PortalPaymentStatus document={document} installments={document.installments} className={wrap} />) : null}
         {document.paymentMethod ? row(ui('portalFieldPaymentMethod'), document.paymentMethod) : null}
         {hasAmounts ? row(ui('portalColTaxBase'), <PortalMoney currency={document.currency} value={document.taxBase} />) : null}
         {hasAmounts ? row(taxLabel, <PortalMoney currency={document.currency} value={taxesTotal} />) : null}
