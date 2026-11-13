@@ -188,7 +188,7 @@ export default function PortalDocumentListView({
             <h1 className="font-['Plus_Jakarta_Sans',Inter,sans-serif] text-[28px] font-bold leading-9">{plural}</h1>
             <PortalCountChip count={totalCount} />
           </div>
-          <PortalLanguageSwitch />
+          <PortalLanguageSwitch align="end" side="bottom" />
         </div>
         <div className="flex gap-2.5">{searchPill(true)}</div>
         {renderTabs(true)}

@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Building2, ChevronRight, LogOut, User, Languages, Rocket } from 'lucide-react';
+import { Building2, ChevronRight, LogOut, User, Rocket } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
 import { useLocaleSwitch } from '@/i18n/index.js';
@@ -14,11 +14,8 @@ import { useLogout } from '@/auth/useLogout.js';
 import { useFeatureFlag, MY_COMPANIES_PAGE } from '@/lib/flags';
 import { ADMIN_NAME_I18N_KEY, resolveRoleDisplayName } from '@/lib/roleNameI18n.js';
 import { useSupportSession } from '@/hooks/useSupportSession.js';
+import { LanguageMenuSection } from '@/components/LanguageMenuSection.jsx';
 
-const LOCALES = [
-  { code: 'en_US', flag: '🇺🇸', label: 'English' },
-  { code: 'es_ES', flag: '🇪🇸', label: 'Español' },
-];
 
 /**
  * Button that opens a small user menu with identity details and logout.
@@ -134,28 +131,7 @@ export function UserAvatarButton({ expanded = false }) {
 
           {setLocale && (
             <>
-              <div className="px-2 pt-2 pb-1">
-                <p className="flex items-center gap-1.5 px-2 pb-1 text-xs font-medium text-muted-foreground">
-                  <Languages className="h-3.5 w-3.5" data-testid="Languages__9f3744" />
-                  {ui('language')}
-                </p>
-                {LOCALES.map((l) => (
-                  <button
-                    key={l.code}
-                    type="button"
-                    onClick={() => setLocale(l.code)}
-                    data-testid={`user-menu-language-${l.code}`}
-                    className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors ${
-                      locale === l.code
-                        ? 'bg-muted font-semibold text-foreground'
-                        : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
-                    }`}
-                  >
-                    <span className="text-sm leading-none">{l.flag}</span>
-                    {l.label}
-                  </button>
-                ))}
-              </div>
+              <LanguageMenuSection locale={locale} setLocale={setLocale} />
               <DropdownMenuSeparator data-testid="DropdownMenuSeparator__9f3744" />
             </>
           )}

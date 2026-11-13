@@ -830,8 +830,11 @@ mobile headers, as the boards do; the shell is only the sidebar and the bottom b
 
 - **Design pass (2026-11-13, live render vs boards).** Sidebar: the logo sits in a fixed 32×32
   rounded tile (`object-contain` on the card background, initials when there is none); the footer
-  is a top rule with the etendo.ai mark + "Creado con etendo.ai" and a discreet text ES · EN switch
-  (the app keeps the language in its user menu, which the portal has not). Home: the uppercase
+  is a top rule with the language trigger and "Creado con etendo.ai" with the etendo.ai mark. The
+  language works as in the app: the trigger (`Languages` icon, current flag and name) opens the
+  app's `DropdownMenu` with the user menu's own "Idioma" section (`LanguageMenuSection`, extracted
+  from `UserAvatarButton` with its `APP_LOCALES`: English, Español); on mobile the same trigger
+  sits in the top bar. Home: the uppercase
   section titles are set in Inter like the design's (the global `h1–h6` Plus Jakarta Sans rule ran
   their words together); "Requiere tu atención" and "Tu saldo" hug their content; desktop "Tu
   saldo" is pending + paid pills only (the overdue line is mobile-only); the chart's axis uses the

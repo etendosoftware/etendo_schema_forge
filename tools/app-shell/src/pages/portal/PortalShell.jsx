@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  FileText, Home, LayoutGrid, Receipt, Search, ShoppingBag, Truck,
+  FileText, Home, Languages, LayoutGrid, Receipt, Search, ShoppingBag, Truck,
 } from 'lucide-react';
 import { useLocaleSwitch, useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { PORTAL_DOCUMENT_KINDS } from '@/lib/portal/portalApi.js';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { APP_LOCALES, LanguageMenuSection } from '@/components/LanguageMenuSection.jsx';
 import { PortalTag } from './PortalBits.jsx';
 import { PORTAL_HIGHLIGHTS, PORTAL_KIND_META } from './portalPresentation.js';
 
@@ -87,73 +91,40 @@ export function PortalBrand({ identity, logoUrl, size = 'sm' }) {
 }
 
 /**
- * ES / EN switch (§B.8). Spanish is the default; the choice is the viewer's. `compact` is the
- * discreet text form for the sidebar footer: in the app the language lives inside the user menu,
- * which the portal does not have, so it sits beside "Creado con etendo.ai" without competing
- * with the navigation.
+ * The language choice (§B.8), the way the app offers it. In the app it is the "Idioma" section of
+ * the user menu (`UserAvatarButton`); the portal has no user menu, so a discreet trigger — the
+ * `Languages` icon with the current flag and name — opens the app's own `DropdownMenu` holding
+ * that same section (`LanguageMenuSection`: the app's `APP_LOCALES`, rows and active marker).
+ * Spanish is the default; the choice is the viewer's.
  */
-export function PortalLanguageSwitch({ compact = false }) {
+export function PortalLanguageSwitch({ align = 'start', side = 'top' }) {
   const ui = useUI();
   const { locale, setLocale } = useLocaleSwitch();
   if (!setLocale) return null;
-  const options = [
-    { code: 'es_ES', short: 'ES', labelKey: 'portalSwitchToSpanish' },
-    { code: 'en_US', short: 'EN', labelKey: 'portalSwitchToEnglish' },
-  ];
-  if (compact) {
-    return (
-      <div role="group" aria-label={ui('portalLanguage')} className="flex items-center gap-1 text-xs" data-testid="portal-language-switch">
-        {options.map((option, index) => {
-          const active = (locale || 'es_ES').startsWith(option.code.slice(0, 2));
-          return (
-            <span key={option.code} className="flex items-center gap-1">
-              {index > 0 ? <span className="text-muted-foreground" aria-hidden="true">·</span> : null}
-              <button
-                type="button"
-                aria-pressed={active}
-                aria-label={ui(option.labelKey)}
-                onClick={() => setLocale(option.code)}
-                className={cn(
-                  'rounded px-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  active ? 'font-semibold text-foreground' : 'text-muted-foreground hover:text-foreground',
-                )}
-                data-testid={`portal-language-${option.short.toLowerCase()}`}
-              >
-                {option.short}
-              </button>
-            </span>
-          );
-        })}
-      </div>
-    );
-  }
+  const current = APP_LOCALES.find((entry) => entry.code === locale)
+    ?? APP_LOCALES.find((entry) => entry.code === 'es_ES');
   return (
-    <div
-      role="group"
-      aria-label={ui('portalLanguage')}
-      className="inline-flex rounded-lg bg-muted p-0.5"
-      data-testid="portal-language-switch"
-    >
-      {options.map((option) => {
-        const active = (locale || 'es_ES').startsWith(option.code.slice(0, 2));
-        return (
-          <button
-            key={option.code}
-            type="button"
-            aria-pressed={active}
-            aria-label={ui(option.labelKey)}
-            onClick={() => setLocale(option.code)}
-            className={cn(
-              'h-7 rounded-md px-2 text-xs font-medium transition-colors',
-              active ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-            )}
-            data-testid={`portal-language-${option.short.toLowerCase()}`}
-          >
-            {option.short}
-          </button>
-        );
-      })}
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={ui('language')}
+          className="flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          data-testid="portal-language-switch"
+        >
+          <Languages className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span className="text-sm leading-none" aria-hidden="true">{current.flag}</span>
+          <span className="truncate">{current.label}</span>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side={side} align={align} className="w-48">
+        <LanguageMenuSection
+          locale={locale}
+          setLocale={setLocale}
+          testIdFor={(code) => `portal-language-${code.slice(0, 2).toLowerCase()}`}
+        />
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -181,7 +152,7 @@ export function PortalMobileBrandBar({ identity, logoUrl, onSearch }) {
             <Search className="h-5 w-5" aria-hidden="true" />
           </button>
         ) : null}
-        <PortalLanguageSwitch />
+        <PortalLanguageSwitch align="end" side="bottom" />
       </div>
     </header>
   );
@@ -270,7 +241,7 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
         <div className="flex-1" />
         {/* The language toggle on its own line above the credit, so both read in full at 216 px. */}
         <div className="flex flex-col gap-2 border-t border-border px-4 pt-2.5">
-          <PortalLanguageSwitch compact />
+          <PortalLanguageSwitch />
           <span className="flex items-center gap-2 text-xs text-muted-foreground" data-testid="portal-created-with">
             <img src="/logo-etendo-ai.png" alt="" className="h-3.5 w-3.5 shrink-0 object-contain" />
             {ui('portalCreatedWith')}
