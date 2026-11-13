@@ -1,7 +1,8 @@
 # Customer portal: every sales document, one link per send
 
-Status: **approved 2026-11-11 (all decisions below taken as proposed) · Part A implemented and
-approved, Part B implemented 2026-11-12** · Created 2026-11-11 ·
+Status: **approved 2026-11-11 (all decisions below taken as proposed) · Parts A and B implemented
+and approved by REVIEW and QA (2026-11-13) · Part C (accept / reject) not built — see
+[Still open](#still-open)** · Created 2026-11-11 ·
 Jira: **ETP-6209** (extends ETP-5267) · Flag: **`bp-portal-link`** (unchanged gate, now for all sales
 document sends) · Branches: `feature/ETP-6209` in `etendo_schema_forge` and `com.etendoerp.go`
 
@@ -9,6 +10,12 @@ Builds on the MVP plan [`2026-09-10-bp-self-service-portal.md`](2026-09-10-bp-se
 (ETP-5267). That plan stays as the record of the MVP; this one **supersedes** the parts listed in §0.
 PO answers to the five open questions (Jira ETP-6209, comment 149209) are folded in and treated as
 fixed (§B.0).
+
+**Reading order.** Parts A and B below are the design as approved. Where the shipped code differs,
+the two *implementation notes* sections at the end win, and the design text carries a short
+"(as built: …)" pointer at each such spot. The runtime reference of the endpoints lives in
+`com.etendoerp.go/docs/customer-portal.md`; the email side in
+`com.etendoerp.go/docs/transactional-email-contracts.md` → *Customer portal link*.
 
 Paths: `go/` = `modules/com.etendoerp.go/`, `sf/` = `etendo_schema_forge/`. Every `file:line` was read
 on the `feature/ETP-6209` worktrees on 2026-11-11.
@@ -136,7 +143,7 @@ KPI denominator.
    (`PortalLinkPolicy.java:80-83`) **before writing**, exactly as `PortalAccessService.java:72-76`
    does today. Closed gate ⇒ no row, no paragraph, email byte-identical.
 5. **Mint pending in `resolve()`**: `PortalLinkService.mintPending(kind, recordId, recipientSet,
-   language, contractName)` inserts a row with `SENT_AT = NULL`, returns `(linkId, url)`. The URL goes
+   language, contractName)` (as built: `mintForSend`; the renewal uses `mintRenewal`) inserts a row with `SENT_AT = NULL`, returns `(linkId, url)`. The URL goes
    in the paragraph; `linkId` travels as a new generic field
    `EmailProviderRequest.sendCorrelationId` — **never serialized** by `toProviderPayload()` (the
    gateway Lambda drops unknown fields anyway, but an internal id must not leave by design).
@@ -147,7 +154,8 @@ KPI denominator.
    (`:476-486`), after `recordAudit`; `recordSendHistory` (`:550-562`) and
    `EmailSendLogStore.recordSend` return the new log id (`Optional<String>`) instead of `void`.
    `DefaultDocumentSendEmailContract.onDelivered` → `PortalLinkService.confirm(correlationId,
-   sendLogId, now)` sets `SENT_AT`, `EXPIRES_AT`, `ETGO_EMAIL_SEND_LOG_ID`, then emits
+   sendLogId, now)` (as built: `confirm(linkId, sendLogId, recipientCount)`, clock injected in the
+   service) sets `SENT_AT`, `EXPIRES_AT`, `ETGO_EMAIL_SEND_LOG_ID`, then emits
    `portal.link.sent` (§A.7). Never throws into the send: a failed confirm leaves the row pending (the
    customer's link then answers "invalid") and logs ERROR — the email itself was delivered and must be
    reported as such.
@@ -165,6 +173,8 @@ nothing; `neo-headless.md:14208` already documents that the preview omits this p
 documents, both catalogs, e.g. *"Puede consultar este documento y el resto de sus documentos en su
 **portal de cliente** (enlace válido {0}):"* with `{0}` from `ValidityWindow` against `EXPIRES_AT`
 (skill rule: a number in the copy comes from the record). Final wording is the user's call.
+(As built, Part B: with a link the portal is the email's call-to-action button, "Ver documento en
+el portal", and the "Descargar documento" button is dropped — see *Part B — implementation notes*.)
 
 ## A.3 Recipient and renewal policy (fixed by the PO)
 
@@ -182,8 +192,8 @@ non-GET, `PortalServlet.java:165-169`; it is widened to `POST /renew` only).
 | Endpoint | Purpose |
 |---|---|
 | `GET /me[/{token}]` | Validate; answer state + identity + entry document |
-| `POST /renew` | Token in `Authorization`; renew an expired link |
-| `GET /documents`, `GET /documents/{kind}/{id}`, `GET /documents/{kind}/{id}/pdf` | Part B |
+| `POST /renew` | Renew an expired link. Token in a header (as built: `X-Portal-Token`, not `Authorization` — implementation notes) |
+| `GET /home`, `GET /documents`, `GET /documents/{kind}/{id}`, `GET /documents/{kind}/{id}/pdf` | Part B (`/home` added in Part B) |
 | `GET /logo` | Unchanged (`PortalServlet.java:250-271`), scope from the link |
 
 The MVP `/invoices` routes are removed (no consumers but `PortalPage`).
@@ -195,6 +205,10 @@ The MVP `/invoices` routes are removed (no consumers but `PortalPage`).
 | **invalid** | unknown hash, pending (`SENT_AT` null), `ISACTIVE='N'`, malformed, absent | **401 `{"error":"This link is no longer valid"}` — byte-identical to today** (`PortalServlet.java:151`, `:497-499`) |
 | **valid** | `SENT_AT` set and `now < EXPIRES_AT` | 200 `{state:"valid", businessPartnerName, tenantName, hasLogo, entryDocument:{kind,id}}` |
 | **expired** | `SENT_AT` set and `now >= EXPIRES_AT` | 200 `{state:"expired", tenantName, hasLogo}` — no BP name, no document |
+| **unavailable** | a still-valid link whose customer is blocked or inactive, or whose company's plan expired (D-1, §A.5) | 200 `{state:"unavailable", tenantName, hasLogo}` — no BP name, no document, reason never disclosed |
+
+As built, a valid answer's `entryDocument` is `null` (plus `entryKind`) when the link's own document
+left its scope (§A.8.8).
 
 The SPA, on `expired`, **automatically** calls `POST /renew` (story 4: opening the link triggers it;
 no button). `POST /renew` answers:
@@ -223,7 +237,8 @@ customer's business. The reason goes to the log line and the KPI event `errorCod
   holder of an expired token already received it.
 - `POST /renew` with an unknown/pending token answers the same 401.
 - `PortalRateLimiter` (30 req/min/IP, `PortalRateLimiter.java:49-53`) covers `GET /me` **and**
-  `POST /renew` (own instance each).
+  `POST /renew` (own instance each). As built, the data reads (`/home`, `/documents*`) get a third
+  instance at 120 req/min; over any ceiling the answer is `429` (Part B notes, N-e).
 
 ### Renewal email contract `portal-link-renewal`
 
@@ -321,7 +336,7 @@ Submitted after the business write, per `UsageEventRecorder.java:40-43`.
 |---|---|---|---|---|---|---|
 | `portal.link.sent` | `PortalLinkService.confirm`, `ORIGIN=SEND` | tenant | `ROOT_LINK_ID` | doc kind | `send` / ok | `linkId, documentTable, documentId, bpartnerId, contractName, sendLogId, recipientCount` ; `userId` = sender |
 | `portal.link.opened` | `GET /me` → `valid` (once per page load, not per API call) | tenant | `ROOT_LINK_ID` | doc kind | `open` / ok | `linkId, origin, documentId, bpartnerId, firstUse` |
-| `portal.link.renewed` | `POST /renew` | tenant | `ROOT_LINK_ID` | doc kind | `renew` / ok, or error with `BLOCKED_CUSTOMER`, `INACTIVE`, `PLAN_EXPIRED`, `COOLDOWN`, `DAILY_LIMIT`, `SEND_FAILED` | `expiredLinkId, newLinkId?, bpartnerId` |
+| `portal.link.renewed` | `POST /renew` | tenant | `ROOT_LINK_ID` | doc kind | `renew` / ok, or error with `BLOCKED_CUSTOMER`, `INACTIVE`, `PLAN_EXPIRED`, `COOLDOWN`, `DAILY_LIMIT`, `SEND_FAILED` (as built, also the email status `DUPLICATE` / `THROTTLED`; the ok event is emitted when the renewal link is confirmed) | `expiredLinkId, newLinkId?, bpartnerId` |
 | `portal.document.downloaded` | `GET /documents/{kind}/{id}/pdf` → 200 | tenant | `ROOT_LINK_ID` | doc kind | `download` / ok | `linkId, documentId, isEntryDocument` |
 
 Metrics (one send = one `ROOT_LINK_ID`; renewals inherit the root, so opening a renewed link counts
@@ -363,7 +378,8 @@ story; noted for the KPI owner.
 4. Token never logged, header after first load (`PortalServlet.java:419-429`) — unchanged; the
    renewal email never contains the expired token.
 5. `no-store` on every response (`PortalServlet.java:161-164`) — unchanged, applies to `POST /renew`.
-6. Rate limit on `GET /me` and `POST /renew` — extended.
+6. Rate limit on `GET /me` and `POST /renew` — extended (as built, also on the data reads: 30 / 30 /
+   120 per minute per client IP; see the W6 note for how the client IP is resolved in production).
 7. ~~Manual revocation~~ — **removed**; replaced by 48 h TTL + renewal only to original recipients.
 8. **New**: out-of-scope or hidden document → 404 never 403 (unchanged rule, MVP §6), now also for a
    valid link whose own entry document became hidden (reactivated to draft): `/me` still answers
@@ -419,11 +435,12 @@ JUnit test today** (no file under `src-test` references `PortalAccessService`, `
 ## A.11 User-visible changes
 
 - Quotation, order, shipment, invoice and credit-note emails carry a portal paragraph (only for
-  accounts with `bp-portal-link`), with new wording mentioning documents and validity.
+  accounts with `bp-portal-link`), with new wording mentioning documents and validity. Since Part B
+  the portal link is the email's button and replaces "Descargar documento".
 - Every link expires 48 h after its send; older links keep working until their own expiry.
 - Opening an expired link mails a new one to the original To/CC and says so on screen; blocked,
   inactive or expired-plan tenants get a "cannot send, contact {company}" message.
-- New email "portal-link-renewal" (ES/EN); it appears in the document's Emails card (if D-3 confirmed).
+- New email "portal-link-renewal" (ES/EN); it appears in the document's Emails card (D-3 confirmed).
 - The backend-only revoke endpoint disappears (no visible UI change).
 - MVP stable links stop working (no production users).
 
@@ -491,11 +508,14 @@ app's sources:
 
 | Endpoint | Returns |
 |---|---|
+| `GET /home` (added in Part B) | pending-payment balances, one tile per kind with its count and highlight, recent documents — server-side aggregates |
 | `GET /documents?type=&status=&dateFrom=&dateTo=&limit=&offset=` | `{documents:[{kind, isCreditNote, id, documentNo, date, currency, grandTotalAmount, documentStatus, …invoice payment fields}], totalCount, offset, limit, balances}` |
 | `GET /documents/{kind}/{id}` | header detail + `links[]` + `hasPdf` |
 | `GET /documents/{kind}/{id}/pdf` | the PDF stream |
 
-- One `PortalDocumentQuery` (replaces `PortalInvoiceQuery`): native SQL `UNION ALL` over the three
+- One `PortalDocumentQuery` (replaces `PortalInvoiceQuery`) — as built it is HQL on the session,
+  one kind per list request (the sidebar has one list per kind), not a native `UNION ALL`; the
+  rest of this bullet holds. Design text: native SQL `UNION ALL` over the three
   tables, each arm carrying the full scope + allow-list of §B.1, all values bound, `ORDER BY date
   DESC, documentNo DESC` (deterministic paging, as `PortalInvoiceQuery.java:68-71`), `LIMIT/OFFSET`,
   page clamp kept (`PortalServlet.java:121-132`).
@@ -559,6 +579,11 @@ The email's download link serves the record's **main attachment** at download ti
 (`NeoDocumentDownloadService.java:254-271`); the portal already serves the same thing for invoices
 (`PortalServlet.java:374-408`). Generalised: `handleGetMain(kind.tableName, id)` + client check, for
 all four kinds. Same file by construction, including after a re-print (both serve the new main).
+**As built (QA BUG-1):** `handleGetMain` and `NeoAttachmentsDownloader` resolve through the
+session's tenant, which a portal request does not have, so both the lookup and the stream now go
+through `AnonymousAttachmentStreamer` — the email download link's session-less path, extracted from
+`NeoDocumentDownloadService` and shared by both callers. It bypasses
+`AttachImplementationManager.download()` (ETP-5304), which also settles the "risk to verify" below.
 
 Two consequences the user should know:
 - **A document never emailed or printed has no main attachment** (the SPA caches it before sending,
@@ -568,7 +593,9 @@ Two consequences the user should know:
   documents in a real organization, because `AttachImplementationManager.download` checks readable
   orgs in a session-less request. The portal streams through the same call
   (`NeoAttachmentsDownloader.java:103`). If the MVP invoice download already works in a real org,
-  fine; if not, this story inherits the bug for all five types.
+  fine; if not, this story inherits the bug for all five types. *(Superseded: the shared
+  `AnonymousAttachmentStreamer` never calls that check; live confirmation on a real organization is
+  still listed under [Still open](#still-open).)*
 
 ## B.8 Language and branding
 
@@ -613,14 +640,18 @@ PDF unavailable state.
 
 Where the code differs from the text above, and why:
 
-- **`/invoices` and `/invoices/{id}/pdf` are kept** for this round (§A.4 said they go). Part B
-  replaces them with `/documents`; until then the portal page keeps listing invoices.
+- **`/invoices` and `/invoices/{id}/pdf` were kept** for the Part A round only (§A.4 said they go).
+  They were **removed** in Part B review cycle 1 (see *Part B — implementation notes*).
 - **Loose references.** `PARENT_LINK_ID`, `ROOT_LINK_ID` and `ETGO_EMAIL_SEND_LOG_ID` are plain
   `VARCHAR(32)` with no DB foreign key (§A.1 said FK). A self-reference needs an `AD_REF_TABLE`
   record to be modelled in the AD, and the send-log id is best effort anyway. The origin column is
   `LINK_ORIGIN` (not `ORIGIN`).
-- **DAL access by entity name.** `PortalLinkDal` uses `DynamicOBObject` on `ETGO_Portal_Link`, as
-  `DalEmailSendLogStore` does, so the code compiles without `generate.entities`. Property names are
+- **DAL access by entity name.** `PortalLinkDal` addresses `ETGO_Portal_Link` by entity name, so the
+  code compiles without `generate.entities`, but **creates rows through the entity's mapping class**
+  (`ModelProvider` → `OBProvider`) whenever `generate.entities` has produced one, falling back to a
+  `DynamicOBObject` only when the runtime has no mapping class. The first version always used
+  `DynamicOBObject`, as `DalEmailSendLogStore` does; with a generated class, re-reading that row in
+  the same session failed with `WrongClassException` and aborted the transaction (live test). Property names are
   derived from `AD_Column.Name` (`NamingUtil#getPropertyMappingName`): `bpartner`, `tokenHash`,
   `table`, `record`, `documentKind`, `linkOrigin`, `parentLink`, `rootLink`, `contractName`,
   `emailSendLog`, `recipientsTo`, `recipientsCC`, `emailLanguage`, `sentAt`, `expiresAt`,
@@ -631,9 +662,9 @@ Where the code differs from the text above, and why:
   contract that logs history runs as System.
 - **`EmailSendLogStore#recordSendReturningId`** is a new default method rather than a changed return
   type, so existing implementations and tests keep compiling.
-- **D-1 on the data endpoints.** `/invoices`, `/invoices/{id}/pdf` answer the generic 401 for an
-  expired or unavailable link; `/logo` answers for any sent link (the expired page shows the
-  company's branding).
+- **D-1 on the data endpoints.** The data reads (as built after Part B: `/home`, `/documents*`)
+  answer the generic 401 for an expired or unavailable link — the page then re-checks `/me` once
+  (QA BUG-2); `/logo` answers for any sent link (the expired page shows the company's branding).
 - **The portal token travels in `X-Portal-Token`, not `Authorization`** (live-test fix). The
   SPA's request helper decides `Authorization` from the app's session credential scheme; with an
   Etendo GO session in the browser the scheme resolves to `cookie` and an explicit token is dropped,
@@ -643,11 +674,24 @@ Where the code differs from the text above, and why:
   Etendo GO would have hit it. `PortalServlet#resolveToken` reads `X-Portal-Token` first, then the
   `/me/{token}` path, then `Authorization: Bearer` (legacy), so a GO session's own credential is
   never what opens the portal. This supersedes MVP §5.4's "sent as an `Authorization` header".
-- **Known debt carried over from the MVP (review W6, not fixed):** `PortalRateLimiter` keys on
-  `HttpServletRequest#getRemoteAddr`. Behind a load balancer or proxy that is the balancer's
-  address, so every visitor shares one 30 req/min bucket per node — a busy tenant could see
-  legitimate 429s, and the limiter protects nothing per caller. Fixing it needs a trusted
-  `X-Forwarded-For` policy for the deployment; out of scope for ETP-6209.
+- **Client IP behind the load balancer (review W6) — resolved by infra, no code change.**
+  `PortalRateLimiter` keys on `HttpServletRequest#getRemoteAddr`. Behind a proxy that would be the
+  proxy's address, so every visitor would share one bucket per node. The production path, as
+  confirmed by infra (2026-11-13):
+  - Traffic goes **browser → CloudFront → ALB → Tomcat**.
+  - Infra added **`RemoteIpValve`** to the Tomcat image. From the **next production deploy** on,
+    `getRemoteAddr()` returns the real client IP, so every portal rate limit (30/min `/me`, 30/min
+    `/renew`, 120/min data reads) is **per client**. Until that deploy, the limits still count per
+    proxy address.
+  - **One `etendo-core` task** runs (two, briefly, during a deploy). The counters are in memory, so
+    they are per task and **reset on every deploy**; with a single task that is the whole fleet.
+    If the service is ever scaled out, each task counts on its own, which multiplies the effective
+    ceiling by the task count.
+  - **`X-Portal-Token` passes through CloudFront and the ALB** untouched; no forwarding rule is
+    needed for the portal's own header.
+
+  The code stays as it is; there is no `X-Forwarded-For` parsing in the portal and none must be
+  added (the valve is the one trusted place that reads it).
 - **Renewal concurrency (review W1).** `PortalLinkService#renew` locks the expired link's row
   (`SELECT … FOR UPDATE`) and counts renewals by creation, pending ones included; a failed attempt
   deactivates its pending row. Chosen over committing before releasing an in-JVM lock because the
@@ -732,8 +776,9 @@ instead of an error. S1: `validate`, `findSentLink` and `renew` enter admin mode
 - **Rate limits (N-e).** Every token-validating endpoint is rate limited per IP, each with its own
   counter: `GET /me` 30/min, `POST /renew` 30/min, and the data reads (`/home`, `/documents*`)
   120/min shared, since paging, filtering and opening documents make several calls a minute.
-  Over the ceiling the answer is `429`. The W6 debt (keyed on `getRemoteAddr()`, wrong behind a
-  load balancer) applies to all three.
+  Over the ceiling the answer is `429`. All three key on `getRemoteAddr()`, which is the real
+  client IP in production once `RemoteIpValve` ships (W6, resolved by infra — see *Part A —
+  implementation notes*).
 
 **QA cycle 1 fold-ins (Parts A+B, 2026-11-13).**
 - **PDF without a session (BUG-1).** The portal resolved the main attachment through
@@ -760,3 +805,18 @@ instead of an error. S1: `validate`, `findSentLink` and `renew` enter admin mode
   the kind is unknown) with the notice "El documento de este enlace ya no está disponible…".
 - **Status filter.** `?status=` values are trimmed one by one; empty values are dropped.
 - **Dead MVP copy (BUG-8).** The MVP's invoice-only i18n keys were removed from the three locales.
+
+---
+
+## Still open
+
+Parts A and B are done. This plan stays in `docs/plans/` (not `completed/`) until the items below
+are closed or moved to their own ticket.
+
+| Item | State | Notes |
+|---|---|---|
+| **Part C — accept / reject a quotation from the portal** | **Not built** | The design shows *Aceptar / Rechazar*; ETP-6209 shipped the portal read-only (PO answer 5). The portal has no write besides `POST /renew`, so Part C also needs its own write endpoint, scope check and audit. |
+| **KPI semantics** | **Pending the PO** | The four events of §A.7 ship (`portal.link.sent`, `portal.link.opened`, `portal.link.renewed`, `portal.document.downloaded`, server-only). D-5 took *per send* (`ROOT_LINK_ID`) as the headline unit as proposed; the PO has not yet confirmed the metric definitions — per send vs per document, and whether opens by link scanners that run JS (counted today, §A.7) are filtered. Changing the reading needs no code: the events carry both `ROOT_LINK_ID` and `documentId`. |
+| **Retention / purge job for `ETGO_PORTAL_LINK`** | **Asked of the PO** | Nothing deletes rows today. Pending rows (the email never left) are invalid forever and harmless (§A.2.7); expired rows are kept because **an expired link can be renewed at any age** — there is no maximum. The PO was asked the maximum age after which an expired link should no longer renew; that answer decides both the renewal cut-off and how long rows must be kept. |
+| **Plain-text 500 on the portal PDF route** | Optional cleanup | `GET /sws/portal/documents/{kind}/{id}/pdf` streams through `AnonymousAttachmentStreamer`, whose failure path writes a `text/plain` body (`writePlainError`) — the email download link's format — while every other portal error is JSON. The page only reads the status, so nothing is broken; aligning it would mean a JSON error for the portal caller without changing the email link's answers. |
+| Live check of the PDF on a real organization | To confirm | QA BUG-1 was fixed through the shared streamer; confirm `/pdf` and `hasPdf` live on a tenant whose documents sit in a real (non-`*`) organization. |

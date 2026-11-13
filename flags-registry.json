@@ -416,7 +416,8 @@
           "src/com/etendoerp/go/portal/"
         ]
       },
-      "$pathsComment": "Owned code = the portal feature itself, which is deleted only if the FEATURE is killed. It is NOT deleted when the flag retires: the flag gates one conditional in the email contract, so shipping it unwraps that conditional and leaves every path here in place (same shape as paid-second-tenant, which kept its paths after tenant-upgrade retired). Shared touch points, NOT owned: the sales-invoice email contract, runtime-routes.jsx, GoFeatureFlags, and PropertiesFeatureProvider -- the per-account targeting added there is a platform capability that outlives this flag and must not be removed with it.",
+      "$rateLimitInfraComment": "Review W6 (ETP-6209) is RESOLVED BY INFRA, with no code change -- not a deferred item. PortalRateLimiter keys on HttpServletRequest#getRemoteAddr (30/min GET /me, 30/min POST /renew, 120/min for the data reads /home and /documents*, each its own in-memory counter). Production traffic goes browser -> CloudFront -> ALB -> Tomcat, and infra added RemoteIpValve to the Tomcat image, live from the next production deploy: from then on getRemoteAddr() returns the real client IP and every portal limit is per client (before it, they counted per proxy address). A single etendo-core task runs (two briefly during a deploy), so the in-memory counters are effectively fleet-wide and reset on each deploy; scaling out would make each task count on its own. X-Portal-Token passes through CloudFront and the ALB untouched. Do not add X-Forwarded-For parsing to the portal: the valve is the one trusted place that reads it. Source: docs/plans/2026-11-11-customer-portal-sales-documents.md -- Part A implementation notes, W6.",
+      "$pathsComment": "Owned code = the portal feature itself, which is deleted only if the FEATURE is killed. It is NOT deleted when the flag retires: the flag gates one conditional in the email contract, so shipping it unwraps that conditional and leaves every path here in place (same shape as paid-second-tenant, which kept its paths after tenant-upgrade retired). Shared touch points, NOT owned: the document-send email contracts (DefaultDocumentSendEmailContract and the four sales contracts that declare portalDocumentKind()), the EmailContract#onDelivered hook in TransactionalEmailService, AnonymousAttachmentStreamer (the session-less main-attachment path shared with the email download link, ETP-6209), runtime-routes.jsx, GoFeatureFlags, and PropertiesFeatureProvider -- the per-account targeting added there is a platform capability that outlives this flag and must not be removed with it.",
       "deferredItems": [
         {
           "id": "flag-flip-requires-redeploy",
@@ -462,6 +463,14 @@
           {
             "root": "backend",
             "path": "src-test/src/com/etendoerp/go/schemaforge/email/contracts/PortalLinkRenewalEmailContractTest.java"
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/portal/PortalUsageEventsTest.java"
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/AnonymousAttachmentStreamerTest.java"
           },
           {
             "root": "frontend",
