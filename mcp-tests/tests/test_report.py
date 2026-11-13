@@ -751,20 +751,55 @@ class RoutinesTest(unittest.TestCase):
         self.assertIn("| Task | Rutina | Etendo | Etendo + rutina | Holded |", text)
         self.assertIn("KR2.1 hijo (Etendo + rutina)", text)
 
-    def test_the_child_kr_takes_the_routine_result_only_where_there_is_a_routine(self):
+    def test_the_child_kr_turns_a_lost_task_with_a_routine_into_its_routine_result(self):
+        base = copy.deepcopy(self.base)
         with_routines = copy.deepcopy(self.summary)
+        for row in base["tasks"]:
+            if row["task"] in (self.TASK, "q-product-prices-stock"):
+                row["result"] = "referenceWin"        # both lost without routines
+        base["kr"]["results"] = {**base["kr"]["results"],
+                                 "subjectWin": base["kr"]["results"]["subjectWin"] - 2,
+                                 "referenceWin": base["kr"]["results"]["referenceWin"] + 2}
+        for row in with_routines["tasks"]:
+            if row["task"] in (self.TASK, "q-product-prices-stock"):
+                row["result"] = "subjectWin"          # the rerun won both...
+        view = report.routines_view(base, with_routines)
+        child = view["childKr"]
+        # ...but only the one with a routine changes the child KR.
+        self.assertEqual(child["fromRoutineRun"], [self.TASK])
+        self.assertEqual(child["results"]["subjectWin"], base["kr"]["results"]["subjectWin"] + 1)
+        self.assertEqual(child["results"]["referenceWin"], base["kr"]["results"]["referenceWin"] - 1)
+        self.assertEqual(child["bothPossible"], base["kr"]["bothPossible"])
+        self.assertEqual(child["subjectLabel"], "Etendo + rutina")
+
+    def test_a_routine_never_changes_a_task_the_base_already_won(self):
+        with_routines = copy.deepcopy(self.summary)
+        base = copy.deepcopy(self.base)
+        for row in base["tasks"]:
+            if row["task"] == self.TASK:
+                row["result"] = "subjectWin"
         for row in with_routines["tasks"]:
             if row["task"] == self.TASK:
-                row["result"] = "referenceWin"        # the routine run lost this one
-            elif row["task"] == "q-product-prices-stock":
-                row["result"] = "referenceWin"        # no routine: must stay as in the base
-        view = report.routines_view(self.base, with_routines)
-        child, base = view["childKr"], self.base["kr"]
-        self.assertEqual(child["fromRoutineRun"], [self.TASK])
-        self.assertEqual(child["results"]["subjectWin"], base["results"]["subjectWin"] - 1)
-        self.assertEqual(child["results"]["referenceWin"], base["results"]["referenceWin"] + 1)
-        self.assertEqual(child["bothPossible"], base["bothPossible"])
-        self.assertEqual(child["subjectLabel"], "Etendo + rutina")
+                row["result"] = "referenceWin"
+        view = report.routines_view(base, with_routines)
+        self.assertEqual(view["childKr"]["fromRoutineRun"], [])
+        self.assertEqual(view["childKr"]["results"]["subjectWin"], base["kr"]["results"]["subjectWin"])
+
+    def test_the_reruns_are_the_lost_tasks_that_have_a_routine(self):
+        suite = Path(tempfile.mkdtemp()) / "s.yaml"
+        block = ("      etendo-go:\n        expectAnswer: [{ text: ok }]\nROUTINE"
+                 "      holded:\n        expectAnswer: [{ text: ok }]\n")
+        routine = ("        routine: {name: r, description: d, "
+                   "steps: [{id: a, tool: etendo_list, args: {}}]}\n")
+        probes = ""
+        for task, with_routine in (("e-unknown-document", True), ("q-product-prices-stock", True),
+                                   ("f-process-sales-order", False)):
+            probes += (f"  - id: {task}\n    category: query\n    prompt: hola\n    platforms:\n"
+                       + block.replace("ROUTINE", routine if with_routine else ""))
+        suite.write_text("schemaVersion: 2\nwindow: w\nprobes:\n" + probes)
+        # e-unknown-document: lost, with a routine. q-product-prices-stock: won. f-process-sales-order:
+        # won, no routine.
+        self.assertEqual(report.routine_reruns(self.base, suite), ["e-unknown-document"])
 
     def test_the_view_refuses_runs_in_the_wrong_order(self):
         with self.assertRaises(ValueError):
@@ -803,6 +838,13 @@ class MakeTargetsTest(unittest.TestCase):
                 done = self._make(*argv)
                 self.assertNotEqual(done.returncode, 0)
                 self.assertIn("BASE and WITH are required", done.stdout)
+
+    def test_mcp_compare_routines_needs_the_base_and_targets(self):
+        for argv in (("mcp-compare-routines",), ("mcp-compare-routines", "BASE=x")):
+            with self.subTest(argv=argv):
+                done = self._make(*argv)
+                self.assertNotEqual(done.returncode, 0)
+                self.assertIn("BASE and TARGETS are required", done.stdout)
 
     def test_mcp_seed_needs_an_explicit_target(self):
         # `TARGET ?= local` serves mcp-test/mcp-login; seeding writes, so it must be named.

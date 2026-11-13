@@ -193,7 +193,7 @@ After the tables are created, run `./gradlew export.database` in the Etendo root
 | P2 | Failure semantics | Commit step by step; report completed and pending steps |
 | P3/P6 | Visibility and ownership | Personal routines; only the owner sees and changes them |
 | P4 | Discovery | Through `list`, with a reminder message. Reconfirmed 2026-11-12 after a pilot where the agent never called `list` (2 of 2 attempts): the routines column measures whether the agent finds them on its own; no routine names in `tools/list` (a client caches it until it reconnects) nor in other answers |
-| P5 | Benchmark column | Child KR of KR2.1: the result with the routine for the tasks that have one, the KR2.1 result for the rest. The prompt of a task with a routine ends with the hint "Tenés una rutina guardada para esto: revisá tus rutinas." (2026-11-13) |
+| P5 | Benchmark column | Child KR of KR2.1 ("how far do routines take us"): the KR2.1 with every task Etendo lost that has a routine replaced by its result with the routine; only those tasks are run again (`make mcp-compare-routines`). The prompt of a task with a routine ends with the hint "Tenés una rutina guardada para esto: revisá tus rutinas." (2026-11-13) |
 | P7 | Updates | Version history; older versions can run |
 | P8 | Response | `executionId`; `returnResult` per step, last step by default; `mode:"execution"` reads it all |
 | P9 | `etendo_batch` | Unchanged |
