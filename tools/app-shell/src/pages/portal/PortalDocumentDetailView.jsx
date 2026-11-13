@@ -188,7 +188,7 @@ export default function PortalDocumentDetailView({
         {/* Left pane: the printable, or the data sheet when there is none */}
         <section
           aria-label={ui('portalPreviewLabel')}
-          className="relative hidden min-w-0 flex-1 overflow-y-auto bg-muted md:flex md:flex-col"
+          className="relative hidden min-w-0 flex-1 overflow-y-auto bg-[hsl(var(--border-subtle))] md:flex md:flex-col"
           data-testid="portal-document-preview"
         >
           {showSheet ? (
@@ -268,48 +268,50 @@ function DesktopHeader({ title, breadcrumb, plural, onBack }) {
   );
 }
 
-/** The page card's default width in the design's preview (Documento: a moderate, centred page). */
-const PREVIEW_PAGE_WIDTH = 720;
+/**
+ * The page card's widest default width. Readable width, not fit-to-page: a real A4 page fitted
+ * to the visible height comes out about 590 px wide on a 960 px tall screen, its 9 pt body text at
+ * about 7 px. At 900 px that text renders at about 13–14 px, the design's text size; the rest of
+ * the page and the next pages scroll.
+ */
+const PREVIEW_PAGE_WIDTH = 900;
 /** Grey canvas around the page, on every side. */
 const PREVIEW_GUTTER = 20;
-/** Portrait A4, height / width: the first page's assumed shape for fit-to-page. */
-const A4_ASPECT = 842 / 595;
 /** `PdfViewer` fits the page to its box ("width" mode); the box carries the size. */
 const FIT_BOX_ZOOM = Object.freeze({ scale: 1, fitMode: 'width' });
 
 /**
  * The printable in the app's PDF viewer (`PdfViewer`, as the invoice and file previews use it),
- * laid out as the design's preview pane: a grey canvas with the page as a centred white card, and
- * the three controls — zoom in, full screen (the app's `FileLightbox`), zoom out — on the page's
- * top-right corner.
+ * laid out as the design's preview pane: a grey canvas (`--border-subtle`, one step darker than
+ * the app background, as the design's) with the page as a centred white card, and the three
+ * controls — zoom in, full screen (the app's `FileLightbox`), zoom out — on the page's top-right
+ * corner. They stay in place while the page scrolls: the scroll happens inside `PdfViewer`, under
+ * them.
  *
  * The page's width is computed here and handed to `PdfViewer` as the width of its box: by default
- * the first page fits the visible height (fit-to-page) and is never wider than
- * {@link PREVIEW_PAGE_WIDTH} nor than the pane minus its gutters, so on a narrow pane it fits the
- * width; `usePdfZoom`'s scale multiplies that default. No CSS transform: the PDF is rendered at
- * the size shown.
+ * the readable width, {@link PREVIEW_PAGE_WIDTH} or the pane minus its gutters when narrower; the
+ * rest of the page and the next pages scroll vertically. `usePdfZoom`'s scale multiplies that
+ * default. No CSS transform: the PDF is rendered at the size shown.
  */
 function PortalPdfPreview({ url, onFullScreen }) {
   const ui = useUI();
-  const zoom = usePdfZoom({ initialFitMode: 'page' });
+  const zoom = usePdfZoom();
   const paneRef = useRef(null);
-  const [pane, setPane] = useState({ width: 0, height: 0 });
+  const [pane, setPane] = useState({ width: 0 });
 
   useEffect(() => {
     const element = paneRef.current;
     if (!element) return undefined;
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        setPane({ width: entry.contentRect.width, height: entry.contentRect.height });
+        setPane({ width: entry.contentRect.width });
       }
     });
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
 
-  const fitWidth = Math.max(pane.width - 2 * PREVIEW_GUTTER, 0);
-  const fitHeight = Math.max(pane.height - 2 * PREVIEW_GUTTER, 0) / A4_ASPECT;
-  const baseWidth = Math.min(PREVIEW_PAGE_WIDTH, fitWidth, fitHeight || fitWidth);
+  const baseWidth = Math.min(PREVIEW_PAGE_WIDTH, Math.max(pane.width - 2 * PREVIEW_GUTTER, 0));
   const pageWidth = Math.round(baseWidth * zoom.scale);
   const control = 'flex h-8 w-8 items-center justify-center text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40';
 

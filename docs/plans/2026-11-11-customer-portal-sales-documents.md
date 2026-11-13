@@ -780,10 +780,13 @@ mobile headers, as the boards do; the shell is only the sidebar and the bottom b
   <Tipo> / <Nº>". Left pane: **the real printable** — the main attachment, the very file the email
   links to (§B.7) — in the app's `PdfViewer` with the board's three controls (zoom in, full screen
   through the app's `FileLightbox`, zoom out) on the page's top-right corner; the blob is still
-  rebuilt as `application/pdf` (N-d). The page is a centred white card on the grey canvas: by
-  default the first page fits the visible height, never wider than 720 px nor than the pane minus
-  its 20 px gutters (so a narrow pane fits the width), and zoom scales that default — the size is
-  handed to `PdfViewer`, no CSS transform.
+  rebuilt as `application/pdf` (N-d). The page is a centred white card on a canvas one step darker than
+  the app background (`--border-subtle`, as the design's): by default it takes the readable width —
+  900 px, or the pane minus its 20 px gutters when narrower — and the rest of the page and the next
+  pages scroll under the controls, which stay put. Fit-to-page was tried and dropped: a real A4 page
+  fitted to a 960 px tall screen is about 590 px wide and its body text about 7 px (the design's
+  page is an HTML mock with no A4 blank space). Zoom scales the default; the size is handed to
+  `PdfViewer`, no CSS transform.
   Only when the document has no printable (or it fails to load) does the pane show a sheet drawn
   from the data, under "PDF no disponible". Right pane: title + "Emitido por <organización>",
   "Descargar PDF", the summary card (Total; Fecha, Válido hasta, Estado, Base imponible, Impuestos —
