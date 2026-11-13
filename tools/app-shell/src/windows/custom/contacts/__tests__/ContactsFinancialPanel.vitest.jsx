@@ -29,6 +29,15 @@ vi.mock('../BillingPreferencesForm', () => ({
 vi.mock('../FiscalDefaultsSection', () => ({
   default: () => <div data-testid="fiscal-defaults-section" />,
 }));
+vi.mock('../SepaMandateSection', () => ({
+  default: (props) => (
+    <div
+      data-testid="sepa-mandate-section"
+      data-readonly={String(props.readOnly)}
+      data-has-onchange={String(typeof props.onChange === 'function')}
+      data-customer={String(props.data?.customer)} />
+  ),
+}));
 
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -139,6 +148,16 @@ describe('ContactsFinancialPanel', () => {
   it('renders the fiscal defaults section', () => {
     render(<ContactsFinancialPanel {...defaultProps} />);
     expect(screen.getByTestId('fiscal-defaults-section')).toBeInTheDocument();
+  });
+
+  // ETP-6148 — the SEPA mandate section rides the panel's onChange and edit state, like the
+  // fiscal defaults; its own visibility rule is covered in SepaMandateSection.vitest.jsx.
+  it.each([[false, 'true'], [true, 'false']])('renders the SEPA mandate section with editing=%s as readOnly=%s', (editing, readOnly) => {
+    render(<ContactsFinancialPanel {...defaultProps} data={{ ...defaultProps.data, customer: true }} editing={editing} />);
+    const section = screen.getByTestId('sepa-mandate-section');
+    expect(section).toHaveAttribute('data-readonly', readOnly);
+    expect(section).toHaveAttribute('data-has-onchange', 'true');
+    expect(section).toHaveAttribute('data-customer', 'true');
   });
 
   // The fiscal defaults section draws its own divider (it may render nothing at all when no SIF

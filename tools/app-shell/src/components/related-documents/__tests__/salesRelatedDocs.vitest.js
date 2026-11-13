@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/components/related-documents/salesRelatedDocs.js
+// @covers tools/app-shell/src/components/related-documents/relatedSources.js
 // ETP-5527 — SALES_RELATED_DOCS is the single definition behind both the form's
 // "Related documents" section and the list preview card. These tests resolve each
 // definition against a fake backend (the helpers are mocked by their exact arguments,
@@ -154,21 +155,39 @@ describe('SALES_RELATED_DOCS — resolved chips per spec', () => {
       expected: ['sales-invoice:i-origin', 'sales-invoice:i-rectifying'],
     },
     {
-      // ETP-6002 (IMP-3): the quotation lists the shipments whose lines point at its lines.
-      name: 'sales-quotation: its shipments and returns from linkedShipments',
+      // ETP-6002 CP-14 (QA criterion): a quotation never lists a shipment or a return, even when
+      // the record still carries `linkedShipments` (an older backend injected it).
+      name: 'sales-quotation: no shipment, return nor rectificative chip, only its orders and invoices',
       spec: 'sales-quotation',
       record: { id: 'q1', linkedShipments: [{ id: 's1', isReturn: false }, { id: 'r1', isReturn: true }] },
-      backend: {},
-      expected: ['shipment:s1', 'return-material-receipt:r1'],
+      backend: {
+        listInvoices: {
+          'sales-quotation/quotation/q1': [{ id: 'i1', isRectificative: false }, { id: 'ir', isRectificative: true }],
+        },
+      },
+      expected: ['sales-invoice:i1'],
     },
     {
-      // ETP-6002 (IMP-3): a quotation among the shipment's linkedOrders is a quotation chip.
-      // An entry with no flag at all (the handler only sets it on quotations) stays an order.
-      name: 'goods-shipment: a linked quotation renders as sales-quotation, an order (flag false or absent) as sales-order',
+      // ETP-6002 (QA criterion): a Pedido never lists a factura rectificativa; a row without the
+      // flag (an older backend) is kept.
+      name: 'sales-order: a rectificative from listInvoices is left out',
+      spec: 'sales-order',
+      record: { id: 'o1' },
+      backend: {
+        listInvoices: {
+          'sales-order/header/o1': [{ id: 'i1', isRectificative: false }, { id: 'ir', isRectificative: true }, { id: 'i2' }],
+        },
+      },
+      expected: ['sales-invoice:i1', 'sales-invoice:i2'],
+    },
+    {
+      // ETP-6002 CP-14: a shipment's linkedOrders are orders; a leftover `isQuotation` flag (an
+      // older backend sent it) no longer turns an entry into a quotation chip.
+      name: 'goods-shipment: every linkedOrders entry is a sales-order chip',
       spec: 'goods-shipment',
-      record: { id: 's1', linkedOrders: [{ id: 'q1', isQuotation: true }, { id: 'o1', isQuotation: false }, { id: 'o2' }] },
+      record: { id: 's1', linkedOrders: [{ id: 'q1', isQuotation: true }, { id: 'o1' }] },
       backend: {},
-      expected: ['sales-quotation:q1', 'sales-order:o1', 'sales-order:o2'],
+      expected: ['sales-order:q1', 'sales-order:o1'],
     },
     {
       name: 'goods-shipment: read from the detail record only',

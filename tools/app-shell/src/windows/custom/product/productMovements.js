@@ -6,8 +6,21 @@ import { getDateBounds, toDateParam } from '@/lib/dateRangeBounds.js';
 
 export const MOVEMENTS_PAGE_SIZE = 50;
 
-// The design opens on the last 7 days.
+// Request parameter carrying the order of the type buckets (contract: neo-headless.md §5.3.4.a).
+export const TYPE_ORDER_PARAM = 'typeLabelOrder';
+
+// The designer's final call (ETP-5889) opens on the last 7 days (the 30-day default was reverted). The side
+// panel keeps its own 12-month window; "Ver movimientos" still prefilters the period it was opened with.
 export const DEFAULT_MOVEMENTS_PERIOD = Object.freeze({ presetId: 'last7' });
+
+// Minimum height (px) of the movements table box. The box takes the room left below it, never less than
+// this: when that room is smaller the whole form column scrolls and the table keeps this height. Shared by
+// the tab (inline minHeight) and the `useRemainingHeight` default so the two cannot drift apart.
+export const MOVEMENTS_TABLE_MIN_HEIGHT = 340;
+
+// Opt-in query parameter: the backend answers `response.totals` ({ netQuantity, count }) over ALL the records
+// matching the filters. Only the first page of a view asks for it.
+export const TOTALS_PARAM = 'etgoTotals';
 
 // Sortable columns -> backend column. The foreign key is sorted by its identifier (the warehouse name),
 // not by its id; every other key is a physical column of M_Transaction, so the backend can order by it.
@@ -79,7 +92,7 @@ function prefixed(sortBy) {
 }
 
 /** Path + query string of one page of the product's transactions (`start` is the first row, 0-based). */
-export function buildMovementsQuery({ productId, filters = {}, sort = MOVEMENTS_DEFAULT_SORT, start = 0, pageSize = MOVEMENTS_PAGE_SIZE }) {
+export function buildMovementsQuery({ productId, filters = {}, sort = MOVEMENTS_DEFAULT_SORT, start = 0, pageSize = MOVEMENTS_PAGE_SIZE, typeOrder = null, withTotals = false }) {
   // An unknown column falls back to the default sort, tie-breakers included.
   const sortKey = isMovementsSortKey(sort?.key) ? sort.key : MOVEMENTS_DEFAULT_SORT.key;
   const column = SORT_COLUMNS[sortKey];
@@ -87,58 +100,150 @@ export function buildMovementsQuery({ productId, filters = {}, sort = MOVEMENTS_
   params.append('parentId', productId);
   const direction = sort?.direction ?? MOVEMENTS_DEFAULT_SORT.direction;
   params.append('_sortBy', [prefixed(resolveBackendSort(column, direction)), ...tieBreakers(sortKey, direction)].join(','));
+  // The Type column is sorted by what the user reads (the translated label), which no column holds: the
+  // order of the label buckets in the active language travels with the sort, the backend ranks by it. A
+  // backend that does not know the parameter ignores it and keeps ordering by the stored code.
+  if (sortKey === 'type' && typeOrder) params.append(TYPE_ORDER_PARAM, typeOrder);
   params.append('_startRow', String(start));
   params.append('_endRow', String(start + pageSize - 1));
   const criteria = buildMovementsCriteria(filters);
   if (criteria.length) params.append('criteria', JSON.stringify(criteria));
+  // Totals only ride on the first page: later pages and the one-record probe never ask for them.
+  if (withTotals && start === 0) params.append(TOTALS_PARAM, 'true');
   return `/transactions?${params.toString()}`;
 }
 
-// Source-document kind -> label key. A return keeps the base movement type and is told apart by the
-// IsReturn flag of its document type; the backend resolves that into `etgoDocKind`.
-const KIND_LABELS = {
-  'goods-receipt': 'productMovementsTypeVendorReceipt',
-  'return-to-vendor-shipment': 'movTypeVendorReturn',
-  'goods-shipment': 'productMovementsTypeCustomerShipment',
-  'return-material-receipt': 'movTypeCustomerReturn',
-  'goods-movements': 'productMovementsTypeTransfer',
+/**
+ * The period totals of a list response: `{ netQuantity, count }`, or null when the backend did not send
+ * them (older backend, flag off, aggregate failure) or sent something unusable. Strict on purpose: a
+ * partial or non-numeric answer must hide the total row, never show a wrong sum.
+ */
+export function extractMovementTotals(json) {
+  const totals = json?.response?.totals ?? json?.totals;
+  const { netQuantity, count } = totals ?? {};
+  if (typeof netQuantity !== 'number' || !Number.isFinite(netQuantity)) return null;
+  if (typeof count !== 'number' || !Number.isInteger(count) || count < 0) return null;
+  return { netQuantity, count };
+}
+
+/** True when the filters (period, direction, warehouse) leave the product's movements untouched. */
+export function isUnfilteredMovements(filters = {}) {
+  return buildMovementsCriteria(filters).length === 0;
+}
+
+/** Path + query string of the probe: ONE record of the product, no period/direction/warehouse criteria. */
+export function buildAnyMovementQuery({ productId, sort = MOVEMENTS_DEFAULT_SORT }) {
+  return buildMovementsQuery({ productId, filters: {}, sort, start: 0, pageSize: 1 });
+}
+
+/**
+ * Which empty state an empty page deserves.
+ *  - 'none'      the product has no movement at all (the design's empty state);
+ *  - 'filtered'  it has movements, the filters match none of them;
+ *  - 'checking'  the probe is still in flight (nothing is shown yet).
+ * `probe` is the answer of the probe: 'any', 'none', 'failed' or absent. A failed probe falls back to 'filtered'.
+ */
+export function resolveMovementsEmptyKind({ filters, probe }) {
+  if (isUnfilteredMovements(filters)) return 'none';
+  if (probe === 'none') return 'none';
+  if (probe === 'any' || probe === 'failed') return 'filtered';
+  return 'checking';
+}
+
+// The visible type of a movement is one of eight BUCKETS, one per distinct label. The rule that picks it is
+// mirrored in SQL by `ProductMovementTypeOrder#bucketCase` (com.etendoerp.go), which ranks rows for the Type
+// sort; both are covered by the same table of cases (BUCKET_CASES in productMovements.vitest.js and
+// ProductTransactionsHandlerTest), so a change to the rule has to change both sides and both tests.
+export const MOVEMENT_BUCKETS = Object.freeze([
+  'vendor-receipt', 'vendor-return', 'customer-shipment', 'customer-return',
+  'transfer', 'internal-consumption', 'inventory-in', 'inventory-out',
+]);
+
+const BUCKET_LABELS = {
+  'vendor-receipt': 'productMovementsTypeVendorReceipt',
+  'vendor-return': 'movTypeVendorReturn',
+  'customer-shipment': 'productMovementsTypeCustomerShipment',
+  'customer-return': 'movTypeCustomerReturn',
+  transfer: 'productMovementsTypeTransfer',
   'internal-consumption': 'movTypeInternalConsumption',
+  'inventory-in': 'productMovementsTypeInventoryIn',
+  'inventory-out': 'productMovementsTypeInventoryOut',
+};
+
+// Source-document kind -> bucket. A return keeps the base movement type and is told apart by the
+// IsReturn flag of its document type; the backend resolves that into `etgoDocKind`.
+const KIND_BUCKETS = {
+  'goods-receipt': 'vendor-receipt',
+  'return-to-vendor-shipment': 'vendor-return',
+  'goods-shipment': 'customer-shipment',
+  'return-material-receipt': 'customer-return',
+  'goods-movements': 'transfer',
+  'internal-consumption': 'internal-consumption',
 };
 
 // Rows with no document kind (production, work orders) fall back to the movement type code.
-const CODE_LABELS = {
-  'V+': 'productMovementsTypeVendorReceipt',
-  'V-': 'movTypeVendorReturn',
-  'C-': 'productMovementsTypeCustomerShipment',
-  'C+': 'movTypeCustomerReturn',
-  'I+': 'productMovementsTypeInventoryIn',
-  'I-': 'productMovementsTypeInventoryOut',
-  'M+': 'productMovementsTypeTransfer',
-  'M-': 'productMovementsTypeTransfer',
-  'D+': 'movTypeInternalConsumption',
-  'D-': 'movTypeInternalConsumption',
+const CODE_BUCKETS = {
+  'V+': 'vendor-receipt',
+  'V-': 'vendor-return',
+  'C-': 'customer-shipment',
+  'C+': 'customer-return',
+  'I+': 'inventory-in',
+  'I-': 'inventory-out',
+  'M+': 'transfer',
+  'M-': 'transfer',
+  'D+': 'internal-consumption',
+  'D-': 'internal-consumption',
 };
 
 /**
+ * The bucket (the visible type) of a transaction row, or null when nothing maps. The sign of the quantity
+ * corrects a purchase receipt or sales shipment that moved the other way (a vendor return, a customer
+ * return) and splits a physical inventory into in / out.
+ */
+export function resolveMovementBucket(row) {
+  const quantity = Number(row?.movementQuantity);
+  const kind = row?.etgoDocKind ?? null;
+
+  let bucket = kind ? KIND_BUCKETS[kind] ?? null : null;
+  if (kind === 'goods-receipt' && quantity < 0) bucket = 'vendor-return';
+  if (kind === 'goods-shipment' && quantity > 0) bucket = 'customer-return';
+  if (kind === 'physical-inventory') bucket = quantity < 0 ? 'inventory-out' : 'inventory-in';
+  return bucket ?? CODE_BUCKETS[row?.movementType] ?? null;
+}
+
+/**
  * Label key and colour of a transaction. The sign decides the colour (green in, orange out) except for
- * a transfer between warehouses, which is neutral. The sign also corrects the label of a purchase
- * receipt or sales shipment that moved the other way (a vendor return, a customer return).
+ * a transfer between warehouses, which is neutral.
  *
  * @returns {{ labelKey: string|null, tone: 'in'|'out'|'neutral' }} `labelKey` is null when nothing maps
  */
 export function resolveMovementType(row) {
-  const quantity = Number(row?.movementQuantity);
-  const kind = row?.etgoDocKind ?? null;
-  const direction = quantityTone(quantity);
-
-  let labelKey = kind ? KIND_LABELS[kind] ?? null : null;
-  if (kind === 'goods-receipt' && quantity < 0) labelKey = KIND_LABELS['return-to-vendor-shipment'];
-  if (kind === 'goods-shipment' && quantity > 0) labelKey = KIND_LABELS['return-material-receipt'];
-  if (kind === 'physical-inventory') labelKey = quantity < 0 ? 'productMovementsTypeInventoryOut' : 'productMovementsTypeInventoryIn';
-  if (!labelKey) labelKey = CODE_LABELS[row?.movementType] ?? null;
-
-  const tone = labelKey === 'productMovementsTypeTransfer' ? 'neutral' : direction;
+  const bucket = resolveMovementBucket(row);
+  const labelKey = bucket ? BUCKET_LABELS[bucket] : null;
+  const tone = bucket === 'transfer' ? 'neutral' : quantityTone(Number(row?.movementQuantity));
   return { labelKey, tone };
+}
+
+// `es_ES` (the app's locale code) -> `es-ES` (BCP 47). An unusable code falls back to the default collation.
+const toLanguageTag = (locale) => String(locale ?? '').replace('_', '-') || undefined;
+
+/**
+ * The bucket ids sorted alphabetically by their visible label in the active language, comma-separated
+ * (the value of `typeLabelOrder`). `translate` is the UI dictionary lookup (`useUI()`), `locale` the app
+ * locale code, so the order is the one the user sees in that language and changes with it.
+ */
+export function buildTypeLabelOrder(translate, locale) {
+  let collator;
+  try {
+    collator = new Intl.Collator(toLanguageTag(locale));
+  } catch {
+    collator = new Intl.Collator();
+  }
+  return MOVEMENT_BUCKETS
+    .map((bucket, index) => ({ bucket, index, label: String(translate(BUCKET_LABELS[bucket]) ?? '') }))
+    .sort((a, b) => collator.compare(a.label, b.label) || a.index - b.index)
+    .map(({ bucket }) => bucket)
+    .join(',');
 }
 
 /** Colour of a quantity by its sign: green in, orange out, neutral for zero or not a number. */

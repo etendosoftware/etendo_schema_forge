@@ -41,14 +41,8 @@ import { fetchByCriteria, fetchById } from './helpers.js';
 import {
   criteriaSource,
   listInvoicesSource,
-  selectSource,
-  originInvoicesSource,
-  originInvoicesDepsKey,
   invoiceOrdersFetch,
-  invoiceOrdersDepsKey,
-  movementDefinition,
-  returnDefinition,
-  idsOf,
+  invoiceFlowDefinitions,
 } from './relatedSources.js';
 
 /**
@@ -90,12 +84,10 @@ export const SALES_RELATED_DOCS = {
     refreshEvent: 'sales-quotation:document-created',
     sources: [
       criteriaSource('orders', 'sales-order', 'sales-order', 'header', 'quotation'),
-      listInvoicesSource('invoices', 'sales-invoice', 'sales-quotation', 'quotation'),
-      // ETP-6002 (IMP-3): shipments whose own lines point at this quotation's lines — a shipment
-      // made from an invoice that came straight from the quotation. Injected on the detail GET by
-      // SalesQuotationHeaderHandler (QuotationShipmentLinks); a direct line link only, never
-      // deduced through invoices. The mirror of the shipment's quotation chip below.
-      selectSource('shipments', doc => (doc.isReturn === true ? 'return-material-receipt' : 'shipment'), 'linkedShipments'),
+      listInvoicesSource('invoices', 'sales-invoice', 'sales-quotation', 'quotation', { excludeRectificatives: true }),
+      // ETP-6002 CP-14 (QA criterion): a quotation's direct relations are its orders and invoices
+      // only. A shipment made from an invoice that came straight from the quotation relates to that
+      // invoice, never to the quotation, so there is no shipment / return source here.
     ],
   },
 
@@ -108,63 +100,40 @@ export const SALES_RELATED_DOCS = {
     sources: [
       { key: 'quotation', type: 'sales-quotation', fetch: fetchSourceQuotation },
       criteriaSource('shipments', 'shipment', 'goods-shipment', 'goodsShipment', 'salesOrder'),
-      listInvoicesSource('invoices', 'sales-invoice', 'sales-order', 'header'),
+      // ETP-6002: a Pedido never lists a factura rectificativa (QA criterion).
+      listInvoicesSource('invoices', 'sales-invoice', 'sales-order', 'header', { excludeRectificatives: true }),
     ],
   },
 
-  'sales-invoice': {
-    spec: 'sales-invoice',
-    entity: 'header',
-    // ETP-5576 — dispatched by the follow-up flow (useFollowUpDocuments) after it creates
-    // the shipment; the record re-read that follows also refreshes `linkedShipments`.
+  // The invoice, the goods shipment and the customer return (the flow shared with purchases):
+  // - the invoice's origin is every order its lines come from (`linkedOrders`, ETP-5828), plus the
+  //   header origin (order or quotation) when it is not one of them; its shipments are resolved
+  //   server-side (SalesInvoiceHeaderHandler#enrichLinkedShipments) from each invoice line's own
+  //   M_InOutLine_ID, deliveries and customer returns alike. ETP-5576: the follow-up flow
+  //   (useFollowUpDocuments) dispatches the refresh event after it creates the shipment.
+  // - the shipment's lists are injected by GoodsShipmentHeaderHandler on the detail GET; ETP-6002
+  //   CP-14: `linkedOrders` never holds a quotation (DocSubTypeSO = 'OB' is left out), so every
+  //   entry is an order chip.
+  // - the customer return's lists are injected by ReturnMaterialReceiptHeaderHandler.
+  ...invoiceFlowDefinitions({
+    invoiceSpec: 'sales-invoice',
     refreshEvent: 'sales-invoice:document-created',
-    depsKey: record => [
-      invoiceOrdersDepsKey(record),
-      originInvoicesDepsKey(record),
-      idsOf(record?.rectifyingInvoices),
-    ].join('|'),
-    sources: [
-      {
-        // ETP-5828: every order the invoice's lines come from (`linkedOrders`), plus the
-        // header origin (order or quotation) when it is not one of them.
-        key: 'origin',
-        type: doc => (doc._isQuotation || doc.isQuotation === true ? 'sales-quotation' : 'sales-order'),
-        fetch: invoiceOrdersFetch(fetchInvoiceOrigin),
-      },
-      // Resolved server-side (SalesInvoiceHeaderHandler#enrichLinkedShipments) from each
-      // invoice line's own M_InOutLine_ID: normal deliveries AND customer returns, told
-      // apart by `isReturn` (ETP-4534). Never derived from `salesOrder`.
-      selectSource('shipments', doc => (doc.isReturn === true ? 'return-material-receipt' : 'shipment'), 'linkedShipments'),
-      // What this rectificative rectifies: its C_Invoice_Reverse links (`originInvoices`).
-      originInvoicesSource('sales-invoice'),
-      // The mirror of originInvoicesSource: the rectificativa(s) that rectify THIS invoice
-      // (SalesInvoiceHeaderHandler#enrichRectifyingInvoices, ETP-5745 CP-12). Without this, the
-      // ORIGINAL invoice never showed its own rectifications here — only a rectificativa could
-      // show what it rectifies, via originInvoicesSource above.
-      selectSource('rectifyingInvoices', 'sales-invoice', 'rectifyingInvoices'),
-    ],
-  },
-
-  // Injected by GoodsShipmentHeaderHandler on the detail GET.
-  'goods-shipment': movementDefinition({
-    spec: 'goods-shipment',
-    entity: 'goodsShipment',
-    // ETP-6002 (IMP-3): `linkedOrders` may hold a QUOTATION (a shipment made from an invoice that
-    // came straight from it); GoodsShipmentHeaderHandler flags it with `isQuotation`
-    // (DocSubTypeSO = 'OB'), so it renders as a quotation chip, not as "Pedido".
-    orderType: doc => (doc.isQuotation === true ? 'sales-quotation' : 'sales-order'),
-    invoiceType: 'sales-invoice',
-    returnType: 'return-material-receipt',
+    orderSource: {
+      key: 'origin',
+      type: doc => (doc._isQuotation || doc.isQuotation === true ? 'sales-quotation' : 'sales-order'),
+      fetch: invoiceOrdersFetch(fetchInvoiceOrigin),
+    },
+    movementsKey: 'shipments',
+    movementsField: 'linkedShipments',
+    movementChip: 'shipment',
+    returnChip: 'return-material-receipt',
+    movementSpec: 'goods-shipment',
+    movementEntity: 'goodsShipment',
+    orderType: 'sales-order',
     returnsField: 'returnReceipts',
-  }),
-
-  // Injected by ReturnMaterialReceiptHeaderHandler (list and detail GET).
-  'return-material-receipt': returnDefinition({
-    spec: 'return-material-receipt',
-    entity: 'returnMaterialReceipt',
-    sourceField: 'sourceShipments',
-    sourceType: 'shipment',
-    invoiceType: 'sales-invoice',
+    returnSpec: 'return-material-receipt',
+    returnEntity: 'returnMaterialReceipt',
+    returnSourceField: 'sourceShipments',
   }),
 };
 

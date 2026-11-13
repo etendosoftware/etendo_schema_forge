@@ -1,7 +1,7 @@
 # Invoice Inbox
 
 "Bandeja de facturas" in Spanish. Epic ETP-6046; this guide covers ETP-6049 (list, upload and
-discard).
+discard) and slice S1 of ETP-6050 (the read-only review panel).
 Backend: ETP-6047 (table, flag, upload endpoint) and ETP-6048 (background reading) in
 `com.etendoerp.go`, `docs/neo-headless.md` §4.6b.
 
@@ -15,8 +15,8 @@ rows that are still being read. A document that is not wanted is discarded: it m
 "Descartadas", read-only, and nothing is created in Etendo.
 
 Not in this story:
-- opening a document (review panel, edit, "Mark as reviewed") — ETP-6050. A row click does nothing
-  and the row's Edit (pencil) is shown inert ("Próximamente");
+- editing a document, resolving suppliers and products, "Mark as reviewed" — ETP-6050 slices S2 / S3.
+  S1 only OPENS the panel (read only): see "Review panel (ETP-6050, S1)";
 - Confirm, single and batch — ETP-6051. The batch bar shows Confirm disabled and the row's kebab is
   shown inert ("Próximamente");
 - "Mark for review" batch action — logic not in this story. The button is in the batch bar, shown
@@ -42,7 +42,7 @@ Two independent axes, both required, checked by the menu AND by the page:
   evaluator, for the capability and for the upload endpoint (`docs/feature-flags.md`, backend-only flags).
 - The capability is NOT access control, but the API is gated too (ETP-6049): with the flag off the
   read of the spec (`GET /sws/neo/invoice-inbox/header`, list and by id, and MCP `etendo_list` /
-  `etendo_get`), the upload and the `discard` action all refuse with `403 feature_disabled`
+  `etendo_get`), the upload, the `discard` action and the review read all refuse with `403 feature_disabled`
   (`InvoiceInboxHeaderHandler`).
 - Roles: Compras and Financiero get the window through their template grant
   (`TemplateRoleWindowAccess`); admins through the admin bypass of `SFWindowAccessMap`; automatic roles
@@ -75,6 +75,13 @@ Two independent axes, both required, checked by the menu AND by the page:
   (no body), served by `InvoiceInboxHeaderHandler` (`@NeoExtension`). Actions are not gated by the
   spec's methods, so the spec stays read-only. It is kept for people only: MCP `etendo_action`
   answers 405 for it (`agentExcludedActions`) until it is exposed together with Confirm (ETP-6051).
+- The review panel reads one document through the NEO **GET action**
+  `GET /sws/neo/invoice-inbox/header/{id}/action/review` (ETP-6050; `fetchReview` in
+  `invoiceInboxApi.js`, always through `apiFetch`): the document (`CURRENT_DATA` v1 plus the review
+  enrichment), its recomputed validation, `status`, `reviewed`, `adjusted`, `updated`, `editable`,
+  the currency and the invoice identifier. A document still being read answers 409
+  `processing`. `currentData` / `extractedData` stay `discarded` in the spec: they never travel in
+  the list.
 - The upload is a NEO built-in endpoint (`POST /sws/neo/invoice-inbox/upload`), dispatched before the
   spec router; the read-only spec does not affect it.
 - `apiBaseUrl` of the window is the spec (`/sws/neo/invoice-inbox`): the list is `apiFetch('/header?…')`,
@@ -82,9 +89,9 @@ Two independent axes, both required, checked by the menu AND by the page:
   call goes through `useApiFetch`.
 - Row keys used: `fileName`, `source`, `created` (reception timestamp; there is no `creationDate`
   key), `businessPartner` + `businessPartner$_identifier` + `businessPartner$taxID`
-  (`_extraProperties=businessPartner.taxID`), `extractedName`, `extractedTaxID`, `orderReference`,
-  `invoiceDate` (date-only), `grandTotalAmount`, `status`, `errorCode`, `duplicateOfInvoice`
-  (+ `$_identifier`), `discardedAt` (timestamp; served in the list as a `readOnly` field).
+  (`_extraProperties=businessPartner.taxID,invoice.documentNo,duplicateOfInvoice.documentNo`), `extractedName`, `extractedTaxID`, `orderReference`,
+  `invoiceDate` (date-only), `grandTotalAmount`, `status`, `errorCode`, `invoice$documentNo` (+ `invoice$_identifier` as fallback), `duplicateOfInvoice`
+  (+ `duplicateOfInvoice$documentNo`, `$_identifier` as fallback), `discardedAt` (timestamp; served in the list as a `readOnly` field).
 - Columns are real AD columns (`File_Name`, `C_BPartner_ID`, `POReference`, `DateInvoiced`,
   `GrandTotal`, `Status`), `filterable: false` (the page filters by status tabs), on the shared
   `DataTable`. Nothing is injected in `afterHandle`.
@@ -121,10 +128,10 @@ Definitions live in `invoiceInboxFilters.js` (pure).
 |---|---|
 | Documento | image or document icon by extension, file name; second line: reception date and time, preceded by the origin ("Correo" with its icon) only when the document did not come from a manual upload — an uploaded document shows the date alone, same line height |
 | Proveedor | linked partner: name + its tax id; else extracted name + extracted tax id (grey, no badge); else "Sin datos" |
-| Nº factura | number or "—"; amber copy icon "Posible duplicado de {doc}" when `duplicateOfInvoice` is set and the row is not CONFIRMED/DISCARDED |
+| Nº factura | number or "—"; amber copy icon "Posible duplicado de {docNo}" (the duplicate invoice's plain document number, `duplicateOfInvoice$documentNo`, the identifier only as a fallback) when `duplicateOfInvoice` is set and the row is not CONFIRMED/DISCARDED |
 | Fecha | `formatCalendarDate(invoiceDate)`; red "—" when missing |
 | Total | `formatCurrency(organization currency, grandTotalAmount)` — the row has no currency column yet; the user corrects it in review (ETP-6050) |
-| Estado | status tag by code; ERROR adds the reason by `errorCode`; CONFIRMED adds "{invoice} · Completada" when the invoice identifier is served; DISCARDED adds "Descartada el {date}" from `discardedAt` (wall-clock timestamp, `parseWallClockInstant`, date only; nothing when absent). Never a "deleted in 30 days" text |
+| Estado | status tag by code; ERROR adds the reason by `errorCode`; CONFIRMED adds "{docNo} · Completada" with the invoice's plain document number (`invoice$documentNo`, the identifier only as a fallback) when served; DISCARDED adds "Descartada el {date}" from `discardedAt` (wall-clock timestamp, `parseWallClockInstant`, date only; nothing when absent). Never a "deleted in 30 days" text |
 
 - Text that can be clipped — file name, vendor name and tax id, the status reason (error or created
   invoice) — ellipsises and shows the full text in a tooltip on hover and on keyboard focus (shared
@@ -135,8 +142,9 @@ Definitions live in `invoiceInboxFilters.js` (pure).
   "{n} seleccionada(s)", then, in the design's order, "Marcar para revisión" (disabled,
   "Próximamente"), Descartar (enabled, see Discard) and Confirmar (disabled, "Próximamente"),
   and the close button clears the selection.
+- A row click, or the row's Edit (pencil), opens the review panel (PROCESSING rows do not open).
 - Row hover actions, in the reserved space at the end of the row (as in `/sales-order`): Edit
-  (pencil) and More (kebab), both shown inert with a "… · Próximamente" tooltip, and the red trash
+  (pencil, opens the panel) and More (kebab, shown inert with a "… · Próximamente" tooltip), and the red trash
   (Descartar) only on `PENDING_REVIEW` / `ERROR` / `READY` rows. CONFIRMED and DISCARDED rows show
   pencil and kebab only; PROCESSING rows show no action. They render through DataTable's
   `rowQuickActions.render` slot (`InvoiceInboxRowActions.jsx`, `buttonCount: 3`) with the shared
@@ -246,6 +254,127 @@ confirmation (`InvoiceInboxDiscardDialog.jsx`):
   updated afterwards.
 - Discarded documents are read-only, cannot be selected and keep no expiry (no purge exists).
 
+## Review panel (ETP-6050, S1)
+
+Read only. A drawer (`InvoiceInboxReviewDrawer.jsx`), its own shell used only by this window, built
+from the shared `Sheet` pieces (root, portal, overlay, title, close) plus the Radix content, to
+follow the design: flush to the right edge and the full viewport height, width
+`min(1280px, 100vw - 48px)`, 16px radius on the left corners, a 260 ms slide-in over a veil of
+`rgba(27, 26, 31, .45)` with a 200 ms fade. It is NOT `GenericPreviewModal` and shares nothing with
+it. Closes on an outside click, on the X of its header and on Escape (kept for accessibility). The
+document is on the left (the remaining width, `border-subtle` background); the form on the right
+(`min(560px, 55%)`, at least 420px, left border, own scroll with 18/20/24 padding, fixed footer).
+Typography is the system's (no font family is set); colours are the system's tokens. Text taken
+from the document (banners, "En el documento: «…»", names) wraps anywhere, so the form pane never
+scrolls horizontally; the numeric line cells keep the design widths and carry the full value in
+`title`.
+
+- **Header** (`InvoiceInboxReviewHeader.jsx`, 60px): file-type icon (file for PDF, image for
+  JPG/PNG), file name (17px bold, the dialog title), status tag (`STATUS_LABEL_KEYS` /
+  `STATUS_TONES`), the origin line "Correo de {sender} · {date time}" (e-mail) or "Carga manual ·
+  {date time}" (`formatReceived`), an empty `aria-live` save-status slot (S2 fills it), "{n} de
+  {total}", previous / next (chevron icon buttons) and the close X (the Sheet's absolute close
+  button is not drawn). The header shows the list row's data until the read arrives.
+- **Viewer** (`InvoiceInboxReviewViewer.jsx`): a toolbar "DOCUMENTO ORIGINAL", zoom out, "{zoom}%",
+  zoom in, download (30px icon buttons), above the document. `useMainAttachment` on table
+  `ETGO_Incoming_Document` plus the shared `PdfViewer` (`zoom` prop, `hideToolbar`, no floating
+  bar) for a PDF, or the image with the same percentage. Zoom 40-160, step 15, and the readout is
+  TRUE: 100 % is a fixed A4 sheet of 595px, so the page renders `595 * zoom / 100` px wide on any
+  pane width (scrolling inside the pane when wider). It starts at 100, or, when the pane's inner
+  width (pane width minus its side gaps, tracked with a ResizeObserver) is below 595, at
+  `max(45, floor(w / 595 * 20) * 5)` (`initialZoom`). The shared `PdfViewer` takes a scale
+  relative to the pane, so it gets `scale = (595 * zoom / 100) / basis` through its `zoom`
+  prop, where `basis` is the width the shared viewer fits a page to (its own scroll box minus the side
+  gaps, read from the DOM after the document loads; it is narrower than the pane by the scroll
+  gutter) (`usePdfZoom`'s own steps and range are not used); an image gets the width in px. READ
+  ONLY: no upload / mark-as-main / delete is wired.
+- **Form** (`InvoiceInboxReviewForm.jsx` and its sections; all `readOnly` in S1; sections 22px
+  apart, a 11px uppercase letter-spaced bold section title, 12px below it):
+  - Banners at the TOP (`InvoiceInboxReviewBanners.jsx`, rules in `reviewBanners`): confirmed
+    (green: "{docNo} registrada en Etendo · Completada" with the invoice's `documentNo`, falling back to
+    its identifier only when absent; no link), unreadable (only while the document is not
+    `adjusted`), other error codes (`errorCodeLabelKey`) and possible duplicate (invoice and other
+    inbox documents; never blocks; not on confirmed / discarded).
+  - Proveedor (`InvoiceInboxReviewVendor.jsx`): linked (card: 36px building avatar, name, mono
+    "{taxId} · {city}", the "Vinculado por NIF / nombre" tag inline, ghost inert "Cambiar");
+    ambiguous (one row: the "Etendo AI propone {n} proveedores" chip ("… propone 1 proveedor" for one) with sparkles and the muted
+    "En el documento: «…»" with ", sin NIF legible" when no tax id was extracted; full-row
+    candidate buttons with a custom radio, "Más probable" on the first, "Ninguno · crear
+    proveedor nuevo con los datos extraídos" in primary; the destructive error "Elige uno de los
+    proveedores propuestos"; disabled in S1); new (solid-border block on a muted background, user-plus
+    icon, bold "Proveedor nuevo." + hint, ghost inert "Buscar existente", then name, NIF/CIF and
+    the address STRUCTURED: dirección, código postal, ciudad, país — the extracted country by
+    name, Spain when empty, decision 8); none (an inert field "Selecciona un proveedor de Etendo…"
+    and "Indica el proveedor"). A confirmed / discarded document shows the vendor as plain text.
+  - Cabecera: a 2-column grid: Nº factura | Fecha de factura * (calendar icon inside the input,
+    `formatCalendarDate`; red border, the amber "Revisar" tag and "Indica la fecha de factura"
+    when `validation.missing` has `invoiceDate`), then Moneda. No Vencimiento (decision 1).
+    Moneda is the shared `CurrencyRatePicker` in `isReadOnly` mode, fed `value` = the
+    currency id, `displayValue` = its ISO code, `formData {eTGOCurrencyRate: 1}` (the invoice is
+    created in the organization currency, no conversion) and NO `apiBaseUrl`, so it shows
+    "EUR — 1,00" like the purchase / sales documents and requests no currency options (the spec
+    has no `currencyOptions` action). It still reads the organization's rate precision through
+    its own `useCurrencyPrecision` (`GET /sws/neo/session`), as it does in every window.
+    Confirmed / discarded: the fields are disabled.
+  - Líneas · {n} (`InvoiceInboxReviewLines.jsx`): columns Descripción | Cant. 62 | Precio 84 |
+    IVA 78 | Importe 86 | 34, header 12/600; each line has a second full-width row: the product
+    chip, a BUTTON (chevron at the right) that toggles an expandable panel. Chip: linked (package
+    icon, name, mono search key, "· Coincidencia exacta / Por similitud"; no "saved equivalence",
+    decision 2), ambiguous (AI chip "{n} productos posibles" ("1 producto posible" for one) + "Elige uno" in warning colour;
+    starts expanded), new ("Producto nuevo" pill + "{category} · {uom} · se creará al confirmar"),
+    none (red alert + "Sin producto · vincúlalo o créalo"). Panel: "En el documento: «…»", the
+    candidate list ("Más probable" on the first), "Ninguno · crear producto nuevo" and the inert
+    catalogue search ("Vincular a un producto existente", "Cambiar por otro producto" when
+    linked). A missing tax shows "—" in red. ONE red line below the table joins the active errors
+    (unresolved products, missing tax, "La factura no tiene importe") with " · "; with no lines the
+    table shows only its header. "Añadir línea" (ghost, plus
+    icon) and each line's trash (the `DataTable` row-delete pattern, decision 5: visible on hover
+    and keyboard focus) are inert. Confirmed / discarded: the compact list (description, muted
+    "{searchKey} · {qty} × {price} · IVA {rate}%", amount).
+  - Totals card (`InvoiceInboxReviewTotals.jsx`): base and one "IVA {rate}% s/ {base}" row per
+    rate at 14px, then the Total on a muted band with top border ("Total" 15/700, a red asterisk,
+    the amount at 20px extra-bold), from the lines (`computeTotals`); always shown, with zeros when
+    there are no lines. Amounts use `formatCurrency` with the document currency,
+    quantities `formatGroupedNumber`, dates `formatCalendarDate`.
+  - Total mismatch banner (`InvoiceInboxReviewMismatchBanner`) at the BOTTOM, after the totals
+    (decision 4: non-blocking, only when `totalSource` is `printed` and the printed total differs
+    from the lines total by more than ONE cent, compared in integer cents; never on confirmed /
+    discarded).
+- **Footer** (`InvoiceInboxReviewFooter.jsx`): an icon-only danger Descartar (32px, trash,
+  label "Descartar"; only when the document can be discarded; the ETP-6049 dialog and queue),
+  the "{n} obligatorios pendientes" counter taking the free space (right-aligned, destructive
+  while pending), "Marcar como revisada" (secondary, hidden when READY) and "Confirmar factura"
+  (primary, check icon), both DISABLED ("Próximamente"). A READY document shows "Revisada por ti"
+  as muted text in the counter slot. CONFIRMED and DISCARDED have no footer. Discarding from the
+  panel closes it (only when that document was actually discarded: a failed discard keeps the
+  panel open, with its error toast) and always reloads the list and counters.
+- **Navigation** (`useInvoiceInboxReviewNav.js`): "{n} de {total}" uses the current filter's counter
+  as the total only while more pages exist (never less than the loaded openable rows); at the end of
+  the list the total is exactly the loaded OPENABLE rows (the counter also counts PROCESSING rows). On close, focus returns
+  to the element that opened the panel (the pencil, or the clicked row's pencil), unless it left
+  the DOM. Previous / next walk the rows of the CURRENT
+  filter already loaded in `useInvoiceInboxList`, skipping PROCESSING. They stop at the ends (not
+  circular): at the end of the loaded rows, with `hasMore`, "next" loads the next page and moves
+  to its first openable row (it keeps loading while a page brings only PROCESSING rows, and stops
+  at a load error or the end). On close the page re-reads the rows opened and the counters.
+- **Read errors** (`useInvoiceInboxReview.js`): 409 `processing`, `not_found`, `feature_disabled`,
+  `org_not_allowed` and a network error show a message and "Reintentar" in the form pane; the
+  viewer is independent.
+- Not built (out of scope): the sparkles icon next to field labels, the "Editado" chip, the
+  history tab, source-region highlighting on the document.
+- The pure rules (totals, mismatch, neighbours, banners, vendor view, zoom) live in
+  `invoiceInboxReviewModel.js`.
+
+### Deferred (registered in `flags-registry.json`, feature `invoice-inbox`)
+
+- `due-date-extraction`: the panel shows no Vencimiento; the OCR schema does not extract a due date
+  and how to handle it is still open (to be treated later; user decision 2026-11-12, ETP-6050
+  decision 1).
+- `review-edit-and-resolution`: S1 is read only; editing with autosave, `ADJUSTED`, supplier and
+  product resolution and mark-as-reviewed are slices S2 / S3 of ETP-6050.
+- `revalidate-on-edit` stays open: the review read recomputes the validation at read time only; it
+  is persisted on edit in S2.
+
 ## Polling of PROCESSING rows
 
 `useProcessingRowsPoll`: while at least one loaded row is `PROCESSING` and the browser tab is visible,
@@ -265,7 +394,12 @@ visible until the next reload, so the table does not jump under the cursor.
 `invoiceInboxFilters.js`, `invoiceInboxApi.js`, `invoiceInboxMessages.js`,
 `invoiceInboxUploadPolicy.js`, `invoiceInboxUploadLog.js`, `invoiceInboxUploadResult.js`,
 `InvoiceInboxUploadResult.jsx`, `useInvoiceInboxUploadResult.js`, `useInvoiceInboxList.js`, `useInvoiceInboxUpload.js`,
-`useInvoiceInboxDiscard.js`, `useProcessingRowsPoll.js`, `useInboxFileDrop.js`. Shared touch points:
+`useInvoiceInboxDiscard.js`, `useProcessingRowsPoll.js`, `useInboxFileDrop.js`. Review panel (ETP-6050):
+`InvoiceInboxReviewDrawer.jsx`, `InvoiceInboxReviewHeader.jsx`, `InvoiceInboxReviewViewer.jsx`,
+`InvoiceInboxReviewForm.jsx`, `InvoiceInboxReviewVendor.jsx`, `InvoiceInboxReviewLines.jsx`,
+`InvoiceInboxReviewTotals.jsx`, `InvoiceInboxReviewBanners.jsx`, `InvoiceInboxReviewFooter.jsx`,
+`InvoiceInboxReviewParts.jsx`, `invoiceInboxReviewModel.js`, `useInvoiceInboxReview.js`,
+`useInvoiceInboxReviewNav.js`. Shared touch points:
 `SegmentedTabs.jsx` (optional `count` per item), `menu.json` (Purchases item),
 `lib/capabilityVisibility.js` (`INVOICE_INBOX_CAPABILITY`), `windows/registry.js` (`customLoaders`).
 
@@ -289,6 +423,26 @@ visible until the next reload, so the table does not jump under the cursor.
 (both `aria-disabled`), `invoice-inbox-row-discard-{id}`; dialog: `invoice-inbox-discard-dialog`,
 `invoice-inbox-discard-dialog-title`, `invoice-inbox-discard-dialog-body`, `invoice-inbox-discard-cancel`,
 `invoice-inbox-discard-confirm`, `invoice-inbox-discard-spinner`; menu: `menu-item-invoice-inbox`.
+
+Review panel (prefix `invoice-inbox-review-`): `-drawer`, `-veil`, `-header`, `-title`, `-status`,
+`-origin`, `-save-status`, `-position`, `-prev`, `-next`, `-close`, `-left`, `-right`, `-scroll`,
+`-loading`, `-error`, `-error-text`, `-retry`, `-advancing`; viewer: `-viewer`, `-viewer-loading`,
+`-viewer-empty`, `-viewer-toolbar`, `-viewer-label`, `-viewer-zoom-out`, `-viewer-zoom`,
+`-viewer-zoom-in`, `-viewer-download`, `-viewer-file`, `-viewer-image`; form: `-form`, `-banners`,
+`-banner-{confirmed|unreadable|duplicate|duplicate-inbox|mismatch|error-{CODE}}` (+ `-title`,
+`-body`), vendor: `-vendor` (`data-state`), `-vendor-title`, `-vendor-linked`,
+`-vendor-plain`, `-vendor-name`, `-vendor-meta`, `-vendor-matched-by`, `-vendor-change`,
+`-vendor-ambiguous`, `-vendor-ambiguous-title`, `-vendor-in-document`, `-vendor-candidate-{id}`,
+`-vendor-likely-{id}`, `-vendor-none-option`, `-vendor-error`, `-vendor-new`, `-vendor-new-title`,
+`-vendor-new-hint`, `-vendor-search-existing`, `-vendor-new-{name|taxid|postalcode|address|city|country}`,
+`-vendor-none`, `-vendor-none-hint`; header section: `-header-section`, `-header-title`,
+`-invoice-no`, `-invoice-date` (+ `-tag`, `-error`, `-icon`; each field also `…-field`), the
+currency picker (`field-currency`, `currency-rate-readonly`); lines: `-lines`, `-lines-title`,
+`-lines-head`, `-lines-list`, `-lines-error`, `-line-{i}`,
+`-line-{i}-{description|quantity|price|tax|amount|detail|product|product-tag|product-name|panel|candidates|in-document|candidate-{id}|likely|none-option|search}`,
+`-line-delete-{i}`, `-add-line`; totals: `-totals`, `-total-base`,
+`-total-tax-{rate}`, `-total`, `-total-label`; footer: `-footer`, `-discard`, `-pending`,
+`-reviewed`, `-mark-reviewed`, `-confirm`.
 
 ## Next steps (inside ETP-6049, not in the base)
 
@@ -323,6 +477,13 @@ Prerequisites: `etendo.go.flags.invoice-inbox=true` (Tomcat restart) and the spe
 10. Select 2 → Descartar → "¿Descartar 2 facturas?" (no "30 días"), focus on Cancelar → Descartar →
     two `POST …/header/{id}/action/discard` in Network, toast "2 facturas descartadas", selection
     empty, counters updated; in Descartadas the rows show "Descartada el {fecha}" and cannot be checked.
-11. Hover a Pendiente revisión row: pencil and kebab inert with "Próximamente", red trash → dialog
+11. Hover a Pendiente revisión row: pencil opens the panel, kebab inert with "Próximamente", red trash → dialog
     "¿Descartar esta factura?". A Confirmada / Descartada row: no trash. A Procesando row: no action.
 12. Double click on Descartar → one batch. Escape during the batch does not close the dialog.
+13. Click a row (or its pencil): the panel opens with the document on the left and the form on the
+    right; a PROCESSING row does not open. Next/previous skip PROCESSING rows, stay within the
+    current tab, and at the end of the loaded rows load the next page. Escape and an outside click
+    close it. A CONFIRMED row shows the green banner with the invoice link and no footer; a
+    DISCARDED row, no footer. "Marcar como revisada" and "Confirmar factura" are disabled. Discard
+    from the footer uses the same dialog and closes the panel. English and Spanish: no untranslated
+    text. (Needs the backend `review` action deployed.)

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/contacts/ContactsFinancialPanel.jsx
 // ETP-5112 regression (bug 1) — the contacts credit/tax panel must send the business
 // partner's `updated` optimistic-locking token on its inline PATCH.
 //
@@ -22,6 +23,7 @@ vi.mock('lucide-react', () => ({
 
 vi.mock('../BillingPreferencesForm', () => ({ default: () => <div data-testid="billing-form" /> }));
 vi.mock('../FiscalDefaultsSection', () => ({ default: () => <div data-testid="fiscal-defaults-section" /> }));
+vi.mock('../SepaMandateSection', () => ({ default: () => <div data-testid="sepa-mandate-section" /> }));
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import {
