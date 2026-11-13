@@ -3180,6 +3180,87 @@ primary blue with the same classes as the shared default Button (`bg-primary`, `
 Pure helpers `getConfirmResultTypeConfig(type)` and `getConfirmResultCopy(docs, ui)` are exported for
 reuse and tests. Unit coverage: `tools/app-shell/src/components/contract-ui/__tests__/ConfirmResultModal.vitest.jsx`.
 
+### 21b. Invoice-creating modals — the "Datos fiscales" step (`InvoiceSifStep`, ETP-6179)
+
+**Rule: every modal that creates AND completes an invoice in one call MUST show the shared
+"Datos fiscales" step before it confirms anything.** Those flows build the invoice on the server and
+complete it at once, so the user never sees the invoice's SIF tab; without the step a factura
+rectificativa was completed as an ordinary `F1` with no SII motive and no TicketBAI code. The step
+lives in `tools/app-shell/src/windows/custom/shared/InvoiceSifStep.jsx` and is already wired into
+every current flow:
+
+| Flow | Where the step is wired |
+|---|---|
+| Confirm with invoice (orders, shipments, receipts, returns) | `ConfirmInOutModal` (also behind `ConfirmWithCreditButtonBase`), the order `ConfirmModal`s in `OrderCreateInvoice.jsx` / `PurchaseOrderActions.jsx` |
+| Create the invoice of a confirmed document (single and bulk ONE-invoice) | `CreateInvoiceConfirmModal` via its `sifDefaultsUrl` / `sifDefaultsBody` props; the orders' `CreateDocsModal` |
+| Quotation «Facturar directamente» | `QuotationConfirmModal` → `InvoiceSifStepModal` (its own dialog, because `ActionChoiceModal` cannot host it) |
+| Bulk "one invoice per selected order" | `BulkOrderMoreMenu` / `BulkPurchaseOrderMoreMenu` → `resolveBulkSifPreview` + `InvoiceSifStepModal` in `readOnly` mode |
+
+**The backend is the source of truth.** The step is built from the source record's
+`POST …/action/sifDefaults` (`InvoiceSifPreset` in `com.etendoerp.go`, `neo-headless.md` §4.12.36b):
+which fiscal systems are active (SII on both sides, TicketBAI and VERI\*FACTU on sales only), which
+SIF-tab fields are editable, their allowed codes and the value each would get. The values go back
+as `sifFields` in the invoice-creating action's body. A field the caller does not send gets its
+preview value on the server, so the screen and the API always produce the same invoice.
+
+**Wiring a NEW invoice-creating modal** (reuse a wired modal first; only build a new one when none fits):
+
+```jsx
+import { useInvoiceSifStep, InvoiceSifStepPanel, withSifFields, SIF_STEP_DIALOG_WIDTH }
+  from '@/windows/custom/shared/InvoiceSifStep.jsx';
+
+const sif = useInvoiceSifStep({
+  enabled: invoiceRequested,                                   // an invoice will be created at all
+  apiFetch,                                                    // from useApiFetch
+  defaultsUrl: `/${spec}/${entity}/${recordId}/action/sifDefaults`,
+  body: { shipmentIds },                                       // only when the action reads it
+});
+
+// Primary button: ONE handler. The first click fetches the preview and shows the step (or runs
+// handleConfirm straight away when no system is active); the click on the step confirms.
+<button onClick={() => sif.start(handleConfirm)} disabled={busy || (sif.active && !sif.valid)} />
+
+// While the step shows: title ui('invoiceSifStep.title'), width SIF_STEP_DIALOG_WIDTH, the panel
+// instead of the first screen, and a Back button (sif.back keeps the typed values).
+{sif.active && <InvoiceSifStepPanel sif={sif} />}
+
+// In handleConfirm: send the values.
+body: JSON.stringify(withSifFields({ ...yourBody }, sif)),
+```
+
+Behaviour the hook already owns — do not re-implement it:
+
+- **Fetched on the primary click, not on open**, so a flow that creates no invoice never asks and
+  the preview reflects the record at that moment. The answer is cached per URL + body, so Back →
+  Continue keeps what the user typed.
+- **Fails open.** A preview the server cannot answer skips the step and runs the flow; the backend
+  applies the same defaults and refuses an invalid invoice with its own 422.
+- **`sif.valid`** is false while a rectificative lacks a code of an active system (the primary
+  button is disabled and `invoiceSifStep.rectificationRequired` is shown). The server refuses the
+  same blank with 422 `ETGO_InvoiceRectificationCodeRequired`.
+- **`withSifFields`** adds `sifFields` only while the step was shown; with no active system the
+  body is byte-for-byte what it was before ETP-6179.
+- A modal that cannot host the panel (a shared first screen) renders `InvoiceSifStepModal`
+  (× / Cancelar / Atrás / confirm) instead; remember the option the user picked so Atrás returns to
+  it (`QuotationConfirmModal`'s `chosenOption`).
+- **Bulk, one invoice per document:** never an editable step per invoice. Fetch every preview with
+  `resolveBulkSifPreview(apiFetch, urls)`; on `kind: 'summary'` show
+  `InvoiceSifStepModal` with `sif={readOnlySifStep(preview, varying)}`, `readOnly`,
+  `notice={ui('invoiceSifStep.bulkNotice', …)}` and `onCancel`; a field that differs reads
+  "Según cada cliente" (SII key) or "Según cada pedido" (anything else). Each POST then sends its
+  OWN document's `previews[i].fields` as `sifFields`. On `kind: 'none'` run as before.
+- **Option labels:** any SIF select uses `sifOptionLabel(option, ui)` ("CODE - Label", the code
+  once), as the SIF tab does.
+
+The backend side of a new invoice-creating action must declare `InvoiceSifPreset.sifFieldsParam(sales)`
+in its contract, answer `sifDefaults` with the same target the creation builds, and run
+`InvoiceSifPreset` before completing (`neo-headless.md` §4.12.36b).
+
+Unit coverage: `tools/app-shell/src/windows/custom/shared/__tests__/InvoiceSifStep.vitest.jsx`,
+`orderConfirmModals.fiscalDataStep.vitest.jsx`, `bulkOrderMoreMenus.quotaRefusal.vitest.jsx`,
+`ConfirmInOutModal.spec.jsx`, `CreateInvoiceConfirmModal.vitest.jsx`,
+`QuotationConfirmModal.fiscalDataStep.vitest.jsx`.
+
 ### 22. Header currency and exchange rate — `CurrencyRatePicker` (ETP-5840)
 
 Not a `decisions.json` option: `EntityForm` swaps the header `C_Currency_ID` selector for
@@ -3266,14 +3347,17 @@ with the shared round `RowExpandToggle` (ETP-5593, sized 24 × 24 through `class
 adornment slot and the amount; an expanded document shows a bordered lines table with a master
 checkbox and a −/+ quantity stepper (`NumberStepperInput`, bounded by the line's available
 quantity, typed values still validated on blur); the footer has the selection hint and the
-«Cancelar» / primary pills.
+«Cancelar» / primary pills. The hint reads «N Seleccionados» (`selected`) and the primary button
+counts the selected lines; with `countLinesInFooter` the hint counts LINES with singular/plural
+wording instead (see the prop table).
 
 **Optional props added by ETP-5828** (all default to the previous behaviour):
 
 | Prop | Effect |
 |---|---|
 | `renderSelectionPanel(selection)` | Renders the fixed-height notice area under the list (`ImportLinesModal__selectionPanelSlot`). Return an `<ImportNotice tone="neutral"\|"warning" title body control? />` (exported from the same file); `null` shows the neutral «Información de importación» notice. Without the prop there is no notice area. |
-| `selectedDocumentsKey` | i18n key such as `importOrdersSelectedCount` («{count} pedido(s)»): the footer reads «**N pedido(s)** seleccionado(s)» and the import button counts DOCUMENTS with a selected line instead of lines. |
+| `countLinesInFooter` | Default `false` («N Seleccionados»). `true`: the footer reads «**1 línea** seleccionada» / «**N líneas** seleccionadas» (keys `importLinesSelectedCountOne/Many`, `importLinesSelectedSuffixOne/Many`). Opted in only by the invoices' «Importar desde pedido» (`InvoiceOrderImportModal`, ETP-5828 QA UI-6), which until then counted ORDERS through the removed `selectedDocumentsKey` prop («1 pedido(s)» with two lines). |
+| `describeLine(line, { imported })` | The note under a line's product. On a greyed-out line return a string (e.g. the order import's «en factura borrador FV1000002», from the line's `inDraftInvoices`, ETP-5828 QA UI-4) or `null` to keep the default («ya importado», or «en albarán: …» from `_inDraftShipments`) — `ImportLinesModal__importedNote`. On a selectable line a string adds a note (e.g. «1 en factura borrador FC1000020» for a line another draft holds part of, QA OBS-2), `null` shows none — `ImportLinesModal__lineNote`. Every note (the default one too) wraps onto at most 2 lines inside the fixed product column, so the 64 px row never grows, with its full text as a tooltip (`title`) — QA BUG-1: a single truncated line cut the draft number. |
 | `importButtonKey` | i18n key of the primary button (default `importSelected`; `{count}` receives `" (N)"` or `""`). |
 
 **The notice box (Figma «Alert»).** The slot is 92 px: a 12 px gap and an 80 px alert (padding 16,
@@ -3289,7 +3373,9 @@ Inter 14 (~95 characters).
 **Lazy lines and server-listed documents (ETP-6099).** A popup that lists its documents through a
 server read action (`availableOrders`, `availableShipments`, `availableReceipts`, …) passes
 `eagerLoadLines={false}` so a document's lines are read only when it is expanded or selected, not
-one lines call per document at opening. Two optional props make that work without the lines:
+one lines call per document at opening. Ticking a document whose lines are not loaded yet opens it,
+reads its lines AND selects them in that same click — also when the chevron already started the read
+(ETP-5828 QA UI-3; before, the first tick only unfolded it). Two optional props make that work without the lines:
 
 | Prop | Effect |
 |---|---|

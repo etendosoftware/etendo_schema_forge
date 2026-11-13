@@ -129,6 +129,7 @@ The MCP publishes `documentAction` and `cloneRecord` for this window (declared b
 - **ETP-4028 — Currency field**: `modules/com.etendoerp.go/src-db/database/model/modifiedTables/M_INOUT.xml` adds `EM_ETGO_CURRENCY_ID` (mandatory, Search reference to `C_Currency`). `NeoCommercialDocumentFactory.java` sets `.setEtgoCurrency(...)` on every `ShipmentInOut` creation path (from a sales order, from another shipment, from an invoice). `artifacts/goods-shipment/decisions.json` declares `etgoCurrency` (editable, `defaultExpr: "@C_Currency_ID@"`, locked on `Processed='Y'`) plus `window.labelOverrides` for the field label.
 - **ETP-4028 — Currency-filtered imports**: `artifacts/goods-shipment/custom/ImportFromSalesOrderModal.jsx` and `ImportFromSalesInvoiceModal.jsx` fetch the shipment header for `etgoCurrency` and filter candidate documents by matching currency (superseded by ETP-6099: the actions filter by currency server-side, and the header is read only when nothing is listed), passing `noCurrencyMatchMessageKey` to the shared `ImportLinesModal`.
 - **ETP-5178 — Free-typing quantity field in import modals**: the shared `tools/app-shell/src/components/contract-ui/ImportLinesModal.jsx` per-line quantity input (used here by `ImportFromSalesOrderModal.jsx` / `ImportFromSalesInvoiceModal.jsx`) no longer clamps the value on every keystroke — typing, select-all, delete, and decimal entry all work freely. Range/validity (numeric, non-zero, magnitude ≤ the line's available quantity) is checked only on `onBlur`: an invalid value reverts to the last committed value and shows a `toast.error`, either `qtyMaxAllowed` ("The maximum allowed is {max}" / "El máximo permitido es {max}") when it exceeds the available quantity, or `qtyMustBePositive` ("The quantity must be greater than 0" / "La cantidad debe ser mayor a 0") for zero/negative/empty/non-numeric input. Fixed once in the shared component; applies identically across sales-invoice, purchase-invoice, and goods-receipt.
+- **ETP-5828 QA (UI-3) — ticking a document not opened yet**: in the import popups of this window built on `ImportLinesModal` with lazy lines, ticking a document whose lines are not loaded yet loads AND selects them in the same click (before, the first tick only unfolded it). Reference: `docs/ui-customization.md` §23.
 - **ETP-5828 — Figma look of the shared import popup**: the import modals of this window use the redesigned `ImportLinesModal` (fixed 800 × 648 dialog, «Seleccionar todo / Deseleccionar todo», expand button + checkbox per document, bordered lines table with a master checkbox and a −/+ quantity stepper, pill buttons). Behaviour is unchanged except that a line already imported is never selected by its document or by select-all. Reference: `docs/ui-customization.md` §23.
 - **ETP-4028 — Price-list picker at invoice time**: `tools/app-shell/src/components/contract-ui/CreateInvoiceConfirmModal.jsx` (shared with goods-receipt, purchase-order, sales-order) gained `showPriceListPicker`/`isSOTrx` props, fetching `/price-list/priceList` and letting the user pick a price list before confirming; `GoodsShipmentActions.jsx` wires this in and forwards `priceListId` to `createDraftInvoice`. Backend: `CreateDraftInvoiceHandler.java`'s `createFromOrder`/`createFromShipments` gained a 3rd `priceListId` parameter and an `applyPriceListOverride` helper that sets `invoice.setPriceList(...)` before the native `CreateInvoiceLinesFromProcess` prices the lines.
 - **ETP-4028 — Bulk-invoice currency guard**: `BulkInvoiceFromShipment.jsx` adds a `currencyCheck` that disables `Create Invoice` when the selected shipments don't share the same currency.
@@ -651,3 +652,23 @@ Documentos and the button is back.
 ## Agent prompts on value and dates — ETP-5852
 
 `header.agentPrompt` says a shipment carries quantities only (its value is the order lines' prices times the quantities, or the invoice made from it; M-71), and `movementDate.agentPrompt` that a completed shipment keeps its date: it is corrected with a return and a new shipment (M-163).
+
+## Fiscal data step before the invoice is created — ETP-6179
+
+- **Confirmar** with the invoice toggle on (`GoodsShipmentConfirmModal` → `ConfirmInOutModal`) and
+  **Crear factura de venta** on a confirmed shipment (`GoodsShipmentActions` →
+  `CreateInvoiceConfirmModal`), including the list's bulk "Crear factura" of several shipments into
+  ONE invoice (`BulkInvoiceFromShipment`, preview with the same `shipmentIds`).
+- The bulk "Crear factura" builds ONE invoice, so it shows the same editable step (not the
+  read-only summary of the order lists): the preview is asked with the same `shipmentIds` the
+  creation will send. Several shipments are invoiced with **no order on the invoice header**, so
+  their preview carries no order either: SII description = the organization's default one,
+  operation date = today. A single shipment with an order takes those values from the order, as
+  its invoice does (`CreateDraftInvoiceHandler.shipmentSifTarget`, review W2).
+- Normal invoice: VERI*FACTU type from the document type (`F1` fallback); SII key the customer's own
+  default key when it declares one, else `F1`.
+- The invoice's document type is never a return/rectificative one (`findARInvoiceDocType` skips
+  them since ETP-6179).
+
+How the step itself works — the backend `sifDefaults` preview, when it appears, the
+`sifFields` it sends and the fail-open rule — is described once in [sales-order.md → Fiscal data step before the invoice is created](sales-order.md#fiscal-data-step-before-the-invoice-is-created--etp-6179).
