@@ -125,6 +125,12 @@ const DETAILS = {
     related: [{ kind: 'ORDER', id: 'ord-1', documentNo: 'PV/0001', documentStatus: 'CO' }],
     hasPdf: true,
   },
+  'invoice/inv-2': {
+    kind: 'INVOICE', id: 'inv-2', documentNo: 'FV/0002', date: '2026-08-02', dueDate: '2020-01-10',
+    documentStatus: 'CO', currency: 'EUR', grandTotal: 500, outstandingAmount: 500,
+    installments: [{ dueDate: '2020-01-10', amount: 500, paidAmount: 0, outstandingAmount: 500 }],
+    lines: [], related: [], hasPdf: false,
+  },
   'order/ord-1': {
     kind: 'ORDER', id: 'ord-1', documentNo: 'PV/0001', documentStatus: 'CO', currency: 'EUR',
     grandTotal: 500, lines: [], related: [], hasPdf: false,
@@ -510,7 +516,8 @@ describe('PortalPage — document list', () => {
     ]);
     expect(states).toEqual([
       ['FV/0001', 'paid', 'paid'],
-      ['FV/0002', 'overdue', 'overdue'],
+      // The list badge never says overdue (as in the invoice list grid); the due-date dot does.
+      ['FV/0002', 'pending', 'overdue'],
       ['AB/0001', 'credit-available', null],
     ]);
     // A credit note lives among the invoices, marked as such.
@@ -621,6 +628,16 @@ describe('PortalPage — document detail', () => {
     const detail = screen.getByTestId('portal-document-detail');
     expect(within(detail).queryAllByRole('textbox')).toHaveLength(0);
     expect(within(detail).queryAllByRole('spinbutton')).toHaveLength(0);
+  });
+
+  it('marks an invoice with an owing past-due instalment as overdue in its payment block', async () => {
+    renderPortal(`/portal/${TOKEN}?view=doc&kind=INVOICE&id=inv-2`);
+    await detailReady();
+
+    const payment = within(screen.getByTestId('portal-payment'));
+    expect(payment.getByTestId('portal-payment-status')).toHaveAttribute('data-state', 'overdue');
+    expect(payment.getByTestId('portal-due-date')).toHaveAttribute('data-state', 'overdue');
+    expect(payment.getByTestId('portal-payment-outstanding').textContent).toBe(eur('500,00'));
   });
 
   it('opens a related document', async () => {

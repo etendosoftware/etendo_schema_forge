@@ -14,41 +14,67 @@ import {
  * Presentation rules of the customer portal — pure, so they run under plain `node --test`.
  *
  * The payment table is the parity guard: the portal must show an invoice's payment state exactly
- * as the app does (`resolveInvoicePaymentBadge`), with overdue taking priority over pending and
- * partial the way the invoice topbar orders it — never over paid or over a credit note.
+ * as the app does (`resolveInvoicePaymentBadge`). Overdue follows the app on each surface: with
+ * the instalments (the detail) it wins over pending and partial the way the invoice topbar orders
+ * it — never over paid or over a credit note; without them (lists, home) the badge shows no
+ * overdue, like the invoice list grid, whose due-date dot carries it instead.
+ *
+ * Instalment dates are far in the past or far in the future, so no row depends on the day the
+ * suite runs.
  */
 
 const invoice = (overrides) => ({
   kind: 'INVOICE', documentStatus: 'CO', grandTotal: 1000, outstandingAmount: 1000, overdue: false,
   ...overrides,
 });
+const PAST = '2020-01-10';
+const FUTURE = '2999-01-10';
+const installment = (dueDate, outstandingAmount) => ({ dueDate, outstandingAmount });
 
 describe('invoicePaymentState', () => {
-  for (const [label, document, expected] of [
-    ['paid when nothing is outstanding', invoice({ outstandingAmount: 0 }), 'paid'],
-    ['partial when part was paid', invoice({ outstandingAmount: 400 }), 'partial'],
-    ['pending when nothing was paid', invoice({}), 'pending'],
-    ['pending when the outstanding amount is missing', invoice({ outstandingAmount: null }), 'pending'],
-    ['credit available on a credit note with money left', invoice({ grandTotal: -100, outstandingAmount: -100 }), 'credit-available'],
-    ['credit applied on a fully used credit note', invoice({ grandTotal: -100, outstandingAmount: 0 }), 'credit-applied'],
-    ['overdue before pending', invoice({ overdue: true }), 'overdue'],
-    ['overdue before partial', invoice({ outstandingAmount: 400, overdue: true }), 'overdue'],
-    ['paid even when flagged overdue', invoice({ outstandingAmount: 0, overdue: true }), 'paid'],
+  for (const [label, document, installments, expected] of [
+    ['paid when nothing is outstanding', invoice({ outstandingAmount: 0 }), null, 'paid'],
+    ['partial when part was paid', invoice({ outstandingAmount: 400 }), null, 'partial'],
+    ['pending when nothing was paid', invoice({}), null, 'pending'],
+    ['pending when the outstanding amount is missing', invoice({ outstandingAmount: null }), null, 'pending'],
+    ['credit available on a credit note with money left', invoice({ grandTotal: -100, outstandingAmount: -100 }), null, 'credit-available'],
+    ['credit applied on a fully used credit note', invoice({ grandTotal: -100, outstandingAmount: 0 }), null, 'credit-applied'],
+    ['overdue before pending when an owing instalment is past due', invoice({}), [installment(PAST, 1000)], 'overdue'],
+    [
+      'overdue before partial when an owing instalment is past due',
+      invoice({ outstandingAmount: 400 }),
+      [installment(PAST, 0), installment(PAST, 400)],
+      'overdue',
+    ],
+    [
+      'partial when the past-due instalment is settled and the rest is not due',
+      invoice({ outstandingAmount: 400 }),
+      [installment(PAST, 0), installment(FUTURE, 400)],
+      'partial',
+    ],
+    ['paid even with a past-due instalment', invoice({ outstandingAmount: 0 }), [installment(PAST, 100)], 'paid'],
     [
       'never overdue on a credit note',
-      invoice({ grandTotal: -100, outstandingAmount: -100, overdue: true }),
+      invoice({ grandTotal: -100, outstandingAmount: -100 }),
+      [installment(PAST, 100)],
       'credit-available',
     ],
+    // Lists and home have no instalments: like the invoice list grid, the badge never says
+    // overdue there, whatever the row's own flag — the due-date dot carries it.
+    ['pending, not overdue, without instalments even when the row is flagged overdue', invoice({ overdue: true }), null, 'pending'],
   ]) {
     it(`is ${label}`, () => {
-      assert.equal(invoicePaymentState(document).id, expected);
+      assert.equal(invoicePaymentState(document, installments).id, expected);
     });
   }
 
   it('maps each state to the app labels and tones', () => {
     assert.deepEqual(
-      [invoice({ outstandingAmount: 0 }), invoice({ overdue: true }), invoice({ grandTotal: -1, outstandingAmount: -1 })]
-        .map(invoicePaymentState),
+      [
+        invoicePaymentState(invoice({ outstandingAmount: 0 })),
+        invoicePaymentState(invoice({}), [installment(PAST, 1000)]),
+        invoicePaymentState(invoice({ grandTotal: -1, outstandingAmount: -1 })),
+      ],
       [
         { id: 'paid', labelKey: 'statusPaid', tone: 'success' },
         { id: 'overdue', labelKey: 'statusOverdue', tone: 'destructive' },
