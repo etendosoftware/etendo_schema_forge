@@ -229,6 +229,9 @@ describe('PlanChangeDialog', () => {
     await userEvent.click(screen.getByTestId('PlanChangeDialog__confirm'));
     expect(await screen.findByTestId('PlanChangeDialog__done'))
       .toHaveTextContent('Pro yearly:planChangePendingCancelled');
+    // A confirmation only: its own title, no instructions.
+    expect(screen.getByTestId('PlanChangeDialog__title')).toHaveTextContent('planChangeDoneTitle');
+    expect(screen.queryByTestId('PlanChangeDialog__description')).not.toBeInTheDocument();
     expect(requestPlanChange).toHaveBeenCalledWith('/api', 'pro-yearly', null, null);
   });
 
@@ -255,6 +258,8 @@ describe('PlanChangeDialog', () => {
 
     expect(await screen.findByTestId('PlanChangeDialog__done'))
       .toHaveTextContent('Pro:planChangePaymentRequired');
+    // Nothing changed yet: the dialog keeps its change-plan heading.
+    expect(screen.getByTestId('PlanChangeDialog__title')).toHaveTextContent('planChangeTitle');
     const link = screen.getByTestId('PlanChangeDialog__completePayment');
     expect(link).toHaveAttribute('href', 'https://invoice.stripe.com/i/abc');
     expect(link).toHaveAttribute('target', '_blank');

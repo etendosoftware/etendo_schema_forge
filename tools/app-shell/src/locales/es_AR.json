@@ -22737,6 +22737,7 @@
     "subscriptionChangePlan": "Cambiar de plan",
     "subscriptionQuotaYear": "Año de cuota iniciado el {date}",
     "planChangeTitle": "Cambiar de plan",
+    "planChangeDoneTitle": "Plan cambiado",
     "planChangeDescription": "Elegí el plan al que querés pasar. Antes de confirmar te indicamos cuándo se aplica y qué implica para tu uso.",
     "planChangeUnavailable": "No pudimos cargar los planes disponibles. Intentalo de nuevo.",
     "planChangeNone": "Ahora mismo no hay otro plan disponible para tu suscripción.",

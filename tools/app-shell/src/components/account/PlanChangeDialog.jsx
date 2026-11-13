@@ -227,18 +227,27 @@ export function PlanChangeDialog({
   }, [apiBaseUrl, clientId, selected, preview, onChanged, onSessionExpired, onOpenChange]);
 
   const exceeded = exceededQuotasOf(selected);
+  // Once a change is done (applied, scheduled or a scheduled one cancelled) the dialog is only a
+  // confirmation: its own title, no instructions. An upgrade still waiting for its payment has not
+  // changed anything yet, so it keeps the change-plan heading.
+  const changed = Boolean(done && !done.paymentRequired);
 
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => { if (!submitting) onOpenChange?.(next); }}
       data-testid="Dialog__plan-change">
-      <DialogContent className="sm:max-w-lg" data-testid="PlanChangeDialog__root">
+      <DialogContent className="sm:max-w-lg" data-testid="PlanChangeDialog__root"
+        {...(changed ? { 'aria-describedby': undefined } : {})}>
         <DialogHeader data-testid="DialogHeader__plan-change">
-          <DialogTitle data-testid="PlanChangeDialog__title">{ui('planChangeTitle')}</DialogTitle>
-          <DialogDescription data-testid="PlanChangeDialog__description">
-            {ui('planChangeDescription')}
-          </DialogDescription>
+          <DialogTitle data-testid="PlanChangeDialog__title">
+            {ui(changed ? 'planChangeDoneTitle' : 'planChangeTitle')}
+          </DialogTitle>
+          {!changed && (
+            <DialogDescription data-testid="PlanChangeDialog__description">
+              {ui('planChangeDescription')}
+            </DialogDescription>
+          )}
         </DialogHeader>
 
         {status === 'loading' && (

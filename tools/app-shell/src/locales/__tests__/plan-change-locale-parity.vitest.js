@@ -21,6 +21,7 @@ const KEYS = [
   'planChangeChargeToday', 'planChangeChargeTodayCard', 'planChangeChargeLoading',
   'planChangeChargeUnknown', 'planChangePaymentRequired', 'planChangeCompletePayment',
   'planChangeTimingKeep', 'planChangeKeepNote', 'planChangePendingCancelled',
+  'planChangeDoneTitle',
 ];
 
 const read = (locale, key) => locale.genericLabels?.[key];

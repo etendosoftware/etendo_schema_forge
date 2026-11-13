@@ -26322,6 +26322,7 @@
     "subscriptionChangePlan": "Change plan",
     "subscriptionQuotaYear": "Quota year started on {date}",
     "planChangeTitle": "Change plan",
+    "planChangeDoneTitle": "Plan changed",
     "planChangeDescription": "Choose the plan to move to. We tell you when it applies and what it means for your usage before you confirm.",
     "planChangeUnavailable": "We couldn't load the plans available to you. Please try again.",
     "planChangeNone": "No other plan is available for your subscription right now.",
