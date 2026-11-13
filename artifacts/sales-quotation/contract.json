@@ -1,8 +1,8 @@
 {
-  "version": "0.31.0",
+  "version": "0.32.0",
   "generatedAt": "2026-06-26T16:40:04.731Z",
-  "updatedAt": "2026-10-28T17:26:17.716Z",
-  "checksum": "92348c7b02c3e2b1",
+  "updatedAt": "2026-11-13T21:06:13.383Z",
+  "checksum": "85bbfd86b2190138",
   "frontendContract": {
     "window": {
       "id": "6CB5B67ED33F47DFA334079D3EA2340E",
@@ -16,6 +16,7 @@
         "documentStatus": {
           "notIn": [
             "UE",
+            "ETGO_AC",
             "CA",
             "ETGO_CI",
             "CJ"
@@ -26,8 +27,7 @@
         "CA",
         "ETGO_CI",
         "CL",
-        "VO",
-        "CJ"
+        "VO"
       ],
       "customComponents": {
         "topbarRight": "QuotationTopbarActions",
@@ -243,7 +243,7 @@
               "maxLength": 60
             },
             "callout": {
-              "className": "org.openbravo.erpCommon.ad_callouts.SE_Order_BPartner"
+              "className": "org.openbravo.module.remittance.ad_callouts.REM_Order_Default_Bankaccount"
             },
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @DocStatus@='TMP'",
@@ -282,7 +282,7 @@
               ]
             },
             "callout": {
-              "className": "org.openbravo.erpCommon.ad_callouts.SE_Order_BPartnerLocation"
+              "className": "com.etendoerp.advanced.bank.account.management.ad_callouts.OrderBankAccountAssigner"
             },
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @DocStatus@='TMP'",
@@ -380,7 +380,7 @@
             "label": "Reject Reason",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": false,
             "grid": false,
             "form": true,
@@ -396,9 +396,9 @@
               "js": "record.documentStatus === 'CJ'"
             },
             "readOnlyLogic": {
-              "raw": "@DocStatus@='CJ'|@DocStatus@='CA'",
+              "raw": "@DocStatus@!'CJ'",
               "evaluable": true,
-              "js": "record['documentStatus'] === 'CJ' || record['documentStatus'] === 'CA'"
+              "js": "record['documentStatus'] !== 'CJ'"
             }
           },
           {
@@ -646,7 +646,7 @@
             "name": "eTGOCurrencyRate",
             "apiKey": "eTGOCurrencyRate",
             "column": "EM_ETGO_Currency_Rate",
-            "label": "EM_ETGO_Currency_Rate",
+            "label": "Exchange rate",
             "type": "string",
             "tsType": "string",
             "visibility": "editable",
@@ -713,6 +713,9 @@
             "CL",
             "VO",
             "CJ"
+          ],
+          "keepSaveWhenCompletedFields": [
+            "rejectReason"
           ]
         }
       },
@@ -1061,6 +1064,7 @@
         "documentStatus": {
           "notIn": [
             "UE",
+            "ETGO_AC",
             "CA",
             "ETGO_CI",
             "CJ"
@@ -1071,8 +1075,7 @@
         "CA",
         "ETGO_CI",
         "CL",
-        "VO",
-        "CJ"
+        "VO"
       ],
       "customComponents": {
         "topbarRight": "QuotationTopbarActions",
@@ -1284,7 +1287,7 @@
             "apiKey": "rejectReason",
             "column": "C_Reject_Reason_ID",
             "type": "foreignKey",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -1996,6 +1999,14 @@
             "apiKey": "eTGOInvoiceStatus",
             "column": "EM_ETGO_Invoice_Status",
             "type": "integer",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "eTABAMBankaccount",
+            "apiKey": "eTABAMBankaccount",
+            "column": "EM_Etabam_Bankaccount_ID",
+            "type": "foreignKey",
             "visibility": "system",
             "required": false
           }
@@ -4566,6 +4577,14 @@
         "description": "System field 'dropShipPartner' should exist in backend but not frontend for quotation"
       },
       {
+        "id": "t-system-field-quotation-eTABAMBankaccount",
+        "category": "system-field",
+        "entity": "quotation",
+        "field": "eTABAMBankaccount",
+        "runner": "node",
+        "description": "System field 'eTABAMBankaccount' should exist in backend but not frontend for quotation"
+      },
+      {
         "id": "t-system-field-quotation-eTGODeliveryStatus",
         "category": "system-field",
         "entity": "quotation",
@@ -5525,7 +5544,7 @@
       }
     ],
     "summary": {
-      "total": 310,
+      "total": 311,
       "byCategory": {
         "action-endpoint": 23,
         "crud-flags": 2,
@@ -5539,11 +5558,11 @@
         "rule-declared": 8,
         "searchable-filters": 6,
         "selector-endpoint": 10,
-        "system-field": 154,
+        "system-field": 155,
         "visibility": 2
       },
       "byRunner": {
-        "node": 310,
+        "node": 311,
         "junit": 0
       }
     }

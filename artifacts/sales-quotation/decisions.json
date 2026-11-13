@@ -9,7 +9,7 @@
     "notesField": "description",
     "relatedDocuments": true,
     "hideDeleteWhenComplete": true,
-    "hidePrintWhen": { "documentStatus": { "notIn": ["UE", "CA", "ETGO_CI", "CJ"] } },
+    "hidePrintWhen": { "documentStatus": { "notIn": ["UE", "ETGO_AC", "CA", "ETGO_CI", "CJ"] } },
     "customComponents": {
       "topbarRight": "QuotationTopbarActions",
       "bottomSection": "QuotationBottomPanel"
@@ -64,8 +64,7 @@
       "CA",
       "ETGO_CI",
       "CL",
-      "VO",
-      "CJ"
+      "VO"
     ],
     "preview": {
       "enabled": true,
@@ -95,6 +94,9 @@
           "CL",
           "VO",
           "CJ"
+        ],
+        "keepSaveWhenCompletedFields": [
+          "rejectReason"
         ]
       },
       "fields": {
@@ -178,11 +180,13 @@
           "visibility": "discarded"
         },
         "rejectReason": {
-          "visibility": "readOnly",
+          "visibility": "editable",
           "form": true,
           "grid": false,
           "section": "principal",
-          "displayLogic": "record.documentStatus === 'CJ'"
+          "displayLogic": "record.documentStatus === 'CJ'",
+          "readOnlyLogic": "@DocStatus@!'CJ'",
+          "_note": "ETP-6209: editable on a rejected (CJ) quotation only, so the seller can set the tenant's internal reason after a portal rejection (the portal never sets one: its reason goes to the notes). Overrides the AD logic @DocStatus@='CJ'|@DocStatus@='CA', which locked it exactly there. Saved with the plain Save of draftMode.keepSaveWhenCompletedFields."
         },
         "summedLineAmount": {
           "visibility": "readOnly",

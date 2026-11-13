@@ -42,6 +42,10 @@ const draftModeWithModal = {
   // still expose the Confirm button (which dispatches the convert-to-order/invoice
   // modal via onConfirm).
   completedStatuses: ['CA', 'ETGO_CI', 'CL', 'VO', 'CJ'],
+  // ETP-6209 — a rejected quotation (CJ) keeps a plain Save for its reject reason only, so the
+  // seller can set the tenant's internal reason after a portal rejection. MUST stay in sync with
+  // artifacts/sales-quotation/decisions.json -> entities.header.draftMode (this object shadows it).
+  keepSaveWhenCompletedFields: ['rejectReason'],
   disableWhenEmpty: true,
   onConfirm: () => window.dispatchEvent(new CustomEvent('sales-quotation:open-confirm-modal')),
 };
