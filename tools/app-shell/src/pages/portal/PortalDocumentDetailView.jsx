@@ -18,7 +18,7 @@ import {
 import { portalPdfFileName } from '@/lib/portal/portalInvoices.js';
 import { saveBlobAsFile } from '@/lib/portal/portalDownload.js';
 import {
-  PortalDate, PortalMain, PortalMoney, PortalPaymentStatus, PortalSection,
+  PortalDate, PortalMain, PortalMoney, PortalPaymentStatus, PortalSection, PORTAL_SECTION_TITLE,
 } from './PortalBits.jsx';
 import { PORTAL_KIND_META, documentLabelKey } from './portalPresentation.js';
 
@@ -445,7 +445,7 @@ function Installments({ document }) {
   const ui = useUI();
   return (
     <div className="flex flex-col gap-2">
-      <h2 className="text-[13px] font-medium uppercase leading-[18px] text-muted-foreground md:text-xs md:leading-4">{ui('portalInstallments')}</h2>
+      <h2 className={`${PORTAL_SECTION_TITLE} text-muted-foreground`}>{ui('portalInstallments')}</h2>
       <div className="flex flex-col gap-1.5 rounded-xl border border-border bg-card px-3 py-2.5 md:rounded-lg">
         {document.installments.map((installment, index) => (
           <div key={index} className="flex justify-between gap-3 text-sm tabular-nums" data-testid="portal-installment">

@@ -10,7 +10,7 @@ import { PortalLanguageSwitch } from './PortalShell.jsx';
 import {
   PortalCountChip, PortalDate, PortalDesktopHeader, PortalDocumentStatus, PortalDueDate, PortalMain,
   PortalMoney, PortalPaymentStatus, PortalRowBadge, PortalSearchPill, PortalValidUntil,
-  PORTAL_ROW_FOCUS, portalRowActivation,
+  PORTAL_ROW_FOCUS, PortalCreditNoteBadge, portalRowActivation,
 } from './PortalBits.jsx';
 import {
   PORTAL_KIND_GROUPS, PORTAL_KIND_META, documentLabelKey, quotationValidity, toCalendarParam,
@@ -114,7 +114,10 @@ export default function PortalDocumentListView({
     <div
       role="tablist"
       aria-label={ui('portalColStatus')}
-      className={cn('flex rounded-[10px] bg-muted p-1 md:rounded-lg', mobile ? 'gap-1' : 'gap-0.5')}
+      // Never wraps (M1): on a narrow phone the segmented control scrolls sideways with no visible
+      // scrollbar, as the app's horizontal rails do (`PendingTasksRail`).
+      className={cn('flex overflow-x-auto rounded-[10px] bg-muted p-1 md:rounded-lg', mobile ? 'gap-1' : 'gap-0.5')}
+      style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
     >
       {tabs.map((tab) => {
         const selected = (group ?? null) === tab.code;
@@ -127,7 +130,8 @@ export default function PortalDocumentListView({
             onClick={() => selectGroup(tab.code)}
             className={cn(
               'rounded-lg font-medium text-foreground',
-              mobile ? 'h-11 flex-1 text-[15px]' : 'h-8 px-3',
+              'shrink-0 whitespace-nowrap',
+              mobile ? 'h-11 flex-1 px-3 text-[15px]' : 'h-8 px-3',
               selected ? 'bg-card shadow-sm' : '',
             )}
             data-testid={`portal-status-tab-${(tab.code ?? 'all').toLowerCase()}${mobile ? '-mobile' : ''}`}
@@ -242,7 +246,8 @@ function DesktopTable({ kind, page, documents, onOpen }) {
   const hasAmounts = kind !== 'SHIPMENT';
   const singleTotal = (page?.totals ?? []).length === 1 ? page.totals[0] : null;
   const leadingColumns = 4 + (isQuotation || isInvoice ? 1 : 0) + (isInvoice ? 1 : 0);
-  const th = 'px-2 py-3 font-semibold';
+  // Headers stay on one line, as the design's (L2): the table scrolls sideways before it wraps.
+  const th = 'whitespace-nowrap px-2 py-3 font-semibold';
   const td = 'px-2 py-2.5';
   return (
     <div className="hidden overflow-x-auto md:block">
@@ -270,7 +275,7 @@ function DesktopTable({ kind, page, documents, onOpen }) {
               data-testid="portal-document-row"
             >
               <td className={`${td} pl-3 tabular-nums`}><PortalDate value={document.date} /></td>
-              <td className={td}>
+              <td className={`${td} whitespace-nowrap`}>
                 {/* The number stays its own link-like control; the row opens the same document. */}
                 <button
                   type="button"
@@ -280,9 +285,8 @@ function DesktopTable({ kind, page, documents, onOpen }) {
                 >
                   {document.documentNo}
                 </button>
-                {document.isCreditNote ? (
-                  <span className="ml-2 text-xs text-muted-foreground">{ui('portalKindCreditNote')}</span>
-                ) : null}
+                {/* The app's own "Factura rectificativa" pill, inline so the row stays one line. */}
+                {document.isCreditNote ? <PortalCreditNoteBadge className="ml-2 align-middle" /> : null}
               </td>
               <td className={`${td} max-w-[16rem] truncate text-muted-foreground`}>{document.reference || '—'}</td>
               {isQuotation ? <td className={`${td} tabular-nums`}><PortalValidUntil document={document} /></td> : null}
@@ -360,7 +364,10 @@ function MobileCard({ document, kind, onOpen }) {
       data-testid="portal-document-card"
     >
       <span className="flex items-center justify-between gap-3">
-        <span className="font-semibold">{document.documentNo}</span>
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="font-semibold">{document.documentNo}</span>
+          {document.isCreditNote ? <PortalCreditNoteBadge /> : null}
+        </span>
         {/* An invoice shows its payment state; its document status too when it is not the plain
             "completed" every listed invoice shares (closed, voided), like the table. */}
         <span className="flex flex-wrap items-center justify-end gap-1">
@@ -371,7 +378,6 @@ function MobileCard({ document, kind, onOpen }) {
         </span>
       </span>
       {document.reference ? <span className="truncate text-muted-foreground">{document.reference}</span> : null}
-      {document.isCreditNote ? <span className="text-xs text-muted-foreground">{ui(documentLabelKey(document))}</span> : null}
       <span className="flex items-end justify-between border-t border-border pt-3">
         <span className="flex flex-col text-sm">
           <span className="text-muted-foreground"><PortalDate value={document.date} /></span>

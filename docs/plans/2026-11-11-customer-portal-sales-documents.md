@@ -828,6 +828,19 @@ mobile headers, as the boards do; the shell is only the sidebar and the bottom b
   which are not native controls, also take a link role, a tab stop, Enter / Space and a focus ring
   (`portalRowActivation`); the others are buttons and get the same focus ring.
 
+- **Design pass (2026-11-13, live render vs boards).** Sidebar: the logo sits in a fixed 32×32
+  rounded tile (`object-contain` on the card background, initials when there is none); the footer
+  is a top rule with the etendo.ai mark + "Creado con etendo.ai" and a discreet text ES · EN switch
+  (the app keeps the language in its user menu, which the portal has not). Home: the uppercase
+  section titles are set in Inter like the design's (the global `h1–h6` Plus Jakarta Sans rule ran
+  their words together); "Requiere tu atención" and "Tu saldo" hug their content; desktop "Tu
+  saldo" is pending + paid pills only (the overdue line is mobile-only); the chart's axis uses the
+  dashboard's `niceScale` / `formatDashboardAxisTick` (round ticks); "1 factura" through the app's
+  `_one` / `_plural` keys. Invoices: credit notes carry the app's own "Factura rectificativa" pill
+  (the sales-invoice list's document-type badge) inline, table and mobile card; table headers do
+  not wrap. Mobile: the status tabs scroll sideways instead of wrapping, and the mobile base text
+  is 16 px as on the boards.
+
 **Agreed OUT items (the only design elements not built).** The account / user menu (no login);
 "Ayuda y soporte"; "Albaranes de devolución" (returns are out of scope); the checkboxes and
 "Descargar seleccionados"; the advanced "Filtros"; "Comentarios"; Aceptar / Rechazar and the

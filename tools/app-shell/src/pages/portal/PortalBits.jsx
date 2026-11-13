@@ -150,6 +150,30 @@ export function portalRowActivation(onActivate, label) {
   };
 }
 
+/**
+ * The uppercase section titles ("REQUIERE TU ATENCIÓN", "TU SALDO", …). Set in Inter like the
+ * design's: the app's global `h1–h6` rule switches headings to Plus Jakarta Sans, whose word
+ * space at 12px uppercase collapses visually and ran the words together ("REQUIERETUATENCIÓN").
+ */
+export const PORTAL_SECTION_TITLE = "font-['Inter',sans-serif] text-[13px] font-medium uppercase leading-[18px] tracking-normal [word-spacing:normal] md:text-xs md:leading-4";
+
+/**
+ * A credit note's marker, the app's own: the "Factura rectificativa" pill of the sales-invoice
+ * list's document-type column (`artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx`,
+ * `transactionDocument`) — primary text on a primary tint, same label key.
+ */
+export function PortalCreditNoteBadge({ className }) {
+  const ui = useUI();
+  return (
+    <span
+      className={cn('inline-block whitespace-nowrap rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary', className)}
+      data-testid="portal-credit-note-badge"
+    >
+      {ui('rectificativeInvoicesTab')}
+    </span>
+  );
+}
+
 /** A section with the design's grey header band. */
 export function PortalSection({ title, action, children, className = '', testId }) {
   return (
@@ -158,7 +182,7 @@ export function PortalSection({ title, action, children, className = '', testId 
       data-testid={testId}
     >
       <div className="flex h-14 items-center justify-between border-b border-border bg-muted px-5 md:h-12 md:px-3">
-        <h2 className="text-[13px] font-medium uppercase leading-[18px] md:text-xs md:leading-4">{title}</h2>
+        <h2 className={PORTAL_SECTION_TITLE}>{title}</h2>
         {action}
       </div>
       {children}

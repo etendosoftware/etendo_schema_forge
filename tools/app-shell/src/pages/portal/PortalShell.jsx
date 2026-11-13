@@ -19,25 +19,56 @@ export const PORTAL_KIND_ICONS = Object.freeze({
 /** The kinds the mobile bottom bar shows directly (design Movil-*); the rest live under "Más". */
 const MOBILE_PRIMARY_KINDS = Object.freeze(['QUOTATION', 'INVOICE']);
 
+/** Up to two initials of a company name, for the logo tile when the company has no logo. */
+function initialsOf(name) {
+  const words = String(name ?? '').trim().split(/\s+/).filter(Boolean);
+  return words.slice(0, 2).map((word) => word[0]).join('').toUpperCase() || '·';
+}
+
 /**
- * The tenant's brand block: logo, name and "Portal del cliente" (story item 8). Either part
- * degrades on its own — no logo, no name — without breaking the layout.
+ * The company's logo in the design's fixed rounded-square tile (32×32; 40×40 on the mobile bar):
+ * the logo is contained in it on a neutral card background, so a wide logotype is shrunk to fit
+ * instead of being squeezed into a strip; with no logo the tile shows the company's initials, the
+ * way the app's avatars fall back.
  */
-export function PortalBrand({ identity, logoUrl, size = 'sm' }) {
-  const ui = useUI();
+export function PortalLogoTile({ identity, logoUrl, size = 'sm' }) {
   const large = size === 'lg';
   return (
-    <div className={cn('flex min-w-0 items-center', large ? 'gap-3' : 'gap-2.5')} data-testid="portal-brand">
+    <span
+      className={cn(
+        'flex shrink-0 items-center justify-center overflow-hidden border border-border bg-card',
+        large ? 'h-10 w-10 rounded-[10px]' : 'h-8 w-8 rounded-lg',
+      )}
+      data-testid="portal-logo-tile"
+    >
       {logoUrl ? (
         <img
           src={logoUrl}
           // The tenant name, not "logo": a screen reader should say the company; with no name the
           // empty alt correctly marks the image as decorative.
           alt={identity?.tenantName ?? ''}
-          className={cn('shrink-0 object-contain', large ? 'h-10 w-10 rounded-[10px]' : 'h-8 w-8 rounded-lg')}
+          className="h-full w-full object-contain p-0.5"
           data-testid="portal-logo"
         />
-      ) : null}
+      ) : (
+        <span className={cn('font-semibold text-muted-foreground', large ? 'text-sm' : 'text-xs')} aria-hidden="true">
+          {initialsOf(identity?.tenantName)}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * The tenant's brand block: the logo tile beside the company name and "Portal del cliente"
+ * (story item 8). Either text line degrades on its own without breaking the layout.
+ */
+export function PortalBrand({ identity, logoUrl, size = 'sm' }) {
+  const ui = useUI();
+  const large = size === 'lg';
+  return (
+    <div className={cn('flex min-w-0 items-center', large ? 'gap-3' : 'gap-2.5')} data-testid="portal-brand">
+      <PortalLogoTile identity={identity} logoUrl={logoUrl} size={size} />
       <div className="flex min-w-0 flex-col">
         {identity?.tenantName ? (
           <span
@@ -55,8 +86,13 @@ export function PortalBrand({ identity, logoUrl, size = 'sm' }) {
   );
 }
 
-/** ES / EN switch (§B.8). Spanish is the default; the choice is the viewer's. */
-export function PortalLanguageSwitch() {
+/**
+ * ES / EN switch (§B.8). Spanish is the default; the choice is the viewer's. `compact` is the
+ * discreet text form for the sidebar footer: in the app the language lives inside the user menu,
+ * which the portal does not have, so it sits beside "Creado con etendo.ai" without competing
+ * with the navigation.
+ */
+export function PortalLanguageSwitch({ compact = false }) {
   const ui = useUI();
   const { locale, setLocale } = useLocaleSwitch();
   if (!setLocale) return null;
@@ -64,6 +100,33 @@ export function PortalLanguageSwitch() {
     { code: 'es_ES', short: 'ES', labelKey: 'portalSwitchToSpanish' },
     { code: 'en_US', short: 'EN', labelKey: 'portalSwitchToEnglish' },
   ];
+  if (compact) {
+    return (
+      <div role="group" aria-label={ui('portalLanguage')} className="flex items-center gap-1 text-xs" data-testid="portal-language-switch">
+        {options.map((option, index) => {
+          const active = (locale || 'es_ES').startsWith(option.code.slice(0, 2));
+          return (
+            <span key={option.code} className="flex items-center gap-1">
+              {index > 0 ? <span className="text-muted-foreground" aria-hidden="true">·</span> : null}
+              <button
+                type="button"
+                aria-pressed={active}
+                aria-label={ui(option.labelKey)}
+                onClick={() => setLocale(option.code)}
+                className={cn(
+                  'rounded px-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  active ? 'font-semibold text-foreground' : 'text-muted-foreground hover:text-foreground',
+                )}
+                data-testid={`portal-language-${option.short.toLowerCase()}`}
+              >
+                {option.short}
+              </button>
+            </span>
+          );
+        })}
+      </div>
+    );
+  }
   return (
     <div
       role="group"
@@ -149,7 +212,7 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
     && (view === 'home' || current?.kind === kind);
 
   return (
-    <div className="flex h-screen min-h-0 bg-background text-sm text-foreground" data-testid="portal-shell">
+    <div className="flex h-screen min-h-0 bg-background text-base text-foreground md:text-sm" data-testid="portal-shell">
       {/* Desktop sidebar */}
       <nav
         aria-label={ui('portalPageTitle')}
@@ -205,11 +268,12 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
           </div>
         </div>
         <div className="flex-1" />
-        <div className="flex flex-col gap-2.5 border-t border-border px-4 pt-2.5">
-          <PortalLanguageSwitch />
-          <span className="text-xs text-muted-foreground" data-testid="portal-created-with">
-            {ui('portalCreatedWith')}
+        <div className="flex items-center justify-between gap-2 border-t border-border px-4 pt-2.5">
+          <span className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground" data-testid="portal-created-with">
+            <img src="/logo-etendo-ai.png" alt="" className="h-3.5 w-3.5 shrink-0 object-contain" />
+            <span className="truncate">{ui('portalCreatedWith')}</span>
           </span>
+          <PortalLanguageSwitch compact />
         </div>
       </nav>
 

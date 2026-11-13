@@ -7,7 +7,8 @@ import { cn } from '@/lib/utils';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { formatCurrency, formatGroupedNumber } from '@/lib/formatCurrency.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
+import { formatDashboardAxisTick, niceScale } from '@/lib/dashboardNumberFormat.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 import {
   PORTAL_CHART_MONTHS, PORTAL_ERROR, searchPortalDocuments,
@@ -15,7 +16,7 @@ import {
 import { PORTAL_KIND_ICONS, PortalMobileBrandBar } from './PortalShell.jsx';
 import {
   PortalDate, PortalDesktopHeader, PortalMain, PortalMoney, PortalRowBadge, PortalSearchPill,
-  PortalSection, PortalTag, PORTAL_ROW_FOCUS, usePortalLocale,
+  PortalSection, PortalTag, PORTAL_ROW_FOCUS, PORTAL_SECTION_TITLE, usePortalLocale,
 } from './PortalBits.jsx';
 import { PORTAL_HIGHLIGHTS, PORTAL_KIND_META, documentLabelKey } from './portalPresentation.js';
 
@@ -80,14 +81,15 @@ export default function PortalHomeView({
 
         <MobilePendingHero balances={balances} onNavigate={onNavigate} />
 
-        <div className="flex flex-wrap gap-3">
+        {/* items-start: both cards hug their content, as in the design (no stretched tiles). */}
+        <div className="flex flex-wrap items-start gap-3">
           <section
             className="min-w-0 flex-[2_1_560px] overflow-hidden md:rounded-lg md:border md:border-border"
             aria-label={ui('portalAttentionTitle')}
             data-testid="portal-tiles"
           >
             <div className="hidden h-12 items-center border-b border-border bg-muted px-3 md:flex">
-              <h2 className="text-xs font-medium uppercase leading-4">{ui('portalAttentionTitle')}</h2>
+              <h2 className={PORTAL_SECTION_TITLE}>{ui('portalAttentionTitle')}</h2>
             </div>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fit,minmax(150px,1fr))] md:p-3">
               {TILE_ORDER.map((kind) => (
@@ -261,7 +263,8 @@ function MobilePendingHero({ balances, onNavigate }) {
           <div className="flex items-center justify-between">
             <span className="text-sm opacity-80">{ui('portalPendingPayment')}</span>
             <span className="rounded-lg bg-[hsl(var(--accent-highlight))] px-2.5 py-0.5 text-[13px] font-medium leading-[18px] text-[hsl(var(--accent-highlight-foreground))]">
-              {ui('portalInvoicesCount', { count: balance.pendingCount })}
+              {ui(balance.pendingCount === 1 ? 'portalInvoicesCount_one' : 'portalInvoicesCount_plural',
+                { count: balance.pendingCount })}
             </span>
           </div>
           <span className="font-['Plus_Jakarta_Sans',Inter,sans-serif] text-[44px] font-bold leading-[52px] tabular-nums">
@@ -292,12 +295,16 @@ function MobilePendingHero({ balances, onNavigate }) {
   );
 }
 
-/** "Tu saldo": pending payment (and its overdue part), and what was paid this year. */
+/**
+ * "Tu saldo" (desktop, design Main): "Pendiente de pago" with its count chip and one amount pill
+ * per currency, a divider, then "Pagado este año" the same way. The overdue detail ("… vencidos
+ * desde …") belongs to the mobile card only, as on the Movil-Inicio board.
+ */
 function Balance({ balances, paid }) {
   const ui = useUI();
-  const bcpLocale = usePortalLocale();
+  const pill = 'self-start rounded-md border px-2.5 text-lg font-medium leading-7 tabular-nums';
   return (
-    <div className="flex flex-1 flex-col gap-3.5 p-3.5">
+    <div className="flex flex-col gap-3.5 p-3.5">
       <div className="flex flex-col gap-1.5" data-testid="portal-balance-pending">
         <span className="flex items-center gap-1.5 font-medium text-destructive">
           {ui('portalPendingPayment')}
@@ -306,24 +313,15 @@ function Balance({ balances, paid }) {
           </PortalTag>
         </span>
         {balances.length === 0 ? (
-          <span className="text-sm text-muted-foreground" data-testid="portal-balance-empty">{ui('portalNothingPending')}</span>
+          <span className={`${pill} border-border text-muted-foreground`} data-testid="portal-balance-empty">—</span>
         ) : balances.map((balance) => (
-          <div key={balance.currency || 'none'} className="flex flex-col gap-1" data-testid="portal-balance-currency">
-            <span
-              className="self-start rounded-md border border-destructive/30 bg-[var(--status-destructive-bg)] px-2.5 text-lg font-medium leading-7 text-destructive tabular-nums"
-              data-testid="portal-balance-outstanding"
-            >
-              {formatCurrency(balance.currency, balance.outstanding)}
-            </span>
-            {balance.overdue > 0 ? (
-              <span className="text-xs text-destructive" data-testid="portal-balance-overdue">
-                {ui('portalOverdueSince', {
-                  amount: formatCurrency(balance.currency, balance.overdue),
-                  date: formatCalendarDate(balance.overdueSince, bcpLocale),
-                })}
-              </span>
-            ) : null}
-          </div>
+          <span
+            key={balance.currency || 'none'}
+            className={`${pill} border-destructive/30 bg-[var(--status-destructive-bg)] text-destructive`}
+            data-testid="portal-balance-outstanding"
+          >
+            {formatCurrency(balance.currency, balance.outstanding)}
+          </span>
         ))}
       </div>
       <div className="h-px bg-border" />
@@ -335,13 +333,11 @@ function Balance({ balances, paid }) {
           </PortalTag>
         </span>
         {paid.length === 0 ? (
-          <span className="self-start rounded-md border border-[var(--status-success-border)] bg-[var(--status-success-bg)] px-2.5 text-lg font-medium leading-7 text-[var(--status-success-fg)]">
-            —
-          </span>
+          <span className={`${pill} border-border text-muted-foreground`}>—</span>
         ) : paid.map((entry) => (
           <span
             key={entry.currency || 'none'}
-            className="self-start rounded-md border border-[var(--status-success-border)] bg-[var(--status-success-bg)] px-2.5 text-lg font-medium leading-7 text-[var(--status-success-fg)] tabular-nums"
+            className={`${pill} border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[var(--status-success-fg)]`}
             data-testid="portal-balance-paid-amount"
           >
             {formatCurrency(entry.currency, entry.paid)}
@@ -432,20 +428,16 @@ function RecentDocuments({ recent, onOpen }) {
   );
 }
 
-/** Axis tick: thousands as "1,5K", through the instance's grouped-number formatter. */
-function formatTick(value) {
-  if (value >= 1000) return `${formatGroupedNumber(value / 1000, { maximumFractionDigits: 1 })}K`;
-  return formatGroupedNumber(value, { maximumFractionDigits: 0 });
-}
-
 /** "Facturado por mes": one bar per month of the chosen period, in the most used currency. */
 function InvoicedChart({ chart, year }) {
   const ui = useUI();
   const bcpLocale = usePortalLocale();
   const bars = chart?.bars ?? [];
   const max = Math.max(0, ...bars.map((bar) => bar.amount));
-  const top = max > 0 ? max : 1;
-  const ticks = [top, (top * 2) / 3, top / 3, 0];
+  // Round ticks (0 / 500 / 1K / 1,5K), with the app's dashboard helpers: the axis tops at the
+  // nice maximum, not at the largest bar.
+  const { niceMax: top, ticks: ascending } = niceScale(max);
+  const ticks = [...ascending].reverse();
   return (
     <div className="flex flex-col gap-2.5 px-3.5 py-3">
       {year?.total > 0 ? (
@@ -456,7 +448,7 @@ function InvoicedChart({ chart, year }) {
       ) : null}
       <div className="grid grid-cols-[36px_minmax(0,1fr)] gap-2">
         <div className="flex h-[150px] flex-col justify-between text-right text-[11px] text-muted-foreground">
-          {ticks.map((tick, index) => <span key={index}>{max > 0 ? formatTick(tick) : (index === 3 ? '0' : '')}</span>)}
+          {ticks.map((tick) => <span key={tick}>{formatDashboardAxisTick(tick, bcpLocale)}</span>)}
         </div>
         <div
           className="grid h-[150px] items-end gap-4 border-b border-l border-border px-2.5"
