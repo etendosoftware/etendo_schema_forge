@@ -26330,6 +26330,7 @@
     "planChangeTimingPeriodEnd": "Applies at the end of the period",
     "planChangeImmediateNote": "Applies now. The difference is invoiced today and your billing date does not move.",
     "planChangeIntervalNote": "Applies now. Billing switches to yearly and keeps your billing date; today you pay the yearly price minus the unused part of your current period.",
+    "planChangeIntervalToMonthlyNote": "Applies now. Billing switches to monthly and keeps your billing date; the unused part of your current period is credited against your next invoices.",
     "planChangePeriodEndNote": "Applies on {date}, when the current period ends. Nothing changes before then.",
     "planChangeQuotaKept": "What you have used this year carries over; your yearly quota does not start again.",
     "planChangeQuotaFine": "Your current usage fits within this plan's limits.",

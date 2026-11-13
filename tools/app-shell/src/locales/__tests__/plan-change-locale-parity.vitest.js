@@ -7,9 +7,10 @@ import esES from '../es_ES.json';
 import esAR from '../es_AR.json';
 
 /**
- * The plan-change copy (the /account "Change plan" dialog and the pending-change line)
- * exists in every locale with the same placeholders, so a missing translation can never fall back
- * to a raw key in front of a customer.
+ * The plan-change copy (the /account "Change plan" dialog and the pending-change line, including
+ * the catalog price keys the dialog phrases each option with) exists in every locale with the same
+ * placeholders: the UI has no locale fallback, so a missing translation shows the raw key in front
+ * of a customer.
  */
 const KEYS = [
   'subscriptionPendingChange', 'subscriptionChangePlan', 'subscriptionQuotaYear', 'planChangeTitle',
@@ -21,7 +22,8 @@ const KEYS = [
   'planChangeChargeToday', 'planChangeChargeTodayCard', 'planChangeChargeLoading',
   'planChangeChargeUnknown', 'planChangePaymentRequired', 'planChangeCompletePayment',
   'planChangeTimingKeep', 'planChangeKeepNote', 'planChangePendingCancelled',
-  'planChangeDoneTitle', 'planChangePaymentReturnHint',
+  'planChangeDoneTitle', 'planChangePaymentReturnHint', 'planChangeIntervalToMonthlyNote',
+  'upgradePlanPriceMonthly', 'upgradePlanPriceYearly',
 ];
 
 const read = (locale, key) => locale.genericLabels?.[key];

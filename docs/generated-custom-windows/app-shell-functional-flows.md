@@ -477,7 +477,9 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   and `tools/app-shell/src/components/account/PlanChangeDialog.jsx` (the dialog).
 - **When the action is offered:** on a renewing subscription (`status` in `RENEWING_STATUSES`) that
   has a catalog plan (`planName`). A past-due or canceled subscription gets no action: the backend
-  refuses it anyway (`409 SUBSCRIPTION_NOT_CURRENT`).
+  refuses it anyway (`409 SUBSCRIPTION_NOT_CURRENT`). The dialog applies the same set
+  (`lib/upgrade/subscriptionStatus.js`) to the `subscriptionStatus` of the offer
+  (`PlanChangeDialog__notCurrent`).
 - **Data:** `GET /sws/go/billing/subscription/plan-changes` (`lib/upgrade/api.js` →
   `getPlanChanges`), the active *Allowed plan changes* rows of the current plan: each target with
   `timing` (`immediate` / `period_end`), `intervalChange`, its catalog price, and `quotas[]` — the
@@ -488,11 +490,16 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   (`planChangeImmediateNote` for an upgrade — applies now, the difference invoiced today, the billing
   date unchanged; `planChangeIntervalNote` for monthly → annual — billing switches to yearly and
   keeps the billing date, today the yearly price minus the unused part of the period;
+  `planChangeIntervalToMonthlyNote` for an annual → monthly change applied now (not offered by
+  default, an operator can configure it) — billing switches to monthly and keeps the billing date,
+  the unused part of the period is credited against the next invoices; the note is picked by the
+  target's `billingInterval`;
   `planChangePeriodEndNote` with the current period end for a downgrade — nothing changes before
   then), for an upgrade **the charge line** (`PlanChangeDialog__charge`: `planChangeChargeTodayCard`
   "You will be charged {amount} today on your {brand} ending in {last4}", `planChangeChargeToday`
   without a saved card, `planChangeChargeLoading` while it is quoted, `planChangeChargeUnknown`
-  when the quote fails — the confirm stays enabled then), the quota note (`planChangeQuotaKept`,
+  when the quote fails — the confirm stays enabled then; a quoted `amountDue` of `0` is shown as a
+  zero charge, only a missing one is unknown), the quota note (`planChangeQuotaKept`,
   always: the quota year follows the billing period, which flexible billing keeps), and **one line
   per exceeded quota of the target**
   (`PlanChangeDialog__quotaExceededItem`, `planChangeQuotaExceeded`: "{resource}: you have used
@@ -513,9 +520,15 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   as soon as it is paid. That page has no return address, so the dialog adds
   `planChangePaymentReturnHint` (close the payment tab and come back) and, while the payment is
   outstanding, asks the section to re-read the subscription every time the tab becomes visible
-  again (`visibilitychange`/`focus` → `onChanged`); once the section's `planKey` is the target
+  again (`visibilitychange`/`focus` → `onChanged`; both fire on one return, so a recheck within
+  1 s of the previous one is skipped) and every 5 s while the tab stays visible
+  (`PAYMENT_RECHECK_INTERVAL_MS`: the webhook may land after the customer is back), stopping when
+  the change has applied or the dialog closes; once the section's `planKey` is the target
   (the paid invoice applied the change and its webhook updated the row) the dialog turns into the
-  **Plan changed** confirmation. Otherwise the answer is
+  **Plan changed** confirmation. Closing and reopening the dialog keeps the outstanding payment
+  (its link, no options): offering the options again would let the customer confirm the same
+  upgrade a second time, with a new quote and a second invoice; once the change has applied a
+  reopen starts from the options again. Otherwise the answer is
   shown in place (`PlanChangeDialog__done`: `planChangeDoneImmediate` with the new plan, or
   `planChangeDoneScheduled` with the date; `planChangeAlreadyPending` when the same downgrade was
   already scheduled) and the section re-reads the subscription in the background (`onChanged` →
@@ -523,6 +536,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   it), so the plan, the quotas and the pending line follow. Refusals keep the dialog open with their own line: `planChangeNotAllowed`
   (409 `PLAN_CHANGE_NOT_ALLOWED`), `planChangeNotCurrent` (409 `SUBSCRIPTION_NOT_CURRENT`),
   `planChangeFailed` (anything else); a 401 is handed to the host as everywhere on the page.
+  A refusal or failure line belongs to the option it was about: picking another option clears it.
 - **Keeping the current plan:** while a downgrade is pending the backend lists the changes of the
   plan it moves to, with the current plan first as `timing: "keep"` (badge `planChangeTimingKeep`,
   note `planChangeKeepNote` "Cancels the scheduled change to {plan}…", no charge line, no quote).
@@ -533,7 +547,8 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   dialog repeats it (`PlanChangeDialog__pending`). It disappears when the change applies at the
   period end or an upgrade releases it.
 - **Formatting:** prices through `formatCurrency` with the `upgradePlanPriceMonthly` /
-  `upgradePlanPriceYearly` keys; dates through `formatCalendarDate`. Strings in `en_US.json`,
+  `upgradePlanPriceYearly` keys (present in all three locales: the UI has no locale fallback, a
+  missing key shows raw); dates through `formatCalendarDate`. Strings in `en_US.json`,
   `es_ES.json` and `es_AR.json` (`locales/__tests__/plan-change-locale-parity.vitest.js` pins parity).
 - **Test ids:** `PlanChangeDialog__root`, `__loading`, `__unavailable`, `__retry`, `__none`,
   `__pending`, `__options`, `__option` (with `data-plan-key`, `data-timing`), `__optionName`,

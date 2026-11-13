@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  useCallback, useEffect, useMemo, useRef, useState,
+} from 'react';
 import { CheckCircle2, Circle, Loader2 } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { Button } from '@/components/ui/button';
@@ -21,6 +23,7 @@ import {
   isQuotaOverLimit,
   quotaResourceLabel,
 } from '@/lib/planQuotas.js';
+import { RENEWING_STATUSES } from '@/lib/upgrade/subscriptionStatus.js';
 
 /** Billing interval as the catalog spells it, mapped to the key that phrases the price. */
 const PRICE_LABEL_KEYS = { month: 'upgradePlanPriceMonthly', year: 'upgradePlanPriceYearly' };
@@ -36,9 +39,18 @@ const TIMING_BADGE_KEYS = {
 const REFUSAL_CODES = new Set([
   UPGRADE_ERROR_CODES.planChangeNotAllowed, UPGRADE_ERROR_CODES.planChangeNotCurrent,
 ]);
+/** While a payment is outstanding, how often the dialog re-reads the subscription (tab visible). */
+export const PAYMENT_RECHECK_INTERVAL_MS = 5000;
+/**
+ * One return to the tab fires both `visibilitychange` and `focus`: a recheck this soon after the
+ * previous one is the same return and is skipped.
+ */
+const RECHECK_DEBOUNCE_MS = 1000;
 
-/** Subscription statuses that can change plan; anything else is refused by the backend. */
-const CURRENT_STATUSES = new Set(['active', 'trialing']);
+/** An upgrade still waiting for its payment: nothing changed yet, the host is not on the target. */
+function isAwaitingPayment(done, currentPlanKey) {
+  return Boolean(done?.paymentRequired) && currentPlanKey !== done.planKey;
+}
 
 /** The line a refused or failed change request shows: its own code for a refusal, else generic. */
 function errorKeyOf(err) {
@@ -67,7 +79,7 @@ function exceededQuotasOf(selected) {
 
 /**
  * The timing note of the chosen target: keep the current plan (cancels the pending change),
- * downgrade at the period end, interval change, upgrade.
+ * downgrade at the period end, interval change (to annual, or to monthly), upgrade.
  */
 function timingNote(selected, ui, periodEndDate, pending) {
   if (selected.timing === TIMING_KEEP) {
@@ -76,7 +88,10 @@ function timingNote(selected, ui, periodEndDate, pending) {
   if (selected.timing === TIMING_PERIOD_END) {
     return ui('planChangePeriodEndNote', { date: periodEndDate || '' });
   }
-  return ui(selected.intervalChange ? 'planChangeIntervalNote' : 'planChangeImmediateNote');
+  if (!selected.intervalChange) return ui('planChangeImmediateNote');
+  // An annual-to-monthly change is not offered by default, but an operator can configure it.
+  return ui(selected.billingInterval === 'month'
+    ? 'planChangeIntervalToMonthlyNote' : 'planChangeIntervalNote');
 }
 
 /** `Visa` from the provider's `visa`; the brand as given when it is not a plain word. */
@@ -93,7 +108,7 @@ function chargeText(preview, ui) {
   if (preview.status === 'loading') return ui('planChangeChargeLoading');
   if (preview.status === 'refused') return null;
   const data = preview.data;
-  if (preview.status !== 'loaded' || !data?.amountDue || !data?.currency) {
+  if (preview.status !== 'loaded' || data?.amountDue == null || !data?.currency) {
     return ui('planChangeChargeUnknown');
   }
   const amount = formatCurrency(data.currency, data.amountDue);
@@ -136,10 +151,13 @@ export function planPriceLabel(plan, ui) {
  * invoice page. The host reloads the subscription (`onChanged`).
  *
  * That invoice page opens in its own tab and never sends the customer back (the provider's hosted
- * invoice page has no return address). While the payment is outstanding, every time this tab
- * becomes visible again the dialog asks the host to reload the subscription; once the host's
- * `currentPlanKey` is the target plan (the paid invoice applied the change and its webhook updated
- * the subscription) the dialog turns into the "plan changed" confirmation.
+ * invoice page has no return address). While the payment is outstanding the dialog asks the host to
+ * reload the subscription every time this tab becomes visible again, and every
+ * `PAYMENT_RECHECK_INTERVAL_MS` while it stays visible (the webhook may land after the return);
+ * once the host's `currentPlanKey` is the target plan (the paid invoice applied the change and its
+ * webhook updated the subscription) the dialog turns into the "plan changed" confirmation. Closing
+ * and reopening the dialog keeps that outstanding payment: offering the options again would let the
+ * customer confirm the same upgrade a second time (a new quote, a second invoice).
  */
 export function PlanChangeDialog({
   open, onOpenChange, apiBaseUrl, clientId = null, periodEnd = null, onChanged,
@@ -156,6 +174,9 @@ export function PlanChangeDialog({
   const [done, setDone] = useState(null);
   // 'idle' | 'loading' | 'loaded' | 'failed', for the selected upgrade only
   const [preview, setPreview] = useState({ status: 'idle', data: null });
+  // Read by the open effect without re-running it (and reloading) when the host's plan changes.
+  const currentPlanKeyRef = useRef(currentPlanKey);
+  useEffect(() => { currentPlanKeyRef.current = currentPlanKey; }, [currentPlanKey]);
 
   const load = useCallback(async () => {
     setStatus('loading');
@@ -178,7 +199,9 @@ export function PlanChangeDialog({
   useEffect(() => {
     if (!open) return;
     setSelectedKey(null);
-    setDone(null);
+    // An upgrade waiting for its payment survives a reopen: the customer completes that payment
+    // instead of confirming the same change again.
+    setDone((prev) => (isAwaitingPayment(prev, currentPlanKeyRef.current) ? prev : null));
     setErrorKey(null);
     load();
   }, [open, load]);
@@ -219,18 +242,26 @@ export function PlanChangeDialog({
     return () => { cancelled = true; };
   }, [apiBaseUrl, clientId, selectedKey, selectedTiming, onSessionExpired, onOpenChange]);
   // ETP-5053 — the customer pays in another tab: re-read the subscription whenever this one is
-  // shown again, until the change has applied.
+  // shown again, and periodically while it stays visible (the webhook may land after the return),
+  // until the change has applied or the dialog closes.
   const awaitingPayment = Boolean(open && done?.paymentRequired);
+  const lastRecheckRef = useRef(0);
   useEffect(() => {
     if (!awaitingPayment) return undefined;
     const recheck = () => {
-      if (document.visibilityState === 'visible') onChanged?.(done);
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - lastRecheckRef.current < RECHECK_DEBOUNCE_MS) return;
+      lastRecheckRef.current = now;
+      onChanged?.(done);
     };
     document.addEventListener('visibilitychange', recheck);
     window.addEventListener('focus', recheck);
+    const timer = window.setInterval(recheck, PAYMENT_RECHECK_INTERVAL_MS);
     return () => {
       document.removeEventListener('visibilitychange', recheck);
       window.removeEventListener('focus', recheck);
+      window.clearInterval(timer);
     };
   }, [awaitingPayment, done, onChanged]);
 
@@ -243,7 +274,7 @@ export function PlanChangeDialog({
   const pending = offer?.pendingChange || null;
   // A past-due or canceled subscription cannot change plan: say so up front, offer nothing.
   const notCurrent = status === 'loaded' && Boolean(offer?.subscriptionStatus)
-    && !CURRENT_STATUSES.has(offer.subscriptionStatus);
+    && !RENEWING_STATUSES.has(offer.subscriptionStatus);
   const periodEndDate = periodEnd ? formatCalendarDate(periodEnd, locale) : null;
 
   const handleConfirm = useCallback(async () => {
@@ -268,6 +299,12 @@ export function PlanChangeDialog({
       setSubmitting(false);
     }
   }, [apiBaseUrl, clientId, selected, preview, onChanged, onSessionExpired, onOpenChange]);
+
+  // A refusal or failure belongs to the option it was about: picking another one clears it.
+  const selectOption = useCallback((planKey) => {
+    if (planKey !== selectedKey) setErrorKey(null);
+    setSelectedKey(planKey);
+  }, [selectedKey]);
 
   const exceeded = exceededQuotasOf(selected);
   // Once a change is done (applied, scheduled or a scheduled one cancelled) the dialog is only a
@@ -367,7 +404,7 @@ export function PlanChangeDialog({
                       ? 'bg-primary/10 ring-2 ring-inset ring-primary'
                       : 'hover:bg-muted/60'}`}
                     aria-pressed={isSelected}
-                    onClick={() => setSelectedKey(change.planKey)}
+                    onClick={() => selectOption(change.planKey)}
                     data-testid="PlanChangeDialog__option"
                     data-plan-key={change.planKey}
                     data-timing={change.timing}

@@ -26568,6 +26568,7 @@
     "planChangeTimingPeriodEnd": "Se aplica al final del periodo",
     "planChangeImmediateNote": "Se aplica ahora. La diferencia se factura hoy y tu fecha de facturación no cambia.",
     "planChangeIntervalNote": "Se aplica ahora. La facturación pasa a anual y mantiene tu fecha de facturación; hoy pagas el precio anual menos la parte no usada de tu periodo actual.",
+    "planChangeIntervalToMonthlyNote": "Se aplica ahora. La facturación pasa a mensual y mantiene tu fecha de facturación; la parte no usada de tu periodo actual se descuenta de tus próximas facturas.",
     "planChangePeriodEndNote": "Se aplica el {date}, cuando termina el periodo actual. Hasta entonces nada cambia.",
     "planChangeQuotaKept": "Lo consumido este año se conserva; tu cuota anual no vuelve a empezar.",
     "planChangeQuotaFine": "Tu uso actual entra dentro de los límites de este plan.",

@@ -1,5 +1,7 @@
 // @covers tools/app-shell/src/components/account/PlanChangeDialog.jsx
-import { render, screen, waitFor, within } from '@testing-library/react';
+import {
+  act, render, screen, waitFor, within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 /**
@@ -53,7 +55,9 @@ vi.mock('@/lib/upgrade/api.js', () => ({
   },
 }));
 
-import { PlanChangeDialog, planPriceLabel } from '../PlanChangeDialog.jsx';
+import {
+  PAYMENT_RECHECK_INTERVAL_MS, PlanChangeDialog, planPriceLabel,
+} from '../PlanChangeDialog.jsx';
 
 const PRO = {
   planKey: 'pro', planName: 'Pro', billingInterval: 'month', displayPrice: '99', currency: 'EUR',
@@ -71,6 +75,15 @@ const PRO_YEARLY = {
   planKey: 'pro-yearly', planName: 'Pro yearly', billingInterval: 'year', displayPrice: '990',
   currency: 'EUR', timing: 'immediate', intervalChange: true, quotas: [],
 };
+/** Annual to monthly, applied now: not offered by default, but an operator can configure it. */
+const PRO_MONTHLY_FROM_YEARLY = {
+  planKey: 'pro-monthly', planName: 'Pro monthly', billingInterval: 'month', displayPrice: '99',
+  currency: 'EUR', timing: 'immediate', intervalChange: true, quotas: [],
+};
+const PAYMENT_REQUIRED = {
+  planKey: 'pro', planName: 'Pro', timing: 'immediate', effectiveAt: '2026-10-31T10:00:00Z',
+  alreadyPending: false, paymentRequired: true, paymentUrl: 'https://invoice.stripe.com/i/abc',
+};
 
 function renderDialog(props = {}) {
   const onOpenChange = vi.fn();
@@ -86,6 +99,21 @@ function renderDialog(props = {}) {
 /** The customer comes back to this tab (from the provider's invoice page in another one). */
 function returnToTab() {
   document.dispatchEvent(new Event('visibilitychange'));
+}
+
+/** Hides (or shows again) this tab as the browser reports it. */
+function setTabHidden(hidden) {
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true, get: () => (hidden ? 'hidden' : 'visible'),
+  });
+}
+
+/** Picks the upgrade, waits for its quote and confirms it: the answer asks for a payment. */
+async function confirmUpgradeAwaitingPayment(user = userEvent) {
+  await user.click((await screen.findAllByTestId('PlanChangeDialog__option'))[0]);
+  await screen.findByText(/planChangeChargeTodayCard/);
+  await user.click(screen.getByTestId('PlanChangeDialog__confirm'));
+  await screen.findByTestId('PlanChangeDialog__completePayment');
 }
 
 const PRORATION_DATE = 1794527600;
@@ -175,6 +203,17 @@ describe('PlanChangeDialog', () => {
     expect(screen.getByTestId('PlanChangeDialog__quotaKept')).toBeInTheDocument();
   });
 
+  it('says an annual-to-monthly change switches billing to monthly, not to annual', async () => {
+    getPlanChanges.mockResolvedValue({ hasSubscription: true, changes: [PRO_MONTHLY_FROM_YEARLY] });
+    renderDialog();
+
+    await userEvent.click((await screen.findAllByTestId('PlanChangeDialog__option'))[0]);
+
+    const note = screen.getByTestId('PlanChangeDialog__timingNote');
+    expect(note).toHaveTextContent('planChangeIntervalToMonthlyNote');
+    expect(note).not.toHaveTextContent('planChangeIntervalNote');
+  });
+
   it('marks the chosen option as selected, and only that one', async () => {
     getPlanChanges.mockResolvedValue({ hasSubscription: true, changes: [PRO, CORE] });
     renderDialog();
@@ -200,6 +239,18 @@ describe('PlanChangeDialog', () => {
     expect(charge).toHaveTextContent('458');
     expect(charge).toHaveTextContent('@Visa/4242');
     expect(previewPlanChange).toHaveBeenCalledWith('/api', 'pro', 'CLIENT-1');
+  });
+
+  it('quotes a zero charge as a charge of zero, not as an unknown amount', async () => {
+    getPlanChanges.mockResolvedValue({ hasSubscription: true, changes: [PRO] });
+    previewPlanChange.mockResolvedValue({ ...PREVIEW, amountDue: 0 });
+    renderDialog();
+
+    await userEvent.click((await screen.findAllByTestId('PlanChangeDialog__option'))[0]);
+
+    const charge = await screen.findByText(/planChangeChargeTodayCard/);
+    expect(charge).toHaveTextContent('0');
+    expect(screen.queryByText(/planChangeChargeUnknown/)).not.toBeInTheDocument();
   });
 
   it('falls back to a generic charge line when the amount cannot be read', async () => {
@@ -267,6 +318,40 @@ describe('PlanChangeDialog', () => {
     expect(screen.getByTestId('PlanChangeDialog__confirm')).toBeDisabled();
   });
 
+  it('drops a refusal once the customer picks another option', async () => {
+    getPlanChanges.mockResolvedValue({ hasSubscription: true, changes: [PRO, CORE] });
+    previewPlanChange.mockRejectedValue(Object.assign(new Error('not allowed'),
+      { status: 409, code: 'planChangeNotAllowed' }));
+    renderDialog();
+
+    const options = await screen.findAllByTestId('PlanChangeDialog__option');
+    await userEvent.click(options[0]);
+    expect(await screen.findByTestId('PlanChangeDialog__error')).toHaveTextContent('planChangeNotAllowed');
+    // Clicking the refused option again keeps its refusal: nothing new was asked.
+    await userEvent.click(options[0]);
+    expect(screen.getByTestId('PlanChangeDialog__error')).toHaveTextContent('planChangeNotAllowed');
+
+    // The downgrade is not quoted, so nothing else would clear the upgrade's refusal.
+    await userEvent.click(options[1]);
+    expect(screen.queryByTestId('PlanChangeDialog__error')).not.toBeInTheDocument();
+    expect(screen.getByTestId('PlanChangeDialog__confirm')).toBeEnabled();
+  });
+
+  it('drops a failed confirm once the customer picks a downgrade instead', async () => {
+    getPlanChanges.mockResolvedValue({ hasSubscription: true, changes: [PRO, CORE] });
+    requestPlanChange.mockRejectedValue(Object.assign(new Error('boom'), { status: 502 }));
+    renderDialog();
+
+    const options = await screen.findAllByTestId('PlanChangeDialog__option');
+    await userEvent.click(options[0]);
+    await screen.findByText(/planChangeChargeTodayCard/);
+    await userEvent.click(screen.getByTestId('PlanChangeDialog__confirm'));
+    expect(await screen.findByTestId('PlanChangeDialog__error')).toHaveTextContent('planChangeFailed');
+
+    await userEvent.click(options[1]);
+    expect(screen.queryByTestId('PlanChangeDialog__error')).not.toBeInTheDocument();
+  });
+
   it('previews nothing for a downgrade, which charges nothing today', async () => {
     getPlanChanges.mockResolvedValue({ hasSubscription: true, changes: [CORE] });
     renderDialog();
@@ -331,6 +416,92 @@ describe('PlanChangeDialog', () => {
     // Nothing outstanding any more: returning to the tab reloads nothing.
     returnToTab();
     expect(onChanged).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps an outstanding payment across a reopen instead of offering the same upgrade again', async () => {
+    getPlanChanges.mockResolvedValue({ hasSubscription: true, changes: [PRO] });
+    requestPlanChange.mockResolvedValue(PAYMENT_REQUIRED);
+    const { rerender } = renderDialog({ currentPlanKey: 'core' });
+
+    await confirmUpgradeAwaitingPayment();
+    rerender({ open: false, currentPlanKey: 'core' });
+    rerender({ open: true, currentPlanKey: 'core' });
+
+    // Still waiting for that payment: its link, no options, nothing to confirm a second time.
+    expect(await screen.findByTestId('PlanChangeDialog__completePayment'))
+      .toHaveAttribute('href', 'https://invoice.stripe.com/i/abc');
+    expect(screen.getByTestId('PlanChangeDialog__done')).toHaveTextContent('Pro:planChangePaymentRequired');
+    expect(screen.queryByTestId('PlanChangeDialog__option')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('PlanChangeDialog__confirm')).not.toBeInTheDocument();
+    expect(requestPlanChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers the options again on reopen once the paid upgrade has applied', async () => {
+    getPlanChanges.mockResolvedValue({ hasSubscription: true, changes: [PRO] });
+    requestPlanChange.mockResolvedValue(PAYMENT_REQUIRED);
+    const { rerender } = renderDialog({ currentPlanKey: 'core' });
+
+    await confirmUpgradeAwaitingPayment();
+    rerender({ open: false, currentPlanKey: 'pro' });
+    rerender({ open: true, currentPlanKey: 'pro' });
+
+    expect(await screen.findAllByTestId('PlanChangeDialog__option')).toHaveLength(1);
+    expect(screen.queryByTestId('PlanChangeDialog__done')).not.toBeInTheDocument();
+  });
+
+  describe('while a payment is outstanding', () => {
+    beforeEach(() => { vi.useFakeTimers({ shouldAdvanceTime: true }); });
+    afterEach(() => {
+      vi.useRealTimers();
+      delete document.visibilityState;
+    });
+
+    it('rechecks periodically while the tab is visible, and once per return to the tab', async () => {
+      getPlanChanges.mockResolvedValue({ hasSubscription: true, changes: [PRO] });
+      requestPlanChange.mockResolvedValue(PAYMENT_REQUIRED);
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const { onChanged, rerender } = renderDialog({ currentPlanKey: 'core' });
+
+      await confirmUpgradeAwaitingPayment(user);
+      expect(onChanged).toHaveBeenCalledTimes(1);
+
+      // The webhook has not landed yet when the customer returns: keep asking while visible.
+      act(() => { vi.advanceTimersByTime(PAYMENT_RECHECK_INTERVAL_MS); });
+      expect(onChanged).toHaveBeenCalledTimes(2);
+      act(() => { vi.advanceTimersByTime(PAYMENT_RECHECK_INTERVAL_MS); });
+      expect(onChanged).toHaveBeenCalledTimes(3);
+
+      // One return fires both visibilitychange and focus: one reload, not two.
+      act(() => { vi.advanceTimersByTime(2000); });
+      returnToTab();
+      window.dispatchEvent(new Event('focus'));
+      expect(onChanged).toHaveBeenCalledTimes(4);
+
+      // A hidden tab is not polled.
+      setTabHidden(true);
+      act(() => { vi.advanceTimersByTime(PAYMENT_RECHECK_INTERVAL_MS * 2); });
+      expect(onChanged).toHaveBeenCalledTimes(4);
+      setTabHidden(false);
+
+      // Applied: the polling stops.
+      rerender({ currentPlanKey: 'pro' });
+      expect(await screen.findByTestId('PlanChangeDialog__title')).toHaveTextContent('planChangeDoneTitle');
+      const calls = onChanged.mock.calls.length;
+      act(() => { vi.advanceTimersByTime(PAYMENT_RECHECK_INTERVAL_MS * 2); });
+      expect(onChanged).toHaveBeenCalledTimes(calls);
+    });
+
+    it('stops polling when the dialog closes', async () => {
+      getPlanChanges.mockResolvedValue({ hasSubscription: true, changes: [PRO] });
+      requestPlanChange.mockResolvedValue(PAYMENT_REQUIRED);
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const { onChanged, rerender } = renderDialog({ currentPlanKey: 'core' });
+
+      await confirmUpgradeAwaitingPayment(user);
+      rerender({ open: false, currentPlanKey: 'core' });
+      act(() => { vi.advanceTimersByTime(PAYMENT_RECHECK_INTERVAL_MS * 2); });
+      expect(onChanged).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('confirms an upgrade, reports the new plan and tells its host to reload', async () => {
