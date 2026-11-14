@@ -174,3 +174,59 @@ describe('Invoice Inbox locale keys', () => {
     });
   });
 });
+
+// ETP-6050 S2: editing, autosave, line discount, resolution of vendor / product (31 new keys).
+describe('review panel editing keys (S2)', () => {
+  const placeholders = (s) => [...String(s).matchAll(/\{\{?\s*(\w+)\s*\}?\}/g)].map((m) => m[1]).sort();
+  const S2_KEYS = [
+    'invoiceInboxReviewColDiscount', 'invoiceInboxReviewLineDiscountDetail',
+    'invoiceInboxSaveSaving', 'invoiceInboxSaveSaved', 'invoiceInboxSaveReloadedTitle',
+    'invoiceInboxSaveErrorStale', 'invoiceInboxSaveErrorNotEditable', 'invoiceInboxSaveErrorNotReviewable',
+    'invoiceInboxSaveErrorNotValid', 'invoiceInboxSaveErrorInvalidValue', 'invoiceInboxSaveErrorTooManyLines',
+    'invoiceInboxSaveErrorLineNotFound', 'invoiceInboxSaveErrorUnknownVendor', 'invoiceInboxSaveErrorUnknownProduct',
+    'invoiceInboxSaveErrorUnknownCategory', 'invoiceInboxSaveErrorUnknownUom', 'invoiceInboxSaveErrorTooLarge',
+    'invoiceInboxSaveErrorAccess', 'invoiceInboxSaveErrorGeneric',
+    'invoiceInboxReviewProductMatchManual', 'invoiceInboxReviewVendorLinkedManual',
+    'invoiceInboxReviewProductCategory', 'invoiceInboxReviewProductUom', 'invoiceInboxReviewProductNewRequired',
+    'invoiceInboxReviewProductCreateNewButton', 'invoiceInboxReviewVendorCreateNewButton',
+    'invoiceInboxReviewFieldEmail', 'invoiceInboxReviewFieldPhone', 'invoiceInboxReviewLinesRequired',
+    'invoiceInboxReviewReferenceTooLong', 'invoiceInboxReviewDateRawHint',
+  ];
+
+  it('lists 31 distinct keys', () => {
+    assert.equal(new Set(S2_KEYS).size, 31);
+  });
+
+  for (const [locale, json] of Object.entries(locales)) {
+    it(`${locale} defines every S2 key, non-empty`, () => {
+      assert.deepEqual(S2_KEYS.filter((k) => !String(json.genericLabels[k] ?? '').trim()), []);
+    });
+  }
+
+  it('the S2 texts keep the same placeholders in every locale', () => {
+    for (const key of S2_KEYS) {
+      const base = placeholders(locales.en_US.genericLabels[key]);
+      for (const locale of ['es_ES', 'es_AR']) assert.deepEqual(placeholders(locales[locale].genericLabels[key]), base, `${locale}.${key}`);
+    }
+    assert.deepEqual(placeholders(locales.en_US.genericLabels.invoiceInboxReviewReferenceTooLong), ['max']);
+    assert.deepEqual(placeholders(locales.en_US.genericLabels.invoiceInboxReviewDateRawHint), ['date']);
+  });
+
+  it('every key the editor can show for a refusal exists (the model maps codes to these)', async () => {
+    const { SAVE_ERROR_LABEL_KEYS } = await import('../invoiceInboxReviewModel.js');
+    for (const key of Object.values(SAVE_ERROR_LABEL_KEYS)) {
+      for (const [locale, json] of Object.entries(locales)) assert.ok(json.genericLabels[key], `${locale}.${key}`);
+    }
+  });
+
+  it('the sources use the S2 keys (a key nothing reads is dead text)', () => {
+    assert.deepEqual(S2_KEYS.filter((k) => !inboxKeys.includes(k)), []);
+  });
+
+  it('es_ES S2 texts have no voseo', () => {
+    for (const key of S2_KEYS) {
+      assert.doesNotMatch(locales.es_ES.genericLabels[key], /\b(Podés|Tenés|Querés|vos)\b/, key);
+    }
+  });
+});
+
