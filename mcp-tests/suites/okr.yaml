@@ -564,6 +564,25 @@ probes:
     prompt: "Abrimos un depósito nuevo, Depósito {{marker}}, en la Calle Mayor 1 de Madrid. Cargalo."
     platforms:
       etendo-go:
+        routine:
+          name: alta-deposito
+          description: Crea un depósito (almacén) nuevo en una dirección que ya existe en el sistema.
+          params:
+            name: {type: string, required: true, description: Nombre del depósito}
+            code: {type: string, required: true, description: 'Código del depósito, único, de hasta 40 caracteres'}
+            address: {type: string, required: true, description: 'Dirección ya cargada en el sistema, o parte de ella (calle
+                y número)'}
+          steps:
+          - id: loc
+            tool: etendo_selectors
+            args: {spec: warehouse, column: locationAddress, query: $param.address}
+          - id: wh
+            tool: etendo_create
+            args:
+              spec: warehouse
+              entity: warehouse
+              fields: {name: $param.name, searchKey: $param.code, locationAddress: '$ref:loc.items[0].id'}
+            returnResult: true
         expectEffect:
           tool: etendo_list
           args: { spec: warehouse, entity: warehouse, filters: { name: "Depósito {{marker}}" } }
@@ -755,6 +774,83 @@ probes:
     prompt: "Agregá un producto nuevo, Producto {{marker}}: lo compramos a 4 € y lo vendemos a 9 €."
     platforms:
       etendo-go:
+        routine:
+          name: alta-producto-con-precios
+          description: Da de alta un producto y le carga el precio de compra (tarifa de compra principal) y el de venta (tarifa
+            de venta principal).
+          params:
+            name: {type: string, required: true, description: Nombre del producto}
+            code: {type: string, required: true, description: 'Código del producto, único, de hasta 40 caracteres'}
+            purchasePrice: {type: number, required: true, description: Precio de compra}
+            salesPrice: {type: number, required: true, description: Precio de venta}
+          steps:
+          - id: prod
+            tool: etendo_create
+            args:
+              spec: product
+              entity: product
+              fields: {name: $param.name, searchKey: $param.code}
+          - id: salesList
+            tool: etendo_list
+            args:
+              spec: price-list
+              entity: priceList
+              filters: {salesPriceList: true, default: true}
+              fields: [id]
+          - id: purchaseList
+            tool: etendo_list
+            args:
+              spec: price-list
+              entity: priceList
+              filters: {salesPriceList: false, default: true}
+              fields: [id]
+          - id: salesVersion
+            tool: etendo_list
+            args:
+              spec: price-list
+              entity: priceListVersion
+              parentId: $ref:salesList.data[0].id
+              fields: [id]
+          - id: purchaseVersion
+            tool: etendo_list
+            args:
+              spec: price-list
+              entity: priceListVersion
+              parentId: $ref:purchaseList.data[0].id
+              fields: [id]
+          - id: salesPrice
+            tool: etendo_list
+            args:
+              spec: price-list
+              entity: productPrice
+              parentId: $ref:salesVersion.data[0].id
+              filters: {product: '$ref:prod'}
+              fields: [id, updated]
+          - id: purchasePrice
+            tool: etendo_list
+            args:
+              spec: price-list
+              entity: productPrice
+              parentId: $ref:purchaseVersion.data[0].id
+              filters: {product: '$ref:prod'}
+              fields: [id, updated]
+          - id: setSales
+            tool: etendo_update
+            args:
+              spec: price-list
+              entity: productPrice
+              id: $ref:salesPrice.data[0].id
+              fields: {listPrice: $param.salesPrice, standardPrice: $param.salesPrice}
+              updated: $ref:salesPrice.data[0].updated
+          - id: setPurchase
+            tool: etendo_update
+            args:
+              spec: price-list
+              entity: productPrice
+              id: $ref:purchasePrice.data[0].id
+              fields: {listPrice: $param.purchasePrice, standardPrice: $param.purchasePrice}
+              updated: $ref:purchasePrice.data[0].updated
+            returnResult: true
         expectEffect:
           tool: etendo_list
           args: { spec: product, entity: product, filters: { name: "Producto {{marker}}" } }
@@ -802,6 +898,18 @@ probes:
     prompt: "Creá una tarifa de venta para mayoristas que se llame Mayoristas {{marker}}."
     platforms:
       etendo-go:
+        routine:
+          name: alta-tarifa-venta
+          description: Crea una tarifa (lista de precios) de venta nueva, no predeterminada.
+          params:
+            name: {type: string, required: true, description: Nombre de la tarifa}
+          steps:
+          - id: list
+            tool: etendo_create
+            args:
+              spec: price-list
+              entity: priceList
+              fields: {name: $param.name, salesPriceList: true, default: false}
         expectEffect:
           tool: etendo_list
           args: { spec: price-list, entity: priceList,
@@ -1219,11 +1327,67 @@ probes:
     prompt: "Contamos y en el almacén principal hay 280 Aguas. Corregilo."
     platforms:
       etendo-go:
+        routine:
+          name: ajuste-inventario
+          description: Corrige el stock de un producto en un almacén a la cantidad contada (inventario físico) y lo procesa.
+          params:
+            product: {type: string, required: true, description: Producto (nombre o parte)}
+            warehouse: {type: string, required: true, description: Almacén (nombre o parte)}
+            quantity: {type: number, required: true, description: Cantidad contada}
+          steps:
+          - id: prod
+            tool: etendo_list
+            args:
+              spec: product
+              entity: product
+              filters:
+                name: {contains: $param.product}
+              fields: [id, name]
+          - id: wh
+            tool: etendo_list
+            args:
+              spec: warehouse
+              entity: warehouse
+              filters:
+                name: {contains: $param.warehouse}
+              fields: [id, name]
+          - id: bin
+            tool: etendo_list
+            args:
+              spec: warehouse
+              entity: storageBin
+              parentId: $ref:wh.data[0].id
+              fields: [id]
+          - id: inv
+            tool: etendo_create
+            args:
+              spec: physical-inventory
+              entity: inventory
+              fields: {warehouse: '$ref:wh.data[0].id'}
+          - id: line
+            tool: etendo_create
+            args:
+              spec: physical-inventory
+              entity: inventoryLine
+              parentId: $ref:inv
+              fields: {product: '$ref:prod.data[0].id', storageBin: '$ref:bin.data[0].id', quantityCount: $param.quantity}
+          - id: process
+            tool: etendo_action
+            args:
+              spec: physical-inventory
+              entity: inventory
+              id: $ref:inv
+              action: processNow
+              parameters: {}
+            returnResult: true
         setup: *agua-stock
         expectEffect:
           tool: etendo_list
-          args: { spec: product, entity: stock, parentId: "{{steps.agua.data.0.id}}",
-                  filters: { warehouse: "{{steps.main.data.0.id}}", quantityOnHand: 280 } }
+          args: { spec: product, entity: stock, parentId: "{{steps.agua.data.0.id}}" }
+          # Applied by the runner, not the server: the stock list is served by a customization
+          # that ignores `filters` (ETP-6236 diagnosis), so as a filter this check passed whenever
+          # Agua had any stock at all.
+          where: { warehouse: "{{steps.main.data.0.id}}", quantityOnHand: 280 }
       holded:
         setup:
           - tool: list_products
@@ -1246,6 +1410,76 @@ probes:
     prompt: "Pasá 5 Fernet del almacén principal al secundario."
     platforms:
       etendo-go:
+        routine:
+          name: traspaso-entre-almacenes
+          description: Mueve una cantidad de un producto de un almacén a otro y procesa el movimiento.
+          params:
+            product: {type: string, required: true, description: Producto (nombre o parte)}
+            quantity: {type: number, required: true, description: Cantidad}
+            fromWarehouse: {type: string, required: true, description: Almacén de origen (nombre o parte)}
+            toWarehouse: {type: string, required: true, description: Almacén de destino (nombre o parte)}
+          steps:
+          - id: prod
+            tool: etendo_list
+            args:
+              spec: product
+              entity: product
+              filters:
+                name: {contains: $param.product}
+              fields: [id, name]
+          - id: from
+            tool: etendo_list
+            args:
+              spec: warehouse
+              entity: warehouse
+              filters:
+                name: {contains: $param.fromWarehouse}
+              fields: [id, name]
+          - id: to
+            tool: etendo_list
+            args:
+              spec: warehouse
+              entity: warehouse
+              filters:
+                name: {contains: $param.toWarehouse}
+              fields: [id, name]
+          - id: fromBin
+            tool: etendo_list
+            args:
+              spec: warehouse
+              entity: storageBin
+              parentId: $ref:from.data[0].id
+              fields: [id]
+          - id: toBin
+            tool: etendo_list
+            args:
+              spec: warehouse
+              entity: storageBin
+              parentId: $ref:to.data[0].id
+              fields: [id]
+          - id: mov
+            tool: etendo_create
+            args:
+              spec: goods-movements
+              entity: movement
+              fields: {}
+          - id: line
+            tool: etendo_create
+            args:
+              spec: goods-movements
+              entity: movementLine
+              parentId: $ref:mov
+              fields: {product: '$ref:prod.data[0].id', storageBin: '$ref:fromBin.data[0].id', newStorageBin: '$ref:toBin.data[0].id',
+                movementQuantity: $param.quantity}
+          - id: process
+            tool: etendo_action
+            args:
+              spec: goods-movements
+              entity: movement
+              id: $ref:mov
+              action: processNow
+              parameters: {}
+            returnResult: true
         setup:
           - tool: etendo_list
             args: { spec: product, entity: product, filters: { name: "Fernet" }, fields: [id] }
@@ -1280,6 +1514,61 @@ probes:
     prompt: "Usamos 2 Quesos Sardos para una degustación. Sacalos del stock."
     platforms:
       etendo-go:
+        routine:
+          name: consumo-interno
+          description: Saca del stock una cantidad de un producto para uso interno (degustación, muestras, roturas) y procesa
+            el consumo.
+          params:
+            product: {type: string, required: true, description: Producto (nombre o parte)}
+            quantity: {type: number, required: true, description: Cantidad}
+            warehouse: {type: string, required: true, description: Almacén (nombre o parte)}
+            reason: {type: string, required: true, description: 'Motivo, se usa como nombre del consumo'}
+          steps:
+          - id: prod
+            tool: etendo_list
+            args:
+              spec: product
+              entity: product
+              filters:
+                name: {contains: $param.product}
+              fields: [id, name]
+          - id: wh
+            tool: etendo_list
+            args:
+              spec: warehouse
+              entity: warehouse
+              filters:
+                name: {contains: $param.warehouse}
+              fields: [id, name]
+          - id: bin
+            tool: etendo_list
+            args:
+              spec: warehouse
+              entity: storageBin
+              parentId: $ref:wh.data[0].id
+              fields: [id]
+          - id: cons
+            tool: etendo_create
+            args:
+              spec: internal-consumption
+              entity: internalConsumption
+              fields: {name: $param.reason}
+          - id: line
+            tool: etendo_create
+            args:
+              spec: internal-consumption
+              entity: internalConsumptionLine
+              parentId: $ref:cons
+              fields: {product: '$ref:prod.data[0].id', storageBin: '$ref:bin.data[0].id', movementQuantity: $param.quantity}
+          - id: process
+            tool: etendo_action
+            args:
+              spec: internal-consumption
+              entity: internalConsumption
+              id: $ref:cons
+              action: processNow
+              parameters: {action: CO}
+            returnResult: true
         expectEffect:
           tool: etendo_list
           args: { spec: internal-consumption, entity: internalConsumption, filters: { processed: true } }

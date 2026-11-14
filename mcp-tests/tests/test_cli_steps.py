@@ -1725,5 +1725,130 @@ class AttemptSuccessTest(unittest.TestCase):
         self.assertIsNone(cli.attempt_success(self._probe(), {"outcome": "OKAY"}, None, None))
 
 
+
+class RoutinePreparationTest(unittest.TestCase):
+    """ETP-6236: routines are installed for the "Etendo + routine" column and absent elsewhere."""
+
+    SUITE = textwrap.dedent("""
+        schemaVersion: 2
+        window: w
+        probes:
+          - id: with-routine
+            category: write
+            mode: write
+            prompt: "Cargá el producto {{marker}}"
+            platforms:
+              etendo-go:
+                expectEffect: { tool: etendo_list, args: {}, expect: atLeastOne }
+                routine:
+                  name: new-product
+                  description: Creates a product
+                  steps: [{ id: p, tool: etendo_create, args: { spec: product } }]
+          - id: without
+            category: query
+            prompt: "Hola"
+            platforms:
+              etendo-go:
+                expectAnswer: [{ text: hola }]
+    """)
+
+    def setUp(self):
+        path = Path(tempfile.mkdtemp()) / "s.yaml"
+        path.write_text(self.SUITE)
+        self.probes = [p.for_platform("etendo-go") for p in load_suite(path).probes]
+        self.calls = []
+        self.answers = {}
+
+    def _session(self):
+        test = self
+
+        class Content:
+            type = "text"
+
+            def __init__(self, text):
+                self.text = text
+
+        class Result:
+            def __init__(self, ok, body):
+                self.isError = not ok
+                self.content = [Content(json.dumps(body))]
+
+        class Session:
+            async def call_tool(self, name, args):
+                test.calls.append((name, args))
+                ok, body = test.answers.get(args.get("mode"), (True, {"ok": True, "version": 1}))
+                return Result(ok, body)
+
+        @asynccontextmanager
+        async def session(_target):
+            yield Session()
+
+        return session
+
+    def _prepare(self, target, tools=("etendo_routine",)):
+        with mock.patch.object(cli, "mcp_session", self._session()):
+            return asyncio.run(cli.prepare_routines(target, {"tools": list(tools)}, self.probes))
+
+    def test_a_routines_target_replaces_each_declared_routine(self):
+        installed, error = self._prepare({"name": "r", "platform": "etendo-go", "routines": True})
+        self.assertIsNone(error)
+        self.assertEqual(installed, {"with-routine": {"name": "new-product", "version": 1}})
+        self.assertEqual([args["mode"] for _name, args in self.calls], ["delete", "save"])
+        self.assertEqual(self.calls[1][1]["steps"][0]["tool"], "etendo_create")
+
+    def test_a_refused_routine_aborts_the_run(self):
+        self.answers["save"] = (False, {"error": "validation_error", "detail": "bad step"})
+        installed, error = self._prepare({"name": "r", "platform": "etendo-go", "routines": True})
+        self.assertIsNone(installed)
+        self.assertIn("new-product", error)
+        self.assertIn("bad step", error)
+
+    def test_a_target_without_routines_must_have_none_saved(self):
+        self.answers["list"] = (True, {"routines": [{"name": "left-over"}]})
+        installed, error = self._prepare({"name": "e", "platform": "etendo-go"})
+        self.assertIsNone(installed)
+        self.assertIn("left-over", error)
+        self.answers["list"] = (True, {"routines": []})
+        self.assertEqual(self._prepare({"name": "e", "platform": "etendo-go"}), (None, None))
+
+    def test_routines_need_the_tool_and_an_etendo_target(self):
+        _installed, error = self._prepare({"name": "r", "platform": "etendo-go", "routines": True},
+                                          tools=())
+        self.assertIn("offers no etendo_routine", error)
+        _installed, error = self._prepare({"name": "h", "platform": "holded", "routines": True})
+        self.assertIn("platform", error)
+        self.assertEqual(self._prepare({"name": "h", "platform": "holded"}, tools=()), (None, None))
+        self.assertEqual(self.calls, [])
+
+
+class RoutineHintTest(unittest.TestCase):
+    """ETP-6236: a task whose routine was preloaded gets the hint; every other prompt is unchanged."""
+
+    def _prompt(self, routines):
+        from runner.suite import load_suite
+
+        tmp = Path(tempfile.mkdtemp())
+        h = Harness(tmp, SUITE)
+        probe = load_suite(tmp / "suite.yaml").probes[0]
+        ctx = cli.AttemptContext(
+            target={"name": "t"}, provider={}, run_id="r", run_dir=tmp / "run", events=_Events(),
+            max_steps=1, max_result_chars=100, repeat=1, marker_prefix="r", token_run_id="r",
+            routines=routines,
+        )
+        with mock.patch.object(cli, "mcp_session", h.session), \
+             mock.patch.object(cli, "call_tool", h.call_tool), \
+             mock.patch.object(cli, "run_probe", h.run_probe), \
+             redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            record, _stop = asyncio.run(cli.run_attempt(ctx, probe, 1, None))
+        self.assertEqual(record["prompt"], h.prompts[0])
+        return h.prompts[0]
+
+    def test_only_a_task_with_a_preloaded_routine_gets_the_hint(self):
+        with_routine = self._prompt({"p": {"name": "cobrar", "version": 1}})
+        self.assertTrue(with_routine.endswith(" " + cli.ROUTINE_HINT), with_routine)
+        self.assertNotIn(cli.ROUTINE_HINT, self._prompt(None))
+        self.assertNotIn(cli.ROUTINE_HINT, self._prompt({"other": {"name": "x", "version": 1}}))
+
+
 if __name__ == "__main__":
     unittest.main()

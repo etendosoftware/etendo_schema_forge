@@ -1101,8 +1101,8 @@ SEED        ?=
 # mcp-test. Every target needs `platform` in config.toml. Pass SEED=<run A's
 # seed> to start the second run of a stability pair.
 .PHONY: mcp-compare
-mcp-compare: ## Compare two MCP targets (SUITE=, TARGETS=a,b, SUBJECT=, REPEAT=, CONCURRENCY=, SEED=, MODEL=)
-	cd mcp-tests && uv run python -m runner.cli --targets $(TARGETS) --suite $(SUITE) $(if $(SUBJECT),--subject $(SUBJECT)) $(if $(REPEAT),--repeat $(REPEAT)) $(if $(CONCURRENCY),--concurrency $(CONCURRENCY)) $(if $(SEED),--seed $(SEED)) $(if $(MODEL),--model $(MODEL))
+mcp-compare: ## Compare two MCP targets (SUITE=, TARGETS=a,b, SUBJECT=, PROBE=, REPEAT=, CONCURRENCY=, SEED=, MODEL=)
+	cd mcp-tests && uv run python -m runner.cli --targets $(TARGETS) --suite $(SUITE) $(if $(SUBJECT),--subject $(SUBJECT)) $(if $(PROBE),--probe $(PROBE)) $(if $(REPEAT),--repeat $(REPEAT)) $(if $(CONCURRENCY),--concurrency $(CONCURRENCY)) $(if $(SEED),--seed $(SEED)) $(if $(MODEL),--model $(MODEL))
 
 # Plan §5.4 / §5.9 (S6): load the baseline dataset into a FRESHLY INITIALIZED target through its
 # own MCP, and record a seed manifest (.seeds/<target>.json). Order for an official comparison:
@@ -1128,6 +1128,27 @@ mcp-login: ## Pre-warm or refresh a target's OAuth token (TARGET=). Never a prer
 mcp-report: ## Derive summary.json + summary.md of a comparison (RUN=<compareId>|<path>)
 	@if [ -z "$(RUN)" ]; then echo "RUN is required, e.g. make mcp-report RUN=20261014T1000-cmp-a1b2"; exit 1; fi
 	cd mcp-tests && uv run python -m runner.report report $(RUN)
+
+# ETP-6236: after a KR2.1 comparison (BASE), measure again only the tasks it lost that have a
+# routine, with the routines target against the same reference, then write both KRs.
+.PHONY: mcp-compare-routines
+mcp-compare-routines: ## Rerun the lost tasks that have a routine and compose the child KR (BASE=, TARGETS=<routines target>,<reference>, REPEAT=, CONCURRENCY=, MODEL=)
+	@if [ -z "$(BASE)" ] || [ "$(origin TARGETS)" != "command line" ]; then echo "BASE and TARGETS are required, e.g. make mcp-compare-routines BASE=<compareId> TARGETS=local-routines,holded (the first target needs routines = true)"; exit 1; fi
+	@probes=$$(cd mcp-tests && uv run python -m runner.report routine-reruns $(BASE)) || exit 1; \
+	suite=$$(cd mcp-tests && uv run python -m runner.report routine-reruns $(BASE) --print-suite) || exit 1; \
+	echo "rerunning with routines: $$probes"; \
+	before=$$(ls mcp-tests/runs | grep -- '-cmp-' | sort | tail -1); \
+	(cd mcp-tests && uv run python -m runner.cli --targets $(TARGETS) --suite $$suite --probe $$probes $(if $(REPEAT),--repeat $(REPEAT)) $(if $(CONCURRENCY),--concurrency $(CONCURRENCY)) $(if $(MODEL),--model $(MODEL))) || exit $$?; \
+	after=$$(ls mcp-tests/runs | grep -- '-cmp-' | sort | tail -1); \
+	if [ "$$after" = "$$before" ]; then echo "no new comparison was written"; exit 1; fi; \
+	cd mcp-tests && uv run python -m runner.report routines $(BASE) $$after
+
+# ETP-6236: the three columns side by side — Etendo, Etendo + rutina and the reference. BASE is a
+# comparison without routines (KR2.1), WITH one whose Etendo target has `routines = true` (child KR).
+.PHONY: mcp-report-routines
+mcp-report-routines: ## Etendo vs Etendo + rutina vs reference, per task (BASE=<compareId>, WITH=<compareId>)
+	@if [ -z "$(BASE)" ] || [ -z "$(WITH)" ]; then echo "BASE and WITH are required, e.g. make mcp-report-routines BASE=<compareId> WITH=<compareId>"; exit 1; fi
+	cd mcp-tests && uv run python -m runner.report routines $(BASE) $(WITH)
 
 .PHONY: mcp-stability
 mcp-stability: ## Winner agreement between two comparisons; exit 2 if pins differ or a run is unofficial (A=, B=)

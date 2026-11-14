@@ -56,6 +56,8 @@ Tests: `cd mcp-tests && .venv/bin/python -m unittest discover -s tests -t .`
 | `make mcp-compare` | The same suite against two targets, concurrently, under one `compareId`; ends by writing `summary.json` + `summary.md`. | `TARGETS` (`local,holded`), `SUITE`, `SUBJECT` (first target), `REPEAT` (3), `CONCURRENCY` (4), `SEED` (random), `MODEL` |
 | `make mcp-report` | Re-derives `summary.json` + `summary.md` from a comparison's files. Never contacts an MCP or an LLM. | `RUN` (`<compareId>` or a path, required) |
 | `make mcp-stability` | Winner agreement between two comparisons (the ≥ 90 % acceptance target). | `A`, `B` (`compareId`s, required) |
+| `make mcp-compare-routines` | After a KR2.1 comparison, reruns only the tasks it lost that have a routine, with the routines target, and writes both KRs (ETP-6236). | `BASE` (the KR2.1 compareId), `TARGETS` (`<routines target>,<reference>`, required), `REPEAT`, `CONCURRENCY`, `MODEL` |
+| `make mcp-report-routines` | Etendo, Etendo + rutina and the reference side by side, per task, with both KRs (ETP-6236). Writes `runs/<WITH>/routines-vs-base.md`. | `BASE` (comparison without routines), `WITH` (comparison whose Etendo target has `routines = true`) |
 | `make mcp-login` | Pre-warm or refresh a target's OAuth token. Never a prerequisite. | `TARGET` |
 | `make mcp-ui` | The optional Streamlit panel (design §9); it reads `runs/` and can launch single runs. | — |
 
@@ -156,6 +158,48 @@ harness-marker rows, a half-finished earlier seed) and only warns about what it 
 `mcp-stability` exits 2 (the agreement is printed but does not count) when any pin differs (model,
 suite sha, rule version, catalogue sha, fixture hash…), when either run is unofficial, or when run B
 reuses run A's `seedId` on any target. Concurrency may differ; it is shown, not compared.
+
+### The "Etendo + rutina" column (child KR of KR2.1, ETP-6236)
+
+The Etendo GO MCP can save **routines** (`etendo_routine`): a known flow run in one call with
+parameters. A task's `platforms.etendo-go` block may declare the routine that solves it
+(`routine: {name, description, params, steps}`, the arguments of `etendo_routine` mode save; only
+Etendo blocks may). On a target with routines, the prompt of a task whose routine was preloaded
+ends with a fixed hint, *"Tenés una rutina guardada para esto: revisá tus rutinas."* (recorded in
+`run.json` as `routineHint`): the child KR measures what the routine is worth when the user knows
+it exists. Without the hint the agent did not look for routines (0 of 2 in the 2026-11-12 pilot),
+which the KR2.1 already measures. Every other prompt is unchanged.
+
+- `etendo_routine` is behind the backend flag `mcp-routines` (off by default, per account): turn it
+  on for the account of every Etendo target that runs with routines
+  (`etendo.go.flags.mcp-routines=true` locally). Without the tool a `routines = true` target is
+  refused before anything is measured.
+- A target with `routines = true` in `config.toml` (Etendo GO only) installs every selected task's
+  routine under its user before the first attempt (replacing one of the same name) and deletes them
+  at the end. `run.json` and `compare.json` record what was installed; a server that refuses a
+  routine aborts the run (exit 2).
+- Any **other** Etendo GO target whose MCP offers `etendo_routine` must have **no** routine saved:
+  the KR2.1 is measured without them. A leftover aborts the run and is named.
+- **The child KR ("KR2.1 hijo (Etendo + rutina)")** answers "how far do routines take us": it is
+  the KR2.1 with every task Etendo **lost** that has a routine replaced by its result with the
+  routine. A task Etendo already wins is never run again and never changes. Same formula and
+  denominator as the KR2.1, so the child KR is never below it.
+- **Workflow.** The list of losses comes from the KR2.1 run itself, so the routines run follows it:
+
+  ```bash
+  make mcp-compare SUITE=okr TARGETS=local,holded REPEAT=3                       # 1. KR2.1
+  make mcp-compare-routines BASE=<compareId of 1> TARGETS=local-routines,holded REPEAT=3
+  ```
+
+  Step 2 asks `runner.report routine-reruns` for the tasks step 1 lost that declare a routine,
+  compares only those (same suite) and writes `routines-vs-base.md` with both KRs and the three
+  columns per task. `make mcp-report-routines BASE= WITH=` re-derives it later.
+- The routines run's own summary is headed "KR2.1 hijo" and lists in how many attempts the agent
+  ran the routine (`items.routineRuns`). A comparison with routines never pairs with one without
+  them in `mcp-stability`.
+
+Tasks without a routine run as plain Etendo in the routines column. The routines in `okr.yaml`
+were each run with `etendo_routine` mode run on a local environment before being committed.
 
 ## 4. Reading `summary.md`
 
