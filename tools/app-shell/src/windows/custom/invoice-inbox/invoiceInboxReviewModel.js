@@ -7,9 +7,26 @@
  */
 import { STATUS } from './invoiceInboxFilters.js';
 
-/** Totals are shown to the cent; a printed total within ONE cent of the lines total matches. */
+/**
+ * Exact-decimal money math (ETP-6050 S2, plan 9.4c). The ONE formula the backend shares
+ * (`InvoiceInboxTotals`, same fixture `tools/app-shell/__tests__/fixtures/invoice-inbox-totals.json`):
+ *
+ *   unit6   = round6( unitPrice x (1 - discount / 100) )        (HALF_UP away from zero)
+ *   lineNet = round2( quantity x unit6 )
+ *   base    = sum(lineNet);  taxBase(rate) = sum(lineNet of the lines with that rate)
+ *   tax     = round2( taxBase x rate / 100 );  linesTotal = base + sum(tax)
+ *
+ * BigInt on the inputs scaled to their capped decimals (quantity, unit price and discount x 10^4,
+ * rate x 10^2); no float arithmetic, so the SPA and the server never differ by a micro-unit.
+ */
 const CENT = 100;
 const MISMATCH_TOLERANCE_CENTS = 1;
+const SCALE_4 = 4;
+const SCALE_RATE = 2;
+const TEN = 10n;
+const POW = (n) => TEN ** BigInt(n);
+const MICRO = POW(6);
+const SCALE_4_FACTOR = POW(SCALE_4);
 
 /** `error.code` of a failed review read → `genericLabels` key (the backend text is never shown). */
 export const REVIEW_ERROR_LABEL_KEYS = Object.freeze({
@@ -24,13 +41,74 @@ export function reviewErrorKey(code) {
   return REVIEW_ERROR_LABEL_KEYS[code] ?? REVIEW_ERROR_FALLBACK_KEY;
 }
 
-function round2(value) {
-  return Math.round((Number(value) || 0) * CENT) / CENT;
+/** BigInt division rounded HALF_UP away from zero. `d` must be positive. */
+export function divRoundHalfAway(n, d) {
+  const negative = n < 0n;
+  const abs = negative ? -n : n;
+  const q = (2n * abs + d) / (2n * d);
+  return negative ? -q : q;
 }
 
-/** Quantity x unit price of a line (0 for a missing or non-numeric side). */
+/** `1.5e-7` / `1e21` as plain decimal text (no exponent); text without an exponent is returned as is. */
+function expandExponent(text) {
+  const match = /^(\d+)(?:\.(\d+))?e([+-]?\d+)$/.exec(text);
+  if (!match) return text;
+  const [, intDigits, fracDigits = '', exponentText] = match;
+  const digits = intDigits + fracDigits;
+  const point = intDigits.length + Number(exponentText);
+  if (point <= 0) return `0.${'0'.repeat(-point)}${digits}`;
+  if (point >= digits.length) return digits + '0'.repeat(point - digits.length);
+  return `${digits.slice(0, point)}.${digits.slice(point)}`;
+}
+
+/**
+ * A number as an integer scaled by 10^`decimals`, rounded HALF_UP away from zero (null for a
+ * missing / non-finite value). Works on the decimal TEXT of the number, never on `x * 10^n`.
+ */
+export function toScaled(value, decimals) {
+  if (value == null || value === '') return null;
+  const num = Number(value);
+  if (!Number.isFinite(num)) return null;
+  const negative = num < 0;
+  const abs = Math.abs(num);
+  // The shortest decimal text of the number is the JSON decimal the server parses; only an
+  // exponent form (1e-7, 1e21) needs expanding.
+  const text = expandExponent(String(abs));
+  const [intPart, fracPart = ''] = text.split('.');
+  const padded = fracPart.padEnd(decimals + 1, '0');
+  const kept = BigInt(`${intPart}${padded.slice(0, decimals)}`);
+  const roundUp = padded.charCodeAt(decimals) >= 53; // digit >= 5
+  const scaled = roundUp ? kept + 1n : kept;
+  return negative ? -scaled : scaled;
+}
+
+function scaledOrZero(value, decimals) {
+  return toScaled(value, decimals) ?? 0n;
+}
+
+/** The discount percent of a line (0 when absent / not a number), scale 4. */
+function discountScaled(line) {
+  return scaledOrZero(line?.discount, SCALE_4);
+}
+
+/** The unit price after the discount, in micro-units (10^-6): round6(price x (1 - discount/100)). */
+export function lineUnit6(line) {
+  const priceS = scaledOrZero(line?.unitPrice, SCALE_4);
+  const dS = discountScaled(line);
+  return divRoundHalfAway(priceS * (MICRO - dS), SCALE_4_FACTOR);
+}
+
+/** The net of a line in integer cents: round2(quantity x unit6). */
+export function lineNetCents(line) {
+  const qS = scaledOrZero(line?.quantity, SCALE_4);
+  return divRoundHalfAway(qS * lineUnit6(line), POW(8));
+}
+
+const centsToNumber = (cents) => Number(cents) / CENT;
+
+/** Quantity x unit price after the discount, at the cent, as a number (0 for a missing side). */
 export function lineAmount(line) {
-  return round2((Number(line?.quantity) || 0) * (Number(line?.unitPrice) || 0));
+  return centsToNumber(lineNetCents(line));
 }
 
 /** The VAT rate of a line: the reader's `taxRate`, else the resolved tax's rate, else null. */
@@ -48,34 +126,48 @@ export function lineRate(line) {
  * @returns {{base: number, taxes: {rate: number, base: number, amount: number}[], linesTotal: number}}
  */
 export function computeTotals(lines) {
+  // Grouped by the rate ROUNDED HALF_UP to 2 decimals (rate x 100 as a BigInt), so 10.555 and 10.56
+  // are one row, exactly like the backend (RATE_SCALE = 2).
   const byRate = new Map();
-  let base = 0;
+  let baseCents = 0n;
   for (const line of lines ?? []) {
-    const amount = lineAmount(line);
-    base += amount;
-    const rate = lineRate(line);
-    if (rate != null) byRate.set(rate, (byRate.get(rate) ?? 0) + amount);
+    const net = lineNetCents(line);
+    baseCents += net;
+    const rateScaled = toScaled(lineRate(line), SCALE_RATE);
+    if (rateScaled != null) byRate.set(rateScaled, (byRate.get(rateScaled) ?? 0n) + net);
   }
-  const taxes = [...byRate.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([rate, rateBase]) => ({ rate, base: round2(rateBase), amount: round2((rateBase * rate) / 100) }));
-  const linesTotal = round2(round2(base) + taxes.reduce((sum, tax) => sum + tax.amount, 0));
-  return { base: round2(base), taxes, linesTotal };
+  const rows = [...byRate.entries()]
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+    .map(([rateScaled, rateBase]) => ({
+      rate: Number(rateScaled) / 10 ** SCALE_RATE,
+      baseCents: rateBase,
+      amountCents: divRoundHalfAway(rateBase * rateScaled, POW(SCALE_RATE + 2)),
+    }));
+  const totalCents = baseCents + rows.reduce((sum, row) => sum + row.amountCents, 0n);
+  return {
+    base: centsToNumber(baseCents),
+    taxes: rows.map((row) => ({ rate: row.rate, base: centsToNumber(row.baseCents), amount: centsToNumber(row.amountCents) })),
+    linesTotal: centsToNumber(totalCents),
+  };
 }
 
+const roundCents = (value) => Math.round((Number(value) || 0) * CENT);
+
 /**
- * The total the invoice carries: the printed one (`totalSource` `printed`) or the lines' (`lines`).
- * Falls back to the recomputed lines total when the document has none.
+ * The total the invoice carries: with `totalSource` `lines` the live lines total; otherwise the
+ * printed one (S2-D3: a printed total stays printed after edits). Falls back to the recomputed
+ * lines total when the document has none.
  */
 export function documentTotal(header, totals) {
+  if (header?.totalSource === 'lines') return totals.linesTotal;
   const value = header?.totalAmount;
   if (value == null || value === '' || !Number.isFinite(Number(value))) return totals.linesTotal;
-  return round2(value);
+  return Math.round(Number(value) * CENT) / CENT;
 }
 
 /**
  * Decision 4 — the non-blocking "total does not match" warning: only when the document's total is
- * the PRINTED one and the lines add up to something else.
+ * the PRINTED one and the lines add up to something else (more than one cent apart).
  *
  * @returns {{lines: number, document: number}|null}
  */
@@ -83,10 +175,9 @@ export function totalMismatch(header, totals) {
   if (header?.totalSource !== 'printed') return null;
   const printed = Number(header?.totalAmount);
   if (!Number.isFinite(printed)) return null;
-  // Compared in integer cents (per-line rounding makes a one-cent difference common).
-  const diffCents = Math.abs(Math.round(printed * CENT) - Math.round(totals.linesTotal * CENT));
+  const diffCents = Math.abs(roundCents(printed) - roundCents(totals.linesTotal));
   if (diffCents <= MISMATCH_TOLERANCE_CENTS) return null;
-  return { lines: totals.linesTotal, document: round2(printed) };
+  return { lines: totals.linesTotal, document: Math.round(printed * CENT) / CENT };
 }
 
 /** The `validation.missing` codes as a Set (empty without a verdict). */
@@ -238,4 +329,233 @@ export function initialZoom(width) {
 /** One zoom step (`direction` 1 or -1), kept inside the range. */
 export function stepZoom(zoom, direction) {
   return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom + direction * ZOOM_STEP));
+}
+
+// ── ETP-6050 S2 — editing: operations, optimistic copy, inputs ─────────────────────────────────
+
+/** Caps mirrored from the backend (a drift only means a translated 422 the SPA did not prevent). */
+export const MAX_LINES = 100;
+export const MAX_TEXT = 200;
+export const MAX_DOCUMENT_NO = 20;
+/** Numeric cells: bounds, decimals kept (HALF_UP) and whether empty means "no value" (null). */
+export const NUMBER_FIELDS = Object.freeze({
+  quantity: { min: -1e9, max: 1e9, scale: 4, nullable: false },
+  unitPrice: { min: -1e9, max: 1e9, scale: 4, nullable: false },
+  taxRate: { min: 0, max: 100, scale: 2, nullable: true },
+  discount: { min: 0, max: 100, scale: 4, nullable: true },
+});
+
+/**
+ * Validates and normalizes a typed number for a line field: `{ok: true, value}` (rounded HALF_UP to
+ * the field's scale; null for an empty nullable field) or `{ok: false}` (empty for a non-nullable
+ * field, out of range, not a number).
+ *
+ * @param {string} field a key of `NUMBER_FIELDS`
+ * @param {{value: number|null, isValid: boolean}} parsed the answer of `parseLocaleNumber`
+ */
+export function normalizeNumber(field, parsed) {
+  const spec = NUMBER_FIELDS[field];
+  if (!spec || !parsed?.isValid) return { ok: false };
+  if (parsed.value == null) return spec.nullable ? { ok: true, value: null } : { ok: false };
+  if (parsed.value < spec.min || parsed.value > spec.max) return { ok: false };
+  const scaled = toScaled(parsed.value, spec.scale);
+  if (scaled == null) return { ok: false };
+  const value = Number(scaled) / 10 ** spec.scale;
+  return value < spec.min || value > spec.max ? { ok: false } : { ok: true, value };
+}
+
+/** Numeric equality of two optional line numbers (null equals null; an absent discount equals 0). */
+export function sameNumber(a, b, { absentIsZero = false } = {}) {
+  const norm = (v) => (v == null || v === '' ? (absentIsZero ? 0 : null) : Number(v));
+  return norm(a) === norm(b);
+}
+
+const defined = (obj) => Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
+
+/** Operation builders: exactly the bodies of contract 9.2.2 (unknown keys are a 400 server side). */
+export const buildOp = Object.freeze({
+  setHeader: (patch) => ({ op: 'setHeader', ...defined(patch) }),
+  setLine: (index, patch) => ({ op: 'setLine', index, ...defined(patch) }),
+  addLine: () => ({ op: 'addLine' }),
+  removeLine: (index) => ({ op: 'removeLine', index }),
+  selectVendor: (id) => ({ op: 'selectVendor', id }),
+  newVendor: (fields) => (fields && Object.keys(fields).length ? { op: 'newVendor', fields } : { op: 'newVendor' }),
+  selectProduct: (index, id) => ({ op: 'selectProduct', index, id }),
+  newProduct: (index, patch = {}) => ({ op: 'newProduct', index, ...defined(patch) }),
+});
+
+/** The `index` a line is addressed by: its stable `index`, else its position. */
+function indexOf(line, position) {
+  return lineKey(line, position);
+}
+
+function mapLine(lines, index, fn) {
+  return lines.map((line, position) => (indexOf(line, position) === index ? fn(line) : line));
+}
+
+function setLinePatch(line, op) {
+  const next = { ...line };
+  for (const key of ['description', 'quantity', 'unitPrice']) {
+    if (key in op) next[key] = op[key];
+  }
+  if ('taxRate' in op) {
+    next.taxRate = op.taxRate;
+    // The resolved tax belongs to the OLD rate; the server answer brings the new one.
+    if (op.taxRate == null) next.tax = null;
+  }
+  if ('discount' in op) {
+    if (op.discount == null || Number(op.discount) === 0) delete next.discount;
+    else next.discount = op.discount;
+  }
+  return next;
+}
+
+function newLine(lines) {
+  const index = lines.reduce((max, line, position) => Math.max(max, indexOf(line, position)), -1) + 1;
+  const previous = lines.length ? lines[lines.length - 1] : null;
+  const rate = previous ? lineRate(previous) : null;
+  return {
+    index, description: '', quantity: 1, unitPrice: 0, ...(rate == null ? {} : { taxRate: rate }),
+    product: { state: 'none', candidates: [] },
+  };
+}
+
+function withVendor(document, vendor) {
+  return { ...document, header: { ...document.header, vendor } };
+}
+
+/**
+ * ONE operation applied to a copy of the document, as the user sees it before the server answers.
+ * Optimistic and PARTIAL by design (plan 9.6 F2): it derives nothing the server derives (taxes of
+ * a new address, duplicates, validation, status, `adjusted`); the server answer replaces it.
+ *
+ * @param {object} document the `CURRENT_DATA` v1 document
+ * @param {object} op one of `buildOp`
+ * @param {{name?: string, searchKey?: string, category?: string, uom?: string}} [hint] display
+ *   copies of what the operation picked (the wire operation carries ids only)
+ */
+export function applyOperationLocally(document, op, hint = {}) {
+  const doc = document ?? {};
+  const header = doc.header ?? {};
+  const lines = Array.isArray(doc.lines) ? doc.lines : [];
+  switch (op?.op) {
+    case 'setHeader': {
+      const next = { ...header };
+      if ('documentNo' in op) next.documentNo = op.documentNo;
+      if ('invoiceDate' in op) {
+        if (op.invoiceDate) next.invoiceDate = op.invoiceDate;
+        else delete next.invoiceDate;
+      }
+      return { ...doc, header: next };
+    }
+    case 'setLine':
+      return { ...doc, lines: mapLine(lines, op.index, (line) => setLinePatch(line, op)) };
+    case 'addLine':
+      return { ...doc, lines: [...lines, newLine(lines)] };
+    case 'removeLine':
+      return { ...doc, lines: lines.filter((line, position) => indexOf(line, position) !== op.index) };
+    case 'selectVendor': {
+      const vendor = header.vendor ?? {};
+      return withVendor(doc, {
+        ...vendor, state: 'linked', matchedBy: 'manual', id: op.id, name: hint.name ?? vendor.name,
+        details: { name: hint.name ?? '', taxId: hint.taxId ?? '', city: hint.city ?? '' },
+      });
+    }
+    case 'newVendor': {
+      const { id: _id, name: _name, matchedBy: _matchedBy, details: _details, ...vendor } = header.vendor ?? {};
+      return withVendor(doc, {
+        ...vendor, state: 'new', candidates: vendor.candidates ?? [], extracted: { ...(vendor.extracted ?? {}), ...(op.fields ?? {}) },
+      });
+    }
+    case 'selectProduct':
+      return {
+        ...doc,
+        lines: mapLine(lines, op.index, (line) => {
+          const { new: _new, ...product } = line.product ?? {};
+          return {
+            ...line,
+            product: {
+              ...product, state: 'linked', matchedBy: 'manual', id: op.id, name: hint.name,
+              details: { name: hint.name ?? '', searchKey: hint.searchKey ?? '' },
+            },
+          };
+        }),
+      };
+    case 'newProduct':
+      return {
+        ...doc,
+        lines: mapLine(lines, op.index, (line) => {
+          const product = line.product ?? {};
+          const fresh = { name: line.description ?? '', ...(product.new ?? {}) };
+          for (const key of ['name', 'categoryId', 'uomId']) if (key in op) fresh[key] = op[key];
+          if ('categoryId' in op) fresh.category = op.categoryId == null ? null : (hint.category ?? fresh.category);
+          if ('uomId' in op) fresh.uom = op.uomId == null ? null : (hint.uom ?? fresh.uom);
+          return { ...line, product: { ...product, state: 'new', id: null, new: fresh } };
+        }),
+      };
+    default:
+      return doc;
+  }
+}
+
+/** The review answer with each pending `{op, hint}` applied in order (the pending edits on screen). */
+export function applyPendingToReview(review, pending) {
+  if (!review || !pending?.length) return review;
+  const document = pending.reduce((doc, entry) => applyOperationLocally(doc, entry.op, entry.hint), review.document ?? {});
+  return { ...review, document };
+}
+
+/** The description a `new` product is created with: its own name, else the line's description. */
+export function newProductName(line) {
+  return String(line?.product?.new?.name ?? line?.description ?? '');
+}
+
+/** Whether the `new` product of a line has everything a creation needs (name, category and unit). */
+export function newProductComplete(line) {
+  const fresh = line?.product?.new ?? {};
+  return Boolean(newProductName(line).trim() && String(fresh.categoryId ?? '').trim() && String(fresh.uomId ?? '').trim());
+}
+
+/** `error.code` of a failed write → the `genericLabels` key of its reason (never the backend text). */
+export const SAVE_ERROR_LABEL_KEYS = Object.freeze({
+  stale_document: 'invoiceInboxSaveErrorStale',
+  processing: 'invoiceInboxReviewErrorProcessing',
+  not_editable: 'invoiceInboxSaveErrorNotEditable',
+  not_reviewable: 'invoiceInboxSaveErrorNotReviewable',
+  not_valid: 'invoiceInboxSaveErrorNotValid',
+  invalid_value: 'invoiceInboxSaveErrorInvalidValue',
+  invalid_request: 'invoiceInboxSaveErrorInvalidValue',
+  too_many_lines: 'invoiceInboxSaveErrorTooManyLines',
+  line_not_found: 'invoiceInboxSaveErrorLineNotFound',
+  unknown_vendor: 'invoiceInboxSaveErrorUnknownVendor',
+  unknown_product: 'invoiceInboxSaveErrorUnknownProduct',
+  unknown_category: 'invoiceInboxSaveErrorUnknownCategory',
+  unknown_uom: 'invoiceInboxSaveErrorUnknownUom',
+  document_too_large: 'invoiceInboxSaveErrorTooLarge',
+  request_too_large: 'invoiceInboxSaveErrorTooLarge',
+  missing_updated: 'invoiceInboxSaveErrorGeneric',
+  feature_disabled: 'invoiceInboxReviewErrorFeatureDisabled',
+  org_not_allowed: 'invoiceInboxReviewErrorOrg',
+  access_denied: 'invoiceInboxSaveErrorAccess',
+  not_found: 'invoiceInboxReviewErrorNotFound',
+});
+const SAVE_ERROR_FALLBACK_KEY = 'invoiceInboxSaveErrorGeneric';
+
+export function saveErrorKey(code) {
+  return SAVE_ERROR_LABEL_KEYS[code] ?? SAVE_ERROR_FALLBACK_KEY;
+}
+
+/**
+ * Refusals that mean "the document is not what you were editing": the SPA reloads it, drops the
+ * unsaved local edits and shows a notice (S2-D4), instead of rolling back and offering a retry.
+ */
+const RELOAD_CODES = new Set(['stale_document', 'processing', 'not_editable', 'not_reviewable']);
+
+export function isReloadCode(code) {
+  return RELOAD_CODES.has(code);
+}
+
+/** The "Marcar como revisada" button is enabled only on a valid PENDING_REVIEW document. */
+export function canMarkReviewed(review) {
+  return review?.status === STATUS.PENDING_REVIEW && review?.editable !== false && pendingCount(review.document) === 0;
 }
