@@ -404,6 +404,9 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           bottom: window.innerHeight - rect.top + 4,
           maxHeight,
           zIndex: 1000,
+          // Portaled to <body>: inside a modal Radix dialog (the invoice-inbox review drawer) body has
+          // `pointer-events: none`, so without this the options cannot be clicked (as CreatableSearchSelect).
+          pointerEvents: 'auto',
         }
       : {
           position: 'fixed',
@@ -414,6 +417,9 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           top: rect.bottom + 4,
           maxHeight,
           zIndex: 1000,
+          // Portaled to <body>: inside a modal Radix dialog (the invoice-inbox review drawer) body has
+          // `pointer-events: none`, so without this the options cannot be clicked (as CreatableSearchSelect).
+          pointerEvents: 'auto',
         };
     setDropdownStyle(style);
   }, [anchorRight]);

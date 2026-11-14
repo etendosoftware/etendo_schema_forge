@@ -697,3 +697,26 @@ describe('InlineSearchCombo — ETP-5902 labelPrefix', () => {
     expect(onChange).toHaveBeenCalledWith('iva21', 'IVA 21%', expect.objectContaining({ labelPrefix: '21%' }));
   });
 });
+
+// ---------------------------------------------------------------------------
+// The panel is portaled to <body>: inside a modal Radix dialog (the invoice inbox review drawer)
+// <body> has `pointer-events: none`, so the panel must opt back in or its options cannot be clicked.
+// ---------------------------------------------------------------------------
+
+describe('InlineSearchCombo — portaled panel accepts pointer events', () => {
+  it('the open panel sets pointer-events: auto, and a click on an option picks it under a pointer-events:none body', async () => {
+    const user = userEvent.setup();
+    try {
+      const { input, onChange } = renderCombo();
+      await user.click(input);
+      // The modal dialog locks <body> after the field is focused; the portaled panel still opts in.
+      document.body.style.pointerEvents = 'none';
+      const panel = await screen.findByTestId('inline-add-options-tax');
+      expect(panel.style.pointerEvents).toBe('auto');
+      fireEvent.mouseDown(screen.getByTestId('inline-add-option-tax-iva21'));
+      expect(onChange).toHaveBeenCalledWith('iva21', 'IVA 21%', expect.anything());
+    } finally {
+      document.body.style.pointerEvents = '';
+    }
+  });
+});

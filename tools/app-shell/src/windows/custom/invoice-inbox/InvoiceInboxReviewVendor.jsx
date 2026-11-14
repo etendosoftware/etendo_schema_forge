@@ -1,34 +1,43 @@
+import { useState } from 'react';
 import { Building2, Search, UserPlus } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { extractedCountry, joinMeta, vendorView } from './invoiceInboxReviewModel.js';
+import { buildOp, extractedCountry, joinMeta, MAX_TEXT, vendorView } from './invoiceInboxReviewModel.js';
 import {
   AiChip, FieldError, OptionRow, ReviewField, ReviewTag, SectionTitle,
 } from './InvoiceInboxReviewParts.jsx';
+import { CommitInput } from './InvoiceInboxReviewInputs.jsx';
+import { EntityPicker } from './InvoiceInboxReviewPickers.jsx';
+import { useReviewEditor } from './useInvoiceInboxReviewEditor.js';
 
 const NONE_VALUE = '__none__';
 /** `matchedBy` of a linked vendor → `genericLabels` key. */
 const MATCHED_BY_KEYS = Object.freeze({
   taxId: 'invoiceInboxReviewVendorLinkedByTaxId',
   name: 'invoiceInboxReviewVendorLinkedByName',
+  manual: 'invoiceInboxReviewVendorLinkedManual',
 });
 
-/**
- * An inert "coming later" ghost button: `aria-disabled` (not `disabled`) so its title still shows.
- * The actions behind it (change vendor, search an existing one) arrive with S3.
- */
-function InertButton({ label, testId, icon = null }) {
+let opSequence = 0;
+/** A key no other operation shares: vendor resolutions never coalesce in the write queue. */
+function uniqueKey(prefix) {
+  opSequence += 1;
+  return `${prefix}:${opSequence}`;
+}
+
+/** A ghost button. Without the panel's editor (a section rendered on its own) it is inert. */
+function GhostButton({ label, testId, icon = null, onClick, editable }) {
   const ui = useUI();
   return (
     <Button
       type="button"
       variant="ghost"
       size="sm"
-      aria-disabled="true"
-      title={ui('invoiceInboxRowActionSoon', { action: label })}
-      className="flex-none cursor-not-allowed opacity-60"
-      onClick={(event) => event.preventDefault()}
+      aria-disabled={!editable || undefined}
+      title={editable ? undefined : ui('invoiceInboxRowActionSoon', { action: label })}
+      className={`flex-none ${editable ? '' : 'cursor-not-allowed opacity-60'}`}
+      onClick={editable ? onClick : (event) => event.preventDefault()}
       data-testid={testId}>
       {icon}
       {label}
@@ -36,36 +45,142 @@ function InertButton({ label, testId, icon = null }) {
   );
 }
 
-function LinkedVendor({ view }) {
+/** Choosing / creating, as operations. `hint` is the display copy of the picked vendor. */
+function useVendorActions() {
+  const editor = useReviewEditor();
+  return {
+    editor,
+    select: (id, hint) => editor.commit(uniqueKey('vendor'), buildOp.selectVendor(id), hint),
+    createNew: () => editor.commit(uniqueKey('vendor'), buildOp.newVendor()),
+    editField: (field, value) => editor.commit(`vendor:field:${field}`, buildOp.newVendor({ [field]: value })),
+  };
+}
+
+/** The radios of the candidates plus "none · create new"; `checkedId` / `noneChecked` say what is committed. */
+function CandidateRadios({ view, readOnly, checkedId = null, noneChecked = false, onSelect }) {
   const ui = useUI();
+  const { candidates } = view;
+  return (
+    <div className="flex flex-col gap-2" role="radiogroup" aria-label={ui('invoiceInboxReviewSectionVendor')}>
+      {candidates.map((candidate, position) => (
+        <OptionRow
+          key={candidate.id}
+          value={candidate.id}
+          checked={checkedId === candidate.id}
+          onSelect={onSelect}
+          readOnly={readOnly}
+          testId={`invoice-inbox-review-vendor-candidate-${candidate.id}`}
+          badge={position === 0
+            ? <ReviewTag
+            tone="info"
+            label={ui('invoiceInboxReviewMostLikely')}
+            testId={`invoice-inbox-review-vendor-likely-${candidate.id}`}
+            data-testid="ReviewTag__3b4318" />
+            : null}
+          data-testid="OptionRow__3b4318">
+          <span className="block truncate text-sm font-semibold">{candidate.name}</span>
+          <span className="block truncate font-mono text-xs text-muted-foreground">
+            {joinMeta([candidate.taxId, candidate.city])}
+          </span>
+        </OptionRow>
+      ))}
+      <OptionRow
+        value={NONE_VALUE}
+        checked={noneChecked}
+        onSelect={onSelect}
+        readOnly={readOnly}
+        testId="invoice-inbox-review-vendor-none-option"
+        data-testid="OptionRow__3b4318">
+        <span className="block text-sm font-medium text-primary">{ui('invoiceInboxReviewVendorCreateNew')}</span>
+      </OptionRow>
+    </div>
+  );
+}
+
+/** The search over the Etendo vendors (`purchase-invoice` selector); picking one links it. */
+function VendorSearch({ view, apiBaseUrl, actions }) {
+  const ui = useUI();
+  return (
+    <div data-testid="invoice-inbox-review-vendor-search">
+      <EntityPicker
+        kind="vendor"
+        apiBaseUrl={apiBaseUrl}
+        value={view.state === 'linked' ? view.vendor.id : null}
+        label={view.state === 'linked' ? view.name : ''}
+        placeholder={ui('invoiceInboxReviewVendorNoneHint')}
+        fieldKey="inbox-vendor"
+        onPick={({ id, name, option }) => {
+          if (view.state === 'linked' && view.vendor.id === id) return;
+          actions.select(id, { name, taxId: option?.taxId, city: option?.city });
+        }}
+        data-testid="EntityPicker__vendor" />
+    </div>
+  );
+}
+
+/** What a radio click does: the candidate is selected, "none" creates the vendor from the extracted data. */
+function radioHandler(view, actions) {
+  return (value) => {
+    if (value === NONE_VALUE) {
+      if (view.state !== 'new') actions.createNew();
+      return;
+    }
+    const candidate = view.candidates.find((item) => item.id === value);
+    if (!candidate || (view.state === 'linked' && view.vendor.id === candidate.id)) return;
+    actions.select(candidate.id, { name: candidate.name, taxId: candidate.taxId, city: candidate.city });
+  };
+}
+
+function LinkedVendor({ view, readOnly, apiBaseUrl }) {
+  const ui = useUI();
+  const actions = useVendorActions();
+  const editable = Boolean(actions.editor) && !readOnly;
+  const [changing, setChanging] = useState(false);
   const matchedKey = MATCHED_BY_KEYS[view.vendor.matchedBy];
   const meta = joinMeta([view.taxId, view.city]);
   return (
-    <div
-      className="flex items-center gap-3 rounded-xl border border-border p-3"
-      data-testid="invoice-inbox-review-vendor-linked">
-      <span className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] bg-muted text-muted-foreground">
-        <Building2 className="h-[18px] w-[18px]" aria-hidden="true" data-testid="Building2__review-vendor" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold" data-testid="invoice-inbox-review-vendor-name">{view.name}</p>
-        {meta && (
-          <p className="truncate font-mono text-xs text-muted-foreground" data-testid="invoice-inbox-review-vendor-meta">
-            {meta}
-          </p>
+    <div className="flex flex-col gap-2">
+      <div
+        className="flex items-center gap-3 rounded-xl border border-border p-3"
+        data-testid="invoice-inbox-review-vendor-linked">
+        <span className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] bg-muted text-muted-foreground">
+          <Building2 className="h-[18px] w-[18px]" aria-hidden="true" data-testid="Building2__review-vendor" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold" data-testid="invoice-inbox-review-vendor-name">{view.name}</p>
+          {meta && (
+            <p className="truncate font-mono text-xs text-muted-foreground" data-testid="invoice-inbox-review-vendor-meta">
+              {meta}
+            </p>
+          )}
+        </div>
+        {matchedKey && (
+          <ReviewTag
+            tone="success"
+            label={ui(matchedKey)}
+            testId="invoice-inbox-review-vendor-matched-by"
+            data-testid="ReviewTag__3b4318" />
         )}
+        <GhostButton
+          label={ui('invoiceInboxReviewVendorChange')}
+          testId="invoice-inbox-review-vendor-change"
+          editable={editable}
+          onClick={() => setChanging((open) => !open)}
+          data-testid="GhostButton__3b4318" />
       </div>
-      {matchedKey && (
-        <ReviewTag
-          tone="success"
-          label={ui(matchedKey)}
-          testId="invoice-inbox-review-vendor-matched-by"
-          data-testid="ReviewTag__3b4318" />
+      {editable && changing && (
+        <div className="flex flex-col gap-2" data-testid="invoice-inbox-review-vendor-change-panel">
+          <VendorSearch view={view} apiBaseUrl={apiBaseUrl} actions={actions} data-testid="VendorSearch__3b4318" />
+          {view.candidates.length > 0 && (
+            <CandidateRadios
+              view={view}
+              readOnly={false}
+              checkedId={view.vendor.id}
+              onSelect={radioHandler(view, actions)}
+              data-testid="CandidateRadios__3b4318" />
+          )}
+        </div>
       )}
-      <InertButton
-        label={ui('invoiceInboxReviewVendorChange')}
-        testId="invoice-inbox-review-vendor-change"
-        data-testid="InertButton__3b4318" />
     </div>
   );
 }
@@ -84,8 +199,10 @@ function PlainVendor({ view }) {
   );
 }
 
-function AmbiguousVendor({ view, missing, readOnly }) {
+function AmbiguousVendor({ view, missing, readOnly, apiBaseUrl }) {
   const ui = useUI();
+  const actions = useVendorActions();
+  const editable = Boolean(actions.editor) && !readOnly;
   const { extracted, candidates } = view;
   return (
     <div className="flex flex-col gap-2" data-testid="invoice-inbox-review-vendor-ambiguous">
@@ -101,35 +218,12 @@ function AmbiguousVendor({ view, missing, readOnly }) {
           {!String(extracted.taxId ?? '').trim() && ui('invoiceInboxReviewVendorNoTaxId')}
         </span>
       </div>
-      <div className="flex flex-col gap-2" role="radiogroup" aria-label={ui('invoiceInboxReviewSectionVendor')}>
-        {candidates.map((candidate, position) => (
-          <OptionRow
-            key={candidate.id}
-            value={candidate.id}
-            readOnly={readOnly}
-            testId={`invoice-inbox-review-vendor-candidate-${candidate.id}`}
-            badge={position === 0
-              ? <ReviewTag
-              tone="info"
-              label={ui('invoiceInboxReviewMostLikely')}
-              testId={`invoice-inbox-review-vendor-likely-${candidate.id}`}
-              data-testid="ReviewTag__3b4318" />
-              : null}
-            data-testid="OptionRow__3b4318">
-            <span className="block truncate text-sm font-semibold">{candidate.name}</span>
-            <span className="block truncate font-mono text-xs text-muted-foreground">
-              {joinMeta([candidate.taxId, candidate.city])}
-            </span>
-          </OptionRow>
-        ))}
-        <OptionRow
-          value={NONE_VALUE}
-          readOnly={readOnly}
-          testId="invoice-inbox-review-vendor-none-option"
-          data-testid="OptionRow__3b4318">
-          <span className="block text-sm font-medium text-primary">{ui('invoiceInboxReviewVendorCreateNew')}</span>
-        </OptionRow>
-      </div>
+      <CandidateRadios
+        view={view}
+        readOnly={!editable}
+        onSelect={editable ? radioHandler(view, actions) : undefined}
+        data-testid="CandidateRadios__3b4318" />
+      {editable && <VendorSearch view={view} apiBaseUrl={apiBaseUrl} actions={actions} data-testid="VendorSearch__3b4318" />}
       {missing.has('vendor') && (
         <FieldError
           testId="invoice-inbox-review-vendor-error"
@@ -139,89 +233,152 @@ function AmbiguousVendor({ view, missing, readOnly }) {
   );
 }
 
-function NewVendor({ view, missing, readOnly }) {
+/** One text field of the new vendor: autosaves a `newVendor` patch of that key. */
+function NewVendorField({ field, label, value, readOnly, required = false, invalid = false, error = null, testId, actions, className = '' }) {
+  return (
+    <ReviewField
+      label={label}
+      className={className}
+      readOnly={readOnly}
+      required={required}
+      invalid={invalid}
+      error={error}
+      value={value}
+      testId={testId}
+      control={actions.editor && !readOnly ? (
+        <CommitInput
+          id={testId}
+          value={value ?? ''}
+          display={(text) => String(text ?? '')}
+          maxLength={MAX_TEXT}
+          invalid={invalid}
+          onCommit={(text) => actions.editField(field, text)}
+          testId={testId}
+          data-testid="CommitInput__3b4318" />
+      ) : null}
+      data-testid="ReviewField__3b4318" />
+  );
+}
+
+function NewVendor({ view, missing, readOnly, apiBaseUrl }) {
   const ui = useUI();
+  const actions = useVendorActions();
+  const editable = Boolean(actions.editor) && !readOnly;
+  const [searching, setSearching] = useState(false);
+  const [countryId, setCountryId] = useState(null);
   const { extracted } = view;
   const noName = missing.has('vendor') && !String(extracted.name ?? '').trim();
+  const typedCountry = String(extracted.countryName ?? '').trim();
   const country = extractedCountry(extracted) || ui('invoiceInboxReviewCountryDefault');
+  const field = (key, label, extra = {}) => (
+    <NewVendorField
+      field={key}
+      label={label}
+      value={extracted[key]}
+      readOnly={readOnly}
+      testId={`invoice-inbox-review-vendor-new-${extra.testSuffix ?? key.toLowerCase()}`}
+      actions={actions}
+      {...extra}
+      data-testid="NewVendorField__3b4318" />
+  );
   return (
     <div
       className="flex flex-col gap-3 rounded-xl border border-border bg-muted/50 p-3.5"
       data-testid="invoice-inbox-review-vendor-new">
-      <div className="flex items-start gap-2.5">
+      <div className="flex flex-wrap items-start gap-2.5">
         <UserPlus className="mt-px h-[18px] w-[18px] flex-none text-primary" aria-hidden="true" data-testid="UserPlus__review-vendor" />
-        <p className="min-w-0 flex-1 text-[13px] leading-normal text-muted-foreground [overflow-wrap:anywhere]" data-testid="invoice-inbox-review-vendor-new-hint">
+        <p className="min-w-[180px] flex-1 text-[13px] leading-normal text-muted-foreground [overflow-wrap:anywhere]" data-testid="invoice-inbox-review-vendor-new-hint">
           <b className="font-bold text-foreground" data-testid="invoice-inbox-review-vendor-new-title">
             {ui('invoiceInboxReviewVendorNewTitle')}.
           </b>
           {' '}
           {ui('invoiceInboxReviewVendorNewHint')}
         </p>
-        <InertButton
+        <GhostButton
           label={ui('invoiceInboxReviewVendorSearchExisting')}
           testId="invoice-inbox-review-vendor-search-existing"
           icon={<Search className="h-3.5 w-3.5" aria-hidden="true" data-testid="Search__review-vendor" />}
-          data-testid="InertButton__3b4318" />
+          editable={editable}
+          onClick={() => setSearching((open) => !open)}
+          data-testid="GhostButton__3b4318" />
       </div>
-      <ReviewField
-        label={ui('invoiceInboxReviewFieldName')}
-        value={extracted.name}
-        readOnly={readOnly}
-        required
-        invalid={noName}
-        error={noName ? ui('invoiceInboxReviewVendorRequired') : null}
-        testId="invoice-inbox-review-vendor-new-name"
-        data-testid="ReviewField__3b4318" />
-      <div className="grid grid-cols-[160px_minmax(0,1fr)] gap-3">
-        <ReviewField
-          label={ui('invoiceInboxReviewFieldTaxId')}
-          value={extracted.taxId}
-          readOnly={readOnly}
-          testId="invoice-inbox-review-vendor-new-taxid"
-          data-testid="ReviewField__3b4318" />
-        <ReviewField
-          label={ui('invoiceInboxReviewFieldAddress')}
-          value={extracted.address}
-          readOnly={readOnly}
-          testId="invoice-inbox-review-vendor-new-address"
-          data-testid="ReviewField__3b4318" />
+      {editable && searching && (
+        <VendorSearch view={view} apiBaseUrl={apiBaseUrl} actions={actions} data-testid="VendorSearch__3b4318" />
+      )}
+      {field('name', ui('invoiceInboxReviewFieldName'), {
+        required: true,
+        invalid: noName,
+        error: noName ? ui('invoiceInboxReviewVendorRequired') : null,
+        testSuffix: 'name',
+      })}
+      <div className="grid grid-cols-[minmax(96px,160px)_minmax(0,1fr)] gap-3">
+        {field('taxId', ui('invoiceInboxReviewFieldTaxId'), { testSuffix: 'taxid' })}
+        {field('address', ui('invoiceInboxReviewFieldAddress'))}
       </div>
-      <div className="grid grid-cols-[160px_minmax(0,1fr)_minmax(0,1fr)] gap-3">
+      {/* Postal code | city | country wrap onto a second row when the pane is too narrow for the three. */}
+      <div className="flex flex-wrap gap-3">
+        {field('postalCode', ui('invoiceInboxReviewFieldPostalCode'), { testSuffix: 'postalcode', className: 'min-w-[96px] flex-[1_1_96px]' })}
+        {field('city', ui('invoiceInboxReviewFieldCity'), { className: 'min-w-[120px] flex-[2_1_120px]' })}
         <ReviewField
-          label={ui('invoiceInboxReviewFieldPostalCode')}
-          value={extracted.postalCode}
-          readOnly={readOnly}
-          testId="invoice-inbox-review-vendor-new-postalcode"
-          data-testid="ReviewField__3b4318" />
-        <ReviewField
-          label={ui('invoiceInboxReviewFieldCity')}
-          value={extracted.city}
-          readOnly={readOnly}
-          testId="invoice-inbox-review-vendor-new-city"
-          data-testid="ReviewField__3b4318" />
-        <ReviewField
+          className="min-w-[120px] flex-[1_1_120px]"
           label={ui('invoiceInboxReviewFieldCountry')}
           value={country}
           readOnly={readOnly}
           testId="invoice-inbox-review-vendor-new-country"
+          control={editable ? (
+            <EntityPicker
+              kind="country"
+              apiBaseUrl={apiBaseUrl}
+              value={countryId ?? `name:${typedCountry || 'default'}`}
+              label={country}
+              placeholder={ui('invoiceInboxReviewFieldCountry')}
+              fieldKey="inbox-vendor-country"
+              onPick={({ id, name }) => {
+                setCountryId(id);
+                actions.editField('countryName', name);
+              }}
+              data-testid="EntityPicker__country" />
+          ) : null}
           data-testid="ReviewField__3b4318" />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {field('email', ui('invoiceInboxReviewFieldEmail'))}
+        {field('phone', ui('invoiceInboxReviewFieldPhone'))}
       </div>
     </div>
   );
 }
 
-function NoVendor({ missing }) {
+function NoVendor({ view, missing, readOnly, apiBaseUrl }) {
   const ui = useUI();
+  const actions = useVendorActions();
+  const editable = Boolean(actions.editor) && !readOnly;
+  const hasExtracted = Object.values(view.extracted).some((value) => String(value ?? '').trim());
   return (
-    <div data-testid="invoice-inbox-review-vendor-none">
-      {/* Choosing an Etendo vendor is S3: the field is shown inert until then. */}
-      <Input
-        readOnly
-        aria-disabled="true"
-        placeholder={ui('invoiceInboxReviewVendorNoneHint')}
-        aria-invalid={missing.has('vendor') || undefined}
-        className={missing.has('vendor') ? 'border-destructive' : undefined}
-        data-testid="invoice-inbox-review-vendor-none-hint" />
+    <div className="flex flex-col gap-2" data-testid="invoice-inbox-review-vendor-none">
+      {editable ? (
+        <VendorSearch view={view} apiBaseUrl={apiBaseUrl} actions={actions} data-testid="VendorSearch__3b4318" />
+      ) : (
+        <Input
+          readOnly
+          aria-disabled="true"
+          placeholder={ui('invoiceInboxReviewVendorNoneHint')}
+          aria-invalid={missing.has('vendor') || undefined}
+          className={missing.has('vendor') ? 'border-destructive' : undefined}
+          data-testid="invoice-inbox-review-vendor-none-hint" />
+      )}
+      {editable && hasExtracted && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="self-start"
+          onClick={actions.createNew}
+          data-testid="invoice-inbox-review-vendor-create-new">
+          <UserPlus className="h-3.5 w-3.5" aria-hidden="true" data-testid="UserPlus__review-vendor-create" />
+          {ui('invoiceInboxReviewVendorCreateNewButton')}
+        </Button>
+      )}
       {missing.has('vendor') && (
         <FieldError
           testId="invoice-inbox-review-vendor-error"
@@ -232,36 +389,34 @@ function NoVendor({ missing }) {
 }
 
 /**
- * ETP-6050 F5 — the "Proveedor" section, in its four states (`vendor.state`): linked (card with
- * the tag of how it was matched and an inert "Cambiar"), ambiguous (the AI chip, full-row
- * candidates, "Ninguno · crear proveedor nuevo", the error while unresolved), new (block + the
- * extracted data, the address STRUCTURED, country by name with the Spain fallback — decision 8)
- * and none. Read only in S1: candidates are disabled and "Cambiar" / "Buscar existente" are
- * inert. `locked` (confirmed / discarded) shows the vendor as plain text.
+ * ETP-6050 F5/F6 — the "Proveedor" section, in its four states (`vendor.state`): linked (card with
+ * the tag of how it was matched and "Cambiar", which opens the search and the candidates),
+ * ambiguous (the AI chip, full-row candidates, "Ninguno · crear proveedor nuevo", the search, the
+ * error while unresolved), new (block + the extracted data, all editable, the address STRUCTURED,
+ * country by name with the Spain fallback — decision 8 — and "Buscar existente") and none (search,
+ * or "crear nuevo" when data was extracted). Choosing and editing go through the panel's editor
+ * (`selectVendor` / `newVendor`); nothing is created in Etendo until the confirm (ETP-6051).
+ * `locked` (confirmed / discarded / not editable) shows the vendor as plain text.
  *
- * @param {{document: object, missing: Set<string>, readOnly?: boolean, locked?: boolean}} props
+ * @param {{document: object, missing: Set<string>, readOnly?: boolean, locked?: boolean,
+ *   apiBaseUrl?: string}} props
  */
-export default function InvoiceInboxReviewVendor({ document, missing, readOnly = true, locked = false }) {
+export default function InvoiceInboxReviewVendor({
+  document, missing, readOnly = true, locked = false, apiBaseUrl = '',
+}) {
   const ui = useUI();
   const view = vendorView(document);
+  const common = { view, missing, readOnly, apiBaseUrl };
   return (
     <section className="flex flex-col gap-3" data-testid="invoice-inbox-review-vendor" data-state={view.state}>
       <SectionTitle
         testId="invoice-inbox-review-vendor-title"
         data-testid="SectionTitle__3b4318">{ui('invoiceInboxReviewSectionVendor')}</SectionTitle>
       {locked && <PlainVendor view={view} data-testid="PlainVendor__3b4318" />}
-      {!locked && view.state === 'linked' && <LinkedVendor view={view} data-testid="LinkedVendor__3b4318" />}
-      {!locked && view.state === 'ambiguous' && <AmbiguousVendor
-        view={view}
-        missing={missing}
-        readOnly={readOnly}
-        data-testid="AmbiguousVendor__3b4318" />}
-      {!locked && view.state === 'new' && <NewVendor
-        view={view}
-        missing={missing}
-        readOnly={readOnly}
-        data-testid="NewVendor__3b4318" />}
-      {!locked && view.state === 'none' && <NoVendor missing={missing} data-testid="NoVendor__3b4318" />}
+      {!locked && view.state === 'linked' && <LinkedVendor {...common} data-testid="LinkedVendor__3b4318" />}
+      {!locked && view.state === 'ambiguous' && <AmbiguousVendor {...common} data-testid="AmbiguousVendor__3b4318" />}
+      {!locked && view.state === 'new' && <NewVendor {...common} data-testid="NewVendor__3b4318" />}
+      {!locked && view.state === 'none' && <NoVendor {...common} data-testid="NoVendor__3b4318" />}
     </section>
   );
 }

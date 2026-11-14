@@ -50,7 +50,8 @@ export function FieldError({ children, testId }) {
 }
 
 /**
- * A labelled field. Read only it shows the value in a read-only (or disabled) input; `invalid`
+ * A labelled field. Read only it shows the value in a read-only (or disabled) input; `control`
+ * replaces the input with an editable one (S2: a `CommitInput`, the date field); `invalid`
  * paints the red border and `aria-invalid`; `required` marks the label with the asterisk;
  * `icon` draws an icon inside the input at the right (the date field's calendar). `tag` sits at
  * the right of the label (the "Revisar" tag). A later `readOnly={false}` turns the same input
@@ -58,7 +59,7 @@ export function FieldError({ children, testId }) {
  */
 export function ReviewField({
   label, value, readOnly = true, disabled = false, required = false, invalid = false, tag = null,
-  error = null, placeholder, onChange, testId, className = '', icon: Icon = null,
+  error = null, placeholder, onChange, testId, className = '', icon: Icon = null, control = null,
 }) {
   return (
     <div className={className} data-testid={`${testId}-field`}>
@@ -72,24 +73,26 @@ export function ReviewField({
         </Label>
         {tag}
       </div>
-      <div className="relative">
-        <Input
-          id={testId}
-          value={value ?? ''}
-          readOnly={readOnly}
-          disabled={disabled}
-          placeholder={placeholder}
-          onChange={onChange}
-          aria-invalid={invalid || undefined}
-          className={`${Icon ? 'pr-9 ' : ''}${invalid ? 'border-destructive bg-[var(--status-destructive-bg)]' : ''}`}
-          data-testid={testId} />
-        {Icon && (
-          <Icon
-            className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-            data-testid={`${testId}-icon`} />
-        )}
-      </div>
+      {control ?? (
+        <div className="relative">
+          <Input
+            id={testId}
+            value={value ?? ''}
+            readOnly={readOnly}
+            disabled={disabled}
+            placeholder={placeholder}
+            onChange={onChange}
+            aria-invalid={invalid || undefined}
+            className={`${Icon ? 'pr-9 ' : ''}${invalid ? 'border-destructive bg-[var(--status-destructive-bg)]' : ''}`}
+            data-testid={testId} />
+          {Icon && (
+            <Icon
+              className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+              data-testid={`${testId}-icon`} />
+          )}
+        </div>
+      )}
       <FieldError testId={`${testId}-error`} data-testid="FieldError__a14703">{error}</FieldError>
     </div>
   );
@@ -134,8 +137,8 @@ function RadioDot({ on, size }) {
 
 /**
  * A candidate as a full-row button with a custom radio (`role="radio"`): padding 10/12, radius
- * 10, border; selected = primary border + a 3px ring. Disabled while `readOnly` (S1: the choice
- * is S3). `compact` is the smaller variant of the product panel.
+ * 10, border; selected = primary border + a 3px ring. Disabled while `readOnly`. `compact` is the
+ * smaller variant of the product panel.
  */
 export function OptionRow({
   value, checked = false, readOnly = true, onSelect, testId, badge = null, compact = false, children,

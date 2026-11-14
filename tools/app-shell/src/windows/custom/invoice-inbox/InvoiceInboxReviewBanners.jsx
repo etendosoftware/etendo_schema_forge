@@ -1,3 +1,4 @@
+import { X } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { errorCodeLabelKey } from './invoiceInboxMessages.js';
@@ -118,5 +119,36 @@ export function InvoiceInboxReviewMismatchBanner({ review, currency }) {
         doc: formatCurrency(currency, mismatch.document),
       })}
     </ReviewBanner>
+  );
+}
+
+/**
+ * ETP-6050 S2-D4 — the notice shown after the document was reloaded because it changed under the
+ * editor (`stale_document`, `processing`, `not_editable`, `not_reviewable`): the unsaved local
+ * edits were dropped. Dismissible; the text is the translated message of the refusal's code.
+ *
+ * @param {{noticeKey: string, onDismiss: () => void}} props
+ */
+export function InvoiceInboxReviewNotice({ noticeKey, onDismiss }) {
+  const ui = useUI();
+  return (
+    <div className="relative" data-testid="invoice-inbox-review-notice-wrap">
+      <ReviewBanner
+        tone="warning"
+        testId="invoice-inbox-review-notice"
+        title={ui('invoiceInboxSaveReloadedTitle')}
+        data-testid="ReviewBanner__notice">
+        {ui(noticeKey)}
+      </ReviewBanner>
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label={ui('close')}
+        title={ui('close')}
+        className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full text-current opacity-70 hover:opacity-100"
+        data-testid="invoice-inbox-review-notice-dismiss">
+        <X className="h-3.5 w-3.5" aria-hidden="true" data-testid="X__review-notice" />
+      </button>
+    </div>
   );
 }
