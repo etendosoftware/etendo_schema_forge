@@ -17,10 +17,15 @@ function isAbort(err) {
  * document is still being read, `not_found`, `feature_disabled`…) or `errorText` (a network error,
  * whose message is already translated); `reload` retries.
  *
+ * ETP-6050 S2: `replace(review)` swaps in the answer of a write (`apply` / `mark-reviewed`) for the
+ * current id, and `refresh()` re-reads WITHOUT clearing the form (the 409 reload): it resolves
+ * the review read (null when the read failed).
+ *
  * @param {Function} apiFetch from `useApiFetch(apiBaseUrl)`
  * @param {string|null} id document to read; null keeps the hook idle
  * @returns {{review: object|null, loading: boolean, errorKey: string|null,
- *   errorText: string|null, reload: () => void}}
+ *   errorText: string|null, reload: () => void, replace: (review: object) => void,
+ *   refresh: () => Promise<object|null>}}
  */
 export function useInvoiceInboxReview(apiFetch, id) {
   const [state, setState] = useState({ id: null, review: null, loading: false, errorKey: null, errorText: null });
@@ -56,6 +61,27 @@ export function useInvoiceInboxReview(apiFetch, id) {
     return () => abortRef.current?.abort();
   }, [load]);
 
+  const idRef = useRef(id);
+  idRef.current = id;
+
+  const replace = useCallback((next) => {
+    if (!next) return;
+    setState((prev) => (prev.id === idRef.current ? { ...prev, review: next, loading: false, errorKey: null, errorText: null } : prev));
+  }, []);
+
+  const refresh = useCallback(async () => {
+    const target = idRef.current;
+    if (!target) return null;
+    try {
+      const outcome = await fetchReview(apiFetch, target);
+      if (outcome.status !== 'ok' || idRef.current !== target) return null;
+      setState((prev) => (prev.id === target ? { ...prev, review: outcome.review, loading: false, errorKey: null, errorText: null } : prev));
+      return outcome.review;
+    } catch {
+      return null;
+    }
+  }, [apiFetch]);
+
   // A render between a new `id` and the effect must not show the previous document.
   const current = state.id === id;
   return {
@@ -64,5 +90,7 @@ export function useInvoiceInboxReview(apiFetch, id) {
     errorKey: current ? state.errorKey : null,
     errorText: current ? state.errorText : null,
     reload: load,
+    replace,
+    refresh,
   };
 }
