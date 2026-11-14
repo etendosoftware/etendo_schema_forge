@@ -34,6 +34,7 @@ vi.mock('@/lib/observability.js', () => ({
   identify: (...args) => identifyMock(...args),
   group: (...args) => groupMock(...args),
   reset: vi.fn(),
+  setContext: vi.fn(),
 }));
 
 import { OpenFeature, OpenFeatureEventEmitter, ProviderEvents } from '@openfeature/web-sdk';

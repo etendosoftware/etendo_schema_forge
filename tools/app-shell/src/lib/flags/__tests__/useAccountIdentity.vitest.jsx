@@ -16,6 +16,9 @@ vi.mock('../bootstrap.js', () => ({
   waitForIdentityReset: waitForIdentityResetMock,
 }));
 
+const setContextMock = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/observability.js', () => ({ setContext: setContextMock }));
+
 import { useAccountIdentity } from '../useAccountIdentity.js';
 import { clearSessionIdentity, getSessionIdentity } from '../../sessionIdentity.js';
 
@@ -206,5 +209,25 @@ describe('unresolved legacy identity recovery', () => {
     hook.rerender();
     await act(async () => { await Promise.resolve(); });
     expect(refreshAccountIdentity).toHaveBeenCalledTimes(2);
+  });
+
+  it('sets internal_user from the account email domain, and clears it when unauthenticated (ETP-6230)', async () => {
+    setContextMock.mockClear();
+    auth.current = { token: null, isAuthenticated: true, username: 'ana', clientId: 'c1', account: { id: 'A', email: 'ana@etendo.software' } };
+    const hook = renderHook(() => useAccountIdentity());
+    await waitFor(() => expect(setContextMock).toHaveBeenLastCalledWith({ internal_user: true }));
+    auth.current = { token: null, isAuthenticated: false };
+    hook.rerender();
+    await waitFor(() => expect(setContextMock).toHaveBeenLastCalledWith({ internal_user: undefined }));
+  });
+
+  it('ends on internal_user false after an internal account is replaced by an external one without logout (ETP-6230)', async () => {
+    setContextMock.mockClear();
+    auth.current = { token: null, isAuthenticated: true, username: 'ana', clientId: 'c1', account: { id: 'A', email: 'ana@etendo.ai' } };
+    const hook = renderHook(() => useAccountIdentity());
+    await waitFor(() => expect(setContextMock).toHaveBeenLastCalledWith({ internal_user: true }));
+    auth.current = { token: null, isAuthenticated: true, username: 'bob', clientId: 'c1', account: { id: 'B', email: 'bob@gmail.com' } };
+    hook.rerender();
+    await waitFor(() => expect(setContextMock).toHaveBeenLastCalledWith({ internal_user: false }));
   });
 });

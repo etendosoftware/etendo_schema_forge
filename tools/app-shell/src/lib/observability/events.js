@@ -179,6 +179,7 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
   WALKTHROUGH_STARTED: defineEvent('walkthrough_started', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
     properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
       OBSERVABILITY_PROPERTY_KEYS.FLOW_ID,
       // The status the flow held BEFORE this run, which separates a first-timer
       // from a repeater from someone coming back to a revised tour.
@@ -191,6 +192,7 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
   WALKTHROUGH_FINISHED: defineEvent('walkthrough_finished', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
     properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
       OBSERVABILITY_PROPERTY_KEYS.FLOW_ID,
       // 'completed' | 'abandoned' -- one event with an outcome rather than two
       // events, so the funnel is a single step with a breakdown.
@@ -839,6 +841,7 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
   REPORT_OPENED: defineEvent('report_opened', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
     properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
       OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
       OBSERVABILITY_PROPERTY_KEYS.REPORT_SESSION_ID,
       OBSERVABILITY_PROPERTY_KEYS.SOURCE,
@@ -853,6 +856,7 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
   REPORT_FILTER_APPLIED: defineEvent('report_filter_applied', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
     properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
       OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
       OBSERVABILITY_PROPERTY_KEYS.REPORT_SESSION_ID,
       OBSERVABILITY_PROPERTY_KEYS.TYPE,
@@ -866,6 +870,7 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
   REPORT_GROUP_TOGGLED: defineEvent('report_group_toggled', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
     properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
       OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
       OBSERVABILITY_PROPERTY_KEYS.REPORT_SESSION_ID,
       OBSERVABILITY_PROPERTY_KEYS.TYPE,
@@ -877,6 +882,7 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
   REPORT_DRILLDOWN: defineEvent('report_drilldown', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
     properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
       OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
       OBSERVABILITY_PROPERTY_KEYS.REPORT_SESSION_ID,
       OBSERVABILITY_PROPERTY_KEYS.TYPE,
