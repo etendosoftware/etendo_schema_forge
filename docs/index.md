@@ -39,6 +39,7 @@
 | [xml-regeneration-check.md](xml-regeneration-check.md) | **XML regeneration check**: compare original module XML vs export.database output without DB access |
 | [local-env-plugin.md](local-env-plugin.md) | **local-env plugin** (`local-env.d/plugins/etendo-go`): seeds the GO sample client into local-env's cached DB and starts one Etendo GO SPA per environment on its own `SPA_PORT`/`BFF_PORT`; how `make dev` / `make dev-local-core` honour those ports |
 | [ci-parity-install.md](ci-parity-install.md) | **CI parity install** (`make ci-parity`): bring the local Etendo checkout to the module/branch set CI installs, then clean DB + install — dry-run by default |
+| [../.claude/skills/jenkins/SKILL.md](../.claude/skills/jenkins/SKILL.md) | **Jenkins, read-only** (`make jenkins`): jobs, pipeline source (repo/branch/Jenkinsfile), webhook filters, builds and console logs of `jenkins-go` and `jenkins2`; credentials in `~/.config/etendo-jenkins/config.json`; secrets masked in every output |
 
 ## Field & Pipeline Reference
 
@@ -177,6 +178,7 @@ Plans follow a lifecycle: active in `plans/`, completed in `plans/completed/YYYY
 
 | File | Description |
 |------|-------------|
+| [plans/2026-11-12-etp-6098-go-es-split-plan.md](plans/2026-11-12-etp-6098-go-es-split-plan.md) | ETP-6098 — Split the Spanish localization out of `com.etendoerp.go` into `com.etendoerp.go.es`: decisions D1–D19, SPIs, inventory, migration in tandas 1–10 and the CI/Jenkins/deploy wiring of tanda 1. **Planning; approved decisions, execution not started** |
 | [plans/2026-08-27-recurring-billing-and-resource-limits-prd.md](plans/2026-08-27-recurring-billing-and-resource-limits-prd.md) | Recurring monthly billing, configurable resource limits and plan change (ETP-5045/5046/5047/5048/5049/5050/5051/5053) — supersedes the one-off checkout PRD for forward scope. **Draft for team validation** |
 | [plans/2026-09-22-etp-5443-subscription-lifecycle-design.md](plans/2026-09-22-etp-5443-subscription-lifecycle-design.md) | ETP-5443 — Wires Stripe subscription/invoice webhooks into the `EnvironmentAccessPolicy` access decision and gives the account owner a Subscription section on `/account` reaching the Stripe Customer Portal; implements part of the recurring-billing PRD above. **Approved for implementation**; storage, correlation and enforcement since extended by ETP-5046/5047 (note at its top) |
 | [plans/2026-09-22-etp-5443-subscription-lifecycle-plan.md](plans/2026-09-22-etp-5443-subscription-lifecycle-plan.md) | ETP-5443 — Task-by-task implementation plan for the design above (pure lifecycle interpretation, webhook correlation, the two account endpoints, API clients, the Subscription section, E2E) |
