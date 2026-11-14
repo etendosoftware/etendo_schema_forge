@@ -10,6 +10,11 @@
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewFooter.jsx
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/useInvoiceInboxReviewNav.js
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/useInvoiceInboxReview.js
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/useInvoiceInboxReviewEditor.js
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewInputs.jsx
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewPickers.jsx
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewSaveStatus.jsx
+// @covers tools/app-shell/src/components/contract-ui/InlineSearchCombo.jsx
 // New file justification: invoice-inbox-upload-and-status.mocked.spec.js covers the list, uploads and
 // discard of the window; the review panel is a different flow (open, walk, close, states) with its
 // own mocked `review` action, so it gets its own spec instead of growing that one.
@@ -20,7 +25,10 @@ import { login } from '../../helpers/auth.js';
  * Invoice Inbox — review panel (mocked). Opens from a row and from the pencil, walks previous /
  * next across the loaded rows (skipping PROCESSING, loading more past 50), closes with Escape /
  * outside click / X returning focus, discards from the footer and renders the main states of
- * the mocked `GET /header/{id}/action/review` answer. Routes are installed AFTER login().
+ * the mocked `GET /header/{id}/action/review` answer. ETP-6050 S2 adds the edit flows against a
+ * small stateful fake of `apply` / `mark-reviewed` (the contract of plan 9.2: the token travels in
+ * the body, every answer is the review body of the saved row, the server recomputes the verdict and
+ * the status). Routes are installed AFTER login().
  */
 
 const SPEC = 'invoice-inbox';
@@ -32,7 +40,7 @@ const row = (id, status, extra = {}) => ({
 function review(id, status = 'READY', over = {}, doc = {}) {
   const { header: headerOver, ...docRest } = doc;
   return {
-    id, status, errorCode: null, reviewed: false, adjusted: false, editable: true,
+    id, status, errorCode: null, reviewed: false, adjusted: false, editable: true, updated: 'T0',
     fileName: `${id}.pdf`, sender: 'ana@proveedor.com', source: 'EMAIL', created: '2026-08-10T09:30:00Z',
     invoice: null, currency: { id: 'EUR1', isoCode: 'EUR', symbol: '€' },
     document: {
@@ -57,9 +65,161 @@ function matches(rowData, criteria) {
   });
 }
 
+// ── Fake of `apply` / `mark-reviewed` (independent of the SPA's optimistic copy) ─────────────────
+
+const refusal = (status, code, extra = {}) => ({ status, body: { error: { code, status, ...extra } } });
+
+/** The validator's verdict (plan 9.2.4 / 9.2.5), reduced to what these flows touch. */
+function missingOf(doc) {
+  const missing = [];
+  const vendor = doc.header.vendor ?? {};
+  if (vendor.state === 'linked' || (vendor.state === 'new' && String(vendor.extracted?.name ?? '').trim())) {
+    // resolved
+  } else {
+    missing.push('vendor');
+  }
+  if (!doc.header.invoiceDate) missing.push('invoiceDate');
+  if (!doc.lines.length) missing.push('lines');
+  doc.lines.forEach((l) => {
+    const product = l.product ?? {};
+    const fresh = product.new ?? {};
+    const productOk = product.state === 'linked'
+      || (product.state === 'new' && String(fresh.name ?? l.description ?? '').trim() && fresh.categoryId && fresh.uomId);
+    if (!productOk) missing.push(`line[${l.index}].product`);
+    if (l.taxRate == null) missing.push(`line[${l.index}].tax`);
+  });
+  return missing;
+}
+
+function applyOp(doc, op, catalog) {
+  const { header } = doc;
+  const lineAt = (index) => doc.lines.find((l) => l.index === index);
+  const named = (list, id) => (list ?? []).find((item) => item.id === id);
+  switch (op.op) {
+    case 'setHeader':
+      if ('documentNo' in op) header.documentNo = op.documentNo;
+      if ('invoiceDate' in op) { if (op.invoiceDate) header.invoiceDate = op.invoiceDate; else delete header.invoiceDate; }
+      break;
+    case 'setLine': {
+      const l = lineAt(op.index);
+      for (const k of ['description', 'quantity', 'unitPrice']) if (k in op) l[k] = op[k];
+      if ('taxRate' in op) { l.taxRate = op.taxRate; l.tax = op.taxRate == null ? null : { state: 'resolved', rate: op.taxRate }; }
+      if ('discount' in op) { if (!op.discount) delete l.discount; else l.discount = op.discount; }
+      break;
+    }
+    case 'addLine': {
+      const prev = doc.lines.at(-1);
+      doc.lines.push({
+        index: Math.max(-1, ...doc.lines.map((l) => l.index)) + 1, description: '', quantity: 1, unitPrice: 0,
+        ...(prev?.taxRate == null ? {} : { taxRate: prev.taxRate, tax: { state: 'resolved', rate: prev.taxRate } }),
+        product: { state: 'none', candidates: [] },
+      });
+      break;
+    }
+    case 'removeLine':
+      doc.lines = doc.lines.filter((l) => l.index !== op.index);
+      break;
+    case 'selectVendor': {
+      const found = named(header.vendor.candidates, op.id) ?? named(catalog.vendors, op.id);
+      header.vendor = {
+        state: 'linked', matchedBy: 'manual', id: op.id, candidates: header.vendor.candidates ?? [], extracted: header.vendor.extracted ?? {},
+        details: { name: found.name, taxId: found.taxId, city: found.city },
+      };
+      break;
+    }
+    case 'newVendor': {
+      const { candidates = [], extracted = {} } = header.vendor;
+      header.vendor = { state: 'new', candidates, extracted: { ...extracted, ...(op.fields ?? {}) } };
+      break;
+    }
+    case 'selectProduct': {
+      const l = lineAt(op.index);
+      const found = named(l.product.candidates, op.id) ?? named(catalog.products, op.id);
+      l.product = { state: 'linked', matchedBy: 'manual', id: op.id, candidates: l.product.candidates ?? [], details: { name: found.name, searchKey: found.searchKey } };
+      break;
+    }
+    case 'newProduct': {
+      const l = lineAt(op.index);
+      const fresh = { name: l.description, ...(l.product.new ?? {}) };
+      if ('name' in op) fresh.name = op.name;
+      if ('categoryId' in op) { fresh.categoryId = op.categoryId; fresh.category = named(catalog.categories, op.categoryId)?.name; }
+      if ('uomId' in op) { fresh.uomId = op.uomId; fresh.uom = named(catalog.uoms, op.uomId)?.name; }
+      l.product = { state: 'new', id: null, candidates: l.product.candidates ?? [], new: fresh };
+      break;
+    }
+    default:
+      throw new Error(`fake server: unknown op ${op.op}`);
+  }
+}
+
+/** Runs the 9.2.5 recompute that the flows can see: verdict, status, token, ADJUSTED. */
+function settle(doc, { adjusted }) {
+  doc.document.validation = { missing: missingOf(doc.document) };
+  if (['PENDING_REVIEW', 'READY', 'ERROR'].includes(doc.status) && doc.errorCode !== 'FOREIGN_RECEIVER') {
+    const valid = doc.document.validation.missing.length === 0;
+    doc.status = valid ? 'PENDING_REVIEW' : 'ERROR';
+    doc.errorCode = valid ? null : 'MISSING_FIELDS';
+    doc.reviewed = false;
+  }
+  if (adjusted) doc.adjusted = true;
+}
+
+async function handleWrite(state, id, kind, body) {
+  const doc = state.docs[id];
+  state.log.push(`POST ${kind} ${id}`);
+  if (state.hold) await state.hold;
+  const forced = state.refuse?.(kind, body);
+  if (forced) return forced;
+  if (!doc) return refusal(404, 'not_found');
+  if (body.updated !== doc.updated) return refusal(409, 'stale_document');
+  if (['CONFIRMED', 'DISCARDED'].includes(doc.status) || doc.editable === false) return refusal(409, 'not_editable', { documentStatus: doc.status });
+  if (kind === 'apply') {
+    const working = structuredClone(doc);
+    for (const op of body.operations) applyOp(working.document, op, state.catalog);
+    settle(working, { adjusted: true });
+    working.updated = `T${++state.tokens}`;
+    state.docs[id] = working;
+    return { status: 200, body: working };
+  }
+  if (doc.status === 'READY') return { status: 200, body: doc };
+  if (doc.status !== 'PENDING_REVIEW') return refusal(409, 'not_reviewable', { documentStatus: doc.status });
+  const missing = missingOf(doc.document);
+  if (missing.length) return refusal(422, 'not_valid', { missing });
+  const next = { ...structuredClone(doc), status: 'READY', reviewed: true, updated: `T${++state.tokens}` };
+  state.docs[id] = next;
+  return { status: 200, body: next };
+}
+
+const CATALOG = {
+  vendors: [{ id: 'V9', name: 'Proveedor Nuevo SA', taxId: 'A9', city: 'Leon' }],
+  products: [{ id: 'P9', name: 'Tornillo M8', searchKey: 'TM8' }],
+  categories: [{ id: 'C1', name: 'Ferretería' }, { id: 'C2', name: 'Oficina' }],
+  uoms: [{ id: 'U1', name: 'Caja' }, { id: 'U2', name: 'Unidad' }],
+};
+const SELECTOR_LISTS = { C_BPartner_ID: 'vendors', M_Product_ID: 'products', M_Product_Category_ID: 'categories', C_UOM_ID: 'uoms', C_Country_ID: 'categories' };
+
+async function installSelectors(page, state) {
+  await page.route('**/selectors/**', async (route) => {
+    const url = new URL(route.request().url());
+    const column = url.pathname.split('/selectors/')[1];
+    const q = (url.searchParams.get('q') ?? '').toLowerCase();
+    const items = (state.catalog[SELECTOR_LISTS[column]] ?? [])
+      .filter((item) => !q || item.name.toLowerCase().includes(q))
+      .map((item) => ({ ...item, label: item.name }));
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items, hasMore: false }) });
+  });
+}
+
 async function installInboxMock(page, state) {
   state.reviewReads = [];
   state.writes = [];
+  state.log = [];
+  state.docs = {};
+  state.tokens = 0;
+  state.catalog = CATALOG;
+  /** The live document of an id: the seeded one (`state.reviews`) or the default review. */
+  const live = (id) => (state.docs[id] ??= structuredClone(state.reviews?.[id] ?? review(id)));
+  await installSelectors(page, state);
   await page.route(`**/sws/neo/${SPEC}/**`, async (route) => {
     const req = route.request();
     const url = new URL(req.url());
@@ -68,9 +228,19 @@ async function installInboxMock(page, state) {
     if (req.method() === 'GET' && reviewMatch) {
       const id = decodeURIComponent(reviewMatch[1]);
       state.reviewReads.push(id);
+      state.log.push(`GET review ${id}`);
       const custom = state.reviews?.[id];
       if (custom?.httpStatus) { await json(custom.httpStatus, custom.body); return; }
-      await json(200, custom ?? review(id));
+      await json(200, live(id));
+      return;
+    }
+    const write = url.pathname.match(/\/header\/([^/]+)\/action\/(apply|mark-reviewed)$/);
+    if (req.method() === 'POST' && write) {
+      const id = decodeURIComponent(write[1]);
+      live(id);
+      const result = await handleWrite(state, id, write[2], req.postDataJSON());
+      state.applied = [...(state.applied ?? []), { id, kind: write[2], body: req.postDataJSON(), status: result.status }];
+      await json(result.status, result.body);
       return;
     }
     const discard = url.pathname.match(/\/header\/([^/]+)\/action\/discard$/);
@@ -292,5 +462,322 @@ test.describe('Invoice Inbox — review panel', () => {
     await page.getByTestId('invoice-inbox-review-retry').click();
     await expect(page.getByTestId('invoice-inbox-review-form')).toBeVisible();
     expect(state.reviewReads).toEqual(['rev1', 'rev1']);
+  });
+});
+
+// ── ETP-6050 S2: editing, autosave, resolution of vendor / product, mark as reviewed ──────────────
+
+const tid = (page, id) => page.getByTestId(id);
+const applied = (state) => (state.applied ?? []).filter((w) => w.kind === 'apply');
+const ops = (state) => applied(state).flatMap((w) => w.body.operations);
+
+/** Types into an autosaving cell and leaves it: the blur commits. */
+async function typeInto(page, testId, text) {
+  const input = tid(page, testId);
+  await input.fill(text);
+  await input.blur();
+}
+
+async function openDoc(page, state, id, filter = null) {
+  await openInbox(page, state);
+  if (filter) await page.getByTestId(`invoice-inbox-filter-${filter}`).click();
+  await rowOf(page, id).getByTestId(`invoice-inbox-document-${id}`).click();
+  await expect(tid(page, 'invoice-inbox-review-form')).toBeVisible();
+}
+
+const ambiguousVendorDoc = () => review('rev1', 'ERROR', { errorCode: 'MISSING_FIELDS' }, {
+  header: {
+    vendor: {
+      state: 'ambiguous', extracted: { name: 'ACM SL', taxId: 'B1' },
+      candidates: [{ id: 'c1', name: 'ACME SL', taxId: 'B1', city: 'Madrid' }, { id: 'c2', name: 'ACME SA', taxId: 'A2', city: 'Sevilla' }],
+    },
+  },
+  validation: { missing: ['vendor'] },
+});
+
+test.describe('Invoice Inbox — review panel editing (S2)', () => {
+  let state;
+  test.beforeEach(() => { state = { rows: seedRows() }; });
+
+  test('correcting a quantity saves with the token in the body and shows Guardado; amounts follow', async ({ page }) => {
+    await openDoc(page, state, 'rev1');
+    await typeInto(page, 'invoice-inbox-review-line-0-quantity', '3');
+    await expect(tid(page, 'invoice-inbox-review-save-state')).toHaveAttribute('data-state', 'saved');
+    await expect(tid(page, 'invoice-inbox-review-save-state')).toHaveText('Guardado');
+    expect(applied(state)).toHaveLength(1);
+    expect(applied(state)[0].body).toEqual({ updated: 'T0', operations: [{ op: 'setLine', index: 0, quantity: 3 }] });
+    await expect(tid(page, 'invoice-inbox-review-line-0-amount')).toContainText('150,00');
+    await expect(tid(page, 'invoice-inbox-review-totals')).toContainText('181,50');
+    // The next edit carries the token of the previous answer.
+    await typeInto(page, 'invoice-inbox-review-invoice-no', 'F-9');
+    await expect.poll(() => applied(state).length).toBe(2);
+    expect(applied(state)[1].body.updated).toBe('T1');
+  });
+
+  test('typing and waiting saves by itself after the pause', async ({ page }) => {
+    await openDoc(page, state, 'rev1');
+    await tid(page, 'invoice-inbox-review-invoice-no').fill('F-DEBOUNCE');
+    await expect(tid(page, 'invoice-inbox-review-save-state')).toHaveAttribute('data-state', 'saved');
+    expect(ops(state)).toEqual([{ op: 'setHeader', documentNo: 'F-DEBOUNCE' }]);
+  });
+
+  test('a line discount changes the amount, the VAT and the total (fixture case 3 x 100 less 10 %)', async ({ page }) => {
+    state.reviews = {
+      rev1: review('rev1', 'PENDING_REVIEW', {}, {
+        lines: [{ index: 0, description: 'Widget', quantity: 3, unitPrice: 100, taxRate: 21, product: { state: 'linked', matchedBy: 'exact', details: { name: 'W', searchKey: 'W-1' } } }],
+      }),
+    };
+    await openDoc(page, state, 'rev1');
+    await typeInto(page, 'invoice-inbox-review-line-0-discount', '10');
+    await expect(tid(page, 'invoice-inbox-review-line-0-amount')).toContainText('270,00');
+    await expect(tid(page, 'invoice-inbox-review-save-state')).toHaveAttribute('data-state', 'saved');
+    await expect(tid(page, 'invoice-inbox-review-totals')).toContainText('56,70');
+    await expect(tid(page, 'invoice-inbox-review-totals')).toContainText('326,70');
+    expect(ops(state)).toEqual([{ op: 'setLine', index: 0, discount: 10 }]);
+    // A thousands-grouped text is refused in the cell and never reaches the server.
+    await typeInto(page, 'invoice-inbox-review-line-0-discount', '1.000,50');
+    await expect(tid(page, 'invoice-inbox-review-line-0-discount')).toHaveValue('10%');
+    expect(ops(state)).toHaveLength(1);
+  });
+
+  test('add then remove lines: stable indexes in the operations', async ({ page }) => {
+    state.reviews = {
+      rev1: review('rev1', 'PENDING_REVIEW', {}, {
+        lines: [
+          { index: 0, description: 'Uno', quantity: 1, unitPrice: 10, taxRate: 21, product: { state: 'linked', details: { name: 'A' } } },
+          { index: 3, description: 'Dos', quantity: 1, unitPrice: 20, taxRate: 10, product: { state: 'linked', details: { name: 'B' } } },
+        ],
+      }),
+    };
+    await openDoc(page, state, 'rev1');
+    await tid(page, 'invoice-inbox-review-add-line').click();
+    await expect(tid(page, 'invoice-inbox-review-lines-title')).toHaveText('Líneas · 3');
+    await expect(tid(page, 'invoice-inbox-review-line-2-description')).toBeFocused();
+    await expect(tid(page, 'invoice-inbox-review-line-2-tax')).toHaveValue('10%');
+    await tid(page, 'invoice-inbox-review-line-0').hover();
+    await tid(page, 'invoice-inbox-review-line-delete-0').click();
+    await expect(tid(page, 'invoice-inbox-review-lines-title')).toHaveText('Líneas · 2');
+    await typeInto(page, 'invoice-inbox-review-line-0-quantity', '5');
+    await expect.poll(() => ops(state).length).toBe(3);
+    expect(ops(state)).toEqual([
+      { op: 'addLine' }, { op: 'removeLine', index: 0 }, { op: 'setLine', index: 3, quantity: 5 },
+    ]);
+  });
+
+  test('ambiguous supplier: choosing a candidate links it and clears the pending counter', async ({ page }) => {
+    state.reviews = { rev1: ambiguousVendorDoc() };
+    await openDoc(page, state, 'rev1');
+    await expect(tid(page, 'invoice-inbox-review-pending')).toContainText('1 obligatorio pendiente');
+    await tid(page, 'invoice-inbox-review-vendor-candidate-c2').click();
+    await expect(tid(page, 'invoice-inbox-review-vendor')).toHaveAttribute('data-state', 'linked');
+    await expect(tid(page, 'invoice-inbox-review-vendor-name')).toHaveText('ACME SA');
+    await expect(tid(page, 'invoice-inbox-review-vendor-matched-by')).toHaveText('Elegido por ti');
+    await expect(tid(page, 'invoice-inbox-review-pending')).toHaveText('');
+    await expect(tid(page, 'invoice-inbox-review-mark-reviewed')).toBeEnabled();
+    expect(ops(state)).toEqual([{ op: 'selectVendor', id: 'c2' }]);
+  });
+
+  test('supplier search: the portaled results can be clicked inside the modal drawer', async ({ page }) => {
+    state.reviews = { rev1: ambiguousVendorDoc() };
+    await openDoc(page, state, 'rev1');
+    const search = tid(page, 'invoice-inbox-review-vendor-search').getByTestId('inline-add-field-inbox-vendor');
+    await search.click();
+    await tid(page, 'inline-add-option-inbox-vendor-V9').click();
+    await expect(tid(page, 'invoice-inbox-review-vendor-name')).toHaveText('Proveedor Nuevo SA');
+    expect(ops(state)).toEqual([{ op: 'selectVendor', id: 'V9' }]);
+  });
+
+  test('new supplier: create it from the extracted data, then edit its fields', async ({ page }) => {
+    state.reviews = {
+      rev1: review('rev1', 'ERROR', { errorCode: 'MISSING_FIELDS' }, {
+        header: { vendor: { state: 'none', extracted: { name: 'Nuevo SL', taxId: 'X1', city: 'Paris' } } },
+        validation: { missing: ['vendor'] },
+      }),
+    };
+    await openDoc(page, state, 'rev1');
+    await tid(page, 'invoice-inbox-review-vendor-create-new').click();
+    await expect(tid(page, 'invoice-inbox-review-vendor')).toHaveAttribute('data-state', 'new');
+    await expect(tid(page, 'invoice-inbox-review-vendor-new-name')).toHaveValue('Nuevo SL');
+    await typeInto(page, 'invoice-inbox-review-vendor-new-city', 'Lyon');
+    await expect.poll(() => ops(state).length).toBe(2);
+    expect(ops(state)).toEqual([{ op: 'newVendor' }, { op: 'newVendor', fields: { city: 'Lyon' } }]);
+    await expect(tid(page, 'invoice-inbox-review-vendor-new-city')).toHaveValue('Lyon');
+    await expect(tid(page, 'invoice-inbox-review-pending')).toHaveText('');
+  });
+
+  test('ambiguous product: choosing a candidate links the line product', async ({ page }) => {
+    state.reviews = {
+      rev1: review('rev1', 'ERROR', { errorCode: 'MISSING_FIELDS' }, {
+        lines: [{
+          index: 0, description: 'Tornillo', quantity: 1, unitPrice: 5, taxRate: 21,
+          product: { state: 'ambiguous', candidates: [{ id: 'p1', name: 'Tornillo A', searchKey: 'TA' }, { id: 'p2', name: 'Tornillo B', searchKey: 'TB' }] },
+        }],
+        validation: { missing: ['line[0].product'] },
+      }),
+    };
+    await openDoc(page, state, 'rev1');
+    await expect(tid(page, 'invoice-inbox-review-line-0-panel')).toBeVisible();
+    await tid(page, 'invoice-inbox-review-line-0-candidate-p2').click();
+    await expect(tid(page, 'invoice-inbox-review-line-0-product')).toHaveAttribute('data-state', 'ok');
+    await expect(tid(page, 'invoice-inbox-review-line-0-product-name')).toHaveText('Tornillo B');
+    await expect(tid(page, 'invoice-inbox-review-pending')).toHaveText('');
+    expect(ops(state)).toEqual([{ op: 'selectProduct', index: 0, id: 'p2' }]);
+  });
+
+  test('new product: name, then category and unit from the pickers, until the line is complete', async ({ page }) => {
+    state.reviews = {
+      rev1: review('rev1', 'ERROR', { errorCode: 'MISSING_FIELDS' }, {
+        lines: [{ index: 0, description: 'Tornillo', quantity: 1, unitPrice: 5, taxRate: 21, product: { state: 'none', candidates: [] } }],
+        validation: { missing: ['line[0].product'] },
+      }),
+    };
+    await openDoc(page, state, 'rev1');
+    await tid(page, 'invoice-inbox-review-line-0-product').click();
+    await tid(page, 'invoice-inbox-review-line-0-create-new').click();
+    await expect(tid(page, 'invoice-inbox-review-line-0-new-name')).toHaveValue('Tornillo');
+    await expect(tid(page, 'invoice-inbox-review-line-0-new-error')).toBeVisible();
+    await typeInto(page, 'invoice-inbox-review-line-0-new-name', 'Tornillo M8');
+    await tid(page, 'invoice-inbox-review-line-0-new-category').getByTestId('inline-add-field-inbox-line-0-category').click();
+    await tid(page, 'inline-add-option-inbox-line-0-category-C1').click();
+    await expect(tid(page, 'invoice-inbox-review-line-0-new-category')).toContainText('Ferretería');
+    await expect(tid(page, 'invoice-inbox-review-line-0-new-error')).toBeVisible();
+    await tid(page, 'invoice-inbox-review-line-0-new-uom').getByTestId('inline-add-field-inbox-line-0-uom').click();
+    await tid(page, 'inline-add-option-inbox-line-0-uom-U1').click();
+    await expect(tid(page, 'invoice-inbox-review-line-0-new-uom')).toContainText('Caja');
+    await expect(tid(page, 'invoice-inbox-review-line-0-new-error')).toHaveCount(0);
+    await expect(tid(page, 'invoice-inbox-review-pending')).toHaveText('');
+    expect(ops(state)).toEqual([
+      { op: 'newProduct', index: 0 },
+      { op: 'newProduct', index: 0, name: 'Tornillo M8' },
+      { op: 'newProduct', index: 0, categoryId: 'C1' },
+      { op: 'newProduct', index: 0, uomId: 'U1' },
+    ]);
+    // The category picker reopens on the committed value.
+    await tid(page, 'invoice-inbox-review-line-0-new-category').getByTestId('inline-add-field-inbox-line-0-category-chip').click();
+    await expect(tid(page, 'inline-add-option-inbox-line-0-category-C1')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('mark as reviewed: READY and "Revisada por ti", Confirm stays disabled; an edit afterwards goes back to pending', async ({ page }) => {
+    state.reviews = { rev1: review('rev1', 'PENDING_REVIEW') };
+    await openDoc(page, state, 'rev1');
+    await expect(tid(page, 'invoice-inbox-review-mark-reviewed')).toBeEnabled();
+    await tid(page, 'invoice-inbox-review-mark-reviewed').click();
+    await expect(tid(page, 'invoice-inbox-review-reviewed')).toHaveText('Revisada por ti');
+    await expect(tid(page, 'invoice-inbox-review-mark-reviewed')).toHaveCount(0);
+    await expect(tid(page, 'invoice-inbox-review-confirm')).toBeDisabled();
+    const marks = (state.applied ?? []).filter((w) => w.kind === 'mark-reviewed');
+    expect(marks).toHaveLength(1);
+    expect(marks[0].body).toEqual({ updated: 'T0' });
+    await typeInto(page, 'invoice-inbox-review-line-0-quantity', '4');
+    await expect(tid(page, 'invoice-inbox-review-mark-reviewed')).toBeVisible();
+    await expect(tid(page, 'invoice-inbox-review-reviewed')).toHaveCount(0);
+    expect(applied(state)[0].body.updated).toBe('T1');
+  });
+
+  test('mark as reviewed is disabled while a mandatory piece is missing', async ({ page }) => {
+    state.reviews = { rev1: ambiguousVendorDoc() };
+    await openDoc(page, state, 'rev1');
+    await expect(tid(page, 'invoice-inbox-review-mark-reviewed')).toBeDisabled();
+  });
+
+  test('409 stale_document: the document reloads, the unsaved edit is dropped and a notice shows', async ({ page }) => {
+    await openDoc(page, state, 'rev1');
+    // Someone else changed the document: the server copy moved (new token, quantity 11).
+    state.docs.rev1.updated = 'T77';
+    state.docs.rev1.document.lines[0].quantity = 11;
+    await typeInto(page, 'invoice-inbox-review-line-0-quantity', '9');
+    await expect(tid(page, 'invoice-inbox-review-notice')).toBeVisible();
+    await expect(tid(page, 'invoice-inbox-review-notice')).toContainText('El documento cambió mientras lo editabas');
+    await expect(tid(page, 'invoice-inbox-review-line-0-quantity')).toHaveValue('11');
+    expect(applied(state).map((w) => w.status)).toEqual([409]);
+    await tid(page, 'invoice-inbox-review-notice-dismiss').click();
+    await expect(tid(page, 'invoice-inbox-review-notice')).toHaveCount(0);
+    // The reload brought the new token: the next edit goes through.
+    await typeInto(page, 'invoice-inbox-review-line-0-quantity', '12');
+    await expect(tid(page, 'invoice-inbox-review-save-state')).toHaveAttribute('data-state', 'saved');
+    expect(applied(state).at(-1).body.updated).toBe('T77');
+  });
+
+  test('422 invalid_value: the value goes back, the reason shows and Reintentar clears it', async ({ page }) => {
+    await openDoc(page, state, 'rev1');
+    state.refuse = () => refusal(422, 'invalid_value', { field: 'quantity', index: 0 });
+    await typeInto(page, 'invoice-inbox-review-line-0-quantity', '9');
+    await expect(tid(page, 'invoice-inbox-review-save-state')).toHaveAttribute('data-state', 'error');
+    await expect(tid(page, 'invoice-inbox-review-save-error')).toContainText('El valor no es válido');
+    await expect(tid(page, 'invoice-inbox-review-line-0-quantity')).toHaveValue('2');
+    state.refuse = undefined;
+    await tid(page, 'invoice-inbox-review-save-retry').click();
+    await expect(tid(page, 'invoice-inbox-review-save-state')).toHaveCount(0);
+  });
+
+  test('closing while a save is open waits for it, then closes', async ({ page }) => {
+    await openDoc(page, state, 'rev1');
+    let release;
+    state.hold = new Promise((resolve) => { release = resolve; });
+    await typeInto(page, 'invoice-inbox-review-line-0-quantity', '6');
+    await expect.poll(() => state.log.filter((l) => l === 'POST apply rev1').length).toBe(1);
+    await tid(page, 'invoice-inbox-review-close').click();
+    await page.waitForTimeout(400);
+    await expect(drawer(page)).toBeVisible();
+    state.hold = null;
+    release();
+    await expect(drawer(page)).toHaveCount(0);
+    expect(applied(state)).toHaveLength(1);
+  });
+
+  test('next with a value still being typed saves it first, then reads the next document', async ({ page }) => {
+    await openDoc(page, state, 'rev1');
+    await tid(page, 'invoice-inbox-review-line-0-quantity').fill('8');
+    await tid(page, 'invoice-inbox-review-next').click();
+    await expect(tid(page, 'invoice-inbox-review-title')).toHaveText('rev2.pdf');
+    await expect.poll(() => state.log.includes('GET review rev2')).toBe(true);
+    const log = state.log.filter((l) => l !== 'GET review rev1');
+    expect(log.indexOf('POST apply rev1')).toBeGreaterThanOrEqual(0);
+    expect(log.indexOf('POST apply rev1')).toBeLessThan(log.indexOf('GET review rev2'));
+    expect(ops(state)).toEqual([{ op: 'setLine', index: 0, quantity: 8 }]);
+  });
+
+  test('a failed save keeps the panel on the document when moving on', async ({ page }) => {
+    await openDoc(page, state, 'rev1');
+    state.refuse = () => refusal(422, 'invalid_value');
+    await tid(page, 'invoice-inbox-review-line-0-quantity').fill('8');
+    await tid(page, 'invoice-inbox-review-next').click();
+    await expect(tid(page, 'invoice-inbox-review-save-state')).toHaveAttribute('data-state', 'error');
+    await expect(tid(page, 'invoice-inbox-review-title')).toHaveText('rev1.pdf');
+  });
+
+  for (const [name, over, code] of [
+    ['CONFIRMED', { editable: false, invoice: { id: 'I1', documentNo: '10000007', identifier: '10000007' } }, null],
+    ['DISCARDED', { editable: false }, null],
+    ['FOREIGN_RECEIVER', { editable: false, errorCode: 'FOREIGN_RECEIVER' }, 'FOREIGN_RECEIVER'],
+  ]) {
+    test(`${name} is read only: nothing editable and no write`, async ({ page }) => {
+      const status = name === 'FOREIGN_RECEIVER' ? 'ERROR' : name;
+      state.rows = [row('ro1', status, code ? { errorCode: code } : {})];
+      state.reviews = { ro1: review('ro1', status, over) };
+      await openDoc(page, state, 'ro1', name === 'DISCARDED' ? 'discarded' : null);
+      await expect(tid(page, 'invoice-inbox-review-add-line')).toHaveCount(0);
+      await expect(tid(page, 'invoice-inbox-review-mark-reviewed')).toHaveCount(0);
+      const quantity = page.getByTestId('invoice-inbox-review-line-0-quantity');
+      if (await quantity.count()) await expect(quantity).toHaveAttribute('readonly', '');
+      await expect(tid(page, 'invoice-inbox-review-save-state')).toHaveCount(0);
+      expect(state.applied ?? []).toEqual([]);
+    });
+  }
+
+  test('at 768 px the lines stack, nothing scrolls sideways and the cells still save', async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 900 });
+    await openDoc(page, state, 'rev1');
+    await expect(tid(page, 'invoice-inbox-review-line-0')).toHaveAttribute('data-layout', 'stacked');
+    await expect(tid(page, 'invoice-inbox-review-lines-head')).toHaveCount(0);
+    const overflow = await tid(page, 'invoice-inbox-review-scroll').evaluate((el) => el.scrollWidth - el.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+    const pageOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(pageOverflow).toBeLessThanOrEqual(0);
+    const description = await tid(page, 'invoice-inbox-review-line-0-description').boundingBox();
+    expect(description.width).toBeGreaterThan(120);
+    await typeInto(page, 'invoice-inbox-review-line-0-discount', '5');
+    await expect(tid(page, 'invoice-inbox-review-save-state')).toHaveAttribute('data-state', 'saved');
+    expect(ops(state)).toEqual([{ op: 'setLine', index: 0, discount: 5 }]);
   });
 });
