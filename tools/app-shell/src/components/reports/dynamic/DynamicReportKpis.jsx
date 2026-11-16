@@ -66,15 +66,15 @@ function Kpi({ id, label, hint, value, refValue, compare, percent, tone }) {
             data-testid="TooltipContent__5cc5db">{hint}</TooltipContent>
         </Tooltip>
       </span>
-      <span className="text-xl sm:text-2xl font-semibold tabular-nums break-words" data-testid={`DynamicReportKpis__${id}Value`}>{text(value)}</span>
+      <span className="text-xl sm:text-2xl font-semibold tabular-nums whitespace-nowrap" data-testid={`DynamicReportKpis__${id}Value`}>{text(value)}</span>
       {compare && (
-        <span className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0 text-xs text-muted-foreground">
           {delta && <TrendPill
             trend={trend}
             up={value > refValue}
             testId={`DynamicReportKpis__${id}Trend`}
             data-testid="TrendPill__5cc5db">{delta}</TrendPill>}
-          <span className="tabular-nums">{ui('dynamicReportKpiVs', { value: text(refValue) })}</span>
+          <span className="tabular-nums whitespace-nowrap">{ui('dynamicReportKpiVs', { value: text(refValue) })}</span>
         </span>
       )}
     </div>
@@ -90,7 +90,7 @@ export default function DynamicReportKpis({ kpis, compare }) {
   const { current: c, ref: r } = kpis;
   return (
     <TooltipProvider>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5" data-testid="DynamicReportKpis">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-5" data-testid="DynamicReportKpis">
         <Kpi
           id="income"
           label={ui('dynamicReportKpiIncome')}
