@@ -303,6 +303,99 @@ async def _describe_target(target: dict[str, Any]) -> dict[str, Any]:
         }
 
 
+#: The Etendo GO MCP tool that runs and stores routines (ETP-6236).
+ROUTINE_TOOL = "etendo_routine"
+#: Appended to the prompt of a task whose routine was preloaded (Valentin, 2026-11-13): the child KR
+#: measures what the routine is worth when the user knows it exists, not whether the agent finds it
+#: on its own (it did not, 0 of 2, in the 2026-11-12 pilot). Names no tool (the prompt lint).
+ROUTINE_HINT = "Tenés una rutina guardada para esto: revisá tus rutinas."
+
+
+async def _routine_call(session: Any, args: dict[str, Any]) -> tuple[bool, Any]:
+    """One `etendo_routine` call: (ok, parsed body or error text). Never raises on a tool error."""
+    result = await session.call_tool(ROUTINE_TOOL, args)
+    texts = [c.text for c in result.content if getattr(c, "type", None) == "text"]
+    try:
+        body: Any = json.loads(texts[0]) if texts else None
+    except json.JSONDecodeError:
+        body = texts[0]
+    return not getattr(result, "isError", False), body
+
+
+async def install_routines(target: dict[str, Any], probes: list[Probe]) -> dict[str, Any]:
+    """Save every probe's routine on the target, replacing one of the same name (ETP-6236).
+
+    Runs before the first attempt, in a session of its own, under the target's user: routines are
+    personal, so the agent of every attempt sees exactly these. Returns
+    `{probeId: {name, version}}` for run.json. Raises RuntimeError naming the routine that the
+    server refused: a column measured with a routine missing would not be the column it says.
+    """
+    installed: dict[str, Any] = {}
+    async with mcp_session(target) as session:
+        for probe in probes:
+            if probe.routine is None:
+                continue
+            await _routine_call(session, {"mode": "delete", "name": probe.routine.name})
+            ok, body = await _routine_call(session, probe.routine.save_args())
+            if not ok:
+                raise RuntimeError(f"routine {probe.routine.name!r} of {probe.id!r} was refused: "
+                                   f"{json.dumps(body, ensure_ascii=False)[:500]}")
+            installed[probe.id] = {"name": probe.routine.name, "version": body.get("version")}
+    return installed
+
+
+async def remove_routines(target: dict[str, Any], installed: dict[str, Any] | None) -> None:
+    """Delete the routines a run installed, so the next run without routines starts clean.
+
+    Best effort: a routine left behind is caught by the next run's `prepare_routines` check.
+    """
+    if not installed:
+        return
+    try:
+        async with mcp_session(target) as session:
+            for entry in installed.values():
+                await _routine_call(session, {"mode": "delete", "name": entry["name"]})
+    except Exception as exc:  # noqa: BLE001 - the measurement is already on file
+        print(f"  (routines of {target['name']!r} not removed: {type(exc).__name__}: {exc})",
+              file=sys.stderr)
+
+
+async def saved_routines(target: dict[str, Any]) -> list[str]:
+    """The names of the routines the target's user has saved; empty when the tool is absent."""
+    async with mcp_session(target) as session:
+        ok, body = await _routine_call(session, {"mode": "list"})
+    if not ok or not isinstance(body, dict):
+        raise RuntimeError(f"{ROUTINE_TOOL} list failed: {json.dumps(body, ensure_ascii=False)[:300]}")
+    return [r.get("name") for r in body.get("routines") or []]
+
+
+async def prepare_routines(target: dict[str, Any], server: dict[str, Any] | None,
+                           probes: list[Probe]) -> tuple[dict[str, Any] | None, str | None]:
+    """The routine state a target needs before its first attempt (ETP-6236).
+
+    - `routines = true`: every probe's routine is installed; returns what was installed.
+    - Any other Etendo GO target whose MCP offers routines: its user must have NONE saved, or the
+      column without routines (the KR2.1 itself) would be measured with them.
+    Returns (installed or None, refusal or None).
+    """
+    tools = set((server or {}).get("tools") or [])
+    try:
+        if cfg.target_routines(target):
+            if ROUTINE_TOOL not in tools:
+                return None, f"`routines = true` but the target offers no {ROUTINE_TOOL}"
+            if not any(p.routine for p in probes):
+                return None, "`routines = true` but no selected probe declares a routine"
+            return await install_routines(target, probes), None
+        if target.get("platform") == "etendo-go" and ROUTINE_TOOL in tools:
+            names = await saved_routines(target)
+            if names:
+                return None, (f"its user has saved routines {names}: a run without routines must not "
+                              f"see any. Delete them, or measure this target with `routines = true`")
+    except (RuntimeError, ValueError) as exc:
+        return None, str(exc)
+    return None, None
+
+
 def _silent_wrong(
     verdict: dict[str, Any] | None, effect_verified: bool | None, answer_verified: bool | None = None
 ) -> bool | None:
@@ -403,6 +496,7 @@ def _run_header(
     concurrency: int = 1,
     seed: int | None = None,
     compare_id: str | None = None,
+    routines: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "schemaVersion": RUN_SCHEMA_VERSION,
@@ -432,6 +526,11 @@ def _run_header(
         # harness-errored attempts come on top, capped at `repeat` per probe.
         "repeat": repeat,
         "suites": [{"file": suite.path.name, "sha": suite.sha}],
+        # ETP-6236: the routines preloaded for the "Etendo + routine" column, {probeId: {name,
+        # version}}; null when the target ran without routines.
+        "routines": routines,
+        # ...and the sentence appended to their prompts.
+        "routineHint": ROUTINE_HINT if routines else None,
     }
 
 
@@ -683,6 +782,8 @@ class AttemptContext:
     tag: str = ""
     #: The target's platform when the suite is v2; None for a v1 suite.
     platform: str | None = None
+    #: ETP-6236: the preloaded routines, {probeId: {name, version}}; their prompts get ROUTINE_HINT.
+    routines: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -738,8 +839,11 @@ async def run_attempt(
     timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     started_at = _now_ms()
     marker = attempt_marker(ctx.marker_prefix, probe.id, attempt)
+    text = probe.prompt
+    if ctx.routines and probe.id in ctx.routines:
+        text = f"{text} {ROUTINE_HINT}"
     prompt = interpolate(
-        probe.prompt, run_id=ctx.token_run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
+        text, run_id=ctx.token_run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
     )
     tag = f"{ctx.tag}{probe.id} a{attempt}"
     again = f", replaces {replaces}" if replaces else ""
@@ -1270,6 +1374,7 @@ def _open_target_run(
     compare_id: str | None,
     preflight_error: dict[str, Any] | None,
     platform: str | None = None,
+    routines: dict[str, Any] | None = None,
 ) -> AttemptContext:
     """Write one target's run.json, open its event stream, print its banner."""
     _write_json(
@@ -1288,6 +1393,7 @@ def _open_target_run(
             concurrency=concurrency,
             seed=seed,
             compare_id=compare_id,
+            routines=routines,
         ),
     )
     # The live stream (§6.5). Additive and never authoritative: `run.json` and
@@ -1327,6 +1433,8 @@ def _open_target_run(
               + (" · feedback tools ON" if provider.get("feedbackTools") else ""))
         print(f"  suite       {suite.path.name} @ {suite.sha} ({len(probes)} probe(s))")
     print(f"  concurrency {concurrency}")
+    if routines is not None:
+        print(f"  routines    {len(routines)} preloaded ({', '.join(sorted(routines))})")
     if server and not server["error"]:
         info, cat = server["serverInfo"], server["catalogue"]
         # A server may omit either; say so rather than print "None None".
@@ -1348,6 +1456,7 @@ def _open_target_run(
         preflight_error=preflight_error,
         tag=f"[{target['name']}] " if compare_id else "",
         platform=platform,
+        routines=routines,
     )
 
 
@@ -1556,6 +1665,11 @@ async def _run_single(
         error = error or _bind_fixture(suite, plan, baseline)
         if error:
             problems.append(error)
+    routines = None
+    if not problems and not preflight_error:
+        routines, error = await prepare_routines(target, server, plan.runnable)
+        if error:
+            problems.append(f"routines: {error}")
     if problems:
         print("Suite refused for this target:\n  " + "\n  ".join(problems), file=sys.stderr)
         return 2
@@ -1571,11 +1685,12 @@ async def _run_single(
         provider=provider, max_steps=max_steps, max_result_chars=max_result_chars,
         repeat=repeat, suite=suite, probes=plan.runnable, server=server,
         harness=_harness_revision(), concurrency=concurrency, seed=args.seed,
-        compare_id=None, preflight_error=preflight_error, platform=platform,
+        compare_id=None, preflight_error=preflight_error, platform=platform, routines=routines,
     )
     _write_not_possible(ctx, plan)
     outcome = await run_target(ctx, plan.runnable, concurrency=concurrency, seed=args.seed)
     _finish_target(ctx, outcome)
+    await remove_routines(target, routines)
     if outcome.stopped:
         print(_stop_message(provider), file=sys.stderr)
     else:
@@ -1647,6 +1762,14 @@ async def _run_compare(
             print(f"Comparison aborted: target {target['name']!r}: {error}. Nothing was measured.",
                   file=sys.stderr)
             return 2
+    routine_sets = []
+    for target, server, plan in zip(targets, servers, plans):
+        installed, error = await prepare_routines(target, server, plan.runnable)
+        if error:
+            print(f"Comparison aborted: target {target['name']!r} routines: {error}. Nothing was measured.",
+                  file=sys.stderr)
+            return 2
+        routine_sets.append(installed)
 
     started_at = dt.datetime.now(dt.timezone.utc)
     compare_id = _new_compare_id(started_at)
@@ -1658,7 +1781,8 @@ async def _run_compare(
 
     contexts = []
     target_meta = []
-    for target, server, plan, (baseline, fresh, _e) in zip(targets, servers, plans, assessed):
+    for target, server, plan, (baseline, fresh, _e), installed in zip(
+            targets, servers, plans, assessed, routine_sets):
         k = cfg.target_concurrency(target, concurrency)
         run_id = f"{compare_id}-{target['name']}"
         ctx = _open_target_run(
@@ -1668,6 +1792,7 @@ async def _run_compare(
             server=server, harness=harness, concurrency=k, seed=seed,
             compare_id=compare_id, preflight_error=None,
             platform=cfg.target_platform(target) if suite.schema_version >= 2 else None,
+            routines=installed,
         )
         _write_not_possible(ctx, plan)
         contexts.append((ctx, k, plan))
@@ -1680,6 +1805,8 @@ async def _run_compare(
             # D50, plan §5.9: only `fresh` on every target is official.
             "freshness": fresh,
             "fixtureHash": (baseline or {}).get("fixtureHash"),
+            # ETP-6236: preloaded routines make this the "Etendo + routine" column.
+            "routines": installed,
         })
         print(f"  [{target['name']}] freshness {fresh['status']}"
               + (f" ({len(fresh['unverifiable'])} not verifiable: tool not offered)"
@@ -1703,6 +1830,8 @@ async def _run_compare(
     ))
     for (ctx, _k, _plan), outcome in zip(contexts, outcomes):
         _finish_target(ctx, outcome)
+    for target, installed in zip(targets, routine_sets):
+        await remove_routines(target, installed)
 
     record["finishedAt"] = _now_ms()
     _write_json(compare_dir / "compare.json", record)
@@ -1784,6 +1913,10 @@ def _compare_record(
             # holds the same baseline. Freshness itself is checked apart.
             "fixture": {"name": suite.fixture.name, "sha": suite.fixture.sha} if suite.fixture else None,
             "fixtureHashes": {t["name"]: t.get("fixtureHash") for t in targets},
+            # ETP-6236: a run with preloaded routines never pairs with one without them. Absent
+            # when no target has any, so runs from before routines still pair.
+            **({"routines": {t["name"]: sorted(r["name"] for r in (t.get("routines") or {}).values())
+                             for t in targets}} if any(t.get("routines") for t in targets) else {}),
         },
         "targets": targets,
     }

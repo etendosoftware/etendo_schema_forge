@@ -5,6 +5,7 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { Loader2, TriangleAlert, OctagonAlert, CircleCheck, Download, Landmark } from 'lucide-react';
+import { AeatResultBanner as Banner } from './AeatResultBanner.jsx';
 import { formatAmount, formatPeriod, triggerBase64Download, applyIdentParams, applyBoxParams, isBankIbanRequired, withBox111NonZeroFlag, DECLARATION_TYPE_INGRESO, showIaeActivityReminder } from '../../fiscalModelsUtils.js';
 import { isLastPeriodOfYear } from './fm303Layouts.js';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
@@ -128,6 +129,9 @@ export function classifySubmitOutcome(data) {
 export function resolveErrorCodeKey(errorCode) {
   if (errorCode === 'MISSING_PRESENTER') return 'fm.aeat.error.missingPresenter';
   if (errorCode === 'NO_CERTIFICATE') return 'fm.aeat.error.noCertificate';
+  // ETP-5716: the validation that precedes a real presentation got no answer and the server
+  // is set to stop (FiscalAeatSubmissionSupport.PRESENT_WHEN_VALIDATOR_UNANSWERED = false).
+  if (errorCode === 'VALIDATION_UNAVAILABLE') return 'fm.aeat.error.validationUnavailable';
   if (errorCode === 'ALREADY_SUBMITTED') return 'fm.aeat.error.alreadySubmitted';
   // Modelo 390 only (ETP-5716): the backend refuses a filing with blocking incidents.
   if (errorCode === 'BLOCKING_INCIDENTS') return 'fm.aeat.error.blockingIncidents';
@@ -262,26 +266,6 @@ function InfoRow({ label, value }) {
   );
 }
 
-function Banner({ tone, icon, title, body, children }) {
-  const vars = {
-    success: ['var(--fm-success-bg)', 'var(--fm-success-border)', 'var(--fm-success-fg)'],
-    warning: ['var(--fm-warning-bg)', 'var(--fm-warning-border)', 'var(--fm-warning-fg)'],
-    danger:  ['var(--fm-danger-bg)',  'var(--fm-danger-border)',  'var(--fm-danger-fg)'],
-    info:    ['var(--fm-info-bg)',    'var(--fm-info-border)',    'var(--fm-info-fg)'],
-  }[tone] ?? ['var(--fm-info-bg)', 'var(--fm-info-border)', 'var(--fm-info-fg)'];
-  const [bg, border, fg] = vars;
-  return (
-    <div style={{ padding: '12px 14px', background: bg, border: `1px solid ${border}`, borderRadius: 12, color: fg, display: 'flex', gap: 10 }}>
-      <span style={{ flexShrink: 0, marginTop: 1 }}>{icon}</span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 600 }}>{title}</div>
-        {body && <div style={{ fontSize: 13, marginTop: 4, lineHeight: '18px' }}>{body}</div>}
-        {children}
-      </div>
-    </div>
-  );
-}
-
 // decl:      the declaration record (year, period, id, model, result?.kind, summary?.result)
 // orgIdent:  { nif, nombre } — declarant identity, fetched from /neo/session by FmModel303Page
 // identChecks: casillas identification state (tipo_declaracion, bank_iban, ...)
@@ -400,6 +384,8 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
   }
 
   const outcome = step === 'result' ? classifySubmitOutcome(response) : null;
+  // A real presentation is validated first by the server, in the same request.
+  const submittingKey = testMode ? 'fm.aeat.action.submitting' : 'fm.aeat.action.validating_submitting';
 
   return (
     <div className="fm-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
@@ -408,7 +394,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
         {/* Header */}
         <div className="fm-config-modal__header">
           <div className="fm-config-modal__titles">
-            <div className="fm-config-modal__title">{t('fm.aeat.title') ?? 'AEAT electronic submission'}</div>
+            <div className="fm-config-modal__title">{t('fm.aeat.title') ?? 'AEAT direct submission'}</div>
             {step === 'confirm' && (
               <div className="fm-config-modal__sub">
                 {t('fm.aeat.confirm.subtitle') ?? 'Review the data before sending to the Tax Agency'}
@@ -652,7 +638,11 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
                 <Banner
                   tone="danger"
                   icon={<OctagonAlert size={18} data-testid="OctagonAlert__aeatError" />}
-                  title={t('fm.aeat.result.error.title') ?? 'The submission could not be completed'}
+                  title={response?.stage === 'validation' && !specificKey
+                    // ETP-5716: the server validates before a real presentation; the validator's
+                    // errors stopped it — nothing was presented.
+                    ? (t('fm.aeat.result.validation_rejected.title') ?? 'Declaration not submitted: the AEAT found errors when validating it')
+                    : (t('fm.aeat.result.error.title') ?? 'The submission could not be completed')}
                   data-testid="Banner__aeatError">
                   {errorBody}
                 </Banner>
@@ -702,7 +692,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
                 ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__aeatSubmitting" />
                 : <Landmark size={14} data-testid="Landmark__aeatSubmit" />}
               {submitting
-                ? (t('fm.aeat.action.submitting') ?? 'Submitting to AEAT…')
+                ? (t(submittingKey) ?? 'Submitting to AEAT…')
                 : (t('fm.aeat.action.submit') ?? 'Submit to AEAT')}
             </button>
           )}

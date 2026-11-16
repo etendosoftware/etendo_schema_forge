@@ -28,6 +28,10 @@ import SendToEvaluationModal from '@generated/sales-quotation/custom/SendToEvalu
 import QuotationConfirmModal from '@generated/sales-quotation/custom/QuotationConfirmModal';
 import RejectQuotationModal from '@generated/sales-quotation/custom/RejectQuotationModal';
 
+// The statuses whose Confirmar opens a modal: DR sends to evaluation; UE, CO (legacy) and ETGO_AC
+// (accepted by the customer from the portal, ETP-6209) convert into an order or an invoice.
+const QUOTATION_CONFIRMABLE_STATUSES = ['DR', 'CO', 'UE', 'ETGO_AC'];
+
 const draftModeWithModal = {
   enabled: true,
   processField: 'documentAction',
@@ -38,6 +42,10 @@ const draftModeWithModal = {
   // still expose the Confirm button (which dispatches the convert-to-order/invoice
   // modal via onConfirm).
   completedStatuses: ['CA', 'ETGO_CI', 'CL', 'VO', 'CJ'],
+  // ETP-6209 — a rejected quotation (CJ) keeps a plain Save for its reject reason only, so the
+  // seller can set the tenant's internal reason after a portal rejection. MUST stay in sync with
+  // artifacts/sales-quotation/decisions.json -> entities.header.draftMode (this object shadows it).
+  keepSaveWhenCompletedFields: ['rejectReason'],
   disableWhenEmpty: true,
   onConfirm: () => window.dispatchEvent(new CustomEvent('sales-quotation:open-confirm-modal')),
 };
@@ -71,6 +79,8 @@ function buildQuotationColumns(ui) {
       CL: ui('quotationStatus.CL'),
       CA: ui('quotationStatus.CA'),
       CJ: ui('quotationStatus.CJ'),
+      ETGO_AC: ui('quotationStatus.ETGO_AC'),
+      ETGO_CI: ui('quotationStatus.ETGO_CI'),
       DR: ui('quotationStatus.DR'),
       ME: ui('quotationStatus.ME'),
       NA: ui('quotationStatus.NA'),
@@ -216,7 +226,7 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
   // real row to open it against.
   const rowMenuActions = useCallback(({ row, status }) => (
     windowAccessTier === 'read-only' ? [] : [
-      ...(row?.documentStatus === 'DR' || row?.documentStatus === 'CO' || row?.documentStatus === 'UE'
+      ...(QUOTATION_CONFIRMABLE_STATUSES.includes(row?.documentStatus)
         ? [{ key: 'confirm', label: ui('confirm'), onClick: openQuotationConfirm }]
         : []),
       ...customMenuActions({ status }).map((action) => (

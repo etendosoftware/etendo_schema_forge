@@ -388,7 +388,7 @@
     },
     {
       "id": "bp-self-service-portal",
-      "description": "Read-only self-service portal where a tenant's Business Partner opens a magic link and sees their completed invoices, outstanding balance and invoice PDFs. The portal surface, its three /sws/portal/* endpoints and the access table are UNCONDITIONAL; the flag gates only whether the sales-invoice email carries the link, and is targeted at the ETGO_ACCOUNT email of the user sending the invoice.",
+      "description": "Read-only customer portal a tenant's Business Partner opens from a link in a sales document email and sees their quotations, orders, shipments and invoices (lists, detail, related documents, PDFs) and their outstanding balance. The portal surface, its /sws/portal/* endpoints and the etgo_portal_link table are UNCONDITIONAL; the flag gates only whether a sales quotation, order, shipment or invoice email carries the link (ETP-6209; ETP-5267 covered the invoice only), and is targeted at the ETGO_ACCOUNT email of the user sending the document. Each link lives 48 hours from its send; renewing an expired link is not gated.",
       "owner": "sebastianbarrozo",
       "jira": "ETP-5267",
       "created": "2026-09-10",
@@ -409,21 +409,23 @@
       "paths": {
         "frontend": [
           "tools/app-shell/src/pages/PortalPage.jsx",
+          "tools/app-shell/src/pages/portal/",
           "tools/app-shell/src/lib/portal/"
         ],
         "backend": [
           "src/com/etendoerp/go/portal/"
         ]
       },
-      "$pathsComment": "Owned code = the portal feature itself, which is deleted only if the FEATURE is killed. It is NOT deleted when the flag retires: the flag gates one conditional in the email contract, so shipping it unwraps that conditional and leaves every path here in place (same shape as paid-second-tenant, which kept its paths after tenant-upgrade retired). Shared touch points, NOT owned: the sales-invoice email contract, runtime-routes.jsx, GoFeatureFlags, and PropertiesFeatureProvider -- the per-account targeting added there is a platform capability that outlives this flag and must not be removed with it.",
+      "$rateLimitInfraComment": "Review W6 (ETP-6209) is RESOLVED BY INFRA, with no code change -- not a deferred item. PortalRateLimiter keys on HttpServletRequest#getRemoteAddr (30/min GET /me, 30/min POST /renew, 120/min for the data reads /home and /documents*, each its own in-memory counter). Production traffic goes browser -> CloudFront -> ALB -> Tomcat, and infra added RemoteIpValve to the Tomcat image, live from the next production deploy: from then on getRemoteAddr() returns the real client IP and every portal limit is per client (before it, they counted per proxy address). A single etendo-core task runs (two briefly during a deploy), so the in-memory counters are effectively fleet-wide and reset on each deploy; scaling out would make each task count on its own. X-Portal-Token passes through CloudFront and the ALB untouched. Do not add X-Forwarded-For parsing to the portal: the valve is the one trusted place that reads it. Source: docs/plans/2026-11-11-customer-portal-sales-documents.md -- Part A implementation notes, W6.",
+      "$pathsComment": "Owned code = the portal feature itself, which is deleted only if the FEATURE is killed. It is NOT deleted when the flag retires: the flag gates one conditional in the email contract, so shipping it unwraps that conditional and leaves every path here in place (same shape as paid-second-tenant, which kept its paths after tenant-upgrade retired). Shared touch points, NOT owned: the document-send email contracts (DefaultDocumentSendEmailContract and the four sales contracts that declare portalDocumentKind()), the EmailContract#onDelivered hook in TransactionalEmailService, AnonymousAttachmentStreamer (the session-less main-attachment path shared with the email download link, ETP-6209), runtime-routes.jsx, GoFeatureFlags, and PropertiesFeatureProvider -- the per-account targeting added there is a platform capability that outlives this flag and must not be removed with it.",
       "deferredItems": [
         {
           "id": "flag-flip-requires-redeploy",
           "kind": "cosmetic",
-          "note": "bp-portal-link AND its per-account allowlist are both resolved by the config-backed PropertiesFeatureProvider (JVM property, Openbravo.properties, or ETGO_FLAG_* env var), so changing either is a deploy/restart rather than a toggle. AND THEREFORE: the flag cannot be used to react quickly in production -- if a link has to stop working at short notice, the lever is per-BP revocation, which deliberately sits outside the gate and needs no restart. Recorded so nobody plans an incident response around flipping the flag or editing the allowlist. Not a defect: it is the documented behaviour of the only backend provider installed today, and it disappears if the hosted control plane ever lands.",
+          "note": "The flag only decides whether NEW sends carry a link; it never closes a link already sent (the portal endpoints never read it). Where neither hosted control plane is configured it resolves through PropertiesFeatureProvider (JVM property, Openbravo.properties or ETGO_FLAG_* env var), so a change there is a deploy/restart; with Datadog Feature Flags or ConfigCat a targeting-rule change is live without a restart. INCIDENT LEVERS, in order: (1) to stop new links going out, change the flag's targeting (remove the account's rule, or turn the flag off); (2) to stop links already sent from working, deactivate their ETGO_PORTAL_LINK rows (IsActive = 'N', by ad_client_id / c_bpartner_id / record): a deactivated link answers the same 401 as an unknown one at once, needs no restart, and cannot be renewed. There is no per-BP revocation action any more (removed in ETP-6209, plan section A.6); every link also expires on its own 48 hours after its send. Recorded so nobody plans an incident response around flipping the flag alone.",
           "refs": [
             "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md -- section 'Per-account targeting'",
-            "docs/plans/2026-09-10-bp-self-service-portal.md -- section 'Changing it needs a restart, and revocation is the fast lever'"
+            "docs/plans/2026-11-11-customer-portal-sales-documents.md -- sections A.3/A.6 (recipient, renewal and removal of the revoke action)"
           ]
         }
       ],
@@ -432,13 +434,43 @@
         "unit": [
           {
             "root": "backend",
-            "path": "src-test/src/com/etendoerp/go/portal/PortalAccessServiceTest.java",
-            "expected": true
+            "path": "src-test/src/com/etendoerp/go/portal/PortalLinkServiceTest.java"
           },
           {
             "root": "backend",
-            "path": "src-test/src/com/etendoerp/go/portal/PortalServletTest.java",
-            "expected": true
+            "path": "src-test/src/com/etendoerp/go/portal/PortalServletTest.java"
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/portal/PortalLinkDalTest.java"
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/portal/PortalDocumentQueryTest.java"
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/portal/PortalDocumentsEndpointTest.java"
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/portal/PortalDocumentLinksTest.java"
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/portal/PortalRateLimiterTest.java"
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/email/contracts/PortalLinkRenewalEmailContractTest.java"
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/portal/PortalUsageEventsTest.java"
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/AnonymousAttachmentStreamerTest.java"
           },
           {
             "root": "frontend",
@@ -446,22 +478,25 @@
           },
           {
             "root": "frontend",
-            "path": "tools/app-shell/src/lib/portal/__tests__/portalInvoices.test.js"
+            "path": "tools/app-shell/src/pages/portal/__tests__/portalPresentation.test.js"
           },
           {
             "root": "frontend",
             "path": "tools/app-shell/src/lib/portal/__tests__/portalApi.test.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/lib/portal/__tests__/portalInvoices.test.js"
           }
         ],
         "e2e": [
           {
             "root": "frontend",
-            "path": "e2e/tests/flows/bp-portal.mocked.spec.js",
-            "expected": true
+            "path": "e2e/tests/flows/sales/bp-portal.mocked.spec.js"
           }
         ]
       },
-      "$testSpecsComment": "expected:true means agreed but not yet written (pending Tester). Paths follow each suite's existing naming convention. The two load-bearing portal assertions, both named in the plan's Testing section: cross-BP isolation (neither token can reach the other's invoices or PDF under any endpoint), and no etgo_portal_access row is minted while the gate is closed -- asserted on the row count, not the email body. A THIRD load-bearing case belongs to the platform suite (PropertiesFeatureProviderTest / GoFeatureFlags) and not here: provider selection, where a blank or wrong ConfigCat SDK key must resolve every flag to false and never to true, and a provider that fails to install must leave flags false rather than propagate into an invoice send."
+      "$testSpecsComment": "expected:true means agreed but not yet written (pending Tester); every entry exists today. Paths follow each suite's existing naming convention. The two load-bearing portal assertions: cross-BP isolation (neither token can reach the other's documents or PDF under any endpoint), and no ETGO_PORTAL_LINK row is minted while the gate is closed -- asserted on the row count, not the email body. A THIRD load-bearing case belongs to the platform suite (PropertiesFeatureProviderTest / GoFeatureFlags) and not here: provider selection, where a blank or wrong ConfigCat SDK key must resolve every flag to false and never to true, and a provider that fails to install must leave flags false rather than propagate into an invoice send."
     },
     {
       "id": "lookup-create-product",
@@ -2852,6 +2887,45 @@
           ]
         }
       ]
+    },
+    {
+      "id": "mcp-routines",
+      "description": "The MCP tool etendo_routine (etendo-ai#51): several calls of the existing tools in one call (exec), and personal, versioned, parameterized routines saved to run them again (save, run, list, describe, update, delete, execution, help). With the flag off the tool is neither listed in tools/list nor routed (a call answers tool_disabled); the routine tables and their rows stay.",
+      "owner": "valenvivaldi",
+      "jira": "ETP-6236",
+      "created": "2026-11-13",
+      "flag": {
+        "key": "mcp-routines",
+        "defaultValue": false,
+        "ttl": "2027-03-31",
+        "ttlNote": "PLACEHOLDER, not a commitment: end of Q1 2027. Revisit once the first accounts are targeted and the KR2.1 child KPI (agent_kr21_routines_win_rate) has an official run.",
+        "symbols": [
+          "mcp-routines",
+          "MCP_ROUTINES",
+          "FLAG_MCP_ROUTINES",
+          "ETGO_FLAG_MCP_ROUTINES",
+          "etendo.go.flags.mcp-routines",
+          "McpRoutinesFlag",
+          "routinesDisabled"
+        ],
+        "$symbolsComment": "Backend-only flag: nothing in the browser evaluates it and no key is declared in flag-keys.js. The constant is GoFeatureFlags.FLAG_MCP_ROUTINES and its one evaluator McpRoutinesFlag (com.etendoerp.go); retiring the flag is a grep for that class."
+      },
+      "$gatingComment": "Toggle points in com.etendoerp.go: ToolRegistry.generateTools (listing) and McpToolRouter (routing, McpRouterErrorBodies.routinesDisabled). Per account on a hosted arm, evaluated for the ETGO_ACCOUNT email of the request user.",
+      "paths": {
+        "backend": [
+          "src/com/etendoerp/go/mcp/McpRoutineTool.java",
+          "src/com/etendoerp/go/mcp/McpRoutineSteps.java",
+          "src/com/etendoerp/go/mcp/McpRoutineParams.java",
+          "src/com/etendoerp/go/mcp/McpRoutineHelp.java",
+          "src/com/etendoerp/go/mcp/McpRoutineStore.java",
+          "src/com/etendoerp/go/mcp/McpRoutineJdbcStore.java",
+          "src/com/etendoerp/go/mcp/McpRoutinesFlag.java",
+          "src-db/database/model/tables/ETGO_MCP_ROUTINE.xml",
+          "src-db/database/model/tables/ETGO_MCP_ROUTINE_VERSION.xml",
+          "src-db/database/model/tables/ETGO_MCP_ROUTINE_EXEC.xml"
+        ]
+      },
+      "$pathsComment": "Backend owned files added with ETP-6236 (com.etendoerp.go). The mcp-tests harness support (routines = true targets, the child KR) lives in this repo and reads no flag."
     }
   ]
 }
