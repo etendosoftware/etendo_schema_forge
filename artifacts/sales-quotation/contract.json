@@ -1,8 +1,8 @@
 {
-  "version": "0.33.0",
+  "version": "0.35.0",
   "generatedAt": "2026-06-26T16:40:04.731Z",
-  "updatedAt": "2026-11-16T11:06:32.073Z",
-  "checksum": "92fafebdc73e063a",
+  "updatedAt": "2026-11-16T13:50:00.211Z",
+  "checksum": "0b99ca74327459c8",
   "frontendContract": {
     "window": {
       "id": "6CB5B67ED33F47DFA334079D3EA2340E",
@@ -243,7 +243,7 @@
               "maxLength": 60
             },
             "callout": {
-              "className": "org.openbravo.module.remittance.ad_callouts.REM_Order_Default_Bankaccount"
+              "className": "org.openbravo.erpCommon.ad_callouts.SE_Order_BPartner"
             },
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @DocStatus@='TMP'",
@@ -282,7 +282,7 @@
               ]
             },
             "callout": {
-              "className": "com.etendoerp.advanced.bank.account.management.ad_callouts.OrderBankAccountAssigner"
+              "className": "org.openbravo.erpCommon.ad_callouts.SE_Order_BPartnerLocation"
             },
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @DocStatus@='TMP'",
@@ -653,7 +653,7 @@
             "name": "eTGOCurrencyRate",
             "apiKey": "eTGOCurrencyRate",
             "column": "EM_ETGO_Currency_Rate",
-            "label": "Exchange rate",
+            "label": "EM_ETGO_Currency_Rate",
             "type": "string",
             "tsType": "string",
             "visibility": "editable",
@@ -2006,14 +2006,6 @@
             "apiKey": "eTGOInvoiceStatus",
             "column": "EM_ETGO_Invoice_Status",
             "type": "integer",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "eTABAMBankaccount",
-            "apiKey": "eTABAMBankaccount",
-            "column": "EM_Etabam_Bankaccount_ID",
-            "type": "foreignKey",
             "visibility": "system",
             "required": false
           }
@@ -4584,14 +4576,6 @@
         "description": "System field 'dropShipPartner' should exist in backend but not frontend for quotation"
       },
       {
-        "id": "t-system-field-quotation-eTABAMBankaccount",
-        "category": "system-field",
-        "entity": "quotation",
-        "field": "eTABAMBankaccount",
-        "runner": "node",
-        "description": "System field 'eTABAMBankaccount' should exist in backend but not frontend for quotation"
-      },
-      {
         "id": "t-system-field-quotation-eTGODeliveryStatus",
         "category": "system-field",
         "entity": "quotation",
@@ -5551,7 +5535,7 @@
       }
     ],
     "summary": {
-      "total": 311,
+      "total": 310,
       "byCategory": {
         "action-endpoint": 23,
         "crud-flags": 2,
@@ -5565,11 +5549,11 @@
         "rule-declared": 8,
         "searchable-filters": 6,
         "selector-endpoint": 10,
-        "system-field": 155,
+        "system-field": 154,
         "visibility": 2
       },
       "byRunner": {
-        "node": 311,
+        "node": 310,
         "junit": 0
       }
     }
