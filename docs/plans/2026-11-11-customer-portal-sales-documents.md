@@ -1239,6 +1239,12 @@ Built in both repos following C.0–C.11.
    GET applies nothing. Confirm answers `appliedNow` (true only on the applying call; a re-open no longer
    re-sends the seller's notice). The portal's "sent" message tells the customer to press the button in
    the email.
+   **Accepted trade-off (the PO chose the one-step flow):** a mail scanner that executes the page's
+   JavaScript could confirm a pending decision. The token is single-use, and the email only ever
+   reaches the quotation's main recipient (the first To of the original send). Review follow-ups
+   (Alex W2/W3): the request's cool-down runs under the quotation row lock and ignores requests
+   whose email did not leave; `confirm` re-runs the portal access checks (blocked or inactive
+   customer, expired plan) and applies nothing when the portal is closed for the customer.
 6. **Footer.** "Creado con etendo.ai" links to `https://etendo.ai` (new tab, `noopener noreferrer`); no
    shared constant existed.
 
