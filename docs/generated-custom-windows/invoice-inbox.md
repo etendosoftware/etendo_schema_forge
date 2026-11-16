@@ -385,6 +385,24 @@ read (one poller for both). Backoff 3, 5, 8, 13, 20, then every 30 s; reset by a
 2 minutes). A changed row also refreshes the counters. A row that leaves the current tab's filter stays
 visible until the next reload, so the table does not jump under the cursor.
 
+## Telemetry
+
+One frontend event, `invoice_inbox_opened` (ETP-6050), makes the backend-only `invoice-inbox` flag measurable.
+The inbox is a custom page, so the generic `window_opened` of `ListView` never fires for it, and the flag is
+evaluated only by the backend, so the browser never emits `feature_flag_evaluated` for it.
+
+- Hook: `useInvoiceInboxOpenedTracking.js`, called from `InvoiceInboxPage.jsx`; it calls `trackInvoiceInboxOpened`
+  (`lib/productUsageTelemetry.js`). Catalog entry: `INVOICE_INBOX_OPENED` in `lib/observability/events.js`.
+- Fires once per mount of the page (it is mounted only while shown). A ref guards the StrictMode double effect;
+  list refreshes, the review drawer, polling and locale changes do not re-fire it. Leaving and returning is a new opening.
+- Properties: `account_id` (tenant), `category` = `product_usage`, `specName` = `invoice-inbox`. No file names,
+  vendors, amounts or document ids.
+- Adoption = `invoice_inbox_opened` over `session_started` in Mixpanel (report not created yet, tracked in
+  etendo-kpis). Emission table: `docs/ops/mixpanel-kpi-emission-spec.md`.
+- Caveats: adoption = `invoice_inbox_opened` over `session_started` in Mixpanel; demo tenants (tenant_type D) and test accounts are NOT excluded yet (the ETGO_Account test-account indicator is pending with Platform); `account_id` carries the tenant `clientId`, as in ETP-5889, while etendo-kpis notes that `etgo_account_id` replaces `account_id` for backend events (a frontend migration, if any, must move ETP-5889 and this event together).
+- Hosted Datadog setting `invoice-inbox`: created 2026-11-13, boolean, default false, team Plataforma, server only,
+  no targeting rules, disabled in Production.
+
 ## Files
 
 `tools/app-shell/src/windows/custom/invoice-inbox/`: `index.jsx` (route guard), `InvoiceInboxPage.jsx`,
@@ -399,7 +417,7 @@ visible until the next reload, so the table does not jump under the cursor.
 `InvoiceInboxReviewForm.jsx`, `InvoiceInboxReviewVendor.jsx`, `InvoiceInboxReviewLines.jsx`,
 `InvoiceInboxReviewTotals.jsx`, `InvoiceInboxReviewBanners.jsx`, `InvoiceInboxReviewFooter.jsx`,
 `InvoiceInboxReviewParts.jsx`, `invoiceInboxReviewModel.js`, `useInvoiceInboxReview.js`,
-`useInvoiceInboxReviewNav.js`. Shared touch points:
+`useInvoiceInboxReviewNav.js`. Telemetry (ETP-6050): `useInvoiceInboxOpenedTracking.js`. Shared touch points:
 `SegmentedTabs.jsx` (optional `count` per item), `menu.json` (Purchases item),
 `lib/capabilityVisibility.js` (`INVOICE_INBOX_CAPABILITY`), `windows/registry.js` (`customLoaders`).
 

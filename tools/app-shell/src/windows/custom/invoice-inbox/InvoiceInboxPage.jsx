@@ -16,6 +16,7 @@ import { discardToast, useInvoiceInboxDiscard } from './useInvoiceInboxDiscard.j
 import { useProcessingRowsPoll } from './useProcessingRowsPoll.js';
 import { useInvoiceInboxReviewNav } from './useInvoiceInboxReviewNav.js';
 import { useInboxFileDrop } from './useInboxFileDrop.js';
+import { useInvoiceInboxOpenedTracking } from './useInvoiceInboxOpenedTracking.js';
 import InvoiceInboxDropZone, { InvoiceInboxFileInput } from './InvoiceInboxDropZone.jsx';
 import InvoiceInboxDragOverlay from './InvoiceInboxDragOverlay.jsx';
 import InvoiceInboxUploadTray from './InvoiceInboxUploadTray.jsx';
@@ -160,6 +161,7 @@ export default function InvoiceInboxPage({ apiBaseUrl, token = null }) {
   const list = useInvoiceInboxList(apiFetch, filterKey);
   const [pollResetKey, setPollResetKey] = useState(0);
   useInboxPageMeta(list.counts);
+  useInvoiceInboxOpenedTracking();
 
   // ── Selection (owned by DataTable; mirrored here, cleared on a filter change) ──
   const [selectedRows, setSelectedRows] = useState([]);
