@@ -230,3 +230,54 @@ describe('review panel editing keys (S2)', () => {
   });
 });
 
+
+// ETP-6050 S2 addenda: tax by id, validator codes, line-based tax rows, unknown names (6 more keys).
+describe('review panel keys added with the tax selector and the line codes (S2 addenda)', () => {
+  const placeholders = (s) => [...String(s).matchAll(/\{\{?\s*(\w+)\s*\}?\}/g)].map((m) => m[1]).sort();
+  const ADDENDA_KEYS = [
+    'invoiceInboxReviewNameUnknown', 'invoiceInboxReviewTotalTaxLine', 'invoiceInboxReviewQuantityMissingError',
+    'invoiceInboxReviewPriceMissingError', 'invoiceInboxSaveErrorUnknownTax', 'invoiceInboxReviewTaxPlaceholder',
+  ];
+
+  for (const [locale, json] of Object.entries(locales)) {
+    it(`${locale} defines the ${ADDENDA_KEYS.length} addenda keys, non-empty`, () => {
+      assert.deepEqual(ADDENDA_KEYS.filter((k) => !String(json.genericLabels[k] ?? '').trim()), []);
+    });
+  }
+
+  it('the sources read every addenda key (a key nothing reads is dead text)', () => {
+    const readViaModel = new Set(['invoiceInboxSaveErrorUnknownTax']);
+    assert.deepEqual(ADDENDA_KEYS.filter((k) => !inboxKeys.includes(k) && !readViaModel.has(k)), []);
+    assert.ok(inboxKeys.includes('invoiceInboxSaveErrorUnknownTax'), 'mapped from the unknown_tax code');
+  });
+
+  it('the line-based tax row keeps the same {rate} and {base} placeholders as the document-based one, in every locale', () => {
+    for (const [locale, json] of Object.entries(locales)) {
+      assert.deepEqual(placeholders(json.genericLabels.invoiceInboxReviewTotalTaxLine), ['base', 'rate'], locale);
+      assert.deepEqual(placeholders(json.genericLabels.invoiceInboxReviewTotalTax), ['base', 'rate'], locale);
+    }
+  });
+
+  it('the other addenda texts carry no placeholder', () => {
+    for (const [locale, json] of Object.entries(locales)) {
+      for (const key of ADDENDA_KEYS.filter((k) => k !== 'invoiceInboxReviewTotalTaxLine')) {
+        assert.deepEqual(placeholders(json.genericLabels[key]), [], `${locale}.${key}`);
+      }
+    }
+  });
+
+  it('es_ES has no voseo and es_AR uses it in the two "missing" errors', () => {
+    const voseo = /\b(Podés|Tenés|Querés|Indicá|Elegí|vos)\b/;
+    for (const key of ADDENDA_KEYS) assert.doesNotMatch(locales.es_ES.genericLabels[key], voseo, key);
+    assert.match(locales.es_AR.genericLabels.invoiceInboxReviewQuantityMissingError, /Indicá/);
+    assert.match(locales.es_AR.genericLabels.invoiceInboxReviewPriceMissingError, /Indicá/);
+  });
+
+  it('the Spanish texts are translated (not the English ones left in place)', () => {
+    for (const locale of ['es_ES', 'es_AR']) {
+      for (const key of ADDENDA_KEYS) {
+        assert.notEqual(locales[locale].genericLabels[key], locales.en_US.genericLabels[key], `${locale}.${key}`);
+      }
+    }
+  });
+});
