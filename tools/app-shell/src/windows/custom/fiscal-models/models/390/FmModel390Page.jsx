@@ -70,6 +70,7 @@ import FmSources390 from './FmSources390.jsx';
 import { emptySourcesFilter, sourcesFilterForBox } from './sources390.js';
 import FileGenModal390 from './FileGenModal390.jsx';
 import useOrg390Identity from './useOrg390Identity.js';
+import { FILE_VALIDATION } from './fileValidation390.js';
 import { fetchBoxes390, generate390File, validate390 } from './fm390Api.js';
 import Incidents390Tab from './Incidents390Tab.jsx';
 import { nameWarningsFromIncidents390, normalizeIncidents390 } from './incidents390.js';
@@ -673,6 +674,10 @@ export default function FmModel390Page({
 
   // "Generar fichero 390": pending changes are saved FIRST — the backend generates from the
   // stored inputs — and a failed save stops the generation.
+  // The file is downloaded whatever the AEAT validator said about it (ETP-5716): its answer is a
+  // result step of the popup (FileGenModal390, which gets it as this function's result) and, when
+  // the AEAT answered, the declaration's AEAT incidents — re-read here, the backend already
+  // replaced them. Resolves null when there is no validation to show.
   async function handleGenerate({ fileName } = {}) {
     setGenerating(true);
     try {
@@ -692,7 +697,17 @@ export default function FmModel390Page({
         toastIncompleteYear(result);
       } else if (!result.ok) {
         toast.error(result.serverMessage || t('fm.m390.generate_error'));
+      } else {
+        // A clean file: the success toast. One accepted WITH AEAT warnings shows them in the popup.
+        const clean = result.validation?.outcome === FILE_VALIDATION.ACCEPTED && !result.validation.warnings?.length;
+        if (clean) toast.success(t('fm.m390.file_validation.accepted'));
+        const answered = [FILE_VALIDATION.ACCEPTED, FILE_VALIDATION.REJECTED].includes(result.validation?.outcome);
+        if (answered) setIncidentsVersion(v => v + 1);
+        // An accepted file leaves the validator's PDF (VALIDACION-…) in the Justificante tab.
+        if (result.validation?.outcome === FILE_VALIDATION.ACCEPTED) listReceipts?.();
+        return result.validation ?? null;
       }
+      return null;
     } finally {
       setGenerating(false);
     }
@@ -1046,6 +1061,7 @@ export default function FmModel390Page({
           <div className="fm-page__body" style={{ padding: 0 }}>
             <Incidents390Tab
               incidents={incidents}
+              gatingBlocking={ruleBlocking}
               onGoToBox={goToBoxOfIncident}
               onViewInvoices={viewInvoicesIfDraft}
               onViewSettlements={viewSettlements}
@@ -1077,6 +1093,7 @@ export default function FmModel390Page({
           typeLabel={typeLabel}
           resultLabel={resultLabel}
           onConfirm={handleGenerate}
+          onViewIncidents={() => setActiveTab('incidents')}
           onClose={() => setShowFilegen(false)}
           t={t}
           data-testid="FileGenModal390__74d2aa" />

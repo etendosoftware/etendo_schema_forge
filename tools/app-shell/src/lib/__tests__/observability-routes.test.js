@@ -32,6 +32,9 @@ const SAMPLE_PARAMS = { ':token': TOKEN, ':recordId': RECORD, ':windowName': WIN
 // Routes with a parameter, and what each form must become.
 const PARAMETERIZED = {
   'portal/:token': { router: '/portal/:recordId', browser: '/go/portal/:id' },
+  // The quotation-decision landing: the token is a third segment, which the scrub names `:id` in
+  // both forms (as it does for `/${WINDOW}/:id/lines`), never the raw token.
+  'portal/decision/:token': { router: '/portal/decision/:id', browser: '/go/portal/decision/:id' },
   ':windowName/:recordId': { router: `/${WINDOW}/:recordId`, browser: `/go/${WINDOW}/:id` },
   ':windowName': { router: `/${WINDOW}`, browser: `/go/${WINDOW}` },
   'artifacts/:windowName': { router: `/artifacts/${WINDOW}`, browser: `/go/artifacts/${WINDOW}` },
