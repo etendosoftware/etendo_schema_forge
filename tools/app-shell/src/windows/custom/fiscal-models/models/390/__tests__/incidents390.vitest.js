@@ -6,7 +6,7 @@
 // (Fiscal390IncidentRules); the page groups them into Bloqueantes / Advertencias, translates each
 // one by its code with its params, and offers its action. Also the two requests that carry
 // them: `POST /fiscal390/validate` and the 409 BLOCKING_INCIDENTS of `GET /fiscal390/generate`.
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import esES from '@/locales/es_ES.json';
 import enUS from '@/locales/en_US.json';
 import esAR from '@/locales/es_AR.json';
@@ -216,6 +216,117 @@ describe('fm390Api — incidents requests', () => {
     const err = await fetchBoxes390(decl, opts).catch(e => e);
     expect(err).toMatchObject({ status: 422, code: 'INCOMPLETE_FISCAL_YEAR', year: 2025, missingPeriods: [1, 2] });
     expect(incompleteFiscalYearOf(err)).toEqual({ year: 2025, missingPeriods: [1, 2] });
+  });
+});
+
+// "Generar fichero 390": one request generates the file and has the AEAT validator check it; the
+// file comes back as base64 and is downloaded whatever the validator said.
+describe('generate390File — the file validated by the AEAT', () => {
+  const decl = { id: 'D1', year: 2026, period: '0A' };
+  const opts = { token: 'tok', apiBaseUrl: 'http://h/sws/neo/fiscal-models' };
+  // "A", "Ñ" in ISO-8859-1 (0xD1 — not valid UTF-8 on its own), CR, LF.
+  const FILE_BYTES = [0x41, 0xD1, 0x0D, 0x0A];
+  const FILE_BASE64 = btoa(String.fromCharCode(...FILE_BYTES));
+  const okResponse = (body) => ({ ok: true, status: 200, json: async () => body });
+  let downloads;
+  let clickSpy;
+
+  beforeEach(() => {
+    apiFetch.mockReset();
+    downloads = [];
+    URL.createObjectURL = vi.fn((blob) => { downloads.push({ blob }); return 'blob:390'; });
+    URL.revokeObjectURL = vi.fn();
+    clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function click() {
+      downloads[downloads.length - 1].name = this.download;
+    });
+  });
+  afterEach(() => { clickSpy.mockRestore(); });
+
+  const bytesOf = (blob) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve([...new Uint8Array(reader.result)]);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsArrayBuffer(blob);
+  });
+
+  it('POSTs to fiscal390/generate-validated through the shared apiFetch, with no timeout', async () => {
+    apiFetch.mockResolvedValue(okResponse({ fileBase64: FILE_BASE64, validation: { outcome: 'accepted' } }));
+    await generate390File(decl, opts);
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+    const [url, init] = apiFetch.mock.calls[0];
+    const parsed = new URL(url);
+    expect(parsed.origin + parsed.pathname).toBe('http://h/sws/neo/fiscal390/generate-validated');
+    expect(Object.fromEntries(parsed.searchParams)).toEqual({ year: '2026', period: '0A', id: 'D1' });
+    expect(init).toEqual({ method: 'POST', baseUrl: '', token: 'tok', timeout: 0 });
+  });
+
+  it('decodes fileBase64 to the exact bytes of the file (0xD1 survives) and downloads it as text', async () => {
+    apiFetch.mockResolvedValue(okResponse({ fileBase64: FILE_BASE64, validation: { outcome: 'accepted' } }));
+    await generate390File(decl, opts);
+    expect(downloads).toHaveLength(1);
+    expect(downloads[0].blob.type).toBe('text/plain');
+    expect(await bytesOf(downloads[0].blob)).toEqual(FILE_BYTES);
+    expect(downloads[0].name).toBe('390_0A_2026.txt');
+  });
+
+  it('downloads under the name the user typed', async () => {
+    apiFetch.mockResolvedValue(okResponse({ fileBase64: FILE_BASE64, validation: { outcome: 'accepted' } }));
+    await generate390File(decl, { ...opts, fileName: 'mi390' });
+    expect(downloads[0].name).toBe('mi390.txt');
+  });
+
+  it.each(['accepted', 'rejected', 'connection_failure', 'not_validated'])(
+    'downloads the file and returns the validation when the outcome is %s',
+    async (outcome) => {
+      apiFetch.mockResolvedValue(okResponse({
+        fileBase64: FILE_BASE64,
+        validation: { outcome, errors: [{ code: '390E01', message: 'err' }], warnings: [{ code: '390A01', message: 'warn' }] },
+      }));
+      const res = await generate390File(decl, opts);
+      expect(downloads).toHaveLength(1);
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+      expect(res).toEqual({
+        ok: true,
+        validation: { outcome, errors: [{ code: '390E01', message: 'err' }], warnings: [{ code: '390A01', message: 'warn' }] },
+      });
+    },
+  );
+
+  it('a file without a validation block is downloaded and reads as not validated', async () => {
+    apiFetch.mockResolvedValue(okResponse({ fileBase64: FILE_BASE64 }));
+    const res = await generate390File(decl, opts);
+    expect(downloads).toHaveLength(1);
+    expect(res).toEqual({ ok: true, validation: { outcome: 'not_validated', errors: [], warnings: [] } });
+  });
+
+  it.each([
+    ['no fileBase64', { validation: { outcome: 'accepted' } }],
+    ['an empty fileBase64', { fileBase64: '', validation: { outcome: 'accepted' } }],
+    ['a fileBase64 that is not a string', { fileBase64: 42 }],
+    ['no JSON body', null],
+  ])('reports no_file and downloads nothing with %s', async (_label, body) => {
+    apiFetch.mockResolvedValue(okResponse(body));
+    expect(await generate390File(decl, opts)).toEqual({ ok: false, error: 'no_file' });
+    expect(downloads).toHaveLength(0);
+  });
+
+  it('downloads nothing when the request is refused (409) or the calendar is incomplete (422)', async () => {
+    apiFetch.mockResolvedValue({ ok: false, status: 409, text: async () => JSON.stringify({ error: { message: 'already submitted' } }) });
+    expect(await generate390File(decl, opts)).toEqual({ ok: false, error: 'http_409', serverMessage: 'already submitted' });
+    apiFetch.mockResolvedValue({
+      ok: false, status: 422,
+      text: async () => JSON.stringify({ error: { status: 422, code: 'INCOMPLETE_FISCAL_YEAR', message: 'm', year: 2025, missingPeriods: [12] } }),
+    });
+    expect(await generate390File(decl, opts)).toEqual({ ok: false, error: 'incomplete_fiscal_year', year: 2025, missingPeriods: [12] });
+    expect(downloads).toHaveLength(0);
+  });
+
+  it('reports a network failure, and no_token without an API base', async () => {
+    apiFetch.mockRejectedValue(new Error('down'));
+    expect(await generate390File(decl, opts)).toEqual({ ok: false, error: 'network' });
+    apiFetch.mockReset();
+    expect(await generate390File(decl, { token: 'tok' })).toEqual({ ok: false, error: 'no_token' });
+    expect(apiFetch).not.toHaveBeenCalled();
   });
 });
 
