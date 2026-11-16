@@ -15,7 +15,7 @@ const SNAKE_CASE_EVENT_NAME = /^[a-z0-9]+(?:_[a-z0-9]+)*$/;
 
 describe('observability event catalog', () => {
   it('defines the four interactive-report events (ETP-6080) with their properties', () => {
-    const base = ['specName', 'reportSessionId'];
+    const base = ['account_id', 'specName', 'reportSessionId'];
     expect(OBSERVABILITY_EVENTS.REPORT_OPENED).toMatchObject({ name: 'report_opened', properties: [...base, 'source', 'outcome', 'durationMs', 'errorCode'] });
     expect(OBSERVABILITY_EVENTS.REPORT_FILTER_APPLIED).toMatchObject({ name: 'report_filter_applied', properties: [...base, 'type', 'outcome', 'durationMs', 'errorCode'] });
     expect(OBSERVABILITY_EVENTS.REPORT_GROUP_TOGGLED).toMatchObject({ name: 'report_group_toggled', properties: [...base, 'type', 'outcome'] });
@@ -26,6 +26,12 @@ describe('observability event catalog', () => {
     }
     expect(buildObservabilityEvent(OBSERVABILITY_EVENTS.REPORT_GROUP_TOGGLED, { specName: 'profit-loss', reportSessionId: 's1', type: 'expand', outcome: 'success', name: 'Ventas' }).properties)
       .toEqual({ specName: 'profit-loss', reportSessionId: 's1', type: 'expand', outcome: 'success' });
+  });
+
+  it('declares account_id on the report and walkthrough events (ETP-6230)', () => {
+    for (const key of ['REPORT_OPENED', 'REPORT_FILTER_APPLIED', 'REPORT_GROUP_TOGGLED', 'REPORT_DRILLDOWN', 'WALKTHROUGH_STARTED', 'WALKTHROUGH_FINISHED']) {
+      expect(OBSERVABILITY_EVENTS[key].properties).toContain('account_id');
+    }
   });
 
   it('uses snake_case names for every event', () => {

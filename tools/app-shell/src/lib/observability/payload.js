@@ -25,6 +25,7 @@ const DENYLISTED_PROPERTY_KEYS = new Set([
 
 export const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'account_id',
+  'internal_user',
   'action',
   'accuracy',
   'app',
@@ -150,6 +151,7 @@ const BOOLEAN_EVENT_PROPERTY_KEYS = new Set([
   ...KPI_BOOLEAN_KEYS,
   'auto_opened',
   'enabled',
+  'internal_user',
   'mockMode',
   'supportRequested',
 ]);
