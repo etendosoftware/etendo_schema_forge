@@ -147,12 +147,20 @@ export default function ImportLinesModal({
   renderSelectionPanel,  // (selection) => node (usually an <ImportNotice>) shown in the fixed notice
                          // area under the list; null shows the neutral «Información de importación».
                          // Without this prop there is no notice area at all.
-  selectedDocumentsKey,  // i18n key ("{count} pedido(s)"): the footer and the import button then
-                         // count the DOCUMENTS with a selected line instead of the lines
   importButtonKey = 'importSelected', // i18n key of the import button, `{count}` = " (N)" or ""
   getSuccessToast,       // ({ count, importedDocIds, afterImportResult, partial, ...selection }) => { message, variant? } | null
                          // `partial` = some line imports failed: the modal shows its own warning and
                          // ALSO shows whatever this returns (e.g. a failed follow-up write).
+  isDocumentCovered,     // (doc) => boolean: true hides the document as fully imported from its own row,
+                         // lines not needed (for eagerLoadLines={false}); all hidden → allImportedMessageKey
+  getDocumentTotal,      // (doc) => number | null: the row total while the document's lines are NOT
+                         // loaded; once loaded (or null/undefined, or no prop) the sum of its lines
+  countLinesInFooter = false, // true: the footer reads «1 línea seleccionada» / «N líneas
+                              // seleccionadas»; false keeps the generic «N Seleccionados»
+  describeLine,          // (line, { imported }) => string | null: the note under a line's product
+                         // (e.g. the draft invoice holding it). On a greyed-out line null/absent
+                         // keeps the default («ya importado», or the line's draft shipments); on a
+                         // selectable line null shows no note. Up to 2 lines, full text as tooltip.
 }) {
   if (!linesEndpoint && !submitImport) {
     throw new Error('ImportLinesModal: linesEndpoint prop is required unless submitImport is provided');
@@ -177,6 +185,9 @@ export default function ImportLinesModal({
   // Last value the stepper reported per line: a −/+ click reports it through onChange and then
   // calls onStep in the same tick, before the draft state has re-rendered.
   const lastQtyInput = useRef({});
+  // Documents ticked while their lines were not loaded: selected as soon as the lines arrive,
+  // even when the read was already in flight (opened by the chevron just before the tick).
+  const selectOnLoad = useRef(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -226,6 +237,7 @@ export default function ImportLinesModal({
 
   const filtered = useMemo(() => {
     const visible = documents.filter(d => {
+      if (isDocumentCovered?.(d)) return false;
       const lines = docLines[d.id];
       if (!lines || lines.length === 0) return true;
       return lines.some(l => !l._alreadyImported);
@@ -233,7 +245,7 @@ export default function ImportLinesModal({
     if (!search.trim()) return visible;
     const q = search.toLowerCase();
     return visible.filter(d => (d.documentNo || '').toLowerCase().includes(q));
-  }, [documents, docLines, search]);
+  }, [documents, docLines, search, isDocumentCovered]);
 
   // Documents owning at least one selected line, in list order. Recomputed on every selection
   // change so callers can react live (see `renderSelectionPanel`).
@@ -273,8 +285,12 @@ export default function ImportLinesModal({
       const qtyDefaults = {};
       enrichedLines.forEach(l => { qtyDefaults[l.id] = l._maxQty || 0; });
       setLineQuantities(prev => ({ ...prev, ...qtyDefaults }));
-      if (autoSelectOnExpand || select) addToSelection(selectableIdsOf(enrichedLines));
-    } catch { /* silent */ } finally { setLoadingLines(prev => { const n = new Set(prev); n.delete(docId); return n; }); }
+      const ticked = selectOnLoad.current.delete(docId);
+      if (autoSelectOnExpand || select || ticked) addToSelection(selectableIdsOf(enrichedLines));
+    } catch {
+      // A failed read must not leave the tick pending: a later expand would auto-select.
+      selectOnLoad.current.delete(docId);
+    } finally { setLoadingLines(prev => { const n = new Set(prev); n.delete(docId); return n; }); }
   };
 
   const toggleExpand = (docId) => {
@@ -289,10 +305,14 @@ export default function ImportLinesModal({
     setSelected(prev => { const n = new Set(prev); n.has(lineId) ? n.delete(lineId) : n.add(lineId); return n; });
   };
 
+  // ETP-5828 (QA UI-3) — a document whose lines are not loaded yet (eagerLoadLines off) is
+  // opened, loaded AND selected by the same click: ticking it only to see it unfold, and having
+  // to tick it again, read as a lost click.
   const toggleDoc = (docId) => {
     const lines = docLines[docId] || [];
     if (lines.length === 0) {
       setExpanded(prev => { const n = new Set(prev); n.add(docId); return n; });
+      selectOnLoad.current.add(docId);
       loadLines(docId);
       return;
     }
@@ -431,24 +451,30 @@ export default function ImportLinesModal({
     ? formatCalendarDate(d, locale || 'es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
     : '-');
 
-  const countDocuments = !!selectedDocumentsKey;
-  const selectionSize = countDocuments ? selection.selectedDocuments.length : selected.size;
+  const selectionSize = selected.size;
   const importDisabled = selected.size === 0 || importing;
 
+  // ETP-5828 (QA UI-6) — with `countLinesInFooter` (the order popups) the footer counts the
+  // selected LINES in the singular or the plural: «1 línea seleccionada», «2 líneas seleccionadas».
+  // Every other popup keeps the generic «N Seleccionados».
+  const renderLinesCount = () => {
+    const one = selectionSize === 1;
+    return (
+      <>
+        <strong className="font-semibold">
+          {ui(one ? 'importLinesSelectedCountOne' : 'importLinesSelectedCountMany', { count: selectionSize })}
+        </strong>
+        {' '}{ui(one ? 'importLinesSelectedSuffixOne' : 'importLinesSelectedSuffixMany')}
+      </>
+    );
+  };
+
   const renderFooterHint = () => {
-    if (selected.size === 0) return ui('selectLinesToImport');
-    const text = countDocuments
-      ? (
-        <>
-          <strong className="font-semibold">{ui(selectedDocumentsKey, { count: selectionSize })}</strong>
-          {' '}{ui('importSelectedSuffix')}
-        </>
-      )
-      : ui('selected', { count: selected.size });
+    if (selectionSize === 0) return ui('selectLinesToImport');
     return (
       <>
         <CircleCheck size={20} aria-hidden="true" className={cn('shrink-0', ICON_COLOR)} data-testid="CircleCheck__b0ad7a" />
-        <span>{text}</span>
+        <span>{countLinesInFooter ? renderLinesCount() : ui('selected', { count: selectionSize })}</span>
       </>
     );
   };
@@ -531,6 +557,27 @@ export default function ImportLinesModal({
     return unitPrice != null ? unitPrice * lineQtyOf(line).displayQty : null;
   };
 
+  // The note under the product: ETP-5828 (QA BUG-1) it wraps onto a second line inside the same
+  // fixed column (clamped at 2, so the 64 px row never grows) with the full text as a tooltip —
+  // a draft invoice number truncated after «borrador FV1…» told the user nothing.
+  const defaultImportedNote = (line) => (line._inDraftShipments?.length
+    ? `${ui('inDraftShipment')}: ${line._inDraftShipments.join(', ')}`
+    : ui('alreadyImported'));
+
+  const renderLineNote = (line, imported) => {
+    const note = describeLine?.(line, { imported }) || (imported ? defaultImportedNote(line) : null);
+    if (!note) return null;
+    return (
+      <span
+        className="line-clamp-2 break-words text-xs leading-4 text-muted-foreground"
+        title={note}
+        data-testid={imported ? 'ImportLinesModal__importedNote' : 'ImportLinesModal__lineNote'}
+      >
+        {note}
+      </span>
+    );
+  };
+
   const renderLine = (line, docId) => {
     const imported = line._alreadyImported;
     const lineSelected = !imported && selected.has(line.id);
@@ -563,11 +610,7 @@ export default function ImportLinesModal({
         </span>
         <span className={cn('min-w-0 px-3', showPriceColumns ? 'w-[176px] shrink-0' : 'flex-1')}>
           <span className="block truncate font-semibold text-foreground">{line._productName}</span>
-          {imported && (
-            <span className="block truncate text-xs text-muted-foreground">
-              {line._inDraftShipments?.length ? `${ui('inDraftShipment')}: ${line._inDraftShipments.join(', ')}` : ui('alreadyImported')}
-            </span>
-          )}
+          {renderLineNote(line, imported)}
         </span>
         {showAvailableQtyColumn && (
           <span className="w-[90px] shrink-0 px-3 text-right tabular-nums text-muted-foreground">
@@ -632,9 +675,13 @@ export default function ImportLinesModal({
     // The plain sum of what the lines show; a line without a unit price (its cell shows «-»)
     // contributes the caller's `_lineNetAmount`, as before.
     const docTotalSign = negativeQuantity ? -1 : 1;
-    const docTotal = lines.length > 0
+    const linesTotal = lines.length > 0
       ? lines.reduce((sum, l) => sum + (lineAmountOf(l) ?? (l._lineNetAmount || 0) * docTotalSign), 0)
       : null;
+    // Loaded lines always win (the total follows quantity edits); the document's own total only
+    // stands in while its lines are not loaded yet.
+    const docOwnTotal = docLines[doc.id] === undefined ? getDocumentTotal?.(doc) : undefined;
+    const docTotal = Number.isFinite(docOwnTotal) ? docOwnTotal : linesTotal;
     return (
       <div key={doc.id} data-testid="ImportLinesModal__document" data-doc-id={doc.id}>
         <div

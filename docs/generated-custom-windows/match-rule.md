@@ -161,8 +161,10 @@ rounds, while every other list in the app (Cuentas, its Movimientos / Extractos 
 `ListView`) already offered a checkbox column and a bulk delete. Added here with the **same** parts,
 not a second implementation:
 
-- `hooks/useBulkRowDelete` — the confirm dialog, one `DELETE /{entity}/{id}` per row in parallel, and
-  the three-outcome toast (all / partial / none).
+- `hooks/useBulkRowDelete` — the confirm dialog, the delete itself and the three-outcome toast
+  (all / partial / none). Two or more rows on a spec URL are deleted by one server-side batch job
+  with a progress bar (ETP-6143). Otherwise, one `DELETE /{entity}/{id}` is sent per row in
+  parallel.
 - `components/financial-accounts/BulkDeleteSelectionBar` — the floating "N Seleccionados" pill
   (count + trash + close), itself built on the generic `SelectionToolbar` portal.
 

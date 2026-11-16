@@ -200,6 +200,14 @@ export async function runAfterProcess({ draftMode, saved, isNew, hook, navigate,
  * The secondary (outline) look for a Save button, identical to the one the draftMode
  * renderer has always used for Save Draft. Extracted so the two renderers cannot drift.
  */
+/**
+ * ETP-5889: `primarySave` is `true` (filled Save) or `'strong'` (filled Save plus the dedicated
+ * darker hover token). Typed through a helper so the string variant is not inferred as boolean-only.
+ * @param {boolean|'strong'} value
+ * @returns {boolean}
+ */
+const isStrongPrimary = (value) => value === 'strong';
+
 const SECONDARY_SAVE_CLS = 'bg-card border-[hsl(var(--border-control))] text-[hsl(var(--foreground))]';
 
 /**
@@ -500,7 +508,7 @@ function renderExistingRecordSaveAction({
   // `primarySave` to keep the default (primary) Button variant — the mirror of
   // `hasExternalPrimaryAction` on the new-record path. Named for the intent, not the window.
   const saveLook = primarySave
-    ? { className: saveBtnCls, iconColor: undefined }
+    ? { className: `${saveBtnCls}${isStrongPrimary(primarySave) ? ' hover:!bg-[var(--primary-hover-strong)]' : ''}`, iconColor: undefined }
     : { variant: 'outline', className: `${saveBtnCls} ${SECONDARY_SAVE_CLS}`, iconColor: 'hsl(var(--muted-foreground))' };
   return (
     <GateTooltip data-testid="GateTooltip__3b2291" title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} {...(saveLook.variant ? { variant: saveLook.variant } : {})} size="default" className={saveLook.className} data-testid="action-save" disabled={isDocumentReadOnly || busy || !isDirty || blockSaveForBalance || saveGate.blocked} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title} onClick={async () => {

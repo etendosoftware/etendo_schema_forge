@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/financial-accounts/AccountRowActions.jsx
 /**
  * AccountRowActions — the Cuentas row hover actions.
  *
@@ -7,13 +8,21 @@
  * ONE definition of the per-row testids (`account-row-edit-{id}`, `account-row-refresh-{id}`)
  * and of the sync-visibility rule (bank-connected accounts only), which is what this covers.
  */
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
+// The shared bank-sync state (BankSyncContext) is real; only its network edge is stubbed.
+const mockSync = vi.fn();
+vi.mock('@/hooks/useBankConnectionActions.js', () => ({
+  useBankConnectionActions: () => ({ sync: mockSync, syncStatus: vi.fn().mockResolvedValue({}) }),
+}));
+
 import { AccountRowActions } from '../AccountRowActions.jsx';
+import { BankSyncProvider, useBankSync } from '@/windows/custom/financial-account/BankSyncContext.jsx';
 
 // countryIso ES on purpose: "Conectar banco" is Spain-only since ETP-4896
 // (see saltEdgeEligibility.js), so a fixture without it would hide that action.
@@ -42,8 +51,9 @@ describe('AccountRowActions', () => {
 
     expect(screen.getByTestId('account-row-edit-acc-1'))
       .toHaveAttribute('aria-label', 'financeAccountsMenuEdit');
+    // ETP-6154 — the sync button's label is its tooltip text (bank-sync icon, PSD2 wording).
     expect(screen.getByTestId('account-row-refresh-acc-1'))
-      .toHaveAttribute('aria-label', 'financeAccountsMenuSyncNow');
+      .toHaveAttribute('aria-label', 'financeAccountsBankSyncTooltip');
   });
 
   it('shows the sync button only for bank-connected accounts', () => {
@@ -195,5 +205,93 @@ describe('AccountRowActions — read-only access tier (ETP-5457)', () => {
     expect(screen.getByTestId('account-row-menu-sync-acc-1')).toBeInTheDocument();
     expect(screen.getByTestId('account-row-menu-transfer-acc-1')).toBeInTheDocument();
     expect(screen.getByTestId('account-row-menu-delete-acc-1')).toBeInTheDocument();
+  });
+});
+
+// ETP-6154 — the row sync button reads the window's shared bank-sync state: while ANOTHER entry
+// point (here, a sibling standing in for the statements tab or the Edit modal) syncs the same
+// account, it is disabled, its badge spins and its label says the sync is in progress.
+describe('AccountRowActions — shared bank-sync state', () => {
+  const sibling = {};
+  function OtherEntryPoint() {
+    sibling.bankSync = useBankSync();
+    return null;
+  }
+
+  function renderInWindow(account = CONNECTED, props = {}) {
+    return render(
+      <BankSyncProvider>
+        <OtherEntryPoint />
+        <AccountRowActions account={account} {...props} />
+        <AccountRowActions account={{ ...CONNECTED, id: 'acc-9' }} />
+      </BankSyncProvider>,
+    );
+  }
+
+  let finishSync;
+  beforeEach(() => {
+    mockSync.mockReset();
+    mockSync.mockImplementation(() => new Promise((resolve) => { finishSync = resolve; }));
+  });
+
+  it('is enabled and idle while nothing syncs', () => {
+    renderInWindow();
+    const button = screen.getByTestId('account-row-refresh-acc-1');
+    expect(button).toBeEnabled();
+    expect(button).toHaveAttribute('aria-busy', 'false');
+    expect(screen.getByTestId('account-row-refresh-icon-acc-1')).toHaveAttribute('data-spinning', 'false');
+  });
+
+  it('disables and spins while another entry point syncs the same account', async () => {
+    const onBankConnectionAction = vi.fn();
+    renderInWindow(CONNECTED, { onBankConnectionAction });
+
+    await act(async () => { sibling.bankSync.startSync('acc-1'); });
+
+    const button = screen.getByTestId('account-row-refresh-acc-1');
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('aria-busy', 'true');
+    expect(button).toHaveAttribute('aria-label', 'financeAccountsBankSyncInProgress');
+    expect(screen.getByTestId('account-row-refresh-icon-acc-1')).toHaveAttribute('data-spinning', 'true');
+    fireEvent.click(button);
+    expect(onBankConnectionAction).not.toHaveBeenCalled();
+  });
+
+  it('leaves the rows of other accounts untouched', async () => {
+    renderInWindow();
+    await act(async () => { sibling.bankSync.startSync('acc-1'); });
+
+    expect(screen.getByTestId('account-row-refresh-acc-9')).toBeEnabled();
+    expect(screen.getByTestId('account-row-refresh-icon-acc-9')).toHaveAttribute('data-spinning', 'false');
+  });
+
+  it('shows the in-progress tooltip on the wrapper, which still receives the hover', async () => {
+    const user = userEvent.setup();
+    renderInWindow();
+    await act(async () => { sibling.bankSync.startSync('acc-1'); });
+
+    await user.hover(screen.getByTestId('account-row-refresh-wrap-acc-1'));
+
+    expect((await screen.findAllByText('financeAccountsBankSyncInProgress')).length).toBeGreaterThan(0);
+  });
+
+  it('shows the PSD2 tooltip while idle', async () => {
+    const user = userEvent.setup();
+    renderInWindow();
+
+    await user.hover(screen.getByTestId('account-row-refresh-wrap-acc-1'));
+
+    expect((await screen.findAllByText('financeAccountsBankSyncTooltip')).length).toBeGreaterThan(0);
+  });
+
+  it('is enabled again once the sync finishes', async () => {
+    renderInWindow();
+    await act(async () => { sibling.bankSync.startSync('acc-1'); });
+    expect(screen.getByTestId('account-row-refresh-acc-1')).toBeDisabled();
+
+    await act(async () => { finishSync({ status: 'OK' }); });
+
+    expect(screen.getByTestId('account-row-refresh-acc-1')).toBeEnabled();
+    expect(screen.getByTestId('account-row-refresh-icon-acc-1')).toHaveAttribute('data-spinning', 'false');
   });
 });

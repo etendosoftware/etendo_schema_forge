@@ -81,6 +81,11 @@ const BACKEND_ERROR_MAP = {
   // matching and has to become a parameterized matcher.
   'No active bank connection found for financial account %s. Connect the account first.':
     'backendError.psd2NoActiveConnection',
+  // ETP-6154 — not backend copy: the sentinel useBankConnectionActions throws when its own
+  // AbortController fires (the bank service never answered). A protocol token, so it maps to our
+  // label instead of reaching the user verbatim — from every bank-sync entry point, through the one
+  // notifier (financial-account/bankSyncNotify.js).
+  BANK_CONNECTION_TIMEOUT: 'financeAccountsBankConnectionTimeout',
   // Multi-currency payment registration (com.etendoerp.go PaymentCurrencyConverter, ETP-4504) — plain
   // English literals with no AD_MESSAGE behind them. The modal mirrors the first two client-side and
   // keeps the buttons disabled, so they are mostly unreachable; the format/non-positive ones are
@@ -206,12 +211,26 @@ const BACKEND_ERROR_MAP = {
   // Pre-checked so APRM_FIN_FINACC_TRAN_CHECK_TRG does not fire: a JDBC error escapes the
   // handler's OBException branch as an opaque 500.
   'The movement is already processed or posted. Select it on its own to delete it.': 'backendError.movementProcessedNotDeletable',
-  // The two statement refusals, in the order a user meets them.
+  // The statement delete refusals. ETP-6151 — a bank-connected account no longer refuses the
+  // delete outright (the former 409 "Statements from a bank-connected account cannot be deleted."
+  // is gone from BankStatementsHandler): a processed statement there is reactivated and deleted in
+  // one step unless it is posted (below) or has matched lines.
+  // Flag `psd2-statement-import-settings` off: the backend still refuses the delete outright.
   'Statements from a bank-connected account cannot be deleted.': 'backendError.statementBankConnectedNotDeletable',
+  'The statement is posted. Unpost it before deleting it.': 'backendError.statementPostedNotDeletable',
   'The statement has matched lines; unreconcile them before deleting': 'backendError.statementHasMatchedLines',
   // ETP-5471: create/import on a bank-connected account (BankStatementsHandler + the generic
   // financial-account statement entities).
   'This account is synchronized with the bank; statements cannot be created or imported manually.': 'backendError.statementBankConnectedNotCreatable',
+  // ETP-6151 — FinancialAccountBankConnectionHandler link / createAndLink / import-settings
+  // validation of the PSD2 import settings. The connect modal and the edit panel enforce both
+  // fields before sending, so these are a safety net; they reuse the fields' own required/range
+  // copy. The range one is reachable on link: an account may keep an older "Importar hasta".
+  'The import from date is required': 'financeAccountsBankConnectionImportFromRequired',
+  'The import from date is not a valid date (expected yyyy-MM-dd)': 'financeAccountsBankConnectionImportFromRequired',
+  'The statement grouping is required': 'financeAccountsBankConnectionGroupingRequired',
+  'The statement grouping must be one of 1BD, 1BW, 1BM, 1BE': 'financeAccountsBankConnectionGroupingRequired',
+  'The import from date cannot be later than the import to date': 'financeAccountsBankConnectionImportRangeInvalid',
   // ETP-5581: com.etendoerp.go AD_MESSAGE ETGO_StatementLineDiscarded (409 LINE_DISCARDED), the
   // refusal to reconcile a discarded line. Its key route is in BACKEND_ERROR_KEY_MAP; this text
   // entry serves the reconcile paths that forward only the message (the split panel's
@@ -496,6 +515,15 @@ const BACKEND_ERROR_KEY_MAP = {
   // same rationale as the CashCloseSupport matchers below: a raw BigDecimal string pasted into
   // Spanish copy renders the wrong decimal separator and no currency symbol.
   ETGO_InvoiceRectificationExceedsOriginal: 'backendError.invoiceRectificationExceedsOriginal',
+  // ETP-5745 CP-26 — com.etendoerp.go RectificationFiscalCodeGuard: completing a NON-rectificative
+  // invoice whose VERI*FACTU `etvfacInvType` is still a stray R1-R5 (left over from an earlier
+  // choice, e.g. the document type was reverted through a channel that skipped the UI callout's
+  // own clear-on-revert, such as a direct MCP/REST write). BLOCKS instead of silently correcting
+  // it to F1 — unlike that callout, which may still auto-clear it in the SAME gesture the user
+  // just made (reverting the document type); this guard is the backstop for state the user
+  // already brought to "Confirm", so correcting it without saying anything would hide a real
+  // mistake instead of surfacing it.
+  ETGO_InvoiceVerifactuInvTypeNotRectificative: 'backendError.verifactuInvTypeNotRectificative',
   // ETP-5692 — core `PostedDocument` ("Document already Posted."), which DocumentPostingService
   // now names instead of the misleading "being posted by another process" when a post hits a
   // document someone else already posted. Resolved in the GO locale server-side, so mapping it
@@ -533,6 +561,58 @@ const BACKEND_ERROR_KEY_MAP = {
   ETGO_FinAccCountryRequired: 'backendError.countryRequired',
   ETGO_FinAccInvalidCountry: 'backendError.invalidCountry',
   ETGO_FinAccIbanRequiresCountry: 'backendError.countryIban',
+  // ETP-6148 — every remittance endpoint answers 403 with this key while the sepa-remittances flag
+  // is off (SepaRemittancesFlag.featureDisabled).
+  ETGO_SepaRemittancesDisabled: 'backendError.sepaRemittancesDisabled',
+  // ETP-6148 — the remittance header's account refusals (RemittanceHeaderHandler, 422 on a create or
+  // update that sets financialAccount): not a bank account, no valid IBAN, or no remittance payment
+  // methods linked (an account created before the feature, or with the flag off; no backfill).
+  // There is no per-account «Admite remesas» switch any more: Bank accounts get the methods when
+  // they are created, and that create answers 409 ETGO_RemittanceProvisioningConflict on a race
+  // (retry).
+  ETGO_RemittanceAccountNotBank: 'backendError.remittanceAccountNotBank',
+  ETGO_RemittanceAccountIbanRequired: 'backendError.remittanceAccountIbanRequired',
+  ETGO_RemittanceAccountNotAllowed: 'backendError.remittanceAccountNotAllowed',
+  ETGO_RemittanceProvisioningConflict: 'backendError.remittanceProvisioningConflict',
+  // ETP-6148 — FinancialAccountHandler: a financial-account update that changes `type` from Bank
+  // to Cash or Card while the account has open SEPA remittances (REM status PE, PR, CP or PP of a
+  // provisioned type), 422. Not gated by the flag. The backend embeds the open count as `{0}` and
+  // sends no `messageParams`, so the sentence takes `{count}`: while the param is absent the key
+  // route yields (UNFILLED_PARAM) and the backend's own text, already in the request language and
+  // carrying the count, is shown — never a sentence without the number.
+  ETGO_RemittanceAccountTypeChangeBlocked: 'backendError.remittanceAccountTypeChangeBlocked',
+  // ETP-6148 — RemittanceMethodLinkObserver (DAL): a SEPA remittance payment method added to, or
+  // reactivated on, a non-Bank account (financial-account paymentMethod tab, MCP etendo_create /
+  // etendo_update, or Classic). 422 business_rule.
+  ETGO_RemittanceMethodAccountNotAllowed: 'backendError.remittanceMethodAccountNotAllowed',
+  // ETP-6148 — RemittanceHeaderHandler: a new or changed «Fecha de cargo/abono» earlier than
+  // today (422). The SPA blocks it first through the field's `minDate`; this is the safety net.
+  ETGO_RemittanceDueDatePast: 'backendError.remittanceDueDatePast',
+  // ETP-6148 — «Seleccionar desde factura» refusals (RemittanceHeaderHandler availableDueItems /
+  // selectDueItems / syncDueItems, 422). ETGO_RemittanceDueItemsSelectionFailed embeds the cause as `{0}` and the
+  // backend sends no `messageParams`, so its sentence takes a `{detail}` param: while the param is
+  // absent the key route yields (UNFILLED_PARAM) and the backend's own text, already in the request
+  // language and carrying the cause, is shown instead.
+  ETGO_RemittanceProcessedNotEditable: 'backendError.remittanceProcessedNotEditable',
+  ETGO_RemittanceTypeOrAccountMissing: 'backendError.remittanceTypeOrAccountMissing',
+  ETGO_RemittanceDueItemsRequired: 'backendError.remittanceDueItemsRequired',
+  ETGO_RemittanceDueItemNotAvailable: 'backendError.remittanceDueItemNotAvailable',
+  ETGO_RemittanceDueItemsSelectionFailed: 'backendError.remittanceDueItemsSelectionFailed',
+  // ETP-6148 round 3 — «A remesar» edits (lines PATCH) and the picker sync (syncDueItems, 422).
+  // The amount refusal's sentence takes no number: the SPA has already refused the same values
+  // inline (lib/boundedAmount.js) with the exact maximum, so this is the safety net.
+  ETGO_RemittanceLineAmountInvalid: 'backendError.remittanceLineAmountInvalid',
+  ETGO_RemittanceLineAmountNotEditable: 'backendError.remittanceLineAmountNotEditable',
+  ETGO_RemittanceDueItemNotIncluded: 'backendError.remittanceDueItemNotIncluded',
+  // ETP-6148 — «Procesar» / «Reactivar» (RemittanceHeaderHandler process / reactivate, 422). The
+  // two *Failed keys carry REM's own text as `{0}` with no `messageParams`, so their sentences
+  // take `{detail}`: without the param the key route yields and REM's text, already in the
+  // request language, is shown (same rule as SelectionFailed above).
+  ETGO_RemittanceAlreadyProcessed: 'backendError.remittanceAlreadyProcessed',
+  ETGO_RemittanceNoLines: 'backendError.remittanceNoLines',
+  ETGO_RemittanceProcessFailed: 'backendError.remittanceProcessFailed',
+  ETGO_RemittanceNotProcessed: 'backendError.remittanceNotProcessed',
+  ETGO_RemittanceReactivateFailed: 'backendError.remittanceReactivateFailed',
   // ETP-5684 — NeoAccountingAccessPolicy (com.etendoerp.go): a post/unpost from a role without
   // Show Accounting Fields. The SPA hides those actions, so this reaches only a stale screen.
   ETGO_AccountingAccessDenied: 'backendError.accountingAccessDenied',
@@ -742,6 +822,28 @@ function translateInvoiceReactivateFiscalRectified(messageKeys, messageParams, t
     ? messageParams.rectificativas.join(', ')
     : messageParams.rectificativas;
   return resolveLocaleKey(t, 'backendError.invoiceReactivateFiscalRectified', { fiscalSystem, rectificativas });
+}
+
+const RECTIFICATION_CODE_REQUIRED_KEY = 'ETGO_InvoiceRectificationCodeRequired';
+
+/**
+ * `ETGO_InvoiceRectificationCodeRequired` (`RectificationFiscalCodeGuard.java`, ETP-5745 CP-19):
+ * same reason as {@link translateInvoiceReactivateFiscalRectified} just above — this message
+ * needs the locale-aware conjunction join ("SII y TicketBAI" / "SII and TicketBAI"), which the
+ * generic key route's `toInterpolationParams` (plain comma join) does not give. The backend's
+ * `message` field is deliberately English prose (the wire contract for MCP/scripts); the SPA
+ * never shows it — it renders this localized sentence from `messageParams.systems` instead, a
+ * raw JSON array of system names ("SII", "TicketBAI", "Verifactu"), in the dynamic subset the
+ * guard found still missing their own rectification code/motive.
+ */
+function translateRectificationCodeRequired(messageKeys, messageParams, t) {
+  if (!Array.isArray(messageKeys) || !messageKeys.includes(RECTIFICATION_CODE_REQUIRED_KEY)) return null;
+  if (!messageParams || typeof messageParams !== 'object') return null;
+  const systems = Array.isArray(messageParams.systems)
+    ? joinWithConjunction(messageParams.systems, t)
+    : messageParams.systems;
+  if (!systems) return null;
+  return resolveLocaleKey(t, 'backendError.rectificationCodeRequired', { systems });
 }
 
 // ETP-5840 — the exchange-rate refusals of com.etendoerp.go, rendered from their identity.
@@ -1799,7 +1901,17 @@ const GENERIC_CODE_MESSAGES = {
   forbidden: ['This action is not allowed for the current role.', 'backendError.forbidden'],
 };
 // service_unavailable carries a sanitized, non-fixed text, so it is translated by code alone.
-const CODE_ONLY_KEYS = { service_unavailable: 'backendError.serviceUnavailable' };
+// ETP-6154 — BANK_SYNC_LOCK_UNAVAILABLE: the PSD2 bridge could not take the per-account sync lock
+// (no pooled connection to hold it), so it refused rather than risk duplicated statement lines. Its
+// message is server prose; the code is the identity, and the refusal is retryable.
+// ETP-6154 — BANK_SYNC_DUPLICATE_CHECK_FAILED: the import could not verify whether some bank
+// transactions were already imported, so it skipped them rather than risk duplicates. Arrives on an
+// ERROR or WARNING sync result; same rule as the lock code.
+const CODE_ONLY_KEYS = {
+  service_unavailable: 'backendError.serviceUnavailable',
+  BANK_SYNC_LOCK_UNAVAILABLE: 'backendError.bankSyncLockUnavailable',
+  BANK_SYNC_DUPLICATE_CHECK_FAILED: 'backendError.bankSyncDuplicateCheckFailed',
+};
 
 function translateByCode(msg, t, code) {
   if (!code) return null;
@@ -1891,6 +2003,20 @@ export function translateImportRefusal(body, t, fallback) {
 
 export function isDuplicateConflict(status, code) {
   return status === 409 && (!code || code === 'duplicate_key');
+}
+
+/**
+ * ETP-6148 — whether a refusal names a backend message this module translates by key
+ * (BACKEND_ERROR_KEY_MAP). A code-less 409 is read as «duplicate name» by isDuplicateConflict, but
+ * a 409 sent through NeoMessageText (e.g. ETGO_RemittanceProvisioningConflict, a «try again» on a
+ * Bank account create) has no `code` and DOES carry its identity in `messageKeys`; callers check
+ * this first so such a refusal is translated instead of being shown as «the name already exists».
+ *
+ * @param {string[]|undefined} messageKeys - from extractBackendMessageKeys
+ * @returns {boolean}
+ */
+export function hasMappedMessageKey(messageKeys) {
+  return Array.isArray(messageKeys) && messageKeys.some((key) => Boolean(BACKEND_ERROR_KEY_MAP[key]));
 }
 
 function codeEntry(data) {
@@ -2037,6 +2163,11 @@ export function translateBackendError(msg, t, options = {}) {
   const reactivateFiscal = translateInvoiceReactivateFiscalRectified(
     options.messageKeys, options.messageParams, t);
   if (reactivateFiscal !== null) return reactivateFiscal;
+
+  // ETP-5745 CP-19: same reason — translateRectificationCodeRequired's conjunction join too.
+  const rectificationCodeRequired = translateRectificationCodeRequired(
+    options.messageKeys, options.messageParams, t);
+  if (rectificationCodeRequired !== null) return rectificationCodeRequired;
 
   // Key route first: it is the only one that can resolve a message whose text is unmatchable by
   // construction. Runs even when `msg` is empty — the keys alone carry enough to say what failed.

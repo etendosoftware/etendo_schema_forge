@@ -112,6 +112,8 @@ describe('ETP-5350 — the template example keys', () => {
       // synonym in both), so the vendor example needs no key. `customer` ("Yes"/"Sí") has one.
       // The column is in the contract while `contact-category-type` is OFF (`hiddenWhenFlag`).
       'vendor',
-    ]);
+      // ETP-6206: a building number ("12") reads the same in every language.
+      'buildingNumber',
+    ].sort());
   });
 });

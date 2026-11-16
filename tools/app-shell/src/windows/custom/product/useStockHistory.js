@@ -10,7 +10,7 @@ import { computePeriodRange, SIDEBAR_PERIOD_OPTIONS } from './productSidebarPeri
 export const HISTORY_PAGE_SIZE = 500;
 export const HISTORY_MAX_PAGES = 10;
 
-const EMPTY_STATE = { stockRows: null, transactions: null, partial: false };
+const EMPTY_STATE = { stockRows: null, transactions: null, partial: false, stockFailed: false, historyFailed: false };
 const WIDEST_MONTHS = Math.max(...SIDEBAR_PERIOD_OPTIONS.map(o => o.months));
 
 /** Start of the widest window the panel can show, as a local calendar day. */
@@ -38,18 +38,19 @@ async function readRows(apiFetch, path, signal) {
 /**
  * Reads every page of movements of the window. Stops on the first page with fewer than a full page of
  * rows (totalRows is only a lower bound, so it is never used). Reaching HISTORY_MAX_PAGES full pages
- * returns `partial: true`. A failed page ends the read with what was loaded so far (empty if none).
- * @returns {Promise<{rows: object[], partial: boolean}>}
+ * returns `partial: true`. A failed page ends the read with what was loaded so far; when it is the
+ * first page the read is `failed: true` (a failure, not an empty history).
+ * @returns {Promise<{rows: object[], partial: boolean, failed: boolean}>}
  */
 export async function loadMovementHistory(apiFetch, productId, start, signal) {
   const rows = [];
   for (let page = 0; page < HISTORY_MAX_PAGES; page++) {
     const data = await readRows(apiFetch, buildHistoryPageQuery(productId, start, page * HISTORY_PAGE_SIZE), signal);
-    if (!data) return { rows, partial: false };
+    if (!data) return { rows, partial: false, failed: page === 0 };
     rows.push(...data);
-    if (data.length < HISTORY_PAGE_SIZE) return { rows, partial: false };
+    if (data.length < HISTORY_PAGE_SIZE) return { rows, partial: false, failed: false };
   }
-  return { rows, partial: true };
+  return { rows, partial: true, failed: false };
 }
 
 /**
@@ -58,7 +59,10 @@ export async function loadMovementHistory(apiFetch, productId, start, signal) {
  * effect keyed on it re-fired both requests with identical results. The ref always holds the latest
  * one, which reads the live token at request time. A stale run (product changed, unmount, StrictMode
  * replay) is aborted and its answer ignored.
- * @returns {{stockRows: object[]|null, transactions: object[]|null, partial: boolean}}
+ * A failed read is never collapsed into an empty one: a failed `/stock` leaves `stockRows` null and sets
+ * `stockFailed` (the panel shows "unavailable", not 0); a failed history sets `historyFailed` (with
+ * `transactions: []`, so the read counts as finished). A legitimately empty product has `[]` and no flag.
+ * @returns {{stockRows: object[]|null, transactions: object[]|null, partial: boolean, stockFailed: boolean, historyFailed: boolean}}
  */
 export function useStockHistory(recordId, apiFetch) {
   const apiFetchRef = useRef(apiFetch);
@@ -73,11 +77,11 @@ export function useStockHistory(recordId, apiFetch) {
     const live = (patch) => { if (!signal.aborted) setState(prev => ({ ...prev, ...patch })); };
 
     readRows(apiFetchRef.current, `/stock?parentId=${recordId}&_startRow=0&_endRow=200`, signal)
-      .then(rows => live({ stockRows: rows ?? [] }))
-      .catch(() => live({ stockRows: [] }));
+      .then(rows => live(rows ? { stockRows: rows } : { stockRows: null, stockFailed: true }))
+      .catch(() => live({ stockRows: null, stockFailed: true }));
     loadMovementHistory(apiFetchRef.current, recordId, historyWindowStart(), signal)
-      .then(({ rows, partial }) => live({ transactions: rows, partial }))
-      .catch(() => live({ transactions: [], partial: false }));
+      .then(({ rows, partial, failed }) => live({ transactions: rows, partial, historyFailed: failed }))
+      .catch(() => live({ transactions: [], partial: false, historyFailed: true }));
 
     return () => controller.abort();
   }, [recordId]);

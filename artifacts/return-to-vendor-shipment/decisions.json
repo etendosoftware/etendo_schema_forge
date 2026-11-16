@@ -79,7 +79,6 @@
   "entities": {
     "header": {
       "name": "returnToVendorShipment",
-      "javaQualifier": "returnToVendorShipmentHeaderHandler",
       "virtualFields": [
         {
           "name": "sourceReceiptDocNo",

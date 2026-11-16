@@ -8,6 +8,7 @@ import ImportFromPurchaseOrderModal from './ImportFromPurchaseOrderModal';
 import ImportFromGoodsReturnModal from './ImportFromGoodsReturnModal';
 import ImportFromSourceInvoiceModal from './ImportFromSourceInvoiceModal';
 import { getApSubtype } from './purchaseInvoiceSubtype';
+import { IMPORT_SAVE_OPTIONS } from '@/windows/custom/shared/importSaveOptions.js';
 
 /* eslint-disable react/prop-types */
 
@@ -56,7 +57,7 @@ function PurchaseInvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, re
   const handleImportClick = (type, setter) => async () => {
     pendingModal.current = type;
     if (onSave) {
-      const shouldOpen = await onSave(type);
+      const shouldOpen = await onSave(type, IMPORT_SAVE_OPTIONS);
       if (!shouldOpen) return;
     }
     setter(true);
@@ -201,7 +202,7 @@ const PurchaseInvoiceLineActions = forwardRef(function PurchaseInvoiceLineAction
   const openModal = (type, setter) => async () => {
     pendingModal.current = type;
     if (onSave) {
-      const shouldOpen = await onSave(type);
+      const shouldOpen = await onSave(type, IMPORT_SAVE_OPTIONS);
       if (!shouldOpen) return;
     }
     setter(true);

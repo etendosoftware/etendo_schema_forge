@@ -25,6 +25,9 @@ import { InlineSearchCombo } from './InlineSearchCombo.jsx';
 import { PillToggle } from '@/components/PillToggle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { resolveLookupDrawer } from './lookupDrawers.js';
+import { resolveColumnLink } from './fkNavigation.js';
+import { ResettableAmountInput } from './ResettableAmountInput.jsx';
+import { RecordLink } from './RecordLink.jsx';
 import { committedItemFromRow } from './selectorSelection.js';
 import { renderNeutralTagCell } from './DataTable.cellRenderers.jsx';
 import { columnFlex, isLineGridColumn, withLinesAbsorberColumn } from '@/lib/linesColumnWidth.js';
@@ -423,7 +426,7 @@ function useHorizontalOverflow(ref, enabled, columns, rowCount) {
  * as "this button is engaged" without a new colour.
  */
 function renderRowActionStrip({
-  showActions, reserveActionSlot, isEditing, isDeleting, ui, onEdit, onDelete, canDelete = true, extraActions = [],
+  showActions, reserveActionSlot, isEditing, isDeleting, ui, onEdit, onDelete, canDelete = true, canEdit = true, extraActions = [],
 }) {
   if (!showActions && !reserveActionSlot) return null;
   return (
@@ -447,15 +450,17 @@ function renderRowActionStrip({
               <Icon className="h-5 w-5" data-testid={`${key}Icon__3b7ec2`} />
             </button>
           ))}
-          <button
-            type="button"
-            aria-label={ui('editLineTooltip') ?? 'Edit line'}
-            title={ui('editLineTooltip') ?? 'Edit line'}
-            onClick={onEdit}
-            className={isEditing ? `${ROW_ACTION_BUTTON_NEUTRAL} ${ROW_ACTION_BUTTON_ACTIVE}` : ROW_ACTION_BUTTON_NEUTRAL}
-          >
-            <IconicEditIcon className="h-5 w-5" data-testid="Pencil__3b7ec2" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              aria-label={ui('editLineTooltip') ?? 'Edit line'}
+              title={ui('editLineTooltip') ?? 'Edit line'}
+              onClick={onEdit}
+              className={isEditing ? `${ROW_ACTION_BUTTON_NEUTRAL} ${ROW_ACTION_BUTTON_ACTIVE}` : ROW_ACTION_BUTTON_NEUTRAL}
+            >
+              <IconicEditIcon className="h-5 w-5" data-testid="Pencil__3b7ec2" />
+            </button>
+          )}
           {canDelete && (
             <button
               type="button"
@@ -632,8 +637,31 @@ function computeLineCellStyle({ editable, isNumeric, col, idx }) {
   };
 }
 
+/**
+ * ETP-6148 — the cell of a column that declares `editInPlace` (decisions.json): an always-visible
+ * amount input with a reset button, outside the row's edit mode. `resetToField` / `maxField` name
+ * the sibling fields holding the value the reset restores and the bound the amount may not
+ * exceed. The commit goes through the panel's own `commitField` → `onUpdateRow`, like any inline
+ * edit; a refused value is toasted and stays on screen.
+ */
+function renderInPlaceAmountCell({ col, row, locale, t, onCommit }) {
+  const { resetToField, maxField } = col.editInPlace;
+  const currency = col.currencyField ? resolveRowCurrency(row, col, undefined) : undefined;
+  return (
+    <ResettableAmountInput
+      value={row[col.key]}
+      resetValue={resetToField ? row[resetToField] : undefined}
+      max={maxField ? row[maxField] : undefined}
+      currency={currency}
+      onCommit={(value) => onCommit(row, col, String(value))}
+      onInvalid={(message) => toast.error(message)}
+      ariaLabel={resolveColumnLabel(col, locale, t)}
+      data-testid={`line-in-place-${col.key}-${row.id}`} />
+  );
+}
+
 function renderLineCell({
-  col, idx, row, isEditing, isDocumentReadOnly,
+  col, idx, row, isEditing, isDocumentReadOnly, rowEditDisabled = false, inPlaceEditable = false,
   visibleColumns, hasRowClick,
   entity, token, apiBaseUrl, selectorContext, invalidCell, focusColIdx,
   locale, t, ui, onCommit, onCellClick, cellBadges,
@@ -641,12 +669,13 @@ function renderLineCell({
   // ETP-5600 — no cell is ever hidden for the action strip any more: an editable
   // table reserves its own slot, and a read-only one never shows the strip.
   const isNumeric = NUMERIC_TYPES.has(col.type);
-  const editable = isEditing && isCellEditable(col);
+  const inPlace = Boolean(col.editInPlace) && inPlaceEditable;
+  const editable = !inPlace && isEditing && isCellEditable(col);
   const noTruncate = isNoTruncateColumn(col);
-  const baseStyle = computeLineCellStyle({ editable, isNumeric, col, idx });
+  const baseStyle = computeLineCellStyle({ editable: editable || inPlace, isNumeric, col, idx });
 
-  const cellClickable = !isEditing && !hasRowClick && !isDocumentReadOnly;
-  const cellContent = editable ? (
+  const cellClickable = !inPlace && !isEditing && !hasRowClick && !isDocumentReadOnly && !rowEditDisabled;
+  const readOrEditContent = editable ? (
     <EditCell
       // Re-key on the underlying value so the uncontrolled <Input> re-hydrates
       // its defaultValue whenever a callout updates this field externally
@@ -678,6 +707,7 @@ function renderLineCell({
       ui={ui}
       data-testid="ReadCell__3b7ec2" />
   );
+  const cellContent = inPlace ? renderInPlaceAmountCell({ col, row, locale, t, onCommit }) : readOrEditContent;
 
   // ETP-4888 — optional per-column trailing badge (e.g. the amber "needs SIF
   // config" trigger next to an invoice line's tax value), see `cellBadges` on
@@ -876,6 +906,16 @@ function renderStringReadCell(display, col) {
 }
 
 function ReadCell({ row, col, locale, t, ui }) {
+  const linkTo = col.link ? resolveColumnLink(col.link, row) : null;
+  // ETP-6148 — a column `link` (decisions.json): mounted only for a resolvable route, so a panel
+  // rendered without a Router never reaches RecordLink's useNavigate.
+  if (linkTo) {
+    return (
+      <RecordLink to={linkTo} iconTestId="ArrowUpRight__3b7ec2" data-testid={`line-link-${col.key}`}>
+        {resolveIdentifier(row, col.key) ?? ''}
+      </RecordLink>
+    );
+  }
   if (typeof col.render === 'function') {
     return col.render(row, {});
   }
@@ -1254,6 +1294,10 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // The add-row config. Only its `fields` are read here: the inline commit applies
   // `onSelectMappings` from those entry fields, not from the grid columns.
   addRow,
+  // ETP-6148 — `entities.<name>.rowEdit: false` (decisions.json): the rows are never edited in
+  // place. No Edit action in the hover strip and a click does not enter edit mode; delete and
+  // any caller `rowActions` stay. Defaults to false, so every other caller is unchanged.
+  rowEditDisabled = false,
 }, ref) {
   const ui = useUI();
   const t = useLabel(labelOverrides);
@@ -1649,23 +1693,23 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // --- Action handlers ---------------------------------------------------------
 
   const handleEditClick = useCallback((row) => {
-    if (isDocumentReadOnly) return;
+    if (isDocumentReadOnly || rowEditDisabled) return;
     if (onEditRow) {
       onEditRow(row);
       return;
     }
     setFocusColIdx(null);
     setEditingRowId(prev => (prev === row.id ? null : row.id));
-  }, [isDocumentReadOnly, onEditRow]);
+  }, [isDocumentReadOnly, rowEditDisabled, onEditRow]);
 
   const handleCellClick = useCallback((row, idx, col) => {
-    if (isDocumentReadOnly) return;
+    if (isDocumentReadOnly || rowEditDisabled) return;
     if (onEditRow) { onEditRow(row); return; }
     if (onRowClick) return;
     if (editingRowId === row.id) return;
     setFocusColIdx(isCellEditable(col) ? idx : null);
     setEditingRowId(row.id);
-  }, [isDocumentReadOnly, onEditRow, onRowClick, editingRowId]);
+  }, [isDocumentReadOnly, rowEditDisabled, onEditRow, onRowClick, editingRowId]);
 
   // Centralized Escape-to-cancel handler. A single row-level `onKeyDown` (see
   // the row wrapper below) bubbles here from ANY focused descendant control —
@@ -1864,7 +1908,8 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
             </div>
             {/* Cells */}
             {visibleColumns.map((col, idx) => renderLineCell({
-              col, idx, row, isEditing, isDocumentReadOnly,
+              col, idx, row, isEditing, isDocumentReadOnly, rowEditDisabled,
+              inPlaceEditable: !isDocumentReadOnly && Boolean(onUpdateRow),
               visibleColumns, hasRowClick: Boolean(onRowClick),
               entity, token, apiBaseUrl, selectorContext, invalidCell, focusColIdx,
               locale, t, ui, onCommit: commitField, onCellClick: handleCellClick, cellBadges,
@@ -1888,6 +1933,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
               onEdit: () => handleEditClick(row),
               onDelete: () => handleDeleteClick(row),
               canDelete,
+              canEdit: !rowEditDisabled,
               extraActions: [
                 ...(hasDimensionsPanel ? [{
                   key: 'dimensions',

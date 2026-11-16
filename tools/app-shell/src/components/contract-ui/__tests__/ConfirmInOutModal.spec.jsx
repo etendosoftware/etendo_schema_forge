@@ -968,4 +968,136 @@ describe('ConfirmInOutModal', () => {
       resolveFetch?.({ ok: true, json: async () => ({ response: { data: {} } }) });
     });
   });
+
+  // ETP-6179 — the mandatory "Datos fiscales" step: the source document is only completed once the
+  // invoice's SIF fields are settled, so nothing is written until the final confirm on the step.
+  describe('fiscal data step (ETP-6179)', () => {
+    const PREVIEW = {
+      systems: ['SII'],
+      rectificative: false,
+      fields: { etsgDateOperation: '2026-11-10', aeatsiiDescripcionSii: 'Venta' },
+      fieldSpecs: [
+        { name: 'etsgDateOperation', system: 'SII', type: 'date' },
+        { name: 'aeatsiiDescripcionSii', system: 'SII', type: 'text' },
+      ],
+      siiAuthorizationAvailable: false,
+    };
+    const SIF_PROPS = { ...BASE_PROPS, defaultCreateInvoice: true };
+
+    function mockSif(answer) {
+      const fetchMock = vi.fn((url) => {
+        if (String(url).includes('/action/sifDefaults')) return answer();
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ response: { data: { id: 'INV-001', documentNo: 'FAC-001', documentStatus: 'CO' } } }),
+        });
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      return fetchMock;
+    }
+    const ok = (data) => () => Promise.resolve({ ok: true, status: 200, json: async () => ({ response: { data } }) });
+    const callsTo = (fetchMock, action) => fetchMock.mock.calls.filter(([u]) => String(u).includes(`/action/${action}`));
+    const primary = () => screen.getByTestId('confirm-modal-confirm-btn');
+
+    it('shows the step when a system is active and writes nothing yet', async () => {
+      const fetchMock = mockSif(ok(PREVIEW));
+      render(<ConfirmInOutModal {...SIF_PROPS} />);
+      fireEvent.click(primary());
+
+      await screen.findByTestId('invoice-sif-step');
+      expect(screen.getByText('invoiceSifStep.title')).toBeInTheDocument();
+      expect(screen.queryByTestId('confirm-modal-invoice-toggle')).not.toBeInTheDocument();
+      expect(String(callsTo(fetchMock, 'sifDefaults')[0][0])).toBe('/sws/neo/goods-shipment/goodsShipment/REC-001/action/sifDefaults');
+      expect(callsTo(fetchMock, 'documentAction')).toHaveLength(0);
+      expect(callsTo(fetchMock, 'createInvoice')).toHaveLength(0);
+      expect(BASE_PROPS.onConfirmed).not.toHaveBeenCalled();
+    });
+
+    it('confirming on the step completes the document, then sends sifFields in the invoice POST', async () => {
+      const fetchMock = mockSif(ok(PREVIEW));
+      render(<ConfirmInOutModal {...SIF_PROPS} />);
+      fireEvent.click(primary());
+      await screen.findByTestId('invoice-sif-step');
+      fireEvent.change(screen.getByTestId('Input__sifstep_aeatsiiDescripcionSii'), { target: { value: 'Editada' } });
+      fireEvent.click(primary());
+
+      await waitFor(() => expect(BASE_PROPS.onConfirmed).toHaveBeenCalledTimes(1));
+      const order = fetchMock.mock.calls.map(([u]) => String(u).split('/action/')[1]);
+      expect(order).toEqual(['sifDefaults', 'documentAction', 'createInvoice']);
+      const [, init] = callsTo(fetchMock, 'createInvoice')[0];
+      expect(JSON.parse(init.body).sifFields).toEqual({ ...PREVIEW.fields, aeatsiiDescripcionSii: 'Editada' });
+    });
+
+    it('Atrás keeps the edits and shows the first screen again', async () => {
+      const fetchMock = mockSif(ok(PREVIEW));
+      render(<ConfirmInOutModal {...SIF_PROPS} />);
+      fireEvent.click(primary());
+      await screen.findByTestId('invoice-sif-step');
+      fireEvent.change(screen.getByTestId('Input__sifstep_aeatsiiDescripcionSii'), { target: { value: 'Editada' } });
+
+      fireEvent.click(screen.getByTestId('confirm-modal-sif-back-btn'));
+      expect(screen.queryByTestId('invoice-sif-step')).not.toBeInTheDocument();
+      expect(screen.getByTestId('confirm-modal-invoice-toggle')).toBeInTheDocument();
+      expect(screen.getByText('Confirm Shipment')).toBeInTheDocument();
+
+      fireEvent.click(primary());
+      await screen.findByTestId('invoice-sif-step');
+      expect(screen.getByTestId('Input__sifstep_aeatsiiDescripcionSii')).toHaveValue('Editada');
+      expect(callsTo(fetchMock, 'documentAction')).toHaveLength(0);
+    });
+
+    it('cancelling on the step closes without confirming the source document', async () => {
+      const fetchMock = mockSif(ok(PREVIEW));
+      render(<ConfirmInOutModal {...SIF_PROPS} />);
+      fireEvent.click(primary());
+      await screen.findByTestId('invoice-sif-step');
+      fireEvent.click(screen.getByTestId('confirm-modal-cancel-btn'));
+
+      expect(BASE_PROPS.onClose).toHaveBeenCalledTimes(1);
+      expect(callsTo(fetchMock, 'documentAction')).toHaveLength(0);
+      expect(callsTo(fetchMock, 'createInvoice')).toHaveLength(0);
+    });
+
+    it('never asks for the preview when the invoice toggle is off', async () => {
+      const fetchMock = mockSif(ok(PREVIEW));
+      render(<ConfirmInOutModal {...BASE_PROPS} />);
+      fireEvent.click(primary());
+      await waitFor(() => expect(BASE_PROPS.onConfirmed).toHaveBeenCalledTimes(1));
+      expect(callsTo(fetchMock, 'sifDefaults')).toHaveLength(0);
+      expect(screen.queryByTestId('invoice-sif-step')).not.toBeInTheDocument();
+    });
+
+    it('goes straight on, without sifFields, when no fiscal system is active', async () => {
+      const fetchMock = mockSif(ok({ systems: [], fields: {}, fieldSpecs: [] }));
+      render(<ConfirmInOutModal {...SIF_PROPS} />);
+      fireEvent.click(primary());
+      await waitFor(() => expect(BASE_PROPS.onConfirmed).toHaveBeenCalledTimes(1));
+      expect(screen.queryByTestId('invoice-sif-step')).not.toBeInTheDocument();
+      expect(JSON.parse(callsTo(fetchMock, 'createInvoice')[0][1].body)).not.toHaveProperty('sifFields');
+    });
+
+    it('fails open: a preview that fails goes straight on without the step', async () => {
+      const fetchMock = mockSif(() => Promise.reject(new TypeError('Failed to fetch')));
+      render(<ConfirmInOutModal {...SIF_PROPS} />);
+      fireEvent.click(primary());
+      await waitFor(() => expect(BASE_PROPS.onConfirmed).toHaveBeenCalledTimes(1));
+      expect(screen.queryByTestId('invoice-sif-step')).not.toBeInTheDocument();
+      expect(callsTo(fetchMock, 'documentAction')).toHaveLength(1);
+      expect(JSON.parse(callsTo(fetchMock, 'createInvoice')[0][1].body)).not.toHaveProperty('sifFields');
+    });
+
+    it('blocks the confirm on a rectificative until the rectification code is chosen', async () => {
+      mockSif(ok({
+        ...PREVIEW,
+        rectificative: true,
+        fields: { ...PREVIEW.fields, aeatsiiMotivoRectif: null },
+        fieldSpecs: [...PREVIEW.fieldSpecs, { name: 'aeatsiiMotivoRectif', system: 'SII', type: 'option' }],
+      }));
+      render(<ConfirmInOutModal {...SIF_PROPS} />);
+      fireEvent.click(primary());
+      await screen.findByTestId('invoice-sif-step');
+      expect(primary()).toBeDisabled();
+      expect(screen.getByTestId('invoice-sif-step-required')).toBeInTheDocument();
+    });
+  });
 });

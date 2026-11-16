@@ -109,6 +109,25 @@ describe('StatusCell — reason line per error code', () => {
     expect(reason).toHaveTextContent(/^FAC-77 · /);
   });
 
+  it('CONFIRMED prefers the plain document number over the DAL identifier ("no - date - amount")', () => {
+    const row = { id: 'c1', status: 'CONFIRMED', 'invoice$documentNo': '10000007', 'invoice$_identifier': '10000007 - 2026-08-10 - 121.00' };
+    render(<StatusCell row={row} ui={uiEs} locale="es_ES" />);
+    const reason = screen.getByTestId('invoice-inbox-status-reason-c1');
+    expect(reason).toHaveTextContent(/^10000007 · Completada$/);
+    expect(reason).not.toHaveTextContent('2026-08-10');
+  });
+
+  it('CONFIRMED falls back to the identifier when documentNo is empty', () => {
+    const row = { id: 'c1', status: 'CONFIRMED', 'invoice$documentNo': '', 'invoice$_identifier': 'FAC-77' };
+    render(<StatusCell row={row} ui={uiEs} locale="es_ES" />);
+    expect(screen.getByTestId('invoice-inbox-status-reason-c1')).toHaveTextContent(/^FAC-77 · /);
+  });
+
+  it('CONFIRMED with only documentNo (no identifier) still shows the line', () => {
+    render(<StatusCell row={{ id: 'c1', status: 'CONFIRMED', 'invoice$documentNo': '55' }} ui={uiEs} locale="es_ES" />);
+    expect(screen.getByTestId('invoice-inbox-status-reason-c1')).toHaveTextContent(/^55 · /);
+  });
+
   it('CONFIRMED without an invoice identifier shows no reason line', () => {
     render(<StatusCell row={{ id: 'c1', status: 'CONFIRMED' }} ui={uiEn} locale="en_US" />);
     expect(screen.queryByTestId('invoice-inbox-status-reason-c1')).toBeNull();
@@ -229,6 +248,29 @@ describe('NumberCell — duplicate icon', () => {
     expect(icon).toHaveAttribute('title', expect.stringContaining('INV-9'));
     expect(icon).toHaveAttribute('aria-label', expect.stringContaining('INV-9'));
     expect(within(icon).queryByRole('tooltip')).toBeNull();
+  });
+
+  it('the duplicate tooltip and aria-label use the plain document number, not the identifier', () => {
+    const row = {
+      id: 'n1', status: 'READY', orderReference: 'F-1', duplicateOfInvoice: 'i1',
+      'duplicateOfInvoice$documentNo': '10000003', 'duplicateOfInvoice$_identifier': '10000003 - 2026-08-01 - 99.00',
+    };
+    render(<NumberCell row={row} ui={uiEn} />);
+    const icon = screen.getByTestId('invoice-inbox-duplicate-n1');
+    expect(icon).toHaveAttribute('title', expect.stringContaining('10000003'));
+    expect(icon.getAttribute('title')).not.toContain('2026-08-01');
+    expect(icon.getAttribute('aria-label')).not.toContain('2026-08-01');
+  });
+
+  it('the duplicate label falls back to the identifier when the document number is empty', () => {
+    const row = { id: 'n1', status: 'READY', orderReference: 'F-1', duplicateOfInvoice: 'i1', 'duplicateOfInvoice$documentNo': '', 'duplicateOfInvoice$_identifier': 'INV-9' };
+    render(<NumberCell row={row} ui={uiEn} />);
+    expect(screen.getByTestId('invoice-inbox-duplicate-n1')).toHaveAttribute('title', expect.stringContaining('INV-9'));
+  });
+
+  it('no duplicate icon on a settled row even with a document number', () => {
+    render(<NumberCell row={{ id: 'n1', status: 'CONFIRMED', orderReference: 'F-1', duplicateOfInvoice: 'i1', 'duplicateOfInvoice$documentNo': '1' }} ui={uiEn} />);
+    expect(screen.queryByTestId('invoice-inbox-duplicate-n1')).toBeNull();
   });
 });
 

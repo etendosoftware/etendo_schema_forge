@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/lib/rowCurrency.js
 /**
  * ETP-5245 — `resolveRowCurrency` cascade.
  *
@@ -63,5 +64,46 @@ describe('resolveRowCurrency', () => {
   it('tolerates a missing row or column without throwing', () => {
     expect(resolveRowCurrency(undefined, undefined, 'EUR')).toBe('EUR');
     expect(resolveRowCurrency(null, null, null)).toBeUndefined();
+  });
+
+  // ETP-6148 — opt-in: a declared currencyField may be a plain text field already holding the ISO
+  // code (REM's SQL-logic `Currency` column on remittance lines, served as "EUR"), with no
+  // `$_identifier` twin.
+  describe('declared currencyField holding a plain ISO code', () => {
+    it('uses a 3-letter text code from row[currencyField]', () => {
+      const row = { currency: 'USD', 'cCurrencyID$_identifier': 'CHF' };
+      expect(resolveRowCurrency(row, { currencyField: 'currency' }, SESSION)).toBe('USD');
+    });
+
+    it('still lets the $_identifier twin win when the row carries both', () => {
+      const row = { altCurrency: 'USD', 'altCurrency$_identifier': 'EUR' };
+      expect(resolveRowCurrency(row, { currencyField: 'altCurrency' }, SESSION)).toBe('EUR');
+    });
+
+    it.each([
+      ['a raw id', '100'],
+      ['a UUID', '8A1B2C3D4E5F60718293A4B5C6D7E8F9'],
+      ['lower case', 'usd'],
+      ['too long', 'EURO'],
+      ['too short', 'EU'],
+      ['padded', ' EUR'],
+      ['empty', ''],
+    ])('ignores a non-ISO text value (%s) and falls through to the usual cascade', (_label, raw) => {
+      expect(resolveRowCurrency({ altCurrency: raw, 'currency$_identifier': 'CHF' }, { currencyField: 'altCurrency' }, SESSION)).toBe('CHF');
+      expect(resolveRowCurrency({ altCurrency: raw }, { currencyField: 'altCurrency' }, SESSION)).toBe('GBP');
+    });
+
+    it('ignores a non-string value', () => {
+      expect(resolveRowCurrency({ altCurrency: 978 }, { currencyField: 'altCurrency' }, SESSION)).toBe('GBP');
+      expect(resolveRowCurrency({ altCurrency: { id: 'EUR' } }, { currencyField: 'altCurrency' }, SESSION)).toBe('GBP');
+    });
+
+    it('changes nothing for a column that declares no currencyField', () => {
+      // The plain `currency` text value is NOT read without the declaration: the historical
+      // cascade (twins, then session) is untouched for every other caller.
+      expect(resolveRowCurrency({ currency: 'USD' }, {}, SESSION)).toBe('GBP');
+      expect(resolveRowCurrency({ currency: 'USD' }, undefined, null)).toBeUndefined();
+      expect(resolveRowCurrency({ currency: 'USD', 'currency$_identifier': 'CHF' }, {}, SESSION)).toBe('CHF');
+    });
   });
 });

@@ -16,6 +16,7 @@ import { periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 import { todayCalendarISO } from '@/lib/dateOnly.js';
 import { PeriodRecoveryLink } from '@/components/contract-ui/PeriodRecoveryLink.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useInvoiceSifStep, InvoiceSifStepPanel, withSifFields, SIF_STEP_DIALOG_WIDTH } from '@/windows/custom/shared/InvoiceSifStep.jsx';
 
 export { ConfirmResultModal as PoConfirmResultModal };
 
@@ -346,6 +347,12 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
   const [invoiceResult,  setInvoiceResult]  = useState(null);
 
   const orderUrl = `${apiBaseUrl}/header`;
+  // ETP-6179: the invoice's mandatory "Datos fiscales" step, BEFORE the order is confirmed.
+  const sif = useInvoiceSifStep({
+    enabled: createInvoice && !invoiceResult,
+    apiFetch,
+    defaultsUrl: `${orderUrl}/${orderId}/action/sifDefaults`,
+  });
 
   // Fetch fresh record + line count on mount
   useEffect(() => {
@@ -494,7 +501,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
     if (createInvoice && !invoiceResult) {
       try {
         const res = await apiFetch(`${orderUrl}/${orderId}/action/createPurchaseInvoice`,
-          { method: 'POST', body: JSON.stringify({}) });
+          { method: 'POST', body: JSON.stringify(withSifFields({}, sif)) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
           // ETP-5381: mirrors the sales twin — this was the only branch here not translating the
@@ -584,6 +591,8 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
   // modal opens with whatever exists and the page reloads on its own close.
   // Otherwise the order is silently in CO state but the UI keeps showing DR,
   // and reopening the modal would re-attempt step 1 → @AlreadyPosted@.
+  const confirmDisabled = loading || sif.loading || (sif.active && !sif.valid);
+
   const handleClose = () => {
     if (orderConfirmed || receiptResult || invoiceResult) {
       const result = {};
@@ -606,18 +615,24 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
 
   return (
     <div onClick={handleClose} style={overlayStyle}>
-      <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: 460 }}>
+      <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: sif.active ? SIF_STEP_DIALOG_WIDTH : 460, maxWidth: 'calc(100vw - 32px)' }}>
 
         {/* Title row */}
         <div style={{ padding: '16px 20px 14px', borderBottom: '0.5px solid hsl(var(--card))', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-            {ui('poConfirmTitle', { number: documentNo })}
+            {sif.active ? ui('invoiceSifStep.title') : ui('poConfirmTitle', { number: documentNo })}
           </div>
           <button type="button" onClick={handleClose} style={closeBtn}>&times;</button>
         </div>
 
+        {sif.active && (
+          <div style={{ padding: '14px 20px', overflowY: 'auto', minHeight: 0 }}>
+            <InvoiceSifStepPanel sif={sif} data-testid="InvoiceSifStepPanel__8b5323" />
+          </div>
+        )}
+
         {/* Blue summary card */}
-        <div style={{ padding: '14px 20px' }}>
+        {!sif.active && <div style={{ padding: '14px 20px' }}>
           <div style={{ background: 'var(--status-info-bg)', border: '0.5px solid var(--status-info-border)', borderRadius: 10, padding: '14px 16px' }}>
             {bpName && (
               <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>
@@ -642,10 +657,10 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
               </span>
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* Checkboxes — both optional, both can be selected simultaneously */}
-        <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {!sif.active && <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>
             {ui('soGenerateDocs')}
           </div>
@@ -665,7 +680,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
             subtitle={invoiceResult ? ui('soAlreadyCreated') : ui('poCreateInvoiceCheckDesc')}
             disabled={Boolean(invoiceResult)}
             testId="purchase-order-confirm-invoice-card" />
-        </div>
+        </div>}
 
         {error && (
           <div style={{ padding: '8px 20px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))', whiteSpace: 'pre-line' }}>
@@ -674,16 +689,22 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid hsl(var(--card))' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid hsl(var(--card))' }}>
           <button type="button" onClick={handleClose} disabled={loading}
-            style={{ ...btnSecondary, opacity: loading ? 0.5 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
+            style={{ whiteSpace: 'nowrap', ...btnSecondary, opacity: loading ? 0.5 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
             {ui('cancel')}
           </button>
-          <button type="button" onClick={handleConfirm} disabled={loading}
+          {sif.active && (
+            <button type="button" data-testid="purchase-order-confirm-sif-back" onClick={sif.back} disabled={loading}
+              style={{ whiteSpace: 'nowrap', ...btnSecondary, opacity: loading ? 0.5 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
+              {ui('back')}
+            </button>
+          )}
+          <button type="button" onClick={() => sif.start(handleConfirm)} disabled={confirmDisabled}
             data-testid="action-confirm-modal"
-            style={{ ...btnPrimaryStyle, opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            style={{ whiteSpace: 'nowrap', ...btnPrimaryStyle, opacity: confirmDisabled ? 0.6 : 1, cursor: confirmDisabled ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             {loading && <Spinner data-testid="Spinner__8b5323" />}
-            {loading ? ui('poProcessing') : primaryLabel}
+            {(loading || sif.loading) ? ui('poProcessing') : primaryLabel}
           </button>
         </div>
       </div>
@@ -817,6 +838,12 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
   const soleAction = needsReceipt !== needsInvoice;
   const receiptWanted = soleAction ? needsReceipt : createReceipt;
   const invoiceWanted = soleAction ? needsInvoice : createInvoice;
+  // ETP-6179: the invoice's mandatory "Datos fiscales" step.
+  const sif = useInvoiceSifStep({
+    enabled: invoiceWanted,
+    apiFetch,
+    defaultsUrl: `${base}/purchase-order/header/${orderId}/action/sifDefaults`,
+  });
 
   const handleCreate = async () => {
     if (loading || (!receiptWanted && !invoiceWanted)) return;
@@ -841,7 +868,7 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
 
       if (invoiceWanted) {
         const res = await apiFetch(`${base}/purchase-order/header/${orderId}/action/createPurchaseInvoice`,
-          { method: 'POST', body: JSON.stringify({}) });
+          { method: 'POST', body: JSON.stringify(withSifFields({}, sif)) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
           throw invoiceRefusal(e, res.status, ui);
@@ -864,21 +891,28 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
   };
 
   const canCreate = receiptWanted || invoiceWanted;
+  const submitDisabled = loading || !canCreate || sif.loading || (sif.active && !sif.valid);
 
   return (
     <div onClick={onClose} style={overlayStyle}>
-      <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: 460 }}>
+      <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: sif.active ? SIF_STEP_DIALOG_WIDTH : 460, maxWidth: 'calc(100vw - 32px)' }}>
 
         {/* Title row */}
         <div style={{ padding: '16px 20px 14px', borderBottom: '0.5px solid hsl(var(--card))', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-            {poManageDocsLabel(ui, needsReceipt, needsInvoice) ?? ui('soManageDocsTitle')}
+            {sif.active ? ui('invoiceSifStep.title') : (poManageDocsLabel(ui, needsReceipt, needsInvoice) ?? ui('soManageDocsTitle'))}
           </div>
           <button type="button" onClick={onClose} style={closeBtn}>&times;</button>
         </div>
 
+        {sif.active && (
+          <div style={{ padding: '14px 20px', overflowY: 'auto', minHeight: 0 }}>
+            <InvoiceSifStepPanel sif={sif} data-testid="InvoiceSifStepPanel__poManageDocs" />
+          </div>
+        )}
+
         {/* Blue summary card — no warning since order is already confirmed */}
-        <div style={{ padding: '14px 20px' }}>
+        {!sif.active && <div style={{ padding: '14px 20px' }}>
           <div style={{ background: 'var(--status-info-bg)', border: '0.5px solid var(--status-info-border)', borderRadius: 10, padding: '14px 16px' }}>
             {bpName && (
               <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>
@@ -889,10 +923,10 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
               {formatCurrency(currency, grandTotal)}
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* Only show checkboxes for pending actions; subtitle shows outstanding qty/amount */}
-        <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {!sif.active && <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>
             {/* "(optional)" only holds while there is something to opt out of. */}
             {soleAction ? ui('soGenerateDocsImplied') : ui('soGenerateDocs')}
@@ -917,7 +951,7 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
               subtitle={invoiceSubtitle}
               testId="purchase-order-docs-invoice-card" />
           )}
-        </div>
+        </div>}
 
         {error && (
           <div style={{ padding: '8px 20px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))', whiteSpace: 'pre-line' }}>
@@ -926,14 +960,19 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid hsl(var(--card))' }}>
-          <button type="button" onClick={onClose} disabled={loading} style={{ ...btnSecondary, opacity: loading ? 0.5 : 1 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid hsl(var(--card))' }}>
+          <button type="button" onClick={onClose} disabled={loading} style={{ whiteSpace: 'nowrap', ...btnSecondary, opacity: loading ? 0.5 : 1 }}>
             {ui('cancel')}
           </button>
-          <button type="button" onClick={handleCreate} disabled={loading || !canCreate}
-            style={{ ...btnPrimaryStyle, opacity: (loading || !canCreate) ? 0.6 : 1, cursor: (loading || !canCreate) ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          {sif.active && (
+            <button type="button" data-testid="purchase-order-docs-sif-back" onClick={sif.back} disabled={loading} style={{ whiteSpace: 'nowrap', ...btnSecondary, opacity: loading ? 0.5 : 1 }}>
+              {ui('back')}
+            </button>
+          )}
+          <button type="button" onClick={() => sif.start(handleCreate)} disabled={submitDisabled}
+            style={{ whiteSpace: 'nowrap', ...btnPrimaryStyle, opacity: submitDisabled ? 0.6 : 1, cursor: submitDisabled ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             {loading && <Spinner data-testid="Spinner__8b5323" />}
-            {loading ? ui('poProcessing') : ui('soCreateDocsBtn')}
+            {(loading || sif.loading) ? ui('poProcessing') : ui('soCreateDocsBtn')}
           </button>
         </div>
       </div>

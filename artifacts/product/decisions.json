@@ -668,7 +668,6 @@
     },
     "transactions": {
       "readOnly": true,
-      "javaQualifier": "productTransactionsHandler",
       "fields": {
         "movementDate": {
           "visibility": "readOnly",

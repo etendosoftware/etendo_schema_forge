@@ -643,3 +643,15 @@ An `unpost` of a return that is not posted is refused with **422** (`ETGO_GoodsU
 ## "Generar factura rectificativa" title on the post-confirm invoice popup — ETP-5688
 
 The popup opened by "Crear Factura Rectificativa" on a completed (CO), not-yet-invoiced return is the shared `CreateInvoiceConfirmModal`, which was titled with the generic `soManageDocsTitle` ("Generar factura"). It now accepts an optional `title` prop (default unchanged for every other consumer); `ConfirmWithCreditButtonBase` forwards its new `createInvoiceModalTitle` prop, which this window supplies as `returnToVendor.createCreditNoteTitle` ("Generar factura rectificativa"). `cardTitle` is NOT used for this: it belongs to the draft-time `ConfirmInOutModal`, whose title ("¿Gestionar factura rectificativa?") is unchanged. The row-hover Confirmar (`ReturnToVendorShipmentRowConfirmModal`) only opens that draft-time modal, so it never shows this popup.
+
+## Fiscal data step before the invoice is created — ETP-6179
+
+- **Confirmar** with the rectificative-invoice toggle on and **Crear factura rectificativa** on a
+  confirmed return, same components as the customer return.
+- Purchase rectificative: SII fields only, without a motive (purchase-side corrective support is not
+  implemented), so the `R4` default of the customer return does not apply here. `sifFields` and `sifDefaults` are declared on every channel, MCP included: the header
+  handler is bound by `@NeoExtension` since ETP-6179 (the row's `Java_Qualifier`, the class's
+  `@Named` and the artifact's `javaQualifier` were removed).
+
+How the step itself works — the backend `sifDefaults` preview, when it appears, the
+`sifFields` it sends and the fail-open rule — is described once in [sales-order.md → Fiscal data step before the invoice is created](sales-order.md#fiscal-data-step-before-the-invoice-is-created--etp-6179).

@@ -17,15 +17,15 @@ const TAX_SELECTOR_COLUMN = 'C_Tax_ID';
 // Generous page size: covers the whole tax catalog visible to the client in ONE
 // request for the common case (a few dozen active rates in practice), replacing
 // what would otherwise be N per-distinct-tax fetches (one per row's tax,
-// deduplicated) with a single call. NeoSelectorService.MAX_LIMIT (100) silently
-// clamps whatever we ask for server-side, so orgs with a larger catalog (seen live:
-// 179 taxes) get back a partial page with `hasMore: true` — loadTaxCatalog() below
+// deduplicated) with a single call. The server clamps it to
+// NeoSelectorService.MAX_LIMIT (1000 since ETP-6103, 100 before), and a larger
+// catalog gets back a partial page with `hasMore: true` — loadTaxCatalog() below
 // pages through the rest instead of trusting this to be the only request (ETP-4888
 // bugfix: a tax outside the first page was silently treated as "nothing to fix").
 const TAX_SELECTOR_PAGE_LIMIT = 200;
 // Safety cap on pagination loop iterations, in case `hasMore` ever misbehaves (e.g.
-// a future selector policy that always reports true). 20 pages at up to ~100 items
-// each (the server's own MAX_LIMIT) covers ~2000 items — far beyond any real tax
+// a future selector policy that always reports true). 20 pages of up to
+// TAX_SELECTOR_PAGE_LIMIT items cover ~4000 items — far beyond any real tax
 // catalog — while still guaranteeing the loop terminates.
 const TAX_SELECTOR_MAX_PAGES = 20;
 

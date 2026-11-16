@@ -23,18 +23,32 @@ import { useGLItemLookup } from '@/hooks/useMovementLookups.js';
 import { ACCOUNT_TYPE } from '@/components/financial-accounts/tokens';
 import { canConnectToSaltEdge } from '@/components/financial-accounts/saltEdgeEligibility.js';
 import { LastSyncLabel } from '@/components/financial-accounts/LastSyncLabel.jsx';
+import { BankSyncIcon } from '@/components/financial-accounts/BankSyncIcon.jsx';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { normalizeIban } from '@/lib/validateIban.js';
 import {
   stripTrailingPeriods,
   translateBackendError,
   isDuplicateConflict,
+  hasMappedMessageKey,
   extractBackendMessageKeys,
   extractBackendMessageParams,
 } from '@/lib/backendErrors.js';
 import { validateIbanForCountry, countryLacksIbanConfig } from '@/lib/countryIban.js';
-import { formatCalendarDate, calendarISODaysAgo } from '@/lib/dateOnly.js';
+import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { useSplitButtonDropdown } from './useSplitButtonDropdown';
 import BankConnectionDeleteConfirmModal from './BankConnectionDeleteConfirmModal';
+import { BankImportSettingsFields, importSettingsIncomplete } from './BankImportSettingsFields.jsx';
+import { importFromBeyondFetchInterval } from './bankImportSettingsShared.js';
+import { LegacyBankImportSettings } from './LegacyBankImportSettings.jsx';
+import { usePsd2ImportSettingsFlag } from '@/hooks/usePsd2ImportSettingsFlag.js';
+import { useBankSync } from './BankSyncContext.jsx';
+import { BankSyncBanner } from './BankSyncBanner.jsx';
 
 const EDIT_TAB_GENERAL = 'general';
 const EDIT_TAB_ACCOUNTING = 'accounting';
@@ -103,7 +117,6 @@ function accountingFieldsForType(accountType) {
   return accountType === ACCOUNT_TYPE.BANK ? ACCOUNTING_FIELDS : ACCOUNTING_FIELDS_ALL_TYPES;
 }
 
-const GROUPING_OPTIONS = ['1BD', '1BW', '1BM', '1BE'];
 const FIELD_INPUT = 'bg-card shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]';
 
 // ETP-4896 — Country field. `CreatableSearchSelect` over the live `C_Country_ID` selector (239
@@ -265,25 +278,6 @@ const BANNER_TONE_CLASSES = {
   info: { bg: 'bg-[var(--status-info-bg)]', fg: 'text-[var(--status-info-fg)]' },
 };
 
-/** Maps the bridge sync result ({status, message}) to a toast. */
-function notifySyncResult(res, ui) {
-  // ETP-4891 follow-up: com.etendoerp.psd2 ships no real es_ES translation for these AD_MESSAGEs
-  // (see backendErrors.js), so Core always resolves the English text regardless of session
-  // locale — route it through the same frontend translation map every other untranslated backend
-  // message uses, same fix as ImportedStatementsTab's identical sync-result handler.
-  const msg = res?.message ? translateBackendError(res.message, ui) : res?.message;
-  if (res?.status === 'ERROR') {
-    toast.error(msg || ui('financeAccountsBankConnectionSyncError'));
-  } else if (res?.status === 'WARNING') {
-    // ETP-5181: a WARNING carries something the user has to act on — most often "your import
-    // range reaches further back than this provider serves" — so it must not read as a neutral
-    // notice. The sync itself did complete; only the wording is downgraded, not the outcome.
-    toast.warning(msg || ui('financeAccountsBankConnectionSyncDone'));
-  } else {
-    toast.success(msg || ui('financeAccountsBankConnectionSyncDone'));
-  }
-}
-
 async function copyIbanToClipboard(account, ui) {
   try {
     await navigator.clipboard.writeText((account.iban || '').replace(/\s+/g, ''));
@@ -355,24 +349,26 @@ async function persistAccountEdits({
  *
  * `beforeSync` is a REF, not a plain callback: it is filled in by the modal body, which is where
  * the other form hooks (fields / reconciliation / accounting) are declared — long after this hook
- * runs. It throws to abort, which is exactly what the `catch` below already handles.
+ * runs. It throws to abort; an error carrying `handled` was already reported with the save path's
+ * own wording, so it is not toasted a second time.
+ *
+ * ETP-6154: the sync itself goes through the window's shared BankSyncContext, which owns the
+ * in-flight guard (no second request while one runs, from here or any other entry point), the
+ * polling of a sync still running server side, and the one result toast (bankSyncNotify.js). This
+ * function only says what to reload once the sync is over — `refresh()` and `onSaved`, exactly as
+ * before, however long that takes.
  */
-async function runSync({ account, sync, refresh, onSaved, ui, setBusy, beforeSync }) {
-  setBusy(true);
-  try {
-    await beforeSync?.current?.();
-    const res = await sync(account.id);
-    await refresh();
-    onSaved?.();
-    notifySyncResult(res, ui);
-  } catch (err) {
-    // `handled` marks a failure beforeSync already reported with the save path's own wording —
-    // toasting `err.message` on top of it would show the same problem twice, the second time raw.
-    if (err?.handled) return;
-    toast.error(err.message === 'BANK_CONNECTION_TIMEOUT' ? ui('financeAccountsBankConnectionTimeout') : err.message);
-  } finally {
-    setBusy(false);
-  }
+async function runSync({ account, startSync, refresh, onSaved, beforeSync }) {
+  // No modal-wide `busy` here (ETP-6154, product decision): while the sync runs only "Sincronizar
+  // ahora" is disabled — it reads the shared `syncing` state — and the rest of the modal stays
+  // usable. The save-before-sync step still locks the form on its own, through `saving`.
+  await startSync(account.id, {
+    beforeSync: () => beforeSync?.current?.(),
+    onDone: async () => {
+      await refresh();
+      onSaved?.();
+    },
+  });
 }
 
 async function runReconnect({ account, reconnect, finishReconnect, refresh, onSaved, ui, setBusy }) {
@@ -626,38 +622,6 @@ function isImportRangeInvalid({ importFromDate, importToDate } = {}) {
 }
 
 /**
- * ETP-5181. Whether "Importar desde" reaches further back than the bank will serve, and from
- * which date it actually will.
- *
- * PSD2 providers publish a `max_fetch_interval` (90 days under the regulation's baseline, more
- * for some banks) and the account's provider record carries it; the bridge exposes it on
- * `GET status` as `maxFetchInterval`. A missing or non-positive limit means the provider never
- * published one, and we advise nothing rather than guess.
- *
- * Advisory only, deliberately: it does not block Save. The date stays exactly as typed, because
- * the range is applied as a LOCAL filter over whatever the provider returns (Salt Edge ignores
- * from_date/to_date — see BankIntegrationUtils.buildSaltEdgeTransactionsEndpoint), so an
- * over-long range loses nothing inside the window that IS available. The point is only to stop
- * the user expecting history the bank will never hand over.
- *
- * The comparison is plain string `<` on two `yyyy-MM-dd` values: ISO date-only strings order
- * lexicographically, so no `Date` is built here and there is no timezone to get wrong. The bound
- * itself comes from `calendarISODaysAgo`, which does the local-calendar arithmetic.
- */
-function importFromBeyondFetchInterval(importFromDate, maxFetchInterval) {
-  if (!importFromDate) return null;
-  // Finiteness FIRST, then a positive comparison. Do not collapse this into `maxFetchInterval <= 0`
-  // (what Sonar's S1940 proposes for the equivalent `!(maxFetchInterval > 0)`): the bridge OMITS
-  // the key when the provider declares no limit, and `undefined <= 0` is false, so that rewrite
-  // would fall through on the commonest case and build the bound from NaN. `NaN <= 0` is false
-  // too. Stating finiteness explicitly says what the guard is actually for and keeps the
-  // comparison uninverted.
-  if (!Number.isFinite(maxFetchInterval) || maxFetchInterval <= 0) return null;
-  const earliest = calendarISODaysAgo(maxFetchInterval);
-  return importFromDate < earliest ? { days: maxFetchInterval, earliest } : null;
-}
-
-/**
  * Bank connection panel state + actions.
  *
  * Covers both live connections and soft-disconnected ones: a deactivated connection still needs
@@ -668,7 +632,12 @@ function useBankConnection(
   open, account, bankConnected, onSaved, onClose, bankReconnectable, beforeSync,
 ) {
   const ui = useUI();
-  const { fetchStatus, sync, disconnect, reconnect, finishReconnect } = useBankConnectionActions();
+  // ETP-6151 — flag `psd2-statement-import-settings` (off: the pre-ETP-6151 import panel).
+  const importSettingsEnabled = usePsd2ImportSettingsFlag();
+  const { fetchStatus, disconnect, reconnect, finishReconnect } = useBankConnectionActions();
+  const bankSync = useBankSync();
+  const { startSync } = bankSync;
+  const syncing = bankSync.isSyncing(account?.id);
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -720,9 +689,9 @@ function useBankConnection(
         toast.error(ui('financeAccountsBankConnectionImportRangeInvalid'));
         return Promise.resolve();
       }
-      return runSync({ account, sync, refresh, onSaved, ui, setBusy, beforeSync });
+      return runSync({ account, startSync, refresh, onSaved, beforeSync });
     },
-    [account, sync, refresh, onSaved, ui, form, beforeSync],
+    [account, startSync, refresh, onSaved, ui, form, beforeSync],
   );
   const handleReconnect = useCallback(
     () => runReconnect({ account, reconnect, finishReconnect, refresh, onSaved, ui, setBusy }),
@@ -756,15 +725,20 @@ function useBankConnection(
   );
 
   return {
-    status, loading, busy, form, setForm, refresh, connected, reconnectable,
+    status, loading, busy, syncing, form, setForm, refresh, connected, reconnectable,
+    // For the in-panel BankSyncBanner: this account only, named.
+    syncingAccounts: syncing && account ? [{ id: account.id, name: account.name || null }] : [],
     hasBankLink: liveHasBankLink, settingsDirty, rangeInvalid: isImportRangeInvalid(form),
-    // Derived from `form`, not from `initial`, so it covers both halves of the requirement with
-    // no extra wiring: `form` is hydrated from GET status when the modal opens (so an account
-    // already saved with an out-of-range date advises immediately, untouched) and rewritten on
-    // every keystroke of the date box (so it tracks edits).
-    fetchIntervalWarning: importFromBeyondFetchInterval(
-      form.importFromDate, status?.maxFetchInterval,
-    ),
+    // ETP-6151 — "Importar desde" and the grouping are required, but only once the bank section is
+    // touched: a connection linked before they were mandatory may still hold a null date, and that
+    // must not block saving the account's other fields. Touching the section means saving it, and
+    // the bridge then requires both (import-settings).
+    requiredMissing: importSettingsEnabled && settingsDirty && importSettingsIncomplete(form),
+    // Flag off only: the ON rendering derives the advisory inside BankImportSettingsFields.
+    fetchIntervalWarning: importSettingsEnabled
+      ? null
+      : importFromBeyondFetchInterval(form.importFromDate, status?.maxFetchInterval),
+    importSettingsEnabled,
     handleSync, handleReconnect, handleDisconnect, handleDeleteConnection,
   };
 }
@@ -1307,7 +1281,8 @@ export function EditAccountModal({
   const saveBlocked = fields.name.trim() === '' || fields.ibanInvalid
     || (fields.typeEditable && fields.type === '')
     || (fields.currencyEditable && fields.currencyId === '')
-    || recon.amountToleranceInvalid || bankConnection.rangeInvalid;
+    || recon.amountToleranceInvalid || bankConnection.rangeInvalid
+    || bankConnection.requiredMissing;
   const canSave = dirty && !saving && !saveBlocked;
   const busy = saving || bankConnection.busy;
 
@@ -1341,7 +1316,9 @@ export function EditAccountModal({
     // discriminator; the status is not.
     if (err.code === 'stale_record' || err.body?.error === 'stale_record') {
       setError(ui('financeAccountsEditStaleRecord'));
-    } else if (isDuplicateConflict(err.status, err.code)) {
+    } else if (isDuplicateConflict(err.status, err.code) && !hasMappedMessageKey(extractBackendMessageKeys(err.body))) {
+      // ETP-6148: a code-less 409 that names a translated message (ETGO_RemittanceProvisioningConflict)
+      // is not a duplicate name; it falls through to the translated toast below.
       // ETP-5782: only `duplicate_key` (or a legacy code-less 409) means "name taken"; any other
       // 409 (record in use, retryable conflict) falls through to the server's own message.
       setError(ui('financeAccountsNewNameExists'));
@@ -1871,6 +1848,51 @@ function BankConnectionSection({
   );
 }
 
+/**
+ * "Sincronizar ahora" inside the bank connection panel.
+ *
+ * ETP-6154: disabled, with its icon bobbing, while a fetch of this account runs — `bankConnection.syncing`
+ * is the window's shared bank-sync state, so a sync started from the list row or the statements
+ * tab counts too. The tooltip trigger is a wrapper span because a disabled button fires no pointer
+ * events, which would hide the "in progress" tooltip exactly when it matters.
+ */
+// ETP-6154 — while fetching the button must read BUSY, not merely disabled: info-tinted, full
+// opacity, a progress cursor, the bobbing icon and "Trayendo extractos…". Two whole class strings rather
+// than overrides, so no two utilities compete for the same property.
+const SYNC_BTN_BASE = 'inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]';
+const SYNC_BTN_IDLE = `${SYNC_BTN_BASE} border-[hsl(var(--border-control))] bg-card text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] disabled:opacity-50`;
+const SYNC_BTN_SYNCING = `${SYNC_BTN_BASE} border-status-info-border bg-status-info text-status-info-foreground cursor-progress`;
+
+function BankSyncButton({ ui, bankConnection, busy }) {
+  const { syncing } = bankConnection;
+  const tooltip = ui(syncing ? 'financeAccountsBankSyncInProgress' : 'financeAccountsBankSyncTooltip');
+  return (
+    <TooltipProvider data-testid="TooltipProvider__73027d">
+      <Tooltip delayDuration={0} data-testid="Tooltip__73027d">
+        <TooltipTrigger asChild data-testid="TooltipTrigger__73027d">
+          <span className="inline-flex shrink-0" data-testid="bank-connection-edit-sync-wrap">
+            <button
+              type="button"
+              disabled={busy || syncing || !bankConnection.connected}
+              aria-busy={syncing}
+              onClick={bankConnection.handleSync}
+              data-testid="bank-connection-edit-sync"
+              className={syncing ? SYNC_BTN_SYNCING : SYNC_BTN_IDLE}
+            >
+              <BankSyncIcon
+                spinning={syncing}
+                className={syncing ? 'h-4 w-4' : 'h-4 w-4 text-[hsl(var(--text-disabled))]'}
+                data-testid="bank-connection-edit-sync-icon" />
+              {ui(syncing ? 'financeAccountsBankSyncBadge' : 'financeAccountsMenuSyncNow')}
+            </button>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent data-testid="TooltipContent__73027d">{tooltip}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 function BankConnectionPanel({ ui, bankConnection, busy, reauthMessage, reauthTone = 'info' }) {
   const reauthToneClasses = BANNER_TONE_CLASSES[reauthTone] ?? BANNER_TONE_CLASSES.info;
   // `AlertTriangle` on a blue banner reads as a mismatch — same call BlockingBpBanner.jsx made when
@@ -1883,7 +1905,9 @@ function BankConnectionPanel({ ui, bankConnection, busy, reauthMessage, reauthTo
           <span className="text-sm font-semibold text-[hsl(var(--foreground))]">
             {bankConnection.status?.providerName || ui('financeAccountsBankConnectionStatusConnected')}
           </span>
-          {bankConnection.connected ? (
+          {/* ETP-6154 — hidden while a sync runs: the age is about to change, and the banner
+              below already says what is happening. */}
+          {bankConnection.connected && !bankConnection.syncing ? (
             <LastSyncLabel
               date={bankConnection.status?.lastSyncDate}
               prefixKey="financeAccountsLastSyncAgo"
@@ -1892,82 +1916,52 @@ function BankConnectionPanel({ ui, bankConnection, busy, reauthMessage, reauthTo
             />
           ) : null}
         </div>
-        <button
-          type="button"
-          disabled={busy || !bankConnection.connected}
-          onClick={bankConnection.handleSync}
-          data-testid="bank-connection-edit-sync"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 py-1.5 text-sm font-medium text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))] disabled:opacity-50"
-        >
-          <RefreshCw className="h-4 w-4 text-[hsl(var(--text-disabled))]" data-testid="RefreshCw__73027d" />
-          {ui('financeAccountsMenuSyncNow')}
-        </button>
+        <BankSyncButton ui={ui} bankConnection={bankConnection} busy={busy} data-testid="BankSyncButton__73027d" />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <DateInput
-          label={ui('financeAccountsBankConnectionImportFrom')}
-          name="bank-connection-import-from"
-          value={bankConnection.form.importFromDate || ''}
-          onChange={(v) => bankConnection.setForm((f) => ({ ...f, importFromDate: v }))}
-          data-testid="DateInput__73027d" />
-        <DateInput
-          label={ui('financeAccountsBankConnectionImportTo')}
-          name="bank-connection-import-to"
-          value={bankConnection.form.importToDate || ''}
-          onChange={(v) => bankConnection.setForm((f) => ({ ...f, importToDate: v }))}
-          data-testid="DateInput__73027d" />
-        <Field label={ui('financeAccountsBankConnectionGrouping')} data-testid="Field__73027d">
-          {/* White wrapper: the picker's box is bg-transparent (built for white cards),
-              so on this gray card it blends in — the white backing makes it stand out. */}
-          <div className="rounded-lg bg-card">
-            <CreatableSearchSelect
-              field={{ key: 'statementGrouping', id: 'statementGrouping', name: 'statementGrouping' }}
-              value={bankConnection.form.statementGrouping || ''}
-              displayValue={bankConnection.form.statementGrouping
-                ? ui(`financeAccountsBankConnectionGrouping_${bankConnection.form.statementGrouping}`) : ''}
-              onChange={(id) => bankConnection.setForm((f) => ({ ...f, statementGrouping: id || '' }))}
-              formData={bankConnection.form}
-              resolvedLabel={ui('financeAccountsBankConnectionGrouping')}
-              emptyOptionLabel={ui('financeAccountsBankConnectionGroupingNone')}
-              staticOptions={GROUPING_OPTIONS.map((o) => ({
-                id: o, name: ui(`financeAccountsBankConnectionGrouping_${o}`),
-              }))}
-              data-testid="bank-connection-edit-grouping" />
-          </div>
-        </Field>
-      </div>
+      {/* ETP-6154 — the list's banner sits behind this modal's overlay, so the panel shows its
+          own, scoped to this account. */}
+      <BankSyncBanner
+        accounts={bankConnection.syncingAccounts}
+        data-testid="bank-connection-edit-sync-banner" />
 
-      {/* ETP-5104. Sits under the whole grid rather than inside one Field: the error belongs to the
-          PAIR of dates, and `Field` has no error slot anyway (components/forms/fields.jsx). Same
-          shape as the amount-tolerance error in the reconciliation section. */}
-      {bankConnection.rangeInvalid ? (
-        <p className="text-xs text-destructive" data-testid="bank-connection-import-range-error">
-          {ui('financeAccountsBankConnectionImportRangeInvalid')}
-        </p>
-      ) : null}
-
-      {/* ETP-5181 QA CP-2. The panel's two standing notices are stacked here, at the foot of the
-          panel, rather than one above the grid and one below it. QA read the split as two unrelated
-          things; grouped, they read as one block of "what you should know about this connection",
-          and the fetch-interval notice inherits the position users already scan for the
-          re-authorization one. It still sits FIRST of the two: it is the one the date box directly
-          above it can fix, so it stays closest to its cause. */}
-      {bankConnection.fetchIntervalWarning ? (
-        <div
-          className={`flex items-center gap-2 rounded-lg px-3 py-3 ${BANNER_TONE_CLASSES.warning.bg}`}
-          data-testid="bank-connection-import-fetch-interval-warning"
-        >
-          <AlertTriangle
-            className={`h-4 w-4 shrink-0 ${BANNER_TONE_CLASSES.warning.fg}`}
-            data-testid="AlertTriangle__73027d" />
-          <span className={`text-sm font-medium ${BANNER_TONE_CLASSES.warning.fg}`}>
-            {ui('financeAccountsBankConnectionImportBeyondFetchInterval', {
-              days: bankConnection.fetchIntervalWarning.days,
-            })}
-          </span>
-        </div>
-      ) : null}
+      {bankConnection.importSettingsEnabled ? (
+        <>
+        {/* ETP-6151 — date + grouping come from the component the connect flow's account picker
+            also renders, so both ask for them in the same words. "Importar hasta" is edit-only and
+            sits between them, as it always has. The range error rides in the `footer` slot so it
+            still reads right under the dates; the ETP-5181 fetch-interval notice follows it, first of
+            the panel's two standing notices (it is the one the date box above can fix), with the
+            re-authorization banner below. */}
+        <BankImportSettingsFields
+          importFromDate={bankConnection.form.importFromDate}
+          statementGrouping={bankConnection.form.statementGrouping}
+          onChange={(patch) => bankConnection.setForm((f) => ({ ...f, ...patch }))}
+          maxFetchInterval={bankConnection.status?.maxFetchInterval}
+          showRequiredErrors={bankConnection.settingsDirty}
+          testIdPrefix="bank-connection"
+          gridClassName="sm:grid-cols-3"
+          footer={bankConnection.rangeInvalid ? (
+            // ETP-5104. The error belongs to the PAIR of dates, so it sits under the whole grid.
+            <p className="text-xs text-destructive" data-testid="bank-connection-import-range-error">
+              {ui('financeAccountsBankConnectionImportRangeInvalid')}
+            </p>
+          ) : null}
+          data-testid="BankImportSettingsFields__73027d">
+          <DateInput
+            label={ui('financeAccountsBankConnectionImportTo')}
+            name="bank-connection-import-to"
+            value={bankConnection.form.importToDate || ''}
+            onChange={(v) => bankConnection.setForm((f) => ({ ...f, importToDate: v }))}
+            data-testid="DateInput__73027d" />
+        </BankImportSettingsFields>
+        </>
+      ) : (
+        <LegacyBankImportSettings
+          bankConnection={bankConnection}
+          warningTone={BANNER_TONE_CLASSES.warning}
+          data-testid="LegacyBankImportSettings__73027d" />
+      )}
 
       {/* Amber only inside the last week before the consent lapses (see `buildReauthTone`);
           informational blue for the ~83 days before that, so the two banners above and below are

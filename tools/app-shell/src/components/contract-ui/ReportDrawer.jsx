@@ -297,7 +297,10 @@ export default function ReportDrawer({
     const neoBase = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
     loadDocTemplateConfig('listing', neoBase, token).then(async (config) => {
       // The logo is read with the config, so the preview waits for both and renders once.
-      const logo = config?.showLogo === 'on' ? (config.logo || (await loadCompanyLogo(neoBase, token))) : null;
+      // A logo that cannot be read prints without one; it never keeps the design (and so the exports) loading.
+      const logo = config?.showLogo === 'on'
+        ? (config.logo || (await loadCompanyLogo(neoBase, token).catch(() => null)))
+        : null;
       if (cancelled) return;
       // Names what the list print will use, so "the style is not applied" is diagnosable from the console.
       console.info(`[list-print] ${describeListingDesign(config)}`);
@@ -520,7 +523,9 @@ export default function ReportDrawer({
 
   if (!shouldRender) return null;
 
-  const dataReady = !fetchingData && reportRows && reportRows.length > 0;
+  // The saved design (undefined while it loads) gates the exports as it gates the preview: a file
+  // produced before it arrives would carry neither the style nor the logo.
+  const dataReady = !fetchingData && reportRows && reportRows.length > 0 && listingConfig !== undefined;
 
   return (
     <>

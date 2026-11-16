@@ -1,6 +1,8 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-config/useCertExpiry.js
-import { renderHook, waitFor, act } from '@testing-library/react';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+// @covers tools/app-shell/src/windows/custom/fiscal-config/CertExpiryBanner.jsx
+import { createElement } from 'react';
+import { renderHook, render, screen, waitFor, act } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 vi.mock('@/components/related-documents/helpers.js', () => ({
   neoBase: (url) => url ?? '',
@@ -10,7 +12,12 @@ vi.mock('@/auth/useApiFetch.js', () => ({
   useApiFetch: vi.fn(),
 }));
 
+vi.mock('@/i18n', () => ({
+  useUI: () => (key) => key,
+}));
+
 import { useCertExpiry } from '../useCertExpiry.js';
+import CertExpiryBanner from '../CertExpiryBanner.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
 function makeApiFetch(body, { ok = true } = {}) {
@@ -221,5 +228,70 @@ describe('useCertExpiry — no stale certificate', () => {
     await act(async () => {});
     expect(result.current.validTo).toBeNull();
     expect(result.current.daysLeft).toBeNull();
+  });
+});
+
+// ETP-6053 — GET /certificate returns validTo as ISO yyyy-MM-dd, so daysUntil really computes a
+// distance and the banner really appears. The hook and the real banner wired as FiscalConfigPage
+// wires them, with today pinned (only Date is faked, so waitFor keeps its real timers).
+describe('useCertExpiry → CertExpiryBanner (ISO /certificate payload)', () => {
+  function CertBanner() {
+    const { daysLeft } = useCertExpiry(BASE, { orgId: ORG });
+    return createElement('div', { 'data-testid': 'harness', 'data-days-left': String(daysLeft) },
+      createElement(CertExpiryBanner, { daysLeft, variant: 'prominent' }));
+  }
+
+  async function renderFor(validTo) {
+    vi.mocked(useApiFetch).mockReturnValue(makeApiFetch({ exists: true, validTo }));
+    render(createElement(CertBanner));
+    await waitFor(() => expect(screen.getByTestId('harness')).not.toHaveAttribute('data-days-left', 'null'));
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-10T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('shows a dismissable warning 45 days ahead', async () => {
+    await renderFor('2026-12-25');
+    expect(screen.getByTestId('harness')).toHaveAttribute('data-days-left', '45');
+    expect(screen.getByText('fiscal.cert.expiry.warn.title')).toBeInTheDocument();
+    expect(screen.getByTestId('TriangleAlert__15abdc')).toBeInTheDocument();
+    expect(screen.getByLabelText('fiscal.cert.expiry.dismiss')).toBeInTheDocument();
+  });
+
+  it('shows a critical, non-dismissable banner 15 days ahead', async () => {
+    await renderFor('2026-11-25');
+    expect(screen.getByTestId('harness')).toHaveAttribute('data-days-left', '15');
+    expect(screen.getByText('fiscal.cert.expiry.critical.title')).toBeInTheDocument();
+    expect(screen.getByTestId('OctagonAlert__15abdc')).toBeInTheDocument();
+    expect(screen.queryByLabelText('fiscal.cert.expiry.dismiss')).not.toBeInTheDocument();
+  });
+
+  it('shows the critical "expires today" banner on the expiry day', async () => {
+    await renderFor('2026-11-10');
+    expect(screen.getByTestId('harness')).toHaveAttribute('data-days-left', '0');
+    expect(screen.getByText('fiscal.cert.expiry.today.title')).toBeInTheDocument();
+    expect(screen.getByTestId('OctagonAlert__15abdc')).toBeInTheDocument();
+    expect(screen.queryByLabelText('fiscal.cert.expiry.dismiss')).not.toBeInTheDocument();
+  });
+
+  it('shows the critical "expired" banner for a past validTo', async () => {
+    await renderFor('2026-10-29');
+    expect(screen.getByTestId('harness')).toHaveAttribute('data-days-left', '-12');
+    expect(screen.getByText('fiscal.cert.expiry.expired.title')).toBeInTheDocument();
+    expect(screen.getByTestId('OctagonAlert__15abdc')).toBeInTheDocument();
+    expect(screen.queryByLabelText('fiscal.cert.expiry.dismiss')).not.toBeInTheDocument();
+  });
+
+  it('shows no banner more than 60 days ahead', async () => {
+    await renderFor('2027-01-24');
+    expect(screen.getByTestId('harness')).toHaveAttribute('data-days-left', '75');
+    expect(screen.queryByTestId('TriangleAlert__15abdc')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('OctagonAlert__15abdc')).not.toBeInTheDocument();
   });
 });

@@ -56,6 +56,8 @@ const OBSERVABILITY_PROPERTY_VALUES = Object.freeze({
   TAGS: 'tags',
   TOTAL: 'total',
   SPEC_NAME: 'specName',
+  // ETP-6080: random per report session (crypto.randomUUID), never a user or record id.
+  REPORT_SESSION_ID: 'reportSessionId',
   STATUS: 'status',
   STEP: 'step',
   STEP_ID: 'stepId',
@@ -177,6 +179,7 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
   WALKTHROUGH_STARTED: defineEvent('walkthrough_started', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
     properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
       OBSERVABILITY_PROPERTY_KEYS.FLOW_ID,
       // The status the flow held BEFORE this run, which separates a first-timer
       // from a repeater from someone coming back to a revised tour.
@@ -189,6 +192,7 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
   WALKTHROUGH_FINISHED: defineEvent('walkthrough_finished', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
     properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
       OBSERVABILITY_PROPERTY_KEYS.FLOW_ID,
       // 'completed' | 'abandoned' -- one event with an outcome rather than two
       // events, so the funnel is a single step with a breakdown.
@@ -322,6 +326,17 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
       OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
       OBSERVABILITY_PROPERTY_KEYS.ENTITY,
       OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+    ],
+  }),
+  // ETP-6050 — one event per time the Invoice Inbox page is shown. Makes the backend-only
+  // `invoice-inbox` flag measurable (adoption = this event over `session_started`). The tenant only
+  // (`account_id`) plus the spec: no user, file name, vendor, amount or document id.
+  INVOICE_INBOX_OPENED: defineEvent('invoice_inbox_opened', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
       OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
     ],
   }),
@@ -818,6 +833,63 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
   // "Ir a Mis empresas" pressed on /account, where the flag replaced the subscription.
   ACCOUNT_SUBSCRIPTION_MOVED_CLICKED: defineEvent('account_subscription_moved_clicked', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+  }),
+  // --- interactive reports (ETP-6080, flag `dynamic-reports`; KPI analysis PR #25) -----------
+  // Every event carries `specName` (the report id) and `reportSessionId`. `errorCode` is a class
+  // (`network`, `http_500`, `org_access_denied`), never a message.
+  // Once per report session, when the first result is visible. `source`: 'menu' | 'deep_link'.
+  REPORT_OPENED: defineEvent('report_opened', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+      OBSERVABILITY_PROPERTY_KEYS.REPORT_SESSION_ID,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.OUTCOME,
+      OBSERVABILITY_PROPERTY_KEYS.DURATION_MS,
+      OBSERVABILITY_PROPERTY_KEYS.ERROR_CODE,
+    ],
+  }),
+  // One per user change, once its result is visible or its request failed; never for the defaults,
+  // "Limpiar filtros" or an aborted request. `type`: 'period' | 'organization' | 'account_level' |
+  // 'business_partner' | 'product' | 'comparison'.
+  REPORT_FILTER_APPLIED: defineEvent('report_filter_applied', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+      OBSERVABILITY_PROPERTY_KEYS.REPORT_SESSION_ID,
+      OBSERVABILITY_PROPERTY_KEYS.TYPE,
+      OBSERVABILITY_PROPERTY_KEYS.OUTCOME,
+      OBSERVABILITY_PROPERTY_KEYS.DURATION_MS,
+      OBSERVABILITY_PROPERTY_KEYS.ERROR_CODE,
+    ],
+  }),
+  // `type`: 'expand' | 'collapse' | 'expand_all' | 'collapse_all'. `outcome` is always 'success':
+  // the interactions KPI only counts events with it.
+  REPORT_GROUP_TOGGLED: defineEvent('report_group_toggled', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+      OBSERVABILITY_PROPERTY_KEYS.REPORT_SESSION_ID,
+      OBSERVABILITY_PROPERTY_KEYS.TYPE,
+      OBSERVABILITY_PROPERTY_KEYS.OUTCOME,
+    ],
+  }),
+  // `type`: 'ledger' | 'entry' (with `durationMs`, click to detail visible) | 'document' (when the
+  // tab opens, no duration). `outcome`: 'success' | 'error' | 'no_document'.
+  REPORT_DRILLDOWN: defineEvent('report_drilldown', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+      OBSERVABILITY_PROPERTY_KEYS.REPORT_SESSION_ID,
+      OBSERVABILITY_PROPERTY_KEYS.TYPE,
+      OBSERVABILITY_PROPERTY_KEYS.OUTCOME,
+      OBSERVABILITY_PROPERTY_KEYS.DURATION_MS,
+      OBSERVABILITY_PROPERTY_KEYS.ERROR_CODE,
+    ],
   }),
 });
 

@@ -15,6 +15,7 @@ import {
   parseBackendError,
   translateBackendErrorResponse,
   translateBackendErrorBody,
+  hasMappedMessageKey,
   translateImportRefusal,
   isImportRefusalCode,
   translateQuotaRefusalBody,
@@ -1469,6 +1470,138 @@ describe('translateBackendError — country/IBAN validation (ETP-4896)', () => {
       messageKeys: ['ETGO_AccountingAccessDenied'] };
     assert.equal(translateBackendErrorBody(body, ui, 'fallback'), 'Tu rol no puede ver la contabilidad');
   });
+});
+
+// ETP-6148 — the SEPA remittance refusals (SepaRemittancesFlag and the remittance handlers in
+// com.etendoerp.go), mapped by key through the real locales.
+describe('translateBackendError — SEPA remittance refusals (ETP-6148)', () => {
+  const KEYED = [
+    ['ETGO_SepaRemittancesDisabled', 'backendError.sepaRemittancesDisabled'],
+    ['ETGO_RemittanceAccountNotBank', 'backendError.remittanceAccountNotBank'],
+    ['ETGO_RemittanceAccountIbanRequired', 'backendError.remittanceAccountIbanRequired'],
+    ['ETGO_RemittanceMethodAccountNotAllowed', 'backendError.remittanceMethodAccountNotAllowed'],
+    // RemittanceHeaderHandler: an account with no remittance payment methods linked (422), and the
+    // Bank-account create racing on that provisioning (409, retry).
+    ['ETGO_RemittanceAccountNotAllowed', 'backendError.remittanceAccountNotAllowed'],
+    ['ETGO_RemittanceProvisioningConflict', 'backendError.remittanceProvisioningConflict'],
+    // RemittanceHeaderHandler: a new or changed due date earlier than today (422), the safety
+    // net behind the dueDate field's `minDate`.
+    ['ETGO_RemittanceDueDatePast', 'backendError.remittanceDueDatePast'],
+    // RemittanceHeaderHandler: a write on a processed remittance, and the «Seleccionar desde
+    // factura» refusals (availableDueItems / selectDueItems, 422).
+    ['ETGO_RemittanceProcessedNotEditable', 'backendError.remittanceProcessedNotEditable'],
+    ['ETGO_RemittanceTypeOrAccountMissing', 'backendError.remittanceTypeOrAccountMissing'],
+    ['ETGO_RemittanceDueItemsRequired', 'backendError.remittanceDueItemsRequired'],
+    ['ETGO_RemittanceDueItemNotAvailable', 'backendError.remittanceDueItemNotAvailable'],
+    // «Procesar» / «Reactivar» refusals with a fixed sentence (422).
+    ['ETGO_RemittanceAlreadyProcessed', 'backendError.remittanceAlreadyProcessed'],
+    ['ETGO_RemittanceNoLines', 'backendError.remittanceNoLines'],
+    ['ETGO_RemittanceNotProcessed', 'backendError.remittanceNotProcessed'],
+    // syncDueItems / the in-place «A remesar» cell (422).
+    ['ETGO_RemittanceLineAmountInvalid', 'backendError.remittanceLineAmountInvalid'],
+    ['ETGO_RemittanceLineAmountNotEditable', 'backendError.remittanceLineAmountNotEditable'],
+    ['ETGO_RemittanceDueItemNotIncluded', 'backendError.remittanceDueItemNotIncluded'],
+  ];
+  // The *Failed refusals embed the cause (REM's own text) as `{0}` and the backend sends no
+  // messageParams, so their sentences take `{detail}`: without it the key route yields and the
+  // backend text, already in the request language and carrying the cause, is shown.
+  const DETAIL_KEYED = [
+    ['ETGO_RemittanceDueItemsSelectionFailed', 'backendError.remittanceDueItemsSelectionFailed'],
+    ['ETGO_RemittanceProcessFailed', 'backendError.remittanceProcessFailed'],
+    ['ETGO_RemittanceReactivateFailed', 'backendError.remittanceReactivateFailed'],
+  ];
+  const LOCALES = ['en_US', 'es_ES', 'es_AR'];
+  const labels = Object.fromEntries(LOCALES.map((loc) => [
+    loc, JSON.parse(readFileSync(new URL(`../../locales/${loc}.json`, import.meta.url), 'utf8')).genericLabels,
+  ]));
+
+  // FinancialAccountHandler: changing a Bank account's type while it has open remittances (422).
+  // The count travels inside the backend text ({0}) with no messageParams, so the sentence takes
+  // `{count}`: without it the backend text (count included) is shown, never a number-less sentence.
+  describe('ETGO_RemittanceAccountTypeChangeBlocked', () => {
+    const KEY = 'ETGO_RemittanceAccountTypeChangeBlocked';
+    const UI_KEY = 'backendError.remittanceAccountTypeChangeBlocked';
+
+    it('has a {count} sentence in every locale', () => {
+      for (const loc of LOCALES) assert.match(labels[loc][UI_KEY] ?? '', /\{count\}/, loc);
+    });
+
+    it('without messageParams.count, shows the backend text with its count', () => {
+      const prose = 'No se puede cambiar el tipo de una cuenta bancaria que tiene 3 remesas abiertas.';
+      for (const loc of LOCALES) {
+        assert.equal(translateBackendError(prose, localeTranslator(loc), { messageKeys: [KEY] }), prose, loc);
+      }
+      const body = { error: { status: 422, message: prose, messageKeys: [KEY] } };
+      assert.equal(translateBackendErrorBody(body, localeTranslator('es_ES'), 'fallback'), prose);
+    });
+
+    it('with messageParams.count, renders the locale sentence with the number', () => {
+      for (const loc of LOCALES) {
+        const out = translateBackendError('raw', localeTranslator(loc), { messageKeys: [KEY], messageParams: { count: 3 } });
+        assert.equal(out, labels[loc][UI_KEY].replace('{count}', '3'), loc);
+      }
+    });
+  });
+
+  it('has every key, non-empty, in en_US, es_ES and es_AR', () => {
+    for (const loc of LOCALES) {
+      for (const [, uiKey] of [...KEYED, ...DETAIL_KEYED]) {
+        assert.ok(typeof labels[loc][uiKey] === 'string' && labels[loc][uiKey].trim(), `${loc} is missing ${uiKey}`);
+      }
+    }
+  });
+
+  it('translates the Spanish locales instead of copying the English sentence', () => {
+    for (const [, uiKey] of [...KEYED, ...DETAIL_KEYED]) {
+      assert.notEqual(labels.es_ES[uiKey], labels.en_US[uiKey], `es_ES ${uiKey}`);
+      assert.notEqual(labels.es_AR[uiKey], labels.en_US[uiKey], `es_AR ${uiKey}`);
+    }
+  });
+
+  for (const [messageKey, uiKey] of DETAIL_KEYED) {
+    it(`${messageKey}: every locale sentence takes a {detail} param`, () => {
+      for (const loc of LOCALES) assert.match(labels[loc][uiKey], /\{detail\}/, `${loc} ${uiKey}`);
+    });
+
+    it(`${messageKey}: without messageParams.detail, shows the backend text (cause included)`, () => {
+      const prose = 'No se pudo procesar: el vencimiento 1001 ya está pagado.';
+      for (const loc of LOCALES) {
+        assert.equal(translateBackendError(prose, localeTranslator(loc), { messageKeys: [messageKey] }), prose, loc);
+        assert.equal(
+          translateBackendError(prose, localeTranslator(loc), { messageKeys: [messageKey], messageParams: { other: 'x' } }),
+          prose, loc,
+        );
+      }
+      const body = { error: { status: 422, message: prose, messageKeys: [messageKey] } };
+      assert.equal(translateBackendErrorBody(body, localeTranslator('es_ES'), 'fallback'), prose);
+    });
+
+    it(`${messageKey}: with messageParams.detail, renders the locale sentence around it`, () => {
+      for (const loc of LOCALES) {
+        const out = translateBackendError('raw', localeTranslator(loc), {
+          messageKeys: [messageKey], messageParams: { detail: 'CAUSE-42' },
+        });
+        assert.equal(out, labels[loc][uiKey].replace('{detail}', 'CAUSE-42'), loc);
+        assert.doesNotMatch(out, /\{detail\}/);
+      }
+    });
+  }
+
+  for (const [messageKey, uiKey] of KEYED) {
+    it(`${messageKey}: maps by key in every locale, whatever language the prose is in`, () => {
+      for (const loc of LOCALES) {
+        const t = localeTranslator(loc);
+        assert.equal(translateBackendError('Some English prose.', t, { messageKeys: [messageKey] }), labels[loc][uiKey], loc);
+        assert.equal(translateBackendError('Un texto en castellano.', t, { messageKeys: [messageKey] }), labels[loc][uiKey], loc);
+      }
+    });
+
+    it(`${messageKey}: reads the key out of the NEO error body`, () => {
+      const body = { error: { status: 400, message: 'raw', messageKeys: [messageKey] } };
+      assert.equal(translateBackendErrorBody(body, localeTranslator('es_ES'), 'fallback'), labels.es_ES[uiKey]);
+    });
+  }
+
 });
 
 // ETP-4891 follow-up: PSD2_IBANAutoFillFailed (com.etendoerp.psd2) — that module ships ~108
@@ -3729,6 +3862,83 @@ describe('translateBackendError — invoice reactivate fiscal-rectified refusal 
   });
 });
 
+// ── ETP-5745 CP-19/CP-23: rectification fiscal-code-required refusal (RectificationFiscalCodeGuard)
+// — `messageParams.systems` is a raw array of ACTIVE fiscal systems still missing their own
+// rectification code/motive, joined with the SAME locale-aware conjunction as fiscalSystem above
+// (the backend's own `message` field is deliberately plain English prose — the wire contract for
+// MCP/scripts; the SPA never shows it, it renders this localized sentence instead).
+describe('translateBackendError — rectification fiscal-code-required refusal (ETP-5745)', () => {
+  const es = localeTranslator('es_ES');
+  const en = localeTranslator('en_US');
+  const KEY = 'ETGO_InvoiceRectificationCodeRequired';
+
+  it('renders the key in es_ES and en_US, never the raw key or the backend prose', () => {
+    const prose = 'Select a rectification reason/code in the SIF tab for SII.';
+    const esText = translateBackendError(prose, es, { messageKeys: [KEY], messageParams: { systems: ['SII'] } });
+    const enText = translateBackendError(prose, en, { messageKeys: [KEY], messageParams: { systems: ['SII'] } });
+    assert.notEqual(esText, 'backendError.rectificationCodeRequired');
+    assert.notEqual(enText, 'backendError.rectificationCodeRequired');
+    assert.notEqual(esText, enText);
+  });
+
+  it('names a single missing system with no conjunction needed', () => {
+    const text = translateBackendError('ignored', es, { messageKeys: [KEY], messageParams: { systems: ['Verifactu'] } });
+    assert.match(text, /Verifactu/);
+  });
+
+  it('joins a 2-element systems array with the real es_ES/en_US conjunction, not a comma', () => {
+    const params = { systems: ['SII', 'TicketBAI'] };
+    const esText = translateBackendError('ignored', es, { messageKeys: [KEY], messageParams: params });
+    const enText = translateBackendError('ignored', en, { messageKeys: [KEY], messageParams: params });
+    assert.match(esText, /SII y TicketBAI/);
+    assert.match(enText, /SII and TicketBAI/);
+    assert.doesNotMatch(esText, /SII, TicketBAI/);
+  });
+
+  it('joins a 3-element systems array with no Oxford comma before the conjunction', () => {
+    const params = { systems: ['SII', 'TicketBAI', 'Verifactu'] };
+    const esText = translateBackendError('ignored', es, { messageKeys: [KEY], messageParams: params });
+    const enText = translateBackendError('ignored', en, { messageKeys: [KEY], messageParams: params });
+    assert.match(esText, /SII, TicketBAI y Verifactu/);
+    assert.match(enText, /SII, TicketBAI and Verifactu/);
+  });
+
+  it('keeps the backend prose when the locale has no entry for the key', () => {
+    const prose = 'raw backend prose';
+    assert.equal(translateBackendError(prose, (k) => k, {
+      messageKeys: [KEY], messageParams: { systems: ['SII'] },
+    }), prose);
+  });
+});
+
+// ── ETP-5745 CP-26: a non-rectificative invoice with a stray VERI*FACTU R1-R5 code BLOCKS
+// completion instead of being silently corrected (reverted from the original CP-20 behavior).
+// No dynamic messageParams — a single fixed sentence naming one field on one system, resolved
+// through the generic BACKEND_ERROR_KEY_MAP route (not a dedicated composer).
+describe('translateBackendError — Verifactu invoice type not rectificative (ETP-5745 CP-26)', () => {
+  const es = localeTranslator('es_ES');
+  const en = localeTranslator('en_US');
+  const KEY = 'ETGO_InvoiceVerifactuInvTypeNotRectificative';
+
+  it('renders the key in es_ES and en_US, never the raw key or the backend prose', () => {
+    const prose = 'The VERI*FACTU invoice type cannot be a rectification code (R1-R5) on an '
+      + 'invoice that is not rectificative. Fix it in the SIF tab before confirming.';
+    const esText = translateBackendError(prose, es, { messageKeys: [KEY] });
+    const enText = translateBackendError(prose, en, { messageKeys: [KEY] });
+    assert.notEqual(esText, 'backendError.verifactuInvTypeNotRectificative');
+    assert.notEqual(enText, 'backendError.verifactuInvTypeNotRectificative');
+    assert.notEqual(esText, prose);
+    assert.notEqual(esText, enText);
+    assert.match(esText, /Verifactu|VERI\*FACTU/i);
+    assert.match(esText, /rectificaci/i);
+  });
+
+  it('keeps the backend prose when the locale has no entry for the key', () => {
+    const prose = 'raw backend prose';
+    assert.equal(translateBackendError(prose, (k) => k, { messageKeys: [KEY] }), prose);
+  });
+});
+
 // ── translateByMessageKey messageParams forwarding — no regression on param-less keys ──
 //
 // translateByMessageKey now forwards messageParams to t(key, params) for EVERY keyed message,
@@ -3933,6 +4143,129 @@ describe('extractBackendErrorCode (ETP-5782)', () => {
     const t = (key) => es[key] ?? key;
     assert.match(translateBackendError('Internal error.', t, { code: 'service_unavailable' }), /no está disponible/);
     assert.equal(translateBackendError('A value sent is not valid.', t, { code: 'weird' }), 'A value sent is not valid.');
+  });
+});
+
+// ── PSD2 bank sync: the client timeout sentinel and the lock refusal code ──────────
+describe('translateBackendError — PSD2 bank sync sentinels and codes', () => {
+  const LOCALES = ['en_US', 'es_ES', 'es_AR'];
+  const readLabels = (locale) => JSON.parse(
+    readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8')).genericLabels;
+
+  it('maps the BANK_CONNECTION_TIMEOUT sentinel to the timeout label, never the raw token', () => {
+    const es = fakeUiTranslator({ financeAccountsBankConnectionTimeout: 'El banco no respondió a tiempo.' });
+    assert.equal(translateBackendError('BANK_CONNECTION_TIMEOUT', es), 'El banco no respondió a tiempo.');
+  });
+
+  it('translates BANK_SYNC_LOCK_UNAVAILABLE by its code alone, whatever prose the server sent', () => {
+    for (const locale of LOCALES) {
+      const labels = readLabels(locale);
+      const t = (key) => labels[key] ?? key;
+      assert.equal(
+        translateBackendError('Could not acquire the sync lock for account X', t, { code: 'BANK_SYNC_LOCK_UNAVAILABLE' }),
+        labels['backendError.bankSyncLockUnavailable'],
+        locale,
+      );
+    }
+  });
+
+  it('translates BANK_SYNC_DUPLICATE_CHECK_FAILED by its code alone, English or server-translated prose', () => {
+    for (const locale of LOCALES) {
+      const labels = readLabels(locale);
+      const t = (key) => labels[key] ?? key;
+      for (const prose of [
+        'Could not verify whether 3 transactions were already imported; they were skipped.',
+        'No se pudo verificar si 3 movimientos ya estaban importados.',
+      ]) {
+        assert.equal(
+          translateBackendError(prose, t, { code: 'BANK_SYNC_DUPLICATE_CHECK_FAILED' }),
+          labels['backendError.bankSyncDuplicateCheckFailed'],
+          `${locale}: ${prose}`,
+        );
+      }
+    }
+  });
+
+  it('a message BACKEND_ERROR_MAP knows word for word keeps its own translation over the duplicate-check code', () => {
+    const labels = readLabels('es_ES');
+    const t = (key) => labels[key] ?? key;
+    const known = 'No active bank connection found for financial account %s. Connect the account first.';
+    assert.equal(
+      translateBackendError(known, t, { code: 'BANK_SYNC_DUPLICATE_CHECK_FAILED' }),
+      labels['backendError.psd2NoActiveConnection'],
+    );
+  });
+
+  it('keeps the server prose when the lock label is missing (guard)', () => {
+    const prose = 'Could not acquire the sync lock';
+    assert.equal(translateBackendError(prose, (k) => k, { code: 'BANK_SYNC_LOCK_UNAVAILABLE' }), prose);
+  });
+
+  for (const key of [
+    'financeAccountsBankSyncTooltip',
+    'financeAccountsBankSyncInProgress',
+    'backendError.bankSyncLockUnavailable',
+    'backendError.bankSyncDuplicateCheckFailed',
+  ]) {
+    it(`ships ${key} in every locale, translated in the Spanish ones`, () => {
+      const en = readLabels('en_US')[key];
+      assert.ok(typeof en === 'string' && en.trim(), `en_US.${key}`);
+      for (const locale of ['es_ES', 'es_AR']) {
+        const text = readLabels(locale)[key];
+        assert.ok(typeof text === 'string' && text.trim(), `${locale}.${key}`);
+        assert.notEqual(text, en, `${locale}.${key} is untranslated`);
+      }
+    });
+  }
+});
+
+// ── ETP-6151: PSD2 import-settings refusals of link / createAndLink / import-settings ──
+// FinancialAccountBankConnectionHandler validates the two import settings the link now persists.
+// The connect modal and the edit panel enforce both fields before sending, so these are a safety
+// net; they reuse the fields' own required/range copy, which only en_US and es_ES ship.
+describe('translateBackendError — PSD2 import-settings refusals (ETP-6151)', () => {
+  const readLabels = (locale) => JSON.parse(
+    readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8')).genericLabels;
+  const CASES = [
+    ['The import from date is required', 'financeAccountsBankConnectionImportFromRequired'],
+    ['The import from date is not a valid date (expected yyyy-MM-dd)', 'financeAccountsBankConnectionImportFromRequired'],
+    ['The statement grouping is required', 'financeAccountsBankConnectionGroupingRequired'],
+    ['The statement grouping must be one of 1BD, 1BW, 1BM, 1BE', 'financeAccountsBankConnectionGroupingRequired'],
+    ['The import from date cannot be later than the import to date', 'financeAccountsBankConnectionImportRangeInvalid'],
+  ];
+
+  for (const [raw, key] of CASES) {
+    it(`maps "${raw}" to ${key}`, () => {
+      const requested = [];
+      const t = (k) => {
+        requested.push(k);
+        return `translated:${k}`;
+      };
+      assert.equal(translateBackendError(raw, t), `translated:${key}`);
+      assert.ok(requested.includes(key));
+    });
+
+    for (const locale of ['en_US', 'es_ES']) {
+      it(`resolves "${raw}" to a real ${locale} sentence`, () => {
+        const labels = readLabels(locale);
+        const translated = translateBackendError(raw, (k) => labels[k] ?? k);
+        assert.equal(translated, labels[key]);
+        assert.ok(typeof translated === 'string' && translated.trim());
+      });
+    }
+  }
+
+  it('tolerates surrounding whitespace', () => {
+    const labels = readLabels('es_ES');
+    assert.equal(
+      translateBackendError('  The statement grouping is required\n', (k) => labels[k] ?? k),
+      labels.financeAccountsBankConnectionGroupingRequired,
+    );
+  });
+
+  it('keeps the raw text when the label is missing (guard)', () => {
+    const raw = 'The import from date is required';
+    assert.equal(translateBackendError(raw, (k) => k), raw);
   });
 });
 
@@ -4633,5 +4966,30 @@ describe('translateImportRefusal / isImportRefusalCode — line-import refusals 
       assert.match(labels['backendError.importQuantityExceedsPending'], /\{requested\}.*\{product\}.*\{pending\}/, locale);
       assert.match(labels[NOTHING_PENDING_ON_LINE], /\{requested\}.*\{product\}/, locale);
     }
+  });
+});
+
+// ETP-6148 — hasMappedMessageKey: whether a refusal names a key the SPA translates. The account
+// create/edit flows use it to tell a code-less 409 that carries a mapped key
+// (ETGO_RemittanceProvisioningConflict) from a real duplicate name.
+describe('hasMappedMessageKey', () => {
+  it('is true for a mapped key', () => {
+    assert.equal(hasMappedMessageKey(['ETGO_RemittanceProvisioningConflict']), true);
+  });
+
+  it('is false for an unmapped key', () => {
+    assert.equal(hasMappedMessageKey(['ETGO_SomethingNobodyMapped']), false);
+  });
+
+  it('is true when any key of a mix is mapped, wherever it sits', () => {
+    assert.equal(hasMappedMessageKey(['ETGO_SomethingNobodyMapped', 'ETGO_RemittanceProvisioningConflict']), true);
+    assert.equal(hasMappedMessageKey(['ETGO_RemittanceAccountNotBank', 'ETGO_SomethingNobodyMapped']), true);
+  });
+
+  it('is false for an empty list, undefined, null or a non-array', () => {
+    assert.equal(hasMappedMessageKey([]), false);
+    assert.equal(hasMappedMessageKey(undefined), false);
+    assert.equal(hasMappedMessageKey(null), false);
+    assert.equal(hasMappedMessageKey('ETGO_RemittanceProvisioningConflict'), false);
   });
 });

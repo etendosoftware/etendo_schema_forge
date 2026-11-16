@@ -8,6 +8,10 @@
       the canonical csvField (formula neutralization + quoting) — and every csvField
       call MUST be triple-stashed ({{{ }}}), never {{ }}: Handlebars HTML-escapes
       double-stash output by default, which turns csvField's own escaped `""` into
-      `&quot;&quot;`, corrupting the CSV. --}}{{#with meta}}{{{csvField labels.hdrGroup}}},{{{csvField labels.hdrDepth}}},{{{csvField labels.hdrType}}},{{{csvField labels.hdrCode}}},{{{csvField labels.hdrName}}},{{{csvField labels.amount}}}{{#ifCond params.compareTo '===' 'true'}},{{{csvField labels.amount_ref}}}{{/ifCond}}
-{{/with}}{{#each rows}}{{{csvField this.group}}},{{this.indent}},{{#if this.isFormula}}{{#ifCond this.elementlevel '===' 'E'}}{{{csvField @root.meta.labels.T}}}{{else}}{{{csvField (lookup @root.meta.labels this.elementlevel)}}}{{/ifCond}}{{else}}{{{csvField (lookup @root.meta.labels this.elementlevel)}}}{{/if}},{{{csvField this.value}}},{{{csvField this.name}}},{{this.amount}}{{#ifCond @root.meta.params.compareTo '===' 'true'}},{{this.amount_ref}}{{/ifCond}}
+      `&quot;&quot;`, corrupting the CSV.
+      Variation columns (ETP-6080): only with a comparison AND only for a
+      contract that declares `labels.variationAmount` (Profit & Loss; the
+      Balance Sheet shares this file byte for byte and has no variation yet).
+      Raw values like the amounts; an empty cell when there is no % (reference 0). --}}{{#with meta}}{{{csvField labels.hdrGroup}}},{{{csvField labels.hdrDepth}}},{{{csvField labels.hdrType}}},{{{csvField labels.hdrCode}}},{{{csvField labels.hdrName}}},{{{csvField labels.amount}}}{{#ifCond params.compareTo '===' 'true'}},{{{csvField labels.amount_ref}}}{{#if labels.variationAmount}},{{{csvField labels.variationAmount}}},{{{csvField labels.variationPct}}}{{/if}}{{/ifCond}}
+{{/with}}{{#each rows}}{{{csvField this.group}}},{{this.indent}},{{#if this.isFormula}}{{#ifCond this.elementlevel '===' 'E'}}{{{csvField @root.meta.labels.T}}}{{else}}{{{csvField (lookup @root.meta.labels this.elementlevel)}}}{{/ifCond}}{{else}}{{{csvField (lookup @root.meta.labels this.elementlevel)}}}{{/if}},{{{csvField this.value}}},{{{csvField this.name}}},{{this.amount}}{{#ifCond @root.meta.params.compareTo '===' 'true'}},{{this.amount_ref}}{{#if @root.meta.labels.variationAmount}},{{this.variationAmount}},{{this.variationPct}}{{/if}}{{/ifCond}}
 {{/each}}

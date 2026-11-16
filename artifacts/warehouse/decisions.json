@@ -79,8 +79,7 @@
     },
     "productTransactions": {
       "name": "productTransactions",
-      "readOnly": true,
-      "javaQualifier": "productTransactionsHandler"
+      "readOnly": true
     },
     "binContents": {
       "name": "binContents",
