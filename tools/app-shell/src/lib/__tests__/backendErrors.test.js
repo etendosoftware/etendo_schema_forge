@@ -4054,7 +4054,7 @@ describe('parseBackendError / translateBackendErrorResponse (ETP-5692)', () => {
 // com.etendoerp.go refuses a contact category, or a contact, saved with neither Customer nor
 // Vendor/Creditor. Both are AD_MESSAGE records of a module with no es_ES translation pack, so the
 // SPA's map is where they become Spanish. Reads the REAL locale files so a missing entry fails.
-describe('translateBackendError — contact-type refusals by identity', () => {
+describe('translateBackendError — contact-type and contact identity refusals by identity', () => {
   const es = localeTranslator('es_ES');
   const en = localeTranslator('en_US');
   // [messageKey, i18n key, the backend's English prose]
@@ -4063,6 +4063,15 @@ describe('translateBackendError — contact-type refusals by identity', () => {
       'At least one contact type must be checked: Customer or Vendor/Creditor.'],
     ['ETGO_BPartnerContactTypeRequired', 'backendError.bpartnerContactTypeRequired',
       'The contact must have at least one type: Customer or Vendor/Creditor.'],
+    // ETP-6175 — person or company identity (ContactIdentityRules).
+    ['ETGO_BPartnerPersonNamesRequired', 'backendError.bpartnerPersonNamesRequired',
+      'A person contact requires both a first name and a last name.'],
+    ['ETGO_BPartnerPersonNameNotAllowed', 'backendError.bpartnerPersonNameNotAllowed',
+      'The name of a person contact is built from its first and last name, so it cannot be set: send the first and last name instead.'],
+    ['ETGO_BPartnerCompanyNameRequired', 'backendError.bpartnerCompanyNameRequired',
+      'A company contact requires a legal name.'],
+    ['ETGO_BPartnerCompanyPersonNamesNotAllowed', 'backendError.bpartnerCompanyPersonNamesNotAllowed',
+      'A company contact has no first or last name: leave them empty and set its legal name instead. To create a person, send is_person: true.'],
   ];
 
   for (const [messageKey, i18nKey, prose] of CASES) {

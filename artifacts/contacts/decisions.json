@@ -255,7 +255,7 @@
           "publicApi": {
             "exposed": true,
             "name": "firstName",
-            "description": "First name of a person. Required when is_person is true. Refused for a company."
+            "description": "First name of a person. Required when is_person is true. Refused for a company, and on a create without is_person true."
           }
         },
         "etgoLastname": {
@@ -268,7 +268,7 @@
           "publicApi": {
             "exposed": true,
             "name": "lastName",
-            "description": "Last name of a person. Required when is_person is true. Refused for a company."
+            "description": "Last name of a person. Required when is_person is true. Refused for a company, and on a create without is_person true."
           }
         },
         "etgoIsperson": {
@@ -278,7 +278,7 @@
           "publicApi": {
             "exposed": true,
             "name": "isPerson",
-            "description": "true for a person, false for a company. A contact created without it is a company. A person sends first_name and last_name; a company sends name."
+            "description": "true for a person, false for a company. A contact created without it is a company, so a create that sends first_name or last_name without is_person true is refused. A person sends first_name and last_name; a company sends name. Switching a contact to a company clears its first and last name."
           }
         },
         "eTGOLocation": {

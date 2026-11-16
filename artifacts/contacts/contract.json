@@ -1,8 +1,8 @@
 {
-  "version": "0.11.0",
+  "version": "0.12.0",
   "generatedAt": "2026-09-20T18:16:41.258Z",
-  "updatedAt": "2026-11-16T15:28:47.748Z",
-  "checksum": "998804362239c69a",
+  "updatedAt": "2026-11-16T15:34:21.238Z",
+  "checksum": "70beeb91418247f2",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -633,7 +633,7 @@
             "publicApi": {
               "exposed": true,
               "name": "firstName",
-              "description": "First name of a person. Required when is_person is true. Refused for a company."
+              "description": "First name of a person. Required when is_person is true. Refused for a company, and on a create without is_person true."
             },
             "displayLogic": {
               "raw": "@EM_Etgo_Isperson@='Y'",
@@ -659,7 +659,7 @@
             "publicApi": {
               "exposed": true,
               "name": "lastName",
-              "description": "Last name of a person. Required when is_person is true. Refused for a company."
+              "description": "Last name of a person. Required when is_person is true. Refused for a company, and on a create without is_person true."
             },
             "displayLogic": {
               "raw": "@EM_Etgo_Isperson@='Y'",
@@ -899,7 +899,7 @@
             "publicApi": {
               "exposed": true,
               "name": "isPerson",
-              "description": "true for a person, false for a company. A contact created without it is a company. A person sends first_name and last_name; a company sends name."
+              "description": "true for a person, false for a company. A contact created without it is a company, so a create that sends first_name or last_name without is_person true is refused. A person sends first_name and last_name; a company sends name. Switching a contact to a company clears its first and last name."
             }
           },
           {

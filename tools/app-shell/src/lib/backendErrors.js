@@ -535,6 +535,15 @@ const BACKEND_ERROR_KEY_MAP = {
   // is where they become Spanish.
   ETGO_BPGroupContactTypeRequired: 'backendError.bpGroupContactTypeRequired',
   ETGO_BPartnerContactTypeRequired: 'backendError.bpartnerContactTypeRequired',
+  // ETP-6175 — the contact identity refusals of com.etendoerp.go (ContactIdentityRules): a person
+  // needs a first and a last name and gets its legal name derived from them; a company needs a
+  // legal name and has no first or last name. The form's Company/Person toggle sends the right
+  // fields, so the app meets these only in a race or a stale form; REST/MCP callers get the
+  // backend text. Same reason as above: no es_ES translation pack, so this map makes them Spanish.
+  ETGO_BPartnerPersonNamesRequired: 'backendError.bpartnerPersonNamesRequired',
+  ETGO_BPartnerPersonNameNotAllowed: 'backendError.bpartnerPersonNameNotAllowed',
+  ETGO_BPartnerCompanyNameRequired: 'backendError.bpartnerCompanyNameRequired',
+  ETGO_BPartnerCompanyPersonNamesNotAllowed: 'backendError.bpartnerCompanyPersonNamesNotAllowed',
   // ETP-5669 — com.etendoerp.go GlJournalHeaderHandler: completing a G/L journal whose stored period
   // does not contain its accounting date. Its own identity on purpose: core's PeriodNotValid for the
   // same case maps to "period not open", which sends the user to open a period they do not need.

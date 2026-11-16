@@ -1861,7 +1861,15 @@ exposes on `businessPartner` (all writable, `inout`):
 
 The rules live on the server (Etendo GO), not in the manifest: the manifest `required` flag cannot express a
 condition, so none of these fields is `required` and each carries a `publicApi.description` that states the rule
-in the OpenAPI document. `phone`, `email` and `web` apply to both kinds.
+in the OpenAPI document. `phone`, `email` and `web` apply to both kinds. A create that sends `first_name` or
+`last_name` without `is_person: true` is a company and is refused; switching a contact to a company clears its
+stored first and last name.
+
+The app maps the four server refusals (`ETGO_BPartnerPersonNamesRequired`, `ETGO_BPartnerPersonNameNotAllowed`,
+`ETGO_BPartnerCompanyNameRequired`, `ETGO_BPartnerCompanyPersonNamesNotAllowed`) by message key in
+`BACKEND_ERROR_KEY_MAP` (`tools/app-shell/src/lib/backendErrors.js`) to `backendError.bpartner*` texts in
+`en_US.json` and `es_ES.json`. The Company/Person toggle sends the right fields, so a user meets them only with
+a stale form; the company one tells the user to mark the contact as a person, matching the server's hint.
 
 The category lookup forwards no context: the form's category selector has no validation rule and sends none,
 so the list is the tenant's active categories the key's role can read. Omitting `category` on create keeps the
@@ -1869,7 +1877,7 @@ form's default (the organization's default category). Contact categories are not
 `category` is a plain id attribute; the resource itself is later work.
 
 The window itself is unchanged: `publicApi` only affects the public API manifest (the regen only bumps the
-contract version, `0.9.0` to `0.11.0`; the generated frontend does not change).
+contract version, `0.9.0` to `0.12.0`; the generated frontend does not change).
 
 Evidence: `gateway/e2e/contacts.e2e.ts` (cases marked `[GO]` need the server rules), `gateway/test/public-api-manifest.test.ts`.
 Contract: `docs/public-api.md` §4.3 (*Person or company*) and §4.2.2.
