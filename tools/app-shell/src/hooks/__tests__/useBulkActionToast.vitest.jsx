@@ -618,3 +618,76 @@ describe('showBulkActionToast — plan-quota refusal (ETP-5051)', () => {
     expect(toast.success.mock.calls[0]).toHaveLength(1);
   });
 });
+
+describe('showBulkActionToast — opt-in failure listing (ETP-6286)', () => {
+  const ui = (key) => ({
+    processExecuted: '{ok} ok, {failed} failed',
+    processExecutedWithOmitted: '{ok} ok, {omitted} omitted, {failed} failed',
+    actionFailed: 'Action failed',
+    bulkFailuresMore: 'and {n} more',
+  }[key] ?? key);
+  const row = (label, message) => ({ label, message });
+  const LISTED = { duration: 10000, classNames: { description: 'whitespace-pre-line' } };
+  const show = (result) => showBulkActionToast(ui, result, { listFailures: true });
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it('lists each failed document with its reason on a mixed result', () => {
+    show({ ok: 1, failed: [row('INV-1', 'No deposit account'), row('INV-2', 'Period closed')] });
+    expect(toast.warning).toHaveBeenCalledWith('1 ok, 2 failed', {
+      description: 'INV-1 — No deposit account\nINV-2 — Period closed',
+      ...LISTED,
+    });
+  });
+
+  it('groups the documents that share a reason into one line', () => {
+    show({ ok: 0, failed: [row('A', 'Boom'), row('B', 'Boom')] });
+    expect(toast.error).toHaveBeenCalledWith('0 ok, 2 failed', { description: 'A, B — Boom', ...LISTED });
+  });
+
+  it('caps labels per line and reason lines, counting the hidden documents', () => {
+    show({
+      ok: 1,
+      failed: [
+        ...['A', 'B', 'C', 'D', 'E'].map((l) => row(l, 'R1')),
+        row('F', 'R2'), row('G', 'R3'), row('H', 'R4'), row('I', 'R5'), row('J', 'R5'),
+      ],
+    });
+    expect(toast.warning.mock.calls[0][1].description)
+      .toBe('A, B, C +2 — R1\nF — R2\nG — R3\nand 3 more');
+  });
+
+  it('collapses whitespace, clips long reasons and labels, and falls back to documentNo', () => {
+    const longReason = `Line 10:\n${'x'.repeat(200)}`;
+    show({ ok: 1, failed: [{ documentNo: 'L'.repeat(60), message: longReason }] });
+    const [label, reason] = toast.warning.mock.calls[0][1].description.split(' — ');
+    expect(label).toHaveLength(40);
+    expect(label.endsWith('…')).toBe(true);
+    expect(reason).toHaveLength(120);
+    expect(reason.startsWith('Line 10: x')).toBe(true);
+  });
+
+  it('shows only the reason for rows without a label, and the generic text without a message', () => {
+    show({ ok: 1, failed: [{}] });
+    expect(toast.warning.mock.calls[0][1].description).toBe('Action failed');
+  });
+
+  it('still lets a quota refusal win', () => {
+    show({ ok: 1, failed: [row('A', 'Boom'), { label: 'B', message: 'Quota', quotaRefusal: true }] });
+    expect(toast.warning).toHaveBeenCalledWith('1 ok, 2 failed', { description: 'Quota', ...LISTED });
+  });
+
+  it('keeps the single-failure fast path and the plain success/omitted-only toasts', () => {
+    show({ ok: 0, failed: [row('A', 'Boom')] });
+    expect(toast.error).toHaveBeenCalledWith('Boom');
+    show({ ok: 2, failed: [] });
+    expect(toast.success.mock.calls[0]).toEqual(['2 ok, 0 failed']);
+    show({ ok: 0, omitted: ['X'], failed: [] });
+    expect(toast.warning.mock.calls[0]).toEqual(['0 ok, 1 omitted, 0 failed']);
+  });
+
+  it('without the option, a multi-record failure keeps the plain count (ETP-5316)', () => {
+    showBulkActionToast(ui, { ok: 1, failed: [row('A', 'Boom'), row('B', 'Other')] });
+    expect(toast.warning.mock.calls[0]).toEqual(['1 ok, 2 failed']);
+  });
+});
