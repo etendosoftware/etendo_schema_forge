@@ -50,8 +50,9 @@ export function PortalTag({ tone = 'neutral', children, className, testId, ...re
         TAG_TONES[tone] ?? TAG_TONES.neutral,
         className,
       )}
-      data-testid={testId}
       {...rest}
+      // An explicit testId wins over a generated data-testid passed through rest.
+      data-testid={testId ?? rest['data-testid']}
     >
       {children}
     </span>
