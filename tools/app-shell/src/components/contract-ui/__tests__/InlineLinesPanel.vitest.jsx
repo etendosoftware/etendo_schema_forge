@@ -8,6 +8,7 @@ import { render, screen, within, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import InlineLinesPanel from '../InlineLinesPanel.jsx';
 import React, { createRef } from 'react';
+import { toast } from 'sonner';
 
 // --- Mocks (one block, no spreading across files) ---
 
@@ -21,6 +22,14 @@ vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
+
+// ETP-6148 — a `link` read cell navigates with useNavigate. The panel is rendered without a
+// Router here, so the hook is replaced by a spy; nothing else in this file calls it.
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useNavigate: () => mockNavigate,
 }));
 
 // ETP-4685 — a handful of enum i18n keys translated for the "resolves enum option
@@ -2675,5 +2684,219 @@ describe('InlineLinesPanel — display: tag column (neutral pill)', () => {
     });
     expect(container.querySelector('.status-tag')).toBeNull();
     expect(screen.getAllByText('Centimeter').length).toBeGreaterThan(0);
+  });
+});
+
+// ETP-6148 — `rowEditDisabled` (decisions.json `entities.<name>.rowEdit: false`): the rows are
+// never edited in place, but delete and the caller's row actions stay.
+describe('InlineLinesPanel — rowEditDisabled', () => {
+  async function hoverRow(id) {
+    const row = screen.getByTestId(`line-row-${id}`);
+    await act(async () => { await userEvent.hover(row); });
+    return row;
+  }
+
+  it('renders no edit pencil but keeps the trash icon', async () => {
+    renderPanel({ rowEditDisabled: true });
+    const row = await hoverRow('L1');
+    const actions = within(row).getByTestId('line-actions');
+    expect(within(actions).queryByTestId('Pencil__3b7ec2')).toBeNull();
+    expect(within(actions).queryByRole('button', { name: 'editLineTooltip' })).toBeNull();
+    expect(within(actions).getByTestId('IconicTrashIcon__3b7ec2')).toBeInTheDocument();
+  });
+
+  it('still deletes through the trash icon', async () => {
+    const onDeleteRow = vi.fn().mockResolvedValue();
+    renderPanel({ rowEditDisabled: true, onDeleteRow });
+    const row = await hoverRow('L1');
+    await act(async () => {
+      await userEvent.click(within(row).getByRole('button', { name: 'deleteRowTooltip' }));
+    });
+    expect(onDeleteRow).toHaveBeenCalledWith(ROWS[0]);
+  });
+
+  it('keeps the caller’s extra row actions', async () => {
+    renderPanel({
+      rowEditDisabled: true,
+      rowActions: [{ key: 'archive', icon: (p) => <span {...p} />, tooltip: 'Archive', onClick: vi.fn(), testId: 'line-action-archive' }],
+    });
+    const row = await hoverRow('L1');
+    expect(within(row).getByTestId('line-action-archive')).toBeInTheDocument();
+    expect(within(row).queryByTestId('Pencil__3b7ec2')).toBeNull();
+  });
+
+  it('a cell click does not enter edit mode', async () => {
+    renderPanel({ rowEditDisabled: true });
+    const row = screen.getByTestId('line-row-L1');
+    await act(async () => { await userEvent.click(within(row).getByText('Widget')); });
+    expect(within(row).queryAllByRole('textbox')).toHaveLength(0);
+  });
+
+  it('without the prop, a cell click still enters edit mode and the pencil is there', async () => {
+    renderPanel();
+    const row = screen.getByTestId('line-row-L1');
+    await act(async () => { await userEvent.hover(row); });
+    expect(within(row).getByTestId('Pencil__3b7ec2')).toBeInTheDocument();
+    await act(async () => { await userEvent.click(within(row).getByText('Widget')); });
+    expect(within(row).queryAllByRole('textbox').length).toBeGreaterThan(0);
+  });
+});
+
+// ETP-6148 — a column's declarative `link` (fkNavigation.js `resolveColumnLink`) on a read cell.
+describe('InlineLinesPanel — link read cell', () => {
+  beforeEach(() => mockNavigate.mockClear());
+
+  const PAYMENT = {
+    key: 'payment', label: 'Payment', type: 'string', readOnly: true,
+    link: { idField: 'payment', window: 'payment-in' },
+  };
+  const INVOICE = {
+    key: 'invoice', label: 'Invoice', type: 'string', readOnly: true,
+    link: { idField: 'invoice', window: { field: 'salesTransaction', values: { true: 'sales-invoice', false: 'purchase-invoice' } } },
+  };
+
+  it('renders the value underlined with the ↗ icon and opens the target record', async () => {
+    renderPanel({ columns: [PAYMENT], data: [{ id: 'R1', payment: 'PAY-ID-1', 'payment$_identifier': '1001' }] });
+    const link = screen.getByTestId('line-link-payment');
+    expect(link.tagName).toBe('BUTTON');
+    expect(link).toHaveTextContent('1001');
+    expect(link).toHaveClass('underline');
+    expect(within(link).getByTestId('ArrowUpRight__3b7ec2')).toBeInTheDocument();
+    await act(async () => { await userEvent.click(link); });
+    expect(mockNavigate).toHaveBeenCalledWith('/payment-in/PAY-ID-1');
+  });
+
+  it('a link click does not also fire the row click', async () => {
+    const onRowClick = vi.fn();
+    renderPanel({ columns: [PAYMENT], data: [{ id: 'R1', payment: 'PAY-ID-1', 'payment$_identifier': '1001' }], onRowClick });
+    await act(async () => { await userEvent.click(screen.getByTestId('line-link-payment')); });
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+    expect(onRowClick).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [true, '/sales-invoice/INV-1'],
+    ['Y', '/sales-invoice/INV-1'],
+    [false, '/purchase-invoice/INV-1'],
+    ['N', '/purchase-invoice/INV-1'],
+  ])('picks the window per row: salesTransaction %s → %s', async (flag, route) => {
+    renderPanel({ columns: [INVOICE], data: [{ id: 'R1', invoice: 'INV-1', 'invoice$_identifier': 'FAC-1', salesTransaction: flag }] });
+    await act(async () => { await userEvent.click(screen.getByTestId('line-link-invoice')); });
+    expect(mockNavigate).toHaveBeenCalledWith(route);
+  });
+
+  it('renders a plain cell when the row has no target id', () => {
+    renderPanel({ columns: [PAYMENT], data: [{ id: 'R1', payment: '', 'payment$_identifier': '' }, { id: 'R2' }] });
+    expect(screen.queryByTestId('line-link-payment')).toBeNull();
+    expect(screen.getByTestId('line-row-R1')).toBeInTheDocument();
+  });
+
+  it('renders a plain cell when no window matches the row value', () => {
+    renderPanel({ columns: [INVOICE], data: [{ id: 'R1', invoice: 'INV-1', 'invoice$_identifier': 'FAC-1', salesTransaction: 'maybe' }] });
+    expect(screen.queryByTestId('line-link-invoice')).toBeNull();
+    expect(screen.getByText('FAC-1')).toBeInTheDocument();
+  });
+
+  it('without `link`, the cell renders exactly as before (no link, no navigation)', async () => {
+    const { link: _omit, ...plain } = PAYMENT;
+    renderPanel({ columns: [plain], data: [{ id: 'R1', payment: 'PAY-ID-1', 'payment$_identifier': '1001' }] });
+    expect(screen.queryByTestId('line-link-payment')).toBeNull();
+    expect(screen.queryByTestId('ArrowUpRight__3b7ec2')).toBeNull();
+    await act(async () => { await userEvent.click(screen.getByText('1001')); });
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+});
+
+// ETP-6148 — a column with `editInPlace` (decisions.json): an always-visible amount input with a
+// reset button (ResettableAmountInput), outside the row's edit mode. It commits through the
+// panel's own commitField → onUpdateRow; a refused value is toasted and never sent.
+describe('InlineLinesPanel — editInPlace amount column', () => {
+  const IN_PLACE_COLUMNS = [
+    { key: 'note', label: 'Note', type: 'string' },
+    { key: 'amount', label: 'To remit', type: 'amount', editInPlace: { resetToField: 'outstanding', maxField: 'outstanding' } },
+  ];
+  const IN_PLACE_ROWS = [{ id: 'R1', note: 'first', amount: 40, outstanding: 100 }];
+  const amountInput = () => screen.getByTestId('line-in-place-amount-R1-input');
+
+  function renderInPlace(props = {}) {
+    const onUpdateRow = vi.fn().mockResolvedValue();
+    const utils = renderPanel({ columns: IN_PLACE_COLUMNS, data: IN_PLACE_ROWS, onUpdateRow, ...props });
+    return { ...utils, onUpdateRow };
+  }
+
+  async function typeAndBlur(value) {
+    fireEvent.focus(amountInput());
+    fireEvent.change(amountInput(), { target: { value } });
+    await act(async () => { fireEvent.blur(amountInput()); });
+  }
+
+  beforeEach(() => vi.mocked(toast.error).mockClear());
+
+  it('renders the input outside edit mode, with its reset button', () => {
+    renderInPlace();
+    expect(amountInput()).toBeInTheDocument();
+    expect(amountInput().value).toMatch(/^40(,00)?$/);
+    expect(screen.getByTestId('line-in-place-amount-R1-reset')).toBeInTheDocument();
+  });
+
+  it('renders the input even when row edit is disabled', () => {
+    renderInPlace({ rowEditDisabled: true });
+    expect(amountInput()).toBeInTheDocument();
+  });
+
+  it('is read-only text on a read-only document', () => {
+    renderInPlace({ isDocumentReadOnly: true });
+    expect(screen.queryByTestId('line-in-place-amount-R1')).toBeNull();
+    expect(within(screen.getByTestId('line-row-R1')).getByText('40,00')).toBeInTheDocument();
+  });
+
+  it('is read-only text when there is no onUpdateRow to commit through', () => {
+    renderInPlace({ onUpdateRow: undefined });
+    expect(screen.queryByTestId('line-in-place-amount-R1')).toBeNull();
+    expect(within(screen.getByTestId('line-row-R1')).getByText('40,00')).toBeInTheDocument();
+  });
+
+  it('commits a valid amount through onUpdateRow', async () => {
+    const { onUpdateRow } = renderInPlace();
+    await typeAndBlur('60');
+    expect(onUpdateRow).toHaveBeenCalledTimes(1);
+    const [row, key, value] = onUpdateRow.mock.calls[0];
+    expect(row).toMatchObject({ id: 'R1' });
+    expect(key).toBe('amount');
+    expect(value).toBe('60');
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('the reset commits the reset field’s value', async () => {
+    const { onUpdateRow } = renderInPlace();
+    await act(async () => { fireEvent.click(screen.getByTestId('line-in-place-amount-R1-reset')); });
+    expect(onUpdateRow).toHaveBeenCalledWith(expect.objectContaining({ id: 'R1' }), 'amount', '100', expect.anything());
+  });
+
+  it.each([
+    ['over the maximum', '150', 'boundedAmountExceedsMax'],
+    ['zero', '0', 'boundedAmountZero'],
+  ])('toasts an amount %s and does not send it', async (_label, typed, key) => {
+    const { onUpdateRow } = renderInPlace();
+    await typeAndBlur(typed);
+    expect(toast.error).toHaveBeenCalledWith(key);
+    expect(onUpdateRow).not.toHaveBeenCalled();
+    expect(amountInput()).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('a click on the cell does not put the row into edit mode', async () => {
+    renderInPlace();
+    const row = screen.getByTestId('line-row-R1');
+    expect(within(row).getAllByRole('textbox')).toHaveLength(1);
+    await act(async () => { await userEvent.click(amountInput()); });
+    // Only the in-place input: the `note` column did not turn into an editor.
+    expect(within(row).getAllByRole('textbox')).toHaveLength(1);
+    expect(within(row).getByText('first')).toBeInTheDocument();
+  });
+
+  it('a column without editInPlace renders as before (no in-place input)', () => {
+    renderPanel({ columns: IN_PLACE_COLUMNS.map(({ editInPlace: _drop, ...c }) => c), data: IN_PLACE_ROWS });
+    expect(screen.queryByTestId('line-in-place-amount-R1')).toBeNull();
+    expect(within(screen.getByTestId('line-row-R1')).queryAllByRole('textbox')).toHaveLength(0);
   });
 });

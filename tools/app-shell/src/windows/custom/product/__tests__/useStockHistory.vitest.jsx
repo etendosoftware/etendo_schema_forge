@@ -74,6 +74,13 @@ describe('loadMovementHistory', () => {
     const f = vi.fn(() => (n++ === 0 ? ok(rows(500)) : Promise.resolve({ ok: false })));
     const r = await loadMovementHistory(f, 'P', start);
     expect(r.rows).toHaveLength(500);
+    expect(r.failed).toBe(false);
+  });
+
+  it('reports failed when the first page fails', async () => {
+    const f = vi.fn(() => Promise.resolve({ ok: false }));
+    const r = await loadMovementHistory(f, 'P', start);
+    expect(r).toEqual({ rows: [], partial: false, failed: true });
   });
 });
 
@@ -90,11 +97,31 @@ describe('useStockHistory', () => {
     expect(result.current.partial).toBe(false);
   });
 
-  it('falls back to empty lists when requests fail', async () => {
+  it('flags failed reads instead of reporting an empty stock when requests reject', async () => {
     const f = vi.fn(() => Promise.reject(new Error('boom')));
     const { result } = renderHook(() => useStockHistory('P1', f));
+    await waitFor(() => expect(result.current.historyFailed).toBe(true));
+    await waitFor(() => expect(result.current.stockFailed).toBe(true));
+    expect(result.current.transactions).toEqual([]);
+    expect(result.current.stockRows).toBeNull();
+  });
+
+  it('flags a non-ok stock response as failed, not as empty', async () => {
+    const f = vi.fn((path) => (path.startsWith('/stock') ? Promise.resolve({ ok: false, status: 500 }) : ok([])));
+    const { result } = renderHook(() => useStockHistory('P1', f));
+    await waitFor(() => expect(result.current.stockFailed).toBe(true));
     await waitFor(() => expect(result.current.transactions).toEqual([]));
-    expect(result.current.stockRows).toEqual([]);
+    expect(result.current.stockRows).toBeNull();
+    expect(result.current.historyFailed).toBe(false);
+  });
+
+  it('keeps stockRows [] with no failure flags for a legitimately empty product', async () => {
+    const f = vi.fn(() => ok([]));
+    const { result } = renderHook(() => useStockHistory('P1', f));
+    await waitFor(() => expect(result.current.transactions).toEqual([]));
+    await waitFor(() => expect(result.current.stockRows).toEqual([]));
+    expect(result.current.stockFailed).toBe(false);
+    expect(result.current.historyFailed).toBe(false);
   });
 
   it('aborts the in-flight read on unmount and does not update state', async () => {

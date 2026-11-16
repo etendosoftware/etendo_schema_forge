@@ -49,13 +49,13 @@ function ActionButton({ label, tooltip, className, onClick, inert = false, testI
  * express this row: its Edit always runs `onEdit` under an "Edit" title, its kebab only shows
  * with menu items and opens a menu, and its trash is "Delete".
  *
- * - Edit (pencil): shown, inert, "coming soon" — it will open the review panel (ETP-6050).
+ * - Edit (pencil): opens the review panel (ETP-6050, `onOpen(row)`), like a click on the row.
  * - More (kebab): shown, inert, "coming soon" — confirm from here arrives with ETP-6051.
  * - Discard (red trash): only on rows that can be discarded (`isSelectableRow`: PENDING_REVIEW,
  *   ERROR, READY); opens the same confirmation as the batch bar, for this row.
  * - PROCESSING rows show no action.
  */
-export default function InvoiceInboxRowActions({ row, onDiscard }) {
+export default function InvoiceInboxRowActions({ row, onDiscard, onOpen }) {
   const ui = useUI();
   if (isProcessingRow(row)) return null;
   const soon = (key) => ui('invoiceInboxRowActionSoon', { action: ui(key) });
@@ -65,9 +65,9 @@ export default function InvoiceInboxRowActions({ row, onDiscard }) {
       <div className={ACTIONS_CLASS} onClick={stop} data-testid={`invoice-inbox-row-actions-${row.id}`}>
         <ActionButton
           label={ui('quickAction.edit')}
-          tooltip={soon('quickAction.edit')}
+          tooltip={ui('quickAction.edit')}
           className={ROW_ACTION_BUTTON_NEUTRAL}
-          inert
+          onClick={() => onOpen?.(row)}
           testId={`invoice-inbox-row-edit-${row.id}`}
           data-testid="ActionButton__invoice-inbox-row">
           <IconicEditIcon className="h-5 w-5" data-testid="IconicEditIcon__invoice-inbox-row" />

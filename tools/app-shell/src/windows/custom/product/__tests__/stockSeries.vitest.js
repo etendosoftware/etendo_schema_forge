@@ -4,6 +4,7 @@ import {
   dayNumber, dateFromDay, periodDayRange, buildDailyPoints, valueAtDay, dayFraction, fractionToDay,
   toMovements, buildChartModel,
 } from '../stockSeries';
+import { chartSeriesColor } from '@/lib/chartPalette';
 
 const d = (y, m, day) => dayNumber(new Date(y, m - 1, day));
 const START = d(2026, 1, 1);
@@ -131,7 +132,6 @@ describe('toMovements', () => {
 
 describe('buildChartModel', () => {
   const today = new Date(2026, 10, 3);
-  const colors = ['#a', '#b'];
   const tx = [
     { movementDate: '2026-10-28', movementQuantity: 4, storageBin: 'L1' },
     { movementDate: '2026-10-29', movementQuantity: 1, storageBin: 'L2' },
@@ -140,17 +140,22 @@ describe('buildChartModel', () => {
   const warehouses = [{ binName: 'WH-A', quantityOnHand: 4 }, { binName: 'WH-B', quantityOnHand: 1 }];
 
   it('builds one series per warehouse on a shared window, ignoring unmapped locators', () => {
-    const m = buildChartModel({ transactions: tx, currentStock: 5, warehouses, locatorToWarehouse: { L1: 'WH-A', L2: 'WH-B' }, months: 12, today, colors });
-    expect(m.series.map(s => [s.name, s.color])).toEqual([['WH-A', '#a'], ['WH-B', '#b']]);
+    const m = buildChartModel({ transactions: tx, currentStock: 5, warehouses, locatorToWarehouse: { L1: 'WH-A', L2: 'WH-B' }, months: 12, today });
+    expect(m.series.map(s => [s.name, s.fill, s.line, s.color])).toEqual([
+      ['WH-A', chartSeriesColor(0).fill, chartSeriesColor(0).line, chartSeriesColor(0).fill],
+      ['WH-B', chartSeriesColor(1).fill, chartSeriesColor(1).line, chartSeriesColor(1).fill],
+    ]);
     expect(valueAtDay(m.series[0].points, d(2026, 10, 27))).toBe(0);
     expect(valueAtDay(m.series[0].points, d(2026, 10, 28))).toBe(4);
     expect(valueAtDay(m.series[1].points, m.range.endDay)).toBe(1);
   });
 
   it('falls back to one aggregated line without warehouses and is null when everything is 0', () => {
-    const m = buildChartModel({ transactions: tx, currentStock: 14, warehouses: [], months: 3, today, colors });
+    const m = buildChartModel({ transactions: tx, currentStock: 14, warehouses: [], months: 3, today });
     expect(m.series).toHaveLength(1);
     expect(m.series[0].name).toBeNull();
-    expect(buildChartModel({ transactions: [], currentStock: 0, warehouses: [], months: 3, today, colors })).toBeNull();
+    expect(m.series[0].fill).toBe(chartSeriesColor(0).fill);
+    expect(m.series[0].line).toBe(chartSeriesColor(0).line);
+    expect(buildChartModel({ transactions: [], currentStock: 0, warehouses: [], months: 3, today })).toBeNull();
   });
 });

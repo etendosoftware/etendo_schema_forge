@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// @covers tools/app-shell/src/components/contract-ui/InvoicePickerModal.jsx
 //
 // ETP-5381 — the invoice picker of the "Rectificaciones" tab was extracted out of
 // ReversedInvoicesPanel so the return-document flow could reuse it instead of growing a second,

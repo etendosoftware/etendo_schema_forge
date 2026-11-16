@@ -41,8 +41,7 @@ vi.mock('lucide-react', () => ({
   Box: (props) => <span {...props} data-testid="icon-box" />,
   Calendar: (props) => <span {...props} data-testid="icon-calendar" />,
   ChevronDown: (props) => <span {...props} data-testid="icon-chevron" />,
-  PanelRightClose: (props) => <span {...props} data-testid="icon-panel-close" />,
-  PanelRightOpen: (props) => <span {...props} data-testid="icon-panel-open" />,
+  ArrowRightToLine: (props) => <span {...props} data-testid="icon-arrow-to-line" />,
   ArrowLeftRight: (props) => <span {...props} data-testid="icon-arrow-lr" />,
   Package: (props) => <span {...props} data-testid="icon-package" />,
   Warehouse: (props) => <span {...props} data-testid="icon-warehouse" />,
@@ -50,8 +49,9 @@ vi.mock('lucide-react', () => ({
 
 // --- Import under test ---
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import ProductSidebar from '../ProductSidebar.jsx';
+import { chartSeriesColor } from '@/lib/chartPalette';
 
 // --- Helpers ---
 
@@ -177,8 +177,27 @@ describe('ProductSidebar', () => {
     render(<ProductSidebar {...defaultProps} />);
 
     await waitFor(() => {
-      expect(screen.getByText('stockAvailableLabel')).toBeInTheDocument();
+      expect(screen.getByText('productSidebarStockAvailable')).toBeInTheDocument();
     });
+  });
+
+  it('shows a placeholder bar instead of the available quantity while the stock is loading', async () => {
+    globalThis.fetch = vi.fn(() => new Promise(() => {}));
+    render(<ProductSidebar {...defaultProps} />);
+
+    expect(await screen.findByTestId('AvailabilityValueSkeleton')).toBeInTheDocument();
+    expect(screen.getByText('productSidebarStockAvailable')).toBeInTheDocument();
+  });
+
+  it('replaces the placeholder with the quantity once the stock is loaded', async () => {
+    mockFetchResponses({
+      stockRows: [{ storageBin: 'LOC1', 'warehouse$_identifier': 'WH-A', quantityOnHand: 50, reservedQty: 5 }],
+      transactions: [{ movementDate: '2025-01-15', movementQuantity: 10, storageBin: 'LOC1' }],
+    });
+    render(<ProductSidebar {...defaultProps} />);
+
+    await waitFor(() => expect(screen.queryByTestId('AvailabilityValueSkeleton')).toBeNull());
+    expect(screen.getByText('productSidebarStockAvailable')).toBeInTheDocument();
   });
 
   it('shows stock movement chart title when transactions exist', async () => {
@@ -219,7 +238,7 @@ describe('ProductSidebar', () => {
   });
 
   // ETP-5908 RF-06: "N ubicaciones" is a link to the Warehouses tab.
-  it('renders the locations count as a button that opens the Warehouses tab', async () => {
+  it('renders the locations count as a non-interactive pill with the info tokens; the whole card opens the Warehouses tab', async () => {
     const stockRows = [
       { storageBin: 'LOC1', 'warehouse$_identifier': 'WH-Alpha', quantityOnHand: 30, reservedQty: 5 },
       { storageBin: 'LOC2', 'warehouse$_identifier': 'WH-Beta', quantityOnHand: 20, reservedQty: 2 },
@@ -228,10 +247,19 @@ describe('ProductSidebar', () => {
     mockFetchResponses({ stockRows, transactions });
     render(<ProductSidebar {...defaultProps} />);
 
-    const link = await screen.findByRole('button', { name: 'stockLocationsCount:2' });
-    expect(link.tagName).toBe('BUTTON');
-    expect(link.getAttribute('type')).toBe('button');
-    fireEvent.click(link);
+    const card = await screen.findByTestId('AvailabilityCardButton');
+    const pill = screen.getByTestId('AvailabilityWarehousePill');
+    expect(pill.textContent).toBe('stockLocationsCount:2');
+    expect(pill.tagName).toBe('SPAN');
+    expect(pill.closest('a')).toBeNull();
+    expect(pill.className).toContain('bg-[var(--info-label-bg)]');
+    expect(pill.className).toContain('text-[var(--info-label-fg)]');
+    expect(pill.className).not.toContain('underline');
+    expect(screen.queryByTestId('AvailabilityLocationsLink')).toBeNull();
+
+    expect(card.tagName).toBe('BUTTON');
+    expect(card.contains(pill)).toBe(true);
+    fireEvent.click(card);
 
     expect((await screen.findAllByText('WH-Alpha')).length).toBeGreaterThan(0);
     const cards = screen.getAllByTestId('WarehouseCardAvailability');
@@ -262,7 +290,7 @@ describe('ProductSidebar', () => {
       transactions: [{ movementDate: '2025-03-01', movementQuantity: 30, storageBin: 'LOC1' }],
     });
     render(<ProductSidebar {...defaultProps} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'stockLocationsCount:2' }));
+    fireEvent.click(await screen.findByTestId('AvailabilityCardButton'));
     const name = (await screen.findAllByTestId('WarehouseCard'))[0].querySelector('span.truncate');
     expect(name.className).toContain('truncate');
     expect(name.textContent).toBe(LONG);
@@ -295,7 +323,7 @@ describe('ProductSidebar', () => {
     });
     render(<ProductSidebar {...defaultProps} />);
     expect(await screen.findByText('1.092,5')).toBeInTheDocument();
-    fireEvent.click(await screen.findByRole('button', { name: 'stockLocationsCount:2' }));
+    fireEvent.click(await screen.findByTestId('AvailabilityCardButton'));
     await screen.findAllByText('WH-Alpha');
     const cards = screen.getAllByTestId('WarehouseCardAvailability');
     const cardText = cards.map(c => c.textContent).join('|');
@@ -309,28 +337,81 @@ describe('ProductSidebar', () => {
     expect(dialog.textContent).toContain('total: 1.092,5');
   });
 
-  it('places the locations link inline right after the "Available ·" label', async () => {
-    mockFetchResponses({
+  describe('availability card (whole-card button)', () => {
+    const twoLocations = {
       stockRows: [
         { storageBin: 'LOC1', 'warehouse$_identifier': 'WH-Alpha', quantityOnHand: 30 },
         { storageBin: 'LOC2', 'warehouse$_identifier': 'WH-Beta', quantityOnHand: 20 },
       ],
       transactions: [{ movementDate: '2025-03-01', movementQuantity: 20, storageBin: 'LOC1' }],
-    });
-    render(<ProductSidebar {...defaultProps} />);
-    const link = await screen.findByTestId('AvailabilityLocationsLink');
-    expect(link.previousElementSibling.textContent).toBe('stockAvailableLabel ·');
-    expect(link.parentElement.className).not.toContain('justify-between');
-  });
+    };
 
-  it('keeps the single-warehouse subtitle as plain text (not a link)', async () => {
-    mockFetchResponses({
-      stockRows: [{ storageBin: 'LOC1', 'warehouse$_identifier': 'WH-Only', quantityOnHand: 9 }],
-      transactions: [{ movementDate: '2025-03-01', movementQuantity: 9, storageBin: 'LOC1' }],
+    it('labels the summary card with the dedicated key, not the warehouse card key', async () => {
+      mockFetchResponses(twoLocations);
+      render(<ProductSidebar {...defaultProps} />);
+      const card = await screen.findByTestId('AvailabilityCardButton');
+      expect(card.textContent).toContain('productSidebarStockAvailable');
+      expect(card.textContent).not.toContain('stockAvailableLabel');
     });
-    render(<ProductSidebar {...defaultProps} />);
-    expect((await screen.findAllByText('WH-Only')).length).toBeGreaterThan(0);
-    expect(screen.queryByRole('button', { name: /stockLocationsCount/ })).toBeNull();
+
+    it('is a real button with a hover border and a focus ring, and Enter / Space on it open the Warehouses tab', async () => {
+      mockFetchResponses(twoLocations);
+      render(<ProductSidebar {...defaultProps} />);
+      const card = await screen.findByTestId('AvailabilityCardButton');
+      expect(card.getAttribute('type')).toBe('button');
+      expect(card.className).toContain('hover:border-primary');
+      expect(card.className).toContain('focus-visible:ring-2');
+      // A native <button> turns Enter / Space into a click (the browser does it), so the click is the contract.
+      fireEvent.click(card);
+      expect(await screen.findByTestId('WarehouseCards')).toBeInTheDocument();
+    });
+
+    it('still goes to Warehouses with a single location, which shows its name in the pill', async () => {
+      mockFetchResponses({
+        stockRows: [{ storageBin: 'LOC1', 'warehouse$_identifier': 'WH-Only', quantityOnHand: 9 }],
+        transactions: [{ movementDate: '2025-03-01', movementQuantity: 9, storageBin: 'LOC1' }],
+      });
+      render(<ProductSidebar {...defaultProps} />);
+      const card = await screen.findByTestId('AvailabilityCardButton');
+      expect(screen.getByTestId('AvailabilityWarehousePill').textContent).toBe('WH-Only');
+      fireEvent.click(card);
+      expect(await screen.findByTestId('WarehouseCards')).toBeInTheDocument();
+    });
+
+    it('never truncates the locations count: no truncate classes, the row wraps instead', async () => {
+      mockFetchResponses(twoLocations);
+      render(<ProductSidebar {...defaultProps} />);
+      const pill = await screen.findByTestId('AvailabilityWarehousePill');
+      ['truncate', 'min-w-0', 'max-w-full'].forEach((c) => expect(pill.className).not.toContain(c));
+      ['whitespace-nowrap', 'shrink-0', 'px-1.5'].forEach((c) => expect(pill.className).toContain(c));
+      expect(pill.getAttribute('title')).toBeNull();
+      expect(screen.getByTestId('AvailabilityLabelRow').className).toContain('flex-wrap');
+    });
+
+    it('keeps the ellipsis and the title on a long single-warehouse name', async () => {
+      mockFetchResponses({
+        stockRows: [{ storageBin: 'LOC1', 'warehouse$_identifier': 'WH-Only', quantityOnHand: 9 }],
+        transactions: [{ movementDate: '2025-03-01', movementQuantity: 9, storageBin: 'LOC1' }],
+      });
+      render(<ProductSidebar {...defaultProps} />);
+      const pill = await screen.findByTestId('AvailabilityWarehousePill');
+      ['truncate', 'min-w-0', 'max-w-full'].forEach((c) => expect(pill.className).toContain(c));
+      expect(pill.getAttribute('title')).toBe('WH-Only');
+    });
+
+    it('is not clickable while the stock loads', () => {
+      globalThis.fetch = vi.fn(() => new Promise(() => {}));
+      render(<ProductSidebar {...defaultProps} />);
+      expect(screen.getByTestId('AvailabilityValueSkeleton')).toBeInTheDocument();
+      expect(screen.queryByTestId('AvailabilityCardButton')).toBeNull();
+    });
+
+    it('is not clickable when the stock is unavailable', async () => {
+      globalThis.fetch = vi.fn(() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) }));
+      render(<ProductSidebar {...defaultProps} />);
+      expect(await screen.findByTestId('AvailabilityUnavailable')).toBeInTheDocument();
+      expect(screen.queryByTestId('AvailabilityCardButton')).toBeNull();
+    });
   });
 
   // ETP-5908 RF-07: icon-only expand button.
@@ -537,10 +618,20 @@ describe('ProductSidebar', () => {
     // available shown is the on-hand quantity (no reservation subtracted)
     const rows = screen.getAllByTestId('WarehouseCardAvailability');
     expect(rows.map(r => r.children[0].textContent)).toEqual(['stockAvailableLabel', 'stockAvailableLabel']);
+    const cards = screen.getAllByTestId('WarehouseCard');
+    cards.forEach(c => {
+      expect(c.className).toContain('bg-[var(--surface-subtle)]');
+      expect(c.className).not.toContain('border');
+    });
     expect(rows.map(r => r.children[1].textContent)).toEqual(['30 u', '20 u']);
     expect(rows[1].children[1].className).toContain('font-semibold');
     const dots = screen.getAllByTestId('WarehouseCardDot');
-    expect(dots.map(d => d.style.backgroundColor)).toEqual(['rgb(236, 72, 153)', 'rgb(245, 158, 11)']);
+    expect(dots.map(d => d.style.backgroundColor)).toEqual([chartSeriesColor(0).fill, chartSeriesColor(1).fill]);
+    dots.forEach(d => {
+      expect(d.className).toContain('w-2.5');
+      expect(d.className).toContain('h-2.5');
+      expect(d.className).toContain('rounded-[3px]');
+    });
   });
 
   it('handles fetch error gracefully (stock)', async () => {
@@ -797,6 +888,40 @@ describe('ProductSidebar — interactive stock legend', () => {
 });
 
 // ETP-5908 RF-16: collapse the panel to a 48 px strip.
+describe('ProductSidebar — Etendo AI chart palette', () => {
+  const twoRows = {
+    stockRows: [
+      { storageBin: 'LOC1', 'warehouse$_identifier': 'WH-A', quantityOnHand: 100 },
+      { storageBin: 'LOC2', 'warehouse$_identifier': 'WH-B', quantityOnHand: 30 },
+    ],
+    transactions: [
+      { movementDate: '2026-05-10', movementQuantity: 100, storageBin: 'LOC1' },
+      { movementDate: '2026-05-10', movementQuantity: 30, storageBin: 'LOC2' },
+    ],
+  };
+
+  it('strokes the lines with the series line colour and fills the areas flat with the series fill at the area opacity', async () => {
+    mockFetchResponses(twoRows);
+    const { container } = render(<ProductSidebar {...defaultProps} />);
+    await screen.findByTestId('StockChartLegend');
+    const svg = container.querySelector('svg');
+    const lines = [...svg.querySelectorAll('path[stroke]')];
+    expect(lines.map(l => l.getAttribute('stroke'))).toEqual([chartSeriesColor(0).line, chartSeriesColor(1).line]);
+    const areas = screen.getAllByTestId('StockChartArea');
+    expect(areas.map(a => a.getAttribute('fill'))).toEqual([chartSeriesColor(0).fill, chartSeriesColor(1).fill]);
+    areas.forEach(a => expect(a.style.fillOpacity).toBe('var(--chart-area-opacity)'));
+    expect(svg.querySelector('linearGradient, defs')).toBeNull();
+  });
+
+  it('paints the legend dots with the series fill colour', async () => {
+    mockFetchResponses(twoRows);
+    render(<ProductSidebar {...defaultProps} />);
+    await screen.findByTestId('StockChartLegend');
+    const dots = screen.getAllByTestId('StockChartLegendDot');
+    expect(dots.map(d => d.style.backgroundColor)).toEqual([chartSeriesColor(0).fill, chartSeriesColor(1).fill]);
+  });
+});
+
 describe('ProductSidebar — collapse (RF-16)', () => {
   const rows = () => ({
     stockRows: [
@@ -814,16 +939,39 @@ describe('ProductSidebar — collapse (RF-16)', () => {
   beforeEach(() => { vi.setSystemTime(new Date(2026, 9, 15, 12, 0, 0)); });
   afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
-  it('shows the collapse button (Lucide PanelRightClose) with name, tooltip and aria-expanded', () => {
+  it('shows the collapse button (Lucide ArrowRightToLine) with name, tooltip and aria-expanded', () => {
     mockFetchResponses();
     render(<ProductSidebar {...defaultProps} />);
     const btn = screen.getByTestId('ProductSidebarCollapseButton');
     expect(btn.tagName).toBe('BUTTON');
     expect(btn.getAttribute('type')).toBe('button');
-    expect(btn.getAttribute('aria-label')).toBe('hidePanel');
+    expect(btn.getAttribute('aria-label')).toBe('productSidebarPanelToggleLabel');
+    expect(btn.getAttribute('aria-controls')).toBe('product-sidebar-panel');
+    expect(document.getElementById('product-sidebar-panel')).not.toBeNull();
     expect(btn.getAttribute('title')).toBe('hidePanel');
     expect(btn.getAttribute('aria-expanded')).toBe('true');
-    expect(screen.getByTestId('icon-panel-close')).toBeInTheDocument();
+    expect(btn.getAttribute('data-collapsed')).toBe('false');
+    expect(screen.getByTestId('icon-arrow-to-line').getAttribute('class')).not.toContain('rotate-180');
+  });
+
+  it('leaves the row position as it found it once unmounted', () => {
+    mockFetchResponses();
+    const { unmount } = render(<ProductSidebar {...defaultProps} />);
+    const row = screen.getByTestId('ProductSidebarCollapseButton').parentElement;
+    expect(row.style.position).toBe('relative');
+    unmount();
+    expect(row.style.position).toBe('');
+  });
+
+  it('puts the button on the divider (outside the panel content and the tab header), as a 24 px white circle', () => {
+    mockFetchResponses();
+    render(<ProductSidebar {...defaultProps} />);
+    const btn = screen.getByTestId('ProductSidebarCollapseButton');
+    expect(btn.closest('[data-product-sidebar-collapsed]')).toBeNull();
+    expect(screen.getByTestId('ProductSidebarTab-summary').parentElement.contains(btn)).toBe(false);
+    expect(btn.style.width).toBe('24px');
+    expect(btn.style.height).toBe('24px');
+    ['rounded-full', 'bg-card', 'border', 'hover:text-primary', 'hover:border-primary'].forEach((c) => expect(btn.className).toContain(c));
   });
 
   it('also shows the collapse button in the empty state and for a new product', async () => {
@@ -836,7 +984,7 @@ describe('ProductSidebar — collapse (RF-16)', () => {
     expect(screen.getByTestId('ProductSidebarCollapseButton')).toBeInTheDocument();
   });
 
-  it('collapsing renders the strip: open button, Summary and Warehouses icons, expanded content hidden', async () => {
+  it('collapsing renders the strip: Summary and Warehouses icons only, the divider button rotated, expanded content hidden', async () => {
     mockFetchResponses(rows());
     const { container } = render(<ProductSidebar {...defaultProps} />);
     await screen.findByTestId('StockChartLegend');
@@ -846,9 +994,14 @@ describe('ProductSidebar — collapse (RF-16)', () => {
     const strip = screen.getByTestId('ProductSidebarCollapsed');
     expect(strip.getAttribute('aria-label')).toBe('productSidePanel');
     const open = screen.getByTestId('ProductSidebarOpenButton');
-    expect(open.getAttribute('aria-label')).toBe('showPanel');
+    expect(open.getAttribute('aria-label')).toBe('productSidebarPanelToggleLabel');
+    expect(document.getElementById(open.getAttribute('aria-controls'))).toBe(strip);
     expect(open.getAttribute('title')).toBe('showPanel');
     expect(open.getAttribute('aria-expanded')).toBe('false');
+    expect(open.getAttribute('data-collapsed')).toBe('true');
+    expect(screen.getByTestId('icon-arrow-to-line').getAttribute('class')).toContain('rotate-180');
+    expect(within(strip).queryByTestId('ProductSidebarOpenButton')).toBeNull();
+    expect(within(strip).getAllByRole('button')).toHaveLength(2);
     expect(screen.getByTestId('ProductSidebarStripSummary').getAttribute('aria-label')).toBe('summary');
     expect(screen.getByTestId('ProductSidebarStripWarehouses').getAttribute('title')).toBe('warehouses');
     expect(screen.queryByTestId('StockChartLegend')).toBeNull();
@@ -862,9 +1015,9 @@ describe('ProductSidebar — collapse (RF-16)', () => {
     await screen.findByTestId('StockChartLegend');
     expect(document.activeElement).toBe(document.body);
     collapse();
-    expect(document.activeElement).toBe(screen.getByTestId('ProductSidebarOpenButton'));
+    // The same button stays mounted on the divider, so no focus is stolen from it.
     fireEvent.click(screen.getByTestId('ProductSidebarOpenButton'));
-    expect(document.activeElement).toBe(screen.getByTestId('ProductSidebarCollapseButton'));
+    expect(screen.getByTestId('ProductSidebarCollapseButton').getAttribute('aria-expanded')).toBe('true');
     collapse();
     fireEvent.click(screen.getByTestId('ProductSidebarStripWarehouses'));
     expect(document.activeElement).toBe(screen.getByTestId('ProductSidebarTab-warehouses'));
@@ -897,8 +1050,8 @@ describe('ProductSidebar — collapse (RF-16)', () => {
   });
 
   it.each([
-    ['ProductSidebarStripWarehouses', 'WarehouseCards', 'AvailabilityLocationsLink'],
-    ['ProductSidebarStripSummary', 'AvailabilityLocationsLink', 'WarehouseCards'],
+    ['ProductSidebarStripWarehouses', 'WarehouseCards', 'AvailabilityCardButton'],
+    ['ProductSidebarStripSummary', 'AvailabilityCardButton', 'WarehouseCards'],
   ])('clicking %s reopens on that tab', async (stripId, shown, hidden) => {
     mockFetchResponses(rows());
     render(<ProductSidebar {...defaultProps} />);
@@ -1014,5 +1167,71 @@ describe('ProductSidebar — Ver movimientos link and chart click', () => {
     await renderPanel();
     fireEvent.click(screen.getAllByTestId('StockChartLegendItem')[0]);
     expect(screen.queryByTestId('dialog')).toBeNull();
+  });
+});
+
+// A failed read must never be drawn as a stock of 0 (live finding on ETP-5908).
+describe('ProductSidebar failed reads', () => {
+  const stock = [{ storageBin: 'LOC1', 'warehouse$_identifier': 'WH-A', quantityOnHand: 1530 }];
+  const tx = [{ movementDate: '2025-01-15', movementQuantity: 10, storageBin: 'LOC1' }];
+  const ok = (data) => Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data } }) });
+  const mockFetch = ({ stockResult, txResult }) => {
+    globalThis.fetch = vi.fn((url) => (url.includes('/stock') ? stockResult(url) : txResult(url)));
+  };
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('shows an unavailable state, not 0 or a chart, when /stock answers 500', async () => {
+    mockFetch({ stockResult: () => Promise.resolve({ ok: false, status: 500 }), txResult: () => ok(tx) });
+    render(<ProductSidebar {...defaultProps} />);
+    const dash = await screen.findByTestId('AvailabilityUnavailable');
+    expect(dash).toHaveAttribute('aria-label', 'stockUnavailable');
+    expect(screen.queryByText('0')).toBeNull();
+    expect(screen.queryByTestId('StockChartExpandButton')).toBeNull();
+    expect(screen.getByTestId('StockUnavailableNote')).toHaveTextContent('stockUnavailableDesc');
+    expect(screen.queryByText('noStockMovements')).toBeNull();
+  });
+
+  it('shows the unavailable state on a network error of /stock', async () => {
+    mockFetch({ stockResult: () => Promise.reject(new Error('net')), txResult: () => ok(tx) });
+    render(<ProductSidebar {...defaultProps} />);
+    expect(await screen.findByTestId('AvailabilityUnavailable')).toBeInTheDocument();
+    expect(screen.queryByTestId('AvailabilityValueSkeleton')).toBeNull();
+  });
+
+  it('keeps the real stock and says the history failed when only the history request fails', async () => {
+    mockFetch({ stockResult: () => ok(stock), txResult: () => Promise.resolve({ ok: false, status: 500 }) });
+    render(<ProductSidebar {...defaultProps} />);
+    expect(await screen.findByTestId('StockUnavailableNote')).toHaveTextContent('stockHistoryUnavailable');
+    expect(screen.queryByTestId('AvailabilityUnavailable')).toBeNull();
+    expect(screen.queryByText('noStockMovements')).toBeNull();
+    // The Available card is still rendered with the real stock and its warehouse label.
+    expect(screen.getByText('1.530')).toBeInTheDocument();
+    expect(screen.getByTestId('AvailabilityWarehousePill')).toHaveTextContent('WH-A');
+    expect(screen.queryByTestId('StockChartExpandButton')).toBeNull();
+  });
+
+  it('keeps the real stock cards in the Warehouses tab when only the history fails', async () => {
+    mockFetch({ stockResult: () => ok(stock), txResult: () => Promise.resolve({ ok: false, status: 500 }) });
+    render(<ProductSidebar {...defaultProps} />);
+    await screen.findByTestId('StockUnavailableNote');
+    fireEvent.click(screen.getByTestId('ProductSidebarTab-warehouses'));
+    expect(screen.getByTestId('WarehouseCardAvailability')).toHaveTextContent('1.530');
+    expect(screen.getAllByTestId('StockUnavailableNote')).toHaveLength(1);
+  });
+
+  it('keeps the empty state for a legitimately empty product (no stock rows, no movements)', async () => {
+    mockFetch({ stockResult: () => ok([]), txResult: () => ok([]) });
+    render(<ProductSidebar {...defaultProps} />);
+    expect(await screen.findByText('noStockMovements')).toBeInTheDocument();
+    expect(screen.queryByTestId('StockUnavailableNote')).toBeNull();
+    expect(screen.queryByTestId('AvailabilityUnavailable')).toBeNull();
+  });
+
+  it('shows the note in the Warehouses tab when /stock fails', async () => {
+    mockFetch({ stockResult: () => Promise.resolve({ ok: false, status: 500 }), txResult: () => ok(tx) });
+    render(<ProductSidebar {...defaultProps} />);
+    await screen.findByTestId('AvailabilityUnavailable');
+    fireEvent.click(screen.getByTestId('ProductSidebarTab-warehouses'));
+    expect(screen.getAllByTestId('StockUnavailableNote').length).toBeGreaterThan(0);
   });
 });

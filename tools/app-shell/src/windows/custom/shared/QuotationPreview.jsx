@@ -221,7 +221,8 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
       hasPdf={hasPdf}
       sendLabel={ui('quotationPreviewSend')}
       downloadLabel={ui('quotationPreviewDownloadPdf')}
-      editLabel={ui('quotationPreviewEdit')}
+      editLabel={readOnly ? ui('view') : ui('quotationPreviewEdit')}
+      readOnly={readOnly}
       data-testid="PreviewActionButtons__7eb018" />
   );
 

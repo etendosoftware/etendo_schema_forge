@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/PreviewActionButtons.jsx
 // Mocks must come before imports
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -19,6 +20,7 @@ vi.mock('../PdfViewer.jsx', () => ({
 
 vi.mock('lucide-react', () => ({
   Edit2: ({ className }) => <span data-testid="icon-edit2" className={className} />,
+  Eye: ({ className }) => <span data-testid="icon-eye" className={className} />,
   Mail: ({ className }) => <span data-testid="icon-mail" className={className} />,
   Download: ({ className }) => <span data-testid="icon-download" className={className} />,
   Loader2: ({ className }) => <span data-testid="icon-loader2" className={className} />,
@@ -62,6 +64,24 @@ describe('PreviewActionButtons', () => {
     expect(screen.getByText('Send')).toBeInTheDocument();
     expect(screen.getByText('Download')).toBeInTheDocument();
     expect(screen.getByText('Edit')).toBeInTheDocument();
+  });
+
+  it('renders the Edit icon and editLabel when not read-only', () => {
+    render(<PreviewActionButtons {...defaults} />);
+    const btn = screen.getByTestId('preview-action-edit');
+    expect(btn).toHaveTextContent('Edit');
+    expect(screen.getByTestId('icon-edit2')).toBeInTheDocument();
+    expect(screen.queryByTestId('icon-eye')).not.toBeInTheDocument();
+  });
+
+  it('renders the Eye icon and the passed label when read-only, keeping the same onClick', () => {
+    render(<PreviewActionButtons {...defaults} readOnly editLabel="view" />);
+    const btn = screen.getByTestId('preview-action-edit');
+    expect(btn).toHaveTextContent('view');
+    expect(screen.getByTestId('icon-eye')).toBeInTheDocument();
+    expect(screen.queryByTestId('icon-edit2')).not.toBeInTheDocument();
+    fireEvent.click(btn);
+    expect(defaults.triggerEdit).toHaveBeenCalledTimes(1);
   });
 
   it('calls onEmail when the send button is clicked', () => {

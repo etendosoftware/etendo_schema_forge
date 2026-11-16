@@ -199,6 +199,24 @@
           "section": "principal",
           "label": "SII Key List"
         },
+        "obsepadMandateIdentifier": {
+          "visibility": "editable",
+          "form": false,
+          "grid": false,
+          "section": "principal",
+          "label": "Mandate Identification",
+          "visibleWhenCapability": "sepaRemittances",
+          "_note": "ETP-6148 — customer SEPA mandate (OBSEPAD column). Rendered by the custom SepaMandateSection in ContactsFinancialPanel, not by the generated form. Behind the sepa-remittances flag, BusinessPartnerHandler defaults a blank value to the contact's taxID and drops the key from the write body while the flag is off."
+        },
+        "obsepadMandateDate": {
+          "visibility": "editable",
+          "form": false,
+          "grid": false,
+          "section": "principal",
+          "label": "Mandate Date of Signature",
+          "visibleWhenCapability": "sepaRemittances",
+          "_note": "ETP-6148 — customer SEPA mandate signature date (OBSEPAD column). Rendered by SepaMandateSection. Behind the sepa-remittances flag, BusinessPartnerHandler defaults an empty value to the contact's creation date (today on create)."
+        },
         "employee": {
           "visibility": "editable",
           "form": false
@@ -815,6 +833,13 @@
         },
         "etgoWeb": {
           "visibility": "discarded"
+        },
+        "obsepadMandateIdentifier": {
+          "visibility": "discarded",
+          "_note": "ETP-6148 — the SEPA mandate is owned by the businessPartner entity, whose customization applies the sepa-remittances flag and defaults; same C_BPartner row, so it is not writable from this tab."
+        },
+        "obsepadMandateDate": {
+          "visibility": "discarded"
         }
       }
     },
@@ -828,6 +853,13 @@
         },
         "etgoWeb": {
           "visibility": "discarded"
+        },
+        "obsepadMandateIdentifier": {
+          "visibility": "discarded",
+          "_note": "ETP-6148 — the SEPA mandate is owned by the businessPartner entity, whose customization applies the sepa-remittances flag and defaults; same C_BPartner row, so it is not writable from this tab."
+        },
+        "obsepadMandateDate": {
+          "visibility": "discarded"
         }
       }
     },
@@ -840,6 +872,13 @@
           "visibility": "discarded"
         },
         "etgoWeb": {
+          "visibility": "discarded"
+        },
+        "obsepadMandateIdentifier": {
+          "visibility": "discarded",
+          "_note": "ETP-6148 — the SEPA mandate is owned by the businessPartner entity, whose customization applies the sepa-remittances flag and defaults; same C_BPartner row, so it is not writable from this tab."
+        },
+        "obsepadMandateDate": {
           "visibility": "discarded"
         }
       }

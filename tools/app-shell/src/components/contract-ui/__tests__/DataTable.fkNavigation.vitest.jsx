@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
+// @covers tools/app-shell/src/components/contract-ui/fkNavigation.js
 /**
  * ETP-5075 — click-through navigation on read-only FK cells (DataTable).
  *
@@ -130,6 +132,69 @@ describe('DataTable — ETP-5075 FK click-through navigation', () => {
       { navigate },
     );
 
+    expect(screen.queryByTestId('fk-link-invoiceLine')).not.toBeInTheDocument();
+    expect(screen.getByText('INV-LINE-1')).toBeInTheDocument();
+  });
+});
+
+// ETP-6148 — a column's own declarative `link` (decisions.json) is resolved BEFORE the shared
+// AD-column registry; both fail closed, so an unresolvable link falls back to the registry.
+describe('DataTable — column `link` vs the fkNavigation registry', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // Same AD column as the registry entry (C_InvoiceLine_ID → /purchase-invoice/{invoiceHeaderId}),
+  // but the column declares its own target.
+  const LINKED_REGISTERED = {
+    ...REGISTERED_COLUMN,
+    link: { idField: 'invoice', window: { field: 'salesTransaction', values: { true: 'sales-invoice', false: 'purchase-invoice' } } },
+  };
+  const ROW = { id: '1', invoiceLine: 'INV-LINE-1', invoiceHeaderId: 'HDR-123', invoice: 'INV-9', salesTransaction: true };
+
+  it('the column link wins over the registry entry for the same column', async () => {
+    const user = userEvent.setup();
+    const navigate = vi.fn();
+    renderTable([LINKED_REGISTERED], [ROW], { navigate });
+    await user.click(screen.getByTestId('fk-link-invoiceLine'));
+    expect(navigate).toHaveBeenCalledTimes(1);
+    expect(navigate).toHaveBeenCalledWith('/sales-invoice/INV-9');
+  });
+
+  it('picks the window per row from the declared field', async () => {
+    const user = userEvent.setup();
+    const navigate = vi.fn();
+    renderTable([LINKED_REGISTERED], [{ ...ROW, salesTransaction: false }], { navigate });
+    await user.click(screen.getByTestId('fk-link-invoiceLine'));
+    expect(navigate).toHaveBeenCalledWith('/purchase-invoice/INV-9');
+  });
+
+  it('falls back to the registry when the column link cannot resolve on this row', async () => {
+    const user = userEvent.setup();
+    const navigate = vi.fn();
+    renderTable([LINKED_REGISTERED], [{ ...ROW, invoice: '' }], { navigate });
+    await user.click(screen.getByTestId('fk-link-invoiceLine'));
+    expect(navigate).toHaveBeenCalledWith('/purchase-invoice/HDR-123');
+  });
+
+  it('links a column that is not in the registry at all', async () => {
+    const user = userEvent.setup();
+    const navigate = vi.fn();
+    const column = { ...UNREGISTERED_COLUMN, link: { idField: 'partner', window: 'contacts' } };
+    renderTable([column], [{ id: '1', partner: 'BP-1', 'partner$_identifier': 'Acme Corp' }], { navigate });
+    await user.click(screen.getByTestId('fk-link-partner'));
+    expect(navigate).toHaveBeenCalledWith('/contacts/BP-1');
+  });
+
+  it('renders a plain cell when neither the link nor the registry resolves', () => {
+    const navigate = vi.fn();
+    const column = { ...UNREGISTERED_COLUMN, link: { idField: 'partner', window: 'contacts' } };
+    renderTable([column], [{ id: '1', partner: '' }], { navigate });
+    expect(screen.queryByTestId('fk-link-partner')).not.toBeInTheDocument();
+  });
+
+  it('still fails closed without a navigate prop, link or not', () => {
+    renderTable([LINKED_REGISTERED], [ROW]);
     expect(screen.queryByTestId('fk-link-invoiceLine')).not.toBeInTheDocument();
     expect(screen.getByText('INV-LINE-1')).toBeInTheDocument();
   });

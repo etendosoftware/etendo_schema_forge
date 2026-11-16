@@ -1898,7 +1898,7 @@
       ]
     },
     "2f22ba4790bcdcf783b1573c321c1f35b01b170c50ad5e9ab9e0d33f72120f75": {
-      "checksum": "c441ad95f832051629328a0778e484698e94f8b1ee3fc5e8fe0f5b877336e8cd",
+      "checksum": "791ab1ffd1883bbc6fd7c6e36682323e7cb6c03e1093ec0e5837e8da57510ef4",
       "params": [
         "123"
       ],
@@ -3066,6 +3066,18 @@
           "ad_table_id": "291",
           "columnname": "Is_Customer_Consent",
           "position": "97"
+        },
+        {
+          "ad_column_id": "5E1AABB6995F427CABADDB978D831B3A",
+          "ad_table_id": "291",
+          "columnname": "EM_Obsepad_Mandate_Identifier",
+          "position": "99"
+        },
+        {
+          "ad_column_id": "845872C29D244FCEBC1F7364A029E739",
+          "ad_table_id": "291",
+          "columnname": "EM_Obsepad_Mandate_Date",
+          "position": "100"
         },
         {
           "ad_column_id": "9E6D73B6EE0544BC8202FF883986CD23",
@@ -18536,6 +18548,596 @@
           "ad_table_id": "6046B7C2EC184CC6B9A09D1639539EEA",
           "columnname": "TAX_Type",
           "position": "34"
+        }
+      ]
+    },
+    "71ffdfc8865e7daf652e4f855e18d8bb6126fff59ba2b01e651989778533de54": {
+      "checksum": "8ce6ffe0f6d92aa6e7f0d6913fa3d41a30315d6f5cd434f9861ca90559397c38",
+      "params": [
+        "FF8080812E71F7C7012E71FD0499001B"
+      ],
+      "rows": [
+        {
+          "ad_column_id": "D8B4B2AC559E4F85A9981FE360F315A8",
+          "ad_table_id": "379F8A7C50E3405E838CE94153025761",
+          "columnname": "REM_RemittanceLine_Return_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "8A7A0848D2E746769DB19A98AD2606E4",
+          "ad_table_id": "379F8A7C50E3405E838CE94153025761",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "B12CCD11EC5D4428B0DD5F4FB0B44B02",
+          "ad_table_id": "379F8A7C50E3405E838CE94153025761",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "6110C82E20A54A57B9B6B73E3C003675",
+          "ad_table_id": "379F8A7C50E3405E838CE94153025761",
+          "columnname": "Isactive",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "9A2F95DA98D34CFA8680FD83926458D6",
+          "ad_table_id": "379F8A7C50E3405E838CE94153025761",
+          "columnname": "Created",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "6825FCC22016425EB9F6FB2BEF5D50F1",
+          "ad_table_id": "379F8A7C50E3405E838CE94153025761",
+          "columnname": "Createdby",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "425AF5FF6C1441438F7396922509D919",
+          "ad_table_id": "379F8A7C50E3405E838CE94153025761",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "A399DA7F97BD4297A99881162AC5D18D",
+          "ad_table_id": "379F8A7C50E3405E838CE94153025761",
+          "columnname": "Updatedby",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "DA4E54A3203F4ABB83E296D46C5B7922",
+          "ad_table_id": "379F8A7C50E3405E838CE94153025761",
+          "columnname": "REM_Remittance_ID",
+          "position": "9"
+        },
+        {
+          "ad_column_id": "126604E50C8A4F6195AA208C3BA33FA7",
+          "ad_table_id": "379F8A7C50E3405E838CE94153025761",
+          "columnname": "Line",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "886A86FE2E8B4F2FB2402191D5BA5A45",
+          "ad_table_id": "379F8A7C50E3405E838CE94153025761",
+          "columnname": "DateAcct",
+          "position": "11"
+        },
+        {
+          "ad_column_id": "E74BD308410A4796A3AC6FD8C082A9BE",
+          "ad_table_id": "379F8A7C50E3405E838CE94153025761",
+          "columnname": "FIN_Payment_ID",
+          "position": "12"
+        },
+        {
+          "ad_column_id": "2C2FADF552AB42369EC9F51EA2F4B782",
+          "ad_table_id": "379F8A7C50E3405E838CE94153025761",
+          "columnname": "Posted",
+          "position": "13"
+        },
+        {
+          "ad_column_id": "26DC89F8817B472DB0B41E735FD28C74",
+          "ad_table_id": "379F8A7C50E3405E838CE94153025761",
+          "columnname": "Processed",
+          "position": "14"
+        },
+        {
+          "ad_column_id": "8F76D546A61E4666B2508B54E1D0EE36",
+          "ad_table_id": "379F8A7C50E3405E838CE94153025761",
+          "columnname": "Processing",
+          "position": "15"
+        },
+        {
+          "ad_column_id": "28DF1A964BAE4CAAAE2670CCDCF92DDA",
+          "ad_table_id": "379F8A7C50E3405E838CE94153025761",
+          "columnname": "Undo",
+          "position": "16"
+        },
+        {
+          "ad_column_id": "1DE3EC61C5684123960F8DC8B7B922B6",
+          "ad_table_id": "4E2A33FA8835466BAAA596A17D680E19",
+          "columnname": "REM_Remittanceline_Cancel_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "BADF20AD68814B15A35D335EA0CDFF09",
+          "ad_table_id": "4E2A33FA8835466BAAA596A17D680E19",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "C24818EF9A1246F5A844F821548BC779",
+          "ad_table_id": "4E2A33FA8835466BAAA596A17D680E19",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "298AEC897915495FBF8FD8C5341F6B5D",
+          "ad_table_id": "4E2A33FA8835466BAAA596A17D680E19",
+          "columnname": "Isactive",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "62B6DF7E6F90495EB5BF43B1B3D10AA6",
+          "ad_table_id": "4E2A33FA8835466BAAA596A17D680E19",
+          "columnname": "Created",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "8BED30D0C3A64A42922E40072859E4B6",
+          "ad_table_id": "4E2A33FA8835466BAAA596A17D680E19",
+          "columnname": "Createdby",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "92A831998FE046B5BAF97023896B5C09",
+          "ad_table_id": "4E2A33FA8835466BAAA596A17D680E19",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "88633ED35CB8413FB482CD8D7E6502F8",
+          "ad_table_id": "4E2A33FA8835466BAAA596A17D680E19",
+          "columnname": "Updatedby",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "30D3B9E0EB1E453C9B09AA00A2658A55",
+          "ad_table_id": "4E2A33FA8835466BAAA596A17D680E19",
+          "columnname": "REM_Remittance_ID",
+          "position": "9"
+        },
+        {
+          "ad_column_id": "5DF8ECF2AE4F424EA8F81CFBAC88F776",
+          "ad_table_id": "4E2A33FA8835466BAAA596A17D680E19",
+          "columnname": "Line",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "E8647DAFAB1E414D991A160C6B783731",
+          "ad_table_id": "4E2A33FA8835466BAAA596A17D680E19",
+          "columnname": "DateAcct",
+          "position": "11"
+        },
+        {
+          "ad_column_id": "40073E56875448078870C1275E2B6537",
+          "ad_table_id": "4E2A33FA8835466BAAA596A17D680E19",
+          "columnname": "FIN_Payment_ID",
+          "position": "12"
+        },
+        {
+          "ad_column_id": "AF3326BF665449E99A2519A9A48AC112",
+          "ad_table_id": "4E2A33FA8835466BAAA596A17D680E19",
+          "columnname": "Posted",
+          "position": "13"
+        },
+        {
+          "ad_column_id": "1E7FC18DFD8247A68E40B380A868EF3F",
+          "ad_table_id": "4E2A33FA8835466BAAA596A17D680E19",
+          "columnname": "Processed",
+          "position": "14"
+        },
+        {
+          "ad_column_id": "C7E2CEB742C34E7BAE727210CB7193D8",
+          "ad_table_id": "4E2A33FA8835466BAAA596A17D680E19",
+          "columnname": "Processing",
+          "position": "15"
+        },
+        {
+          "ad_column_id": "7A6D559F8F6B4589862B8D0ED7E73B7D",
+          "ad_table_id": "4E2A33FA8835466BAAA596A17D680E19",
+          "columnname": "Undo",
+          "position": "16"
+        },
+        {
+          "ad_column_id": "9F050824A6D844C6854303E8D9F368FD",
+          "ad_table_id": "4E2A33FA8835466BAAA596A17D680E19",
+          "columnname": "EM_Etar_ReturnReceipt",
+          "position": "18"
+        },
+        {
+          "ad_column_id": "521052DB073A4C138C3900ACDF56C85E",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "REM_Remittance_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "F1D2B523DD964616ADC8EBE945C991CC",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "198D6FC30012483588C054EEF7127AFE",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "B17F5F3A92C8476F9B34731FBA7F77AC",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "Isactive",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "50577FA06FBB4C808F9B8ADCF8AA8C6F",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "Created",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "D7E5280BECD44331AFEE35EA6EFF4810",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "Createdby",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "5AFAD2D064FC44CAB5A982E1F3DD4FAA",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "F339AC3E3F044596B26FCA1A73116A94",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "Updatedby",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "A64F725834214F93A848EB75735FF31C",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "DocumentNo",
+          "position": "9"
+        },
+        {
+          "ad_column_id": "927DFD43FABC457B8A06F65948EFAF5F",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "Name",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "2465E204DD744DC193CE092E876B9C7D",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "FIN_Financial_Account_ID",
+          "position": "11"
+        },
+        {
+          "ad_column_id": "919D46C1044747F9897910BF10217EAA",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "REM_Remittance_Type_ID",
+          "position": "12"
+        },
+        {
+          "ad_column_id": "E6587142A1E749DB9C3939ED33A49FBD",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "FIN_Payment_ID",
+          "position": "13"
+        },
+        {
+          "ad_column_id": "EA289F87868747E9A283347C6976560C",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "Datetrx",
+          "position": "14"
+        },
+        {
+          "ad_column_id": "F2755BF33F0D4F61940AEAFF545D18B2",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "Duedate",
+          "position": "15"
+        },
+        {
+          "ad_column_id": "03922FF896C4436FAEDDFF369706275E",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "Createfrom",
+          "position": "16"
+        },
+        {
+          "ad_column_id": "49AA85B491A0479EA1EEE9700F06FE85",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "Getfile",
+          "position": "17"
+        },
+        {
+          "ad_column_id": "2321AC43002E4CF7ABB84F31E95A9109",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "Posted",
+          "position": "18"
+        },
+        {
+          "ad_column_id": "80CF2D351A59477D89C69980E1AE8B20",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "Process_Remittance",
+          "position": "19"
+        },
+        {
+          "ad_column_id": "2B76FFE8E40F4FD380841DF979CD4D1A",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "Processed",
+          "position": "20"
+        },
+        {
+          "ad_column_id": "C63640ADFF874DDF9189DEA1F8644016",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "Processing",
+          "position": "21"
+        },
+        {
+          "ad_column_id": "9ED969BD38D96CC2E040007F010019E8",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "Selectpayments",
+          "position": "22"
+        },
+        {
+          "ad_column_id": "9F16001CBBE9AA8CE040007F01003961",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "C_Doctype_ID",
+          "position": "23"
+        },
+        {
+          "ad_column_id": "F7D8E22D734A431599A138EE425B78AF",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "Chargedate",
+          "position": "24"
+        },
+        {
+          "ad_column_id": "117FDF5C7B794C79B1C6789EBFA12E98",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "SinglePayment",
+          "position": "25"
+        },
+        {
+          "ad_column_id": "A64AB9B51DA94A18AE569F269BDBF200",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "Remittance_Status",
+          "position": "26"
+        },
+        {
+          "ad_column_id": "6ABCDDF9439F46209669EE29B61CF935",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "EM_Etar_Automaticprocess",
+          "position": "32"
+        },
+        {
+          "ad_column_id": "B7251D9D87EC48069CAE689320D0BD57",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "selectInvoicesAndOrders",
+          "position": null
+        },
+        {
+          "ad_column_id": "978E133CC1064114A079FD9832DCBEA5",
+          "ad_table_id": "FF8080812E6C2859012E6D063F5900B5",
+          "columnname": "REM_Remittanceline_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "AA1BD1F1E0234C079D4115842B3EE2AC",
+          "ad_table_id": "FF8080812E6C2859012E6D063F5900B5",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "64B54B9BE9B44536958F45E765344516",
+          "ad_table_id": "FF8080812E6C2859012E6D063F5900B5",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "7213E0886DCA40B8A27A1D938434F415",
+          "ad_table_id": "FF8080812E6C2859012E6D063F5900B5",
+          "columnname": "Isactive",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "125F50FC3AF6475E8EAE83426C586C00",
+          "ad_table_id": "FF8080812E6C2859012E6D063F5900B5",
+          "columnname": "Created",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "C537694BB0EB4A8B8FDCFC1715F8512F",
+          "ad_table_id": "FF8080812E6C2859012E6D063F5900B5",
+          "columnname": "Createdby",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "7FE5A6F5A3B04669AEDBA85AAE248955",
+          "ad_table_id": "FF8080812E6C2859012E6D063F5900B5",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "18DE0F0F674A44E59DFEF41F54020A49",
+          "ad_table_id": "FF8080812E6C2859012E6D063F5900B5",
+          "columnname": "Updatedby",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "EC4E255AAF6E48E0A5FDCB93786D3465",
+          "ad_table_id": "FF8080812E6C2859012E6D063F5900B5",
+          "columnname": "REM_Remittance_ID",
+          "position": "9"
+        },
+        {
+          "ad_column_id": "C7D7C6CC9313476485975F8D916757F8",
+          "ad_table_id": "FF8080812E6C2859012E6D063F5900B5",
+          "columnname": "Line",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "893CBA52A65F4B19B415D0812212245C",
+          "ad_table_id": "FF8080812E6C2859012E6D063F5900B5",
+          "columnname": "FIN_Payment_ID",
+          "position": "11"
+        },
+        {
+          "ad_column_id": "18158C52944341EFA89E39F55C972448",
+          "ad_table_id": "FF8080812E6C2859012E6D063F5900B5",
+          "columnname": "FIN_Payment_Scheduledetail_ID",
+          "position": "12"
+        },
+        {
+          "ad_column_id": "5BD70748978D436D91F1CA7CA49AB707",
+          "ad_table_id": "FF8080812E6C2859012E6D063F5900B5",
+          "columnname": "Amount",
+          "position": "13"
+        },
+        {
+          "ad_column_id": "F93E08CA093649CFAE0205DB2995E58D",
+          "ad_table_id": "FF8080812E6C2859012E6D063F5900B5",
+          "columnname": "Origstatus",
+          "position": "14"
+        },
+        {
+          "ad_column_id": "66A9407169AC4186AB87228EFD53E729",
+          "ad_table_id": "FF8080812E6C2859012E6D063F5900B5",
+          "columnname": "Currency",
+          "position": null
+        },
+        {
+          "ad_column_id": "EB2F163E3D0F4817BA5906804042F453",
+          "ad_table_id": "FF8080812E6C2859012E6D063F5900B5",
+          "columnname": "fin_payment_sched_ord_v_id",
+          "position": null
+        },
+        {
+          "ad_column_id": "C966487F9A014CFBAF55B1CEE11E286C",
+          "ad_table_id": "FF808081307557870130755E0F110009",
+          "columnname": "REM_Instruction_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "377BD735BBC748539C8FBD768D428A0D",
+          "ad_table_id": "FF808081307557870130755E0F110009",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "B437AC6F1CBB4007919F1118EE70E81E",
+          "ad_table_id": "FF808081307557870130755E0F110009",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "3EF74E04049F4053A3CB9F4A4022D795",
+          "ad_table_id": "FF808081307557870130755E0F110009",
+          "columnname": "Isactive",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "7706EF9D1D65453F81AB1C5CAC71042D",
+          "ad_table_id": "FF808081307557870130755E0F110009",
+          "columnname": "Created",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "1ED0B3260F974FA49C8290668DD7FED8",
+          "ad_table_id": "FF808081307557870130755E0F110009",
+          "columnname": "Createdby",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "A88C36FDF1CF4AEAA2BA04CF5A43EE13",
+          "ad_table_id": "FF808081307557870130755E0F110009",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "2017EC9274CB48628C8DE28B774ED053",
+          "ad_table_id": "FF808081307557870130755E0F110009",
+          "columnname": "Updatedby",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "99E37162E6C3490C92C7B2DCE1F3177B",
+          "ad_table_id": "FF808081307557870130755E0F110009",
+          "columnname": "REM_Remittance_ID",
+          "position": "9"
+        },
+        {
+          "ad_column_id": "C3E8D4EE6DF24DE9A0831832B0B46AC3",
+          "ad_table_id": "FF808081307557870130755E0F110009",
+          "columnname": "Line",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "BCC598D7FBAD4532BFB2565599B4C4D7",
+          "ad_table_id": "FF808081307557870130755E0F110009",
+          "columnname": "C_Bpartner_ID",
+          "position": "11"
+        },
+        {
+          "ad_column_id": "92A0CAD463734EB2BFA222A4DE761432",
+          "ad_table_id": "FF808081307557870130755E0F110009",
+          "columnname": "Amount",
+          "position": "12"
+        },
+        {
+          "ad_column_id": "528B52CB07CC454BAAAAF36062F4D632",
+          "ad_table_id": "FF808081307557870130755E0F110009",
+          "columnname": "Accountno",
+          "position": "13"
+        },
+        {
+          "ad_column_id": "B463FEF7E2B244ACB26484DB2BE8348D",
+          "ad_table_id": "FF808081307557870130755E0F110009",
+          "columnname": "Duedate",
+          "position": "14"
+        },
+        {
+          "ad_column_id": "50A1428217F242178C10F8258B5E8BED",
+          "ad_table_id": "FF808081307557870130755E0F110009",
+          "columnname": "Description",
+          "position": "15"
+        },
+        {
+          "ad_column_id": "B7FBDC41A9DD45BE8B059F61C2094FC7",
+          "ad_table_id": "FF808081307557870130755E0F110009",
+          "columnname": "Msgtext",
+          "position": "16"
+        },
+        {
+          "ad_column_id": "F499B6F0A1EC49049BAD7206251A2A91",
+          "ad_table_id": "FF808081307557870130755E0F110009",
+          "columnname": "Credit_Execution_Date",
+          "position": "17"
+        },
+        {
+          "ad_column_id": "BD126AD5527D418087696504359CC9DB",
+          "ad_table_id": "FF808081307557870130755E0F110009",
+          "columnname": "EM_OBSEPAD_SeqTp",
+          "position": "18"
+        },
+        {
+          "ad_column_id": "879A3BFE1B894890A2A235DCBE87157F",
+          "ad_table_id": "FF808081307557870130755E0F110009",
+          "columnname": "FIN_Payment_ID",
+          "position": "18"
+        },
+        {
+          "ad_column_id": "1ABB9593939846539293BEFD6C4D2829",
+          "ad_table_id": "FF808081307557870130755E0F110009",
+          "columnname": "Currency",
+          "position": null
         }
       ]
     },
@@ -35724,7 +36326,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
-      "checksum": "e28a5655043113d5b46755b353186b759a6d5f941ca02b861ddcb2b947e19bb1",
+      "checksum": "815de502577c4caba7459cbc7062b1c8302a5e418cf89fdfb391d007d023b119",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -36600,10 +37202,46 @@
           "position": "23"
         },
         {
+          "ad_column_id": "113B4581C5164BD1A4BD5ECE0338D680",
+          "ad_table_id": "84203CBEBDA349C38319C0E549751546",
+          "columnname": "EM_PSD2_Is_Discarded",
+          "position": "24"
+        },
+        {
+          "ad_column_id": "7466157F80F24471B6F9011DFC5E7349",
+          "ad_table_id": "84203CBEBDA349C38319C0E549751546",
+          "columnname": "EM_PSD2_Discard_Line",
+          "position": "25"
+        },
+        {
           "ad_column_id": "2A8EA3EC7BFD415692D844A42EE5BFD5",
           "ad_table_id": "84203CBEBDA349C38319C0E549751546",
           "columnname": "EM_ETGO_Pending_Amount",
           "position": "27"
+        },
+        {
+          "ad_column_id": "6EC2539AFF68417DBDFF3452751F22C8",
+          "ad_table_id": "84203CBEBDA349C38319C0E549751546",
+          "columnname": "EM_ETGO_Bounce_Pair_Line_ID",
+          "position": "28"
+        },
+        {
+          "ad_column_id": "F32205B3D5D34F43B2824DF78E695A23",
+          "ad_table_id": "84203CBEBDA349C38319C0E549751546",
+          "columnname": "EM_ETGO_Bounce_Discarded",
+          "position": "29"
+        },
+        {
+          "ad_column_id": "8044D481A3B247A0AFF14FA8EA375A1B",
+          "ad_table_id": "84203CBEBDA349C38319C0E549751546",
+          "columnname": "EM_ETGO_Bounce_Signal",
+          "position": "30"
+        },
+        {
+          "ad_column_id": "70DD9014A11E442DB01888007E1278B5",
+          "ad_table_id": "84203CBEBDA349C38319C0E549751546",
+          "columnname": "EM_ETGO_Bounce_Confidence",
+          "position": "31"
         },
         {
           "ad_column_id": "828EE0AE7FEA5FA1E040007F010067C7",
@@ -37530,6 +38168,30 @@
           "position": "20"
         },
         {
+          "ad_column_id": "ABEC1513F60F49E48EA915A22E79183E",
+          "ad_table_id": "B9AC5C5889CA4A15B461C7D2F004677A",
+          "columnname": "Last_Success_At",
+          "position": "21"
+        },
+        {
+          "ad_column_id": "F69F00A5C2E649659A0DDEB5B39959FC",
+          "ad_table_id": "B9AC5C5889CA4A15B461C7D2F004677A",
+          "columnname": "Last_Fail_At",
+          "position": "22"
+        },
+        {
+          "ad_column_id": "0FC7CE3717CC4BF6AFA19D7681726C19",
+          "ad_table_id": "B9AC5C5889CA4A15B461C7D2F004677A",
+          "columnname": "Last_Fail_Error_Class",
+          "position": "23"
+        },
+        {
+          "ad_column_id": "AE0C745EA5954AEF9BC1B28D1DD7C4B8",
+          "ad_table_id": "B9AC5C5889CA4A15B461C7D2F004677A",
+          "columnname": "Last_Fail_Message",
+          "position": "24"
+        },
+        {
           "ad_column_id": "8189F49FFEA16E56E040007F01003E83",
           "ad_table_id": "D4C23A17190649E7B78F55A05AF3438C",
           "columnname": "FIN_Bankstatement_ID",
@@ -37702,6 +38364,12 @@
           "ad_table_id": "D4C23A17190649E7B78F55A05AF3438C",
           "columnname": "EM_ETGO_Status",
           "position": "104"
+        },
+        {
+          "ad_column_id": "569625BD426949C1919C445AC9B5A655",
+          "ad_table_id": "D4C23A17190649E7B78F55A05AF3438C",
+          "columnname": "EM_ETGO_Discarded_Count",
+          "position": "105"
         },
         {
           "ad_column_id": "20685BD0894442B981F48DAB5E8031ED",

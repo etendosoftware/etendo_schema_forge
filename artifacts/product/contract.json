@@ -1,8 +1,8 @@
 {
   "version": "0.18.0",
   "generatedAt": "2026-09-11T00:36:11.322Z",
-  "updatedAt": "2026-11-03T16:29:54.985Z",
-  "checksum": "77070d8743266a96",
+  "updatedAt": "2026-11-11T19:46:04.971Z",
+  "checksum": "b2d7bff4956b5a67",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -1887,8 +1887,7 @@
               "source": "context.organization"
             }
           }
-        ],
-        "javaQualifier": "productTransactionsHandler"
+        ]
       },
       "productCharacteristic": {
         "tableName": "M_Product_Ch",
@@ -5147,8 +5146,7 @@
             "visibility": "readOnly",
             "required": false
           }
-        ],
-        "javaQualifier": "productTransactionsHandler"
+        ]
       },
       "productCharacteristic": {
         "tableName": "M_Product_Ch",

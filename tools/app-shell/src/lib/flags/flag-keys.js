@@ -91,6 +91,16 @@ export const DOC_TEMPLATE_SELECTION = 'doc-template-selection';
 export const DYNAMIC_REPORTS = 'dynamic-reports';
 
 /**
+ * ETP-6151 — PSD2 statement import settings. On: connecting a bank account asks for "Importar
+ * desde" and the statement grouping (both required, sent with the link), the edit panel enforces
+ * them with help text, and statements of a bank-connected account can be deleted (processed ones
+ * included) behind a re-import notice. Off: the pre-ETP-6151 behaviour, byte for byte. Per
+ * account/user. Visual gating only: com.etendoerp.go evaluates the same key with the same identity
+ * and enforces the rules on its own, so this default must stay `false` until both ends are ready.
+ */
+export const PSD2_STATEMENT_IMPORT_SETTINGS = 'psd2-statement-import-settings';
+
+/**
  * Telemetry kill switches (ETP-4578, D2). They are "kill" flags: `true` STOPS telemetry, so the
  * safe default is `false` (today's shipped behaviour: providers run as configured). They are
  * read by `observability/killSwitch.js`, never rendered by the UI, and are excluded from flag
@@ -124,6 +134,7 @@ export const FLAG_DEFAULTS = Object.freeze({
   [CONTACT_CATEGORY_TYPE]: false,
   [DOC_TEMPLATE_SELECTION]: false,
   [DYNAMIC_REPORTS]: false,
+  [PSD2_STATEMENT_IMPORT_SETTINGS]: false,
   [TELEMETRY_KILL_ALL]: false,
   ...Object.fromEntries(Object.values(TELEMETRY_KILL_PROVIDER_FLAGS).map((key) => [key, false])),
 });

@@ -46,10 +46,17 @@ function preventWhile(locked) {
  *   onConfirm: () => void,
  *   onClose: () => void,
  *   testIdScope?: string,
+ *   notice?: import('react').ReactNode,
  * }} props
+ *
+ * `notice` (optional) is an extra block rendered under the description — a host-specific
+ * consequence the user must read before confirming (e.g. the Imported Statements tab warns that a
+ * bank-connected account re-imports deleted movements on the next sync, ETP-6151). Omitted by
+ * default, so every other surface renders exactly as before.
  */
 export function DeleteConfirmDialog({
   open, count, deleting = false, progress = null, onConfirm, onClose, testIdScope = 'batch-delete',
+  notice = null,
 }) {
   const ui = useUI();
   const scope = testIdScope;
@@ -71,7 +78,11 @@ export function DeleteConfirmDialog({
       <DialogContent
         // `[&>button]:hidden` hides the primitive's own corner X (DialogContent's only direct
         // <button> child) while deleting; the footer buttons sit inside DialogFooter.
-        className={deleting ? 'max-w-sm [&>button]:hidden' : 'max-w-sm'}
+        className={[
+          'max-w-sm',
+          notice ? 'bg-card' : '',
+          deleting ? '[&>button]:hidden' : '',
+        ].filter(Boolean).join(' ')}
         aria-busy={deleting || undefined}
         onEscapeKeyDown={lock}
         onPointerDownOutside={lock}
@@ -83,6 +94,7 @@ export function DeleteConfirmDialog({
             {description}
           </DialogDescription>
         </DialogHeader>
+        {notice}
         {showProgress && (
           <div
             role="progressbar"

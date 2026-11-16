@@ -1351,6 +1351,20 @@
       ],
       "rows": []
     },
+    "71ffdfc8865e7daf652e4f855e18d8bb6126fff59ba2b01e651989778533de54": {
+      "checksum": "6694eeb9288ca4b8ceb145404bde168ed3c3c0b1c98dfe0ade12dd83305e32ee",
+      "params": [
+        "FF8080812E71F7C7012E71FD0499001B"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "0F7DC02B0F8845C9973BF12C66C580EE",
+          "code": "C_DocType.DocBaseType = 'REM_REM' AND AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1'",
+          "columnname": "C_Doctype_ID",
+          "name": "C_Doctype - Remittances"
+        }
+      ]
+    },
     "7a3f9d7a689e84e5d068b46c04ad4a3a05634954d924672e2d18f287019437e0": {
       "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "params": [

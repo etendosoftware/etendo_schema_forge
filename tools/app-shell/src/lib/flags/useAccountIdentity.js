@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { setInternalUserContext } from '../observability/internalUser.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from '@/hooks/useNeoResource.js';
 import { setSessionIdentity } from '../sessionIdentity.js';
@@ -127,6 +128,8 @@ export function useAccountIdentity() {
   // use the latest credential when the effect runs again.
   const latestToken = useRef(token);
   latestToken.current = token;
+
+  useEffect(() => { setInternalUserContext(isAuthenticated ? accountEmail : undefined); }, [isAuthenticated, accountEmail]);
 
   useEffect(() => beginIdentityEffect({
     isAuthenticated, identity: { username, clientId, accountId, accountEmail }, token: latestToken.current,

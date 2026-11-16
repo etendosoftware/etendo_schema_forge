@@ -134,6 +134,7 @@ body { font-family: var(--font-sans); font-size: 13px; line-height: 18px; color:
 .inv-observ { border:1px solid var(--border-1); border-radius:var(--radius-lg); padding:14px 18px; display:grid; grid-template-columns:120px 1fr; gap:16px; margin-top:8px; }
 .inv-observ .eyebrow { padding-top:2px; }
 .inv-observ .body { font-size:12px; line-height:18px; color:var(--fg-2); }
+.inv-observ .observ-reason { margin-bottom:4px; }
 
 /* Footer */
 .inv-footer { margin-top:auto; padding-top:24px; border-top:1px solid var(--border-1); display:flex; justify-content:space-between; font-size:10px; color:var(--fg-4); text-transform:uppercase; letter-spacing:0.08em; }
@@ -265,7 +266,7 @@ export const DOCUMENT_TEMPLATE = `<!DOCTYPE html>
   <!-- Observations -->
   <div class="inv-observ">
     <div class="eyebrow">{{labels.notes}}</div>
-    <div class="body">{{notes}}</div>
+    <div class="body">{{#if rejectReason}}<div class="observ-reason">{{labels.rejectReason}}: {{rejectReason}}</div>{{/if}}{{notes}}</div>
   </div>
 
   <!-- Footer -->
@@ -764,6 +765,8 @@ export const QUOTATION_PDF_LABEL_KEYS = Object.freeze({
   date:            'quotationPdfDate',
   validUntil:      'quotationPdfValidUntil',
   colQty:          'quotationPdfColQty',
+  // ETP-6209: the "Motivo" observation line of a rejected quotation.
+  rejectReason:    'quotationPdfRejectReason',
 });
 
 /**

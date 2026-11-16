@@ -97,7 +97,7 @@ async function deleteDiscount(discountRecord, apiFetch, ui, setDiscountRecord) {
       setDiscountRecord(null);
       toast.success(ui('discountDeleteSuccess'));
     } else {
-      toast.error(await extractApiErrorMessage(res));
+      toast.error(await extractApiErrorMessage(res, ui));
     }
   } catch (err) {
     toast.error(err.message || ui('discountDeleteError'));

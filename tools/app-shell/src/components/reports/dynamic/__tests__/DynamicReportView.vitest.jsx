@@ -5,7 +5,8 @@
 // @covers tools/app-shell/src/components/reports/dynamic/useAccountSplit.js
 // @covers tools/app-shell/src/components/reports/dynamic/DynamicDrillPanel.jsx
 // @covers tools/app-shell/src/components/reports/dynamic/reportTelemetry.js
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionIdentity, setSessionIdentity } from '@/lib/sessionIdentity.js';
 
 const apiFetchMock = vi.fn();
 const trackMock = vi.fn();
@@ -484,6 +485,22 @@ describe('DynamicReportView — telemetry (F10, T9)', () => {
     fireEvent.click(screen.getByTestId('DynamicReportPanel__bPartnerId'));
     await waitFor(() => expect(sent('report_filter_applied')).toHaveLength(1));
     expect(sent('report_opened')).toHaveLength(1);
+  });
+
+  it('attaches account_id from the session clientId, and omits it when empty (ETP-6230)', async () => {
+    setSessionIdentity({ clientId: 'client-1' });
+    renderView();
+    await waitFor(() => expect(sent('report_opened')).toHaveLength(1));
+    expect(sent('report_opened')[0].account_id).toBe('client-1');
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__bPartnerId'));
+    await waitFor(() => expect(sent('report_filter_applied')).toHaveLength(1));
+    expect(sent('report_filter_applied')[0].account_id).toBe('client-1');
+    clearSessionIdentity();
+    trackMock.mockReset();
+    cleanup();
+    renderView();
+    await waitFor(() => expect(sent('report_opened')).toHaveLength(1));
+    expect('account_id' in sent('report_opened')[0]).toBe(false);
   });
 
   it('a user change: one report_filter_applied once its result is in; "Limpiar filtros" none', async () => {

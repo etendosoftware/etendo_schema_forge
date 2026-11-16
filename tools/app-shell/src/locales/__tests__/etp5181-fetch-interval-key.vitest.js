@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/locales/en_US.json
+// @covers tools/app-shell/src/locales/es_ES.json
 import { describe, expect, it } from 'vitest';
 import enUS from '../en_US.json';
 import esES from '../es_ES.json';
@@ -93,3 +95,65 @@ describeFetchIntervalKey('ETP-5181', KEY);
  * `lib/__tests__/backendErrors.test.js`, not here.
  */
 describeFetchIntervalKey('ETP-5181 QA', 'backendError.psd2ImportDateBeyondMaxInterval');
+
+/**
+ * ETP-6151 — the "Importar desde" help line names the bank's limit with the same `{days}`
+ * interpolation, so it gets the same structural guards.
+ */
+describeFetchIntervalKey('ETP-6151', 'financeAccountsBankConnectionImportFromHelpLimit');
+
+/**
+ * ETP-6151 — the rest of the import-settings copy shared by the connect modal and the edit panel
+ * (`BankImportSettingsFields`): help lines, per-grouping help and the two required errors. Like
+ * the advisory above, only en_US and es_ES carry `financeAccountsBankConnection*` keys.
+ *
+ * The grouping is required when the flag `psd2-statement-import-settings` is on, which no longer
+ * offers the empty "Default" option; the flag-off panel still does, so its label stays declared.
+ */
+describe('ETP-6151 — bank import-settings keys', () => {
+  const KEYS = [
+    'financeAccountsBankConnectionImportFromHelp',
+    'financeAccountsBankConnectionImportFromRequired',
+    'financeAccountsBankConnectionGroupingHelp',
+    'financeAccountsBankConnectionGroupingHelp_1BD',
+    'financeAccountsBankConnectionGroupingHelp_1BW',
+    'financeAccountsBankConnectionGroupingHelp_1BM',
+    'financeAccountsBankConnectionGroupingHelp_1BE',
+    'financeAccountsBankConnectionGroupingRequired',
+  ];
+
+  describe.each(Object.entries(DICTIONARIES))('%s', (name, dictionary) => {
+    it.each(KEYS)('declares %s with a non-empty value', (key) => {
+      const value = dictionary.genericLabels?.[key];
+      expect(typeof value, `${name}.genericLabels.${key} must be a string`).toBe('string');
+      expect(value.trim(), `${name}.genericLabels.${key} must be non-empty`).not.toBe('');
+    });
+
+    it.each(KEYS)('%s carries no placeholder or backend template marker', (key) => {
+      // None of these is interpolated: a `{x}` would render literally, and so would `%s` / `%0`.
+      expect(dictionary.genericLabels[key]).not.toMatch(/\{[^}]*\}|%s|%\d/);
+    });
+
+    it('labels each of the four groupings', () => {
+      for (const id of ['1BD', '1BW', '1BM', '1BE']) {
+        expect(dictionary.genericLabels[`financeAccountsBankConnectionGrouping_${id}`]).toBeTruthy();
+      }
+    });
+
+    it('still declares the empty "Default" grouping label (the flag-off edit panel renders it)', () => {
+      expect(dictionary.genericLabels.financeAccountsBankConnectionGroupingNone).toBeTruthy();
+    });
+  });
+
+  it.each(KEYS)('%s is translated in es_ES rather than left in English', (key) => {
+    expect(esES.genericLabels[key]).not.toBe(enUS.genericLabels[key]);
+  });
+
+  it('gives each grouping its own help sentence', () => {
+    for (const dictionary of Object.values(DICTIONARIES)) {
+      const helps = ['1BD', '1BW', '1BM', '1BE', '']
+        .map((id) => dictionary.genericLabels[`financeAccountsBankConnectionGroupingHelp${id ? `_${id}` : ''}`]);
+      expect(new Set(helps).size).toBe(helps.length);
+    }
+  });
+});

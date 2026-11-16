@@ -25,8 +25,8 @@ function Shimmer({ width }) {
  * One line of cell text that ellipsises when the column is too narrow and then shows the full
  * value in a tooltip, on hover and on keyboard focus (`tabIndex` 0; the shared `TruncatedText`
  * only opens it when the text is really clipped). The tooltip is Radix's, so the trigger gets
- * `aria-describedby` while it is open. Row selection is unaffected: the checkbox owns it and a row
- * click does nothing in this window.
+ * `aria-describedby` while it is open. Row selection is unaffected: the checkbox owns it (a row
+ * click opens the review panel, ETP-6050).
  */
 function CellText({ text, className, testId }) {
   return <TruncatedText text={text} className={className} tabIndex={0} data-testid={testId} />;
@@ -147,7 +147,7 @@ export function NumberCell({ row, ui }) {
   if (isProcessingRow(row)) return <Shimmer width={80} data-testid="Shimmer__85f13c" />;
   const duplicate = row.duplicateOfInvoice && !SETTLED_STATUSES.has(row.status);
   const duplicateTitle = duplicate
-    ? ui('invoiceInboxPossibleDuplicate', { doc: row['duplicateOfInvoice$_identifier'] ?? '' })
+    ? ui('invoiceInboxPossibleDuplicate', { doc: row['duplicateOfInvoice$documentNo'] || row['duplicateOfInvoice$_identifier'] || '' })
     : null;
   return (
     <span className="whitespace-nowrap font-mono text-[13px]">
@@ -202,10 +202,12 @@ function StatusSubline({ row, ui, locale }) {
         data-testid="CellText__85f13c" />
     );
   }
-  if (row.status === STATUS.CONFIRMED && row['invoice$_identifier']) {
+  // The plain document number; the DAL identifier ("no - date - amount") only when it is absent.
+  const invoiceDoc = row['invoice$documentNo'] || row['invoice$_identifier'];
+  if (row.status === STATUS.CONFIRMED && invoiceDoc) {
     return (
       <CellText
-        text={ui('invoiceInboxConfirmedAs', { doc: row['invoice$_identifier'] })}
+        text={ui('invoiceInboxConfirmedAs', { doc: invoiceDoc })}
         className={`${SUBLINE_CLASS} font-mono text-primary`}
         testId={`invoice-inbox-status-reason-${row.id}`}
         data-testid="CellText__85f13c" />

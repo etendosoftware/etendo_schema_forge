@@ -27,7 +27,8 @@ const rowsOf = async (res) => (await res.json())?.response?.data || [];
 export const isCoveredDocument = (doc) => Number(doc?.pendingLines) === 0;
 
 /**
- * The row total of a listed ORDER: the server's pending amount (`amount`, sent with `detail`),
+ * The row total of a listed ORDER (and, since ETP-6002, of a SALES invoice on the goods shipment):
+ * the server's pending amount (`amount`, sent with `detail`),
  * else the loaded lines' sum.
  */
 export const pendingDocumentTotal = (doc) => {
@@ -36,9 +37,11 @@ export const pendingDocumentTotal = (doc) => {
 };
 
 /**
- * The row total of a listed INVOICE: always 0, as the popups showed it before ETP-6099 (their
- * lines carry no price, so the eager line sum was 0 on every listed invoice). `availableInvoices`
- * has no `amount`; without this the row would stay blank until expanded.
+ * The row total of a listed PURCHASE invoice (goods receipt): always 0, as the popup showed it
+ * before ETP-6099 (its lines carry no price, so the eager line sum was 0 on every listed invoice).
+ * The receipt's `availableInvoices` has no `amount`; without this the row would stay blank until
+ * expanded. The goods shipment's invoice popup uses `pendingDocumentTotal` since ETP-6002 (CP-27):
+ * its `availableInvoices` sends the pending `amount`.
  */
 export const zeroDocumentTotal = () => 0;
 

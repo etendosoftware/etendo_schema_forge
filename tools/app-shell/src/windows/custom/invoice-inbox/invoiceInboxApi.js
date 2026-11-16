@@ -3,7 +3,8 @@
  * `useApiFetch(apiBaseUrl)`, whose base is the spec (`/sws/neo/invoice-inbox`), so paths here are
  * relative to it: the list is `/header`, the upload is `/upload` (a built-in endpoint that NEO
  * dispatches before the spec router; the spec's CRUD is read-only), the discard is the action
- * `/header/{id}/action/discard`.
+ * `/header/{id}/action/discard`, the review read (ETP-6050) the GET action
+ * `/header/{id}/action/review`.
  */
 import { buildListQuery, COUNT_QUERIES, idsCriteria } from './invoiceInboxFilters.js';
 
@@ -13,6 +14,8 @@ export const UPLOAD_PATH = '/upload';
 export const UPLOAD_PART = 'files';
 /** NEO action name of "Discard" (`InvoiceInboxHeaderHandler`). */
 export const DISCARD_ACTION = 'discard';
+/** NEO GET action that reads one document for the review panel (ETP-6050). */
+export const REVIEW_ACTION = 'review';
 
 class InboxRequestError extends Error {
   constructor(status) {
@@ -126,6 +129,25 @@ export async function discardInboxDocument(apiFetch, id) {
   const res = await apiFetch(path, { method: 'POST', timeout: 0 });
   if (res.ok) return { status: 'discarded' };
   const json = await readJson(res);
+  return { status: 'failed', code: json?.error?.code ?? null, httpStatus: res.status };
+}
+
+/**
+ * ETP-6050 — reads ONE document for the review panel: `GET /header/{id}/action/review`, a NEO GET
+ * action of `InvoiceInboxHeaderHandler` (the document, its recomputed validation, the enriched
+ * candidates, the main attachment metadata, `updated`, `editable`). A read: the default timeout of
+ * `apiFetch` applies. Never throws for an HTTP answer; a request with no HTTP answer rejects with
+ * the core `NetworkError`, and an aborted one with an `AbortError`.
+ *
+ * @returns {Promise<{status: 'ok', review: object} | {status: 'failed', code: string|null,
+ *   httpStatus: number}>} `code` is the `error.code` of the NEO error envelope (`processing` with
+ *   409 while the document is still being read, `feature_disabled`, `not_found`, …)
+ */
+export async function fetchReview(apiFetch, id, signal) {
+  const path = `${LIST_PATH}/${encodeURIComponent(id)}/action/${REVIEW_ACTION}`;
+  const res = await apiFetch(path, { signal });
+  const json = await readJson(res);
+  if (res.ok && json) return { status: 'ok', review: json };
   return { status: 'failed', code: json?.error?.code ?? null, httpStatus: res.status };
 }
 

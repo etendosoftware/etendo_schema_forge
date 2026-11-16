@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Edit2, Mail, Download, Loader2, AlertCircle } from 'lucide-react';
+import { Edit2, Eye, Mail, Download, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import PdfViewer from './PdfViewer.jsx';
 import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
@@ -12,7 +12,9 @@ export default function PreviewActionButtons({
   sendLabel,
   downloadLabel,
   editLabel,
+  readOnly = false,
 }) {
+  const EditIcon = readOnly ? Eye : Edit2;
   return (
     <>
       {onEmail && (
@@ -41,7 +43,7 @@ export default function PreviewActionButtons({
         className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[hsl(var(--border-control))] shadow-sm text-[hsl(var(--foreground))] [&_svg]:size-5"
         onClick={triggerEdit}
         data-testid="preview-action-edit">
-        <Edit2 className="text-[hsl(var(--text-disabled))]" data-testid="Edit2__9ccdc3" />
+        <EditIcon className="text-[hsl(var(--text-disabled))]" data-testid="Edit2__9ccdc3" />
         {editLabel}
       </Button>
     </>
