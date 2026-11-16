@@ -33,6 +33,46 @@ const ERROR_KEYS = { org_access_denied: 'reportErrorOrgAccess', report_access_de
   period_range_too_long: 'reportErrorPeriodRangeTooLong', invalid_periods: 'reportErrorInvalidPeriods',
 };
 
+/** The error line of a failed query: a network failure carries its own translated message. */
+function queryErrorText(error, errorCode, ui) {
+  if (!error) return error;
+  return errorCode === 'network' ? error : ui(ERROR_KEYS[errorCode] || 'dynamicReportErrorGeneric');
+}
+
+/** POSTs the render request and saves the file; a refusal throws an Error carrying the server's lowercased `code`. */
+async function downloadRender(apiFetch, reportId, format, body) {
+  const res = await apiFetch(`/api/reports/${reportId}/render`, {
+    method: 'POST',
+    baseUrl: '',
+    timeout: 0, // a render can take longer than the read default
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const code = String((await res.json().catch(() => null))?.code ?? '').toLowerCase();
+    throw Object.assign(new Error(`HTTP ${res.status}`), { code });
+  }
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = buildReportFilename(reportId, format);
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/** The chips under the title: the active filters, each one with a `clear` removable. */
+function buildChips({ state, ui, label, fmt, orgName, reference, splitDimensions }) {
+  return [
+    { key: 'period', label: ui('dynamicReportPeriodChip'), value: `${fmt(state.dateFrom)} – ${fmt(state.dateTo)}` },
+    // The org has no `clear` on purpose: the query requires one, so it is changed in the panel, never removed.
+    orgName && { key: 'org', label: label('orgId'), value: orgName },
+    state.bPartnerId && { key: 'bp', label: label('bPartnerId'), value: state._display_bPartnerId, clear: { bPartnerId: '', _display_bPartnerId: '' } },
+    state.productId && { key: 'product', label: label('productId'), value: state._display_productId, clear: { productId: '', _display_productId: '' } },
+    state.columns !== 'total' && { key: 'columns', label: ui('dynamicReportColumns'), value: ui(COLUMN_LABELS[state.columns]), clear: { columns: 'total' } },
+    reference && { key: 'compare', label: ui('dynamicReportComparedWith'), value: `${fmt(reference.from)} – ${fmt(reference.to)}`, clear: { compare: '' } },
+    state.splitBy && { key: 'split', label: ui('dynamicReportSplitChip'), value: splitDimensions.find((d) => d.value === state.splitBy)?.label, clear: { splitBy: '' } },
+  ].filter(Boolean);
+}
+
 const pick = (labelObj, locale) => labelObj?.[locale] || labelObj?.en_US || labelObj?.es_ES || '';
 
 /** Filters the view starts on, and goes back to with "Limpiar filtros". */
@@ -126,8 +166,8 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   const collapseRef = useRef(null);
   const expandRef = useRef(null);
   const focusAfter = useRef(null);
-  const togglePanel = (collapsed, trigger = 'user', opts) => {
-    telemetry.emit(REPORT_EVENTS.PANEL_TOGGLED, { panelState: collapsed ? 'collapsed' : 'expanded', trigger, outcome: 'success' });
+  const togglePanel = (collapsed, trigger, opts) => {
+    telemetry.emit(REPORT_EVENTS.PANEL_TOGGLED, { panelState: collapsed ? 'collapsed' : 'expanded', trigger: trigger ?? 'user', outcome: 'success' });
     focusAfter.current = collapsed ? expandRef : collapseRef;
     panel.setCollapsed(collapsed, opts);
   };
@@ -206,37 +246,22 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
     setExportError(null);
     const exportPlan = format === 'pdf' ? plan : fullPlan;
     try {
-      const res = await apiFetch(`/api/reports/${report.id}/render`, {
-        method: 'POST',
-        baseUrl: '',
-        timeout: 0, // a render can take longer than the read default
-        body: JSON.stringify({
-          format,
-          locale,
-          params: {
-            ...queryParams,
-            periods: serializePeriods(exportPlan.buckets),
-            hiddenCount: String(exportPlan.hiddenCount),
-            compareMode: mode,
-            accountLevel: state.level,
-            expandedNodeIds: expandedNodeIdsParam(expandedSet),
-            // The exported header names the filters, not their ids (report-filters.js reads `_display_*`).
-            _display_orgId: orgName,
-            _display_bPartnerId: state._display_bPartnerId,
-            _display_productId: state._display_productId,
-          },
-        }),
+      await downloadRender(apiFetch, report.id, format, {
+        format,
+        locale,
+        params: {
+          ...queryParams,
+          periods: serializePeriods(exportPlan.buckets),
+          hiddenCount: String(exportPlan.hiddenCount),
+          compareMode: mode,
+          accountLevel: state.level,
+          expandedNodeIds: expandedNodeIdsParam(expandedSet),
+          // The exported header names the filters, not their ids (report-filters.js reads `_display_*`).
+          _display_orgId: orgName,
+          _display_bPartnerId: state._display_bPartnerId,
+          _display_productId: state._display_productId,
+        },
       });
-      if (!res.ok) {
-        const code = String((await res.json().catch(() => null))?.code ?? '').toLowerCase();
-        throw Object.assign(new Error(`HTTP ${res.status}`), { code });
-      }
-      const url = URL.createObjectURL(await res.blob());
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = buildReportFilename(report.id, format);
-      a.click();
-      URL.revokeObjectURL(url);
     } catch (err) {
       setExportError(ui(ERROR_KEYS[err?.code] || 'dynamicReportErrorGeneric'));
     }
@@ -244,20 +269,11 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   };
 
   const fmt = (d) => (d ? formatCalendarDate(d, locale.replace('_', '-')) : '');
-  const chips = [
-    { key: 'period', label: ui('dynamicReportPeriodChip'), value: `${fmt(state.dateFrom)} – ${fmt(state.dateTo)}` },
-    // The org has no `clear` on purpose: the query requires one, so it is changed in the panel, never removed.
-    orgName && { key: 'org', label: label('orgId'), value: orgName },
-    state.bPartnerId && { key: 'bp', label: label('bPartnerId'), value: state._display_bPartnerId, clear: { bPartnerId: '', _display_bPartnerId: '' } },
-    state.productId && { key: 'product', label: label('productId'), value: state._display_productId, clear: { productId: '', _display_productId: '' } },
-    state.columns !== 'total' && { key: 'columns', label: ui('dynamicReportColumns'), value: ui(COLUMN_LABELS[state.columns]), clear: { columns: 'total' } },
-    reference && { key: 'compare', label: ui('dynamicReportComparedWith'), value: `${fmt(reference.from)} – ${fmt(reference.to)}`, clear: { compare: '' } },
-    state.splitBy && { key: 'split', label: ui('dynamicReportSplitChip'), value: splitDimensions.find((d) => d.value === state.splitBy)?.label, clear: { splitBy: '' } },
-  ].filter(Boolean);
+  const chips = buildChips({ state, ui, label, fmt, orgName, reference, splitDimensions });
 
   // The strip's badge counts what the user chose to narrow; the period and the (required) org are always on.
   const activeFilterCount = chips.filter((c) => c.clear).length;
-  const errorText = reversed ? ui('dynamicReportErrorReversedDates') : error && (errorCode === 'network' ? error : ui(ERROR_KEYS[errorCode] || 'dynamicReportErrorGeneric'));
+  const errorText = reversed ? ui('dynamicReportErrorReversedDates') : queryErrorText(error, errorCode, ui);
 
   return (
     <div className="flex-1 min-h-0 flex flex-col" data-testid="DynamicReportView">

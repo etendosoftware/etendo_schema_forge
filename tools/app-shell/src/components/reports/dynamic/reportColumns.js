@@ -42,7 +42,8 @@ export function columnModel({ periods, grain, mode, locale, quarterPrefix, total
   const lang = (locale || 'en_US').replace('_', '-');
   const short = (p) => (grain === 'quarter' ? formatCalendarQuarterShort(p.dateFrom, quarterPrefix) : formatCalendarMonthShort(p.dateFrom, lang));
   const groups = (periods || []).map((p, pos) => {
-    const label = p.idx === 0 ? totalLabel : `${short(p)}${p.partial ? '*' : ''}`;
+    const partialMark = p.partial ? '*' : '';
+    const label = p.idx === 0 ? totalLabel : `${short(p)}${partialMark}`;
     return {
       pos,
       label,
