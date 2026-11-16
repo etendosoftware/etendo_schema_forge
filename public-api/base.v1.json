@@ -121,7 +121,7 @@
             "type": "string"
           },
           "reference": null,
-          "description": "Name of the contact. Required for a company (is_person false or omitted). For a person Etendo derives it from first_name and last_name; send none, as any other value is refused."
+          "description": "Name of the contact. Required for a company (is_person false or omitted). For a person Etendo derives it from first_name and last_name: send none; a value other than first name + last name is refused."
         },
         "category": {
           "sourceVisibility": "editable",
@@ -303,7 +303,7 @@
       },
       "source": {
         "artifact": "contacts",
-        "contractVersion": "0.12.0",
+        "contractVersion": "0.13.0",
         "backendEntity": true
       }
     },
@@ -509,7 +509,7 @@
       },
       "source": {
         "artifact": "contacts",
-        "contractVersion": "0.12.0",
+        "contractVersion": "0.13.0",
         "backendEntity": true
       }
     },
@@ -634,7 +634,7 @@
       },
       "source": {
         "artifact": "contacts",
-        "contractVersion": "0.12.0",
+        "contractVersion": "0.13.0",
         "backendEntity": true
       }
     },

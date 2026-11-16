@@ -89,6 +89,47 @@ describe('contacts as a person or a company', () => {
     assert.equal(read.phone, '600000001', 'a person keeps its phone');
   });
 
+  it('[GO] accepts a person with a name matching first_name and last_name', async () => {
+    const attributes = personAttributes('matching-name');
+    attributes.name = `${attributes.first_name} ${attributes.last_name}`;
+    const created = await createRecord('contacts', resource('contacts', attributes), CONTACT_HINT);
+    const { res } = await readWithEtag(`contacts/${created.id}`);
+    const read = res.json.data.attributes;
+    assert.equal(read.is_person, true);
+    assert.equal(read.first_name, attributes.first_name);
+    assert.equal(read.last_name, attributes.last_name);
+    assert.equal(read.name, attributes.name);
+  });
+
+  it('[GO] refuses first and last name without is_person and explains how to create a person', async () => {
+    const attributes = personAttributes('missing-type');
+    delete attributes.is_person;
+    const error = expectErrorDocument(await api('POST', 'contacts', {
+      body: resource('contacts', attributes),
+    }), 400);
+    assert.match(error.detail, /is_person\s*:\s*true/, 'the error tells the integrator to send is_person: true');
+  });
+
+  it('[GO] switching a person to a company clears the persisted first and last name', async () => {
+    const attributes = personAttributes('becomes-company');
+    const created = await createRecord('contacts', resource('contacts', attributes), CONTACT_HINT);
+    const { res: before, etag } = await readWithEtag(`contacts/${created.id}`);
+    assert.equal(before.json.data.attributes.first_name, attributes.first_name);
+    assert.equal(before.json.data.attributes.last_name, attributes.last_name);
+    expectStatus(await api('PATCH', `contacts/${created.id}`, {
+      body: resource('contacts', { is_person: false }, undefined, created.id),
+      headers: { 'If-Match': etag },
+    }), 200);
+    const { res } = await readWithEtag(`contacts/${created.id}`);
+    const read = res.json.data.attributes;
+    assert.equal(read.is_person, false);
+    for (const field of ['first_name', 'last_name']) {
+      assert.ok(read[field] === null || read[field] === '', `${field} is empty in the persisted company`);
+    }
+    assert.equal(read.name, before.json.data.attributes.name, 'changing only the type preserves the contact name');
+    assert.equal(read.phone, attributes.phone, 'changing only the type preserves the phone');
+  });
+
   it('creates a company with name, and reads it back as not a person', async () => {
     const created = await createContact('company', { is_person: false });
     const read = (await api('GET', `contacts/${created.id}`)).json.data.attributes;

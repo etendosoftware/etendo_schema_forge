@@ -1,8 +1,8 @@
 {
-  "version": "0.12.0",
+  "version": "0.13.0",
   "generatedAt": "2026-09-20T18:16:41.258Z",
-  "updatedAt": "2026-11-16T15:34:21.238Z",
-  "checksum": "70beeb91418247f2",
+  "updatedAt": "2026-11-16T15:40:09.364Z",
+  "checksum": "ebb16e88f19fbca2",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -580,7 +580,7 @@
             "publicApi": {
               "exposed": true,
               "name": "name",
-              "description": "Name of the contact. Required for a company (is_person false or omitted). For a person Etendo derives it from first_name and last_name; send none, as any other value is refused."
+              "description": "Name of the contact. Required for a company (is_person false or omitted). For a person Etendo derives it from first_name and last_name: send none; a value other than first name + last name is refused."
             }
           },
           {

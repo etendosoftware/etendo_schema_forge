@@ -4071,7 +4071,7 @@ describe('translateBackendError — contact-type and contact identity refusals b
     ['ETGO_BPartnerCompanyNameRequired', 'backendError.bpartnerCompanyNameRequired',
       'A company contact requires a legal name.'],
     ['ETGO_BPartnerCompanyPersonNamesNotAllowed', 'backendError.bpartnerCompanyPersonNamesNotAllowed',
-      'A company contact has no first or last name: leave them empty and set its legal name instead. To create a person, send is_person: true.'],
+      'First and last name are only for a person contact. To create or turn the contact into a person, send etgoIsperson=true (is_person: true in the public API) together with both names; for a company, leave them empty and send its legal name.'],
   ];
 
   for (const [messageKey, i18nKey, prose] of CASES) {

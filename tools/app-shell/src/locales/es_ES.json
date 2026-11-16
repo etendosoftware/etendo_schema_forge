@@ -21636,7 +21636,7 @@
     "backendError.bpGroupContactTypeRequired": "Debe marcarse al menos un tipo de contacto: Cliente o Proveedor/Acreedor",
     "backendError.bpartnerContactTypeRequired": "El contacto debe tener al menos un tipo: Cliente o Proveedor/Acreedor",
     "backendError.bpartnerPersonNamesRequired": "Un contacto de tipo persona requiere nombre y apellido",
-    "backendError.bpartnerPersonNameNotAllowed": "La razón social de un contacto de tipo persona se forma con su nombre y apellido, así que no se puede indicar: introduce el nombre y el apellido",
+    "backendError.bpartnerPersonNameNotAllowed": "El nombre completo de un contacto de tipo persona se forma con su nombre y apellido, así que no se puede indicar por separado: introduce el nombre y el apellido.",
     "backendError.bpartnerCompanyNameRequired": "Un contacto de tipo empresa requiere razón social",
     "backendError.bpartnerCompanyPersonNamesNotAllowed": "Un contacto de tipo empresa no tiene nombre ni apellido: déjalos vacíos e indica su razón social, o marca el contacto como persona",
     "bpCategoryContactType": "Tipo de contacto",

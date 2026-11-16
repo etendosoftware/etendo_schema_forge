@@ -1877,7 +1877,7 @@ form's default (the organization's default category). Contact categories are not
 `category` is a plain id attribute; the resource itself is later work.
 
 The window itself is unchanged: `publicApi` only affects the public API manifest (the regen only bumps the
-contract version, `0.9.0` to `0.12.0`; the generated frontend does not change).
+contract version, `0.9.0` to `0.13.0`; the generated frontend does not change).
 
 Evidence: `gateway/e2e/contacts.e2e.ts` (cases marked `[GO]` need the server rules), `gateway/test/public-api-manifest.test.ts`.
 Contract: `docs/public-api.md` §4.3 (*Person or company*) and §4.2.2.
