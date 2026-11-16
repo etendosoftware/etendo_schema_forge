@@ -27,10 +27,10 @@ const VIEW = Object.freeze({ applying: 'applying', ready: 'ready', invalid: 'inv
 
 /** Title, description and icon per state. */
 const STATE_COPY = Object.freeze({
-  [PORTAL_DECISION_STATE.confirmed]: { title: 'portalDecisionConfirmedTitle', description: 'portalDecisionConfirmedDescription', tone: 'success' },
-  [PORTAL_DECISION_STATE.voided]: { title: 'portalDecisionVoidedTitle', description: 'portalDecisionVoidedDescription', tone: 'neutral' },
-  [PORTAL_DECISION_STATE.notPending]: { title: 'portalDecisionNotPendingTitle', description: 'portalDecisionNotPendingDescription', tone: 'neutral' },
-  [PORTAL_DECISION_STATE.expired]: { title: 'portalDecisionExpiredTitle', description: 'portalDecisionExpiredDescription', tone: 'neutral' },
+  [PORTAL_DECISION_STATE.confirmed]: { titleKey: 'portalDecisionConfirmedTitle', descriptionKey: 'portalDecisionConfirmedDescription', tone: 'success' },
+  [PORTAL_DECISION_STATE.voided]: { titleKey: 'portalDecisionVoidedTitle', descriptionKey: 'portalDecisionVoidedDescription', tone: 'neutral' },
+  [PORTAL_DECISION_STATE.notPending]: { titleKey: 'portalDecisionNotPendingTitle', descriptionKey: 'portalDecisionNotPendingDescription', tone: 'neutral' },
+  [PORTAL_DECISION_STATE.expired]: { titleKey: 'portalDecisionExpiredTitle', descriptionKey: 'portalDecisionExpiredDescription', tone: 'neutral' },
 });
 
 function Frame({ children }) {
@@ -61,7 +61,7 @@ function resultTitle(decision, copy) {
   if (decision.state === PORTAL_DECISION_STATE.confirmed && decision.appliedNow) {
     return decision.decision === 'ACCEPT' ? 'portalDecisionAppliedAcceptTitle' : 'portalDecisionAppliedRejectTitle';
   }
-  return copy.title;
+  return copy.titleKey;
 }
 
 export default function PortalDecisionPage() {
@@ -165,7 +165,7 @@ export default function PortalDecisionPage() {
           aria-hidden="true"
           data-testid="FileText__be410c" />}
         title={appliedNow ? `${ui(resultTitle(decision, copy))} ${params.number}`.trim() : ui(resultTitle(decision, copy))}
-        description={ui(appliedNow ? 'portalDecisionAppliedDescription' : copy.description, params)}
+        description={ui(appliedNow ? 'portalDecisionAppliedDescription' : copy.descriptionKey, params)}
         data-testid="Card__be410c">
         {appliedNow && reasonLabel ? (
           <p className="mt-3 text-sm" data-testid="portal-decision-reason">
