@@ -219,7 +219,12 @@ export function DateRangePopoverContent({ value, onChange, onClose, extraPresets
  *   extraPresets?: Array<'last3m'|'last6m'>; // opt-in: adds "Last 3 / 6 months" before "Last 12 months"
  * }} props
  */
-export function DateRangePopover({ value, onChange, placeholder, extraPresets }) {
+/**
+ * @param {string} [testId] optional `data-testid` for the trigger button. Only set when given:
+ *   the trigger is a Radix `asChild` slot, where an explicit `undefined` on the child would
+ *   override the slot's own test id for every other caller.
+ */
+export function DateRangePopover({ value, onChange, placeholder, extraPresets, testId }) {
   const ui = useUI();
   const { locale: appLocale } = useLocaleSwitch();
   const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
@@ -233,6 +238,7 @@ export function DateRangePopover({ value, onChange, placeholder, extraPresets })
         <button
           type="button"
           className="inline-flex h-10 items-center justify-between gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium leading-6 text-[#121217] transition-colors hover:bg-muted"
+          {...(testId ? { 'data-testid': testId } : {})}
         >
           <CalendarDays
             className="h-5 w-5 shrink-0 text-[#828FA3]"

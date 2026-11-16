@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/printableSources.js
 // ETP-4941 — [PDF] Presupuesto, Pedido y Factura de Venta, y Pedido de Compra:
 // columna CÓD. muestra número de línea en vez del SKU del producto.
 //
@@ -177,5 +178,28 @@ describe('DOCUMENT_TEMPLATE — Totals rows stay label-driven (ETP-5125)', () =>
     expect(html).toContain('<span>Subtotal (sin impuestos)</span>');
     expect(html).toContain('<span>Impuestos</span>');
     expect(html).not.toContain('IVA');
+  });
+});
+
+// The observations carry the "Motivo" of a rejected quotation once, ahead of the notes; every other
+// document of the shared template (invoice, order) has no rejectReason and prints no such line.
+describe('DOCUMENT_TEMPLATE — reject reason in the observations', () => {
+  const labels = { ...BASE_LABELS, rejectReason: 'Motivo' };
+
+  it('prints exactly one "Motivo" line, before the notes, when rejectReason is set', () => {
+    const html = renderTemplate({ labels, rejectReason: 'Precio demasiado alto', notes: 'Gracias' });
+
+    expect(html.match(/Motivo/g)).toHaveLength(1);
+    expect(html).toContain('<div class="observ-reason">Motivo: Precio demasiado alto</div>Gracias');
+  });
+
+  it.each([
+    ['an invoice', { documentNo: 'INV-1', notes: 'Gracias', rejectReason: null }],
+    ['an order', { documentNo: 'SO-1', notes: null, rejectReason: null }],
+  ])('prints no reason line for %s', (_label, data) => {
+    const html = renderTemplate({ labels, ...data });
+
+    expect(html).not.toContain('observ-reason');
+    expect(html).not.toContain('Motivo');
   });
 });
