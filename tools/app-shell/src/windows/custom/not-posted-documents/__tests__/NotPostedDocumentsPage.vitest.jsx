@@ -524,7 +524,7 @@ describe('NotPostedDocumentsPage — selection and bulk post', () => {
     expect(screen.getByTestId('npd-selection-count')).toHaveTextContent('selected(2)');
   });
 
-  it('bulk-posts the selected rows and shows the shared outcome toast', async () => {
+  it('bulk-posts the selected rows and lists each failed document with its reason', async () => {
     apiFetchMock = mkFetch(ROWS, {
       '/action/bulk-post': () => json({
         ok: 1, total: 2, success: false,
@@ -545,8 +545,10 @@ describe('NotPostedDocumentsPage — selection and bulk post', () => {
       { tableId: '318', recordId: 'doc-1', label: 'INV-001' },
       { tableId: '472', recordId: 'doc-2', label: 'MI-002' },
     ]);
-    // 1 ok + 1 failed: the shared toast's mixed-outcome summary.
-    expect(toast.warning).toHaveBeenCalledWith('processExecuted');
+    // 1 ok + 1 failed: mixed-outcome summary, listing the failed row by label (ETP-6286).
+    expect(toast.warning).toHaveBeenCalledWith('processExecuted', expect.objectContaining({
+      description: 'MI-002 — Boom',
+    }));
     await waitFor(() => expect(screen.queryByTestId('npd-selection-toolbar')).not.toBeInTheDocument());
   });
 

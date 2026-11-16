@@ -1244,6 +1244,16 @@ consumes the caller's own persisted result before the fallback reload can hand i
 to the next mount. `useBulkActionToast()` belongs at the list level (it is called
 once in `ListView.jsx`, covering every window), not inside an action.
 
+**Listing the failed rows is opt-in: `showBulkActionToast(ui, result, { listFailures: true })`
+(ETP-6286).** By default a multi-record failure shows only the counts, plus a plan-quota refusal
+(ETP-5051) or a reason every failure shares (ETP-5591). ETP-5316 forbids per-row errors in a bulk
+toast because they do not scale and DocAction errors cite line numbers nobody can locate. With the
+option, the description lists the failures grouped by translated reason, one line per reason:
+`Doc A, Doc B +2 — <reason>`. It is capped at 3 lines and closes with a `bulkFailuresMore` count;
+the toast stays 10 s. Each failure's label is `label`, else `documentNo`. Opt in only when the errors are
+document-level and the user can fix them from the list. Today only the bulk post of
+`not-posted-documents` does.
+
 A bulk action that produces a result and does *not* refetch is a bug of its own
 class, not merely a missed nicety: `BulkInvoiceFromShipment.jsx` ("Crear
 Factura") neither reloaded nor refreshed before ETP-5302, so the rows it had just
