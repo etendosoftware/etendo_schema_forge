@@ -270,6 +270,30 @@ describe('extractErrorMessage', () => {
     assert.equal(msg, 'Duplicate identifier');
   });
 
+  // ETP-6140 — the error code is a discriminator, the message is what the user reads.
+  it('prefers the readable message over a flat error code', async () => {
+    const res = { status: 409, json: async () => ({
+      error: 'stale_record', message: 'The record was modified by another user.',
+    }) };
+    const msg = await extractErrorMessage(res, interpolatingUi());
+    assert.equal(msg, 'The record was modified by another user.');
+  });
+
+  it('does not return a nested error code while a readable message exists elsewhere', async () => {
+    const res = { status: 409, json: async () => ({
+      error: { code: 'retryable_conflict', status: 409 },
+      message: 'The record is being modified.',
+    }) };
+    const msg = await extractErrorMessage(res, interpolatingUi());
+    assert.equal(msg, 'The record is being modified.');
+  });
+
+  it('falls back to the error code only when the body carries no message', async () => {
+    const res = { status: 409, json: async () => ({ error: 'stale_record' }) };
+    const msg = await extractErrorMessage(res, interpolatingUi());
+    assert.equal(msg, 'stale_record');
+  });
+
   it('collapses whitespace on an unrecognized backend message', async () => {
     const res = neoErrorRes('Some\n  unmapped\tbackend   failure');
     const msg = await extractErrorMessage(res, interpolatingUi());

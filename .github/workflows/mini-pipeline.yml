@@ -44,8 +44,21 @@ jobs:
           cp .env.example .env
           make install
 
+      # No --with-deps: the runner image already has every library Chromium needs, so apt only added
+      # fonts no test uses, and when the Ubuntu mirror did not resolve it hung the job for 10 min and
+      # failed it. The browser is cached per Playwright version and downloads only on a bump.
+      - name: Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
       - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       # run-e2e-full.sh builds the no-PWA bundle, serves it, runs the mocked projects and then the
       # quarantined tests without blocking (docs/testing/flaky-tests.md).

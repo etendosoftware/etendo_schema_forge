@@ -1,6 +1,8 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
-import { useApiFetch } from '@/auth/useApiFetch.js';
 import { apiFetch as moduleApiFetch } from '@/auth/api.js';
+import { listAll, listLines, newestCreatedFirst } from '@/windows/custom/shared/importActionClient.js';
+import useImportLoadFailureToast from '@/windows/custom/shared/useImportLoadFailureToast.js';
+import { pricingContextOf } from '@/windows/custom/shared/invoiceImportPricing.js';
 
 /**
  * Import invoice lines from a completed Return to Vendor Shipment (Albarán de
@@ -19,7 +21,8 @@ import { apiFetch as moduleApiFetch } from '@/auth/api.js';
  * Return-to-vendor-shipment lines carry no pricing and no linked purchase-
  * order-line (unlike a regular goods receipt), so pricing is resolved purely
  * through the purchase-invoice lines callout cascade (same pattern as
- * ImportFromGoodsReceiptModal) with no order-level discount to carry over.
+ * ImportFromGoodsReceiptModal) on expand (the row total) and again at import, with no order-level
+ * discount to carry over.
  *
  * Per ETP-4737 acceptance criteria ("Importe total según origen"): a
  * rectificative invoice generated from a return must always carry a NEGATIVE
@@ -28,10 +31,11 @@ import { apiFetch as moduleApiFetch } from '@/auth/api.js';
  * totals to read correctly, matching the negative-total guarantee the backend
  * already enforces for this flow.
  *
- * The return-to-vendor-shipment header/lines have no currency of their own and
- * no linked purchase order to resolve one through (no `salesOrder` field on
- * the header, unlike goods-receipt) — there is nothing to filter by currency
- * here, so `excludedByCurrency` is always false.
+ * ETP-6099: the candidates and their lines come from the invoice's own
+ * `availableReturns` / `availableReturnLines` actions (com.etendoerp.go),
+ * which apply the partner, status and not-invoiced-in-full rules and flag the
+ * lines this invoice already holds (`blockedReason: importedHere`). No
+ * currency is compared on this side, so `excludedByCurrency` is always false.
  */
 
 const resolveLinePrice = async (base, productId, qty, invoiceHeader, auxData = {}) => {
@@ -98,83 +102,65 @@ const resolveLinePrice = async (base, productId, qty, invoiceHeader, auxData = {
   }
 };
 
-const fetchDocuments = async ({ base, bpId, invoiceId }) => {
-  const [returnRes, invLinesRes, headerRes] = await Promise.all([
-    moduleApiFetch(`${base}/return-to-vendor-shipment/returnToVendorShipment?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
-    moduleApiFetch(`${base}/purchase-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`),
-    moduleApiFetch(`${base}/purchase-invoice/header/${invoiceId}`),
-  ]);
+/**
+ * ETP-6099 — ONE `availableReturns` read of the invoice lists the supplier's completed returns not
+ * invoiced in full (server filtered), the covered ones too at `pendingLines: 0`
+ * (`includeCovered`), which the popup hides (`isReturnCovered`); `detail` adds `sourceDocumentNo`.
+ * Rejects with `ImportLoadError` on a refusal; the component shows `describeLoadFailure`.
+ */
+const fetchDocuments = async ({ base, invoiceId }) => {
+  const rows = await listAll({
+    apiFetch: moduleApiFetch, base, spec: 'purchase-invoice', targetId: invoiceId,
+    action: 'availableReturns', params: { includeCovered: true, detail: true },
+  });
+  // Newest created first, as the old `_sortBy=creationDate desc` read listed them.
+  const documents = newestCreatedFirst(rows).map(r => ({ ...r, movementDate: r.date, sourceReceiptDocNo: r.sourceDocumentNo || '' }));
+  return { documents, sharedContext: { invoiceId }, excludedByCurrency: false };
+};
 
-  const alreadyImportedReceiptLines = new Set();
-  if (invLinesRes.ok) {
-    const invLines = (await invLinesRes.json())?.response?.data || [];
-    invLines.forEach(il => { if (il.goodsShipmentLine) alreadyImportedReceiptLines.add(il.goodsShipmentLine); });
-  }
-
-  let invoiceHeader = {};
-  if (headerRes.ok) {
-    invoiceHeader = (await headerRes.json())?.response?.data?.[0] || {};
-  }
-
-  const priceListId = invoiceHeader.priceList;
-  const selectorUrl = `${base}/purchase-invoice/lines/selectors/M_Product_ID?limit=500&offset=0${priceListId ? `&priceList=${encodeURIComponent(priceListId)}` : ''}`;
-  const selectorRes = await moduleApiFetch(selectorUrl);
-
-  const productAuxMap = {};
-  if (selectorRes.ok) {
-    const selData = await selectorRes.json();
-    for (const item of (selData?.items || [])) {
-      if (item.id && item._aux) {
-        const aux = {};
-        for (const [suffix, val] of Object.entries(item._aux)) {
-          aux[`product${suffix}`] = val;
-        }
-        productAuxMap[item.id] = aux;
-      }
-    }
-  }
-
-  let documents = [];
-  if (returnRes.ok) {
-    const all = (await returnRes.json())?.response?.data || [];
-    documents = all.filter(r =>
-      r.documentStatus === 'CO'
-      && r.businessPartner === bpId
-      && Number(r.invoiceStatus || 0) < 100
-    );
-  }
-
+/**
+ * One `availableReturnLines` row in the shape the popup reads: a line this invoice already holds
+ * (`importedHere`) is greyed and shows its returned quantity, as before.
+ * Otherwise it offers what the server says is left to credit (positive; the import negates it).
+ * The price (callout, `priceData`) feeds the row total.
+ */
+const returnLineRow = (r, priceData = {}) => {
+  const pending = Number(r.pendingQuantity) || 0;
+  const blocked = !!r.blockedReason || pending <= 0;
   return {
-    documents,
-    sharedContext: { invoiceHeader, productAuxMap, alreadyImportedReceiptLines },
-    excludedByCurrency: false,
+    ...r,
+    salesOrderLine: r.orderLine ?? null,
+    _productName: r['product$_identifier'] || r.id,
+    _maxQty: blocked ? Math.abs(Number(r.movementQuantity) || 0) : pending,
+    _unitPrice: Number(priceData.unitPrice) || Number(priceData.grossUnitPrice) || 0,
+    _lineNetAmount: Number(priceData.lineNetAmount ?? 0),
+    _tax: priceData.tax || null,
+    _uOM: priceData.uOM || r.uOM || null,
+    _alreadyImported: blocked,
+    _orderDiscount: 0,
   };
 };
 
+/** ONE `availableReturnLines` read per return, lines with nothing left included. */
 const fetchLines = async ({ base, docId, sharedContext }) => {
-  const res = await moduleApiFetch(`${base}/return-to-vendor-shipment/returnToVendorShipmentLine?parentId=${docId}&_startRow=0&_endRow=200`);
-  if (!res.ok) return [];
-  const json = await res.json();
-  const lines = json?.response?.data || [];
-  const { invoiceHeader, productAuxMap, alreadyImportedReceiptLines } = sharedContext;
-
-  return Promise.all(lines.map(async (l) => {
-    const imported = alreadyImportedReceiptLines?.has(l.id);
-    const qty = Number(l.movementQuantity) || 1;
-    const priceData = l.product ? await resolveLinePrice(base, l.product, qty, invoiceHeader, productAuxMap[l.product] || {}) : {};
-    return {
-      ...l,
-      _productName: l['product$_identifier'] || l.id,
-      _maxQty: Number(l.movementQuantity) || 0,
-      _unitPrice: Number(priceData.unitPrice) || Number(priceData.grossUnitPrice) || 0,
-      _lineNetAmount: Number(priceData.lineNetAmount ?? 0),
-      _tax: priceData.tax || null,
-      _uOM: priceData.uOM || l.uOM || null,
-      _alreadyImported: !!imported,
-      _orderDiscount: 0,
-    };
+  const rows = await listLines({
+    apiFetch: moduleApiFetch, base, spec: 'purchase-invoice', targetId: sharedContext?.invoiceId,
+    action: 'availableReturnLines', params: { returnId: docId, includeCovered: true, detail: true },
+  });
+  // The row total shown once a return without a source number is expanded is the sum of its
+  // priced lines, as before: the callout prices each line here, on expand (never on open).
+  const { invoiceHeader, productAuxMap } = await pricingContextOf({ apiFetch: moduleApiFetch, base, spec: 'purchase-invoice', sharedContext });
+  return Promise.all(rows.map(async (r) => {
+    const qty = Math.abs(Number(r.movementQuantity)) || 1;
+    const priceData = r.product
+      ? await resolveLinePrice(base, r.product, qty, invoiceHeader, productAuxMap[r.product] || {})
+      : {};
+    return returnLineRow(r, priceData);
   }));
 };
+
+/** A return with nothing left to credit is not listed (it used to be hidden once its lines loaded). */
+const isReturnCovered = (doc) => Number(doc.pendingLines) === 0;
 
 const getDocDisplay = (doc) => {
   const sourceRef = doc.sourceReceiptDocNo || '';
@@ -185,8 +171,9 @@ const getDocDisplay = (doc) => {
   };
 };
 
+// The price callout runs here, per selected line at IMPORT time (never on open).
 const buildLineBody = async ({ line, qty, invoiceId, lineNo, sharedContext, base }) => {
-  const { invoiceHeader, productAuxMap } = sharedContext;
+  const { invoiceHeader, productAuxMap } = await pricingContextOf({ apiFetch: moduleApiFetch, base, spec: 'purchase-invoice', sharedContext });
   const priceData = await resolveLinePrice(base, line.product, qty, invoiceHeader, productAuxMap[line.product] || {});
   const calloutGrossUnitPrice = Number(priceData.grossUnitPrice) || 0;
   const calloutUnitPrice = Number(priceData.unitPrice) || calloutGrossUnitPrice || Number(line._unitPrice) || 0;
@@ -222,11 +209,8 @@ const buildLineBody = async ({ line, qty, invoiceId, lineNo, sharedContext, base
 };
 
 export default function ImportFromGoodsReturnModal(props) {
-  // ETP-4576 - the credential belongs to apiFetch, not to the component.
-  // Empty base ON PURPOSE: these modals pull from ANOTHER spec than their own window
-  // (an invoice importing shipment lines), and resolveApiUrl only skips a prefix that
-  // matches - so a configured base doubles it and 404s.
-  const apiFetch = useApiFetch('');
+  // ETP-6099 — a failed read is not «nothing to import»: tell the user, show an empty list.
+  const handlers = useImportLoadFailureToast(fetchDocuments, fetchLines);
   return (
     <ImportLinesModal
       {...props}
@@ -237,8 +221,10 @@ export default function ImportFromGoodsReturnModal(props) {
       noSearchResultsKey="noGoodsReturnsMatchYourSearch"
       successMessageKey="linesImportedFromGoodsReturn"
       showPriceColumns={false}
-      fetchDocuments={fetchDocuments}
-      fetchLines={fetchLines}
+      eagerLoadLines={false}
+      isDocumentCovered={isReturnCovered}
+      fetchDocuments={handlers.fetchDocuments}
+      fetchLines={handlers.fetchLines}
       getDocDisplay={getDocDisplay}
       buildLineBody={buildLineBody}
     />

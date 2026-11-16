@@ -1,3 +1,6 @@
+// @covers artifacts/report-general-ledger/report-contract.json
+// @covers artifacts/report-general-ledger/template.hbs
+// @covers artifacts/report-journal-entries/report-contract.json
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -81,6 +84,26 @@ describe('report-journal-entries — factAcctGroupId drill-down parameter (ETP-5
 // Both the grouped-by-dimension branch (.dim-group/.acct-card) and the flat
 // branch render their own date <td>, so the link has to be present in BOTH or
 // the feature silently disappears whenever the user toggles grouping.
+describe('report-general-ledger — accountId drill-down parameter (ETP-6080)', () => {
+  // The interactive P&L opens one leaf account's ledger. Filtering by the code alone goes through the
+  // c_elementvalue join and reads the client's whole history (production opening: 21 → 7 ms by id).
+  const param = (GL_CONTRACT.parameters || []).find((p) => p.name === 'accountId');
+
+  it('is a hidden, optional text parameter, translated in both locales', () => {
+    assert.ok(param, 'accountId not declared');
+    assert.equal(param.type, 'text');
+    assert.equal(param.hidden, true);
+    assert.ok(!param.required);
+    assert.ok(param.label.en_US && param.label.es_ES);
+  });
+
+  it('filters fact_acct.account_id in the ledger and its opening, blank = no filter', () => {
+    for (const kind of ['query', 'openingQuery']) {
+      assert.ok(GL_CONTRACT.sql[kind].includes("AND ('__ACCOUNTID__' = '' OR fa.account_id = '__ACCOUNTID__')"), kind);
+    }
+  });
+});
+
 const DATE_LINK_LINES = GL_TEMPLATE_SRC
   .split('\n')
   .filter((line) => line.includes('gl-entry-drilldown'));
@@ -192,4 +215,27 @@ describe('report-general-ledger — rendered date link output (ETP-5013)', () =>
     assert.match(html, /dateDisplay:''/);
     assert.doesNotMatch(html, /Invalid Date/);
   });
+});
+
+// ── ETP-6080: a parent org includes its children, as in Profit & Loss ───────
+//
+// The interactive Profit & Loss drills into these two reports. P&L scopes the
+// org with ad_isorgincluded (a parent covers its children, like Classic), so a
+// ledger opened from a parent-org P&L row must too, or its total differs from
+// the amount the user clicked. Every query that filters by org counts, the
+// GL opening balance included. The tree is resolved once over ad_org, not once
+// per fact_acct line (the same orgs, far fewer calls); org 0 belongs to client 0.
+describe('General Ledger / Journal Entries — org scope includes child orgs (ETP-6080)', () => {
+  const TREE = "('__ORGID__' = '' OR fa.ad_org_id IN (SELECT o.ad_org_id FROM ad_org o WHERE o.ad_client_id IN ('__CLIENT_ID__', '0') AND ad_isorgincluded(o.ad_org_id, '__ORGID__', '__CLIENT_ID__') <> -1))";
+  for (const [label, sql] of [
+    ['General Ledger query', GL_CONTRACT.sql.query],
+    ['General Ledger openingQuery', GL_CONTRACT.sql.openingQuery],
+    ['Journal Entries query', JE_CONTRACT.sql.query],
+  ]) {
+    it(`${label} filters the org through ad_isorgincluded, never an exact match`, () => {
+      assert.ok(sql.includes(TREE), sql);
+      assert.doesNotMatch(sql, /fa\.ad_org_id = '__ORGID__'/);
+      assert.doesNotMatch(sql, /ad_isorgincluded\(fa\./, 'never once per fact_acct line');
+    });
+  }
 });

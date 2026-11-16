@@ -1,6 +1,8 @@
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxMessages.js
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxFilters.js
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxPage.jsx
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxReviewModel.js
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewDrawer.jsx
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -120,5 +122,55 @@ describe('Invoice Inbox locale keys', () => {
     assert.equal(g.invoiceInboxDiscardTitleOne, '¿Descartar esta factura?');
     assert.match(g.invoiceInboxDiscardTitleMany, /¿Descartar \{+\s*count\s*\}+ facturas\?/);
     assert.match(g.invoiceInboxErrorForeignReceiver, /La factura no está emitida a tu empresa/);
+  });
+
+  // Review panel (ETP-6050): the invoiceInboxReview* keys.
+  describe('review panel keys', () => {
+    const placeholders = (s) => [...String(s).matchAll(/\{\{?\s*(\w+)\s*\}?\}/g)].map((m) => m[1]).sort();
+    const reviewKeys = Object.keys(locales.en_US.genericLabels).filter((k) => k.startsWith('invoiceInboxReview'));
+
+    it('there are 80+ review keys in en_US and the sources use them', () => {
+      assert.ok(reviewKeys.length >= 80, `found ${reviewKeys.length}`);
+      const usedReview = inboxKeys.filter((k) => k.startsWith('invoiceInboxReview'));
+      assert.ok(usedReview.length >= 70, `sources use ${usedReview.length}`);
+      assert.deepEqual(usedReview.filter((k) => !reviewKeys.includes(k)), []);
+    });
+
+    for (const locale of ['es_ES', 'es_AR']) {
+      it(`${locale} defines exactly the review keys of en_US, non-empty, with the same placeholders`, () => {
+        const g = locales[locale].genericLabels;
+        const own = Object.keys(g).filter((k) => k.startsWith('invoiceInboxReview'));
+        assert.deepEqual(own.sort(), [...reviewKeys].sort());
+        for (const key of reviewKeys) {
+          assert.ok(String(g[key]).trim(), `${locale}.${key} empty`);
+          assert.deepEqual(placeholders(g[key]), placeholders(locales.en_US.genericLabels[key]), `${locale}.${key}`);
+        }
+      });
+    }
+
+    it('the singular variants carry no count placeholder and the plural ones do, in every locale', () => {
+      for (const json of Object.values(locales)) {
+        const g = json.genericLabels;
+        for (const key of ['invoiceInboxReviewVendorAmbiguousTitleOne', 'invoiceInboxReviewProductAmbiguousTagOne', 'invoiceInboxReviewPendingOne']) {
+          assert.deepEqual(placeholders(g[key]), [], key);
+        }
+        for (const key of ['invoiceInboxReviewVendorAmbiguousTitle', 'invoiceInboxReviewProductAmbiguousTag', 'invoiceInboxReviewPendingMany']) {
+          assert.deepEqual(placeholders(g[key]), ['count'], key);
+        }
+      }
+    });
+
+    it('the Spanish singular texts read as the design does', () => {
+      for (const l of ['es_ES', 'es_AR']) {
+        assert.equal(locales[l].genericLabels.invoiceInboxReviewVendorAmbiguousTitleOne, 'Etendo AI propone 1 proveedor');
+        assert.equal(locales[l].genericLabels.invoiceInboxReviewProductAmbiguousTagOne, '1 producto posible');
+      }
+    });
+
+    it('es_ES review texts have no voseo', () => {
+      for (const key of reviewKeys) {
+        assert.doesNotMatch(locales.es_ES.genericLabels[key], /\b(Podés|Tenés|Querés|Revisalas|vos)\b/, key);
+      }
+    });
   });
 });

@@ -49,6 +49,16 @@ export function trackProductMovementsTabOpened(properties = {}) {
   });
 }
 
+// ETP-6050. One opening of the Invoice Inbox page; the tenant from the session, never a person.
+export function trackInvoiceInboxOpened(properties = {}) {
+  const { clientId } = getSessionIdentity();
+  send(OBSERVABILITY_EVENTS.INVOICE_INBOX_OPENED, {
+    account_id: clientId || undefined,
+    specName: 'invoice-inbox',
+    ...properties,
+  });
+}
+
 export function trackRecordCreated(properties = {}) {
   send(OBSERVABILITY_EVENTS.RECORD_CREATED, {
     source: 'detail_view',

@@ -5,8 +5,10 @@ import { Check } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import {
   resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor, hasCommittedValue, pinSearchTerms,
+  firstPageLimit,
 } from './selectorSelection.js';
 import { useLocateCommittedValue } from './useLocateCommittedValue.js';
+import { LocatingNotice } from './LocatingNotice.jsx';
 
 export const SEARCH_POPUP_PAGE_SIZE = 30;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -34,8 +36,10 @@ const SEARCH_DEBOUNCE_MS = 300;
  * @param {() => void} props.onClose
  * @param {(item: {id: string, name: string}) => void} props.onSelect — the popup does not close
  *   itself on select; the caller decides (it usually closes it).
- * @param {(query: string, offset: number, signal: AbortSignal) =>
- *   Promise<{items: Array<{id: string, name: string}>, hasMore: boolean}>} props.loadPage
+ * @param {(query: string, offset: number, signal: AbortSignal, opts?: {limit: number}) =>
+ *   Promise<{items: Array<{id: string, name: string}>, hasMore: boolean}>} props.loadPage — `opts.limit`
+ *   (ETP-6103) is the page size to serve while locating the committed value (up to 100, instead of
+ *   SEARCH_POPUP_PAGE_SIZE). A loader may ignore it: paging advances by the rows it actually returns.
  * @param {string} [props.title]
  * @param {string} [props.value] — ETP-5948: the committed id. On open it is marked (check +
  *   `aria-selected`), located in place by walking up to LOCATE_SELECTION_MAX_PAGES pages, and
@@ -75,6 +79,9 @@ export function SearchPopup({
   // The caller usually passes an inline loadPage; keep the latest in a ref so a re-render does
   // not refetch the first page.
   const loadPageRef = useRef(loadPage);
+  // ETP-6103 — the first page of an open with a committed value is the larger walk page.
+  const firstLimitRef = useRef(() => SEARCH_POPUP_PAGE_SIZE);
+  firstLimitRef.current = (q) => firstPageLimit(SEARCH_POPUP_PAGE_SIZE, value, q);
   useEffect(() => { loadPageRef.current = loadPage; }, [loadPage]);
 
   useEffect(() => {
@@ -96,6 +103,9 @@ export function SearchPopup({
     const controller = new AbortController();
     abortRef.current = controller;
     setLoading(true);
+    // An aborted walk page never lowers these (its finally returns early): reset on every (re)open.
+    setLoadingMore(false);
+    loadingMoreRef.current = false;
     setError(null);
     setOptions([]);
     setHasMore(false);
@@ -103,7 +113,7 @@ export function SearchPopup({
     offsetRef.current = 0;
     const trimmed = query.trim();
     const timer = setTimeout(() => {
-      Promise.resolve(loadPageRef.current(trimmed, 0, controller.signal))
+      Promise.resolve(loadPageRef.current(trimmed, 0, controller.signal, { limit: firstLimitRef.current(trimmed) }))
         .then(({ items = [], hasMore: more = false } = {}) => {
           if (controller.signal.aborted) return;
           setOptions(items);
@@ -125,14 +135,14 @@ export function SearchPopup({
     return () => { clearTimeout(timer); controller.abort(); };
   }, [open, query, reloadKey]);
 
-  const loadMore = useCallback(() => {
+  const loadMore = useCallback((_query, _offset, opts) => {
     const controller = abortRef.current;
     // The sentinel and the ETP-5948 walk both page: one request at a time.
-    if (!controller || controller.signal.aborted || loadingMoreRef.current) return;
+    if (!controller || controller.signal.aborted || loadingMoreRef.current) return false;
     loadingMoreRef.current = true;
     setLoadingMore(true);
     setError(null);
-    Promise.resolve(loadPageRef.current(query.trim(), offsetRef.current, controller.signal))
+    Promise.resolve(loadPageRef.current(query.trim(), offsetRef.current, controller.signal, { limit: opts?.limit ?? SEARCH_POPUP_PAGE_SIZE }))
       .then(({ items = [], hasMore: more = false } = {}) => {
         if (controller.signal.aborted) return;
         setOptions((prev) => [...prev, ...items]);
@@ -159,11 +169,12 @@ export function SearchPopup({
   const selectedIndex = resolveSelectedIndex(rendered, value);
   const optionId = (o) => `${dataTestId}-option-${o.id}`;
 
-  useLocateCommittedValue({
+  const { locating } = useLocateCommittedValue({
     open, query, value, dropdownRef: listRef, interactedRef, canFetch: true,
     rows, loading: loading || loadingMore, panelLoading: loading,
     hasMore, pageSize: SEARCH_POPUP_PAGE_SIZE, settledFetches, locateDone, setLocateDone,
     fetchPage: loadMore, offsetRef, selectedIndex, renderedCount: rendered.length, layoutKey: open,
+    loadedRows: options.length,
   });
 
   // Not found in place: ask the same loader for the label and keep ONLY the id-equal row, so an
@@ -244,7 +255,8 @@ export function SearchPopup({
             className="w-full h-8 px-2 text-sm border border-border rounded-md bg-card focus:outline-none focus:ring-1 focus:ring-primary/30"
           />
         </div>
-        <div className="flex-1 overflow-auto py-1" role="listbox" aria-label={title} ref={listRef}>
+        <div className={`flex-1 py-1 ${locating ? 'overflow-hidden' : 'overflow-auto'}`} role="listbox" aria-label={title} ref={listRef}>
+          {locating && !loading && <LocatingNotice data-testid={`${dataTestId}-locating`} />}
           {loading && <div className="flex justify-center py-6 text-muted-foreground text-xs">{ui('loading')}</div>}
           {!loading && error && options.length === 0 && (
             <div className="flex flex-col items-center gap-2 py-6 text-xs" data-testid={`${dataTestId}-error`}>
@@ -275,7 +287,7 @@ export function SearchPopup({
                 ref={isHighlighted ? activeRef : undefined}
                 onClick={() => onSelect(o)}
                 data-testid={optionId(o)}
-                className={['w-full flex items-start gap-2 text-left px-4 py-2 text-sm break-words', isHighlighted ? 'bg-primary/10 text-primary' : 'hover:bg-muted/50', isSelected ? 'font-medium' : ''].join(' ')}
+                className={['w-full flex items-start gap-2 text-left px-4 py-2 text-sm break-words', isHighlighted ? 'bg-primary/10 text-primary' : 'hover:bg-muted/50', isSelected ? 'font-medium' : '', locating ? 'invisible' : ''].join(' ')}
               >
                 {isSelected
                   ? <Check className="h-4 w-4 mt-0.5 text-primary shrink-0" aria-hidden="true" data-testid={`${dataTestId}-check`} />
@@ -308,12 +320,13 @@ export function SearchPopup({
  * @param {Array<{id: string, name: string}>} items
  */
 export function staticPageLoader(items) {
-  return (query, offset) => {
+  return (query, offset, _signal, opts) => {
+    const size = opts?.limit ?? SEARCH_POPUP_PAGE_SIZE;
     const q = query.toLowerCase();
     const matches = q ? items.filter((o) => o.name.toLowerCase().includes(q)) : items;
     return Promise.resolve({
-      items: matches.slice(offset, offset + SEARCH_POPUP_PAGE_SIZE),
-      hasMore: offset + SEARCH_POPUP_PAGE_SIZE < matches.length,
+      items: matches.slice(offset, offset + size),
+      hasMore: offset + size < matches.length,
     });
   };
 }

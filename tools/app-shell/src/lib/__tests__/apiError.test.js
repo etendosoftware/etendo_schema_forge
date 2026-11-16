@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/lib/apiError.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { extractApiErrorMessage } from '../apiError.js';
@@ -124,5 +125,23 @@ describe('extractApiErrorMessage — error shape parsing (ETP-3660)', () => {
       const res = makeRes(404, { message: 'Not found description' });
       assert.equal(await extractApiErrorMessage(res), 'Not found description');
     });
+  });
+});
+
+describe('extractApiErrorMessage — backend-error translation with `t`', () => {
+  const t = (key) => (key === 'backendError.accessDeniedToSpec' ? 'translated: no access' : key);
+
+  it('translates the access-denied message when t is given', async () => {
+    const res = makeRes(403, { error: { message: 'Access denied to spec for current role' } });
+    assert.equal(await extractApiErrorMessage(res, t), 'translated: no access');
+  });
+
+  it('keeps the raw message when t is omitted', async () => {
+    const res = makeRes(403, { error: { message: 'Access denied to spec for current role' } });
+    assert.equal(await extractApiErrorMessage(res), 'Access denied to spec for current role');
+  });
+
+  it('falls back to Error <status> on a non-JSON body even with t', async () => {
+    assert.equal(await extractApiErrorMessage(makeNonJsonRes(403), t), 'Error 403');
   });
 });

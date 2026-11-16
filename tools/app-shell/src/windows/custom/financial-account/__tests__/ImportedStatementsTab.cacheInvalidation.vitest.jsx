@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/financial-account/ImportedStatementsTab.jsx
 /**
  * ETP-5522 regression — creating / importing / syncing / processing / deleting a bank statement
  * from the account detail must mark the shared `account` cache entries stale, so the Cuentas list
@@ -177,6 +178,18 @@ describe('ImportedStatementsTab — account list cache invalidation (ETP-5522)',
 
       expect(invalidateMock).toHaveBeenCalledWith({ entity: 'account' });
       expect(reloadFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('tells the parent (tab badge source) through onStatementsChanged, only on a mutation', async () => {
+      const onStatementsChanged = vi.fn();
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} onStatementsChanged={onStatementsChanged} />);
+      expect(onStatementsChanged).not.toHaveBeenCalled();
+
+      await user.click(screen.getByTestId('toolbar-manual'));
+      await user.click(screen.getByTestId('manual-success'));
+
+      expect(onStatementsChanged).toHaveBeenCalledTimes(1);
     });
 
     it('after a statement is edited through the manual modal', async () => {

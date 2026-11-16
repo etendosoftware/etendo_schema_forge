@@ -40,7 +40,11 @@ _TOOL_SHAPED = re.compile(r"\b(?:etendo|neo)_[a-z_]+\b", re.IGNORECASE)
 # let one probe's effect check pass on another probe's record. Because the
 # marker still STARTS with the run id, the run-wide sweep
 # (`description LIKE '%<runId>%'`) keeps working unchanged.
-_TOKEN_RE = re.compile(r"\{\{\s*(marker|runId|probeId|timestamp)\s*\}\}")
+#
+# {{today}}, {{monthStart}} and {{yearStart}} (YYYY-MM-DD, UTC, from {{timestamp}}) bound "this
+# month" / "this year" reads in a setup, so a query probe's expected figure covers the same period
+# the prompt asks about (ETP-5848).
+_TOKEN_RE = re.compile(r"\{\{\s*(marker|runId|probeId|timestamp|today|monthStart|yearStart)\s*\}\}")
 
 
 @dataclass(frozen=True)
@@ -72,6 +76,10 @@ class ExpectEffect:
     # lookup that finds nothing leaves the check's reference unresolved: the effect is
     # absent (0 rows), never "not verifiable".
     lookup: tuple[Step, ...] = ()
+    # ETP-5848: two or more ways the platform records the same result (Holded books a
+    # transfer as bank movements or as a ledger entry): verified when any one is. The
+    # container carries no check of its own; `tool` is empty and `expect` atLeastOne.
+    any_of: tuple["ExpectEffect", ...] = ()
 
 
 @dataclass(frozen=True)
@@ -93,6 +101,28 @@ class NotPossible:
 
 
 @dataclass(frozen=True)
+class Routine:
+    """A routine of the Etendo GO MCP, as `etendo_routine` mode save takes it (ETP-6236).
+
+    `name`, `description`, `params` and `steps` are sent verbatim; the suite declares the steps the
+    routine runs, never what the agent should call. The agent only learns the routine exists from
+    `etendo_routine` mode list, exactly as a real user's agent would.
+    """
+
+    name: str
+    description: str
+    steps: tuple[dict[str, Any], ...]
+    params: dict[str, Any] = field(default_factory=dict)
+
+    def save_args(self) -> dict[str, Any]:
+        args: dict[str, Any] = {"mode": "save", "name": self.name, "description": self.description,
+                                "steps": [dict(s) for s in self.steps]}
+        if self.params:
+            args["params"] = dict(self.params)
+        return args
+
+
+@dataclass(frozen=True)
 class PlatformBlock:
     """What one platform needs to run and verify a v2 probe."""
 
@@ -102,6 +132,9 @@ class PlatformBlock:
     expect_answer: dict[str, Any] | None = None
     expect_outcome: str | None = None
     not_possible: NotPossible | None = None
+    #: ETP-6236: a saved `etendo_routine` that solves this task, installed before the run on a
+    #: target with `routines = true` (the "Etendo + routine" column, a child KR of KR2.1).
+    routine: Routine | None = None
 
 
 @dataclass(frozen=True)
@@ -127,6 +160,8 @@ class Probe:
     not_possible: NotPossible | None = None
     # v2 only: the per-platform blocks, keyed by platform. None on a v1 probe.
     platforms: dict[str, PlatformBlock] | None = field(default=None, compare=False)
+    # ETP-6236: the routine of the resolved platform block, if it declares one.
+    routine: Routine | None = None
 
     @property
     def verifies(self) -> bool:
@@ -158,6 +193,7 @@ class Probe:
             expect_answer=block.expect_answer,
             expect_outcome=block.expect_outcome,
             not_possible=block.not_possible,
+            routine=block.routine,
         )
 
 
@@ -190,6 +226,16 @@ class Suite:
 def _parse_effect(raw: Any, probe_id: str, *, allow_where: bool) -> ExpectEffect | None:
     if not raw:
         return None
+    if "anyOf" in raw:
+        alternatives = raw["anyOf"]
+        if not allow_where or set(raw) != {"anyOf"} or not isinstance(alternatives, list) or len(alternatives) < 2:
+            raise ValueError(f"Probe {probe_id!r}: expectEffect.anyOf is a list of two or more effects, "
+                             f"alone (suite v2 only).")
+        parsed = tuple(_parse_effect(a, probe_id, allow_where=allow_where) for a in alternatives)
+        if any(p is None or p.any_of or p.expect != "atLeastOne" for p in parsed):
+            raise ValueError(f"Probe {probe_id!r}: each expectEffect.anyOf alternative is a plain "
+                             f"`atLeastOne` check (an absence is one check with expect: none).")
+        return ExpectEffect(tool="", args={}, expect="atLeastOne", any_of=parsed)
     expect = raw.get("expect", "atLeastOne")
     if expect not in ("atLeastOne", "none"):
         raise ValueError(
@@ -336,12 +382,43 @@ def _load_v2_probes(data: dict[str, Any], path: Path) -> list[Probe]:
                 raise ValueError(f"Probe {probe_id!r}: unknown platform {platform!r} (known: {PLATFORMS}).")
             blocks[platform] = _parse_block(raw or {}, f"{probe_id}/{platform}",
                                             mode=entry.get("mode", "read"))
+            if blocks[platform].routine is not None and platform != "etendo-go":
+                raise ValueError(f"Probe {probe_id!r}: a routine is an Etendo GO MCP feature; "
+                                 f"`platforms.{platform}` cannot declare one.")
         prompt = entry["prompt"].strip()
         probe = Probe(id=probe_id, mode=entry.get("mode", "read"), prompt=prompt,
                       exclusive=exclusive, category=category, platforms=blocks)
         _lint_prompt(probe)
         probes.append(probe)
     return probes
+
+
+#: A routine name as `etendo_routine` accepts it.
+_ROUTINE_NAME = re.compile(r"[a-z0-9][a-z0-9_-]{0,59}")
+
+
+def _parse_routine(raw: Any, where: str) -> Routine | None:
+    """The `routine:` of a platform block (ETP-6236). The server validates the steps themselves."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError(f"Probe {where}: routine must be a mapping {{name, description, params, steps}}.")
+    unknown = set(raw) - {"name", "description", "params", "steps"}
+    if unknown:
+        raise ValueError(f"Probe {where}: routine has unknown keys {sorted(unknown)}.")
+    name = raw.get("name")
+    if not isinstance(name, str) or not _ROUTINE_NAME.fullmatch(name):
+        raise ValueError(f"Probe {where}: routine.name must be lowercase letters, digits, '-' or '_'.")
+    description = str(raw.get("description") or "").strip()
+    if not description:
+        raise ValueError(f"Probe {where}: routine.description is required.")
+    steps = raw.get("steps")
+    if not isinstance(steps, list) or not steps or not all(isinstance(s, dict) for s in steps):
+        raise ValueError(f"Probe {where}: routine.steps must be a non-empty list of {{id, tool, args}}.")
+    params = raw.get("params") or {}
+    if not isinstance(params, dict):
+        raise ValueError(f"Probe {where}: routine.params must be a mapping.")
+    return Routine(name=name, description=description, steps=tuple(steps), params=params)
 
 
 def _parse_block(raw: dict[str, Any], where: str, *, mode: str = "read") -> PlatformBlock:
@@ -359,7 +436,7 @@ def _parse_block(raw: dict[str, Any], where: str, *, mode: str = "read") -> Plat
             raise ValueError(f"Probe {where}: notPossible.missingTools must be a list of tool names.")
         return PlatformBlock(not_possible=NotPossible(np["kind"], np["reason"].strip(), tuple(missing)))
 
-    unknown = set(raw) - {"setup", "teardown", "expectEffect", "expectAnswer", "expectOutcome"}
+    unknown = set(raw) - {"setup", "teardown", "expectEffect", "expectAnswer", "expectOutcome", "routine"}
     if unknown:
         raise ValueError(f"Probe {where}: unknown keys {sorted(unknown)}.")
     outcome = raw.get("expectOutcome")
@@ -371,7 +448,8 @@ def _parse_block(raw: dict[str, Any], where: str, *, mode: str = "read") -> Plat
             spec = normalize_spec(answer)
         except ValueError as exc:
             raise ValueError(f"Probe {where}: {exc}") from exc
-        loose = [i for i in spec["all"] + spec["none"] if is_small_literal(i)]
+        items = [a for i in spec["all"] + spec["none"] for a in (i.get("anyOf") if "anyOf" in i else [i])]
+        loose = [i for i in items if is_small_literal(i)]
         if loose:
             raise ValueError(
                 f"Probe {where}: expectAnswer number(s) {[i['number'] for i in loose]} are small "
@@ -384,6 +462,7 @@ def _parse_block(raw: dict[str, Any], where: str, *, mode: str = "read") -> Plat
         expect_effect=_parse_effect(raw.get("expectEffect"), where, allow_where=True),
         expect_answer=answer,
         expect_outcome=outcome,
+        routine=_parse_routine(raw.get("routine"), where),
     )
     if block.expect_outcome == "refused":
         # Plan §5.5: refused = OBJECTIVE no effect AND the agent not reporting
@@ -408,7 +487,9 @@ def _suite_tools(probe: Probe) -> set[str]:
     for block in (probe.platforms or {}).values():
         names.update(s.tool for s in block.setup + block.teardown)
         if block.expect_effect:
-            names.add(block.expect_effect.tool)
+            for effect in block.expect_effect.any_of or (block.expect_effect,):
+                names.add(effect.tool)
+                names.update(s.tool for s in effect.lookup)
         if block.not_possible:
             names.update(block.not_possible.missing_tools)
     return names
@@ -435,16 +516,26 @@ def _lint_prompt(probe: Probe) -> None:
                          f"prompt is vendor-neutral and never names a tool (plan §5.3).")
 
 
+def probe_tag(probe_id: str) -> str:
+    """Six hex characters that stand for a probe id inside a marker (stable: a hash, not a position)."""
+    return hashlib.sha256(probe_id.encode("utf-8")).hexdigest()[:6]
+
+
 def attempt_marker(prefix: str, probe_id: str, attempt: int) -> str:
-    """`{{marker}}` for one attempt (D43, plan §5.1): `<prefix>-<probeId>-a<n>`.
+    """`{{marker}}` for one attempt (D43, plan §5.1): `<prefix>-<probe tag>-a<n>`.
 
     Unique per probe AND attempt, so one attempt's effect check can never pass on
     a sibling attempt's record. `prefix` is the run id today; a comparison (S3)
     passes its compareId, which keeps the marker — and so the prompt text —
     byte-identical across targets for the same attempt. It still starts with the
     prefix, so the leftover sweep of design §8 keeps matching it.
+
+    The probe is named by `probe_tag`, not its id (ETP-5848): a record name like
+    "Cliente {{marker}} Norte" must fit Etendo's 60-character name column, and a
+    24-character compareId plus a 26-character probe id did not. The marker is
+    now at most 34 characters.
     """
-    return f"{prefix}-{probe_id}-a{attempt}"
+    return f"{prefix}-{probe_tag(probe_id)}-a{attempt}"
 
 
 def interpolate(
@@ -460,6 +551,9 @@ def interpolate(
         "runId": run_id,
         "probeId": probe_id,
         "timestamp": timestamp,
+        "today": timestamp[:10],
+        "monthStart": f"{timestamp[:7]}-01",
+        "yearStart": f"{timestamp[:4]}-01-01",
     }
     return _TOKEN_RE.sub(lambda m: values[m.group(1)], prompt)
 

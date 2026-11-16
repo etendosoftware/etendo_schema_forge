@@ -15,7 +15,11 @@
       Amount cells use data-cell-type="number" with the RAW value (no
       formatCurrency) — html-to-xlsx does `parseFloat(cell.innerText)` for that
       type, so a formatted amount would silently truncate at the thousands
-      separator. Never format here. --}}
+      separator. Never format here.
+      Variation columns (ETP-6080): only with a comparison AND only for a
+      contract that declares `labels.variationAmount` (Profit & Loss; the
+      Balance Sheet shares this file byte for byte and has no variation yet).
+      Raw values like the amounts; an empty cell when there is no % (reference 0). --}}
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8">
 <style>
@@ -33,7 +37,7 @@
       <th>{{meta.labels.hdrCode}}</th>
       <th>{{meta.labels.hdrName}}</th>
       <th>{{meta.labels.amount}}</th>
-      {{#ifCond meta.params.compareTo '===' 'true'}}<th>{{meta.labels.amount_ref}}</th>{{/ifCond}}
+      {{#ifCond meta.params.compareTo '===' 'true'}}<th>{{meta.labels.amount_ref}}</th>{{#if meta.labels.variationAmount}}<th>{{meta.labels.variationAmount}}</th><th>{{meta.labels.variationPct}}</th>{{/if}}{{/ifCond}}
     </tr></thead>
     <tbody>
       {{#each rows}}
@@ -44,7 +48,7 @@
         <td>{{this.value}}</td>
         <td>{{this.name}}</td>
         <td data-cell-type="number">{{this.amount}}</td>
-        {{#ifCond @root.meta.params.compareTo '===' 'true'}}<td data-cell-type="number">{{this.amount_ref}}</td>{{/ifCond}}
+        {{#ifCond @root.meta.params.compareTo '===' 'true'}}<td data-cell-type="number">{{this.amount_ref}}</td>{{#if @root.meta.labels.variationAmount}}<td data-cell-type="number">{{this.variationAmount}}</td><td data-cell-type="number">{{this.variationPct}}</td>{{/if}}{{/ifCond}}
       </tr>
       {{/each}}
     </tbody>

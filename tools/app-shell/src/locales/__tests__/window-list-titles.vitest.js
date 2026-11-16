@@ -1,6 +1,7 @@
 // @covers tools/app-shell/src/locales/en_US.json
 // @covers tools/app-shell/src/locales/es_ES.json
 // @covers tools/app-shell/src/locales/es_AR.json
+// @covers artifacts/document-sequence/decisions.json
 /**
  * A window's list-page title must read the same as its sidebar menu entry.
  *
@@ -42,5 +43,29 @@ describe.each(['en_US', 'es_ES', 'es_AR'])('list titles match the menu (%s)', (l
     expect(tMenu(windowName)).toBe(expected[locale]);
     expect(tMenu(menuKey)).toBe(expected[locale]);
     expect(dictionary.windows?.[windowName]?.label).toBe(expected[locale]);
+  });
+});
+
+/**
+ * A list-only window whose rows are a fixed enum shows each row through its enum label key:
+ * `decisions.json` -> `enumValues[].name` becomes the form option `label`, which the grid and the
+ * record title resolve with `useUI()` (genericLabels). `useUI()` echoes the raw key when a locale
+ * lacks it, so a missing entry shows `documentSequenceSalesQuotation` as literal row text.
+ */
+const ENUM_WINDOWS = [['document-sequence', 'sequence', 'name']];
+const REPO_ROOT = join(__dirname, '..', '..', '..', '..', '..');
+const enumLabelKeys = (window, entity, field) => {
+  const decisions = JSON.parse(readFileSync(join(REPO_ROOT, 'artifacts', window, 'decisions.json'), 'utf8'));
+  return (decisions.entities?.[entity]?.fields?.[field]?.enumValues ?? []).map((v) => v.name);
+};
+
+describe.each(['en_US', 'es_ES', 'es_AR'])('window enum labels are translated (%s)', (locale) => {
+  const genericLabels = load(locale).genericLabels ?? {};
+
+  it.each(ENUM_WINDOWS)('%s: every %s.%s enum label key is defined', (window, entity, field) => {
+    const keys = enumLabelKeys(window, entity, field);
+    expect(keys.length).toBeGreaterThan(0);
+    const missing = keys.filter((key) => typeof genericLabels[key] !== 'string' || !genericLabels[key].trim());
+    expect(missing).toEqual([]);
   });
 });

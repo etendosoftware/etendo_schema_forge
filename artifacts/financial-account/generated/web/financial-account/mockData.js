@@ -1140,6 +1140,8 @@ export const bankStatementLines = [
     "dramount": 38907,
     "cramount": 38907,
     "description": "Standard order for Q1 delivery",
+    "pSD2DiscardLine": "Sample pSD2DiscardLine",
+    "pSD2IsDiscarded": "Sample pSD2IsDiscarded",
     "accountId": "mock-account-001"
   },
   {
@@ -1153,6 +1155,8 @@ export const bankStatementLines = [
     "dramount": 9306,
     "cramount": 9306,
     "description": "Rush order - priority shipping required",
+    "pSD2DiscardLine": "Sample pSD2DiscardLine",
+    "pSD2IsDiscarded": "Sample pSD2IsDiscarded",
     "accountId": "mock-account-002"
   },
   {
@@ -1166,6 +1170,8 @@ export const bankStatementLines = [
     "dramount": 11544,
     "cramount": 11544,
     "description": "Bulk purchase for warehouse restocking",
+    "pSD2DiscardLine": "Sample pSD2DiscardLine",
+    "pSD2IsDiscarded": "Sample pSD2IsDiscarded",
     "accountId": "mock-account-003"
   },
   {
@@ -1179,6 +1185,8 @@ export const bankStatementLines = [
     "dramount": 11872,
     "cramount": 11872,
     "description": "Sample order for client evaluation",
+    "pSD2DiscardLine": "Sample pSD2DiscardLine",
+    "pSD2IsDiscarded": "Sample pSD2IsDiscarded",
     "accountId": "mock-account-004"
   },
   {
@@ -1192,6 +1200,8 @@ export const bankStatementLines = [
     "dramount": 48460,
     "cramount": 48460,
     "description": "Recurring monthly supply order",
+    "pSD2DiscardLine": "Sample pSD2DiscardLine",
+    "pSD2IsDiscarded": "Sample pSD2IsDiscarded",
     "accountId": "mock-account-005"
   },
   {
@@ -1205,6 +1215,8 @@ export const bankStatementLines = [
     "dramount": 45418,
     "cramount": 45418,
     "description": "Special pricing agreement applies",
+    "pSD2DiscardLine": "Sample pSD2DiscardLine",
+    "pSD2IsDiscarded": "Sample pSD2IsDiscarded",
     "accountId": "mock-account-006"
   },
   {
@@ -1218,6 +1230,8 @@ export const bankStatementLines = [
     "dramount": 33840,
     "cramount": 33840,
     "description": "Consolidated order from multiple requests",
+    "pSD2DiscardLine": "Sample pSD2DiscardLine",
+    "pSD2IsDiscarded": "Sample pSD2IsDiscarded",
     "accountId": "mock-account-007"
   },
   {
@@ -1231,6 +1245,8 @@ export const bankStatementLines = [
     "dramount": 25716,
     "cramount": 25716,
     "description": "Trial order for new product line",
+    "pSD2DiscardLine": "Sample pSD2DiscardLine",
+    "pSD2IsDiscarded": "Sample pSD2IsDiscarded",
     "accountId": "mock-account-008"
   },
   {
@@ -1244,6 +1260,8 @@ export const bankStatementLines = [
     "dramount": 44780,
     "cramount": 44780,
     "description": "Replacement for damaged goods",
+    "pSD2DiscardLine": "Sample pSD2DiscardLine",
+    "pSD2IsDiscarded": "Sample pSD2IsDiscarded",
     "accountId": "mock-account-009"
   },
   {
@@ -1257,6 +1275,8 @@ export const bankStatementLines = [
     "dramount": 12483,
     "cramount": 12483,
     "description": "Pre-season inventory build-up",
+    "pSD2DiscardLine": "Sample pSD2DiscardLine",
+    "pSD2IsDiscarded": "Sample pSD2IsDiscarded",
     "accountId": "mock-account-010"
   },
   {
@@ -1270,6 +1290,8 @@ export const bankStatementLines = [
     "dramount": 46022,
     "cramount": 46022,
     "description": "Customer-specific configuration",
+    "pSD2DiscardLine": "Sample pSD2DiscardLine",
+    "pSD2IsDiscarded": "Sample pSD2IsDiscarded",
     "accountId": "mock-account-011"
   },
   {
@@ -1283,6 +1305,8 @@ export const bankStatementLines = [
     "dramount": 38634,
     "cramount": 38634,
     "description": "Government contract fulfillment",
+    "pSD2DiscardLine": "Sample pSD2DiscardLine",
+    "pSD2IsDiscarded": "Sample pSD2IsDiscarded",
     "accountId": "mock-account-012"
   }
 ];

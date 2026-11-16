@@ -1,101 +1,48 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { apiFetch as moduleApiFetch } from '@/auth/api.js';
+import useImportLoadFailureToast from '@/windows/custom/shared/useImportLoadFailureToast.js';
+import { draftDocumentsOf, fetchInOutDocuments, fetchInOutLines, isCoveredDocument, pendingDocumentTotal, pendingOf } from '@/windows/custom/shared/inOutImport.js';
 
-async function fetchDraftInfoByOrderLine({ base, bpId, currentShipmentId }) {
-  // Fetch current shipment lines directly (by parentId) + other draft shipments list in parallel.
-  // Avoids relying on the current shipment appearing in the paginated list.
-  const [currentLinesRes, shipmentsRes] = await Promise.all([
-    currentShipmentId
-      ? moduleApiFetch(`${base}/goods-shipment/goodsShipmentLine?parentId=${currentShipmentId}&_startRow=0&_endRow=200`)
-      : Promise.resolve(null),
-    moduleApiFetch(`${base}/goods-shipment/goodsShipment?_startRow=0&_endRow=100&_sortBy=movementDate desc`),
-  ]);
+// ETP-6099 — the orders and their lines come from the shipment's own read actions
+// (`availableOrders` / `availableOrderLines`, inOutImport.js): the customer's completed orders in
+// the shipment's currency with quantity left to deliver, drafts deducted server-side. The covered
+// ones (`pendingLines: 0`, everything held by draft shipments) are listed too and hidden by
+// `isDocumentCovered`. Replaced: the company-wide order list (500), the shipment header, the
+// shipment list (100) and the lines of every draft shipment.
+const ENTITY = 'goodsShipment'; // the header entity of the action URLs
+const SPEC = 'goods-shipment';
 
-  const draftInfo = {};
+const CURRENCY_PROBE = Object.freeze({
+  sourceHeader: 'sales-order/header',
+  isCandidate: (o) => Number(o.deliveryStatus ?? 100) < 100,
+});
 
-  if (currentLinesRes?.ok) {
-    const currentLines = (await currentLinesRes.json())?.response?.data || [];
-    currentLines.forEach(l => {
-      if (!l.salesOrderLine) return;
-      if (!draftInfo[l.salesOrderLine]) draftInfo[l.salesOrderLine] = { qty: 0, docNos: new Set() };
-      draftInfo[l.salesOrderLine].qty += Number(l.movementQuantity) || 0;
-    });
-  }
+const fetchDocuments = ({ base, bpId, invoiceId: shipmentId }) => fetchInOutDocuments({
+  apiFetch: moduleApiFetch, base, spec: SPEC, entity: ENTITY, targetId: shipmentId, bpId,
+  action: 'availableOrders', dateKey: 'orderDate', currencyProbe: CURRENCY_PROBE,
+});
 
-  if (shipmentsRes.ok) {
-    const all = (await shipmentsRes.json())?.response?.data || [];
-    const otherDrafts = all.filter(s =>
-      s.documentStatus === 'DR' && s.businessPartner === bpId && s.id !== currentShipmentId,
-    );
-    const lineResults = await Promise.all(
-      otherDrafts.map(s =>
-        moduleApiFetch(`${base}/goods-shipment/goodsShipmentLine?parentId=${s.id}&_startRow=0&_endRow=200`)
-          .then(r => r.ok ? r.json().then(d => ({ docNo: s.documentNo, lines: d?.response?.data || [] })) : null),
-      ),
-    );
-    for (const result of lineResults) {
-      if (!result) continue;
-      result.lines.forEach(l => {
-        if (!l.salesOrderLine) return;
-        if (!draftInfo[l.salesOrderLine]) draftInfo[l.salesOrderLine] = { qty: 0, docNos: new Set() };
-        draftInfo[l.salesOrderLine].qty += Number(l.movementQuantity) || 0;
-        draftInfo[l.salesOrderLine].docNos.add(result.docNo);
-      });
-    }
-  }
-
-  return draftInfo;
-}
-
-const fetchDocuments = async ({ base, bpId, invoiceId: shipmentId }) => {
-  const [ordersRes, draftInfo, headerRes] = await Promise.all([
-    moduleApiFetch(`${base}/sales-order/header?_startRow=0&_endRow=500&_sortBy=orderDate desc`),
-    fetchDraftInfoByOrderLine({ base, bpId, currentShipmentId: shipmentId }),
-    moduleApiFetch(`${base}/goods-shipment/goodsShipment/${shipmentId}`),
-  ]);
-
-  let shipmentCurrency = null;
-  if (headerRes.ok) {
-    shipmentCurrency = (await headerRes.json())?.response?.data?.[0]?.etgoCurrency || null;
-  }
-
-  let documents = [];
-  let excludedByCurrency = false;
-  if (ordersRes.ok) {
-    const all = (await ordersRes.json())?.response?.data || [];
-    const candidates = all.filter(o =>
-      o.documentStatus === 'CO'
-      && o.businessPartner === bpId
-      && Number(o.deliveryStatus ?? 100) < 100,
-    );
-    documents = shipmentCurrency ? candidates.filter(o => o.currency === shipmentCurrency) : candidates;
-    excludedByCurrency = !!shipmentCurrency && documents.length === 0 && candidates.length > 0;
-  }
-  return { documents, sharedContext: { draftInfo }, excludedByCurrency };
+const toOrderLine = (l) => {
+  const pending = pendingOf(l);
+  const unitPrice = Number(l.unitPrice) || 0;
+  return {
+    ...l,
+    _productName: l['product$_identifier'] || l.id,
+    _maxQty: pending,
+    _unitPrice: unitPrice,
+    _lineNetAmount: unitPrice * pending,
+    _alreadyImported: pending === 0,
+    _inDraftShipments: draftDocumentsOf(l),
+  };
 };
 
-export const fetchLines = async ({ base, docId, sharedContext }) => {
-  const res = await moduleApiFetch(`${base}/sales-order/lines?parentId=${docId}&_startRow=0&_endRow=200`);
-  if (!res.ok) return [];
-  const lines = (await res.json())?.response?.data || [];
-  return lines.map(l => {
-    const ordered = Number(l.orderedQuantity) || 0;
-    const delivered = Number(l.deliveredQuantity) || 0;
-    const draftEntry = sharedContext.draftInfo?.[l.id];
-    const inOtherDrafts = draftEntry?.qty || 0;
-    const pending = Math.max(0, ordered - delivered - inOtherDrafts);
-    const unitPrice = Number(l.unitPrice) || 0;
-    return {
-      ...l,
-      _productName: l['product$_identifier'] || l.id,
-      _maxQty: pending,
-      _unitPrice: unitPrice,
-      _lineNetAmount: unitPrice * pending,
-      _alreadyImported: pending === 0,
-      _inDraftShipments: draftEntry?.docNos?.size ? [...draftEntry.docNos] : undefined,
-    };
+const fetchLines = async ({ base, docId, sharedContext }) => {
+  const rows = await fetchInOutLines({
+    apiFetch: moduleApiFetch, base, spec: SPEC, entity: ENTITY, targetId: sharedContext?.targetId,
+    action: 'availableOrderLines', params: { orderId: docId },
   });
+  return rows.map(toOrderLine);
 };
 
 const getDocDisplay = (doc) => ({ docNo: doc.documentNo || doc.id, date: doc.orderDate });
@@ -115,6 +62,7 @@ export default function ImportFromSalesOrderModal(props) {
   // (an invoice importing shipment lines), and resolveApiUrl only skips a prefix that
   // matches - so a configured base doubles it and 404s.
   const apiFetch = useApiFetch('');
+  const loaders = useImportLoadFailureToast(fetchDocuments, fetchLines);
   return (
     <ImportLinesModal
       {...props}
@@ -126,8 +74,11 @@ export default function ImportFromSalesOrderModal(props) {
       noCurrencyMatchMessageKey="noSalesOrdersMatchShipmentCurrency"
       successMessageKey="linesImportedFromSalesOrder"
       showPriceColumns={false}
-      fetchDocuments={fetchDocuments}
-      fetchLines={fetchLines}
+      fetchDocuments={loaders.fetchDocuments}
+      fetchLines={loaders.fetchLines}
+      eagerLoadLines={false}
+      isDocumentCovered={isCoveredDocument}
+      getDocumentTotal={pendingDocumentTotal}
       getDocDisplay={getDocDisplay}
       buildLineBody={buildLineBody}
     />

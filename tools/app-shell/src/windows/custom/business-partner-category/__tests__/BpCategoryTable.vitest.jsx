@@ -2,13 +2,13 @@
 /**
  * Contact Category list — the columns follow the `contact-category-type` flag.
  *
- * The REAL generated `BusinessPartnerCategoryTable` is mounted (so its column list is the one the
- * pipeline emits today) and only the shared `DataTable` is stubbed, capturing the columns and the
- * hidden keys it receives. The visible list is what DataTable draws: the generated columns minus
- * the hidden ones.
+ * Only the shared `DataTable` is stubbed, capturing the columns, filters and hidden keys it
+ * receives. The visible list is what DataTable draws: the received columns minus the hidden ones.
  *
- *  - OFF (pre-category-type list): Search Key, Name.
- *  - ON: Name, Customer, Vendor/Creditor, Default.
+ *  - OFF (pre-category-type list): the REAL generated `BusinessPartnerCategoryTable` is mounted
+ *    (so its column list is the one the pipeline emits today): Search Key, Name.
+ *  - ON: the wrapper renders DataTable with its own Figma columns: Name, Customer,
+ *    Vendor/Creditor, Default — each on its real AD column, so all of them filter and sort.
  */
 import { render } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -51,6 +51,17 @@ describe('BpCategoryTable', () => {
     ['ON', true, ['name', 'etgoIscustomer', 'etgoIsvendor', 'default']],
   ])('flag %s shows the list columns of that state', (_state, flagOn, expected) => {
     expect(renderTable(flagOn).visible).toEqual(expected);
+  });
+
+  // "List columns must be real columns": a column without its AD `column` silently drops out of the
+  // advanced filter. Identificador is hidden but stays declared so that filter still offers it.
+  it('flag ON declares every column on its AD column and keeps Identificador declared but hidden', () => {
+    const { hiddenColumns } = renderTable(true);
+    const { columns, filters } = mocks.tableProps;
+    expect(columns.filter((c) => !c.column).map((c) => c.key)).toEqual([]);
+    expect(columns.find((c) => c.key === 'searchKey')).toMatchObject({ column: 'Value' });
+    expect(hiddenColumns).toContain('searchKey');
+    expect(filters).toEqual(['searchKey', 'name']);
   });
 
   it.each([

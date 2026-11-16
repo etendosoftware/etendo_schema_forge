@@ -75,8 +75,6 @@
           "gridOrder": 3,
           "section": "principal",
           "seq": 5,
-          "span": 4,
-          "customRenderer": "ContactTypeField",
           "agentPrompt": "#REF#agent-prompts/business-partner-category/category.etgo-iscustomer.md",
           "badge": true,
           "badgeLabels": {

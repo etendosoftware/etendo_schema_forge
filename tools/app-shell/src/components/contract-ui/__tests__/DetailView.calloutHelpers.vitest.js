@@ -107,7 +107,8 @@ import {
 // actually runs for combos; applyCalloutComboUpdates unconditionally skips
 // the trigger field before ever reaching it, so the trigger-field staleness
 // path can only be exercised by calling applyOneComboEntry directly.
-import { applyOneComboEntry, isCurrencyRateRecalcTarget } from '../detailViewHelpers.jsx';
+import { applyOneComboEntry, isCurrencyRateRecalcTarget, isRectificationCascadeTarget }
+  from '../detailViewHelpers.jsx';
 
 describe('normalizePatchFieldValues', () => {
   it('skips keys ending in $_identifier', () => {
@@ -239,6 +240,54 @@ describe('applyCalloutFieldUpdates', () => {
     expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1', { origin: 'callout' });
   });
 
+  // ETP-5745 CP-18: the invoice document-type callout's own reset of the rectification fields
+  // (e.g. `aeatsiiMotivoRectif: ''`, `tbaiReverseinvoicecode: ''` when reverting to a normal doc
+  // type) used to be silently dropped by BOTH guards above — the field already held a non-empty
+  // value (that's the whole point of the reset) and the user had typically touched it by hand
+  // while the invoice was rectificative. isRectificationCascadeTarget exempts exactly these
+  // fields when the trigger is `transactionDocument`, mirroring isDocumentDateCascadeTarget.
+  it('applies an empty rectification-field reset from the transactionDocument callout even '
+      + 'over an existing non-empty, user-touched value', () => {
+    const a = makeArgs({
+      triggerField: 'transactionDocument',
+      data: { aeatsiiMotivoRectif: 'R1' },
+      userTouchedRef: { current: new Set(['aeatsiiMotivoRectif']) },
+    });
+    applyCalloutFieldUpdates(
+      { aeatsiiMotivoRectif: { value: '' } },
+      a,
+    );
+    expect(a.appliedFields.get('aeatsiiMotivoRectif')).toBe('');
+    expect(a.hook.handleChange)
+      .toHaveBeenCalledWith('aeatsiiMotivoRectif', '', { origin: 'callout' });
+  });
+
+  it('does NOT exempt a rectification field when the trigger is something else', () => {
+    const a = makeArgs({
+      triggerField: 'businessPartner',
+      data: { aeatsiiMotivoRectif: 'R1' },
+      userTouchedRef: { current: new Set(['aeatsiiMotivoRectif']) },
+    });
+    applyCalloutFieldUpdates(
+      { aeatsiiMotivoRectif: { value: '' } },
+      a,
+    );
+    expect(a.appliedFields.has('aeatsiiMotivoRectif')).toBe(false);
+  });
+
+  it('does NOT exempt a field outside the rectification set even from transactionDocument', () => {
+    const a = makeArgs({
+      triggerField: 'transactionDocument',
+      data: { warehouse: 'EXISTING' },
+      userTouchedRef: { current: new Set(['warehouse']) },
+    });
+    applyCalloutFieldUpdates(
+      { warehouse: { value: '' } },
+      a,
+    );
+    expect(a.appliedFields.has('warehouse')).toBe(false);
+  });
+
   it('emits key$_identifier when entry._identifier is present', () => {
     const a = makeArgs();
     applyCalloutFieldUpdates(
@@ -355,6 +404,29 @@ describe('exchange-rate recalculation on callout', () => {
   });
 });
 
+// ETP-5745 CP-18: the invoice rectification fields (SII/TicketBAI/VERI*FACTU structural fields
+// the doc-type callout resets) are exempt from the two applyCalloutFieldUpdates guards ONLY when
+// the trigger is `transactionDocument` — the exact same shape of exemption
+// isDocumentDateCascadeTarget/isCurrencyRateRecalcTarget already have for their own fields.
+describe('isRectificationCascadeTarget', () => {
+  it.each([
+    ['isRectificative', 'transactionDocument', true],
+    ['aeatsiiClaveTipo', 'transactionDocument', true],
+    ['aeatsiiTipoRectif', 'transactionDocument', true],
+    ['aeatsiiMotivoRectif', 'transactionDocument', true],
+    ['tbaiIsreverseinvoice', 'transactionDocument', true],
+    ['tbaiReverseinvoicetype', 'transactionDocument', true],
+    ['tbaiReverseinvoicecode', 'transactionDocument', true],
+    ['etvfacInvType', 'transactionDocument', true],
+    ['etvfacReverseinvtype', 'transactionDocument', true],
+    ['aeatsiiMotivoRectif', 'businessPartner', false],
+    ['warehouse', 'transactionDocument', false],
+    ['etvfacInvType', undefined, false],
+  ])('isRectificationCascadeTarget(%s, trigger=%s) is %s', (key, trigger, expected) => {
+    expect(isRectificationCascadeTarget(key, trigger)).toBe(expected);
+  });
+});
+
 // ETP-4772: opening a new Purchase/Sales Order auto-fires a callout for the
 // default warehouse. If the user changes warehouse before that default
 // callout's response arrives, the OLD (stale) response used to win
@@ -450,6 +522,185 @@ describe('applyCalloutFieldUpdates — ETP-4772 stale response guard', () => {
     );
     expect(a.appliedFields.get('warehouse')).toBe('WH1');
     expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1', { origin: 'callout' });
+  });
+});
+
+// A callout update may be SUGGESTED (`{ value, suggested: true }`, e.g. the remittance name
+// proposed from the due date): it fills only a field the user has never touched in this form
+// session, including one the user cleared on purpose. Without the flag the value is FORCED and
+// keeps the previous rules. Contract: docs/neo-headless-extensibility.md, "Callout updates:
+// forced vs suggested values".
+describe('applyCalloutFieldUpdates — suggested vs forced values', () => {
+  function makeArgs(overrides = {}) {
+    return {
+      data: {},
+      triggerField: 'dueDate',
+      userTouchedRef: { current: new Set() },
+      appliedFields: new Map(),
+      hook: { handleChange: vi.fn() },
+      api: {},
+      catalogs: {},
+      ...overrides,
+    };
+  }
+
+  describe('suggested values', () => {
+    it('fills a pristine empty field', () => {
+      const a = makeArgs({ data: { name: '' } });
+      applyCalloutFieldUpdates({ name: { value: 'Remesa 2026-11-30', suggested: true } }, a);
+      expect(a.appliedFields.get('name')).toBe('Remesa 2026-11-30');
+      expect(a.hook.handleChange).toHaveBeenCalledWith('name', 'Remesa 2026-11-30', { origin: 'callout' });
+    });
+
+    it('replaces the value of a pristine field the user never edited', () => {
+      const a = makeArgs({ data: { name: 'Remesa 2026-11-15' } });
+      applyCalloutFieldUpdates({ name: { value: 'Remesa 2026-11-30', suggested: true } }, a);
+      expect(a.appliedFields.get('name')).toBe('Remesa 2026-11-30');
+      expect(a.hook.handleChange).toHaveBeenCalledWith('name', 'Remesa 2026-11-30', { origin: 'callout' });
+    });
+
+    it('bumps the field generation when it is applied to a pristine field', () => {
+      const fieldGenerationRef = { current: { name: 1 } };
+      const a = makeArgs({ dispatchSnapshot: { name: 1 }, fieldGenerationRef });
+      applyCalloutFieldUpdates({ name: { value: 'Remesa 2026-11-30', suggested: true } }, a);
+      expect(a.appliedFields.get('name')).toBe('Remesa 2026-11-30');
+      expect(fieldGenerationRef.current.name).toBe(2);
+    });
+
+    it('skips a touched field that holds a value', () => {
+      const a = makeArgs({
+        data: { name: 'My remittance' },
+        userTouchedRef: { current: new Set(['name']) },
+      });
+      applyCalloutFieldUpdates({ name: { value: 'Remesa 2026-11-30', suggested: true } }, a);
+      expect(a.appliedFields.has('name')).toBe(false);
+      expect(a.hook.handleChange).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['an empty string', ''],
+      ['null', null],
+      ['undefined', undefined],
+    ])('skips a touched field the user cleared to %s', (_label, cleared) => {
+      const a = makeArgs({
+        data: { name: cleared },
+        userTouchedRef: { current: new Set(['name']) },
+      });
+      applyCalloutFieldUpdates({ name: { value: 'Remesa 2026-11-30', suggested: true } }, a);
+      expect(a.appliedFields.has('name')).toBe(false);
+      expect(a.hook.handleChange).not.toHaveBeenCalled();
+    });
+
+    it('skips a touched field even when it is the trigger field', () => {
+      const a = makeArgs({
+        triggerField: 'name',
+        data: { name: 'My remittance' },
+        userTouchedRef: { current: new Set(['name']) },
+      });
+      applyCalloutFieldUpdates({ name: { value: 'Remesa 2026-11-30', suggested: true } }, a);
+      expect(a.appliedFields.has('name')).toBe(false);
+      expect(a.hook.handleChange).not.toHaveBeenCalled();
+    });
+
+    it('skips only the touched field and still applies the rest of the same response', () => {
+      const a = makeArgs({
+        data: { name: '', description: '' },
+        userTouchedRef: { current: new Set(['name']) },
+      });
+      applyCalloutFieldUpdates({
+        name: { value: 'Remesa 2026-11-30', suggested: true },
+        description: { value: 'Due 2026-11-30', suggested: true },
+      }, a);
+      expect(a.appliedFields.has('name')).toBe(false);
+      expect(a.appliedFields.get('description')).toBe('Due 2026-11-30');
+      expect(a.hook.handleChange).toHaveBeenCalledTimes(1);
+      expect(a.hook.handleChange).toHaveBeenCalledWith('description', 'Due 2026-11-30', { origin: 'callout' });
+    });
+
+    it('discards a stale suggested response for a pristine field before anything else', () => {
+      const fieldGenerationRef = { current: { name: 2 } };
+      const a = makeArgs({
+        data: { name: '' },
+        dispatchSnapshot: { name: 1 },
+        fieldGenerationRef,
+      });
+      applyCalloutFieldUpdates({ name: { value: 'Remesa 2026-11-30', suggested: true } }, a);
+      expect(a.appliedFields.has('name')).toBe(false);
+      expect(a.hook.handleChange).not.toHaveBeenCalled();
+      expect(fieldGenerationRef.current.name).toBe(2);
+    });
+  });
+
+  describe('forced values (no suggested flag) keep the previous rules', () => {
+    it.each([
+      ['absent', {}],
+      ['false', { suggested: false }],
+    ])('refills a touched collateral field the user cleared (flag %s)', (_label, flag) => {
+      const a = makeArgs({
+        data: { name: '' },
+        userTouchedRef: { current: new Set(['name']) },
+      });
+      applyCalloutFieldUpdates({ name: { value: 'Remesa 2026-11-30', ...flag } }, a);
+      expect(a.appliedFields.get('name')).toBe('Remesa 2026-11-30');
+      expect(a.hook.handleChange).toHaveBeenCalledWith('name', 'Remesa 2026-11-30', { origin: 'callout' });
+    });
+
+    it('skips a touched collateral field while it holds a value', () => {
+      const a = makeArgs({
+        data: { name: 'My remittance' },
+        userTouchedRef: { current: new Set(['name']) },
+      });
+      applyCalloutFieldUpdates({ name: { value: 'Remesa 2026-11-30', suggested: false } }, a);
+      expect(a.appliedFields.has('name')).toBe(false);
+      expect(a.hook.handleChange).not.toHaveBeenCalled();
+    });
+
+    it('lets a touched trigger field win', () => {
+      const a = makeArgs({
+        triggerField: 'name',
+        data: { name: 'My remittance' },
+        userTouchedRef: { current: new Set(['name']) },
+      });
+      applyCalloutFieldUpdates({ name: { value: 'MY REMITTANCE' } }, a);
+      expect(a.appliedFields.get('name')).toBe('MY REMITTANCE');
+      expect(a.hook.handleChange).toHaveBeenCalledWith('name', 'MY REMITTANCE', { origin: 'callout' });
+    });
+
+    it('re-applies the document-date cascade over a touched accounting date', () => {
+      const a = makeArgs({
+        triggerField: 'invoiceDate',
+        documentDateField: 'invoiceDate',
+        data: { accountingDate: '2026-11-01' },
+        userTouchedRef: { current: new Set(['accountingDate']) },
+      });
+      applyCalloutFieldUpdates({ accountingDate: { value: '2026-11-20' } }, a);
+      expect(a.appliedFields.get('accountingDate')).toBe('2026-11-20');
+      expect(a.hook.handleChange).toHaveBeenCalledWith('accountingDate', '2026-11-20', { origin: 'callout' });
+    });
+
+    it('keeps a touched accounting date when another field triggered the callout', () => {
+      const a = makeArgs({
+        triggerField: 'businessPartner',
+        documentDateField: 'invoiceDate',
+        data: { accountingDate: '2026-11-01' },
+        userTouchedRef: { current: new Set(['accountingDate']) },
+      });
+      applyCalloutFieldUpdates({ accountingDate: { value: '2026-11-20' } }, a);
+      expect(a.appliedFields.has('accountingDate')).toBe(false);
+      expect(a.hook.handleChange).not.toHaveBeenCalled();
+    });
+
+    it('recalculates a touched exchange rate when the currency changes', () => {
+      const a = makeArgs({
+        triggerField: 'currency',
+        documentDateField: 'orderDate',
+        data: { eTGOCurrencyRate: 2.5 },
+        userTouchedRef: { current: new Set(['eTGOCurrencyRate']) },
+      });
+      applyCalloutFieldUpdates({ eTGOCurrencyRate: { value: 1.1 } }, a);
+      expect(a.appliedFields.get('eTGOCurrencyRate')).toBe(1.1);
+      expect(a.hook.handleChange).toHaveBeenCalledWith('eTGOCurrencyRate', 1.1, { origin: 'callout' });
+    });
   });
 });
 

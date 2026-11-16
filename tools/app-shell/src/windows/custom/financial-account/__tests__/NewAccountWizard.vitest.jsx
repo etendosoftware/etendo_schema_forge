@@ -434,6 +434,24 @@ describe('NewAccountWizard', () => {
     expect(await submitCashAccountExpectingToast()).toBe(expected);
   });
 
+  // ETP-6148 — a Bank account create provisions the SEPA remittance payment methods; a race on
+  // that provisioning answers 409 ETGO_RemittanceProvisioningConflict (NeoMessageText.error: the
+  // body carries `messageKeys`, no `code`). It is a «try again», not a duplicate name.
+  it.each([
+    ['es_ES', esES],
+    ['en_US', enUS],
+  ])('translates a 409 ETGO_RemittanceProvisioningConflict (%s), not as a duplicate name', async (_, locale) => {
+    activeLocale = locale.genericLabels;
+    const expected = locale.genericLabels['backendError.remittanceProvisioningConflict'];
+    expect(expected).toEqual(expect.stringMatching(/\S/));
+    createAccount.mockRejectedValueOnce(await httpError(409, {
+      error: { status: 409, message: 'Texto del backend.', messageKeys: ['ETGO_RemittanceProvisioningConflict'] },
+    }));
+
+    expect(await submitCashAccountExpectingToast()).toBe(expected);
+    expect(screen.queryByTestId('account-form-error')).not.toBeInTheDocument();
+  });
+
   it('falls back to the financeAccountsNewCreateError key when the error carries nothing at all', async () => {
     createAccount.mockRejectedValueOnce(new Error(''));
 

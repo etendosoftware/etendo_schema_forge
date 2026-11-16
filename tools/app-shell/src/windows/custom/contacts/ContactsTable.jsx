@@ -295,7 +295,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
         method: 'DELETE',
       });
       if (!res.ok) {
-        toast.error(await extractApiErrorMessage(res));
+        toast.error(await extractApiErrorMessage(res, ui));
       } else {
         toast.success(ui('contactDeleteSuccess'));
         onDataMutated?.();
@@ -306,7 +306,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
     } finally {
       resolve();
     }
-  }, [pendingDelete, apiFetch, onDataMutated, invalidateBusinessPartner]);
+  }, [pendingDelete, apiFetch, ui, onDataMutated, invalidateBusinessPartner]);
 
   const cancelDelete = useCallback(() => {
     pendingDelete?.resolve();

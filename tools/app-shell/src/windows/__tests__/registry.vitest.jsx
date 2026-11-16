@@ -1,5 +1,9 @@
 // @covers tools/app-shell/src/windows/registry.js
 // @covers tools/app-shell/src/windows/RedirectWindow.jsx
+// @covers tools/app-shell/src/menu.json
+// The remittance loader test below resolves the route guard, not the generated window behind it:
+// stubbing the generated module keeps that import light (the full window timed out under suite load).
+vi.mock('@generated/remittance/generated/web/remittance/index.jsx', () => ({ default: () => null }));
 import { buildMenuGroups, getAllWindowNames, apiOnlyWindows, buildWindowMap, filterMenuGroupsByAccess } from '../registry';
 import menuConfig from '../../menu.json';
 import { defaultNavigation, optionalNavigation, hiddenNavigation, navigationProfiles, expectedNavigation, navigationPermissions, expectNavigation } from './navigationExpectations.js';
@@ -290,6 +294,44 @@ describe('registry', () => {
 
       it('is visible for an admin who has the capability, without a window grant', () => {
         expect(names(filterMenuGroupsByAccess(inbox(), null, { isAdminOrClientAdmin: true, invoiceInbox: true }, {}))).toEqual(['invoice-inbox']);
+      });
+    });
+
+    // ETP-6148 — the real menu.json entry, not a synthetic one: Finance › Remittance is gated by
+    // the Classic Remittance window grant AND the per-account sepaRemittances capability.
+    describe('remittance menu entry (accessWindowId + sepaRemittances)', () => {
+      const REMITTANCE_WINDOW = 'FF8080812E71F7C7012E71FD0499001B';
+      const visible = (capabilities, windowAccess) => filterMenuGroupsByAccess(
+        buildMenuGroups(), new Set(), capabilities, windowAccess,
+      ).flatMap(g => g.items.map(i => i.name)).includes('remittance');
+
+      it('is declared in Finance with its window anchor and capability', () => {
+        const finance = menuConfig.menu.find(g => g.items.some(i => i.name === 'remittance'));
+        const item = finance.items.find(i => i.name === 'remittance');
+        expect(finance.group).toBe('Finance');
+        expect(item).toMatchObject({ accessWindowId: REMITTANCE_WINDOW, capability: 'sepaRemittances' });
+        expect(item.windowId).toBeUndefined();
+      });
+
+      it('is visible with the capability and the window grant', () => {
+        expect(visible({ sepaRemittances: true }, { [REMITTANCE_WINDOW]: 'full' })).toBe(true);
+      });
+
+      it('is hidden without the capability, even with the window grant', () => {
+        expect(visible({ sepaRemittances: false }, { [REMITTANCE_WINDOW]: 'full' })).toBe(false);
+        expect(visible({}, { [REMITTANCE_WINDOW]: 'full' })).toBe(false);
+      });
+
+      it('is hidden without the window grant, even with the capability', () => {
+        expect(visible({ sepaRemittances: true }, {})).toBe(false);
+      });
+
+      it('is hidden for an admin without the capability', () => {
+        expect(visible({ isAdminOrClientAdmin: true }, {})).toBe(false);
+      });
+
+      it('is hidden while the access maps are loading', () => {
+        expect(visible(null, null)).toBe(false);
       });
     });
 
@@ -734,6 +776,16 @@ describe('registry', () => {
     it('simple-g-l-journal loads the record-keeping redirect', async () => {
       const { default: Redirect } = await buildWindowMap()['simple-g-l-journal'].loader();
       expect(Redirect.name).toBe('RedirectWindowKeepPath');
+    });
+
+    // ETP-6148 — the remittance entry loads the route guard, not the bare generated window, so a
+    // URL typed by hand still meets the capability + window-access check.
+    it('remittance loads the capability + window-access route guard', async () => {
+      const entry = buildWindowMap().remittance;
+      expect(entry).toBeDefined();
+      const mod = await entry.loader();
+      expect(mod.default.name).toBe('RemittanceRoute');
+      expect(mod.REMITTANCE_WINDOW_ID).toBe('FF8080812E71F7C7012E71FD0499001B');
     });
 
     it('does not register a hidden window without redirect or routeOnly', () => {

@@ -342,9 +342,11 @@ refetches. The response itself is returned untouched, and without a `DataProvide
 returns the plain core client.
 
 A POST is not always a write: a URL whose **last** path segment is in `READ_ONLY_SUB_ENDPOINTS`
-— `evaluate-display` (fired on every record open) and `callout` (fired on field edits) — never
-invalidates anything (`isReadOnlySubEndpoint`). Without that rule a callout on a shipment field
-marked the sales order stale.
+— `evaluate-display` (fired on every record open), `callout` (fired on field edits) and
+`sifDefaults` (the `InvoiceSifStep` preview, fired when an invoice-creating modal opens) — never
+invalidates anything nor announces a record write (`isReadOnlySubEndpoint`). Without that rule a
+callout on a shipment field marked the sales order stale, and opening "Crear Factura" re-read the
+environment list.
 
 | A write to | Marks stale |
 |---|---|

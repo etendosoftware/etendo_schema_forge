@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/hooks/useEntity.js
 import { renderHook, act, waitFor } from '@testing-library/react';
 
 // ETP-5034 — a detail route pointing at a record that cannot be loaded.
@@ -174,8 +175,11 @@ describe('useEntity — recordError (ETP-5034)', () => {
     );
     act(() => { result.current.fetchById('rec-1'); });
 
-    await waitFor(() => expect(result.current.recordError).toBeNull());
-    expect(result.current.selected?.id).toBe('rec-1');
+    // Wait for the record itself, not for recordError === null: fetchById resets recordError
+    // synchronously when it STARTS (see 'is null again while a new fetchById is in flight'), so
+    // that condition holds before the response lands and the assertion below raced the request.
+    await waitFor(() => expect(result.current.selected?.id).toBe('rec-1'));
+    expect(result.current.recordError).toBeNull();
   });
 
   // ---------------------------------------------------------------------------

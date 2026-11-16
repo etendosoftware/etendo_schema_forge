@@ -1,10 +1,18 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+// @covers tools/app-shell/src/components/financial-accounts/AccountRowMenu.jsx
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
+// The shared bank-sync state (BankSyncContext) is real; only its network edge is stubbed.
+const mockSync = vi.fn();
+vi.mock('@/hooks/useBankConnectionActions.js', () => ({
+  useBankConnectionActions: () => ({ sync: mockSync, syncStatus: vi.fn().mockResolvedValue({}) }),
+}));
+
 import { AccountRowMenu } from '../AccountRowMenu.jsx';
+import { BankSyncProvider, useBankSync } from '@/windows/custom/financial-account/BankSyncContext.jsx';
 
 // countryIso ES on purpose: "Conectar banco" is Spain-only since ETP-4896
 // (see saltEdgeEligibility.js), so a fixture without it would hide that item.
@@ -379,5 +387,89 @@ describe('AccountRowMenu — read-only access tier (ETP-5457)', () => {
     for (const [name, fn] of Object.entries(writes)) {
       expect(fn, name).not.toHaveBeenCalled();
     }
+  });
+});
+
+// ETP-6154 — "Sincronizar ahora" reads the window's shared bank-sync state: while another entry
+// point syncs the same account the item is disabled, spins and says the sync is in progress.
+describe('AccountRowMenu — "Sincronizar ahora" and the shared bank-sync state', () => {
+  const CONNECTED = { ...baseAccount, bankConnected: true };
+  const sibling = {};
+  function OtherEntryPoint() {
+    sibling.bankSync = useBankSync();
+    return null;
+  }
+
+  let finishSync;
+  beforeEach(() => {
+    mockSync.mockReset();
+    mockSync.mockImplementation(() => new Promise((resolve) => { finishSync = resolve; }));
+  });
+
+  function renderInWindow(account = CONNECTED) {
+    const onBankConnectionAction = vi.fn();
+    render(
+      <BankSyncProvider>
+        <OtherEntryPoint />
+        <AccountRowMenu account={account} onBankConnectionAction={onBankConnectionAction} />
+      </BankSyncProvider>,
+    );
+    return onBankConnectionAction;
+  }
+
+  it('offers the item with the bank-sync icon and the PSD2 title while idle', async () => {
+    const onBankConnectionAction = renderInWindow();
+    openMenu();
+
+    const item = await screen.findByTestId('account-row-menu-sync-acc-1');
+    expect(item).not.toHaveAttribute('data-disabled');
+    expect(item).toHaveAttribute('title', 'financeAccountsBankSyncTooltip');
+    expect(item).toHaveTextContent('financeAccountsMenuSyncNow');
+    expect(screen.getByTestId('account-row-menu-sync-icon-acc-1')).toHaveAttribute('data-spinning', 'false');
+
+    fireEvent.click(item);
+    expect(onBankConnectionAction).toHaveBeenCalledWith('syncNow', CONNECTED);
+  });
+
+  it('is disabled, spinning and labelled in progress while another entry point syncs it', async () => {
+    renderInWindow();
+    await act(async () => { sibling.bankSync.startSync('acc-1'); });
+    openMenu();
+
+    const item = await screen.findByTestId('account-row-menu-sync-acc-1');
+    expect(item).toHaveAttribute('data-disabled');
+    expect(item).toHaveAttribute('aria-busy', 'true');
+    expect(item).toHaveAttribute('title', 'financeAccountsBankSyncInProgress');
+    expect(item).toHaveTextContent('financeAccountsBankSyncInProgress');
+    expect(screen.getByTestId('account-row-menu-sync-icon-acc-1')).toHaveAttribute('data-spinning', 'true');
+    // Radix keeps a disabled item out of keyboard navigation; the pointer is blocked by the
+    // shared item style (data-[disabled]:pointer-events-none), which jsdom does not apply.
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+    expect(item.className).toMatch(/data-\[disabled\]:pointer-events-none/);
+  });
+
+  it('is offered again once the sync finishes', async () => {
+    renderInWindow();
+    await act(async () => { sibling.bankSync.startSync('acc-1'); });
+    await act(async () => { finishSync({ status: 'OK' }); });
+    openMenu();
+
+    const item = await screen.findByTestId('account-row-menu-sync-acc-1');
+    expect(item).not.toHaveAttribute('data-disabled');
+    expect(item).toHaveTextContent('financeAccountsMenuSyncNow');
+  });
+
+  it('gives the sync item the bank-sync icon, while the deactivated "Reconectar" keeps RefreshCw', async () => {
+    const { unmount } = render(<AccountRowMenu account={CONNECTED} />);
+    openMenu();
+    const sync = await screen.findByTestId('account-row-menu-sync-acc-1');
+    expect(sync).toContainElement(screen.getByTestId('account-row-menu-sync-icon-acc-1'));
+    expect(sync.querySelector('.lucide-refresh-cw')).toBeNull();
+    unmount();
+
+    render(<AccountRowMenu account={{ ...baseAccount, bankConnected: false, bankReconnectable: true }} />);
+    openMenu();
+    const reconnect = await screen.findByTestId('account-row-menu-reconnect-acc-1');
+    expect(reconnect).toContainElement(screen.getByTestId('RefreshCwReconnect__ffaf9f'));
   });
 });

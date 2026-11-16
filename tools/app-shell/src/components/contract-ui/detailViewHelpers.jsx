@@ -520,6 +520,52 @@ export function isCurrencyRateRecalcTarget(key, triggerField, documentDateField)
     || (!!documentDateField && triggerField === documentDateField);
 }
 
+/**
+ * Fields the invoice document-type callout (`InvoiceCalloutHelper#applyRectificativeFieldsFromDocType`
+ * / `#applyVerifactuInvTypeFromDocType`, com.etendoerp.go) resolves whenever `transactionDocument`
+ * changes — SII's, TicketBAI's and VERI*FACTU's own structural rectificative fields, including
+ * their RESET to a non-rectificative value/blank when the document type stops being rectificative.
+ *
+ * ETP-5745 CP-18: without this exemption, reverting "Factura rectificativa" back to a normal
+ * document type in the SAME unsaved form never actually cleared anything — the backend's reset
+ * updates (e.g. `aeatsiiMotivoRectif: ''`, `tbaiReverseinvoicecode: ''`) were silently dropped by
+ * the two guards below: the empty-value guard (these fields already hold a non-empty value —
+ * that's the whole problem) and the user-touched guard (the user picked `aeatsiiMotivoRectif`/
+ * `tbaiReverseinvoicecode` by hand while the invoice was rectificative). Exactly the same shape of
+ * problem `isDocumentDateCascadeTarget`/`isCurrencyRateRecalcTarget` already solve for their own
+ * fields — the callout's own reset is the intended effect here, not collateral damage from an
+ * unrelated field's callout.
+ *
+ * Driven by field names that are the same on every invoice window (sales and purchase; the fields
+ * absent on the purchase side simply never appear in `updates` — see that method's own javadoc),
+ * no spec identity.
+ */
+const RECTIFICATION_CASCADE_FIELDS = new Set([
+  'isRectificative',
+  'aeatsiiClaveTipo', 'aeatsiiTipoRectif', 'aeatsiiMotivoRectif',
+  'tbaiIsreverseinvoice', 'tbaiReverseinvoicetype', 'tbaiReverseinvoicecode',
+  'etvfacInvType', 'etvfacReverseinvtype',
+]);
+
+export function isRectificationCascadeTarget(key, triggerField) {
+  return triggerField === 'transactionDocument' && RECTIFICATION_CASCADE_FIELDS.has(key);
+}
+
+/** True when a callout value actually carries something (neither `''` nor null/undefined). */
+function hasCalloutValue(value) {
+  return value !== '' && value != null;
+}
+
+/**
+ * ETP-6148 — a SUGGESTED value (`{ value, suggested: true }`, e.g. the remittance name proposed
+ * from the due date) only fills a field the user has never touched in this form session. Unlike
+ * the collateral guard in applyCalloutFieldUpdates, this skip does not require a current value:
+ * a field the user cleared on purpose stays empty. Forced (non-suggested) values are unaffected.
+ */
+function isSuggestionForTouchedField(entry, key, userTouchedRef) {
+  return entry?.suggested === true && userTouchedRef.current.has(key);
+}
+
 export function applyCalloutFieldUpdates(updates, ctx) {
   const { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs, dispatchSnapshot, fieldGenerationRef, documentDateField } = ctx;
   for (const [key, entry] of Object.entries(updates)) {
@@ -530,12 +576,18 @@ export function applyCalloutFieldUpdates(updates, ctx) {
     if (isStaleCalloutResponse(key, dispatchSnapshot, fieldGenerationRef)) {
       continue;
     }
+    // ETP-6148 — see isSuggestionForTouchedField. Forced values keep every rule below.
+    if (isSuggestionForTouchedField(entry, key, userTouchedRef)) {
+      continue;
+    }
     // Skip empty callout values if the field already has a non-empty value
     // (e.g., callout clears warehouse but defaults already set it)
     const currentVal = data[key];
-    const userHasValue = currentVal !== '' && currentVal != null;
+    const userHasValue = hasCalloutValue(currentVal);
     const isRateRecalc = isCurrencyRateRecalcTarget(key, triggerField, documentDateField);
-    if ((entry.value === '' || entry.value == null) && userHasValue && !isRateRecalc) {
+    const isRectificationCascade = isRectificationCascadeTarget(key, triggerField);
+    if (!hasCalloutValue(entry.value) && userHasValue && !isRateRecalc
+        && !isRectificationCascade) {
       continue;
     }
     // Protect user-touched fields from being overwritten by collateral updates
@@ -547,9 +599,12 @@ export function applyCalloutFieldUpdates(updates, ctx) {
     // isDocumentDateCascadeTarget. It is not collateral damage from an unrelated
     // field's callout, it is the whole purpose of the document date's own callout,
     // and classic re-applies it on every change.
+    //
+    // ETP-5745 CP-18: same exemption for the invoice rectificative fields — see
+    // isRectificationCascadeTarget.
     if (key !== triggerField && userTouchedRef.current.has(key) && userHasValue
         && !isDocumentDateCascadeTarget(key, triggerField, documentDateField)
-        && !isRateRecalc) {
+        && !isRateRecalc && !isRectificationCascade) {
       continue;
     }
     appliedFields.set(key, entry.value);
@@ -577,7 +632,7 @@ export function applyCalloutFieldUpdates(updates, ctx) {
     //
     // The empty write itself is still applied above — only the generation is left
     // alone, so ETP-4772's protection of a real user edit is untouched.
-    if (entry.value !== '' && entry.value != null) {
+    if (hasCalloutValue(entry.value)) {
       bumpFieldGeneration(key, fieldGenerationRef);
     }
   }
@@ -1207,7 +1262,9 @@ export function buildInitialTabs(p) {
     entries.push({ tab: linesTab, ...computeLinesEntryKey(p.detailTabOrder, p.detailTabIndex, secondaryEntries) });
   } else if (p.CustomLines) {
     entries.push({
-      tab: { key: 'customLines', label: p.customLinesLabel, count: p.customLinesCount ?? null },
+      // `icon`: the CustomLines component's optional static `tabIcon` (ETP-5791); absent ⇒ the
+      // icon resolves from the key as before (resolveTabIcon).
+      tab: { key: 'customLines', label: p.customLinesLabel, count: p.customLinesCount ?? null, icon: p.CustomLines.tabIcon ?? null },
       weight: LINES_DEFAULT_WEIGHT,
       insertionIndex: -0.5,
     });
@@ -2255,7 +2312,9 @@ export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
       secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, previous);
       const msg = await extractErrorMessage(res);
       toast.error(msg || ui('networkError'));
-      throw new Error(msg || 'PATCH failed');
+      // ETP-6140 — the throw only stops InlineLinesPanel from claiming the row was saved; the
+      // user was already told by the toast above (see inlineLineUpdateHandlers.js).
+      throw Object.assign(new Error(msg || 'PATCH failed'), { userNotified: true });
     }
   } : undefined;
 }

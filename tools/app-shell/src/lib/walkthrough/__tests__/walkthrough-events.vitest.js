@@ -36,6 +36,7 @@ import {
   trackWalkthroughMenuOpened,
   trackWalkthroughStarted,
 } from '../walkthrough-events.js';
+import { clearSessionIdentity, setSessionIdentity } from '@/lib/sessionIdentity.js';
 import { OBSERVABILITY_EVENTS, buildObservabilityEvent } from '@/lib/observability/events.js';
 
 const FLOWS = [
@@ -60,6 +61,35 @@ beforeEach(() => {
   trackCalls.length = 0;
   window.localStorage.clear();
   window.localStorage.setItem('sf_auth_user', 'valentin');
+});
+
+describe('account_id (ETP-6230)', () => {
+  afterEach(() => clearSessionIdentity());
+
+  it('is attached from the session clientId on started and finished', async () => {
+    setSessionIdentity({ clientId: 'client-1' });
+    trackWalkthroughStarted({ flowId: 'create-contact', status: 'new', total: 15, source: 'launcher' });
+    trackWalkthroughFinished({ flowId: 'create-contact', status: 'completed', stepId: 'x', stepIndex: 1, totalSteps: 15, durationMs: 1 });
+    await flush();
+
+    assert.equal(onlyCall('walkthrough_started').properties.account_id, 'client-1');
+    assert.equal(onlyCall('walkthrough_finished').properties.account_id, 'client-1');
+  });
+
+  it('is omitted when the clientId is an empty string', async () => {
+    setSessionIdentity({ clientId: '' });
+    trackWalkthroughStarted({ flowId: 'create-contact', status: 'new', total: 15, source: 'launcher' });
+    await flush();
+
+    assert.equal('account_id' in onlyCall('walkthrough_started').properties, false);
+  });
+
+  it('is omitted when there is no clientId', async () => {
+    trackWalkthroughStarted({ flowId: 'create-contact', status: 'new', total: 15, source: 'launcher' });
+    await flush();
+
+    assert.equal('account_id' in onlyCall('walkthrough_started').properties, false);
+  });
 });
 
 describe('the descriptors the core hands over', () => {

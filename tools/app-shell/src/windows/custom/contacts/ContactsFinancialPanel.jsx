@@ -4,6 +4,7 @@ import { useUI } from '@/i18n';
 import { useContactsCacheInvalidation } from './contactsCacheInvalidation';
 import BillingPreferencesForm from './BillingPreferencesForm';
 import FiscalDefaultsSection from './FiscalDefaultsSection';
+import SepaMandateSection from './SepaMandateSection';
 import ContactsSummaryWidget from './ContactsSummaryWidget';
 
 
@@ -326,6 +327,14 @@ export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalo
         readOnly={editing === false}
         apiBaseUrl={apiBaseUrl}
         data-testid="FiscalDefaultsSection__d55d36" />
+      {/* SEPA direct-debit mandate — customers only, behind the sepaRemittances capability
+          (ETP-6148). Draws its own divider and renders nothing when it does not apply. */}
+      <SepaMandateSection
+        data={data}
+        onChange={onChange}
+        readOnly={editing === false}
+        apiBaseUrl={apiBaseUrl}
+        data-testid="SepaMandateSection__d55d36" />
     </div>
   );
 }
