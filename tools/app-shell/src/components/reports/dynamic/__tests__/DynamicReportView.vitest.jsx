@@ -273,6 +273,17 @@ describe('DynamicReportView — comparison and chips', () => {
 });
 
 describe('DynamicReportView — split, errors and exports', () => {
+  it('with dateFrom after dateTo no /query is sent', async () => {
+    renderView();
+    await waitFor(() => expect(rowIds()).toHaveLength(2));
+    const before = queries().length;
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__dateFrom'), { target: { value: '2026-12-01' } });
+    await new Promise((r) => setTimeout(r, 450)); // longer than the debounce
+    expect(queries()).toHaveLength(before);
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__dateFrom'), { target: { value: '2026-10-01' } });
+    await waitFor(() => expect(queries()).toHaveLength(before + 1));
+    expect(queries().at(-1)).toMatchObject({ dateFrom: '2026-10-01' });
+  });
   it('with a split dimension, a leaf account lists its parts by that dimension', async () => {
     renderView();
     await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));

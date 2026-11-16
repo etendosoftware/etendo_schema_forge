@@ -102,15 +102,16 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   const queryParams = useMemo(() => ({
     acctSchemaId: defaults.acctSchemaId || '',
     orgId: state.orgId,
-    dateFrom: state.dateFrom,
-    dateTo: state.dateTo,
+    // An invalid range (from > to) leaves the dates blank, so the query, the split and the exports stay idle.
+    dateFrom: hasRange ? state.dateFrom : '',
+    dateTo: hasRange ? state.dateTo : '',
     bPartnerId: state.bPartnerId,
     productId: state.productId,
     showOnlyAccountsWithValue: 'true',
     columns: state.columns,
     periods: plan ? serializePeriods(plan.buckets) : '',
     hiddenCount: String(plan?.hiddenCount ?? 0),
-  }), [defaults.acctSchemaId, state.orgId, state.dateFrom, state.dateTo, state.bPartnerId, state.productId, state.columns, plan]);
+  }), [defaults.acctSchemaId, state.orgId, state.dateFrom, state.dateTo, hasRange, state.bPartnerId, state.productId, state.columns, plan]);
 
   const { data, loading, error, errorCode, settled } = useReportQuery(report.id, queryParams, { locale });
   const telemetry = useReportTelemetry(report.id, { source, paramsKey: JSON.stringify(queryParams), settled, errorCode });
@@ -262,7 +263,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
               key={format}
               variant="ghost"
               className="h-9 px-3 gap-1.5 text-sm"
-              disabled={!data || exporting !== null || (exportTooLong && format !== 'pdf')}
+              disabled={!data || !hasRange || exporting !== null || (exportTooLong && format !== 'pdf')}
               onClick={() => exportAs(format)}
               data-testid={`DynamicReportView__export-${format}`}
             >
@@ -342,7 +343,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
                   onToggle={toggleRow}
                   splitBy={state.splitBy}
                   splits={splits}
-                  onToggleSplit={toggleSplit}
+                  onToggleSplit={hasRange ? toggleSplit : undefined}
                   onOpenLedger={canOpen(LEDGER_REPORT_ID) ? openLedger : null}
                   data-testid="DynamicReportTable__c51cea" />
                 {(answered.hiddenCount > 0 || hasPartial) && (
