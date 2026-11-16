@@ -26582,6 +26582,8 @@
     "dynamicReportCollapseRow": "Collapse {name}",
     "reportErrorOrgAccess": "You do not have access to this organization.",
     "reportErrorReportAccess": "You do not have access to this report.",
+    "reportErrorPeriodRangeTooLong": "The period range is too long for this format. Choose a shorter range or fewer periods.",
+    "reportErrorInvalidPeriods": "The periods requested are not valid. Review the dates and try again.",
     "dynamicReportErrorGeneric": "The report could not be loaded.",
     "dynamicReportOpening": "Opening balance",
     "dynamicReportDebit": "Debit",

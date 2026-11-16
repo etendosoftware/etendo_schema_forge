@@ -26820,6 +26820,8 @@
     "dynamicReportCollapseRow": "Contraer {name}",
     "reportErrorOrgAccess": "No tienes acceso a esta organización.",
     "reportErrorReportAccess": "No tienes acceso a este informe.",
+    "reportErrorPeriodRangeTooLong": "El rango de períodos es demasiado largo para este formato. Elige un rango más corto o menos períodos.",
+    "reportErrorInvalidPeriods": "Los períodos solicitados no son válidos. Revisa las fechas e inténtalo de nuevo.",
     "dynamicReportErrorGeneric": "No se pudo cargar el informe.",
     "dynamicReportOpening": "Saldo inicial",
     "dynamicReportDebit": "Debe",

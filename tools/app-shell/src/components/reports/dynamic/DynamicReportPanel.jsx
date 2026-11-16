@@ -49,15 +49,14 @@ export default function DynamicReportPanel({
   if (collapsed) {
     // Desktop: a narrow strip; mobile: a bar across the top. Both keep the filters one click away.
     return (
-      <aside id={PANEL_ID} className="shrink-0 flex md:flex-col items-center gap-2 bg-card border-b md:border-b-0 md:border-r border-border/30 px-3 py-2 md:w-10 md:px-0 md:py-3" data-testid="DynamicReportPanel__strip">
+      <aside className="shrink-0 flex md:flex-col items-center gap-2 bg-card border-b md:border-b-0 md:border-r border-border/30 px-3 py-2 md:w-10 md:px-0 md:py-3" data-testid="DynamicReportPanel__strip">
         <button
           type="button"
           ref={expandRef}
           aria-expanded={false}
-          aria-controls={PANEL_ID}
           aria-label={toggleLabel}
           title={toggleLabel}
-          className="relative w-8 h-8 rounded-lg flex items-center justify-center hover:bg-muted focus-visible:outline focus-visible:outline-2"
+          className="relative h-8 w-8 md:w-8 max-md:w-full max-md:justify-start max-md:gap-2 rounded-lg flex items-center justify-center hover:bg-muted focus-visible:outline focus-visible:outline-2"
           onClick={() => onToggleCollapsed?.(false)}
           data-testid="DynamicReportPanel__expand"
         >
@@ -68,8 +67,8 @@ export default function DynamicReportPanel({
               {activeFilterCount}
             </span>
           )}
+          <span className="text-xs font-semibold md:hidden">{ui('customizeReport')}</span>
         </button>
-        <span className="text-xs font-semibold md:hidden">{ui('customizeReport')}</span>
       </aside>
     );
   }

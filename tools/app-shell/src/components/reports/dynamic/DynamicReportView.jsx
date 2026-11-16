@@ -29,7 +29,9 @@ const EXPORTS = [
 ];
 const SPLIT_DIMENSIONS = [['org', 'orgId'], ['bpartner', 'bPartnerId'], ['product', 'productId']];
 const COLUMN_LABELS = { total: 'dynamicReportColumnsTotal', month: 'dynamicReportColumnsMonth', quarter: 'dynamicReportColumnsQuarter' };
-const ERROR_KEYS = { org_access_denied: 'reportErrorOrgAccess', report_access_denied: 'reportErrorReportAccess' };
+const ERROR_KEYS = { org_access_denied: 'reportErrorOrgAccess', report_access_denied: 'reportErrorReportAccess',
+  period_range_too_long: 'reportErrorPeriodRangeTooLong', invalid_periods: 'reportErrorInvalidPeriods',
+};
 
 const pick = (labelObj, locale) => labelObj?.[locale] || labelObj?.en_US || labelObj?.es_ES || '';
 
@@ -92,7 +94,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   const mode = modeOf(state.compare);
   // ETP-6239: every request carries both compared ranges, so the comparison is a display choice, not a request.
   const range = useMemo(() => ({ dateFrom: state.dateFrom, dateTo: state.dateTo }), [state.dateFrom, state.dateTo]);
-  const hasRange = Boolean(state.dateFrom && state.dateTo);
+  const hasRange = Boolean(state.dateFrom && state.dateTo && state.dateFrom <= state.dateTo);
   const plan = useMemo(
     () => (hasRange ? periodBuckets(range, state.columns, { maxShown: SCREEN_PERIODS[state.columns] }) : null),
     [hasRange, range, state.columns],

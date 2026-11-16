@@ -1045,7 +1045,7 @@ describe('DynamicReportView — collapsible panel (ETP-6239 D8/D9)', () => {
     fireEvent.click(screen.getByTestId('DynamicReportPanel__collapse'));
     const expand = screen.getByTestId('DynamicReportPanel__expand');
     expect(expand).toHaveAttribute('aria-expanded', 'false');
-    expect(expand).toHaveAttribute('aria-controls', 'dynamic-report-panel');
+    expect(expand).not.toHaveAttribute('aria-controls');
     expect(expand).toHaveAttribute('aria-label', 'dynamicReportShowPanel');
     fireEvent.click(expand);
     expect(screen.getByTestId('DynamicReportPanel')).toBeInTheDocument();

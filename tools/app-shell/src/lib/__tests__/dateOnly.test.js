@@ -399,9 +399,9 @@ describe('dateOnly helpers', () => {
       after(() => { process.env.TZ = original; });
 
       it('formatCalendarMonthShort: "{mmm} {yy}" without a trailing dot, per locale', () => {
-        assert.equal(formatCalendarMonthShort('2026-09-01', 'es-ES'), 'sept 26');
+        assert.equal(formatCalendarMonthShort('2026-09-01', 'es-ES'), 'sep 26');
         assert.equal(formatCalendarMonthShort('2026-01-31', 'es-ES'), 'ene 26');
-        assert.equal(formatCalendarMonthShort('2026-09-15', 'en-GB'), 'Sept 26');
+        assert.equal(formatCalendarMonthShort('2026-09-15', 'en-GB'), 'Sep 26');
         assert.equal(formatCalendarMonthShort('2026-12-31', 'en-US'), 'Dec 26');
       });
 
