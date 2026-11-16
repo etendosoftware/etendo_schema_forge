@@ -228,7 +228,7 @@ describe('report-api NEO fetch — Accept-Language (ETP-5013)', () => {
       // The piece most likely to be silently dropped in a refactor: the header
       // code would still look correct while receiving `undefined` forever.
       assert.match(PLUGIN_SRC,
-        /fetchReportData\(reportId, \{ limit, session, params, locale \}\)/);
+        /fetchReportData\(reportId, \{ limit, session, params, locale, format \}\)/);
     });
 
     it('has no locale-less fetchReportData call site left (GET /data removed, ETP-6080)', () => {

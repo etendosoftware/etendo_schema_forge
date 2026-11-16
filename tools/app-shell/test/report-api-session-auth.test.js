@@ -568,7 +568,7 @@ describe('report-api.js — session-cookie authentication (ETP-5460)', () => {
     });
 
     it('runs the render SQL through core runReportSql, not a copy of it (ETP-6080 W4)', () => {
-      assert.match(PLUGIN_SRC, /\{ rows, openingRows, operandRows \} = await runReportSql\(pool, contract, \{[^}]*mainSql: sql/);
+      assert.match(PLUGIN_SRC, /\{ rows, openingRows, operandRows, periodRows, periodSpec \} = await runReportSql\(pool, contract, \{[^}]*mainSql: sql/);
       assert.doesNotMatch(PLUGIN_SRC, /applyPlaceholders\(contract\.sql\.(openingQuery|operandsQuery)/);
     });
 
