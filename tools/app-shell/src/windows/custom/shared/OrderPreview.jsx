@@ -219,7 +219,8 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
       hasPdf={hasPdf}
       sendLabel={ui('orderPreviewSend')}
       downloadLabel={ui('orderPreviewDownloadPdf')}
-      editLabel={ui('orderPreviewEdit')}
+      editLabel={readOnly ? ui('view') : ui('orderPreviewEdit')}
+      readOnly={readOnly}
       data-testid="PreviewActionButtons__90f59a" />
   );
 

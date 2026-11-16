@@ -297,6 +297,13 @@
           "windowId": "94EAA455D2644E04AB25D93BE5157B6D"
         },
         {
+          "name": "remittance",
+          "label": "Remittance",
+          "favname": "Remittance",
+          "accessWindowId": "FF8080812E71F7C7012E71FD0499001B",
+          "capability": "sepaRemittances"
+        },
+        {
           "name": "match-rule",
           "label": "Match Rule",
           "favname": "Match Rule",

@@ -237,6 +237,17 @@ def _new_run_id(target: str, now: dt.datetime) -> str:
     return f"{now.strftime('%Y%m%dT%H%M')}-{target}-{secrets.token_hex(2)}"
 
 
+def _selected_probes(suite: Suite, wanted: str | None) -> list[Probe]:
+    """`--probe a,b,c` in suite order (ETP-5848: one comparison fills its slots with several
+    probes instead of waiting for the slowest attempt of each); none means every probe."""
+    if not wanted:
+        return list(suite.probes)
+    ids = [p.strip() for p in wanted.split(",") if p.strip()]
+    for probe_id in ids:
+        suite.probe(probe_id)  # an unknown id fails here, naming the known ones
+    return [p for p in suite.probes if p.id in ids]
+
+
 def _resolve_suite_path(name: str) -> Path:
     candidate = Path(name)
     if candidate.exists():
@@ -290,6 +301,99 @@ async def _describe_target(target: dict[str, Any]) -> dict[str, Any]:
             "catalogue": None,
             "error": {"kind": kind, "detail": _error_detail(exc)},
         }
+
+
+#: The Etendo GO MCP tool that runs and stores routines (ETP-6236).
+ROUTINE_TOOL = "etendo_routine"
+#: Appended to the prompt of a task whose routine was preloaded (Valentin, 2026-11-13): the child KR
+#: measures what the routine is worth when the user knows it exists, not whether the agent finds it
+#: on its own (it did not, 0 of 2, in the 2026-11-12 pilot). Names no tool (the prompt lint).
+ROUTINE_HINT = "Tenés una rutina guardada para esto: revisá tus rutinas."
+
+
+async def _routine_call(session: Any, args: dict[str, Any]) -> tuple[bool, Any]:
+    """One `etendo_routine` call: (ok, parsed body or error text). Never raises on a tool error."""
+    result = await session.call_tool(ROUTINE_TOOL, args)
+    texts = [c.text for c in result.content if getattr(c, "type", None) == "text"]
+    try:
+        body: Any = json.loads(texts[0]) if texts else None
+    except json.JSONDecodeError:
+        body = texts[0]
+    return not getattr(result, "isError", False), body
+
+
+async def install_routines(target: dict[str, Any], probes: list[Probe]) -> dict[str, Any]:
+    """Save every probe's routine on the target, replacing one of the same name (ETP-6236).
+
+    Runs before the first attempt, in a session of its own, under the target's user: routines are
+    personal, so the agent of every attempt sees exactly these. Returns
+    `{probeId: {name, version}}` for run.json. Raises RuntimeError naming the routine that the
+    server refused: a column measured with a routine missing would not be the column it says.
+    """
+    installed: dict[str, Any] = {}
+    async with mcp_session(target) as session:
+        for probe in probes:
+            if probe.routine is None:
+                continue
+            await _routine_call(session, {"mode": "delete", "name": probe.routine.name})
+            ok, body = await _routine_call(session, probe.routine.save_args())
+            if not ok:
+                raise RuntimeError(f"routine {probe.routine.name!r} of {probe.id!r} was refused: "
+                                   f"{json.dumps(body, ensure_ascii=False)[:500]}")
+            installed[probe.id] = {"name": probe.routine.name, "version": body.get("version")}
+    return installed
+
+
+async def remove_routines(target: dict[str, Any], installed: dict[str, Any] | None) -> None:
+    """Delete the routines a run installed, so the next run without routines starts clean.
+
+    Best effort: a routine left behind is caught by the next run's `prepare_routines` check.
+    """
+    if not installed:
+        return
+    try:
+        async with mcp_session(target) as session:
+            for entry in installed.values():
+                await _routine_call(session, {"mode": "delete", "name": entry["name"]})
+    except Exception as exc:  # noqa: BLE001 - the measurement is already on file
+        print(f"  (routines of {target['name']!r} not removed: {type(exc).__name__}: {exc})",
+              file=sys.stderr)
+
+
+async def saved_routines(target: dict[str, Any]) -> list[str]:
+    """The names of the routines the target's user has saved; empty when the tool is absent."""
+    async with mcp_session(target) as session:
+        ok, body = await _routine_call(session, {"mode": "list"})
+    if not ok or not isinstance(body, dict):
+        raise RuntimeError(f"{ROUTINE_TOOL} list failed: {json.dumps(body, ensure_ascii=False)[:300]}")
+    return [r.get("name") for r in body.get("routines") or []]
+
+
+async def prepare_routines(target: dict[str, Any], server: dict[str, Any] | None,
+                           probes: list[Probe]) -> tuple[dict[str, Any] | None, str | None]:
+    """The routine state a target needs before its first attempt (ETP-6236).
+
+    - `routines = true`: every probe's routine is installed; returns what was installed.
+    - Any other Etendo GO target whose MCP offers routines: its user must have NONE saved, or the
+      column without routines (the KR2.1 itself) would be measured with them.
+    Returns (installed or None, refusal or None).
+    """
+    tools = set((server or {}).get("tools") or [])
+    try:
+        if cfg.target_routines(target):
+            if ROUTINE_TOOL not in tools:
+                return None, f"`routines = true` but the target offers no {ROUTINE_TOOL}"
+            if not any(p.routine for p in probes):
+                return None, "`routines = true` but no selected probe declares a routine"
+            return await install_routines(target, probes), None
+        if target.get("platform") == "etendo-go" and ROUTINE_TOOL in tools:
+            names = await saved_routines(target)
+            if names:
+                return None, (f"its user has saved routines {names}: a run without routines must not "
+                              f"see any. Delete them, or measure this target with `routines = true`")
+    except (RuntimeError, ValueError) as exc:
+        return None, str(exc)
+    return None, None
 
 
 def _silent_wrong(
@@ -392,6 +496,7 @@ def _run_header(
     concurrency: int = 1,
     seed: int | None = None,
     compare_id: str | None = None,
+    routines: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "schemaVersion": RUN_SCHEMA_VERSION,
@@ -421,6 +526,11 @@ def _run_header(
         # harness-errored attempts come on top, capped at `repeat` per probe.
         "repeat": repeat,
         "suites": [{"file": suite.path.name, "sha": suite.sha}],
+        # ETP-6236: the routines preloaded for the "Etendo + routine" column, {probeId: {name,
+        # version}}; null when the target ran without routines.
+        "routines": routines,
+        # ...and the sentence appended to their prompts.
+        "routineHint": ROUTINE_HINT if routines else None,
     }
 
 
@@ -439,11 +549,59 @@ async def _verify_effect(
     axis, never folded into `outcome`: an agent reporting OKAY while the effect
     is missing is a different and more dangerous result than an honest failure.
     `None` means "could not verify", which is not the same as "verified absent".
+
+    ETP-5848: an effect with `anyOf` alternatives (two ways a platform records the
+    same result) is verified when any of them is; it is absent only when every one
+    was checked and found absent, and not verifiable when none was found and one
+    could not be checked.
     """
     effect = probe.expect_effect
     if effect is None:
         return None, None, None
+    alternatives = effect.any_of or (effect,)
+    results = []
+    for one in alternatives:
+        results.append(await _verify_one_effect(one, probe.id, target, run_id=run_id, timestamp=timestamp,
+                                                saved=saved, marker=marker))
+        if results[-1][0] is True:
+            break
+    if not effect.any_of:
+        return results[0]
+    details = [r[1] or {"harnessError": r[2]} for r in results]
+    if any(r[0] is True for r in results):
+        return True, {"anyOf": details}, None
+    errored = next((r[2] for r in results if r[2]), None)
+    if errored:
+        return None, None, errored
+    return False, {"anyOf": details}, None
 
+
+def _effect_summary(detail: dict[str, Any]) -> str:
+    """`tool -> N rows` (with its `where`), or each alternative of an `anyOf` effect."""
+    if "anyOf" in detail:
+        return " | ".join(_effect_summary(d) if "tool" in d else "not verifiable" for d in detail["anyOf"])
+    where = f", where {json.dumps(detail['where'], ensure_ascii=False)}" if detail.get("where") else ""
+    return f"{detail.get('tool')} -> {detail.get('rows')} rows{where}"
+
+
+def _effect_rows(detail: dict[str, Any]) -> int | None:
+    if "anyOf" in detail:
+        rows = [d.get("rows") for d in detail["anyOf"] if isinstance(d.get("rows"), int)]
+        return max(rows) if rows else None
+    return detail.get("rows")
+
+
+async def _verify_one_effect(
+    effect: Any,
+    probe_id: str,
+    target: dict[str, Any],
+    *,
+    run_id: str,
+    timestamp: str,
+    saved: dict[str, Any] | None = None,
+    marker: str | None = None,
+) -> tuple[bool | None, dict[str, Any] | None, dict[str, Any] | None]:
+    """One effect check (see `_verify_effect`)."""
     known = dict(saved or {})
     unresolved = False
     try:
@@ -452,7 +610,9 @@ async def _verify_effect(
             if effect.lookup:
                 # ETP-5848: reads that find what the agent created; failures surface below.
                 lookups = [replace(s, args=interpolate_args(
-                    s.args, run_id=run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
+                    s.args, run_id=run_id, probe_id=probe_id, timestamp=timestamp, marker=marker
+                ), aggregate=interpolate_args(
+                    s.aggregate, run_id=run_id, probe_id=probe_id, timestamp=timestamp, marker=marker
                 )) for s in effect.lookup]
                 done = await run_steps(lookups, lambda tool, args: call_tool(session, tool, args),
                                        phase="lookup", saved=known, stop_on_error=True,
@@ -461,7 +621,7 @@ async def _verify_effect(
                 if failed:
                     raise VerificationError(f"lookup[{failed['index']}] {failed['tool']}: {failed['error']}")
             call_args = interpolate_args(
-                effect.args, run_id=run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
+                effect.args, run_id=run_id, probe_id=probe_id, timestamp=timestamp, marker=marker
             )
             try:
                 # A check may name what setup created (`{{steps.invoice.id}}`, D41).
@@ -480,7 +640,7 @@ async def _verify_effect(
                     payload = rows_at(payload, effect.rows_at)
                 if effect.where:
                     where = resolve_refs(interpolate_args(
-                        effect.where, run_id=run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
+                        effect.where, run_id=run_id, probe_id=probe_id, timestamp=timestamp, marker=marker
                     ), known)
                     rows = count_matching(payload, where)
                 else:
@@ -542,6 +702,10 @@ async def _run_phase(
             s,
             args=interpolate_args(
                 s.args, run_id=run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
+            ),
+            # ETP-5848: an aggregate's `where` names the attempt's records ("Banco {{marker}}").
+            aggregate=interpolate_args(
+                s.aggregate, run_id=run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
             ),
         )
         for s in declared
@@ -618,6 +782,8 @@ class AttemptContext:
     tag: str = ""
     #: The target's platform when the suite is v2; None for a v1 suite.
     platform: str | None = None
+    #: ETP-6236: the preloaded routines, {probeId: {name, version}}; their prompts get ROUTINE_HINT.
+    routines: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -673,8 +839,11 @@ async def run_attempt(
     timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     started_at = _now_ms()
     marker = attempt_marker(ctx.marker_prefix, probe.id, attempt)
+    text = probe.prompt
+    if ctx.routines and probe.id in ctx.routines:
+        text = f"{text} {ROUTINE_HINT}"
     prompt = interpolate(
-        probe.prompt, run_id=ctx.token_run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
+        text, run_id=ctx.token_run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
     )
     tag = f"{ctx.tag}{probe.id} a{attempt}"
     again = f", replaces {replaces}" if replaces else ""
@@ -808,9 +977,9 @@ async def run_attempt(
         elif verified is False:
             # The headline case this amendment exists for.
             claim = " despite the agent reporting OKAY" if verdict["outcome"] == "OKAY" else ""
-            print(f"    {tag} effect ABSENT{claim} ({detail['tool']} -> {detail['rows']} rows)")
+            print(f"    {tag} effect ABSENT{claim} ({_effect_summary(detail)})")
         elif verified is True:
-            print(f"    {tag} effect verified ({detail['tool']} -> {detail['rows']} rows)")
+            print(f"    {tag} effect verified ({_effect_summary(detail)})")
 
         ctx.events.emit(
             PROBE_FINISHED,
@@ -824,7 +993,7 @@ async def run_attempt(
                 EFFECT_CHECKED,
                 probe=probe.id, attempt=attempt,
                 verified=verified,
-                rows=None if detail is None else detail.get("rows"),
+                rows=None if detail is None else _effect_rows(detail),
             )
     except SetupFailed as exc:
         # The agent never ran: there is nothing to measure (D41). A 429 is
@@ -903,9 +1072,62 @@ async def run_attempt(
             result["finishedAt"] = _now_ms()
             _write_json(attempt_path(ctx.run_dir, probe.id, attempt), result)
 
+    # Valentin, 2026-11-05: a failed attempt on a target that declares a feedback tool is reported
+    # through it, AFTER the measurement and in a session of its own, so the failure reaches the
+    # people who can fix it and costs the comparison nothing. A harness error is not a product
+    # failure (it is replaced, D43) and is never reported.
+    feedback_tool = ctx.target.get("feedback_on_failure")
+    if feedback_tool and result.get("success") is False and not result.get("harnessError"):
+        result["failureFeedback"] = await _send_failure_feedback(ctx.target, feedback_tool, result)
+
     result["finishedAt"] = _now_ms()
     _write_json(attempt_path(ctx.run_dir, probe.id, attempt), result)
     return result, stop_run
+
+
+def failure_feedback_args(result: dict[str, Any]) -> dict[str, Any]:
+    """The feedback-tool arguments for a failed attempt: the agent's own report, plus what the
+    harness saw that the agent may not have (the verified effect absent, a wrong answer, tool
+    calls that returned an error). The outcome is the harness's, not the agent's claim."""
+    verdict = result.get("verdict") or {}
+    why = []
+    if result.get("effectVerified") is False:
+        check = result.get("effectCheck") or {}
+        why.append(f"the expected effect was not found ({_effect_summary(check)})")
+    if result.get("answerVerified") is False:
+        why.append(f"the answer did not match the check ({json.dumps(result.get('answerCheck'), ensure_ascii=False)[:300]})")
+    if not why:
+        why.append(f"the agent reported {verdict.get('outcome') or 'no verdict'}")
+    claimed = f" The agent reported {verdict['outcome']}: {verdict.get('summary')}" if verdict.get("outcome") else ""
+    failures = list(verdict.get("failures") or [])
+    reported = {f.get("tool") for f in failures}
+    for call in result.get("toolCalls") or []:
+        if call.get("error") and call.get("tool") not in reported:
+            failures.append({"tool": call.get("tool"), "payload": call.get("args") or {},
+                             "error": str(call.get("result"))[:500], "recovered": False})
+    args = {
+        "outcome": "ERROR",
+        "summary": f"[mcp-tests {result.get('runId')} · {result.get('probeId')} a{result.get('attempt')}] "
+                   f"Task not achieved: {'; '.join(why)}. Prompt: {result.get('prompt')!r}.{claimed}"[:2000],
+        "achieved": verdict.get("achieved") or "Not verified by the harness.",
+    }
+    for key in ("plannedApproach", "howKnown", "frictions", "wastedCalls", "suggestions"):
+        if verdict.get(key):
+            args[key] = verdict[key]
+    if failures:
+        args["failures"] = failures
+    return args
+
+
+async def _send_failure_feedback(target: dict[str, Any], tool: str, result: dict[str, Any]) -> dict[str, Any]:
+    """Call the target's feedback tool for a failed attempt; never raises (it is not measured)."""
+    args = failure_feedback_args(result)
+    try:
+        async with mcp_session(target) as session:
+            answer = await call_tool(session, tool, args)
+        return {"tool": tool, "ok": True, "response": json.dumps(answer, ensure_ascii=False)[:500]}
+    except Exception as exc:  # noqa: BLE001 - feedback is best effort and outside the measurement
+        return {"tool": tool, "ok": False, "error": f"{type(exc).__name__}: {exc}"[:500]}
 
 
 async def run_target(
@@ -1152,6 +1374,7 @@ def _open_target_run(
     compare_id: str | None,
     preflight_error: dict[str, Any] | None,
     platform: str | None = None,
+    routines: dict[str, Any] | None = None,
 ) -> AttemptContext:
     """Write one target's run.json, open its event stream, print its banner."""
     _write_json(
@@ -1170,6 +1393,7 @@ def _open_target_run(
             concurrency=concurrency,
             seed=seed,
             compare_id=compare_id,
+            routines=routines,
         ),
     )
     # The live stream (§6.5). Additive and never authoritative: `run.json` and
@@ -1209,6 +1433,8 @@ def _open_target_run(
               + (" · feedback tools ON" if provider.get("feedbackTools") else ""))
         print(f"  suite       {suite.path.name} @ {suite.sha} ({len(probes)} probe(s))")
     print(f"  concurrency {concurrency}")
+    if routines is not None:
+        print(f"  routines    {len(routines)} preloaded ({', '.join(sorted(routines))})")
     if server and not server["error"]:
         info, cat = server["serverInfo"], server["catalogue"]
         # A server may omit either; say so rather than print "None None".
@@ -1230,6 +1456,7 @@ def _open_target_run(
         preflight_error=preflight_error,
         tag=f"[{target['name']}] " if compare_id else "",
         platform=platform,
+        routines=routines,
     )
 
 
@@ -1407,7 +1634,7 @@ async def _run_single(
         return 0
 
     suite = load_suite(_resolve_suite_path(args.suite))
-    probes = [suite.probe(args.probe)] if args.probe else list(suite.probes)
+    probes = _selected_probes(suite, args.probe)
 
     # What the target says it is, and its tool catalogue, read once before the
     # first probe (plan §6). Skipped when auth already failed: there is no
@@ -1438,6 +1665,11 @@ async def _run_single(
         error = error or _bind_fixture(suite, plan, baseline)
         if error:
             problems.append(error)
+    routines = None
+    if not problems and not preflight_error:
+        routines, error = await prepare_routines(target, server, plan.runnable)
+        if error:
+            problems.append(f"routines: {error}")
     if problems:
         print("Suite refused for this target:\n  " + "\n  ".join(problems), file=sys.stderr)
         return 2
@@ -1453,11 +1685,12 @@ async def _run_single(
         provider=provider, max_steps=max_steps, max_result_chars=max_result_chars,
         repeat=repeat, suite=suite, probes=plan.runnable, server=server,
         harness=_harness_revision(), concurrency=concurrency, seed=args.seed,
-        compare_id=None, preflight_error=preflight_error, platform=platform,
+        compare_id=None, preflight_error=preflight_error, platform=platform, routines=routines,
     )
     _write_not_possible(ctx, plan)
     outcome = await run_target(ctx, plan.runnable, concurrency=concurrency, seed=args.seed)
     _finish_target(ctx, outcome)
+    await remove_routines(target, routines)
     if outcome.stopped:
         print(_stop_message(provider), file=sys.stderr)
     else:
@@ -1489,7 +1722,7 @@ async def _run_compare(
         print("--login takes one --target, not --targets.", file=sys.stderr)
         return 2
     suite = load_suite(_resolve_suite_path(args.suite))
-    probes = [suite.probe(args.probe)] if args.probe else list(suite.probes)
+    probes = _selected_probes(suite, args.probe)
     try:
         rule.resolve_parameters(suite.decision)
     except rule.RuleMismatch as exc:
@@ -1529,6 +1762,14 @@ async def _run_compare(
             print(f"Comparison aborted: target {target['name']!r}: {error}. Nothing was measured.",
                   file=sys.stderr)
             return 2
+    routine_sets = []
+    for target, server, plan in zip(targets, servers, plans):
+        installed, error = await prepare_routines(target, server, plan.runnable)
+        if error:
+            print(f"Comparison aborted: target {target['name']!r} routines: {error}. Nothing was measured.",
+                  file=sys.stderr)
+            return 2
+        routine_sets.append(installed)
 
     started_at = dt.datetime.now(dt.timezone.utc)
     compare_id = _new_compare_id(started_at)
@@ -1540,7 +1781,8 @@ async def _run_compare(
 
     contexts = []
     target_meta = []
-    for target, server, plan, (baseline, fresh, _e) in zip(targets, servers, plans, assessed):
+    for target, server, plan, (baseline, fresh, _e), installed in zip(
+            targets, servers, plans, assessed, routine_sets):
         k = cfg.target_concurrency(target, concurrency)
         run_id = f"{compare_id}-{target['name']}"
         ctx = _open_target_run(
@@ -1550,6 +1792,7 @@ async def _run_compare(
             server=server, harness=harness, concurrency=k, seed=seed,
             compare_id=compare_id, preflight_error=None,
             platform=cfg.target_platform(target) if suite.schema_version >= 2 else None,
+            routines=installed,
         )
         _write_not_possible(ctx, plan)
         contexts.append((ctx, k, plan))
@@ -1562,6 +1805,8 @@ async def _run_compare(
             # D50, plan §5.9: only `fresh` on every target is official.
             "freshness": fresh,
             "fixtureHash": (baseline or {}).get("fixtureHash"),
+            # ETP-6236: preloaded routines make this the "Etendo + routine" column.
+            "routines": installed,
         })
         print(f"  [{target['name']}] freshness {fresh['status']}"
               + (f" ({len(fresh['unverifiable'])} not verifiable: tool not offered)"
@@ -1585,6 +1830,8 @@ async def _run_compare(
     ))
     for (ctx, _k, _plan), outcome in zip(contexts, outcomes):
         _finish_target(ctx, outcome)
+    for target, installed in zip(targets, routine_sets):
+        await remove_routines(target, installed)
 
     record["finishedAt"] = _now_ms()
     _write_json(compare_dir / "compare.json", record)
@@ -1666,6 +1913,10 @@ def _compare_record(
             # holds the same baseline. Freshness itself is checked apart.
             "fixture": {"name": suite.fixture.name, "sha": suite.fixture.sha} if suite.fixture else None,
             "fixtureHashes": {t["name"]: t.get("fixtureHash") for t in targets},
+            # ETP-6236: a run with preloaded routines never pairs with one without them. Absent
+            # when no target has any, so runs from before routines still pair.
+            **({"routines": {t["name"]: sorted(r["name"] for r in (t.get("routines") or {}).values())
+                             for t in targets}} if any(t.get("routines") for t in targets) else {}),
         },
         "targets": targets,
     }
@@ -1731,7 +1982,7 @@ def main(argv: list[str] | None = None) -> int:
         default=DEFAULT_AUTH_WAIT,
         help=f"Seconds to wait for the OAuth callback (default {DEFAULT_AUTH_WAIT}).",
     )
-    parser.add_argument("--probe", help="Run only this probe id (default: every probe in the suite)")
+    parser.add_argument("--probe", help="Run only these probe ids, comma-separated (default: every probe in the suite)")
     parser.add_argument(
         "--model",
         help="Explicit override of provider.model from the config. The only "

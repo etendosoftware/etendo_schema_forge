@@ -3927,3 +3927,14 @@ ETP-5711 in com.etendoerp.go, CUT not bumped). Sibling of `R50-gl-journal-foreig
 - **2026-11-06 — Label bookkeeping.** Highest label across every local/remote ref was `R56`, gap
   `N9`; this fix is `R57`, gap `N10`. The newest pending fix on any ref was
   `20261028T120000Z__R51-etgo-survey-config-seed`.
+- **2026-11-12 — `Quotation` sequence `STARTNO` 10000 (QA round 1, CP-17; R58).** The dataset
+  shipped `STARTNO=10000` on `Quotation` and 1000000 on the other six visible series. On the local
+  DB, all 6 `Quotation` rows (5 clients, F&B with two) still held 10000; `CURRENTNEXT` ranged
+  10000–1000027. R58 rewrites `STARTNO` only, and only where it is exactly 10000. By user decision,
+  `CURRENTNEXT` is not touched: `STARTNO` is a reset base, so no number is re-issued and nothing is
+  renumbered. On La Paulina (app.etendo.ai, where QA round 1 ran) `CURRENTNEXT` is 1000044, so only
+  the starting number changes there. A tenant whose `CURRENTNEXT` sits below 1000000 (the local dev
+  DB's "QA Testing" tenant: 10000)
+  keeps issuing from there. R58 leaves that as is, and the window shows a "next number" below its
+  "starting number" for that tenant. R58 is dated after R57 (`20261112T120000Z`), so the watermark
+  of a tenant that already ran R57 does not skip it.

@@ -428,7 +428,8 @@ is active (ETP-5831, see "Fiscal section visibility"). Its body is
   (`fieldRequired`), AD lengths (`fieldMaxLengthError`), and the NIF format via `getTaxIdError`.
   Each create/update/delete persists immediately through its own request, like the IAE grid — the grid
   is not part of the page's unsaved-changes form. Backend errors are toasted with the server message
-  (`extractApiErrorMessage`) and the form stays open.
+  (`extractApiErrorMessage(res, ui)`, so a known backend error such as "Access denied to spec for
+  current role" is translated) and the form stays open.
 - **Dates:** `powerDate` is a date-only value. It is edited with the shared `DateField`, normalised to
   `yyyy-MM-dd` with local getters (`toCalendarISO`, built on `parseCalendarDate`) before it is sent,
   and displayed with `formatCalendarDate` in the UI locale — no timezone shift.

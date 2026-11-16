@@ -81,11 +81,15 @@ const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 /**
  * NEO sub-endpoints that are POSTed to but never change server state: `evaluate-display`
  * (`useDisplayLogic`, fired on every record open) and `callout` (`useCallout`, `DetailView`,
- * `SifTab`, fired on field edits). Treating them as writes made merely opening a contact wipe
- * every cached selector page, and a callout on a shipment field mark the sales order stale.
- * Add an entry only for a sub-endpoint shown to be read-only.
+ * `SifTab`, fired on field edits) and `sifDefaults` (the `InvoiceSifStep` preview of the invoice
+ * SIF fields, fired when an invoice-creating modal opens; `InvoiceSifPreset.preview()` only builds
+ * JSON). Treating them as writes made merely opening a contact wipe every cached selector page, a
+ * callout on a shipment field mark the sales order stale, and opening "Crear Factura" re-read the
+ * environment list. Add an entry only for a sub-endpoint shown to be read-only.
  */
-export const READ_ONLY_SUB_ENDPOINTS = Object.freeze(new Set(['evaluate-display', 'callout']));
+export const READ_ONLY_SUB_ENDPOINTS = Object.freeze(
+  new Set(['evaluate-display', 'callout', 'sifDefaults']),
+);
 
 /** True for a request method that can change server state. Defaults to GET like `fetch`. */
 export function isWriteMethod(method) {

@@ -1201,6 +1201,49 @@
       ],
       "rows": []
     },
+    "71ffdfc8865e7daf652e4f855e18d8bb6126fff59ba2b01e651989778533de54": {
+      "checksum": "7ba418770368ffbc61ab424a2f443d805706e087f9f48d725c77f59823ce563b",
+      "params": [
+        "FF8080812E71F7C7012E71FD0499001B"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "FF8080812FA0710E012FA0B61573005D",
+          "ad_tab_id": "FF8080812E71F7C7012E71FE49BB0021",
+          "name": "ISDISCOUNT",
+          "tab_name": "Remittance",
+          "validation_code": "@SQL=SELECT REM_REMITTANCE_TYPE.CONSOLIDATE AS ISDISCOUNT FROM REM_REMITTANCE, REM_REMITTANCE_TYPE WHERE REM_REMITTANCE.REM_REMITTANCE_TYPE_ID = REM_REMITTANCE_TYPE.REM_REMITTANCE_TYPE_ID AND REM_REMITTANCE_ID = @REM_REMITTANCE_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "FF8080812F07E6C2012F07F07007000F",
+          "ad_tab_id": "FF8080812E71F7C7012E7202F3240031",
+          "name": "IsSOTrx",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT MAX(IsSOTrx)  FROM (\nSELECT COALESCE(isreceipt,'A') AS IsSOTrx FROM FIN_PAYMENT WHERE FIN_PAYMENT_ID = @FIN_PAYMENT_ID@\nUNION\nSELECT COALESCE(IsSOTrx,'A') AS IsSOTrx FROM C_ORDER WHERE C_ORDER_ID = @C_ORDER_ID@\nUNION\nSELECT COALESCE(IsSOTrx,'A') AS IsSOTrx FROM C_INVOICE WHERE C_INVOICE_ID = @C_INVOICE_ID@) a"
+        },
+        {
+          "ad_auxiliarinput_id": "05F59A284DD445D284E40B61661EA2D5",
+          "ad_tab_id": "FF8080813075578701307561B4550020",
+          "name": "OBSEPAD_IS_DIRECT_DEBIT",
+          "tab_name": "Bank Instructions",
+          "validation_code": "@SQL=SELECT 'Y' FROM REM_REMITTANCE_TYPE RT \nINNER JOIN REM_REMITTANCE R ON (RT.REM_REMITTANCE_TYPE_ID = R.REM_REMITTANCE_TYPE_ID) \nWHERE R.REM_REMITTANCE_ID=@REM_Remittance_ID@ AND RT.CLASSNAME LIKE 'org.openbravo.sepa.iso20022.coredirectdebit.customertobank.%DirectDebit'"
+        },
+        {
+          "ad_auxiliarinput_id": "FF8080812F07FB2E012F080038E30021",
+          "ad_tab_id": "00ACA8F9B07E491483DD9EA4F8D93ED0",
+          "name": "IsSOTrx",
+          "tab_name": "Settled",
+          "validation_code": "@SQL=SELECT COALESCE(ISRECEIPT,'Y') AS ISRECEIPT FROM FIN_PAYMENT WHERE FIN_PAYMENT_ID = @FIN_PAYMENT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "FF8080812F07FB2E012F0800D46C0023",
+          "ad_tab_id": "BA373AF6034149378E1ACD65B0EEFE7D",
+          "name": "IsSOTrx",
+          "tab_name": "Protested",
+          "validation_code": "@SQL=SELECT COALESCE(ISRECEIPT,'Y') AS ISRECEIPT FROM FIN_PAYMENT WHERE FIN_PAYMENT_ID = @FIN_PAYMENT_ID@"
+        }
+      ]
+    },
     "7a3f9d7a689e84e5d068b46c04ad4a3a05634954d924672e2d18f287019437e0": {
       "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "params": [
@@ -1952,7 +1995,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
-      "checksum": "57df016482c9b37e88cc5f8dd064c3c8d348b8617fead857463b72cc7e7f9b29",
+      "checksum": "052728576aad38457540d210c19dc283c8bf0e1aa27a898cb3ae31514c16766b",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -2137,7 +2180,7 @@
           "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
           "name": "PSD2_HasInactiveConnections",
           "tab_name": "Account",
-          "validation_code": "@SQL=select count(1) from psd2_finacc_connection where fin_financial_account_id=@Fin_Financial_Account_ID@ and connection_status='IN'"
+          "validation_code": "@SQL=select count(1) from psd2_finacc_connection where fin_financial_account_id=@Fin_Financial_Account_ID@ and (connection_status in ('IN','DI') or (connection_status='AC' and last_fail_at is not null and (last_success_at is null or last_fail_at > last_success_at)))"
         },
         {
           "ad_auxiliarinput_id": "5697505A5B024A7BBA63BC5234251BD0",

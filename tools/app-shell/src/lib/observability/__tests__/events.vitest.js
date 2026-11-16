@@ -236,3 +236,33 @@ describe('product_movements_tab_opened event', () => {
     expect(JSON.stringify(properties)).not.toMatch(/ABC|XYZ|u1|admin|a@x\.com/);
   });
 });
+
+// ETP-6050 — the adoption event of the Invoice Inbox; counted by this exact name over `session_started`.
+describe('invoice_inbox_opened event', () => {
+  const declared = { account_id: 'client-1', category: 'product_usage', specName: 'invoice-inbox' };
+
+  it('is registered under its name, on the Mixpanel channel only', () => {
+    expect(OBSERVABILITY_EVENTS.INVOICE_INBOX_OPENED.name).toBe('invoice_inbox_opened');
+    expect(OBSERVABILITY_EVENTS.INVOICE_INBOX_OPENED.channels).toEqual([OBSERVABILITY_CHANNELS.MIXPANEL]);
+  });
+
+  it('allows exactly the tenant, the category and the spec', () => {
+    expect([...OBSERVABILITY_EVENTS.INVOICE_INBOX_OPENED.properties].sort()).toEqual(
+      [
+        OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+        OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+        OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+      ].sort(),
+    );
+    const { name, properties } = buildObservabilityEvent(OBSERVABILITY_EVENTS.INVOICE_INBOX_OPENED, declared);
+    expect(name).toBe('invoice_inbox_opened');
+    expect(properties).toEqual(declared);
+  });
+
+  it('drops anything that is not declared (file name, vendor, amount, document id)', () => {
+    const { properties } = buildObservabilityEvent(OBSERVABILITY_EVENTS.INVOICE_INBOX_OPENED, {
+      ...declared, fileName: 'f.pdf', vendor: 'ACME', amount: 99, documentId: 'D1',
+    });
+    expect(Object.keys(properties).sort()).toEqual(Object.keys(declared).sort());
+  });
+});

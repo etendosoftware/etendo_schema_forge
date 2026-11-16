@@ -60,6 +60,7 @@
 
 | File | Description |
 |------|-------------|
+| [Checkout plan consistency and introductory offer](plans/2026-11-11-checkout-plan-consistency.md) | ETP-6216 — explicit replacement of an unpaid checkout, immutable offer snapshots, monthly second-month offer, annual catalog prerequisites and validation boundaries |
 | [PRD.md](PRD.md) | Product requirements, decision map, pipeline, scope |
 | [PRD-anex.md](PRD-anex.md) | API versioning model (conceptual) |
 | [TDD.md](TDD.md) | Technical design, data models, validation rules, generator specs |

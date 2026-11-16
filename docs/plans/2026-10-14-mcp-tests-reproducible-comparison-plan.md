@@ -221,6 +221,22 @@ probes:
   `w-company-users-numbering` finds the user by email, then reads its roles. A lookup that finds
   nothing leaves the check's reference unresolved, which counts as the effect being absent (0
   rows); a lookup call that fails is *not verifiable*.
+- A setup or lookup step takes `aggregate:` (ETP-5848, `runner/aggregate.py`): the runner sums a
+  value over the step's rows and saves `{sum, count}` — or, with `groupBy`/`top`, the groups from
+  the largest sum — instead of the rows. It is how a query probe gets its expected figure on Holded,
+  which only lists documents (Etendo reads a widget that is already summed), and how a stock check
+  gets "the stock before, plus 5". `value` is a field or arithmetic over fields
+  (`units * (price - cost_price)`); `rows` walks into the rows (`items.*.lines`) or into one record
+  (`warehouses`). A row with no number there, or a cursor page with more to come, fails the step:
+  a sum over part of the documents is not the figure.
+- Prompts and step args also take `{{today}}`, `{{monthStart}}` and `{{yearStart}}` (UTC dates of
+  the attempt), so a "this month" read covers the period the prompt asks about.
+- Holded writes amounts as strings with a decimal comma (`"36,30"`); `where` compares them as
+  numbers. A grouped `"1,234.5"` stays text.
+- An `expectAnswer` item may be `{anyOf: [item, item, ...]}` (matcher v5, ETP-5848): it passes
+  when any alternative is found. For a question with two defensible readings — receivables net of
+  the credit customers hold, or the outstanding invoices alone (`q-financial-reports`) — decided by
+  Valentin on 2026-11-05. Only under `all:`; under `none:` each item is listed on its own.
 - A task that one platform's MCP cannot do at all is declared, not attempted — see §5.10.
 
 ### 5.4 Identical starting data and isolation

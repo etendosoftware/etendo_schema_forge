@@ -327,6 +327,17 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
       OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
     ],
   }),
+  // ETP-6050 — one event per time the Invoice Inbox page is shown. Makes the backend-only
+  // `invoice-inbox` flag measurable (adoption = this event over `session_started`). The tenant only
+  // (`account_id`) plus the spec: no user, file name, vendor, amount or document id.
+  INVOICE_INBOX_OPENED: defineEvent('invoice_inbox_opened', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+    ],
+  }),
   TIME_TO_CREATE: defineEvent('time_to_create', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
     properties: [

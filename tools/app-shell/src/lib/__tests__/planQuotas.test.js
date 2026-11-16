@@ -272,6 +272,7 @@ describe('announceRecordWrite', () => {
     announceRecordWrite({ url: '/etendo/sws/neo/sales-invoice/header' });
     announceRecordWrite({ url: '/etendo/sws/neo/sales-invoice/header/ABC/callout', method: 'POST' });
     announceRecordWrite({ url: '/etendo/sws/neo/contacts/header/ABC/evaluate-display', method: 'POST' });
+    announceRecordWrite({ url: '/etendo/sws/neo/goods-shipment/header/ABC/action/sifDefaults', method: 'POST' });
     announceRecordWrite({ url: '/etendo/sws/go/session/environment', method: 'POST' });
     announceRecordWrite({ method: 'POST' });
     announceRecordWrite();

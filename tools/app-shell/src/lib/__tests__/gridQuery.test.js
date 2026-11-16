@@ -1055,3 +1055,27 @@ describe('buildAdvancedFilterCriteria — negative multi-value AND composition (
     ]);
   });
 });
+
+describe('buildAdvancedFilterCriteria — text "Es"/"No es" comma list (ETP-5009)', () => {
+  const columns = [{ key: 'name', type: 'string' }];
+  const build = (operator, value) => buildAdvancedFilterCriteria(
+    { rowOperator: 'and', conditions: [{ field: 'name', operator, value }] }, columns);
+
+  it('splits "Es" into OR-ed iEquals', () => {
+    assert.deepEqual(build('iEquals', 'Cordino 6mm, Mosquetón HMS'), [{
+      _constructor: 'AdvancedCriteria', operator: 'or',
+      criteria: [
+        { fieldName: 'name', operator: 'iEquals', value: 'Cordino 6mm' },
+        { fieldName: 'name', operator: 'iEquals', value: 'Mosquetón HMS' },
+      ],
+    }]);
+  });
+
+  it('splits "No es" into AND-ed iNotEqual', () => {
+    assert.equal(build('iNotEqual', 'A,B')[0].operator, 'and');
+  });
+
+  it('keeps a value without comma as a single iEquals', () => {
+    assert.deepEqual(build('iEquals', 'A'), [{ fieldName: 'name', operator: 'iEquals', value: 'A' }]);
+  });
+});

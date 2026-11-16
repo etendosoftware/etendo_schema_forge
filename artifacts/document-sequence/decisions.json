@@ -21,7 +21,10 @@
         "CurrentNext": "Próximo número"
       }
     },
-    "hideDeleteButton": true
+    "hideDeleteButton": true,
+    "customComponents": {
+      "headerTable": "SequenceHeaderTable"
+    }
   },
   "entities": {
     "sequence": {

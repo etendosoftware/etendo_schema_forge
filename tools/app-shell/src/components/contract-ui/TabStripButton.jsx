@@ -17,8 +17,11 @@ export const TAB_COUNT_CHIP_CLS = 'inline-flex items-center justify-center h-5 m
 export default function TabStripButton({
   iconKey, icon = null, label, count, isActive, onClick,
   paddingY = 'py-2.5', showHoverLine = true, indicatorCls, tMenu, testId, disabledHint = null,
-  hoverDarkText = false,
+  hoverDarkText = false, activeAccent = 'default',
 }) {
+  // activeAccent 'primary' (opt-in): active text, icon and underline use the brand blue.
+  const activeText = activeAccent === 'primary' ? 'text-primary' : 'text-foreground';
+  const activeBg = activeAccent === 'primary' ? 'bg-primary' : 'bg-foreground';
   const defaultGeometry = 'absolute bottom-0 left-2 right-2 h-0.5 rounded-full';
   const effectiveIndicatorGeometry = indicatorCls
     ? indicatorCls.replace(/\bbg-\S+/g, '').trim()
@@ -32,7 +35,7 @@ export default function TabStripButton({
       data-testid={testId}
       className={[
         tabStripButtonBaseCls(paddingY, showHoverLine),
-        isActive ? 'text-foreground' : 'text-muted-foreground',
+        isActive ? activeText : 'text-muted-foreground',
         !isActive && !disabled && hoverDarkText && 'hover:text-foreground',
         disabled && 'opacity-50 cursor-not-allowed',
       ].filter(Boolean).join(' ')}
@@ -48,11 +51,11 @@ export default function TabStripButton({
         <span className={[
           effectiveIndicatorGeometry,
           'transition-colors',
-          isActive ? 'bg-foreground' : 'bg-transparent',
+          isActive ? activeBg : 'bg-transparent',
           !isActive && !disabled && 'group-hover:bg-muted-foreground/30',
         ].filter(Boolean).join(' ')} />
       ) : (
-        isActive && <span className={indicatorCls || `${defaultGeometry} bg-foreground`} />
+        isActive && <span className={indicatorCls ? indicatorCls.replace(/\bbg-foreground\b/, activeBg) : `${defaultGeometry} ${activeBg}`} />
       )}
     </button>
   );

@@ -15,29 +15,22 @@ import { login } from '../../helpers/auth.js';
  * `C_OrderLine_ID` NULL, `C_INVOICE_POST` never wrote `M_MATCHSO` nor `QtyInvoiced`, so the
  * order stayed invoiceable forever (double invoicing).
  *
- * The write path differs per window, so each one declares how it imports (`importVia`):
- *   - sales-invoice (`ImportFromOrderModal`) — since ETP-6002 the modal sends ONE request,
- *     `POST /sales-invoice/header/{id}/action/importOrderLines`, with
- *     `{ orders: [{ orderId, lines: [{ sourceLineId, quantity }] }], carryGlobalDiscount }`.
- *     The FK travels as `sourceLineId` and the server builds the line; pending quantities are
- *     read through `.../action/availableOrderLines`, never computed in the browser. Since
- *     ETP-5828 the popup also LISTS through the invoice's actions: `availableOrders` for the
- *     orders and one `availableOrderLines` (`includeCovered: true`) per order for the lines, their
- *     price and pending — the order GETs are not read on this path.
- *   - purchase-invoice (`ImportFromPurchaseOrderModal`) — the same unified popup (ETP-5828) on its
- *     client path (`importVia: 'client'`, until QA decides MCP-2): still one
- *     `POST /purchase-invoice/lines` per line, carrying the FK as `salesOrderLine` (the spec's
- *     java_qualifier). Since ETP-6099 it LISTS like sales (availableOrders + one
- *     availableOrderLines with `detail: true` per order, whose row carries the order-line columns
- *     the line body copies), asking `pendingBasis: 'classic'` — the pre-ETP-6099 pending rule,
- *     ordered − invoiced with no draft deduction (product decision).
+ * Both windows import the same way (ETP-6002 for sales; purchases since ETP-5828 QA MCP-2, which
+ * retired their per-line `POST /purchase-invoice/lines` and the `pendingBasis: 'classic'` listing
+ * that offered lines other draft invoices held): ONE request,
+ * `POST /{invoice}/header/{id}/action/importOrderLines`, with
+ * `{ orders: [{ orderId, lines: [{ sourceLineId, quantity }] }], carryGlobalDiscount }`. The FK
+ * travels as `sourceLineId` and the server builds the line; pending quantities are read through
+ * `.../action/availableOrderLines`, never computed in the browser. The popup LISTS through the
+ * invoice's actions: `availableOrders` for the orders and one `availableOrderLines`
+ * (`includeCovered: true`) per order for the lines, their price and pending — the order GETs are
+ * not read.
  *
  * What this spec locks, per window:
- *   1. The FK of the selected order line reaches the server under the key that window's
- *      contract reads, and the dead `cOrderlineId` key is sent nowhere.
- *   2. sales-invoice: no per-line `POST /lines` is sent, and the quantity sent is the server's
- *      `pendingQuantity` (2, drafts counted), not ordered − invoiced (3). purchase-invoice: the
- *      quantity sent is the server's CLASSIC pending, ordered − invoiced (3), as before ETP-6099.
+ *   1. The FK of the selected order line reaches the server as `sourceLineId`, and the dead
+ *      `cOrderlineId` key is sent nowhere.
+ *   2. No per-line `POST /lines` is sent, and the quantity sent is the server's
+ *      `pendingQuantity` (2, drafts counted), not ordered − invoiced (3).
  *
  * Routing notes
  * -------------
@@ -86,7 +79,6 @@ const WINDOWS = [
     // ui('importFromSalesOrder') — "Import from order" / "Importar desde pedido"
     importButton: /Import from order|Importar desde pedido/i,
     documentType: { transactionDocument: 'doctype-ar-001', 'transactionDocument$_identifier': 'AR Invoice' },
-    importVia: 'action',
   },
   {
     label: 'purchase-invoice ← purchase-order',
@@ -95,7 +87,6 @@ const WINDOWS = [
     // ui('importFromPurchaseOrder') — "Import from PO" / "Importar desde pedido"
     importButton: /Import from PO|Importar desde pedido/i,
     documentType: { transactionDocument: 'doctype-ap-001', 'transactionDocument$_identifier': 'AP Invoice' },
-    importVia: 'linePost',
   },
 ];
 
@@ -170,10 +161,8 @@ function buildFixtures({ invoiceSpec, orderSpec, documentType }) {
         tax: 'tax-1',
       },
     ],
-    // What `.../action/availableOrderLines` answers (both windows since ETP-6099) under the
-    // default rule. Line 2 has pendingQuantity 2 (drafts counted) while ordered − invoiced is 3,
-    // which is what the mock answers to `pendingBasis: 'classic'`: the posted quantity tells which
-    // rule the modal asked for.
+    // What `.../action/availableOrderLines` answers. Line 2 has pendingQuantity 2 (drafts counted)
+    // while ordered − invoiced is 3: the quantity sent tells that the server's pending was used.
     pendingByLine: [
       { id: orderLine1Id, pendingQuantity: 4 },
       { id: orderLine2Id, pendingQuantity: 2 },
@@ -260,17 +249,8 @@ async function installMocks(page, cfg, { existingInvoiceLines = [], state }) {
         return {
           id: p.id, lineNo: (i + 1) * 10, product: line.product,
           'product$_identifier': line['product$_identifier'], uOM: line.uOM,
-          // `pendingBasis: 'classic'` (purchases): ordered − invoiced, no draft deduction.
-          pendingQuantity: body.pendingBasis === 'classic'
-            ? Math.max(0, line.orderedQuantity - line.invoicedQuantity)
-            : p.pendingQuantity,
+          pendingQuantity: p.pendingQuantity,
           unitPrice: line.unitPrice, discount: 0,
-          // `detail: true` (the purchase client import, ETP-6099): the order-line columns the line
-          // body copies.
-          ...(body.detail ? {
-            listPrice: line.listPrice, grossUnitPrice: 0, tax: line.tax, description: null,
-            orderedQuantity: line.orderedQuantity, invoicedQuantity: line.invoicedQuantity,
-          } : {}),
         };
       });
     } else {
@@ -361,7 +341,7 @@ for (const win of WINDOWS) {
   const { invoiceId, orderId, orderLine2Id } = cfg.fixtures;
 
   test.describe(`Import from order — order-line FK (${cfg.label})`, () => {
-    test(`the selected order line's FK reaches the server (${cfg.importVia}), and no cOrderlineId key at all`, async ({ page }) => {
+    test('the selected order line\'s FK reaches the server in ONE importOrderLines call, and no cOrderlineId key at all', async ({ page }) => {
       const state = { postBodies: [], actionCalls: [] };
 
       await login(page);
@@ -378,53 +358,33 @@ for (const win of WINDOWS) {
       // Select the second order line only, so the assertion pins a specific id.
       await modalCheckboxes(page).nth(3).evaluate((el) => el.click());
 
-      // ui('importSelectedOrders') — "Import selected (1)" / "Importar seleccionados (1)"
-      const importBtn = page.getByRole('button', { name: /Import selected|Importar seleccionados/i });
+      // ui('importSelected') — "Import selected (1)" / "Importar seleccionadas (1)" (counts lines)
+      const importBtn = page.getByRole('button', { name: /Import selected|Importar seleccionad[ao]s/i });
       await expect(importBtn).toBeEnabled({ timeout: 5_000 });
       await importBtn.click();
 
-      if (cfg.importVia === 'action') {
-        const imports = () => state.actionCalls.filter((c) => c.name === 'importOrderLines');
-        await expect.poll(() => imports().length, { timeout: 10_000 }).toBe(1);
+      const imports = () => state.actionCalls.filter((c) => c.name === 'importOrderLines');
+      await expect.poll(() => imports().length, { timeout: 10_000 }).toBe(1);
 
-        // The orders and the pending quantities came from the server (ETP-5828: listed through
-        // availableOrders, lines in ONE availableOrderLines per order, covered ones included).
-        // `detail` (ETP-6099): pendingLines leaves out the lines already on this invoice, so an
-        // order with nothing selectable is hidden at open; the lines body stays without it.
-        expect(state.actionCalls.filter((c) => c.name === 'availableOrders').map((c) => c.body))
-          .toContainEqual(expect.objectContaining({ includeCovered: true, detail: true }));
-        expect(state.actionCalls.filter((c) => c.name === 'availableOrderLines').map((c) => c.body))
-          .toContainEqual({ orderId, includeCovered: true });
+      // The orders and the pending quantities came from the server (ETP-5828: listed through
+      // availableOrders, lines in ONE availableOrderLines per order, covered ones included).
+      // `detail` (ETP-6099): pendingLines leaves out the lines already on this invoice, so an
+      // order with nothing selectable is hidden at open; the lines body stays without it. No
+      // `pendingBasis`: the server rule (drafts deducted), on both windows.
+      expect(state.actionCalls.filter((c) => c.name === 'availableOrders').map((c) => c.body))
+        .toContainEqual({ limit: 1000, includeCovered: true, detail: true });
+      expect(state.actionCalls.filter((c) => c.name === 'availableOrderLines').map((c) => c.body))
+        .toContainEqual({ orderId, includeCovered: true });
 
-        // ONE request: the order, its selected line by FK, the server's pending quantity (2,
-        // not ordered − invoiced = 3), and no global discount to carry (the order has none).
-        expect(imports()[0].body).toEqual({
-          orders: [{ orderId, lines: [{ sourceLineId: orderLine2Id, quantity: 2 }] }],
-          carryGlobalDiscount: false,
-        });
-        // The server builds the line: nothing is POSTed per line any more.
-        expect(state.postBodies).toEqual([]);
-        expect(JSON.stringify(state.actionCalls)).not.toContain('cOrderlineId');
-      } else {
-        await expect.poll(() => state.postBodies.length, { timeout: 10_000 }).toBe(1);
-
-        const posted = state.postBodies[0];
-        // The FK the backend actually persists (spec java_qualifier for C_OrderLine_ID).
-        expect(posted.salesOrderLine).toBe(orderLine2Id);
-        // ETP-6099: listed through the actions with the classic pending rule (product decision),
-        // so the quantity is ordered − invoiced (3) as before, not the drafts-counted 2; the body
-        // is built from the detailed availableOrderLines row (no order-lines GET).
-        expect(state.actionCalls.filter((c) => c.name === 'availableOrders').map((c) => c.body))
-          .toContainEqual(expect.objectContaining({ pendingBasis: 'classic' }));
-        expect(state.actionCalls.filter((c) => c.name === 'availableOrderLines').map((c) => c.body))
-          .toContainEqual({ orderId, includeCovered: true, detail: true, pendingBasis: 'classic' });
-        expect(Number(posted.invoicedQuantity)).toBe(3);
-        expect(posted.tax).toBe('tax-1');
-        expect(Number(posted.listPrice)).toBe(20);
-        // The dead key must not be present at all — NeoFieldFilter would drop it silently,
-        // so sending it "just in case" is indistinguishable from not sending the FK.
-        expect(Object.hasOwn(posted, 'cOrderlineId')).toBe(false);
-      }
+      // ONE request: the order, its selected line by FK, the server's pending quantity (2,
+      // not ordered − invoiced = 3), and no global discount to carry (the order has none).
+      expect(imports()[0].body).toEqual({
+        orders: [{ orderId, lines: [{ sourceLineId: orderLine2Id, quantity: 2 }] }],
+        carryGlobalDiscount: false,
+      });
+      // The server builds the line: nothing is POSTed per line any more.
+      expect(state.postBodies).toEqual([]);
+      expect(JSON.stringify(state.actionCalls)).not.toContain('cOrderlineId');
     });
   });
 }

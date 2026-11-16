@@ -13,15 +13,16 @@ import {
  *
  * Every column is backed by a real `ETGO_INCOMING_DOCUMENT` column (`column:`) — the cells only
  * compose values the row already carries. `filterable: false`: this page filters through its
- * status tabs, not per column. No `onRowClick`: opening a document is the review panel of
- * ETP-6050, so a row click does nothing yet. PROCESSING, CONFIRMED and DISCARDED rows cannot be
- * checked (`isRowSelectable`).
+ * status tabs, not per column. A row click opens the review panel (ETP-6050, `onOpenRow(row)`;
+ * the page ignores PROCESSING rows). PROCESSING, CONFIRMED and DISCARDED rows cannot be checked
+ * (`isRowSelectable`).
  *
  * Row hover actions (edit, kebab, discard) go through DataTable's `rowQuickActions` custom
- * `render` slot (`InvoiceInboxRowActions`); `onDiscardRow(row)` opens the discard confirmation.
+ * `render` slot (`InvoiceInboxRowActions`); `onDiscardRow(row)` opens the discard confirmation and
+ * the pencil calls `onOpenRow(row)`.
  */
 export default function InvoiceInboxTable({
-  rows, loading, emptyState, ui, onSelectionChange, clearSelectionTrigger, onDiscardRow,
+  rows, loading, emptyState, ui, onSelectionChange, clearSelectionTrigger, onDiscardRow, onOpenRow,
 }) {
   const { locale } = useLocaleSwitch();
   const currency = useCurrency();
@@ -67,10 +68,11 @@ export default function InvoiceInboxTable({
       <InvoiceInboxRowActions
         row={row}
         onDiscard={onDiscardRow}
+        onOpen={onOpenRow}
         data-testid="InvoiceInboxRowActions__2b9513" />
     ),
     buttonCount: INVOICE_INBOX_ROW_ACTION_COUNT,
-  }), [onDiscardRow]);
+  }), [onDiscardRow, onOpenRow]);
 
   return (
     <DataTable
@@ -83,6 +85,7 @@ export default function InvoiceInboxTable({
       onSelectionChange={onSelectionChange}
       clearSelectionTrigger={clearSelectionTrigger}
       rowQuickActions={rowQuickActions}
+      onRowClick={onOpenRow}
       emptyState={emptyState}
       data-testid="invoice-inbox-table"
     />

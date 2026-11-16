@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Loader2, Landmark } from 'lucide-react';
 import {
   Dialog,
@@ -7,11 +7,23 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useUI } from '@/i18n';
+import { usePsd2ImportSettingsFlag } from '@/hooks/usePsd2ImportSettingsFlag.js';
+import {
+  BankImportSettingsFields,
+  defaultImportFromDate,
+  importSettingsIncomplete,
+} from './BankImportSettingsFields.jsx';
+import { DEFAULT_STATEMENT_GROUPING } from './bankImportSettingsShared.js';
 
 /**
  * Renders the two native surfaces of the bank connect flow driven by {@code useBankConnectionFlow}:
  * a non-dismissable "waiting for bank authentication" overlay while the Salt Edge popup is open,
- * and the bank-account selection modal shown when the connection returns more than one account.
+ * and the bank-account selection modal shown once the connection returns its accounts.
+ *
+ * ETP-6151 — the selection modal also asks for the import settings the link persists in the same
+ * transaction: "Importar desde" (defaults to the first day of the current month) and the statement
+ * grouping (starts on {@code DEFAULT_STATEMENT_GROUPING}, Classic's 1BD; required). "Vincular cuenta" is
+ * enabled as soon as an account is selected (date and grouping have defaults), and `confirmSelection` receives them as its second argument.
  *
  * @param {{ flow: ReturnType<typeof import('@/hooks/useBankConnectionFlow').useBankConnectionFlow> }} props
  */
@@ -52,12 +64,29 @@ export function BankConnectionFlowUI({ flow }) {
 
 function BankConnectionAccountSelectModal({ selection, onConfirm, onCancel }) {
   const ui = useUI();
+  // ETP-6151 — flag `psd2-statement-import-settings`. Off: only the account list, and "Vincular"
+  // needs just an account, as before.
+  const importSettingsEnabled = usePsd2ImportSettingsFlag();
   const [selected, setSelected] = useState(null);
+  const [importSettings, setImportSettings] = useState(() => ({
+    importFromDate: defaultImportFromDate(),
+    statementGrouping: DEFAULT_STATEMENT_GROUPING,
+  }));
+
+  // The modal stays mounted between flows, so every new selection starts from a clean slate: no
+  // account picked, the date back on the first of the CURRENT month (the tab may have been open
+  // across a month change) and the default grouping.
+  useEffect(() => {
+    if (!importSettingsEnabled || !selection) return;
+    setSelected(null);
+    setImportSettings({ importFromDate: defaultImportFromDate(), statementGrouping: DEFAULT_STATEMENT_GROUPING });
+  }, [selection, importSettingsEnabled]);
 
   const open = !!selection;
   const accounts = selection?.accounts ?? [];
   const providerName = selection?.providerName;
   const providerLogoUrl = selection?.providerLogoUrl;
+  const canConfirm = !!selected && !(importSettingsEnabled && importSettingsIncomplete(importSettings));
 
   return (
     <Dialog
@@ -112,6 +141,20 @@ function BankConnectionAccountSelectModal({ selection, onConfirm, onCancel }) {
             );
           })}
         </div>
+        {importSettingsEnabled && (
+        <div className="mt-2 flex flex-col gap-3 border-t border-[hsl(var(--border-subtle))] pt-4">
+          {/* Keyed by connection so a new flow also drops the "touched" state behind the required
+              errors, not just the values. */}
+          <BankImportSettingsFields
+            key={selection?.connectionId ?? 'none'}
+            importFromDate={importSettings.importFromDate}
+            statementGrouping={importSettings.statementGrouping}
+            onChange={(patch) => setImportSettings((s) => ({ ...s, ...patch }))}
+            maxFetchInterval={selection?.maxFetchInterval}
+            testIdPrefix="bank-connection-link"
+            data-testid="BankImportSettingsFields__5f0f32" />
+        </div>
+        )}
         <div className="mt-4 flex justify-end gap-2">
           <button
             type="button"
@@ -123,8 +166,10 @@ function BankConnectionAccountSelectModal({ selection, onConfirm, onCancel }) {
           </button>
           <button
             type="button"
-            disabled={!selected}
-            onClick={() => onConfirm?.(selected)}
+            disabled={!canConfirm}
+            onClick={() => (importSettingsEnabled
+              ? onConfirm?.(selected, { ...importSettings })
+              : onConfirm?.(selected))}
             data-testid="bank-connection-account-select-confirm"
             className="rounded-lg bg-[hsl(var(--foreground))] px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground disabled:hover:bg-[hsl(var(--border-control))] disabled:hover:text-primary-foreground"
           >

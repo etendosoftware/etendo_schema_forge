@@ -4,7 +4,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ChevronDown, CalendarDays, Filter, Loader2 } from 'lucide-react';
 import { useLocale, useUI } from '@etendosoftware/app-shell-core';
 import { useDistinctValues } from '@/hooks/useDistinctValues.js';
-import { compareStatusCodes, getStatusTone, statusLabel } from '@/lib/statusBadge.js';
+import { compareStatusCodes, statusLabel } from '@/lib/statusBadge.js';
+import { resolveStatusTone } from '@/lib/statusToneOverride.js';
 import { StatusTag } from '@/components/ui/status-tag';
 import { AdvancedFilterBuilder } from './AdvancedFilterBuilder.jsx';
 import { DistinctValuesList } from './DistinctValuesList.jsx';
@@ -254,7 +255,7 @@ export function ListFilterBar({
     return labelForStatus(activeStatusCode);
   }, [activeStatusCode, dictionary, ui]);
 
-  // Same tag (StatusTag + getStatusTone) the grid's status column renders. The wrapper reserves
+  // Same tag (StatusTag + resolveStatusTone) the grid's status column renders. The wrapper reserves
   // the right gutter for the selected-row check on every row (no shift) and lets a long label
   // truncate with an ellipsis instead of overflowing the menu.
   const renderStatusOption = (code, label) => (
@@ -262,7 +263,7 @@ export function ListFilterBar({
       <StatusTag
         status={code}
         label={label}
-        tone={getStatusTone(code)}
+        tone={resolveStatusTone(code, statusCol?.enumVariants)}
         className="!inline-block min-w-0 max-w-full truncate tracking-[-0.005em]"
         data-testid="StatusTag__6d5e90" />
     </span>
