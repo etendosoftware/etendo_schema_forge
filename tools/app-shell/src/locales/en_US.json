@@ -18734,6 +18734,7 @@
     "quotationPdfSection": "Quotation details",
     "quotationPdfDate": "Date:",
     "quotationPdfValidUntil": "Valid until:",
+    "quotationPdfRejectReason": "Reason",
     "quotationPdfColQty": "Qty",
     "orderPreviewGeneral": "General",
     "orderPreviewSend": "Send",

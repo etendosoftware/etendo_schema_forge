@@ -1222,13 +1222,15 @@ Built in both repos following C.0–C.11.
    first-option fallback) is closed in `SalesQuotationHeaderHandler.afterHandle` (DEFAULTS drop
    `rejectReason`). Needs `make regen ONLY=sales-quotation PUSH_TO_NEO=1` + `export.database` (the NEO
    field is still read-only until pushed).
-4. **Quotation PDF "Motivo".** The commercial template prints `Description` as its notes, so a portal
-   rejection already prints "Rechazado por el cliente desde el portal. Motivo: …". **Not built:** the
-   asked rule "tenant reason when set, else the portal reason" would print an internal reason on a PDF
-   the customer downloads from the portal and receives by email, contradicting point 3. Proposed rule,
-   pending a product decision: the printable never prints the tenant reason; the portal's notes line is
-   the customer-facing reason (`docs/document-printables.md` D30). **Cache:** the app's preview already
-   re-renders a stale stored PDF; the portal did not — `/pdf` now re-renders a stored PDF older than the
+4. **Quotation PDF "Motivo" (user decision 2026-11-16, Jira comment 149518 point 5).** A rejected
+   quotation's printable always shows one observation line "Motivo: <reason>": the tenant's reject
+   reason when the seller has set one, otherwise the customer's portal reason (and the "Otros" text),
+   read from the portal's note line; that line is left out of the observations so "Motivo" is not
+   printed twice. Built in `buildQuotationData` and `QuotationPrintableData` (every producer).
+   **The internal (tenant) reason is visible to the customer** — this is the PDF the customer
+   downloads from the portal and receives by email — and the user accepted this explicitly.
+   **Cache:** editing the reason moves the quotation's `updated`, so the stored PDF goes stale; the
+   app's preview re-renders it, and the portal's `/pdf` now re-renders a stored PDF older than the
    document before serving it (D29).
 5. **One step for the 2FA.** The confirmation email's button names the decision ("Confirmar rechazo" /
    "Confirmar aceptación") and is the confirmation: the landing's script sends `POST /decisions/confirm`
@@ -1249,7 +1251,7 @@ are closed or moved to their own ticket.
 
 | Item | State | Notes |
 |---|---|---|
-| **Part C — accept / reject a quotation from the portal** | **Built, PO answers applied** | See Part C, C.13. Open: the PDF "Motivo" rule (C.13 point 4, pending a product decision) and `ETGO_AC` in the core `STATUS_ORDER` (sort order only). |
+| **Part C — accept / reject a quotation from the portal** | **Built, PO answers applied** | See Part C, C.13. Open: `ETGO_AC` in the core `STATUS_ORDER` (sort order only). |
 | **KPI semantics** | **Pending the PO** | The four events of §A.7 ship (`portal.link.sent`, `portal.link.opened`, `portal.link.renewed`, `portal.document.downloaded`, server-only). D-5 took *per send* (`ROOT_LINK_ID`) as the headline unit as proposed; the PO has not yet confirmed the metric definitions — per send vs per document, and whether opens by link scanners that run JS (counted today, §A.7) are filtered. Changing the reading needs no code: the events carry both `ROOT_LINK_ID` and `documentId`. |
 | **Drop the unused `ETGO_PORTAL_ACCESS`** | **Follow-up, after a production check** | Kept as on `develop` in this delivery (§A.1, revised 2026-11-13). Check production for rows; if empty, drop the model XML and its dictionary rows in their own change. |
 | **Retention / purge job for `ETGO_PORTAL_LINK`** | **Asked of the PO** | Nothing deletes rows today. Pending rows (the email never left) are invalid forever and harmless (§A.2.7); expired rows are kept because **an expired link can be renewed at any age** — there is no maximum. The PO was asked the maximum age after which an expired link should no longer renew; that answer decides both the renewal cut-off and how long rows must be kept. |

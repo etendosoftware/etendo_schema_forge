@@ -18343,6 +18343,7 @@
     "quotationPdfSection": "Detalles del presupuesto",
     "quotationPdfDate": "Fecha:",
     "quotationPdfValidUntil": "Válido hasta:",
+    "quotationPdfRejectReason": "Motivo",
     "quotationPdfColQty": "Cant.",
     "orderPreviewGeneral": "General",
     "orderPreviewSend": "Enviar",
