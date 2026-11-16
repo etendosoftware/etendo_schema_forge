@@ -284,6 +284,14 @@ describe('DynamicReportView — split, errors and exports', () => {
     await waitFor(() => expect(queries()).toHaveLength(before + 1));
     expect(queries().at(-1)).toMatchObject({ dateFrom: '2026-10-01' });
   });
+  it('with dateFrom after dateTo the exports are disabled', async () => {
+    renderView();
+    await waitFor(() => expect(rowIds()).toHaveLength(2));
+    for (const f of ['pdf', 'xlsx', 'csv']) expect(screen.getByTestId(`DynamicReportView__export-${f}`)).toBeEnabled();
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__dateFrom'), { target: { value: '2026-12-01' } });
+    for (const f of ['pdf', 'xlsx', 'csv']) expect(screen.getByTestId(`DynamicReportView__export-${f}`)).toBeDisabled();
+  });
+
   it('with a split dimension, a leaf account lists its parts by that dimension', async () => {
     renderView();
     await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
