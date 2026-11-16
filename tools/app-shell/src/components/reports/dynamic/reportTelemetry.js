@@ -32,10 +32,11 @@ export function startReportTiming(event, properties) {
 /** `{ outcome, errorCode }` of a settled request. */
 export const resultOf = (errorCode) => (errorCode ? { outcome: 'error', errorCode } : { outcome: 'success' });
 
-// The view's state keys, in the KPI's filter types. The split dimension is not a filter type.
+// The view's state keys, in the KPI's filter types. The split dimension is not a filter type, and the
+// comparison is emitted directly by the view (it sends no request, so there is nothing to time).
 const FILTER_TYPES = [
   ['dateFrom', 'period'], ['dateTo', 'period'], ['orgId', 'organization'],
-  ['bPartnerId', 'business_partner'], ['productId', 'product'], ['compare', 'comparison'],
+  ['bPartnerId', 'business_partner'], ['productId', 'product'], ['columns', 'columns'],
 ];
 export function filterTypeOf(patch) {
   return FILTER_TYPES.find(([key]) => key in patch)?.[1] ?? null;

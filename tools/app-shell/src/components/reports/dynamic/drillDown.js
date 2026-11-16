@@ -16,9 +16,12 @@ export const ENTRY_REQUIRED_PARAMS = Object.freeze(['orgId', 'acctSchemaId', 'fa
  * a leaf account = `fact_acct.account_id`) lets the SQL use the account index instead of reading
  * the client's whole history through the account code. The code bounds are redundant with it (one
  * schema = one chart) and kept so the request still means the same to a General Ledger without `accountId`.
+ * `range` (`{from, to}`, ETP-6239) replaces the view's period: the bucket of the cell clicked, or the range it was compared with.
  */
-export function ledgerParams(queryParams, row) {
-  const { acctSchemaId, orgId, dateFrom, dateTo, bPartnerId, productId } = queryParams;
+export function ledgerParams(queryParams, row, range = null) {
+  const { acctSchemaId, orgId, bPartnerId, productId } = queryParams;
+  const dateFrom = range?.from ?? queryParams.dateFrom;
+  const dateTo = range?.to ?? queryParams.dateTo;
   return { acctSchemaId, orgId, dateFrom, dateTo, bPartnerId, productId, accountId: row.node_id, fromAccountId: row.value, toAccountId: row.value };
 }
 

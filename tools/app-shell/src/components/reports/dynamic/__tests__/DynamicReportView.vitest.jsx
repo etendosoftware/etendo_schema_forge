@@ -57,6 +57,7 @@ const TREE = [
   { node_id: 'C1', parentId: 'E1', elementlevel: 'C', value: '70', name: 'Ventas de mercaderías', amount: 1000, amount_ref: 800, sign: 'C' },
   { node_id: 'S1', parentId: 'C1', elementlevel: 'S', value: '700', name: 'Ventas nacionales', amount: 1000, amount_ref: 800, sign: 'C' },
 ];
+const TOTAL_PERIOD = [{ idx: 0, dateFrom: '2026-07-01', dateTo: '2026-11-03', partial: false }];
 const withVariation = (rows) => rows.map((r) => ({ ...r, variationAmount: r.amount - r.amount_ref, variationPct: 25, trend: 'improves' }));
 
 const json = (body, { ok = true, status = 200 } = {}) => ({ ok, status, json: () => Promise.resolve(body) });
@@ -92,7 +93,7 @@ function route(url, init) {
   if (url.endsWith('/query')) {
     const { params } = JSON.parse(init.body);
     // As the split SQL answers it: a part with no dimension has name '' (COALESCE), not null.
-    if (params.splitBy) return Promise.resolve(json({ kind: 'split', rows: [{ node_id: 'O1', name: 'Spain', amount: 600, amount_ref: 0 }, { node_id: null, name: '', amount: 400, amount_ref: 0 }] }));
+    if (params.splitBy) return Promise.resolve(json({ kind: 'split', periods: TOTAL_PERIOD, rows: [{ node_id: 'O1', name: 'Spain', amount: 600, amount_ref: 0 }, { node_id: null, name: '', amount: 400, amount_ref: 0 }] }));
     return Promise.resolve(queryAnswer(params));
   }
   return Promise.reject(new Error(`unexpected ${url}`));
@@ -108,7 +109,7 @@ beforeEach(() => {
   years = JULY_YEARS;
   entryAnswer = ENTRY;
   ledgerAnswer = () => LEDGER;
-  queryAnswer = (params) => json({ kind: 'tree', rows: params.compareTo === 'true' ? withVariation(TREE) : TREE });
+  queryAnswer = (params) => json({ kind: 'tree', periods: TOTAL_PERIOD, rows: withVariation(TREE) });
   apiFetchMock.mockReset();
   trackMock.mockReset();
   apiFetchMock.mockImplementation(route);
@@ -122,7 +123,8 @@ describe('DynamicReportView — opening (§19)', () => {
     renderView();
     await waitFor(() => expect(queries()).toHaveLength(1));
     const [params] = queries();
-    expect(params).toMatchObject({ acctSchemaId: 'S1', orgId: 'O1', dateFrom: '2026-07-01', dateTo: '2026-11-03', compareTo: 'false' });
+    expect(params).toMatchObject({ acctSchemaId: 'S1', orgId: 'O1', dateFrom: '2026-07-01', dateTo: '2026-11-03', columns: 'total' });
+    expect(params).not.toHaveProperty('compareTo');
     expect(params).not.toHaveProperty('yearId');
     expect(params).not.toHaveProperty('referenceYearId');
     expect(screen.getByTestId('DynamicReportPanel__shortcut-year')).toHaveAttribute('aria-pressed', 'true');
@@ -218,7 +220,10 @@ describe('DynamicReportView — comparison and chips', () => {
     renderView();
     await waitFor(() => expect(rowIds()).toHaveLength(2));
     fireEvent.change(screen.getByTestId('DynamicReportPanel__compare'), { target: { value: 'same-last-year' } });
-    await waitFor(() => expect(queries().at(-1)).toMatchObject({ compareTo: 'true', fromReferenceDate: '2025-07-01', toReferenceDate: '2025-11-03' }));
+    // The comparison is a display choice: no new request, and none carries the compared dates.
+    expect(queries()).toHaveLength(1);
+    expect(queries()[0]).not.toHaveProperty('compareTo');
+    expect(queries()[0].periods).toContain('|2025-07-01..2025-11-03|');
     await waitFor(() => expect(screen.getAllByTestId('DynamicReportTable__variation')).toHaveLength(2));
     expect(screen.getAllByTestId('DynamicReportTable__variationPct')[0]).toHaveTextContent('25,00 %');
     expect(screen.getAllByTestId('DynamicReportTable__variation')[0].className).toContain('status-success');
@@ -523,10 +528,10 @@ describe('DynamicReportView — telemetry (F10, T9)', () => {
     await waitFor(() => expect(sent('report_opened')).toHaveLength(1));
     fireEvent.click(screen.getByTestId('DynamicReportPanel__shortcut-month'));
     fireEvent.change(screen.getByTestId('DynamicReportPanel__compare'), { target: { value: 'previous' } });
-    await waitFor(() => expect(queries().at(-1).compareTo).toBe('true'));
+    await waitFor(() => expect(queries()).toHaveLength(2)); // the opening one and the month shortcut
     await settle();
-    expect(queries()).toHaveLength(2); // the opening one and the last change: the first change never ran
-    expect(sent('report_filter_applied').map((e) => e.type)).toEqual(['comparison']);
+    // The comparison is emitted at once (no request to time); the period when its result lands.
+    expect(sent('report_filter_applied').map((e) => e.type)).toEqual(['comparison', 'period']);
   });
 
   it('a failed request reports the error class, never the message', async () => {

@@ -17,7 +17,8 @@ import { useReportQuery } from './useReportQuery.js';
 import { useReportDefaults } from './useReportDefaults.js';
 import { useAccountSplit } from './useAccountSplit.js';
 import { REPORT_EVENTS, filterTypeOf, useReportTelemetry } from './reportTelemetry.js';
-import { comparisonPeriod, matchingShortcut, matchingYear, openingPeriod, pickedYearPeriod, shortcutPeriod } from './dynamicDates.js';
+import { matchingShortcut, matchingYear, openingPeriod, periodBuckets, pickedYearPeriod, serializePeriods, shortcutPeriod } from './dynamicDates.js';
+import { EXPORT_MAX_BUCKETS, SCREEN_PERIODS, columnModel, modeOf, rowsForMode } from './reportColumns.js';
 import { expandedNodeIdsParam, foldExpansion, visibleRows } from './reportTree.js';
 
 const EXPORTS = [
@@ -26,6 +27,7 @@ const EXPORTS = [
   { format: 'csv', label: 'CSV', icon: FileText },
 ];
 const SPLIT_DIMENSIONS = [['org', 'orgId'], ['bpartner', 'bPartnerId'], ['product', 'productId']];
+const COLUMN_LABELS = { total: 'dynamicReportColumnsTotal', month: 'dynamicReportColumnsMonth', quarter: 'dynamicReportColumnsQuarter' };
 const ERROR_KEYS = { org_access_denied: 'reportErrorOrgAccess', report_access_denied: 'reportErrorReportAccess' };
 
 const pick = (labelObj, locale) => labelObj?.[locale] || labelObj?.en_US || labelObj?.es_ES || '';
@@ -35,7 +37,7 @@ function initialState(defaultOrgId, period, level) {
   return {
     orgId: defaultOrgId || '', dateFrom: period?.dateFrom || '', dateTo: period?.dateTo || '',
     bPartnerId: '', _display_bPartnerId: '', productId: '', _display_productId: '',
-    compare: '', splitBy: '', level,
+    compare: '', columns: 'total', splitBy: '', level,
   };
 }
 
@@ -81,7 +83,14 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   }, [opening]);
 
   const change = useCallback((patch) => setState((s) => ({ ...s, ...patch })), []);
-  const reference = comparisonPeriod(state.compare, state);
+  const mode = modeOf(state.compare);
+  // ETP-6239: every request carries both compared ranges, so the comparison is a display choice, not a request.
+  const range = useMemo(() => ({ dateFrom: state.dateFrom, dateTo: state.dateTo }), [state.dateFrom, state.dateTo]);
+  const hasRange = Boolean(state.dateFrom && state.dateTo);
+  const plan = useMemo(
+    () => (hasRange ? periodBuckets(range, state.columns, { maxShown: SCREEN_PERIODS[state.columns] }) : null),
+    [hasRange, range, state.columns],
+  );
   const queryParams = useMemo(() => ({
     acctSchemaId: defaults.acctSchemaId || '',
     orgId: state.orgId,
@@ -90,20 +99,37 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
     bPartnerId: state.bPartnerId,
     productId: state.productId,
     showOnlyAccountsWithValue: 'true',
-    compareTo: reference ? 'true' : 'false',
-    fromReferenceDate: reference?.fromReferenceDate || '',
-    toReferenceDate: reference?.toReferenceDate || '',
-  }), [defaults.acctSchemaId, state.orgId, state.dateFrom, state.dateTo, state.bPartnerId, state.productId, reference?.fromReferenceDate, reference?.toReferenceDate]);
+    columns: state.columns,
+    periods: plan ? serializePeriods(plan.buckets) : '',
+    hiddenCount: String(plan?.hiddenCount ?? 0),
+  }), [defaults.acctSchemaId, state.orgId, state.dateFrom, state.dateTo, state.bPartnerId, state.productId, state.columns, plan]);
 
   const { data, loading, error, errorCode, settled } = useReportQuery(report.id, queryParams, { locale });
   const telemetry = useReportTelemetry(report.id, { source, paramsKey: JSON.stringify(queryParams), settled, errorCode });
   // A user's change: marked for report_filter_applied. The defaults and "Limpiar filtros" are not.
-  const userChange = (patch) => { telemetry.markFilter(filterTypeOf(patch)); change(patch); };
+  // The comparison sends no request, so there is no result to time: it is emitted here, like `setLevel`.
+  const userChange = (patch) => {
+    if ('compare' in patch) telemetry.emit(REPORT_EVENTS.FILTER_APPLIED, { type: 'comparison', outcome: 'success' });
+    else telemetry.markFilter(filterTypeOf(patch));
+    change(patch);
+  };
   const groupToggled = (type) => telemetry.emit(REPORT_EVENTS.GROUP_TOGGLED, { type, outcome: 'success' });
   // The query waits for the schema (isQueryReady); a role that sees none would wait forever.
   const noSchema = !defaults.loading && !defaults.acctSchemaId;
-  const rows = useMemo(() => data?.rows ?? [], [data]);
-  const compare = queryParams.compareTo === 'true' && Boolean(data) && rows.some((r) => 'variationAmount' in r);
+  // What the answer was asked with: an answer is only ever set for the params at hand (a newer change aborts the older request).
+  /* eslint-disable react-hooks/exhaustive-deps */
+  const answered = useMemo(() => ({ grain: state.columns, periods: data?.periods ?? [], hiddenCount: data?.hiddenCount ?? 0 }), [data]);
+  /* eslint-enable react-hooks/exhaustive-deps */
+  const rows = useMemo(() => rowsForMode(data?.rows ?? [], mode), [data, mode]);
+  const compare = mode !== 'none' && Boolean(data);
+  const quarterPrefix = ui('dynamicReportQuarterPrefix');
+  const totalLabel = ui('dynamicReportColumnsTotal');
+  const groups = useMemo(
+    () => columnModel({ periods: answered.periods, grain: answered.grain, mode, locale, quarterPrefix, totalLabel }),
+    [answered, mode, locale, quarterPrefix, totalLabel],
+  );
+  const reference = compare ? groups[0]?.compared : null;
+  const hasPartial = groups.some((g) => g.partial);
 
   // Folding: a base (the level, expand all, collapse all) plus the rows the user flipped since,
   // applied to every result, so rows a new filter brings in follow the base.
@@ -127,7 +153,8 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
     refold('level');
   };
 
-  const [drillAccount, setDrillAccount] = useState(null);
+  const [drill, setDrill] = useState(null); // { row, range }: the account whose ledger is open, and the cell's range (null = the view's period)
+  const openLedger = useCallback((row, cellRange) => setDrill({ row, range: cellRange }), []);
   const { splits, toggle: toggleSplit } = useAccountSplit(report.id, queryParams, state.splitBy, { locale });
 
   const shortcut = matchingShortcut(state, defaults.years, today);
@@ -140,9 +167,13 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   const orgName = orgs.find((o) => o.id === state.orgId)?.name;
   const [exporting, setExporting] = useState(null);
   const [exportError, setExportError] = useState(null);
+  // PDF prints what the screen shows; Excel / CSV print every period, up to the cap (D5).
+  const fullPlan = useMemo(() => (hasRange ? periodBuckets(range, state.columns) : null), [hasRange, range, state.columns]);
+  const exportTooLong = state.columns !== 'total' && (fullPlan?.buckets.length ?? 0) > EXPORT_MAX_BUCKETS;
   const exportAs = async (format) => {
     setExporting(format);
     setExportError(null);
+    const exportPlan = format === 'pdf' ? plan : fullPlan;
     try {
       const res = await apiFetch(`/api/reports/${report.id}/render`, {
         method: 'POST',
@@ -153,6 +184,9 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
           locale,
           params: {
             ...queryParams,
+            periods: serializePeriods(exportPlan.buckets),
+            hiddenCount: String(exportPlan.hiddenCount),
+            compareMode: mode,
             accountLevel: state.level,
             expandedNodeIds: expandedNodeIdsParam(expandedSet),
             // The exported header names the filters, not their ids (report-filters.js reads `_display_*`).
@@ -181,7 +215,8 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
     orgName && { key: 'org', label: label('orgId'), value: orgName },
     state.bPartnerId && { key: 'bp', label: label('bPartnerId'), value: state._display_bPartnerId, clear: { bPartnerId: '', _display_bPartnerId: '' } },
     state.productId && { key: 'product', label: label('productId'), value: state._display_productId, clear: { productId: '', _display_productId: '' } },
-    reference && { key: 'compare', label: ui('dynamicReportComparedWith'), value: `${fmt(reference.fromReferenceDate)} – ${fmt(reference.toReferenceDate)}`, clear: { compare: '' } },
+    state.columns !== 'total' && { key: 'columns', label: ui('dynamicReportColumns'), value: ui(COLUMN_LABELS[state.columns]), clear: { columns: 'total' } },
+    reference && { key: 'compare', label: ui('dynamicReportComparedWith'), value: `${fmt(reference.from)} – ${fmt(reference.to)}`, clear: { compare: '' } },
     state.splitBy && { key: 'split', label: ui('dynamicReportSplitChip'), value: splitDimensions.find((d) => d.value === state.splitBy)?.label, clear: { splitBy: '' } },
   ].filter(Boolean);
 
@@ -199,7 +234,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
               key={format}
               variant="ghost"
               className="h-9 px-3 gap-1.5 text-sm"
-              disabled={!data || exporting !== null}
+              disabled={!data || exporting !== null || (exportTooLong && format !== 'pdf')}
               onClick={() => exportAs(format)}
               data-testid={`DynamicReportView__export-${format}`}
             >
@@ -257,6 +292,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
               ))}
             </div>
 
+            {exportTooLong && <p className="text-xs text-muted-foreground mb-3" data-testid="DynamicReportView__exportTooLong">{ui('dynamicReportExportTooLong')}</p>}
             {(errorText || exportError) && (
               <p role="alert" className="text-sm text-destructive mb-3" data-testid="DynamicReportView__error">{errorText || exportError}</p>
             )}
@@ -267,14 +303,21 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
                 {kpis && <DynamicReportKpis kpis={kpis} compare={compare} data-testid="DynamicReportKpis__c51cea" />}
                 <DynamicReportTable
                   rows={shown}
-                  compare={compare}
+                  groups={groups}
+                  mode={mode}
                   expanded={expandedSet}
                   onToggle={toggleRow}
                   splitBy={state.splitBy}
                   splits={splits}
                   onToggleSplit={toggleSplit}
-                  onOpenLedger={canOpen(LEDGER_REPORT_ID) ? setDrillAccount : null}
+                  onOpenLedger={canOpen(LEDGER_REPORT_ID) ? openLedger : null}
                   data-testid="DynamicReportTable__c51cea" />
+                {(answered.hiddenCount > 0 || hasPartial) && (
+                  <div className="mt-2 text-xs text-muted-foreground" data-testid="DynamicReportView__periodNotes">
+                    {answered.hiddenCount > 0 && <p data-testid="DynamicReportView__hiddenNote">{ui('dynamicReportHiddenPeriods', { count: answered.hiddenCount })}</p>}
+                    {hasPartial && <p data-testid="DynamicReportView__partialNote">{ui('dynamicReportPartialPeriods')}</p>}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -282,11 +325,12 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
       </div>
       <DynamicDrillPanel
         reportTitle={title}
-        account={drillAccount}
+        account={drill?.row ?? null}
+        range={drill?.range ?? null}
         queryParams={queryParams}
         session={telemetry.session}
         canOpenEntry={canOpen(ENTRY_REPORT_ID)}
-        onClose={() => setDrillAccount(null)}
+        onClose={() => setDrill(null)}
         data-testid="DynamicDrillPanel__c51cea" />
     </div>
   );

@@ -15,6 +15,12 @@ const COMPARISONS = [
   ['previous', 'dynamicReportPreviousPeriod'],
 ];
 
+const COLUMN_OPTIONS = [
+  ['total', 'dynamicReportColumnsTotal'],
+  ['month', 'dynamicReportColumnsMonth'],
+  ['quarter', 'dynamicReportColumnsQuarter'],
+];
+
 const selectClass = 'w-full h-9 rounded-lg border border-[hsl(var(--border-control))] bg-card px-2 text-sm';
 
 function Section({ title, children }) {
@@ -125,6 +131,11 @@ export default function DynamicReportPanel({
       </Section>
 
       <Section title={sectionLabel('comparacion')} data-testid="Section__f52339">
+        <label className="text-xs">{ui('dynamicReportColumns')}
+          <select className={selectClass} value={state.columns} onChange={(e) => onChange({ columns: e.target.value })} data-testid="DynamicReportPanel__columns">
+            {COLUMN_OPTIONS.map(([value, key]) => <option key={value} value={value}>{ui(key)}</option>)}
+          </select>
+        </label>
         <select className={selectClass} value={state.compare} onChange={(e) => onChange({ compare: e.target.value })} aria-label={label('compareTo')} data-testid="DynamicReportPanel__compare">
           {COMPARISONS.map(([value, key]) => <option key={value} value={value}>{ui(key)}</option>)}
         </select>
