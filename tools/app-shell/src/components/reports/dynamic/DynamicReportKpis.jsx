@@ -52,7 +52,7 @@ function Kpi({ id, label, hint, value, refValue, compare, percent, tone }) {
   const text = (v) => kpiText(v, percent);
   const delta = compare ? kpiDelta(value, refValue, percent) : null;
   return (
-    <div className={cn('rounded-xl border p-4 flex flex-col gap-1', tone || 'border-border/60 bg-card')} data-testid={`DynamicReportKpis__${id}`}>
+    <div className={cn('min-w-0 rounded-xl border p-4 flex flex-col gap-1', tone || 'border-border/60 bg-card')} data-testid={`DynamicReportKpis__${id}`}>
       <span className="flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {label}
         <Tooltip delayDuration={200} data-testid="Tooltip__5cc5db">
@@ -66,7 +66,7 @@ function Kpi({ id, label, hint, value, refValue, compare, percent, tone }) {
             data-testid="TooltipContent__5cc5db">{hint}</TooltipContent>
         </Tooltip>
       </span>
-      <span className="text-2xl font-semibold tabular-nums" data-testid={`DynamicReportKpis__${id}Value`}>{text(value)}</span>
+      <span className="text-xl sm:text-2xl font-semibold tabular-nums break-words" data-testid={`DynamicReportKpis__${id}Value`}>{text(value)}</span>
       {compare && (
         <span className="flex items-center gap-2 text-xs text-muted-foreground">
           {delta && <TrendPill
