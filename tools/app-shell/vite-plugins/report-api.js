@@ -29,6 +29,7 @@ const { filterAndTransformParams } = await loadReportCli('report-filters');
 const { hydrateDocumentBranding, resolveCompanyLogoDataUrl } = await loadReportCli('report-branding');
 const { resolveReportSession, reportAuthErrorBody, assertReportOrgAccess, assertReportAccess } = await loadReportCli('report-auth');
 const { handleReportQuery, runReportSql } = await loadReportCli('report-query');
+const { buildPeriodMeta, normalizeCompareMode, maxPeriodBucketsFor } = await loadReportCli('report-periods');
 
 const ARTIFACTS_DIR = resolve(import.meta.dirname, '../../../artifacts');
 const ROOT = resolve(ARTIFACTS_DIR, '..');
@@ -152,7 +153,7 @@ function listReports() {
  *   VITE_MOCK=true  → use mock data files
  *   VITE_MOCK=false → use real data (NEO API or Jasper SQL)
  */
-async function fetchReportData(reportId, { limit, session, params = {}, locale } = {}) {
+async function fetchReportData(reportId, { limit, session, params = {}, locale, format } = {}) {
   const contractPath = join(ARTIFACTS_DIR, reportId, 'report-contract.json');
   const contract = JSON.parse(readFileSync(contractPath, 'utf8'));
 
@@ -400,7 +401,8 @@ async function fetchReportData(reportId, { limit, session, params = {}, locale }
 
     // Main query plus Libro Mayor's openingQuery (ETP-4898) and Profit & Loss's
     // operandsQuery (ETP-4899): core's runner, shared with `/query` and the report-server.
-    const { rows, openingRows, operandRows } = await runReportSql(pool, contract, { clientId, params, locale, mainSql: sql });
+    // `periods` (ETP-6239) also returns periodRows/periodSpec; the cap depends on the format.
+    const { rows, openingRows, operandRows, periodRows, periodSpec } = await runReportSql(pool, contract, { clientId, params, locale, mainSql: sql, maxPeriodBuckets: maxPeriodBucketsFor(format) });
 
     // Company logo for listing reports (ETP-5013) — "document" contracts
     // (print-*) resolve org_logo_id from their own header SQL row (see the
@@ -413,7 +415,7 @@ async function fetchReportData(reportId, { limit, session, params = {}, locale }
       etendoBase: etendoUrl,
     });
 
-    return { rows, contract, openingRows, operandRows, companyLogoDataUrl };
+    return { rows, contract, openingRows, operandRows, periodRows, periodSpec, companyLogoDataUrl };
   } finally {
     await pool.end();
   }
@@ -783,7 +785,7 @@ export default function reportApiPlugin(options = {}) {
           }
 
           try {
-            const result = await fetchReportData(reportId, { limit, session, params, locale });
+            const result = await fetchReportData(reportId, { limit, session, params, locale, format });
             let { rows, contract, documentData, neoMeta = {}, openingRows, operandRows, companyLogoDataUrl } = result;
 
             // Account-report tree reports (ETP-4899 — Profit & Loss): the SQL returns
@@ -791,7 +793,8 @@ export default function reportApiPlugin(options = {}) {
             // account-level cutoff) is assembled here, replacing `rows` so
             // recordCount/totals and the Excel/CSV templates keep working unchanged.
             if (contract.sql?.operandsQuery !== undefined && Array.isArray(rows)) {
-              rows = buildRenderAccountTree(rows, operandRows, params, contract);
+              rows = buildRenderAccountTree(rows, operandRows, params, contract,
+                result.periodRows ? { periodRows: result.periodRows, spec: result.periodSpec, compareMode: normalizeCompareMode(params.compareMode) } : null);
             }
 
             // Handle groupBy parameter: find the dimension param whose groupByValue matches and
@@ -861,7 +864,7 @@ export default function reportApiPlugin(options = {}) {
             const isInteractive = format === 'html' || format === 'preview';
             const templateData = documentData
               ? { css, meta: { title, generatedAt: new Date().toISOString(), filters: activeFilters, params, locale, ui, labels, isInteractive }, header: documentData.header, lines: documentData.lines, taxes: documentData.taxes }
-              : { css, meta: { title, generatedAt: new Date().toISOString(), recordCount, filters: activeFilters, params, locale, ui, labels, totals, groupLabel, descriptionLabel, dimensionLabel, dimensionField, groups, tbGroups, companyLogoDataUrl, isInteractive, ...neoMeta }, rows };
+              : { css, meta: { title, generatedAt: new Date().toISOString(), recordCount, filters: activeFilters, params, locale, ui, labels, totals, groupLabel, descriptionLabel, dimensionLabel, dimensionField, groups, tbGroups, companyLogoDataUrl, isInteractive, ...neoMeta, ...buildPeriodMeta(result.periodSpec, { format, compareMode: params.compareMode }) }, rows };
 
             // Document (print-*) reports render a QR of the header. QRCode.toDataURL
             // is async while Handlebars.compile is sync, so the QR cannot be a helper
@@ -958,9 +961,10 @@ export default function reportApiPlugin(options = {}) {
             const buffer = Buffer.from(await jsRes.arrayBuffer());
             res.end(buffer);
           } catch (e) {
-            res.statusCode = 500;
+            // ETP-6239: a bad `periods` value is the caller's, not a server failure.
+            res.statusCode = e?.name === 'ReportPeriodsError' ? e.status : 500;
             res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ error: e.message }));
+            res.end(JSON.stringify(e?.name === 'ReportPeriodsError' ? { error: e.message, code: e.code } : { error: e.message }));
           }
           return;
         }
