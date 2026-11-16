@@ -210,13 +210,13 @@ function Entry({ params, locale, accountValue, session }) {
  * goes back to its step. An entry whose table has no window mapped ends the drill-down there (Q5).
  * Each step emits `report_drilldown` (ledger / entry timed, document when the tab opens).
  */
-export default function DynamicDrillPanel({ reportTitle, account, queryParams, session, canOpenEntry = true, onClose }) {
+export default function DynamicDrillPanel({ reportTitle, account, range = null, queryParams, session, canOpenEntry = true, onClose }) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   const [entry, setEntry] = useState(null);
   const [allLines, setAllLines] = useState(false);
   const dateText = (raw) => (raw ? formatCalendarDate(sqlDateDay(raw), locale.replace('_', '-')) : '');
-  const ledger = useMemo(() => account && ledgerParams(queryParams, account), [account, queryParams]);
+  const ledger = useMemo(() => account && ledgerParams(queryParams, account, range), [account, range, queryParams]);
   const entryQuery = useMemo(() => entry && entryParams(queryParams, entry.id), [entry, queryParams]);
   const close = () => { setEntry(null); setAllLines(false); onClose(); };
 

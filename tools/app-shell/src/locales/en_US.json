@@ -26742,6 +26742,9 @@
     "dynamicReportCollapseRow": "Collapse {name}",
     "reportErrorOrgAccess": "You do not have access to this organization.",
     "reportErrorReportAccess": "You do not have access to this report.",
+    "reportErrorPeriodRangeTooLong": "The period range is too long for this format. Choose a shorter range or fewer periods.",
+    "reportErrorInvalidPeriods": "The periods requested are not valid. Review the dates and try again.",
+    "dynamicReportErrorReversedDates": "The \"From\" date is after the \"To\" date.",
     "dynamicReportErrorGeneric": "The report could not be loaded.",
     "dynamicReportOpening": "Opening balance",
     "dynamicReportDebit": "Debit",
@@ -26767,7 +26770,18 @@
     "dynamicReportEntry": "Entry",
     "dynamicReportOpenDocument": "Open document",
     "dynamicReportNoDocument": "This entry has no document window to open.",
-    "dynamicReportDrillPath": "Drill-down path"
+    "dynamicReportDrillPath": "Drill-down path",
+    "dynamicReportColumns": "Columns",
+    "dynamicReportColumnsTotal": "Total",
+    "dynamicReportColumnsMonth": "By month",
+    "dynamicReportColumnsQuarter": "By quarter",
+    "dynamicReportQuarterPrefix": "Q",
+    "dynamicReportHiddenPeriods": "{count} earlier periods are not shown. Excel and CSV include every period.",
+    "dynamicReportPartialPeriods": "* Month or quarter incomplete within the chosen range.",
+    "dynamicReportExportTooLong": "Excel and CSV take up to 24 months or 8 quarters. Shorten the period to export them.",
+    "dynamicReportHidePanel": "Hide filters panel",
+    "dynamicReportShowPanel": "Show filters panel",
+    "dynamicReportActiveFilters": "{count} active filters"
   },
   "menus": {
     "Invoice Inbox": {
