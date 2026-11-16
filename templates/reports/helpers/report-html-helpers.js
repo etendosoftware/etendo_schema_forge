@@ -270,8 +270,9 @@ export function createReportHelpers({ numberFormat } = {}) {
 
   // The PDF pages with the range total last: the engine's pages hold idx 0 first, so flatten,
   // move it to the end and cut again at the engine's page size.
-  function periodPages(columnPages) {
-    var size = ((columnPages || [])[0] || []).length || 1;
+  function periodPages(columnPages, pageSize) {
+    // The engine's page size (meta.columnPageSize); a Handlebars call without it passes the options object.
+    var size = typeof pageSize === 'number' && pageSize > 0 ? pageSize : ((columnPages || [])[0] || []).length || 1;
     var flat = [].concat.apply([], columnPages || []);
     var ordered = flat.filter(function(i) { return i !== 0; }).concat(flat.filter(function(i) { return i === 0; }));
     var pages = [];
@@ -570,8 +571,8 @@ const JSREPORT_HELPER_SOURCES = {
   var all = (periods || []).map(function(p) { return p.idx; });
   return all.filter(function(i) { return i !== 0; }).concat(all.filter(function(i) { return i === 0; }));
 }`,
-  periodPages: `function periodPages(columnPages) {
-  var size = ((columnPages || [])[0] || []).length || 1;
+  periodPages: `function periodPages(columnPages, pageSize) {
+  var size = typeof pageSize === 'number' && pageSize > 0 ? pageSize : ((columnPages || [])[0] || []).length || 1;
   var flat = [].concat.apply([], columnPages || []);
   var ordered = flat.filter(function(i) { return i !== 0; }).concat(flat.filter(function(i) { return i === 0; }));
   var pages = [];

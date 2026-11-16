@@ -290,8 +290,9 @@ describe('DynamicReportView — split, errors and exports', () => {
     renderView();
     await waitFor(() => expect(rowIds()).toHaveLength(2));
     fireEvent.change(screen.getByTestId('DynamicReportPanel__dateFrom'), { target: { value: '2026-12-01' } });
-    expect(await screen.findByTestId('DynamicReportView__error')).toHaveTextContent('reportErrorInvalidPeriods');
+    expect(await screen.findByTestId('DynamicReportView__error')).toHaveTextContent('dynamicReportErrorReversedDates');
     expect(rowIds()).toHaveLength(0);
+    expect(JSON.stringify(trackMock.mock.calls)).not.toContain('invalid_periods'); // a client-side refusal is no server error class
     fireEvent.change(screen.getByTestId('DynamicReportPanel__dateFrom'), { target: { value: '2026-10-01' } });
     await waitFor(() => expect(screen.queryByTestId('DynamicReportView__error')).toBeNull());
   });

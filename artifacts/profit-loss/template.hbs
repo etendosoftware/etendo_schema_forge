@@ -53,7 +53,7 @@
         page with a comparison, all in one without), the range total last. Concepto and the 2-row
         header repeat on every page. Explicit table-layout and widths: without them Chrome shrinks a
         wide table to fit and then cuts columns. --}}
-  {{#each (periodPages meta.columnPages) as |page|}}
+  {{#each (periodPages meta.columnPages meta.columnPageSize) as |page|}}
   <table class="report-table period-table {{#if (periodMode @root.meta.params.compareMode)}}with-compare{{/if}}" style="table-layout: fixed;{{#unless @first}} page-break-before: always;{{/unless}}">
     <colgroup>
       <col style="width:45mm">

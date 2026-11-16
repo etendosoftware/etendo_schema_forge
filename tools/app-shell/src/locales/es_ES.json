@@ -26822,6 +26822,7 @@
     "reportErrorReportAccess": "No tienes acceso a este informe.",
     "reportErrorPeriodRangeTooLong": "El rango de períodos es demasiado largo para este formato. Elige un rango más corto o menos períodos.",
     "reportErrorInvalidPeriods": "Los períodos solicitados no son válidos. Revisa las fechas e inténtalo de nuevo.",
+    "dynamicReportErrorReversedDates": "La fecha \"Desde\" es posterior a la fecha \"Hasta\".",
     "dynamicReportErrorGeneric": "No se pudo cargar el informe.",
     "dynamicReportOpening": "Saldo inicial",
     "dynamicReportDebit": "Debe",

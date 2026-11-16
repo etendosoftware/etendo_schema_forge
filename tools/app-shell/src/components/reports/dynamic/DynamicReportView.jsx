@@ -117,8 +117,8 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   // From after to is a user error: say so, and show nothing of the previous period under the new one.
   const reversed = Boolean(state.dateFrom && state.dateTo && state.dateFrom > state.dateTo);
   const data = reversed ? null : queried;
-  const error = reversed ? 'reversed' : queryError;
-  const errorCode = reversed ? 'invalid_periods' : queryErrorCode;
+  const error = queryError;
+  const errorCode = queryErrorCode; // telemetry reads this: a client-side refusal is not a server error class
   const telemetry = useReportTelemetry(report.id, { source, paramsKey: JSON.stringify(queryParams), settled, errorCode });
   // D8: the panel hides on a button or on Mes/Trimestre. The button the user was on disappears, so
   // focus moves to the one that replaces it.
@@ -257,7 +257,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
 
   // The strip's badge counts what the user chose to narrow; the period and the (required) org are always on.
   const activeFilterCount = chips.filter((c) => c.clear).length;
-  const errorText = error && (errorCode === 'network' ? error : ui(ERROR_KEYS[errorCode] || 'dynamicReportErrorGeneric'));
+  const errorText = reversed ? ui('dynamicReportErrorReversedDates') : error && (errorCode === 'network' ? error : ui(ERROR_KEYS[errorCode] || 'dynamicReportErrorGeneric'));
 
   return (
     <div className="flex-1 min-h-0 flex flex-col" data-testid="DynamicReportView">
