@@ -2,6 +2,17 @@ import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+// The agreed v1 surface is explicit: adding a window or a UI child tab must
+// never publish a new public resource without a scope decision.
+export const publicApiV1Entities = Object.freeze({
+  contacts: ['businessPartner', 'locationAddress', 'contact'],
+  product: ['product', 'costing'],
+  'product-category': ['productCategory'],
+  'purchase-order': ['header', 'lines'],
+  'sales-order': ['header', 'lines'],
+  'sales-quotation': ['quotation', 'quotationLine'],
+});
+
 const excludedCategories = new Set([
   // These modules are not part of the public API scope.
   'accounting',
@@ -517,7 +528,7 @@ export async function generateManifest({
 } = {}) {
   const entities = {};
   for (const entry of await readdir(artifactsRoot, { withFileTypes: true })) {
-    if (!entry.isDirectory() || excludedWindows.has(entry.name)) continue;
+    if (!entry.isDirectory() || !Object.hasOwn(publicApiV1Entities, entry.name) || excludedWindows.has(entry.name)) continue;
     const contractPath = join(artifactsRoot, entry.name, 'contract.json');
     let contract;
     try {
@@ -554,6 +565,7 @@ export async function generateManifest({
     const primaryTable = primaryRaw?.tableName;
     const primaryIdField = primaryRaw?.fields?.find((field) => field.type === 'id');
     for (const entityName of Object.keys(contract.frontendContract?.entities ?? {})) {
+      if (!publicApiV1Entities[entry.name].includes(entityName)) continue;
       const source = contract.frontendContract.entities[entityName];
       const rawEntity = rawContract?.entities?.find((candidate) => candidate.tableName === source?.tableName);
       const isPrimary = entityName === primaryEntityName;
@@ -644,7 +656,8 @@ export async function generateManifest({
     apiVersion: 'v1',
     generatedFrom: 'artifacts/*/contract.json',
     policy: {
-      entitySelection: 'primary-entity-and-schema-linked-children-per-base-window',
+      entitySelection: 'explicit-v1-resources-with-schema-linked-children',
+      allowedResources: publicApiV1Entities,
       fieldSelection: 'curated-publicApi-else-form-plus-readonly-list',
       excludedCategories: [...excludedCategories],
       excludedWindows: [...excludedWindows],

@@ -771,3 +771,15 @@ An integrator with no id known beforehand completes an order this way: `GET /api
 window's lookup, works too.
 
 Evidence: `gateway/e2e/support/orders.ts` (`complete action`). Contract: `docs/public-api.md` §4.2.2.
+
+
+## Public API V1 warehouse selection
+
+The public API exposes this order and its lines, including the header's `complete` action.
+The app's new-order form requires an explicitly selected warehouse and can start with that
+picker empty. The public API offers the same choice through
+`GET /api/v1/purchase-order/lookups/warehouse`; submit the selected id as
+`data.attributes.warehouse` when creating the order. No warehouse default is inferred.
+The standalone warehouse collection is outside the V1 scope, so this field is a writable
+scalar rather than a relationship to another public resource. Partial updates can omit an
+unchanged warehouse. Document-state validation remains with the runtime, as in the app.

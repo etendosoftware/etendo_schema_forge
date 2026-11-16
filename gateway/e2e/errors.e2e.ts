@@ -37,6 +37,12 @@ describe('not found', () => {
     assert.match(error.detail, /Unknown public entity/);
   });
 
+  it('404 for resources outside V1, including warehouse and fiscal monitors', async () => {
+    for (const name of ['warehouse', 'sales-invoice', 'purchase-invoice', 'goods-shipment', 'goods-receipt', 'monitor-verifactu', 'sii-monitor', 'tbai-facturas-enviadas']) {
+      expectErrorDocument(await api('GET', name), 404);
+    }
+  });
+
   it('404 for a child resource addressed at top level', async () => {
     expectErrorDocument(await api('GET', 'sales-order-lines'), 404);
   });

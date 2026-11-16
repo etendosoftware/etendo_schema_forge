@@ -38,10 +38,11 @@ export async function createProduct(label: string, attributes: Record<string, un
   );
 }
 
-export async function firstWarehouseId(): Promise<string> {
-  const res = await api('GET', 'warehouse?page[size]=1');
-  expectStatus(res, 200, 'orders need a warehouse; the tenant has none readable through the public API');
+export async function firstWarehouseId(kind: 'sales-order' | 'purchase-order'): Promise<string> {
+  const res = await api('GET', `${kind}/lookups/warehouse?page[size]=1`);
+  expectStatus(res, 200, 'orders need a warehouse; the UI selector offers no warehouse');
   const id = res.json.data?.[0]?.id;
   assert.ok(id, 'no warehouse available to create an order');
+  assert.equal(res.json.data[0].type, 'warehouse');
   return id;
 }
