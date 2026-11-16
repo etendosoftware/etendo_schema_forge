@@ -2,13 +2,14 @@
 // @covers tools/app-shell/src/pages/portal/PortalDocumentListView.jsx
 // @covers tools/app-shell/src/pages/portal/PortalDocumentDetailView.jsx
 // @covers tools/app-shell/src/lib/portal/portalApi.js
+// @covers tools/app-shell/src/pages/portal/PortalHomeView.jsx
 import { test, expect } from '../../helpers/test.js';
 
 /**
  * Customer portal (mocked) — the two journeys a Business Partner takes from a sales document email.
  *
  * A. A valid link opens the document it was sent with; from there the customer goes to the list,
- *    filters it by status and date, opens another document and downloads its PDF.
+ *    filters it by status group (a tab) and date, opens another document and downloads its PDF.
  * B. An expired link renews itself: exactly one POST /renew, then the "new link sent" message.
  *
  * The portal is a public page: no `login()`, no session. Every `/sws/portal/*` route is mocked here
@@ -118,24 +119,26 @@ test.describe('Customer portal — mocked', () => {
     // Back to that kind's list.
     await page.getByTestId('portal-back').click();
     const list = page.getByTestId('portal-document-list');
-    await expect(list).toHaveAttribute('data-kind', 'INVOICE');
+    await expect(list.locator('[data-kind="INVOICE"]')).toBeVisible();
     await expect(page.getByTestId('portal-document-row')).toHaveCount(INVOICES.length);
     const initial = requests.filter((request) => request.path === '/documents').at(-1);
     const initialFrom = new URL(initial.url).searchParams.get('dateFrom');
+    // A plain list opens on the rolling last month (D-2).
     expect(initialFrom).toBeTruthy();
 
-    // Status filter: the picked status goes to the backend.
-    const byStatus = page.waitForRequest((request) => request.url().includes('/sws/portal/documents?')
-      && new URL(request.url()).searchParams.get('status') === 'CO');
-    await page.getByTestId('portal-status-tab-co').click();
-    await byStatus;
-    await expect(page.getByTestId('portal-status-tab-co')).toHaveAttribute('aria-selected', 'true');
+    // Status filter: the tab's customer-facing group goes to the backend, and to the URL.
+    const byGroup = page.waitForRequest((request) => request.url().includes('/sws/portal/documents?')
+      && new URL(request.url()).searchParams.get('group') === 'pending');
+    await page.getByTestId('portal-status-tab-pending').click();
+    await byGroup;
+    await expect(page.getByTestId('portal-status-tab-pending')).toHaveAttribute('aria-selected', 'true');
+    expect(new URL(page.url()).searchParams.get('group')).toBe('pending');
 
-    // Date filter: a preset replaces the default range, and the status filter stays applied.
+    // Date filter: a preset replaces the default range, and the group stays applied.
     const byDate = page.waitForRequest((request) => {
       if (!request.url().includes('/sws/portal/documents?')) return false;
       const params = new URL(request.url()).searchParams;
-      return params.get('status') === 'CO' && params.get('dateFrom') !== initialFrom;
+      return params.get('group') === 'pending' && params.get('dateFrom') !== initialFrom;
     });
     await list.getByTestId('portal-date-range').click();
     await page.getByRole('button', { name: /últimos 12 meses|last 12 months/i }).click();
@@ -146,7 +149,8 @@ test.describe('Customer portal — mocked', () => {
       .getByTestId('portal-document-open').click();
     await expect(page.getByTestId('portal-view-title')).toContainText('FV/0002');
 
-    // Its PDF, saved under a path-safe name.
+    // Its PDF, fetched with the document, saved under a path-safe name.
+    await expect(page.getByTestId('portal-download-pdf')).toBeEnabled();
     const [download] = await Promise.all([
       page.waitForEvent('download'),
       page.getByTestId('portal-download-pdf').click(),

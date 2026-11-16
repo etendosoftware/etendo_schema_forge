@@ -14,6 +14,41 @@ vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => apiFetchMock }));
 // The download plumbing lives in its own module so a test can see what would be saved.
 vi.mock('@/lib/portal/portalDownload.js', () => ({ saveBlobAsFile: vi.fn() }));
 
+// react-pdf cannot render in jsdom: the viewer is the boundary. The stub shows which URL it got.
+vi.mock('@/windows/custom/shared/PdfViewer.jsx', () => ({
+  default: ({ url }) => <div data-testid="pdf-viewer" data-url={url} />,
+  usePdfZoom: () => ({
+    scale: 1, zoomIn: () => {}, zoomOut: () => {}, canZoomIn: true, canZoomOut: true,
+  }),
+}));
+vi.mock('@/windows/custom/shared/FileLightbox.jsx', () => ({
+  default: ({ open, file }) => (open ? <div data-testid="pdf-lightbox" data-url={file.objectUrl} /> : null),
+}));
+
+// Radix menus open on pointer events jsdom does not drive reliably. This stand-in keeps the
+// contract the portal relies on: the content exists only once its trigger has been clicked.
+vi.mock('@/components/ui/dropdown-menu', async () => {
+  const React = await vi.importActual('react');
+  const Ctx = React.createContext(null);
+  return {
+    DropdownMenu: ({ children }) => {
+      const [open, setOpen] = React.useState(false);
+      return React.createElement(Ctx.Provider, { value: { open, setOpen } }, children);
+    },
+    DropdownMenuTrigger: ({ children }) => {
+      const { open, setOpen } = React.useContext(Ctx);
+      return React.cloneElement(children, { onClick: () => setOpen(!open), 'aria-expanded': open });
+    },
+    DropdownMenuContent: ({ children }) => {
+      const { open, setOpen } = React.useContext(Ctx);
+      return open ? React.createElement('div', { role: 'menu', onClick: () => setOpen(false) }, children) : null;
+    },
+    DropdownMenuItem: ({ children, onSelect, ...props }) => React.createElement(
+      'button', { type: 'button', role: 'menuitem', onClick: onSelect, ...props }, children,
+    ),
+  };
+});
+
 /**
  * The mocked translation: the key, plus its variables when there are any, so an assertion can see
  * WHICH values reached the copy (the tenant name, the overdue amount) and not just the key.
@@ -73,8 +108,9 @@ const HOME = {
   recent: [
     { kind: 'ORDER', id: 'ord-1', documentNo: 'PV/0001', date: '2026-08-01', documentStatus: 'CO', currency: 'EUR', grandTotal: 500 },
     {
-      kind: 'INVOICE', id: 'inv-1', documentNo: 'FV/0001', date: '2026-08-02', documentStatus: 'CO',
-      currency: 'EUR', grandTotal: 1000, outstandingAmount: 0,
+      // The server says it is overdue: the home badge follows it (no instalments here).
+      kind: 'INVOICE', id: 'inv-2', documentNo: 'FV/0002', date: '2026-08-02', documentStatus: 'CO',
+      currency: 'EUR', grandTotal: 500, outstandingAmount: 500, overdue: true,
     },
   ],
 };
@@ -195,6 +231,12 @@ const callsTo = (route) => apiFetchMock.mock.calls
 const listQueries = () => callsTo('/documents')
   .map(([path]) => new URL(path, 'http://portal').searchParams);
 
+/** The view the URL holds, as an object. */
+const urlView = () => Object.fromEntries(new URLSearchParams(screen.getByTestId('location-probe').textContent));
+
+/** The kind of the list on screen (its toolbar carries it). */
+const listKind = () => screen.getByTestId('portal-document-list').querySelector('[data-kind]')?.getAttribute('data-kind');
+
 /** Exact options of every GET the page makes; `/renew` adds `method: 'POST'`. */
 const PORTAL_GET_OPTIONS = { token: TOKEN, headers: { 'X-Portal-Token': TOKEN }, on401: 'ignore' };
 
@@ -207,16 +249,31 @@ const listReady = () => waitFor(
 const detailReady = () => waitFor(
   () => expect(screen.getByTestId('portal-document-detail')).toBeInTheDocument(),
 );
+/** The printable has arrived: its download button is enabled. */
+const pdfReady = () => waitFor(
+  () => expect(screen.getByTestId('portal-download-pdf')).toBeEnabled(),
+);
 
 beforeEach(() => {
   vi.clearAllMocks();
   localeState.locale = 'es_ES';
-  // jsdom has no object URLs; the logo and "Ver PDF" both need one.
+  // jsdom has no object URLs; the logo and the printable both need one.
   URL.createObjectURL = vi.fn(() => 'blob:portal-object');
   URL.revokeObjectURL = vi.fn();
+  // The preview sizes the page from its pane; the setup's ResizeObserver stub observes nothing.
+  globalThis.ResizeObserver = class {
+    constructor(callback) { this.callback = callback; }
+
+    observe() { this.callback([{ contentRect: { width: 840 } }]); }
+
+    unobserve() {}
+
+    disconnect() {}
+  };
   responses = {
     me: jsonResponse(IDENTITY),
     home: jsonResponse(HOME),
+    search: jsonResponse({ documents: [INVOICES[1]] }),
     documents: (params) => jsonResponse(
       LISTS[params.get('type')] ?? { documents: [], totalCount: 0, statuses: [] },
     ),
@@ -233,6 +290,7 @@ beforeEach(() => {
     let answer;
     if (route.endsWith('/me')) answer = typeof responses.me === 'function' ? responses.me() : responses.me;
     else if (route.endsWith('/home')) answer = responses.home;
+    else if (route.endsWith('/search')) answer = responses.search;
     else if (route.endsWith('/renew')) answer = responses.renew;
     else if (route.endsWith('/logo')) answer = responses.logo;
     else if (route.endsWith('/documents')) answer = responses.documents(new URLSearchParams(query));
@@ -256,14 +314,18 @@ describe('PortalPage — token handling (plan §5.4)', () => {
     responses.logo = blobResponse(new Blob(['png'], { type: 'image/png' }));
     renderPortal();
     await detailReady();
+    await pdfReady();
 
     await user.click(screen.getByTestId('portal-download-pdf'));
-    await waitFor(() => expect(saveBlobAsFile).toHaveBeenCalled());
     await user.click(screen.getByTestId('portal-back'));
     await listReady();
+    await user.click(screen.getByTestId('portal-nav-home'));
+    await shellReady();
+    await user.type(screen.getByTestId('portal-global-search'), 'FV');
+    await waitFor(() => expect(callsTo('/search')).toHaveLength(1));
 
-    // Every GET the page can make: identity, home, logo, one document, its printable, a list.
-    // `/renew` is asserted in the link-states block.
+    // Every GET the page can make: identity, home, logo, a document, its printable, a list, the
+    // search. `/renew` is asserted in the link-states block.
     const routes = new Set(apiFetchMock.mock.calls.map(([path]) => path.split('?')[0]));
     expect([...routes].sort()).toEqual([
       '/sws/portal/documents',
@@ -272,6 +334,7 @@ describe('PortalPage — token handling (plan §5.4)', () => {
       '/sws/portal/home',
       '/sws/portal/logo',
       '/sws/portal/me',
+      '/sws/portal/search',
     ]);
     for (const [path, options] of apiFetchMock.mock.calls) {
       expect(path).not.toContain(TOKEN);
@@ -377,7 +440,7 @@ describe('PortalPage — view in the URL', () => {
     responses.me = jsonResponse({ ...IDENTITY, entryKind: 'ORDER' });
     renderPortal();
 
-    await waitFor(() => expect(screen.getByTestId('portal-document-list')).toHaveAttribute('data-kind', 'ORDER'));
+    await waitFor(() => expect(listKind()).toBe('ORDER'));
     const notice = screen.getByTestId('portal-entry-unavailable');
     expect(notice).toHaveAttribute('role', 'status');
     expect(notice.textContent).toBe('portalEntryDocumentUnavailable');
@@ -406,7 +469,7 @@ describe('PortalPage — view in the URL', () => {
     renderPortal(`/portal/${TOKEN}?view=list&kind=INVOICE`);
     await listReady();
 
-    expect(screen.getByTestId('portal-document-list')).toHaveAttribute('data-kind', 'INVOICE');
+    expect(listKind()).toBe('INVOICE');
     expect(callsTo('/documents/invoice/inv-1')).toHaveLength(0);
   });
 
@@ -419,23 +482,100 @@ describe('PortalPage — view in the URL', () => {
     await user.click(screen.getByTestId('portal-back'));
     await listReady();
 
-    const search = screen.getByTestId('location-probe').textContent;
-    expect(Object.fromEntries(new URLSearchParams(search))).toEqual({ view: 'list', kind: 'INVOICE' });
-    expect(search).not.toContain(TOKEN);
+    expect(urlView()).toEqual({ view: 'list', kind: 'INVOICE' });
+    expect(screen.getByTestId('location-probe').textContent).not.toContain(TOKEN);
   });
 });
 
-describe('PortalPage — home', () => {
-  it('shows the pending balance per currency, with the overdue line only where there is one', async () => {
+describe('PortalPage — shell', () => {
+  it('shows the customer the link belongs to, as the sidebar row and the mobile avatar', async () => {
     renderPortal();
     await shellReady();
 
-    expect(screen.getAllByTestId('portal-balance-currency')).toHaveLength(2);
-    expect(screen.getAllByTestId('portal-balance-outstanding')[0].textContent).toBe(eur('1.210,50'));
-    const overdue = screen.getAllByTestId('portal-balance-overdue');
-    expect(overdue).toHaveLength(1);
-    expect(overdue[0].textContent)
-      .toBe(t('portalOverdueSince', { amount: eur('210,50'), date: '15/08/2026' }));
+    expect(screen.getByTestId('portal-customer-name').textContent).toBe('Cliente Uno');
+    const avatar = screen.getByTestId('portal-customer-avatar');
+    expect(avatar.textContent).toBe('CU');
+    expect(avatar).toHaveAttribute('aria-label', 'Cliente Uno');
+  });
+
+  it('shows no customer row and no avatar when /me names no customer', async () => {
+    responses.me = jsonResponse({ tenantName: 'Acme SA' });
+    renderPortal();
+    await shellReady();
+
+    expect(screen.queryByTestId('portal-customer')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('portal-customer-avatar')).not.toBeInTheDocument();
+  });
+
+  it('links "Creado con etendo.ai" to the product site in a new tab, without an opener', async () => {
+    renderPortal();
+    await shellReady();
+
+    const link = screen.getByTestId('portal-created-with');
+    expect(link).toHaveAttribute('href', 'https://etendo.ai');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('marks the open view in the sidebar and counts what needs the customer', async () => {
+    renderPortal();
+    await shellReady();
+
+    expect(screen.getByTestId('portal-nav-home')).toHaveAttribute('aria-current', 'page');
+    expect(within(screen.getByTestId('portal-nav-quotation')).getByTestId('portal-nav-count').textContent).toBe('2');
+    expect(within(screen.getByTestId('portal-nav-invoice')).getByTestId('portal-nav-count').textContent).toBe('1');
+    expect(within(screen.getByTestId('portal-nav-order')).queryByTestId('portal-nav-count')).not.toBeInTheDocument();
+  });
+});
+
+describe('PortalPage — language', () => {
+  it('opens the language menu from its trigger, names Spanish by default and switches to English', async () => {
+    const user = userEvent.setup();
+    localeState.locale = undefined;
+    renderPortal();
+    await shellReady();
+
+    // The sidebar's trigger (the first) names the current language; Spanish when none is set.
+    const trigger = screen.getAllByTestId('portal-language-switch')[0];
+    expect(trigger).toHaveTextContent('Español');
+    // The menu is closed until its trigger is clicked.
+    expect(screen.queryByTestId('portal-language-en')).not.toBeInTheDocument();
+    await user.click(trigger);
+
+    await user.click(screen.getByTestId('portal-language-en'));
+    expect(localeState.setLocale).toHaveBeenCalledWith('en_US');
+  });
+
+  for (const [locale, active] of [['es_ES', 'es'], ['en_US', 'en']]) {
+    it(`marks ${locale} as the active language`, async () => {
+      const user = userEvent.setup();
+      localeState.locale = locale;
+      renderPortal();
+      await shellReady();
+
+      await user.click(screen.getAllByTestId('portal-language-switch')[0]);
+
+      for (const short of ['es', 'en']) {
+        const { className } = screen.getByTestId(`portal-language-${short}`);
+        if (short === active) expect(className).toMatch(/font-semibold/);
+        else expect(className).not.toMatch(/font-semibold/);
+      }
+    });
+  }
+});
+
+describe('PortalPage — home', () => {
+  it('shows the pending balance per currency, and the overdue line on the mobile card', async () => {
+    renderPortal();
+    await shellReady();
+
+    const pending = screen.getAllByTestId('portal-balance-outstanding');
+    expect(pending).toHaveLength(2);
+    expect(pending[0].textContent).toBe(eur('1.210,50'));
+    // The overdue detail belongs to the mobile card, once, for the currency that has it.
+    const hero = screen.getByTestId('portal-pending-hero');
+    expect(hero.textContent.match(/portalOverdueSince/g)).toHaveLength(1);
+    expect(hero).toHaveTextContent(t('portalOverdueSince', { amount: eur('210,50'), date: '15/08/2026' }));
   });
 
   it('says nothing is pending when there are no balances', async () => {
@@ -443,7 +583,9 @@ describe('PortalPage — home', () => {
     renderPortal();
     await shellReady();
 
-    expect(screen.getByTestId('portal-balance-empty')).toHaveTextContent('portalNothingPending');
+    expect(screen.getByTestId('portal-balance-empty').textContent).toBe('—');
+    expect(screen.getByTestId('portal-pending-hero')).toHaveTextContent('portalNothingPending');
+    expect(screen.queryByTestId('portal-view-pending-invoices')).not.toBeInTheDocument();
   });
 
   it('shows one tile per kind, with the figure the kind calls out', async () => {
@@ -462,7 +604,7 @@ describe('PortalPage — home', () => {
     }
   });
 
-  it('opens a kind list from its tile', async () => {
+  it('opens the tab a tile counts, on all time, since what it counts may be older than a month', async () => {
     const user = userEvent.setup();
     renderPortal();
     await shellReady();
@@ -470,19 +612,34 @@ describe('PortalPage — home', () => {
     await user.click(screen.getByTestId('portal-tile-invoice'));
 
     await listReady();
-    expect(screen.getByTestId('portal-document-list')).toHaveAttribute('data-kind', 'INVOICE');
-    expect(listQueries().every((query) => query.get('type') === 'invoice')).toBe(true);
+    expect(urlView()).toEqual({ view: 'list', kind: 'INVOICE', group: 'overdue' });
+    for (const query of listQueries()) {
+      expect([query.get('type'), query.get('group'), query.get('dateFrom')]).toEqual(['invoice', 'overdue', null]);
+    }
   });
 
-  it('lists the recent documents and opens one', async () => {
+  it('opens a plain list from a tile with nothing to call out', async () => {
+    const user = userEvent.setup();
+    renderPortal();
+    await shellReady();
+
+    await user.click(screen.getByTestId('portal-tile-order'));
+
+    await waitFor(() => expect(listKind()).toBe('ORDER'));
+    expect(urlView()).toEqual({ view: 'list', kind: 'ORDER' });
+  });
+
+  it('lists the recent documents, the overdue one as overdue, and opens one', async () => {
     const user = userEvent.setup();
     renderPortal();
     await shellReady();
 
     const recent = screen.getAllByTestId('portal-recent-document');
     expect(recent).toHaveLength(2);
-    expect(recent[0]).toHaveTextContent('portalKindOrder PV/0001');
-    expect(within(recent[1]).getByTestId('portal-payment-status')).toHaveAttribute('data-state', 'paid');
+    expect(recent[0]).toHaveTextContent('portalKindOrder');
+    expect(recent[0]).toHaveTextContent('PV/0001');
+    // No instalments on the home: the server's overdue flag decides the badge.
+    expect(within(recent[1]).getByTestId('portal-payment-status')).toHaveAttribute('data-state', 'overdue');
 
     await user.click(recent[0]);
 
@@ -490,10 +647,38 @@ describe('PortalPage — home', () => {
     expect(callsTo('/documents/order/ord-1')).toHaveLength(1);
     expect(screen.getByTestId('portal-view-title').textContent).toBe('portalKindOrder PV/0001');
   });
+
+  it('refetches only the home aggregates for another chart period', async () => {
+    const user = userEvent.setup();
+    renderPortal();
+    await shellReady();
+    expect(new URL(callsTo('/home')[0][0], 'http://portal').searchParams.get('months')).toBe('12');
+
+    await user.click(screen.getByTestId('portal-period'));
+    await user.click(screen.getByTestId('portal-period-3'));
+
+    await waitFor(() => expect(callsTo('/home')).toHaveLength(2));
+    expect(new URL(callsTo('/home')[1][0], 'http://portal').searchParams.get('months')).toBe('3');
+    expect(callsTo('/me')).toHaveLength(1);
+  });
+
+  it('searches every kind from the header and opens a match', async () => {
+    const user = userEvent.setup();
+    renderPortal();
+    await shellReady();
+
+    await user.type(screen.getByTestId('portal-global-search'), 'FV');
+
+    await waitFor(() => expect(screen.getAllByTestId('portal-search-result')).toHaveLength(1));
+    expect(new URL(callsTo('/search')[0][0], 'http://portal').searchParams.get('q')).toBe('FV');
+    await user.click(screen.getByTestId('portal-search-result'));
+    await detailReady();
+    expect(urlView()).toEqual({ view: 'doc', kind: 'INVOICE', id: 'inv-2' });
+  });
 });
 
 describe('PortalPage — document list', () => {
-  const listPath = (kind) => `/portal/${TOKEN}?view=list&kind=${kind}`;
+  const listPath = (kind, group) => `/portal/${TOKEN}?view=list&kind=${kind}${group ? `&group=${group}` : ''}`;
 
   it('asks for the rolling last month by default', async () => {
     // Only `Date` is faked, so the debounce and the waits keep their real timers.
@@ -509,21 +694,24 @@ describe('PortalPage — document list', () => {
     }
   });
 
-  it('offers "all" plus only the statuses the backend lists, and requests the one picked', async () => {
+  it('offers "all" plus the kind\'s status groups, and a tab sends its group, never a status', async () => {
     const user = userEvent.setup();
     renderPortal(listPath('INVOICE'));
     await listReady();
 
-    expect(screen.getAllByRole('tab').map((tab) => tab.getAttribute('data-testid'))).toEqual([
-      'portal-status-tab-all', 'portal-status-tab-co', 'portal-status-tab-cl',
+    const desktopTabs = screen.getAllByRole('tab').map((tab) => tab.getAttribute('data-testid'))
+      .filter((id) => !id.endsWith('-mobile'));
+    expect(desktopTabs).toEqual([
+      'portal-status-tab-all', 'portal-status-tab-pending', 'portal-status-tab-overdue', 'portal-status-tab-paid',
     ]);
-    // "All" sends no status at all: the client never names a status — draft included — on its own.
-    expect(listQueries().every((query) => !query.has('status'))).toBe(true);
+    expect(listQueries().every((query) => !query.has('group') && !query.has('status'))).toBe(true);
 
-    await user.click(screen.getByTestId('portal-status-tab-co'));
+    await user.click(screen.getByTestId('portal-status-tab-paid'));
 
-    await waitFor(() => expect(listQueries().some((query) => query.get('status') === 'CO')).toBe(true));
-    expect(screen.getByTestId('portal-status-tab-co')).toHaveAttribute('aria-selected', 'true');
+    await waitFor(() => expect(listQueries().some((query) => query.get('group') === 'paid')).toBe(true));
+    expect(screen.getByTestId('portal-status-tab-paid')).toHaveAttribute('aria-selected', 'true');
+    expect(urlView()).toEqual({ view: 'list', kind: 'INVOICE', group: 'paid' });
+    expect(listQueries().some((query) => query.has('status'))).toBe(false);
   });
 
   it('debounces the search and sends it as q', async () => {
@@ -541,8 +729,8 @@ describe('PortalPage — document list', () => {
   it('loads the next page on demand and appends it', async () => {
     const user = userEvent.setup();
     responses.documents = (params) => jsonResponse(params.get('offset') === '2'
-      ? { documents: [order(3)], totalCount: 3, statuses: ['CO'] }
-      : { documents: [order(1), order(2)], totalCount: 3, statuses: ['CO'] });
+      ? { documents: [order(3)], totalCount: 3 }
+      : { documents: [order(1), order(2)], totalCount: 3 });
     renderPortal(listPath('ORDER'));
     await listReady();
     expect(screen.getAllByTestId('portal-document-row')).toHaveLength(2);
@@ -554,25 +742,25 @@ describe('PortalPage — document list', () => {
     expect(screen.queryByTestId('portal-load-more')).not.toBeInTheDocument();
   });
 
-  it('shows the payment badge and the due-date dot of each invoice, and marks credit notes', async () => {
+  it('shows each invoice\'s type, payment badge and due-date dot', async () => {
     renderPortal(listPath('INVOICE'));
     await listReady();
 
     const rows = screen.getAllByTestId('portal-document-row');
     const states = rows.map((row) => [
       within(row).getByTestId('portal-document-open').textContent,
+      within(row).getByTestId('portal-invoice-type').getAttribute('data-credit-note'),
       within(row).getByTestId('portal-payment-status').getAttribute('data-state'),
       within(row).queryByTestId('portal-due-date')?.getAttribute('data-state') ?? null,
     ]);
     expect(states).toEqual([
-      ['FV/0001', 'paid', 'paid'],
+      ['FV/0001', 'false', 'paid', 'paid'],
       // The list badge never says overdue (as in the invoice list grid); the due-date dot does.
-      ['FV/0002', 'pending', 'overdue'],
-      ['AB/0001', 'credit-available', null],
+      ['FV/0002', 'false', 'pending', 'overdue'],
+      // A credit note lives among the invoices, as a rectificative.
+      ['AB/0001', 'true', 'credit-available', null],
     ]);
-    // A credit note lives among the invoices, marked as such.
-    expect(rows[2]).toHaveTextContent('portalKindCreditNote');
-    expect(rows[0]).not.toHaveTextContent('portalKindCreditNote');
+    expect(within(rows[2]).getByTestId('portal-invoice-type').textContent).toBe('rectificativeInvoicesTab');
   });
 
   it('shows no amount columns for shipments and a dash on the card', async () => {
@@ -592,15 +780,15 @@ describe('PortalPage — document list', () => {
     expect(screen.queryByTestId('portal-document-table')).not.toBeInTheDocument();
   });
 
-  it('opens a document from its row', async () => {
+  it('opens a document from a click anywhere on its row', async () => {
     const user = userEvent.setup();
     renderPortal(listPath('INVOICE'));
     await listReady();
 
-    await user.click(within(screen.getAllByTestId('portal-document-row')[0]).getByTestId('portal-document-open'));
+    await user.click(within(screen.getAllByTestId('portal-document-row')[0]).getByText('—'));
 
     await detailReady();
-    expect(callsTo('/documents/invoice/inv-1')).toHaveLength(1);
+    expect(urlView()).toEqual({ view: 'doc', kind: 'INVOICE', id: 'inv-1' });
   });
 });
 
@@ -624,7 +812,6 @@ describe('PortalPage — mobile layout', () => {
         { ...INVOICES[0], id: 'inv-9', documentNo: 'FV/0009', documentStatus: 'CL' },
       ],
       totalCount: 2,
-      statuses: ['CO', 'CL'],
     });
     renderPortal(`/portal/${TOKEN}?view=list&kind=INVOICE`);
     await listReady();
@@ -640,7 +827,7 @@ describe('PortalPage — mobile layout', () => {
       .toBe(`portalColOutstanding ${eur('0,00')}`);
   });
 
-  it('shows the bottom navigation below the breakpoint and the sidebar above it', async () => {
+  it('shows the bottom navigation below the breakpoint, with orders and shipments under "Más"', async () => {
     const user = userEvent.setup();
     renderPortal();
     await shellReady();
@@ -649,68 +836,91 @@ describe('PortalPage — mobile layout', () => {
     const bottomNav = screen.getByTestId('portal-bottom-nav');
     expect(bottomNav).toHaveClass('md:hidden');
     expect(within(bottomNav).getByTestId('portal-bottom-nav-home')).toHaveAttribute('aria-current', 'page');
+    expect(within(bottomNav).queryByTestId('portal-bottom-nav-order')).not.toBeInTheDocument();
 
+    await user.click(within(bottomNav).getByTestId('portal-bottom-nav-more'));
     await user.click(within(bottomNav).getByTestId('portal-bottom-nav-order'));
 
-    await waitFor(() => expect(screen.getByTestId('portal-document-list')).toHaveAttribute('data-kind', 'ORDER'));
-    expect(within(bottomNav).getByTestId('portal-bottom-nav-order')).toHaveAttribute('aria-current', 'page');
-  });
-});
-
-describe('PortalPage — language', () => {
-  for (const [label, locale, pressed] of [
-    ['Spanish', 'es_ES', 'es'],
-    ['Spanish when no locale is set', undefined, 'es'],
-    ['English', 'en_US', 'en'],
-  ]) {
-    it(`marks ${label} as the active language`, async () => {
-      localeState.locale = locale;
-      renderPortal();
-      await shellReady();
-
-      // One switch in the sidebar, one in the mobile top bar.
-      for (const short of ['es', 'en']) {
-        for (const button of screen.getAllByTestId(`portal-language-${short}`)) {
-          expect(button).toHaveAttribute('aria-pressed', String(short === pressed));
-        }
-      }
-    });
-  }
-
-  it('switches to English on EN', async () => {
-    const user = userEvent.setup();
-    renderPortal();
-    await shellReady();
-
-    await user.click(screen.getAllByTestId('portal-language-en')[0]);
-
-    expect(localeState.setLocale).toHaveBeenCalledWith('en_US');
+    await waitFor(() => expect(listKind()).toBe('ORDER'));
+    expect(within(bottomNav).getByTestId('portal-bottom-nav-more')).toHaveAttribute('aria-expanded', 'false');
   });
 });
 
 describe('PortalPage — document detail', () => {
-  it('renders the lines read-only', async () => {
+  it('shows the printable in the PDF viewer, with no data sheet, once it arrives', async () => {
     responses.me = jsonResponse(WITH_ENTRY);
     renderPortal();
     await detailReady();
 
-    const lines = screen.getByTestId('portal-document-lines');
-    expect(within(lines).getAllByRole('row')).toHaveLength(3); // header + two lines
-    expect(lines).toHaveTextContent('Tornillo');
-    expect(lines).toHaveTextContent('Arandela');
-    const detail = screen.getByTestId('portal-document-detail');
-    expect(within(detail).queryAllByRole('textbox')).toHaveLength(0);
-    expect(within(detail).queryAllByRole('spinbutton')).toHaveLength(0);
+    await waitFor(() => expect(screen.getByTestId('pdf-viewer')).toHaveAttribute('data-url', 'blob:portal-object'));
+    expect(screen.queryByTestId('portal-document-sheet')).not.toBeInTheDocument();
+    expect(callsTo('/documents/invoice/inv-1/pdf')[0][1]).toStrictEqual(PORTAL_GET_OPTIONS);
   });
 
-  it('marks an invoice with an owing past-due instalment as overdue in its payment block', async () => {
+  it('opens the printable full screen from the mobile "Ver PDF"', async () => {
+    const user = userEvent.setup();
+    responses.me = jsonResponse(WITH_ENTRY);
+    renderPortal();
+    await detailReady();
+    await pdfReady();
+
+    await user.click(screen.getByTestId('portal-view-pdf'));
+    expect(screen.getByTestId('pdf-lightbox')).toHaveAttribute('data-url', 'blob:portal-object');
+  });
+
+  it('saves the printable already fetched under a path-safe name on "Descargar PDF"', async () => {
+    const user = userEvent.setup();
+    responses.me = jsonResponse(WITH_ENTRY);
+    renderPortal();
+    await detailReady();
+    await pdfReady();
+
+    await user.click(screen.getByTestId('portal-download-pdf'));
+
+    // `FV/0001` would be saved as `0001.pdf` if the slash reached the download attribute.
+    expect(saveBlobAsFile).toHaveBeenCalledWith(expect.any(Blob), 'FV-0001.pdf');
+    expect(saveBlobAsFile.mock.calls[0][0].type).toBe('application/pdf');
+    // The download reuses the fetched printable: no second request.
+    expect(callsTo('/documents/invoice/inv-1/pdf')).toHaveLength(1);
+  });
+
+  for (const [label, pdfAnswer, note] of [
+    ['has none the server could render (404)', jsonResponse({}, { status: 404 }), 'portalPdfUnavailableHint'],
+    ['failed to arrive', jsonResponse({}, { status: 500 }), 'portalDownloadFailed'],
+  ]) {
+    it(`falls back to the data sheet, lines read-only, when the printable ${label}`, async () => {
+      responses.pdf = pdfAnswer;
+      responses.me = jsonResponse(WITH_ENTRY);
+      renderPortal();
+      await detailReady();
+
+      await waitFor(() => expect(screen.getByTestId('portal-document-sheet')).toBeInTheDocument());
+      expect(screen.getByTestId('portal-pdf-unavailable')).toHaveTextContent(note);
+      const lines = screen.getByTestId('portal-document-lines');
+      expect(within(lines).getAllByRole('row')).toHaveLength(3); // header + two lines
+      expect(lines).toHaveTextContent('Tornillo');
+      const detail = screen.getByTestId('portal-document-detail');
+      expect(within(detail).queryAllByRole('textbox')).toHaveLength(0);
+      expect(within(detail).queryAllByRole('spinbutton')).toHaveLength(0);
+      expect(screen.queryByTestId('pdf-viewer')).not.toBeInTheDocument();
+    });
+  }
+
+  it('says "PDF no disponible", offers no download and asks for no printable when there is none', async () => {
+    renderPortal(`/portal/${TOKEN}?view=doc&kind=ORDER&id=ord-1`);
+    await detailReady();
+
+    expect(screen.getByTestId('portal-pdf-unavailable')).toHaveTextContent('portalPdfUnavailable');
+    expect(screen.queryByTestId('portal-download-pdf')).not.toBeInTheDocument();
+    expect(callsTo('/pdf')).toHaveLength(0);
+  });
+
+  it('marks an invoice with an owing past-due instalment as overdue in its summary', async () => {
     renderPortal(`/portal/${TOKEN}?view=doc&kind=INVOICE&id=inv-2`);
     await detailReady();
 
-    const payment = within(screen.getByTestId('portal-payment'));
-    expect(payment.getByTestId('portal-payment-status')).toHaveAttribute('data-state', 'overdue');
-    expect(payment.getByTestId('portal-due-date')).toHaveAttribute('data-state', 'overdue');
-    expect(payment.getByTestId('portal-payment-outstanding').textContent).toBe(eur('500,00'));
+    const panel = within(screen.getByTestId('portal-document-cards-panel'));
+    expect(panel.getByTestId('portal-payment-status')).toHaveAttribute('data-state', 'overdue');
   });
 
   it('opens a related document', async () => {
@@ -719,85 +929,23 @@ describe('PortalPage — document detail', () => {
     renderPortal();
     await detailReady();
 
-    await user.click(screen.getByTestId('portal-related-document'));
+    await user.click(screen.getByRole('button', { name: /orderDoc/ }));
 
     await waitFor(() => expect(screen.getByTestId('portal-view-title').textContent).toBe('portalKindOrder PV/0001'));
     expect(callsTo('/documents/order/ord-1')).toHaveLength(1);
-    expect(Object.fromEntries(new URLSearchParams(screen.getByTestId('location-probe').textContent)))
-      .toEqual({ view: 'doc', kind: 'ORDER', id: 'ord-1' });
+    expect(urlView()).toEqual({ view: 'doc', kind: 'ORDER', id: 'ord-1' });
   });
 
-  it('opens the printable in a dialog on "Ver PDF"', async () => {
-    const user = userEvent.setup();
-    responses.me = jsonResponse(WITH_ENTRY);
-    renderPortal();
-    await detailReady();
-
-    await user.click(screen.getByTestId('portal-view-pdf'));
-
-    await waitFor(() => expect(screen.getByTestId('portal-pdf-dialog')).toBeInTheDocument());
-    const pdfCalls = callsTo('/documents/invoice/inv-1/pdf');
-    expect(pdfCalls).toHaveLength(1);
-    expect(pdfCalls[0][1]).toStrictEqual(PORTAL_GET_OPTIONS);
-    expect(saveBlobAsFile).not.toHaveBeenCalled();
-  });
-
-  it('saves the printable under a path-safe name on "Descargar PDF"', async () => {
-    const user = userEvent.setup();
-    const pdf = new Blob(['%PDF-1.4'], { type: 'application/pdf' });
-    responses.pdf = blobResponse(pdf);
-    responses.me = jsonResponse(WITH_ENTRY);
-    renderPortal();
-    await detailReady();
-
-    await user.click(screen.getByTestId('portal-download-pdf'));
-
-    // `FV/0001` would be saved as `0001.pdf` if the slash reached the download attribute.
-    await waitFor(() => expect(saveBlobAsFile).toHaveBeenCalledWith(pdf, 'FV-0001.pdf'));
-    expect(callsTo('/documents/invoice/inv-1/pdf')[0][1]).toStrictEqual(PORTAL_GET_OPTIONS);
-  });
-
-  it('says "PDF no disponible" and offers no buttons when the document has no printable', async () => {
-    renderPortal(`/portal/${TOKEN}?view=doc&kind=ORDER&id=ord-1`);
-    await detailReady();
-
-    expect(screen.getByTestId('portal-pdf-unavailable')).toHaveTextContent('portalPdfUnavailable');
-    expect(screen.queryByTestId('portal-view-pdf')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('portal-download-pdf')).not.toBeInTheDocument();
-  });
-
-  it('reports one failed printable without leaving the document', async () => {
-    const user = userEvent.setup();
-    responses.pdf = jsonResponse({}, { status: 404 });
-    responses.me = jsonResponse(WITH_ENTRY);
-    renderPortal();
-    await detailReady();
-
-    await user.click(screen.getByTestId('portal-download-pdf'));
-
-    await waitFor(() => expect(within(screen.getByTestId('portal-document-detail')).getByRole('alert'))
-      .toHaveTextContent('portalDownloadFailed'));
-    expect(saveBlobAsFile).not.toHaveBeenCalled();
-  });
-
-  it('re-checks the link once when the printable rejects the token, and gives up on the second refusal', async () => {
-    const user = userEvent.setup();
+  it('re-checks the link once when the printable rejects the token, then gives up on the second refusal', async () => {
     responses.pdf = jsonResponse({}, { status: 401 });
     responses.me = jsonResponse(WITH_ENTRY);
     renderPortal();
-    await detailReady();
 
-    // First refusal: /me is asked again and still says "valid", so the document comes back.
-    await user.click(screen.getByTestId('portal-download-pdf'));
-    await waitFor(() => expect(callsTo('/me')).toHaveLength(2));
-    await detailReady();
-    expect(screen.queryByTestId('portal-invalid-link')).not.toBeInTheDocument();
-
-    // Second refusal without navigating: the dead-link screen, and no third /me.
-    await user.click(screen.getByTestId('portal-download-pdf'));
+    // The printable loads with the document: the first refusal re-runs /me (still valid), the
+    // document and its printable come back, and the second refusal ends on the dead-link screen.
     await waitFor(() => expect(screen.getByTestId('portal-invalid-link')).toBeInTheDocument());
-    expect(screen.queryByTestId('portal-document-detail')).not.toBeInTheDocument();
     expect(callsTo('/me')).toHaveLength(2);
+    expect(callsTo('/documents/invoice/inv-1/pdf')).toHaveLength(2);
     expect(saveBlobAsFile).not.toHaveBeenCalled();
   });
 
