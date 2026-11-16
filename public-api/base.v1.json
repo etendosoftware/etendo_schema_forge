@@ -121,7 +121,70 @@
             "type": "string"
           },
           "reference": null,
-          "required": true
+          "description": "Name of the contact. Required for a company (is_person false or omitted). For a person Etendo derives it from first_name and last_name; send none, as any other value is refused."
+        },
+        "category": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "businessPartnerCategory",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "BusinessPartnerCategory",
+          "description": "Category of the contact. When omitted on create, Etendo assigns the default category.",
+          "lookup": {
+            "selector": "businessPartnerCategory",
+            "type": "business-partner-category",
+            "context": {}
+          }
+        },
+        "first_name": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "etgoFirstname",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "description": "First name of a person. Required when is_person is true. Refused for a company."
+        },
+        "last_name": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "etgoLastname",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "description": "Last name of a person. Required when is_person is true. Refused for a company."
+        },
+        "tax_id_key": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "oBTIKTaxIDKey",
+          "dataType": {
+            "type": "string",
+            "enum": [
+              "1",
+              "2",
+              "3",
+              "4",
+              "5",
+              "6",
+              "7"
+            ]
+          },
+          "reference": null,
+          "enumLabels": {
+            "1": "NIF",
+            "2": "NIF Intracomunitario",
+            "3": "Pasaporte",
+            "4": "Documento oficial de identificación expedido por el país",
+            "5": "Certificado de residencia fiscal",
+            "6": "Otro documento probatorio",
+            "7": "No Censado"
+          },
+          "description": "Kind of tax id held in tax_id. When omitted, Etendo applies the default kind before it validates tax_id."
         },
         "tax_id": {
           "sourceVisibility": "editable",
@@ -130,7 +193,8 @@
           "dataType": {
             "type": "string"
           },
-          "reference": null
+          "reference": null,
+          "description": "Tax identification number. Etendo validates it for the kind in tax_id_key and refuses an invalid one."
         },
         "web": {
           "sourceVisibility": "editable",
@@ -158,6 +222,16 @@
             "type": "string"
           },
           "reference": null
+        },
+        "is_person": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "etgoIsperson",
+          "dataType": {
+            "type": "boolean"
+          },
+          "reference": null,
+          "description": "true for a person, false for a company. A contact created without it is a company. A person sends first_name and last_name; a company sends name."
         },
         "payment_method": {
           "sourceVisibility": "editable",
@@ -229,7 +303,7 @@
       },
       "source": {
         "artifact": "contacts",
-        "contractVersion": "0.9.0",
+        "contractVersion": "0.11.0",
         "backendEntity": true
       }
     },
@@ -435,7 +509,7 @@
       },
       "source": {
         "artifact": "contacts",
-        "contractVersion": "0.9.0",
+        "contractVersion": "0.11.0",
         "backendEntity": true
       }
     },
@@ -560,7 +634,7 @@
       },
       "source": {
         "artifact": "contacts",
-        "contractVersion": "0.9.0",
+        "contractVersion": "0.11.0",
         "backendEntity": true
       }
     },

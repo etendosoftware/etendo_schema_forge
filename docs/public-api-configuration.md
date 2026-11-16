@@ -120,7 +120,8 @@ beforehand (a payment method). Declare it on the field:
   value that is a published resource (a contact, a product) is found by listing that resource.
 
 Published today: `sales-order` and `purchase-order` `paymentMethod` (`IsSOTrx` `Y` / `N`) and
-`warehouse` (no context), and `contacts` `paymentMethod` / `pOPaymentMethod` (`FIN_ISRECEIPT` `Y` / `N`).
+`warehouse` (no context), and `contacts` `paymentMethod` / `pOPaymentMethod` (`FIN_ISRECEIPT` `Y` / `N`)
+and `businessPartnerCategory` (no context: the form's category selector has no validation rule).
 
 ## 4c. Describe a field, and list values
 
@@ -130,6 +131,9 @@ others), describe it on the field. The text is the field's description in the Op
 ```json
 "name": { "publicApi": { "exposed": true, "description": "Required for a company. Refused for a person." } }
 ```
+
+Real example: `artifacts/contacts/decisions.json`, where `name`, `etgoFirstname`, `etgoLastname`,
+`etgoIsperson`, `taxID`, `oBTIKTaxIDKey` and `businessPartnerCategory` describe the person-or-company rules.
 
 The description must be a non-empty string and must not cite an internal reference (a ticket or
 Jira); anything else fails the generation. Write it for an external integrator. The manifest
