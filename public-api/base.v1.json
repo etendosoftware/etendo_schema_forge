@@ -940,7 +940,6 @@
             "type": "string"
           },
           "reference": "Warehouse",
-          "required": true,
           "lookup": {
             "selector": "warehouse",
             "type": "warehouse",
@@ -1075,7 +1074,7 @@
       },
       "source": {
         "artifact": "purchase-order",
-        "contractVersion": "0.57.0",
+        "contractVersion": "0.58.0",
         "backendEntity": true
       }
     },
@@ -1217,7 +1216,7 @@
       },
       "source": {
         "artifact": "purchase-order",
-        "contractVersion": "0.57.0",
+        "contractVersion": "0.58.0",
         "backendEntity": true
       }
     },
@@ -1319,7 +1318,6 @@
             "type": "string"
           },
           "reference": "Warehouse",
-          "required": true,
           "lookup": {
             "selector": "warehouse",
             "type": "warehouse",
@@ -1420,7 +1418,7 @@
       },
       "source": {
         "artifact": "sales-order",
-        "contractVersion": "0.40.0",
+        "contractVersion": "0.41.0",
         "backendEntity": true
       }
     },
@@ -1562,7 +1560,7 @@
       },
       "source": {
         "artifact": "sales-order",
-        "contractVersion": "0.40.0",
+        "contractVersion": "0.41.0",
         "backendEntity": true
       }
     },
