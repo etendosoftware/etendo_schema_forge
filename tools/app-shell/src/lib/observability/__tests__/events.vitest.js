@@ -28,6 +28,16 @@ describe('observability event catalog', () => {
       .toEqual({ specName: 'profit-loss', reportSessionId: 's1', type: 'expand', outcome: 'success' });
   });
 
+  it('declares report_panel_toggled with panelState, trigger and outcome; state stays dropped', () => {
+    const event = OBSERVABILITY_EVENTS.REPORT_PANEL_TOGGLED;
+    expect(event.name).toBe('report_panel_toggled');
+    expect(event.properties).toEqual(expect.arrayContaining(['panelState', 'trigger', 'outcome']));
+    const { properties } = buildObservabilityEvent(event, {
+      specName: 'profit-loss', reportSessionId: 's1', panelState: 'collapsed', trigger: 'auto_columns', outcome: 'success', state: 'collapsed',
+    });
+    expect(properties).toEqual({ specName: 'profit-loss', reportSessionId: 's1', panelState: 'collapsed', trigger: 'auto_columns', outcome: 'success' });
+  });
+
   it('declares account_id on the report and walkthrough events (ETP-6230)', () => {
     for (const key of ['REPORT_OPENED', 'REPORT_FILTER_APPLIED', 'REPORT_GROUP_TOGGLED', 'REPORT_DRILLDOWN', 'WALKTHROUGH_STARTED', 'WALKTHROUGH_FINISHED']) {
       expect(OBSERVABILITY_EVENTS[key].properties).toContain('account_id');
