@@ -640,6 +640,14 @@ describe('fetchPortalDecision / confirmPortalDecision', () => {
       },
     ],
     [
+      'exposes the way into the portal: the fresh portal token and the quotation it opens on',
+      { state: 'confirmed', appliedNow: true, decision: 'ACCEPT', portalToken: 'tok-new', quotationId: 'q-1' },
+      {
+        state: 'confirmed', appliedNow: true, decision: 'ACCEPT', reasonCode: null, reasonText: null,
+        documentNo: null, tenantName: null, portalToken: 'tok-new', quotationId: 'q-1',
+      },
+    ],
+    [
       'treats anything but a literal true as not applied now (a re-opened link)',
       { state: 'confirmed', appliedNow: 'true' },
       {
