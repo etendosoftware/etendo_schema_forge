@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxApi.js
 import { describe, it, expect, vi } from 'vitest';
-import { fetchRowsByIdChunked, IDS_PER_REQUEST, fetchNextPage, fetchCount, fetchCounts, fetchRowsById, uploadInboxFile, fetchStreamPage, discardInboxDocument, DISCARD_ACTION } from '../invoiceInboxApi.js';
+import { fetchRowsByIdChunked, IDS_PER_REQUEST, fetchNextPage, fetchCount, fetchCounts, fetchRowsById, uploadInboxFile, fetchStreamPage, discardInboxDocument, DISCARD_ACTION, fetchReview, REVIEW_ACTION } from '../invoiceInboxApi.js';
 import { INBOX_FILTERS } from '../invoiceInboxFilters.js';
 
 const json = (body, { ok = true, status = 200 } = {}) => ({ ok, status, json: async () => body });
@@ -221,5 +221,59 @@ describe('fetchRowsByIdChunked', () => {
     const apiFetch = vi.fn();
     expect(await fetchRowsByIdChunked(apiFetch, [])).toEqual([]);
     expect(apiFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('fetchReview', () => {
+  it('GETs /header/{id}/action/review with the signal and returns the answer as is', async () => {
+    const body = { id: 'D1', status: 'READY', editable: true, document: { lines: [] } };
+    const apiFetch = vi.fn(async () => json(body));
+    const ctrl = new AbortController();
+    const out = await fetchReview(apiFetch, 'D1', ctrl.signal);
+    expect(REVIEW_ACTION).toBe('review');
+    expect(apiFetch).toHaveBeenCalledWith('/header/D1/action/review', { signal: ctrl.signal });
+    expect(out).toEqual({ status: 'ok', review: body });
+  });
+
+  it('encodes the id in the path', async () => {
+    const apiFetch = vi.fn(async () => json({ id: 'x' }));
+    await fetchReview(apiFetch, 'a/b c');
+    expect(apiFetch.mock.calls[0][0]).toBe('/header/a%2Fb%20c/action/review');
+  });
+
+  it('409 processing: failed with the code and the HTTP status', async () => {
+    const apiFetch = vi.fn(async () => json({ error: { code: 'processing', message: 'x' } }, { ok: false, status: 409 }));
+    expect(await fetchReview(apiFetch, 'D1')).toEqual({ status: 'failed', code: 'processing', httpStatus: 409 });
+  });
+
+  it('403 feature_disabled and 404 carry their codes', async () => {
+    const disabled = vi.fn(async () => json({ error: { code: 'feature_disabled' } }, { ok: false, status: 403 }));
+    expect(await fetchReview(disabled, 'D1')).toEqual({ status: 'failed', code: 'feature_disabled', httpStatus: 403 });
+    const missing = vi.fn(async () => json({ error: { code: 'not_found' } }, { ok: false, status: 404 }));
+    expect(await fetchReview(missing, 'D1')).toEqual({ status: 'failed', code: 'not_found', httpStatus: 404 });
+  });
+
+  it('a non-JSON error answer is a failure with no code', async () => {
+    const apiFetch = vi.fn(async () => ({ ok: false, status: 502, json: async () => { throw new SyntaxError('bad json'); } }));
+    expect(await fetchReview(apiFetch, 'D1')).toEqual({ status: 'failed', code: null, httpStatus: 502 });
+  });
+
+  it('a 200 with a non-JSON body is not an ok answer', async () => {
+    const apiFetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => { throw new SyntaxError('bad json'); } }));
+    expect(await fetchReview(apiFetch, 'D1')).toEqual({ status: 'failed', code: null, httpStatus: 200 });
+  });
+
+  it('a request with no HTTP answer rejects with the network error', async () => {
+    const err = Object.assign(new Error('offline'), { name: 'NetworkError' });
+    const apiFetch = vi.fn(async () => { throw err; });
+    await expect(fetchReview(apiFetch, 'D1')).rejects.toBe(err);
+  });
+
+  it('sends only a GET: no body and no method override', async () => {
+    const apiFetch = vi.fn(async () => json({ id: 'D1' }));
+    await fetchReview(apiFetch, 'D1');
+    const [, options] = apiFetch.mock.calls[0];
+    expect(options.method).toBeUndefined();
+    expect(options.body).toBeUndefined();
   });
 });

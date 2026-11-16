@@ -136,6 +136,19 @@ def target_platform(target: dict[str, Any]) -> str:
     return platform
 
 
+def target_routines(target: dict[str, Any]) -> bool:
+    """Whether the target preloads each probe's `routine` (ETP-6236, the "Etendo + routine" column).
+
+    Only an Etendo GO target can: the routine is an `etendo_routine` of its MCP.
+    """
+    routines = target.get("routines", False)
+    if not isinstance(routines, bool):
+        raise ValueError(f"Target {target['name']!r}: `routines` must be true or false.")
+    if routines and target.get("platform") != "etendo-go":
+        raise ValueError(f"Target {target['name']!r}: `routines = true` needs `platform = \"etendo-go\"`.")
+    return routines
+
+
 def target_settings(config: dict[str, Any], name: str) -> dict[str, Any]:
     targets = config.get("targets", {})
     if name not in targets:

@@ -36,8 +36,12 @@ export const SORT_NEWEST_FIRST = '-created';
 /** Rows per page of the list. */
 export const PAGE_SIZE = 50;
 
-/** Extra property that brings the linked vendor's tax id as `businessPartner$taxID`. */
-export const EXTRA_PROPERTIES = 'businessPartner.taxID';
+/**
+ * Extra properties of a list read: the linked vendor's tax id (`businessPartner$taxID`) and the
+ * created invoice's and the possible duplicate's plain document numbers (`invoice$documentNo`,
+ * `duplicateOfInvoice$documentNo`; the `$_identifier` of an invoice is "no - date - amount").
+ */
+export const EXTRA_PROPERTIES = 'businessPartner.taxID,invoice.documentNo,duplicateOfInvoice.documentNo';
 
 function equalsStatus(value) {
   return { fieldName: STATUS_FIELD, operator: 'equals', value };
