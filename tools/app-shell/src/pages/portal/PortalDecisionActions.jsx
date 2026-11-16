@@ -69,56 +69,24 @@ export default function PortalDecisionActions({
     }
   };
 
-  if (sentTo != null) {
-    return (
-      <p
-        role="status"
-        className={cn('flex items-start gap-2 text-sm', bar ? 'rounded-xl border border-border bg-card p-4' : '')}
-        data-testid="portal-decision-sent"
-      >
-        <MailCheck
-          className="mt-0.5 h-4 w-4 shrink-0 text-primary"
-          aria-hidden="true"
-          data-testid="MailCheck__a48dad" />
-        <span>{ui('portalDecisionSent', { email: sentTo })}</span>
-      </p>
-    );
-  }
-
+  if (sentTo != null) return <DecisionSentNotice email={sentTo} bar={bar} data-testid="DecisionSentNotice__a48dad" />;
   if (!decision.canDecide) {
-    const key = ERROR_KEYS[decision.blockedReason];
-    // Not pending any more (answered, closed): nothing to show — its status says it.
-    if (!key || decision.blockedReason === PORTAL_DECISION_ERROR.notPending) return null;
     return (
-      <p className="text-sm text-muted-foreground" data-testid="portal-decision-blocked">
-        {ui(key, { tenantName: tenantName ?? '' })}
-      </p>
+      <DecisionBlockedNotice
+        reason={decision.blockedReason}
+        tenantName={tenantName}
+        data-testid="DecisionBlockedNotice__a48dad" />
     );
   }
 
   const buttons = (
-    <div className={cn(bar ? 'grid gap-3' : 'flex flex-wrap gap-2', bar && acceptShown ? 'grid-cols-[minmax(0,1fr)_minmax(0,2fr)]' : '')}>
-      <Button
-        variant="outline"
-        className={bar ? 'h-14 rounded-[10px]' : ''}
-        onClick={() => setRejectOpen(true)}
-        disabled={busy}
-        data-testid="portal-decision-reject"
-      >
-        <X className="mr-1.5 h-4 w-4" aria-hidden="true" data-testid="X__a48dad" />{ui('portalDecisionReject')}
-      </Button>
-      {acceptShown ? (
-        <Button
-          className={bar ? 'h-14 rounded-[10px] font-semibold' : ''}
-          onClick={() => submit({ decision: 'ACCEPT' })}
-          disabled={busy}
-          data-testid="portal-decision-accept"
-        >
-          <Check className="mr-1.5 h-4 w-4" aria-hidden="true" data-testid="Check__a48dad" />
-          {ui(bar ? 'portalDecisionAcceptQuotation' : 'portalDecisionAccept')}
-        </Button>
-      ) : null}
-    </div>
+    <DecisionButtons
+      bar={bar}
+      acceptShown={acceptShown}
+      busy={busy}
+      onReject={() => setRejectOpen(true)}
+      onAccept={() => submit({ decision: 'ACCEPT' })}
+      data-testid="DecisionButtons__a48dad" />
   );
 
   return (
@@ -152,6 +120,65 @@ export default function PortalDecisionActions({
  * The portal's reject modal: the six fixed reasons (PO spec), "Otros" with a required text. Not the
  * app's `RejectQuotationModal`, which lists and creates the tenant's reasons through NEO.
  */
+/** The request left: the confirmation email went to the masked address. */
+function DecisionSentNotice({ email, bar }) {
+  const ui = useUI();
+  return (
+    <p
+      role="status"
+      className={cn('flex items-start gap-2 text-sm', bar ? 'rounded-xl border border-border bg-card p-4' : '')}
+      data-testid="portal-decision-sent"
+    >
+      <MailCheck
+        className="mt-0.5 h-4 w-4 shrink-0 text-primary"
+        aria-hidden="true"
+        data-testid="MailCheck__a48dad" />
+      <span>{ui('portalDecisionSent', { email })}</span>
+    </p>
+  );
+}
+
+/** Why the quotation cannot be answered now; nothing when it is simply no longer pending. */
+function DecisionBlockedNotice({ reason, tenantName }) {
+  const ui = useUI();
+  const key = ERROR_KEYS[reason];
+  if (!key || reason === PORTAL_DECISION_ERROR.notPending) return null;
+  return (
+    <p className="text-sm text-muted-foreground" data-testid="portal-decision-blocked">
+      {ui(key, { tenantName: tenantName ?? '' })}
+    </p>
+  );
+}
+
+/** Rechazar, and Aceptar when the PO enabled it. */
+function DecisionButtons({ bar, acceptShown, busy, onReject, onAccept }) {
+  const ui = useUI();
+  return (
+    <div className={cn(bar ? 'grid gap-3' : 'flex flex-wrap gap-2', bar && acceptShown ? 'grid-cols-[minmax(0,1fr)_minmax(0,2fr)]' : '')}>
+      <Button
+        variant="outline"
+        className={bar ? 'h-14 rounded-[10px]' : ''}
+        onClick={onReject}
+        disabled={busy}
+        data-testid="portal-decision-reject"
+      >
+        <X className="mr-1.5 h-4 w-4" aria-hidden="true" data-testid="X__a48dad" />{ui('portalDecisionReject')}
+      </Button>
+      {acceptShown ? (
+        <Button
+          className={bar ? 'h-14 rounded-[10px] font-semibold' : ''}
+          onClick={onAccept}
+          disabled={busy}
+          data-testid="portal-decision-accept"
+        >
+          <Check className="mr-1.5 h-4 w-4" aria-hidden="true" data-testid="Check__a48dad" />
+          {ui(bar ? 'portalDecisionAcceptQuotation' : 'portalDecisionAccept')}
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 function PortalRejectModal({ open, busy, documentNo, onClose, onSubmit }) {
   const ui = useUI();
   const [reason, setReason] = useState(null);

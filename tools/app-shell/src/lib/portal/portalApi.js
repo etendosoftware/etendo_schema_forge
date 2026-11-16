@@ -221,8 +221,8 @@ export async function renewPortalLink(fetchImpl, token) {
   const renewal = readableText(data?.renewal);
   return {
     state: readLinkState(data?.state),
-    renewal: renewal === PORTAL_RENEWAL.recentlySent ? PORTAL_RENEWAL.recentlySent
-      : (renewal === PORTAL_RENEWAL.sent ? PORTAL_RENEWAL.sent : null),
+    // Only a known answer is passed on; anything else reads as "no renewal".
+    renewal: [PORTAL_RENEWAL.recentlySent, PORTAL_RENEWAL.sent].includes(renewal) ? renewal : null,
   };
 }
 

@@ -121,39 +121,13 @@ export default function PortalDocumentDetailView({
 
   if (state !== 'ready') {
     return (
-      <>
-        <DesktopHeader
-          title={ui(PORTAL_KIND_META[kind].singularKey)}
-          breadcrumb={`${ui('portalNavMyDocuments')} / ${plural}`}
-          plural={plural}
-          onBack={back}
-          data-testid="DesktopHeader__6a1d3b" />
-        <PortalMain className="p-6" data-testid="PortalMain__6a1d3b">
-          {state === 'loading' ? (
-            <p className="text-sm text-muted-foreground" data-testid="portal-document-loading">{ui('loading')}</p>
-          ) : (
-            <div className="flex flex-col items-center px-6 py-12 text-center" data-testid="portal-document-unavailable">
-              <FileX
-                className="h-8 w-8 text-muted-foreground"
-                aria-hidden="true"
-                data-testid="FileX__6a1d3b" />
-              <p className="mt-3 font-medium">
-                {ui(state === 'notFound' ? 'portalDocumentNotFoundTitle' : 'portalLoadErrorTitle')}
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {ui(state === 'notFound' ? 'portalDocumentNotFoundDescription' : 'portalLoadErrorDescription')}
-              </p>
-              <Button
-                variant="outline"
-                className="mt-4"
-                onClick={() => onNavigate({ view: 'home' })}
-                data-testid="Button__6a1d3b">
-                {ui('portalBackToHome')}
-              </Button>
-            </div>
-          )}
-        </PortalMain>
-      </>
+      <DocumentNotReady
+        state={state}
+        title={ui(PORTAL_KIND_META[kind].singularKey)}
+        plural={plural}
+        onBack={back}
+        onNavigate={onNavigate}
+        data-testid="DocumentNotReady__6a1d3b" />
     );
   }
 
@@ -210,26 +184,14 @@ export default function PortalDocumentDetailView({
           className="relative hidden min-w-0 flex-1 overflow-y-auto bg-[hsl(var(--border-subtle))] md:flex md:flex-col"
           data-testid="portal-document-preview"
         >
-          {showSheet ? (
-            <div className="flex flex-col gap-3 p-5">
-              <p className="mx-auto w-full max-w-[640px] text-sm text-muted-foreground" data-testid="portal-pdf-unavailable">
-                <span className="font-medium text-foreground">{ui('portalPdfUnavailable')}</span>
-                {' · '}{ui(pdf.status === 'failed' ? 'portalDownloadFailed' : 'portalPdfUnavailableHint')}
-              </p>
-              <DocumentSheet
-                document={document}
-                issuer={issuer}
-                logoUrl={logoUrl}
-                data-testid="DocumentSheet__6a1d3b" />
-            </div>
-          ) : (pdfReady ? (
-            <PortalPdfPreview
-              url={pdf.url}
-              onFullScreen={() => setLightboxOpen(true)}
-              data-testid="PortalPdfPreview__6a1d3b" />
-          ) : (
-            <p className="m-auto text-sm text-muted-foreground" data-testid="portal-pdf-loading">{ui('loading')}</p>
-          ))}
+          <PreviewPane
+            showSheet={showSheet}
+            pdf={pdf}
+            document={document}
+            issuer={issuer}
+            logoUrl={logoUrl}
+            onFullScreen={() => setLightboxOpen(true)}
+            data-testid="PreviewPane__6a1d3b" />
         </section>
 
         {/* Right pane */}
@@ -502,14 +464,100 @@ function PortalSummary({ document }) {
 }
 
 /** An invoice's instalments, when there is more than one. */
+/**
+ * Pairs each row with a React key built from its own content (the API sends no line id), with a
+ * counter only for rows that are identical, so a key never depends on the row's position alone.
+ */
+function withStableKeys(items, keyOf) {
+  const seen = new Map();
+  return (items ?? []).map((item) => {
+    const base = keyOf(item);
+    const count = seen.get(base) ?? 0;
+    seen.set(base, count + 1);
+    return { item, key: count ? `${base}#${count}` : base };
+  });
+}
+
+const installmentKey = (installment) => `${installment.dueDate}|${installment.amount}`;
+const lineKey = (line) => `${line.productCode}|${line.product}|${line.description}|${line.quantity}|${line.amount}`;
+
+/** The detail while it loads, or when it is not found or failed to load. */
+function DocumentNotReady({ state, title, plural, onBack, onNavigate }) {
+  const ui = useUI();
+  return (
+    <>
+      <DesktopHeader
+        title={title}
+        breadcrumb={`${ui('portalNavMyDocuments')} / ${plural}`}
+        plural={plural}
+        onBack={onBack}
+        data-testid="DesktopHeader__6a1d3b" />
+      <PortalMain className="p-6" data-testid="PortalMain__6a1d3b">
+        {state === 'loading' ? (
+          <p className="text-sm text-muted-foreground" data-testid="portal-document-loading">{ui('loading')}</p>
+        ) : (
+          <div className="flex flex-col items-center px-6 py-12 text-center" data-testid="portal-document-unavailable">
+            <FileX
+              className="h-8 w-8 text-muted-foreground"
+              aria-hidden="true"
+              data-testid="FileX__6a1d3b" />
+            <p className="mt-3 font-medium">
+              {ui(state === 'notFound' ? 'portalDocumentNotFoundTitle' : 'portalLoadErrorTitle')}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {ui(state === 'notFound' ? 'portalDocumentNotFoundDescription' : 'portalLoadErrorDescription')}
+            </p>
+            <Button
+              variant="outline"
+              className="mt-4"
+              onClick={() => onNavigate({ view: 'home' })}
+              data-testid="Button__6a1d3b">
+              {ui('portalBackToHome')}
+            </Button>
+          </div>
+        )}
+      </PortalMain>
+    </>
+  );
+}
+
+/** The left pane: the data sheet when there is no printable, else the PDF once it arrives. */
+function PreviewPane({ showSheet, pdf, document, issuer, logoUrl, onFullScreen }) {
+  const ui = useUI();
+  if (showSheet) {
+    return (
+      <div className="flex flex-col gap-3 p-5">
+        <p className="mx-auto w-full max-w-[640px] text-sm text-muted-foreground" data-testid="portal-pdf-unavailable">
+          <span className="font-medium text-foreground">{ui('portalPdfUnavailable')}</span>
+          {' · '}{ui(pdf.status === 'failed' ? 'portalDownloadFailed' : 'portalPdfUnavailableHint')}
+        </p>
+        <DocumentSheet
+          document={document}
+          issuer={issuer}
+          logoUrl={logoUrl}
+          data-testid="DocumentSheet__6a1d3b" />
+      </div>
+    );
+  }
+  if (pdf.status === 'ready') {
+    return (
+      <PortalPdfPreview
+        url={pdf.url}
+        onFullScreen={onFullScreen}
+        data-testid="PortalPdfPreview__6a1d3b" />
+    );
+  }
+  return <p className="m-auto text-sm text-muted-foreground" data-testid="portal-pdf-loading">{ui('loading')}</p>;
+}
+
 function Installments({ document }) {
   const ui = useUI();
   return (
     <div className="flex flex-col gap-2">
       <h2 className={`${PORTAL_SECTION_TITLE} text-muted-foreground`}>{ui('portalInstallments')}</h2>
       <div className="flex flex-col gap-1.5 rounded-xl border border-border bg-card px-3 py-2.5 md:rounded-lg">
-        {document.installments.map((installment, index) => (
-          <div key={index} className="flex justify-between gap-3 text-sm tabular-nums" data-testid="portal-installment">
+        {withStableKeys(document.installments, installmentKey).map(({ item: installment, key }) => (
+          <div key={key} className="flex justify-between gap-3 text-sm tabular-nums" data-testid="portal-installment">
             <PortalDate value={installment.dueDate} data-testid="PortalDate__6a1d3b" />
             <span>
               <PortalMoney
@@ -554,8 +602,8 @@ function MobileLines({ document, canViewPdf, onViewPdf }) {
         <p className="px-5 py-4 text-sm text-muted-foreground">{ui('portalNoLines')}</p>
       ) : (
         <ul className="divide-y divide-border">
-          {document.lines.map((line, index) => (
-            <li key={index} className="flex justify-between gap-3 px-5 py-4">
+          {withStableKeys(document.lines, lineKey).map(({ item: line, key }) => (
+            <li key={key} className="flex justify-between gap-3 px-5 py-4">
               <span className="flex min-w-0 flex-col">
                 <span className="font-medium">{line.product || line.description}</span>
                 <span className="text-sm text-muted-foreground">
@@ -631,8 +679,8 @@ function DocumentSheet({ document, issuer, logoUrl }) {
             </tr>
           </thead>
           <tbody>
-            {document.lines.map((line, index) => (
-              <tr key={index}>
+            {withStableKeys(document.lines, lineKey).map(({ item: line, key }) => (
+              <tr key={key}>
                 <td className="py-2.5 pr-1.5 text-muted-foreground">{line.productCode || '—'}</td>
                 <td className="px-1.5 py-2.5 font-semibold">{line.product || line.description}</td>
                 <td className="px-1.5 py-2.5 text-right tabular-nums">

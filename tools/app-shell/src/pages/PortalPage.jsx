@@ -98,6 +98,153 @@ function PortalNotice({ testId, icon, title, description, children }) {
   );
 }
 
+/**
+ * The full-page screen of every state but "ready" (loading, dead link, renewal, unavailable,
+ * failures), or {@code null} when the portal itself is shown.
+ */
+function portalStatusScreen(view, ui, tenantName, onRetry) {
+  if (view === VIEW.loading) {
+    return (
+      <PortalFrame data-testid="PortalFrame__3db5f6">
+        <PortalNotice
+          testId="portal-loading"
+          icon={<Loader2
+            className="h-8 w-8 animate-spin text-primary"
+            data-testid="Loader2__3db5f6" />}
+          title={ui('portalLoading')}
+          data-testid="PortalNotice__3db5f6" />
+      </PortalFrame>
+    );
+  }
+
+  // No retry button here, deliberately: there is nothing for the reader to retry, and a
+  // retry loop against a token-validating endpoint is exactly what the rate limit is for.
+  if (view === VIEW.invalid) {
+    return (
+      <PortalFrame data-testid="PortalFrame__3db5f6">
+        <PortalNotice
+          testId="portal-invalid-link"
+          icon={(
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <FileText className="h-6 w-6" data-testid="FileText__3db5f6" />
+            </span>
+          )}
+          title={ui('portalInvalidLinkTitle')}
+          description={ui('portalInvalidLinkDescription')}
+          data-testid="PortalNotice__3db5f6" />
+      </PortalFrame>
+    );
+  }
+
+  if (view === VIEW.renewing) {
+    return (
+      <PortalFrame data-testid="PortalFrame__3db5f6">
+        <PortalNotice
+          testId="portal-renewing"
+          icon={<Loader2
+            className="h-8 w-8 animate-spin text-primary"
+            data-testid="Loader2__3db5f6" />}
+          title={ui('portalRenewingTitle')}
+          description={ui('portalRenewingDescription')}
+          data-testid="PortalNotice__3db5f6" />
+      </PortalFrame>
+    );
+  }
+
+  if (view === VIEW.renewed || view === VIEW.recentlySent) {
+    const recently = view === VIEW.recentlySent;
+    return (
+      <PortalFrame data-testid="PortalFrame__3db5f6">
+        <PortalNotice
+          testId={recently ? 'portal-recently-sent' : 'portal-renewed'}
+          icon={(
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <MailCheck className="h-6 w-6" data-testid="MailCheck__3db5f6" />
+            </span>
+          )}
+          title={ui(recently ? 'portalRecentlySentTitle' : 'portalRenewedTitle')}
+          description={ui(recently ? 'portalRecentlySentDescription' : 'portalRenewedDescription')}
+          data-testid="PortalNotice__3db5f6" />
+      </PortalFrame>
+    );
+  }
+
+  // One message for blocked, inactive and plan-expired alike: the reason is the company's
+  // business, not the customer's.
+  if (view === VIEW.unavailable) {
+    return (
+      <PortalFrame data-testid="PortalFrame__3db5f6">
+        <PortalNotice
+          testId="portal-unavailable"
+          icon={(
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <Ban className="h-6 w-6" data-testid="Ban__3db5f6" />
+            </span>
+          )}
+          title={ui('portalUnavailableTitle')}
+          description={tenantName
+            ? ui('portalUnavailableDescription', { tenantName })
+            : ui('portalUnavailableDescriptionGeneric')}
+          data-testid="PortalNotice__3db5f6" />
+      </PortalFrame>
+    );
+  }
+
+  if (view === VIEW.renewFailed) {
+    return (
+      <PortalFrame data-testid="PortalFrame__3db5f6">
+        <PortalNotice
+          testId="portal-renew-error"
+          icon={(
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+              <AlertCircle className="h-6 w-6" data-testid="AlertCircle__3db5f6" />
+            </span>
+          )}
+          title={ui('portalRenewErrorTitle')}
+          description={ui('portalRenewErrorDescription')}
+          data-testid="PortalNotice__3db5f6">
+          <Button
+            variant="outline"
+            className="mt-6"
+            onClick={onRetry}
+            data-testid="portal-renew-retry"
+          >
+            {ui('retry')}
+          </Button>
+        </PortalNotice>
+      </PortalFrame>
+    );
+  }
+
+  if (view === VIEW.transientFailure) {
+    return (
+      <PortalFrame data-testid="PortalFrame__3db5f6">
+        <PortalNotice
+          testId="portal-load-error"
+          icon={(
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+              <AlertCircle className="h-6 w-6" data-testid="AlertCircle__3db5f6" />
+            </span>
+          )}
+          title={ui('portalLoadErrorTitle')}
+          description={ui('portalLoadErrorDescription')}
+          data-testid="PortalNotice__3db5f6">
+          <Button
+            variant="outline"
+            className="mt-6"
+            onClick={onRetry}
+            data-testid="portal-retry"
+          >
+            {ui('retry')}
+          </Button>
+        </PortalNotice>
+      </PortalFrame>
+    );
+  }
+
+  return null;
+}
+
 export default function PortalPage() {
   // The token arrives as a path segment because an email link cannot carry a header.
   const { token = '' } = useParams();
@@ -263,145 +410,9 @@ export default function PortalPage() {
     setSearchParams(writePortalView(target));
   }, [setSearchParams]);
 
-  if (view === VIEW.loading) {
-    return (
-      <PortalFrame data-testid="PortalFrame__3db5f6">
-        <PortalNotice
-          testId="portal-loading"
-          icon={<Loader2
-            className="h-8 w-8 animate-spin text-primary"
-            data-testid="Loader2__3db5f6" />}
-          title={ui('portalLoading')}
-          data-testid="PortalNotice__3db5f6" />
-      </PortalFrame>
-    );
-  }
-
-  // No retry button here, deliberately: there is nothing for the reader to retry, and a
-  // retry loop against a token-validating endpoint is exactly what the rate limit is for.
-  if (view === VIEW.invalid) {
-    return (
-      <PortalFrame data-testid="PortalFrame__3db5f6">
-        <PortalNotice
-          testId="portal-invalid-link"
-          icon={(
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
-              <FileText className="h-6 w-6" data-testid="FileText__3db5f6" />
-            </span>
-          )}
-          title={ui('portalInvalidLinkTitle')}
-          description={ui('portalInvalidLinkDescription')}
-          data-testid="PortalNotice__3db5f6" />
-      </PortalFrame>
-    );
-  }
-
-  if (view === VIEW.renewing) {
-    return (
-      <PortalFrame data-testid="PortalFrame__3db5f6">
-        <PortalNotice
-          testId="portal-renewing"
-          icon={<Loader2
-            className="h-8 w-8 animate-spin text-primary"
-            data-testid="Loader2__3db5f6" />}
-          title={ui('portalRenewingTitle')}
-          description={ui('portalRenewingDescription')}
-          data-testid="PortalNotice__3db5f6" />
-      </PortalFrame>
-    );
-  }
-
-  if (view === VIEW.renewed || view === VIEW.recentlySent) {
-    const recently = view === VIEW.recentlySent;
-    return (
-      <PortalFrame data-testid="PortalFrame__3db5f6">
-        <PortalNotice
-          testId={recently ? 'portal-recently-sent' : 'portal-renewed'}
-          icon={(
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <MailCheck className="h-6 w-6" data-testid="MailCheck__3db5f6" />
-            </span>
-          )}
-          title={ui(recently ? 'portalRecentlySentTitle' : 'portalRenewedTitle')}
-          description={ui(recently ? 'portalRecentlySentDescription' : 'portalRenewedDescription')}
-          data-testid="PortalNotice__3db5f6" />
-      </PortalFrame>
-    );
-  }
-
-  // One message for blocked, inactive and plan-expired alike: the reason is the company's
-  // business, not the customer's.
-  if (view === VIEW.unavailable) {
-    const tenantName = identity?.tenantName;
-    return (
-      <PortalFrame data-testid="PortalFrame__3db5f6">
-        <PortalNotice
-          testId="portal-unavailable"
-          icon={(
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
-              <Ban className="h-6 w-6" data-testid="Ban__3db5f6" />
-            </span>
-          )}
-          title={ui('portalUnavailableTitle')}
-          description={tenantName
-            ? ui('portalUnavailableDescription', { tenantName })
-            : ui('portalUnavailableDescriptionGeneric')}
-          data-testid="PortalNotice__3db5f6" />
-      </PortalFrame>
-    );
-  }
-
-  if (view === VIEW.renewFailed) {
-    return (
-      <PortalFrame data-testid="PortalFrame__3db5f6">
-        <PortalNotice
-          testId="portal-renew-error"
-          icon={(
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-              <AlertCircle className="h-6 w-6" data-testid="AlertCircle__3db5f6" />
-            </span>
-          )}
-          title={ui('portalRenewErrorTitle')}
-          description={ui('portalRenewErrorDescription')}
-          data-testid="PortalNotice__3db5f6">
-          <Button
-            variant="outline"
-            className="mt-6"
-            onClick={() => setAttempt((value) => value + 1)}
-            data-testid="portal-renew-retry"
-          >
-            {ui('retry')}
-          </Button>
-        </PortalNotice>
-      </PortalFrame>
-    );
-  }
-
-  if (view === VIEW.transientFailure) {
-    return (
-      <PortalFrame data-testid="PortalFrame__3db5f6">
-        <PortalNotice
-          testId="portal-load-error"
-          icon={(
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-              <AlertCircle className="h-6 w-6" data-testid="AlertCircle__3db5f6" />
-            </span>
-          )}
-          title={ui('portalLoadErrorTitle')}
-          description={ui('portalLoadErrorDescription')}
-          data-testid="PortalNotice__3db5f6">
-          <Button
-            variant="outline"
-            className="mt-6"
-            onClick={() => setAttempt((value) => value + 1)}
-            data-testid="portal-retry"
-          >
-            {ui('retry')}
-          </Button>
-        </PortalNotice>
-      </PortalFrame>
-    );
-  }
+  const statusScreen = portalStatusScreen(view, ui, identity?.tenantName,
+    () => setAttempt((value) => value + 1));
+  if (statusScreen) return statusScreen;
 
   // Each view draws its own headers (desktop and mobile) and content card, as the design does:
   // they differ per screen (search pill, count chip, back button, mobile top bars).

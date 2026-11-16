@@ -172,16 +172,21 @@ export default function PortalDocumentListView({
     </div>
   ) : null;
 
-  const state = failed ? (
-    <p className="text-sm text-destructive" role="alert" data-testid="portal-list-error">
-      {ui('portalLoadErrorDescription')}
-    </p>
-  ) : (!loading && documents.length === 0 ? (
-    <div className="flex flex-col items-center px-6 py-12 text-center" data-testid="portal-list-empty">
-      <p className="font-medium">{ui('portalListEmpty')}</p>
-      <p className="mt-1 text-sm text-muted-foreground">{ui('portalListEmptyHint')}</p>
-    </div>
-  ) : null);
+  let state = null;
+  if (failed) {
+    state = (
+      <p className="text-sm text-destructive" role="alert" data-testid="portal-list-error">
+        {ui('portalLoadErrorDescription')}
+      </p>
+    );
+  } else if (!loading && documents.length === 0) {
+    state = (
+      <div className="flex flex-col items-center px-6 py-12 text-center" data-testid="portal-list-empty">
+        <p className="font-medium">{ui('portalListEmpty')}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{ui('portalListEmptyHint')}</p>
+      </div>
+    );
+  }
 
   return (
     <>
