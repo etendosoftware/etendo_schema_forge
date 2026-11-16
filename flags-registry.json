@@ -2207,6 +2207,14 @@
           {
             "root": "frontend",
             "path": "tools/app-shell/src/components/reports/dynamic/__tests__/drillDown.vitest.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/reports/dynamic/__tests__/reportColumns.vitest.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/reports/dynamic/__tests__/useReportPanelCollapsed.vitest.jsx"
           }
         ],
         "e2e": [

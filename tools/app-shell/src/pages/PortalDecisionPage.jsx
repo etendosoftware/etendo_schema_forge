@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { AlertCircle, Ban, CheckCircle2, FileText, Loader2 } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,9 @@ import {
   PORTAL_DECISION_STATE, PORTAL_ERROR, confirmPortalDecision, resolvePortalBaseUrl,
 } from '@/lib/portal/portalApi.js';
 import { PORTAL_REJECT_REASONS } from './portal/portalPresentation.js';
+import {
+  PORTAL_NOTICE_STATE_KEY, portalDecisionNotice, portalEntryPath,
+} from './portal/portalDecisionArrival.js';
 
 /**
  * The confirmation landing of a portal quotation decision (ETP-6209 Part C): the page the
@@ -71,6 +74,7 @@ export default function PortalDecisionPage() {
   const apiFetch = useApiFetch(baseUrl);
   const [view, setView] = useState(VIEW.applying);
   const [decision, setDecision] = useState(null);
+  const navigate = useNavigate();
 
   // The token whose confirmation was already sent: the POST goes out once per open, also under
   // StrictMode's double effect in development (a second POST would answer "already applied").
@@ -84,12 +88,19 @@ export default function PortalDecisionPage() {
     }
     setView(VIEW.applying);
     confirmPortalDecision(apiFetch, trimmed).then((result) => {
+      // ETP-6209: the customer is taken into the portal on the quotation, with a one-off notice in
+      // the router state (never the URL). Without a way in, this page shows its own card.
+      const entryPath = portalEntryPath(result);
+      if (entryPath) {
+        navigate(entryPath, { replace: true, state: { [PORTAL_NOTICE_STATE_KEY]: portalDecisionNotice(result) } });
+        return;
+      }
       setDecision(result);
       setView(VIEW.ready);
     }).catch((error) => {
       setView(error?.code === PORTAL_ERROR.invalidLink ? VIEW.invalid : VIEW.failed);
     });
-  }, [apiFetch, token]);
+  }, [apiFetch, token, navigate]);
 
   // The confirmation is the page's own POST, sent once on open (never a GET side effect).
   useEffect(() => {

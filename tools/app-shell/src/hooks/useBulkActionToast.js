@@ -6,6 +6,13 @@ import { periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 
 const STORAGE_KEY = 'bulkActionResult';
 
+// ETP-6286 — caps of the opt-in failure listing: a toast is not a report.
+const MAX_REASON_LINES = 3;
+const MAX_LABELS_PER_LINE = 3;
+const MAX_LABEL_LENGTH = 40;
+const MAX_REASON_LENGTH = 200;
+const LISTED_FAILURES_DURATION_MS = 10000;
+
 /**
  * Same guard as `lib/listViewSession.js`: with site data blocked (strict private
  * mode, corporate policy) reading the `sessionStorage` ACCESSOR throws, not just
@@ -37,7 +44,11 @@ function normalizeBulkActionResult(result) {
 // just to reach `showResult` also installs its sessionStorage-draining effect, which
 // re-runs whenever `ui` changes identity and would consume the caller's own persisted
 // result before a fallback reload could hand it to the next mount.
-export function showBulkActionToast(ui, result) {
+//
+// ETP-6286 — `listFailures` (opt-in) lists the failed rows grouped by translated reason
+// ("Doc A, Doc B — <reason>", capped) instead of the plain count. Only for actions whose errors are
+// document-level and actionable (not-posted documents' bulk post); the default stays ETP-5316's.
+export function showBulkActionToast(ui, result, { listFailures = false } = {}) {
   const { ok, omitted, failed } = normalizeBulkActionResult(result);
 
   // ETP-5316 — exactly one record was selected (nothing else attempted, nothing
@@ -57,9 +68,23 @@ export function showBulkActionToast(ui, result) {
   // handful of rows and the raw messages (e.g. line-number references) aren't
   // locatable in the document from a toast anyway. Two exceptions, both said once as the
   // description (see `bulkFailureDescription`): a plan-quota refusal (ETP-5051) and a reason
-  // every failure shares (ETP-5591).
-  const description = bulkFailureDescription(failed, ui);
-  const notify = (show) => (description ? show(msg, { description }) : show(msg));
+  // every failure shares (ETP-5591). A caller that opts into `listFailures` (ETP-6286) gets the
+  // capped, grouped listing instead; a quota refusal still wins there too.
+  const listing = listFailures && failed.length > 0;
+  const description = listing
+    ? (quotaRefusalMessage(failed) ?? failureListing(failed, ui))
+    : bulkFailureDescription(failed, ui);
+  let options;
+  if (listing) {
+    options = {
+      description,
+      duration: LISTED_FAILURES_DURATION_MS,
+      classNames: { description: 'whitespace-pre-line' },
+    };
+  } else if (description) {
+    options = { description };
+  }
+  const notify = (show) => (options ? show(msg, options) : show(msg));
   if (failed.length === 0 && omitted.length === 0) {
     toast.success(msg);
   } else if (failed.length > 0 && ok === 0 && omitted.length === 0) {
@@ -83,11 +108,7 @@ function showSingleRecordFailureToast(ui, failure) {
   // rather than by its text — the text carries AD line numbers (10, 20, 30…) that match no
   // literal and point at nothing the user can find in the document. Absent against a backend
   // that does not send them, in which case this is the pre-existing text-only translation.
-  const text = translateBackendError(failure.message, ui, {
-    messageKeys: failure.messageKeys,
-    messageParams: failure.messageParams,
-  })
-    || ui('actionFailed');
+  const text = failureText(ui, failure);
   // ETP-5577: a "period not open" refusal also offers the way to open it.
   const recovery = periodNotAvailableToastOptions(failure.messageKeys, ui);
   if (Object.keys(recovery).length > 0) toast.error(text, recovery);
@@ -121,9 +142,54 @@ function bulkSummaryMessage(ui, { ok, omitted, failed }) {
  * Otherwise ETP-5591's shared reason, when every failure has it.
  */
 function bulkFailureDescription(failed, ui) {
-  const quotaFailure = failed.find((entry) => entry?.quotaRefusal && entry?.message);
-  if (quotaFailure) return quotaFailure.message;
-  return sharedFailureReason(failed, ui) ?? undefined;
+  return quotaRefusalMessage(failed) ?? sharedFailureReason(failed, ui) ?? undefined;
+}
+
+function quotaRefusalMessage(failed) {
+  return failed.find((entry) => entry?.quotaRefusal && entry?.message)?.message ?? null;
+}
+
+/** One row's backend error, translated — the same text the one-record toast shows. */
+function failureText(ui, failure) {
+  return translateBackendError(failure.message, ui, {
+    messageKeys: failure.messageKeys,
+    messageParams: failure.messageParams,
+  })
+    || ui('actionFailed');
+}
+
+function clip(text, max) {
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+}
+
+/**
+ * ETP-6286 — the failed rows grouped by translated reason, one line per reason:
+ * "Doc A, Doc B +2 — <reason>". Grouped by text, not identity: an unkeyed message with row detail
+ * (ETP-5710) just forms its own group. At most MAX_REASON_LINES lines; the documents of the
+ * remaining reasons are counted in one `bulkFailuresMore` line. A row's label is `label` (the
+ * caller's) or `documentNo` (BulkDocumentAction's); rows with neither are only counted.
+ */
+function failureListing(failed, ui) {
+  const groups = new Map();
+  for (const f of failed) {
+    // ETP-5109 line errors carry newlines; one reason must stay one line.
+    const reason = clip(failureText(ui, f).replace(/\s+/g, ' ').trim(), MAX_REASON_LENGTH);
+    if (!groups.has(reason)) groups.set(reason, []);
+    groups.get(reason).push(f.label ?? f.documentNo ?? '');
+  }
+  const entries = [...groups];
+  const lines = entries.slice(0, MAX_REASON_LINES).map(([reason, labels]) => {
+    const shown = labels.filter(Boolean)
+      .slice(0, MAX_LABELS_PER_LINE)
+      .map((l) => clip(String(l), MAX_LABEL_LENGTH));
+    if (shown.length === 0) return reason;
+    const rest = labels.length - shown.length;
+    const more = rest > 0 ? ' +' + rest : '';
+    return `${shown.join(', ')}${more} — ${reason}`;
+  });
+  const hidden = entries.slice(MAX_REASON_LINES).reduce((n, [, labels]) => n + labels.length, 0);
+  if (hidden > 0) lines.push(ui('bulkFailuresMore').replace('{n}', String(hidden)));
+  return lines.join('\n');
 }
 
 /**
