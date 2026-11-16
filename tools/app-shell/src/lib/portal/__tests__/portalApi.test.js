@@ -636,6 +636,7 @@ describe('fetchPortalDecision / confirmPortalDecision', () => {
       {
         state: 'confirmed', appliedNow: true, decision: 'REJECT', reasonCode: 'OTHER',
         reasonText: 'Ya no', documentNo: 'PR/0001', tenantName: 'Acme SA',
+        portalToken: null, quotationId: null,
       },
     ],
     [
@@ -643,7 +644,7 @@ describe('fetchPortalDecision / confirmPortalDecision', () => {
       { state: 'confirmed', appliedNow: 'true' },
       {
         state: 'confirmed', appliedNow: false, decision: null, reasonCode: null, reasonText: null,
-        documentNo: null, tenantName: null,
+        documentNo: null, tenantName: null, portalToken: null, quotationId: null,
       },
     ],
     [
@@ -651,7 +652,7 @@ describe('fetchPortalDecision / confirmPortalDecision', () => {
       { state: 'weird' },
       {
         state: 'not_pending', appliedNow: false, decision: null, reasonCode: null, reasonText: null,
-        documentNo: null, tenantName: null,
+        documentNo: null, tenantName: null, portalToken: null, quotationId: null,
       },
     ],
   ]) {

@@ -1247,6 +1247,21 @@ Built in both repos following C.0–C.11.
    customer, expired plan) and applies nothing when the portal is closed for the customer.
 6. **Footer.** "Creado con etendo.ai" links to `https://etendo.ai` (new tab, `noopener noreferrer`); no
    shared constant existed.
+7. **The confirmation lands in the portal (PO, 2026-11-16).** The landing no longer ends on its own
+   card. After the one-step confirmation, whatever its state (applied now, answered before,
+   superseded, no longer pending, expired), the server mints a new portal link like a renewal (same
+   tenant, Business Partner, recipients and language as the decision's link; 48 h from now;
+   `LINK_ORIGIN = DECISION`, parent = the decision's link, root = its root) and marks it usable at
+   once, since no email carries it (`PortalDecisionEntry`). Its raw token comes back only in the
+   confirm POST's answer (`portalToken`, `quotationId`). The SPA opens
+   `/portal/<token>?view=doc&kind=QUOTATION&id=<quotationId>` and hands it a one-off notice through
+   router state, dropped from the history entry once read (`PortalArrivalNotice`): "Has aceptado el
+   presupuesto {n}", "Has rechazado el presupuesto {n}" with "Motivo: …", "Ya habías respondido este
+   presupuesto", no longer pending, expired. Opening the portal records `portal.link.opened` as usual
+   (origin `DECISION`). No link, and the landing keeps its card: invalid token, portal closed for the
+   customer by the access checks, or minting failed; the decision itself is applied or not exactly as
+   before. Bound: at most 10 `DECISION` links per decision link and day, besides the confirm route's
+   rate limiter. **Needs `update.database`** (`ETGO_PORTAL_LINK_ORIGIN_CHK` accepts `DECISION`).
 
 ---
 
