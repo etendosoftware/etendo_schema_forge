@@ -4321,6 +4321,10 @@ backend's append-only `ETGO_Fiscal_AEAT_Attempt` table, whatever happens to the 
 (which each attempt still replaces). It has no UI: it is read by SQL. Reference:
 `{etendo_root}/modules/com.etendoerp.go/docs/aeat-attempt-log.md`.
 
+**Manual test.** The stub-based procedure for every validator outcome (download, pre-presentation
+validation, attempt rows) — never against the real AEAT, never a real presentation — is in
+"Manual test against a stub" of `{etendo_root}/modules/com.etendoerp.go/docs/aeat-390-endpoints.md`.
+
 Every successful save invalidates the list's session cache for the declaration
 (`invalidateFiscalComputeCache`), patches the list (`onManualDataSaved`) and recomputes the
 incidents (`POST /fiscal390/validate`, see "Incidents"); Calcular with nothing to save recomputes

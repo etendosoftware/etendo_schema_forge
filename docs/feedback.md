@@ -3345,3 +3345,19 @@ reject, the catalog toggle breaks silently.
 **Status:** noted, not fixed (no behaviour change in ETP-5831). The fix, if the contract ever
 changes, is a `catch` in `toggleModel` that treats a failed read as "not in the SII" (same as
 `fetchOrgSiiStatus` does now) or shows an error toast.
+
+## [2026-11-16] ETP-5716 — AEAT endpoint preferences cannot be created from the Preference window
+
+**Component:** `org.openbravo.module.aeat303.es` — `AEAT303SubmissionService.getEndpoint`
+(`AEAT303_ValidationEndpoint`, `AEAT303_ProdEndpoint`).
+
+**Observation (manual testing of the 390 validation against a local stub):** the service reads
+the endpoint overrides as property-list preferences (`ISPROPERTYLIST = 'Y'`), but neither property
+is registered in the property list, so the Preference window does not offer them; a row created
+there as a free attribute is silently ignored and the official AEAT endpoint is used. The override
+had to be inserted by SQL.
+
+**Status:** documented, no code change in ETP-5716. SQL and the stub procedure:
+`modules/org.openbravo.module.aeat303.es/doc/aeat-303-electronic-submission.md` ("AEAT protocol
+summary") and `modules/com.etendoerp.go/docs/aeat-390-endpoints.md` ("Manual test against a
+stub"). The fix is to register both properties in the property list of the aeat303 module.
