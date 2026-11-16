@@ -3,7 +3,7 @@ import { comparedRanges } from './dynamicDates.js';
 
 /**
  * ETP-6239 — the columns of the interactive report: one group per period (bucket 0, the range,
- * first), each `Importe` alone or with `Comparado`, `Var. €` and `Var. %`. Pure, so it is unit-tested
+ * last), each `Importe` alone or with `Comparado`, `Var. €` and `Var. %`. Pure, so it is unit-tested
  * apart from the table.
  */
 
@@ -28,7 +28,7 @@ const COLUMNS_WITH_COMPARISON = ['current', 'compared', 'variation', 'variationP
 export function columnModel({ periods, grain, mode, locale, quarterPrefix, totalLabel }) {
   const lang = (locale || 'en_US').replace('_', '-');
   const short = (p) => (grain === 'quarter' ? formatCalendarQuarterShort(p.dateFrom, quarterPrefix) : formatCalendarMonthShort(p.dateFrom, lang));
-  return (periods || []).map((p, pos) => {
+  const groups = (periods || []).map((p, pos) => {
     const label = p.idx === 0 ? totalLabel : `${short(p)}${p.partial ? '*' : ''}`;
     return {
       pos,
@@ -39,6 +39,8 @@ export function columnModel({ periods, grain, mode, locale, quarterPrefix, total
       columns: mode === 'none' ? ['current'] : COLUMNS_WITH_COMPARISON,
     };
   });
+  // The range's total goes last on screen ("se agrega al final la columna de total"); `pos` still indexes `row.cells`.
+  return [...groups.slice(1), ...groups.slice(0, 1)];
 }
 
 /** How many table columns after Concepto the groups take. */

@@ -128,7 +128,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
     () => columnModel({ periods: answered.periods, grain: answered.grain, mode, locale, quarterPrefix, totalLabel }),
     [answered, mode, locale, quarterPrefix, totalLabel],
   );
-  const reference = compare ? groups[0]?.compared : null;
+  const reference = compare ? groups.find((g) => g.pos === 0)?.compared : null;
   const hasPartial = groups.some((g) => g.partial);
 
   // Folding: a base (the level, expand all, collapse all) plus the rows the user flipped since,
