@@ -1,9 +1,12 @@
-import { describe, it } from 'node:test';
+// @covers tools/app-shell/src/lib/dateOnly.js
+import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   calendarISODaysAgo,
   formatCalendarDate,
+  formatCalendarMonthShort,
   formatCalendarMonthYear,
+  formatCalendarQuarterShort,
   getCalendarDateRelation,
   parseCalendarDate,
   parseWallClockInstant,
@@ -388,4 +391,42 @@ describe('dateOnly helpers', () => {
       });
     });
   });
+
+  for (const tz of ['Europe/Madrid', 'America/Argentina/Buenos_Aires']) {
+    describe(`short period labels [${tz}]`, () => {
+      const original = process.env.TZ;
+      before(() => { process.env.TZ = tz; });
+      after(() => { process.env.TZ = original; });
+
+      it('formatCalendarMonthShort: "{mmm} {yy}" without a trailing dot, per locale', () => {
+        assert.equal(formatCalendarMonthShort('2026-09-01', 'es-ES'), 'sept 26');
+        assert.equal(formatCalendarMonthShort('2026-01-31', 'es-ES'), 'ene 26');
+        assert.equal(formatCalendarMonthShort('2026-09-15', 'en-GB'), 'Sept 26');
+        assert.equal(formatCalendarMonthShort('2026-12-31', 'en-US'), 'Dec 26');
+      });
+
+      it('formatCalendarMonthShort: a day never rolls the label into another month', () => {
+        assert.equal(formatCalendarMonthShort('2026-03-01', 'en-US'), 'Mar 26');
+        assert.equal(formatCalendarMonthShort('2026-03-31', 'en-US'), 'Mar 26');
+      });
+
+      it('formatCalendarMonthShort: invalid input is a dash', () => {
+        assert.equal(formatCalendarMonthShort('nope'), '—');
+        assert.equal(formatCalendarMonthShort(null), '—');
+      });
+
+      it('formatCalendarQuarterShort: quarter of the day, two-digit year, prefix', () => {
+        assert.equal(formatCalendarQuarterShort('2026-07-01', 'T'), 'T3 26');
+        assert.equal(formatCalendarQuarterShort('2026-09-30'), 'Q3 26');
+        assert.equal(formatCalendarQuarterShort('2026-01-01'), 'Q1 26');
+        assert.equal(formatCalendarQuarterShort('2026-12-31'), 'Q4 26');
+        assert.equal(formatCalendarQuarterShort('2026-03-31', 'T'), 'T1 26');
+        assert.equal(formatCalendarQuarterShort('2026-04-01', 'T'), 'T2 26');
+      });
+
+      it('formatCalendarQuarterShort: invalid input is a dash', () => {
+        assert.equal(formatCalendarQuarterShort('', 'T'), '—');
+      });
+    });
+  }
 });
