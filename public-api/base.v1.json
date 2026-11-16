@@ -202,7 +202,7 @@
       },
       "source": {
         "artifact": "contacts",
-        "contractVersion": "0.8.0",
+        "contractVersion": "0.9.0",
         "backendEntity": true
       }
     },
@@ -408,7 +408,7 @@
       },
       "source": {
         "artifact": "contacts",
-        "contractVersion": "0.8.0",
+        "contractVersion": "0.9.0",
         "backendEntity": true
       }
     },
@@ -533,7 +533,7 @@
       },
       "source": {
         "artifact": "contacts",
-        "contractVersion": "0.8.0",
+        "contractVersion": "0.9.0",
         "backendEntity": true
       }
     },
