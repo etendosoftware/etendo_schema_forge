@@ -23,10 +23,10 @@ function entryText(e, t) {
 }
 
 // The AEAT warnings (`avisos`), as the direct presentation lists them under its result.
-function AeatWarnings({ warnings, t }) {
+function AeatWarnings({ warnings, t, 'data-testid': testId }) {
   if (!warnings?.length) return null;
   return (
-    <div style={{ marginTop: 16, fontSize: 13, color: 'hsl(var(--muted-foreground))' }} data-testid="FileGenModal390__warnings">
+    <div style={{ marginTop: 16, fontSize: 13, color: 'hsl(var(--muted-foreground))' }} data-testid={testId}>
       <div style={{ fontWeight: 600, marginBottom: 4 }}>{t('fm.aeat.warnings.title')}</div>
       <ul style={{ margin: 0, paddingLeft: 18 }}>
         {warnings.map(w => <li key={`${w.code}|${w.message}`}>{entryText(w, t)}</li>)}
@@ -35,7 +35,12 @@ function AeatWarnings({ warnings, t }) {
   );
 }
 
-function ValidationResult({ validation, t }) {
+// The result step: its wrapper takes the `data-testid` given by the popup.
+function ValidationResult({ validation, t, 'data-testid': testId }) {
+  return <div data-testid={testId}>{validationBanner(validation, t)}</div>;
+}
+
+function validationBanner(validation, t) {
   if (validation.outcome === FILE_VALIDATION.ACCEPTED) {
     // Accepted with AEAT warnings: the warning banner, the warnings inside it.
     return (
@@ -66,7 +71,7 @@ function ValidationResult({ validation, t }) {
         </ul>
         <div style={{ fontSize: 13, marginTop: 8, lineHeight: '18px' }}>{t('fm.m390.file_validation.rejected.body')}</div>
       </AeatResultBanner>
-      <AeatWarnings warnings={validation.warnings} t={t} data-testid="AeatWarnings__filegen390" />
+      <AeatWarnings warnings={validation.warnings} t={t} data-testid="FileGenModal390__warnings" />
       </>
     );
   }
@@ -129,9 +134,7 @@ export default function FileGenModal390({ decl, summary, typeLabel, resultLabel,
             </div>
           )}
           {!working && result && (
-            <div data-testid="FileGenModal390__result">
-              <ValidationResult validation={result} t={t} data-testid="ValidationResult__filegen390" />
-            </div>
+            <ValidationResult validation={result} t={t} data-testid="FileGenModal390__result" />
           )}
           {!working && !result && (<>
           <label className="fm-390-filegen__label" htmlFor="fm390-filegen-name">{t('fm.filegen.filename')}</label>
