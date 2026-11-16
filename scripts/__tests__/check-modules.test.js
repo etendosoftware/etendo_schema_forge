@@ -5,7 +5,9 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { declaredBranch, evaluateRepo, normalizeRemote, parseWorktreeConf, resolveDir } from '../check-modules.js';
+import {
+  declaredBranch, evaluateRepo, mergePolicies, normalizeRemote, parseWorktreeConf, resolveDir, retiredRemoteFix,
+} from '../check-modules.js';
 import { isolatedGitEnv } from './isolatedGitEnv.js';
 
 const EPIC = 'epic/ETP-3504';
@@ -124,6 +126,50 @@ describe('normalizeRemote', () => {
   it('reduces ssh and https URLs to owner/repo', () => {
     assert.equal(normalizeRemote('git@bitbucket.org:koodu_software/com.smf.ticketbai.git'), 'koodu_software/com.smf.ticketbai');
     assert.equal(normalizeRemote('https://github.com/EtendoSoftware/com.etendoerp.go'), 'etendosoftware/com.etendoerp.go');
+  });
+});
+
+describe('retired Bitbucket host', () => {
+  it('maps the old bitbucket.org SSH URL to ssh.bitbucket.org and leaves other hosts alone', () => {
+    assert.equal(
+      retiredRemoteFix('git@bitbucket.org:koodu_software/org.openbravo.module.sii.git'),
+      'git@ssh.bitbucket.org:koodu_software/org.openbravo.module.sii.git',
+    );
+    assert.equal(
+      retiredRemoteFix('ssh://git@bitbucket.org/koodu_software/com.smf.ticketbai.git'),
+      'git@ssh.bitbucket.org:koodu_software/com.smf.ticketbai.git',
+    );
+    assert.equal(retiredRemoteFix('git@ssh.bitbucket.org:koodu_software/com.smf.ticketbai.git'), null);
+    assert.equal(retiredRemoteFix('git@github.com:etendosoftware/com.etendoerp.go.git'), null);
+  });
+
+  it('fails the check for a module whose origin is on the retired host, with the fix command', async () => {
+    git(clone, 'checkout', '-q', '-B', EPIC, `origin/${EPIC}`);
+    const realOrigin = git(clone, 'remote', 'get-url', 'origin');
+    git(clone, 'remote', 'set-url', 'origin', 'git@bitbucket.org:koodu_software/org.openbravo.module.sii.git');
+    try {
+      const r = await evaluateRepo(clone, epicSpec, EPIC);
+      assert.ok(errors(r).some((m) => m.includes('remote set-url origin git@ssh.bitbucket.org:koodu_software/org.openbravo.module.sii.git')));
+    } finally {
+      git(clone, 'remote', 'set-url', 'origin', realOrigin);
+    }
+  });
+});
+
+describe('mergePolicies', () => {
+  const local = { epic: EPIC, repos: [{ name: 'a', kind: 'epic' }, { name: 'b', kind: 'usual' }] };
+
+  it('adds the repos only origin/develop lists, so an older branch still sees a new module', () => {
+    const upstream = { epic: EPIC, repos: [{ name: 'a', kind: 'usual' }, { name: 'remittance', kind: 'epic' }] };
+    const { policy, addedFromUpstream } = mergePolicies(local, upstream);
+    assert.deepEqual(addedFromUpstream, ['remittance']);
+    assert.deepEqual(policy.repos.map((s) => s.name), ['a', 'b', 'remittance']);
+    // this branch's own spec wins for a repo both list
+    assert.equal(policy.repos[0].kind, 'epic');
+  });
+
+  it('keeps the local policy when origin/develop has none', () => {
+    assert.deepEqual(mergePolicies(local, null), { policy: local, addedFromUpstream: [] });
   });
 });
 

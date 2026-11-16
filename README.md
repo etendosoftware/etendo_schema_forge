@@ -241,6 +241,11 @@ git clone -b epic/ETP-3504 git@github.com:etendosoftware/com.etendoerp.db.extend
 git clone -b epic/ETP-3504 git@github.com:etendosoftware/com.etendoerp.copilot.git
 git clone -b epic/ETP-3504 git@github.com:etendosoftware/org.openbravo.sepa.iso20022.template.git
 
+# Bitbucket SSH lives at ssh.bitbucket.org: the old bitbucket.org host refuses SSH. A module cloned
+# from the old host cannot fetch; fix it with
+#   git -C <module> remote set-url origin git@ssh.bitbucket.org:koodu_software/<module>.git
+# (`make check-modules` flags it and prints that command).
+
 # Bitbucket modules on the epic: localization (ES)
 for m in com.etendoerp.sif.general com.smf.ticketbai com.etendoerp.verifactu \
          org.openbravo.module.aeat347apr.es org.openbravo.module.aeat390.es \
@@ -248,34 +253,37 @@ for m in com.etendoerp.sif.general com.smf.ticketbai com.etendoerp.verifactu \
          org.openbravo.module.intrastat \
          org.openbravo.module.sii org.openbravo.module.taxreportlauncher \
          org.openbravo.module.bptaxidkey; do
-  git clone -b epic/ETP-3504 git@bitbucket.org:koodu_software/$m.git
+  git clone -b epic/ETP-3504 git@ssh.bitbucket.org:koodu_software/$m.git
 done
 
 # Bitbucket modules on the epic: currency conversion rates + PSD2
 for m in com.smf.currency.conversionrate com.smf.currency.apiconfig \
          com.etendoerp.psd2.bank.integration; do
-  git clone -b epic/ETP-3504 git@bitbucket.org:koodu_software/$m.git
+  git clone -b epic/ETP-3504 git@ssh.bitbucket.org:koodu_software/$m.git
 done
 
 # Bitbucket modules on the epic: SEPA ISO 20022 (structured address / SEPA direct debit & credit transfer)
 for m in org.openbravo.sepa.iso20022 \
          org.openbravo.sepa.iso20022.credittransfer.customertobank \
          org.openbravo.sepa.iso20022.coredirectdebit.customertobank; do
-  git clone -b epic/ETP-3504 git@bitbucket.org:koodu_software/$m.git
+  git clone -b epic/ETP-3504 git@ssh.bitbucket.org:koodu_software/$m.git
 done
 
 # Bitbucket module on the epic: SEPA remittances (ETP-6148 adds REM_REMITTANCE.REMITTANCE_STATUS)
-git clone -b epic/ETP-3504 git@bitbucket.org:koodu_software/org.openbravo.module.remittance.git
+git clone -b epic/ETP-3504 git@ssh.bitbucket.org:koodu_software/org.openbravo.module.remittance.git
 # Already cloned on develop? Switch it to the epic:
 #   git -C org.openbravo.module.remittance fetch origin && git -C org.openbravo.module.remittance checkout epic/ETP-3504
 
 # Bitbucket modules on the usual model (no epic branch). Optional: without a checkout, the build
 # resolves them as published JARs.
-git clone -b develop git@bitbucket.org:koodu_software/org.openbravo.module.remittance.template.git
-git clone -b main git@bitbucket.org:koodu_software/com.etendoerp.automated.remittance.git
+git clone -b develop git@ssh.bitbucket.org:koodu_software/org.openbravo.module.remittance.template.git
+git clone -b main git@ssh.bitbucket.org:koodu_software/com.etendoerp.automated.remittance.git
 ```
 
-Check at any time which modules are off-branch or behind (from `etendo_core/modules`):
+Check at any time which modules are missing, off-branch, behind or on the retired Bitbucket host.
+`make check-modules` reads `scripts/modules-policy.json` from this branch **and** from `origin/develop`,
+so a schema_forge on an older branch still reports a module the team added since (e.g. `not cloned`).
+For a quick branch/behind listing of what is already cloned (from `etendo_core/modules`):
 
 ```bash
 for d in */; do d=${d%/}; [ -e "$d/.git" ] || continue; git -C "$d" fetch -q origin
