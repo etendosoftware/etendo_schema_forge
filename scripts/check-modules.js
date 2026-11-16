@@ -58,6 +58,37 @@ export function normalizeRemote(url) {
   return m ? m[1].toLowerCase() : null;
 }
 
+// Bitbucket moved its SSH endpoint to ssh.bitbucket.org; the old bitbucket.org host refuses SSH, so a
+// module whose origin still points there can neither be fetched nor pulled. Returns the URL to switch
+// to, or null when the URL is not on the retired host.
+export function retiredRemoteFix(url) {
+  if (!url) return null;
+  const m = url.trim().match(/^(?:ssh:\/\/)?git@bitbucket\.org[:/](.+)$/);
+  return m ? `git@ssh.bitbucket.org:${m[1]}` : null;
+}
+
+// The policy this branch carries, plus every repo that origin/develop's policy lists and this branch
+// does not: a checkout on an older branch must still learn that a module was added to the team setup.
+export function mergePolicies(local, upstream) {
+  if (!upstream?.repos) return { policy: local, addedFromUpstream: [] };
+  const known = new Set(local.repos.map((s) => s.name));
+  const added = upstream.repos.filter((s) => !known.has(s.name));
+  return { policy: { ...local, repos: [...local.repos, ...added] }, addedFromUpstream: added.map((s) => s.name) };
+}
+
+async function loadPolicy(fetchFirst) {
+  const local = JSON.parse(readFileSync(join(HERE, 'modules-policy.json'), 'utf8'));
+  if (fetchFirst) await git(REPO_ROOT, ['fetch', '-q', 'origin', 'develop']);
+  const text = await git(REPO_ROOT, ['show', 'origin/develop:scripts/modules-policy.json']);
+  let upstream = null;
+  try {
+    upstream = text ? JSON.parse(text) : null;
+  } catch {
+    upstream = null;
+  }
+  return mergePolicies(local, upstream);
+}
+
 /**
  * Evaluate one repo checkout. Returns { branch, findings: [{ level: 'ERROR'|'WARN'|'INFO', msg }] }.
  * `epic` is the epic branch name, `spec.kind` one of base | epic | usual.
@@ -77,7 +108,12 @@ export async function evaluateRepo(dir, spec, epic) {
   const originDevelop = await have('develop');
   const originMain = await have('main');
 
-  const remote = normalizeRemote(await git(dir, ['remote', 'get-url', 'origin']));
+  const originUrl = await git(dir, ['remote', 'get-url', 'origin']);
+  const fixedUrl = retiredRemoteFix(originUrl);
+  if (fixedUrl) {
+    add('ERROR', `origin uses the retired host bitbucket.org (SSH refused, fetch fails): git -C ${dir} remote set-url origin ${fixedUrl}`);
+  }
+  const remote = normalizeRemote(originUrl);
   if (spec.remote && remote && remote !== spec.remote.toLowerCase()) {
     add('WARN', `origin is ${remote}, expected ${spec.remote}`);
   }
@@ -294,8 +330,11 @@ async function checkRoot(etendoRoot, { policy, fetchFirst, only, explicitRoot, m
 }
 
 export async function main(argv = process.argv.slice(2), env = process.env) {
-  const policy = JSON.parse(readFileSync(join(HERE, 'modules-policy.json'), 'utf8'));
   const fetchFirst = !argv.includes('--no-fetch');
+  const { policy, addedFromUpstream } = await loadPolicy(fetchFirst);
+  if (addedFromUpstream.length) {
+    console.log(`NOTE: this schema_forge branch predates origin/develop's module policy; also checking ${addedFromUpstream.join(', ')}.\n`);
+  }
   const only = flagValues(argv, '--only');
   const mainRoot = readEtendoRoot(env);
 
