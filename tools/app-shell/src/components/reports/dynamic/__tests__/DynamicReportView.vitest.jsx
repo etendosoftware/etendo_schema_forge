@@ -65,6 +65,7 @@ let years;
 let queryAnswer;
 let entryAnswer;
 let ledgerAnswer;
+let splitAnswer;
 // pg sends a SQL date as the server's local midnight in UTC: 15 September in Madrid.
 const LEDGER = {
   kind: 'rows',
@@ -93,6 +94,7 @@ function route(url, init) {
   if (url.endsWith('/query')) {
     const { params } = JSON.parse(init.body);
     // As the split SQL answers it: a part with no dimension has name '' (COALESCE), not null.
+    if (params.splitBy && splitAnswer) return Promise.resolve(splitAnswer(params));
     if (params.splitBy) return Promise.resolve(json({ kind: 'split', periods: TOTAL_PERIOD, rows: [{ node_id: 'O1', name: 'Spain', amount: 600, amount_ref: 0 }, { node_id: null, name: '', amount: 400, amount_ref: 0 }] }));
     return Promise.resolve(queryAnswer(params));
   }
@@ -109,6 +111,7 @@ beforeEach(() => {
   years = JULY_YEARS;
   entryAnswer = ENTRY;
   ledgerAnswer = () => LEDGER;
+  splitAnswer = null;
   queryAnswer = (params) => json({ kind: 'tree', periods: TOTAL_PERIOD, rows: withVariation(TREE) });
   apiFetchMock.mockReset();
   trackMock.mockReset();
@@ -602,6 +605,405 @@ describe('DynamicReportView — telemetry (F10, T9)', () => {
     fireEvent.click(await screen.findByTestId('DynamicDrillPanel__openDocument'));
     expect(sent('report_drilldown').at(-1)).toMatchObject({ type: 'document', outcome: 'error' });
     open.mockRestore();
+  });
+});
+
+// ETP-6239 — period columns: the server answers one `cells[i]` per requested period, in every mode.
+const cellOf = (n) => ({
+  amount: n,
+  sly: { amount: n - 20, variationAmount: 20, variationPct: 25, trend: 'improves' },
+  prev: { amount: n - 10, variationAmount: 10, variationPct: 11, trend: 'improves' },
+});
+const periodsOf = (params, partialIdx) => params.periods.split(',').map((tuple, idx) => {
+  const [dateFrom, dateTo] = tuple.split('|')[0].split('..');
+  return { idx, dateFrom, dateTo, partial: idx === partialIdx };
+});
+const periodAnswer = (params, { partialIdx, extraRows = [] } = {}) => {
+  const periods = periodsOf(params, partialIdx);
+  return json({
+    kind: 'tree',
+    periods,
+    hiddenCount: Number(params.hiddenCount),
+    rows: [...TREE, ...extraRows].map((r) => ({ ...r, cells: periods.map((_, pos) => cellOf(100 + pos)) })),
+  });
+};
+
+describe('DynamicReportView — period columns (ETP-6239)', () => {
+  const settle = () => waitFor(() => expect(screen.queryByTestId('DynamicReportView__loading')).toBeNull());
+  const sent = (name) => trackMock.mock.calls.filter(([event]) => event === name).map(([, props]) => props);
+  const quiet = () => new Promise((r) => setTimeout(r, 450)); // longer than the query debounce
+  const choose = (testId, value) => fireEvent.change(screen.getByTestId(testId), { target: { value } });
+  const groupLabels = () => screen.getAllByTestId('DynamicReportTable__group').map((th) => th.textContent);
+  const renderPeriods = async (props) => {
+    queryAnswer = periodAnswer;
+    renderView(props);
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+  };
+  const toMonths = async () => {
+    choose('DynamicReportPanel__columns', 'month');
+    await waitFor(() => expect(queries().at(-1).columns).toBe('month'));
+    await waitFor(() => expect(groupLabels()).toHaveLength(6));
+  };
+  const leafRow = () => screen.getAllByTestId('DynamicReportTable__row').find((r) => r.dataset.nodeId === 'S1');
+  const drillButtons = () => within(leafRow()).getAllByTestId('DynamicReportTable__cellLedger');
+  const openLeaf = async () => {
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__expandAll'));
+    await waitFor(() => expect(rowIds()).toContain('S1'));
+  };
+  const lastLedger = () => queriesTo('report-general-ledger').at(-1);
+
+  describe('the request', () => {
+    it('Total mode carries columns, periods and hiddenCount, and nothing of the comparison', async () => {
+      await renderPeriods();
+      const [params] = queries();
+      expect(params).toMatchObject({
+        columns: 'total', hiddenCount: '0',
+        periods: '2026-07-01..2026-11-03|2025-07-01..2025-11-03|2026-02-25..2026-06-30',
+      });
+      for (const gone of ['compareTo', 'fromReferenceDate', 'toReferenceDate', 'yearId', 'referenceYearId', 'compare']) {
+        expect(params).not.toHaveProperty(gone);
+      }
+    });
+
+    it('Mes sends the range plus the shown months, each with its compared ranges, and no year', async () => {
+      await renderPeriods();
+      await toMonths();
+      const params = queries().at(-1);
+      const tuples = params.periods.split(',');
+      expect(tuples).toHaveLength(6);
+      expect(tuples[0]).toBe('2026-07-01..2026-11-03|2025-07-01..2025-11-03|2026-06-01..2026-10-03');
+      expect(tuples[1]).toBe('2026-07-01..2026-07-31|2025-07-01..2025-07-31|2026-06-01..2026-06-30');
+      expect(tuples[5]).toBe('2026-11-01..2026-11-03|2025-11-01..2025-11-03|2026-10-01..2026-10-03');
+      expect(params.hiddenCount).toBe('0');
+      for (const gone of ['compareTo', 'fromReferenceDate', 'toReferenceDate', 'yearId', 'referenceYearId']) {
+        expect(params).not.toHaveProperty(gone);
+      }
+    });
+
+    it('Trimestre sends quarters; a long range sends only the last N plus hiddenCount', async () => {
+      await renderPeriods();
+      choose('DynamicReportPanel__year', 'Y25'); // 2025-07-01 .. 2026-06-30: 12 months, 4 quarters
+      choose('DynamicReportPanel__columns', 'month');
+      await waitFor(() => expect(queries().at(-1)).toMatchObject({ columns: 'month', dateFrom: '2025-07-01', hiddenCount: '6' }));
+      expect(queries().at(-1).periods.split(',')).toHaveLength(7);
+      choose('DynamicReportPanel__columns', 'quarter');
+      await waitFor(() => expect(queries().at(-1)).toMatchObject({ columns: 'quarter', hiddenCount: '0' }));
+      expect(queries().at(-1).periods.split(',')).toHaveLength(5);
+    });
+  });
+
+  describe('the comparison toggle sends no request (D4)', () => {
+    it('in Total mode', async () => {
+      await renderPeriods();
+      await settle();
+      const before = apiFetchMock.mock.calls.length;
+      choose('DynamicReportPanel__compare', 'same-last-year');
+      choose('DynamicReportPanel__compare', 'previous');
+      choose('DynamicReportPanel__compare', '');
+      await quiet();
+      expect(apiFetchMock.mock.calls.length).toBe(before);
+      expect(queries()).toHaveLength(1);
+    });
+
+    it('in Mes mode, and the compared columns appear for every period', async () => {
+      await renderPeriods();
+      await toMonths();
+      await settle();
+      const before = apiFetchMock.mock.calls.length;
+      choose('DynamicReportPanel__compare', 'previous');
+      await quiet();
+      expect(apiFetchMock.mock.calls.length).toBe(before);
+      expect(screen.getAllByTestId('DynamicReportTable__variation').length).toBe(2 * 6);
+      choose('DynamicReportPanel__compare', '');
+      await quiet();
+      expect(apiFetchMock.mock.calls.length).toBe(before);
+      expect(screen.queryAllByTestId('DynamicReportTable__variation')).toHaveLength(0);
+    });
+  });
+
+  describe('stale data and notes', () => {
+    it('Total → Mes while the old answer is still shown: labels stay consistent with it, then follow the new answer', async () => {
+      await renderPeriods();
+      let release;
+      queryAnswer = (params) => (params.columns === 'month'
+        ? new Promise((res) => { release = () => res(periodAnswer(params)); })
+        : periodAnswer(params));
+      choose('DynamicReportPanel__columns', 'month');
+      await waitFor(() => expect(typeof release).toBe('function'));
+      // The Total answer (one period) is still on screen: its header, no month label, no crash.
+      expect(groupLabels()).toEqual(['dynamicReportColumnsTotal']);
+      expect(rowIds()).toEqual(['E1', 'C1']);
+      release();
+      await waitFor(() => expect(groupLabels()).toHaveLength(6));
+      expect(groupLabels()).toEqual([expect.stringMatching(/^jul 26$/), 'ago 26', expect.stringMatching(/^sept? 26$/), 'oct 26', 'nov 26', 'dynamicReportColumnsTotal']);
+    });
+
+    it('the hidden-periods note carries the count from the answer; none when nothing is hidden', async () => {
+      await renderPeriods();
+      expect(screen.queryByTestId('DynamicReportView__hiddenNote')).toBeNull();
+      choose('DynamicReportPanel__year', 'Y25');
+      choose('DynamicReportPanel__columns', 'month');
+      expect(await screen.findByTestId('DynamicReportView__hiddenNote')).toHaveTextContent('dynamicReportHiddenPeriods:6');
+    });
+
+    it('the partial note and the * show only when a bucket is partial', async () => {
+      queryAnswer = (params) => periodAnswer(params, { partialIdx: params.columns === 'month' ? 5 : undefined });
+      renderView();
+      await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+      expect(screen.queryByTestId('DynamicReportView__partialNote')).toBeNull();
+      await toMonths();
+      expect(screen.getByTestId('DynamicReportView__partialNote')).toHaveTextContent('dynamicReportPartialPeriods');
+      expect(groupLabels().filter((l) => l.endsWith('*'))).toEqual(['nov 26*']);
+    });
+  });
+
+  describe('exports', () => {
+    const renderBody = (format) => {
+      const call = apiFetchMock.mock.calls.filter(([u]) => u.endsWith('/render')).at(-1);
+      expect(call).toBeTruthy();
+      const body = JSON.parse(call[1].body);
+      expect(body.format).toBe(format);
+      return body.params;
+    };
+    const exportAs = async (format) => {
+      fireEvent.click(screen.getByTestId(`DynamicReportView__export-${format}`));
+      await waitFor(() => expect(globalThis.URL.createObjectURL).toHaveBeenCalled());
+      globalThis.URL.createObjectURL.mockClear();
+      return renderBody(format);
+    };
+
+    it('PDF sends the last N plus hiddenCount; Excel and CSV send every bucket; all send compareMode', async () => {
+      await renderPeriods();
+      choose('DynamicReportPanel__year', 'Y25');
+      choose('DynamicReportPanel__columns', 'month');
+      choose('DynamicReportPanel__compare', 'previous');
+      await waitFor(() => expect(screen.getByTestId('DynamicReportView__hiddenNote')).toBeInTheDocument());
+      await settle();
+      const pdf = await exportAs('pdf');
+      expect(pdf.periods.split(',')).toHaveLength(7);
+      expect(pdf.hiddenCount).toBe('6');
+      expect(pdf.compareMode).toBe('prev');
+      for (const format of ['xlsx', 'csv']) {
+        const params = await exportAs(format);
+        expect(params.periods.split(',')).toHaveLength(13);
+        expect(params.hiddenCount).toBe('0');
+        expect(params.compareMode).toBe('prev');
+        expect(params.columns).toBe('month');
+      }
+    });
+
+    it('compareMode follows the toggle, and is none without a comparison', async () => {
+      await renderPeriods();
+      expect((await exportAs('pdf')).compareMode).toBe('none');
+      choose('DynamicReportPanel__compare', 'same-last-year');
+      expect((await exportAs('csv')).compareMode).toBe('sly');
+    });
+
+    it('over 25 buckets Excel and CSV are disabled with a translated message; PDF still works; Total mode has no cap', async () => {
+      await renderPeriods();
+      choose('DynamicReportPanel__columns', 'month');
+      fireEvent.change(screen.getByTestId('DynamicReportPanel__dateFrom'), { target: { value: '2020-01-01' } });
+      await waitFor(() => expect(queries().at(-1)).toMatchObject({ columns: 'month', dateFrom: '2020-01-01' }));
+      await settle();
+      expect(screen.getByTestId('DynamicReportView__exportTooLong')).toHaveTextContent('dynamicReportExportTooLong');
+      expect(screen.getByTestId('DynamicReportView__export-xlsx')).toBeDisabled();
+      expect(screen.getByTestId('DynamicReportView__export-csv')).toBeDisabled();
+      expect(screen.getByTestId('DynamicReportView__export-pdf')).toBeEnabled();
+      expect((await exportAs('pdf')).periods.split(',')).toHaveLength(7);
+      choose('DynamicReportPanel__columns', 'total');
+      await waitFor(() => expect(screen.queryByTestId('DynamicReportView__exportTooLong')).toBeNull());
+      expect(screen.getByTestId('DynamicReportView__export-xlsx')).toBeEnabled();
+    });
+  });
+
+  describe('drill (D7)', () => {
+    it('a current cell opens the ledger of its bucket; the total column opens the whole range', async () => {
+      await renderPeriods();
+      await toMonths();
+      await openLeaf();
+      // Groups in screen order: jul, ago, sep, oct, nov, Total.
+      expect(drillButtons()).toHaveLength(6);
+      fireEvent.click(drillButtons()[1]);
+      await waitFor(() => expect(lastLedger()).toMatchObject({ dateFrom: '2026-08-01', dateTo: '2026-08-31', accountId: 'S1' }));
+      fireEvent.click(await screen.findByTestId('DynamicDrillPanel__crumb-report'));
+      await waitFor(() => expect(screen.queryByTestId('DynamicDrillPanel__ledger')).toBeNull());
+      fireEvent.click(drillButtons()[5]);
+      await waitFor(() => expect(lastLedger()).toMatchObject({ dateFrom: '2026-07-01', dateTo: '2026-11-03' }));
+    });
+
+    it('a Comparado cell opens the compared range; for the total it is the single D3 range', async () => {
+      await renderPeriods();
+      await toMonths();
+      choose('DynamicReportPanel__compare', 'previous');
+      await openLeaf();
+      // Per group: Importe, Comparado. Var. € and Var. % are not buttons.
+      expect(drillButtons()).toHaveLength(12);
+      fireEvent.click(drillButtons()[1]);
+      await waitFor(() => expect(lastLedger()).toMatchObject({ dateFrom: '2026-06-01', dateTo: '2026-06-30' }));
+      fireEvent.click(await screen.findByTestId('DynamicDrillPanel__crumb-report'));
+      await waitFor(() => expect(screen.queryByTestId('DynamicDrillPanel__ledger')).toBeNull());
+      fireEvent.click(drillButtons()[11]);
+      await waitFor(() => expect(lastLedger()).toMatchObject({ dateFrom: '2026-06-01', dateTo: '2026-10-03' }));
+    });
+
+    it('Comparado under same-period-last-year opens last year\'s bucket', async () => {
+      await renderPeriods();
+      await toMonths();
+      choose('DynamicReportPanel__compare', 'same-last-year');
+      await openLeaf();
+      fireEvent.click(drillButtons()[1]);
+      await waitFor(() => expect(lastLedger()).toMatchObject({ dateFrom: '2025-07-01', dateTo: '2025-07-31' }));
+    });
+
+    it('the variation cells are not clickable', async () => {
+      await renderPeriods();
+      await toMonths();
+      choose('DynamicReportPanel__compare', 'previous');
+      await openLeaf();
+      const cells = [...within(leafRow()).getAllByTestId('DynamicReportTable__variation'), ...within(leafRow()).getAllByTestId('DynamicReportTable__variationPct')];
+      expect(cells).toHaveLength(12);
+      for (const cell of cells) expect(within(cell).queryByRole('button')).toBeNull();
+    });
+  });
+
+  describe('telemetry (D9)', () => {
+    it('the comparison is emitted at once with no durationMs, and sends no request', async () => {
+      await renderPeriods();
+      await settle();
+      choose('DynamicReportPanel__compare', 'previous');
+      const [applied] = sent('report_filter_applied');
+      expect(applied).toMatchObject({ type: 'comparison', outcome: 'success', specName: 'profit-loss' });
+      expect(applied).not.toHaveProperty('durationMs');
+      await quiet();
+      expect(sent('report_filter_applied')).toHaveLength(1);
+    });
+
+    it('Columnas is a timed filter: one event with durationMs once its result is in', async () => {
+      await renderPeriods();
+      await waitFor(() => expect(sent('report_opened')).toHaveLength(1));
+      choose('DynamicReportPanel__columns', 'month');
+      await waitFor(() => expect(sent('report_filter_applied')).toHaveLength(1));
+      expect(sent('report_filter_applied')[0]).toMatchObject({ type: 'columns', outcome: 'success' });
+      expect(sent('report_filter_applied')[0].durationMs).toEqual(expect.any(Number));
+    });
+  });
+
+  describe('chips and the panel', () => {
+    it('has the Columnas select with the three grains', async () => {
+      await renderPeriods();
+      const options = within(screen.getByTestId('DynamicReportPanel__columns')).getAllByRole('option').map((o) => [o.value, o.textContent]);
+      expect(options).toEqual([['total', 'dynamicReportColumnsTotal'], ['month', 'dynamicReportColumnsMonth'], ['quarter', 'dynamicReportColumnsQuarter']]);
+    });
+
+    it('the comparison chip shows the total group\'s compared range, per mode and grain', async () => {
+      await renderPeriods();
+      choose('DynamicReportPanel__compare', 'same-last-year');
+      expect(await screen.findByTestId('DynamicReportView__chip-compare')).toHaveTextContent('01/07/2025 – 03/11/2025');
+      choose('DynamicReportPanel__compare', 'previous');
+      // Total mode: the same number of days, ending the day before.
+      expect(screen.getByTestId('DynamicReportView__chip-compare')).toHaveTextContent('25/02/2026 – 30/06/2026');
+      await toMonths();
+      // Mes mode: the D3 single range [prev(first).from, prev(last).to].
+      await waitFor(() => expect(screen.getByTestId('DynamicReportView__chip-compare')).toHaveTextContent('01/06/2026 – 03/10/2026'));
+    });
+
+    it('a Columnas chip shows outside Total and its remove button goes back to Total', async () => {
+      await renderPeriods();
+      expect(screen.queryByTestId('DynamicReportView__chip-columns')).toBeNull();
+      await toMonths();
+      expect(screen.getByTestId('DynamicReportView__chip-columns')).toHaveTextContent('dynamicReportColumnsMonth');
+      fireEvent.click(screen.getByTestId('DynamicReportView__chipRemove-columns'));
+      await waitFor(() => expect(queries().at(-1).columns).toBe('total'));
+      expect(screen.queryByTestId('DynamicReportView__chip-columns')).toBeNull();
+    });
+  });
+
+  describe('the table', () => {
+    it('has a two-row header: Concepto spans both, each period is a colgroup over its sub-columns', async () => {
+      await renderPeriods();
+      await toMonths();
+      choose('DynamicReportPanel__compare', 'previous');
+      const table = screen.getByTestId('DynamicReportTable');
+      const headerRows = table.querySelectorAll('thead tr');
+      expect(headerRows).toHaveLength(2);
+      const concept = headerRows[0].querySelector('th[scope="col"]');
+      expect(concept).toHaveAttribute('rowspan', '2');
+      const colgroups = headerRows[0].querySelectorAll('th[scope="colgroup"]');
+      expect(colgroups).toHaveLength(6);
+      for (const th of colgroups) expect(th).toHaveAttribute('colspan', '4');
+      const subs = headerRows[1].querySelectorAll('th[scope="col"]');
+      expect(subs).toHaveLength(24);
+      expect([...subs].slice(0, 4).map((th) => th.textContent)).toEqual(['dynamicReportAmount', 'dynamicReportCompared', 'dynamicReportVariation', 'dynamicReportVariationPct']);
+    });
+
+    it('scrolls horizontally inside its own wrapper', async () => {
+      await renderPeriods();
+      expect(screen.getByTestId('DynamicReportTable__scroll').className).toContain('overflow-x-auto');
+      expect(screen.getByTestId('DynamicReportTable__scroll')).toContainElement(screen.getByTestId('DynamicReportTable'));
+    });
+
+    it('the sticky Concepto cell has an opaque background on normal, heading, formula and hovered rows', async () => {
+      queryAnswer = (params) => periodAnswer(params, {
+        extraRows: [{ node_id: 'F1', parentId: null, elementlevel: 'E', value: '', name: 'Resultado', amount: 1, amount_ref: 0, sign: 'C', isFormula: true }],
+      });
+      renderView();
+      await waitFor(() => expect(rowIds()).toContain('F1'));
+      const first = (id) => screen.getAllByTestId('DynamicReportTable__row').find((r) => r.dataset.nodeId === id).querySelector('td');
+      for (const id of ['E1', 'C1', 'F1']) {
+        const tokens = first(id).className.split(/\s+/);
+        expect(tokens, id).toContain('sticky');
+        expect(tokens, id).toContain('left-0');
+        // a solid fill: bg-card / bg-muted, never an alpha one like bg-muted/40
+        expect(tokens.some((t) => /^bg-(card|muted)$/.test(t)), id).toBe(true);
+        expect(tokens.some((t) => /^bg-[a-z-]+\//.test(t)), id).toBe(false);
+      }
+      // hovering the row must not let the scrolled amounts show through
+      expect(first('C1').className).toContain('group-hover:bg-muted');
+      expect(first('F1').className).toContain('bg-muted');
+      const concept = screen.getByTestId('DynamicReportTable').querySelector('thead th[scope="col"]');
+      expect(concept.className).toContain('sticky');
+      expect(concept.className).toContain('bg-muted');
+    });
+  });
+
+  describe('the split by dimension', () => {
+    it('opens in Mes with one cell per period, in the same column order, and carries columns and periods', async () => {
+      splitAnswer = (params) => json({
+        kind: 'split',
+        periods: periodsOf(params),
+        rows: [{ node_id: 'O1', name: 'Spain', cells: periodsOf(params).map((_, pos) => cellOf(600 + pos)) }],
+      });
+      await renderPeriods();
+      await toMonths();
+      await openLeaf();
+      choose('DynamicReportPanel__splitBy', 'org');
+      fireEvent.click(await screen.findByTestId('DynamicReportTable__splitToggle'));
+      const part = await screen.findByTestId('DynamicReportTable__splitRow');
+      // jul..nov (pos 1..5), then the range total (pos 0)
+      expect(part.textContent).toBe(['Spain', '601,00', '602,00', '603,00', '604,00', '605,00', '600,00'].join(''));
+      expect(queries().find((p) => p.splitBy)).toMatchObject({ splitBy: 'org', splitNodeId: 'S1', columns: 'month' });
+      expect(queries().find((p) => p.splitBy).periods.split(',')).toHaveLength(6);
+    });
+
+    it('opens in Trimestre too, with the compared columns of the mode', async () => {
+      splitAnswer = (params) => json({
+        kind: 'split',
+        periods: periodsOf(params),
+        rows: [{ node_id: 'O1', name: 'Spain', cells: periodsOf(params).map((_, pos) => cellOf(600 + pos)) }],
+      });
+      await renderPeriods();
+      choose('DynamicReportPanel__columns', 'quarter');
+      await waitFor(() => expect(groupLabels()).toHaveLength(3));
+      choose('DynamicReportPanel__compare', 'previous');
+      await openLeaf();
+      choose('DynamicReportPanel__splitBy', 'org');
+      fireEvent.click(await screen.findByTestId('DynamicReportTable__splitToggle'));
+      const part = await screen.findByTestId('DynamicReportTable__splitRow');
+      // Importe, Comparado (amount - 10), Var. €, Var. % per group; q3 (pos 1), q4 (pos 2), total (pos 0)
+      expect(part.textContent).toContain('601,00591,00');
+      expect(part.textContent).toContain('600,00590,00');
+      expect(queries().find((p) => p.splitBy)).toMatchObject({ columns: 'quarter' });
+    });
   });
 });
 
