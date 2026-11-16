@@ -1,3 +1,4 @@
+// @covers templates/reports/helpers/report-html-helpers.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';

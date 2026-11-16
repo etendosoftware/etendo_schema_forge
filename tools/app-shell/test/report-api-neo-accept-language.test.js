@@ -1,3 +1,4 @@
+// @covers tools/app-shell/vite-plugins/report-api.js
 /**
  * ETP-5013 — the render's locale must reach the NEO backend as `Accept-Language`.
  *

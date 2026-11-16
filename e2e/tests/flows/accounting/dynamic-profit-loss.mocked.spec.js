@@ -286,5 +286,10 @@ test.describe('Profit & Loss — period columns and the filter panel (ETP-6239)'
     const strip = await page.getByTestId('DynamicReportPanel__strip').boundingBox();
     expect(strip.width).toBeGreaterThanOrEqual(view.width - 2);
     expect(strip.height).toBeLessThan(80);
+    // The "Personalizar informe" text sits inside the button, so a tap on the text opens the panel too.
+    await expect(page.getByTestId('DynamicReportPanel__expand')).not.toHaveAttribute('aria-controls');
+    await page.getByTestId('DynamicReportPanel__strip').getByText(t('customizeReport')).click();
+    await expect(panel).toBeVisible();
+    await expect(page.getByTestId('DynamicReportPanel__strip')).toHaveCount(0);
   });
 });

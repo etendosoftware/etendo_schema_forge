@@ -293,6 +293,18 @@ describe('DynamicReportView — split, errors and exports', () => {
     expect(rowIds()).toHaveLength(2);
   });
 
+  it.each([
+    ['PERIOD_RANGE_TOO_LONG', 'reportErrorPeriodRangeTooLong'],
+    ['INVALID_PERIODS', 'reportErrorInvalidPeriods'],
+  ])('maps %s to its translated message and keeps the last tree', async (code, key) => {
+    renderView();
+    await waitFor(() => expect(rowIds()).toHaveLength(2));
+    queryAnswer = () => json({ error: code, code }, { ok: false, status: 400 });
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__shortcut-month'));
+    expect(await screen.findByTestId('DynamicReportView__error')).toHaveTextContent(key);
+    expect(rowIds()).toHaveLength(2);
+  });
+
   it('PDF export renders what the screen shows: same filters, level and expanded rows', async () => {
     renderView({ roleOrgs: [{ id: 'O1', name: 'Spain' }] });
     await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
@@ -527,15 +539,19 @@ describe('DynamicReportView — telemetry (F10, T9)', () => {
     expect(sent('report_filter_applied')).toHaveLength(1);
   });
 
-  it('two changes inside the debounce: only the one whose request ran is reported', async () => {
+  it('two request-producing changes inside the debounce: one request, and only the last change is reported', async () => {
+    queryAnswer = periodAnswer;
     renderView();
     await waitFor(() => expect(sent('report_opened')).toHaveLength(1));
+    expect(queries()).toHaveLength(1);
     fireEvent.click(screen.getByTestId('DynamicReportPanel__shortcut-month'));
-    fireEvent.change(screen.getByTestId('DynamicReportPanel__compare'), { target: { value: 'previous' } });
-    await waitFor(() => expect(queries()).toHaveLength(2)); // the opening one and the month shortcut
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__columns'), { target: { value: 'month' } });
+    await waitFor(() => expect(queries()).toHaveLength(2)); // the opening one and one for both changes
     await settle();
-    // The comparison is emitted at once (no request to time); the period when its result lands.
-    expect(sent('report_filter_applied').map((e) => e.type)).toEqual(['comparison', 'period']);
+    await new Promise((r) => setTimeout(r, 450)); // longer than the debounce: no second request follows
+    expect(queries()).toHaveLength(2);
+    expect(queries().at(-1)).toMatchObject({ columns: 'month', dateFrom: '2026-11-01' });
+    expect(sent('report_filter_applied').map((e) => e.type)).toEqual(['columns']);
   });
 
   it('a failed request reports the error class, never the message', async () => {
@@ -1051,6 +1067,15 @@ describe('DynamicReportView — collapsible panel (ETP-6239 D8/D9)', () => {
     expect(screen.getByTestId('DynamicReportPanel')).toBeInTheDocument();
     expect(localStorage.getItem(KEY)).toBe('0');
     expect(screen.getByTestId('DynamicReportPanel__collapse')).toHaveFocus();
+    expect(sent('report_panel_toggled').at(-1)).toMatchObject({ panelState: 'expanded', trigger: 'user' });
+  });
+
+  it('on the collapsed strip, clicking the "customize" text inside the button expands the panel', async () => {
+    localStorage.setItem(KEY, '1');
+    await ready();
+    const strip = screen.getByTestId('DynamicReportPanel__strip');
+    fireEvent.click(within(strip).getByText('customizeReport'));
+    expect(screen.getByTestId('DynamicReportPanel')).toBeInTheDocument();
     expect(sent('report_panel_toggled').at(-1)).toMatchObject({ panelState: 'expanded', trigger: 'user' });
   });
 

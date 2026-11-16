@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/lib/dateOnly.js
+// @covers templates/reports/helpers/report-html-helpers.js
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -13,6 +14,7 @@ import {
   todayCalendarISO,
   tomorrowCalendarISO,
 } from '../dateOnly.js';
+import { createReportHelpers } from '../../../../../templates/reports/helpers/report-html-helpers.js';
 
 describe('dateOnly helpers', () => {
   describe('parseCalendarDate', () => {
@@ -427,6 +429,18 @@ describe('dateOnly helpers', () => {
       it('formatCalendarQuarterShort: invalid input is a dash', () => {
         assert.equal(formatCalendarQuarterShort('', 'T'), '—');
       });
+    });
+  }
+});
+
+describe('formatCalendarMonthShort vs the exports\' periodLabel (same table, screen = PDF/Excel)', () => {
+  const { periodLabel } = createReportHelpers();
+  for (const [locale, appLocale] of [['es_ES', 'es-ES'], ['en_US', 'en-US'], ['en_US', 'en-GB']]) {
+    it(`all 12 months match in ${appLocale}`, () => {
+      for (let m = 1; m <= 12; m += 1) {
+        const dateFrom = `2026-${String(m).padStart(2, '0')}-01`;
+        assert.equal(formatCalendarMonthShort(dateFrom, appLocale), periodLabel({ idx: 1, dateFrom, partial: false }, 'month', locale, 'Total'), dateFrom);
+      }
     });
   }
 });
