@@ -173,6 +173,27 @@ export function calendarISODaysAgo(days, reference = new Date()) {
 }
 
 /**
+ * Short column label of a month: "sep 26" / "Sept 26" ("{mmm} {yy}", no trailing dot).
+ * ETP-6239: the period columns of the interactive reports and their exports.
+ */
+export function formatCalendarMonthShort(raw, locales = 'en-GB') {
+  const date = parseCalendarDate(raw);
+  if (!date) return '—';
+  const formatter = new Intl.DateTimeFormat(normalizeLocale(locales), { month: 'short', year: '2-digit' });
+  const parts = formatter.formatToParts(date);
+  const month = parts.find((part) => part.type === 'month')?.value?.replace(/\.$/, '');
+  const year = parts.find((part) => part.type === 'year')?.value;
+  return month && year ? `${month} ${year}` : formatter.format(date);
+}
+
+/** Short column label of the calendar quarter containing the day: "T3 26" (`quarterPrefix` 'T') / "Q3 26". */
+export function formatCalendarQuarterShort(raw, quarterPrefix = 'Q') {
+  const date = parseCalendarDate(raw);
+  if (!date) return '—';
+  return `${quarterPrefix}${Math.floor(date.getMonth() / 3) + 1} ${String(date.getFullYear()).slice(-2)}`;
+}
+
+/**
  * Formats a calendar month and two-digit year without locale-specific connector words, so fiscal
  * period labels consistently read "January 27" / "Enero 27" rather than persisted "Jan-27".
  */

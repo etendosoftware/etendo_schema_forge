@@ -26607,7 +26607,15 @@
     "dynamicReportEntry": "Entry",
     "dynamicReportOpenDocument": "Open document",
     "dynamicReportNoDocument": "This entry has no document window to open.",
-    "dynamicReportDrillPath": "Drill-down path"
+    "dynamicReportDrillPath": "Drill-down path",
+    "dynamicReportColumns": "Columns",
+    "dynamicReportColumnsTotal": "Total",
+    "dynamicReportColumnsMonth": "By month",
+    "dynamicReportColumnsQuarter": "By quarter",
+    "dynamicReportQuarterPrefix": "Q",
+    "dynamicReportHiddenPeriods": "{count} earlier periods are not shown. Excel and CSV include every period.",
+    "dynamicReportPartialPeriods": "* Month or quarter incomplete within the chosen range.",
+    "dynamicReportExportTooLong": "Excel and CSV take up to 24 months or 8 quarters. Shorten the period to export them."
   },
   "menus": {
     "Invoice Inbox": {

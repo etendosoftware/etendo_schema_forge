@@ -852,7 +852,7 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
   }),
   // One per user change, once its result is visible or its request failed; never for the defaults,
   // "Limpiar filtros" or an aborted request. `type`: 'period' | 'organization' | 'account_level' |
-  // 'business_partner' | 'product' | 'comparison'.
+  // 'business_partner' | 'product' | 'comparison' | 'columns'.
   REPORT_FILTER_APPLIED: defineEvent('report_filter_applied', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
     properties: [
