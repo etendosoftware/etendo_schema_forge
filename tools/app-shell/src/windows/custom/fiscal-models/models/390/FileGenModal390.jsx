@@ -110,7 +110,7 @@ export default function FileGenModal390({ decl, summary, typeLabel, resultLabel,
       validation = null;
     }
     setWorking(false);
-    const clean = validation?.outcome === FILE_VALIDATION.ACCEPTED && !(validation.warnings?.length > 0);
+    const clean = validation?.outcome === FILE_VALIDATION.ACCEPTED && !validation.warnings?.length;
     if (validation && !clean) setResult(validation);
     else onClose();
   }

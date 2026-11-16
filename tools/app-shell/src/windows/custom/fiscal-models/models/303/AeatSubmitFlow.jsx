@@ -384,6 +384,8 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
   }
 
   const outcome = step === 'result' ? classifySubmitOutcome(response) : null;
+  // A real presentation is validated first by the server, in the same request.
+  const submittingKey = testMode ? 'fm.aeat.action.submitting' : 'fm.aeat.action.validating_submitting';
 
   return (
     <div className="fm-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
@@ -690,8 +692,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
                 ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__aeatSubmitting" />
                 : <Landmark size={14} data-testid="Landmark__aeatSubmit" />}
               {submitting
-                // A real presentation is validated first by the server, in the same request.
-                ? (t(testMode ? 'fm.aeat.action.submitting' : 'fm.aeat.action.validating_submitting') ?? 'Submitting to AEAT…')
+                ? (t(submittingKey) ?? 'Submitting to AEAT…')
                 : (t('fm.aeat.action.submit') ?? 'Submit to AEAT')}
             </button>
           )}

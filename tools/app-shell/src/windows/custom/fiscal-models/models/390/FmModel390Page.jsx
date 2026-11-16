@@ -699,7 +699,7 @@ export default function FmModel390Page({
         toast.error(result.serverMessage || t('fm.m390.generate_error'));
       } else {
         // A clean file: the success toast. One accepted WITH AEAT warnings shows them in the popup.
-        const clean = result.validation?.outcome === FILE_VALIDATION.ACCEPTED && !(result.validation.warnings?.length > 0);
+        const clean = result.validation?.outcome === FILE_VALIDATION.ACCEPTED && !result.validation.warnings?.length;
         if (clean) toast.success(t('fm.m390.file_validation.accepted'));
         const answered = [FILE_VALIDATION.ACCEPTED, FILE_VALIDATION.REJECTED].includes(result.validation?.outcome);
         if (answered) setIncidentsVersion(v => v + 1);
