@@ -461,16 +461,19 @@ describe('SearchPopup — row memoization (ETP-6280)', () => {
     expect(rowRenders).toBe(SEARCH_POPUP_PAGE_SIZE);
   });
 
-  it('re-renders at most the two rows whose highlight changed on each arrow key', async () => {
+  it('re-renders only the rows whose highlight changed on each arrow key', async () => {
     renderPopup({ loadPage: countedPager(30) });
     await screen.findByTestId('search-popup-option-acc-29');
     const input = screen.getByTestId('search-popup-input');
 
+    const perKey = [];
     for (const key of ['ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowUp']) {
       rowRenders = 0;
       fireEvent.keyDown(input, { key });
-      expect(rowRenders).toBeLessThanOrEqual(2);
+      perKey.push(rowRenders);
     }
+    // The first press only gains a highlight (1 row); every later move loses one and gains one.
+    expect(perKey).toEqual([1, 2, 2, 2]);
     expect(screen.getByTestId('search-popup-option-acc-1')).toHaveAttribute('data-highlighted', 'true');
   });
 
