@@ -482,7 +482,7 @@ code, or a missing id, shows no link. It opens in the same tab; Back restores th
    ("Proceso ejecutado: …") carries, as description, the failed documents grouped by translated
    reason, one line per reason: `INV-1, INV-2 +3 — <motivo>`. The reason is the same text the
    per-row **Contabilizar** shows (same `messageKeys`/`messageParams` translation). Caps: 3 reason
-   lines, 3 labels per line (`+N` for the rest), labels clipped to 40 characters, reasons to 120
+   lines, 3 labels per line (`+N` for the rest), labels clipped to 40 characters, reasons to 200
    (whitespace collapsed); the documents of further reasons are counted in one
    `bulkFailuresMore` line ("Y {n} documentos más; usa Contabilizar en la fila para ver el
    motivo"). The Estado column only shows the coarse bucket (e.g. "Error"), so the per-row action

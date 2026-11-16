@@ -10,7 +10,7 @@ const STORAGE_KEY = 'bulkActionResult';
 const MAX_REASON_LINES = 3;
 const MAX_LABELS_PER_LINE = 3;
 const MAX_LABEL_LENGTH = 40;
-const MAX_REASON_LENGTH = 120;
+const MAX_REASON_LENGTH = 200;
 const LISTED_FAILURES_DURATION_MS = 10000;
 
 /**

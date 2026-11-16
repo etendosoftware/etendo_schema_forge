@@ -663,7 +663,7 @@ describe('showBulkActionToast — opt-in failure listing (ETP-6286)', () => {
     const [label, reason] = toast.warning.mock.calls[0][1].description.split(' — ');
     expect(label).toHaveLength(40);
     expect(label.endsWith('…')).toBe(true);
-    expect(reason).toHaveLength(120);
+    expect(reason).toHaveLength(200);
     expect(reason.startsWith('Line 10: x')).toBe(true);
   });
 
