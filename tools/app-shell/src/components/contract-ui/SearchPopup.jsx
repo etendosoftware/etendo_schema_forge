@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useUI } from '@/i18n';
 import { isNetworkError } from '@etendosoftware/app-shell-core/auth';
 import { Check } from 'lucide-react';
@@ -35,7 +35,8 @@ const SEARCH_DEBOUNCE_MS = 300;
  * @param {boolean} props.open
  * @param {() => void} props.onClose
  * @param {(item: {id: string, name: string}) => void} props.onSelect — the popup does not close
- *   itself on select; the caller decides (it usually closes it).
+ *   itself on select; the caller decides (it usually closes it). Its identity does not matter: the
+ *   rows are memoized and call the latest one through a ref (ETP-6280).
  * @param {(query: string, offset: number, signal: AbortSignal, opts?: {limit: number}) =>
  *   Promise<{items: Array<{id: string, name: string}>, hasMore: boolean}>} props.loadPage — `opts.limit`
  *   (ETP-6103) is the page size to serve while locating the committed value (up to 100, instead of
@@ -83,6 +84,11 @@ export function SearchPopup({
   const firstLimitRef = useRef(() => SEARCH_POPUP_PAGE_SIZE);
   firstLimitRef.current = (q) => firstPageLimit(SEARCH_POPUP_PAGE_SIZE, value, q);
   useEffect(() => { loadPageRef.current = loadPage; }, [loadPage]);
+  // ETP-6280 — rows are memoized: a stable click handler keeps an inline `onSelect` from
+  // re-rendering all of them.
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
+  const pick = useCallback((o) => onSelectRef.current(o), []);
 
   useEffect(() => {
     if (open) { setQuery(''); setFocusIdx(-1); }
@@ -272,30 +278,20 @@ export function SearchPopup({
           {/* ETP-5948 — the ETP-5903 contract: check + aria-selected mark the COMMITTED value
               (never the keyboard focus, the ETP-5846 bug); the highlight is data-highlighted,
               exposed through aria-activedescendant on the search box. */}
-          {!loading && rendered.map((o, idx) => {
-            const isSelected = idx === selectedIndex;
-            const isHighlighted = idx === focusIdx;
-            return (
-              <button
-                key={o.id}
-                id={optionId(o)}
-                type="button"
-                role="option"
-                aria-selected={isSelected}
-                data-option-index={idx}
-                {...(isHighlighted ? { 'data-highlighted': 'true' } : {})}
-                ref={isHighlighted ? activeRef : undefined}
-                onClick={() => onSelect(o)}
-                data-testid={optionId(o)}
-                className={['w-full flex items-start gap-2 text-left px-4 py-2 text-sm break-words', isHighlighted ? 'bg-primary/10 text-primary' : 'hover:bg-muted/50', isSelected ? 'font-medium' : '', locating ? 'invisible' : ''].join(' ')}
-              >
-                {isSelected
-                  ? <Check className="h-4 w-4 mt-0.5 text-primary shrink-0" aria-hidden="true" data-testid={`${dataTestId}-check`} />
-                  : <span className="w-4 shrink-0" />}
-                <span className="min-w-0">{o.name}</span>
-              </button>
-            );
-          })}
+          {!loading && rendered.map((o, idx) => (
+            <SearchPopupOption
+              key={o.id}
+              option={o}
+              index={idx}
+              optionId={optionId(o)}
+              checkTestId={`${dataTestId}-check`}
+              isSelected={idx === selectedIndex}
+              isHighlighted={idx === focusIdx}
+              locating={locating}
+              activeRef={activeRef}
+              onPick={pick}
+            />
+          ))}
           {!loading && error && options.length > 0 && (
             <div className="flex justify-center gap-2 py-2 text-xs" data-testid={`${dataTestId}-load-more-error`}>
               <span>{errorMessage}</span>
@@ -312,6 +308,37 @@ export function SearchPopup({
     </Dialog>
   );
 }
+
+/**
+ * One option row (ETP-6280). Memoized so that appending a page renders only the new rows and a
+ * highlight move renders only the two rows whose state changed. Its props must therefore stay
+ * stable: the option object, strings, booleans, the `activeRef` object and a stable `onPick`.
+ * Kept in this file: the committed-selection guardrail requires a `role="option"` renderer to
+ * use `selectorSelection`, which this module does.
+ */
+const SearchPopupOption = memo(function SearchPopupOption({
+  option, index, optionId, checkTestId, isSelected, isHighlighted, locating, activeRef, onPick,
+}) {
+  return (
+    <button
+      id={optionId}
+      type="button"
+      role="option"
+      aria-selected={isSelected}
+      data-option-index={index}
+      {...(isHighlighted ? { 'data-highlighted': 'true' } : {})}
+      ref={isHighlighted ? activeRef : undefined}
+      onClick={() => onPick(option)}
+      data-testid={optionId}
+      className={['w-full flex items-start gap-2 text-left px-4 py-2 text-sm break-words', isHighlighted ? 'bg-primary/10 text-primary' : 'hover:bg-muted/50', isSelected ? 'font-medium' : '', locating ? 'invisible' : ''].join(' ')}
+    >
+      {isSelected
+        ? <Check className="h-4 w-4 mt-0.5 text-primary shrink-0" aria-hidden="true" data-testid={checkTestId} />
+        : <span className="w-4 shrink-0" />}
+      <span className="min-w-0">{option.name}</span>
+    </button>
+  );
+});
 
 /**
  * A `SearchPopup` page loader over an in-memory `{ id, name }` list: case-insensitive match on
