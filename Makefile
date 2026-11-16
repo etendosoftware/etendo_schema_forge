@@ -879,6 +879,13 @@ ci-parity: ## Bring the local Etendo checkout to CI parity, then clean DB + inst
 	if [ "$(CI_PARITY_JSON)" = "1" ]; then PARITY_ARGS="$$PARITY_ARGS --json"; fi; \
 	node cli/src/ci-parity.js $$PARITY_ARGS
 
+.PHONY: jenkins jenkins-help
+jenkins: ## Read-only queries to the two Jenkins (ARGS="<go|ci> <command> …"; `make jenkins-help`)
+	@node scripts/jenkins.mjs $(ARGS)
+
+jenkins-help: ## Show usage of `make jenkins`
+	@node scripts/jenkins.mjs --help
+
 .PHONY: ci-parity-help
 ci-parity-help: ## Show usage and examples for `make ci-parity`
 	@echo "Usage: make ci-parity [VAR=value ...]"
