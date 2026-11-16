@@ -200,7 +200,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   const [exportError, setExportError] = useState(null);
   // PDF prints what the screen shows; Excel / CSV print every period, up to the cap (D5).
   const fullPlan = useMemo(() => (hasRange ? periodBuckets(range, state.columns) : null), [hasRange, range, state.columns]);
-  const exportTooLong = hasRange && isExportTooLong(range, fullPlan?.buckets.length ?? 0);
+  const exportTooLong = hasRange && isExportTooLong(fullPlan, state.columns);
   const exportAs = async (format) => {
     setExporting(format);
     setExportError(null);

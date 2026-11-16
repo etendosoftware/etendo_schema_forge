@@ -1,8 +1,9 @@
 // @covers tools/app-shell/src/components/reports/dynamic/reportColumns.js
 import {
-  columnCount, columnModel, cellParts, COLUMN_GRAINS, EXPORT_MAX_BUCKETS, exportTooLong, modeOf, rowsForMode, SCREEN_PERIODS,
+  columnCount, columnModel, cellParts, COLUMN_GRAINS, exportTooLong, modeOf, rowsForMode, SCREEN_PERIODS,
 } from '../reportColumns.js';
-import { periodBuckets } from '../dynamicDates.js';
+import { periodBuckets, serializePeriods } from '../dynamicDates.js';
+import { buildPeriodValues, EXPORT_MAX_BUCKETS } from '@etendosoftware/schema-forge-cli/src/report-periods.js';
 
 const range = { dateFrom: '2026-07-15', dateTo: '2026-09-30' };
 const buckets = (grain, opts) => periodBuckets(range, grain, opts).buckets;
@@ -152,11 +153,26 @@ describe('rowsForMode', () => {
   });
 });
 
-describe('exportTooLong (mirrors the server cap)', () => {
+describe('exportTooLong (the server validator itself)', () => {
+  const tooLong = (r, grain) => exportTooLong(periodBuckets(r, grain), grain);
   it('refuses a range past from + 24 months, accepts exactly 24, refuses over 25 buckets', () => {
-    expect(exportTooLong({ dateFrom: '2024-01-01', dateTo: '2026-12-31' }, 1)).toBe(true);
-    expect(exportTooLong({ dateFrom: '2024-01-01', dateTo: '2026-01-01' }, 25)).toBe(false);
-    expect(exportTooLong({ dateFrom: '2024-01-01', dateTo: '2025-12-31' }, 26)).toBe(true);
-    expect(exportTooLong({ dateFrom: '', dateTo: '' }, 0)).toBe(false);
+    expect(tooLong({ dateFrom: '2024-01-01', dateTo: '2026-12-31' }, 'total')).toBe(true);
+    expect(tooLong({ dateFrom: '2025-03-01', dateTo: '2027-03-01' }, 'total')).toBe(false);
+    expect(tooLong({ dateFrom: '2024-01-01', dateTo: '2025-12-31' }, 'month')).toBe(false);
+    expect(tooLong({ dateFrom: '2023-01-01', dateTo: '2025-12-31' }, 'month')).toBe(true);
+  });
+  it('is false without a plan', () => {
+    expect(exportTooLong(null, 'total')).toBe(false);
+  });
+  // Alex W1 fixtures: the client used to enable the button and the server answered 400.
+  it.each([
+    ['total over a 29 Feb', { dateFrom: '2019-01-01', dateTo: '2021-01-01' }, 'total'],
+    ['quarter ending 28 Feb after a leap year', { dateFrom: '2019-02-28', dateTo: '2021-02-28' }, 'quarter'],
+  ])('matches the server on %s', (_n, r, grain) => {
+    const plan = periodBuckets(r, grain);
+    let server = false;
+    try { buildPeriodValues(serializePeriods(plan.buckets), { maxBuckets: EXPORT_MAX_BUCKETS, capRange: true, grain, hiddenCount: plan.hiddenCount }); } catch (e) { server = e.code === 'PERIOD_RANGE_TOO_LONG'; }
+    expect(server).toBe(true);
+    expect(exportTooLong(plan, grain)).toBe(true);
   });
 });
