@@ -107,7 +107,8 @@ function GroupCells({ parts, group, share, onOpenCurrent, onOpenCompared }) {
 /** Chevron that folds a parent row, or shows the split parts of a leaf account. */
 function RowToggle({ row, name, open, split, splittable, onToggle, onToggleSplit }) {
   const ui = useUI();
-  if (!row.hasChildren && !splittable) return <span className="w-5 h-5 shrink-0" />;
+  // No split handler (e.g. reversed dates) means no dead control.
+  if (!row.hasChildren && !(splittable && onToggleSplit)) return <span className="w-5 h-5 shrink-0" />;
   const parent = Boolean(row.hasChildren);
   let label = ui('dynamicReportShowSplit', { name });
   if (parent) label = ui(open ? 'dynamicReportCollapseRow' : 'dynamicReportExpandRow', { name });

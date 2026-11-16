@@ -273,6 +273,19 @@ describe('DynamicReportView — comparison and chips', () => {
 });
 
 describe('DynamicReportView — split, errors and exports', () => {
+  it('with dateFrom after dateTo the split toggle is not offered: no request, no parts', async () => {
+    renderView();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__expandAll'));
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__splitBy'), { target: { value: 'org' } });
+    await screen.findByTestId('DynamicReportTable__splitToggle');
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__dateFrom'), { target: { value: '2026-12-01' } });
+    await new Promise((r) => setTimeout(r, 450));
+    expect(screen.queryAllByTestId('DynamicReportTable__splitToggle')).toHaveLength(0);
+    expect(queries().some((p) => p.splitNodeId)).toBe(false);
+    expect(screen.queryAllByTestId('DynamicReportTable__splitRow')).toHaveLength(0);
+  });
+
   it('with dateFrom after dateTo no /query is sent', async () => {
     renderView();
     await waitFor(() => expect(rowIds()).toHaveLength(2));
