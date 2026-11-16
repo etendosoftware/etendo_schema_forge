@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/reports/dynamic/useReportPanelCollapsed.js
 // @covers tools/app-shell/src/components/reports/dynamic/DynamicReportView.jsx
 // @covers tools/app-shell/src/components/reports/dynamic/DynamicReportPanel.jsx
 // @covers tools/app-shell/src/components/reports/dynamic/DynamicReportTable.jsx
@@ -1013,6 +1014,125 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
       expect(part.textContent).toContain('601,00591,00');
       expect(part.textContent).toContain('600,00590,00');
       expect(queries().find((p) => p.splitBy)).toMatchObject({ columns: 'quarter' });
+    });
+  });
+});
+
+describe('DynamicReportView — collapsible panel (ETP-6239 D8/D9)', () => {
+  const KEY = 'etendo.reports.panel.collapsed:anonymous';
+  const sent = (name) => trackMock.mock.calls.filter(([event]) => event === name).map(([, props]) => props);
+  const ready = async (props) => {
+    queryAnswer = periodAnswer;
+    const view = renderView(props);
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    return view;
+  };
+  const ROLE_ORGS = [{ id: 'O1', name: 'Spain' }];
+  const quietMs = () => new Promise((r) => setTimeout(r, 450));
+  beforeEach(() => localStorage.clear());
+
+  it('the collapse button hides the panel, persists it, reports a user toggle and moves focus to the strip button', async () => {
+    await ready();
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__collapse'));
+    expect(screen.queryByTestId('DynamicReportPanel')).toBeNull();
+    expect(localStorage.getItem(KEY)).toBe('1');
+    expect(sent('report_panel_toggled')).toEqual([expect.objectContaining({ panelState: 'collapsed', trigger: 'user', outcome: 'success' })]);
+    expect(screen.getByTestId('DynamicReportPanel__expand')).toHaveFocus();
+  });
+
+  it('the strip is a labelled disclosure; expanding persists and focus returns to the collapse button', async () => {
+    await ready();
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__collapse'));
+    const expand = screen.getByTestId('DynamicReportPanel__expand');
+    expect(expand).toHaveAttribute('aria-expanded', 'false');
+    expect(expand).toHaveAttribute('aria-controls', 'dynamic-report-panel');
+    expect(expand).toHaveAttribute('aria-label', 'dynamicReportShowPanel');
+    fireEvent.click(expand);
+    expect(screen.getByTestId('DynamicReportPanel')).toBeInTheDocument();
+    expect(localStorage.getItem(KEY)).toBe('0');
+    expect(screen.getByTestId('DynamicReportPanel__collapse')).toHaveFocus();
+    expect(sent('report_panel_toggled').at(-1)).toMatchObject({ panelState: 'expanded', trigger: 'user' });
+  });
+
+  it('opens collapsed when the saved state says so', async () => {
+    localStorage.setItem(KEY, '1');
+    await ready();
+    expect(screen.getByTestId('DynamicReportPanel__strip')).toBeInTheDocument();
+    expect(screen.queryByTestId('DynamicReportPanel')).toBeNull();
+  });
+
+  it('the badge counts only the removable chips: contact, product, columns, comparison, split', async () => {
+    await ready({ roleOrgs: ROLE_ORGS });
+    expect(screen.getByTestId('DynamicReportView__chip-org')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__bPartnerId'));
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__productId'));
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__compare'), { target: { value: 'previous' } });
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__splitBy'), { target: { value: 'org' } });
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__columns'), { target: { value: 'month' } }); // auto-hides
+    const badge = await screen.findByTestId('DynamicReportPanel__activeCount');
+    expect(badge).toHaveTextContent('5');
+    expect(badge).toHaveAttribute('aria-label', 'dynamicReportActiveFilters:5');
+  });
+
+  it('with only the period and the org on, the strip has no badge', async () => {
+    localStorage.setItem(KEY, '1');
+    await ready();
+    expect(screen.queryByTestId('DynamicReportPanel__activeCount')).toBeNull();
+  });
+
+  describe('auto-hide on Mes / Trimestre', () => {
+    it('hides the panel, reports auto_columns, saves nothing and focuses the expand button', async () => {
+      await ready();
+      fireEvent.change(screen.getByTestId('DynamicReportPanel__columns'), { target: { value: 'month' } });
+      expect(screen.queryByTestId('DynamicReportPanel')).toBeNull();
+      expect(sent('report_panel_toggled')).toEqual([expect.objectContaining({ panelState: 'collapsed', trigger: 'auto_columns' })]);
+      expect(localStorage.getItem(KEY)).toBeNull();
+      expect(screen.getByTestId('DynamicReportPanel__expand')).toHaveFocus();
+    });
+
+    it('Trimestre hides it too', async () => {
+      await ready();
+      fireEvent.change(screen.getByTestId('DynamicReportPanel__columns'), { target: { value: 'quarter' } });
+      expect(screen.getByTestId('DynamicReportPanel__strip')).toBeInTheDocument();
+    });
+
+    it('does not fire on Total, nor when the panel is already collapsed', async () => {
+      await ready();
+      fireEvent.change(screen.getByTestId('DynamicReportPanel__compare'), { target: { value: 'previous' } });
+      expect(screen.getByTestId('DynamicReportPanel')).toBeInTheDocument();
+      expect(sent('report_panel_toggled')).toHaveLength(0);
+      fireEvent.click(screen.getByTestId('DynamicReportPanel__collapse'));
+      expect(sent('report_panel_toggled')).toHaveLength(1);
+      fireEvent.click(screen.getByTestId('DynamicReportView__chipRemove-compare'));
+      await quietMs();
+      expect(sent('report_panel_toggled')).toHaveLength(1);
+    });
+
+    it('a remount after an auto-hide shows the panel expanded', async () => {
+      const { unmount } = await ready();
+      fireEvent.change(screen.getByTestId('DynamicReportPanel__columns'), { target: { value: 'month' } });
+      unmount();
+      await ready();
+      expect(screen.getByTestId('DynamicReportPanel')).toBeInTheDocument();
+    });
+  });
+
+  describe('chips while the panel is collapsed', () => {
+    it('Columnas, contact and product are removable under the title; the org chip has no remove button', async () => {
+      await ready({ roleOrgs: ROLE_ORGS });
+      expect(screen.getByTestId('DynamicReportView__chip-org')).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('DynamicReportPanel__bPartnerId'));
+      fireEvent.click(screen.getByTestId('DynamicReportPanel__productId'));
+      fireEvent.change(screen.getByTestId('DynamicReportPanel__columns'), { target: { value: 'month' } });
+      expect(screen.getByTestId('DynamicReportPanel__strip')).toBeInTheDocument();
+      expect(screen.queryByTestId('DynamicReportView__chipRemove-org')).toBeNull();
+      fireEvent.click(screen.getByTestId('DynamicReportView__chipRemove-bp'));
+      fireEvent.click(screen.getByTestId('DynamicReportView__chipRemove-product'));
+      fireEvent.click(screen.getByTestId('DynamicReportView__chipRemove-columns'));
+      await waitFor(() => expect(queries().at(-1)).toMatchObject({ columns: 'total' }));
+      expect(queries().at(-1)).not.toHaveProperty('bPartnerId', 'B1');
+      expect(screen.queryByTestId('DynamicReportView__chip-bp')).toBeNull();
+      expect(screen.queryByTestId('DynamicReportView__chip-product')).toBeNull();
     });
   });
 });
