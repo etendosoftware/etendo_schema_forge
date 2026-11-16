@@ -1,3 +1,6 @@
+// @covers tools/app-shell/src/windows/custom/shared/preview-cards/RelatedDocumentsCard.jsx
+const navigateMock = vi.fn();
+
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
   useMenuLabel: () => (key) => key,
@@ -5,7 +8,7 @@ vi.mock('@/i18n', () => ({
 }));
 
 vi.mock('react-router-dom', () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => navigateMock,
 }));
 
 vi.mock('@/components/related-documents/constants.jsx', () => ({
@@ -132,5 +135,40 @@ describe('RelatedDocumentsCard', () => {
     );
 
     await waitFor(() => expect(SPECS[0].fetch).toHaveBeenCalledTimes(2));
+  });
+
+  // Items mode (the customer portal): the caller already holds the related documents, so the card
+  // renders them as given — no fetch, nothing to refresh — and hands a click to `onOpen` instead of
+  // navigating to an app route the portal's visitor cannot reach.
+  describe('with items given by the caller', () => {
+    const ITEMS = [
+      { type: 'sales-invoice', doc: { id: 'inv-9', documentNo: '90001', grandTotalAmount: 121, 'currency$_identifier': 'EUR', documentStatus: 'CO' } },
+    ];
+
+    it('renders the items without fetching and offers no refresh', () => {
+      render(<RelatedDocumentsCard specs={SPECS} items={ITEMS} onOpen={vi.fn()} />);
+
+      expect(screen.getByText('statusCompleted')).toBeInTheDocument();
+      expect(SPECS[0].fetch).not.toHaveBeenCalled();
+      // The only button is the row itself: no refresh control.
+      expect(screen.getAllByRole('button')).toHaveLength(1);
+    });
+
+    it('hands a click to onOpen with the type and the document, and does not navigate', () => {
+      const onOpen = vi.fn();
+      render(<RelatedDocumentsCard items={ITEMS} onOpen={onOpen} />);
+
+      act(() => { screen.getByRole('button').click(); });
+
+      expect(onOpen).toHaveBeenCalledWith('sales-invoice', ITEMS[0].doc);
+      expect(navigateMock).not.toHaveBeenCalled();
+    });
+
+    it('shows the empty state for an empty list, with no document id needed', () => {
+      render(<RelatedDocumentsCard items={[]} onOpen={vi.fn()} />);
+
+      expect(screen.getByText('noRelatedDocuments')).toBeInTheDocument();
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    });
   });
 });

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/lib/statusBadge.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -6,7 +7,22 @@ import {
   getStatusDotColor,
   getStatusPillClass,
   getStatusGridPillClass,
+  statusLabel,
 } from '../statusBadge.js';
+
+// ETGO_AC: a quotation the customer accepted from the portal. It is a positive end state like
+// ETGO_CI, so it must read as success everywhere and carry its own label, not the raw code.
+describe('statusBadge — ETGO_AC (accepted by the customer)', () => {
+  for (const code of ['ETGO_AC', 'etgo_ac']) {
+    it(`classifies ${code} as success`, () => {
+      assert.equal(getStatusTone(code), 'success');
+    });
+  }
+
+  it('labels ETGO_AC through the statusAccepted key', () => {
+    assert.equal(statusLabel('ETGO_AC', {}, (key) => (key === 'statusAccepted' ? 'Aceptado' : key)), 'Aceptado');
+  });
+});
 
 describe('statusBadge — ETGO_CI (Closed - Invoice Created) classification', () => {
   describe('getStatusTone', () => {

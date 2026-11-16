@@ -2,9 +2,14 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  PORTAL_HIGHLIGHTS,
+  PORTAL_KIND_GROUPS,
   defaultPortalRange,
   documentLabelKey,
+  initialPortalRange,
   invoicePaymentState,
+  isPortalGroup,
+  quotationValidity,
   readPortalView,
   toCalendarParam,
   writePortalView,
@@ -93,6 +98,22 @@ describe('invoicePaymentState', () => {
   }
 });
 
+// The home has no instalments but the server knows which invoices are overdue: there the badge may
+// follow the server's flag (`useServerOverdue`), with the same priorities as everywhere else.
+describe('invoicePaymentState — server overdue (home)', () => {
+  for (const [label, document, expected] of [
+    ['overdue before pending', invoice({ overdue: true }), 'overdue'],
+    ['overdue before partial', invoice({ outstandingAmount: 400, overdue: true }), 'overdue'],
+    ['pending when the server says it is not overdue', invoice({ overdue: false }), 'pending'],
+    ['still paid when settled', invoice({ outstandingAmount: 0, overdue: true }), 'paid'],
+    ['never overdue on a credit note', invoice({ grandTotal: -100, outstandingAmount: -100, overdue: true }), 'credit-available'],
+  ]) {
+    it(`is ${label}`, () => {
+      assert.equal(invoicePaymentState(document, null, { useServerOverdue: true }).id, expected);
+    });
+  }
+});
+
 describe('defaultPortalRange (rolling last month)', () => {
   // Local-time constructors on both sides, so the expectation holds in any timezone.
   for (const [label, reference, from] of [
@@ -114,6 +135,59 @@ describe('defaultPortalRange (rolling last month)', () => {
     const { to } = defaultPortalRange(new Date(2026, 4, 15, 18, 30));
     assert.deepEqual([to.getHours(), to.getMinutes()], [0, 0]);
   });
+});
+
+describe('initialPortalRange', () => {
+  const reference = new Date(2026, 4, 15);
+
+  it('opens a plain list on the rolling last month', () => {
+    assert.deepEqual(initialPortalRange(null, reference), defaultPortalRange(reference));
+  });
+
+  it('opens a status-group link on all time, since what it asks for may be older than a month', () => {
+    assert.equal(initialPortalRange('overdue', reference), null);
+  });
+});
+
+describe('status groups (the list tabs)', () => {
+  for (const [kind, group, expected] of [
+    ['QUOTATION', 'awaiting', true],
+    ['INVOICE', 'overdue', true],
+    ['INVOICE', 'awaiting', false],
+    ['SHIPMENT', 'inProgress', false],
+    ['ORDER', null, false],
+    ['UNKNOWN', 'paid', false],
+  ]) {
+    it(`${expected ? 'accepts' : 'refuses'} ${group} as a tab of ${kind}`, () => {
+      assert.equal(isPortalGroup(kind, group), expected);
+    });
+  }
+
+  it('sends every home tile that opens a tab to a tab that exists', () => {
+    // A tile whose group is no kind's tab would open an unfiltered list instead of what it counts.
+    const tabs = new Set(Object.values(PORTAL_KIND_GROUPS).flat().map((g) => g.code));
+    for (const [code, highlight] of Object.entries(PORTAL_HIGHLIGHTS)) {
+      if (highlight.group) assert.ok(tabs.has(highlight.group), `${code} opens unknown tab ${highlight.group}`);
+    }
+  });
+});
+
+describe('quotationValidity', () => {
+  const quotation = (overrides) => ({ kind: 'QUOTATION', validUntil: '2999-01-10', documentStatus: 'UE', ...overrides });
+
+  for (const [label, document, expected] of [
+    ['open while the customer can still answer', quotation({}), { state: 'open' }],
+    ['open on a legacy completed quotation', quotation({ documentStatus: 'CO' }), { state: 'open' }],
+    ['expired once the date is past', quotation({ validUntil: '2020-01-10' }), { state: 'expired' }],
+    ['answered once accepted, whatever the date', quotation({ documentStatus: 'ETGO_AC', validUntil: '2020-01-10' }), { state: 'answered' }],
+    ['answered once rejected', quotation({ documentStatus: 'CJ' }), { state: 'answered' }],
+    ['nothing without a validity date', quotation({ validUntil: null }), null],
+    ['nothing for another kind', { kind: 'ORDER', validUntil: '2999-01-10', documentStatus: 'UE' }, null],
+  ]) {
+    it(`is ${label}`, () => {
+      assert.deepEqual(quotationValidity(document), expected);
+    });
+  }
 });
 
 describe('toCalendarParam', () => {
@@ -143,9 +217,10 @@ describe('portal view in the URL', () => {
   for (const target of [
     { view: 'home' },
     { view: 'list', kind: 'ORDER' },
+    { view: 'list', kind: 'INVOICE', group: 'overdue' },
     { view: 'doc', kind: 'INVOICE', id: 'inv/1' },
   ]) {
-    it(`round-trips ${target.view}`, () => {
+    it(`round-trips ${JSON.stringify(target)}`, () => {
       assert.deepEqual(readPortalView(new URLSearchParams(writePortalView(target).toString())), target);
     });
   }
@@ -161,8 +236,19 @@ describe('portal view in the URL', () => {
     });
   }
 
-  it('writes only view, kind and id', () => {
-    const params = writePortalView({ view: 'doc', kind: 'ORDER', id: 'ord-1', token: 'tok-secret' });
-    assert.deepEqual([...params.keys()], ['view', 'kind', 'id']);
+  it('reads a lower-case kind', () => {
+    assert.deepEqual(readPortalView(new URLSearchParams('view=list&kind=invoice')), { view: 'list', kind: 'INVOICE' });
+  });
+
+  it('drops a group that is not a tab of the kind, keeping the list', () => {
+    assert.deepEqual(
+      readPortalView(new URLSearchParams('view=list&kind=SHIPMENT&group=overdue')),
+      { view: 'list', kind: 'SHIPMENT' },
+    );
+  });
+
+  it('writes only view, kind, id and group', () => {
+    const params = writePortalView({ view: 'list', kind: 'INVOICE', group: 'paid', id: 'x', token: 'tok-secret' });
+    assert.deepEqual([...params.keys()], ['view', 'kind', 'id', 'group']);
   });
 });

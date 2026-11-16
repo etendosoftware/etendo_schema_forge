@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/components/UserAvatarButton.jsx
+// @covers tools/app-shell/src/components/LanguageMenuSection.jsx
 
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -203,6 +204,11 @@ describe('UserAvatarButton', () => {
     const user = userEvent.setup();
 
     render(<UserAvatarButton />);
+
+    // The menu marks the active language; the testids stay the ones the app menu always had
+    // (LanguageMenuSection keeps them as its default, and the portal passes its own).
+    expect(screen.getByTestId('user-menu-language-en_US').className).toMatch(/font-semibold/);
+    expect(screen.getByTestId('user-menu-language-es_ES').className).not.toMatch(/font-semibold/);
 
     await user.click(screen.getByRole('button', { name: /Español/ }));
 

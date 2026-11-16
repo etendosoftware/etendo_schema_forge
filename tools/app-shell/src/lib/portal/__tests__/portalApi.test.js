@@ -2,7 +2,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  PORTAL_DECISION_ERROR,
   PORTAL_ERROR,
+  confirmPortalDecision,
+  fetchPortalDecision,
   fetchPortalDocument,
   fetchPortalDocumentPdf,
   fetchPortalDocuments,
@@ -10,7 +13,9 @@ import {
   fetchPortalIdentity,
   fetchPortalLogoBlob,
   renewPortalLink,
+  requestPortalDecision,
   resolvePortalBaseUrl,
+  searchPortalDocuments,
 } from '../portalApi.js';
 
 /**
@@ -91,6 +96,7 @@ describe('portal request contract', () => {
     await fetchPortalDocumentPdf(fetchImpl, TOKEN, 'INVOICE', 'inv-1');
     await fetchPortalLogoBlob(fetchImpl, TOKEN);
     await renewPortalLink(fetchImpl, TOKEN);
+    await searchPortalDocuments(fetchImpl, TOKEN, 'FV');
 
     // The header name is spelled out rather than taken from the module's constant: the servlet
     // in com.etendoerp.go reads this exact spelling, so a rename here must fail a test. The
@@ -109,6 +115,7 @@ describe('portal request contract', () => {
         { route: '/sws/portal/documents/invoice/inv-1/pdf', options: getOptions },
         { route: '/sws/portal/logo', options: getOptions },
         { route: '/sws/portal/renew', options: { ...getOptions, method: 'POST' } },
+        { route: '/sws/portal/search', options: getOptions },
       ],
     );
     // The token must never reach the URL, query string included (plan §5.4).
@@ -277,17 +284,17 @@ describe('fetchPortalDocuments', () => {
     [
       'sends every filter, the kind lower-cased and the search trimmed',
       {
-        kind: 'INVOICE', statuses: ['CO', 'CL'], dateFrom: '2026-07-12', dateTo: '2026-08-12',
-        search: '  FV/00  ', offset: 50, limit: 25,
+        kind: 'INVOICE', group: 'pending', statuses: ['CO', 'CL'], dateFrom: '2026-07-12',
+        dateTo: '2026-08-12', search: '  FV/00  ', offset: 50, limit: 25,
       },
       {
-        type: 'invoice', status: 'CO,CL', dateFrom: '2026-07-12', dateTo: '2026-08-12', q: 'FV/00',
-        limit: '25', offset: '50',
+        type: 'invoice', group: 'pending', status: 'CO,CL', dateFrom: '2026-07-12', dateTo: '2026-08-12',
+        q: 'FV/00', limit: '25', offset: '50',
       },
     ],
     [
-      'omits empty filters, so "all statuses" asks for no status at all',
-      { kind: 'ORDER', statuses: [], search: '   ' },
+      'omits empty filters, so "all statuses" asks for no status and no group at all',
+      { kind: 'ORDER', group: null, statuses: [], search: '   ' },
       { type: 'order', limit: '50', offset: '0' },
     ],
   ]) {
@@ -304,6 +311,7 @@ describe('fetchPortalDocuments', () => {
     const { fetchImpl } = recordingFetch(() => jsonResponse({
       documents: [{ kind: 'INVOICE', id: 'inv-1', documentNo: 'FV/0001', grandTotal: '1000.00', isCreditNote: true }],
       statuses: ['CO'],
+      groups: ['pending', 42, 'paid'],
       totals: [{ currency: 'EUR', count: 1, taxBase: '826.45', grandTotal: '1000' }],
     }));
 
@@ -312,6 +320,8 @@ describe('fetchPortalDocuments', () => {
     assert.equal(page.totalCount, 1);
     assert.equal(page.offset, 50);
     assert.deepEqual(page.statuses, ['CO']);
+    // The tab groups the backend offers, "all" excluded; anything that is not a code is dropped.
+    assert.deepEqual(page.groups, ['pending', 'paid']);
     assert.deepEqual(page.totals, [{ currency: 'EUR', count: 1, taxBase: 826.45, grandTotal: 1000 }]);
     assert.deepEqual(
       { grandTotal: page.documents[0].grandTotal, isCreditNote: page.documents[0].isCreditNote },
@@ -341,8 +351,72 @@ describe('fetchPortalHome', () => {
   it('degrades an unparseable body to an empty home rather than to an error screen', async () => {
     const { fetchImpl } = recordingFetch(() => unparseableResponse());
 
-    assert.deepEqual(await fetchPortalHome(fetchImpl, TOKEN), { balances: [], tiles: {}, recent: [] });
+    assert.deepEqual(await fetchPortalHome(fetchImpl, TOKEN, { months: 6 }), {
+      balances: [],
+      tiles: {},
+      recent: [],
+      paidThisYear: [],
+      invoicesThisYear: { total: 0, upToDate: 0 },
+      // The period asked for, when the backend does not echo one.
+      chart: { months: 6, currency: null, bars: [] },
+    });
   });
+
+  for (const [label, options, months] of [
+    ['asks for the last 12 months by default', undefined, '12'],
+    ['asks for the period picked on the chart', { months: 3 }, '3'],
+  ]) {
+    it(label, async () => {
+      const { fetchImpl, calls } = recordingFetch(() => jsonResponse({}));
+
+      await fetchPortalHome(fetchImpl, TOKEN, options);
+
+      assert.equal(new URL(calls[0].path, 'http://portal').searchParams.get('months'), months);
+    });
+  }
+
+  it('coerces the paid-this-year figures and the chart bars', async () => {
+    const { fetchImpl } = recordingFetch(() => jsonResponse({
+      paidThisYear: [{ currency: 'EUR', paid: '300.5', count: 2 }],
+      invoicesThisYear: { total: 5, upToDate: 4 },
+      chart: { months: 3, currency: 'EUR', bars: [{ month: '2026-09', amount: '120' }, { month: '2026-10', amount: null }] },
+    }));
+
+    const home = await fetchPortalHome(fetchImpl, TOKEN, { months: 3 });
+
+    assert.deepEqual(home.paidThisYear, [{ currency: 'EUR', paid: 300.5, count: 2 }]);
+    assert.deepEqual(home.invoicesThisYear, { total: 5, upToDate: 4 });
+    // An empty month is a zero bar, never a gap in the chart.
+    assert.deepEqual(home.chart, {
+      months: 3, currency: 'EUR', bars: [{ month: '2026-09', amount: 120 }, { month: '2026-10', amount: 0 }],
+    });
+  });
+});
+
+describe('searchPortalDocuments', () => {
+  it('sends the trimmed query as q and normalizes the matches', async () => {
+    const { fetchImpl, calls } = recordingFetch(() => jsonResponse({
+      documents: [{ kind: 'QUOTATION', id: 'q-1', documentNo: 'PR/0001', orderId: 'ord-1', orderNo: 'PV/0007' }],
+    }));
+
+    const found = await searchPortalDocuments(fetchImpl, TOKEN, '  PR/00 ');
+
+    assert.equal(new URL(calls[0].path, 'http://portal').searchParams.get('q'), 'PR/00');
+    // A quotation carries its generated order, when there is one in scope.
+    assert.deepEqual(
+      found.map((doc) => [doc.kind, doc.id, doc.orderId, doc.orderNo]),
+      [['QUOTATION', 'q-1', 'ord-1', 'PV/0007']],
+    );
+  });
+
+  for (const query of ['', '   ', null]) {
+    it(`resolves ${JSON.stringify(query)} to no matches without a request`, async () => {
+      const { fetchImpl, calls } = recordingFetch(() => jsonResponse({}));
+
+      assert.deepEqual(await searchPortalDocuments(fetchImpl, TOKEN, query), []);
+      assert.equal(calls.length, 0);
+    });
+  }
 });
 
 describe('fetchPortalDocument', () => {
@@ -363,6 +437,20 @@ describe('fetchPortalDocument', () => {
     assert.deepEqual(document.related.map((doc) => [doc.kind, doc.id]), [['ORDER', 'ord-1']]);
     // A backend that does not say there is a printable shows "PDF no disponible", never a dead button.
     assert.equal(document.hasPdf, false);
+    // No decision block: the document is not a quotation the customer can answer.
+    assert.equal(document.decision, null);
+  });
+
+  it('reads a quotation decision block strictly: only a literal true enables an action', async () => {
+    const { fetchImpl } = recordingFetch(() => jsonResponse({
+      kind: 'QUOTATION',
+      id: 'q-1',
+      decision: { canDecide: 'true', blockedReason: ' expired ', acceptAvailable: true },
+    }));
+
+    const document = await fetchPortalDocument(fetchImpl, TOKEN, 'QUOTATION', 'q-1');
+
+    assert.deepEqual(document.decision, { canDecide: false, blockedReason: 'expired', acceptAvailable: true });
   });
 });
 
@@ -447,6 +535,141 @@ describe('error mapping of the home, list, detail and printable calls', () => {
       const { fetchImpl } = failingFetch();
 
       await assert.rejects(call(fetchImpl), expectPortalError(expected.network));
+    });
+  }
+});
+
+describe('requestPortalDecision', () => {
+  it('POSTs the decision with the portal token in its header, never in the URL', async () => {
+    const { fetchImpl, calls } = recordingFetch(() => jsonResponse({ maskedEmail: 'c***@acme.com' }));
+
+    const result = await requestPortalDecision(fetchImpl, TOKEN, 'q/1', { decision: 'ACCEPT' });
+
+    assert.deepEqual(result, { ok: true, maskedEmail: 'c***@acme.com' });
+    assert.equal(calls[0].path, '/sws/portal/quotations/q%2F1/decision');
+    assert.deepEqual(calls[0].options, {
+      method: 'POST',
+      token: TOKEN,
+      headers: { 'X-Portal-Token': TOKEN, 'Content-Type': 'application/json' },
+      on401: 'ignore',
+      body: JSON.stringify({ decision: 'ACCEPT' }),
+    });
+  });
+
+  // A JSON null was read as the text "null": a field without a value is left out of the body.
+  for (const [label, reason, body] of [
+    ['omits both reason fields when there are none', {}, { decision: 'REJECT' }],
+    ['omits a blank reason text', { reasonCode: 'PRICE', reasonText: '   ' }, { decision: 'REJECT', reasonCode: 'PRICE' }],
+    [
+      'sends the trimmed text with its code',
+      { reasonCode: 'OTHER', reasonText: '  Ya no lo necesitamos ' },
+      { decision: 'REJECT', reasonCode: 'OTHER', reasonText: 'Ya no lo necesitamos' },
+    ],
+  ]) {
+    it(label, async () => {
+      const { fetchImpl, calls } = recordingFetch(() => jsonResponse({}));
+
+      await requestPortalDecision(fetchImpl, TOKEN, 'q-1', { decision: 'REJECT', ...reason });
+
+      assert.deepEqual(JSON.parse(calls[0].options.body), body);
+    });
+  }
+
+  for (const [label, response, expected] of [
+    ['passes a known refusal code through', jsonResponse({ error: 'cooldown' }, { status: 409 }), PORTAL_DECISION_ERROR.cooldown],
+    ['maps an unknown refusal code to failed', jsonResponse({ error: 'boom' }, { status: 400 }), PORTAL_DECISION_ERROR.failed],
+    ['maps an unparseable refusal to failed', unparseableResponse({ status: 500 }), PORTAL_DECISION_ERROR.failed],
+  ]) {
+    it(label, async () => {
+      const { fetchImpl } = recordingFetch(() => response);
+
+      assert.deepEqual(await requestPortalDecision(fetchImpl, TOKEN, 'q-1', { decision: 'ACCEPT' }), {
+        ok: false, error: expected,
+      });
+    });
+  }
+
+  for (const status of [401, 403]) {
+    it(`throws the dead-link code on ${status}`, async () => {
+      const { fetchImpl } = recordingFetch(() => jsonResponse({}, { status }));
+
+      await assert.rejects(
+        requestPortalDecision(fetchImpl, TOKEN, 'q-1', { decision: 'ACCEPT' }),
+        expectPortalError(PORTAL_ERROR.invalidLink, { status }),
+      );
+    });
+  }
+
+  it('throws loadFailed when the request never completed', async () => {
+    const { fetchImpl } = failingFetch();
+
+    await assert.rejects(
+      requestPortalDecision(fetchImpl, TOKEN, 'q-1', { decision: 'ACCEPT' }),
+      expectPortalError(PORTAL_ERROR.loadFailed),
+    );
+  });
+});
+
+describe('fetchPortalDecision / confirmPortalDecision', () => {
+  const DECISION_TOKEN = 'dec-0123456789abcdef';
+
+  it('sends the decision token in its own header, never the portal token and never in the URL', async () => {
+    const { fetchImpl, calls } = recordingFetch(() => jsonResponse({ state: 'pending' }));
+
+    await fetchPortalDecision(fetchImpl, DECISION_TOKEN);
+    await confirmPortalDecision(fetchImpl, DECISION_TOKEN);
+
+    const decisionOptions = { token: null, headers: { 'X-Portal-Decision-Token': DECISION_TOKEN }, on401: 'ignore' };
+    assert.deepEqual(calls.map((call) => ({ path: call.path, options: call.options })), [
+      { path: '/sws/portal/decisions/view', options: decisionOptions },
+      { path: '/sws/portal/decisions/confirm', options: { ...decisionOptions, method: 'POST' } },
+    ]);
+  });
+
+  for (const [label, body, expected] of [
+    [
+      'reads the applied decision, appliedNow included',
+      {
+        state: 'confirmed', appliedNow: true, decision: 'REJECT', reasonCode: 'OTHER',
+        reasonText: 'Ya no', documentNo: 'PR/0001', tenantName: 'Acme SA',
+      },
+      {
+        state: 'confirmed', appliedNow: true, decision: 'REJECT', reasonCode: 'OTHER',
+        reasonText: 'Ya no', documentNo: 'PR/0001', tenantName: 'Acme SA',
+      },
+    ],
+    [
+      'treats anything but a literal true as not applied now (a re-opened link)',
+      { state: 'confirmed', appliedNow: 'true' },
+      {
+        state: 'confirmed', appliedNow: false, decision: null, reasonCode: null, reasonText: null,
+        documentNo: null, tenantName: null,
+      },
+    ],
+    [
+      'maps an unknown state to not pending',
+      { state: 'weird' },
+      {
+        state: 'not_pending', appliedNow: false, decision: null, reasonCode: null, reasonText: null,
+        documentNo: null, tenantName: null,
+      },
+    ],
+  ]) {
+    it(label, async () => {
+      const { fetchImpl } = recordingFetch(() => jsonResponse(body));
+
+      assert.deepEqual(await confirmPortalDecision(fetchImpl, DECISION_TOKEN), expected);
+    });
+  }
+
+  for (const status of [401, 403, 404]) {
+    it(`maps ${status} on the confirmation to the dead-link code`, async () => {
+      const { fetchImpl } = recordingFetch(() => jsonResponse({}, { status }));
+
+      await assert.rejects(
+        confirmPortalDecision(fetchImpl, DECISION_TOKEN),
+        expectPortalError(PORTAL_ERROR.invalidLink, { status }),
+      );
     });
   }
 });

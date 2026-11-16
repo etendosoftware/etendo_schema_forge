@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/sales-quotation/index.jsx
 // ETP-5378 — row-hover "Confirmar" for Presupuesto de Venta.
 //
 // Unlike every other window fixed under this ticket, this one dispatches to TWO
@@ -117,9 +118,10 @@ describe('SalesQuotationWindow — row-hover Confirmar (ETP-5378)', () => {
     toastError.mockClear();
   });
 
-  it('offers Confirm on Draft, Bajo evaluación and Completado', () => {
+  it('offers Confirm on Draft, Bajo evaluación, Completado and Aceptado', () => {
     render(<SalesQuotationWindow windowName="sales-quotation" apiBaseUrl="/sws/neo/sales-quotation" token="tkn" />);
-    for (const documentStatus of ['DR', 'UE', 'CO']) {
+    // ETGO_AC: accepted by the customer from the portal, still converted from here.
+    for (const documentStatus of ['DR', 'UE', 'CO', 'ETGO_AC']) {
       const actions = lastGeneratedAppProps.rowQuickActions.menuActions({ row: { documentStatus }, status: documentStatus });
       expect(actions.some(a => a.key === 'confirm')).toBe(true);
     }
@@ -166,6 +168,22 @@ describe('SalesQuotationWindow — row-hover Confirmar (ETP-5378)', () => {
     // summedLineAmount, so this is exactly the value ETP-4468 would have hidden
     // forever behind the stale row if it had been passed instead.
     expect(quotationConfirmProps.data).toEqual(fresh);
+  });
+
+  it('opens the convert modal (QuotationConfirmModal) on a row the customer accepted (ETGO_AC)', async () => {
+    const fresh = { id: 'q-3', documentStatus: 'ETGO_AC', grandTotalAmount: 121 };
+    apiFetchMock.mockResolvedValue(jsonResponse({ response: { data: [fresh] } }));
+    await openConfirm({ id: 'q-3', documentStatus: 'ETGO_AC' });
+
+    expect(screen.getByTestId('quotation-confirm-modal')).toBeInTheDocument();
+    expect(screen.queryByTestId('send-to-eval-modal')).not.toBeInTheDocument();
+    expect(quotationConfirmProps.data).toEqual(fresh);
+  });
+
+  it('keeps a plain Save on a completed quotation for the reject reason only', () => {
+    render(<SalesQuotationWindow windowName="sales-quotation" recordId="q-1" apiBaseUrl="/sws/neo/sales-quotation" token="tkn" />);
+    // Shadows decisions.json -> draftMode, so the two must agree: rejectReason and nothing else.
+    expect(lastGeneratedAppProps.draftMode.keepSaveWhenCompletedFields).toEqual(['rejectReason']);
   });
 
   it('does not pass onSave to QuotationConfirmModal — nothing is unsaved from a row action', async () => {
