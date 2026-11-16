@@ -667,7 +667,7 @@ Recorded, NOT fixed; the product owner decides later.
 3. `new.category` is stored with the name in the user's DEFAULT session language, not the `Accept-Language` header, so the panel may show "Beverages" in a Spanish UI until the product is re-saved.
 
 NOT verified live:
-- MCP `etendo_action` answering 405 `actionHidden` for `discard`, `review`, `apply` and `mark-reviewed` (no MCP client reachable).
+- MCP `etendo_action` for `discard`, `review`, `apply` and `mark-reviewed` answers HTTP 405 with `error: method_not_allowed` and the message "... is not available through MCP: its customization keeps it for people only. Nothing was run." (`McpRoutingException.actionHidden` is only the Java factory's name, not a wire code).
 - A discount given as an AMOUNT in the OCR.
 - The unit of measure name in the session language (`c_uom_trl` equals the English name in the test database).
 - The 422 `not_valid` of `mark-reviewed` (reconciled in 9.2.3: an ERROR row answers 409 `not_reviewable`, an invalid PENDING_REVIEW row answers 422 and moves to ERROR; the SPA handles both).
