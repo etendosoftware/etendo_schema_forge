@@ -26615,7 +26615,10 @@
     "dynamicReportQuarterPrefix": "Q",
     "dynamicReportHiddenPeriods": "{count} earlier periods are not shown. Excel and CSV include every period.",
     "dynamicReportPartialPeriods": "* Month or quarter incomplete within the chosen range.",
-    "dynamicReportExportTooLong": "Excel and CSV take up to 24 months or 8 quarters. Shorten the period to export them."
+    "dynamicReportExportTooLong": "Excel and CSV take up to 24 months or 8 quarters. Shorten the period to export them.",
+    "dynamicReportHidePanel": "Hide filters panel",
+    "dynamicReportShowPanel": "Show filters panel",
+    "dynamicReportActiveFilters": "{count} active filters"
   },
   "menus": {
     "Invoice Inbox": {

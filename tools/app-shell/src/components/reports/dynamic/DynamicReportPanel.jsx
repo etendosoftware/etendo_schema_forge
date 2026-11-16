@@ -1,3 +1,4 @@
+import { ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
 import { PopupMultiSelector } from '@/pages/ReportViewerPage.jsx';
@@ -21,6 +22,7 @@ const COLUMN_OPTIONS = [
   ['quarter', 'dynamicReportColumnsQuarter'],
 ];
 
+const PANEL_ID = 'dynamic-report-panel';
 const selectClass = 'w-full h-9 rounded-lg border border-[hsl(var(--border-control))] bg-card px-2 text-sm';
 
 function Section({ title, children }) {
@@ -40,13 +42,59 @@ function Section({ title, children }) {
 export default function DynamicReportPanel({
   state, onChange, onShortcut, onPickYear, onLevel, onExpandAll, onCollapseAll, onReset,
   shortcut, yearId, years, orgs, splitDimensions, levelOptions, label, sectionLabel, noFiscalYear,
+  collapsed = false, onToggleCollapsed, activeFilterCount = 0, collapseRef, expandRef,
 }) {
   const ui = useUI();
+  const toggleLabel = ui(collapsed ? 'dynamicReportShowPanel' : 'dynamicReportHidePanel');
+  if (collapsed) {
+    // Desktop: a narrow strip; mobile: a bar across the top. Both keep the filters one click away.
+    return (
+      <aside id={PANEL_ID} className="shrink-0 flex md:flex-col items-center gap-2 bg-card border-b md:border-b-0 md:border-r border-border/30 px-3 py-2 md:w-10 md:px-0 md:py-3" data-testid="DynamicReportPanel__strip">
+        <button
+          type="button"
+          ref={expandRef}
+          aria-expanded={false}
+          aria-controls={PANEL_ID}
+          aria-label={toggleLabel}
+          title={toggleLabel}
+          className="relative w-8 h-8 rounded-lg flex items-center justify-center hover:bg-muted focus-visible:outline focus-visible:outline-2"
+          onClick={() => onToggleCollapsed?.(false)}
+          data-testid="DynamicReportPanel__expand"
+        >
+          <ChevronRight className="w-4 h-4 hidden md:block" data-testid="ChevronRight__panel" />
+          <SlidersHorizontal className="w-4 h-4 md:hidden" data-testid="SlidersHorizontal__panel" />
+          {activeFilterCount > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-foreground text-background text-[10px] leading-4 text-center" aria-label={ui('dynamicReportActiveFilters', { count: activeFilterCount })} data-testid="DynamicReportPanel__activeCount">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
+        <span className="text-xs font-semibold md:hidden">{ui('customizeReport')}</span>
+      </aside>
+    );
+  }
   return (
-    <aside className="w-72 shrink-0 flex flex-col bg-card border-r border-border/30 overflow-y-auto" data-testid="DynamicReportPanel">
-      <div className="px-3 pt-3">
-        <h2 className="text-sm font-semibold">{ui('customizeReport')}</h2>
-        <p className="text-xs text-muted-foreground mt-1">{ui('dynamicReportLiveHint')}</p>
+    <aside id={PANEL_ID} className="w-full md:w-72 shrink-0 flex flex-col bg-card border-b md:border-b-0 md:border-r border-border/30 overflow-y-auto max-h-[60vh] md:max-h-none" data-testid="DynamicReportPanel">
+      <div className="px-3 pt-3 flex items-start justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold">{ui('customizeReport')}</h2>
+          <p className="text-xs text-muted-foreground mt-1">{ui('dynamicReportLiveHint')}</p>
+        </div>
+        {onToggleCollapsed && (
+          <button
+            type="button"
+            ref={collapseRef}
+            aria-expanded
+            aria-controls={PANEL_ID}
+            aria-label={toggleLabel}
+            title={toggleLabel}
+            className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center hover:bg-muted focus-visible:outline focus-visible:outline-2"
+            onClick={() => onToggleCollapsed(true)}
+            data-testid="DynamicReportPanel__collapse"
+          >
+            <ChevronLeft className="w-4 h-4" data-testid="ChevronLeft__panel" />
+          </button>
+        )}
       </div>
 
       <Section title={sectionLabel('periodo')} data-testid="Section__f52339">

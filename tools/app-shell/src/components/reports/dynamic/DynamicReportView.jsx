@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FileDown, FileSpreadsheet, FileText, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
@@ -14,6 +14,7 @@ import { reportKpis } from './reportVisuals.js';
 import DynamicDrillPanel from './DynamicDrillPanel.jsx';
 import { ENTRY_REPORT_ID, LEDGER_REPORT_ID } from './drillDown.js';
 import { useReportQuery } from './useReportQuery.js';
+import { useReportPanelCollapsed } from './useReportPanelCollapsed.js';
 import { useReportDefaults } from './useReportDefaults.js';
 import { useAccountSplit } from './useAccountSplit.js';
 import { REPORT_EVENTS, filterTypeOf, useReportTelemetry } from './reportTelemetry.js';
@@ -47,6 +48,11 @@ function initialState(defaultOrgId, period, level) {
  * on screen, compares with a preset period and splits leaf accounts by a dimension. The exports
  * print what the screen shows: same params plus `expandedNodeIds`. `source` ('menu' | 'deep_link')
  * is how the report was opened, for `report_opened` (F10).
+ *
+ * ETP-6239 D8: the panel collapses (button, or automatically on Mes/Trimestre). The chips under the
+ * title are always shown, so they are the active filters while it is hidden and each one with a
+ * `clear` can be removed from there. Exception: the organization chip is not removable, because the
+ * query requires an org; it is changed in the panel.
  */
 export default function DynamicReportView({ report, onBack, selectedOrgId, roleOrgs = [], source = 'deep_link', reportAccess = null }) {
   // The server refuses a drill step the role cannot open (ETP-6080), so the view does not offer it.
@@ -106,9 +112,26 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
 
   const { data, loading, error, errorCode, settled } = useReportQuery(report.id, queryParams, { locale });
   const telemetry = useReportTelemetry(report.id, { source, paramsKey: JSON.stringify(queryParams), settled, errorCode });
+  // D8: the panel hides on a button or on Mes/Trimestre. The button the user was on disappears, so
+  // focus moves to the one that replaces it.
+  const panel = useReportPanelCollapsed();
+  const collapseRef = useRef(null);
+  const expandRef = useRef(null);
+  const focusAfter = useRef(null);
+  const togglePanel = (collapsed, trigger = 'user', opts) => {
+    telemetry.emit(REPORT_EVENTS.PANEL_TOGGLED, { panelState: collapsed ? 'collapsed' : 'expanded', trigger, outcome: 'success' });
+    focusAfter.current = collapsed ? expandRef : collapseRef;
+    panel.setCollapsed(collapsed, opts);
+  };
+  useEffect(() => {
+    focusAfter.current?.current?.focus();
+    focusAfter.current = null;
+  }, [panel.collapsed]);
   // A user's change: marked for report_filter_applied. The defaults and "Limpiar filtros" are not.
   // The comparison sends no request, so there is no result to time: it is emitted here, like `setLevel`.
   const userChange = (patch) => {
+    // D8: picking Mes/Trimestre hides the panel for this session only (nothing is saved).
+    if (patch.columns && patch.columns !== 'total' && !panel.collapsed) togglePanel(true, 'auto_columns', { persist: false });
     if ('compare' in patch) telemetry.emit(REPORT_EVENTS.FILTER_APPLIED, { type: 'comparison', outcome: 'success' });
     else telemetry.markFilter(filterTypeOf(patch));
     change(patch);
@@ -212,6 +235,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   const fmt = (d) => (d ? formatCalendarDate(d, locale.replace('_', '-')) : '');
   const chips = [
     { key: 'period', label: ui('dynamicReportPeriodChip'), value: `${fmt(state.dateFrom)} – ${fmt(state.dateTo)}` },
+    // The org has no `clear` on purpose: the query requires one, so it is changed in the panel, never removed.
     orgName && { key: 'org', label: label('orgId'), value: orgName },
     state.bPartnerId && { key: 'bp', label: label('bPartnerId'), value: state._display_bPartnerId, clear: { bPartnerId: '', _display_bPartnerId: '' } },
     state.productId && { key: 'product', label: label('productId'), value: state._display_productId, clear: { productId: '', _display_productId: '' } },
@@ -220,6 +244,8 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
     state.splitBy && { key: 'split', label: ui('dynamicReportSplitChip'), value: splitDimensions.find((d) => d.value === state.splitBy)?.label, clear: { splitBy: '' } },
   ].filter(Boolean);
 
+  // The strip's badge counts what the user chose to narrow; the period and the (required) org are always on.
+  const activeFilterCount = chips.filter((c) => c.clear).length;
   const errorText = error && (errorCode === 'network' ? error : ui(ERROR_KEYS[errorCode] || 'dynamicReportErrorGeneric'));
 
   return (
@@ -245,8 +271,13 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 flex">
+      <div className="flex-1 min-h-0 flex flex-col md:flex-row">
         <DynamicReportPanel
+          collapsed={panel.collapsed}
+          onToggleCollapsed={togglePanel}
+          activeFilterCount={activeFilterCount}
+          collapseRef={collapseRef}
+          expandRef={expandRef}
           state={state}
           onChange={userChange}
           onShortcut={onShortcut}

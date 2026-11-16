@@ -632,7 +632,15 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
   const settle = () => waitFor(() => expect(screen.queryByTestId('DynamicReportView__loading')).toBeNull());
   const sent = (name) => trackMock.mock.calls.filter(([event]) => event === name).map(([, props]) => props);
   const quiet = () => new Promise((r) => setTimeout(r, 450)); // longer than the query debounce
-  const choose = (testId, value) => fireEvent.change(screen.getByTestId(testId), { target: { value } });
+  // Choosing Mes/Trimestre hides the panel (D8), so a later control is reached by showing it again.
+  const showPanel = () => {
+    const expand = screen.queryByTestId('DynamicReportPanel__expand');
+    if (expand) fireEvent.click(expand);
+  };
+  const choose = (testId, value) => {
+    showPanel();
+    fireEvent.change(screen.getByTestId(testId), { target: { value } });
+  };
   const groupLabels = () => screen.getAllByTestId('DynamicReportTable__group').map((th) => th.textContent);
   const renderPeriods = async (props) => {
     queryAnswer = periodAnswer;
@@ -647,6 +655,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
   const leafRow = () => screen.getAllByTestId('DynamicReportTable__row').find((r) => r.dataset.nodeId === 'S1');
   const drillButtons = () => within(leafRow()).getAllByTestId('DynamicReportTable__cellLedger');
   const openLeaf = async () => {
+    showPanel();
     fireEvent.click(screen.getByTestId('DynamicReportPanel__expandAll'));
     await waitFor(() => expect(rowIds()).toContain('S1'));
   };
@@ -802,6 +811,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
     it('over 25 buckets Excel and CSV are disabled with a translated message; PDF still works; Total mode has no cap', async () => {
       await renderPeriods();
       choose('DynamicReportPanel__columns', 'month');
+      showPanel();
       fireEvent.change(screen.getByTestId('DynamicReportPanel__dateFrom'), { target: { value: '2020-01-01' } });
       await waitFor(() => expect(queries().at(-1)).toMatchObject({ columns: 'month', dateFrom: '2020-01-01' }));
       await settle();

@@ -63,6 +63,9 @@ const OBSERVABILITY_PROPERTY_VALUES = Object.freeze({
   STEP_ID: 'stepId',
   SUPPORT_REQUESTED: 'supportRequested',
   TYPE: 'type',
+  // ETP-6239: `state` is denylisted by the payload policy, so the panel state travels as `panelState`.
+  PANEL_STATE: 'panelState',
+  TRIGGER: 'trigger',
   USERNAME: 'username',
   VALUE: 'value',
   VARIANT: 'variant',
@@ -874,6 +877,19 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
       OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
       OBSERVABILITY_PROPERTY_KEYS.REPORT_SESSION_ID,
       OBSERVABILITY_PROPERTY_KEYS.TYPE,
+      OBSERVABILITY_PROPERTY_KEYS.OUTCOME,
+    ],
+  }),
+  // ETP-6239 D8/D9: the "Personalizar informe" panel hidden or shown. `panelState`: 'collapsed' |
+  // 'expanded'. `trigger`: 'user' (the button) | 'auto_columns' (hidden by choosing Mes/Trimestre).
+  REPORT_PANEL_TOGGLED: defineEvent('report_panel_toggled', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+      OBSERVABILITY_PROPERTY_KEYS.REPORT_SESSION_ID,
+      OBSERVABILITY_PROPERTY_KEYS.PANEL_STATE,
+      OBSERVABILITY_PROPERTY_KEYS.TRIGGER,
       OBSERVABILITY_PROPERTY_KEYS.OUTCOME,
     ],
   }),
