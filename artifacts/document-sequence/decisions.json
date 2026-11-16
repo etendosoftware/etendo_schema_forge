@@ -21,11 +21,13 @@
         "CurrentNext": "Próximo número"
       }
     },
-    "hideDeleteButton": true
+    "hideDeleteButton": true,
+    "customComponents": {
+      "headerTable": "SequenceHeaderTable"
+    }
   },
   "entities": {
     "sequence": {
-      "javaQualifier": "document-sequence",
       "methods": [
         "GET",
         "GETBYID",
@@ -47,6 +49,10 @@
             {
               "value": "Standard Order",
               "name": "documentSequenceSalesOrder"
+            },
+            {
+              "value": "Quotation",
+              "name": "documentSequenceSalesQuotation"
             },
             {
               "value": "AR Invoice",

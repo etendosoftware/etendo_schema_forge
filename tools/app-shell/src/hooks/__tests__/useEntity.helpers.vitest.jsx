@@ -9,6 +9,8 @@ vi.mock('sonner', () => ({
 }));
 
 import { toast } from 'sonner';
+import enUS from '@/locales/en_US.json';
+import esES from '@/locales/es_ES.json';
 import {
   pickMessage,
   pickMessageFromObject,
@@ -601,6 +603,39 @@ describe('useEntity helpers', () => {
       await handleSaveErrorResponse(res, uiFn, setFieldErrors, setSaveError);
       expect(setFieldErrors).not.toHaveBeenCalled();
       expect(setSaveError).toHaveBeenCalled();
+    });
+
+    // ETP-6148 — a remittance header save (create, or an update that sets financialAccount)
+    // refused by RemittanceHeaderHandler with a 422 + `messageKeys`: the save error DetailView
+    // shows is the SPA's own sentence for the key, through the real locales, whatever language
+    // the backend prose is in.
+    describe('remittance header account refusals (ETP-6148)', () => {
+      const LOCALES = { en_US: enUS, es_ES: esES };
+      const localeUi = (json) => (key, params) => {
+        let text = json.genericLabels[key] ?? key;
+        for (const [name, value] of Object.entries(params ?? {})) text = text.replace(`{${name}}`, value);
+        return text;
+      };
+      const remittanceRefusal = (messageKey) => {
+        const body = { error: { status: 422, message: 'Texto del backend en otro idioma.', messageKeys: [messageKey] } };
+        return { clone: () => ({ json: async () => body }), json: async () => body, status: 422 };
+      };
+
+      it.each([
+        ['ETGO_RemittanceAccountNotBank', 'backendError.remittanceAccountNotBank'],
+        ['ETGO_RemittanceAccountIbanRequired', 'backendError.remittanceAccountIbanRequired'],
+        ['ETGO_RemittanceAccountNotAllowed', 'backendError.remittanceAccountNotAllowed'],
+      ])('%s becomes the translated save error', async (messageKey, uiKey) => {
+        for (const [loc, json] of Object.entries(LOCALES)) {
+          const expected = json.genericLabels[uiKey];
+          expect(expected, `${loc} ${uiKey}`).toEqual(expect.stringMatching(/\S/));
+          const setFieldErrors = vi.fn();
+          const setSaveError = vi.fn();
+          await handleSaveErrorResponse(remittanceRefusal(messageKey), localeUi(json), setFieldErrors, setSaveError);
+          expect(setSaveError, loc).toHaveBeenCalledWith(expected);
+          expect(setFieldErrors).not.toHaveBeenCalled();
+        }
+      });
     });
   });
 

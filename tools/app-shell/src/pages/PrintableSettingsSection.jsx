@@ -82,11 +82,15 @@ export default function PrintableSettingsSection({
   const [saving, setSaving] = useState(false);
   const fileRef = useRef(null);
 
+  // Keyed by what the server holds for THIS section's types, not by the `configs` array: the page
+  // reloads it after any failed save, and a new array for the other tab's save must not wipe this
+  // tab's unsaved draft.
+  const serverKey = JSON.stringify(currentSettings(configs, docTypes));
   useEffect(() => {
-    const settings = currentSettings(configs, docTypes);
+    const settings = JSON.parse(serverKey);
     setSaved(settings);
     setDraft(settings);
-  }, [configs, docTypes]);
+  }, [serverKey]);
 
   const set = (key) => (value) => setDraft((d) => ({ ...d, [key]: value }));
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);

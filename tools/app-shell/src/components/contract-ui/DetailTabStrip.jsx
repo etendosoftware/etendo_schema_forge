@@ -18,10 +18,10 @@ function GhostText({ text }) {
 }
 
 /** Width-only twin of a tab button: same box classes, icon and chip, text as generated content. */
-function ProbeTab({ iconKey, label, count, buttonProps }) {
+function ProbeTab({ iconKey, icon, label, count, buttonProps }) {
   return (
     <span className={tabStripButtonBaseCls(buttonProps.paddingY, buttonProps.showHoverLine)}>
-      {React.createElement(resolveTabIcon(iconKey), { className: 'h-4 w-4' })}
+      {React.createElement(resolveTabIcon(iconKey, icon), { className: 'h-4 w-4' })}
       <GhostText text={label} data-testid="GhostText__detailTabStripProbeLabel" />
       {count != null && (
         <span className={COUNT_CHIP_CLS}><GhostText text={String(count)} data-testid="GhostText__detailTabStripProbeCount" /></span>
@@ -71,6 +71,7 @@ export default function DetailTabStrip({
           <ProbeTab
             key={tab.key}
             iconKey={tab.key}
+            icon={tab.icon}
             label={tMenu(tab.label)}
             count={tab.count}
             buttonProps={buttonProps}
@@ -87,6 +88,7 @@ export default function DetailTabStrip({
         <TabStripButton
           key={tab.key}
           iconKey={tab.key}
+          icon={tab.icon}
           label={tab.label}
           count={tab.count}
           isActive={activeIndex === index}
@@ -122,7 +124,7 @@ export default function DetailTabStrip({
                   onSelect={() => onSelect(index)}
                   data-testid={`detail-tab-more-item-${tab.key}`}
                 >
-                  {React.createElement(resolveTabIcon(tab.key), { className: 'h-4 w-4' })}
+                  {React.createElement(resolveTabIcon(tab.key, tab.icon), { className: 'h-4 w-4' })}
                   <span className="flex-1 whitespace-nowrap">{tMenu(tab.label)}</span>
                   {tab.count != null && <span className={COUNT_CHIP_CLS}>{tab.count}</span>}
                 </DropdownMenuItem>

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/QuotationPreview.jsx
 // Mocks must come before imports (Vitest hoisting)
 
 vi.mock('@/i18n', () => ({
@@ -56,8 +57,8 @@ vi.mock('../PreviewActionButtons.jsx', () => ({
   // disabled={!hasPdf || !onDownloadPdf} download gate (PreviewActionButtons.jsx,
   // ETP-4789) so tests can assert whether QuotationPreview passed a truthy
   // onEmail/onDownloadPdf or not.
-  default: ({ onEmail, onDownloadPdf, hasPdf, sendLabel, downloadLabel, editLabel }) => (
-    <div data-testid="action-buttons">
+  default: ({ onEmail, onDownloadPdf, hasPdf, sendLabel, downloadLabel, editLabel, readOnly }) => (
+    <div data-testid="action-buttons" data-read-only={String(Boolean(readOnly))}>
       {onEmail && (
         <button data-testid="email-btn" onClick={onEmail}>
           {sendLabel}
@@ -441,6 +442,8 @@ describe('QuotationPreview — Solo-Lectura tier (ETP-5205)', () => {
     expect(screen.getByTestId('download-btn')).toBeEnabled();
     expect(vi.mocked(EmailsCard).mock.calls.at(-1)[0].onSend).toBeUndefined();
     expect(vi.mocked(GenericPreviewModal).mock.calls.at(-1)[0].attachmentConfig.readOnly).toBe(true);
+    expect(screen.getByTestId('action-buttons')).toHaveAttribute('data-read-only', 'true');
+    expect(screen.getByTestId('edit-btn')).toHaveTextContent('view');
   });
 
   it('keeps Send under full access (control)', () => {

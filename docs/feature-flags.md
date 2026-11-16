@@ -232,9 +232,42 @@ its behaviour is documented in its topic doc and in `com.etendoerp.go`
 | `environment-access-enforcement-off` | `environment-access-enforcement-kill-switch` | [Paid tenant infrastructure](paid-tenant-infrastructure.md) §3.7; local testing: [`stripe-local-testing.md`](stripe-local-testing.md) "The 402 body and the kill switch"; operating it: "Operating environment-access enforcement" in `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md` |
 | `fiscal-model-390` | `fiscal-model-390` | ETP-5716 (TTL 2027-01-01): hides the whole Modelo 390 — the catalog answer drops it and marks it `_unavailable`, and every surface (catalog drawer, declarations list, Organization's Modelo 390 section) reacts to that answer; [fiscal models guide](generated-custom-windows/fiscal-models.md) "Modelo 390 behind the backend-only flag `fiscal-model-390`"; backend: `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md` |
 | `invoice-inbox` | `invoice-inbox` | ETP-6047 (TTL 2027-01-31, provisional). Backend-only, per account (lowercase `email` rules): gates the Invoice Inbox upload endpoint (evaluated at request entry, never in the OCR worker) and, through `capabilities.invoiceInbox` off `SFWindowAccessMap` (ETP-6049), the inbox menu entry and page. No web key: the browser only reads the capability. The page's Discard (batch bar and row trash, ETP-6049) calls the NEO action `POST /sws/neo/invoice-inbox/header/{id}/action/discard`, behind the same backend gate; with the flag off it answers `403 feature_disabled` and the SPA stops the batch. The table, window and read-only NEO spec ship unconditionally; backend: `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md` |
+| `sepa-remittances` | `sepa-remittances` | ETP-6148 (TTL 2027-03-31, provisional). Backend-only, per account (lowercase `email` rules): gates the automatic linking of the two SEPA remittance payment methods when a **Bank** financial account is created (manual create and bank-connection `createAndLink`, with lazy per-client provisioning; 409 `ETGO_RemittanceProvisioningConflict` on a race), the default SEPA mandate of a customer and the `remittance` spec (`403 feature_disabled` when off). There is no per-account «Admite remesas» switch and no `EM_ETGO_Allow_Remittance` column (removed in ETP-6148). The browser reads `capabilities.sepaRemittances` off `SFWindowAccessMap` (`SEPA_REMITTANCES_CAPABILITY`) for the menu entry, the page guard and the contact mandate section. The SPA shows no creditor identifier and no schemes. No web key. The remittance status is REM's own `REM_REMITTANCE.REMITTANCE_STATUS`, added in ETP-6148 on `feature/ETP-6148` and set by REM's processes; the remittance PR must be merged and its module built before this `com.etendoerp.go` change is deployed; backend: `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md` |
 | `structured-address-for-sepa` | `structured-address-for-sepa` | ETP-5806 relaunch (TTL 2026-11-15, driven by [etendosoftware/etendo-ai#24](https://github.com/etendosoftware/etendo-ai/issues/24) — SEPA 2025 rulebooks ban unstructured addresses in remittance files from that date); backend: `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md` |
 | `product-movements-tab` | `product-movements-tab` | ETP-5889 (TTL placeholder 2027-01-31). Backend-only, per account: the browser reads `capabilities.productMovements` off `SFWindowAccessMap`; backend: `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md` |
 | `usage-aggregation-schedule` | `usage-aggregation-schedule` | [Usage measurement](usage-measurement.md) §7.1; go-live (flag plus production Process Request): "5.1 Turning the usage schedule on" in `com.etendoerp.go` `docs/plan-quotas.md`; behaviour: "`usage-aggregation-schedule` (ETP-5051)" in `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md` |
+
+### Backend flags that also have a web key
+
+One flag is evaluated on **both** ends with the same key and the same identity, so it is the exception
+to the rule above: `psd2-statement-import-settings` (ETP-6151, TTL placeholder 2026-12-31).
+
+| Key | Web key | Registry entry | What it gates |
+|---|---|---|---|
+| `psd2-statement-import-settings` | `PSD2_STATEMENT_IMPORT_SETTINGS` in `tools/app-shell/src/lib/flags/flag-keys.js` (default `false`), read only through `hooks/usePsd2ImportSettingsFlag.js` | `psd2-statement-import-settings` (roots `frontend` and `backend`) | Required "Importar desde" and statement grouping when linking a PSD2 bank account (connect modal and Edit-account panel), the `import-settings` / financial-account update validation, `maxFetchInterval` on `accounts`, and deleting statements of bank-connected accounts. Off (the default, and what an absent key means) reproduces the behaviour before ETP-6151 |
+
+The browser key is **visual gating only**: the backend (`Psd2ImportSettingsFlag`) evaluates the same
+key per account (targeting key = the account email, lowercase `email` attribute) and enforces the
+rules on its own, so both ends must be targeted with the same rules or the SPA shows fields the
+backend ignores, or the reverse. Backend: `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md`
+section "`psd2-statement-import-settings` (ETP-6151)". Feature behaviour:
+[financial-account](generated-custom-windows/financial-account.md) and
+[financial-account-management](generated-custom-windows/financial-account-management.md).
+
+**Ends can disagree.** SPA ON + backend OFF: link / createAndLink report success but the import-from date and
+grouping are not stored (the first sync imports everything), and delete shows the trash and notice but the
+backend answers the old 409. SPA OFF + backend ON: link / createAndLink with empty fields get a 400 whose
+English text shows raw in the toast (the SPA translates it only with its flag ON), and the trash for
+processed statements is hidden. ON to OFF for an account: the stored date and grouping stay and the PSD2
+sync keeps using them, while any grouping can be saved again. Hence: create the flag and its per-email rules
+(lowercase `email`) for **both ends at the same time**, enable a test email first, verify on SPA and backend,
+then widen. Details: `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md`.
+
+**Control-plane setup (not yet done in any environment):** create a **boolean** flag named exactly
+`psd2-statement-import-settings` in Datadog Feature Flags (and the same setting in ConfigCat as the
+fallback), **default `false`**, in each environment (production, experimental, staging, development),
+then add per-account targeting rules on the lowercase `email` attribute for the accounts to enable. Until
+the key exists it resolves to `false` and nobody is targeted.
 
 ## Personal business-grid views
 

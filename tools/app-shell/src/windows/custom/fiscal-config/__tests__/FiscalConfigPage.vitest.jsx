@@ -188,8 +188,9 @@ vi.mock('../OnboardingWizard.jsx', () => ({
   ),
 }));
 
+// Exposes the daysLeft the page hands it, so the hook → banner wiring is observable.
 vi.mock('../CertExpiryBanner.jsx', () => ({
-  default: () => <div data-testid="cert-expiry-banner" />,
+  default: ({ daysLeft }) => <div data-testid="cert-expiry-banner" data-days-left={String(daysLeft)} />,
 }));
 
 vi.mock('../TabBar.jsx', () => ({
@@ -515,6 +516,18 @@ describe('FiscalConfigPage — profile: sii', () => {
     // Open the dropdown and verify addComplementary is not among the items.
     fireEvent.click(screen.getByTestId('FiscalConfigPage__actionsMenu'));
     expect(screen.queryByTestId('FiscalConfigPage__addComplementary')).not.toBeInTheDocument();
+  });
+
+  // The certificate's daysLeft read by useCertExpiry is what the expiry banner receives; the
+  // banner's own suite and useCertExpiry's banner integration cover what it then shows.
+  it('hands the certificate daysLeft of useCertExpiry to the expiry banner', () => {
+    certExpiry.value = { daysLeft: 15, validTo: '2026-11-25' };
+    try {
+      renderPage();
+      expect(screen.getByTestId('cert-expiry-banner')).toHaveAttribute('data-days-left', '15');
+    } finally {
+      certExpiry.value = { daysLeft: null, validTo: null };
+    }
   });
 });
 
@@ -1783,6 +1796,27 @@ describe('FiscalStatusSummary — deriveConfiguredStatus / buildConfiguredStatus
   const rowValue = (rows, key) => rows.find(r => r.key === key)?.value;
   // ETP-6053 — the territory comes from the backend catalog (fiscalSystemCatalog).
   const catalog = FISCAL_SYSTEM_CATALOG;
+
+  // ETP-6053 — the certificate row formats the ISO validTo of GET /certificate as dd/MM/yyyy for
+  // es_ES: 1 July 2027 reads 01/07/2027, never the month-first 07/01/2027.
+  it('formats the certificate validTo as dd/MM/yyyy for es_ES', () => {
+    const uiParams = (key, params) => (params ? `${key} ${Object.values(params).join(' ')}` : key);
+    const status = deriveConfiguredStatus({ profile: 'sii', siiRecord: { id: 'sii-1', taxtype: 'IVA' }, catalog });
+    const rows = buildConfiguredStatusRows({
+      status, territories, systems, cert: { validTo: '2027-07-01' }, locale: 'es_ES', ui: uiParams,
+    });
+    expect(rowValue(rows, 'cert')).toBe('fiscal.cert.validUntil 01/07/2027');
+  });
+
+  // The locale is passed through, not pinned to es_ES: en_US reads the same date month-first.
+  it('formats the certificate validTo as MM/dd/yyyy for en_US', () => {
+    const uiParams = (key, params) => (params ? `${key} ${Object.values(params).join(' ')}` : key);
+    const status = deriveConfiguredStatus({ profile: 'sii', siiRecord: { id: 'sii-1', taxtype: 'IVA' }, catalog });
+    const rows = buildConfiguredStatusRows({
+      status, territories, systems, cert: { validTo: '2027-07-01' }, locale: 'en_US', ui: uiParams,
+    });
+    expect(rowValue(rows, 'cert')).toBe('fiscal.cert.validUntil 07/01/2027');
+  });
 
   it('maps sii-navarra to the Navarra territory with no national-operation row', () => {
     const status = deriveConfiguredStatus({ profile: 'sii-navarra', siiRecord: { id: 'sii-1', navarra: 'Y', taxtype: 'IVA' }, catalog });

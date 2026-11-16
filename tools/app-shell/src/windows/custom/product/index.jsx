@@ -19,6 +19,9 @@ export default function ProductApp({ windowName, recordId, ...props }) {
         recordId={recordId}
         Table={ProductCustomTable}
         sidebarFormScrollPaddingX={PRODUCT_CONTENT_CLASS}
+        // ETP-5889: filled blue Save (dedicated hover token) and blue active tab.
+        primarySave="strong"
+        tabsActiveAccent="primary"
         {...props}
         data-testid="ProductPage__2c94d0" />
     </div>

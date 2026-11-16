@@ -1659,6 +1659,150 @@
         }
       ]
     },
+    "1ff82f378ae21bc327da4382fb94121e5e53f4ea9283f7c46698b579c45f2078": {
+      "checksum": "dc86d0653d99d32f5b55a560b8842cdaf818da7412912771f59751f85ae06080",
+      "params": [
+        [
+          "A57088821ED94129B1F252AD80F75E5A",
+          "575BCB88A4694C27BC013DE9C73E6FE7",
+          "8DC0016258B840EE9F4200ACA20F6208"
+        ]
+      ],
+      "rows": [
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Awaiting Payment",
+          "name_es": "A Pagar",
+          "value": "RPAP"
+        },
+        {
+          "ad_reference_id": "8DC0016258B840EE9F4200ACA20F6208",
+          "name": "First",
+          "name_es": "Primer adeudo",
+          "value": "FRST"
+        },
+        {
+          "ad_reference_id": "A57088821ED94129B1F252AD80F75E5A",
+          "name": "Pending",
+          "name_es": "Pending",
+          "value": "PE"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Awaiting Execution",
+          "name_es": "A Ejecutar",
+          "value": "RPAE"
+        },
+        {
+          "ad_reference_id": "A57088821ED94129B1F252AD80F75E5A",
+          "name": "Processed",
+          "name_es": "Processed",
+          "value": "PR"
+        },
+        {
+          "ad_reference_id": "8DC0016258B840EE9F4200ACA20F6208",
+          "name": "Recurring",
+          "name_es": "Adeudo recurrente",
+          "value": "RCUR"
+        },
+        {
+          "ad_reference_id": "A57088821ED94129B1F252AD80F75E5A",
+          "name": "Collected",
+          "name_es": "Collected",
+          "value": "CT"
+        },
+        {
+          "ad_reference_id": "8DC0016258B840EE9F4200ACA20F6208",
+          "name": "Final",
+          "name_es": "Último adeudo",
+          "value": "FNAL"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Void",
+          "name_es": "Anulado",
+          "value": "RPVOID"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Remitted",
+          "name_es": "Remitted",
+          "value": "REM_SENT"
+        },
+        {
+          "ad_reference_id": "8DC0016258B840EE9F4200ACA20F6208",
+          "name": "One-Off",
+          "name_es": "Adeudo único",
+          "value": "OOFF"
+        },
+        {
+          "ad_reference_id": "A57088821ED94129B1F252AD80F75E5A",
+          "name": "Paid",
+          "name_es": "Paid",
+          "value": "PT"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Payment Made",
+          "name_es": "Pagado",
+          "value": "PPM"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Payment Received",
+          "name_es": "Cobrado",
+          "value": "RPR"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Settled in Remittance",
+          "name_es": "Settled in Remittance",
+          "value": "REM_CANCEL"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Deposited not Cleared",
+          "name_es": "Cobro depositado",
+          "value": "RDNC"
+        },
+        {
+          "ad_reference_id": "A57088821ED94129B1F252AD80F75E5A",
+          "name": "Partially collected",
+          "name_es": "Partially collected",
+          "value": "CP"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Withdrawn not Cleared",
+          "name_es": "Pago reintegrado",
+          "value": "PWNC"
+        },
+        {
+          "ad_reference_id": "A57088821ED94129B1F252AD80F75E5A",
+          "name": "Partially paid",
+          "name_es": "Partially paid",
+          "value": "PP"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Payment Cleared",
+          "name_es": "Conciliado",
+          "value": "RPPC"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Payment Error",
+          "name_es": "Payment Error",
+          "value": "ETGOERR"
+        },
+        {
+          "ad_reference_id": "A57088821ED94129B1F252AD80F75E5A",
+          "name": "Voided",
+          "name_es": "Voided",
+          "value": "AN"
+        }
+      ]
+    },
     "292dffcc06f348c4ec0075d2f5a2480c447ec36ea06e3e8b7460e3e1d5ce8fed": {
       "checksum": "7f503d734cab961b3dcd34d15fd7a1e92a2595291c1d1c3fd6b47e0376568f57",
       "params": [
@@ -10679,6 +10823,857 @@
           "name": "SSL",
           "name_es": "SSL",
           "value": "SSL"
+        }
+      ]
+    },
+    "bc482d24a69b37c3c0d94473afd209625d25c01ace83966e0e31eae3b52a1cd7": {
+      "checksum": "b798631b5c56c44da9b7348fc42b8de40012822a786af2e3148c2eae7e4220d0",
+      "params": [
+        [
+          "A6BDFA712FF948CE903C4C463E832FC1",
+          "C123B7BF5B2C438D84D2E509734776B5",
+          "C3531F85C14B4515AB7259F0D338050D",
+          "86F92F3C04C148E69F12FF84F50AD51D",
+          "A1B2C3D4E5F607890A1B2C3D4E5F6A7B",
+          "4EFC9773F30B4ACE97D225BD13CFF8CB",
+          "575BCB88A4694C27BC013DE9C73E6FE7",
+          "D431058F6B7345598D1E0709DFF3B5DD",
+          "DBCF65339D0F4403822A8A7928533D6B",
+          "FC98D43996374909B1AAC0197BBE95BA",
+          "085E99751D2045AA9D4FA23F4B765B21",
+          "BCABCED4983A4ECB814A6D142593ACEA",
+          "131",
+          "FF8080812E443491012E443C053A001A",
+          "183",
+          "087396CF6E744F72AAE794266C271D14",
+          "734D872F58664531B2F67B729E10BD58",
+          "3FA3A633B10240169BE9A0A8040D5823",
+          "7D3AC131018144F49E77A00FD30E486E",
+          "3C5D8A9557F24C9E81D26D032AF917B2"
+        ]
+      ],
+      "rows": [
+        {
+          "ad_reference_id": "86F92F3C04C148E69F12FF84F50AD51D",
+          "name": "New statement each run",
+          "name_es": "New statement each run",
+          "value": "1BE"
+        },
+        {
+          "ad_reference_id": "86F92F3C04C148E69F12FF84F50AD51D",
+          "name": "Within 1 day",
+          "name_es": "Within 1 day",
+          "value": "1BD"
+        },
+        {
+          "ad_reference_id": "86F92F3C04C148E69F12FF84F50AD51D",
+          "name": "Within 7 days",
+          "name_es": "Within 7 days",
+          "value": "1BW"
+        },
+        {
+          "ad_reference_id": "86F92F3C04C148E69F12FF84F50AD51D",
+          "name": "Within 30 days",
+          "name_es": "Within 30 days",
+          "value": "1BM"
+        },
+        {
+          "ad_reference_id": "A1B2C3D4E5F607890A1B2C3D4E5F6A7B",
+          "name": "Active",
+          "name_es": "Active",
+          "value": "CO"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Awaiting Payment",
+          "name_es": "A Pagar",
+          "value": "RPAP"
+        },
+        {
+          "ad_reference_id": "3FA3A633B10240169BE9A0A8040D5823",
+          "name": "High",
+          "name_es": "High",
+          "value": "high"
+        },
+        {
+          "ad_reference_id": "7D3AC131018144F49E77A00FD30E486E",
+          "name": "PSD2 payment link",
+          "name_es": "PSD2 payment link",
+          "value": "pis_link"
+        },
+        {
+          "ad_reference_id": "3C5D8A9557F24C9E81D26D032AF917B2",
+          "name": "Transaction",
+          "name_es": "Transacción",
+          "value": "T"
+        },
+        {
+          "ad_reference_id": "C123B7BF5B2C438D84D2E509734776B5",
+          "name": "Use Generic Account No.",
+          "name_es": "Utilizar Número Genérico de Cuenta",
+          "value": "GENERIC"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Awaiting Execution",
+          "name_es": "A Ejecutar",
+          "value": "RPAE"
+        },
+        {
+          "ad_reference_id": "7D3AC131018144F49E77A00FD30E486E",
+          "name": "Bounce wording",
+          "name_es": "Bounce wording",
+          "value": "return_text"
+        },
+        {
+          "ad_reference_id": "A1B2C3D4E5F607890A1B2C3D4E5F6A7B",
+          "name": "Inactive",
+          "name_es": "Inactive",
+          "value": "DC"
+        },
+        {
+          "ad_reference_id": "3C5D8A9557F24C9E81D26D032AF917B2",
+          "name": "Payment",
+          "name_es": "Pago",
+          "value": "P"
+        },
+        {
+          "ad_reference_id": "3FA3A633B10240169BE9A0A8040D5823",
+          "name": "Review",
+          "name_es": "Review",
+          "value": "review"
+        },
+        {
+          "ad_reference_id": "C123B7BF5B2C438D84D2E509734776B5",
+          "name": "Use IBAN",
+          "name_es": "Utilizar IBAN",
+          "value": "IBAN"
+        },
+        {
+          "ad_reference_id": "3C5D8A9557F24C9E81D26D032AF917B2",
+          "name": "Invoice",
+          "name_es": "Factura",
+          "value": "I"
+        },
+        {
+          "ad_reference_id": "7D3AC131018144F49E77A00FD30E486E",
+          "name": "Same counterparty",
+          "name_es": "Same counterparty",
+          "value": "counterparty"
+        },
+        {
+          "ad_reference_id": "C123B7BF5B2C438D84D2E509734776B5",
+          "name": "Use SWIFT + Generic Account No.",
+          "name_es": "Usar código SWIFT + Número Genérico de Cuenta",
+          "value": "SWIFT"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Void",
+          "name_es": "Anulado",
+          "value": "RPVOID"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Remitted",
+          "name_es": "Remitted",
+          "value": "REM_SENT"
+        },
+        {
+          "ad_reference_id": "3C5D8A9557F24C9E81D26D032AF917B2",
+          "name": "Order",
+          "name_es": "Pedido",
+          "value": "O"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Payment Made",
+          "name_es": "Pagado",
+          "value": "PPM"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Payment Received",
+          "name_es": "Cobrado",
+          "value": "RPR"
+        },
+        {
+          "ad_reference_id": "C123B7BF5B2C438D84D2E509734776B5",
+          "name": "Use Spanish",
+          "name_es": "Utilizar Español",
+          "value": "SPANISH"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Settled in Remittance",
+          "name_es": "Settled in Remittance",
+          "value": "REM_CANCEL"
+        },
+        {
+          "ad_reference_id": "3C5D8A9557F24C9E81D26D032AF917B2",
+          "name": "Credit",
+          "name_es": "Crédito",
+          "value": "C"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Deposited not Cleared",
+          "name_es": "Cobro depositado",
+          "value": "RDNC"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Withdrawn not Cleared",
+          "name_es": "Pago reintegrado",
+          "value": "PWNC"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Payment Cleared",
+          "name_es": "Conciliado",
+          "value": "RPPC"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Payment Error",
+          "name_es": "Payment Error",
+          "value": "ETGOERR"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "** New **",
+          "name_es": "** Nuevo **",
+          "value": "---"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "AP Credit Memo",
+          "name_es": "AP Nota de crédito",
+          "value": "APC"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "AP Invoice",
+          "name_es": "AP factura",
+          "value": "API"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "AP Payment",
+          "name_es": "AP pago",
+          "value": "APP"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "AP Payment Proposal",
+          "name_es": "AP Propuesta de pago",
+          "value": "APPP"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "AR Credit Memo",
+          "name_es": "AR Nota de crédito",
+          "value": "ARC"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "AR Invoice",
+          "name_es": "AR factura",
+          "value": "ARI"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "AR Pro Forma Invoice",
+          "name_es": "AR Pro forma factura",
+          "value": "ARF"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "AR Receipt",
+          "name_es": "AR Recibo",
+          "value": "ARR"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "AR Receivable Proposal",
+          "name_es": "AR Propuesta de Cobro",
+          "value": "ARRP"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "AR Return Material Invoice",
+          "name_es": "AR factura de devolución de material",
+          "value": "ARI_RM"
+        },
+        {
+          "ad_reference_id": "087396CF6E744F72AAE794266C271D14",
+          "name": "Active",
+          "name_es": "Active",
+          "value": "AC"
+        },
+        {
+          "ad_reference_id": "BCABCED4983A4ECB814A6D142593ACEA",
+          "name": "Added",
+          "name_es": "Añadido",
+          "value": "AD"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Amortization",
+          "name_es": "Amortización",
+          "value": "AMZ"
+        },
+        {
+          "ad_reference_id": "C3531F85C14B4515AB7259F0D338050D",
+          "name": "Amount",
+          "name_es": "Importe",
+          "value": "A"
+        },
+        {
+          "ad_reference_id": "BCABCED4983A4ECB814A6D142593ACEA",
+          "name": "Approved",
+          "name_es": "Aprobado",
+          "value": "AP"
+        },
+        {
+          "ad_reference_id": "BCABCED4983A4ECB814A6D142593ACEA",
+          "name": "Auto",
+          "name_es": "Auto",
+          "value": "AU"
+        },
+        {
+          "ad_reference_id": "FC98D43996374909B1AAC0197BBE95BA",
+          "name": "Automatic",
+          "name_es": "Automático",
+          "value": "A"
+        },
+        {
+          "ad_reference_id": "4EFC9773F30B4ACE97D225BD13CFF8CB",
+          "name": "BP Deposit",
+          "name_es": "Cobro",
+          "value": "BPD"
+        },
+        {
+          "ad_reference_id": "4EFC9773F30B4ACE97D225BD13CFF8CB",
+          "name": "BP Withdrawal",
+          "name_es": "Pago",
+          "value": "BPW"
+        },
+        {
+          "ad_reference_id": "A6BDFA712FF948CE903C4C463E832FC1",
+          "name": "Bank",
+          "name_es": "Banco",
+          "value": "B"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Bank Statement",
+          "name_es": "Extracto bancario",
+          "value": "CMB"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Bank Statement File",
+          "name_es": "Fichero de extracto bancario",
+          "value": "BSF"
+        },
+        {
+          "ad_reference_id": "4EFC9773F30B4ACE97D225BD13CFF8CB",
+          "name": "Bank fee",
+          "name_es": "Tasa de Banco",
+          "value": "BF"
+        },
+        {
+          "ad_reference_id": "A6BDFA712FF948CE903C4C463E832FC1",
+          "name": "Card",
+          "name_es": "Card",
+          "value": "CA"
+        },
+        {
+          "ad_reference_id": "A6BDFA712FF948CE903C4C463E832FC1",
+          "name": "Cash",
+          "name_es": "Caja",
+          "value": "C"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Cash Journal",
+          "name_es": "Diario de caja",
+          "value": "CMC"
+        },
+        {
+          "ad_reference_id": "085E99751D2045AA9D4FA23F4B765B21",
+          "name": "Cleared Payment Account",
+          "name_es": "Cuenta contable para reconciliación",
+          "value": "CLE"
+        },
+        {
+          "ad_reference_id": "131",
+          "name": "Closed",
+          "name_es": "Cerrado",
+          "value": "CL"
+        },
+        {
+          "ad_reference_id": "DBCF65339D0F4403822A8A7928533D6B",
+          "name": "Closing Entry",
+          "name_es": "Asiento de cierre",
+          "value": "C"
+        },
+        {
+          "ad_reference_id": "131",
+          "name": "Completed",
+          "name_es": "Completado",
+          "value": "CO"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Cost Adjustment",
+          "name_es": "Ajuste de Costes",
+          "value": "CAD"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Cost Not Calculated",
+          "name_es": "Coste No Calculado",
+          "value": "NC"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Debt Payment Management",
+          "name_es": "Gestión de efectos",
+          "value": "DPM"
+        },
+        {
+          "ad_reference_id": "085E99751D2045AA9D4FA23F4B765B21",
+          "name": "Deposited Payment Account",
+          "name_es": "Cuenta contable para depósito",
+          "value": "DEP"
+        },
+        {
+          "ad_reference_id": "087396CF6E744F72AAE794266C271D14",
+          "name": "Disabled",
+          "name_es": "Disabled",
+          "value": "DI"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Disabled For Background",
+          "name_es": "Deshabilitado Para Background",
+          "value": "d"
+        },
+        {
+          "ad_reference_id": "DBCF65339D0F4403822A8A7928533D6B",
+          "name": "Divide Up",
+          "name_es": "Reparto de reservas",
+          "value": "D"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Document Disabled",
+          "name_es": "Documento Deshabilitado",
+          "value": "D"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Document Locked",
+          "name_es": "Documento Bloqueado",
+          "value": "L"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Doubtful Debt",
+          "name_es": "Dudoso cobro",
+          "value": "DDB"
+        },
+        {
+          "ad_reference_id": "131",
+          "name": "Draft",
+          "name_es": "Borrador",
+          "value": "DR"
+        },
+        {
+          "ad_reference_id": "734D872F58664531B2F67B729E10BD58",
+          "name": "Draft",
+          "name_es": "Draft",
+          "value": "DRAFT"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Error",
+          "name_es": "Error",
+          "value": "E"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Error, No cost",
+          "name_es": "Error, No hay coste",
+          "value": "C"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Financial Account Transaction",
+          "name_es": "Transacciones de la cuenta financiera",
+          "value": "FAT"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "GL Document",
+          "name_es": "Documento libro mayor",
+          "value": "GLD"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "GL Journal",
+          "name_es": "Diario",
+          "value": "GLJ"
+        },
+        {
+          "ad_reference_id": "085E99751D2045AA9D4FA23F4B765B21",
+          "name": "In Transit Payment Account",
+          "name_es": "Cuenta contable para cobro/pago en tránsito",
+          "value": "INT"
+        },
+        {
+          "ad_reference_id": "087396CF6E744F72AAE794266C271D14",
+          "name": "Inactive",
+          "name_es": "Inactive",
+          "value": "IN"
+        },
+        {
+          "ad_reference_id": "DBCF65339D0F4403822A8A7928533D6B",
+          "name": "Income Statement",
+          "name_es": "Entrada de regularización",
+          "value": "R"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Invalid Account",
+          "name_es": "Cuenta No Válida",
+          "value": "i"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Inventory Amount Update",
+          "name_es": "Actualización Valor Inventario",
+          "value": "IAU"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Landed Cost",
+          "name_es": "Landed Cost",
+          "value": "LDC"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Landed Cost Cost",
+          "name_es": "Coste Landed Cost",
+          "value": "LCC"
+        },
+        {
+          "ad_reference_id": "FC98D43996374909B1AAC0197BBE95BA",
+          "name": "Manual",
+          "name_es": "Manual",
+          "value": "M"
+        },
+        {
+          "ad_reference_id": "BCABCED4983A4ECB814A6D142593ACEA",
+          "name": "Manual",
+          "name_es": "Manual",
+          "value": "MA"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Manual Cash VAT Settlement",
+          "name_es": "Manual Cash VAT Settlement",
+          "value": "OBCVAT_MS"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Match Invoice",
+          "name_es": "Factura comprobada",
+          "value": "MXI"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Match PO",
+          "name_es": "Pedido de compra comprobado",
+          "value": "MXP"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Material Delivery",
+          "name_es": "Entrega material",
+          "value": "MMS"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Material Internal Consumption",
+          "name_es": "Consumo Interno de Material",
+          "value": "MIC"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Material Movement",
+          "name_es": "Movimiento de almacén",
+          "value": "MMM"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Material Physical Inventory",
+          "name_es": "Inventario físico",
+          "value": "MMI"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Material Production",
+          "name_es": "Producción",
+          "value": "MMP"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Material Receipt",
+          "name_es": "Recibo material",
+          "value": "MMR"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "No Accounting Date",
+          "name_es": "Sin Fecha Contable",
+          "value": "AD"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "No Document Type",
+          "name_es": "Sin tipo de Documento",
+          "value": "DT"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "No Related PO",
+          "name_es": "Sin PO Relacionada",
+          "value": "NO"
+        },
+        {
+          "ad_reference_id": "BCABCED4983A4ECB814A6D142593ACEA",
+          "name": "None",
+          "name_es": "Ninguno",
+          "value": "NO"
+        },
+        {
+          "ad_reference_id": "131",
+          "name": "Not Accepted",
+          "name_es": "No aprobado",
+          "value": "NA"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Not Balanced",
+          "name_es": "No Balanceado",
+          "value": "b"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Not Convertible (no rate)",
+          "name_es": "No Convertible (no hay rango)",
+          "value": "c"
+        },
+        {
+          "ad_reference_id": "131",
+          "name": "Not Paid",
+          "name_es": "Pendiente de Pago",
+          "value": "WP"
+        },
+        {
+          "ad_reference_id": "DBCF65339D0F4403822A8A7928533D6B",
+          "name": "Opening Entry",
+          "name_es": "Asiento de apertura",
+          "value": "O"
+        },
+        {
+          "ad_reference_id": "734D872F58664531B2F67B729E10BD58",
+          "name": "Partial",
+          "name_es": "Partial",
+          "value": "PARTIAL"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Payment Allocation",
+          "name_es": "Asignación de pagos",
+          "value": "CMA"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Payment proposal",
+          "name_es": "Propuesta de pago",
+          "value": "PPR"
+        },
+        {
+          "ad_reference_id": "734D872F58664531B2F67B729E10BD58",
+          "name": "Pending",
+          "name_es": "Pending",
+          "value": "PENDING"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Pending Refresh",
+          "name_es": "Pendiente de Actualización",
+          "value": "l"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Period Closed",
+          "name_es": "Periodo Cerrado",
+          "value": "p"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Post Prepared",
+          "name_es": "Contabilidad Preparada",
+          "value": "y"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Posted",
+          "name_es": "Contabilizado",
+          "value": "Y"
+        },
+        {
+          "ad_reference_id": "FF8080812E443491012E443C053A001A",
+          "name": "Process Reconciliation",
+          "name_es": "Reconciliación de Proceso",
+          "value": "P"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Project Issue",
+          "name_es": "Asunto de proyecto",
+          "value": "PJI"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Purchase Order",
+          "name_es": "Pedido de compra",
+          "value": "POO"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Purchase Requisition",
+          "name_es": "Pre-pedido compra",
+          "value": "POR"
+        },
+        {
+          "ad_reference_id": "131",
+          "name": "Re-Opened",
+          "name_es": "Reabierto",
+          "value": "RE"
+        },
+        {
+          "ad_reference_id": "FF8080812E443491012E443C053A001A",
+          "name": "Reactivate",
+          "name_es": "Reactivar",
+          "value": "R"
+        },
+        {
+          "ad_reference_id": "734D872F58664531B2F67B729E10BD58",
+          "name": "Reconciled",
+          "name_es": "Reconciled",
+          "value": "RECONCILED"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Reconciliation",
+          "name_es": "Conciliación",
+          "value": "REC"
+        },
+        {
+          "ad_reference_id": "DBCF65339D0F4403822A8A7928533D6B",
+          "name": "Regular Entry",
+          "name_es": "Asiento normal",
+          "value": "N"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Remittance",
+          "name_es": "Remittance",
+          "value": "REM_REM"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Remittance Cancel",
+          "name_es": "Remittance Cancel",
+          "value": "REM_REMCANCEL"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Remittance Return",
+          "name_es": "Remittance Return",
+          "value": "REM_REMRETURN"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Sales Order",
+          "name_es": "Pedido venta",
+          "value": "SOO"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Settlement",
+          "name_es": "Liquidación",
+          "value": "STT"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Settlement manual",
+          "name_es": "Liquidación manual",
+          "value": "STM"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Table Disabled",
+          "name_es": "Tabla Deshabilitada",
+          "value": "T"
+        },
+        {
+          "ad_reference_id": "131",
+          "name": "Temporal",
+          "name_es": "Temporal",
+          "value": "TEMP"
+        },
+        {
+          "ad_reference_id": "131",
+          "name": "Under Way",
+          "name_es": "En curso",
+          "value": "IP"
+        },
+        {
+          "ad_reference_id": "131",
+          "name": "Unknown",
+          "name_es": "Desconocido",
+          "value": "??"
+        },
+        {
+          "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
+          "name": "Unposted",
+          "name_es": "No Contabilizado",
+          "value": "N"
+        },
+        {
+          "ad_reference_id": "131",
+          "name": "Voided",
+          "name_es": "Anulado",
+          "value": "VO"
+        },
+        {
+          "ad_reference_id": "085E99751D2045AA9D4FA23F4B765B21",
+          "name": "Withdrawn Payment Account",
+          "name_es": "Cuenta contable para reintegro",
+          "value": "WIT"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Work Requirement",
+          "name_es": "Orden de fabricación",
+          "value": "WRE"
         }
       ]
     },

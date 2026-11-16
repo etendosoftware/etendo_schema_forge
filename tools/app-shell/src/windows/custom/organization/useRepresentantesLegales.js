@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
+import { useUI } from '@/i18n';
 import { extractApiErrorMessage } from '@/lib/apiError.js';
 import { sortByLineNo } from './representanteLegal.js';
 
@@ -21,6 +22,7 @@ import { sortByLineNo } from './representanteLegal.js';
  */
 export function useRepresentantesLegales(orgId, apiBaseUrl) {
   const repApiFetch = useApiFetch(`${neoBase(apiBaseUrl)}/organization`);
+  const ui = useUI();
 
   const [state, setState] = useState({ loading: false, error: null, rows: [] });
 
@@ -50,23 +52,23 @@ export function useRepresentantesLegales(orgId, apiBaseUrl) {
       method: 'POST',
       body: JSON.stringify({ ...body, parentId: orgId }),
     });
-    if (!res.ok) throw new Error(await extractApiErrorMessage(res));
+    if (!res.ok) throw new Error(await extractApiErrorMessage(res, ui));
     return (await res.json().catch(() => null))?.response?.data?.[0] ?? null;
-  }, [repApiFetch, orgId]);
+  }, [repApiFetch, orgId, ui]);
 
   const updateRow = useCallback(async (id, payload) => {
     const res = await repApiFetch(`/representanteLegal/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error(await extractApiErrorMessage(res));
+    if (!res.ok) throw new Error(await extractApiErrorMessage(res, ui));
     return (await res.json().catch(() => null))?.response?.data?.[0] ?? null;
-  }, [repApiFetch]);
+  }, [repApiFetch, ui]);
 
   const deleteRow = useCallback(async (id) => {
     const res = await repApiFetch(`/representanteLegal/${id}`, { method: 'DELETE' });
-    if (!res.ok) throw new Error(await extractApiErrorMessage(res));
-  }, [repApiFetch]);
+    if (!res.ok) throw new Error(await extractApiErrorMessage(res, ui));
+  }, [repApiFetch, ui]);
 
   return {
     ...state,

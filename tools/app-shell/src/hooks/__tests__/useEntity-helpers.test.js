@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/hooks/useEntity.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
@@ -140,6 +141,7 @@ const {
   showSaveSuccessToast,
   handleSaveErrorResponse,
   getNumericFieldViolation,
+  getDateFieldViolation,
   getContactsTextFieldViolation,
   getContactsTaxIdViolation,
   reportInvalidFormatField,
@@ -781,6 +783,88 @@ describe('getNumericFieldViolation (ETP-4542 — generic min/integer save block)
 
   it('is a no-op on an empty fields array', () => {
     assert.equal(getNumericFieldViolation([], {}), null);
+  });
+});
+
+describe('getDateFieldViolation — minDate save block', () => {
+  // A day that is always in the past and one that is always in the future, whatever the
+  // date the suite runs on, so the "today" bound needs no clock injection here (the bound
+  // itself is covered in lib/__tests__/dateFieldValidation.test.js).
+  const PAST = '2000-01-15';
+  const OTHER_PAST = '2000-02-20';
+  const FUTURE = '2999-12-31';
+  const DUE_DATE = { key: 'dueDate', type: 'date', minDate: 'today' };
+
+  it('blocks a NEW record with a past date (no loaded value)', () => {
+    assert.deepEqual(getDateFieldViolation([DUE_DATE], { dueDate: PAST }, null), {
+      key: 'dueDate', errorKey: 'fieldMinDateError', errorParams: {},
+    });
+  });
+
+  it('ignores a stale `loaded` record when the editing record has no id (create)', () => {
+    // On create, `selected` may still hold the previous record: it must not whitelist its date.
+    assert.equal(
+      getDateFieldViolation([DUE_DATE], { dueDate: PAST }, { id: 'prev', dueDate: PAST })?.errorKey,
+      'fieldMinDateError',
+    );
+  });
+
+  it('allows an existing record whose loaded past date is unchanged', () => {
+    const loaded = { id: 'R1', dueDate: PAST };
+    assert.equal(getDateFieldViolation([DUE_DATE], { id: 'R1', dueDate: PAST }, loaded), null);
+  });
+
+  it('allows an unchanged past date loaded as a full timestamp', () => {
+    const loaded = { id: 'R1', dueDate: `${PAST}T00:00:00.000Z` };
+    assert.equal(getDateFieldViolation([DUE_DATE], { id: 'R1', dueDate: PAST }, loaded), null);
+  });
+
+  it('blocks an existing record whose past date was changed to another past date', () => {
+    const loaded = { id: 'R1', dueDate: PAST };
+    assert.deepEqual(getDateFieldViolation([DUE_DATE], { id: 'R1', dueDate: OTHER_PAST }, loaded), {
+      key: 'dueDate', errorKey: 'fieldMinDateError', errorParams: {},
+    });
+  });
+
+  it('allows a future date', () => {
+    assert.equal(getDateFieldViolation([DUE_DATE], { dueDate: FUTURE }, null), null);
+  });
+
+  it('carries {min} for a fixed minDate', () => {
+    const field = { key: 'startDate', type: 'date', minDate: '2999-01-01' };
+    const v = getDateFieldViolation([field], { startDate: PAST }, null);
+    assert.equal(v.key, 'startDate');
+    assert.equal(v.errorKey, 'fieldMinDateBeforeError');
+    assert.ok(typeof v.errorParams.min === 'string' && v.errorParams.min.includes('2999'), v.errorParams.min);
+  });
+
+  it('skips a read-only field (completed document)', () => {
+    const field = { ...DUE_DATE, readOnlyLogic: (record) => record.processed === true };
+    assert.equal(getDateFieldViolation([field], { processed: true, dueDate: PAST }, null), null);
+  });
+
+  it('skips a field hidden by displayLogic', () => {
+    const field = { ...DUE_DATE, displayLogic: (record) => record.showDue === true };
+    assert.equal(getDateFieldViolation([field], { showDue: false, dueDate: PAST }, null), null);
+    assert.equal(getDateFieldViolation([field], { showDue: true, dueDate: PAST }, null)?.key, 'dueDate');
+  });
+
+  it('does not block on an empty value (required mechanism owns emptiness)', () => {
+    assert.equal(getDateFieldViolation([DUE_DATE], { dueDate: '' }, null), null);
+  });
+
+  it('is a no-op for fields that declare no minDate', () => {
+    const fields = [{ key: 'orderDate', type: 'date' }, { key: 'businessPartner' }];
+    assert.equal(getDateFieldViolation(fields, { orderDate: PAST }, null), null);
+    assert.equal(getDateFieldViolation([], {}, null), null);
+  });
+
+  it('reports the first violating field', () => {
+    const fields = [
+      { key: 'a', type: 'date', minDate: 'today' },
+      { key: 'b', type: 'date', minDate: 'today' },
+    ];
+    assert.equal(getDateFieldViolation(fields, { a: FUTURE, b: PAST }, null)?.key, 'b');
   });
 });
 

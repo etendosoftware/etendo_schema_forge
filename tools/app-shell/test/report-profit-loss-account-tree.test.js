@@ -484,13 +484,14 @@ describe('profit-loss template.hbs — tree rendering', () => {
 });
 
 describe('profit-loss template.hbs — Reference Amount column visibility', () => {
-  it('compareTo=true: shows the header, a 3-col colgroup and a reference cell per row', () => {
+  it('compareTo=true: shows the header, a 5-col colgroup and reference + variation cells per row', () => {
     const html = renderHtml({ compareTo: true });
     assert.doesNotMatch(html, /Missing helper/);
     assert.match(html, /<th class="cell-amount">Reference Amount<\/th>/);
-    assert.equal([...html.matchAll(/<col style="width:20%">/g)].length, 2);
-    // 2 amount cells per row (main + reference) + 2 amount headers.
-    assert.equal([...html.matchAll(/class="cell-amount"/g)].length, ROWS.length * 2 + 2);
+    assert.match(html, /<col style="width:40%"><col style="width:17%"><col style="width:17%"><col style="width:16%"><col style="width:10%">/);
+    // 4 amount cells per row (main, reference, variation, %) + 4 amount headers.
+    assert.equal([...html.matchAll(/class="cell-amount"/g)].length, ROWS.length * 4 + 4);
+    assert.doesNotMatch(html, /> %</, 'a row without variation data prints no stray %');
     assert.match(html, />8\.000,00</, 'the reference amount must be rendered');
   });
 
@@ -583,7 +584,7 @@ describe('profit-loss template-excel.hbs', () => {
     const header = html.slice(html.indexOf('<thead>'), html.indexOf('</thead>'));
     assert.deepEqual(
       [...header.matchAll(/<th>([^<]*)<\/th>/g)].map((m) => m[1]),
-      ['Grupo', 'Profundidad', 'Tipo', 'Código', 'Nombre', 'Importe', 'Importe de Referencia']
+      ['Grupo', 'Profundidad', 'Tipo', 'Código', 'Nombre', 'Importe', 'Importe de Referencia', 'Variación', 'Variación %']
     );
   });
 });
@@ -640,8 +641,8 @@ describe('profit-loss template-csv.hbs', () => {
 
   it('appends the reference-amount column only when compareTo === "true"', () => {
     const on = renderCsv({ compareTo: true }).trim().split('\n');
-    assert.equal(on[0], 'Group,Depth,Type,Code,Name,Amount,Reference Amount');
-    assert.equal(on[1], `${GROUP},0,Heading,P.G.1,Importe neto de la cifra de negocios,8716.16,8000`);
+    assert.equal(on[0], 'Group,Depth,Type,Code,Name,Amount,Reference Amount,Variation,Variation %');
+    assert.equal(on[1], `${GROUP},0,Heading,P.G.1,Importe neto de la cifra de negocios,8716.16,8000,,`);
 
     const off = renderCsv({ compareTo: false }).trim().split('\n');
     assert.equal(off[0], 'Group,Depth,Type,Code,Name,Amount');
@@ -650,7 +651,7 @@ describe('profit-loss template-csv.hbs', () => {
 
   it('header row uses translated labels [es_ES]', () => {
     const csv = renderCsv({ compareTo: true, locale: 'es_ES' });
-    assert.equal(csv.trim().split('\n')[0], 'Grupo,Profundidad,Tipo,Código,Nombre,Importe,Importe de Referencia');
+    assert.equal(csv.trim().split('\n')[0], 'Grupo,Profundidad,Tipo,Código,Nombre,Importe,Importe de Referencia,Variación,Variación %');
   });
 
   it('quotes a group name containing a comma through csvField', () => {
@@ -659,5 +660,202 @@ describe('profit-loss template-csv.hbs', () => {
     for (const line of csv.trim().split('\n').slice(1)) {
       assert.ok(line.startsWith('"Activo, corriente",'), `group must be quoted: ${line}`);
     }
+  });
+});
+
+// ── ETP-6080: interactive view support (dimension filters, split, expansion) ─
+
+const { applyPlaceholders } = await (await import('../vite-plugins/report-cli.js')).loadReportCli('report-sql');
+const apply = (sql, params) => applyPlaceholders(sql, { clientId: 'C1', params, contract: CONTRACT });
+const NO_YEAR = { acctSchemaId: 'S1', orgId: 'O1', dateFrom: '2026-01-01', dateTo: '2026-12-31', compareTo: 'false' };
+
+describe('profit-loss SQL — the year clause is optional (ETP-6080)', () => {
+  // The interactive view sends dates, never yearId. The clause used to open the
+  // CASE with no leading AND, so it could not be stripped: '__YEARID__' = '' was
+  // false, BETWEEN NULL AND NULL was NULL and every amount fell to ELSE 0.
+  it('leaves no __YEARID__ behind when only dates are sent', () => {
+    const sql = apply(SQL, NO_YEAR);
+    assert.doesNotMatch(sql, /__YEARID__/);
+    assert.match(sql, /SUM\(CASE WHEN TRUE\s+AND \('2026-01-01' = '' OR fa\.dateacct >= '2026-01-01'::date\)/);
+  });
+
+  it('still filters by the year when the old viewer sends yearId', () => {
+    assert.match(apply(SQL, { ...NO_YEAR, yearId: 'Y1' }), /CASE WHEN TRUE AND \('Y1' = '' OR fa\.dateacct BETWEEN/);
+  });
+});
+
+describe('profit-loss SQL — reads only the lines its periods can count (ETP-6080)', () => {
+  // The period used to live only inside the SUM(CASE ...): every line the client ever posted was
+  // read and org-checked on each query. The WHERE now keeps a line only when it can fall in the
+  // current period or, when comparing, in the compared one; the CASEs still decide which.
+  const facts = (sql) => sql.slice(sql.indexOf(' FROM fact_acct fa WHERE'), sql.indexOf(' GROUP BY', sql.indexOf(' FROM fact_acct fa WHERE')));
+
+  it('checks the org tree once over ad_org, never per fact_acct line', () => {
+    for (const sql of [SQL, CONTRACT.sql.splitQuery]) {
+      assert.doesNotMatch(sql, /ad_isorgincluded\(fa\./);
+      assert.ok(sql.includes("fa.ad_org_id IN (SELECT o.ad_org_id FROM ad_org o WHERE o.ad_client_id IN ('__CLIENT_ID__', '0')"));
+    }
+  });
+
+  it('bounds the lines by the period when not comparing', () => {
+    for (const sql of [SQL, CONTRACT.sql.splitQuery]) {
+      const where = facts(apply(sql, NO_YEAR));
+      assert.match(where, /fa\.dateacct >= '2026-01-01'::date OR \('false' = 'true'/);
+      assert.match(where, /fa\.dateacct <= '2026-12-31'::date OR \('false' = 'true'/);
+      assert.doesNotMatch(where, /__[A-Z]+__/);
+    }
+  });
+
+  it('keeps the compared period lines, and opens a side the compared period leaves blank', () => {
+    const cmp = { ...NO_YEAR, compareTo: 'true', fromReferenceDate: '2025-01-01', toReferenceDate: '2025-12-31' };
+    const where = facts(apply(SQL, cmp));
+    assert.match(where, /fa\.dateacct >= '2026-01-01'::date OR \('true' = 'true'\s+AND \('2025-01-01' = '' OR fa\.dateacct >= '2025-01-01'::date\)/);
+    // No reference dates: the blank clauses strip away, leaving an always-true compared period.
+    const open = facts(apply(SQL, { ...NO_YEAR, compareTo: 'true' }));
+    assert.doesNotMatch(open, /__[A-Z]+__/);
+    assert.match(open, /fa\.dateacct >= '2026-01-01'::date OR \('true' = 'true'\s*\)/);
+  });
+
+  it('aggregates the facts once, never once per tree node', () => {
+    // Estimated at ~1 row, the planner could nest the aggregate under the tree join and rerun it
+    // per node (production, year only: 62 ms → 8.7 ms once materialized).
+    assert.ok(SQL.includes(' facts AS MATERIALIZED ( SELECT'));
+  });
+
+  it('adds one index-friendly date range covering both periods when comparing', () => {
+    const cmp = { ...NO_YEAR, compareTo: 'true', fromReferenceDate: '2025-01-01', toReferenceDate: '2025-12-31' };
+    for (const sql of [SQL, CONTRACT.sql.splitQuery]) {
+      const where = facts(apply(sql, cmp));
+      assert.match(where, /fa\.dateacct >= LEAST\('2026-01-01'::date, '2025-01-01'::date\)/);
+      assert.match(where, /fa\.dateacct <= GREATEST\('2026-12-31'::date, '2025-12-31'::date\)/);
+      // Not comparing, or a blank side: the range is off and no placeholder is left.
+      assert.doesNotMatch(facts(apply(sql, NO_YEAR)), /LEAST|GREATEST/);
+      assert.match(facts(apply(sql, { ...cmp, compareTo: 'false' })), /'false' <> 'true' OR/);
+      assert.doesNotMatch(facts(apply(sql, { ...NO_YEAR, compareTo: 'true' })), /__[A-Z]+__|LEAST|GREATEST/);
+    }
+  });
+
+  it('drops every bound when nothing limits the period (old viewer, no dates)', () => {
+    const where = facts(apply(SQL, { acctSchemaId: 'S1', orgId: 'O1', compareTo: 'false' }));
+    assert.doesNotMatch(where, /dateacct/);
+  });
+});
+
+describe('profit-loss — business partner / product filters (ETP-6080)', () => {
+  for (const [name, column] of [['bPartnerId', 'c_bpartner_id'], ['productId', 'm_product_id']]) {
+    it(`${name} is an optional multi-select search in "dimensiones", filtering fa.${column}`, () => {
+      const p = findParam(name);
+      assert.ok(p, `${name} not declared`);
+      assert.equal(p.type, 'search');
+      assert.equal(p.multi, true);
+      assert.equal(p.section, 'dimensiones');
+      assert.ok(!p.required && !p.hidden);
+      const placeholder = `__${name.toUpperCase()}__`;
+      for (const sql of [SQL, CONTRACT.sql.splitQuery]) {
+        assert.ok(sql.includes(`AND ('${placeholder}' = '' OR fa.${column} = '${placeholder}')`));
+      }
+      assert.match(apply(SQL, { ...NO_YEAR, [name]: 'A,B' }), new RegExp(`fa\\.${column} IN \\('A','B'\\)`));
+      assert.doesNotMatch(apply(SQL, NO_YEAR), new RegExp(placeholder));
+    });
+  }
+
+  it('declares the "dimensiones" section with bilingual labels', () => {
+    const section = CONTRACT.sections.find((s) => s.id === 'dimensiones');
+    assert.deepEqual(section?.label, { en_US: 'Dimensions', es_ES: 'Dimensiones' });
+  });
+});
+
+describe('profit-loss — interactive-only params are hidden (ETP-6080)', () => {
+  // Hidden: never in the filter panel, never printed as an active filter.
+  for (const name of ['expandedNodeIds', 'splitBy', 'splitNodeId', 'splitSign']) {
+    it(`${name} is declared hidden`, () => {
+      assert.equal(findParam(name)?.hidden, true);
+    });
+  }
+
+  it('opts in to the result trend rule (revenue up / expense down improve)', () => {
+    assert.equal(CONTRACT.trend, 'result');
+  });
+});
+
+describe('profit-loss splitQuery — one account split by org / contact / product (ETP-6080)', () => {
+  const SPLIT = CONTRACT.sql.splitQuery;
+  const facts = (sql) => sql.slice(sql.indexOf('FROM fact_acct fa WHERE'), sql.indexOf(' GROUP BY'));
+  const ownSums = (sql) => sql.slice(sql.indexOf('SUM(CASE WHEN TRUE AND'), sql.indexOf(' FROM fact_acct fa WHERE'));
+
+  it('reads fact_acct with exactly the main query\'s predicates (org, schema, R/C, dimensions)', () => {
+    assert.ok(facts(SPLIT).startsWith(facts(SQL)), facts(SPLIT));
+  });
+
+  it('sums the same periods as the main query (year/dates and the comparison)', () => {
+    assert.equal(ownSums(SPLIT), ownSums(SQL));
+  });
+
+  it('covers the node and its whole subtree, and groups by the chosen dimension', () => {
+    assert.match(SPLIT, /SELECT '__SPLITNODEID__'::varchar AS node_id/);
+    assert.match(SPLIT, /JOIN sub s ON tn\.parent_id = s\.node_id/);
+    assert.match(SPLIT, /fa\.account_id IN \(SELECT node_id FROM sub\)/);
+    assert.match(SPLIT, /CASE '__SPLITBY__' WHEN 'org' THEN fa\.ad_org_id WHEN 'bpartner' THEN fa\.c_bpartner_id ELSE fa\.m_product_id END AS dimension_id/);
+  });
+
+  it('returns the columns the split handler reads', () => {
+    for (const col of ['AS dimension_id', 'AS dimension_name', 'f.own_amt', 'f.own_amt_ref']) assert.ok(SPLIT.includes(col), col);
+  });
+});
+
+// ── ETP-6080: variation columns in every export, only with a comparison ─────
+
+const VAR_ROWS = [
+  { ...ROWS[1], variationAmount: 716.16, variationPct: 8.95, trend: 'improves' },
+  { ...ROWS[2], variationAmount: -22.48, variationPct: null, trend: 'worsens' }, // reference 0: no %
+  { ...ROWS[3], variationAmount: 0, variationPct: 0, trend: null }, // unchanged: 0 % is still printed
+];
+
+describe('profit-loss exports — variation (ETP-6080)', () => {
+  it('labels the variation columns in both locales', () => {
+    assert.equal(LABELS.en_US.variationAmount, 'Variation');
+    assert.equal(LABELS.es_ES.variationPct, 'Variación %');
+  });
+
+  it('PDF/HTML: adds Variation and Variation % after the reference amount, % empty when the reference is 0', () => {
+    const html = renderHtml({ compareTo: true, rows: VAR_ROWS });
+    const header = html.slice(html.indexOf('<thead>'), html.indexOf('</thead>'));
+    assert.ok(header.indexOf('Reference Amount') < header.indexOf('>Variation<'));
+    assert.ok(header.includes('Variation %'));
+    const body = html.slice(html.indexOf('<tbody>'));
+    assert.match(body, /716,16<\/td>\s*<td class="cell-amount">8,95 %<\/td>/);
+    assert.match(body, /-22,48<\/td>\s*<td class="cell-amount"><\/td>/);
+    assert.match(body, />0,00 %</);
+  });
+
+  it('PDF/HTML: no variation columns without a comparison', () => {
+    assert.doesNotMatch(renderHtml({ compareTo: false, rows: VAR_ROWS }), /Variation/);
+  });
+
+  it('Excel: raw numeric variation cells after the reference amount', () => {
+    const html = renderExcel({ compareTo: true, rows: VAR_ROWS });
+    assert.match(html, /<th>Variation<\/th><th>Variation %<\/th>/);
+    assert.match(html, /<td data-cell-type="number">716.16<\/td><td data-cell-type="number">8.95<\/td>/);
+    assert.doesNotMatch(renderExcel({ compareTo: false, rows: VAR_ROWS }), /Variation/);
+  });
+
+  it('CSV: raw variation values, empty % when the reference is 0', () => {
+    const [header, first, second] = renderCsv({ compareTo: true, rows: VAR_ROWS }).trim().split('\n');
+    assert.ok(header.endsWith(',"Variation","Variation %"') || header.endsWith(',Variation,Variation %'), header);
+    assert.ok(first.endsWith(',8000,716.16,8.95'), first);
+    assert.ok(second.endsWith(',0,-22.48,'), second);
+    assert.doesNotMatch(renderCsv({ compareTo: false, rows: VAR_ROWS }), /Variation/);
+  });
+
+  it('a contract without variation labels (Balance Sheet shares the Excel/CSV files) gets no variation columns', () => {
+    const { variationAmount, variationPct, ...noVariation } = LABELS.en_US;
+    void variationAmount; void variationPct;
+    const hb = Handlebars.create();
+    registerReportHelpers(hb, HELPERS_CODE);
+    const excel = hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-excel.hbs'), 'utf8'))({
+      meta: { ...META_BASE, labels: noVariation, params: { compareTo: 'true' } }, rows: VAR_ROWS,
+    });
+    assert.doesNotMatch(excel, /<td data-cell-type="number">716\.16</);
+    assert.match(excel, /<th>Reference Amount<\/th>\s*<\/tr>/);
   });
 });

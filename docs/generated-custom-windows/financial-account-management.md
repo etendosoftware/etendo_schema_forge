@@ -195,7 +195,7 @@ Field editability in the top section:
   so past balances and journal entries stay consistent. `useAccountFields` exposes this as
   `fields.currencyEditable`.
 - **Connection block** (General tab, non-cash only): connected → live bank connection panel (provider, Sync
-  now, Import from/to dates, Statement grouping, re-authorization banner) + a Disconnect footer
+  now, Import from/to dates, Statement grouping — both import-from and grouping required with flag `psd2-statement-import-settings` ON, ETP-6151; with it OFF the pre-ETP-6151 panel —, re-authorization banner) + a Disconnect footer
   button; not connected → a single "Connect bank" button.
 - **Import date range** (ETP-5104). `Importar desde` / `Importar hasta` are validated as a pair by
   `isImportRangeInvalid`, which compares the ISO `yyyy-mm-dd` strings `DateInput` emits — in that
@@ -207,11 +207,14 @@ Field editability in the top section:
   `handleImportSettings` (400, `The import from date cannot be later than the import to date`) for
   callers that skip the form; it validates the *resulting* pair before touching the entity, since a
   body may carry only one bound and a managed instance would be flushed at commit even after a
-  rejection. That 400 is deliberately NOT mapped in `lib/backendErrors.js`: the modal is the only
-  caller of `import-settings` and it refuses the range before the request fires, so the message
-  cannot reach a toast — and every addition to that map lands inside a pre-existing CPD block
-  (~150 homogeneous `'string': 'key'` lines, 20.8% duplication), which fails the Sonar new-code
-  gate. Map it only once a surface exists that can actually surface it.
+  rejection. ETP-5104 left that 400 deliberately unmapped in `lib/backendErrors.js`: the edit modal was
+  the only caller of `import-settings` and refused the range before the request fired, so the
+  message could not reach a toast (and every addition to that map lands inside a pre-existing CPD
+  block that fails the Sonar new-code gate). **ETP-6151 created that surface** (with flag `psd2-statement-import-settings` ON) — `link` /
+  `createAndLink` toast the bridge's 400s (`link` no longer raises this one: it clears a stale "Importar
+  hasta" instead) — so the message is now mapped
+  to `financeAccountsBankConnectionImportRangeInvalid`, together with the four required/invalid
+  import-settings messages below.
 
   Why it is worth guarding twice: nothing downstream catches an inverted range usefully. The PSD2
   module validates it only at synchronization time
@@ -219,6 +222,94 @@ Field editability in the top section:
   `processProviderTransactions` and re-wrapped into
   `PSD2_ErrorRetrievingRransactionsForTheAccount` — so the user got an untranslated toast carrying
   the Salt Edge connection id and raw Java timestamps, far away from the field that caused it.
+- **Required import settings and the shared field block (ETP-6151, behind the flag
+  `psd2-statement-import-settings`).** **Everything in this bullet applies only when the per-account
+  flag is ON** (default OFF; see *Feature flag* below). **With the flag OFF the behaviour is that of
+  `develop`**: the connect modal asks only for the account (no date, no grouping; the link payload
+  carries neither key and `link` / `createAndLink` return the bridge's plain `data`, no advisory), the
+  Edit-account bank panel is the old one (`LegacyBankImportSettings.jsx`: Importar desde / Importar hasta
+  / grouping with the empty "Por defecto" option, key `financeAccountsBankConnectionGroupingNone`, no
+  help text, no required rule, `requiredMissing` always false), the ETP-5181 fetch-interval notice
+  is derived in `EditAccountModal` from `status.maxFetchInterval` as before, and the backend ignores the
+  import keys on `link` / `createAndLink`, validates nothing on `import-settings` and the
+  `PUT`/`PATCH`, and does not return `maxFetchInterval` from `accounts`. With the flag ON, connecting a bank account asks for the two
+  settings that decide what the first sync imports, so no synchronization — not even
+  the scheduled one — can run on a new connection without a lower bound:
+  - **"Importar desde"** — required, defaults to the first day of the current month
+    (`defaultImportFromDate()`, built from local calendar getters, never a parsed string).
+  - **Statement grouping** — required, one of `1BD` / `1BW` / `1BM` / `1BE`
+    (`GROUPING_OPTIONS`). With the flag ON there is no empty "Default" option (the
+    key `financeAccountsBankConnectionGroupingNone` stays in the locales for the OFF panel); in the connect modal it starts
+    on `1BD` ("Diaria", Classic's default, constant `DEFAULT_STATEMENT_GROUPING` in `bankImportSettingsShared.js`)
+    and stays selectable among the four options. Each field has a help line (`…ImportFromHelp`, `…GroupingHelp`, and
+    one per option `…GroupingHelp_1BD|1BW|1BM|1BE`) that says what it does: the grouping is decided
+    by the day the sync RUNS, not by the transaction dates — `1BD` joins syncs made the same day,
+    `1BW` the same Monday-based week, `1BM` the same month, `1BE` creates a statement per sync.
+    Changing the grouping later does not regroup statements already imported.
+
+  With the flag ON both surfaces render the same component, **`BankImportSettingsFields`**
+  (`windows/custom/financial-account/BankImportSettingsFields.jsx`), which also exports
+  `GROUPING_OPTIONS`, `defaultImportFromDate`, `importSettingsIncomplete` and
+  `importFromBeyondFetchInterval` (moved here from `EditAccountModal`). Props: `importFromDate`,
+  `statementGrouping`, `onChange(patch)`, `maxFetchInterval`, `showRequiredErrors`, `testIdPrefix`,
+  `gridClassName`, and the `children` (the edit panel slots "Importar hasta" between the two) and
+  `footer` (the range error) slots. It returns a fragment so the provider-history advisory stays an
+  immediate sibling of the re-authorization banner in the edit panel. A field shows its required
+  error once the user has emptied it, or for every empty field when `showRequiredErrors` is set.
+  - **Connect flow** (`BankConnectionFlowUI` account-selection modal; the block and the
+    required-field gate on "Vincular cuenta" render only with the flag ON, via `usePsd2ImportSettingsFlag()`): the block sits under the
+    account list, is reset on every new selection (date back to day 1, grouping back to `1BD`), and "Vincular cuenta" is
+    enabled as soon as an account is selected (date and grouping carry defaults; emptying the date disables it again). `confirmSelection(saltEdgeAccountId, { importFromDate,
+    statementGrouping })` forwards them to `link` / `createAndLink`. The modal warns BEFORE confirming
+    when the date reaches further back than the bank serves, using `maxFetchInterval` from `accounts`.
+    A failed link is now toasted through `translateBackendError(err.message, ui)` (it used to show
+    `err.message` raw), so the bridge's 400s above and the client's `BANK_CONNECTION_TIMEOUT` sentinel
+    (45 s) reach the user translated (`financeAccountsBankConnectionTimeout`); anything unmapped is
+    still shown as the bridge wrote it.
+  - **Edit panel** (`EditAccountModal` via `useBankConnectionPanel`; flag OFF renders
+    `LegacyBankImportSettings` instead): `bankConnection.requiredMissing
+    = importSettingsEnabled && settingsDirty && importSettingsIncomplete(form)` is OR-ed into `saveBlocked`. It applies **only
+    when the bank section is dirty**: a connection linked before the settings were mandatory may hold
+    a null date or an empty grouping, and that must not block saving the account's other fields.
+    Touching the section means saving it, and the bridge then requires both.
+
+  Server side — **flag ON only, evaluated per request by `Psd2ImportSettingsFlag` with the ETGO_ACCOUNT
+  email** (`FinancialAccountBankConnectionHandler`, rules in `BankImportSettingsRules`, shared by
+  four entry points so they answer with the same messages):
+  - `link` and `createAndLink` require `importFromDate` (`yyyy-MM-dd`) and `statementGrouping`
+    (one of the four codes); a missing or invalid value answers 400 **before** anything is written or
+    any Salt Edge call is made (`createAndLink` validates before it creates the account, so a bad
+    request leaves no account behind). Both are stored on the account in the same transaction as the
+    link. When the date is after the account's stored import-to date, `link` does not refuse: it clears
+    that stale import-to (sets it to null) in the same transaction and goes on.
+  - `import-settings` keeps "omitted key keeps its stored value", but the configuration it would
+    save must have an import-from date and a valid grouping (validated on the RESULTING values), and a
+    malformed date is now a 400 instead of a 500.
+  - The generic `PUT`/`PATCH` of `financial-account/account` validates `pSD2StatementFrequency` (a value
+    outside the four codes is refused on every account) and, on a connected account, refuses sending
+    it or `pSD2ImportFromDate` null/blank only when the stored value is non-null (it would clear a
+    real value). Echoing a null over a null passes, and accounts that are not connected may clear both.
+  - Wire messages (fixed English text, mapped by exact match in `lib/backendErrors.js`):
+
+    | Bridge message | SPA key |
+    |---|---|
+    | `The import from date is required` | `financeAccountsBankConnectionImportFromRequired` |
+    | `The import from date is not a valid date (expected yyyy-MM-dd)` | `financeAccountsBankConnectionImportFromRequired` |
+    | `The statement grouping is required` | `financeAccountsBankConnectionGroupingRequired` |
+    | `The statement grouping must be one of 1BD, 1BW, 1BM, 1BE` | `financeAccountsBankConnectionGroupingRequired` |
+    | `The import from date cannot be later than the import to date` | `financeAccountsBankConnectionImportRangeInvalid` |
+
+    The modal and the edit panel enforce both fields before sending, so these are a safety net.
+  - **Hook and keys.** The SPA reads the flag through `hooks/usePsd2ImportSettingsFlag.js`
+    (`useFeatureFlag(PSD2_STATEMENT_IMPORT_SETTINGS) === true`, key in `lib/flags/flag-keys.js`, default
+    `false`); toggle points: `BankConnectionFlowUI`, `EditAccountModal`, `ImportedStatementsTab`,
+    `StatementsTable`, `StatementRowKebab`, `useBankConnectionFlow`, `useBankConnectionActions`
+    (`includeMessages` only with the flag ON). The restored OFF keys are
+    `financeAccountsBankConnectionGroupingNone` and `backendError.statementBankConnectedNotDeletable`;
+    the edit-tooltip key `financeAccountStatementsRowBankSyncedEditTooltip` is new (ON only).
+  - An account linked before ETP-6151 with no import-from date keeps syncing without a lower bound;
+    it only has to provide one the next time it saves this configuration.
+
 - **Provider max fetch interval** (ETP-5181). PSD2 providers publish a `max_fetch_interval` — the
   most days of history they will serve (90 under the regulation's baseline, more for some banks) —
   stored on `PSD2_PROVIDER.MAX_FETCH_INTERVAL` and browsable in the AD window **Bank Provider**.
@@ -232,7 +323,12 @@ Field editability in the top section:
   disagree. The key sits **inside** the `connection != null` block (an account with no active
   connection cannot sync at all — `fetchAccountTransactions` throws
   `PSD2_NoActiveConnectionForAccount` before the interval check) and is **omitted**, never
-  defaulted, when the provider declares no limit or stores 0.
+  defaulted, when the provider declares no limit or stores 0. **ETP-6151 (flag ON only; OFF: no `maxFetchInterval`, the logo through the single plain
+  `providers/{code}` call as before):** `GET accounts` exposes the
+  same `maxFetchInterval` (a connection being linked has no account yet, so there is no `status`):
+  from the `PSD2_PROVIDER` row of the connection's provider code, else from the `max_fetch_interval`
+  of the Salt Edge `providers/{code}?include_ais_fields=true` answer that already carries the logo
+  (one call serves both, `fetchProviderDisplay`). Omitted when unknown, like in `status`.
 
   The SPA renders `bank-connection-import-fetch-interval-warning` as a **banner at the foot of the
   panel, stacked immediately above the re-authorization banner**, mirroring that banner's shape
@@ -263,8 +359,9 @@ Field editability in the top section:
   provider's history deepens. The sync-side warning needed no new code: the module already
   downgrades `SUCCESS` to `WARNING` and appends `PSD2_ImportDateBeyondMaxInterval`, which
   `lib/backendErrors.js` already translates — ETP-5181 only changed the toast **type** from
-  `toast.info` to `toast.warning` in `notifySyncResult` and in `ImportedStatementsTab`, since a
-  WARNING is something the user has to act on. QA then rejected the *copy*: "sólo pueden estar
+  `toast.info` to `toast.warning` in `notifySyncResult` and in `ImportedStatementsTab` (both
+  replaced since ETP-6154 by the single notifier `bankSyncNotify.js`, which keeps
+  `toast.warning`, see *Bank sync* below), since a WARNING is something the user has to act on. QA then rejected the *copy*: "sólo pueden estar
   disponibles los movimientos de ese período" left it ambiguous whether the sync would still run, so
   `backendError.psd2ImportDateBeyondMaxInterval` now states the outcome — "**sólo se sincronizarán**
   los movimientos de ese período" (en_US: "only transactions from that period **will be
@@ -282,6 +379,11 @@ Field editability in the top section:
   never the stored `Date`, so the server time zone cannot shift it). It is computed by
   `FinancialAccountBankConnectionSupport.findImportFromBeyondFetchInterval` from the same N as
   `GET status` → `maxFetchInterval`; no UI change, the SPA keeps its live as-you-type banner.
+  **ETP-6151 (flag ON only):** `link` and `createAndLink` return the same advisory (all three write actions share
+  `addFetchIntervalAdvisory`). `useBankConnectionActions` opts those two calls into `includeMessages`,
+  so their result carries the top-level `messages: [{ type, text }]`, and `useBankConnectionFlow`
+  toasts each `warning` after the link (`linkAdvisories`) — covering a bank never linked on this
+  instance, for which `accounts` could not publish the limit before the modal confirmed.
   `import-settings` evaluates the resulting from-date (also when only `importToDate` is sent), while
   the PUT branch is gated on the field being sent and skipped on a failed write.
   Placement: MCP puts `messages` inside core's `response` wrapper (flattened to the top level for the
@@ -331,14 +433,16 @@ Field editability in the top section:
   save step reaches `useBankConnection` as a **ref** (`beforeSyncRef`), because that hook is
   declared before the hooks holding the rest of the form. If the form cannot be saved (blank name,
   invalid IBAN/tolerance/range) the sync is aborted rather than run against stale values, and a
-  failure is reported once — `runSync` skips its own toast for an error flagged `handled`.
+  failure is reported once: the save step is passed to the shared `startSync` as its `beforeSync`,
+  and an error flagged `handled` is not toasted a second time (ETP-6154, see *Bank sync* below).
 - **Save** persists every changed field across both tabs in one call: account fields via
   `updateAccount(id, payload)`, bank import settings via the bridge `import-settings` action, and
   (ETP-4530, extended ETP-4872) the accounting configuration via `saveAccountingConfiguration`.
   Enabled purely on `dirty && !saving && !saveBlocked`, where `saveBlocked` is
   `fields.name.trim() === '' || fields.ibanInvalid || recon.amountToleranceInvalid ||
-  bankConnection.rangeInvalid` (ETP-5104 added the last term and split the predicate out so the
-  sync path can reuse it) — **no accounting field can block Save** (ETP-4872 dropped the
+  bankConnection.rangeInvalid || bankConnection.requiredMissing` (ETP-5104 added `rangeInvalid` and
+  split the predicate out so the sync path can reuse it; ETP-6151 added `requiredMissing`, which is
+  only true with the flag ON, when the bank section is dirty and "Importar desde" or the grouping is empty) — **no accounting field can block Save** (ETP-4872 dropped the
   old `fINAssetAcct`-required check). The former `accounting.assetAcctMissing` state, the
   field-level error inside `AccountingConfigurationSection`, and the cross-tab summary line
   (`edit-account-accounting-error-summary`, QA BUG-1) were all removed with it — see "Accounting
@@ -753,7 +857,9 @@ native app-shell UI; only the bank login is an external popup.
 - **Sync statements:** bank-synced accounts run the PSD2 module per-account statement fetch (the
   Classic "Get Bank Statement" equivalent) from the row-hover sync icon, the kebab "Sincronizar
   ahora", the Edit modal "Sincronizar ahora", and — on the Imported Statements tab — a dedicated
-  "Sincronizar extractos" button that replaces the manual import/create split-button.
+  "Sincronizar extractos" button that replaces the manual import/create split-button. Since
+  ETP-6154 the four entry points share one state, so only one sync of an account runs at a time;
+  see [Bank sync: one at a time, shared by the four entry points](#bank-sync-one-at-a-time-shared-by-the-four-entry-points-etp-6154).
 - **Sync result messages are translated in the frontend, not by Core (ETP-4891, ETP-5109).** The
   bridge returns HTTP 200 with `{status, message}`, where `message` is the raw `AD_MESSAGE` text
   built by `SaltEdgeAccountLinkHelper.fetchAccountTransactions`. `com.etendoerp.psd2.bank.integration`
@@ -769,7 +875,10 @@ native app-shell UI; only the bank login is an external popup.
   knowing before touching either side: those English strings are a **de facto wire contract** —
   rewording one on the Java side silently un-translates the toast — and because the helper can
   append several messages into one newline-joined buffer, `translateBackendError` resolves the
-  string **line by line**.
+  string **line by line**. Since ETP-6154 the outcomes that did not come from a finished fetch
+  (another sync running, the lock unavailable, a failed duplicate check) arrive with the bridge's own
+  translated wording and a stable `code`, and every entry point toasts through one notifier,
+  `bankSyncNotify.js` (see *Bank sync* below).
 - **An empty account list explains itself with a CODE, not a sentence (ETP-5179).** Connecting a USD
   Financial Account to a bank that only exposes EUR accounts used to raise the very same generic
   toast ("No se encontraron cuentas bancarias compatibles para esta conexión") as a wrong account
@@ -816,7 +925,8 @@ native app-shell UI; only the bank login is an external popup.
   **Frontend side.** `useBankConnectionActions.fetchAccounts` passes both fields through
   *without* defaulting them to `''` — the bridge omits them when there is nothing to explain, so
   `undefined` is semantic and an empty string would read as "a reason is present but unknown".
-  `useBankConnectionFlow` maps them in `NO_ACCOUNTS_REASON_KEYS` /
+  `fetchAccounts` also passes `maxFetchInterval` through (ETP-6151; `undefined` unless it is a finite
+  number, so the advisory stays silent when the bridge omits it; `useBankConnectionFlow` forwards it to the modal only with the flag ON). `useBankConnectionFlow` maps them in `NO_ACCOUNTS_REASON_KEYS` /
   `noAccountsMessage(emptyReason, accountCurrency, ui)` to
   `financeAccountsBankConnectionNoAccountsCurrency` / `…Type` / `…AllLinked`, added to `en_US.json`,
   `es_ES.json` and `es_AR.json`. Two deliberate fall-backs to the generic
@@ -827,9 +937,178 @@ native app-shell UI; only the bank login is an external popup.
   fall-through covers an unknown or absent reason, so the SPA keeps working against a backend that
   predates ETP-5179.
 - **Row actions:** account rows show on hover a pencil (Edit account) and, for connected accounts,
-  a sync icon, both with tooltips.
+  a sync button with the `BankSyncIcon` (ETP-6154, see *Bank sync* below), both with tooltips.
 - **Sidebar:** the "Pendientes por conciliar" card shows only "Cuentas con pendientes" (the former
   "Sugerencias listas" / "Por regla" indicators were removed).
+
+### Bank sync: one at a time, shared by the four entry points (ETP-6154)
+
+**The problem.** A manual sync runs synchronously inside the HTTP request. The SPA gave up after 45 s
+while the server kept going, so a retry started a second sync of the same account that overlapped
+the first, and both imported the same movements. Each of the four entry points also fired its own
+request with no idea the others existed, and the row button and the kebab item had no busy state
+at all. A double click was enough to start two syncs.
+
+**Backend, in one paragraph.** The PSD2 module now runs every sync of an account under a
+per-account, non-waiting advisory lock (`AccountSyncLock`) and commits the imported lines before
+releasing it. This covers this window, the MCP, Classic's *Get Bank Statement* and the scheduled
+processes. A second sync of a locked account does not wait: the bridge answers `IN_PROGRESS` at
+once. A new `syncStatus` action of the bridge tells, per account, whether a sync is running and how
+the last fetch ended. Contract and codes: `com.etendoerp.go/docs/neo-headless.md` §4.12.1.8. Lock,
+duplicate check and timeouts: the PSD2 module's `README.md` → *One synchronization per account*.
+
+**Entry points.** All four read and drive the same per-account state, so they disable and spin
+together, whichever one started the sync:
+
+| Entry point | Component | Test ids | Label | Tooltip |
+|---|---|---|---|---|
+| List row, sync button (on hover) | `components/financial-accounts/AccountRowActions.jsx` | `account-row-refresh-{id}` (button), `account-row-refresh-wrap-{id}` (tooltip trigger), `account-row-refresh-icon-{id}` | `aria-label` = the tooltip text | `financeAccountsBankSyncTooltip`, or `financeAccountsBankSyncInProgress` while syncing |
+| Row kebab, "Sincronizar ahora" | `SyncNowMenuItem` in `components/financial-accounts/AccountRowMenu.jsx` | `account-row-menu-sync-{id}`, `account-row-menu-sync-icon-{id}` | `financeAccountsMenuSyncNow`, or `financeAccountsBankSyncInProgress` while syncing | a native `title` with the same two texts (a Radix tooltip inside a menu item would fight the menu for focus and hover) |
+| Imported statements toolbar, "Sincronizar extractos" | `SyncStatementsButton` in `windows/custom/financial-account/StatementsToolbar.jsx`, driven by `ImportedStatementsTab.jsx` | `statements-bank-sync-button`, `statements-bank-sync-wrap`, `statements-bank-sync-icon` | `financeAccountStatementsBankConnectionSync` | `financeAccountsBankSyncTooltip` / `financeAccountsBankSyncInProgress` |
+| Edit account modal, "Sincronizar ahora" | `BankSyncButton` in `windows/custom/financial-account/EditAccountModal.jsx` | `bank-connection-edit-sync`, `bank-connection-edit-sync-wrap`, `bank-connection-edit-sync-icon` | `financeAccountsMenuSyncNow` | `financeAccountsBankSyncTooltip` / `financeAccountsBankSyncInProgress` |
+
+While a sync of the account runs, each entry point is `disabled` with `aria-busy="true"` and its
+icon badge spinning. The modal button is also disabled, as before, while the modal is `busy` or the
+account is not connected. A disabled button fires no pointer events, so the row, toolbar and modal
+buttons sit inside a `<span>` that is the Radix tooltip trigger: without it, the "in progress"
+tooltip would never show exactly when it matters.
+
+The account's status line says it too. `SyncStatusInline` (list row and detail header) shows
+`financeAccountsBankSyncInProgress` with a pulsing dot (`account-sync-in-progress-{id}`,
+`aria-live="polite"`) instead of the last-sync age, which is about to change. The detail header is
+rendered in the page chrome through `useSetPageMeta`, outside the provider, so
+`FinancialAccountDetail` passes it the state explicitly through the `syncing` prop.
+
+**What is NOT disabled, by decision.** Only the sync actions are locked. Edit, disconnect, delete
+connection, reconnect, import settings, Save in the modal and every other action stay available
+during a sync.
+
+**Shared state: `BankSyncContext.jsx`.** `windows/custom/financial-account/BankSyncContext.jsx`
+owns "is this account syncing?" for the whole window. `FinancialAccountWindow` (`index.jsx`) mounts
+`BankSyncProvider` once at its root, so the list, the detail tabs and the Edit modal share it.
+
+| Export | Used by | What it does |
+|---|---|---|
+| `BankSyncProvider` | `index.jsx` | Mounts one controller for the window |
+| `useBankSync()` | `AccountsHeaderTable`, `FinancialAccountDetail`, `ImportedStatementsTab`, `EditAccountModal` | `{isSyncing(id), startSync(id, options), track(ids), subscribe(id, cb)}`. Its `startSync` drops the caller's `onDone` once the caller unmounts. Outside a provider (a component rendered on its own, as in unit tests) it falls back to a controller private to the caller: same behaviour, not shared |
+| `useBankSyncStatus(id)` | the row button, the kebab item, `SyncStatusInline` | Read-only `{syncing}`, no request, no fallback controller. Outside a provider it is always "not syncing" |
+| `useBankSyncTracking(bankSync, ids)` | `AccountsHeaderTable` (bank-connected rows on screen), `FinancialAccountDetail` (its account, when connected) | Declares the accounts a host shows, for discovery (below) |
+| `useBankSyncDone(bankSync, id, cb)` | `AccountsHeaderTable` (every account: reload the list), `FinancialAccountDetail` (its account: `reloadAccountAndList`) | Host-level reload for a finished sync nobody else reloads for |
+
+Lifecycle of one account:
+
+```
+startSync(id)
+  │  already running for id?  ── yes ──▶ no request; the caller's onDone joins the running sync;
+  │                                      info toast "in progress"; returns {status: IN_PROGRESS}
+  ▼ no (the Map entry is written synchronously, before any await: a double click cannot pass)
+beforeSync?()  ── throws ──▶ drop; toast unless the error is flagged `handled`; no callbacks
+  ▼
+POST ?action=sync
+  ├─ OK / WARNING / ERROR ─────────────▶ finish: callbacks, then ONE result toast
+  ├─ IN_PROGRESS (another tab, user, ──▶ info toast, then poll
+  │   MCP or scheduled run holds it)
+  ├─ BANK_CONNECTION_TIMEOUT (45 s) ───▶ poll silently (the server keeps going)
+  └─ any other error ──────────────────▶ finish: error toast, no callbacks
+
+poll: GET ?action=syncStatus every 3 s, paused while the tab is hidden
+  ├─ inProgress === false ─────────────▶ finish with resultOfFinishedSync(state, startedAt)
+  └─ 10 min elapsed, or 3 consecutive ─▶ give up: finish with no result (the timeout toast if the
+     failed or empty reads                request had timed out, nothing otherwise); reloads still run
+```
+
+- **Re-entry guard.** The controller keeps a `Map` of running syncs in a ref and writes the entry
+  before the first `await`. A second `startSync` for the same account, from the same button or any
+  other entry point, sends nothing.
+- **Polling.** `BANK_SYNC_POLL_INTERVAL_MS` = 3 s, `BANK_SYNC_POLL_GIVE_UP_MS` = 10 min,
+  `BANK_SYNC_POLL_MAX_FAILURES` = 3 consecutive reads that failed or omitted the account. It stops
+  while `document.visibilityState` is `hidden` and resumes on `visibilitychange`.
+- **What a polled sync ended with: `resultOfFinishedSync`.** The bridge's `lastResult` is the Salt
+  Edge fetch health, not the outcome of our import, so it can describe an older fetch. It is
+  trusted only when its `at` is not older than the moment this tab started (or discovered) the sync,
+  with 60 s of tolerance for clock skew. Otherwise a `lastSyncDate` that moved since then means the
+  import ran (`OK`). Neither: the outcome is unknown, no toast is shown, and the reloads show
+  whatever landed. These are instant comparisons, not calendar days, so there is no timezone trap.
+  A polled result never carries a `code`: `BANK_SYNC_DUPLICATE_CHECK_FAILED` only arrives on the
+  direct `sync` answer, so a sync followed after the 45 s timeout cannot report it.
+- **Discovery on mount.** The first time a host tracks an account id, its status is read once
+  (`syncStatus` for the new ids). An account found `inProgress` is marked as syncing and polled, so
+  reloading the page in the middle of a sync still shows it running. A sync discovered this way
+  finishes **silently** (this tab did not ask for it), but its reloads run. A failed discovery read
+  un-marks the ids, so the next tracking change retries them. Discovery is one read per id: a sync
+  started elsewhere after the page loaded is only noticed when someone here starts one (the bridge
+  then answers `IN_PROGRESS` and this tab joins it).
+- **Who reloads what.** When a sync finishes, the `onDone` callbacks of the components that asked
+  for it or joined it, and are still mounted, run. Only when there is none do the host listeners
+  (`useBankSyncDone`) run instead, so each reload runs once:
+
+  | Started from | `onDone` | Reload |
+  |---|---|---|
+  | List row or kebab | none | the list's `useBankSyncDone` → `reload()` |
+  | Imported statements toolbar | `refreshStatements()` + `onSynced()` | statements, lines and the account's `lastSyncDate` |
+  | Edit account modal | `refresh()` + `onSaved()` | the modal's status, then the host's own `onSaved` |
+  | Discovered (reload, another user, MCP, scheduled) | none | the host listeners: list reload, or `reloadAccountAndList` in the detail |
+
+**`syncStatus` on the client.** `useBankConnectionActions().syncStatus(ids)` sends
+`GET ?action=syncStatus&financialAccountIds=a,b`, not the `POST` form: a `POST` on this report spec
+needs write access to the Financial Account window, so read-only roles got 403 and never saw
+"in progress". The ids are deduplicated and split into chunks of `SYNC_STATUS_MAX_IDS` (200, the
+bridge's limit; it answers 400 above that), the chunks run in parallel and their maps are merged.
+The accounts list can grow past 200 through "load more", which is why chunking exists. Each read has
+a 15 s timeout: it runs every few seconds while a sync is pending, so a slow answer is dropped and
+retried on the next tick. The bridge omits the ids this session cannot read. A refused request now
+also carries the `code` of its error body as `err.code`.
+
+**One notifier: `bankSyncNotify.js`.** `windows/custom/financial-account/bankSyncNotify.js` is the
+only place a sync outcome becomes a toast. It replaces three hand-copied handlers that had drifted
+apart (the list toasted a WARNING with `toast.info`, the statements tab showed
+`BANK_CONNECTION_TIMEOUT` raw):
+
+| Outcome | Toast | Text |
+|---|---|---|
+| `IN_PROGRESS` (or a second click joining a running sync) | `toast.info` | always our own `financeAccountsBankSyncInProgress`, never the bridge's |
+| `ERROR` | `toast.error` | the translated message, else `financeAccountsBankConnectionSyncError` |
+| `WARNING` | `toast.warning` (ETP-5181) | the translated message, else `financeAccountsBankConnectionSyncDone` |
+| `OK` or no status | `toast.success` | the translated message, else `financeAccountsBankConnectionSyncDone` |
+| A request that threw (network, HTTP error, client timeout) | `toast.error` | through `notifyBankSyncError` |
+
+`translateBankSyncMessage(message, code, ui)` decides the text. A message that the
+`lib/backendErrors.js` map knows word for word is shown in its own translation. Any other prose
+gives way to the code's label, so the raw text of a coded result is never shown. Codes are
+translated by identity (`CODE_ONLY_KEYS`): `BANK_SYNC_LOCK_UNAVAILABLE` →
+`backendError.bankSyncLockUnavailable`, `BANK_SYNC_DUPLICATE_CHECK_FAILED` →
+`backendError.bankSyncDuplicateCheckFailed`. The client's own timeout sentinel
+`BANK_CONNECTION_TIMEOUT` is now in the message map (`financeAccountsBankConnectionTimeout`), and a
+bare code with no label yields the generic text, so no protocol token ever reaches the user.
+
+**The icon: `BankSyncIcon`.** `components/financial-accounts/BankSyncIcon.jsx` is the icon of the
+four entry points: a `Landmark` (the glyph this window already uses for the bank connection) with a
+small `ArrowDownUp` badge in its bottom-right corner. It replaces `RefreshCw`, which read as "reload
+the screen" and looked the same as the toolbar's refresh button next to it. While syncing
+(`spinning`), only the badge turns, so the bank stays legible. It is `aria-hidden`: the button that
+hosts it carries the accessible name. The badge's backdrop (`badgeClassName`) must match the surface
+behind it so the badge reads as cut out of the bank: the hovered row's `--row-hover-bg` on the
+list, `bg-popover` (focused: `bg-accent`) in the kebab, `bg-primary` on the toolbar's primary
+button, and the default `bg-card` in the modal. Rows and the toolbar size it `h-5 w-5`; the kebab
+and the modal use `h-4 w-4`.
+
+**i18n.** New keys, in `en_US.json`, `es_ES.json` and `es_AR.json`:
+
+| Key | es_ES | en_US |
+|---|---|---|
+| `financeAccountsBankSyncTooltip` | Sincronizar movimientos bancarios (PSD2) | Sync bank transactions (PSD2) |
+| `financeAccountsBankSyncInProgress` | Sincronización en curso, por favor espere… | Sync in progress, please wait… |
+| `backendError.bankSyncLockUnavailable` | No se pudo iniciar la sincronización bancaria en este momento. Inténtalo de nuevo en unos instantes. | The bank sync could not start right now. Try again in a moment. |
+| `backendError.bankSyncDuplicateCheckFailed` | No se pudo comprobar si algunos movimientos bancarios ya estaban importados y no se importaron. Vuelve a sincronizar. | Some bank transactions could not be checked for duplicates and were not imported. Try syncing again. |
+
+Reused: `financeAccountsMenuSyncNow`, `financeAccountStatementsBankConnectionSync`,
+`financeAccountsBankConnectionSyncDone`, `financeAccountsBankConnectionSyncError`,
+`financeAccountsBankConnectionTimeout`. The bridge's own `IN_PROGRESS` message
+(`psd2BankSyncInProgress` in com.etendoerp.go's `neo_hints_es.properties`) carries the same es_ES
+text, but the SPA never shows it: the notifier uses its own key.
+
+All of this is custom window code: no `decisions.json` change and no `make regen`. Every request
+goes through `useApiFetch` (via `useBankConnectionActions`).
 
 ### Disconnecting: two modes (ETP-4764)
 
@@ -881,13 +1160,30 @@ mark the connection active again and refresh the consent expiry. Classic does no
 Edge redirects straight into `AisConnectionCallback`, which does the same work server-side. Without
 the follow-up call the connection stays inactive and a deactivated account can never be revived.
 
-Bridge actions: `connect` (optional `financialAccountId` → provider preselect) · `accounts` ·
-`providers` · `link` · `createAndLink` · `reconnect` · `reconnect-callback` · `disconnect`
-(optional `permanentDeletion`, default `false`) · `sync` · `import-settings` · `status` (returns
-`reconnectable`).
+Bridge actions: `connect` (optional `financialAccountId` → provider preselect) · `accounts` (returns
+`maxFetchInterval` with flag `psd2-statement-import-settings` ON, ETP-6151) · `providers` · `link` and `createAndLink` (both require `importFromDate`
+and `statementGrouping` with the flag ON, ETP-6151; ignored with it OFF) · `reconnect` · `reconnect-callback` · `disconnect`
+(optional `permanentDeletion`, default `false`) · `sync` (`status` `OK|WARNING|ERROR|IN_PROGRESS`,
+ETP-6154) · `syncStatus` (`POST` with `financialAccountIds[]` or `GET` with
+`?financialAccountIds=a,b`, at most 200 ids, ETP-6154) · `import-settings` (needs a resulting from-date and a valid grouping with the flag ON, ETP-6151) · `status` (returns
+`reconnectable`). Contract of `sync` and `syncStatus`: `com.etendoerp.go/docs/neo-headless.md`
+§4.12.1.8.
+
+**Feature flag `psd2-statement-import-settings` (ETP-6151).** The import-settings fields of the
+connect flow, their validation and the `maxFetchInterval` of `accounts`, and the delete of statements
+of a bank-connected account (see `financial-account.md`) are all behind one boolean flag, evaluated per
+account (targeting key = the account email, lowercase `email` attribute) on the backend
+(`Psd2ImportSettingsFlag`) and in the SPA (`usePsd2ImportSettingsFlag`), default OFF; absent in the
+control plane means OFF for everyone, and OFF reproduces the pre-ETP-6151 behaviour. Registry entry
+`psd2-statement-import-settings` in `flags-registry.json` (TTL placeholder 2026-12-31); rollout
+prerequisite and local switches: `docs/feature-flags.md` and `com.etendoerp.go`
+`docs/feature-flags-and-tenant-upgrade.md`.
+
 Frontend: `hooks/useBankConnectionActions.js`, `hooks/useBankConnectionFlow.js`,
 `pages/BankConnectionCallbackPage.jsx`, `windows/custom/financial-account/BankConnectionFlowUI.jsx`,
-`windows/custom/financial-account/BankConnectionDeleteConfirmModal.jsx`.
+`windows/custom/financial-account/BankConnectionDeleteConfirmModal.jsx`; for the sync (ETP-6154)
+`windows/custom/financial-account/BankSyncContext.jsx`, `windows/custom/financial-account/bankSyncNotify.js`
+and `components/financial-accounts/BankSyncIcon.jsx`.
 
 ### Widget language and the waiting overlay (ETP-5102)
 
@@ -1229,6 +1525,47 @@ redirects there) with active accounts in two currencies, e.g. EUR + USD under an
 
   Unchanged by this: `SaltEdgeAccountLinkHelper.populateBankIBANField` still reconciles a linked account's country against the IBAN Salt Edge returns and surfaces a mismatch as a **warning toast** (via `data.warning`) rather than blocking — that path now only matters for already-linked accounts, and no change was made to that helper.
 
+### SEPA remittances on Bank accounts (ETP-6148)
+
+There is no per-account «Admite remesas» switch and no `EM_ETGO_Allow_Remittance` column. The column,
+the `eTGOAllowRemittance` field, the «Remesas SEPA» section of «Editar cuenta» and its refusals were
+removed by a product decision; an earlier iteration of ETP-6148 had them.
+
+- **Automatic.** Creating a **Bank** (`B`) account while the `sepa-remittances` flag is on for the
+  user links the two SEPA remittance payment methods (collection and payment) to it. The client is
+  provisioned the first time. Both the manual create and the bank-connection `createAndLink` do
+  it, server-side (com.etendoerp.go). Cash and Card accounts are untouched.
+- **The only new create refusal** is 409 `ETGO_RemittanceProvisioningConflict` (a concurrent
+  provisioning; retry). It is mapped to `backendError.remittanceProvisioningConflict`.
+- **No backfill.** An account created before the feature, or while the flag was off, has no
+  remittance methods. The remittance header refuses it (see [remittance.md](remittance.md)).
+- **The SEPA creditor identifier is not part of this task** and is not stored on the account. It is
+  computed when the SEPA XML is built, from the organization tax ID (NIF) and the remittance type's
+  `Creditor_Business_Code` parameter, default `000`.
+- The remittance window that uses these accounts is described in [remittance.md](remittance.md).
+
+#### Transaction status: remittance codes (ETP-6148)
+
+The Remittance module adds two codes to the payment status list (the AD reference shared by
+`FIN_Finacc_Transaction.Status` and `FIN_Payment.Status`), so the transaction status enum now has
+11 codes.
+
+- **`enumValues` for all 11 codes.** `decisions.json` → `entities.transaction.fields.status`
+  declares every code, in AD order, with its genericLabels key as `name`: `statusRpap`,
+  `statusRpae`, `statusRpvoid`, `statusRemSent`, `statusPpm`, `statusRpr`, `statusRemCancel`,
+  `statusRdnc`, `statusPwnc`, `statusRppc` and `statusEtgoerr`.
+  - The grid column already used these keys.
+  - The override also makes the read-only form select resolve them (`tMenu`) in every locale. Before it, the select showed the AD names that have no es_ES translation: «Remitted», «Settled in Remittance» and «Payment Error».
+  - An override replaces the whole list, so a new code in the list has to be added here too.
+- **`REM_SENT`** («Remesado» / «Remitted», key `statusRemSent`) and **`REM_CANCEL`** («Liquidado en
+  remesa» / «Settled in remittance», key `statusRemCancel`) are in the global catalog of
+  `lib/statusBadge.js`. The codes are unique, so they belong there.
+  - `statusLabel` maps each code to its key.
+  - `getStatusTone` gives `REM_SENT` the **warning** tone (sent, waiting for the bank) and `REM_CANCEL` the **success** tone (settled).
+  - The same entries cover Payment In / Payment Out, whose hand-written status column (`PaymentHeaderTableBase`) has no entry for these codes.
+- Not covered: the Movements tab badge (`movementStatusConfig.js`) has no entry for either code, so it
+  shows no badge for them.
+
 Server-side IBAN/country validation helpers live in `FinancialAccountCountrySupport` (`com.etendoerp.go`), extracted out of `FinancialAccountHandler` to keep it under Sonar's method-count ceiling — same rationale as `FinancialAccountDeleteSupport`.
 
 **MCP hook parity (ETP-4239, runtime change):** `McpToolRouter` now resolves the entity's `NeoHandler` (annotation first, `Java_Qualifier` as fallback, through `NeoExtensionDispatcher`) and runs `handle()` (pre, may mutate the body) / `afterHandle()` (post) around `etendo_create` / `etendo_update` / `etendo_delete` — previously MCP writes bypassed ALL entity hooks (no validation, no derivation). This applies to every W spec, not just financial-account.
@@ -1298,18 +1635,38 @@ Posting stays on `financial-account/transaction` (`post` / `unpost`). Runtime re
 `com.etendoerp.go/docs/neo-headless.md` §4.12.1.4 (movements), §4.12.1.5 (transfers) and §4.12.9
 (differences with the SPA's route).
 
-## MCP / agent access to the bank connection (ETP-5804)
+## MCP / agent access to the bank connection (ETP-5804, ETP-6154)
 
 The two disconnect options of "Editar cuenta" and the row kebab (see "Disconnecting: two modes
-(ETP-4764)" above) are declared actions of `financial-account/account`, called with
+(ETP-4764)" above) and, since ETP-6154, the sync and its status are declared actions of
+`financial-account/account`, called with
 `etendo_action {spec:"financial-account", entity:"account", id:<financial account id>, action:...}`:
 
 | Action | Mode | Effect |
 |---|---|---|
 | `disconnectBank` | soft, reversible (`permanentDeletion=false`) | Sync stops; normally the account keeps its link and history and can be reconnected from the UI; a connection shared by several accounts is unlinked instead (`permanent:true, reconnectable:false`), so the agent reads `reconnectable`. Repeating it while the account is still soft-disconnected is safe (200); once the account is unlinked there is nothing left to disconnect and it answers 404. Releases the account for manual bank statements, which a connected account rejects with 409 |
 | `deleteBankConnection` | permanent, irreversible (`permanentDeletion=true`) | Deletes the connection at Salt Edge and unlinks the account; the bank connection then no longer blocks deleting it (other delete blockers may still apply). Its description instructs the agent to ask the user first and call it only after they confirm |
+| `syncBank` | write | Imports the account's new bank movements, exactly as the Sincronizar buttons do, synchronously. Answers `{status: OK\|WARNING\|ERROR\|IN_PROGRESS, code?, message, lastSyncDate}`. `IN_PROGRESS` means another sync of the account is running (from the UI, the scheduled import or another agent): none is started, and the agent polls `bankSyncStatus`. `code` is `BANK_SYNC_LOCK_UNAVAILABLE` or `BANK_SYNC_DUPLICATE_CHECK_FAILED`, both retriable |
+| `bankSyncStatus` | read | `{inProgress, lastSyncDate, lastResult: {status: OK\|ERROR\|null, message, at}}` for the account, without starting a sync. `lastResult` is the bank connection's last attempt to reach the bank, not the outcome of the import |
 
-Both answer `{disconnected, permanent, reconnectable}`; an account with no connection answers 404.
+The disconnect actions answer `{disconnected, permanent, reconnectable}`; an account with no
+connection answers 404.
+
+**There is no server-side MCP timeout.** `syncBank` waits for the bank, so the agent's client may
+give up while the sync keeps running on the server. The action descriptions and the entity's
+`AGENT_PROMPT` (`agent-prompts/financial-account/account.md`) tell the agent to poll
+`bankSyncStatus` every few seconds until `inProgress` is `false` after an `IN_PROGRESS` answer or a
+timeout, instead of calling `syncBank` again. `pSD2GetBankstatement` stays hidden
+(`MCP_CONFIG.actions.hidden`); it is protected by the same per-account lock anyway.
+
+**Role gate (ETP-6154).** All four actions now pass the check the SPA's own request passes:
+report-spec access to `financial-account-bank-connection`, as a `POST` for `syncBank`,
+`disconnectBank` and `deleteBankConnection` and as a `GET` for `bankSyncStatus`, else **403**. This
+closes a gap open since ETP-5804: the MCP authorizes `etendo_action` as a read of
+`financial-account`, so a role with read-only access to the Financial Account window could
+disconnect or delete a bank connection through the MCP although the UI never offers it to that
+role.
+
 Connecting and reconnecting stay hidden from the MCP: they need the account holder to authenticate at
 the bank (SCA). Runtime reference: `com.etendoerp.go/docs/neo-headless.md` §4.12.1.8.
 
@@ -1337,7 +1694,7 @@ and reads the catalogue (descriptions, `idDescription`, JSON-Schema parameters) 
 | `updateStatement` | write | bank statement (`FIN_BankStatement`) | `POST ?action=update` — drafts only; replaces the unmatched lines |
 | `processStatement` | write | bank statement | `POST ?action=process` |
 | `reactivateStatement` | write | bank statement | `POST ?action=reactivate` — does not reverse reconciliations |
-| `deleteStatement` | write | bank statement | `POST ?action=delete` — drafts only; 409 on a PSD2-connected account, 400 while matched lines remain |
+| `deleteStatement` | write | bank statement | `POST ?action=delete` — a draft; on a PSD2-connected account 409 with flag `psd2-statement-import-settings` OFF, and with it ON (ETP-6151) also a processed one (reactivated and deleted in one step); 400 when posted or while matched lines remain (a processed one on an unconnected account is 400 too). The action description is static and states both rules |
 
 Parameters, line shape and refusals are documented once, in the runtime reference
 (`com.etendoerp.go/docs/neo-headless.md` §4.12.1.2) and in the catalogue itself; this guide does not
@@ -1494,6 +1851,11 @@ financeAccountsArchiveSuccess        "Account archived"
 financeAccountsArchiveOpenRecon      "Cannot archive an account with open reconciliations"
 financeAccountsMenuEdit              "Edit account"
 financeAccountsMenuArchive           "Archive account"
+financeAccountsRemittanceSection     "SEPA remittances"                (ETP-6148)
+financeAccountsRemittanceAllow       "Allows remittances"              (ETP-6148)
+financeAccountsRemittanceAllowHint   "Turning it on requires a valid IBAN and enables the remittance payment methods on this account." (ETP-6148)
+backendError.remittanceAccountNotBank, backendError.remittanceAccountIbanRequired,
+backendError.sepaRemittancesDisabled                                   (ETP-6148, see the refusals table above)
 ```
 
 ## Not implemented yet (follow-up tasks)

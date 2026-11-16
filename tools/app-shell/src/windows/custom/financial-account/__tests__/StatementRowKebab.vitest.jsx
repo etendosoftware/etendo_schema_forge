@@ -1,7 +1,14 @@
+// @covers tools/app-shell/src/windows/custom/financial-account/StatementRowKebab.jsx
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
+
+// ETP-6151 — flag `psd2-statement-import-settings`; defaults to on (the suites below describe it).
+const importSettingsFlag = vi.hoisted(() => ({ on: true }));
+vi.mock('@/hooks/usePsd2ImportSettingsFlag.js', () => ({
+  usePsd2ImportSettingsFlag: () => importSettingsFlag.on,
+}));
 
 // Radix only mounts TooltipContent while the tooltip is open, and opening it needs a real hover
 // with its delay timers — unreachable here, where the trigger also sits inside a DropdownMenu.
@@ -107,8 +114,23 @@ describe('StatementRowKebab', () => {
       renderKebab(PROCESSED, { bankConnected: true });
       await openMenu(user, 'p1');
 
-      expect(screen.getByText('financeAccountStatementsRowBankSyncedTooltip')).toBeInTheDocument();
+      expect(screen.getByText('financeAccountStatementsRowBankSyncedEditTooltip')).toBeInTheDocument();
+      expect(screen.queryByText('financeAccountStatementsRowBankSyncedTooltip')).toBeNull();
       expect(screen.queryByText('financeAccountStatementsRowReactivateTooltip')).toBeNull();
+    });
+
+    it('flag off: keeps the original "cannot be edited or deleted" wording', async () => {
+      importSettingsFlag.on = false;
+      try {
+        const user = userEvent.setup();
+        renderKebab(PROCESSED, { bankConnected: true });
+        await openMenu(user, 'p1');
+
+        expect(screen.getByText('financeAccountStatementsRowBankSyncedTooltip')).toBeInTheDocument();
+        expect(screen.queryByText('financeAccountStatementsRowBankSyncedEditTooltip')).toBeNull();
+      } finally {
+        importSettingsFlag.on = true;
+      }
     });
 
     // Completing a draft is not editing its content, so Procesar keeps working.
@@ -119,6 +141,20 @@ describe('StatementRowKebab', () => {
 
       await user.click(screen.getByTestId('statement-row-process'));
       expect(props.onProcess).toHaveBeenCalledWith(DRAFT);
+    });
+
+    // ETP-6151 — closing Reactivar does not close Eliminar: the backend deletes a processed bank
+    // statement in one step (refusing only a posted one or one with matched lines).
+    it('keeps Eliminar available on a processed statement and fires onDelete', async () => {
+      const user = userEvent.setup();
+      const onDelete = vi.fn();
+      renderKebab(PROCESSED, { bankConnected: true, onDelete });
+      await openMenu(user, 'p1');
+
+      const remove = screen.getByTestId('statement-row-delete');
+      expect(remove).not.toHaveAttribute('aria-disabled', 'true');
+      await user.click(remove);
+      expect(onDelete).toHaveBeenCalledWith(PROCESSED);
     });
 
     // Guard against over-correcting: an unconnected account keeps the original behaviour.

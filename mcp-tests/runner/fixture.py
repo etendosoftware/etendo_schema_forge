@@ -63,7 +63,7 @@ _CHECK_STATUS = {"dirty": "dirty", "unverified": "unverified", "leftover": "clea
 TOOL_NOT_OFFERED = "tool not offered"
 
 #: A harness marker anywhere in a value: `suite.attempt_marker` writes
-#: `<prefix>-<probeId>-a<n>`, and every prefix (a run id or a compareId) starts
+#: `<prefix>-<probe tag>-a<n>` (`<prefix>-<probeId>-a<n>` before ETP-5848), and every prefix (a run id or a compareId) starts
 #: with the stamp of cli._new_run_id (`%Y%m%dT%H%M`) or cli._new_compare_id
 #: (`%Y%m%dT%H%M%S`; `%Y%m%dT%H%M` before 2026-10-15).
 MARKER_RE = re.compile(r"\b\d{8}T\d{4}(?:\d{2})?-\S+?-a\d+\b")

@@ -1071,6 +1071,13 @@ describe('ListModalWindow — multi-select + bulk delete', () => {
 describe('ListModalWindow — read-only window access (ETP-4950)', () => {
   const READ_ONLY = { readOnly: true };
 
+  it('hides the "create a new record" empty-state hint when window.readOnly is true', () => {
+    neoState.data = [];
+    renderWindow({ window: READ_ONLY });
+    expect(screen.getByTestId('list-modal-empty')).toBeInTheDocument();
+    expect(screen.queryByText('createNewRecord')).not.toBeInTheDocument();
+  });
+
   it('hides every write affordance when window.readOnly is true', () => {
     neoState.data = TWO_ROWS;
     renderWindow({ window: READ_ONLY, config: { allowClone: true } });

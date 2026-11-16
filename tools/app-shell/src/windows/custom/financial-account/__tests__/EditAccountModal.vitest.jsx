@@ -1,5 +1,5 @@
 // @covers tools/app-shell/src/windows/custom/financial-account/EditAccountModal.jsx
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // Polyfill Pointer Capture / scrollIntoView (not implemented by jsdom) for the Radix-based
@@ -15,6 +15,12 @@ beforeAll(() => {
 // implementation to prove the ETP-4891 translateBackendError wiring on the sync-result toast,
 // while every other test keeps the default key-echoing behavior.
 const uiMock = vi.fn((key) => key);
+// ETP-6151 — flag `psd2-statement-import-settings`. Off by default (the pre-existing suites describe the flag-off panel); the ETP-6151 block turns it on.
+const importSettingsFlag = vi.hoisted(() => ({ on: false }));
+vi.mock('@/hooks/usePsd2ImportSettingsFlag.js', () => ({
+  usePsd2ImportSettingsFlag: () => importSettingsFlag.on,
+}));
+
 vi.mock('@/i18n', () => ({
   useUI: () => uiMock,
   useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: vi.fn() }),
@@ -102,6 +108,9 @@ vi.mock('@/hooks/useMovementLookups.js', () => ({
 }));
 
 import { EditAccountModal, initialEditTab, isDeleteMode } from '../EditAccountModal.jsx';
+import {
+  BankSyncProvider, useBankSync, useBankSyncDone, useBankSyncStatus,
+} from '../BankSyncContext.jsx';
 
 // `countryIso: 'ES'` (the STORED country) makes this account eligible for the Salt Edge
 // connection, which is Spain-only since ETP-4896 — see saltEdgeEligibility.js. `countryId` is
@@ -367,6 +376,51 @@ describe('EditAccountModal', () => {
       expect(toastError).toHaveBeenCalledWith('Account is used by a reconciliation.'),
     );
     expect(screen.queryByText('financeAccountsNewNameExists')).not.toBeInTheDocument();
+  });
+
+  // ETP-6148 — a code-less 409 that names a mapped message key is not a duplicate name
+  // (reportSaveError's hasMappedMessageKey guard): ETGO_RemittanceProvisioningConflict is a
+  // «try again», toasted in the SPA's own words.
+  describe('409 with a mapped message key (ETP-6148)', () => {
+    async function renameAndSave(user) {
+      const nameInput = screen.getByTestId('edit-account-name');
+      await user.clear(nameInput);
+      await user.type(nameInput, 'BBVA Renamed');
+      await user.click(screen.getByTestId('edit-account-save'));
+    }
+
+    it('toasts ETGO_RemittanceProvisioningConflict translated, not as «name already exists»', async () => {
+      const user = userEvent.setup();
+      uiMock.mockImplementation((key) => (key === 'backendError.remittanceProvisioningConflict' ? 'T:provisioningConflict' : key));
+      const err = new Error('Texto del backend.');
+      err.status = 409;
+      err.code = null;
+      err.body = { error: { status: 409, message: 'Texto del backend.', messageKeys: ['ETGO_RemittanceProvisioningConflict'] } };
+      updateAccount.mockRejectedValueOnce(err);
+      const onClose = vi.fn();
+      renderModal({ onClose });
+      await renameAndSave(user);
+
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith('T:provisioningConflict'));
+      expect(screen.queryByTestId('edit-account-error')).not.toBeInTheDocument();
+      expect(screen.queryByText('financeAccountsNewNameExists')).not.toBeInTheDocument();
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('a real duplicate (duplicate_key, no mapped key) still shows the name-exists error', async () => {
+      const user = userEvent.setup();
+      const err = new Error('duplicate key value violates unique constraint');
+      err.status = 409;
+      err.code = 'duplicate_key';
+      err.body = { error: { status: 409, code: 'duplicate_key', message: err.message, messageKeys: ['SomeUnmappedKey'] } };
+      updateAccount.mockRejectedValueOnce(err);
+      renderModal();
+      await renameAndSave(user);
+
+      await waitFor(() =>
+        expect(screen.getByTestId('edit-account-error')).toHaveTextContent('financeAccountsNewNameExists'));
+      expect(toastError).not.toHaveBeenCalled();
+    });
   });
 
   it('toasts an error for a non-409 save failure', async () => {
@@ -1882,6 +1936,111 @@ describe('EditAccountModal', () => {
   // Type (like Currency) locks the moment real movement history exists. When
   // locked it renders as plain info text (label + value, no input box), not a
   // disabled control; when editable it renders a 3-option Select.
+  // ETP-6148 — there is no per-account «Admite remesas» switch any more: Bank accounts get the SEPA
+  // remittance payment methods when they are created. The modal shows no remittance setting and
+  // never sends the flag, whatever the capability says and whatever the stored row carries.
+  describe('SEPA remittances: no account setting (ETP-6148)', () => {
+    const REMITTANCE_BANK = {
+      id: 'acc-rem',
+      name: 'Santander',
+      type: 'B',
+      iban: 'ES9121000418450200051332',
+      currencyId: '102',
+      currencyIso: 'EUR',
+      countryIso: 'ES',
+      bankConnected: false,
+      hasTransactions: false,
+      // What a list row / detail record of an account set up before the removal can still carry.
+      eTGOAllowRemittance: true,
+      allowRemittance: true,
+    };
+
+    async function renameAndSave(user) {
+      const nameInput = screen.getByTestId('edit-account-name');
+      await user.clear(nameInput);
+      await user.type(nameInput, 'Santander Renamed');
+      await user.click(screen.getByTestId('edit-account-save'));
+      await waitFor(() => expect(updateAccount).toHaveBeenCalledTimes(1));
+      return updateAccount.mock.calls[0][1];
+    }
+
+    it('shows no remittance section on a Bank account, even with the sepaRemittances capability', () => {
+      hasCapability.mockReturnValue(true);
+      renderModal({ account: REMITTANCE_BANK });
+      expect(screen.getByTestId('edit-account-name')).toBeInTheDocument();
+      expect(screen.queryByTestId('remittance-settings-section')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('edit-account-allow-remittance')).not.toBeInTheDocument();
+      expect(screen.queryByText('financeAccountsRemittanceAllow')).not.toBeInTheDocument();
+      // Not dirty on open: the stored flag no longer takes part in the dirty check.
+      expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+    });
+
+    it('an edit never sends allowRemittance or eTGOAllowRemittance', async () => {
+      const user = userEvent.setup();
+      renderModal({ account: REMITTANCE_BANK });
+      const payload = await renameAndSave(user);
+      expect(payload).toMatchObject({ name: 'Santander Renamed' });
+      expect(payload).not.toHaveProperty('allowRemittance');
+      expect(payload).not.toHaveProperty('eTGOAllowRemittance');
+    });
+
+    it('a type change never sends the flag either', async () => {
+      const user = userEvent.setup();
+      renderModal({ account: REMITTANCE_BANK });
+      await pickType(user, 'Cash');
+      await user.click(screen.getByTestId('edit-account-save'));
+      await waitFor(() => expect(updateAccount).toHaveBeenCalledTimes(1));
+      const payload = updateAccount.mock.calls[0][1];
+      expect(payload).toMatchObject({ type: 'C' });
+      expect(payload).not.toHaveProperty('allowRemittance');
+      expect(payload).not.toHaveProperty('eTGOAllowRemittance');
+    });
+
+    describe('a type change refused with ETGO_RemittanceAccountTypeChangeBlocked', () => {
+      const UI_KEY = 'backendError.remittanceAccountTypeChangeBlocked';
+      const PROSE = 'No se puede cambiar el tipo de una cuenta bancaria que tiene 2 remesas abiertas.';
+      const blocked = (messageParams) => Object.assign(new Error(PROSE), {
+        status: 422,
+        body: { error: { status: 422, message: PROSE, messageKeys: ['ETGO_RemittanceAccountTypeChangeBlocked'], ...(messageParams ? { messageParams } : {}) } },
+      });
+
+      async function changeTypeAndSave(user, err) {
+        updateAccount.mockRejectedValueOnce(err);
+        renderModal({ account: REMITTANCE_BANK });
+        await pickType(user, 'Cash');
+        await user.click(screen.getByTestId('edit-account-save'));
+      }
+
+      it('shows the translated sentence with the open-remittance count', async () => {
+        const user = userEvent.setup();
+        uiMock.mockImplementation((key, params) => (key === UI_KEY ? `T:typeChangeBlocked ${params?.count}` : key));
+        await changeTypeAndSave(user, blocked({ count: 2 }));
+        await waitFor(() => expect(toastError).toHaveBeenCalledWith('T:typeChangeBlocked 2'));
+        expect(toastSuccess).not.toHaveBeenCalled();
+      });
+
+      it('without messageParams, shows the backend text (count included), never a number-less sentence', async () => {
+        const user = userEvent.setup();
+        uiMock.mockImplementation((key) => (key === UI_KEY ? 'T:typeChangeBlocked {count}' : key));
+        await changeTypeAndSave(user, blocked());
+        await waitFor(() => expect(toastError).toHaveBeenCalledWith(PROSE));
+        expect(toastError.mock.calls[0][0]).toContain('2');
+      });
+
+      it('keeps the modal open with the pending Type', async () => {
+        const user = userEvent.setup();
+        const onClose = vi.fn();
+        updateAccount.mockRejectedValueOnce(blocked({ count: 2 }));
+        renderModal({ account: REMITTANCE_BANK, onClose });
+        await pickType(user, 'Cash');
+        await user.click(screen.getByTestId('edit-account-save'));
+        await waitFor(() => expect(toastError).toHaveBeenCalled());
+        expect(onClose).not.toHaveBeenCalled();
+        expect(screen.getByTestId('edit-account-modal')).toBeInTheDocument();
+      });
+    });
+  });
+
   describe('type field editability (ETP-4581)', () => {
     const TX_BANK_ACCOUNT = {
       id: 'acc-tx',
@@ -3142,4 +3301,324 @@ describe('EditAccountModal', () => {
     });
   });
 
+
+  // ETP-6151 — "Importar desde" and the statement grouping are required on a connection, but only
+  // once the bank section is touched: a connection linked before they were mandatory may still
+  // hold a null date, and that must not block saving the account's other fields. Touching the
+  // section means saving it, and the bridge then requires both.
+  describe('ETP-6151 — required import settings', () => {
+    const FROM_BOX = 'field-date-bank-connection-import-from';
+    const TO_BOX = 'field-date-bank-connection-import-to';
+    const LEGACY_STATUS = {
+      ...BASE_STATUS, importFromDate: null, importToDate: null, statementGrouping: null,
+    };
+
+    beforeAll(() => {
+      Element.prototype.scrollIntoView = vi.fn();
+    });
+
+    beforeEach(() => { importSettingsFlag.on = true; });
+    afterEach(() => { importSettingsFlag.on = false; });
+
+    it('saves the other account fields of a connection with no stored date or grouping', async () => {
+      const user = userEvent.setup();
+      fetchStatus.mockResolvedValue(LEGACY_STATUS);
+      await openConnectedModal();
+
+      // Nothing is flagged on an untouched section.
+      expect(screen.queryByTestId('bank-connection-import-from-required')).toBeNull();
+      expect(screen.queryByTestId('bank-connection-grouping-required')).toBeNull();
+
+      const nameInput = screen.getByTestId('edit-account-name');
+      await user.clear(nameInput);
+      await user.type(nameInput, 'BBVA Renamed');
+      const save = screen.getByTestId('edit-account-save');
+      expect(save).toBeEnabled();
+      await user.click(save);
+
+      await waitFor(() => expect(updateAccount).toHaveBeenCalledTimes(1));
+      expect(updateAccount.mock.calls[0][1]).toMatchObject({ name: 'BBVA Renamed' });
+      // The untouched bank section is not written.
+      expect(saveImportSettings).not.toHaveBeenCalled();
+    });
+
+    it('blocks Save, flagging both fields, once the section of such a connection is touched', async () => {
+      const user = userEvent.setup();
+      fetchStatus.mockResolvedValue(LEGACY_STATUS);
+      await openConnectedModal();
+
+      await typeImportDate(user, TO_BOX, '31122026');
+
+      expect(await screen.findByTestId('bank-connection-import-from-required'))
+        .toHaveTextContent('financeAccountsBankConnectionImportFromRequired');
+      expect(screen.getByTestId('bank-connection-grouping-required'))
+        .toHaveTextContent('financeAccountsBankConnectionGroupingRequired');
+      const save = screen.getByTestId('edit-account-save');
+      expect(save).toBeDisabled();
+      await user.click(save);
+      expect(saveImportSettings).not.toHaveBeenCalled();
+      expect(updateAccount).not.toHaveBeenCalled();
+    });
+
+    it('unblocks Save once both are filled, and saves them', async () => {
+      const user = userEvent.setup();
+      fetchStatus.mockResolvedValue(LEGACY_STATUS);
+      await openConnectedModal();
+
+      await typeImportDate(user, FROM_BOX, '01112026');
+      expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+      expect(screen.queryByTestId('bank-connection-import-from-required')).toBeNull();
+      expect(screen.getByTestId('bank-connection-grouping-required')).toBeInTheDocument();
+
+      await user.click(screen.getByTestId('field-statementGrouping'));
+      await user.click(await screen.findByTestId('option-statementGrouping-1BM'));
+
+      const save = screen.getByTestId('edit-account-save');
+      expect(save).toBeEnabled();
+      expect(screen.queryByTestId('bank-connection-grouping-required')).toBeNull();
+      await user.click(save);
+
+      await waitFor(() => expect(saveImportSettings).toHaveBeenCalledWith(expect.objectContaining({
+        financialAccountId: 'acc-9',
+        importFromDate: '2026-11-01',
+        statementGrouping: '1BM',
+      })));
+    });
+
+    it('blocks Save when the user empties the stored date of a complete connection', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      const fromInput = screen.getByTestId(FROM_BOX);
+      await user.clear(fromInput);
+      await user.tab();
+
+      expect(await screen.findByTestId('bank-connection-import-from-required')).toBeInTheDocument();
+      expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+      // The grouping is still set, so only the date is flagged.
+      expect(screen.queryByTestId('bank-connection-grouping-required')).toBeNull();
+    });
+
+    it('does not block Save for a dirty section whose two fields are set', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      await typeImportDate(user, FROM_BOX, '15012026');
+
+      expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+      expect(screen.queryByTestId('bank-connection-import-from-required')).toBeNull();
+      expect(screen.queryByTestId('bank-connection-grouping-required')).toBeNull();
+    });
+
+    it('offers the four groupings with no empty "Default" option, opening on the stored one', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      await user.click(screen.getByTestId('field-statementGrouping-chip'));
+
+      expect(await screen.findByTestId('option-statementGrouping-1BD')).toHaveAttribute('aria-selected', 'true');
+      for (const id of ['1BW', '1BM', '1BE']) {
+        expect(screen.getByTestId(`option-statementGrouping-${id}`)).toHaveAttribute('aria-selected', 'false');
+      }
+      expect(screen.queryByTestId('option-statementGrouping-__empty__')).toBeNull();
+    });
+  });
+
+  // ETP-6151 flag off (the default here): the panel is the pre-ETP-6151 one — no required rule, no
+  // help text, and the grouping still offers the empty "Por defecto" option.
+  describe('ETP-6151 — flag psd2-statement-import-settings off', () => {
+    beforeAll(() => {
+      Element.prototype.scrollIntoView = vi.fn();
+    });
+
+    it('does not require the date or the grouping, nor flag them, once the section is touched', async () => {
+      const user = userEvent.setup();
+      fetchStatus.mockResolvedValue({
+        ...BASE_STATUS, importFromDate: null, importToDate: null, statementGrouping: null,
+      });
+      await openConnectedModal();
+
+      await typeImportDate(user, 'field-date-bank-connection-import-to', '31122026');
+
+      expect(screen.queryByTestId('bank-connection-import-from-required')).toBeNull();
+      expect(screen.queryByTestId('bank-connection-grouping-required')).toBeNull();
+      expect(screen.queryByTestId('bank-connection-import-from-help')).toBeNull();
+      expect(screen.queryByTestId('bank-connection-grouping-help')).toBeNull();
+      expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+    });
+
+    it('still offers the empty "Por defecto" grouping option', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      await user.click(screen.getByTestId('field-statementGrouping-chip'));
+
+      expect(await screen.findByTestId('option-statementGrouping-__empty__')).toBeInTheDocument();
+    });
+  });
+});
+
+// ETP-6154 — "Sincronizar ahora" goes through the window's shared BankSyncContext: it is disabled
+// and spinning while a sync of the account runs from ANY entry point, the ETP-5104 save-before-sync
+// runs inside that sync (as its beforeSync) so the account already counts as syncing while it
+// saves, and the modal's own reloads are dropped once it is closed.
+describe('EditAccountModal — shared bank-sync state', () => {
+  const sibling = {};
+  function OtherEntryPoint({ onListen }) {
+    sibling.bankSync = useBankSync();
+    useBankSyncDone(sibling.bankSync, null, onListen ?? (() => {}));
+    return null;
+  }
+  function RowStatus() {
+    const { syncing } = useBankSyncStatus('acc-9');
+    return <span data-testid="row-status">{String(syncing)}</span>;
+  }
+
+  let finishSync;
+  beforeEach(() => {
+    [toastSuccess, toastError, toastWarning, toastInfo].forEach((fn) => fn.mockClear());
+    uiMock.mockReset();
+    uiMock.mockImplementation((key) => key);
+    fetchStatus.mockReset();
+    fetchStatus.mockResolvedValue(BASE_STATUS);
+    saveImportSettings.mockReset();
+    saveImportSettings.mockResolvedValue({});
+    updateAccount.mockReset();
+    fetchDefaults.mockReset();
+    fetchDefaults.mockResolvedValue({ currencies: [{ id: '102', iso: 'EUR' }] });
+    hasCapability.mockReset();
+    hasCapability.mockReturnValue(true);
+    sync.mockReset();
+    sync.mockImplementation(() => new Promise((resolve) => { finishSync = resolve; }));
+  });
+
+  function renderInWindow({ onSaved = vi.fn(), onListen, open = true } = {}) {
+    const ui = (shown) => (
+      <BankSyncProvider>
+        <OtherEntryPoint onListen={onListen} />
+        <RowStatus />
+        {shown ? (
+          <EditAccountModal
+            open
+            account={CONNECTED_ACCOUNT}
+            onClose={vi.fn()}
+            onSaved={onSaved}
+            onArchive={vi.fn()}
+            onConnect={vi.fn()}
+          />
+        ) : null}
+      </BankSyncProvider>
+    );
+    const result = render(ui(open));
+    return { ...result, hideModal: () => result.rerender(ui(false)) };
+  }
+
+  it('is enabled and idle, with the bank-sync icon and the PSD2 tooltip', async () => {
+    const user = userEvent.setup();
+    renderInWindow();
+    const button = await screen.findByTestId('bank-connection-edit-sync');
+
+    expect(button).toBeEnabled();
+    expect(button).toHaveAttribute('aria-busy', 'false');
+    expect(screen.getByTestId('bank-connection-edit-sync-icon')).toHaveAttribute('data-spinning', 'false');
+    await user.hover(screen.getByTestId('bank-connection-edit-sync-wrap'));
+    expect((await screen.findAllByText('financeAccountsBankSyncTooltip')).length).toBeGreaterThan(0);
+  });
+
+  it('is disabled and spinning, with the in-progress tooltip, while another entry point syncs the account', async () => {
+    const user = userEvent.setup();
+    renderInWindow();
+    await screen.findByTestId('bank-connection-edit-sync');
+
+    await act(async () => { sibling.bankSync.startSync('acc-9'); });
+
+    const button = screen.getByTestId('bank-connection-edit-sync');
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('aria-busy', 'true');
+    // ETP-6154 follow-up — while fetching the button reads busy: the icon bobs and the label
+    // becomes "Trayendo extractos…".
+    expect(screen.getByTestId('bank-connection-edit-sync-icon')).toHaveAttribute('data-spinning', 'true');
+    expect(button).toHaveTextContent('financeAccountsBankSyncBadge');
+    await user.hover(screen.getByTestId('bank-connection-edit-sync-wrap'));
+    expect((await screen.findAllByText('financeAccountsBankSyncInProgress')).length).toBeGreaterThan(0);
+
+    await user.click(button);
+    expect(sync).toHaveBeenCalledTimes(1);
+
+    await act(async () => { finishSync({ status: 'OK' }); });
+    expect(screen.getByTestId('bank-connection-edit-sync')).toBeEnabled();
+  });
+
+  it('its own sync spins the other entry points too, and reloads the modal only when it ends', async () => {
+    const user = userEvent.setup();
+    const onSaved = vi.fn();
+    renderInWindow({ onSaved });
+    await user.click(await screen.findByTestId('bank-connection-edit-sync'));
+
+    await waitFor(() => expect(sync).toHaveBeenCalledWith('acc-9'));
+    expect(screen.getByTestId('row-status')).toHaveTextContent('true');
+    expect(screen.getByTestId('bank-connection-edit-sync')).toBeDisabled();
+    expect(onSaved).not.toHaveBeenCalled();
+
+    await act(async () => { finishSync({ status: 'OK', message: 'done' }); });
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(fetchStatus).toHaveBeenCalledTimes(2);
+    expect(toastSuccess).toHaveBeenCalledWith('done');
+    expect(screen.getByTestId('row-status')).toHaveTextContent('false');
+  });
+
+  it('ETP-5104 save-before-sync runs inside the shared sync: syncing while it saves, request only after', async () => {
+    const user = userEvent.setup();
+    let finishSave;
+    saveImportSettings.mockImplementation(() => new Promise((resolve) => { finishSave = resolve; }));
+    renderInWindow();
+    await screen.findByTestId('bank-connection-edit-sync');
+
+    await typeImportDate(user, 'field-date-bank-connection-import-from', '15012026');
+    await user.click(screen.getByTestId('bank-connection-edit-sync'));
+
+    await waitFor(() => expect(saveImportSettings).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId('row-status')).toHaveTextContent('true');
+    expect(sync).not.toHaveBeenCalled();
+
+    // A second entry point cannot start a concurrent sync while the save is still pending.
+    await act(async () => { await sibling.bankSync.startSync('acc-9'); });
+    expect(sync).not.toHaveBeenCalled();
+    expect(toastInfo).toHaveBeenCalledWith('financeAccountsBankSyncInProgress');
+
+    await act(async () => { finishSave({}); });
+    await waitFor(() => expect(sync).toHaveBeenCalledTimes(1));
+    expect(saveImportSettings.mock.invocationCallOrder[0]).toBeLessThan(sync.mock.invocationCallOrder[0]);
+  });
+
+  it('a failed pre-sync save ends the shared sync without a request or a second toast', async () => {
+    const user = userEvent.setup();
+    saveImportSettings.mockRejectedValueOnce(Object.assign(new Error('boom'), { status: 500 }));
+    renderInWindow();
+    await screen.findByTestId('bank-connection-edit-sync');
+
+    await typeImportDate(user, 'field-date-bank-connection-import-from', '15012026');
+    await user.click(screen.getByTestId('bank-connection-edit-sync'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
+    expect(toastError).toHaveBeenCalledWith('boom');
+    expect(sync).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByTestId('row-status')).toHaveTextContent('false'));
+  });
+
+  it('drops its reloads once closed mid-sync, and the window listener reloads instead', async () => {
+    const user = userEvent.setup();
+    const onSaved = vi.fn();
+    const onListen = vi.fn();
+    const { hideModal } = renderInWindow({ onSaved, onListen });
+    await user.click(await screen.findByTestId('bank-connection-edit-sync'));
+    await waitFor(() => expect(sync).toHaveBeenCalledTimes(1));
+
+    hideModal();
+    await act(async () => { finishSync({ status: 'OK' }); });
+
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(onListen).toHaveBeenCalledWith('acc-9', { status: 'OK' });
+  });
 });

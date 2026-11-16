@@ -1,3 +1,7 @@
+// @covers tools/app-shell/src/lib/backendErrors.js
+// @covers tools/app-shell/src/locales/en_US.json
+// @covers tools/app-shell/src/locales/es_ES.json
+// @covers tools/app-shell/src/locales/es_AR.json
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
@@ -18,9 +22,12 @@ import { translateBackendError } from '../backendErrors.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const LOCALES_DIR = join(__dirname, '..', '..', 'locales');
 const KEY = 'backendError.statementBankConnectedNotCreatable';
-const DELETE_KEY = 'backendError.statementBankConnectedNotDeletable';
+// ETP-6151 — with flag `psd2-statement-import-settings` on, the bank-connected delete refusal is
+// gone and the delete refusal a connected account can still raise is the posted one, which must
+// stay a separate key. With the flag off the original refusal (and its key) is live again.
+const DELETE_KEY = 'backendError.statementPostedNotDeletable';
 const RAW = 'This account is synchronized with the bank; statements cannot be created or imported manually.';
-const DELETE_RAW = 'Statements from a bank-connected account cannot be deleted.';
+const DELETE_RAW = 'The statement is posted. Unpost it before deleting it.';
 
 function loadLabels(locale) {
   const json = JSON.parse(readFileSync(join(LOCALES_DIR, `${locale}.json`), 'utf8'));
@@ -54,7 +61,7 @@ describe('backendError.statementBankConnectedNotCreatable — locale keys (ETP-5
     }
   });
 
-  it('is a different sentence from the not-deletable refusal', () => {
+  it('is a different sentence from the posted (not-deletable) refusal', () => {
     for (const locale of ['en_US', 'es_ES', 'es_AR']) {
       const labels = loadLabels(locale);
       assert.notEqual(labels[KEY], labels[DELETE_KEY]);
@@ -103,9 +110,68 @@ describe('translateBackendError — bank-connected create/import refusal (ETP-54
     assert.equal(translateBackendError(raw, es), raw);
   });
 
-  it('keeps the not-deletable refusal on its own key', () => {
+  it('keeps the posted (not-deletable) refusal on its own key', () => {
     const es = translatorFor(loadLabels('es_ES'));
     assert.equal(translateBackendError(DELETE_RAW, es), loadLabels('es_ES')[DELETE_KEY]);
+  });
+});
+
+/**
+ * ETP-6151 — a bank-connected account no longer refuses a statement delete outright: the backend
+ * reactivates and deletes a processed bank statement in one step, refusing only a posted one (or
+ * one with matched lines) — behind the flag `psd2-statement-import-settings`. The posted refusal and
+ * the re-import notice both delete confirmations show must resolve in every locale the tab ships
+ * in; the former refusal and its key stay live for the flag-off state.
+ */
+describe('statement delete on a bank-connected account — locale keys (ETP-6151)', () => {
+  const LOCALES = ['en_US', 'es_ES', 'es_AR'];
+  const NOTICE = 'financeAccountStatementsDeleteBankReimportNotice';
+  const NOTICE_NO_DATE = 'financeAccountStatementsDeleteBankReimportNoticeNoDate';
+  const REMOVED_KEY = 'backendError.statementBankConnectedNotDeletable';
+  const REMOVED_RAW = 'Statements from a bank-connected account cannot be deleted.';
+
+  for (const locale of LOCALES) {
+    for (const key of [DELETE_KEY, NOTICE, NOTICE_NO_DATE]) {
+      it(`${locale} declares a non-empty ${key}`, () => {
+        const value = loadLabels(locale)[key];
+        assert.equal(typeof value, 'string');
+        assert.ok(value.trim().length > 0);
+      });
+    }
+
+    // useUI replaces only the FIRST `{date}` (String.replace with a string pattern), so a second
+    // one would render literally; and the date-less sentence must carry none at all.
+    it(`${locale} interpolates the date exactly once in the dated notice, never in the other`, () => {
+      const labels = loadLabels(locale);
+      assert.equal(labels[NOTICE].split('{date}').length - 1, 1);
+      assert.doesNotMatch(labels[NOTICE_NO_DATE], /\{[^}]*\}/);
+    });
+
+    it(`${locale} still declares the flag-off bank-connected delete refusal`, () => {
+      const value = loadLabels(locale)[REMOVED_KEY];
+      assert.equal(typeof value, 'string');
+      assert.ok(value.trim().length > 0);
+    });
+  }
+
+  for (const locale of ['es_ES', 'es_AR']) {
+    it(`${locale} translates the posted refusal and both notices`, () => {
+      const en = loadLabels('en_US');
+      const labels = loadLabels(locale);
+      for (const key of [DELETE_KEY, NOTICE, NOTICE_NO_DATE]) {
+        assert.notEqual(labels[key], en[key], `${locale}.${key} is untranslated`);
+      }
+    });
+  }
+
+  it('translates the posted refusal to es_AR', () => {
+    const ar = translatorFor(loadLabels('es_AR'));
+    assert.equal(translateBackendError(DELETE_RAW, ar), loadLabels('es_AR')[DELETE_KEY]);
+  });
+
+  it('still maps the flag-off bank-connected refusal text to its own key', () => {
+    const t = (key) => `translated:${key}`;
+    assert.equal(translateBackendError(REMOVED_RAW, t), `translated:${REMOVED_KEY}`);
   });
 });
 

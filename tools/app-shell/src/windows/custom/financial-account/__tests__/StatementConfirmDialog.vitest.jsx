@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/financial-account/StatementConfirmDialog.jsx
 /**
  * Rendering suite for StatementConfirmDialog — the confirmation dialog shared by the
  * "Process", "Reactivate" and "Delete" row actions of an imported statement.
@@ -162,5 +163,53 @@ describe('StatementConfirmDialog — actions', () => {
 
     expect(screen.getByTestId('statement-confirm-action')).toBeDisabled();
     expect(screen.getByText('financeAccountStatementsManualCancel').closest('button')).toBeDisabled();
+  });
+});
+
+/**
+ * ETP-6151 — optional `notice`, rendered under the description: the Imported Statements tab passes
+ * the bank re-import warning there when deleting a statement of a bank-connected account.
+ */
+describe('StatementConfirmDialog — notice', () => {
+  it('renders the notice under the description, before the actions', () => {
+    renderDialog({ variant: 'delete', notice: <p data-testid="host-notice">Heads up</p> });
+
+    const notice = screen.getByTestId('host-notice');
+    expect(screen.getByTestId('statement-confirm-dialog')).toContainElement(notice);
+    const description = screen.getByText('financeAccountStatementsDeleteBody|Extracto marzo');
+    expect(description).not.toContainElement(notice);
+    // eslint-disable-next-line no-bitwise
+    expect(description.compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // eslint-disable-next-line no-bitwise
+    expect(notice.compareDocumentPosition(screen.getByTestId('statement-confirm-action'))
+      & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  // Unchanged when null: the header is still followed directly by the footer, as before the prop.
+  it.each([
+    ['omitted', {}],
+    ['null', { notice: null }],
+  ])('adds nothing between the header and the footer when the notice is %s', (_label, extra) => {
+    renderDialog({ variant: 'delete', ...extra });
+
+    expect(screen.getByTestId('DialogHeader__858de3').nextElementSibling)
+      .toBe(screen.getByTestId('DialogFooter__858de3'));
+  });
+
+  it('keeps its original max-w-md content class when no notice is given, and switches only with one', () => {
+    const { unmount } = renderDialog({ variant: 'delete' });
+    const plain = screen.getByTestId('statement-confirm-dialog').className;
+    unmount();
+    expect(plain).toContain('max-w-md');
+    expect(plain).not.toContain('bg-card');
+
+    renderDialog({ variant: 'delete', notice: <p>n</p> });
+    expect(screen.getByTestId('statement-confirm-dialog').className).toContain('bg-card');
+  });
+
+  it('renders nothing while closed, notice included', () => {
+    renderDialog({ variant: null, notice: <p data-testid="host-notice">Heads up</p> });
+
+    expect(screen.queryByTestId('host-notice')).toBeNull();
   });
 });

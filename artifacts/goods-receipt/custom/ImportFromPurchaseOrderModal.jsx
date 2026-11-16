@@ -1,107 +1,53 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { apiFetch as moduleApiFetch } from '@/auth/api.js';
+import useImportLoadFailureToast from '@/windows/custom/shared/useImportLoadFailureToast.js';
+import { newestCreatedFirst } from '@/windows/custom/shared/importActionClient.js';
+import { draftDocumentsOf, fetchInOutDocuments, fetchInOutLines, isCoveredDocument, pendingDocumentTotal, pendingOf } from '@/windows/custom/shared/inOutImport.js';
 
-async function fetchDraftInfoByOrderLine({ base, bpId, currentReceiptId }) {
-  // Fetch current receipt lines directly (by parentId) + other draft receipts list in parallel.
-  // Avoids relying on the current receipt appearing in the paginated list.
-  const [currentLinesRes, receiptsRes] = await Promise.all([
-    currentReceiptId
-      ? moduleApiFetch(`${base}/goods-receipt/goodsReceiptLine?parentId=${currentReceiptId}&_startRow=0&_endRow=200`)
-      : Promise.resolve(null),
-    moduleApiFetch(`${base}/goods-receipt/goodsReceipt?_startRow=0&_endRow=100&_sortBy=movementDate desc`),
-  ]);
+// ETP-6099 — the orders and their lines come from the receipt's own read actions
+// (`availableOrders` / `availableOrderLines`, inOutImport.js): the vendor's completed orders in
+// the receipt's currency with quantity left to receive, drafts deducted server-side. The covered
+// ones (`pendingLines: 0`, everything held by draft receipts) are listed too and hidden by
+// `isDocumentCovered`. Replaced: the company-wide order list (500), the receipt header, the
+// receipt list (100) and the lines of every draft receipt.
+const ENTITY = 'goodsReceipt'; // the header entity of the action URLs
+const SPEC = 'goods-receipt';
 
-  const draftInfo = {};
+const CURRENCY_PROBE = Object.freeze({
+  sourceHeader: 'purchase-order/header',
+  isCandidate: (o) => Number(o.deliveryStatusPurchase ?? 0) < 100,
+});
 
-  if (currentLinesRes?.ok) {
-    const currentLines = (await currentLinesRes.json())?.response?.data || [];
-    currentLines.forEach(l => {
-      if (!l.salesOrderLine) return;
-      if (!draftInfo[l.salesOrderLine]) draftInfo[l.salesOrderLine] = { qty: 0, docNos: new Set() };
-      draftInfo[l.salesOrderLine].qty += Number(l.movementQuantity) || 0;
-    });
-  }
+const fetchDocuments = ({ base, bpId, invoiceId: receiptId }) => fetchInOutDocuments({
+  apiFetch: moduleApiFetch, base, spec: SPEC, entity: ENTITY, targetId: receiptId, bpId,
+  action: 'availableOrders', dateKey: 'orderDate', currencyProbe: CURRENCY_PROBE,
+  // The popup always listed purchase orders newest CREATED first; the action sorts by order date.
+  order: newestCreatedFirst,
+});
 
-  if (receiptsRes.ok) {
-    const all = (await receiptsRes.json())?.response?.data || [];
-    const otherDrafts = all.filter(s =>
-      s.documentStatus === 'DR' && s.businessPartner === bpId && s.id !== currentReceiptId,
-    );
-    const lineResults = await Promise.all(
-      otherDrafts.map(s =>
-        moduleApiFetch(`${base}/goods-receipt/goodsReceiptLine?parentId=${s.id}&_startRow=0&_endRow=200`)
-          .then(r => r.ok ? r.json().then(d => ({ docNo: s.documentNo, lines: d?.response?.data || [] })) : null),
-      ),
-    );
-    for (const result of lineResults) {
-      if (!result) continue;
-      result.lines.forEach(l => {
-        if (!l.salesOrderLine) return;
-        if (!draftInfo[l.salesOrderLine]) draftInfo[l.salesOrderLine] = { qty: 0, docNos: new Set() };
-        draftInfo[l.salesOrderLine].qty += Number(l.movementQuantity) || 0;
-        draftInfo[l.salesOrderLine].docNos.add(result.docNo);
-      });
-    }
-  }
-
-  return draftInfo;
-}
-
-const fetchDocuments = async ({ base, bpId, invoiceId: receiptId }) => {
-  const [ordersRes, draftInfo, headerRes] = await Promise.all([
-    moduleApiFetch(`${base}/purchase-order/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
-    fetchDraftInfoByOrderLine({ base, bpId, currentReceiptId: receiptId }),
-    moduleApiFetch(`${base}/goods-receipt/goodsReceipt/${receiptId}`),
-  ]);
-
-  let receiptCurrency = null;
-  if (headerRes.ok) {
-    receiptCurrency = (await headerRes.json())?.response?.data?.[0]?.etgoCurrency || null;
-  }
-
-  let documents = [];
-  let excludedByCurrency = false;
-  if (ordersRes.ok) {
-    const all = (await ordersRes.json())?.response?.data || [];
-    const candidates = all.filter(o =>
-      o.documentStatus === 'CO'
-      && o.businessPartner === bpId
-      && Number(o.deliveryStatusPurchase ?? 0) < 100
-    );
-    documents = receiptCurrency ? candidates.filter(o => o.currency === receiptCurrency) : candidates;
-    excludedByCurrency = !!receiptCurrency && documents.length === 0 && candidates.length > 0;
-  }
-  return { documents, sharedContext: { draftInfo }, excludedByCurrency };
+const toOrderLine = (l) => {
+  const pending = pendingOf(l);
+  const unitPrice = Number(l.unitPrice) || 0;
+  return {
+    ...l,
+    _productName: l['product$_identifier'] || l.id,
+    _maxQty: pending,
+    _orderedQty: Number(l.orderedQuantity) || 0,
+    _unitPrice: unitPrice,
+    _lineNetAmount: unitPrice * pending,
+    _alreadyImported: pending <= 0,
+    _inDraftShipments: draftDocumentsOf(l),
+  };
 };
 
-export const fetchLines = async ({ base, docId, sharedContext }) => {
-  const res = await moduleApiFetch(
-    `${base}/purchase-order/lines?parentId=${docId}&_startRow=0&_endRow=200`,
-    {},
-  );
-  if (!res.ok) return [];
-  const lines = (await res.json())?.response?.data || [];
-  return lines
-    .map(l => {
-      const ordered = Number(l.orderedQuantity) || 0;
-      const delivered = Number(l.deliveredQuantity) || 0;
-      const draftEntry = sharedContext.draftInfo?.[l.id];
-      const inOtherDrafts = draftEntry?.qty || 0;
-      const pending = Math.max(0, ordered - delivered - inOtherDrafts);
-      const unitPrice = Number(l.unitPrice) || 0;
-      return {
-        ...l,
-        _productName: l['product$_identifier'] || l.id,
-        _maxQty: pending,
-        _orderedQty: ordered,
-        _unitPrice: unitPrice,
-        _lineNetAmount: unitPrice * pending,
-        _alreadyImported: pending <= 0,
-        _inDraftShipments: draftEntry?.docNos?.size ? [...draftEntry.docNos] : undefined,
-      };
-    })
-    .filter(l => l._orderedQty > 0);
+// A line ordered at 0 or less (a return or a total-discount line) is never received from here.
+const fetchLines = async ({ base, docId, sharedContext }) => {
+  const rows = await fetchInOutLines({
+    apiFetch: moduleApiFetch, base, spec: SPEC, entity: ENTITY, targetId: sharedContext?.targetId,
+    action: 'availableOrderLines', params: { orderId: docId },
+  });
+  return rows.map(toOrderLine).filter(l => l._orderedQty > 0);
 };
 
 const getDocDisplay = (doc) => ({
@@ -138,6 +84,7 @@ export default function ImportFromPurchaseOrderModal(props) {
   // (an invoice importing shipment lines), and resolveApiUrl only skips a prefix that
   // matches - so a configured base doubles it and 404s.
   const apiFetch = useApiFetch('');
+  const loaders = useImportLoadFailureToast(fetchDocuments, fetchLines);
   return (
     <ImportLinesModal
       {...props}
@@ -149,8 +96,11 @@ export default function ImportFromPurchaseOrderModal(props) {
       noCurrencyMatchMessageKey="noPurchaseOrdersMatchReceiptCurrency"
       successMessageKey="linesImportedFromPurchaseOrder"
       showPriceColumns={false}
-      fetchDocuments={fetchDocuments}
-      fetchLines={fetchLines}
+      fetchDocuments={loaders.fetchDocuments}
+      fetchLines={loaders.fetchLines}
+      eagerLoadLines={false}
+      isDocumentCovered={isCoveredDocument}
+      getDocumentTotal={pendingDocumentTotal}
       getDocDisplay={getDocDisplay}
       buildLineBody={buildLineBody}
       afterImport={afterImport}

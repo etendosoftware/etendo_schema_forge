@@ -10,8 +10,8 @@ globalThis.__labels = labels;
 
 import InvoiceInboxRowActions, { INVOICE_INBOX_ROW_ACTION_COUNT } from '../InvoiceInboxRowActions.jsx';
 
-const renderFor = (status, onDiscard = vi.fn()) => {
-  render(<InvoiceInboxRowActions row={{ id: 'x', status }} onDiscard={onDiscard} />);
+const renderFor = (status, onDiscard = vi.fn(), onOpen = vi.fn()) => {
+  render(<InvoiceInboxRowActions row={{ id: 'x', status }} onDiscard={onDiscard} onOpen={onOpen} />);
   return onDiscard;
 };
 
@@ -39,15 +39,38 @@ describe('InvoiceInboxRowActions', () => {
     expect(onDiscard).toHaveBeenCalledWith({ id: 'x', status });
   });
 
-  it('pencil and kebab are aria-disabled and do nothing', () => {
-    const onDiscard = renderFor('READY');
-    for (const id of ['invoice-inbox-row-edit-x', 'invoice-inbox-row-more-x']) {
-      const btn = screen.getByTestId(id);
-      expect(btn).toHaveAttribute('aria-disabled', 'true');
-      expect(btn).not.toBeDisabled();
-      fireEvent.click(btn);
-    }
+  it('the pencil is live (not aria-disabled) and calls onOpen(row) once; it does not discard', () => {
+    const onOpen = vi.fn();
+    const onDiscard = renderFor('READY', vi.fn(), onOpen);
+    const pencil = screen.getByTestId('invoice-inbox-row-edit-x');
+    expect(pencil).not.toHaveAttribute('aria-disabled');
+    fireEvent.click(pencil);
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(onOpen).toHaveBeenCalledWith({ id: 'x', status: 'READY' });
     expect(onDiscard).not.toHaveBeenCalled();
+  });
+
+  it.each(['CONFIRMED', 'DISCARDED', 'ERROR', 'PENDING_REVIEW'])('the pencil of a %s row opens the panel too', (status) => {
+    const onOpen = vi.fn();
+    renderFor(status, vi.fn(), onOpen);
+    fireEvent.click(screen.getByTestId('invoice-inbox-row-edit-x'));
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it('without onOpen the pencil click does not throw', () => {
+    render(<InvoiceInboxRowActions row={{ id: 'x', status: 'READY' }} onDiscard={vi.fn()} />);
+    expect(() => fireEvent.click(screen.getByTestId('invoice-inbox-row-edit-x'))).not.toThrow();
+  });
+
+  it('the kebab stays aria-disabled and inert', () => {
+    const onOpen = vi.fn();
+    const onDiscard = renderFor('READY', vi.fn(), onOpen);
+    const btn = screen.getByTestId('invoice-inbox-row-more-x');
+    expect(btn).toHaveAttribute('aria-disabled', 'true');
+    expect(btn).not.toBeDisabled();
+    fireEvent.click(btn);
+    expect(onDiscard).not.toHaveBeenCalled();
+    expect(onOpen).not.toHaveBeenCalled();
   });
 
   it('the trash is not aria-disabled', () => {
@@ -55,15 +78,22 @@ describe('InvoiceInboxRowActions', () => {
     expect(screen.getByTestId('invoice-inbox-row-discard-x')).not.toHaveAttribute('aria-disabled');
   });
 
-  it('pencil and kebab show a "Próximamente" tooltip on focus', async () => {
+  it('the kebab shows a "Próximamente" tooltip on focus; the pencil shows only "Editar"', async () => {
+    renderFor('READY');
+    fireEvent.focus(screen.getByTestId('invoice-inbox-row-more-x'));
+    expect((await screen.findAllByText(/Próximamente/)).length).toBeGreaterThan(0);
+  });
+
+  it('the pencil tooltip is the plain Edit label, not "coming soon"', async () => {
     renderFor('READY');
     fireEvent.focus(screen.getByTestId('invoice-inbox-row-edit-x'));
-    expect((await screen.findAllByText(/Próximamente/)).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(labels['quickAction.edit'])).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Próximamente/)).toBeNull();
   });
 
   it('clicking an action does not bubble to the row', () => {
     const rowClick = vi.fn();
-    render(<div onClick={rowClick}><InvoiceInboxRowActions row={{ id: 'x', status: 'READY' }} onDiscard={vi.fn()} /></div>);
+    render(<div onClick={rowClick}><InvoiceInboxRowActions row={{ id: 'x', status: 'READY' }} onDiscard={vi.fn()} onOpen={vi.fn()} /></div>);
     fireEvent.click(screen.getByTestId('invoice-inbox-row-discard-x'));
     fireEvent.click(screen.getByTestId('invoice-inbox-row-edit-x'));
     expect(rowClick).not.toHaveBeenCalled();

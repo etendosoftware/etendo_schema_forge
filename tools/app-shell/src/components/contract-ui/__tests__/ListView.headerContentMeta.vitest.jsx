@@ -269,16 +269,16 @@ describe('ListView — emptyListContext (the window has no records at all)', () 
   });
 
   it.each([
-    ['hideCreate', { hideCreate: true }],
-    ['the static read-only flag (api.window.readOnly)', { api: { window: { readOnly: true } } }],
-    ['the runtime read-only tier (window.readOnly)', { window: { readOnly: true } }],
-  ])('drops onCreate under %s', (_label, props) => {
+    ['hideCreate', { hideCreate: true }, 'function'],
+    ['the static read-only flag (api.window.readOnly)', { api: { window: { readOnly: true } } }, 'undefined'],
+    ['the runtime read-only tier (window.readOnly)', { window: { readOnly: true } }, 'undefined'],
+  ])('drops onCreate under %s (onImport: %s)', (_label, props, importType) => {
     hookState = LOADED_EMPTY;
 
     render(<ListView {...defaultProps} import={IMPORT} {...props} />);
 
     expect(tableProps.emptyListContext.onCreate).toBeUndefined();
-    expect(typeof tableProps.emptyListContext.onImport).toBe('function');
+    expect(typeof tableProps.emptyListContext.onImport).toBe(importType);
   });
 
   it.each([

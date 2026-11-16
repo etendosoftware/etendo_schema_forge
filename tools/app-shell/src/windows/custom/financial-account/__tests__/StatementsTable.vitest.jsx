@@ -4,6 +4,11 @@ import { getContractGridColumns } from '@/components/financial-accounts/contract
 // Exercise personal views through the real shared hook; only the session/API boundary is mocked.
 const personalGrid = vi.hoisted(() => ({ enabled: false, apiFetch: vi.fn() }));
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => personalGrid.apiFetch }));
+// ETP-6151 — flag `psd2-statement-import-settings`. Defaults to on; the flag-off tests flip it.
+const importSettingsFlag = vi.hoisted(() => ({ on: true }));
+vi.mock('@/hooks/usePsd2ImportSettingsFlag.js', () => ({
+  usePsd2ImportSettingsFlag: () => importSettingsFlag.on,
+}));
 vi.mock('@/lib/flags', () => ({ GRID_COLUMN_VIEWS: 'grid-column-views', useFeatureFlag: () => personalGrid.enabled }));
 
 // @covers tools/app-shell/src/windows/custom/financial-account/StatementsTable.jsx
@@ -241,9 +246,10 @@ describe('StatementsTable', () => {
     });
 
     // ETP-4921 — on a PSD2-connected account the statements come from the bank, so even a DRAFT
-    // one offers no Edit and no Delete. Hidden rather than disabled, matching what this row
-    // already does for a processed statement; the reason is shown on the kebab's Reactivar.
-    it('hides inline Edit + Delete on a bank-connected account, even for a draft', () => {
+    // one offers no Edit. Hidden rather than disabled, matching what this row already does for a
+    // processed statement; the reason is shown on the kebab's Reactivar. ETP-6151 — Delete is
+    // offered there now (the backend reactivates and deletes a bank statement in one step).
+    it('hides inline Edit but keeps Delete on a bank-connected account', () => {
       render(
         <StatementsTable
           statements={[DRAFT]}
@@ -253,8 +259,96 @@ describe('StatementsTable', () => {
         />,
       );
       expect(screen.queryByTestId('statement-row-edit-d1')).not.toBeInTheDocument();
-      expect(screen.queryByTestId('statement-row-delete-d1')).not.toBeInTheDocument();
+      expect(screen.getByTestId('statement-row-delete-d1')).toBeInTheDocument();
       expect(screen.getByTestId('statement-row-menu-d1')).toBeInTheDocument();
+    });
+
+    // ETP-6151 — the backend reactivates and deletes a processed statement of a bank-connected
+    // account in one step, so the trash reveals on a PROCESSED row there too. Edit stays hidden
+    // and Reactivar stays closed: deleting a bank statement does not reopen it for hand edits.
+    describe('processed statement of a bank-connected account', () => {
+      const PROCESSED = ROWS[0];
+
+      function renderConnectedProcessed(actions = {}) {
+        const handlers = {
+          onEdit: vi.fn(), onDelete: vi.fn(), onProcess: vi.fn(), onReactivate: vi.fn(), ...actions,
+        };
+        render(
+          <StatementsTable statements={[PROCESSED]} loading={false} bankConnected actions={handlers} />,
+        );
+        return handlers;
+      }
+
+      it('reveals the trash and fires onDelete with the statement', async () => {
+        const user = userEvent.setup();
+        const { onDelete } = renderConnectedProcessed();
+
+        await user.click(screen.getByTestId('statement-row-delete-s1'));
+
+        expect(onDelete).toHaveBeenCalledWith(expect.objectContaining({ id: 's1' }));
+      });
+
+      it('still hides Edit', () => {
+        renderConnectedProcessed();
+
+        expect(screen.queryByTestId('statement-row-edit-s1')).not.toBeInTheDocument();
+      });
+
+      it('still keeps Reactivar closed in the kebab', async () => {
+        const user = userEvent.setup();
+        const { onReactivate } = renderConnectedProcessed();
+
+        await user.click(screen.getByTestId('statement-row-menu-s1'));
+        const reactivate = await screen.findByTestId('statement-row-reactivate');
+        expect(reactivate).toHaveAttribute('aria-disabled', 'true');
+        await user.click(reactivate);
+
+        expect(onReactivate).not.toHaveBeenCalled();
+      });
+    });
+
+    // ETP-6151 flag off: a bank-connected account shows neither Edit nor Delete, as before.
+    describe('flag psd2-statement-import-settings off', () => {
+      beforeEach(() => { importSettingsFlag.on = false; });
+      afterEach(() => { importSettingsFlag.on = true; });
+
+      it('hides inline Edit and Delete on a bank-connected draft', () => {
+        render(
+          <StatementsTable
+            statements={[DRAFT]}
+            loading={false}
+            bankConnected
+            actions={{ onEdit: vi.fn(), onDelete: vi.fn(), onProcess: vi.fn(), onReactivate: vi.fn() }}
+          />,
+        );
+        expect(screen.queryByTestId('statement-row-edit-d1')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('statement-row-delete-d1')).not.toBeInTheDocument();
+        expect(screen.getByTestId('statement-row-menu-d1')).toBeInTheDocument();
+      });
+
+      it('hides the trash on a processed statement of a bank-connected account', () => {
+        render(
+          <StatementsTable
+            statements={[ROWS[0]]}
+            loading={false}
+            bankConnected
+            actions={{ onEdit: vi.fn(), onDelete: vi.fn(), onProcess: vi.fn(), onReactivate: vi.fn() }}
+          />,
+        );
+        expect(screen.queryByTestId('statement-row-delete-s1')).not.toBeInTheDocument();
+      });
+
+      it('keeps the draft affordances on an unconnected account', () => {
+        render(
+          <StatementsTable
+            statements={[DRAFT]}
+            loading={false}
+            actions={{ onEdit: vi.fn(), onDelete: vi.fn(), onProcess: vi.fn(), onReactivate: vi.fn() }}
+          />,
+        );
+        expect(screen.getByTestId('statement-row-edit-d1')).toBeInTheDocument();
+        expect(screen.getByTestId('statement-row-delete-d1')).toBeInTheDocument();
+      });
     });
 
     // Guard against over-correcting: an unconnected account keeps the draft affordances.

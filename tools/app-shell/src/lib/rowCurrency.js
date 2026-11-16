@@ -22,6 +22,11 @@
  * grid did before this ticket, which is what keeps symbol-less mock data and
  * currency-less entities rendering unchanged.
  *
+ * ETP-6148 — a declared `currencyField` may also name a plain text field that already holds the
+ * ISO code (e.g. REM's SQL-logic `Currency` column on remittance lines, served as `"EUR"`): when
+ * the field has no `$_identifier` twin and its own value is a 3-letter code, that code is used.
+ * Opt-in through `currencyField` only, so every caller that does not declare it is unchanged.
+ *
  * @param {object|null|undefined} row - The grid row (a NEO record).
  * @param {object|null|undefined} col - The column definition; `col.currencyField`
  *   (from decisions.json) names the sibling field carrying the currency.
@@ -29,11 +34,15 @@
  *   currency; `null` while it is still resolving.
  * @returns {string|undefined} ISO 4217 code, or undefined when none is known.
  */
+const ISO_CODE_RE = /^[A-Z]{3}$/;
+
 export function resolveRowCurrency(row, col, sessionCurrency) {
   const declared = col?.currencyField;
   if (declared) {
     const value = row?.[`${declared}$_identifier`];
     if (value) return value;
+    const raw = row?.[declared];
+    if (typeof raw === 'string' && ISO_CODE_RE.test(raw)) return raw;
   }
   // Historical default: entities whose currency association is named `currency`.
   if (row?.['currency$_identifier']) return row['currency$_identifier'];

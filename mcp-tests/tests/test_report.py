@@ -155,7 +155,7 @@ class SummaryTest(unittest.TestCase):
             "w-invoice-one-product-issued": ("decided", "subject", "0-capability", "subjectOnly"),
             "q-product-prices-stock": ("decided", "subject", "1-success", "subjectWin"),
             "f-process-sales-order": ("decided", "subject", "3-tokens", "subjectWin"),
-            "e-unknown-document": ("decided", "tie", "1-noSuccess", "tie"),
+            "e-unknown-document": ("decided", "reference", "1-subjectFailed", "referenceWin"),
             "q-both-not-possible": ("excluded", None, None, None),
             "q-short-of-attempts": ("notEvaluable", None, None, None),
             "q-tokens-missing": ("notEvaluable", None, None, None),
@@ -163,17 +163,23 @@ class SummaryTest(unittest.TestCase):
         reasons = {r["task"]: r["reason"] for r in self.summary["notEvaluable"]}
         self.assertEqual(reasons["q-tokens-missing"], "reference: token usage missing")
 
-    def test_kr_headline_counts_the_five_results(self):
+    def test_kr_headline_is_wins_over_tasks_both_platforms_can_do(self):
         kr = self.summary["kr"]
         self.assertEqual((kr["tasks"], kr["evaluated"]), (7, 4),
-                         "excluded and not-evaluable tasks are out of the denominator")
-        self.assertEqual(kr["results"], {"subjectOnly": 1, "subjectWin": 2, "referenceWin": 0,
-                                         "referenceOnly": 0, "tie": 1})
-        self.assertEqual((kr["winRate"], kr["target"]), (0.75, 0.8))
+                         "excluded and not-evaluable tasks are out of the count")
+        # Rule 3: e-unknown-document is 0/3 on both sides, a loss for the subject (it was a tie).
+        self.assertEqual(kr["results"], {"subjectOnly": 1, "subjectWin": 2, "referenceWin": 1,
+                                         "referenceOnly": 0, "tie": 0})
+        # The Etendo Only task leaves the number: 2 wins over the 3 tasks both can do.
+        self.assertEqual((kr["bothPossible"], kr["winRate"], kr["target"]), (3, 0.6667, 0.8))
+        self.assertEqual((kr["subjectOnlyTasks"], kr["referenceOnlyTasks"]),
+                         (["w-invoice-one-product-issued"], []))
         self.assertEqual((kr["subjectLabel"], kr["referenceLabel"]), ("Etendo", "Holded"))
-        headline = report.render_markdown(self.summary).splitlines()[2]
-        self.assertEqual(headline, "**KR2.1: 75 % sobre 4 pruebas** (meta 80 %) — 1 Etendo Only, 2 Etendo Win, "
-                                   "0 Holded Win, 0 Holded Only, 1 empate. 7 en la suite, 1 frágiles.")
+        lines = report.render_markdown(self.summary).splitlines()
+        self.assertEqual(lines[2], "**KR2.1: 67 % sobre 3 pruebas posibles en ambas** (meta 80 %) — "
+                                   "2 Etendo Win, 1 Holded Win, 0 empate. 7 en la suite, 1 frágiles.")
+        self.assertEqual(lines[4], "Notas — Etendo Only (1): `w-invoice-one-product-issued`. "
+                                   "Holded Only (0): ninguna.")
 
     def test_a_reference_win_by_capability_is_holded_only(self):
         self.assertEqual(report.task_result(rule.Decision("decided", rule.REFERENCE, "0-capability")),
@@ -329,7 +335,7 @@ class SummaryTest(unittest.TestCase):
         self.assertEqual(unescaped(row), unescaped(header))
 
     def test_rule_version_and_parameters_are_recorded(self):
-        self.assertEqual(self.summary["rule"]["version"], 2)
+        self.assertEqual(self.summary["rule"]["version"], 3)
         self.assertEqual(self.summary["rule"]["parameters"]["callsMargin"], 0.2)
         self.assertEqual(self.summary["pins"]["rule"], {k: self.summary["rule"][k]
                                                         for k in ("version", "parameters", "parametersSha")})
@@ -700,6 +706,108 @@ class StabilityTest(unittest.TestCase):
                 self.assertNotIn("Traceback", err.getvalue())
 
 
+class RoutinesTest(unittest.TestCase):
+    """ETP-6236: the "Etendo + rutina" column — the child KR and the three-column view."""
+
+    TASK = "f-process-sales-order"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.dir = _copy_fixture()
+
+        def preload(compare):
+            subject = next(t for t in compare["targets"] if t["name"] == compare["subject"])
+            subject["routines"] = {cls.TASK: {"name": "process-order", "version": 1}}
+
+        _edit_compare(cls.dir, preload)
+        attempt = cls.dir / "targets" / "local" / "probes" / cls.TASK / "attempt-1.json"
+        record = json.loads(attempt.read_text())
+        record["toolCalls"].append({"id": "r", "tool": "etendo_routine",
+                                    "args": {"mode": "run", "name": "process-order"}})
+        attempt.write_text(json.dumps(record))
+        cls.summary = report.build_summary(cls.dir)
+        cls.base = report.build_summary(FIXTURE)
+
+    def test_a_subject_with_routines_is_the_child_kr(self):
+        kr = self.summary["kr"]
+        self.assertEqual((kr["variant"], kr["routineTasks"]), ("routines", [self.TASK]))
+        self.assertEqual(kr["subjectLabel"], "Etendo + rutina")
+        self.assertIsNone(self.base["kr"]["variant"])
+        self.assertEqual(_task(self.summary, self.TASK)["subject"]["items"]["routineRuns"], 1)
+        text = report.render_markdown(self.summary)
+        self.assertIn("**KR2.1 hijo (Etendo + rutina):", text)
+        self.assertIn("El agente ejecutó la rutina en 1 de 3 intentos", text)
+        self.assertNotIn("hijo", report.render_markdown(self.base))
+
+    def test_the_view_puts_the_three_columns_side_by_side(self):
+        view = report.routines_view(self.base, self.summary)
+        row = next(r for r in view["rows"] if r["task"] == self.TASK)
+        self.assertTrue(row["routine"])
+        self.assertEqual(row["etendo"]["target"], "local")
+        self.assertEqual(row["etendoRoutines"]["items"]["routineRuns"], 1)
+        self.assertEqual(row["reference"]["target"], "holded")
+        self.assertEqual(view["pinDifferences"], [])
+        text = report.render_routines_view(view)
+        self.assertIn("| Task | Rutina | Etendo | Etendo + rutina | Holded |", text)
+        self.assertIn("KR2.1 hijo (Etendo + rutina)", text)
+
+    def test_the_child_kr_turns_a_lost_task_with_a_routine_into_its_routine_result(self):
+        base = copy.deepcopy(self.base)
+        with_routines = copy.deepcopy(self.summary)
+        for row in base["tasks"]:
+            if row["task"] in (self.TASK, "q-product-prices-stock"):
+                row["result"] = "referenceWin"        # both lost without routines
+        base["kr"]["results"] = {**base["kr"]["results"],
+                                 "subjectWin": base["kr"]["results"]["subjectWin"] - 2,
+                                 "referenceWin": base["kr"]["results"]["referenceWin"] + 2}
+        for row in with_routines["tasks"]:
+            if row["task"] in (self.TASK, "q-product-prices-stock"):
+                row["result"] = "subjectWin"          # the rerun won both...
+        view = report.routines_view(base, with_routines)
+        child = view["childKr"]
+        # ...but only the one with a routine changes the child KR.
+        self.assertEqual(child["fromRoutineRun"], [self.TASK])
+        self.assertEqual(child["results"]["subjectWin"], base["kr"]["results"]["subjectWin"] + 1)
+        self.assertEqual(child["results"]["referenceWin"], base["kr"]["results"]["referenceWin"] - 1)
+        self.assertEqual(child["bothPossible"], base["kr"]["bothPossible"])
+        self.assertEqual(child["subjectLabel"], "Etendo + rutina")
+
+    def test_a_routine_never_changes_a_task_the_base_already_won(self):
+        with_routines = copy.deepcopy(self.summary)
+        base = copy.deepcopy(self.base)
+        for row in base["tasks"]:
+            if row["task"] == self.TASK:
+                row["result"] = "subjectWin"
+        for row in with_routines["tasks"]:
+            if row["task"] == self.TASK:
+                row["result"] = "referenceWin"
+        view = report.routines_view(base, with_routines)
+        self.assertEqual(view["childKr"]["fromRoutineRun"], [])
+        self.assertEqual(view["childKr"]["results"]["subjectWin"], base["kr"]["results"]["subjectWin"])
+
+    def test_the_reruns_are_the_lost_tasks_that_have_a_routine(self):
+        suite = Path(tempfile.mkdtemp()) / "s.yaml"
+        block = ("      etendo-go:\n        expectAnswer: [{ text: ok }]\nROUTINE"
+                 "      holded:\n        expectAnswer: [{ text: ok }]\n")
+        routine = ("        routine: {name: r, description: d, "
+                   "steps: [{id: a, tool: etendo_list, args: {}}]}\n")
+        probes = ""
+        for task, with_routine in (("e-unknown-document", True), ("q-product-prices-stock", True),
+                                   ("f-process-sales-order", False)):
+            probes += (f"  - id: {task}\n    category: query\n    prompt: hola\n    platforms:\n"
+                       + block.replace("ROUTINE", routine if with_routine else ""))
+        suite.write_text("schemaVersion: 2\nwindow: w\nprobes:\n" + probes)
+        # e-unknown-document: lost, with a routine. q-product-prices-stock: won. f-process-sales-order:
+        # won, no routine.
+        self.assertEqual(report.routine_reruns(self.base, suite), ["e-unknown-document"])
+
+    def test_the_view_refuses_runs_in_the_wrong_order(self):
+        with self.assertRaises(ValueError):
+            report.routines_view(self.summary, self.summary)
+        with self.assertRaises(ValueError):
+            report.routines_view(self.base, self.base)
+
+
 class MakeTargetsTest(unittest.TestCase):
     """The Make wrappers refuse to run without their arguments (no uv call)."""
 
@@ -723,6 +831,20 @@ class MakeTargetsTest(unittest.TestCase):
                 done = self._make(*argv)
                 self.assertNotEqual(done.returncode, 0)
                 self.assertIn("A and B are required", done.stdout)
+
+    def test_mcp_report_routines_needs_both_runs(self):
+        for argv in (("mcp-report-routines",), ("mcp-report-routines", "BASE=x")):
+            with self.subTest(argv=argv):
+                done = self._make(*argv)
+                self.assertNotEqual(done.returncode, 0)
+                self.assertIn("BASE and WITH are required", done.stdout)
+
+    def test_mcp_compare_routines_needs_the_base_and_targets(self):
+        for argv in (("mcp-compare-routines",), ("mcp-compare-routines", "BASE=x")):
+            with self.subTest(argv=argv):
+                done = self._make(*argv)
+                self.assertNotEqual(done.returncode, 0)
+                self.assertIn("BASE and TARGETS are required", done.stdout)
 
     def test_mcp_seed_needs_an_explicit_target(self):
         # `TARGET ?= local` serves mcp-test/mcp-login; seeding writes, so it must be named.

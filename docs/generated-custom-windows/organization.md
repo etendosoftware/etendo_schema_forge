@@ -349,19 +349,37 @@ A sixth `SectionRow` in `OrganizationPage.jsx`, **"Representante legal / Modelo 
 is active (ETP-5831, see "Fiscal section visibility"). Its body is
 `Modelo390IdentitySection.jsx`:
 
-- **"Persona física" switch** (`information.aeat390Isperson`). It is a page-form field: flipping it
+- **"Persona física" switch** (`information.aeat390Isperson`), labelled "La organización es una
+  persona física (autónomo)" since ETP-5831 (CP-16). Only the label is shown, with no hint under
+  it. It is a page-form field: flipping it
   shows the unsaved-changes banner and is persisted by the page's Save, in the same
   `PATCH /information/{orgId}` as the rest of `AD_OrgInfo`. The branch below follows the form value,
   so flipping it previews the other branch before saving.
-- **ON — natural person:** Nombre, Primer apellido, Segundo apellido, NIF del representante legal,
-  Nombre del representante legal (`aeat390Firstname/Surname1/Surname2/RepNif/RepName`). Since
-  ETP-5831 (CP-16) they are laid out as **one row of a table in the representatives grid's format**
-  — one column per field, the column header (`<label htmlFor>`) labelling the inline input below it,
-  the field error inside its cell — and there is **no "add" button**: the organization is the one
-  natural person, so a second row is impossible. The table shell (`RepresentativeTableFrame.jsx`:
-  bordered fixed-layout table, muted header row, `RepresentativeHeaderCell`) is the same component
-  the representatives grid renders. Also page-form
-  fields, saved with the page; inputs are capped at the AD lengths (60, and 20 for the NIF). The AD
+- **ON — natural person:** since ETP-5831 (CP-16) two separate, titled blocks (simple two-column
+  field grids, labels above inputs, field error right below its input; no table, no "add" button —
+  the organization is the one natural person):
+  - **"Datos del titular"** (`Modelo390IdentitySection__holder`): the organization's NIF, read-only
+    (`Modelo390IdentitySection__holderNif`; it is `information.taxID`, the same form value as the
+    "Datos fiscales" NIF, edited only there; no hint under it), then **Nombre \*** and **Primer apellido \*** and
+    Segundo apellido (`aeat390Firstname/Surname1/Surname2`). Block hint under the title
+    (`org390HolderHint`): the AEAT needs the name and the surnames separately for a natural person.
+    Nothing is pre-filled from the organization name.
+  - **"Representante (opcional)"** (`Modelo390IdentitySection__representative`): "NIF del
+    representante" and "Nombre o razón social del representante" (`aeat390RepNif/RepName`). One block hint under the
+    title (`org390RepHint`): "Solo si la persona física actúa por medio de un representante". Neither field carries an asterisk;
+    the "(opcional)" title says the block may stay empty, and the both-or-neither rule shows up
+    only as the inline `org390RepPairRequired` error on save when just one of the two is filled.
+
+  **Why name and surnames are asked even though the org already has a name:** the Modelo 390
+  (DR390e2025/2026) has "Nombre" (pos. 83) as a field of its own, "OBLIGATORIO (persona física)",
+  separate from "Apellidos o Razón Social"; Classic's 390 generator takes a natural person's given
+  name and surnames from these `AD_OrgInfo` fields, never from the organization name, and ignores
+  the legal-representatives grid for a natural person. The representative is only filled "si,
+  tratándose de una persona física, actúa por medio de representante" (AEAT IVA 2025 manual), so it
+  stays optional. The data model is unchanged; CP-16 only made the UI explain it.
+
+  All of these are page-form fields, saved with the page; inputs are capped at the AD lengths (60,
+  and 20 for the NIF). The AD
   columns are optional, but the classic module adds two DB checks on `AD_OrgInfo`, mirrored by
   `getAeat390IdentityErrors` (`representanteLegal.js`) so the save never reaches them:
   - `EM_AEAT390_ISPERSON_MAND_CH` — a natural person needs **Nombre** and **Primer apellido**
@@ -410,7 +428,8 @@ is active (ETP-5831, see "Fiscal section visibility"). Its body is
   (`fieldRequired`), AD lengths (`fieldMaxLengthError`), and the NIF format via `getTaxIdError`.
   Each create/update/delete persists immediately through its own request, like the IAE grid — the grid
   is not part of the page's unsaved-changes form. Backend errors are toasted with the server message
-  (`extractApiErrorMessage`) and the form stays open.
+  (`extractApiErrorMessage(res, ui)`, so a known backend error such as "Access denied to spec for
+  current role" is translated) and the form stays open.
 - **Dates:** `powerDate` is a date-only value. It is edited with the shared `DateField`, normalised to
   `yyyy-MM-dd` with local getters (`toCalendarISO`, built on `parseCalendarDate`) before it is sent,
   and displayed with `formatCalendarDate` in the UI locale — no timezone shift.
@@ -560,7 +579,7 @@ case list, deliberately).
 - `tools/app-shell/src/windows/custom/organization/countryFlag.js` — country-name → flag-emoji lookup for the read-only País pill.
 - `tools/app-shell/src/windows/custom/organization/ActividadesIaeSection.jsx` — editable IAE-activities grid (ETP-4975): selectors, default checkbox, add/delete rows, missing-code hint.
 - `tools/app-shell/src/windows/custom/organization/useActividadesIae.js` — fetch/create/update/delete hook + `enforceSingleDefault()` (ETP-4975 single-default rule) + `rowsRef` concurrent-toggle fix (QA).
-- `tools/app-shell/src/windows/custom/organization/Modelo390IdentitySection.jsx` — "Persona física" switch + natural-person fields, or the representatives grid (ETP-5716).
+- `tools/app-shell/src/windows/custom/organization/Modelo390IdentitySection.jsx` — "Persona física" switch + natural-person holder/representative blocks (ETP-5831 CP-16), or the representatives grid (ETP-5716).
 - `tools/app-shell/src/windows/custom/organization/RepresentantesLegalesSection.jsx` — legal representatives grid, "390" marker on the first 3 by line, add/edit form card with inline validation (ETP-5716).
 - `tools/app-shell/src/windows/custom/organization/useRepresentantesLegales.js` — list (line-ordered) / create (no `lineNo`) / update / delete hook (ETP-5716).
 - `tools/app-shell/src/windows/custom/organization/representanteLegal.js` — pure helpers: `sortByLineNo`, `toCalendarISO`, `buildRepresentativePayload`, `getRepresentativeErrors`, AD length constants (ETP-5716).
@@ -575,7 +594,7 @@ case list, deliberately).
 - `tools/app-shell/src/windows/custom/organization/__tests__/useFiscalSectionVisibility.vitest.jsx` — the visibility rule per catalog model (303, 390, 349, `{}`, non-`true` flags, telematic models from the registry), SII/TBAI/VERI\*FACTU, fail closed per source, loading until both sources settle (ETP-5831).
 - `tools/app-shell/src/windows/custom/organization/__tests__/useActividadesIae.vitest.jsx` — load/create/update/delete, `enforceSingleDefault` sweep behavior including the per-row-swallowed-failure case (ETP-4975).
 - `tools/app-shell/src/windows/custom/organization/__tests__/useRepresentantesLegales.vitest.jsx` — line ordering (server param + client sort), create omits `lineNo` and carries `parentId`, `yyyy-MM-dd` power date, update/delete, and the `representanteLegal.js` validation helpers (ETP-5716).
-- `tools/app-shell/src/windows/custom/organization/__tests__/Modelo390IdentitySection.vitest.jsx` — "Persona física" switches person fields vs grid, "390" marker on the first 3 rows, required/NIF inline validation, create/edit/delete, save-error toast (ETP-5716).
+- `tools/app-shell/src/windows/custom/organization/__tests__/Modelo390IdentitySection.vitest.jsx` — "Persona física" switches person blocks (holder with read-only NIF, optional representative) vs grid, "390" marker on the first 3 rows, required/NIF inline validation, create/edit/delete, save-error toast (ETP-5716).
 - `tools/app-shell/src/windows/custom/fiscal-models/models/303/__tests__/AeatSubmitFlow.missingIaeGuard.vitest.jsx` — the "Marcar como Presentado" pre-flight guard: blocks/proceeds cases, fail-open on fetch error (ETP-4975); updated for ETP-5432 pt.10 to assert `showIaeActivityReminder` is called with `{ severity: 'error' }` instead of asserting on banner/CTA text.
 - `tools/app-shell/src/windows/custom/fiscal-models/models/303/__tests__/FmModel303Page.missingIaeGuard.vitest.jsx` — the mirror "Generar fichero" pre-flight guard, same case matrix (ETP-4975); updated the same way for the toast, plus (ETP-5432 pt.10) a new describe block covering `handlePresent`'s two manual "Registrar/Presentar" paths — including an async-timing test that keeps the guard's own fetch pending to prove `handlePresent` genuinely awaits it rather than racing ahead — and mocking fixes so a double-prefixed/malformed guard URL 404s in the test the same way it would against the real backend (see "Double-prefixed URL bug" above).
 - `tools/app-shell/src/lib/__tests__/imageUpload.test.js` — `sanitizeImageName()` truncation/extension-preservation cases.
@@ -616,9 +635,10 @@ All of the above are now covered by automated tests — the "pending Tester" gap
 13. Mark a row as "Principal" without picking a Código and confirm a warning icon appears next to that row's Código selector (tooltip: "Falta el código…"); confirm hovering the info icon next to the "Código" column header explains why it matters for Modelo 303. Confirm save is NOT blocked either way (visual hint only).
 14. Delete a row via the trash icon and confirm it disappears from the list and does not reappear on reload.
 15. Open Fiscal → Modelo 303 for a period whose organization has NO default IAE activity with a code, select the last period of the year (4T quarterly, or December for monthly), and attempt to submit. Confirm a translated banner appears ("Esta organización necesita al menos una actividad del IAE marcada como principal…") with a "Ir a Organización" button that navigates to `/organization`, and that the request never reaches the backend's submit endpoint. Repeat for a non-last period (e.g. 1T/2T/3T or any month before 12) with the same missing data and confirm submission proceeds normally (the guard only applies to the last period). Then add/mark a valid default IAE row with a code and confirm the last-period submission proceeds past this guard.
-16. **Modelo 390 identity — natural person (ETP-5716).** In "Representante legal / Modelo 390", turn
-    "Persona física" on, leave Nombre and Primer apellido empty and Save: both show "Requerido" inline
-    and nothing is saved. Fill them, type only "Nombre del representante legal" and Save: the NIF
+16. **Modelo 390 identity — natural person (ETP-5716, ETP-5831 CP-16).** In "Representante legal /
+    Modelo 390", turn on "La organización es una persona física (autónomo)" (no hint under it), leave Nombre and Primer apellido empty and Save: both show "Requerido" inline
+    and nothing is saved. Check the two blocks "Datos del titular" (with the org NIF read-only) and
+    "Representante (opcional)". Fill them, type only "Nombre o razón social del representante" and Save: the NIF
     field shows "Debe rellenar ambos…". Type the NIF as ` 12.345.678-z ` with a name and Save: it
     saves, and after a reload the NIF shows `12345678Z`. Clear Segundo apellido and Save: in the DB
     `EM_AEAT390_SURNAME2` is `NULL`, not `''`.
