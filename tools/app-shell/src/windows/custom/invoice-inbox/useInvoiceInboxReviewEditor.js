@@ -59,8 +59,10 @@ export function useInvoiceInboxReviewEditor(apiFetch, id) {
   const flushersRef = useRef(new Set());
   const savedTimerRef = useRef(null);
   const mountedRef = useRef(true);
+  const serverRef = useRef(server);
   idRef.current = id;
   apiFetchRef.current = apiFetch;
+  serverRef.current = server;
 
   const syncPending = useCallback(() => {
     setPendingState({ id: idRef.current, entries: [...pendingRef.current.values()] });
@@ -178,6 +180,27 @@ export function useInvoiceInboxReviewEditor(apiFetch, id) {
     return failuresRef.current === before;
   }, [waitUntilIdle]);
 
+  /**
+   * 422 `not_valid`: the server moved the stored status to ERROR and answered the recomputed `missing`
+   * and the NEW token. Adopt both locally (no reload) so the footer counter, the field errors and the
+   * "Revisar" tag agree with the stored state.
+   */
+  const adoptNotValid = useCallback((outcome) => {
+    const base = serverRef.current;
+    if (outcome.updated != null) tokenRef.current = outcome.updated;
+    if (!base) return;
+    replace({
+      ...base,
+      status: outcome.documentStatus ?? 'ERROR',
+      errorCode: base.errorCode ?? 'MISSING_FIELDS',
+      updated: outcome.updated ?? base.updated,
+      document: {
+        ...base.document,
+        validation: { ...(base.document?.validation ?? {}), valid: false, missing: outcome.missing ?? base.document?.validation?.missing ?? [] },
+      },
+    });
+  }, [replace]);
+
   const markReviewedNow = useCallback(async () => {
     const docId = idRef.current;
     if (!docId) return false;
@@ -193,18 +216,14 @@ export function useInvoiceInboxReviewEditor(apiFetch, id) {
         markSaved();
         return true;
       }
-      if (outcome.code === 'not_valid') {
-        // The stored verdict was stale: re-read so the footer and the field errors say what is missing.
-        const fresh = await refresh();
-        if (fresh?.updated != null) tokenRef.current = fresh.updated;
-      }
+      if (outcome.code === 'not_valid') adoptNotValid(outcome);
       return await handleFailure(outcome);
     } catch (err) {
       return idRef.current === docId ? handleNetworkError(err) : false;
     } finally {
       if (mountedRef.current) setMarking(false);
     }
-  }, [flush, handleFailure, handleNetworkError, markSaved, refresh, replace]);
+  }, [adoptNotValid, flush, handleFailure, handleNetworkError, markSaved, replace]);
 
   const retry = useCallback(async () => {
     setSave(IDLE);

@@ -217,16 +217,54 @@ describe('useInvoiceInboxReviewEditor', () => {
     expect(mockMark).not.toHaveBeenCalled();
   });
 
-  it('markReviewed not_valid re-reads the document and exposes the reason', async () => {
-    mockMark.mockResolvedValue(failed('not_valid', { httpStatus: 422, missing: ['header.vendor'] }));
+  it('markReviewed not_valid adopts the recomputed missing, the status and the NEW token locally: no reload, no loop', async () => {
+    mockMark.mockResolvedValue(failed('not_valid', { httpStatus: 422, missing: ['line[0].quantity'], documentStatus: 'ERROR', updated: 'T9' }));
     const { result } = await mount();
-    const stale = reviewOf('T5', [lineOf()], { document: { header: {}, lines: [lineOf()], validation: { missing: ['header.vendor'] } } });
-    mockFetchReview.mockResolvedValue(okOutcome(stale));
+    const reads = mockFetchReview.mock.calls.length;
     let done;
     await act(async () => { done = await result.current.markReviewed(); });
     expect(done).toBe(false);
+    expect(mockFetchReview.mock.calls.length).toBe(reads);
     expect(result.current.save).toMatchObject({ status: 'error', errorKey: 'invoiceInboxSaveErrorNotValid' });
-    expect(result.current.review.document.validation.missing).toEqual(['header.vendor']);
+    expect(result.current.notice).toBeNull();
+    expect(result.current.review.status).toBe('ERROR');
+    expect(result.current.review.errorCode).toBe('MISSING_FIELDS');
+    expect(result.current.review.updated).toBe('T9');
+    expect(result.current.review.document.validation).toMatchObject({ valid: false, missing: ['line[0].quantity'] });
+    expect(result.current.marking).toBe(false);
+    // the next write carries the adopted token (not the stale T0)
+    mockApply.mockResolvedValue(okOutcome(reviewOf('T10', [lineOf({ quantity: 3 })])));
+    act(() => { result.current.commit('line:0:quantity', buildOp.setLine(0, { quantity: 3 })); });
+    await waitFor(() => expect(mockApply).toHaveBeenCalledWith(apiFetch, 'D1', 'T9', [{ op: 'setLine', index: 0, quantity: 3 }]));
+  });
+
+  it('markReviewed not_valid without the new token or the verdict keeps the previous ones and still reports the reason', async () => {
+    mockMark.mockResolvedValue(failed('not_valid', { httpStatus: 422, missing: null, documentStatus: null, updated: null }));
+    const { result } = await mount();
+    await act(async () => { await result.current.markReviewed(); });
+    expect(result.current.review.updated).toBe('T0');
+    expect(result.current.review.status).toBe('ERROR');
+    expect(result.current.review.document.validation.missing).toEqual([]);
+    expect(result.current.save.errorKey).toBe('invoiceInboxSaveErrorNotValid');
+  });
+
+  it('markReviewed access_denied (code-less 403) shows the access reason, with no reload notice', async () => {
+    mockMark.mockResolvedValue(failed('access_denied', { httpStatus: 403 }));
+    const { result } = await mount();
+    await act(async () => { await result.current.markReviewed(); });
+    expect(result.current.save).toMatchObject({ status: 'error', errorKey: 'invoiceInboxSaveErrorAccess', code: 'access_denied' });
+    expect(result.current.notice).toBeNull();
+  });
+
+  it('a write refused with unknown_tax rolls the tax pick back and shows its reason', async () => {
+    mockApply.mockResolvedValue(failed('unknown_tax', { httpStatus: 422 }));
+    const { result } = await mount('D1', reviewOf('T0', [lineOf({ tax: { state: 'resolved', id: 'T21', rate: 21, name: 'IVA 21%' } })]));
+    act(() => { result.current.commit('line:0:tax', buildOp.setLine(0, { taxId: 'T10' }), { taxName: 'IVA 10%', taxRate: 10 }); });
+    expect(result.current.review.document.lines[0].tax.id).toBe('T10');
+    await waitFor(() => expect(result.current.save.status).toBe('error'));
+    expect(result.current.save.errorKey).toBe('invoiceInboxSaveErrorUnknownTax');
+    expect(result.current.review.document.lines[0].tax.id).toBe('T21');
+    expect(result.current.review.document.lines[0].taxRate).toBe(21);
   });
 
   it('markReviewed not_reviewable reloads with a notice', async () => {

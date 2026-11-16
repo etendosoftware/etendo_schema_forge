@@ -309,7 +309,7 @@ describe('applyOperations / markReviewed (ETP-6050 S2)', () => {
     const body = { error: { code: 'invalid_value', field: 'quantity', index: 2, status: 422 } };
     const apiFetch = vi.fn(async () => json(body, { ok: false, status: 422 }));
     expect(await applyOperations(apiFetch, 'D1', 'u', ops)).toEqual({
-      status: 'failed', code: 'invalid_value', httpStatus: 422, field: 'quantity', index: 2, missing: null, documentStatus: null,
+      status: 'failed', code: 'invalid_value', httpStatus: 422, field: 'quantity', index: 2, missing: null, documentStatus: null, updated: null,
     });
   });
 
@@ -358,5 +358,10 @@ describe('applyOperations / markReviewed (ETP-6050 S2)', () => {
     expect((await applyOperations(coded, 'D1', 'u', ops)).code).toBe('feature_disabled');
     const notFound = vi.fn(async () => ({ ok: false, status: 404, json: async () => ({}) }));
     expect((await applyOperations(notFound, 'D1', 'u', ops)).code).toBeNull();
+  });
+
+  it('markReviewed 422 not_valid exposes missing, the NEW token and the document status', async () => {
+    const apiFetch = vi.fn(async () => ({ ok: false, status: 422, json: async () => ({ error: { code: 'not_valid', missing: ['vendor'], updated: 'u9', documentStatus: 'ERROR' } }) }));
+    expect(await markReviewed(apiFetch, 'D1', 'u')).toMatchObject({ status: 'failed', code: 'not_valid', missing: ['vendor'], updated: 'u9', documentStatus: 'ERROR' });
   });
 });

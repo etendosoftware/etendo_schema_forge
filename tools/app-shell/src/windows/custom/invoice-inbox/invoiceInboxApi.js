@@ -175,6 +175,8 @@ function failedOutcome(res, json) {
     index: Number.isInteger(details.index) ? details.index : null,
     missing: Array.isArray(details.missing) ? details.missing : null,
     documentStatus: details.documentStatus ?? null,
+    // `not_valid` (422) carries the NEW token: adopt it without a reload.
+    updated: details.updated ?? null,
   };
 }
 
