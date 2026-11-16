@@ -237,6 +237,58 @@ export function createReportHelpers({ numberFormat } = {}) {
     return overrides[docbasetype] || translatedName;
   }
 
+
+  // ETP-6239 — period columns (the Columnas select of the interactive reports): read the
+  // engine's `meta.periods` / `meta.columnPages`, so they are canonical (template.hbs is also
+  // rendered server-side, which registers only this set). Mirrored in JSREPORT_HELPER_SOURCES.
+  //
+  // "sep 26" / "T3 26" ("Q3 26" in English), "*" when the bucket does not cover its whole month
+  // or quarter. Bucket 0 is the range total: its label is the caller's own "Total".
+  // shortcut: month names are fixed per language, not read from Intl (the jsreport container's
+  // ICU build is not guaranteed); upgrade when a third locale ships.
+  function periodLabel(period, columns, locale, totalLabel) {
+    if (!period) return '';
+    if (period.idx === 0) return totalLabel;
+    var months = {
+      es: ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'],
+      en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    };
+    var lang = String(locale || 'en_US').slice(0, 2) === 'es' ? 'es' : 'en';
+    var parts = String(period.dateFrom).split('-');
+    var year = parts[0].slice(-2);
+    var month = Number(parts[1]) - 1;
+    var star = period.partial ? '*' : '';
+    if (columns === 'quarter') return (lang === 'es' ? 'T' : 'Q') + (Math.floor(month / 3) + 1) + ' ' + year + star;
+    return months[lang][month] + ' ' + year + star;
+  }
+
+  // Bucket order for Excel / CSV: the periods first, the range total (idx 0) last.
+  function periodOrder(periods) {
+    var all = (periods || []).map(function(p) { return p.idx; });
+    return all.filter(function(i) { return i !== 0; }).concat(all.filter(function(i) { return i === 0; }));
+  }
+
+  // The PDF pages with the range total last: the engine's pages hold idx 0 first, so flatten,
+  // move it to the end and cut again at the engine's page size.
+  function periodPages(columnPages) {
+    var size = ((columnPages || [])[0] || []).length || 1;
+    var flat = [].concat.apply([], columnPages || []);
+    var ordered = flat.filter(function(i) { return i !== 0; }).concat(flat.filter(function(i) { return i === 0; }));
+    var pages = [];
+    for (var i = 0; i < ordered.length; i += size) pages.push(ordered.slice(i, i + size));
+    return pages;
+  }
+
+  // 'sly' / 'prev' when the render compares, '' otherwise (an unknown mode counts as none).
+  function periodMode(value) {
+    return value === 'sly' || value === 'prev' ? value : '';
+  }
+
+  // Columns a group header row spans: Concepto plus every sub-column of the page's groups.
+  function periodSpan(groups, mode) {
+    return 1 + groups * (mode === 'sly' || mode === 'prev' ? 4 : 1);
+  }
+
   return {
     isGroupBreak,
     resetGroupTracking,
@@ -254,6 +306,11 @@ export function createReportHelpers({ numberFormat } = {}) {
     sumRowsByCategory,
     translateDocType,
     csvField,
+    periodLabel,
+    periodOrder,
+    periodPages,
+    periodMode,
+    periodSpan,
   };
 }
 
@@ -493,6 +550,39 @@ const JSREPORT_HELPER_SOURCES = {
   while (i < s.length && triggers.indexOf(s.charAt(i)) < 0 && /[\\s\\uFEFF]/.test(s.charAt(i))) i++;
   if (i < s.length && triggers.indexOf(s.charAt(i)) >= 0) s = "'" + s;
   return /[",\\n\\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}`,
+  periodLabel: `function periodLabel(period, columns, locale, totalLabel) {
+  if (!period) return '';
+  if (period.idx === 0) return totalLabel;
+  var months = {
+    es: ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'],
+    en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+  };
+  var lang = String(locale || 'en_US').slice(0, 2) === 'es' ? 'es' : 'en';
+  var parts = String(period.dateFrom).split('-');
+  var year = parts[0].slice(-2);
+  var month = Number(parts[1]) - 1;
+  var star = period.partial ? '*' : '';
+  if (columns === 'quarter') return (lang === 'es' ? 'T' : 'Q') + (Math.floor(month / 3) + 1) + ' ' + year + star;
+  return months[lang][month] + ' ' + year + star;
+}`,
+  periodOrder: `function periodOrder(periods) {
+  var all = (periods || []).map(function(p) { return p.idx; });
+  return all.filter(function(i) { return i !== 0; }).concat(all.filter(function(i) { return i === 0; }));
+}`,
+  periodPages: `function periodPages(columnPages) {
+  var size = ((columnPages || [])[0] || []).length || 1;
+  var flat = [].concat.apply([], columnPages || []);
+  var ordered = flat.filter(function(i) { return i !== 0; }).concat(flat.filter(function(i) { return i === 0; }));
+  var pages = [];
+  for (var i = 0; i < ordered.length; i += size) pages.push(ordered.slice(i, i + size));
+  return pages;
+}`,
+  periodMode: `function periodMode(value) {
+  return value === 'sly' || value === 'prev' ? value : '';
+}`,
+  periodSpan: `function periodSpan(groups, mode) {
+  return 1 + groups * (mode === 'sly' || mode === 'prev' ? 4 : 1);
 }`,
 };
 
