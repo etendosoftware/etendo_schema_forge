@@ -196,21 +196,6 @@ export function reporterNodeOptions(existing, junitFile) {
   return [existing?.trim(), ...flags].filter(Boolean).join(' ');
 }
 
-/**
- * Sends `send()` again while it answers 401, at most `retries` more times, `delayMs` apart; any other
- * answer (or a thrown error) is returned/raised at once. Only for the first request after a session
- * is issued or rotated: resolving a not-yet-committed token is read-only, so the retry is safe.
- */
-// shortcut: GO answers before committing the session (ETP-6152), drop this retry once that fix is in develop
-export async function retryOn401(send, { retries = 3, delayMs = 500, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
-  let res = await send();
-  for (let attempt = 0; res.status === 401 && attempt < retries; attempt += 1) {
-    await sleep(delayMs);
-    res = await send();
-  }
-  return res;
-}
-
 // ---------------------------------------------------------------- install
 
 function sh(command, args, options = {}) {
@@ -379,7 +364,7 @@ async function run() {
     if (session.status !== 200 || !session.json?.csrfToken) throw failure('POST /sws/go/session', session);
     csrf = session.json.csrfToken;
 
-    const environments = await retryOn401(() => request(`${neo}/sws/go/environments`, { jar, origin }));
+    const environments = await request(`${neo}/sws/go/environments`, { jar, origin });
     if (environments.status !== 200) throw failure('GET /sws/go/environments', environments);
     const environment = pickEnvironment(environments.json);
     const entered = await request(`${neo}/sws/go/session/environment`, {
@@ -395,7 +380,7 @@ async function run() {
     log(`entered environment "${environment.clientName ?? environment.clientId}"`);
 
     // A cancelled or crashed run can leave its keys behind; the owner may hold only 10 active ones.
-    const existing = await retryOn401(() => request(`${neo}/oauth2/api-keys`, { jar, origin }));
+    const existing = await request(`${neo}/oauth2/api-keys`, { jar, origin });
     if (existing.status !== 200) throw failure('GET /oauth2/api-keys', existing);
     for (const stale of leftoverKeys(existing.json, runId)) {
       const res = await request(`${neo}/oauth2/api-keys/${encodeURIComponent(stale.id)}`, { method: 'DELETE', jar, csrf, origin });

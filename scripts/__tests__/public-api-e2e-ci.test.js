@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   childEnv, CookieJar, FULL_CAPABILITIES, READONLY_CAPABILITIES, keyName, leftoverKeys, runTimeoutMinutes, pickEnvironment, pinnedCoreVersion, reporterNodeOptions, resolveCredentials,
-  resolveNeoBaseUrl, retryOn401, setCookiePairs,
+  resolveNeoBaseUrl, setCookiePairs,
 } from '../public-api-e2e-ci.mjs';
 
 const headersWith = (cookies) => {
@@ -17,41 +17,6 @@ describe('public-api-e2e-ci helpers', () => {
     it('gives the full key read, write and process (business actions), the other key read only', () => {
       assert.deepEqual(FULL_CAPABILITIES, ['public-api:read', 'public-api:write', 'public-api:process']);
       assert.deepEqual(READONLY_CAPABILITIES, ['public-api:read']);
-    });
-  });
-
-  describe('retryOn401', () => {
-    const scripted = (...statuses) => {
-      const calls = { count: 0 };
-      const send = async () => ({ status: statuses[Math.min(calls.count++, statuses.length - 1)] });
-      return { send, calls };
-    };
-    const noSleep = { sleep: async () => {} };
-
-    it('retries a 401 and returns the first success', async () => {
-      const { send, calls } = scripted(401, 200);
-      assert.equal((await retryOn401(send, noSleep)).status, 200);
-      assert.equal(calls.count, 2);
-    });
-    it('returns the last 401 after the retry cap', async () => {
-      const { send, calls } = scripted(401);
-      const waits = [];
-      const res = await retryOn401(send, { sleep: async (ms) => { waits.push(ms); } });
-      assert.equal(res.status, 401);
-      assert.equal(calls.count, 4);
-      assert.deepEqual(waits, [500, 500, 500]);
-    });
-    it('does not retry any other status', async () => {
-      for (const status of [200, 403, 500]) {
-        const { send, calls } = scripted(status, 200);
-        assert.equal((await retryOn401(send, noSleep)).status, status);
-        assert.equal(calls.count, 1);
-      }
-    });
-    it('does not retry a thrown error', async () => {
-      let count = 0;
-      await assert.rejects(retryOn401(async () => { count += 1; throw new Error('boom'); }, noSleep), /boom/);
-      assert.equal(count, 1);
     });
   });
 

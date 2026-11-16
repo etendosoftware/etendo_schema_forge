@@ -401,8 +401,6 @@ make public-api-e2e                                    # or: cd gateway && npm r
 4. runs `npm run test:e2e` with `PUBLIC_API_BASE_URL`, `PUBLIC_API_KEY` and `PUBLIC_API_KEY_READONLY` set, adding a JUnit reporter through `NODE_OPTIONS`;
 5. always (failure and `SIGINT`/`SIGTERM` included) stops the suite's whole process group, then the gateway, deletes both keys and closes the session, and exits with the suite's status (`1` when the setup failed, `130`/`143` when interrupted).
 
-The first request after signing in (`GET /sws/go/environments`) and the first after entering the environment (`GET /oauth2/api-keys`) are retried on `401` only, up to 3 times 500 ms apart: GO currently answers those two session calls before the new session is committed, so the next request can briefly see it as invalid. This is a temporary workaround, removed once ETP-6152 fixes the session commit; no other request retries.
-
 It prints the key ids, never a password, cookie, CSRF token or secret. The gateway and the suite get a minimal environment: `PATH`, `HOME`, the temp/locale variables, `CI`, `NODE_*`, `npm_config_*` (either case) and `PUBLIC_API_*` (minus the sign-in account), plus what the script sets for them; other CI secrets in the caller's environment do not reach them.
 
 | Variable | Meaning |
