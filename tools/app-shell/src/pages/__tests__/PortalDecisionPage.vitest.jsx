@@ -14,7 +14,9 @@ vi.mock('@/i18n', () => ({ useUI: () => t }));
 import { StrictMode } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import {
+  MemoryRouter, Route, Routes, useLocation, useNavigationType,
+} from 'react-router-dom';
 import PortalDecisionPage from '../PortalDecisionPage.jsx';
 
 const DECISION_TOKEN = 'dec-0123456789abcdef';
@@ -33,10 +35,24 @@ function renderLanding({ strict = false, path = `/portal/decision/${DECISION_TOK
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="portal/decision/:token" element={<PortalDecisionPage />} />
+        <Route path="portal/:token" element={<PortalArrivalProbe />} />
       </Routes>
     </MemoryRouter>
   );
   return render(strict ? <StrictMode>{tree}</StrictMode> : tree);
+}
+
+/** Stands in for the portal: shows where the landing sent the customer, and how. */
+function PortalArrivalProbe() {
+  const location = useLocation();
+  return (
+    <output
+      data-testid="portal-arrival-probe"
+      data-path={`${location.pathname}${location.search}`}
+      data-navigation={useNavigationType()}
+      data-state={JSON.stringify(location.state)}
+    />
+  );
 }
 
 const confirmCalls = () => apiFetchMock.mock.calls.filter(([path]) => path.endsWith('/decisions/confirm'));
@@ -130,5 +146,35 @@ describe('PortalDecisionPage — what it says', () => {
 
     await waitFor(() => expect(screen.getByTestId('portal-decision-applied')).toBeInTheDocument());
     expect(confirmCalls()).toHaveLength(2);
+  });
+});
+
+describe('PortalDecisionPage — the way into the portal', () => {
+  it('opens the portal on the quotation, replacing the landing, with the notice in router state only', async () => {
+    apiFetchMock.mockResolvedValue(jsonResponse({ ...APPLIED_REJECT, portalToken: 'tok-new', quotationId: 'q-1' }));
+    // StrictMode: the effect runs twice, the confirmation still goes out once.
+    renderLanding({ strict: true });
+
+    await waitFor(() => expect(screen.getByTestId('portal-arrival-probe')).toBeInTheDocument());
+    const probe = screen.getByTestId('portal-arrival-probe');
+    expect(probe.dataset.path).toBe('/portal/tok-new?view=doc&kind=QUOTATION&id=q-1');
+    // Replace: Back does not return to the landing (which would answer "already applied").
+    expect(probe.dataset.navigation).toBe('REPLACE');
+    expect(JSON.parse(probe.dataset.state)).toStrictEqual({
+      portalNotice: {
+        messageKey: 'portalNoticeRejected', tone: 'success', number: 'PR/0001',
+        reasonCode: 'OTHER', reasonText: 'Ya no lo necesitamos',
+      },
+    });
+    expect(screen.queryByTestId('portal-decision-applied')).not.toBeInTheDocument();
+    expect(confirmCalls()).toHaveLength(1);
+  });
+
+  it('keeps its own card when the answer carries no portal token', async () => {
+    apiFetchMock.mockResolvedValue(jsonResponse({ ...APPLIED_REJECT, portalToken: null, quotationId: 'q-1' }));
+    renderLanding();
+
+    await waitFor(() => expect(screen.getByTestId('portal-decision-applied')).toBeInTheDocument());
+    expect(screen.queryByTestId('portal-arrival-probe')).not.toBeInTheDocument();
   });
 });

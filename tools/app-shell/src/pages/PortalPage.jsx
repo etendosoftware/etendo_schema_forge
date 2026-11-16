@@ -15,6 +15,7 @@ import {
   resolvePortalBaseUrl,
 } from '@/lib/portal/portalApi.js';
 import PortalShell from './portal/PortalShell.jsx';
+import PortalArrivalNotice, { usePortalArrivalNotice } from './portal/PortalArrivalNotice.jsx';
 import PortalHomeView from './portal/PortalHomeView.jsx';
 import PortalDocumentListView from './portal/PortalDocumentListView.jsx';
 import PortalDocumentDetailView from './portal/PortalDocumentDetailView.jsx';
@@ -260,6 +261,8 @@ export default function PortalPage() {
   const [attempt, setAttempt] = useState(0);
   const [logoUrl, setLogoUrl] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  // ETP-6209: the one-off notice of a decision confirmation that led here (router state only).
+  const [arrivalNotice, dismissArrivalNotice] = usePortalArrivalNotice();
   // The home chart's period ("Últimos 12 meses"); a change refetches only the home aggregates.
   const [months, setMonths] = useState(12);
   const monthsRef = useRef(months);
@@ -467,6 +470,10 @@ export default function PortalPage() {
       tiles={home?.tiles}
       onNavigate={navigate}
       data-testid="PortalShell__3db5f6">
+      <PortalArrivalNotice
+        notice={arrivalNotice}
+        onDismiss={dismissArrivalNotice}
+        data-testid="PortalArrivalNotice__3db5f6" />
       {entryHidden && (
         <p
           role="status"
