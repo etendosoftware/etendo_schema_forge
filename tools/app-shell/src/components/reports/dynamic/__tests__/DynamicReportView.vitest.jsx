@@ -286,6 +286,16 @@ describe('DynamicReportView — split, errors and exports', () => {
     expect(screen.queryAllByTestId('DynamicReportTable__splitRow')).toHaveLength(0);
   });
 
+  it('with dateFrom after dateTo it says so and drops the previous period data', async () => {
+    renderView();
+    await waitFor(() => expect(rowIds()).toHaveLength(2));
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__dateFrom'), { target: { value: '2026-12-01' } });
+    expect(await screen.findByTestId('DynamicReportView__error')).toHaveTextContent('reportErrorInvalidPeriods');
+    expect(rowIds()).toHaveLength(0);
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__dateFrom'), { target: { value: '2026-10-01' } });
+    await waitFor(() => expect(screen.queryByTestId('DynamicReportView__error')).toBeNull());
+  });
+
   it('with dateFrom after dateTo no /query is sent', async () => {
     renderView();
     await waitFor(() => expect(rowIds()).toHaveLength(2));
@@ -857,7 +867,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
       expect((await exportAs('csv')).compareMode).toBe('sly');
     });
 
-    it('over 25 buckets Excel and CSV are disabled with a translated message; PDF still works; Total mode has no cap', async () => {
+    it('over 25 buckets Excel and CSV are disabled with a translated message; PDF still works; Total mode obeys the 24-month cap', async () => {
       await renderPeriods();
       choose('DynamicReportPanel__columns', 'month');
       showPanel();
@@ -870,8 +880,21 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
       expect(screen.getByTestId('DynamicReportView__export-pdf')).toBeEnabled();
       expect((await exportAs('pdf')).periods.split(',')).toHaveLength(7);
       choose('DynamicReportPanel__columns', 'total');
+      // The server refuses a range past from + 24 months in any grain (report-periods.js, D5).
+      await waitFor(() => expect(screen.getByTestId('DynamicReportView__export-xlsx')).toBeDisabled());
+      expect(screen.getByTestId('DynamicReportView__exportTooLong')).toBeInTheDocument();
+      fireEvent.change(screen.getByTestId('DynamicReportPanel__dateFrom'), { target: { value: '2025-01-01' } });
       await waitFor(() => expect(screen.queryByTestId('DynamicReportView__exportTooLong')).toBeNull());
       expect(screen.getByTestId('DynamicReportView__export-xlsx')).toBeEnabled();
+    });
+
+    it('a server refusal of an export shows its translated message, not the generic one', async () => {
+      await renderPeriods();
+      apiFetchMock.mockImplementation((url, init) => (url.endsWith('/render')
+        ? Promise.resolve({ ok: false, status: 400, json: () => Promise.resolve({ code: 'PERIOD_RANGE_TOO_LONG' }) })
+        : route(url, init)));
+      fireEvent.click(screen.getByTestId('DynamicReportView__export-xlsx'));
+      expect(await screen.findByTestId('DynamicReportView__error')).toHaveTextContent('reportErrorPeriodRangeTooLong');
     });
   });
 

@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/components/reports/dynamic/reportColumns.js
 import {
-  columnCount, columnModel, cellParts, COLUMN_GRAINS, EXPORT_MAX_BUCKETS, modeOf, rowsForMode, SCREEN_PERIODS,
+  columnCount, columnModel, cellParts, COLUMN_GRAINS, EXPORT_MAX_BUCKETS, exportTooLong, modeOf, rowsForMode, SCREEN_PERIODS,
 } from '../reportColumns.js';
 import { periodBuckets } from '../dynamicDates.js';
 
@@ -149,5 +149,14 @@ describe('rowsForMode', () => {
 
   it('no rows is an empty list', () => {
     expect(rowsForMode(undefined, 'none')).toEqual([]);
+  });
+});
+
+describe('exportTooLong (mirrors the server cap)', () => {
+  it('refuses a range past from + 24 months, accepts exactly 24, refuses over 25 buckets', () => {
+    expect(exportTooLong({ dateFrom: '2024-01-01', dateTo: '2026-12-31' }, 1)).toBe(true);
+    expect(exportTooLong({ dateFrom: '2024-01-01', dateTo: '2026-01-01' }, 25)).toBe(false);
+    expect(exportTooLong({ dateFrom: '2024-01-01', dateTo: '2025-12-31' }, 26)).toBe(true);
+    expect(exportTooLong({ dateFrom: '', dateTo: '' }, 0)).toBe(false);
   });
 });

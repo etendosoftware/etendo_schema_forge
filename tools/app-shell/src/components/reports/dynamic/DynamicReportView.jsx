@@ -19,7 +19,7 @@ import { useReportDefaults } from './useReportDefaults.js';
 import { useAccountSplit } from './useAccountSplit.js';
 import { REPORT_EVENTS, filterTypeOf, useReportTelemetry } from './reportTelemetry.js';
 import { matchingShortcut, matchingYear, openingPeriod, periodBuckets, pickedYearPeriod, serializePeriods, shortcutPeriod } from './dynamicDates.js';
-import { EXPORT_MAX_BUCKETS, SCREEN_PERIODS, columnModel, modeOf, rowsForMode } from './reportColumns.js';
+import { SCREEN_PERIODS, exportTooLong as isExportTooLong, columnModel, modeOf, rowsForMode } from './reportColumns.js';
 import { expandedNodeIdsParam, foldExpansion, visibleRows } from './reportTree.js';
 
 const EXPORTS = [
@@ -113,7 +113,12 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
     hiddenCount: String(plan?.hiddenCount ?? 0),
   }), [defaults.acctSchemaId, state.orgId, state.dateFrom, state.dateTo, hasRange, state.bPartnerId, state.productId, state.columns, plan]);
 
-  const { data, loading, error, errorCode, settled } = useReportQuery(report.id, queryParams, { locale });
+  const { data: queried, loading, error: queryError, errorCode: queryErrorCode, settled } = useReportQuery(report.id, queryParams, { locale });
+  // From after to is a user error: say so, and show nothing of the previous period under the new one.
+  const reversed = Boolean(state.dateFrom && state.dateTo && state.dateFrom > state.dateTo);
+  const data = reversed ? null : queried;
+  const error = reversed ? 'reversed' : queryError;
+  const errorCode = reversed ? 'invalid_periods' : queryErrorCode;
   const telemetry = useReportTelemetry(report.id, { source, paramsKey: JSON.stringify(queryParams), settled, errorCode });
   // D8: the panel hides on a button or on Mes/Trimestre. The button the user was on disappears, so
   // focus moves to the one that replaces it.
@@ -195,7 +200,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   const [exportError, setExportError] = useState(null);
   // PDF prints what the screen shows; Excel / CSV print every period, up to the cap (D5).
   const fullPlan = useMemo(() => (hasRange ? periodBuckets(range, state.columns) : null), [hasRange, range, state.columns]);
-  const exportTooLong = state.columns !== 'total' && (fullPlan?.buckets.length ?? 0) > EXPORT_MAX_BUCKETS;
+  const exportTooLong = hasRange && isExportTooLong(range, fullPlan?.buckets.length ?? 0);
   const exportAs = async (format) => {
     setExporting(format);
     setExportError(null);
@@ -222,15 +227,18 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
           },
         }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const code = String((await res.json().catch(() => null))?.code ?? '').toLowerCase();
+        throw Object.assign(new Error(`HTTP ${res.status}`), { code });
+      }
       const url = URL.createObjectURL(await res.blob());
       const a = document.createElement('a');
       a.href = url;
       a.download = buildReportFilename(report.id, format);
       a.click();
       URL.revokeObjectURL(url);
-    } catch {
-      setExportError(ui('dynamicReportErrorGeneric'));
+    } catch (err) {
+      setExportError(ui(ERROR_KEYS[err?.code] || 'dynamicReportErrorGeneric'));
     }
     setExporting(null);
   };

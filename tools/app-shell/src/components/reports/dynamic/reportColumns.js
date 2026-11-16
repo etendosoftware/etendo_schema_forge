@@ -17,6 +17,17 @@ export const SCREEN_PERIODS = Object.freeze({ month: 6, quarter: 4 });
 /** Buckets Excel / CSV accept, the range included (24 months or 8 quarters). */
 export const EXPORT_MAX_BUCKETS = 25;
 
+/**
+ * Excel / CSV refusals, mirroring the server (core report-periods.js, D5): the range may not run past
+ * from + 24 months (any grain, Total included) and may not carry more than EXPORT_MAX_BUCKETS periods.
+ */
+export function exportTooLong({ dateFrom, dateTo }, bucketCount) {
+  if (!dateFrom || !dateTo) return false;
+  const [y, m, d] = dateFrom.split('-').map(Number);
+  const limit = new Date(Date.UTC(y, m - 1 + 24, d)).toISOString().slice(0, 10);
+  return dateTo > limit || bucketCount > EXPORT_MAX_BUCKETS;
+}
+
 const COLUMNS_WITH_COMPARISON = ['current', 'compared', 'variation', 'variationPct'];
 
 /**
