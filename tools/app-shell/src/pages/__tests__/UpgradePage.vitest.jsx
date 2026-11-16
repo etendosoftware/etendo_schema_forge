@@ -113,7 +113,7 @@ const PRODUCTIVE_PLAN = {
   displayPrice: '49.00',
   currency: 'EUR',
   billingInterval: 'month',
-  secondMonthFree: true,
+  freeTrialDays: 30,
 };
 
 function jsonResponse(data, { ok = true, status = 200 } = {}) {
@@ -1063,7 +1063,7 @@ describe('UpgradePage — what the checkout requests carry (ETP-4576)', () => {
   it('does not promise an introductory offer that the server has not enabled', async () => {
     installFetch({
       environments: [{ clientName: 'Current Productive', clientId: 'CURRENT-PRODUCTIVE', plan: 'productive' }],
-      plans: [{ ...PRODUCTIVE_PLAN, secondMonthFree: false }],
+      plans: [{ ...PRODUCTIVE_PLAN, freeTrialDays: 0 }],
     });
     await renderUpgradePage();
     expect(screen.queryByTestId('upgrade-monthly-promotion')).not.toBeInTheDocument();
@@ -1080,7 +1080,7 @@ describe('UpgradePage — what the checkout requests carry (ETP-4576)', () => {
     UPGRADE_SESSION.clientId = 'CURRENT-PRODUCTIVE';
     await renderUpgradePage();
     await user.type(screen.getByTestId('upgrade-tenant-name-input'), 'Checkout Target');
-    expect(screen.getByTestId('upgrade-monthly-promotion')).toHaveTextContent('upgradeMonthlyIntroductoryOffer');
+    expect(screen.getByTestId('upgrade-monthly-promotion')).toHaveTextContent('upgradeMonthlyFreeTrial');
     await user.click(screen.getByTestId('upgrade-submit'));
     const replaceButton = await screen.findByTestId('upgrade-replace-purchase');
     expect(assignMock).not.toHaveBeenCalled();
