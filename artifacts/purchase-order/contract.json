@@ -1,8 +1,8 @@
 {
-  "version": "0.57.0",
+  "version": "0.58.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-11-06T12:57:33.390Z",
-  "checksum": "eb35510769613dc4",
+  "updatedAt": "2026-11-16T18:47:24.736Z",
+  "checksum": "7f572820cd9ee321",
   "frontendContract": {
     "window": {
       "id": "181",
@@ -437,6 +437,13 @@
               "source": "DR"
             },
             "enumValues": [
+              {
+                "value": "ETGO_AC",
+                "name": "Accepted",
+                "labels": {
+                  "es_ES": "Accepted"
+                }
+              },
               {
                 "value": "AE",
                 "name": "Automatic Evaluation",

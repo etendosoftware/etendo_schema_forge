@@ -7,7 +7,7 @@ description: Work on any email Etendo sends — changing its wording, layout, la
 
 # Etendo Emails
 
-Etendo sends **24 distinct emails** from **two independent stacks**. Full inventory with per-email
+Etendo sends **25 distinct emails** from **two independent stacks**. Full inventory with per-email
 file references: `docs/email-inventory.md`. Design decisions and rollout plan:
 `docs/plans/2026-08-25-etp-5003-unified-email-template.md` (ETP-5003).
 
@@ -157,6 +157,35 @@ through the GO provider. It is a fallback, not an override — SMTP wins when pr
 - Rules, thresholds and local verification: `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md`
   → *Trial notices* and `docs/etp-5396-local-lifecycle-tool.md`.
 
+### portal-quotation-decision-confirm / -notice (ETP-6209 Part C)
+- **confirm**: sent when a customer asks, in the portal, to accept or reject a quotation
+  (`POST /sws/portal/quotations/{id}/decision`). Only to the **first To of the original send** —
+  never CC, never an address from the caller (re-derived from the link's root row). It carries a
+  single-use, never-expiring confirmation link; the decision row is minted pending in `resolve` and
+  usable from `onDelivered`. Opening the link applies nothing; the landing's button confirms.
+- **notice**: to the user who sent the quotation, at their ETGO_ACCOUNT email (`AD_User.Email` is
+  not filled by onboarding), after the confirmation's commit. No account: no notice, logged.
+- Both refuse any caller outside `PortalDecisionScope` (403) and file under the quotation's send
+  history. Copy: `portal-quotation-decision.*` (formal "usted" for the customer, as the renewal).
+
+### portal-link-renewal (ETP-6209)
+- Sent when a customer opens an **expired** customer portal link: the portal page calls
+  `POST /sws/portal/renew`, which emails a new link. Never sent from the browser or the
+  email-contracts endpoint: the contract refuses any caller outside `PortalRenewalScope` (403),
+  which only `PortalLinkService#renew` sets, after the blocking checks and the cool-down.
+- **Recipients are the original send's To and CC**, read from the expired `ETGO_Portal_Link` row —
+  never whoever opened the link. Language is the original send's (`EMAIL_LANGUAGE` on the row).
+- Copy: `portal-link-renewal.*`. The document is named with its article and in lower case
+  ("para consultar **la factura** F-001") through `portal-link-renewal.document.<KIND>`
+  (`QUOTATION`, `ORDER`, `SHIPMENT`, `INVOICE`, `CREDIT_NOTE`); the validity sentence interpolates
+  the link's lifetime in hours from config, never a literal.
+- It logs send history (unlike the account family) and is filed under the **document's** record
+  and spec, so it shows in the document's Emails card. It runs as System, so
+  `DalEmailSendLogStore#setOwner` files the row under the command's tenant at organization `*`.
+- Limits: one renewal per link per 15 minutes (`etendo.go.portal.renewal.cooldownMinutes`),
+  enforced with a row lock across requests and nodes; an optional daily cap per customer is off by
+  default. The contract's own throttles (per recipient 20/h) are only the email system's backstop.
+
 ### login-alert
 - Registered, migrated, reachable over the endpoint — and **nobody calls it**. There is no producer
   in either repo.
@@ -250,6 +279,19 @@ either side.
 label from the AD menu while the module used its catalog, so an operator read one subject on screen
 while the customer received another — and a comment in the Java saying "the two must agree" did not
 stop it. If the guard fails, fix the copy; do not relax the test.
+
+### The portal link inside the document emails (ETP-5267, ETP-6209)
+- `sales-quotation-send`, `sales-order-send`, `goods-shipment-send` and `sales-invoice-send` (credit
+  notes included) declare `portalDocumentKind()`; when the `bp-portal-link` flag is on for the
+  sending account the email gets the `document.portal.intro` sentence and **the portal becomes the
+  call-to-action button** (`document.portal.cta`, "Ver documento en el portal"); the "Descargar
+  documento" button is dropped (ETP-6209 Part B). The base contract branches only on whether a link
+  was minted.
+- **The link is per send.** Every send mints its own token; `document.portal.intro` states the
+  link's validity in hours (`{0}`, from `etendo.go.portal.link.ttlMinutes`), so the copy must keep
+  that placeholder and must not promise a permanent link. The link becomes valid only when the
+  email leaves (`EmailContract#onDelivered`); a throttled or duplicate send leaves it pending.
+- Every other document email declares nothing and is byte-identical.
 
 ### The six document emails
 - One implementation, `DefaultDocumentSendEmailContract`, parameterised six times. Contract name is
