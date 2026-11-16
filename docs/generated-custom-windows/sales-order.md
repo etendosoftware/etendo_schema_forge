@@ -871,4 +871,9 @@ its invoice because of a fiscal problem. The values travel as `sifFields` in the
 body; the backend validates them with the same per-system rule as the invoice's own completion
 (`RectificationFiscalCodeGuard`, 422 `ETGO_InvoiceRectificationCodeRequired`). If the preview cannot
 be loaded the flow continues without the step: the backend applies the same defaults anyway.
+The mandatory fields of the step carry the red `*` and keep the primary button disabled while
+empty (SII *Tipo factura* and *Descripción SII*; VERI*FACTU *Tipo de factura*, *Descripción de la
+operación* and, with VERI*FACTU active, *Fecha operación*; on a rectificative also each system's
+rectification code, which is never preselected). The rule is shared with the invoices' SIF tab:
+`docs/ui-customization.md` §21b.
 Backend reference: `com.etendoerp.go` `docs/neo-headless.md` §4.12.36b (ETP-6179).

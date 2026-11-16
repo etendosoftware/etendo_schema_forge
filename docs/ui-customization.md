@@ -3203,6 +3203,37 @@ SIF-tab fields are editable, their allowed codes and the value each would get. T
 as `sifFields` in the invoice-creating action's body. A field the caller does not send gets its
 preview value on the server, so the screen and the API always produce the same invoice.
 
+**No rectification code is preselected.** On a rectificative the preview leaves the SII motive
+(`aeatsiiMotivoRectif`), the TicketBAI code (`tbaiReverseinvoicecode`) and the VERI\*FACTU type
+(`etvfacInvType`, which there only offers `R1`–`R5`) EMPTY: the selects show the "—" placeholder and
+the user has to choose each one before the primary button is enabled. The one exception is on the
+server and never visible in the step: a caller that sends **no `sifFields` at all** (MCP/API, or
+this screen when the preview failed and the step was skipped) gets `R4` in those fields
+(`InvoiceSifPreset.unattendedRectificationFallback`, `neo-headless.md` §4.12.36b).
+
+**Mandatory fields carry the red `*`**, here and in the invoices' SIF tab (`SifTab.jsx`), from ONE
+rule: `isSifFieldRequired(name, { rectificative, verifactu })` in
+`tools/app-shell/src/windows/custom/shared/sifRequiredFields.js`. No SIF column is mandatory in the
+AD; the rule lists the fields a fiscal system refuses when empty:
+
+| System | Field | Mandatory when | Who refuses it empty |
+|---|---|---|---|
+| SII | Tipo factura (`aeatsiiClaveTipo` / purchase `aeatsiiClaveTipoFc`) | always | SII pre-send validation (`SIIUtils`) |
+| SII | Descripción SII (`aeatsiiDescripcionSii`) | always | SII pre-send validation |
+| SII | Motivo de rectificación (`aeatsiiMotivoRectif`) | sales rectificative | `RectificationFiscalCodeGuard` (422 on completion), `EM_AEATSII_C_INV_RECT_CHK` |
+| TicketBAI | Código de factura rectificativa (`tbaiReverseinvoicecode`) | sales rectificative | `RectificationFiscalCodeGuard` |
+| VERI\*FACTU | Tipo de factura (`etvfacInvType`) | always (`R1`–`R5` on a rectificative) | VERI\*FACTU `InitialValidator`, `RectificationFiscalCodeGuard` |
+| VERI\*FACTU | Descripción de la operación (`etvfacVerifacDesc`) | always | VERI\*FACTU `InitialValidator` |
+| SII / VERI\*FACTU | Fecha operación (`etsgDateOperation`) | VERI\*FACTU active | VERI\*FACTU `InitialValidator` |
+
+The SII exemption cause is deliberately NOT in the list: an exempt tax without a cause only raises
+a non-blocking warning toast. The marker is the app's own `RequiredMark`
+(`@/components/ui/required-mark.jsx`, `aria-hidden`), with `aria-required` / `required` on the
+control, and — like the header form — it is not shown on a field the user cannot edit (a completed
+invoice, a read-only role, the read-only bulk summary). To make a field mandatory or stop it being
+so, change `sifRequiredFields.js` only: the tab, the step's `*` and the step's blocked button all
+follow.
+
 **Wiring a NEW invoice-creating modal** (reuse a wired modal first; only build a new one when none fits):
 
 ```jsx
@@ -3233,11 +3264,14 @@ Behaviour the hook already owns — do not re-implement it:
 - **Fetched on the primary click, not on open**, so a flow that creates no invoice never asks and
   the preview reflects the record at that moment. The answer is cached per URL + body, so Back →
   Continue keeps what the user typed.
-- **Fails open.** A preview the server cannot answer skips the step and runs the flow; the backend
-  applies the same defaults and refuses an invalid invoice with its own 422.
-- **`sif.valid`** is false while a rectificative lacks a code of an active system (the primary
-  button is disabled and `invoiceSifStep.rectificationRequired` is shown). The server refuses the
-  same blank with 422 `ETGO_InvoiceRectificationCodeRequired`.
+- **Fails open.** A preview the server cannot answer skips the step and runs the flow with no
+  `sifFields`; the backend then applies its own values (on a rectificative, the `R4` fallback) and
+  refuses an invalid invoice with its own 422.
+- **`sif.valid`** is false while a mandatory field of the step (`sifRequiredFields.js`, above) is
+  empty; `sif.missing` names them. The primary button is disabled and a hint is shown:
+  `invoiceSifStep.rectificationRequired` while a rectification code is missing, the generic
+  `requiredFieldsMissing` otherwise. A rectificative always starts invalid, since its codes come
+  empty. The server refuses a blank code with 422 `ETGO_InvoiceRectificationCodeRequired`.
 - **`withSifFields`** adds `sifFields` only while the step was shown; with no active system the
   body is byte-for-byte what it was before ETP-6179.
 - A modal that cannot host the panel (a shared first screen) renders `InvoiceSifStepModal`
@@ -3248,7 +3282,11 @@ Behaviour the hook already owns — do not re-implement it:
   `InvoiceSifStepModal` with `sif={readOnlySifStep(preview, varying)}`, `readOnly`,
   `notice={ui('invoiceSifStep.bulkNotice', …)}` and `onCancel`; a field that differs reads
   "Según cada cliente" (SII key) or "Según cada pedido" (anything else). Each POST then sends its
-  OWN document's `previews[i].fields` as `sifFields`. On `kind: 'none'` run as before.
+  OWN document's `previews[i].fields` as `sifFields`. On `kind: 'none'` run as before. The
+  read-only summary marks no field mandatory and never blocks. The bulk flows only reach ordinary
+  invoices today (the order and shipment lists exclude return document types); a bulk flow that
+  could produce a rectificative would send its empty codes and be refused by the server, so it
+  needs a product decision first.
 - **Option labels:** any SIF select uses `sifOptionLabel(option, ui)` ("CODE - Label", the code
   once), as the SIF tab does.
 

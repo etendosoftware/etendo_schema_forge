@@ -607,19 +607,20 @@ test.describe('return-material-receipt — CO form actions (no existing invoice)
 
 /**
  * A rectificative invoice is created AND confirmed in one call, so the modal shows the mandatory
- * "Datos fiscales" step before creating it. The backend preview preselects R4 in every active
- * system (SII motive, VERI*FACTU type); the step shows it, and those values travel as `sifFields`
- * in createReturnInvoice next to `originInvoices`.
+ * "Datos fiscales" step before creating it. The backend preview preselects NO rectification code
+ * (SII motive, VERI*FACTU type come empty): the step marks them mandatory, keeps the confirm
+ * disabled until the user chooses each one, and the chosen values travel as `sifFields` in
+ * createReturnInvoice next to `originInvoices`.
  */
 test.describe('return-material-receipt — CO rectificative invoice with the fiscal data step', () => {
   const SIF_PREVIEW = {
     systems: ['SII', 'Verifactu'],
     rectificative: true,
-    sales: false,
-    fields: { etsgDateOperation: '2026-11-10', aeatsiiMotivoRectif: 'R4', etvfacInvType: 'R4' },
+    sales: true,
+    fields: { etsgDateOperation: '2026-11-10', aeatsiiMotivoRectif: null, etvfacInvType: null },
     fieldSpecs: [
       { name: 'etsgDateOperation', system: 'SII', type: 'date' },
-      { name: 'aeatsiiMotivoRectif', system: 'SII', type: 'option' },
+      { name: 'aeatsiiMotivoRectif', system: 'SII', type: 'option', options: ['R1', 'R2', 'R3', 'R4', 'R5'] },
       { name: 'etvfacInvType', system: 'Verifactu', type: 'option', options: ['R1', 'R2', 'R3', 'R4', 'R5'] },
     ],
     siiAuthorizationAvailable: false,
@@ -632,7 +633,7 @@ test.describe('return-material-receipt — CO rectificative invoice with the fis
     await installReturnReceiptMocks(page, { suggestedInvoiceIds: ['rect-inv-a'], state, sifPreview: SIF_PREVIEW });
   });
 
-  test('shows R4 preselected per system, Atrás keeps the modal, and posts sifFields on confirm', async ({ page }) => {
+  test('preselects no rectification code, blocks until each is chosen, Atrás keeps the modal, and posts sifFields on confirm', async ({ page }) => {
     await page.goto('/return-material-receipt/ret-003');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
@@ -651,10 +652,26 @@ test.describe('return-material-receipt — CO rectificative invoice with the fis
     expect(state.invoicePosts).toHaveLength(0);
     await expect(step.getByTestId('invoice-sif-step-SII')).toBeVisible();
     await expect(step.getByTestId('invoice-sif-step-Verifactu')).toBeVisible();
-    await expect(step.getByTestId('SelectTrigger__sifstep_aeatsiiMotivoRectif')).toContainText('R4 - ');
-    await expect(step.getByTestId('SelectTrigger__sifstep_etvfacInvType')).toContainText('R4 - ');
-    // Every code is chosen, so nothing blocks the confirm.
+    // No code is preselected: both selects are empty, marked mandatory, and the confirm is blocked.
+    const motive = step.getByTestId('SelectTrigger__sifstep_aeatsiiMotivoRectif');
+    const vfType = step.getByTestId('SelectTrigger__sifstep_etvfacInvType');
+    await expect(motive).not.toContainText('R4');
+    await expect(vfType).not.toContainText('R4');
+    await expect(motive).toHaveAttribute('aria-required', 'true');
+    await expect(vfType).toHaveAttribute('aria-required', 'true');
+    await expect(step.getByTestId('invoice-sif-step-required')).toBeVisible();
+    await expect(primary).toBeDisabled();
+
+    // The user chooses each code; only then is the confirm available.
+    await motive.click();
+    await page.getByTestId('SelectItem__sifstep_R1').click();
+    await expect(primary).toBeDisabled();
+    await vfType.click();
+    await page.getByTestId('SelectItem__sifstep_R2').click();
+    await expect(motive).toContainText('R1 - ');
+    await expect(vfType).toContainText('R2 - ');
     await expect(step.getByTestId('invoice-sif-step-required')).toHaveCount(0);
+    await expect(primary).toBeEnabled();
 
     // Atrás: back to the first screen, nothing created; the step comes back unchanged.
     await invoiceModal.getByTestId('invoice-confirm-sif-back-btn').click();
@@ -670,7 +687,7 @@ test.describe('return-material-receipt — CO rectificative invoice with the fis
     expect(state.invoicePosts).toHaveLength(1);
     expect(state.invoicePosts[0]).toEqual({
       originInvoices: ['rect-inv-a'],
-      sifFields: SIF_PREVIEW.fields,
+      sifFields: { ...SIF_PREVIEW.fields, aeatsiiMotivoRectif: 'R1', etvfacInvType: 'R2' },
     });
   });
 });

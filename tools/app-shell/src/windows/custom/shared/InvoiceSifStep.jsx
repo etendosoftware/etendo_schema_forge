@@ -14,6 +14,12 @@ import {
 } from '@/windows/custom/shared/useSifFieldPatcher.js';
 import { normalizeDateInputValue } from '@/windows/custom/fiscal-config/fiscalConfig.utils.js';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
+import RequiredMark from '@/components/ui/required-mark.jsx';
+import {
+  isRectificationCodeField,
+  isSifFieldRequired,
+  missingRequiredSifFields,
+} from '@/windows/custom/shared/sifRequiredFields.js';
 
 /**
  * ETP-6179 — the "Datos fiscales" step of every modal that creates AND completes an invoice in one
@@ -23,7 +29,9 @@ import { InfoBanner } from '@/components/InfoBanner.jsx';
  * Those flows build the invoice on the server and complete it at once, so the user never saw the
  * invoice's SIF tab: a rectificative left as an ordinary F1, with no SII motive and no TicketBAI
  * code. This step shows the editable SIF fields of the fiscal systems ACTIVE for the invoice's
- * organization, prefilled with what the invoice would get, before anything is confirmed.
+ * organization, prefilled with what the invoice would get, before anything is confirmed. On a
+ * rectificative the rectification codes come EMPTY (never a preselected R4): the user chooses
+ * each one, and the mandatory fields carry the app's red `*` (`sifRequiredFields.js`).
  *
  * The backend is the single source of truth (`sifDefaults` action, `InvoiceSifPreset` in
  * com.etendoerp.go): which systems apply, which fields are editable, their allowed codes and
@@ -85,9 +93,24 @@ export function sifOptionLabel(option, ui) {
     : `${option.value} - ${label}`;
 }
 
-// The rectification codes a rectificative invoice cannot be confirmed without — mirrors the
-// backend guard (RectificationFiscalCodeGuard), which refuses the same blanks with a 422.
-const REQUIRED_ON_RECTIFICATIVE = ['aeatsiiMotivoRectif', 'tbaiReverseinvoicecode', 'etvfacInvType'];
+/**
+ * What `sifRequiredFields.js` needs to know about the invoice a preview describes. The backend
+ * lists a rectification field on a SALES rectificative only, so a purchase one has none to mark.
+ */
+function requiredContextOf(preview) {
+  return {
+    rectificative: preview?.rectificative === true,
+    verifactu: (preview?.systems ?? []).includes('Verifactu'),
+  };
+}
+
+/** The mandatory fields of the step — the ones shown — that are still empty. */
+function missingRequiredFields(preview, values) {
+  const shown = (preview?.fieldSpecs ?? [])
+    .map(spec => spec.name)
+    .filter(name => isFieldShown(name, values));
+  return missingRequiredSifFields(shown, values, requiredContextOf(preview));
+}
 
 // SifTab.jsx's display logic for the two VERI*FACTU flags: mutually exclusive on the type.
 function isFieldShown(name, values) {
@@ -106,9 +129,11 @@ function isFieldShown(name, values) {
  * system with editable fields is active) or calls `proceed` straight away, so a modal wires ONE
  * handler: `onClick={() => sif.start(handleConfirm)}` — on the step, the same click confirms.
  *
- * Fails OPEN on a preview the server could not answer: the backend applies the same defaults
- * (document-type VERI*FACTU type, R4 on a rectificative) and refuses an invalid invoice with its
- * own 422, so a failed preview never blocks the flow, it only skips the review.
+ * Fails OPEN on a preview the server could not answer: no `sifFields` is sent then, and for that
+ * case alone the backend applies its own values (document-type VERI*FACTU type, and the R4
+ * fallback on a rectificative — `InvoiceSifPreset.unattendedRectificationFallback`) and refuses an
+ * invalid invoice with its own 422, so a failed preview never blocks the flow, it only skips the
+ * review. When the step IS shown, a rectificative's codes come empty and the user must choose.
  *
  * @param {object} args
  * @param {boolean} args.enabled whether an invoice is going to be created at all
@@ -167,12 +192,10 @@ export function useInvoiceSifStep({ enabled, apiFetch, defaultsUrl, body, absolu
   }, [enabled, defaultsUrl, phase, fetchPreview]);
 
   const active = enabled && phase === 'active' && !!preview;
-  const valid = useMemo(() => {
-    if (!active) return true;
-    if (!preview.rectificative) return true;
-    const specs = new Set((preview.fieldSpecs ?? []).map(s => s.name));
-    return REQUIRED_ON_RECTIFICATIVE.every(name => !specs.has(name) || !!values[name]);
-  }, [active, preview, values]);
+  const missing = useMemo(
+    () => (active ? missingRequiredFields(preview, values) : []),
+    [active, preview, values]);
+  const valid = missing.length === 0;
 
   const setValue = useCallback((name, value) => {
     setValues(prev => ({ ...prev, [name]: value }));
@@ -186,8 +209,10 @@ export function useInvoiceSifStep({ enabled, apiFetch, defaultsUrl, body, absolu
     preview,
     values,
     setValue,
-    /** Every rectification code a rectificative needs is chosen. */
+    /** Every mandatory field (`sifRequiredFields.js`) has a value. */
     valid,
+    /** The mandatory fields still empty. */
+    missing,
     /** Primary click: shows the step, or runs `proceed` when there is none / it is showing. */
     start,
     /** Back to the modal's first screen; the values typed so far are kept. */
@@ -305,7 +330,8 @@ export async function resolveBulkSifPreview(apiFetch, urls) {
  */
 export function readOnlySifStep(preview, varying = {}) {
   return {
-    preview, values: preview?.fields ?? {}, varying, setValue: () => {}, valid: true, back: () => {},
+    preview, values: preview?.fields ?? {}, varying, setValue: () => {}, valid: true, missing: [],
+    back: () => {},
   };
 }
 
@@ -314,24 +340,26 @@ export function withSifFields(body, sif) {
   return sif?.payload ? { ...body, sifFields: sif.payload } : body;
 }
 
-function FieldRow({ label, htmlFor, children, wide }) {
+function FieldRow({ label, htmlFor, children, wide, required }) {
   return (
     <div className={`space-y-1.5 min-w-0 ${wide ? 'col-span-2' : ''}`}>
       <Label htmlFor={htmlFor} className="text-sm text-foreground font-medium" data-testid="Label__sifstep">
         {label}
+        {required && <RequiredMark aria-hidden="true" data-testid={`RequiredMark__sifstep_${htmlFor}`} />}
       </Label>
       {children}
     </div>
   );
 }
 
-function OptionField({ id, spec, value, onChange, ui, disabled }) {
+function OptionField({ id, spec, value, onChange, ui, disabled, required }) {
   const allowed = new Set(spec.options ?? []);
   const options = (FIELD_OPTIONS[spec.name] ?? []).filter(o => allowed.size === 0 || allowed.has(o.value));
   return (
     <Select value={value || undefined} onValueChange={onChange} disabled={disabled} data-testid={`Select__sifstep_${spec.name}`}>
       <SelectTrigger
         id={id}
+        aria-required={required || undefined}
         className="h-auto min-h-10 whitespace-normal text-left [&>span]:line-clamp-none"
         data-testid={`SelectTrigger__sifstep_${spec.name}`}>
         <SelectValue placeholder="—" data-testid="SelectValue__sifstep" />
@@ -347,10 +375,12 @@ function OptionField({ id, spec, value, onChange, ui, disabled }) {
   );
 }
 
-function StepField({ spec, values, setValue, authorizationAvailable, ui, readOnly, varies }) {
+function StepField({ spec, values, setValue, authorizationAvailable, ui, readOnly, varies, requiredContext }) {
   const id = `sif-step-${spec.name}`;
   const value = values[spec.name];
   const label = ui(FIELD_LABEL_KEYS[spec.name] ?? spec.name);
+  // Only where the user can act on it: the read-only bulk summary marks nothing.
+  const required = !readOnly && !varies && isSifFieldRequired(spec.name, requiredContext);
   let control;
   if (varies) {
     control = (
@@ -371,6 +401,7 @@ function StepField({ spec, values, setValue, authorizationAvailable, ui, readOnl
       onChange={v => setValue(spec.name, v)}
       ui={ui}
       disabled={readOnly}
+      required={required}
       data-testid="invoice-sif-step-option" />;
   } else if (spec.type === 'date') {
     control = (
@@ -379,6 +410,7 @@ function StepField({ spec, values, setValue, authorizationAvailable, ui, readOnl
         value={normalizeDateInputValue(value ?? '')}
         onChange={iso => setValue(spec.name, iso || null)}
         disabled={readOnly}
+        required={required}
         data-testid={`DateField__sifstep_${spec.name}`} />
     );
   } else if (spec.type === 'boolean') {
@@ -405,6 +437,7 @@ function StepField({ spec, values, setValue, authorizationAvailable, ui, readOnl
         value={value ?? ''}
         onChange={e => setValue(spec.name, e.target.value)}
         disabled={readOnly}
+        aria-required={required || undefined}
         className="bg-card"
         data-testid={`Input__sifstep_${spec.name}`} />
     );
@@ -413,6 +446,7 @@ function StepField({ spec, values, setValue, authorizationAvailable, ui, readOnl
     <FieldRow
       label={label}
       htmlFor={id}
+      required={required}
       wide={spec.type === 'option' || spec.type === 'boolean'}
       data-testid="invoice-sif-step-field">{control}</FieldRow>
   );
@@ -434,6 +468,13 @@ export function InvoiceSifStepPanel({ sif, readOnly = false, notice, 'data-testi
 
   const specs = preview.fieldSpecs ?? [];
   const systems = preview.systems ?? [];
+  const requiredContext = requiredContextOf(preview);
+  // A missing rectification code gets its own sentence; any other empty mandatory field the
+  // app's generic one.
+  const missing = sif.missing ?? [];
+  const missingHintKey = missing.some(name => isRectificationCodeField(name, requiredContext))
+    ? 'invoiceSifStep.rectificationRequired'
+    : 'requiredFieldsMissing';
   // The host's own test id (each modal passes one) wraps the panel, whose inner id stays stable.
   const panel = (
     <div data-testid="invoice-sif-step" className="flex flex-col gap-5">
@@ -466,6 +507,7 @@ export function InvoiceSifStepPanel({ sif, readOnly = false, notice, 'data-testi
                   authorizationAvailable={preview.siiAuthorizationAvailable === true}
                   readOnly={readOnly}
                   varies={!!sif.varying?.[spec.name]}
+                  requiredContext={requiredContext}
                   ui={ui}
                   data-testid="invoice-sif-step-step-field" />
               ))}
@@ -475,7 +517,7 @@ export function InvoiceSifStepPanel({ sif, readOnly = false, notice, 'data-testi
       })}
       {!readOnly && !sif.valid && (
         <div data-testid="invoice-sif-step-required" className="text-xs text-muted-foreground">
-          {ui('invoiceSifStep.rectificationRequired')}
+          {ui(missingHintKey)}
         </div>
       )}
     </div>

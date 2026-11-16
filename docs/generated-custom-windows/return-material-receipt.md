@@ -783,11 +783,15 @@ The popup opened by "Crear Factura Rectificativa" on a completed (CO), not-yet-i
 - **Confirmar** with *Crear factura rectificativa* on (`ConfirmWithCreditButtonBase` →
   `ConfirmInOutModal`, also the list row's confirm) and **Crear factura rectificativa** on a confirmed
   return (`CreateInvoiceConfirmModal`).
-- Rectificative: `R4` preselected for the SII motive, the TicketBAI code and the VERI*FACTU type, all
-  editable; SII key `R`/type `I` and the TicketBAI/VERI*FACTU reverse types are set automatically.
-  Before ETP-6179 this flow completed the invoice as an ordinary `F1`. Clearing a code blocks the
-  primary button (`invoiceSifStep.rectificationRequired`); an API caller that sends a blank code gets
-  422 `ETGO_InvoiceRectificationCodeRequired` and nothing is created.
+- Rectificative: the SII motive, the TicketBAI code and the VERI*FACTU type come **empty** (no `R4`
+  preselected; the VERI*FACTU type only offers `R1`–`R5` and never reads `F1`). Each is marked
+  mandatory with the red `*` and the user has to choose it: until then the primary button is
+  disabled and `invoiceSifStep.rectificationRequired` is shown. SII key `R`/type `I` and the
+  TicketBAI/VERI*FACTU reverse types are set automatically. Before ETP-6179 this flow completed the
+  invoice as an ordinary `F1`. An API caller that sends `sifFields` with a blank or missing code
+  gets 422 `ETGO_InvoiceRectificationCodeRequired` and nothing is created; one that sends **no
+  `sifFields` at all** (also this screen when the preview could not be read) gets `R4` in every
+  active system (`InvoiceSifPreset.unattendedRectificationFallback`).
 
 How the step itself works — the backend `sifDefaults` preview, when it appears, the
 `sifFields` it sends and the fail-open rule — is described once in [sales-order.md → Fiscal data step before the invoice is created](sales-order.md#fiscal-data-step-before-the-invoice-is-created--etp-6179).

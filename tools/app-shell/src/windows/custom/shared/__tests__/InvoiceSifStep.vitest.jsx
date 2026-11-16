@@ -332,14 +332,25 @@ describe('useInvoiceSifStep', () => {
     expect(result.current.payload.aeatsiiClaveTipo).toBe('F2');
   });
 
-  it('a rectificative is invalid until every required code is chosen', async () => {
-    const p = preview({ rectificative: true, fields: { ...preview().fields, etvfacInvType: 'R4' } });
+  // The backend preselects no rectification code (never R4): both come empty on a rectificative,
+  // VERI*FACTU's type included, and the step stays invalid until the user chooses each one.
+  it('a rectificative comes with no code preselected and is invalid until each one is chosen', async () => {
+    const p = preview({
+      rectificative: true,
+      fields: { ...preview().fields, aeatsiiMotivoRectif: null, etvfacInvType: null },
+    });
     const apiFetch = vi.fn().mockResolvedValue(jsonResponse(p));
     const { result } = setup(apiFetch);
     await act(async () => { await result.current.start(vi.fn()); });
+    expect(result.current.values.aeatsiiMotivoRectif).toBeNull();
+    expect(result.current.values.etvfacInvType).toBeNull();
     expect(result.current.valid).toBe(false);
-    act(() => result.current.setValue('aeatsiiMotivoRectif', 'R4'));
+    expect(result.current.missing).toEqual(['aeatsiiMotivoRectif', 'etvfacInvType']);
+    act(() => result.current.setValue('aeatsiiMotivoRectif', 'R1'));
+    expect(result.current.valid).toBe(false);
+    act(() => result.current.setValue('etvfacInvType', 'R2'));
     expect(result.current.valid).toBe(true);
+    expect(result.current.payload).toMatchObject({ aeatsiiMotivoRectif: 'R1', etvfacInvType: 'R2' });
   });
 
   it('goes back to idle when the invoice is no longer requested', async () => {
@@ -407,8 +418,13 @@ describe('InvoiceSifStepPanel', () => {
     expect(screen.getByTestId('CheckboxField__sifstep_aeatsiiIsauthorization')).toBeDisabled();
   });
 
-  it('shows the rectification warning when the step is not valid', () => {
-    render(<InvoiceSifStepPanel sif={editableStep(preview(), undefined, { valid: false })} />);
+  it('shows the rectification warning while a rectification code is missing', () => {
+    const p = preview({
+      rectificative: true,
+      fields: { ...preview().fields, aeatsiiMotivoRectif: null, etvfacInvType: null },
+    });
+    render(<InvoiceSifStepPanel
+      sif={editableStep(p, undefined, { valid: false, missing: ['aeatsiiMotivoRectif', 'etvfacInvType'] })} />);
     expect(screen.getByTestId('invoice-sif-step-required')).toHaveTextContent('invoiceSifStep.rectificationRequired');
   });
 

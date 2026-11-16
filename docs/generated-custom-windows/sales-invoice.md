@@ -2836,3 +2836,24 @@ VERI\*FACTU *Tipo factura*, TicketBAI *Código factura rectificativa*) now rende
 a label that already starts with its code is shown as it is, any other one gets the `"CODE - "`
 prefix. The "Datos fiscales" step of the invoice-creating modals uses the same function, so the tab
 and the step always read alike. No locale key changed.
+
+## Mandatory fields of the SIF tab carry the red `*` — ETP-6179
+
+The SIF tab marks its mandatory fields with the app's red `*` (`RequiredMark`, with
+`aria-required` on the control), from the same rule as the "Datos fiscales" step of the
+invoice-creating modals (`isSifFieldRequired` in
+`tools/app-shell/src/windows/custom/shared/sifRequiredFields.js`; full table in
+`docs/ui-customization.md` §21b):
+
+- **SII:** *Tipo factura*, *Descripción SII*; *Motivo de rectificación* when the invoice is a
+  rectificative (the field only shows then). *Fecha operación* only when VERI\*FACTU is active too.
+- **VERI\*FACTU:** *Fecha operación*, *Tipo de factura*, *Descripción de la operación*.
+- **TicketBAI:** *Código de factura rectificativa*, on a rectificative (the field only shows then).
+
+None of these columns is mandatory in the AD: the list mirrors what each fiscal system refuses when
+empty (SII's pre-send validation, VERI\*FACTU's `InitialValidator`, and
+`RectificationFiscalCodeGuard`, which blocks the completion of a rectificative with no code). The
+SII *Causa exención* is not marked: an exempt tax without a cause only raises a warning toast. The
+`*` is hidden on a field the user cannot edit (a completed or sent invoice, a read-only role), as
+in the header form. The marker is purely visual here: saving a draft is not blocked, and the
+completion is refused by the server exactly as before.
