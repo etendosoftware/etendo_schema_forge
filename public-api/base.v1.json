@@ -85,6 +85,8 @@
     "readOnlyFields": "fields.<field>.publicApi.readOnly or entities.<entity>.publicApi.readOnlyFields in decisions.json",
     "inputFields": "entities.<entity>.publicApi.inputFields in decisions.json",
     "lookups": "entities.<entity>.fields.<field>.publicApi.lookup in decisions.json (top-level resources only)",
+    "enums": "the AD list values of a published string field (contract enumValues): dataType.enum plus enumLabels",
+    "descriptions": "entities.<entity>.fields.<field>.publicApi.description in decisions.json",
     "failClosed": true
   },
   "entities": {
@@ -984,9 +986,47 @@
           "direction": "out",
           "internalPath": "documentStatus",
           "dataType": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "AE",
+              "CO",
+              "CL",
+              "ETGO_CI",
+              "CA",
+              "CJ",
+              "DR",
+              "ME",
+              "NA",
+              "NC",
+              "WP",
+              "RE",
+              "TMP",
+              "UE",
+              "IP",
+              "??",
+              "VO"
+            ]
           },
-          "reference": null
+          "reference": null,
+          "enumLabels": {
+            "AE": "Automatic Evaluation",
+            "CO": "Booked",
+            "CL": "Closed",
+            "ETGO_CI": "Closed - Invoice Created",
+            "CA": "Closed - Order Created",
+            "CJ": "Closed - Rejected",
+            "DR": "Draft",
+            "ME": "Manual Evaluation",
+            "NA": "Not Accepted",
+            "NC": "Not Confirmed",
+            "WP": "Not Paid",
+            "RE": "Re-Opened",
+            "TMP": "Temporal",
+            "UE": "Under Evaluation",
+            "IP": "Under Way",
+            "??": "Unknown",
+            "VO": "Voided"
+          }
         },
         "grand_total_amount": {
           "sourceVisibility": "readOnly",
@@ -1328,9 +1368,47 @@
           "direction": "out",
           "internalPath": "documentStatus",
           "dataType": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "AE",
+              "CO",
+              "CL",
+              "ETGO_CI",
+              "CA",
+              "CJ",
+              "DR",
+              "ME",
+              "NA",
+              "NC",
+              "WP",
+              "RE",
+              "TMP",
+              "UE",
+              "IP",
+              "??",
+              "VO"
+            ]
           },
-          "reference": null
+          "reference": null,
+          "enumLabels": {
+            "AE": "Automatic Evaluation",
+            "CO": "Booked",
+            "CL": "Closed",
+            "ETGO_CI": "Closed - Invoice Created",
+            "CA": "Closed - Order Created",
+            "CJ": "Closed - Rejected",
+            "DR": "Draft",
+            "ME": "Manual Evaluation",
+            "NA": "Not Accepted",
+            "NC": "Not Confirmed",
+            "WP": "Not Paid",
+            "RE": "Re-Opened",
+            "TMP": "Temporal",
+            "UE": "Under Evaluation",
+            "IP": "Under Way",
+            "??": "Unknown",
+            "VO": "Voided"
+          }
         },
         "grand_total_amount": {
           "sourceVisibility": "readOnly",
@@ -1679,9 +1757,47 @@
           "direction": "out",
           "internalPath": "documentStatus",
           "dataType": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "AE",
+              "CO",
+              "CL",
+              "ETGO_CI",
+              "CA",
+              "CJ",
+              "DR",
+              "ME",
+              "NA",
+              "NC",
+              "WP",
+              "RE",
+              "TMP",
+              "UE",
+              "IP",
+              "??",
+              "VO"
+            ]
           },
-          "reference": null
+          "reference": null,
+          "enumLabels": {
+            "AE": "Automatic Evaluation",
+            "CO": "Booked",
+            "CL": "Closed",
+            "ETGO_CI": "Closed - Invoice Created",
+            "CA": "Closed - Order Created",
+            "CJ": "Closed - Rejected",
+            "DR": "Draft",
+            "ME": "Manual Evaluation",
+            "NA": "Not Accepted",
+            "NC": "Not Confirmed",
+            "WP": "Not Paid",
+            "RE": "Re-Opened",
+            "TMP": "Temporal",
+            "UE": "Under Evaluation",
+            "IP": "Under Way",
+            "??": "Unknown",
+            "VO": "Voided"
+          }
         },
         "grand_total_amount": {
           "sourceVisibility": "readOnly",

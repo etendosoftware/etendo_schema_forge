@@ -102,10 +102,24 @@ test('every write-enabled resource has a writable field and publishes updated fo
   }
 });
 
-test('publishes no internal ticket or Jira reference in the functional texts', () => {
+test('publishes no internal ticket or Jira reference in the functional texts nor in a field description', () => {
   for (const [resource, entity] of entities) {
     const texts = [entity.functional.functionalSummary, ...entity.functional.functionalCapabilities];
+    for (const field of Object.values(entity.fields) as any[]) if (field.description) texts.push(field.description);
     for (const text of texts) assert.doesNotMatch(text, /\bETP-\d+\b|\bjira\b/i, resource);
+  }
+});
+
+test('publishes the codes of an AD list with a label each, and never on a reference', () => {
+  const orderStatus = manifest.entities['sales-order'].fields.document_status;
+  assert.ok(orderStatus.dataType.enum.includes('CO') && orderStatus.dataType.enum.includes('DR'));
+  for (const [resource, entity] of entities) {
+    for (const [name, field] of Object.entries(entity.fields) as Array<[string, any]>) {
+      if (!field.dataType.enum) continue;
+      assert.equal(field.dataType.type, 'string', `${resource}.${name}`);
+      assert.equal(field.reference, null, `${resource}.${name}`);
+      assert.deepEqual(Object.keys(field.enumLabels), field.dataType.enum, `${resource}.${name}`);
+    }
   }
 });
 

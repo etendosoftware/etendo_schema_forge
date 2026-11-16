@@ -11,7 +11,7 @@ type JsonSchema = {
   required?: string[];
 };
 
-type FieldSchema = { type: string; format?: string; nullable?: boolean; enum?: Array<string | null>; description?: string; properties?: Record<string, FieldSchema>; items?: FieldSchema; required?: string[] };
+type FieldSchema = { type: string; format?: string; nullable?: boolean; enum?: Array<string | null>; 'x-enumDescriptions'?: Record<string, string>; description?: string; properties?: Record<string, FieldSchema>; items?: FieldSchema; required?: string[] };
 
 export interface OpenApiParameter {
   name: string;
@@ -63,6 +63,31 @@ function lookupsOf(entity: PublicApiEntity): Array<[string, Required<FieldLookup
 }
 
 const lookupPath = (entityName: string, fieldName: string) => `/api/v1/${entityName}/lookups/${fieldName}`;
+
+/** What the manifest documents about a field beyond its JSON type. */
+type DocumentedField = { dataType?: FieldSchema; description?: string; enumLabels?: Record<string, string> };
+
+/**
+ * Attribute schema of a manifest field: its JSON type, plus what documents it. The description
+ * joins the field's own text (decisions.json publicApi.description), the codes of an AD list with
+ * their labels (also as x-enumDescriptions, which Scalar shows next to each code) and, for a field
+ * with a lookup, where its valid ids are listed.
+ */
+function fieldSchema(field: DocumentedField, lookup?: string): FieldSchema {
+  const schema: FieldSchema = { ...(field.dataType ?? { type: 'string' }) };
+  const codes = (schema.enum ?? []).filter((code): code is string => typeof code === 'string');
+  const labels = field.enumLabels && codes.length
+    ? Object.fromEntries(codes.map((code) => [code, field.enumLabels?.[code] ?? code]))
+    : undefined;
+  if (labels) schema['x-enumDescriptions'] = labels;
+  const description = [
+    field.description,
+    labels ? `One of: ${codes.map((code) => `\`${code}\` (${labels[code]})`).join(', ')}.` : undefined,
+    lookup ? `Id of a valid value; list them with GET ${lookup}.` : undefined,
+  ].filter(Boolean).join(' ');
+  if (description) schema.description = description;
+  return schema;
+}
 
 /** Query parameters of a lookup: pagination and the search text. */
 function lookupQueryParameters(): OpenApiParameter[] {
@@ -311,17 +336,13 @@ export function buildPerEntityOpenApiPaths(schema: PublicApiSchema): Record<stri
     // than a second unrelated/raw entity.
     const tag = groupTitle;
     const properties: Record<string, FieldSchema> = {};
+    const lookupFields = new Set(lookupsOf(entity).map(([fieldName]) => fieldName));
     for (const [fieldName, field] of Object.entries(entity.fields)) {
       // JSON:API represents the identifier at resource level, never inside
       // attributes. The manifest keeps it for response filtering, but the
       // OpenAPI attribute schema must not duplicate it.
       if (fieldName === 'id') continue;
-      properties[fieldName] = (field as typeof field & { dataType?: FieldSchema }).dataType ?? { type: 'string' };
-    }
-    // A field with a lookup says where its valid ids are listed.
-    for (const [fieldName] of lookupsOf(entity)) {
-      if (!properties[fieldName]) continue;
-      properties[fieldName] = { ...properties[fieldName], description: `Id of a valid value; list them with GET ${lookupPath(entityName, fieldName)}.` };
+      properties[fieldName] = fieldSchema(field as DocumentedField, lookupFields.has(fieldName) ? lookupPath(entityName, fieldName) : undefined);
     }
     const allowed = new Set(entity.operations.map((operation) => operation.toUpperCase()));
     const can = (operation: string) => allowed.has(operation) || (operation === 'GET' && allowed.has('LIST'));

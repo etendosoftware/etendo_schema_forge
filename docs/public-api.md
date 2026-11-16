@@ -90,6 +90,7 @@ Per-field key at `entities.<entity>.fields.<field>.publicApi`:
 | `name` | string | Requested public field name. The manifest generator derives the final public name from it (see [Name derivation](#name-derivation)). |
 | `readOnly` | boolean | `true` publishes the field `out` (read-only) even when the window edits it. |
 | `lookup` | `true` or `{ "context": { "<param>": "<value>" } }` | Publishes `GET /api/v1/<resource>/lookups/<field>`, the field's valid values ([4.2.2](#422-lookups)). Top-level resources, published reference fields only; read by the manifest generator straight from `decisions.json`. |
+| `description` | string | Published as the field's OpenAPI description, for rules its type cannot express (when the field is required, when it is refused). A non-empty text that cites no internal reference (a ticket or Jira); anything else fails the generation. Read by the manifest generator straight from `decisions.json`. |
 
 A public field is its NEO value under a public name: nothing transforms it. The keys `type` and `handlerId` of an earlier format promised custom field handlers that were never implemented; the manifest generator refuses them, naming the field.
 
@@ -123,7 +124,7 @@ Some fields are never published, whether curated or derived. The manifest lists 
 | `accountNo`, `bankName`, `displayedAccount`, `iBAN`, `swiftCode` | Bank account identifiers of a business partner. |
 | `etblkpAccountingstatus`, `etblkpBulkposting` | Accounting bulk-posting fields; accounting is outside the public API scope. |
 
-To configure what a window publishes (fields, read-only, input-only fields, actions, lookups) step by step, see
+To configure what a window publishes (fields, read-only, input-only fields, actions, lookups, descriptions) step by step, see
 [Public API configuration](public-api-configuration.md).
 
 ### Name derivation
@@ -149,6 +150,7 @@ absent) through `publicFieldName()`:
 - API-only fields declared in `publicApi.inputFields` ([configuration guide](public-api-configuration.md#3-add-input-only-fields)) are `in`, or `inout` with `readable: true`, and only on a resource with a write endpoint. With `writable: false` the field is read-only (`out`, never `required`) and is published on any resource: a value the entity's handler adds on read.
 - `id` is always present and its internal path is always `id` (the NEO response key). When `id` is not curated it is added as a read-only (`out`) field; when it is curated, its curated direction is kept and only the internal path is forced to `id`.
 - `dataType` comes from the contract field `type`: `amount`, `decimal`, `price`, `quantity` and `number` give `{ "type": "number", "format": "double" }`; `integer` gives `{ "type": "integer", "format": "int32" }`; `boolean` gives `{ "type": "boolean" }`; `date` gives `{ "type": "string", "format": "date" }`; `dateTime` (and the older spelling `datetime`) gives `{ "type": "string", "format": "date-time" }`. Every other type (`string`, `text`, `textarea`, `enum`, `list`, `button`, `foreignKey`, `productAttribute`, `image`) gives `{ "type": "string" }`. The `dataType` is what the OpenAPI document declares for the field and decides which filter operators it accepts ([4.10](#410-list-queries-pagination-sorting-and-filtering)).
+- A string field that carries the values of an AD list (the contract field's `enumValues`, typically type `enum`) publishes them: the codes as `dataType.enum` and a label per code as `enumLabels` (`{ "<code>": "<label>" }`, the list value's name in the Application Dictionary). This is generic, it needs no decision and applies to every published resource. NEO reads and writes the **code**; the OpenAPI document lists the codes under `enum`, their labels as `x-enumDescriptions` and in the field description (`One of: \`1\` (NIF), ...`). A reference field (a foreign key) never publishes an enum, and a response attribute also accepts `null`. The manifest's `enum` documents the accepted values; NEO is what refuses an unknown code.
 - `updated` is added as a read-only (`out`) field only when the entity's raw schema (`schema-raw.json`) has a field named `updated`. A resource whose entity has none carries no `updated` field. A resource that publishes `updated` is a versioned resource: its updates use [optimistic concurrency](#45-optimistic-concurrency-etag-and-if-match).
 
 ---

@@ -1798,6 +1798,11 @@ rename what it publishes.
 |----------|------|---------|
 | `exposed` | boolean | Only the exact value `true` opts the field in. In a curated entity, absent or `false` = not public. |
 | `name` | string | Requested public field name. **Not necessarily the final name**: the manifest generator (`scripts/generate-base-public-api-manifest.mjs`) rewrites it to snake_case (`searchKey` → `search_key`). |
+| `description` | string | Published as the field's OpenAPI description, for rules its type cannot express (conditionally required or refused). Non-empty, no internal reference (ticket, Jira); otherwise the generation fails. |
+
+The other `publicApi` keys (`readOnly`, `required`, `lookup`, entity-level `inputFields`) are
+described in [public-api-configuration.md](public-api-configuration.md). AD list values need no key:
+a published list field publishes its codes and labels as an enum on its own.
 
 Mechanics: `resolve-curated.js` copies `publicApi` verbatim and `generate-contract.js` stamps it
 onto the field in `contract.json` (both in `schema_forge_core`). Fields with `visibility`
