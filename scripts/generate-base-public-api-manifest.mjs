@@ -70,12 +70,6 @@ const excludedChildTabs = [
   /^bank account$/i,
 ];
 
-export const fiscalMonitorWindows = new Set([
-  'monitor-verifactu',
-  'sii-monitor',
-  'tbai-facturas-enviadas',
-]);
-
 // Fields that are never published, whether curated or derived from the window
 // form. Deriving the default exposure from the form is opt-out, so this list is
 // the safety net for values that are visible to a logged-in user but must not
@@ -149,14 +143,11 @@ export function isCurated(source) {
 //   fields its window list shows (`visibility === 'readOnly' && grid !== false`),
 //   e.g. document status and totals. The added fields are read-only, so they
 //   are published `out`.
-// - Fiscal monitors are never derived: their curation belongs to the Spanish
-//   localization team, so without it they publish only `id` and `updated`.
 // - `system` / `discarded` fields and `neverExposedFields` are never published.
-export function isPublicField(field, { curated, specName }) {
+export function isPublicField(field, { curated }) {
   if (field.visibility === 'system' || field.visibility === 'discarded') return false;
   if (neverExposedFields.has(field.name)) return false;
   if (curated) return field.publicApi?.exposed === true;
-  if (fiscalMonitorWindows.has(specName)) return false;
   if (field.form !== false) return true;
   return field.visibility === 'readOnly' && field.grid !== false;
 }
@@ -319,7 +310,7 @@ export function lookupOf(field, where) {
 //   refuses to create without. Declared, not derived: the contract's `required` also covers
 //   fields NEO fills by itself (e.g. an order's address or price list).
 // Field names are the internal (contract) names. Platform guardrails
-// (`neverExposedFields`, fiscal monitors) are applied by the generator and win over this.
+// (`neverExposedFields`) are applied by the generator and win over this.
 export function exposurePolicyOf(decisions, entityName) {
   const entity = decisions?.entities?.[entityName];
   const actions = decisions?.window?.publicApi?.actions;
@@ -397,8 +388,6 @@ export function buildEntity({
   if (operations.includes('PUT') && !operations.includes('PATCH')) {
     operations.push('PATCH');
   }
-  const readOnlyFiscalMonitor = fiscalMonitorWindows.has(specName);
-  if (readOnlyFiscalMonitor) operations = ['GET', 'LIST'];
   const pubName = publicName(specName, entityName, contract.frontendContract.window.primaryEntity);
   const readOnlyResource = policy.readOnly;
   if (readOnlyResource) operations = ['GET', 'LIST'];
@@ -408,7 +397,7 @@ export function buildEntity({
   const curated = isCurated(source);
   for (const field of source.fields ?? []) {
     assertNoFieldMapping(field, `${specName}/${entityName}`);
-    if (!isPublicField(field, { curated, specName })) continue;
+    if (!isPublicField(field, { curated })) continue;
     const apiName = publicFieldName(field.publicApi?.name ?? field.name);
     if (fields[apiName]) {
       throw new Error(`Public field name collision in ${specName}/${entityName}: ${apiName}`);
@@ -496,10 +485,9 @@ export function buildEntity({
     specName,
     entityName,
     publicApi: true,
-    ...(readOnlyFiscalMonitor ? { group: 'Fiscal Monitors' } : {}),
     operations,
     fields,
-    processes: readOnlyFiscalMonitor || parent || !policy.actions.length ? [] : buildProcesses({ source, entityName, actions: policy.actions }),
+    processes: parent || !policy.actions.length ? [] : buildProcesses({ source, entityName, actions: policy.actions }),
     ...(parent ? {
       parent: {
         resource: parent.resource,
@@ -665,7 +653,7 @@ export async function generateManifest({
       excludedFields: [...neverExposedFields],
       // Mechanism, not a list of windows: what a window publishes beyond the
       // conservative default is declared in its own decisions.json.
-      guardrails: ['neverExposedFields', 'fiscalMonitors'],
+      guardrails: ['neverExposedFields'],
       actions: 'window.publicApi.actions in decisions.json (absent means none)',
       readOnlyResources: 'entities.<entity>.publicApi.readOnly in decisions.json',
       readOnlyFields: 'fields.<field>.publicApi.readOnly or entities.<entity>.publicApi.readOnlyFields in decisions.json',

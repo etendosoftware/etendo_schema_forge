@@ -9,7 +9,6 @@ import { join } from 'node:path';
 import {
   assertNoFieldMapping,
   buildEntity,
-  fiscalMonitorWindows,
   generateManifest,
   inputFieldsOf,
   isCurated,
@@ -78,7 +77,7 @@ describe('isCurated', () => {
 describe('isPublicField', () => {
   it('never publishes system, discarded or excluded fields, curated or not', () => {
     for (const curated of [true, false]) {
-      const options = { curated, specName: 'sales-order' };
+      const options = { curated };
       assert.equal(isPublicField({ name: 'x', visibility: 'system', publicApi: { exposed: true } }, options), false);
       assert.equal(isPublicField({ name: 'x', visibility: 'discarded', publicApi: { exposed: true } }, options), false);
       for (const name of neverExposedFields) {
@@ -240,31 +239,6 @@ describe('buildEntity — API-only input fields declared in decisions.json', () 
   });
 });
 
-describe('buildEntity — fiscal monitors are not derived', () => {
-  it('publishes no form field for any fiscal monitor without curation', () => {
-    for (const specName of fiscalMonitorWindows) {
-      const entity = build(specName, formFields);
-      assert.deepEqual(Object.keys(entity.fields), ['id'], specName);
-      assert.deepEqual(entity.operations, ['GET', 'LIST'], specName);
-      assert.equal(entity.group, 'Fiscal Monitors', specName);
-    }
-  });
-
-  it('covers the three monitors owned by the localization team', () => {
-    assert.deepEqual([...fiscalMonitorWindows].sort(), ['monitor-verifactu', 'sii-monitor', 'tbai-facturas-enviadas']);
-  });
-
-  it('publishes the curation of a curated fiscal monitor, still without excluded fields', () => {
-    const entity = build('sii-monitor', [
-      { name: 'documentNo', visibility: 'readOnly', form: true, type: 'string', publicApi: { exposed: true } },
-      { name: 'client', visibility: 'readOnly', form: true, type: 'foreignKey', publicApi: { exposed: true } },
-      { name: 'orderDate', visibility: 'editable', form: true, type: 'date' },
-    ]);
-    assert.deepEqual(Object.keys(entity.fields).sort(), ['document_no', 'id']);
-    assert.deepEqual(entity.operations, ['GET', 'LIST']);
-  });
-});
-
 describe('buildEntity — operations', () => {
   it('makes a resource with no writable field read-only, even if its window accepts writes', () => {
     const entity = build('matched-purchase-invoices', [
@@ -299,15 +273,6 @@ describe('buildEntity — conservative base exposure', () => {
     assert.deepEqual(buildWith({ window: { publicApi: { actions: [] } } }).processes, []);
     const entity = buildWith({ window: { publicApi: { actions: ['complete'] } } });
     assert.deepEqual(entity.processes.map((process) => process.action), ['complete']);
-  });
-
-  it('never publishes actions on a fiscal monitor, whatever the decisions say', () => {
-    const contract = completeContract();
-    const entity = buildEntity({
-      specName: [...fiscalMonitorWindows][0], entityName: 'header', contract, functional,
-      parent: null, rawEntity: null, policy: { actions: ['complete'], readOnly: false, readOnlyFields: new Set() },
-    });
-    assert.deepEqual(entity.processes, []);
   });
 
   it('publishes an entity with publicApi.readOnly as GET/LIST with every field out', () => {

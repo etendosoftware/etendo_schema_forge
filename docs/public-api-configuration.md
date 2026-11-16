@@ -120,7 +120,7 @@ beforehand (a payment method). Declare it on the field:
   value that is a published resource (a contact, a product) is found by listing that resource.
 
 Published today: `sales-order` and `purchase-order` `paymentMethod` (`IsSOTrx` `Y` / `N`) and
-`contacts` `paymentMethod` / `pOPaymentMethod` (`FIN_ISRECEIPT` `Y` / `N`).
+`warehouse` (no context), and `contacts` `paymentMethod` / `pOPaymentMethod` (`FIN_ISRECEIPT` `Y` / `N`).
 
 ## 5. What the platform guarantees (you cannot override it)
 
@@ -129,8 +129,10 @@ These live in the generator and win over any decision:
 - `neverExposedFields` (`policy.excludedFields` in the manifest): `client`, `organization`,
   `grantPortalAccess`, bank identifiers (`accountNo`, `bankName`, `displayedAccount`, `iBAN`,
   `swiftCode`) and the accounting bulk-posting fields. `exposed: true` does not publish them.
-- Fiscal monitors (`monitor-verifactu`, `sii-monitor`, `tbai-facturas-enviadas`): read-only, `id` and
-  `updated` only, no actions.
+- The V1 allowlist (`publicApiV1Entities`, `policy.allowedResources` in the manifest): only
+  `contacts`, `product`, `product-category`, `sales-quotation`, `sales-order` and `purchase-order`,
+  with the child entities listed there, are published. A window outside it stays out whatever its
+  `decisions.json` says; adding one is a change to the generator, not a decision.
 - Conservative defaults: `system`/`discarded` fields are never published, excluded categories,
   windows and child tabs stay out, no action without opt-in, a resource with no writable field is
   read-only.

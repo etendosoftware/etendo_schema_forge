@@ -78,8 +78,7 @@
       "etblkpBulkposting"
     ],
     "guardrails": [
-      "neverExposedFields",
-      "fiscalMonitors"
+      "neverExposedFields"
     ],
     "actions": "window.publicApi.actions in decisions.json (absent means none)",
     "readOnlyResources": "entities.<entity>.publicApi.readOnly in decisions.json",

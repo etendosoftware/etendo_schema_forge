@@ -47,6 +47,19 @@ export function describeOrderFlow(kind: 'sales-order' | 'purchase-order'): void 
       assert.ok(Number.isFinite(grossBefore) && grossBefore > 0, 'the line carries a positive line_gross_amount');
     });
 
+    it('assigns a warehouse on create when the new order omits it', async () => {
+      const draft = await createRecord(
+        kind,
+        resource(kind, { order_date: '2026-10-14', partner_address: addressId }, { business_partner: ['contacts', contactId] }),
+        'an order without warehouse is accepted',
+      );
+      const { res } = await readWithEtag(`${kind}/${draft.id}`);
+      const warehouse = res.json.data.attributes.warehouse;
+      assert.equal(typeof warehouse, 'string', 'the created order carries a warehouse');
+      assert.ok(warehouse.length > 0, 'Etendo assigned a non-empty warehouse');
+      await expectDeleted({ collection: kind, id: draft.id });
+    });
+
     it('reads the header with its ETag and a grand total, and lists it', async () => {
       const { res } = await readWithEtag(`${kind}/${order.id}`);
       const total = res.json.data.attributes.grand_total_amount;
