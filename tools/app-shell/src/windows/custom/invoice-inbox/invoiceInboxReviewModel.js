@@ -12,21 +12,32 @@ import { STATUS } from './invoiceInboxFilters.js';
  * (`InvoiceInboxTotals`, same fixture `tools/app-shell/__tests__/fixtures/invoice-inbox-totals.json`):
  *
  *   unit6   = round6( unitPrice x (1 - discount / 100) )        (HALF_UP away from zero)
- *   lineNet = round2( quantity x unit6 )
- *   base    = sum(lineNet);  taxBase(rate) = sum(lineNet of the lines with that rate)
- *   tax     = round2( taxBase x rate / 100 );  linesTotal = base + sum(tax)
+ *   lineNet = round_scale( quantity x unit6 )                   (scale = the document currency's decimals)
+ *   base    = sum(lineNet)
+ *   tax     = per (rate, mode): D (document-based, default) rounds ONCE on the sum of the nets,
+ *             L (line-based) rounds each line (round_scale(lineNet x rate / 100)) and sums;
+ *             a rate may have a D row and an L row (ascending by rate, D before L)
+ *   rate    = line taxRate, else tax.rate, rounded HALF_UP to 2 decimals BEFORE grouping
  *
- * BigInt on the inputs scaled to their capped decimals (quantity, unit price and discount x 10^4,
- * rate x 10^2); no float arithmetic, so the SPA and the server never differ by a micro-unit.
+ * BigInt on the inputs scaled to their capped decimals (quantity and discount x 10^4, unit price
+ * x 10^6, rate x 10^2) and amounts in units of 10^-scale; no float arithmetic, so the SPA and the
+ * server never differ by a unit.
  */
-const CENT = 100;
-const MISMATCH_TOLERANCE_CENTS = 1;
-const SCALE_4 = 4;
+const DEFAULT_SCALE = 2;
+const MISMATCH_TOLERANCE_UNITS = 1;
+const SCALE_QTY = 4;
+const SCALE_PRICE = 6;
+const SCALE_DISCOUNT = 4;
 const SCALE_RATE = 2;
 const TEN = 10n;
 const POW = (n) => TEN ** BigInt(n);
 const MICRO = POW(6);
-const SCALE_4_FACTOR = POW(SCALE_4);
+
+/** The decimals of the document currency (`currency.scale`); 2 when the answer carries none. */
+export function currencyScale(currency) {
+  const scale = currency?.scale;
+  return Number.isInteger(scale) && scale >= 0 && scale <= 6 ? scale : DEFAULT_SCALE;
+}
 
 /** `error.code` of a failed review read → `genericLabels` key (the backend text is never shown). */
 export const REVIEW_ERROR_LABEL_KEYS = Object.freeze({
@@ -86,29 +97,30 @@ function scaledOrZero(value, decimals) {
   return toScaled(value, decimals) ?? 0n;
 }
 
-/** The discount percent of a line (0 when absent / not a number), scale 4. */
+/** The discount percent of a line, scale 4; an invalid one (negative, over 100, not a number) counts as 0. */
 function discountScaled(line) {
-  return scaledOrZero(line?.discount, SCALE_4);
+  const scaled = scaledOrZero(line?.discount, SCALE_DISCOUNT);
+  return scaled < 0n || scaled > 100n * POW(SCALE_DISCOUNT) ? 0n : scaled;
 }
 
 /** The unit price after the discount, in micro-units (10^-6): round6(price x (1 - discount/100)). */
 export function lineUnit6(line) {
-  const priceS = scaledOrZero(line?.unitPrice, SCALE_4);
+  const priceS = scaledOrZero(line?.unitPrice, SCALE_PRICE);
   const dS = discountScaled(line);
-  return divRoundHalfAway(priceS * (MICRO - dS), SCALE_4_FACTOR);
+  return divRoundHalfAway(priceS * (MICRO - dS), MICRO);
 }
 
-/** The net of a line in integer cents: round2(quantity x unit6). */
-export function lineNetCents(line) {
-  const qS = scaledOrZero(line?.quantity, SCALE_4);
-  return divRoundHalfAway(qS * lineUnit6(line), POW(8));
+/** The net of a line in units of 10^-scale: round_scale(quantity x unit6). */
+export function lineNetUnits(line, scale = DEFAULT_SCALE) {
+  const qS = scaledOrZero(line?.quantity, SCALE_QTY);
+  return divRoundHalfAway(qS * lineUnit6(line), POW(SCALE_QTY + SCALE_PRICE - scale));
 }
 
-const centsToNumber = (cents) => Number(cents) / CENT;
+const unitsToNumber = (units, scale) => Number(units) / 10 ** scale;
 
-/** Quantity x unit price after the discount, at the cent, as a number (0 for a missing side). */
-export function lineAmount(line) {
-  return centsToNumber(lineNetCents(line));
+/** Quantity x unit price after the discount, at the currency scale, as a number (0 for a missing side). */
+export function lineAmount(line, scale = DEFAULT_SCALE) {
+  return unitsToNumber(lineNetUnits(line, scale), scale);
 }
 
 /** The VAT rate of a line: the reader's `taxRate`, else the resolved tax's rate, else null. */
@@ -119,65 +131,95 @@ export function lineRate(line) {
   return Number.isFinite(rate) ? rate : null;
 }
 
+/** True when the line's tax is LINE-based ('L'); the default is document-based ('D'). */
+function isLineBased(line) {
+  return line?.tax?.docTaxAmount === 'L';
+}
+
 /**
- * Totals recomputed from the lines: the base, one VAT row per rate (ascending; lines without a
- * rate add to the base only) and the lines total (base + VAT).
+ * Totals recomputed from the lines, at the document currency's `scale` (default 2): the base, one VAT row
+ * per (rate, mode) (ascending by rate, document-based before line-based; lines without a rate add to the
+ * base only; a line missing its quantity or unit price counts for nothing) and the lines total.
  *
- * @returns {{base: number, taxes: {rate: number, base: number, amount: number}[], linesTotal: number}}
+ * @returns {{base: number, taxes: {rate: number, base: number, amount: number, docTaxAmount?: 'L'}[],
+ *   linesTotal: number}}
  */
-export function computeTotals(lines) {
-  // Grouped by the rate ROUNDED HALF_UP to 2 decimals (rate x 100 as a BigInt), so 10.555 and 10.56
-  // are one row, exactly like the backend (RATE_SCALE = 2).
-  const byRate = new Map();
-  let baseCents = 0n;
+export function computeTotals(lines, scale = DEFAULT_SCALE) {
+  const rows = new Map();
+  let baseUnits = 0n;
   for (const line of lines ?? []) {
-    const net = lineNetCents(line);
-    baseCents += net;
+    if (line?.quantity == null || line?.unitPrice == null) continue;
+    const net = lineNetUnits(line, scale);
+    baseUnits += net;
     const rateScaled = toScaled(lineRate(line), SCALE_RATE);
-    if (rateScaled != null) byRate.set(rateScaled, (byRate.get(rateScaled) ?? 0n) + net);
+    if (rateScaled == null) continue;
+    const lineBased = isLineBased(line);
+    const key = `${rateScaled}|${lineBased ? 'L' : 'D'}`;
+    const row = rows.get(key) ?? { rateScaled, lineBased, base: 0n, lineTax: 0n };
+    row.base += net;
+    if (lineBased) row.lineTax += taxOf(net, rateScaled);
+    rows.set(key, row);
   }
-  const rows = [...byRate.entries()]
-    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
-    .map(([rateScaled, rateBase]) => ({
-      rate: Number(rateScaled) / 10 ** SCALE_RATE,
-      baseCents: rateBase,
-      amountCents: divRoundHalfAway(rateBase * rateScaled, POW(SCALE_RATE + 2)),
-    }));
-  const totalCents = baseCents + rows.reduce((sum, row) => sum + row.amountCents, 0n);
+  const ordered = [...rows.values()].sort((a, b) => {
+    if (a.rateScaled !== b.rateScaled) return a.rateScaled < b.rateScaled ? -1 : 1;
+    return Number(a.lineBased) - Number(b.lineBased);
+  }).map((row) => ({ ...row, amount: row.lineBased ? row.lineTax : taxOf(row.base, row.rateScaled) }));
+  const totalUnits = baseUnits + ordered.reduce((sum, row) => sum + row.amount, 0n);
   return {
-    base: centsToNumber(baseCents),
-    taxes: rows.map((row) => ({ rate: row.rate, base: centsToNumber(row.baseCents), amount: centsToNumber(row.amountCents) })),
-    linesTotal: centsToNumber(totalCents),
+    base: unitsToNumber(baseUnits, scale),
+    taxes: ordered.map((row) => ({
+      rate: Number(row.rateScaled) / 10 ** SCALE_RATE,
+      base: unitsToNumber(row.base, scale),
+      amount: unitsToNumber(row.amount, scale),
+      ...(row.lineBased ? { docTaxAmount: 'L' } : {}),
+    })),
+    linesTotal: unitsToNumber(totalUnits, scale),
   };
 }
 
-const roundCents = (value) => Math.round((Number(value) || 0) * CENT);
+/** round_scale(base x rate / 100) in the same units as `base`; `rateScaled` is the rate x 100. */
+function taxOf(base, rateScaled) {
+  return divRoundHalfAway(base * rateScaled, POW(SCALE_RATE + 2));
+}
+
+const roundUnits = (value, scale) => Math.round((Number(value) || 0) * 10 ** scale);
 
 /**
  * The total the invoice carries: with `totalSource` `lines` the live lines total; otherwise the
  * printed one (S2-D3: a printed total stays printed after edits). Falls back to the recomputed
  * lines total when the document has none.
  */
-export function documentTotal(header, totals) {
+export function documentTotal(header, totals, scale = DEFAULT_SCALE) {
   if (header?.totalSource === 'lines') return totals.linesTotal;
   const value = header?.totalAmount;
   if (value == null || value === '' || !Number.isFinite(Number(value))) return totals.linesTotal;
-  return Math.round(Number(value) * CENT) / CENT;
+  return Math.round(Number(value) * 10 ** scale) / 10 ** scale;
 }
 
 /**
  * Decision 4 — the non-blocking "total does not match" warning: only when the document's total is
- * the PRINTED one and the lines add up to something else (more than one cent apart).
+ * the PRINTED one and the lines add up to something else (more than one minimal currency unit apart:
+ * a cent for 2 decimals, a whole unit for a 0-decimal currency).
  *
  * @returns {{lines: number, document: number}|null}
  */
-export function totalMismatch(header, totals) {
+export function totalMismatch(header, totals, scale = DEFAULT_SCALE) {
   if (header?.totalSource !== 'printed') return null;
   const printed = Number(header?.totalAmount);
   if (!Number.isFinite(printed)) return null;
-  const diffCents = Math.abs(roundCents(printed) - roundCents(totals.linesTotal));
-  if (diffCents <= MISMATCH_TOLERANCE_CENTS) return null;
-  return { lines: totals.linesTotal, document: Math.round(printed * CENT) / CENT };
+  const diff = Math.abs(roundUnits(printed, scale) - roundUnits(totals.linesTotal, scale));
+  if (diff <= MISMATCH_TOLERANCE_UNITS) return null;
+  return { lines: totals.linesTotal, document: Math.round(printed * 10 ** scale) / 10 ** scale };
+}
+
+/** True when line `lineIndex` lacks its `field` (`quantity`, `unitPrice`, `tax`, `product`): a `line[i].field` code. */
+export function lineFieldMissing(missing, lineIndex, field) {
+  return missing.has(`line[${lineIndex}].${field}`);
+}
+
+/** True when some line lacks its quantity / unit price (any sign, zero included, is a valid number). */
+export function hasMissingLineField(document, field) {
+  return [...missingSet(document)].some((code) => new RegExp(`^line\\[\\d+\\]\\.${field}$`).test(code));
 }
 
 /** The `validation.missing` codes as a Set (empty without a verdict). */
@@ -340,7 +382,7 @@ export const MAX_DOCUMENT_NO = 20;
 /** Numeric cells: bounds, decimals kept (HALF_UP) and whether empty means "no value" (null). */
 export const NUMBER_FIELDS = Object.freeze({
   quantity: { min: -1e9, max: 1e9, scale: 4, nullable: false },
-  unitPrice: { min: -1e9, max: 1e9, scale: 4, nullable: false },
+  unitPrice: { min: -1e9, max: 1e9, scale: 6, nullable: false },
   taxRate: { min: 0, max: 100, scale: 2, nullable: true },
   discount: { min: 0, max: 100, scale: 4, nullable: true },
 });
@@ -393,7 +435,7 @@ function mapLine(lines, index, fn) {
   return lines.map((line, position) => (indexOf(line, position) === index ? fn(line) : line));
 }
 
-function setLinePatch(line, op) {
+function setLinePatch(line, op, hint = {}) {
   const next = { ...line };
   for (const key of ['description', 'quantity', 'unitPrice']) {
     if (key in op) next[key] = op[key];
@@ -403,11 +445,29 @@ function setLinePatch(line, op) {
     // The resolved tax belongs to the OLD rate; the server answer brings the new one.
     if (op.taxRate == null) next.tax = null;
   }
+  if ('taxId' in op) applyTaxChoice(next, op.taxId, hint);
   if ('discount' in op) {
     if (op.discount == null || Number(op.discount) === 0) delete next.discount;
     else next.discount = op.discount;
   }
   return next;
+}
+
+/**
+ * A tax chosen BY ID (`setLine {taxId}`): the line shows it at once, but its rate is only known when the
+ * selector option exposed it (`hint.taxRate`); otherwise the rate is left unknown (`pending`) until the
+ * server answers: the SPA never guesses it. A null id clears the choice (the server resolves a default).
+ */
+function applyTaxChoice(line, taxId, hint) {
+  if (taxId == null) {
+    line.tax = null;
+    delete line.taxRate;
+    return;
+  }
+  const rate = hint.taxRate != null && Number.isFinite(Number(hint.taxRate)) ? Number(hint.taxRate) : null;
+  line.tax = { state: rate == null ? 'pending' : 'resolved', matchedBy: 'manual', id: taxId, name: hint.taxName ?? '', ...(rate == null ? {} : { rate }) };
+  if (rate == null) delete line.taxRate;
+  else line.taxRate = rate;
 }
 
 function newLine(lines) {
@@ -416,6 +476,7 @@ function newLine(lines) {
   const rate = previous ? lineRate(previous) : null;
   return {
     index, description: '', quantity: 1, unitPrice: 0, ...(rate == null ? {} : { taxRate: rate }),
+    ...(previous?.tax?.id ? { tax: previous.tax } : {}),
     product: { state: 'none', candidates: [] },
   };
 }
@@ -449,7 +510,7 @@ export function applyOperationLocally(document, op, hint = {}) {
       return { ...doc, header: next };
     }
     case 'setLine':
-      return { ...doc, lines: mapLine(lines, op.index, (line) => setLinePatch(line, op)) };
+      return { ...doc, lines: mapLine(lines, op.index, (line) => setLinePatch(line, op, hint)) };
     case 'addLine':
       return { ...doc, lines: [...lines, newLine(lines)] };
     case 'removeLine':
@@ -523,6 +584,7 @@ export const SAVE_ERROR_LABEL_KEYS = Object.freeze({
   not_editable: 'invoiceInboxSaveErrorNotEditable',
   not_reviewable: 'invoiceInboxSaveErrorNotReviewable',
   not_valid: 'invoiceInboxSaveErrorNotValid',
+  unknown_tax: 'invoiceInboxSaveErrorUnknownTax',
   invalid_value: 'invoiceInboxSaveErrorInvalidValue',
   invalid_request: 'invoiceInboxSaveErrorInvalidValue',
   too_many_lines: 'invoiceInboxSaveErrorTooManyLines',

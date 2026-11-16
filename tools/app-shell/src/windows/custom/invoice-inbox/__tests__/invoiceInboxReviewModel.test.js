@@ -10,7 +10,7 @@ import {
   initialZoom, stepZoom, PAPER_WIDTH, ZOOM_MIN, ZOOM_MAX, ZOOM_STEP,
   lineUnit6, toScaled, divRoundHalfAway, normalizeNumber, sameNumber, buildOp, applyOperationLocally,
   applyPendingToReview, newProductComplete, newProductName, saveErrorKey, isReloadCode, canMarkReviewed,
-  SAVE_ERROR_LABEL_KEYS, NUMBER_FIELDS,
+  SAVE_ERROR_LABEL_KEYS, NUMBER_FIELDS, currencyScale, lineFieldMissing, hasMissingLineField,
 } from '../invoiceInboxReviewModel.js';
 import { readFileSync } from 'node:fs';
 
@@ -271,20 +271,21 @@ describe('zoom', () => {
 const FIXTURE = JSON.parse(readFileSync(new URL('../../../../../__tests__/fixtures/invoice-inbox-totals.json', import.meta.url), 'utf8'));
 
 describe('totals shared fixture (same file the backend reads)', () => {
-  it('carries the 15 agreed cases', () => {
-    assert.equal(FIXTURE.cases.length, 15);
+  it('carries the 21 agreed cases', () => {
+    assert.equal(FIXTURE.cases.length, 21);
   });
   for (const c of FIXTURE.cases) {
     it(`computeTotals: ${c.name}`, () => {
-      const totals = computeTotals(c.lines);
+      const scale = c.scale ?? 2;
+      const totals = computeTotals(c.lines, scale);
       assert.equal(totals.base, Number(c.expected.base ?? 0));
       assert.equal(totals.linesTotal, Number(c.expected.linesTotal));
       assert.deepEqual(
-        totals.taxes.map((t) => [t.rate, t.base, t.amount]),
-        (c.expected.taxes ?? []).map((t) => [t.rate, Number(t.base), Number(t.amount)]),
+        totals.taxes.map((t) => [t.rate, t.docTaxAmount ?? 'D', t.base, t.amount]),
+        (c.expected.taxes ?? []).map((t) => [t.rate, t.docTaxAmount ?? 'D', Number(t.base), Number(t.amount)]),
       );
       (c.expected.lines ?? []).forEach((expected, i) => {
-        assert.equal(lineAmount(c.lines[i]), Number(expected.net), 'lineAmount');
+        assert.equal(lineAmount(c.lines[i], scale), Number(expected.net), 'lineAmount');
         assert.equal(Number(lineUnit6(c.lines[i])) / 1e6, Number(expected.unit6), 'lineUnit6');
       });
     });
@@ -518,5 +519,277 @@ describe('saveErrorKey / isReloadCode / canMarkReviewed', () => {
     assert.equal(canMarkReviewed({ ...valid, status: 'CONFIRMED' }), false);
     assert.equal(canMarkReviewed({ ...valid, editable: false }), false);
     assert.equal(canMarkReviewed(null), false);
+  });
+});
+
+describe('ETP-6050 S2 — tax by id and negative lines', () => {
+  it('setLine {taxId} shows the chosen tax at once; the rate is only used when the option exposed it', async () => {
+    const m = await import('../invoiceInboxReviewModel.js');
+    const doc = { lines: [{ index: 0, quantity: 1, unitPrice: 100, taxRate: 21, tax: { id: 'T21', rate: 21 } }] };
+    const unknown = m.applyOperationLocally(doc, m.buildOp.setLine(0, { taxId: 'T10' }), { taxName: 'IVA 10%' });
+    assert.equal(unknown.lines[0].tax.id, 'T10');
+    assert.equal(unknown.lines[0].tax.state, 'pending');
+    assert.equal(m.lineRate(unknown.lines[0]), null, 'the rate is never guessed');
+    const known = m.applyOperationLocally(doc, m.buildOp.setLine(0, { taxId: 'T10' }), { taxName: 'IVA 10%', taxRate: 10 });
+    assert.equal(m.lineRate(known.lines[0]), 10);
+    const cleared = m.applyOperationLocally(doc, m.buildOp.setLine(0, { taxId: null }));
+    assert.equal(m.lineRate(cleared.lines[0]), null);
+  });
+
+  it('totals work with negative lines (credit / return) and a zero price', async () => {
+    const m = await import('../invoiceInboxReviewModel.js');
+    const totals = m.computeTotals([
+      { quantity: 2, unitPrice: 50, taxRate: 21 },
+      { quantity: -1, unitPrice: 30, taxRate: 21 },
+      { quantity: 3, unitPrice: 0, taxRate: 21 },
+    ]);
+    assert.equal(totals.base, 70);
+    assert.equal(totals.linesTotal, 84.7);
+    const negative = m.computeTotals([{ quantity: -1, unitPrice: 100, taxRate: 21 }]);
+    assert.equal(negative.linesTotal, -121);
+  });
+
+  it('lineFieldMissing / hasMissingLineField read the line[i].quantity and unitPrice codes', async () => {
+    const m = await import('../invoiceInboxReviewModel.js');
+    const doc = { validation: { missing: ['line[2].quantity', 'line[0].unitPrice'] } };
+    assert.equal(m.lineFieldMissing(m.missingSet(doc), 2, 'quantity'), true);
+    assert.equal(m.lineFieldMissing(m.missingSet(doc), 2, 'unitPrice'), false);
+    assert.equal(m.hasMissingLineField(doc, 'unitPrice'), true);
+    assert.equal(m.hasMissingLineField({ validation: { missing: ['vendor'] } }, 'quantity'), false);
+  });
+});
+
+describe('ETP-6050 S2 — currency scale', () => {
+  it('currencyScale reads currency.scale and defaults to 2', async () => {
+    const m = await import('../invoiceInboxReviewModel.js');
+    assert.equal(m.currencyScale({ scale: 0 }), 0);
+    assert.equal(m.currencyScale({ scale: 3 }), 3);
+    assert.equal(m.currencyScale({}), 2);
+    assert.equal(m.currencyScale(undefined), 2);
+  });
+
+  it('the mismatch tolerance is one minimal unit of the currency', async () => {
+    const m = await import('../invoiceInboxReviewModel.js');
+    const totals = { linesTotal: 122 };
+    assert.equal(m.totalMismatch({ totalSource: 'printed', totalAmount: 123 }, totals, 0), null);
+    assert.deepEqual(m.totalMismatch({ totalSource: 'printed', totalAmount: 124 }, totals, 0), { lines: 122, document: 124 });
+    assert.equal(m.totalMismatch({ totalSource: 'printed', totalAmount: 122.01 }, totals, 2), null);
+  });
+
+  it('unit prices keep 6 decimals', async () => {
+    const m = await import('../invoiceInboxReviewModel.js');
+    assert.deepEqual(m.normalizeNumber('unitPrice', { value: 0.1234567, isValid: true }), { ok: true, value: 0.123457 });
+  });
+});
+
+describe('ETP-6050 S2 — totals edge cases (any sign, missing sides, discount bounds)', () => {
+  it('a line missing its quantity or its price counts for nothing (base, tax and total)', () => {
+    const totals = computeTotals([
+      { quantity: null, unitPrice: 10, taxRate: 21 },
+      { quantity: 2, unitPrice: undefined, taxRate: 21 },
+      { quantity: 1, unitPrice: 100, taxRate: 21 },
+    ]);
+    assert.equal(totals.base, 100);
+    assert.deepEqual(totals.taxes.map((t) => [t.rate, t.base, t.amount]), [[21, 100, 21]]);
+    assert.equal(totals.linesTotal, 121);
+  });
+
+  it('a zero quantity or a zero price counts as a valid line of amount 0 (and keeps its tax row)', () => {
+    const totals = computeTotals([{ quantity: 0, unitPrice: 50, taxRate: 10 }, { quantity: 3, unitPrice: 0, taxRate: 10 }]);
+    assert.equal(totals.base, 0);
+    assert.deepEqual(totals.taxes, [{ rate: 10, base: 0, amount: 0 }]);
+    assert.equal(totals.linesTotal, 0);
+  });
+
+  it('a negative price and a negative quantity multiply to a positive line; mixed signs net out', () => {
+    assert.equal(computeTotals([{ quantity: -2, unitPrice: -5, taxRate: 0 }]).base, 10);
+    const mixed = computeTotals([{ quantity: 1, unitPrice: 100, taxRate: 21 }, { quantity: -1, unitPrice: 100, taxRate: 21 }]);
+    assert.equal(mixed.base, 0);
+    assert.equal(mixed.linesTotal, 0);
+  });
+
+  it('a credit document (every line negative) totals negative with a negative tax amount', () => {
+    const totals = computeTotals([{ quantity: -1, unitPrice: 100, taxRate: 21 }, { quantity: -2, unitPrice: 10.5, taxRate: 21 }]);
+    assert.equal(totals.base, -121);
+    assert.deepEqual(totals.taxes, [{ rate: 21, base: -121, amount: -25.41 }]);
+    assert.equal(totals.linesTotal, -146.41);
+  });
+
+  it('a negative or over-100 discount is treated as 0; 100 gives a free line', () => {
+    assert.equal(lineAmount({ quantity: 1, unitPrice: 10, discount: -20 }), 10);
+    assert.equal(lineAmount({ quantity: 1, unitPrice: 10, discount: 150 }), 10);
+    assert.equal(lineAmount({ quantity: 1, unitPrice: 10, discount: 100 }), 0);
+    assert.equal(lineAmount({ quantity: 1, unitPrice: 10, discount: 'abc' }), 10);
+  });
+
+  it('the scale decides the rounding of every line, at the boundary (half away from zero)', () => {
+    // 3 x 0.125 = 0.375 -> 0.38 at 2 decimals, 0.375 at 3, 0 at 0
+    const l = { quantity: 3, unitPrice: 0.125 };
+    assert.equal(lineAmount(l, 2), 0.38);
+    assert.equal(lineAmount(l, 3), 0.375);
+    assert.equal(lineAmount(l, 0), 0);
+    assert.equal(lineAmount({ quantity: -3, unitPrice: 0.125 }, 2), -0.38);
+    // 4 decimals of quantity x 6 of price survive until the final rounding
+    assert.equal(lineAmount({ quantity: 1.5, unitPrice: 0.000333 }, 6), 0.000500);
+    assert.equal(lineAmount({ quantity: 1000, unitPrice: 0.000333 }, 2), 0.33);
+  });
+
+  it('a 6-decimal unit price is kept by the discount math (unit6 rounds at 6 decimals)', () => {
+    assert.equal(Number(lineUnit6({ unitPrice: 0.123456 })) / 1e6, 0.123456);
+    assert.equal(Number(lineUnit6({ unitPrice: 0.123457, discount: 50 })) / 1e6, 0.061729);
+  });
+
+  it('D rows group per rate; L rows keep one row per rate too and sum per-line roundings; D comes before L', () => {
+    const lines = [
+      { quantity: 1, unitPrice: 0.25, taxRate: 10, tax: { docTaxAmount: 'L' } },
+      { quantity: 1, unitPrice: 0.25, taxRate: 10, tax: { docTaxAmount: 'L' } },
+      { quantity: 1, unitPrice: 0.25, taxRate: 10 },
+      { quantity: 1, unitPrice: 0.25, taxRate: 10 },
+      { quantity: 1, unitPrice: 1, taxRate: 4 },
+    ];
+    const { taxes, linesTotal } = computeTotals(lines);
+    assert.deepEqual(taxes.map((t) => [t.rate, t.docTaxAmount ?? 'D', t.base, t.amount]), [
+      [4, 'D', 1, 0.04], [10, 'D', 0.5, 0.05], [10, 'L', 0.5, 0.06],
+    ]);
+    assert.equal(linesTotal, 2 + 0.04 + 0.05 + 0.06);
+  });
+
+  it('the rate is rounded to 2 decimals before grouping and the effective rate falls back to tax.rate', () => {
+    const { taxes } = computeTotals([
+      { quantity: 1, unitPrice: 100, taxRate: 10.554 },
+      { quantity: 1, unitPrice: 100, tax: { rate: 10.55 } },
+    ]);
+    assert.deepEqual(taxes.map((t) => [t.rate, t.base]), [[10.55, 200]]);
+  });
+
+  it('a scale of 3 and of 0 flow through computeTotals, documentTotal and totalMismatch', () => {
+    const t3 = computeTotals([{ quantity: 3, unitPrice: 1.2345, taxRate: 10 }], 3);
+    assert.equal(t3.linesTotal, 4.074);
+    assert.equal(documentTotal({ totalSource: 'printed', totalAmount: 4.0744 }, t3, 3), 4.074);
+    assert.equal(totalMismatch({ totalSource: 'printed', totalAmount: 4.075 }, t3, 3), null);
+    assert.deepEqual(totalMismatch({ totalSource: 'printed', totalAmount: 4.076 }, t3, 3), { lines: 4.074, document: 4.076 });
+    const t0 = computeTotals([{ quantity: 3, unitPrice: 33.5, taxRate: 21 }], 0);
+    assert.equal(documentTotal({ totalSource: 'printed', totalAmount: 122.4 }, t0, 0), 122);
+    assert.equal(totalMismatch({ totalSource: 'printed', totalAmount: 123 }, t0, 0), null);
+    assert.notEqual(totalMismatch({ totalSource: 'printed', totalAmount: 124 }, t0, 0), null);
+  });
+
+  it('a negative printed total (credit note) mismatches by minimal units, not by sign', () => {
+    const totals = computeTotals([{ quantity: -1, unitPrice: 100, taxRate: 21 }]);
+    assert.equal(totalMismatch({ totalSource: 'printed', totalAmount: -121 }, totals), null);
+    assert.equal(totalMismatch({ totalSource: 'printed', totalAmount: -121.01 }, totals), null);
+    assert.deepEqual(totalMismatch({ totalSource: 'printed', totalAmount: -121.5 }, totals), { lines: -121, document: -121.5 });
+  });
+});
+
+describe('ETP-6050 S2 — currencyScale boundaries', () => {
+  it('accepts 0..6 integers only; anything else falls back to 2', () => {
+    for (const [input, expected] of [[0, 0], [1, 1], [6, 6], [7, 2], [-1, 2], [2.5, 2], ['3', 2], [null, 2]]) {
+      assert.equal(currencyScale({ scale: input }), expected, String(input));
+    }
+    assert.equal(currencyScale(null), 2);
+  });
+});
+
+describe('ETP-6050 S2 — line[i].quantity / unitPrice validation codes', () => {
+  it('lineFieldMissing is exact per index and field; hasMissingLineField ignores look-alike codes', () => {
+    const doc = { validation: { missing: ['line[0].quantity', 'line[10].unitPrice', 'line[1].quantityX', 'line[x].quantity'] } };
+    const set = missingSet(doc);
+    assert.equal(lineFieldMissing(set, 0, 'quantity'), true);
+    assert.equal(lineFieldMissing(set, 1, 'quantity'), false);
+    assert.equal(lineFieldMissing(set, 10, 'unitPrice'), true);
+    assert.equal(hasMissingLineField(doc, 'quantity'), true);
+    assert.equal(hasMissingLineField({ validation: { missing: ['line[1].quantityX', 'line[x].quantity'] } }, 'quantity'), false);
+    assert.equal(hasMissingLineField({}, 'quantity'), false);
+  });
+
+  it('every missing code (quantity and price included) counts once in the footer counter, and blocks Mark as reviewed', () => {
+    const review = { status: 'PENDING_REVIEW', editable: true, document: { validation: { missing: ['line[0].quantity', 'line[0].unitPrice', 'line[1].quantity'] } } };
+    assert.equal(pendingCount(review.document), 3);
+    assert.equal(canMarkReviewed(review), false);
+    assert.equal(canMarkReviewed({ ...review, document: { validation: { missing: [] } } }), true);
+  });
+
+  it('an empty quantity or unit price is rejected, zero and negative values are accepted', () => {
+    for (const field of ['quantity', 'unitPrice']) {
+      assert.deepEqual(normalizeNumber(field, { value: null, isValid: true }), { ok: false });
+      assert.deepEqual(normalizeNumber(field, { value: 0, isValid: true }), { ok: true, value: 0 });
+      assert.deepEqual(normalizeNumber(field, { value: -7, isValid: true }), { ok: true, value: -7 });
+    }
+  });
+
+  it('input scales: quantity 4, unit price 6, discount 4, rate 2 (HALF_UP at the boundary, away from zero when negative)', () => {
+    assert.deepEqual(normalizeNumber('quantity', { value: 1.23455, isValid: true }), { ok: true, value: 1.2346 });
+    assert.deepEqual(normalizeNumber('quantity', { value: -1.23455, isValid: true }), { ok: true, value: -1.2346 });
+    assert.deepEqual(normalizeNumber('unitPrice', { value: 0.1234565, isValid: true }), { ok: true, value: 0.123457 });
+    assert.deepEqual(normalizeNumber('unitPrice', { value: 12.345678, isValid: true }), { ok: true, value: 12.345678 });
+    assert.deepEqual(normalizeNumber('discount', { value: 12.34565, isValid: true }), { ok: true, value: 12.3457 });
+    assert.deepEqual(normalizeNumber('taxRate', { value: 10.555, isValid: true }), { ok: true, value: 10.56 });
+  });
+});
+
+describe('ETP-6050 S2 — tax by id: optimistic copy and error mapping', () => {
+  const taxed = () => ({ lines: [{ index: 0, quantity: 1, unitPrice: 100, taxRate: 21, tax: { state: 'resolved', id: 'T21', name: 'IVA 21%', rate: 21 } }] });
+
+  it('a picked tax whose option exposes the rate shows it at once (resolved, manual) and the totals follow', () => {
+    const next = applyOperationLocally(taxed(), buildOp.setLine(0, { taxId: 'T10' }), { taxName: 'IVA 10%', taxRate: '10' });
+    assert.deepEqual(next.lines[0].tax, { state: 'resolved', matchedBy: 'manual', id: 'T10', name: 'IVA 10%', rate: 10 });
+    assert.equal(next.lines[0].taxRate, 10);
+    assert.equal(computeTotals(next.lines).linesTotal, 110);
+  });
+
+  it('an option with no usable rate leaves the rate unknown (pending): no taxRate, no tax row, the line counts in the base only', () => {
+    for (const hint of [{}, { taxRate: null }, { taxRate: 'abc' }]) {
+      const next = applyOperationLocally(taxed(), buildOp.setLine(0, { taxId: 'T10' }), hint);
+      assert.equal(next.lines[0].tax.state, 'pending');
+      assert.equal('rate' in next.lines[0].tax, false);
+      assert.equal('taxRate' in next.lines[0], false);
+      assert.equal(lineRate(next.lines[0]), null);
+      assert.deepEqual(computeTotals(next.lines), { base: 100, taxes: [], linesTotal: 100 });
+    }
+  });
+
+  it('a rate of 0 exposed by the option is a real rate, not "unknown"', () => {
+    const next = applyOperationLocally(taxed(), buildOp.setLine(0, { taxId: 'T0' }), { taxName: 'Exento', taxRate: 0 });
+    assert.equal(lineRate(next.lines[0]), 0);
+    assert.equal(next.lines[0].tax.state, 'resolved');
+  });
+
+  it('the wire operation of a tax pick carries the id only (no rate, no name)', () => {
+    assert.deepEqual(buildOp.setLine(0, { taxId: 'T10' }), { op: 'setLine', index: 0, taxId: 'T10' });
+  });
+
+  it('addLine inherits the previous line tax object (id included); with no previous tax id it inherits only the rate, or nothing', () => {
+    const withId = applyOperationLocally(taxed(), buildOp.addLine());
+    assert.equal(withId.lines[1].tax.id, 'T21');
+    assert.equal(withId.lines[1].taxRate, 21);
+    const rateOnly = applyOperationLocally({ lines: [{ index: 0, quantity: 1, unitPrice: 1, taxRate: 10 }] }, buildOp.addLine());
+    assert.equal('tax' in rateOnly.lines[1], false);
+    assert.equal(rateOnly.lines[1].taxRate, 10);
+    const bare = applyOperationLocally({ lines: [{ index: 0, quantity: 1, unitPrice: 1 }] }, buildOp.addLine());
+    assert.equal('tax' in bare.lines[1], false);
+    assert.equal('taxRate' in bare.lines[1], false);
+  });
+
+  it('unknown_tax maps to its own label key and does not reload the document', () => {
+    assert.equal(saveErrorKey('unknown_tax'), 'invoiceInboxSaveErrorUnknownTax');
+    assert.equal(isReloadCode('unknown_tax'), false);
+  });
+
+  it('access_denied (code-less 403) maps to the access label and does not reload', () => {
+    assert.equal(saveErrorKey('access_denied'), 'invoiceInboxSaveErrorAccess');
+    assert.equal(isReloadCode('access_denied'), false);
+  });
+});
+
+describe('ETP-6050 S2 — product.new without a resolved name', () => {
+  it('the name comes from the answer or the description; a draft id with no name stays selected and is never echoed', () => {
+    const doc = { lines: [{ index: 0, description: 'Tornillo', product: { state: 'new', new: { categoryId: 'C1', uomId: 'U1' } } }] };
+    assert.equal(newProductName(doc.lines[0]), 'Tornillo');
+    const next = applyOperationLocally(doc, buildOp.newProduct(0, { categoryId: 'C2' }), {});
+    // category name not resolved: the id stays committed, the name is whatever the server sent before (none)
+    assert.equal(next.lines[0].product.new.categoryId, 'C2');
+    assert.equal(next.lines[0].product.new.category, undefined);
+    assert.equal(newProductComplete(next.lines[0]), true);
   });
 });
