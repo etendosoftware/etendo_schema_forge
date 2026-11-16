@@ -9,7 +9,8 @@ import { formatAmount } from '@/lib/formatAmount.js';
 import { resolveRowCurrency } from '@/lib/rowCurrency.js';
 import { formatSignedDelta } from '@/lib/formatSigned.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
-import { getStatusDotColor, getStatusTone, statusLabel } from '@/lib/statusBadge.js';
+import { getStatusDotColor, statusLabel } from '@/lib/statusBadge.js';
+import { resolveStatusTone } from '@/lib/statusToneOverride.js';
 import {
   resolvePostedStatus, postedStatusLabel, postedStatusTone, isPostedStatusColumn, isPostedBooleanValue,
 } from '@/lib/postedStatus.js';
@@ -154,7 +155,8 @@ export function renderStatusCell({ row, col, dictionary, ui }) {
       </span>
     );
   }
-  return <StatusTag status={raw} label={label} tone={getStatusTone(raw)} data-testid="StatusTag__eb5261" />;
+  // ETP-6148 — a column's own per-code tones (`enumVariants`) win over the global catalog.
+  return <StatusTag status={raw} label={label} tone={resolveStatusTone(raw, col.enumVariants)} data-testid="StatusTag__eb5261" />;
 }
 
 export function renderPercentCell({ row, col }) {

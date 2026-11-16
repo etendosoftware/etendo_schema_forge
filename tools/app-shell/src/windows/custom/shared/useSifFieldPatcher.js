@@ -1,4 +1,6 @@
 import { useEffect, useRef } from 'react';
+import { toast } from 'sonner';
+import { joinWithConjunction } from '@/lib/backendErrors.js';
 import { useUI } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
@@ -36,6 +38,47 @@ export const VERIFACTU_INV_TYPE_OPTIONS = [
   { value: 'R4', labelKey: 'sifDataTabs.option.vfR4' },
   { value: 'R5', labelKey: 'sifDataTabs.option.vfR5' },
 ];
+
+// ETP-5745 CP-16: which active fiscal system(s) still need their own rectification code/motive
+// on a rectificative invoice — the CLIENT-SIDE mirror of
+// `RectificationFiscalCodeGuard.missingSystems` (com.etendoerp.go), so the toast only fires while
+// there is something left to fill in (e.g. never again after a reactivation of an invoice whose
+// codes were already completed). Kept in sync with that guard's three checks:
+//   - SII: `aeatsiiMotivoRectif` blank.
+//   - TicketBAI (only when active for the org): `tbaiReverseinvoicecode` blank.
+//   - VERI*FACTU (only when active for the org): `etvfacInvType` still a non-rectificative code
+//     (blank or F*, not R1-R5).
+// Exported so a future test can cover it directly without mounting the hook.
+export function missingRectificationSystems(data, { showSii, showTbai, showVerifactu }) {
+  const missing = [];
+  if (showSii && !data?.aeatsiiMotivoRectif) {
+    missing.push('SII');
+  }
+  if (showTbai && !data?.tbaiReverseinvoicecode) {
+    missing.push('TicketBAI');
+  }
+  if (showVerifactu) {
+    const vfInvType = data?.etvfacInvType;
+    const isRectificativeCode = typeof vfInvType === 'string' && vfInvType.startsWith('R');
+    if (!isRectificativeCode) {
+      missing.push('Verifactu');
+    }
+  }
+  return missing;
+}
+
+// ETP-5745 CP-23: the SIF field that actually carries each system's rectification motive/code —
+// used to name the PRECISE field in the heads-up toast, since the three systems don't share one
+// concept: SII has a dedicated "Motivo de rectificación" field, TicketBAI a dedicated "Código de
+// Factura Rectificativa" field, but VERI*FACTU has neither — its "Tipo de Factura" field folds
+// the motive INTO the type code (R1-R5), so telling the user to complete a "motivo" there is
+// simply wrong. Reuses the SAME locale keys each field's own <Field label> already uses
+// (SifTab.jsx), so the toast never drifts from what the user actually sees on the tab.
+export const SYSTEM_FIELD_LABEL_KEYS = {
+  SII: 'sifDataTabs.field.rectificationReason',
+  TicketBAI: 'sifDataTabs.field.tbaiReverseinvoicecode',
+  Verifactu: 'sifDataTabs.field.vfInvoiceType',
+};
 
 // ETP-4783: SII rectification reason (EM_Aeatsii_Motivo_Rectif) — only shown on rectificative invoices.
 export const SII_MOTIVO_RECTIF_OPTIONS = [
@@ -117,10 +160,10 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
   const dateReadOnly = !isDraft || isProcessed;
   const siiFieldReadOnly = isSentToSii || isProcessed;
 
-  const vfInvTypeDefaultedRef = useRef(null);
-  const vfReverseTypeRef = useRef(null);
-  const siiRectifTypeRef = useRef(null);
-  const siiTipoRectifDefaultedRef = useRef(null);
+  // ETP-5745 CP-23: the record id the heads-up rectification-code toast already fired for.
+  const rectifCodeToastRef = useRef(null);
+  // ETP-5747: the record id the user explicitly picked an SII invoice type for (see setSiiType).
+  const siiTypeUserChoiceRef = useRef(null);
 
   function getVal(key) {
     return data?.[key] ?? '';
@@ -128,6 +171,13 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
 
   function getDateVal(key) {
     return normalizeDateInputValue(data?.[key] ?? '');
+  }
+
+  // ETP-5747: the SII "Tipo factura" Select writes through here, so the auto-set-to-R effect
+  // below can tell a type the USER chose (respected) from one the record state was reset to.
+  function setSiiType(value) {
+    siiTypeUserChoiceRef.current = recordId;
+    onChange?.(siiTypeField, value);
   }
 
   // ETP-4390: Classic defaults etvfacInvType ("Tipo de Factura") to 'F1' at the AD
@@ -139,20 +189,34 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
   // state the first time the Verifactu panel is shown for a draft record with no
   // existing value. Scoped to this single field only — see task notes for why the
   // other new fields don't need this treatment.
+  //
+  // ETP-5745 CP-22: ALSO excludes a rectificative invoice. The doc-type callout
+  // (InvoiceCalloutHelper#applyVerifactuInvTypeFromDocType) now deliberately CLEARS
+  // etvfacInvType to '' the instant the document becomes rectificative — the same visual
+  // "something needs your attention" signal SII's Clave (→ 'R') and TicketBAI's Código
+  // field (appears) already give. Without this exclusion, this effect would immediately see
+  // that now-blank value and stamp 'F1' right back over it, since '' is falsy — defeating the
+  // whole point of a rectificative invoice visibly needing a real R1-R5 choice.
+  //
+  // ETP-5747: no one-shot guard (ref-based) — a forced re-read of the record (fetchById, e.g.
+  // after "Importar desde factura origen") replaces pending edits with the stored NULL, and the
+  // default must come back. It only ever fills a BLANK value, so it never overrides a user
+  // choice nor the R* type the server copies from the document type
+  // (SalesRectificativeFiscalDefaults), and it cannot loop (once set, the value is no longer
+  // blank) — a prior ref-based one-shot guard here was removed for exactly this reason (it
+  // suppressed the re-fill after a forced re-read).
   useEffect(() => {
     if (!showVerifactu || !isDraft || !recordId) return;
-    if (vfInvTypeDefaultedRef.current === recordId) return;
+    if (data?.isRectificative) return;
     if (data?.etvfacInvType) return; // already has a value — never clobber
-    vfInvTypeDefaultedRef.current = recordId;
     onChange?.('etvfacInvType', 'F1');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showVerifactu, isDraft, recordId, data?.etvfacInvType, onChange]);
+  }, [showVerifactu, isDraft, recordId, data?.isRectificative, data?.etvfacInvType, onChange]);
 
   // ETP-4783: When SII is configured and the selected document type is rectificative
   // (isRectificative injected by AbstractInvoiceHeaderHandler.enrichIsRectificative),
   // auto-set the SII "Tipo de Factura" field (aeatsiiClaveTipo) to 'R' (Factura
-  // rectificativa). Keyed on recordId+isRectificative so a document-type change
-  // mid-session re-fires. Never clobbers a value that is already 'R'.
+  // rectificativa). Never clobbers a value that is already 'R'.
   //
   // ETP-5745 CP-10: sales-only. This effect used to also force `aeatsiiClaveTipoFc` to
   // 'R' on purchase invoices, even though `PURCHASE_CLAVE_TIPO_FC_OPTIONS` never offers
@@ -161,34 +225,77 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
   // (MCP's direct-DAL write skips both this effect and that validation, so it never saw
   // the failure). Purchase-side corrective-invoice support (rectification-reason handling,
   // AEAT XML payload) isn't implemented yet, so purchase invoices stay at 'F1' for now.
+  //
+  // ETP-5747: no longer a one-shot per record. The value it writes is a PENDING edit (saved with
+  // the "Motivo de rectificación", which EM_AEATSII_C_INV_RECT_CHK requires alongside 'R'), and
+  // anything that re-reads the record replaces pending edits with the stored 'F1' — "Importar
+  // desde factura origen" does exactly that after importing (DetailView onRefresh → fetchById).
+  // The old `${recordId}:rectif` guard had already fired, so the tab showed F1 until a page
+  // reload reset the guard. It now re-applies whenever the record shows anything but 'R',
+  // unless the user picked a type in the Select (setSiiType) — that choice is never overridden.
   useEffect(() => {
     if (isPurchaseInvoice) return;
     if (!showSii || !isDraft || !recordId) return;
     if (!data?.isRectificative) return;
-    const currentVal = data?.[siiTypeField];
-    if (currentVal === 'R') return; // already correct — no-op
-    const key = `${recordId}:rectif`;
-    if (siiRectifTypeRef.current === key) return;
-    siiRectifTypeRef.current = key;
+    if (data?.[siiTypeField] === 'R') return; // already correct — no-op
+    if (siiTypeUserChoiceRef.current === recordId) return; // the user chose — respect it
     onChange?.(siiTypeField, 'R');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPurchaseInvoice, showSii, isDraft, recordId, data?.isRectificative, siiTypeField, onChange]);
+  }, [isPurchaseInvoice, showSii, isDraft, recordId, data?.isRectificative, siiTypeField, data?.[siiTypeField], onChange]);
+
+  // ETP-5745 CP-14/CP-16/CP-23: non-blocking heads-up when the invoice becomes rectificative AND
+  // at least one active fiscal system still needs its own rectification code/motive — none of
+  // SII's Motivo, TicketBAI's Código or VERI*FACTU's rectificative code are auto-picked (that
+  // is a fiscal judgement call, never guessed on the user's behalf — see
+  // RectificationFiscalCodeGuard.java, which BLOCKS completion for exactly the same set of
+  // systems). This toast only warns early, so the user finds out before hitting Confirm instead
+  // of after.
+  //
+  // CP-16: gating on `missingRectificationSystems(...).length` rather than bare
+  // `isRectificative` is the fix for a reactivated (RE) invoice whose codes were already filled
+  // in before it was completed — `isRectificative` alone stayed true forever, so the toast kept
+  // firing on every reactivation even though there was nothing left to complete.
+  //
+  // CP-23: the description now names the PRECISE field of each still-missing system (via
+  // SYSTEM_FIELD_LABEL_KEYS), joined with the same locale-aware conjunction
+  // (`joinWithConjunction`, shared with the backend's own 422 translator) the blocking message
+  // already uses — "Motivo de rectificación (SII) y Código de Factura Rectificativa (TicketBAI)"
+  // — instead of one generic "motivo/código" that was flatly wrong for VERI*FACTU (its field has
+  // no separate "motivo" at all, see SYSTEM_FIELD_LABEL_KEYS' own comment).
+  useEffect(() => {
+    if (isPurchaseInvoice) return;
+    if (!isDraft || !recordId) return;
+    if (!data?.isRectificative) return;
+    const missing = missingRectificationSystems(data, { showSii, showTbai, showVerifactu });
+    if (missing.length === 0) return;
+    if (rectifCodeToastRef.current === recordId) return;
+    rectifCodeToastRef.current = recordId;
+    const fields = joinWithConjunction(
+      missing.map(system => `${ui(SYSTEM_FIELD_LABEL_KEYS[system])} (${system})`), ui);
+    toast.warning(ui('sifDataTabs.toast.rectificationCodeRequired.title'), {
+      description: ui('sifDataTabs.toast.rectificationCodeRequired.description', { fields }),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPurchaseInvoice, isDraft, recordId, data?.isRectificative, data?.aeatsiiMotivoRectif,
+      data?.tbaiReverseinvoicecode, data?.etvfacInvType, showSii, showTbai, showVerifactu, ui]);
 
   // ETP-4783: "Tipo de Factura Rectificativa" (etvfacReverseinvtype) is hidden from
   // the UI. When the Verifactu invoice type is rectificative (R1–R5) the field must
   // always be persisted as 'I' (Por Diferencias) — the only valid value. We write it
   // into the shared editing state so the batch save picks it up automatically.
-  // Keyed on recordId + vfInvType so a type change within the same record re-fires.
+  //
+  // ETP-5747: fills a BLANK value only, with no one-shot guard (it used to be keyed on
+  // recordId + vfInvType and wrote 'I' even over a stored value). A forced re-read drops the
+  // pending 'I' and it comes back; a value already stored (by the server default, which takes the
+  // document type's reverse type, or by Classic) is never overwritten; and it cannot loop.
   useEffect(() => {
     if (!showVerifactu || !isDraft || !recordId) return;
     const vfInvType = data?.etvfacInvType;
     if (typeof vfInvType !== 'string' || !vfInvType.startsWith('R')) return;
-    const key = `${recordId}:${vfInvType}`;
-    if (vfReverseTypeRef.current === key) return;
-    vfReverseTypeRef.current = key;
+    if (data?.etvfacReverseinvtype) return; // already has a value — never clobber
     onChange?.('etvfacReverseinvtype', 'I');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showVerifactu, isDraft, recordId, data?.etvfacInvType, onChange]);
+  }, [showVerifactu, isDraft, recordId, data?.etvfacInvType, data?.etvfacReverseinvtype, onChange]);
 
   // ETP-5745 CP-11: "Tipo de factura rectificativa" (aeatsiiTipoRectif) is hidden from the SII
   // panel — the UI only ever lets the user pick "Motivo de rectificación" (aeatsiiMotivoRectif),
@@ -201,13 +308,13 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
   // same default decisions.json already declares for this field (dead there: the field is
   // form:false, so the generator-declared defaultValue is never applied to any form). Never
   // clobbers a value the user (or Classic) already set.
+  // ETP-5747: no one-shot guard either — a re-read of the record (see the effect above) drops the
+  // pending 'I' together with the pending 'R', and both must come back. It only ever fills an
+  // empty field, so re-firing cannot loop or override anything.
   useEffect(() => {
     if (!showSii || !isDraft || !recordId) return;
     if (data?.[siiTypeField] !== 'R') return;
     if (data?.aeatsiiTipoRectif) return; // already has a value — never clobber
-    const key = `${recordId}:${data?.[siiTypeField]}`;
-    if (siiTipoRectifDefaultedRef.current === key) return;
-    siiTipoRectifDefaultedRef.current = key;
     onChange?.('aeatsiiTipoRectif', 'I');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showSii, isDraft, recordId, siiTypeField, data?.[siiTypeField], data?.aeatsiiTipoRectif, onChange]);
@@ -230,5 +337,6 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
     siiFieldReadOnly,
     getVal,
     getDateVal,
+    setSiiType,
   };
 }

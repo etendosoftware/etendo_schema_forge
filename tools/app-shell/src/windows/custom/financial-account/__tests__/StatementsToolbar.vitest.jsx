@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/financial-account/StatementsToolbar.jsx
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -219,5 +220,45 @@ describe('StatementsToolbar', () => {
       await user.click(screen.getByTestId('finance-refresh-button'));
       expect(onRefresh).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+// ETP-6154 — `syncing` is the window's shared bank-sync state for the account (the statements tab
+// reads it from BankSyncContext), so a sync started from the list or the Edit modal disables and
+// spins this button too.
+describe('StatementsToolbar — bank-sync button state', () => {
+  it('is enabled, idle and shows the bank-sync icon with the PSD2 tooltip', async () => {
+    const user = userEvent.setup();
+    const onSyncClick = vi.fn();
+    renderToolbar({ bankConnectionSynced: true, onSyncClick });
+
+    const button = screen.getByTestId('statements-bank-sync-button');
+    expect(button).toBeEnabled();
+    expect(button).toHaveAttribute('aria-busy', 'false');
+    expect(button).toContainElement(screen.getByTestId('statements-bank-sync-icon'));
+    expect(screen.getByTestId('statements-bank-sync-icon')).toHaveAttribute('data-spinning', 'false');
+
+    await user.hover(screen.getByTestId('statements-bank-sync-wrap'));
+    expect((await screen.findAllByText('financeAccountsBankSyncTooltip')).length).toBeGreaterThan(0);
+
+    await user.click(button);
+    expect(onSyncClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('is disabled and spinning, with the in-progress tooltip, while a sync runs', async () => {
+    const user = userEvent.setup();
+    const onSyncClick = vi.fn();
+    renderToolbar({ bankConnectionSynced: true, onSyncClick, syncing: true });
+
+    const button = screen.getByTestId('statements-bank-sync-button');
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByTestId('statements-bank-sync-icon')).toHaveAttribute('data-spinning', 'true');
+
+    await user.hover(screen.getByTestId('statements-bank-sync-wrap'));
+    expect((await screen.findAllByText('financeAccountsBankSyncInProgress')).length).toBeGreaterThan(0);
+
+    await user.click(button);
+    expect(onSyncClick).not.toHaveBeenCalled();
   });
 });

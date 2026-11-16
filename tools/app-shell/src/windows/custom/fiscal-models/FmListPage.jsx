@@ -32,6 +32,8 @@ import { getListBehavior } from './modelRegistryList.js';
 import { useFiscalModelsCatalog } from './useFiscalModelsCatalog.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { neoBase } from '@/components/related-documents/helpers.js';
+import { isNetworkError } from '@etendosoftware/app-shell-core/auth';
 import { parseBackendError, isDuplicateConflict } from '@/lib/backendErrors.js';
 
 // committed-selection-ok: short, fully rendered lists that already set aria-selected from their value; nothing to page or centre.
@@ -874,9 +876,61 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
 
   // Shared catalog reader (ETP-5831): same endpoint, same `{}` = no model active rule as the
   // Organization window's fiscal sections. `setActiveModels` stays local for the drawer's save.
+  // Catalog PUTs still in flight (see saveCatalog below). While any is pending, a re-read of the
+  // catalog (the token refresh re-reads it) must not overwrite the optimistic toggle.
+  const pendingCatalogSavesRef = useRef(0);
   const {
     activeModels, setActiveModels, unavailableModels, loaded: catalogLoaded, error: catalogError,
-  } = useFiscalModelsCatalog(apiBaseUrl, token);
+  } = useFiscalModelsCatalog(apiBaseUrl, token, { holdActiveModels: () => pendingCatalogSavesRef.current > 0 });
+
+  // ETP-5831 CP-22 — the catalog drawer saves on every toggle. The PUTs are chained so that fast
+  // consecutive toggles reach the server in order (the last toggle wins), and a failed one rolls
+  // back to the last catalog the server confirmed.
+  //   confirmedCatalogRef — last server-confirmed catalog: the read result, then every PUT that
+  //                         answered OK. Tracked from `activeModels` only while no save is pending
+  //                         (otherwise `activeModels` holds an optimistic, unconfirmed value).
+  //   latestCatalogRef    — the most recent selection requested; only its failure rolls back and
+  //                         toasts (an earlier failed PUT is superseded by the later full catalog).
+  const confirmedCatalogRef = useRef(activeModels);
+  const latestCatalogRef = useRef(null);
+  const catalogSaveChainRef = useRef(Promise.resolve());
+  useEffect(() => {
+    if (pendingCatalogSavesRef.current === 0) confirmedCatalogRef.current = activeModels;
+  }, [activeModels]);
+
+  const saveCatalog = useCallback((newActive) => {
+    // The PUT replaces the whole catalog: never send one built without a successful read
+    // (it would switch off every model the drawer could not see).
+    if (!catalogLoaded || catalogError) {
+      toast.error(t('fm.catalog.save_unavailable'));
+      // Hand the drawer the unchanged catalog back so its switch does not stay flipped.
+      setActiveModels(current => ({ ...current }));
+      return;
+    }
+    setActiveModels(newActive);
+    if (!apiBaseUrl) return;
+    latestCatalogRef.current = newActive;
+    pendingCatalogSavesRef.current += 1;
+    const base = neoBase(apiBaseUrl);
+    catalogSaveChainRef.current = catalogSaveChainRef.current
+      .then(() => apiFetch(`${base}/fiscal-models-catalog`, {
+        method: 'PUT',
+        baseUrl: '',
+        body: JSON.stringify(newActive),
+      }))
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        confirmedCatalogRef.current = newActive;
+      })
+      .catch((err) => {
+        // A failed save is never silent (ETP-5831 CP-22): unless a later toggle already sent the
+        // full catalog again, the optimistic update is undone and the user is told.
+        if (latestCatalogRef.current !== newActive) return;
+        setActiveModels(confirmedCatalogRef.current);
+        toast.error(isNetworkError(err) ? err.message : t('fm.catalog.save_failed'));
+      })
+      .finally(() => { pendingCatalogSavesRef.current -= 1; });
+  }, [catalogLoaded, catalogError, apiBaseUrl, apiFetch, setActiveModels, t]);
 
   // "Resultado" auto-compute, one bucket set per registered model — see
   // `useDeclarationsAutoCompute` above for the draft / other / submitted split.
@@ -1469,26 +1523,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           activeModels={activeModels}
           unavailableModels={unavailableModels}
           onBack={() => setShowCatalog(false)}
-          onSave={(newActive) => {
-            setShowCatalog(false);
-            // The PUT replaces the whole catalog: never send one built without a successful read
-            // (it would switch off every model the drawer could not see).
-            if (!catalogLoaded || catalogError) {
-              toast.error(t('fm.catalog.save_unavailable'));
-              return;
-            }
-            setActiveModels(newActive);
-            if (apiBaseUrl) {
-              const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-              apiFetch(`${base}/fiscal-models-catalog`, {
-                method: 'PUT',
-                baseUrl: '',
-                body: JSON.stringify(newActive),
-              })
-                .then(r => { if (!r.ok) throw new Error(r.status); })
-                .catch(() => {});
-            }
-          }}
+          onSave={saveCatalog}
           token={token}
           apiBaseUrl={apiBaseUrl}
           data-testid="FmCatalogPage__cb728e" />

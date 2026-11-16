@@ -117,11 +117,11 @@
         },
         "currentData": {
           "visibility": "discarded",
-          "reason": "Large JSON text (up to 1 MB); not served in the list. The review panel (ETP-6050) loads it per record."
+          "reason": "Large JSON text (up to 1 MB); never served in the list. The review panel (ETP-6050) reads the document through the `review` action (GET /sws/neo/invoice-inbox/header/{id}/action/review, REST only, hidden from MCP), not through this spec."
         },
         "extractedData": {
           "visibility": "discarded",
-          "reason": "Large JSON text (up to 1 MB); not served in the list. The review panel (ETP-6050) loads it per record."
+          "reason": "Large JSON text (up to 1 MB); never served in the list. The review panel (ETP-6050) reads the document through the `review` action (GET /sws/neo/invoice-inbox/header/{id}/action/review, REST only, hidden from MCP), not through this spec."
         },
         "processingAttempts": {
           "visibility": "system",

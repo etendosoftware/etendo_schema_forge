@@ -88,12 +88,12 @@ vi.mock('../CashClose/index.jsx', () => ({
 // Exposes the same ref API the real tab does, driven per-test by mockStatementsApi.
 let mockStatementsApi = { selected: [], filtered: [] };
 vi.mock('../ImportedStatementsTab.jsx', () => ({
-  ImportedStatementsTab: forwardRef(function ImportedStatementsTabMock({ onSynced }, ref) {
+  ImportedStatementsTab: forwardRef(function ImportedStatementsTabMock({ onSynced, onStatementsChanged }, ref) {
     useImperativeHandle(ref, () => ({
       getSelectedStatementIds: () => mockStatementsApi.selected,
       getFilteredStatements: () => mockStatementsApi.filtered,
     }));
-    return <div data-testid="tab-statements"><button type="button" data-testid="tab-statements-synced" onClick={onSynced} /></div>;
+    return <div data-testid="tab-statements"><button type="button" data-testid="tab-statements-synced" onClick={onSynced} /><button type="button" data-testid="tab-statements-changed" onClick={onStatementsChanged} /></div>;
   }),
 }));
 
@@ -144,6 +144,12 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   WindowAccessGuard: () => <div data-testid="window-access-guard" />,
 }));
 
+// ETP-6151 — flag `psd2-statement-import-settings`, flipped per test (default off).
+const importSettingsFlag = { on: false };
+vi.mock('@/hooks/usePsd2ImportSettingsFlag', () => ({
+  usePsd2ImportSettingsFlag: () => importSettingsFlag.on,
+}));
+
 import FinancialAccountWindow from '../index.jsx';
 
 // Reload handles are hoisted so a test can assert what a child's success callback re-fetches.
@@ -175,6 +181,7 @@ describe('FinancialAccountWindow', () => {
     useAccountMovementsMock.mockReset();
     useBankStatementsMock.mockReset();
     useReconciliationsMock.mockReset();
+    importSettingsFlag.on = false;
   });
 
   it('passes the recordId to all three data hooks', () => {
@@ -390,5 +397,45 @@ describe('FinancialAccountWindow', () => {
     // for it — so the statements count (7) must not appear anywhere.
     expect(screen.getByText('financeAccountDetailTabStatements')).toBeInTheDocument();
     expect(screen.queryByText('7')).not.toBeInTheDocument();
+  });
+
+  describe('statements tab badge (ETP-6151, flag psd2-statement-import-settings)', () => {
+    const goToStatementsTab = () => fireEvent.click(screen.getByText('financeAccountDetailTabStatements'));
+
+    it('flag ON: shows the total statement headers count, including 1 and 0', () => {
+      importSettingsFlag.on = true;
+      setHooks({ statements: [{ id: 's1' }] });
+      const { unmount } = render(<FinancialAccountWindow recordId="acc-1" />);
+      expect(screen.getByTestId('detail-tab-statements').textContent).toContain('1');
+      unmount();
+      setHooks({ statements: [] });
+      render(<FinancialAccountWindow recordId="acc-1" />);
+      expect(screen.getByTestId('detail-tab-statements').textContent).toContain('0');
+    });
+
+    it('flag ON: no badge while the first load is running', () => {
+      importSettingsFlag.on = true;
+      setHooks({ statements: [] });
+      useBankStatementsMock.mockReturnValue({ statements: [], loading: true, error: null, reload: vi.fn() });
+      render(<FinancialAccountWindow recordId="acc-1" />);
+      expect(screen.getByTestId('detail-tab-statements').textContent).not.toMatch(/\d/);
+    });
+
+    it('flag OFF: no badge even with statements', () => {
+      setHooks({ statements: [{ id: 's1' }, { id: 's2' }] });
+      render(<FinancialAccountWindow recordId="acc-1" />);
+      expect(screen.getByTestId('detail-tab-statements').textContent).not.toMatch(/\d/);
+    });
+
+    it('a statement mutation reported by the tab reloads the badge source', () => {
+      importSettingsFlag.on = true;
+      const reloadStatements = vi.fn();
+      setHooks({ statements: [{ id: 's1' }] });
+      useBankStatementsMock.mockReturnValue({ statements: [{ id: 's1' }], loading: false, error: null, reload: reloadStatements });
+      render(<FinancialAccountWindow recordId="acc-1" />);
+      goToStatementsTab();
+      fireEvent.click(screen.getByTestId('tab-statements-changed'));
+      expect(reloadStatements).toHaveBeenCalledTimes(1);
+    });
   });
 });

@@ -66,6 +66,7 @@ async function registerToProfile(page) {
   await page.getByTestId('action-switch-to-register').click();
   await page.locator('#reg-name').fill(ACCOUNT.name);
   await page.locator('#reg-email').fill(ACCOUNT.email);
+  await page.getByTestId('sector-select').selectOption('servicios');
   await page.getByTestId('action-register-submit').click();
   await expect(page.locator('#fullName')).toBeVisible();
 }

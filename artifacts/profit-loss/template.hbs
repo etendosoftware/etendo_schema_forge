@@ -1,7 +1,10 @@
 {{!-- Profit & Loss — indented account-report tree (ETP-4899).
       Rows arrive pre-flattened from buildAccountReportTree(): each carries its
       own `indentClass` and `isHeading`, so this template needs no arithmetic
-      (and therefore no new Handlebars helper). --}}
+      (and therefore no new Handlebars helper). With a comparison it adds the
+      variation in amount and % (ETP-6080, from addVariation); no % when the
+      reference is 0. With expandedNodeIds the rows are already the expanded
+      ones (buildRenderAccountTree), so the print matches the screen. --}}
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8">
 <style>
@@ -37,7 +40,7 @@
   <table class="report-table" style="table-layout: fixed;">
     <colgroup>
       {{#ifCond meta.params.compareTo '===' 'true'}}
-      <col style="width:60%"><col style="width:20%"><col style="width:20%">
+      <col style="width:40%"><col style="width:17%"><col style="width:17%"><col style="width:16%"><col style="width:10%">
       {{else}}
       <col style="width:75%"><col style="width:25%">
       {{/ifCond}}
@@ -46,20 +49,20 @@
       <tr>
         <th>{{meta.labels.element}}</th>
         <th class="cell-amount">{{meta.labels.amount}}</th>
-        {{#ifCond meta.params.compareTo '===' 'true'}}<th class="cell-amount">{{meta.labels.amount_ref}}</th>{{/ifCond}}
+        {{#ifCond meta.params.compareTo '===' 'true'}}<th class="cell-amount">{{meta.labels.amount_ref}}</th><th class="cell-amount">{{meta.labels.variationAmount}}</th><th class="cell-amount">{{meta.labels.variationPct}}</th>{{/ifCond}}
       </tr>
     </thead>
     <tbody>
       {{#each rows}}
       {{#if this.isGroupStart}}
       <tr class="group-header">
-        <td colspan="{{#ifCond @root.meta.params.compareTo '===' 'true'}}3{{else}}2{{/ifCond}}">{{this.group}}</td>
+        <td colspan="{{#ifCond @root.meta.params.compareTo '===' 'true'}}5{{else}}2{{/ifCond}}">{{this.group}}</td>
       </tr>
       {{/if}}
       <tr class="tree-row {{#if this.isHeading}}heading{{/if}}">
         <td class="{{this.indentClass}}">{{this.element}}</td>
         <td class="cell-amount">{{formatCurrency this.amount}}</td>
-        {{#ifCond @root.meta.params.compareTo '===' 'true'}}<td class="cell-amount">{{formatCurrency this.amount_ref}}</td>{{/ifCond}}
+        {{#ifCond @root.meta.params.compareTo '===' 'true'}}<td class="cell-amount">{{formatCurrency this.amount_ref}}</td><td class="cell-amount">{{formatCurrency this.variationAmount}}</td><td class="cell-amount">{{#if this.variationPct}}{{formatCurrency this.variationPct}} %{{else}}{{#ifCond this.variationPct '===' 0}}{{formatCurrency this.variationPct}} %{{/ifCond}}{{/if}}</td>{{/ifCond}}
       </tr>
       {{/each}}
     </tbody>

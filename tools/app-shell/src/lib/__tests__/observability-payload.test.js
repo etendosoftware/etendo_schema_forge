@@ -271,4 +271,12 @@ describe('observability payload normalization', () => {
       windowName: 'sales-order',
     });
   });
+
+  // ETP-6080: without the allowlist entry the report funnels lose their session key silently.
+  it('keeps reportSessionId, the report funnel key', () => {
+    assert.deepEqual(
+      sanitizeEventProperties({ reportSessionId: '3b1f0c7e-9a43-4e55-8a1d-5f2d6c0b9e21', specName: 'profit-loss', name: 'x' }),
+      { reportSessionId: '3b1f0c7e-9a43-4e55-8a1d-5f2d6c0b9e21', specName: 'profit-loss' }
+    );
+  });
 });

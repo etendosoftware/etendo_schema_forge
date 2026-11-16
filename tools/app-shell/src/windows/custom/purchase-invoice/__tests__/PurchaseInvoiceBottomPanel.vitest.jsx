@@ -1,3 +1,5 @@
+// @covers artifacts/purchase-invoice/custom/PurchaseInvoiceBottomPanel.jsx
+// @covers tools/app-shell/src/windows/custom/shared/importSaveOptions.js
 // Regression suite for the import-modal remount bug (ETP-4583).
 //
 // Component under test: artifacts/purchase-invoice/custom/PurchaseInvoiceBottomPanel.jsx
@@ -95,11 +97,13 @@ beforeEach(() => {
 describe('PurchaseInvoiceBottomPanel.linesEmptyState — import modal selection (ETP-4583)', () => {
   it("forceOpen='order' on a draft mounts the PURCHASE ORDER modal, not receipt (remount regression)", () => {
     const onForceOpenHandled = vi.fn();
+    const onSave = vi.fn().mockResolvedValue(true);
     render(
       <LinesEmptyState
         {...BASE_PROPS}
         data={FAC_DRAFT}
         forceOpen="order"
+        onSave={onSave}
         onForceOpenHandled={onForceOpenHandled}
       />,
     );
@@ -108,34 +112,41 @@ describe('PurchaseInvoiceBottomPanel.linesEmptyState — import modal selection 
     // pedido" was clicked.
     expectOnlyModal('import-order-modal');
     expect(onForceOpenHandled).toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   it("forceOpen='receipt' on a draft mounts the RECEIPT modal", () => {
     const onForceOpenHandled = vi.fn();
+    const onSave = vi.fn().mockResolvedValue(true);
     render(
       <LinesEmptyState
         {...BASE_PROPS}
         data={FAC_DRAFT}
         forceOpen="receipt"
+        onSave={onSave}
         onForceOpenHandled={onForceOpenHandled}
       />,
     );
     expectOnlyModal('import-receipt-modal');
     expect(onForceOpenHandled).toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   it('legacy forceOpen=true (boolean) falls back to the ref default (receipt) without crashing', () => {
     const onForceOpenHandled = vi.fn();
+    const onSave = vi.fn().mockResolvedValue(true);
     render(
       <LinesEmptyState
         {...BASE_PROPS}
         data={FAC_DRAFT}
         forceOpen={true}
+        onSave={onSave}
         onForceOpenHandled={onForceOpenHandled}
       />,
     );
     expectOnlyModal('import-receipt-modal');
     expect(onForceOpenHandled).toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   it("clicking the order-import button on a draft calls onSave('order') and mounts the order modal when onSave resolves truthy", async () => {
@@ -150,7 +161,7 @@ describe('PurchaseInvoiceBottomPanel.linesEmptyState — import modal selection 
     // param to 'order' when called bare — so a bare onSave() would silently
     // make every import (including receipt) carry 'order' across the
     // save-navigate remount, opening the wrong modal on the receipt path.
-    expect(onSave).toHaveBeenCalledWith('order');
+    expect(onSave).toHaveBeenCalledWith('order', { skipSaveWhenClean: true });
     expectOnlyModal('import-order-modal');
   });
 
@@ -159,7 +170,7 @@ describe('PurchaseInvoiceBottomPanel.linesEmptyState — import modal selection 
     const onSave = vi.fn().mockResolvedValue(false);
     render(<LinesEmptyState {...BASE_PROPS} data={FAC_DRAFT} onSave={onSave} />);
     await user.click(screen.getByText('importFromPurchaseOrder'));
-    expect(onSave).toHaveBeenCalledWith('order');
+    expect(onSave).toHaveBeenCalledWith('order', { skipSaveWhenClean: true });
     for (const id of MODAL_IDS) expect(screen.queryByTestId(id)).toBeNull();
   });
 
@@ -168,7 +179,7 @@ describe('PurchaseInvoiceBottomPanel.linesEmptyState — import modal selection 
     const onSave = vi.fn().mockResolvedValue(true);
     render(<LinesEmptyState {...BASE_PROPS} data={FAC_DRAFT} onSave={onSave} />);
     await user.click(screen.getByText('importFromGoodsReceipt'));
-    expect(onSave).toHaveBeenCalledWith('receipt');
+    expect(onSave).toHaveBeenCalledWith('receipt', { skipSaveWhenClean: true });
     expectOnlyModal('import-receipt-modal');
   });
 });
@@ -176,44 +187,53 @@ describe('PurchaseInvoiceBottomPanel.linesEmptyState — import modal selection 
 describe('PurchaseInvoiceBottomPanel.detailExtraActions — import modal selection (ETP-4583)', () => {
   it("forceOpen='order' on a draft mounts the PURCHASE ORDER modal, not receipt (remount regression)", () => {
     const onForceOpenHandled = vi.fn();
+    const onSave = vi.fn().mockResolvedValue(true);
     render(
       <DetailExtraActions
         {...BASE_PROPS}
         data={FAC_DRAFT}
         forceOpen="order"
+        onSave={onSave}
         onForceOpenHandled={onForceOpenHandled}
       />,
     );
     expectOnlyModal('import-order-modal');
     expect(onForceOpenHandled).toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   it("forceOpen='receipt' on a draft mounts the RECEIPT modal", () => {
     const onForceOpenHandled = vi.fn();
+    const onSave = vi.fn().mockResolvedValue(true);
     render(
       <DetailExtraActions
         {...BASE_PROPS}
         data={FAC_DRAFT}
         forceOpen="receipt"
+        onSave={onSave}
         onForceOpenHandled={onForceOpenHandled}
       />,
     );
     expectOnlyModal('import-receipt-modal');
     expect(onForceOpenHandled).toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   it('legacy forceOpen=true (boolean) falls back to the ref default (receipt) without crashing', () => {
     const onForceOpenHandled = vi.fn();
+    const onSave = vi.fn().mockResolvedValue(true);
     render(
       <DetailExtraActions
         {...BASE_PROPS}
         data={FAC_DRAFT}
         forceOpen={true}
+        onSave={onSave}
         onForceOpenHandled={onForceOpenHandled}
       />,
     );
     expectOnlyModal('import-receipt-modal');
     expect(onForceOpenHandled).toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   it("the imperative openImportOrderModal handle calls onSave('order') and mounts the order modal", async () => {
@@ -227,7 +247,7 @@ describe('PurchaseInvoiceBottomPanel.detailExtraActions — import modal selecti
     await act(async () => { await ref.current.openImportOrderModal(); });
     // Regression guard (ETP-4583 review fix): see the linesEmptyState suite
     // above for why the explicit argument matters, not just "was called".
-    expect(onSave).toHaveBeenCalledWith('order');
+    expect(onSave).toHaveBeenCalledWith('order', { skipSaveWhenClean: true });
     expectOnlyModal('import-order-modal');
   });
 
@@ -236,7 +256,7 @@ describe('PurchaseInvoiceBottomPanel.detailExtraActions — import modal selecti
     const onSave = vi.fn().mockResolvedValue(true);
     render(<DetailExtraActions {...BASE_PROPS} data={FAC_DRAFT} onSave={onSave} />);
     await user.click(screen.getByText('importFromGoodsReceipt'));
-    expect(onSave).toHaveBeenCalledWith('receipt');
+    expect(onSave).toHaveBeenCalledWith('receipt', { skipSaveWhenClean: true });
     expectOnlyModal('import-receipt-modal');
   });
 
@@ -245,7 +265,7 @@ describe('PurchaseInvoiceBottomPanel.detailExtraActions — import modal selecti
     const onSave = vi.fn().mockResolvedValue(false);
     render(<DetailExtraActions {...BASE_PROPS} data={FAC_DRAFT} onSave={onSave} />);
     await user.click(screen.getByText('importFromGoodsReceipt'));
-    expect(onSave).toHaveBeenCalledWith('receipt');
+    expect(onSave).toHaveBeenCalledWith('receipt', { skipSaveWhenClean: true });
     for (const id of MODAL_IDS) expect(screen.queryByTestId(id)).toBeNull();
   });
 });

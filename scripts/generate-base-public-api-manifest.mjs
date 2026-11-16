@@ -260,7 +260,8 @@ function buildProcesses({ source, entityName, actions }) {
 // contract fields, declared per entity in decisions.json as
 // `entities.<entity>.publicApi.inputFields: [{ name, internalPath, dataType, required?, readable? }]`.
 // `readable: true` means a GET returns the value, so the field is `inout`; otherwise `in`.
-// A resource with no write endpoint publishes nothing from this list.
+// `writable: false` makes it read-only (`out`): a value the handler adds on read, never sent.
+// A resource with no write endpoint publishes only the read-only ones.
 export function inputFieldsOf(decisions, entityName) {
   const list = decisions?.entities?.[entityName]?.publicApi?.inputFields;
   return Array.isArray(list) ? list : [];
@@ -343,18 +344,20 @@ export function buildEntity({
     };
   }
 
-  for (const input of writable ? inputFields : []) {
+  for (const input of inputFields) {
+    const outputOnly = input.writable === false;
+    if (!writable && !outputOnly) continue;
     const apiName = publicFieldName(input.name);
     if (fields[apiName]) {
       throw new Error(`Public field name collision in ${specName}/${entityName}: ${apiName}`);
     }
     fields[apiName] = {
-      sourceVisibility: 'editable',
-      direction: input.readable === true ? 'inout' : 'in',
+      sourceVisibility: outputOnly ? 'readOnly' : 'editable',
+      direction: outputOnly ? 'out' : input.readable === true ? 'inout' : 'in',
       internalPath: input.internalPath,
       dataType: { type: input.dataType ?? 'string' },
       reference: null,
-      ...(input.required === true ? { required: true } : {}),
+      ...(!outputOnly && input.required === true ? { required: true } : {}),
     };
   }
 

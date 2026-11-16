@@ -165,7 +165,8 @@
         { "target": "lastName", "aliases": ["apellido de contacto"], "label": "Last Name", "example": "Fernández", "headerScope": "contact" },
         { "target": "phone", "aliases": ["telefono de contacto"], "label": "Phone", "example": "610 000 002", "headerScope": "contact" },
         { "target": "position", "aliases": ["cargo"], "label": "Position", "example": "Responsable de compras", "exampleKey": "importExampleContactPosition", "headerScope": "contact" },
-        { "target": "address", "aliases": ["direccion", "dirección"], "label": "Address", "example": "Calle Mayor 12", "exampleKey": "importExampleContactAddress", "labelKey": "importHeaderAddress", "headerScope": "address" },
+        { "target": "streetName", "aliases": ["calle", "nombre de la calle", "via", "vía", "street", "street name", "direccion", "dirección", "address"], "label": "Street", "example": "Calle Mayor", "exampleKey": "importExampleContactStreet", "labelKey": "importHeaderStreet", "headerScope": "address" },
+        { "target": "buildingNumber", "aliases": ["numero", "número", "num", "nº", "numero de calle", "número de calle", "number", "building number", "street number"], "label": "Number", "example": "12", "labelKey": "importHeaderBuildingNumber", "headerScope": "address" },
         { "target": "city", "aliases": ["ciudad"], "label": "City", "example": "Sevilla", "labelKey": "importHeaderCity", "headerScope": "address" },
         { "target": "postal", "aliases": ["codigo postal", "código postal", "cp"], "label": "Postal Code", "example": "41001", "labelKey": "importHeaderPostalCode", "headerScope": "address" },
         { "target": "country", "aliases": ["pais", "país"], "label": "Country", "matchEntity": "Country", "example": "España", "exampleKey": "importExampleContactCountry", "headerScope": "address", "labelKey": "importHeaderCountry" },
@@ -197,6 +198,24 @@
           "grid": false,
           "section": "principal",
           "label": "SII Key List"
+        },
+        "obsepadMandateIdentifier": {
+          "visibility": "editable",
+          "form": false,
+          "grid": false,
+          "section": "principal",
+          "label": "Mandate Identification",
+          "visibleWhenCapability": "sepaRemittances",
+          "_note": "ETP-6148 — customer SEPA mandate (OBSEPAD column). Rendered by the custom SepaMandateSection in ContactsFinancialPanel, not by the generated form. Behind the sepa-remittances flag, BusinessPartnerHandler defaults a blank value to the contact's taxID and drops the key from the write body while the flag is off."
+        },
+        "obsepadMandateDate": {
+          "visibility": "editable",
+          "form": false,
+          "grid": false,
+          "section": "principal",
+          "label": "Mandate Date of Signature",
+          "visibleWhenCapability": "sepaRemittances",
+          "_note": "ETP-6148 — customer SEPA mandate signature date (OBSEPAD column). Rendered by SepaMandateSection. Behind the sepa-remittances flag, BusinessPartnerHandler defaults an empty value to the contact's creation date (today on create)."
         },
         "employee": {
           "visibility": "editable",
@@ -523,8 +542,7 @@
           "section": "principal",
           "displayLogic": "record.customer"
         }
-      },
-      "javaQualifier": "businessPartnerHandler"
+      }
     },
     "locationAddress": {
       "publicApi": {
@@ -534,7 +552,8 @@
           { "name": "city_name", "internalPath": "cityName", "dataType": "string", "readable": true },
           { "name": "postal_code", "internalPath": "postalCode", "dataType": "string", "readable": true },
           { "name": "country", "internalPath": "country", "dataType": "string", "readable": true },
-          { "name": "region_name", "internalPath": "regionName", "dataType": "string", "readable": true }
+          { "name": "region_name", "internalPath": "regionName", "dataType": "string", "readable": true },
+          { "name": "country_code", "internalPath": "countryCode", "dataType": "string", "writable": false }
         ]
       },
       "fields": {
@@ -593,8 +612,7 @@
         "taxLocation": {
           "publicApi": { "exposed": true, "name": "taxLocation" }
         }
-      },
-      "javaQualifier": "contactsLocationAddressHandler"
+      }
     },
     "contact": {
       "fields": {
@@ -815,6 +833,13 @@
         },
         "etgoWeb": {
           "visibility": "discarded"
+        },
+        "obsepadMandateIdentifier": {
+          "visibility": "discarded",
+          "_note": "ETP-6148 — the SEPA mandate is owned by the businessPartner entity, whose customization applies the sepa-remittances flag and defaults; same C_BPartner row, so it is not writable from this tab."
+        },
+        "obsepadMandateDate": {
+          "visibility": "discarded"
         }
       }
     },
@@ -828,6 +853,13 @@
         },
         "etgoWeb": {
           "visibility": "discarded"
+        },
+        "obsepadMandateIdentifier": {
+          "visibility": "discarded",
+          "_note": "ETP-6148 — the SEPA mandate is owned by the businessPartner entity, whose customization applies the sepa-remittances flag and defaults; same C_BPartner row, so it is not writable from this tab."
+        },
+        "obsepadMandateDate": {
+          "visibility": "discarded"
         }
       }
     },
@@ -840,6 +872,13 @@
           "visibility": "discarded"
         },
         "etgoWeb": {
+          "visibility": "discarded"
+        },
+        "obsepadMandateIdentifier": {
+          "visibility": "discarded",
+          "_note": "ETP-6148 — the SEPA mandate is owned by the businessPartner entity, whose customization applies the sepa-remittances flag and defaults; same C_BPartner row, so it is not writable from this tab."
+        },
+        "obsepadMandateDate": {
           "visibility": "discarded"
         }
       }

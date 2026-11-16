@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-// Product detail: a tab's own scroll box must be bounded by the space that is left below it, so the
-// page (DetailView's content column) never scrolls and the form header + tab strip stay in place.
+// Product detail: a tab's own scroll box is bounded by the space that is left below it, but never below
+// `minHeight` (200 px by default, the caller passes its own floor): with less room the content column scrolls as a whole.
 // DetailView's content column is `overflow-auto` and unbounded for the content, so a fixed
 // `100vh - N` guess overflows it as soon as the header above (cost banner, form rows) grows.
 

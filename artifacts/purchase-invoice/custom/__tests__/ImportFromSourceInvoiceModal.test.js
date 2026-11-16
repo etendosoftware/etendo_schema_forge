@@ -1,12 +1,26 @@
+// @covers artifacts/purchase-invoice/custom/ImportFromSourceInvoiceModal.jsx
 import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getApSubtype } from '../purchaseInvoiceSubtype.js';
+import { loadCustomModule, apiFetchToGlobalFetch } from '../../../_test-support/loadCustomModule.js';
+import * as importActionClient from '../../../../tools/app-shell/src/windows/custom/shared/importActionClient.js';
+import { newestCreatedFirst } from '../../../../tools/app-shell/src/windows/custom/shared/invoiceOrderImport.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(join(__dirname, '..', 'ImportFromSourceInvoiceModal.jsx'), 'utf8');
+// ETP-6099: the listing helpers are the REAL production ones (loadCustomModule), the read-action
+// client the real shared module, both over the same fetch stub.
+const { helpers, source: src } = loadCustomModule(
+  join(__dirname, '..', 'ImportFromSourceInvoiceModal.jsx'),
+  {
+    moduleApiFetch: apiFetchToGlobalFetch,
+    listAll: importActionClient.listAll,
+    listLines: importActionClient.listLines,
+    newestCreatedFirst,
+  },
+);
+const { fetchDocuments, fetchLines, isDocumentCovered, getDocumentTotal } = helpers;
 
 describe('ImportFromSourceInvoiceModal (purchase) — source shape', () => {
   it('exports a default function component', () => {
@@ -19,15 +33,12 @@ describe('ImportFromSourceInvoiceModal (purchase) — source shape', () => {
     assert.match(src, /<ImportLinesModal[\s\S]*\{\.\.\.props\}/);
   });
 
-  it('filters source invoices to apInvoiceSubtype === FAC via getApSubtype — ETP-4737 edge case 5', () => {
-    assert.match(src, /from '\.\/purchaseInvoiceSubtype'/);
-    assert.match(src, /getApSubtype\(inv\)\s*===\s*'FAC'/);
-  });
-
-  it('excludes the current invoice and matches business partner + CO status', () => {
-    assert.match(src, /inv\.id\s*!==\s*invoiceId/);
-    assert.match(src, /inv\.documentStatus\s*===\s*'CO'/);
-    assert.match(src, /inv\.businessPartner\s*===\s*bpId/);
+  // ETP-6099: FAC-only, own supplier, completed and not the invoice itself are decided by the
+  // availableOriginInvoices action now (behaviour tests below); the client filter must not return.
+  it('lists through the invoice actions, not a client-filtered header list', () => {
+    assert.match(src, /action: 'availableOriginInvoices'/);
+    assert.match(src, /action: 'availableOriginInvoiceLines'/);
+    assert.doesNotMatch(src, /getApSubtype\(inv\)/);
   });
 
   it('always force-negates the imported quantity, mirroring ImportFromGoodsReturnModal', () => {
@@ -54,10 +65,9 @@ describe('ImportFromSourceInvoiceModal (purchase) — source shape', () => {
     assert.match(src, /successMessageKey="linesImportedFromSourceInvoice"/);
   });
 
-  it('sends sourceInvoiceLineId and reads it back for duplicate detection — ETP-4737 follow-up', () => {
+  it('sends sourceInvoiceLineId and reads importedHere back for duplicate detection — ETP-4737 follow-up', () => {
     assert.match(src, /sourceInvoiceLineId:\s*line\.id/);
-    assert.match(src, /il\.sourceInvoiceLineId/);
-    assert.match(src, /alreadyImportedSourceLineIds/);
+    assert.match(src, /importedHere/);
   });
 });
 
@@ -81,34 +91,6 @@ describe('ImportFromSourceInvoiceModal (purchase) — getApSubtype exclusion, re
 // ── Behavioral tests: fetchDocuments / buildLineBody (re-implemented per the
 // established repo pattern — see ImportFromGoodsReceiptModal.test.js). ──────
 
-async function fetchDocuments({ base, headers, bpId, invoiceId }) {
-  const [res, invLinesRes] = await Promise.all([
-    fetch(`${base}/purchase-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`, { headers }),
-    fetch(`${base}/purchase-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`, { headers }),
-  ]);
-  let documents = [];
-  if (res.ok) {
-    const all = (await res.json())?.response?.data || [];
-    documents = all.filter(inv =>
-      inv.id !== invoiceId
-      && inv.documentStatus === 'CO'
-      && inv.businessPartner === bpId
-      && getApSubtype(inv) === 'FAC',
-    );
-  }
-  const alreadyImportedSourceLineIds = new Set();
-  if (invLinesRes.ok) {
-    const invLines = (await invLinesRes.json())?.response?.data || [];
-    invLines.forEach(il => { if (il.sourceInvoiceLineId) alreadyImportedSourceLineIds.add(il.sourceInvoiceLineId); });
-  }
-  return { documents, sharedContext: { productAuxMap: {}, alreadyImportedSourceLineIds }, excludedByCurrency: false };
-}
-
-function fetchLinesAlreadyImported(lines, sharedContext) {
-  const { alreadyImportedSourceLineIds } = sharedContext;
-  return lines.map(l => ({ ...l, _alreadyImported: !!alreadyImportedSourceLineIds?.has(l.id) }));
-}
-
 function buildLineBody({ line, qty }) {
   const unitPrice = Number(line._unitPrice) || Number(line.unitPrice) || 0;
   const negQty = -Math.abs(qty);
@@ -116,14 +98,18 @@ function buildLineBody({ line, qty }) {
   return { invoicedQuantity: negQty, unitPrice, lineNetAmount, sourceInvoiceLineId: line.id };
 }
 
+const ACTION_LIST = '/purchase-invoice/header/inv1/action/availableOriginInvoices';
+const ACTION_LINES = '/purchase-invoice/header/inv1/action/availableOriginInvoiceLines';
+
 function mockRes(ok, data) {
-  return { ok, json: async () => ({ response: { data } }) };
+  return { ok, json: async () => ({ response: { data, hasMore: false } }) };
 }
 
-function installFetch(invoices, invLines = []) {
+/** `listed` = what availableOriginInvoices answers (filtered server-side), `lines` = the lines action. */
+function installFetch({ listed = [], lines = [], listOk = true } = {}) {
   globalThis.fetch = mock.fn(async (url) => {
-    if (url.includes('/purchase-invoice/header?')) return mockRes(true, invoices);
-    if (url.includes('/purchase-invoice/lines?parentId=')) return mockRes(true, invLines);
+    if (url.endsWith(ACTION_LIST)) return listOk ? mockRes(true, listed) : { ok: false, json: async () => null };
+    if (url.endsWith(ACTION_LINES)) return mockRes(true, lines);
     throw new Error(`Unexpected fetch: ${url}`);
   });
 }
@@ -133,42 +119,55 @@ describe('ImportFromSourceInvoiceModal (purchase) — fetchDocuments (edge case 
     mock.reset();
   });
 
-  it('includes a plain FAC invoice from the same supplier', async () => {
-    installFetch([{ id: 'inv2', documentStatus: 'CO', businessPartner: 'bp1', apInvoiceSubtype: 'FAC' }]);
+  it('lists the FAC candidates with ONE availableOriginInvoices call, covered included, nothing else', async () => {
+    installFetch({ listed: [{ id: 'inv2', documentNo: 'FP-2', date: '2026-10-02', pendingLines: 1 }] });
     const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.equal(globalThis.fetch.mock.calls.length, 1);
+    const [url, opts] = globalThis.fetch.mock.calls[0].arguments;
+    assert.equal(url, `/b${ACTION_LIST}`);
+    assert.equal(opts.method, 'POST');
+    assert.deepEqual(JSON.parse(opts.body), { limit: 1000, includeCovered: true, detail: true });
     assert.deepEqual(result.documents.map(d => d.id), ['inv2']);
+    assert.equal(result.documents[0].invoiceDate, '2026-10-02');
+    assert.equal(result.sharedContext.invoiceId, 'inv1');
+    assert.equal(result.excludedByCurrency, false);
   });
 
-  it('excludes another rectificativa invoice from being selectable as a source', async () => {
-    installFetch([{ id: 'inv2', documentStatus: 'CO', businessPartner: 'bp1', apInvoiceSubtype: 'RECTIFICATIVA' }]);
+  it('follows nextOffset while hasMore (every candidate examined)', async () => {
+    let page = 0;
+    globalThis.fetch = mock.fn(async () => {
+      page += 1;
+      return page === 1
+        ? { ok: true, json: async () => ({ response: { data: [{ id: 'a' }], hasMore: true, nextOffset: 1000 } }) }
+        : { ok: true, json: async () => ({ response: { data: [{ id: 'b' }], hasMore: false, nextOffset: null } }) };
+    });
     const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
-    assert.equal(result.documents.length, 0);
+    assert.deepEqual(result.documents.map(d => d.id), ['a', 'b']);
+    assert.equal(JSON.parse(globalThis.fetch.mock.calls[1].arguments[1].body).offset, 1000);
   });
 
-  it('excludes a historical AP CreditMemo invoice from being selectable as a source (legacy fallback)', async () => {
-    installFetch([{
-      id: 'inv2', documentStatus: 'CO', businessPartner: 'bp1',
-      'transactionDocument$_identifier': 'AP CreditMemo',
-    }]);
+  it('lists newest created first, as the header GET did (the action answers by invoice date)', async () => {
+    installFetch({ listed: [
+      { id: 'old', date: '2026-10-05', creationDate: '2026-09-01T08:00:00' },
+      { id: 'new', date: '2026-10-01', creationDate: '2026-10-02T08:00:00' },
+    ] });
     const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
-    assert.equal(result.documents.length, 0);
+    assert.deepEqual(result.documents.map(d => d.id), ['new', 'old']);
   });
 
-  it('excludes the invoice being edited from its own candidates', async () => {
-    installFetch([{ id: 'inv1', documentStatus: 'CO', businessPartner: 'bp1', apInvoiceSubtype: 'FAC' }]);
-    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
-    assert.equal(result.documents.length, 0);
+  it('a refused read rejects with ImportLoadError (the component toasts it)', async () => {
+    installFetch({ listOk: false });
+    await assert.rejects(
+      fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' }),
+      err => err instanceof importActionClient.ImportLoadError,
+    );
   });
 
-  it('mixed candidate set: only the plain FAC invoice survives', async () => {
-    installFetch([
-      { id: 'inv2', documentStatus: 'CO', businessPartner: 'bp1', apInvoiceSubtype: 'FAC' },
-      { id: 'inv3', documentStatus: 'CO', businessPartner: 'bp1', apInvoiceSubtype: 'RECTIFICATIVA' },
-      { id: 'inv4', documentStatus: 'DR', businessPartner: 'bp1', apInvoiceSubtype: 'FAC' },
-      { id: 'inv5', documentStatus: 'CO', businessPartner: 'other-bp', apInvoiceSubtype: 'FAC' },
-    ]);
-    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
-    assert.deepEqual(result.documents.map(d => d.id), ['inv2']);
+  it('the row hides a covered invoice and shows its total negated, without its lines', () => {
+    assert.equal(isDocumentCovered({ pendingLines: 0 }), true);
+    assert.equal(isDocumentCovered({ pendingLines: 3 }), false);
+    assert.equal(getDocumentTotal({ amount: 40 }), -40);
+    assert.equal(getDocumentTotal({}), null);
   });
 });
 
@@ -195,23 +194,31 @@ describe('ImportFromSourceInvoiceModal (purchase) — duplicate detection via so
     mock.reset();
   });
 
-  it('builds the already-imported set from the current invoice lines sourceInvoiceLineId', async () => {
-    installFetch(
-      [{ id: 'inv2', documentStatus: 'CO', businessPartner: 'bp1', apInvoiceSubtype: 'FAC' }],
-      [{ id: 'il1', sourceInvoiceLineId: 'source-line-1' }],
-    );
-    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
-    assert.ok(result.sharedContext.alreadyImportedSourceLineIds.has('source-line-1'));
+  it('asks availableOriginInvoiceLines for the source invoice, covered lines included', async () => {
+    installFetch();
+    await fetchLines({ base: '/b', headers: {}, docId: 'inv2', sharedContext: { invoiceId: 'inv1' } });
+    const [url, opts] = globalThis.fetch.mock.calls[0].arguments;
+    assert.equal(url, `/b${ACTION_LINES}`);
+    assert.deepEqual(JSON.parse(opts.body), { invoiceId: 'inv2', includeCovered: true, detail: true });
   });
 
-  it('marks a source line already imported into the current invoice as _alreadyImported', () => {
-    const sharedContext = { alreadyImportedSourceLineIds: new Set(['source-line-1']) };
-    const lines = fetchLinesAlreadyImported(
-      [{ id: 'source-line-1' }, { id: 'source-line-2' }],
-      sharedContext,
-    );
-    assert.equal(lines.find(l => l.id === 'source-line-1')._alreadyImported, true);
-    assert.equal(lines.find(l => l.id === 'source-line-2')._alreadyImported, false);
+  it('marks a source line already imported into the current invoice as _alreadyImported, keeping its quantity', async () => {
+    installFetch({
+      lines: [
+        { id: 'source-line-1', lineNo: 10, invoicedQuantity: 2, pendingQuantity: 0, unitPrice: 10, importedHere: true },
+        { id: 'source-line-2', lineNo: 20, invoicedQuantity: 4, pendingQuantity: 4, unitPrice: 10, importedHere: false, tax: 't1', uOM: 'u1' },
+      ],
+    });
+    const lines = await fetchLines({ base: '/b', headers: {}, docId: 'inv2', sharedContext: { invoiceId: 'inv1' } });
+    const imported = lines.find(l => l.id === 'source-line-1');
+    const offered = lines.find(l => l.id === 'source-line-2');
+    assert.equal(imported._alreadyImported, true);
+    assert.equal(imported._maxQty, 2);
+    assert.equal(offered._alreadyImported, false);
+    assert.equal(offered._maxQty, 4);
+    assert.equal(offered._lineNetAmount, 40);
+    assert.equal(offered._tax, 't1');
+    assert.equal(offered._uOM, 'u1');
   });
 });
 

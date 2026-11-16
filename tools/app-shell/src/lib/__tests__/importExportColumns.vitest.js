@@ -279,9 +279,13 @@ describe('the shipped windows resolve their sources', () => {
     // ETP-4997 — the child-scoped columns are no longer empty: BusinessPartnerHandler attaches
     // the primary contact person and address under `etgoChildData`, and the export addresses
     // them by dotted path (which NeoCsvExportService resolves into nested values).
-    for (const target of ['email', 'firstName', 'lastName', 'phone', 'position', 'address', 'city', 'postal', 'country', 'region']) {
+    for (const target of ['email', 'firstName', 'lastName', 'phone', 'position', 'city', 'postal', 'country', 'region']) {
       expect(byTarget[target], target).toBe(`etgoChildData.${target}`);
     }
+    // ETP-6206 — Calle / Número read the street and number BusinessPartnerHandler derives (the
+    // structured street, or the whole address line for an address never broken down).
+    expect(byTarget.streetName).toBe('etgoChildData.street');
+    expect(byTarget.buildingNumber).toBe('etgoChildData.buildingNumber');
   });
 
   // The dotted path has to survive serialization intact — only ':' and '|' are the spec's

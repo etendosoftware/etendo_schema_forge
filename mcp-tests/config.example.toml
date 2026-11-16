@@ -91,6 +91,9 @@ max_result_chars = 200000
 url  = "http://localhost:3100/mcp"
 auth = "oauth"
 platform = "etendo-go"
+# Optional. A failed attempt (no success, no harness error) is reported through this tool,
+# after the measurement and in its own session: it costs the comparison nothing.
+feedback_on_failure = "etendo_feedback"
 
 [targets.experimental]
 url  = "https://go.experimental.etendo.cloud/mcp"

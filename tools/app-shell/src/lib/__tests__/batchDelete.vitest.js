@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/lib/batchDelete.js
 /**
  * ETP-4656 — direct unit coverage for the shared batch-delete core
  * (`runBatchDelete` / `toastBatchDeleteOutcome`), extracted out of
@@ -11,7 +12,10 @@ vi.mock('sonner', () => ({
 }));
 
 import { toast } from 'sonner';
-import { runBatchDelete, toastBatchDeleteOutcome, buildChildRowDeleteFn } from '../batchDelete.js';
+import {
+  runBatchDelete, toastBatchDeleteOutcome, buildChildRowDeleteFn,
+  buildBulkDeleteOperations, outcomeFromBulkDeleteEnvelope,
+} from '../batchDelete.js';
 
 /**
  * Identity-with-params for every UI key, EXCEPT the `backendError.*` namespace: `translateBackendError`
@@ -611,3 +615,51 @@ describe('buildChildRowDeleteFn (ETP-5758)', () => {
   });
 });
 
+
+// ETP-6143 — the bulk path: one async /sws/neo/batch job instead of N parallel DELETEs.
+describe('buildBulkDeleteOperations', () => {
+  it('builds one DELETE operation per record, with positional op ids', () => {
+    expect(buildBulkDeleteOperations([{ id: 'A' }, { id: 'B' }], { spec: 'product', entity: 'header' }))
+      .toEqual([
+        { id: 'del-0', spec: 'product', entity: 'header', method: 'DELETE', recordId: 'A' },
+        { id: 'del-1', spec: 'product', entity: 'header', method: 'DELETE', recordId: 'B' },
+      ]);
+  });
+});
+
+describe('outcomeFromBulkDeleteEnvelope', () => {
+  const items = [{ id: 'A' }, { id: 'B' }, { id: 'C' }];
+
+  it('reports every record deleted when the job committed every row', () => {
+    expect(outcomeFromBulkDeleteEnvelope(items, { committed: true, operations: [] }))
+      .toEqual({ succeeded: items, failed: [], errors: [] });
+  });
+
+  it('maps each job row back to its record, keeping the server reason of a refused one', () => {
+    const outcome = outcomeFromBulkDeleteEnvelope(items, {
+      committed: false,
+      partial: true,
+      rows: [
+        { index: 0, ids: ['del-0'], committed: true },
+        { index: 1, ids: ['del-1'], committed: false, error: { status: 409, message: 'In use' } },
+        // del-2 never ran: the job was cancelled before reaching it.
+      ],
+    });
+
+    expect(outcome.succeeded).toEqual([{ id: 'A' }]);
+    expect(outcome.failed).toEqual([{ id: 'B' }, { id: 'C' }]);
+    expect(outcome.errors[0].message).toBe('In use');
+    expect(outcome.errors[0].status).toBe(409);
+    expect(outcome.errors[1].status).toBeUndefined();
+  });
+
+  it('reports nothing deleted on a synchronous, atomic failure', () => {
+    const outcome = outcomeFromBulkDeleteEnvelope(items, {
+      committed: false, atomic: true, error: { status: 400, message: 'Bad batch' },
+    });
+
+    expect(outcome.succeeded).toEqual([]);
+    expect(outcome.failed).toEqual(items);
+    expect(outcome.errors.every((e) => e.status === 400 && e.message === 'Bad batch')).toBe(true);
+  });
+});

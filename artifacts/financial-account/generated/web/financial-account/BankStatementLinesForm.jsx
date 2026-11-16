@@ -11,6 +11,7 @@ const fields = [
   { key: 'dramount', column: 'Dramount', type: 'number', label: 'Amount OUT', required: true, section: 'other', defaultValue: '0', readOnlySource: 'server', readOnlyLogicReason: 'session-variable' },
   { key: 'cramount', column: 'Cramount', type: 'number', label: 'Amount IN', required: true, section: 'other', defaultValue: '0', readOnlySource: 'server', readOnlyLogicReason: 'session-variable' },
   { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'other', maxLength: 2000 },
+  { key: 'pSD2IsDiscarded', column: 'EM_PSD2_Is_Discarded', type: 'checkbox', label: 'Discarded', required: true, readOnly: true, section: 'other' },
 ];
 // @sf-generated-end fields:bankStatementLines
 

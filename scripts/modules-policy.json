@@ -30,6 +30,7 @@
     { "name": "org.openbravo.sepa.iso20022.template", "kind": "epic", "location": "modules", "remote": "etendosoftware/org.openbravo.sepa.iso20022.template" },
     { "name": "org.openbravo.sepa.iso20022.credittransfer.customertobank", "kind": "epic", "location": "modules", "remote": "koodu_software/org.openbravo.sepa.iso20022.credittransfer.customertobank" },
     { "name": "org.openbravo.sepa.iso20022.coredirectdebit.customertobank", "kind": "epic", "location": "modules", "remote": "koodu_software/org.openbravo.sepa.iso20022.coredirectdebit.customertobank" },
+    { "name": "org.openbravo.module.remittance", "kind": "epic", "location": "modules", "remote": "koodu_software/org.openbravo.module.remittance" },
     { "name": "com.etendoerp.service.integration.amazon.s3", "kind": "epic", "location": "modules", "remote": "koodu_software/com.etendoerp.service.integration.amazon.s3", "optional": true },
 
     { "name": "com.etendoerp.tomcat", "kind": "usual", "location": "modules", "remote": "etendosoftware/com.etendoerp.tomcat", "optional": true },
@@ -37,6 +38,8 @@
     { "name": "com.etendoerp.copilot.devassistant", "kind": "usual", "location": "modules", "remote": "etendosoftware/com.etendoerp.copilot.devassistant", "optional": true },
     { "name": "com.etendoerp.webhookevents", "kind": "usual", "location": "modules", "remote": "etendosoftware/com.etendoerp.webhookevents", "optional": true },
     { "name": "org.openbravo.utility.hqlquerytool", "kind": "usual", "location": "modules", "remote": "etendosoftware/org.openbravo.utility.hqlquerytool", "optional": true },
-    { "name": "com.etendoerp.openapi", "kind": "usual", "location": "modules", "remote": "etendosoftware/com.etendoerp.openapi", "optional": true }
+    { "name": "com.etendoerp.openapi", "kind": "usual", "location": "modules", "remote": "etendosoftware/com.etendoerp.openapi", "optional": true },
+    { "name": "org.openbravo.module.remittance.template", "kind": "usual", "location": "modules", "remote": "koodu_software/org.openbravo.module.remittance.template", "optional": true },
+    { "name": "com.etendoerp.automated.remittance", "kind": "usual", "location": "modules", "remote": "koodu_software/com.etendoerp.automated.remittance", "optional": true }
   ]
 }

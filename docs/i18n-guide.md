@@ -462,6 +462,17 @@ Three matching mechanisms coexist — know all three before adding a new backend
    exact-match entry in `BACKEND_ERROR_MAP` may stay as the fallback for an older, keyless backend,
    but never add a Spanish-text entry — the key already covers it.
 
+   **Classic fiscal messages reworded on the backend (ETP-6158).** Some `AD_MESSAGE`s of the shared
+   Spanish fiscal modules (VERI\*FACTU, TicketBAI, SII, AEAT 303/349/390) name Classic-only UI.
+   Their rows are shared with Classic and must not be edited, so `com.etendoerp.go`'s
+   `ClassicMessageRemap` replaces the Classic text at NEO's REST and MCP exits with a GO-authored
+   one in the request language (its `neo_hints_{es,en}.properties` catalog) and adds the key to
+   `messageKeys` (e.g. `TBAI_EmptyNifCode`). The `message` the SPA receives is therefore already
+   final copy: show it as is. Do not add a `BACKEND_ERROR_MAP` entry or matcher for the Classic
+   Spanish text (it never reaches the browser), nor for the GO text (it follows the locale). To
+   reword another Classic message for GO, add it to that catalog, not to `backendErrors.js` and
+   not to the Classic module: `com.etendoerp.go` `docs/neo-headless.md` §4.17.
+
    **Degradation is the point, not a shim.** `com.etendoerp.go` and this repo deploy separately, so
    a frontend running against a backend that predates the field is the normal steady state for a
    while. No keys → `translateBackendError` skips this mechanism entirely and behaves exactly as it

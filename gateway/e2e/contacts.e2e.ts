@@ -39,6 +39,7 @@ describe('contacts and their location address', () => {
     for (const field of ['address_line1', 'city_name', 'postal_code', 'country']) {
       assert.ok(row.attributes[field] !== undefined && row.attributes[field] !== null, `list row carries ${field}`);
     }
+    assert.equal(row.attributes.country_code, 'ES', 'the address created with country ES reads back its ISO code');
   });
 
   it('PATCHing one address field keeps the others', async () => {
