@@ -75,4 +75,13 @@ describe('Modelo 390 file validation / direct presentation — texts (ETP-5716)'
     const missing = RENAMED_KEYS.filter(k => typeof dict.genericLabels?.[k] !== 'string' || dict.genericLabels[k].trim() === '');
     expect(missing, `${name} missing`).toEqual([]);
   });
+
+  // Any Fiscal Models text (the whole `fm.` namespace), not only the renamed ones: a new key that
+  // says "telemática" must fail too. Keys outside `fm.` are another feature and are not checked.
+  it.each(LOCALES)('%s: no Fiscal Models (fm.*) text says "telemátic" / "telematic"', (name, dict) => {
+    const fmKeys = Object.keys(dict.genericLabels).filter(k => k.startsWith('fm.'));
+    expect(fmKeys.length).toBeGreaterThan(150);
+    const offending = fmKeys.filter(k => /telem[aá]tic/i.test(String(dict.genericLabels[k])));
+    expect(offending, `${name} still telematic`).toEqual([]);
+  });
 });
