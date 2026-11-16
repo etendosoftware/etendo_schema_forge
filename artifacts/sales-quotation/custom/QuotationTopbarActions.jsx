@@ -34,7 +34,8 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
       // under the Solo-Lectura tier, so a stray event must not open one either.
       if (windowReadOnly) return;
       if (status === 'DR') setShowSendToEval(true);
-      else if (status === 'CO' || status === 'UE') setShowConfirm(true);
+      // ETGO_AC: accepted by the customer from the portal (ETP-6209), still converted from here.
+      else if (status === 'CO' || status === 'UE' || status === 'ETGO_AC') setShowConfirm(true);
     }
     window.addEventListener('sales-quotation:open-confirm-modal', handler);
     return () => window.removeEventListener('sales-quotation:open-confirm-modal', handler);

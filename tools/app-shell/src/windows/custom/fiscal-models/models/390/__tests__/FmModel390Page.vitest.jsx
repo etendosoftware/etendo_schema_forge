@@ -85,9 +85,10 @@ vi.mock('../FileGenModal390.jsx', () => ({
     type: 'button', 'data-testid': 'FileGenModal390-confirm', onClick: () => onConfirm({ fileName: undefined }),
   }, 'filegen-confirm'),
 }));
+const listReceiptsMock = vi.hoisted(() => vi.fn());
 vi.mock('@/components/attachments', () => ({
   AttachmentsTab: () => null,
-  useAttachments: () => ({ count: 0, upload: vi.fn() }),
+  useAttachments: () => ({ count: 0, upload: vi.fn(), list: listReceiptsMock }),
 }));
 vi.mock('@/windows/custom/shared/CheckboxField.jsx', () => ({
   CheckboxField: ({ checked, disabled, onToggle, 'data-testid': testId }) => React.createElement('input', {
@@ -988,5 +989,107 @@ describe('FmModel390Page — incidents (ETP-5716)', () => {
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('fm.m390.blocked_by_incidents'));
     await waitFor(() => expect(screen.getByTestId('IncidentsTab__row_TERRITORY_PERCENT_SUM')).toBeTruthy());
     expect(validate390).toHaveBeenCalledTimes(2);
+  });
+});
+
+// "Generar fichero 390" validates the file with the AEAT in the same request: the page says so
+// only for a clean file, re-reads the incidents only when the AEAT answered, and refreshes the
+// Justificante tab only when it left its validation PDF there (an accepted file).
+describe('FmModel390Page — the generated file validated by the AEAT (ETP-5716)', () => {
+  const ACCEPTED_KEY = 'fm.m390.file_validation.accepted';
+  const validation = (outcome, extra = {}) => ({ outcome, errors: [], warnings: [], ...extra });
+
+  /** Opens the page, waits for the opening incidents read, generates and waits for it to settle. */
+  async function generateWith(result) {
+    generate390File.mockResolvedValue(result);
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    // opening: validate390 resolves null, so the stored incidents are read once
+    await waitFor(() => expect(fetchDeclarationIncidents).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByTestId('FmModel390Page__generate'));
+    await act(async () => { fireEvent.click(screen.getByTestId('FileGenModal390-confirm')); });
+    await waitFor(() => expect(generate390File).toHaveBeenCalledTimes(1));
+    await act(async () => {});
+  }
+
+  it('accepted without warnings: success toast, incidents re-read, receipts refreshed', async () => {
+    await generateWith({ ok: true, validation: validation('accepted') });
+    expect(toast.success).toHaveBeenCalledWith(ACCEPTED_KEY);
+    await waitFor(() => expect(fetchDeclarationIncidents).toHaveBeenCalledTimes(2));
+    expect(listReceiptsMock).toHaveBeenCalledTimes(1);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('accepted with AEAT warnings: no success toast, incidents re-read, receipts refreshed', async () => {
+    await generateWith({ ok: true, validation: validation('accepted', { warnings: [{ code: '390A01', message: 'warn' }] }) });
+    expect(toast.success).not.toHaveBeenCalled();
+    await waitFor(() => expect(fetchDeclarationIncidents).toHaveBeenCalledTimes(2));
+    expect(listReceiptsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejected: no success toast, incidents re-read, receipts left alone', async () => {
+    await generateWith({ ok: true, validation: validation('rejected', { errors: [{ code: '390E01', message: 'err' }] }) });
+    expect(toast.success).not.toHaveBeenCalled();
+    await waitFor(() => expect(fetchDeclarationIncidents).toHaveBeenCalledTimes(2));
+    expect(listReceiptsMock).not.toHaveBeenCalled();
+    // the AEAT answer is the popup's result step, not an error toast
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it.each(['connection_failure', 'not_validated'])(
+    '%s: the AEAT did not answer — no toast, no incidents re-read, no receipts refresh',
+    async (outcome) => {
+      await generateWith({ ok: true, validation: validation(outcome) });
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(fetchDeclarationIncidents).toHaveBeenCalledTimes(1);
+      expect(listReceiptsMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('a failed generation: its error toast, nothing re-read or refreshed', async () => {
+    await generateWith({ ok: false, error: 'http_500', serverMessage: 'boom' });
+    expect(toast.error).toHaveBeenCalledWith('boom');
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(fetchDeclarationIncidents).toHaveBeenCalledTimes(1);
+    expect(listReceiptsMock).not.toHaveBeenCalled();
+  });
+
+  it('the re-read after an AEAT answer reads the stored incidents, without recomputing the rules', async () => {
+    await generateWith({ ok: true, validation: validation('rejected') });
+    await waitFor(() => expect(fetchDeclarationIncidents).toHaveBeenCalledTimes(2));
+    expect(validate390).toHaveBeenCalledTimes(1);
+  });
+
+  // The Incidencias banner text follows the rule-blocking count the page hands the tab
+  // (`gatingBlocking`): a stored AEAT error is blocking-severity but does not gate the file.
+  describe('Incidencias banner (gatingBlocking)', () => {
+    const openIncidents = () => fireEvent.click(screen.getByRole('tab', { name: 'fm.tab.incidents' }));
+    const AEAT_ERROR = { origin: 'AEAT-390E01', severity: 'block', message: 'Error de la AEAT' };
+    const RULE_ERROR = { origin: 'NO_MAIN_IAE', severity: 'block', message: 'iae', action: { type: 'organization', section: 'iae' } };
+
+    it('only AEAT errors: "review before presenting", and Generar is not blocked', async () => {
+      validate390.mockResolvedValue({ blocking: 1, warning: 0, items: [AEAT_ERROR] });
+      render(<FmModel390Page decl={makeDecl()} {...props()} />);
+      await waitFor(() => expect(screen.getByTestId('FmModel390Page__incidentsCount').textContent).toBe('1'));
+      openIncidents();
+      const tab = screen.getByTestId('Incidents390Tab');
+      expect(screen.getByTestId('IncidentsTab__row_AEAT-390E01').textContent).toContain('Error de la AEAT');
+      expect(tab.textContent).toContain('fm.incidents.review_sub');
+      expect(tab.textContent).not.toContain('fm.incidents.block_sub');
+      expect(screen.getByText('fm.incidents.review_sub').style.color).toBe('hsl(var(--destructive))');
+      fireEvent.click(screen.getByTestId('FmModel390Page__generate'));
+      expect(toast.error).not.toHaveBeenCalledWith('fm.m390.blocked_by_incidents');
+      expect(screen.getByTestId('FileGenModal390-confirm')).toBeInTheDocument();
+    });
+
+    it('a rule error next to an AEAT error: "resolve before generating"', async () => {
+      validate390.mockResolvedValue({ blocking: 2, warning: 0, items: [AEAT_ERROR, RULE_ERROR] });
+      render(<FmModel390Page decl={makeDecl()} {...props()} />);
+      await waitForBlocked();
+      openIncidents();
+      const tab = screen.getByTestId('Incidents390Tab');
+      expect(tab.textContent).toContain('fm.incidents.block_sub');
+      expect(tab.textContent).not.toContain('fm.incidents.review_sub');
+    });
   });
 });

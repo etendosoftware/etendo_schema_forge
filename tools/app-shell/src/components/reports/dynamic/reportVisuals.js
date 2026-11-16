@@ -1,6 +1,8 @@
 /**
  * ETP-6080 — numbers behind the interactive report's visuals: the KPI strip and the magnitude bars.
  * Pure, so they are unit-tested apart from the components.
+ * ETP-6239: they read `amount` / `amount_ref` of rows from `rowsForMode` (reportColumns.js), i.e. the
+ * chosen comparison mode's `cells[0]` (the whole range), whatever the period columns on screen.
  */
 
 const topLevel = (rows) => {

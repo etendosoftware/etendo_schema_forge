@@ -57,10 +57,15 @@ export function matchingShortcut(period, years, today) {
   return ['month', 'quarter'].find((k) => shortcutPeriod(k, today).dateFrom === period.dateFrom) || null;
 }
 
-/** One calendar year back; 29 February becomes 28 February (§19.2: no day offsets). */
+const lastDay = (y, m) => new Date(y, m + 1, 0).getDate();
+
+/**
+ * One calendar year back. The last day of February maps to the last day of February (28 Feb 2021 →
+ * 29 Feb 2020, 29 Feb 2024 → 28 Feb 2023), so a February range loses no posting dated 29 Feb (ETP-6239 D2).
+ */
 function minusOneYear(day) {
   const [y, m, d] = parts(day);
-  return iso(y - 1, m, m === 1 && d === 29 ? 28 : d);
+  return iso(y - 1, m, m === 1 && d === lastDay(y, 1) ? lastDay(y - 1, 1) : d);
 }
 
 /** "Same period last year": each bound one calendar year back. */
@@ -82,3 +87,76 @@ export function comparisonPeriod(mode, period) {
   if (mode === 'previous') return previousPeriod(period);
   return null;
 }
+
+/**
+ * D3: the same days shifted back `months`, the day clamped to the target month's length; a day that
+ * is the last of its month stays the last of the target month (30 Jun → 31 Mar, 31 Mar → 28 Feb).
+ */
+function shiftBack(day, months) {
+  const [y, m, d] = parts(day);
+  const target = new Date(y, m - months, 1);
+  const [ty, tm] = [target.getFullYear(), target.getMonth()];
+  const len = lastDay(ty, tm);
+  return iso(ty, tm, d === lastDay(y, m) ? len : Math.min(d, len));
+}
+
+/** D3: the previous calendar month (or quarter) of a bucket, keeping its days: 15–31 Mar → 15–28 Feb. */
+export function previousCalendarBucket({ dateFrom, dateTo }, grain) {
+  const months = grain === 'quarter' ? 3 : 1;
+  return { from: shiftBack(dateFrom, months), to: shiftBack(dateTo, months) };
+}
+
+/**
+ * The two ranges a period is compared with: same period last year, and the previous period. In
+ * Total mode the previous period is the same number of days (`previousPeriod`); in Month / Quarter
+ * mode it is the previous calendar bucket, which for the range itself is `[prev(first).from, prev(last).to]`.
+ */
+export function comparedRanges(period, grain) {
+  const sly = { from: minusOneYear(period.dateFrom), to: minusOneYear(period.dateTo) };
+  if (grain === 'total') {
+    const prev = previousPeriod(period);
+    return { sly, prev: { from: prev.fromReferenceDate, to: prev.toReferenceDate } };
+  }
+  return { sly, prev: previousCalendarBucket(period, grain) };
+}
+
+const bucketOf = (idx, dateFrom, dateTo, partial, grain) => ({ idx, dateFrom, dateTo, partial, ...comparedRanges({ dateFrom, dateTo }, grain) });
+
+/** The calendar months (span 1) or quarters (span 3) touching the range, clipped to it. */
+function calendarBuckets({ dateFrom, dateTo }, grain) {
+  const span = grain === 'quarter' ? 3 : 1;
+  const [fy, fm] = parts(dateFrom);
+  const [ty, tm] = parts(dateTo);
+  const out = [];
+  for (let i = fy * 12 + fm - (fm % span); i <= ty * 12 + tm; i += span) {
+    const [y, m] = [Math.floor(i / 12), i % 12];
+    const start = iso(y, m, 1);
+    const end = iso(y, m + span, 0);
+    const from = start < dateFrom ? dateFrom : start;
+    const to = end > dateTo ? dateTo : end;
+    out.push({ from, to, partial: from !== start || to !== end });
+  }
+  return out;
+}
+
+/**
+ * The buckets a report asks for (ETP-6239 D1/D3/D5): bucket 0 is the range itself, then the last
+ * `maxShown` calendar months or quarters of it (all of them by default), each with its
+ * same-last-year and previous ranges. `hiddenCount` is how many earlier buckets were left out;
+ * `total` is bucket 0's compared ranges. `grain` is 'total' | 'month' | 'quarter'.
+ */
+export function periodBuckets({ dateFrom, dateTo }, grain, { maxShown = Infinity } = {}) {
+  const total = bucketOf(0, dateFrom, dateTo, false, grain);
+  const all = grain === 'total' ? [] : calendarBuckets({ dateFrom, dateTo }, grain);
+  const shown = all.slice(-maxShown);
+  return {
+    buckets: [total, ...shown.map((b, i) => bucketOf(i + 1, b.from, b.to, b.partial, grain))],
+    hiddenCount: all.length - shown.length,
+    total: { sly: total.sly, prev: total.prev },
+  };
+}
+
+/** The request's `periods`: `from..to|slyFrom..slyTo|prevFrom..prevTo` tuples, bucket 0 first. */
+export const serializePeriods = (buckets) => buckets
+  .map((b) => `${b.dateFrom}..${b.dateTo}|${b.sly.from}..${b.sly.to}|${b.prev.from}..${b.prev.to}`)
+  .join(',');

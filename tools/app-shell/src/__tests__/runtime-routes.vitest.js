@@ -31,6 +31,13 @@ describe('buildRuntimeRoutes', () => {
     );
   });
 
+  // The customer portal and its quotation-decision landing are opened from an email by someone
+  // with no account: the token in the path is the whole credential, so neither may ask for a login.
+  it.each(['portal/:token', 'portal/decision/:token'])('registers %s as a public route', (path) => {
+    const routes = buildRuntimeRoutes({ windowMap: {}, apiBaseUrl: 'http://x/api' });
+    expect(routes.find((route) => route.path === path)?.public).toBe(true);
+  });
+
   it('registers public logout before dynamic window routes while keeping dashboard protected', () => {
     const routes = buildRuntimeRoutes({ windowMap: {}, apiBaseUrl: 'http://x/api' });
     const logoutIndex = routes.findIndex((route) => route.path === 'logout');

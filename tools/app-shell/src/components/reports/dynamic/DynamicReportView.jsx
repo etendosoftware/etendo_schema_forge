@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FileDown, FileSpreadsheet, FileText, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
@@ -14,10 +14,12 @@ import { reportKpis } from './reportVisuals.js';
 import DynamicDrillPanel from './DynamicDrillPanel.jsx';
 import { ENTRY_REPORT_ID, LEDGER_REPORT_ID } from './drillDown.js';
 import { useReportQuery } from './useReportQuery.js';
+import { useReportPanelCollapsed } from './useReportPanelCollapsed.js';
 import { useReportDefaults } from './useReportDefaults.js';
 import { useAccountSplit } from './useAccountSplit.js';
 import { REPORT_EVENTS, filterTypeOf, useReportTelemetry } from './reportTelemetry.js';
-import { comparisonPeriod, matchingShortcut, matchingYear, openingPeriod, pickedYearPeriod, shortcutPeriod } from './dynamicDates.js';
+import { matchingShortcut, matchingYear, openingPeriod, periodBuckets, pickedYearPeriod, serializePeriods, shortcutPeriod } from './dynamicDates.js';
+import { SCREEN_PERIODS, exportTooLong as isExportTooLong, columnModel, modeOf, rowsForMode } from './reportColumns.js';
 import { expandedNodeIdsParam, foldExpansion, visibleRows } from './reportTree.js';
 
 const EXPORTS = [
@@ -26,7 +28,50 @@ const EXPORTS = [
   { format: 'csv', label: 'CSV', icon: FileText },
 ];
 const SPLIT_DIMENSIONS = [['org', 'orgId'], ['bpartner', 'bPartnerId'], ['product', 'productId']];
-const ERROR_KEYS = { org_access_denied: 'reportErrorOrgAccess', report_access_denied: 'reportErrorReportAccess' };
+const COLUMN_LABELS = { total: 'dynamicReportColumnsTotal', month: 'dynamicReportColumnsMonth', quarter: 'dynamicReportColumnsQuarter' };
+const ERROR_KEYS = { org_access_denied: 'reportErrorOrgAccess', report_access_denied: 'reportErrorReportAccess',
+  period_range_too_long: 'reportErrorPeriodRangeTooLong', invalid_periods: 'reportErrorInvalidPeriods',
+};
+
+/** The error line of a failed query: a network failure carries its own translated message. */
+function queryErrorText(error, errorCode, ui) {
+  if (!error) return error;
+  return errorCode === 'network' ? error : ui(ERROR_KEYS[errorCode] || 'dynamicReportErrorGeneric');
+}
+
+/** POSTs the render request and saves the file; a refusal throws an Error carrying the server's lowercased `code`. */
+async function downloadRender(apiFetch, reportId, format, body) {
+  const res = await apiFetch(`/api/reports/${reportId}/render`, {
+    method: 'POST',
+    baseUrl: '',
+    timeout: 0, // a render can take longer than the read default
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const code = String((await res.json().catch(() => null))?.code ?? '').toLowerCase();
+    throw Object.assign(new Error(`HTTP ${res.status}`), { code });
+  }
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = buildReportFilename(reportId, format);
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/** The chips under the title: the active filters, each one with a `clear` removable. */
+function buildChips({ state, ui, label, fmt, orgName, reference, splitDimensions }) {
+  return [
+    { key: 'period', label: ui('dynamicReportPeriodChip'), value: `${fmt(state.dateFrom)} – ${fmt(state.dateTo)}` },
+    // The org has no `clear` on purpose: the query requires one, so it is changed in the panel, never removed.
+    orgName && { key: 'org', label: label('orgId'), value: orgName },
+    state.bPartnerId && { key: 'bp', label: label('bPartnerId'), value: state._display_bPartnerId, clear: { bPartnerId: '', _display_bPartnerId: '' } },
+    state.productId && { key: 'product', label: label('productId'), value: state._display_productId, clear: { productId: '', _display_productId: '' } },
+    state.columns !== 'total' && { key: 'columns', label: ui('dynamicReportColumns'), value: ui(COLUMN_LABELS[state.columns]), clear: { columns: 'total' } },
+    reference && { key: 'compare', label: ui('dynamicReportComparedWith'), value: `${fmt(reference.from)} – ${fmt(reference.to)}`, clear: { compare: '' } },
+    state.splitBy && { key: 'split', label: ui('dynamicReportSplitChip'), value: splitDimensions.find((d) => d.value === state.splitBy)?.label, clear: { splitBy: '' } },
+  ].filter(Boolean);
+}
 
 const pick = (labelObj, locale) => labelObj?.[locale] || labelObj?.en_US || labelObj?.es_ES || '';
 
@@ -35,7 +80,7 @@ function initialState(defaultOrgId, period, level) {
   return {
     orgId: defaultOrgId || '', dateFrom: period?.dateFrom || '', dateTo: period?.dateTo || '',
     bPartnerId: '', _display_bPartnerId: '', productId: '', _display_productId: '',
-    compare: '', splitBy: '', level,
+    compare: '', columns: 'total', splitBy: '', level,
   };
 }
 
@@ -45,6 +90,11 @@ function initialState(defaultOrgId, period, level) {
  * on screen, compares with a preset period and splits leaf accounts by a dimension. The exports
  * print what the screen shows: same params plus `expandedNodeIds`. `source` ('menu' | 'deep_link')
  * is how the report was opened, for `report_opened` (F10).
+ *
+ * ETP-6239 D8: the panel collapses (button, or automatically on Mes/Trimestre). The chips under the
+ * title are always shown, so they are the active filters while it is hidden and each one with a
+ * `clear` can be removed from there. Exception: the organization chip is not removable, because the
+ * query requires an org; it is changed in the panel.
  */
 export default function DynamicReportView({ report, onBack, selectedOrgId, roleOrgs = [], source = 'deep_link', reportAccess = null }) {
   // The server refuses a drill step the role cannot open (ETP-6080), so the view does not offer it.
@@ -81,29 +131,76 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   }, [opening]);
 
   const change = useCallback((patch) => setState((s) => ({ ...s, ...patch })), []);
-  const reference = comparisonPeriod(state.compare, state);
+  const mode = modeOf(state.compare);
+  // ETP-6239: every request carries both compared ranges, so the comparison is a display choice, not a request.
+  const range = useMemo(() => ({ dateFrom: state.dateFrom, dateTo: state.dateTo }), [state.dateFrom, state.dateTo]);
+  const hasRange = Boolean(state.dateFrom && state.dateTo && state.dateFrom <= state.dateTo);
+  const plan = useMemo(
+    () => (hasRange ? periodBuckets(range, state.columns, { maxShown: SCREEN_PERIODS[state.columns] }) : null),
+    [hasRange, range, state.columns],
+  );
   const queryParams = useMemo(() => ({
     acctSchemaId: defaults.acctSchemaId || '',
     orgId: state.orgId,
-    dateFrom: state.dateFrom,
-    dateTo: state.dateTo,
+    // An invalid range (from > to) leaves the dates blank, so the query, the split and the exports stay idle.
+    dateFrom: hasRange ? state.dateFrom : '',
+    dateTo: hasRange ? state.dateTo : '',
     bPartnerId: state.bPartnerId,
     productId: state.productId,
     showOnlyAccountsWithValue: 'true',
-    compareTo: reference ? 'true' : 'false',
-    fromReferenceDate: reference?.fromReferenceDate || '',
-    toReferenceDate: reference?.toReferenceDate || '',
-  }), [defaults.acctSchemaId, state.orgId, state.dateFrom, state.dateTo, state.bPartnerId, state.productId, reference?.fromReferenceDate, reference?.toReferenceDate]);
+    columns: state.columns,
+    periods: plan ? serializePeriods(plan.buckets) : '',
+    hiddenCount: String(plan?.hiddenCount ?? 0),
+  }), [defaults.acctSchemaId, state.orgId, state.dateFrom, state.dateTo, hasRange, state.bPartnerId, state.productId, state.columns, plan]);
 
-  const { data, loading, error, errorCode, settled } = useReportQuery(report.id, queryParams, { locale });
+  const { data: queried, loading, error: queryError, errorCode: queryErrorCode, settled } = useReportQuery(report.id, queryParams, { locale });
+  // From after to is a user error: say so, and show nothing of the previous period under the new one.
+  const reversed = Boolean(state.dateFrom && state.dateTo && state.dateFrom > state.dateTo);
+  const data = reversed ? null : queried;
+  const error = queryError;
+  const errorCode = queryErrorCode; // telemetry reads this: a client-side refusal is not a server error class
   const telemetry = useReportTelemetry(report.id, { source, paramsKey: JSON.stringify(queryParams), settled, errorCode });
+  // D8: the panel hides on a button or on Mes/Trimestre. The button the user was on disappears, so
+  // focus moves to the one that replaces it.
+  const panel = useReportPanelCollapsed();
+  const collapseRef = useRef(null);
+  const expandRef = useRef(null);
+  const focusAfter = useRef(null);
+  const togglePanel = (collapsed, trigger, opts) => {
+    telemetry.emit(REPORT_EVENTS.PANEL_TOGGLED, { panelState: collapsed ? 'collapsed' : 'expanded', trigger: trigger ?? 'user', outcome: 'success' });
+    focusAfter.current = collapsed ? expandRef : collapseRef;
+    panel.setCollapsed(collapsed, opts);
+  };
+  useEffect(() => {
+    focusAfter.current?.current?.focus();
+    focusAfter.current = null;
+  }, [panel.collapsed]);
   // A user's change: marked for report_filter_applied. The defaults and "Limpiar filtros" are not.
-  const userChange = (patch) => { telemetry.markFilter(filterTypeOf(patch)); change(patch); };
+  // The comparison sends no request, so there is no result to time: it is emitted here, like `setLevel`.
+  const userChange = (patch) => {
+    // D8: picking Mes/Trimestre hides the panel for this session only (nothing is saved).
+    if (patch.columns && patch.columns !== 'total' && !panel.collapsed) togglePanel(true, 'auto_columns', { persist: false });
+    if ('compare' in patch) telemetry.emit(REPORT_EVENTS.FILTER_APPLIED, { type: 'comparison', outcome: 'success' });
+    else telemetry.markFilter(filterTypeOf(patch));
+    change(patch);
+  };
   const groupToggled = (type) => telemetry.emit(REPORT_EVENTS.GROUP_TOGGLED, { type, outcome: 'success' });
   // The query waits for the schema (isQueryReady); a role that sees none would wait forever.
   const noSchema = !defaults.loading && !defaults.acctSchemaId;
-  const rows = useMemo(() => data?.rows ?? [], [data]);
-  const compare = queryParams.compareTo === 'true' && Boolean(data) && rows.some((r) => 'variationAmount' in r);
+  // What the answer was asked with: an answer is only ever set for the params at hand (a newer change aborts the older request).
+  /* eslint-disable react-hooks/exhaustive-deps */
+  const answered = useMemo(() => ({ grain: state.columns, periods: data?.periods ?? [], hiddenCount: data?.hiddenCount ?? 0 }), [data]);
+  /* eslint-enable react-hooks/exhaustive-deps */
+  const rows = useMemo(() => rowsForMode(data?.rows ?? [], mode), [data, mode]);
+  const compare = mode !== 'none' && Boolean(data);
+  const quarterPrefix = ui('dynamicReportQuarterPrefix');
+  const totalLabel = ui('dynamicReportColumnsTotal');
+  const groups = useMemo(
+    () => columnModel({ periods: answered.periods, grain: answered.grain, mode, locale, quarterPrefix, totalLabel }),
+    [answered, mode, locale, quarterPrefix, totalLabel],
+  );
+  const reference = compare ? groups.find((g) => g.pos === 0)?.compared : null;
+  const hasPartial = groups.some((g) => g.partial);
 
   // Folding: a base (the level, expand all, collapse all) plus the rows the user flipped since,
   // applied to every result, so rows a new filter brings in follow the base.
@@ -127,7 +224,8 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
     refold('level');
   };
 
-  const [drillAccount, setDrillAccount] = useState(null);
+  const [drill, setDrill] = useState(null); // { row, range }: the account whose ledger is open, and the cell's range (null = the view's period)
+  const openLedger = useCallback((row, cellRange) => setDrill({ row, range: cellRange }), []);
   const { splits, toggle: toggleSplit } = useAccountSplit(report.id, queryParams, state.splitBy, { locale });
 
   const shortcut = matchingShortcut(state, defaults.years, today);
@@ -140,52 +238,42 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   const orgName = orgs.find((o) => o.id === state.orgId)?.name;
   const [exporting, setExporting] = useState(null);
   const [exportError, setExportError] = useState(null);
+  // PDF prints what the screen shows; Excel / CSV print every period, up to the cap (D5).
+  const fullPlan = useMemo(() => (hasRange ? periodBuckets(range, state.columns) : null), [hasRange, range, state.columns]);
+  const exportTooLong = hasRange && isExportTooLong(fullPlan, state.columns);
   const exportAs = async (format) => {
     setExporting(format);
     setExportError(null);
+    const exportPlan = format === 'pdf' ? plan : fullPlan;
     try {
-      const res = await apiFetch(`/api/reports/${report.id}/render`, {
-        method: 'POST',
-        baseUrl: '',
-        timeout: 0, // a render can take longer than the read default
-        body: JSON.stringify({
-          format,
-          locale,
-          params: {
-            ...queryParams,
-            accountLevel: state.level,
-            expandedNodeIds: expandedNodeIdsParam(expandedSet),
-            // The exported header names the filters, not their ids (report-filters.js reads `_display_*`).
-            _display_orgId: orgName,
-            _display_bPartnerId: state._display_bPartnerId,
-            _display_productId: state._display_productId,
-          },
-        }),
+      await downloadRender(apiFetch, report.id, format, {
+        format,
+        locale,
+        params: {
+          ...queryParams,
+          periods: serializePeriods(exportPlan.buckets),
+          hiddenCount: String(exportPlan.hiddenCount),
+          compareMode: mode,
+          accountLevel: state.level,
+          expandedNodeIds: expandedNodeIdsParam(expandedSet),
+          // The exported header names the filters, not their ids (report-filters.js reads `_display_*`).
+          _display_orgId: orgName,
+          _display_bPartnerId: state._display_bPartnerId,
+          _display_productId: state._display_productId,
+        },
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const url = URL.createObjectURL(await res.blob());
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = buildReportFilename(report.id, format);
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      setExportError(ui('dynamicReportErrorGeneric'));
+    } catch (err) {
+      setExportError(ui(ERROR_KEYS[err?.code] || 'dynamicReportErrorGeneric'));
     }
     setExporting(null);
   };
 
   const fmt = (d) => (d ? formatCalendarDate(d, locale.replace('_', '-')) : '');
-  const chips = [
-    { key: 'period', label: ui('dynamicReportPeriodChip'), value: `${fmt(state.dateFrom)} – ${fmt(state.dateTo)}` },
-    orgName && { key: 'org', label: label('orgId'), value: orgName },
-    state.bPartnerId && { key: 'bp', label: label('bPartnerId'), value: state._display_bPartnerId, clear: { bPartnerId: '', _display_bPartnerId: '' } },
-    state.productId && { key: 'product', label: label('productId'), value: state._display_productId, clear: { productId: '', _display_productId: '' } },
-    reference && { key: 'compare', label: ui('dynamicReportComparedWith'), value: `${fmt(reference.fromReferenceDate)} – ${fmt(reference.toReferenceDate)}`, clear: { compare: '' } },
-    state.splitBy && { key: 'split', label: ui('dynamicReportSplitChip'), value: splitDimensions.find((d) => d.value === state.splitBy)?.label, clear: { splitBy: '' } },
-  ].filter(Boolean);
+  const chips = buildChips({ state, ui, label, fmt, orgName, reference, splitDimensions });
 
-  const errorText = error && (errorCode === 'network' ? error : ui(ERROR_KEYS[errorCode] || 'dynamicReportErrorGeneric'));
+  // The strip's badge counts what the user chose to narrow; the period and the (required) org are always on.
+  const activeFilterCount = chips.filter((c) => c.clear).length;
+  const errorText = reversed ? ui('dynamicReportErrorReversedDates') : queryErrorText(error, errorCode, ui);
 
   return (
     <div className="flex-1 min-h-0 flex flex-col" data-testid="DynamicReportView">
@@ -199,7 +287,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
               key={format}
               variant="ghost"
               className="h-9 px-3 gap-1.5 text-sm"
-              disabled={!data || exporting !== null}
+              disabled={!data || !hasRange || exporting !== null || (exportTooLong && format !== 'pdf')}
               onClick={() => exportAs(format)}
               data-testid={`DynamicReportView__export-${format}`}
             >
@@ -210,8 +298,13 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 flex">
+      <div className="flex-1 min-h-0 flex flex-col md:flex-row">
         <DynamicReportPanel
+          collapsed={panel.collapsed}
+          onToggleCollapsed={togglePanel}
+          activeFilterCount={activeFilterCount}
+          collapseRef={collapseRef}
+          expandRef={expandRef}
           state={state}
           onChange={userChange}
           onShortcut={onShortcut}
@@ -257,6 +350,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
               ))}
             </div>
 
+            {exportTooLong && <p className="text-xs text-muted-foreground mb-3" data-testid="DynamicReportView__exportTooLong">{ui('dynamicReportExportTooLong')}</p>}
             {(errorText || exportError) && (
               <p role="alert" className="text-sm text-destructive mb-3" data-testid="DynamicReportView__error">{errorText || exportError}</p>
             )}
@@ -267,14 +361,21 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
                 {kpis && <DynamicReportKpis kpis={kpis} compare={compare} data-testid="DynamicReportKpis__c51cea" />}
                 <DynamicReportTable
                   rows={shown}
-                  compare={compare}
+                  groups={groups}
+                  mode={mode}
                   expanded={expandedSet}
                   onToggle={toggleRow}
                   splitBy={state.splitBy}
                   splits={splits}
-                  onToggleSplit={toggleSplit}
-                  onOpenLedger={canOpen(LEDGER_REPORT_ID) ? setDrillAccount : null}
+                  onToggleSplit={hasRange ? toggleSplit : undefined}
+                  onOpenLedger={canOpen(LEDGER_REPORT_ID) ? openLedger : null}
                   data-testid="DynamicReportTable__c51cea" />
+                {(answered.hiddenCount > 0 || hasPartial) && (
+                  <div className="mt-2 text-xs text-muted-foreground" data-testid="DynamicReportView__periodNotes">
+                    {answered.hiddenCount > 0 && <p data-testid="DynamicReportView__hiddenNote">{ui('dynamicReportHiddenPeriods', { count: answered.hiddenCount })}</p>}
+                    {hasPartial && <p data-testid="DynamicReportView__partialNote">{ui('dynamicReportPartialPeriods')}</p>}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -282,11 +383,12 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
       </div>
       <DynamicDrillPanel
         reportTitle={title}
-        account={drillAccount}
+        account={drill?.row ?? null}
+        range={drill?.range ?? null}
         queryParams={queryParams}
         session={telemetry.session}
         canOpenEntry={canOpen(ENTRY_REPORT_ID)}
-        onClose={() => setDrillAccount(null)}
+        onClose={() => setDrill(null)}
         data-testid="DynamicDrillPanel__c51cea" />
     </div>
   );
