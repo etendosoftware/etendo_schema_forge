@@ -373,11 +373,21 @@ attachment, currency, document`. `updated` is the optimistic-lock token (`NeoDat
 - `newProduct {index, name?, categoryId?, uomId?}`: patch of `product.new = {name, categoryId, category, uomId, uom}` (`name` defaults to the line description the first time; `category`/`uom` are the names, resolved server-side in the session language and stored as display copies, ids are the truth; `null` clears). Ids must resolve (new lookups `productCategoryById`, `uomById`), else 422 `unknown_category` / `unknown_uom`. Result `product = {state:'new', id:null, candidates (kept), new}`.
 - After the operations, the recompute of 9.2.5 runs.
 
-**9.2.3 `mark-reviewed`**: after the flag, access, org and tenant checks, `processing`, `not_editable`, and the token: if the status is `READY` it answers 200 unchanged (idempotent, nothing written); if it is not `PENDING_REVIEW`: 409 `not_reviewable` `{status}`; the validation is RECOMPUTED (the stored one is not trusted) and, if not valid, 422 `not_valid` `{missing:[...]}`; otherwise `status = 'READY'`, `REVIEWED = 'Y'`, `updated` moves, `ADJUSTED` untouched, summary untouched.
+**9.2.3 `mark-reviewed`** (FINAL case table; checks in order: flag, access, org and tenant, `processing`, the token, then the status):
+
+| Row | Answer |
+|---|---|
+| valid `PENDING_REVIEW` (validation RECOMPUTED, the stored one is not trusted) | 200: `status = READY`, `REVIEWED = Y`, `updated` moves, `ADJUSTED` and the summary untouched |
+| invalid `PENDING_REVIEW` (legacy rows or a lagging status) | 422 `not_valid` with the recomputed `missing`, `updated` (the NEW token) and `documentStatus = ERROR`; the stored status moves to ERROR |
+| `ERROR` | 409 `not_reviewable` `{documentStatus}` |
+| `READY` with the current token | 200 unchanged (idempotent, nothing written); with an old token: 409 `stale_document` |
+| `CONFIRMED`, `DISCARDED`, `FOREIGN_RECEIVER` | 409 `not_editable` `{documentStatus}` |
+
+SPA on `not_valid`: adopt `updated` WITHOUT a reload, set the document status to ERROR and the validation to the answered `missing`, so the footer counter, the field errors and the "Revisar" tag agree; the error is shown with a retry that only re-reads (no write loop).
 
 **9.2.4 Document shapes** (additive over the v1 contract; version stays 1; every reader tolerates the absence):
 - line: `discount` (number percent 0-100, scale 4, optional, absent = 0); `index` stable.
-- `vendor.matchedBy` may be `manual`; `product.matchedBy` may be `manual`; `product.new = {name, categoryId, category, uomId, uom}` (all optional strings; S1's SPA already reads `product.new.category/uom` as text);
+- `vendor.matchedBy` may be `manual`; `product.matchedBy` may be `manual`; `product.new = {name, categoryId, category, uomId, uom}` (all optional strings; `category` / `uom` are NAMES resolved from the ids at read time in the request language and present ONLY when the id resolves, the SPA sends ids only, never echoes the names, and shows a committed id without a name as "Desconocido"; S1's SPA already reads `product.new.category/uom` as text);
   `vendor.extracted` gains `countryName` and keeps `country`, `email`, `phone`.
 - Validator (D8): a line with `product.state = 'new'` is complete only with a non-blank effective name (`new.name`, else the line description), quantity > 0, price >= 0, AND non-blank `new.categoryId` and `new.uomId`. Existing `new` lines
   written by the worker have no `new` block, so they report `line[i].product` until the user picks category and unit (intended).
@@ -660,7 +670,7 @@ NOT verified live:
 - MCP `etendo_action` answering 405 `actionHidden` for `discard`, `review`, `apply` and `mark-reviewed` (no MCP client reachable).
 - A discount given as an AMOUNT in the OCR.
 - The unit of measure name in the session language (`c_uom_trl` equals the English name in the test database).
-- The 422 `not_valid` of `mark-reviewed`: an invalid document is in status ERROR and answers 409 `not_reviewable` first, so 9.2.3 and 9.2.6 must be reconciled (the SPA handles both).
+- The 422 `not_valid` of `mark-reviewed` (reconciled in 9.2.3: an ERROR row answers 409 `not_reviewable`, an invalid PENDING_REVIEW row answers 422 and moves to ERROR; the SPA handles both).
 - Rows read before the discount keys were deployed.
 
 What the live run DID verify:
@@ -671,3 +681,13 @@ What the live run DID verify:
 - The `ADJUSTED` matrix (24 cases), and that nothing was created in `c_bpartner`, `m_product` or `c_invoice`.
 
 SPA fixes made after the live run: a code-less 403 on `apply` / `mark-reviewed` (the generic NEO spec gate, "Access denied to spec for current role") is mapped to `access_denied` and shown as a translated no-permission message without a retry button; at 420px and below the form pane is no longer wider than the drawer (`min-w-[min(420px,100%)]`), the footer wraps, and the new-supplier block wraps its header and its postal code / city / country row.
+
+
+## S2 contract update: validator alignment and tax by id (2026-11-16)
+
+- `validation.missing` may contain `line[i].quantity` and `line[i].unitPrice` (every line needs a numeric quantity and unit price, ANY sign, zero included); it no longer contains `amount` for a zero or negative total, nor `line[i].product` for a new product with quantity <= 0 or a negative price. A skeleton row reports `["vendor","invoiceDate","lines"]`. The SPA maps the two codes to red cells, a translated line error and the footer counter, and keeps no rule against negative / zero quantity or price (credit and return lines; the +-1e9 and scale caps stay).
+- Tax by id: `setLine {index, taxId: <id>|null}`; the server validates (active, ValidFrom <= document date or today, SOPOType P/B, tenant) and answers 422 `unknown_tax` with `error.index`; the answer gives `lines[i].tax = {state, matchedBy: 'manual', id, name, rate}` and sets the line's `taxRate` to the tax's rate. The SPA uses the purchase-invoice lines' tax selector (`purchase-invoice/lines/selectors/C_Tax_ID`, `InlineSearchCombo`), shows the tax name, keeps the effective rate `line.taxRate ?? line.tax.rate`, never sends a typed rate, and never guesses the rate of a chosen tax (shown as "…" until the answer unless the option exposes it). A new line inherits the previous line's tax by id.
+
+### Currency scale and tax mode (2026-11-16)
+
+Answers (`review`, `apply`) carry `currency = {id, isoCode, symbol, scale}` (scale = the invoice currency's StdPrecision: 0 for JPY-like currencies, 2 usually; the currency is the vendor's purchase price list currency, else the organization / client currency, stored as `document.header.currencyId`; read only in S2) and `lines[i].tax.docTaxAmount` (`D` document-based amount by rate, `L` line-based). Totals (9.4c amended): `net = round_scale(quantity x unit6)` with `scale = currency.scale`; D lines are grouped per rate and rounded once on the sum of the nets, L lines are rounded per line and summed, a rate may have a D row and an L row (ascending by rate, D before L); effective rate = `taxRate`, else `tax.rate`, scaled to 2 decimals HALF_UP before grouping; default D. Input scales: quantity 4, unit price 6, discount 4, rate 2. The shared fixture has 20 cases with an optional `scale` per case and optional `tax.docTaxAmount` per line; the SPA model test reads the whole file. The mismatch tolerance is one minimal unit of the scale. The SPA formats amounts through `formatCurrency` with the document scale as min / max fraction digits (`invoiceInboxMoney.js`); the list's total cell keeps the organization currency because the list payload has no currency.

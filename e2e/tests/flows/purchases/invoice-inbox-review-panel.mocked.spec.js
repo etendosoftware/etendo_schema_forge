@@ -7,6 +7,9 @@
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewVendor.jsx
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewLines.jsx
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewBanners.jsx
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewTotals.jsx
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxReviewModel.js
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxMoney.js
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewFooter.jsx
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/useInvoiceInboxReviewNav.js
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/useInvoiceInboxReview.js
@@ -42,7 +45,7 @@ function review(id, status = 'READY', over = {}, doc = {}) {
   return {
     id, status, errorCode: null, reviewed: false, adjusted: false, editable: true, updated: 'T0',
     fileName: `${id}.pdf`, sender: 'ana@proveedor.com', source: 'EMAIL', created: '2026-08-10T09:30:00Z',
-    invoice: null, currency: { id: 'EUR1', isoCode: 'EUR', symbol: '€' },
+    invoice: null, currency: { id: 'EUR1', isoCode: 'EUR', symbol: '€', scale: 2 },
     document: {
       header: {
         vendor: { state: 'linked', matchedBy: 'taxId', details: { name: 'ACME SL', taxId: 'B1234', city: 'Madrid' }, candidates: [], extracted: {} },
@@ -50,7 +53,7 @@ function review(id, status = 'READY', over = {}, doc = {}) {
         duplicate: { state: 'none', invoices: [], inbox: [] },
         ...headerOver,
       },
-      lines: [{ index: 0, description: 'Widget', quantity: 2, unitPrice: 50, taxRate: 21, product: { state: 'linked', matchedBy: 'exact', details: { name: 'Widget A', searchKey: 'W-1' } } }],
+      lines: [{ index: 0, description: 'Widget', quantity: 2, unitPrice: 50, taxRate: 21, tax: { state: 'resolved', matchedBy: 'rate', id: 'T21', name: 'IVA 21%', rate: 21, docTaxAmount: 'D' }, product: { state: 'linked', matchedBy: 'exact', details: { name: 'Widget A', searchKey: 'W-1' } } }],
       validation: { missing: [] },
       ...docRest,
     },
@@ -66,6 +69,11 @@ function matches(rowData, criteria) {
 }
 
 // ── Fake of `apply` / `mark-reviewed` (independent of the SPA's optimistic copy) ─────────────────
+
+/** The tax selector's catalogue (`C_Tax_ID`): the options carry no rate, as the real selector may not expose one. */
+const TAXES = {
+  T21: { name: 'IVA 21%', rate: 21 }, T10: { name: 'IVA 10%', rate: 10 }, T4: { name: 'IVA 4%', rate: 4 },
+};
 
 const refusal = (status, code, extra = {}) => ({ status, body: { error: { code, status, ...extra } } });
 
@@ -87,6 +95,8 @@ function missingOf(doc) {
       || (product.state === 'new' && String(fresh.name ?? l.description ?? '').trim() && fresh.categoryId && fresh.uomId);
     if (!productOk) missing.push(`line[${l.index}].product`);
     if (l.taxRate == null) missing.push(`line[${l.index}].tax`);
+    if (l.quantity == null) missing.push(`line[${l.index}].quantity`);
+    if (l.unitPrice == null) missing.push(`line[${l.index}].unitPrice`);
   });
   return missing;
 }
@@ -104,6 +114,11 @@ function applyOp(doc, op, catalog) {
       const l = lineAt(op.index);
       for (const k of ['description', 'quantity', 'unitPrice']) if (k in op) l[k] = op[k];
       if ('taxRate' in op) { l.taxRate = op.taxRate; l.tax = op.taxRate == null ? null : { state: 'resolved', rate: op.taxRate }; }
+      if ('taxId' in op) {
+        const chosen = TAXES[op.taxId];
+        l.taxRate = chosen.rate;
+        l.tax = { state: 'resolved', matchedBy: 'manual', id: op.taxId, name: chosen.name, rate: chosen.rate, docTaxAmount: chosen.docTaxAmount ?? 'D' };
+      }
       if ('discount' in op) { if (!op.discount) delete l.discount; else l.discount = op.discount; }
       break;
     }
@@ -184,7 +199,13 @@ async function handleWrite(state, id, kind, body) {
   if (doc.status === 'READY') return { status: 200, body: doc };
   if (doc.status !== 'PENDING_REVIEW') return refusal(409, 'not_reviewable', { documentStatus: doc.status });
   const missing = missingOf(doc.document);
-  if (missing.length) return refusal(422, 'not_valid', { missing });
+  if (missing.length) {
+    // The server stores the verdict: the row moves to ERROR with a NEW token, both answered in the refusal.
+    const stored = { ...structuredClone(doc), status: 'ERROR', errorCode: 'MISSING_FIELDS', updated: `T${++state.tokens}` };
+    stored.document.validation = { missing };
+    state.docs[id] = stored;
+    return refusal(422, 'not_valid', { missing, documentStatus: 'ERROR', updated: stored.updated });
+  }
   const next = { ...structuredClone(doc), status: 'READY', reviewed: true, updated: `T${++state.tokens}` };
   state.docs[id] = next;
   return { status: 200, body: next };
@@ -195,12 +216,14 @@ const CATALOG = {
   products: [{ id: 'P9', name: 'Tornillo M8', searchKey: 'TM8' }],
   categories: [{ id: 'C1', name: 'Ferretería' }, { id: 'C2', name: 'Oficina' }],
   uoms: [{ id: 'U1', name: 'Caja' }, { id: 'U2', name: 'Unidad' }],
+  taxes: Object.entries(TAXES).map(([id, tax]) => ({ id, name: tax.name })),
 };
-const SELECTOR_LISTS = { C_BPartner_ID: 'vendors', M_Product_ID: 'products', M_Product_Category_ID: 'categories', C_UOM_ID: 'uoms', C_Country_ID: 'categories' };
+const SELECTOR_LISTS = { C_Tax_ID: 'taxes', C_BPartner_ID: 'vendors', M_Product_ID: 'products', M_Product_Category_ID: 'categories', C_UOM_ID: 'uoms', C_Country_ID: 'categories' };
 
 async function installSelectors(page, state) {
   await page.route('**/selectors/**', async (route) => {
     const url = new URL(route.request().url());
+    (state.selectorUrls ??= []).push(url.href);
     const column = url.pathname.split('/selectors/')[1];
     const q = (url.searchParams.get('q') ?? '').toLowerCase();
     const items = (state.catalog[SELECTOR_LISTS[column]] ?? [])
@@ -779,5 +802,197 @@ test.describe('Invoice Inbox — review panel editing (S2)', () => {
     await typeInto(page, 'invoice-inbox-review-line-0-discount', '5');
     await expect(tid(page, 'invoice-inbox-review-save-state')).toHaveAttribute('data-state', 'saved');
     expect(ops(state)).toEqual([{ op: 'setLine', index: 0, discount: 5 }]);
+  });
+});
+
+// ── ETP-6050 S2 addenda: tax selector, currency scale, validator codes, refusals ───────────────────
+
+/**
+ * Replaces the text of a cell whose focused (plain) text differs from its display text (the price:
+ * "100,00 €" becomes "100" on focus). `fill` selects the DISPLAY text and the swap on focus moves the
+ * caret, so the typed text would land inside the plain one; select what is there once focused instead.
+ */
+async function retype(page, testId, text) {
+  const input = tid(page, testId);
+  await input.click();
+  await input.press('ControlOrMeta+a');
+  await input.pressSequentially(text);
+  await input.blur();
+}
+
+const lineOf = (over = {}) => ({
+  index: 0, description: 'Widget', quantity: 2, unitPrice: 50, taxRate: 21,
+  tax: { state: 'resolved', matchedBy: 'rate', id: 'T21', name: 'IVA 21%', rate: 21, docTaxAmount: 'D' },
+  product: { state: 'linked', matchedBy: 'exact', details: { name: 'Widget A', searchKey: 'W-1' } },
+  ...over,
+});
+
+test.describe('Invoice Inbox — review panel: tax, currency scale and validator codes (S2 addenda)', () => {
+  let state;
+  test.beforeEach(() => { state = { rows: seedRows() }; });
+
+  test('picking a tax by id: the rate shows "…" until the server answers, then the VAT row and the total follow', async ({ page }) => {
+    await openDoc(page, state, 'rev1');
+    await expect(tid(page, 'invoice-inbox-review-line-0-tax')).toHaveValue('21%');
+    let release;
+    state.hold = new Promise((resolve) => { release = resolve; });
+    await tid(page, 'invoice-inbox-review-line-0-tax-picker').getByTestId('inline-add-field-inbox-line-0-tax-chip').click();
+    await tid(page, 'inline-add-option-inbox-line-0-tax-T10').click();
+    await expect(tid(page, 'invoice-inbox-review-line-0-tax')).toHaveValue('…');
+    await expect(tid(page, 'invoice-inbox-review-total-tax-21')).toHaveCount(0);
+    state.hold = null;
+    release();
+    await expect(tid(page, 'invoice-inbox-review-line-0-tax')).toHaveValue('10%');
+    await expect(tid(page, 'invoice-inbox-review-total-tax-10')).toContainText('10,00');
+    await expect(tid(page, 'invoice-inbox-review-total')).toContainText('110,00');
+    expect(ops(state)).toEqual([{ op: 'setLine', index: 0, taxId: 'T10' }]);
+    // The selector was asked for the purchase side and the document date.
+    const url = new URL(state.selectorUrls.find((u) => u.includes('C_Tax_ID')));
+    expect(url.searchParams.get('isSOTrx')).toBe('N');
+    expect(url.searchParams.get('DateInvoiced')).toBeTruthy();
+    // Re-picking the tax already chosen writes nothing.
+    await tid(page, 'invoice-inbox-review-line-0-tax-picker').getByTestId('inline-add-field-inbox-line-0-tax-chip').click();
+    await tid(page, 'inline-add-option-inbox-line-0-tax-T10').click();
+    await page.waitForTimeout(300);
+    expect(ops(state)).toHaveLength(1);
+  });
+
+  test('a new line inherits the previous line tax by id: addLine, then setLine {taxId}', async ({ page }) => {
+    await openDoc(page, state, 'rev1');
+    await tid(page, 'invoice-inbox-review-add-line').click();
+    await expect.poll(() => ops(state).length).toBe(2);
+    expect(ops(state)).toEqual([{ op: 'addLine' }, { op: 'setLine', index: 1, taxId: 'T21' }]);
+    await expect(tid(page, 'invoice-inbox-review-line-1-tax')).toHaveValue('21%');
+  });
+
+  test('a USD document (2 decimals) and a JPY one (0 decimals) format lines and totals with their scale; the badge is read-only', async ({ page }) => {
+    state.rows = [row('usd1', 'PENDING_REVIEW'), row('jpy1', 'PENDING_REVIEW')];
+    state.reviews = {
+      usd1: review('usd1', 'PENDING_REVIEW', { currency: { id: 'USD1', isoCode: 'USD', symbol: '$', scale: 2 } }, {
+        lines: [lineOf({ quantity: 3, unitPrice: 1234.5 })],
+      }),
+      jpy1: review('jpy1', 'PENDING_REVIEW', { currency: { id: 'JPY1', isoCode: 'JPY', symbol: '¥', scale: 0 } }, {
+        lines: [lineOf({ quantity: 3, unitPrice: 1234 })],
+      }),
+    };
+    await openDoc(page, state, 'usd1');
+    await expect(tid(page, 'currency-rate-readonly')).toContainText('USD');
+    await expect(tid(page, 'invoice-inbox-review-line-0-amount')).toContainText('3.703,50');
+    await expect(tid(page, 'invoice-inbox-review-total')).toContainText('4.481,24');
+    await page.keyboard.press('Escape');
+    await expect(drawer(page)).toHaveCount(0);
+    await rowOf(page, 'jpy1').getByTestId('invoice-inbox-document-jpy1').click();
+    await expect(tid(page, 'invoice-inbox-review-title')).toHaveText('jpy1.pdf');
+    await expect(tid(page, 'currency-rate-readonly')).toContainText('JPY');
+    // 3 x 1.234 = 3.702; VAT 21 % = 777,42 -> 777; total 4.479: whole units only.
+    await expect(tid(page, 'invoice-inbox-review-line-0-amount')).toContainText('3.702');
+    await expect(tid(page, 'invoice-inbox-review-line-0-amount')).not.toContainText(',');
+    await expect(tid(page, 'invoice-inbox-review-total-tax-21')).toContainText('777');
+    await expect(tid(page, 'invoice-inbox-review-total')).toContainText('4.479');
+    await expect(tid(page, 'invoice-inbox-review-total')).not.toContainText(',');
+    await typeInto(page, 'invoice-inbox-review-line-0-quantity', '4');
+    await expect(tid(page, 'invoice-inbox-review-total')).toContainText('5.973');
+    await expect(tid(page, 'invoice-inbox-review-save-state')).toHaveAttribute('data-state', 'saved');
+    await expect(tid(page, 'invoice-inbox-review-total')).toContainText('5.973');
+  });
+
+  test('a line-based (L) tax document shows its own "por línea" row next to the document-based one', async ({ page }) => {
+    state.reviews = {
+      rev1: review('rev1', 'PENDING_REVIEW', {}, {
+        lines: [
+          lineOf({ index: 0, quantity: 1, unitPrice: 100, taxRate: 10, tax: { state: 'resolved', id: 'T10', name: 'IVA 10%', rate: 10, docTaxAmount: 'D' } }),
+          lineOf({ index: 1, description: 'Servicio', quantity: 1, unitPrice: 50, taxRate: 10, tax: { state: 'resolved', id: 'T10', name: 'IVA 10%', rate: 10, docTaxAmount: 'L' } }),
+        ],
+      }),
+    };
+    await openDoc(page, state, 'rev1');
+    await expect(tid(page, 'invoice-inbox-review-total-tax-10')).toContainText('10,00');
+    await expect(tid(page, 'invoice-inbox-review-total-tax-10-L')).toContainText('5,00');
+    await expect(tid(page, 'invoice-inbox-review-total-tax-10-L-label')).toContainText('por línea');
+    await expect(tid(page, 'invoice-inbox-review-total')).toContainText('165,00');
+  });
+
+  test('a negative line (credit) keeps its sign in the line and the totals, and does not block Marcar como revisada', async ({ page }) => {
+    state.reviews = {
+      rev1: review('rev1', 'PENDING_REVIEW', {}, {
+        lines: [lineOf({ quantity: -1, unitPrice: 100 })],
+      }),
+    };
+    await openDoc(page, state, 'rev1');
+    await expect(tid(page, 'invoice-inbox-review-line-0-amount')).toContainText('-100,00');
+    await expect(tid(page, 'invoice-inbox-review-total')).toContainText('-121,00');
+    await expect(tid(page, 'invoice-inbox-review-line-0-quantity')).not.toHaveAttribute('aria-invalid', 'true');
+    await expect(tid(page, 'invoice-inbox-review-mark-reviewed')).toBeEnabled();
+    await retype(page, 'invoice-inbox-review-line-0-price', '-5');
+    await expect.poll(() => ops(state).length).toBe(1);
+    expect(ops(state)).toEqual([{ op: 'setLine', index: 0, unitPrice: -5 }]);
+    await expect(tid(page, 'invoice-inbox-review-line-0-amount')).toContainText('5,00');
+  });
+
+  test('a missing quantity is a red cell, counted in the footer and under the table, until it is filled', async ({ page }) => {
+    state.reviews = {
+      rev1: review('rev1', 'ERROR', { errorCode: 'MISSING_FIELDS' }, {
+        lines: [lineOf({ quantity: null })],
+        validation: { missing: ['line[0].quantity'] },
+      }),
+    };
+    await openDoc(page, state, 'rev1');
+    await expect(tid(page, 'invoice-inbox-review-line-0-quantity')).toHaveAttribute('aria-invalid', 'true');
+    await expect(tid(page, 'invoice-inbox-review-lines-error')).toContainText('Indica la cantidad de todas las líneas');
+    await expect(tid(page, 'invoice-inbox-review-pending')).toContainText('1 obligatorio pendiente');
+    await expect(tid(page, 'invoice-inbox-review-mark-reviewed')).toBeDisabled();
+    await expect(tid(page, 'invoice-inbox-review-total-base')).toContainText('0,00');
+    await typeInto(page, 'invoice-inbox-review-line-0-quantity', '3');
+    await expect(tid(page, 'invoice-inbox-review-line-0-quantity')).not.toHaveAttribute('aria-invalid', 'true');
+    await expect(tid(page, 'invoice-inbox-review-lines-error')).toHaveCount(0);
+    await expect(tid(page, 'invoice-inbox-review-pending')).toHaveText('');
+    await expect(tid(page, 'invoice-inbox-review-mark-reviewed')).toBeEnabled();
+    await expect(tid(page, 'invoice-inbox-review-total-base')).toContainText('150,00');
+    expect(ops(state)).toEqual([{ op: 'setLine', index: 0, quantity: 3 }]);
+  });
+
+  test('mark as reviewed answered 422 not_valid: the codes and the new token are adopted without a re-read, and fixing it then works', async ({ page }) => {
+    // A stale verdict: the stored one says valid, the server recomputes and finds the quantity missing.
+    state.reviews = {
+      rev1: review('rev1', 'PENDING_REVIEW', {}, { lines: [lineOf({ quantity: null })], validation: { missing: [] } }),
+    };
+    await openDoc(page, state, 'rev1');
+    const readsBefore = state.reviewReads.length;
+    await tid(page, 'invoice-inbox-review-mark-reviewed').click();
+    await expect(tid(page, 'invoice-inbox-review-save-error')).toContainText('Faltan datos obligatorios');
+    await expect(tid(page, 'invoice-inbox-review-line-0-quantity')).toHaveAttribute('aria-invalid', 'true');
+    await expect(tid(page, 'invoice-inbox-review-pending')).toContainText('1 obligatorio pendiente');
+    await expect(tid(page, 'invoice-inbox-review-mark-reviewed')).toBeDisabled();
+    expect(state.reviewReads.length).toBe(readsBefore);
+    const marks = () => (state.applied ?? []).filter((w) => w.kind === 'mark-reviewed');
+    expect(marks()).toHaveLength(1);
+    expect(marks()[0].status).toBe(422);
+    // The fix carries the NEW token the refusal answered (T1), not the stale one.
+    await typeInto(page, 'invoice-inbox-review-line-0-quantity', '2');
+    await expect.poll(() => applied(state).length).toBe(1);
+    expect(applied(state)[0].body.updated).toBe('T1');
+    await expect(tid(page, 'invoice-inbox-review-mark-reviewed')).toBeEnabled();
+    await tid(page, 'invoice-inbox-review-mark-reviewed').click();
+    await expect(tid(page, 'invoice-inbox-review-reviewed')).toHaveText('Revisada por ti');
+    expect(marks()).toHaveLength(2);
+  });
+
+  test('a 403 without a code on a save reads "no permission", offers no Reintentar, and the value goes back', async ({ page }) => {
+    await openDoc(page, state, 'rev1');
+    state.refuse = () => ({ status: 403, body: {} });
+    await typeInto(page, 'invoice-inbox-review-line-0-quantity', '9');
+    await expect(tid(page, 'invoice-inbox-review-save-state')).toHaveAttribute('data-state', 'error');
+    await expect(tid(page, 'invoice-inbox-review-save-error')).toContainText('No tienes permiso para editar documentos de la bandeja');
+    await expect(tid(page, 'invoice-inbox-review-save-retry')).toHaveCount(0);
+    await expect(tid(page, 'invoice-inbox-review-line-0-quantity')).toHaveValue('2');
+  });
+
+  test('unknown_tax: the pick goes back to the previous tax and the translated reason shows', async ({ page }) => {
+    await openDoc(page, state, 'rev1');
+    state.refuse = () => refusal(422, 'unknown_tax', { field: 'taxId', index: 0 });
+    await tid(page, 'invoice-inbox-review-line-0-tax-picker').getByTestId('inline-add-field-inbox-line-0-tax-chip').click();
+    await tid(page, 'inline-add-option-inbox-line-0-tax-T4').click();
+    await expect(tid(page, 'invoice-inbox-review-save-error')).toContainText('El impuesto elegido no está disponible para esta línea');
+    await expect(tid(page, 'invoice-inbox-review-line-0-tax')).toHaveValue('21%');
   });
 });

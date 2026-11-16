@@ -1922,7 +1922,7 @@
             "root": "frontend",
             "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/invoiceInboxReviewModel.test.js",
             "expected": true,
-            "note": "ETP-6050 S1 (tester-functional, node --test): computeTotals per rate and cents, totalMismatch (1 cent no warning, 2 cents yes, only printed), documentTotal, missingSet/lineKey/unresolvedProductCount, vendorView/productView/joinMeta/extractedCountry, isReviewReadOnly/isOpenableRow, reviewBanners per status and error code, reviewNeighbors skipping PROCESSING, zoom range/step/initial fit. ETP-6050 S2: the shared totals fixture (13 cases, same file the backend reads), toScaled/divRoundHalfAway/normalizeNumber/sameNumber, buildOp and applyOperationLocally for the eight operations, applyPendingToReview, newProductComplete, saveErrorKey/isReloadCode, canMarkReviewed."
+            "note": "ETP-6050 S1 (tester-functional, node --test): computeTotals per rate and cents, totalMismatch (1 cent no warning, 2 cents yes, only printed), documentTotal, missingSet/lineKey/unresolvedProductCount, vendorView/productView/joinMeta/extractedCountry, isReviewReadOnly/isOpenableRow, reviewBanners per status and error code, reviewNeighbors skipping PROCESSING, zoom range/step/initial fit. ETP-6050 S2: the shared totals fixture (13 cases, same file the backend reads), toScaled/divRoundHalfAway/normalizeNumber/sameNumber, buildOp and applyOperationLocally for the eight operations, applyPendingToReview, newProductComplete, saveErrorKey/isReloadCode, canMarkReviewed. ETP-6050 S2 addenda: totals edge cases (missing sides count for nothing, zero, negative price and quantity, credit document, discount out of range as 0, rounding at the scale boundary, 6-decimal unit price, D and L rows grouping and order, rate rounded to 2 decimals), scale 0 and 3 through documentTotal and totalMismatch, currencyScale bounds, line[i].quantity / unitPrice codes (exact match, footer counter, canMarkReviewed), input scales, tax by id optimistic copy (rate only when exposed, pending otherwise, 0% is real, inheritance on addLine with and without a tax id), unknown_tax and access_denied mapping, product.new without a resolved name."
           },
           {
             "root": "frontend",
@@ -1946,13 +1946,13 @@
             "root": "frontend",
             "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/InvoiceInboxReviewEditing.vitest.jsx",
             "expected": true,
-            "note": "ETP-6050 S2 (tester-functional): write flows through the drawer against a stateful fake of apply / mark-reviewed: autosave (700 ms debounce, blur, Enter, invalid value reverts, no write without change), Guardando/Guardado live region, discount parsing under a comma locale and live totals, add/remove line with stable index, stacked layout below 460 px, supplier linked/ambiguous/new/none and product ambiguous/new flows with category and unit pickers opening on the committed value, Marcar como revisada rules, read-only states, 409/422/network refusals, close/prev/next/discard waiting for the saves. Ambiguous product -> Ninguno · crear producto nuevo keeps the panel with the required category and unit open (the earlier known-red case is green since the source fix)."
+            "note": "ETP-6050 S2 (tester-functional): write flows through the drawer against a stateful fake of apply / mark-reviewed: autosave (700 ms debounce, blur, Enter, invalid value reverts, no write without change), Guardando/Guardado live region, discount parsing under a comma locale and live totals, add/remove line with stable index, stacked layout below 460 px, supplier linked/ambiguous/new/none and product ambiguous/new flows with category and unit pickers opening on the committed value, Marcar como revisada rules, read-only states, 409/422/network refusals, close/prev/next/discard waiting for the saves. Ambiguous product -> Ninguno · crear producto nuevo keeps the panel with the required category and unit open (the earlier known-red case is green since the source fix). ETP-6050 S2 addenda: tax selector variants (option with and without rate, 0%, empty list, failing selector, supplier location and DateInvoiced in the query, unknown_tax rollback, missing tax red, read-only documents offer no picker, addLine inheritance with and without a tax id), currency scale 0 and 3 end to end (lines, price input, totals card, mismatch tolerance, read-only list, missing currency falls back to 2, read-only badge), price and quantity precision (6 and 4 decimals, rounding at the boundary), any sign / zero / missing values and the red cells, credit document, D and L total rows, mark-reviewed not_valid adoption without a re-read, code-less 403 without Reintentar, new product with unresolved names."
           },
           {
             "root": "frontend",
             "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/useInvoiceInboxReviewEditor.vitest.jsx",
             "expected": true,
-            "note": "ETP-6050 S2 (tester-functional): editor hook: pending overlay then server replace, one write in flight, same-key coalescing with token refresh, unique keys for structural operations, 409 reload + notice, 422 and network rollback, failed write discards the queue behind it, flush true/false and input flushers, no write after unmount, markReviewed flushes first and handles not_valid / not_reviewable / network, beforeunload guard, retry."
+            "note": "ETP-6050 S2 (tester-functional): editor hook: pending overlay then server replace, one write in flight, same-key coalescing with token refresh, unique keys for structural operations, 409 reload + notice, 422 and network rollback, failed write discards the queue behind it, flush true/false and input flushers, no write after unmount, markReviewed flushes first and handles not_valid / not_reviewable / network, beforeunload guard, retry. ETP-6050 S2 addenda: markReviewed not_valid adopts the recomputed missing, the ERROR status and the new token with no reload and no loop (and keeps the previous ones when the refusal carries none), code-less 403 reads access_denied with no notice, unknown_tax rolls the tax pick back."
           },
           {
             "root": "frontend",
@@ -1962,9 +1962,15 @@
           },
           {
             "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/invoiceInboxMoney.vitest.js",
+            "expected": true,
+            "note": "ETP-6050 S2 (tester-functional): formatMoney shows exactly the currency scale as min and max fraction digits (0, 2, 3), pads and rounds, keeps the sign and groups big numbers, maxDigits above the scale shows up to 6 decimals for unit prices and never fewer than the scale, always through the canonical formatCurrency; under es-style and en-style instance separators and a left-side symbol."
+          },
+          {
+            "root": "frontend",
             "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/invoiceInboxLocales.test.js",
             "expected": true,
-            "note": "ETP-6050 (tester-functional, node --test): the invoiceInbox* keys the sources use exist in en_US, es_ES and es_AR with the same placeholders; S2 adds the 31 editing / save / resolution keys and checks every refusal code maps to a defined key."
+            "note": "ETP-6050 (tester-functional, node --test): the invoiceInbox* keys the sources use exist in en_US, es_ES and es_AR with the same placeholders; S2 adds the 31 editing / save / resolution keys and checks every refusal code maps to a defined key. S2 addenda: the 6 keys of the tax selector and the line codes exist in the three locales, are read by the sources, keep placeholders ({rate}, {base} on the per-line tax row), es_ES has no voseo and es_AR does in the two missing-value errors."
           },
           {
             "root": "frontend",
@@ -1990,7 +1996,7 @@
             "root": "frontend",
             "path": "e2e/tests/flows/purchases/invoice-inbox-review-panel.mocked.spec.js",
             "expected": true,
-            "note": "ETP-6050 S1 (tester-functional, mocked): open from row and pencil, prev/next across a filter and past 50 of 130 rows, PROCESSING skipped, Escape/outside/X close with focus return, discard from the footer, main states from mocked review answers, no write request. ETP-6050 S2: edit and save with the token in the body, discount and live totals, add/remove lines, ambiguous and new supplier, supplier search under the modal, ambiguous and new product with pickers, mark as reviewed and back to pending after an edit, 409 reload notice, 422 rollback, close and next waiting for a save, read-only states, 768 px stacked layout."
+            "note": "ETP-6050 S1 (tester-functional, mocked): open from row and pencil, prev/next across a filter and past 50 of 130 rows, PROCESSING skipped, Escape/outside/X close with focus return, discard from the footer, main states from mocked review answers, no write request. ETP-6050 S2: edit and save with the token in the body, discount and live totals, add/remove lines, ambiguous and new supplier, supplier search under the modal, ambiguous and new product with pickers, mark as reviewed and back to pending after an edit, 409 reload notice, 422 rollback, close and next waiting for a save, read-only states, 768 px stacked layout. ETP-6050 S2 addenda: pick a tax by id (rate '…' until the server answers, VAT row and total follow, selector asked with isSOTrx and DateInvoiced, re-pick writes nothing), new line inherits the tax by id, USD (2 decimals) and JPY (0 decimals) documents with the read-only badge, a line-based tax document with its own row, a negative line, a missing quantity red cell until filled, mark-reviewed 422 not_valid adopted without a re-read and fixed with the new token, code-less 403 with no retry, unknown_tax rollback."
           }
         ]
       },

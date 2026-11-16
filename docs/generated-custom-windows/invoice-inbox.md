@@ -382,9 +382,10 @@ scrolls horizontally; the numeric line cells keep the design widths and carry th
   - Lines: Descripción | Cant. | Precio | **Dto. %** | IVA | Importe | trash, grid
     `minmax(0,1fr) 54 74 52 56 80 30` (description 150px at the 560px pane). Below 460px of inner width
     (ResizeObserver) each line stacks: description + trash, then the five numbers in a row with small
-    visible labels (the header row is hidden). Numeric cells show the formatted value and, while focused,
+    visible labels (the header row is hidden). The VAT cell is a READ-ONLY display of the effective rate (`taxRate`, else the resolved tax's `rate`); the tax is
+    CHOSEN BY ID with a selector under the line (see below), never typed. Numeric cells show the formatted value and, while focused,
     the plain number (`formatPlainDecimal`, parsed with `parseLocaleNumber`; bounds and decimals mirror the
-    backend: quantity / price 4 decimals, discount 0-100 with 4, VAT 0-100 with 2). The amount is
+    backend: quantity 4 decimals, unit price 6, discount 0-100 with 4, VAT 0-100 with 2; the discount is shown with up to 4 decimals, trailing zeros trimmed and never padded: `10%`, `12,3457%`, in the cell idle and focused and in the read-only list). The amount is
     `lineAmount`: `round2(quantity x round6(price x (1 - discount/100)))`, exact BigInt arithmetic shared with
     the backend through `tools/app-shell/__tests__/fixtures/invoice-inbox-totals.json`. The effective VAT
     rate of a line is its `taxRate`, else the resolved tax's `rate`, rounded HALF_UP to 2 decimals before the
@@ -393,16 +394,49 @@ scrolls horizontally; the numeric line cells keep the design widths and carry th
     flow and the MCP OCR tools ignore the discount, so discounted lines may show at the gross printed price there. "Añadir línea" appends
     a line (the server gives it the previous line's tax rate, else the supplier's default; the new description
     gets focus); the trash removes a line at once (no confirmation, no undo). Line `index` is a stable id.
+  - Tax by id: each line has a tax selector next to its product chip, the SAME selector the purchase-invoice lines
+    use (`purchase-invoice/lines/selectors/C_Tax_ID` through the shared `InlineSearchCombo`, opening on the committed
+    tax; context: `isSOTrx=N`, `DateInvoiced` from the document date, `C_BPartner_Location_ID` from the supplier's
+    address when known). Picking one sends `setLine {index, taxId}`; the server validates it (active, valid at the
+    document date, purchase side, tenant) and answers `lines[i].tax = {state, matchedBy: 'manual', id, name, rate}`
+    with the line's rate set to the tax's; 422 `unknown_tax` shows a translated message. The label is the tax name
+    (the rate when no name). The optimistic view uses the option's `rate` only if the selector exposes it; otherwise the
+    VAT cell shows "…" until the answer (the rate is never guessed). Re-picking the same tax writes nothing. A new line
+    inherits the previous line's tax by id (`addLine` then `setLine {taxId}`) when that tax has an id, else the server
+    default. A typed rate is never sent; the printed OCR rate is not echoed back.
+  - Quantity and price may be any sign (negative = credit / return line) or zero; a line lacking either is reported by
+    the server as `line[i].quantity` / `line[i].unitPrice`: the cell is red, the red line under the table says "Indica la
+    cantidad / el precio de todas las líneas" and the footer counter counts it. An empty price shows empty, not 0.
+    Totals, the mismatch banner and the signs go through `formatCurrency` / `formatGroupedNumber`.
+  - Currency and totals (ETP-6050 S2): `review.currency = {id, isoCode, symbol, scale}` (the vendor's purchase price
+    list currency, else the organization's; read only, shown with the shared `CurrencyRatePicker` in the header
+    section). `scale` (the currency's StdPrecision: 0 for JPY-like, 2 usually; 2 when absent) drives EVERY amount of
+    the panel: `formatMoney` (`invoiceInboxMoney.js`) calls the canonical `formatCurrency` with that scale as min / max
+    fraction digits (the global `formatCurrency` is untouched), in the lines' amounts, the totals card, the mismatch
+    banner and the compact read-only list; unit prices show up to 6 decimals (at least the scale). The mismatch
+    tolerance is ONE minimal unit of the currency. The totals rule is shared with the backend and the fixture
+    (`invoiceInboxReviewModel.js`, `computeTotals(lines, scale)`): `unit6 = round6(price x (1 - d/100))`,
+    `net = round_scale(quantity x unit6)`; a tax whose `tax.docTaxAmount` is `D` (default) is rounded ONCE per rate on the
+    sum of the nets, one that is `L` is rounded per line and summed; a rate may have both a D row and an L row (ascending
+    by rate, D before L; the L row reads "IVA {rate}% por línea s/ {base}"); the effective rate is `taxRate`, else
+    `tax.rate`, rounded HALF_UP to 2 decimals before grouping; BigInt only. Input scales: quantity 4, unit price 6,
+    discount 4, rate 2. The LIST's total cell still uses the organization currency: the list payload carries no
+    currency of its own.
   - Supplier: "Cambiar" (linked) / "Buscar existente" (new) / the search (none, ambiguous) use the
     purchase-invoice vendor selector (`isSOTrx=N`, `isVendor=Y`) through `EntityPicker` (the shared
     `InlineSearchCombo`); candidates are live radios plus "Ninguno · crear proveedor nuevo" (`newVendor`
     without fields); a NEW supplier's fields (name, NIF, address, postal code, city, country picker, e-mail,
     phone) are editable and saved as `newVendor {fields}` into `vendor.extracted`.
   - Product per line: candidates, search (purchase-invoice line product selector), "Crear producto nuevo" and,
-    for a new product, name plus category and unit pickers (`product` spec selectors, opening on the committed
+    for a new product, name plus category and unit pickers (only ids are sent; the names come back resolved from the ids in the request language and only when the id resolves, so a committed id without a name shows "Desconocido" and stays selected) (`product` spec selectors, opening on the committed
     value) saved as `newProduct`; a new product needs category and unit to be complete.
   - Footer: the counter comes from the server's `validation`; "Marcar como revisada" is enabled only on a
-    valid PENDING_REVIEW document with nothing saving (`mark-reviewed`, flushes first); a READY document
+    valid PENDING_REVIEW document with nothing saving (`mark-reviewed`, flushes first); the answers are: valid PENDING_REVIEW -> READY (`REVIEWED = Y`);
+    invalid PENDING_REVIEW (legacy rows or a lagging status) -> 422 `not_valid` with the recomputed `missing`,
+    the new `updated` token and `documentStatus` ERROR (the panel adopts all three without a reload, so the
+    counter, the field errors and the "Revisar" tag show what is missing); ERROR -> 409 `not_reviewable`;
+    READY with the current token -> 200 unchanged (old token -> 409 `stale_document`); CONFIRMED / DISCARDED /
+    FOREIGN_RECEIVER -> 409 `not_editable`; a READY document
     shows "Revisada por ti" and an edit sends it back to PENDING_REVIEW; "Confirmar factura" stays disabled
     ("Próximamente", ETP-6051). CONFIRMED / DISCARDED / FOREIGN_RECEIVER (`editable: false`) stay read only.
 - **Read errors** (`useInvoiceInboxReview.js`): 409 `processing`, `not_found`, `feature_disabled`,
@@ -508,7 +542,7 @@ Review panel (prefix `invoice-inbox-review-`): `-drawer`, `-veil`, `-header`, `-
 `-invoice-no`, `-invoice-date` (+ `-tag`, `-error`, `-icon`, `-raw`, `-control`; each field also `…-field`), the
 currency picker (`field-currency`, `currency-rate-readonly`); lines: `-lines`, `-lines-title`,
 `-lines-head`, `-lines-list`, `-lines-error`, `-line-{i}`,
-`-line-{i}-{description|quantity|price|discount|tax|amount|detail|product|product-tag|product-name|panel|candidates|in-document|candidate-{id}|likely|none-option|search|create-new|new-product|new-name|new-category|new-uom|new-error}`,
+`-line-{i}-{description|quantity|price|discount|tax|tax-picker|tax-name|amount|detail|product|product-tag|product-name|panel|candidates|in-document|candidate-{id}|likely|none-option|search|create-new|new-product|new-name|new-category|new-uom|new-error}`,
 `-line-delete-{i}`, `-add-line`; totals: `-totals`, `-total-base`,
 `-total-tax-{rate}`, `-total`, `-total-label`; footer: `-footer`, `-discard`, `-pending`,
 `-reviewed`, `-mark-reviewed`, `-confirm`.
