@@ -2,6 +2,13 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { track } from '@/lib/observability.js';
 import { OBSERVABILITY_EVENTS, buildObservabilityEvent } from '@/lib/observability/events.js';
 import { startTiming } from '@/lib/observability/timing.js';
+import { getSessionIdentity } from '@/lib/sessionIdentity.js';
+
+// Read per event, not memoized: the identity may resolve after the report mounts (ETP-5808).
+const accountProps = () => {
+  const { clientId } = getSessionIdentity();
+  return clientId ? { account_id: clientId } : {};
+};
 
 export const REPORT_EVENTS = Object.freeze({
   OPENED: OBSERVABILITY_EVENTS.REPORT_OPENED,
@@ -12,13 +19,13 @@ export const REPORT_EVENTS = Object.freeze({
 
 /** An event with no duration. Telemetry never breaks the screen. */
 export function trackReportEvent(event, properties) {
-  const { name, properties: safe } = buildObservabilityEvent(event, properties);
+  const { name, properties: safe } = buildObservabilityEvent(event, { ...accountProps(), ...properties });
   Promise.resolve(track(name, safe)).catch(() => {});
 }
 
 /** Starts the clock; the returned `stop(extra)` emits the event with `durationMs`, once. */
 export function startReportTiming(event, properties) {
-  const stop = startTiming(event, { properties });
+  const stop = startTiming(event, { properties: { ...accountProps(), ...properties } });
   return (extra) => { Promise.resolve(stop(extra)).catch(() => {}); };
 }
 
