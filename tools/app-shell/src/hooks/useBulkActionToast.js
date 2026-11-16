@@ -179,10 +179,13 @@ function failureListing(failed, ui) {
   }
   const entries = [...groups];
   const lines = entries.slice(0, MAX_REASON_LINES).map(([reason, labels]) => {
-    const shown = labels.filter(Boolean).slice(0, MAX_LABELS_PER_LINE).map((l) => clip(String(l), MAX_LABEL_LENGTH));
+    const shown = labels.filter(Boolean)
+      .slice(0, MAX_LABELS_PER_LINE)
+      .map((l) => clip(String(l), MAX_LABEL_LENGTH));
     if (shown.length === 0) return reason;
     const rest = labels.length - shown.length;
-    return `${shown.join(', ')}${rest > 0 ? ` +${rest}` : ''} — ${reason}`;
+    const more = rest > 0 ? ' +' + rest : '';
+    return `${shown.join(', ')}${more} — ${reason}`;
   });
   const hidden = entries.slice(MAX_REASON_LINES).reduce((n, [, labels]) => n + labels.length, 0);
   if (hidden > 0) lines.push(ui('bulkFailuresMore').replace('{n}', String(hidden)));
