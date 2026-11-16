@@ -416,7 +416,7 @@ export default function PortalPage() {
         identity={identity}
         onNavigate={navigate}
         onInvalid={showInvalid}
-      />
+        data-testid="PortalDocumentListView__3db5f6" />
     );
   } else if (current.view === 'doc') {
     body = (
@@ -430,7 +430,7 @@ export default function PortalPage() {
         logoUrl={logoUrl}
         onNavigate={navigate}
         onInvalid={showInvalid}
-      />
+        data-testid="PortalDocumentDetailView__3db5f6" />
     );
   } else {
     body = (
@@ -444,7 +444,7 @@ export default function PortalPage() {
         onMonthsChange={changeMonths}
         onNavigate={navigate}
         onInvalid={showInvalid}
-      />
+        data-testid="PortalHomeView__3db5f6" />
     );
   }
 
@@ -455,7 +455,7 @@ export default function PortalPage() {
       current={current}
       tiles={home?.tiles}
       onNavigate={navigate}
-    >
+      data-testid="PortalShell__3db5f6">
       {entryHidden && (
         <p
           role="status"

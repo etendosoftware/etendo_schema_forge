@@ -122,20 +122,32 @@ export default function PortalDocumentDetailView({
   if (state !== 'ready') {
     return (
       <>
-        <DesktopHeader title={ui(PORTAL_KIND_META[kind].singularKey)} breadcrumb={`${ui('portalNavMyDocuments')} / ${plural}`} plural={plural} onBack={back} />
-        <PortalMain className="p-6">
+        <DesktopHeader
+          title={ui(PORTAL_KIND_META[kind].singularKey)}
+          breadcrumb={`${ui('portalNavMyDocuments')} / ${plural}`}
+          plural={plural}
+          onBack={back}
+          data-testid="DesktopHeader__6a1d3b" />
+        <PortalMain className="p-6" data-testid="PortalMain__6a1d3b">
           {state === 'loading' ? (
             <p className="text-sm text-muted-foreground" data-testid="portal-document-loading">{ui('loading')}</p>
           ) : (
             <div className="flex flex-col items-center px-6 py-12 text-center" data-testid="portal-document-unavailable">
-              <FileX className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
+              <FileX
+                className="h-8 w-8 text-muted-foreground"
+                aria-hidden="true"
+                data-testid="FileX__6a1d3b" />
               <p className="mt-3 font-medium">
                 {ui(state === 'notFound' ? 'portalDocumentNotFoundTitle' : 'portalLoadErrorTitle')}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
                 {ui(state === 'notFound' ? 'portalDocumentNotFoundDescription' : 'portalLoadErrorDescription')}
               </p>
-              <Button variant="outline" className="mt-4" onClick={() => onNavigate({ view: 'home' })}>
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={() => onNavigate({ view: 'home' })}
+                data-testid="Button__6a1d3b">
                 {ui('portalBackToHome')}
               </Button>
             </div>
@@ -161,7 +173,7 @@ export default function PortalDocumentDetailView({
           className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[10px]"
           data-testid="portal-back-mobile"
         >
-          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+          <ArrowLeft className="h-5 w-5" aria-hidden="true" data-testid="ArrowLeft__6a1d3b" />
         </button>
         <div className="flex min-w-0 flex-1 flex-col">
           <h1 className="truncate text-xl font-semibold leading-7">{title}</h1>
@@ -176,7 +188,7 @@ export default function PortalDocumentDetailView({
             className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[10px] border border-border bg-card disabled:opacity-50"
             data-testid="portal-download-pdf-mobile"
           >
-            <Download className="h-5 w-5" aria-hidden="true" />
+            <Download className="h-5 w-5" aria-hidden="true" data-testid="Download__6a1d3b" />
           </button>
         ) : null}
       </header>
@@ -186,7 +198,7 @@ export default function PortalDocumentDetailView({
         breadcrumb={`${ui('portalNavMyDocuments')} / ${plural} / ${document.documentNo ?? ''}`}
         plural={plural}
         onBack={back}
-      />
+        data-testid="DesktopHeader__6a1d3b" />
 
       <main
         className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-2 pb-28 pt-1 md:flex-row md:gap-0 md:overflow-hidden md:rounded-lg md:bg-card md:p-0"
@@ -204,10 +216,17 @@ export default function PortalDocumentDetailView({
                 <span className="font-medium text-foreground">{ui('portalPdfUnavailable')}</span>
                 {' · '}{ui(pdf.status === 'failed' ? 'portalDownloadFailed' : 'portalPdfUnavailableHint')}
               </p>
-              <DocumentSheet document={document} issuer={issuer} logoUrl={logoUrl} />
+              <DocumentSheet
+                document={document}
+                issuer={issuer}
+                logoUrl={logoUrl}
+                data-testid="DocumentSheet__6a1d3b" />
             </div>
           ) : (pdfReady ? (
-            <PortalPdfPreview url={pdf.url} onFullScreen={() => setLightboxOpen(true)} />
+            <PortalPdfPreview
+              url={pdf.url}
+              onFullScreen={() => setLightboxOpen(true)}
+              data-testid="PortalPdfPreview__6a1d3b" />
           ) : (
             <p className="m-auto text-sm text-muted-foreground" data-testid="portal-pdf-loading">{ui('loading')}</p>
           ))}
@@ -227,11 +246,14 @@ export default function PortalDocumentDetailView({
               document={document}
               tenantName={identity?.tenantName}
               onInvalid={onInvalid}
-            />
+              data-testid="PortalDecisionActions__6a1d3b" />
             {document.hasPdf ? (
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" onClick={downloadPdf} disabled={!pdfReady} data-testid="portal-download-pdf">
-                  <Download className="mr-1.5 h-4 w-4" aria-hidden="true" />{ui('portalDownloadPdf')}
+                  <Download
+                    className="mr-1.5 h-4 w-4"
+                    aria-hidden="true"
+                    data-testid="Download__6a1d3b" />{ui('portalDownloadPdf')}
                 </Button>
               </div>
             ) : null}
@@ -240,16 +262,16 @@ export default function PortalDocumentDetailView({
           {/* The app's own preview cards (`windows/custom/shared/preview-cards`), as the quotation,
               order, invoice and shipment previews use them; they bring their own margins. */}
           <div className="flex flex-col pb-4" data-testid="portal-document-cards-panel">
-            <PortalSummary document={document} />
+            <PortalSummary document={document} data-testid="PortalSummary__6a1d3b" />
             {document.kind === 'INVOICE' && document.installments.length > 1 ? (
-              <div className="mx-4 mt-5"><Installments document={document} /></div>
+              <div className="mx-4 mt-5"><Installments document={document} data-testid="Installments__6a1d3b" /></div>
             ) : null}
             <div className="mx-4 mt-5 md:hidden">
               <MobileLines
                 document={document}
                 canViewPdf={pdfReady}
                 onViewPdf={() => setLightboxOpen(true)}
-              />
+                data-testid="MobileLines__6a1d3b" />
             </div>
             <RelatedDocumentsCard
               items={document.related.map(toRelatedItem)}
@@ -265,7 +287,7 @@ export default function PortalDocumentDetailView({
                 tenantName={identity?.tenantName}
                 onInvalid={onInvalid}
                 variant="bar"
-              />
+                data-testid="PortalDecisionActions__6a1d3b" />
             </div>
           </div>
         </aside>
@@ -294,7 +316,7 @@ function DesktopHeader({ title, breadcrumb, plural, onBack }) {
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card"
         data-testid="portal-back"
       >
-        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" data-testid="ArrowLeft__6a1d3b" />
       </button>
       <div className="flex min-w-0 flex-col">
         <h1 className="truncate text-lg font-semibold leading-7" data-testid="portal-view-title">{title}</h1>
@@ -361,13 +383,13 @@ function PortalPdfPreview({ url, onFullScreen }) {
             data-testid="portal-pdf-controls"
           >
             <button type="button" onClick={zoom.zoomIn} disabled={!zoom.canZoomIn} aria-label={ui('pdfViewerZoomIn')} className={control} data-testid="portal-pdf-zoom-in">
-              <ZoomIn className="h-3.5 w-3.5" aria-hidden="true" />
+              <ZoomIn className="h-3.5 w-3.5" aria-hidden="true" data-testid="ZoomIn__6a1d3b" />
             </button>
             <button type="button" onClick={onFullScreen} aria-label={ui('portalFullScreen')} className={control} data-testid="portal-pdf-full-screen">
-              <Maximize className="h-3.5 w-3.5" aria-hidden="true" />
+              <Maximize className="h-3.5 w-3.5" aria-hidden="true" data-testid="Maximize__6a1d3b" />
             </button>
             <button type="button" onClick={zoom.zoomOut} disabled={!zoom.canZoomOut} aria-label={ui('pdfViewerZoomOut')} className={control} data-testid="portal-pdf-zoom-out">
-              <ZoomOut className="h-3.5 w-3.5" aria-hidden="true" />
+              <ZoomOut className="h-3.5 w-3.5" aria-hidden="true" data-testid="ZoomOut__6a1d3b" />
             </button>
           </div>
           <PdfViewer
@@ -375,7 +397,7 @@ function PortalPdfPreview({ url, onFullScreen }) {
             zoom={FIT_BOX_ZOOM}
             hideToolbar
             contentPadding={{ top: PREVIEW_GUTTER, right: 0, bottom: PREVIEW_GUTTER, left: 0 }}
-          />
+            data-testid="PdfViewer__6a1d3b" />
         </div>
       ) : null}
     </div>
@@ -430,12 +452,12 @@ function PortalSummary({ document }) {
         rows={[
           { label: ui('shipmentPreviewDocNo'), value: document.documentNo || '—' },
           { label: ui('shipmentPreviewContact'), value: document.customer.name || '—' },
-          { label: ui('shipmentPreviewDate'), value: <PortalDate value={document.date} /> },
+          { label: ui('shipmentPreviewDate'), value: <PortalDate value={document.date} data-testid="PortalDate__6a1d3b" /> },
         ]}
         statusRowLabel={ui('shipmentPreviewStatus')}
         statusLabel={statusText}
         statusBadgeClass={STATUS_BADGE[document.documentStatus] || 'bg-muted text-muted-foreground border-border-subtle'}
-      />
+        data-testid="MovementSummaryCard__6a1d3b" />
     );
   }
 
@@ -449,16 +471,32 @@ function PortalSummary({ document }) {
       statusLabel={statusText}
       validUntil={document.kind === 'QUOTATION' ? (document.validUntil || null) : undefined}
       dueDate={isInvoice ? (document.dueDate ?? null) : undefined}
-    >
+      data-testid="SummaryCard__6a1d3b">
       {isInvoice ? (
-        <InfoRow label={rowLabel('portalColPaymentStatus')}>
-          <PortalPaymentStatus document={document} installments={document.installments} className="whitespace-normal text-right" />
+        <InfoRow label={rowLabel('portalColPaymentStatus')} data-testid="InfoRow__6a1d3b">
+          <PortalPaymentStatus
+            document={document}
+            installments={document.installments}
+            className="whitespace-normal text-right"
+            data-testid="PortalPaymentStatus__6a1d3b" />
         </InfoRow>
       ) : null}
-      {isInvoice ? <InfoRow label={rowLabel('portalColOutstanding')} value={money(document.outstandingAmount)} /> : null}
-      {document.paymentMethod ? <InfoRow label={rowLabel('portalFieldPaymentMethod')} value={document.paymentMethod} /> : null}
-      <InfoRow label={rowLabel('portalColTaxBase')} value={money(document.taxBase)} />
-      <InfoRow label={rowLabel('portalFieldTaxes')} value={money(taxesTotal)} />
+      {isInvoice ? <InfoRow
+        label={rowLabel('portalColOutstanding')}
+        value={money(document.outstandingAmount)}
+        data-testid="InfoRow__6a1d3b" /> : null}
+      {document.paymentMethod ? <InfoRow
+        label={rowLabel('portalFieldPaymentMethod')}
+        value={document.paymentMethod}
+        data-testid="InfoRow__6a1d3b" /> : null}
+      <InfoRow
+        label={rowLabel('portalColTaxBase')}
+        value={money(document.taxBase)}
+        data-testid="InfoRow__6a1d3b" />
+      <InfoRow
+        label={rowLabel('portalFieldTaxes')}
+        value={money(taxesTotal)}
+        data-testid="InfoRow__6a1d3b" />
     </SummaryCard>
   );
 }
@@ -472,11 +510,17 @@ function Installments({ document }) {
       <div className="flex flex-col gap-1.5 rounded-xl border border-border bg-card px-3 py-2.5 md:rounded-lg">
         {document.installments.map((installment, index) => (
           <div key={index} className="flex justify-between gap-3 text-sm tabular-nums" data-testid="portal-installment">
-            <PortalDate value={installment.dueDate} />
+            <PortalDate value={installment.dueDate} data-testid="PortalDate__6a1d3b" />
             <span>
-              <PortalMoney currency={document.currency} value={installment.amount} />
+              <PortalMoney
+                currency={document.currency}
+                value={installment.amount}
+                data-testid="PortalMoney__6a1d3b" />
               {' · '}{ui('portalColOutstanding')}{' '}
-              <PortalMoney currency={document.currency} value={installment.outstandingAmount} />
+              <PortalMoney
+                currency={document.currency}
+                value={installment.outstandingAmount}
+                data-testid="PortalMoney__6a1d3b" />
             </span>
           </div>
         ))}
@@ -505,7 +549,7 @@ function MobileLines({ document, canViewPdf, onViewPdf }) {
       ) : null}
       className="rounded-xl md:hidden"
       testId="portal-document-lines-mobile"
-    >
+      data-testid="PortalSection__6a1d3b">
       {document.lines.length === 0 ? (
         <p className="px-5 py-4 text-sm text-muted-foreground">{ui('portalNoLines')}</p>
       ) : (
@@ -522,7 +566,11 @@ function MobileLines({ document, canViewPdf, onViewPdf }) {
                     line.tax].filter(Boolean).join(' · ')}
                 </span>
               </span>
-              {hasAmounts ? <PortalMoney currency={document.currency} value={line.amount} className="font-medium tabular-nums" /> : null}
+              {hasAmounts ? <PortalMoney
+                currency={document.currency}
+                value={line.amount}
+                className="font-medium tabular-nums"
+                data-testid="PortalMoney__6a1d3b" /> : null}
             </li>
           ))}
         </ul>
@@ -561,8 +609,8 @@ function DocumentSheet({ document, issuer, logoUrl }) {
         </div>
         <div className="flex flex-col gap-0.5 rounded-[10px] border border-border px-4 py-3.5">
           <span className={cn(label, 'mb-1.5')}>{ui('portalDocumentData')}</span>
-          <span><b className="font-semibold">{ui('portalFieldDate')}:</b> <PortalDate value={document.date} /></span>
-          {document.validUntil ? <span><b className="font-semibold">{ui('portalColValidUntil')}:</b> <PortalDate value={document.validUntil} /></span> : null}
+          <span><b className="font-semibold">{ui('portalFieldDate')}:</b> <PortalDate value={document.date} data-testid="PortalDate__6a1d3b" /></span>
+          {document.validUntil ? <span><b className="font-semibold">{ui('portalColValidUntil')}:</b> <PortalDate value={document.validUntil} data-testid="PortalDate__6a1d3b" /></span> : null}
           {document.paymentMethod ? <span><b className="font-semibold">{ui('portalFieldPaymentMethod')}:</b> {document.paymentMethod}</span> : null}
         </div>
       </div>
@@ -591,7 +639,10 @@ function DocumentSheet({ document, issuer, logoUrl }) {
                   {formatQuantity(line.quantity)}{!hasAmounts && line.uom ? ` ${line.uom}` : ''}
                 </td>
                 {hasAmounts ? (
-                  <td className="px-1.5 py-2.5 text-right tabular-nums"><PortalMoney currency={document.currency} value={line.unitPrice} /></td>
+                  <td className="px-1.5 py-2.5 text-right tabular-nums"><PortalMoney
+                    currency={document.currency}
+                    value={line.unitPrice}
+                    data-testid="PortalMoney__6a1d3b" /></td>
                 ) : null}
                 {document.kind === 'QUOTATION' || document.kind === 'ORDER' ? (
                   <td className="px-1.5 py-2.5 text-right tabular-nums">
@@ -600,7 +651,10 @@ function DocumentSheet({ document, issuer, logoUrl }) {
                 ) : null}
                 {hasAmounts ? <td className="px-1.5 py-2.5">{line.tax || '—'}</td> : null}
                 {hasAmounts ? (
-                  <td className="py-2.5 pl-1.5 text-right tabular-nums"><PortalMoney currency={document.currency} value={line.amount} /></td>
+                  <td className="py-2.5 pl-1.5 text-right tabular-nums"><PortalMoney
+                    currency={document.currency}
+                    value={line.amount}
+                    data-testid="PortalMoney__6a1d3b" /></td>
                 ) : null}
               </tr>
             ))}
@@ -610,10 +664,19 @@ function DocumentSheet({ document, issuer, logoUrl }) {
       {hasAmounts ? (
         <div className="flex justify-end border-t border-border pt-3">
           <div className="flex w-[260px] flex-col gap-1">
-            <div className="flex justify-between"><span>{ui('portalSubtotal')}</span><PortalMoney currency={document.currency} value={document.taxBase} /></div>
-            <div className="flex justify-between"><span>{ui('portalFieldTaxes')}</span><PortalMoney currency={document.currency} value={taxesTotal} /></div>
+            <div className="flex justify-between"><span>{ui('portalSubtotal')}</span><PortalMoney
+              currency={document.currency}
+              value={document.taxBase}
+              data-testid="PortalMoney__6a1d3b" /></div>
+            <div className="flex justify-between"><span>{ui('portalFieldTaxes')}</span><PortalMoney
+              currency={document.currency}
+              value={taxesTotal}
+              data-testid="PortalMoney__6a1d3b" /></div>
             <div className="mt-1 flex justify-between border-t border-border pt-2 text-sm font-bold">
-              <span>{ui('portalTotal')}</span><PortalMoney currency={document.currency} value={document.grandTotal} />
+              <span>{ui('portalTotal')}</span><PortalMoney
+              currency={document.currency}
+              value={document.grandTotal}
+              data-testid="PortalMoney__6a1d3b" />
             </div>
           </div>
         </div>

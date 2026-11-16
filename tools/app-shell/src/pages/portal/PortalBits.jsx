@@ -69,7 +69,7 @@ export function PortalDocumentStatus({ status, className }) {
       className={className}
       testId="portal-document-status"
       data-status={status}
-    >
+      data-testid="PortalTag__7a317e">
       {statusLabel(status, dictionary, ui)}
     </PortalTag>
   );
@@ -81,7 +81,12 @@ export function PortalPaymentStatus({ document, installments = null, useServerOv
   const state = invoicePaymentState(document, installments, { useServerOverdue });
   if (!state) return null;
   return (
-    <PortalTag tone={state.tone} className={className} testId="portal-payment-status" data-state={state.id}>
+    <PortalTag
+      tone={state.tone}
+      className={className}
+      testId="portal-payment-status"
+      data-state={state.id}
+      data-testid="PortalTag__7a317e">
       {ui(state.labelKey)}
     </PortalTag>
   );
@@ -90,8 +95,15 @@ export function PortalPaymentStatus({ document, installments = null, useServerOv
 /** The badge a row shows: an invoice's payment state, any other document's status. */
 export function PortalRowBadge({ document, className, useServerOverdue = false }) {
   return document?.kind === 'INVOICE'
-    ? <PortalPaymentStatus document={document} className={className} useServerOverdue={useServerOverdue} />
-    : <PortalDocumentStatus status={document?.documentStatus} className={className} />;
+    ? <PortalPaymentStatus
+    document={document}
+    className={className}
+    useServerOverdue={useServerOverdue}
+    data-testid="PortalPaymentStatus__7a317e" />
+    : <PortalDocumentStatus
+    status={document?.documentStatus}
+    className={className}
+    data-testid="PortalDocumentStatus__7a317e" />;
 }
 
 /** The due date with the app's four-state dot (paid / overdue / soon / ok). */
@@ -101,7 +113,7 @@ export function PortalDueDate({ document }) {
   return (
     <span className="inline-flex items-center gap-1.5" data-testid="portal-due-date" data-state={state}>
       <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={getDueDateDotStyle(state)} />
-      <PortalDate value={document.dueDate} />
+      <PortalDate value={document.dueDate} data-testid="PortalDate__7a317e" />
     </span>
   );
 }
@@ -111,14 +123,14 @@ export function PortalValidUntil({ document }) {
   const validity = quotationValidity(document);
   if (!validity) return <span className="text-muted-foreground">—</span>;
   if (validity.state === 'answered') {
-    return <span className="text-muted-foreground"><PortalDate value={document.validUntil} /></span>;
+    return <span className="text-muted-foreground"><PortalDate value={document.validUntil} data-testid="PortalDate__7a317e" /></span>;
   }
   return (
     <span className="inline-flex items-center gap-1.5" data-testid="portal-valid-until" data-state={validity.state}>
       <span
         className={cn('h-1.5 w-1.5 shrink-0 rounded-full', validity.state === 'expired' ? 'bg-destructive' : 'bg-foreground')}
       />
-      <PortalDate value={document.validUntil} />
+      <PortalDate value={document.validUntil} data-testid="PortalDate__7a317e" />
     </span>
   );
 }
@@ -208,7 +220,10 @@ export function PortalSearchPill({ value, onChange, placeholder, label, testId, 
   return (
     <div className={cn('relative min-w-0', className)}>
       <label className="flex h-12 items-center gap-2.5 rounded-full bg-muted px-4 md:h-9 md:gap-2 md:px-3.5">
-        <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <Search
+          className="h-4 w-4 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+          data-testid="Search__7a317e" />
         <input
           type="search"
           value={value}
@@ -249,7 +264,10 @@ export function PortalDesktopHeader({ title, count, breadcrumb, search }) {
       <div className="flex min-w-0 flex-col">
         <div className="flex items-center gap-2">
           <h1 className="truncate text-lg font-semibold leading-7" data-testid="portal-view-title">{title}</h1>
-          {count != null ? <PortalCountChip count={count} testId="portal-view-count" /> : null}
+          {count != null ? <PortalCountChip
+            count={count}
+            testId="portal-view-count"
+            data-testid="PortalCountChip__7a317e" /> : null}
         </div>
         <span className="truncate text-xs leading-4 text-muted-foreground" data-testid="portal-breadcrumb">{breadcrumb}</span>
       </div>

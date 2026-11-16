@@ -76,7 +76,10 @@ export default function PortalDecisionActions({
         className={cn('flex items-start gap-2 text-sm', bar ? 'rounded-xl border border-border bg-card p-4' : '')}
         data-testid="portal-decision-sent"
       >
-        <MailCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+        <MailCheck
+          className="mt-0.5 h-4 w-4 shrink-0 text-primary"
+          aria-hidden="true"
+          data-testid="MailCheck__a48dad" />
         <span>{ui('portalDecisionSent', { email: sentTo })}</span>
       </p>
     );
@@ -102,7 +105,7 @@ export default function PortalDecisionActions({
         disabled={busy}
         data-testid="portal-decision-reject"
       >
-        <X className="mr-1.5 h-4 w-4" aria-hidden="true" />{ui('portalDecisionReject')}
+        <X className="mr-1.5 h-4 w-4" aria-hidden="true" data-testid="X__a48dad" />{ui('portalDecisionReject')}
       </Button>
       {acceptShown ? (
         <Button
@@ -111,7 +114,7 @@ export default function PortalDecisionActions({
           disabled={busy}
           data-testid="portal-decision-accept"
         >
-          <Check className="mr-1.5 h-4 w-4" aria-hidden="true" />
+          <Check className="mr-1.5 h-4 w-4" aria-hidden="true" data-testid="Check__a48dad" />
           {ui(bar ? 'portalDecisionAcceptQuotation' : 'portalDecisionAccept')}
         </Button>
       ) : null}
@@ -140,7 +143,7 @@ export default function PortalDecisionActions({
         documentNo={document.documentNo}
         onClose={() => setRejectOpen(false)}
         onSubmit={(reasonCode, reasonText) => submit({ decision: 'REJECT', reasonCode, reasonText })}
-      />
+        data-testid="PortalRejectModal__a48dad" />
     </div>
   );
 }
@@ -159,11 +162,14 @@ function PortalRejectModal({ open, busy, documentNo, onClose, onSubmit }) {
   const canSubmit = Boolean(reason) && !textMissing && !busy;
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => { if (!next) onClose(); }}
+      data-testid="Dialog__a48dad">
       <DialogContent className="max-w-md" data-testid="portal-reject-modal">
-        <DialogHeader>
-          <DialogTitle>{ui('portalRejectTitle')}</DialogTitle>
-          <DialogDescription>{ui('portalRejectDescription', { number: documentNo ?? '' })}</DialogDescription>
+        <DialogHeader data-testid="DialogHeader__a48dad">
+          <DialogTitle data-testid="DialogTitle__a48dad">{ui('portalRejectTitle')}</DialogTitle>
+          <DialogDescription data-testid="DialogDescription__a48dad">{ui('portalRejectDescription', { number: documentNo ?? '' })}</DialogDescription>
         </DialogHeader>
         <fieldset className="flex flex-col gap-1.5">
           <legend className="mb-1.5 text-sm font-medium">{ui('portalRejectReasonLabel')}</legend>
@@ -212,8 +218,12 @@ function PortalRejectModal({ open, busy, documentNo, onClose, onSubmit }) {
             ) : null}
           </label>
         ) : null}
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={busy}>{ui('cancel')}</Button>
+        <DialogFooter data-testid="DialogFooter__a48dad">
+          <Button
+            variant="outline"
+            onClick={onClose}
+            disabled={busy}
+            data-testid="Button__a48dad">{ui('cancel')}</Button>
           <Button
             onClick={() => onSubmit(reason, needsText ? text.trim() : null)}
             disabled={!canSubmit}

@@ -56,8 +56,8 @@ export default function PortalHomeView({
       placeholder={ui('portalSearchAllPlaceholder')}
       label={ui('portalSearch')}
       testId="portal-global-search"
-    >
-      <SearchResults search={search} onOpen={open} />
+      data-testid="PortalSearchPill__beaeb4">
+      <SearchResults search={search} onOpen={open} data-testid="SearchResults__beaeb4" />
     </PortalSearchPill>
   );
 
@@ -67,19 +67,29 @@ export default function PortalHomeView({
         identity={identity}
         logoUrl={logoUrl}
         onSearch={() => setMobileSearchOpen((value) => !value)}
-      />
+        data-testid="PortalMobileBrandBar__beaeb4" />
       <PortalDesktopHeader
         title={ui('portalNavHome')}
         breadcrumb={ui('portalNavHome')}
         search={searchBox}
-      />
+        data-testid="PortalDesktopHeader__beaeb4" />
 
-      <PortalMain className="overflow-y-auto px-6 pb-28 pt-6 md:pb-3 md:pt-3" testId="portal-home">
+      <PortalMain
+        className="overflow-y-auto px-6 pb-28 pt-6 md:pb-3 md:pt-3"
+        testId="portal-home"
+        data-testid="PortalMain__beaeb4">
         {mobileSearchOpen ? <div className="md:hidden">{searchBox}</div> : null}
 
-        <Greeting identity={identity} months={months} onMonthsChange={onMonthsChange} />
+        <Greeting
+          identity={identity}
+          months={months}
+          onMonthsChange={onMonthsChange}
+          data-testid="Greeting__beaeb4" />
 
-        <MobilePendingHero balances={balances} onNavigate={onNavigate} />
+        <MobilePendingHero
+          balances={balances}
+          onNavigate={onNavigate}
+          data-testid="MobilePendingHero__beaeb4" />
 
         {/* items-start: both cards hug their content, as in the design (no stretched tiles). */}
         <div className="flex flex-wrap items-start gap-3">
@@ -93,7 +103,12 @@ export default function PortalHomeView({
             </div>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fit,minmax(150px,1fr))] md:p-3">
               {TILE_ORDER.map((kind) => (
-                <KindTile key={kind} kind={kind} tile={tiles[kind]} onNavigate={onNavigate} />
+                <KindTile
+                  key={kind}
+                  kind={kind}
+                  tile={tiles[kind]}
+                  onNavigate={onNavigate}
+                  data-testid="KindTile__beaeb4" />
               ))}
             </div>
           </section>
@@ -102,8 +117,11 @@ export default function PortalHomeView({
             title={ui('portalBalanceTitle')}
             className="hidden flex-[1_1_280px] md:block"
             testId="portal-balance"
-          >
-            <Balance balances={balances} paid={home?.paidThisYear ?? []} />
+            data-testid="PortalSection__beaeb4">
+            <Balance
+              balances={balances}
+              paid={home?.paidThisYear ?? []}
+              data-testid="Balance__beaeb4" />
           </PortalSection>
         </div>
 
@@ -122,12 +140,19 @@ export default function PortalHomeView({
             )}
             className="rounded-xl"
             testId="portal-recent"
-          >
-            <RecentDocuments recent={recent} onOpen={open} />
+            data-testid="PortalSection__beaeb4">
+            <RecentDocuments recent={recent} onOpen={open} data-testid="RecentDocuments__beaeb4" />
           </PortalSection>
 
-          <PortalSection title={ui('portalInvoicedPerMonth')} className="hidden md:block" testId="portal-chart">
-            <InvoicedChart chart={home?.chart} year={home?.invoicesThisYear} />
+          <PortalSection
+            title={ui('portalInvoicedPerMonth')}
+            className="hidden md:block"
+            testId="portal-chart"
+            data-testid="PortalSection__beaeb4">
+            <InvoicedChart
+              chart={home?.chart}
+              year={home?.invoicesThisYear}
+              data-testid="InvoicedChart__beaeb4" />
           </PortalSection>
         </div>
       </PortalMain>
@@ -186,7 +211,7 @@ function SearchResults({ search, onOpen }) {
           <span className="min-w-0 flex-1 truncate">
             {ui(documentLabelKey(document))} <span className="text-muted-foreground">{document.documentNo}</span>
           </span>
-          <PortalRowBadge document={document} />
+          <PortalRowBadge document={document} data-testid="PortalRowBadge__beaeb4" />
         </button>
       ))}
     </div>
@@ -200,7 +225,10 @@ function Greeting({ identity, months, onMonthsChange }) {
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex items-center gap-3">
         <div className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[hsl(var(--accent-highlight))] text-[hsl(var(--accent-highlight-foreground))] md:flex">
-          <FileText className="h-[18px] w-[18px]" aria-hidden="true" />
+          <FileText
+            className="h-[18px] w-[18px]"
+            aria-hidden="true"
+            data-testid="FileText__beaeb4" />
         </div>
         <div className="flex min-w-0 flex-col gap-1 md:gap-0">
           {identity?.businessPartnerName ? (
@@ -218,19 +246,22 @@ function Greeting({ identity, months, onMonthsChange }) {
           </h2>
         </div>
       </div>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
+      <DropdownMenu data-testid="DropdownMenu__beaeb4">
+        <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__beaeb4">
           <button
             type="button"
             className="hidden h-9 items-center gap-2 rounded-lg border border-border bg-card px-3 font-medium md:inline-flex"
             data-testid="portal-period"
           >
-            <CalendarDays className="h-4 w-4" aria-hidden="true" />
+            <CalendarDays className="h-4 w-4" aria-hidden="true" data-testid="CalendarDays__beaeb4" />
             {ui('portalPeriodMonths', { count: months })}
-            <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+            <ChevronDown
+              className="h-3.5 w-3.5"
+              aria-hidden="true"
+              data-testid="ChevronDown__beaeb4" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" data-testid="DropdownMenuContent__beaeb4">
           {PORTAL_CHART_MONTHS.map((option) => (
             <DropdownMenuItem
               key={option}
@@ -289,7 +320,7 @@ function MobilePendingHero({ balances, onNavigate }) {
           data-testid="portal-view-pending-invoices"
         >
           {ui('portalViewPendingInvoices')}
-          <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          <ArrowRight className="h-4 w-4" aria-hidden="true" data-testid="ArrowRight__beaeb4" />
         </button>
       ) : null}
     </section>
@@ -309,7 +340,7 @@ function Balance({ balances, paid }) {
       <div className="flex flex-col gap-1.5" data-testid="portal-balance-pending">
         <span className="flex items-center gap-1.5 font-medium text-destructive">
           {ui('portalPendingPayment')}
-          <PortalTag className="px-1.5 py-0 font-normal">
+          <PortalTag className="px-1.5 py-0 font-normal" data-testid="PortalTag__beaeb4">
             {balances.reduce((sum, balance) => sum + balance.pendingCount, 0)}
           </PortalTag>
         </span>
@@ -329,7 +360,7 @@ function Balance({ balances, paid }) {
       <div className="flex flex-col gap-1.5" data-testid="portal-balance-paid">
         <span className="flex items-center gap-1.5 font-medium text-[var(--status-success-fg)]">
           {ui('portalPaidThisYear')}
-          <PortalTag className="px-1.5 py-0 font-normal">
+          <PortalTag className="px-1.5 py-0 font-normal" data-testid="PortalTag__beaeb4">
             {paid.reduce((sum, entry) => sum + entry.count, 0)}
           </PortalTag>
         </span>
@@ -365,14 +396,20 @@ function KindTile({ kind, tile, onNavigate }) {
       data-testid={`portal-tile-${kind.toLowerCase()}`}
     >
       <span className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Icon className="hidden h-4 w-4 md:block" aria-hidden="true" />
+        <Icon
+          className="hidden h-4 w-4 md:block"
+          aria-hidden="true"
+          data-testid="Icon__beaeb4" />
         {ui(PORTAL_KIND_META[kind].pluralKey)}
       </span>
       <span className="text-[44px] font-medium leading-[48px] tabular-nums md:text-5xl md:leading-[48px]" data-testid="portal-tile-count">
         {shown ? tile.highlight.count : (tile?.count ?? 0)}
       </span>
       {shown ? (
-        <PortalTag tone={highlight.tone} className="max-w-full self-start whitespace-normal">{ui(highlight.labelKey)}</PortalTag>
+        <PortalTag
+          tone={highlight.tone}
+          className="max-w-full self-start whitespace-normal"
+          data-testid="PortalTag__beaeb4">{ui(highlight.labelKey)}</PortalTag>
       ) : (
         <span className="text-xs text-muted-foreground">{ui('portalTileTotal')}</span>
       )}
@@ -403,15 +440,28 @@ function RecentDocuments({ recent, onOpen }) {
                 it; every amount (or a shipment's "—") is right-aligned in a 110 px pill. */}
             <span className="min-w-0 flex-1 truncate">{ui(documentLabelKey(document))}</span>
             <span className="flex w-24 shrink-0 justify-end">
-              <PortalTag className="block max-w-full truncate font-normal" title={document.documentNo}>{document.documentNo}</PortalTag>
+              <PortalTag
+                className="block max-w-full truncate font-normal"
+                title={document.documentNo}
+                data-testid="PortalTag__beaeb4">{document.documentNo}</PortalTag>
             </span>
             <span className="flex w-28 shrink-0 justify-end">
-              <PortalRowBadge document={document} useServerOverdue className="whitespace-normal font-normal" />
+              <PortalRowBadge
+                document={document}
+                useServerOverdue
+                className="whitespace-normal font-normal"
+                data-testid="PortalRowBadge__beaeb4" />
             </span>
             <span className="w-[110px] shrink-0 rounded-lg border border-border px-2 py-0.5 text-right text-xs leading-4 tabular-nums">
-              <PortalMoney currency={document.currency} value={document.grandTotal} />
+              <PortalMoney
+                currency={document.currency}
+                value={document.grandTotal}
+                data-testid="PortalMoney__beaeb4" />
             </span>
-            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+            <ChevronRight
+              className="h-3.5 w-3.5 text-muted-foreground"
+              aria-hidden="true"
+              data-testid="ChevronRight__beaeb4" />
           </button>
           <button
             type="button"
@@ -423,13 +473,17 @@ function RecentDocuments({ recent, onOpen }) {
               <span className="truncate font-medium">{ui(documentLabelKey(document))} {document.documentNo}</span>
               <span className="text-sm text-muted-foreground">
                 {document.kind === 'INVOICE' && document.dueDate
-                  ? <>{ui('portalDueOnPrefix')} <PortalDate value={document.dueDate} /></>
-                  : <PortalDate value={document.date} />}
+                  ? <>{ui('portalDueOnPrefix')} <PortalDate value={document.dueDate} data-testid="PortalDate__beaeb4" /></>
+                  : <PortalDate value={document.date} data-testid="PortalDate__beaeb4" />}
               </span>
             </span>
             <span className="flex flex-col items-end gap-1">
-              <PortalMoney currency={document.currency} value={document.grandTotal} className="font-semibold tabular-nums" />
-              <PortalRowBadge document={document} useServerOverdue />
+              <PortalMoney
+                currency={document.currency}
+                value={document.grandTotal}
+                className="font-semibold tabular-nums"
+                data-testid="PortalMoney__beaeb4" />
+              <PortalRowBadge document={document} useServerOverdue data-testid="PortalRowBadge__beaeb4" />
             </span>
           </button>
         </li>
@@ -452,7 +506,10 @@ function InvoicedChart({ chart, year }) {
     <div className="flex flex-col gap-2.5 px-3.5 py-3">
       {year?.total > 0 ? (
         <span className="flex items-center gap-2 text-xs text-[var(--status-success-fg)]" data-testid="portal-up-to-date">
-          <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+          <CheckCircle2
+            className="h-3.5 w-3.5"
+            aria-hidden="true"
+            data-testid="CheckCircle2__beaeb4" />
           {ui('portalUpToDate', { upToDate: year.upToDate, total: year.total })}
         </span>
       ) : null}

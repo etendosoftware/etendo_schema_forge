@@ -100,31 +100,43 @@ export default function PortalDecisionPage() {
 
   if (view === VIEW.applying) {
     return (
-      <Frame>
-        <Card testId="portal-decision-applying" icon={<Loader2 className="h-8 w-8 animate-spin text-primary" />} title={ui('portalDecisionApplying')} />
+      <Frame data-testid="Frame__be410c">
+        <Card
+          testId="portal-decision-applying"
+          icon={<Loader2
+            className="h-8 w-8 animate-spin text-primary"
+            data-testid="Loader2__be410c" />}
+          title={ui('portalDecisionApplying')}
+          data-testid="Card__be410c" />
       </Frame>
     );
   }
   if (view === VIEW.invalid) {
     return (
-      <Frame>
+      <Frame data-testid="Frame__be410c">
         <Card
           testId="portal-decision-invalid"
-          icon={<Ban className="h-8 w-8 text-muted-foreground" aria-hidden="true" />}
+          icon={<Ban
+            className="h-8 w-8 text-muted-foreground"
+            aria-hidden="true"
+            data-testid="Ban__be410c" />}
           title={ui('portalInvalidLinkTitle')}
           description={ui('portalInvalidLinkDescription')}
-        />
+          data-testid="Card__be410c" />
       </Frame>
     );
   }
   if (view === VIEW.failed) {
     return (
-      <Frame>
+      <Frame data-testid="Frame__be410c">
         <Card
           testId="portal-decision-failed"
-          icon={<AlertCircle className="h-8 w-8 text-destructive" aria-hidden="true" />}
+          icon={<AlertCircle
+            className="h-8 w-8 text-destructive"
+            aria-hidden="true"
+            data-testid="AlertCircle__be410c" />}
           title={ui('portalDecisionConfirmFailed')}
-        >
+          data-testid="Card__be410c">
           <Button className="mt-6" onClick={() => apply()} data-testid="portal-decision-retry">
             {ui('retry')}
           </Button>
@@ -139,16 +151,22 @@ export default function PortalDecisionPage() {
   // `pending` should not come back from a confirmation; it reads as "no longer pending" here.
   const copy = STATE_COPY[decision.state] ?? STATE_COPY[PORTAL_DECISION_STATE.notPending];
   return (
-    <Frame>
+    <Frame data-testid="Frame__be410c">
       <Card
         testId={appliedNow ? 'portal-decision-applied' : `portal-decision-${decision.state}`}
         tenantName={decision.tenantName}
         icon={copy.tone === 'success'
-          ? <CheckCircle2 className="h-8 w-8 text-[var(--status-success-fg)]" aria-hidden="true" />
-          : <FileText className="h-8 w-8 text-muted-foreground" aria-hidden="true" />}
+          ? <CheckCircle2
+          className="h-8 w-8 text-[var(--status-success-fg)]"
+          aria-hidden="true"
+          data-testid="CheckCircle2__be410c" />
+          : <FileText
+          className="h-8 w-8 text-muted-foreground"
+          aria-hidden="true"
+          data-testid="FileText__be410c" />}
         title={appliedNow ? `${ui(resultTitle(decision, copy))} ${params.number}`.trim() : ui(resultTitle(decision, copy))}
         description={ui(appliedNow ? 'portalDecisionAppliedDescription' : copy.description, params)}
-      >
+        data-testid="Card__be410c">
         {appliedNow && reasonLabel ? (
           <p className="mt-3 text-sm" data-testid="portal-decision-reason">
             <span className="font-medium">{ui('portalRejectReasonLabel')}:</span>{' '}

@@ -154,7 +154,7 @@ export default function PortalDocumentListView({
       placeholder={ui('portalSearchPlaceholder')}
       testId={mobile ? 'portal-search-mobile' : 'portal-search'}
       className={mobile ? 'flex-1' : undefined}
-    />
+      data-testid="PortalSearchPill__c7f7d2" />
   );
 
   const footer = documents.length > 0 ? (
@@ -192,11 +192,15 @@ export default function PortalDocumentListView({
               share one line; the board's 28 px from 640 up. */}
           <div className="flex min-w-0 items-center gap-2.5">
             <h1 className="truncate text-2xl font-bold leading-9 sm:text-[28px]">{plural}</h1>
-            <PortalCountChip count={totalCount} />
+            <PortalCountChip count={totalCount} data-testid="PortalCountChip__c7f7d2" />
           </div>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-            <PortalLanguageSwitch align="end" side="bottom" compact />
-            <PortalCustomer identity={identity} variant="avatar" />
+            <PortalLanguageSwitch
+              align="end"
+              side="bottom"
+              compact
+              data-testid="PortalLanguageSwitch__c7f7d2" />
+            <PortalCustomer identity={identity} variant="avatar" data-testid="PortalCustomer__c7f7d2" />
           </div>
         </div>
         <div className="flex gap-2.5">{searchPill(true)}</div>
@@ -208,12 +212,19 @@ export default function PortalDocumentListView({
         count={totalCount}
         breadcrumb={`${ui('portalNavMyDocuments')} / ${plural}`}
         search={searchPill(false)}
-      />
+        data-testid="PortalDesktopHeader__c7f7d2" />
 
-      <PortalMain className="overflow-y-auto px-6 pb-28 pt-5 md:pb-3 md:pt-3" testId="portal-document-list">
+      <PortalMain
+        className="overflow-y-auto px-6 pb-28 pt-5 md:pb-3 md:pt-3"
+        testId="portal-document-list"
+        data-testid="PortalMain__c7f7d2">
         <div className="hidden flex-wrap items-center gap-2 md:flex" data-kind={kind}>
           {renderTabs(false)}
-          <DateRangePopover value={range} onChange={setRange} testId="portal-date-range" />
+          <DateRangePopover
+            value={range}
+            onChange={setRange}
+            testId="portal-date-range"
+            data-testid="DateRangePopover__c7f7d2" />
           <div className="flex-1" />
           <Button
             variant="outline"
@@ -223,7 +234,7 @@ export default function PortalDocumentListView({
             onClick={() => setReload((value) => value + 1)}
             data-testid="portal-refresh"
           >
-            <RefreshCw className="h-4 w-4" aria-hidden="true" />
+            <RefreshCw className="h-4 w-4" aria-hidden="true" data-testid="RefreshCw__c7f7d2" />
           </Button>
         </div>
 
@@ -231,11 +242,20 @@ export default function PortalDocumentListView({
 
         {documents.length > 0 ? (
           <>
-            <DesktopTable kind={kind} page={page} documents={documents} onOpen={open} />
+            <DesktopTable
+              kind={kind}
+              page={page}
+              documents={documents}
+              onOpen={open}
+              data-testid="DesktopTable__c7f7d2" />
             <ul className="flex flex-col gap-3 md:hidden" data-testid="portal-document-cards">
               {documents.map((document) => (
                 <li key={document.id}>
-                  <MobileCard document={document} kind={kind} onOpen={open} />
+                  <MobileCard
+                    document={document}
+                    kind={kind}
+                    onOpen={open}
+                    data-testid="MobileCard__c7f7d2" />
                 </li>
               ))}
             </ul>
@@ -295,8 +315,8 @@ function DesktopTable({ kind, page, documents, onOpen }) {
               {...portalRowActivation(() => onOpen(document), `${ui(documentLabelKey(document))} ${document.documentNo ?? ''}`.trim())}
               data-testid="portal-document-row"
             >
-              <td className={`${td} pl-3 tabular-nums`}><PortalDate value={document.date} /></td>
-              {isInvoice ? <td className={td}><PortalInvoiceTypeBadge document={document} /></td> : null}
+              <td className={`${td} pl-3 tabular-nums`}><PortalDate value={document.date} data-testid="PortalDate__c7f7d2" /></td>
+              {isInvoice ? <td className={td}><PortalInvoiceTypeBadge document={document} data-testid="PortalInvoiceTypeBadge__c7f7d2" /></td> : null}
               <td className={`${td} whitespace-nowrap`}>
                 {/* The number stays its own link-like control; the row opens the same document. */}
                 <button
@@ -309,23 +329,34 @@ function DesktopTable({ kind, page, documents, onOpen }) {
                 </button>
               </td>
               <td className={`${td} w-full max-w-0 truncate text-muted-foreground`} title={document.reference || undefined}>{document.reference || '—'}</td>
-              {isQuotation ? <td className={`${td} tabular-nums`}><PortalValidUntil document={document} /></td> : null}
-              {isInvoice ? <td className={`${td} tabular-nums`}><PortalDueDate document={document} /></td> : null}
-              <td className={td}><PortalDocumentStatus status={document.documentStatus} /></td>
-              {isInvoice ? <td className={td}><PortalPaymentStatus document={document} /></td> : null}
+              {isQuotation ? <td className={`${td} tabular-nums`}><PortalValidUntil document={document} data-testid="PortalValidUntil__c7f7d2" /></td> : null}
+              {isInvoice ? <td className={`${td} tabular-nums`}><PortalDueDate document={document} data-testid="PortalDueDate__c7f7d2" /></td> : null}
+              <td className={td}><PortalDocumentStatus
+                status={document.documentStatus}
+                data-testid="PortalDocumentStatus__c7f7d2" /></td>
+              {isInvoice ? <td className={td}><PortalPaymentStatus document={document} data-testid="PortalPaymentStatus__c7f7d2" /></td> : null}
               {hasAmounts ? (
                 <td className={`${td} ${taxBaseVisibility} text-right tabular-nums`}>
-                  <PortalMoney currency={document.currency} value={document.taxBase} />
+                  <PortalMoney
+                    currency={document.currency}
+                    value={document.taxBase}
+                    data-testid="PortalMoney__c7f7d2" />
                 </td>
               ) : null}
               {hasAmounts ? (
                 <td className={`${td} pr-3 text-right tabular-nums`}>
-                  <PortalMoney currency={document.currency} value={document.grandTotal} />
+                  <PortalMoney
+                    currency={document.currency}
+                    value={document.grandTotal}
+                    data-testid="PortalMoney__c7f7d2" />
                 </td>
               ) : null}
               {isInvoice ? (
                 <td className={`${td} pr-3 text-right tabular-nums`}>
-                  <PortalMoney currency={document.currency} value={document.outstandingAmount} />
+                  <PortalMoney
+                    currency={document.currency}
+                    value={document.outstandingAmount}
+                    data-testid="PortalMoney__c7f7d2" />
                 </td>
               ) : null}
             </tr>
@@ -334,10 +365,16 @@ function DesktopTable({ kind, page, documents, onOpen }) {
             <tr className="font-semibold" data-testid="portal-document-totals">
               <td colSpan={leadingColumns} />
               <td className={`px-2 py-3 ${taxBaseVisibility} text-right tabular-nums`}>
-                <PortalMoney currency={singleTotal.currency} value={singleTotal.taxBase} />
+                <PortalMoney
+                  currency={singleTotal.currency}
+                  value={singleTotal.taxBase}
+                  data-testid="PortalMoney__c7f7d2" />
               </td>
               <td className="px-2 py-3 pr-3 text-right tabular-nums">
-                <PortalMoney currency={singleTotal.currency} value={singleTotal.grandTotal} />
+                <PortalMoney
+                  currency={singleTotal.currency}
+                  value={singleTotal.grandTotal}
+                  data-testid="PortalMoney__c7f7d2" />
               </td>
               {isInvoice ? <td /> : null}
             </tr>
@@ -357,17 +394,17 @@ function CardSecondaryLine({ document }) {
     if (validity?.state === 'expired') {
       return (
         <span className="text-destructive">
-          {ui('portalExpiredOnPrefix')} <PortalDate value={document.validUntil} />
+          {ui('portalExpiredOnPrefix')} <PortalDate value={document.validUntil} data-testid="PortalDate__c7f7d2" />
         </span>
       );
     }
     if (document.validUntil) {
-      return <span>{ui('portalColValidUntil')} <PortalDate value={document.validUntil} /></span>;
+      return <span>{ui('portalColValidUntil')} <PortalDate value={document.validUntil} data-testid="PortalDate__c7f7d2" /></span>;
     }
     return null;
   }
   if (document.kind === 'INVOICE' && document.dueDate) {
-    return <span>{ui('portalDueOnPrefix')} <PortalDate value={document.dueDate} /></span>;
+    return <span>{ui('portalDueOnPrefix')} <PortalDate value={document.dueDate} data-testid="PortalDate__c7f7d2" /></span>;
   }
   return null;
 }
@@ -386,33 +423,43 @@ function MobileCard({ document, kind, onOpen }) {
       <span className="flex items-center justify-between gap-3">
         <span className="flex min-w-0 items-center gap-2">
           <span className="font-semibold">{document.documentNo}</span>
-          {isInvoice ? <PortalInvoiceTypeBadge document={document} /> : null}
+          {isInvoice ? <PortalInvoiceTypeBadge document={document} data-testid="PortalInvoiceTypeBadge__c7f7d2" /> : null}
         </span>
         {/* An invoice shows its payment state; its document status too when it is not the plain
             "completed" every listed invoice shares (closed, voided), like the table. */}
         <span className="flex flex-wrap items-center justify-end gap-1">
           {isInvoice && document.documentStatus !== 'CO'
-            ? <PortalDocumentStatus status={document.documentStatus} className="text-[13px] leading-[18px]" />
+            ? <PortalDocumentStatus
+            status={document.documentStatus}
+            className="text-[13px] leading-[18px]"
+            data-testid="PortalDocumentStatus__c7f7d2" />
             : null}
-          <PortalRowBadge document={document} className="text-[13px] leading-[18px]" />
+          <PortalRowBadge
+            document={document}
+            className="text-[13px] leading-[18px]"
+            data-testid="PortalRowBadge__c7f7d2" />
         </span>
       </span>
       {document.reference ? <span className="truncate text-muted-foreground">{document.reference}</span> : null}
       <span className="flex items-end justify-between border-t border-border pt-3">
         <span className="flex flex-col text-sm">
-          <span className="text-muted-foreground"><PortalDate value={document.date} /></span>
-          <CardSecondaryLine document={document} />
+          <span className="text-muted-foreground"><PortalDate value={document.date} data-testid="PortalDate__c7f7d2" /></span>
+          <CardSecondaryLine document={document} data-testid="CardSecondaryLine__c7f7d2" />
         </span>
         <span className="flex flex-col items-end">
           <PortalMoney
             currency={document.currency}
             value={document.grandTotal}
             className="text-xl font-semibold leading-7 tabular-nums"
-          />
+            data-testid="PortalMoney__c7f7d2" />
           {isInvoice ? (
             <span className="text-sm text-muted-foreground" data-testid="portal-card-outstanding">
               {ui('portalColOutstanding')}{' '}
-              <PortalMoney currency={document.currency} value={document.outstandingAmount} className="tabular-nums" />
+              <PortalMoney
+                currency={document.currency}
+                value={document.outstandingAmount}
+                className="tabular-nums"
+                data-testid="PortalMoney__c7f7d2" />
             </span>
           ) : null}
         </span>

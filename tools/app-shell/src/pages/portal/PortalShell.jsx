@@ -75,7 +75,11 @@ export function PortalBrand({ identity, logoUrl, size = 'sm' }) {
   const large = size === 'lg';
   return (
     <div className={cn('flex min-w-0 items-center', large ? 'gap-3' : 'gap-2.5')} data-testid="portal-brand">
-      <PortalLogoTile identity={identity} logoUrl={logoUrl} size={size} />
+      <PortalLogoTile
+        identity={identity}
+        logoUrl={logoUrl}
+        size={size}
+        data-testid="PortalLogoTile__a5d12f" />
       <div className="flex min-w-0 flex-col">
         {identity?.tenantName ? (
           <span
@@ -107,27 +111,34 @@ export function PortalLanguageSwitch({ align = 'start', side = 'top', compact = 
   const current = APP_LOCALES.find((entry) => entry.code === locale)
     ?? APP_LOCALES.find((entry) => entry.code === 'es_ES');
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <DropdownMenu data-testid="DropdownMenu__a5d12f">
+      <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__a5d12f">
         <button
           type="button"
           aria-label={ui('language')}
           className="flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           data-testid="portal-language-switch"
         >
-          <Languages className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <Languages
+            className="h-3.5 w-3.5 shrink-0"
+            aria-hidden="true"
+            data-testid="Languages__a5d12f" />
           <span className="text-sm leading-none" aria-hidden="true">{current.flag}</span>
           {/* `compact` (mobile top bars): icon + flag only, so the brand keeps the room; the
               trigger's label still names it, and the same menu opens. */}
           {compact ? null : <span className="truncate">{current.label}</span>}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side={side} align={align} className="w-48">
+      <DropdownMenuContent
+        side={side}
+        align={align}
+        className="w-48"
+        data-testid="DropdownMenuContent__a5d12f">
         <LanguageMenuSection
           locale={locale}
           setLocale={setLocale}
           testIdFor={(code) => `portal-language-${code.slice(0, 2).toLowerCase()}`}
-        />
+          data-testid="LanguageMenuSection__a5d12f" />
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -166,7 +177,7 @@ export function PortalCustomer({ identity, variant = 'row' }) {
   return (
     <div className="flex min-w-0 items-center gap-2.5" title={name} data-testid="portal-customer">
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-        <User className="h-4 w-4" aria-hidden="true" />
+        <User className="h-4 w-4" aria-hidden="true" data-testid="User__a5d12f" />
       </span>
       <span className="min-w-0 flex-1 truncate" data-testid="portal-customer-name">{name}</span>
     </div>
@@ -186,7 +197,11 @@ export function PortalMobileBrandBar({ identity, logoUrl, onSearch }) {
     >
       {/* The brand takes the room left by the controls and truncates only a very long name. */}
       <div className="min-w-0 flex-1">
-        <PortalBrand identity={identity} logoUrl={logoUrl} size="lg" />
+        <PortalBrand
+          identity={identity}
+          logoUrl={logoUrl}
+          size="lg"
+          data-testid="PortalBrand__a5d12f" />
       </div>
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
         {onSearch ? (
@@ -197,11 +212,15 @@ export function PortalMobileBrandBar({ identity, logoUrl, onSearch }) {
             className="flex h-10 w-10 items-center justify-center rounded-[10px] border border-border bg-card sm:h-12 sm:w-12"
             data-testid="portal-mobile-search"
           >
-            <Search className="h-5 w-5" aria-hidden="true" />
+            <Search className="h-5 w-5" aria-hidden="true" data-testid="Search__a5d12f" />
           </button>
         ) : null}
-        <PortalLanguageSwitch align="end" side="bottom" compact />
-        <PortalCustomer identity={identity} variant="avatar" />
+        <PortalLanguageSwitch
+          align="end"
+          side="bottom"
+          compact
+          data-testid="PortalLanguageSwitch__a5d12f" />
+        <PortalCustomer identity={identity} variant="avatar" data-testid="PortalCustomer__a5d12f" />
       </div>
     </header>
   );
@@ -240,7 +259,7 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
         data-testid="portal-sidebar"
       >
         <div className="px-3">
-          <PortalBrand identity={identity} logoUrl={logoUrl} />
+          <PortalBrand identity={identity} logoUrl={logoUrl} data-testid="PortalBrand__a5d12f" />
         </div>
         <div className="flex flex-col">
           <span className="px-3 pb-1.5 text-xs text-muted-foreground">{ui('portalNavGeneral')}</span>
@@ -254,7 +273,7 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
             )}
             data-testid="portal-nav-home"
           >
-            <Home className="h-4 w-4" aria-hidden="true" />
+            <Home className="h-4 w-4" aria-hidden="true" data-testid="Home__a5d12f" />
             {ui('portalNavHome')}
           </button>
         </div>
@@ -278,7 +297,11 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
                 >
                   {ui(PORTAL_KIND_META[kind].pluralKey)}
                   {badge ? (
-                    <PortalTag tone={badge.tone} className="px-1.5 py-0 font-normal" testId="portal-nav-count">
+                    <PortalTag
+                      tone={badge.tone}
+                      className="px-1.5 py-0 font-normal"
+                      testId="portal-nav-count"
+                      data-testid="PortalTag__a5d12f">
                       {badge.count}
                     </PortalTag>
                   ) : null}
@@ -290,8 +313,8 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
         <div className="flex-1" />
         {/* Customer, then language, then the credit — one line each, so all read in full at 216 px. */}
         <div className="flex flex-col gap-2 border-t border-border px-4 pt-2.5">
-          <PortalCustomer identity={identity} />
-          <PortalLanguageSwitch />
+          <PortalCustomer identity={identity} data-testid="PortalCustomer__a5d12f" />
+          <PortalLanguageSwitch data-testid="PortalLanguageSwitch__a5d12f" />
           <a
             href={ETENDO_AI_URL}
             target="_blank"
@@ -309,7 +332,11 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
         {children}
       </div>
 
-      <PortalBottomNav current={current} onNavigate={onNavigate} isActive={isActive} />
+      <PortalBottomNav
+        current={current}
+        onNavigate={onNavigate}
+        isActive={isActive}
+        data-testid="PortalBottomNav__a5d12f" />
     </div>
   );
 }
@@ -373,7 +400,7 @@ function PortalBottomNav({ onNavigate, isActive }) {
                 className="flex items-center gap-3 px-4 py-3 text-left text-base hover:bg-muted"
                 data-testid={`portal-bottom-nav-${kind.toLowerCase()}`}
               >
-                <Icon className="h-5 w-5" aria-hidden="true" />
+                <Icon className="h-5 w-5" aria-hidden="true" data-testid="Icon__a5d12f" />
                 {ui(PORTAL_KIND_META[kind].pluralKey)}
               </button>
             );
@@ -399,7 +426,7 @@ function PortalBottomNav({ onNavigate, isActive }) {
               active ? 'bg-[hsl(var(--accent-highlight))] text-[hsl(var(--accent-highlight-foreground))]' : '',
             )}
           >
-            <Icon className="h-5 w-5" aria-hidden="true" />
+            <Icon className="h-5 w-5" aria-hidden="true" data-testid="Icon__a5d12f" />
           </span>
           {label}
         </button>

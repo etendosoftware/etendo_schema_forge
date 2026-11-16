@@ -102,77 +102,80 @@ export function UserAvatarButton({ expanded = false }) {
 
   return (
     <DropdownMenu data-testid="DropdownMenu__9f3744">
-        <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__9f3744">
-          {expanded ? (
-            <div className="w-full">{trigger}</div>
-          ) : (
-            trigger
+      <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__9f3744">
+        {expanded ? (
+          <div className="w-full">{trigger}</div>
+        ) : (
+          trigger
+        )}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        side="right"
+        align="end"
+        sideOffset={12}
+        className="w-56"
+        data-testid="DropdownMenuContent__9f3744">
+        <div className="border-b px-4 py-3">
+          <p className="truncate text-sm font-semibold">{username || '—'}</p>
+          {(selectedRole?.name || selectedOrg?.name) && (
+            <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+              {selectedRole?.name && (
+                <p className="break-words" title={roleDisplay}>{ui('role')}: {roleDisplay}</p>
+              )}
+              {selectedOrg?.name && (
+                <p className="truncate" title={selectedOrg.name}>{ui('organization')}: {selectedOrg.name}</p>
+              )}
+            </div>
           )}
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          side="right"
-          align="end"
-          sideOffset={12}
-          className="w-56"
-          data-testid="DropdownMenuContent__9f3744">
-          <div className="border-b px-4 py-3">
-            <p className="truncate text-sm font-semibold">{username || '—'}</p>
-            {(selectedRole?.name || selectedOrg?.name) && (
-              <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
-                {selectedRole?.name && (
-                  <p className="break-words" title={roleDisplay}>{ui('role')}: {roleDisplay}</p>
-                )}
-                {selectedOrg?.name && (
-                  <p className="truncate" title={selectedOrg.name}>{ui('organization')}: {selectedOrg.name}</p>
-                )}
-              </div>
-            )}
-          </div>
+        </div>
 
-          {setLocale && (
+        {setLocale && (
+          <>
+            <LanguageMenuSection
+              locale={locale}
+              setLocale={setLocale}
+              data-testid="LanguageMenuSection__9f3744" />
+            <DropdownMenuSeparator data-testid="DropdownMenuSeparator__9f3744" />
+          </>
+        )}
+
+        <div className="px-2 py-2">
+          {!isSupportMode && (
             <>
-              <LanguageMenuSection locale={locale} setLocale={setLocale} />
-              <DropdownMenuSeparator data-testid="DropdownMenuSeparator__9f3744" />
+              <DropdownMenuItem
+                onSelect={() => navigate('/upgrade')}
+                data-testid="menu-tenant-upgrade"
+              >
+                <Rocket className="h-3.5 w-3.5 mr-2" data-testid="Rocket__9f3744" />
+                {ui('upgradeMenuAction')}
+              </DropdownMenuItem>
+              {myCompaniesEnabled && (
+                <DropdownMenuItem
+                  onSelect={() => navigate('/companies')}
+                  data-testid="menu-my-companies"
+                >
+                  <Building2 className="h-3.5 w-3.5 mr-2" data-testid="Building2__menu-my-companies" />
+                  {ui('myCompaniesMenuAction')}
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                onSelect={() => navigate('/account')}
+                data-testid="menu-account"
+              >
+                <User className="h-3.5 w-3.5 mr-2" data-testid="User__menu-account" />
+                {ui('account')}
+              </DropdownMenuItem>
             </>
           )}
-
-          <div className="px-2 py-2">
-            {!isSupportMode && (
-              <>
-                <DropdownMenuItem
-                  onSelect={() => navigate('/upgrade')}
-                  data-testid="menu-tenant-upgrade"
-                >
-                  <Rocket className="h-3.5 w-3.5 mr-2" data-testid="Rocket__9f3744" />
-                  {ui('upgradeMenuAction')}
-                </DropdownMenuItem>
-                {myCompaniesEnabled && (
-                  <DropdownMenuItem
-                    onSelect={() => navigate('/companies')}
-                    data-testid="menu-my-companies"
-                  >
-                    <Building2 className="h-3.5 w-3.5 mr-2" data-testid="Building2__menu-my-companies" />
-                    {ui('myCompaniesMenuAction')}
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem
-                  onSelect={() => navigate('/account')}
-                  data-testid="menu-account"
-                >
-                  <User className="h-3.5 w-3.5 mr-2" data-testid="User__menu-account" />
-                  {ui('account')}
-                </DropdownMenuItem>
-              </>
-            )}
-            <DropdownMenuItem
-              onClick={logout}
-              className="text-destructive focus:text-destructive focus:bg-destructive/10 dark:focus:bg-destructive/20"
-              data-testid="user-menu-logout">
-              <LogOut className="h-3.5 w-3.5 mr-2" data-testid="LogOut__9f3744" />
-              {ui('logout')}
-            </DropdownMenuItem>
-          </div>
-        </DropdownMenuContent>
+          <DropdownMenuItem
+            onClick={logout}
+            className="text-destructive focus:text-destructive focus:bg-destructive/10 dark:focus:bg-destructive/20"
+            data-testid="user-menu-logout">
+            <LogOut className="h-3.5 w-3.5 mr-2" data-testid="LogOut__9f3744" />
+            {ui('logout')}
+          </DropdownMenuItem>
+        </div>
+      </DropdownMenuContent>
     </DropdownMenu>
   );
 }
