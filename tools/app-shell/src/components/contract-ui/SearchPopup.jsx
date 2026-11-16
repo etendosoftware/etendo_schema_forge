@@ -290,7 +290,7 @@ export function SearchPopup({
               locating={locating}
               activeRef={activeRef}
               onPick={pick}
-            />
+              data-testid="SearchPopupOption__cfed54" />
           ))}
           {!loading && error && options.length > 0 && (
             <div className="flex justify-center gap-2 py-2 text-xs" data-testid={`${dataTestId}-load-more-error`}>
