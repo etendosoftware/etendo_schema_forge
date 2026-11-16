@@ -287,14 +287,12 @@ to find an id it cannot know beforehand, for example a payment method.
   | `GET /api/v1/sales-order/lookups/warehouse` | The sales order's warehouse | None |
   | `GET /api/v1/purchase-order/lookups/warehouse` | The purchase order's warehouse | None |
 
-  Warehouse selection follows the app: a new sales or purchase order shows an empty, required,
-  editable warehouse picker. There is no inferred warehouse default. Its `required` manifest
-  metadata documents the create requirement in OpenAPI; upstream validation enforces mandatory
-  fields at runtime. Fetch the order's warehouse
-  lookup, then send the selected id as `data.attributes.warehouse` on create. The warehouse
-  collection is outside V1, so this scalar has no `relationships.warehouse` link. Partial `PATCH`
-  requests may omit an unchanged warehouse. On completed orders the app locks the field; the
-  public API continues to apply the same upstream document validation.
+  Choose an order's warehouse with that order's warehouse lookup and send the selected id as
+  `data.attributes.warehouse` on create. The field is optional: if it is omitted, Etendo assigns
+  a warehouse when the order is created. There is no `relationships.warehouse`, because the
+  warehouse collection is outside V1. Partial `PATCH` requests may omit an unchanged warehouse.
+  On completed orders the app locks the field; the public API applies the same upstream
+  document validation.
 
   Each payment-method lookup lists the tenant's active payment methods, the same list the app offers in that field. The
   fixed context is forwarded to the field's selector; whether it narrows the list depends on that

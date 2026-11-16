@@ -65,11 +65,11 @@ test('publishes exactly the twelve resources in the agreed V1 scope', () => {
     ['contacts-contact', 'contacts-locationAddress']);
 });
 
-test('orders expose a required warehouse attribute without a dangling warehouse relationship', () => {
+test('orders expose an optional warehouse attribute without a dangling warehouse relationship', () => {
   for (const resource of ['sales-order', 'purchase-order']) {
     const warehouse = manifest.entities[resource].fields.warehouse;
     assert.equal(warehouse.direction, 'inout');
-    assert.equal(warehouse.required, true);
+    assert.equal(warehouse.required, undefined, 'Etendo assigns a warehouse on create when it is omitted');
     assert.equal(warehouse.relationship, undefined);
     assert.equal(warehouse.internalPath, 'warehouse');
   }

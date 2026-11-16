@@ -154,7 +154,7 @@
           "grid": false,
           "seq": 60,
           "inputMode": "search",
-          "publicApi": { "lookup": true, "required": true }
+          "publicApi": { "lookup": true }
         },
         "scheduledDeliveryDate": {
           "section": "principal",

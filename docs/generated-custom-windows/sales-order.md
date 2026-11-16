@@ -878,13 +878,11 @@ Evidence: `gateway/e2e/support/orders.ts` (`complete action`). Contract: `docs/p
 ## Public API V1 warehouse selection
 
 The public API exposes this order and its lines, including the header's `complete` action.
-The app's new-order form requires an explicitly selected warehouse and can start with that
-picker empty. The public API offers the same choice through
-`GET /api/v1/sales-order/lookups/warehouse`; submit the selected id as
-`data.attributes.warehouse` when creating the order. No warehouse default is inferred.
-The standalone warehouse collection is outside the V1 scope, so this field is a writable
-scalar rather than a relationship to another public resource. Partial updates can omit an
-unchanged warehouse. Document-state validation remains with the runtime, as in the app.
+Choose the warehouse with `GET /api/v1/sales-order/lookups/warehouse` and send the selected id as
+`data.attributes.warehouse` when creating the order. The field is optional: if it is omitted,
+Etendo assigns a warehouse when the order is created. There is no `relationships.warehouse`,
+because the warehouse collection is outside V1. Partial updates can omit an unchanged
+warehouse. Document-state validation remains with the runtime, as in the app.
 
 ## Fiscal data step before the invoice is created — ETP-6179
 

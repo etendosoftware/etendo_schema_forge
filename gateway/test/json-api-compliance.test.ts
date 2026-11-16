@@ -161,13 +161,13 @@ test('relationship fields of the manifest are writable only as relationships', a
   }
 });
 
-test('order warehouse is a required create attribute and remains optional on PATCH', () => {
+test('order warehouse is an optional create attribute and stays optional on PATCH', () => {
   for (const name of ['sales-order', 'purchase-order']) {
     const request = (path: string, method: string) =>
       (paths[path][method].requestBody!.content[MEDIA].schema.properties as any).data;
     const create = request(`/api/v1/${name}`, 'post');
     const patch = request(`/api/v1/${name}/{id}`, 'patch');
-    assert.ok(create.properties.attributes.required.includes('warehouse'), name);
+    assert.ok(!create.properties.attributes.required?.includes('warehouse'), name);
     assert.ok(!patch.properties.attributes.required?.includes('warehouse'), name);
     assert.ok(create.properties.attributes.properties.warehouse, name);
     assert.equal(create.properties.relationships?.properties.warehouse, undefined, name);

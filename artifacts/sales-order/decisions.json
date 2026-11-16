@@ -171,7 +171,7 @@
         },
         "warehouse": {
           "inputMode": "search",
-          "publicApi": { "lookup": true, "required": true }
+          "publicApi": { "lookup": true }
         },
         "salesRepresentative": {
           "visibility": "system"
