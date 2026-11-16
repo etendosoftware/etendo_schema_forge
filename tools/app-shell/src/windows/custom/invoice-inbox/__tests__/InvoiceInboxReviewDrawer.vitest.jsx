@@ -396,11 +396,14 @@ describe('review drawer — lines and products', () => {
 
   it('numeric cells carry the full value in title, and the amount is quantity x price', async () => {
     await renderLoaded(makeReview({}, { lines: [line({ quantity: 1234.5, unitPrice: 10.25, taxRate: 21 })] }));
-    for (const part of ['quantity', 'price', 'tax']) {
+    for (const part of ['quantity', 'price']) {
       const input = tid(`invoice-inbox-review-line-0-${part}`);
       expect(input.title).toBe(input.value);
       expect(input.title).not.toBe('');
     }
+    // The VAT cell is a read-only display of the effective rate (the tax is chosen with the selector).
+    expect(tid('invoice-inbox-review-line-0-tax')).toHaveValue('21%');
+    expect(tid('invoice-inbox-review-line-0-tax')).toHaveAttribute('readonly');
     expect(tid('invoice-inbox-review-line-0-amount')).toHaveTextContent(M(12653.63));
     expect(tid('invoice-inbox-review-line-0-amount').title).toBe(tid('invoice-inbox-review-line-0-amount').textContent);
   });

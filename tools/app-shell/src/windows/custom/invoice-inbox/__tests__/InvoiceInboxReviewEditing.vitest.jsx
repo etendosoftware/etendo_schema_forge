@@ -6,6 +6,10 @@
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewVendor.jsx
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewFooter.jsx
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewForm.jsx
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewTotals.jsx
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewBanners.jsx
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/useInvoiceInboxReviewEditor.js
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxMoney.js
 // New file justification: InvoiceInboxReviewDrawer.vitest.jsx is the read-side suite of the panel
 // (732 lines: shell, banners, rendering of every state); this file holds the write flows of S2
 // (autosave, line operations, vendor / product resolution, mark reviewed, flush on close / nav),
@@ -276,11 +280,114 @@ describe('editing — autosave inputs', () => {
     expect(editOps()).toEqual([{ op: 'setLine', index: 0, discount: null }]);
   });
 
-  it('the tax rate accepts a comma decimal and is rounded to two decimals', async () => {
+  it('the VAT cell is a read-only display: a typed rate is never offered nor sent (the tax is chosen by id)', async () => {
     await mountLoaded();
+    const tax = tid('invoice-inbox-review-line-0-tax');
+    expect(tax).toHaveAttribute('readonly');
     typeAndBlur('invoice-inbox-review-line-0-tax', '10,555');
-    await waitFor(() => expect(posts).toHaveLength(1));
-    expect(editOps()).toEqual([{ op: 'setLine', index: 0, taxRate: 10.56 }]);
+    expect(posts).toHaveLength(0);
+  });
+});
+
+describe('editing — tax by id (ETP-6050 S2)', () => {
+  it('picking a tax sends setLine {taxId} with no rate; the selector gets the document date and purchase side; re-picking the same tax writes nothing', async () => {
+    pickerItems([{ id: 'T21', label: 'IVA 21%' }, { id: 'T10', label: 'IVA 10%' }]);
+    await mountLoaded(makeReview({}, { lines: [line({ taxRate: 21, tax: { state: 'resolved', matchedBy: 'rate', id: 'T21', name: 'IVA 21%', rate: 21 } })] }));
+    const picker = within(tid('invoice-inbox-review-line-0-tax-picker'));
+    // A committed tax shows as a chip; clicking it opens the search on the committed value.
+    fireEvent.click(picker.getByTestId('inline-add-field-inbox-line-0-tax-chip'));
+    fireEvent.mouseDown(await screen.findByTestId('inline-add-option-inbox-line-0-tax-T21'));
+    expect(posts).toHaveLength(0);
+    const url = mockPickerFetch.mock.calls.at(-1)[0];
+    expect(url).toContain('/purchase-invoice/lines/selectors/C_Tax_ID');
+    expect(url).toContain('isSOTrx=N');
+    expect(url).toContain('DateInvoiced=');
+    fireEvent.click(picker.getByTestId('inline-add-field-inbox-line-0-tax-chip'));
+    fireEvent.mouseDown(await screen.findByTestId('inline-add-option-inbox-line-0-tax-T10'));
+    await waitFor(() => expect(editOps()).toEqual([{ op: 'setLine', index: 0, taxId: 'T10' }]));
+  });
+
+  it('a missing quantity or price is red and counted; a negative or zero value is a valid number', async () => {
+    await mountLoaded(makeReview({}, {
+      lines: [line({ quantity: null, unitPrice: null }), line({ index: 1, quantity: -2, unitPrice: 0 })],
+      validation: { missing: ['line[0].quantity', 'line[0].unitPrice'] },
+    }));
+    expect(tid('invoice-inbox-review-line-0-quantity')).toHaveAttribute('aria-invalid', 'true');
+    expect(tid('invoice-inbox-review-line-0-price')).toHaveAttribute('aria-invalid', 'true');
+    expect(tid('invoice-inbox-review-line-0-price')).toHaveValue('');
+    expect(tid('invoice-inbox-review-line-1-quantity')).not.toHaveAttribute('aria-invalid');
+    expect(tid('invoice-inbox-review-lines-error')).toHaveTextContent(L('invoiceInboxReviewQuantityMissingError'));
+    expect(tid('invoice-inbox-review-lines-error')).toHaveTextContent(L('invoiceInboxReviewPriceMissingError'));
+    typeAndBlur('invoice-inbox-review-line-1-quantity', '-3');
+    await waitFor(() => expect(editOps()).toEqual([{ op: 'setLine', index: 1, quantity: -3 }]));
+  });
+});
+
+describe('editing — discount display keeps its 4 decimals', () => {
+  it.each([[10, '10%'], [12.3457, '12,3457%'], [7.0007, '7,0007%'], [12.5, '12,5%']])('a stored discount of %s shows %s (idle) and its plain value when focused', async (stored, idle) => {
+    await mountLoaded(makeReview({}, { lines: [line({ discount: stored })] }));
+    const cell = tid('invoice-inbox-review-line-0-discount');
+    expect(cell).toHaveValue(idle);
+    fireEvent.focus(cell);
+    expect(cell).toHaveValue(String(stored).replace('.', ','));
+  });
+
+  it('the read-only list (confirmed) shows the discount with up to 4 decimals too', async () => {
+    await mountLoaded(makeReview({ status: 'CONFIRMED', editable: false }, { lines: [line({ discount: 12.3457 })] }));
+    expect(tid('invoice-inbox-review-line-0-detail')).toHaveTextContent('12,3457');
+  });
+
+  it('typing 12,3457 keeps all four decimals after blur and sends them', async () => {
+    await mountLoaded(makeReview({}, { lines: [line()] }));
+    typeAndBlur('invoice-inbox-review-line-0-discount', '12,3457');
+    await waitFor(() => expect(editOps()).toEqual([{ op: 'setLine', index: 0, discount: 12.3457 }]));
+  });
+});
+
+describe('editing — negative tax rates (withholding)', () => {
+  it('the totals card lists -10, -5 then 21 with a signed label, amount and test id', async () => {
+    await mountLoaded(makeReview({}, {
+      header: { totalSource: 'lines' },
+      lines: [
+        line({ index: 0, quantity: 1, unitPrice: 100, taxRate: 21 }),
+        line({ index: 1, quantity: 1, unitPrice: 100, taxRate: -5 }),
+        line({ index: 2, quantity: 1, unitPrice: 100, taxRate: -10 }),
+      ],
+    }));
+    const ids = screen.getAllByTestId(/^invoice-inbox-review-total-tax-.*$/).filter((el) => !el.dataset.testid.endsWith('-label')).map((el) => el.dataset.testid);
+    expect(ids).toEqual(['invoice-inbox-review-total-tax--10', 'invoice-inbox-review-total-tax--5', 'invoice-inbox-review-total-tax-21']);
+    expect(tid('invoice-inbox-review-total-tax--10-label')).toHaveTextContent('IVA -10%');
+    expect(tid('invoice-inbox-review-total-tax--10')).toHaveTextContent(M(-10));
+    expect(tid('invoice-inbox-review-total-tax--5')).toHaveTextContent(M(-5));
+    expect(tid('invoice-inbox-review-total-tax-21')).toHaveTextContent(M(21));
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(M(306));
+  });
+});
+
+describe('editing — currency scale and tax mode (ETP-6050 S2)', () => {
+  it('a 0-decimal currency shows no decimals in lines, totals and the mismatch banner (tolerance = 1 unit)', async () => {
+    const review = makeReview({ currency: { id: 'JPY1', isoCode: 'JPY', symbol: '¥', scale: 0 } }, {
+      header: { totalSource: 'printed', totalAmount: 125 },
+      lines: [line({ quantity: 3, unitPrice: 33.5, taxRate: 21 })],
+    });
+    await mountLoaded(review);
+    const yen = (v) => formatCurrency('JPY', v, { minimumFractionDigits: 0, maximumFractionDigits: 0 }).replace(/\s+/g, ' ');
+    expect(tid('invoice-inbox-review-line-0-amount')).toHaveTextContent(yen(101));
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(yen(125));
+    expect(tid('invoice-inbox-review-total-tax-21')).toHaveTextContent(yen(21));
+    // lines total 122 vs printed 125: 3 units apart -> warning; 1 unit apart would not warn
+    expect(tid('invoice-inbox-review-banner-mismatch')).toHaveTextContent(yen(122));
+  });
+
+  it('a document with both document-based and line-based taxes at one rate shows two rows, D before L', async () => {
+    await mountLoaded(makeReview({}, {
+      lines: [
+        line({ index: 0, quantity: 1, unitPrice: 0.25, taxRate: 10, tax: { state: 'resolved', docTaxAmount: 'D' } }),
+        line({ index: 1, quantity: 1, unitPrice: 0.25, taxRate: 10, tax: { state: 'resolved', docTaxAmount: 'L' } }),
+      ],
+    }));
+    expect(tid('invoice-inbox-review-total-tax-10')).toBeInTheDocument();
+    expect(tid('invoice-inbox-review-total-tax-10-L')).toBeInTheDocument();
   });
 });
 
@@ -812,5 +919,534 @@ describe('editing — leaving the panel waits for the saves', () => {
     const after = new Event('beforeunload', { cancelable: true });
     window.dispatchEvent(after);
     expect(after.defaultPrevented).toBe(false);
+  });
+});
+
+// ── ETP-6050 S2 addenda: tax selector, currency scale, validator codes, error paths ─────────────────
+
+const TAXES = { T21: { name: 'IVA 21%', rate: 21 }, T10: { name: 'IVA 10%', rate: 10 }, T0: { name: 'Exento', rate: 0 } };
+const taxed = (id = 'T21') => ({ state: 'resolved', matchedBy: 'rate', id, name: TAXES[id].name, rate: TAXES[id].rate, docTaxAmount: 'D' });
+const taxedLine = (over = {}) => line({ taxRate: 21, tax: taxed('T21'), ...over });
+const squash = (text) => text.replace(/\s+/g, ' ');
+const val = (id) => squash(tid(id).value);
+const money = (code, value, scale, maxDigits = scale) => squash(formatCurrency(code, value, { minimumFractionDigits: scale, maximumFractionDigits: Math.max(scale, maxDigits) }));
+
+/** A server that resolves `setLine {taxId}` from TAXES the way the backend does (rate of the tax), and applies the rest. */
+function taxAwareServer() {
+  respond = (url, body) => {
+    if (!url.endsWith('/action/apply')) return undefined;
+    let document = state.document;
+    for (const op of body.operations) {
+      if (op.op === 'setLine' && 'taxId' in op) {
+        const chosen = TAXES[op.taxId];
+        document = { ...document, lines: document.lines.map((l, i) => ((l.index ?? i) === op.index
+          ? { ...l, taxRate: chosen.rate, tax: { state: 'resolved', matchedBy: 'manual', id: op.taxId, name: chosen.name, rate: chosen.rate, docTaxAmount: 'D' } }
+          : l)) };
+      } else {
+        document = applyOperationLocally(document, op, hintFor(document, op));
+      }
+    }
+    tokenCount += 1;
+    state = { ...state, document, updated: `T${tokenCount}`, adjusted: true };
+    return jsonRes(200, state);
+  };
+}
+
+async function pickTax(position, id) {
+  const picker = within(tid(`invoice-inbox-review-line-${position}-tax-picker`));
+  fireEvent.click(picker.getByTestId(`inline-add-field-inbox-line-${position}-tax-chip`));
+  fireEvent.mouseDown(await screen.findByTestId(`inline-add-option-inbox-line-${position}-tax-${id}`));
+}
+
+describe('editing — tax selector variants (ETP-6050 S2)', () => {
+  it('an option that exposes its rate shows it at once (VAT cell, tax row, total) and the server answer keeps it', async () => {
+    taxAwareServer();
+    pickerItems([{ id: 'T21', label: 'IVA 21%', rate: 21 }, { id: 'T10', label: 'IVA 10%', rate: 10 }]);
+    const release = holdWrites();
+    await mountLoaded(makeReview({}, { lines: [taxedLine()] }));
+    await pickTax(0, 'T10');
+    expect(tid('invoice-inbox-review-line-0-tax')).toHaveValue('10%');
+    expect(tid('invoice-inbox-review-total-tax-10')).toHaveTextContent(M(10));
+    expect(maybe('invoice-inbox-review-total-tax-21')).toBeNull();
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(M(110));
+    release();
+    await waitFor(() => expect(saveState()).toHaveAttribute('data-state', 'saved'));
+    expect(tid('invoice-inbox-review-line-0-tax')).toHaveValue('10%');
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(M(110));
+    expect(editOps()).toEqual([{ op: 'setLine', index: 0, taxId: 'T10' }]);
+  });
+
+  it('an option WITHOUT a rate shows "…" and no tax row until the server answers with the real rate; nothing is guessed', async () => {
+    taxAwareServer();
+    pickerItems([{ id: 'T10', label: 'IVA 10%' }]);
+    const release = holdWrites();
+    await mountLoaded(makeReview({}, { lines: [taxedLine()] }));
+    await pickTax(0, 'T10');
+    expect(tid('invoice-inbox-review-line-0-tax')).toHaveValue('…');
+    expect(tid('invoice-inbox-review-line-0-tax')).not.toHaveAttribute('aria-invalid');
+    expect(screen.queryAllByTestId(/^invoice-inbox-review-total-tax-/).filter((n) => /total-tax-\d/.test(n.getAttribute('data-testid')))).toHaveLength(0);
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(M(100));
+    release();
+    await waitFor(() => expect(tid('invoice-inbox-review-line-0-tax')).toHaveValue('10%'));
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(M(110));
+  });
+
+  it('a 0% tax is a real choice: the rate shows 0% and the line is not flagged', async () => {
+    taxAwareServer();
+    pickerItems([{ id: 'T0', label: 'Exento', rate: 0 }]);
+    await mountLoaded(makeReview({}, { lines: [taxedLine()] }));
+    await pickTax(0, 'T0');
+    await waitFor(() => expect(tid('invoice-inbox-review-line-0-tax')).toHaveValue('0%'));
+    expect(tid('invoice-inbox-review-line-0-tax')).not.toHaveAttribute('aria-invalid');
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(M(100));
+  });
+
+  it('an empty selector list offers no option and writes nothing', async () => {
+    pickerItems([]);
+    await mountLoaded(makeReview({}, { lines: [taxedLine()] }));
+    fireEvent.click(within(tid('invoice-inbox-review-line-0-tax-picker')).getByTestId('inline-add-field-inbox-line-0-tax-chip'));
+    await waitFor(() => expect(mockPickerFetch).toHaveBeenCalled());
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
+    expect(posts).toHaveLength(0);
+  });
+
+  it('a failing selector request leaves the picker usable and empty: no option, no write, no crash', async () => {
+    mockPickerFetch.mockImplementation(async () => jsonRes(500, { error: { code: 'boom' } }));
+    await mountLoaded(makeReview({}, { lines: [taxedLine()] }));
+    fireEvent.click(within(tid('invoice-inbox-review-line-0-tax-picker')).getByTestId('inline-add-field-inbox-line-0-tax-chip'));
+    await waitFor(() => expect(mockPickerFetch).toHaveBeenCalled());
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
+    expect(posts).toHaveLength(0);
+    expect(tid('invoice-inbox-review-line-0-tax')).toHaveValue('21%');
+  });
+
+  it('the selector query carries the supplier location when the vendor has one, and omits it when it does not', async () => {
+    pickerItems([{ id: 'T21', label: 'IVA 21%', rate: 21 }]);
+    const withLocation = await mountLoaded(makeReview({}, {
+      header: { vendor: { state: 'linked', id: 'V0', locationId: 'LOC9', details: { name: 'ACME SL', taxId: 'B1', city: 'M' }, candidates: [], extracted: {} } },
+      lines: [taxedLine()],
+    }));
+    fireEvent.click(within(tid('invoice-inbox-review-line-0-tax-picker')).getByTestId('inline-add-field-inbox-line-0-tax-chip'));
+    await waitFor(() => expect(mockPickerFetch).toHaveBeenCalled());
+    expect(mockPickerFetch.mock.calls.at(-1)[0]).toContain('C_BPartner_Location_ID=LOC9');
+    withLocation.unmount();
+    mockPickerFetch.mockClear();
+    await mountLoaded(makeReview({}, { lines: [taxedLine()] }));
+    fireEvent.click(within(tid('invoice-inbox-review-line-0-tax-picker')).getByTestId('inline-add-field-inbox-line-0-tax-chip'));
+    await waitFor(() => expect(mockPickerFetch).toHaveBeenCalled());
+    const url = mockPickerFetch.mock.calls.at(-1)[0];
+    expect(url).not.toContain('C_BPartner_Location_ID');
+    expect(url).toContain('isSOTrx=N');
+  });
+
+  it('DateInvoiced follows the document date: another date, another selector query', async () => {
+    pickerItems([{ id: 'T21', label: 'IVA 21%', rate: 21 }]);
+    const first = await mountLoaded(makeReview({}, { header: { invoiceDate: '2026-08-01' }, lines: [taxedLine()] }));
+    fireEvent.click(within(tid('invoice-inbox-review-line-0-tax-picker')).getByTestId('inline-add-field-inbox-line-0-tax-chip'));
+    await waitFor(() => expect(mockPickerFetch).toHaveBeenCalled());
+    const urlA = new URL(mockPickerFetch.mock.calls.at(-1)[0], 'http://x');
+    first.unmount();
+    mockPickerFetch.mockClear();
+    await mountLoaded(makeReview({}, { header: { invoiceDate: '2026-09-15' }, lines: [taxedLine()] }));
+    fireEvent.click(within(tid('invoice-inbox-review-line-0-tax-picker')).getByTestId('inline-add-field-inbox-line-0-tax-chip'));
+    await waitFor(() => expect(mockPickerFetch).toHaveBeenCalled());
+    const urlB = new URL(mockPickerFetch.mock.calls.at(-1)[0], 'http://x');
+    expect(urlA.searchParams.get('DateInvoiced')).toBeTruthy();
+    expect(urlB.searchParams.get('DateInvoiced')).toBeTruthy();
+    expect(urlB.searchParams.get('DateInvoiced')).not.toBe(urlA.searchParams.get('DateInvoiced'));
+  });
+
+  it('editing the document date then opening the picker queries with the NEW date', async () => {
+    pickerItems([{ id: 'T21', label: 'IVA 21%', rate: 21 }]);
+    await mountLoaded(makeReview({}, { header: { invoiceDate: '2026-08-01' }, lines: [taxedLine()] }));
+    const dateInput = document.getElementById('invoice-inbox-review-invoice-date');
+    fireEvent.focus(dateInput);
+    fireEvent.change(dateInput, { target: { value: '15/09/2026' } });
+    fireEvent.blur(dateInput);
+    await waitFor(() => expect(editOps()).toEqual([{ op: 'setHeader', invoiceDate: '2026-09-15' }]));
+    await waitFor(() => expect(saveState()).toHaveAttribute('data-state', 'saved'));
+    fireEvent.click(within(tid('invoice-inbox-review-line-0-tax-picker')).getByTestId('inline-add-field-inbox-line-0-tax-chip'));
+    await waitFor(() => expect(mockPickerFetch).toHaveBeenCalled());
+    const url = new URL(mockPickerFetch.mock.calls.at(-1)[0], 'http://x');
+    expect(url.searchParams.get('DateInvoiced')).toMatch(/2026/);
+    expect(url.searchParams.get('DateInvoiced')).toMatch(/09|15/);
+  });
+
+  it('unknown_tax: the pick rolls back to the previous tax and the reason is the translated text, not the backend one', async () => {
+    pickerItems([{ id: 'T10', label: 'IVA 10%', rate: 10 }]);
+    respond = () => refusal(422, { code: 'unknown_tax', field: 'taxId', index: 0, message: 'tax T10 not found in zone' });
+    await mountLoaded(makeReview({}, { lines: [taxedLine()] }));
+    await pickTax(0, 'T10');
+    await waitFor(() => expect(saveState()).toHaveAttribute('data-state', 'error'));
+    expect(tid('invoice-inbox-review-save-error')).toHaveTextContent(L('invoiceInboxSaveErrorUnknownTax'));
+    expect(screen.queryByText(/not found in zone/)).toBeNull();
+    expect(tid('invoice-inbox-review-line-0-tax')).toHaveValue('21%');
+    expect(maybe('invoice-inbox-review-notice')).toBeNull();
+  });
+
+  it('a line missing its tax (line[i].tax) shows "—" and flags the picker as invalid', async () => {
+    await mountLoaded(makeReview({}, {
+      lines: [line({ taxRate: undefined, tax: undefined })],
+      validation: { missing: ['line[0].tax'] },
+    }));
+    expect(tid('invoice-inbox-review-line-0-tax')).toHaveValue('—');
+    expect(tid('invoice-inbox-review-line-0-tax')).toHaveAttribute('aria-invalid', 'true');
+    expect(tid('invoice-inbox-review-line-0-tax-picker')).toHaveAttribute('data-invalid', 'true');
+    expect(tid('invoice-inbox-review-lines-error')).toHaveTextContent(L('invoiceInboxReviewTaxMissingError'));
+  });
+
+  it('a chosen tax with no name shows its rate as the picker label', async () => {
+    await mountLoaded(makeReview({}, { lines: [line({ taxRate: 7, tax: { state: 'resolved', id: 'T7', rate: 7 } })] }));
+    expect(within(tid('invoice-inbox-review-line-0-tax-picker')).getByTestId('inline-add-field-inbox-line-0-tax-chip')).toHaveTextContent('7%');
+  });
+
+  it.each([
+    ['a settled document', { status: 'CONFIRMED', editable: false, invoice: { documentNo: 'F-1' } }],
+    ['a foreign receiver (read-only table)', { status: 'ERROR', errorCode: 'FOREIGN_RECEIVER', editable: false }],
+  ])('%s: no tax picker is offered (label as text) and the VAT cell stays read-only', async (_name, over) => {
+    await mountLoaded(makeReview(over, { lines: [taxedLine()] }));
+    expect(maybe('invoice-inbox-review-line-0-tax-picker')).toBeNull();
+    expect(mockPickerFetch).not.toHaveBeenCalled();
+    const name = maybe('invoice-inbox-review-line-0-tax-name');
+    if (name) expect(name).toHaveTextContent('IVA 21%');
+    expect(posts).toHaveLength(0);
+  });
+
+  it('addLine on a line whose tax has an id also sends setLine {taxId}, in that order, and the new row shows the tax', async () => {
+    taxAwareServer();
+    await mountLoaded(makeReview({}, { lines: [taxedLine()] }));
+    fireEvent.click(tid('invoice-inbox-review-add-line'));
+    await waitFor(() => expect(editOps()).toEqual([{ op: 'addLine' }, { op: 'setLine', index: 1, taxId: 'T21' }]));
+    await waitFor(() => expect(tid('invoice-inbox-review-line-1-tax')).toHaveValue('21%'));
+  });
+
+  it('addLine on a line with a rate but NO tax id sends only addLine (the server default applies)', async () => {
+    await mountLoaded(makeReview({}, { lines: [line({ taxRate: 10 })] }));
+    fireEvent.click(tid('invoice-inbox-review-add-line'));
+    await waitFor(() => expect(editOps()).toEqual([{ op: 'addLine' }]));
+    await act(async () => { await Promise.resolve(); });
+    expect(editOps()).toEqual([{ op: 'addLine' }]);
+  });
+
+  it('addLine on an empty document sends only addLine', async () => {
+    await mountLoaded(makeReview({}, { lines: [], validation: { missing: ['lines'] } }));
+    fireEvent.click(tid('invoice-inbox-review-add-line'));
+    await waitFor(() => expect(editOps()).toEqual([{ op: 'addLine' }]));
+  });
+});
+
+describe('editing — currency scale end to end (ETP-6050 S2)', () => {
+  const jpy = { id: 'JPY1', isoCode: 'JPY', symbol: '¥', scale: 0 };
+  const kwd = { id: 'KWD1', isoCode: 'KWD', symbol: 'KD', scale: 3 };
+
+  it('scale 0: lines, price input, totals card and tax label show no decimals; the price still accepts up to 6', async () => {
+    await mountLoaded(makeReview({ currency: jpy }, {
+      header: { totalSource: 'lines' },
+      lines: [line({ quantity: 3, unitPrice: 1234, taxRate: 21 }), line({ index: 1, quantity: 1, unitPrice: 33.5, taxRate: 21 })],
+    }));
+    expect(tid('invoice-inbox-review-line-0-amount')).toHaveTextContent(money('JPY', 3702, 0));
+    expect(val('invoice-inbox-review-line-0-price')).toBe(money('JPY', 1234, 0, 6));
+    expect(val('invoice-inbox-review-line-1-price')).toBe(money('JPY', 33.5, 0, 6));
+    expect(tid('invoice-inbox-review-total-base')).toHaveTextContent(money('JPY', 3736, 0));
+    expect(tid('invoice-inbox-review-total-tax-21-label')).toHaveTextContent(money('JPY', 3736, 0));
+    expect(tid('invoice-inbox-review-total-tax-21')).toHaveTextContent(money('JPY', 785, 0));
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(money('JPY', 4521, 0));
+    expect(tid('invoice-inbox-review-total').textContent).not.toMatch(/[.,]\d{2}(?!\d)/);
+    typeAndBlur('invoice-inbox-review-line-0-price', '1234,5');
+    await waitFor(() => expect(editOps()).toEqual([{ op: 'setLine', index: 0, unitPrice: 1234.5 }]));
+  });
+
+  it('scale 0: the mismatch banner tolerates ONE unit and warns from two', async () => {
+    const make = (printed) => makeReview({ currency: jpy }, {
+      header: { totalSource: 'printed', totalAmount: printed },
+      lines: [line({ quantity: 3, unitPrice: 33.5, taxRate: 21 })],
+    });
+    const one = await mountLoaded(make(123));
+    expect(maybe('invoice-inbox-review-banner-mismatch')).toBeNull();
+    one.unmount();
+    await mountLoaded(make(124));
+    expect(tid('invoice-inbox-review-banner-mismatch')).toHaveTextContent(money('JPY', 122, 0));
+    expect(tid('invoice-inbox-review-banner-mismatch')).toHaveTextContent(money('JPY', 124, 0));
+  });
+
+  it('scale 3: amounts, totals and the mismatch tolerance use three decimals', async () => {
+    const make = (printed) => makeReview({ currency: kwd }, {
+      header: { totalSource: 'printed', totalAmount: printed },
+      lines: [line({ quantity: 3, unitPrice: 1.2345, taxRate: 10 })],
+    });
+    const ok = await mountLoaded(make(4.075));
+    expect(tid('invoice-inbox-review-line-0-amount')).toHaveTextContent(money('KWD', 3.704, 3));
+    expect(tid('invoice-inbox-review-total-base')).toHaveTextContent(money('KWD', 3.704, 3));
+    expect(tid('invoice-inbox-review-total-tax-10')).toHaveTextContent(money('KWD', 0.37, 3));
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(money('KWD', 4.075, 3));
+    expect(maybe('invoice-inbox-review-banner-mismatch')).toBeNull();
+    ok.unmount();
+    await mountLoaded(make(4.077));
+    expect(tid('invoice-inbox-review-banner-mismatch')).toHaveTextContent(money('KWD', 4.074, 3));
+  });
+
+  it('a missing currency (or one with no scale) falls back to 2 decimals', async () => {
+    const none = await mountLoaded(makeReview({ currency: null }, { lines: [line({ quantity: 1, unitPrice: 10.5, taxRate: 0 })] }));
+    expect(tid('invoice-inbox-review-line-0-amount')).toHaveTextContent(M(10.5));
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(M(10.5));
+    none.unmount();
+    await mountLoaded(makeReview({ currency: { id: 'EUR1', isoCode: 'EUR', symbol: '€' } }, { lines: [line({ quantity: 1, unitPrice: 10.5, taxRate: 0 })] }));
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(M(10.5));
+  });
+
+  it('the currency badge is read-only and shows the document currency (no selector, no fetch, nothing written)', async () => {
+    await mountLoaded(makeReview({ currency: jpy }));
+    const badge = tid('currency-rate-readonly');
+    expect(badge).toHaveTextContent(/JPY/);
+    expect(badge).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(badge);
+    expect(maybe('currency-rate-popover')).toBeNull();
+    expect(mockPickerFetch).not.toHaveBeenCalled();
+    expect(posts).toHaveLength(0);
+  });
+
+  it('the read-only list (settled document) formats line, detail and total with the scale', async () => {
+    await mountLoaded(makeReview({ currency: jpy, status: 'CONFIRMED', editable: false, invoice: { documentNo: 'F-1' } }, {
+      lines: [line({ quantity: 3, unitPrice: 33.5, taxRate: 21, discount: 10 })],
+    }));
+    expect(tid('invoice-inbox-review-line-0-amount')).toHaveTextContent(money('JPY', 90, 0));
+    expect(tid('invoice-inbox-review-line-0-detail')).toHaveTextContent(money('JPY', 33.5, 0, 6));
+    expect(tid('invoice-inbox-review-total-base')).toHaveTextContent(money('JPY', 90, 0));
+  });
+});
+
+describe('editing — price and quantity precision (ETP-6050 S2)', () => {
+  it('a 6-decimal price is displayed in full, a 2-decimal one never with fewer than the scale; the quantity keeps 4', async () => {
+    await mountLoaded(makeReview({}, {
+      lines: [line({ quantity: 1.2345, unitPrice: 0.123456 }), line({ index: 1, quantity: 1, unitPrice: 12.5 })],
+    }));
+    expect(val('invoice-inbox-review-line-0-price')).toBe(money('EUR', 0.123456, 2, 6));
+    expect(tid('invoice-inbox-review-line-0-price').value).toMatch(/0,123456/);
+    expect(tid('invoice-inbox-review-line-1-price').value).toMatch(/12,50(?!\d)/);
+    expect(tid('invoice-inbox-review-line-0-quantity')).toHaveValue('1,2345');
+  });
+
+  it('typing 7 decimals rounds HALF_UP to 6 at the boundary before it is sent and shown', async () => {
+    await mountLoaded();
+    typeAndBlur('invoice-inbox-review-line-0-price', '0,1234565');
+    await waitFor(() => expect(editOps()).toEqual([{ op: 'setLine', index: 0, unitPrice: 0.123457 }]));
+    await waitFor(() => expect(tid('invoice-inbox-review-line-0-price').value).toMatch(/0,123457/));
+  });
+
+  it('typing 5 decimals of quantity rounds to 4; a price typed with the plain 2 decimals is padded on display', async () => {
+    await mountLoaded();
+    typeAndBlur('invoice-inbox-review-line-0-quantity', '1,23455');
+    await waitFor(() => expect(editOps()).toEqual([{ op: 'setLine', index: 0, quantity: 1.2346 }]));
+    typeAndBlur('invoice-inbox-review-line-0-price', '7,5');
+    await waitFor(() => expect(editOps()).toContainEqual({ op: 'setLine', index: 0, unitPrice: 7.5 }));
+    await waitFor(() => expect(tid('invoice-inbox-review-line-0-price').value).toMatch(/7,50(?!\d)/));
+  });
+
+  it('while focused the price shows its full precision as plain text', async () => {
+    await mountLoaded(makeReview({}, { lines: [line({ unitPrice: 0.123456 })] }));
+    const price = tid('invoice-inbox-review-line-0-price');
+    fireEvent.focus(price);
+    expect(price).toHaveValue('0,123456');
+  });
+});
+
+describe('editing — any sign, zero and missing values (ETP-6050 S2)', () => {
+  it('a negative quantity and a negative price are valid, sent as typed, and the amount keeps its sign', async () => {
+    await mountLoaded(makeReview({}, { lines: [line({ quantity: -2, unitPrice: 50, taxRate: 0 })], header: { totalSource: 'lines' } }));
+    expect(tid('invoice-inbox-review-line-0-amount')).toHaveTextContent(M(-100));
+    expect(tid('invoice-inbox-review-line-0-quantity')).not.toHaveAttribute('aria-invalid');
+    typeAndBlur('invoice-inbox-review-line-0-price', '-5');
+    await waitFor(() => expect(editOps()).toEqual([{ op: 'setLine', index: 0, unitPrice: -5 }]));
+    expect(tid('invoice-inbox-review-line-0-amount')).toHaveTextContent(M(10));
+  });
+
+  it('a zero quantity or a zero price is accepted (amount 0) and Marcar como revisada stays available', async () => {
+    await mountLoaded(makeReview({}, { lines: [line({ quantity: 0, unitPrice: 50 }), line({ index: 1, quantity: 3, unitPrice: 0 })], header: { totalSource: 'lines' } }));
+    expect(tid('invoice-inbox-review-line-0-amount')).toHaveTextContent(M(0));
+    expect(tid('invoice-inbox-review-line-1-amount')).toHaveTextContent(M(0));
+    expect(tid('invoice-inbox-review-line-0-quantity')).toHaveValue('0');
+    expect(maybe('invoice-inbox-review-lines-error')).toBeNull();
+    expect(tid('invoice-inbox-review-mark-reviewed')).not.toBeDisabled();
+    typeAndBlur('invoice-inbox-review-line-0-quantity', '0');
+    expect(posts).toHaveLength(0);
+  });
+
+  it('clearing a price is rejected (reverts), never sent as null or as zero', async () => {
+    await mountLoaded();
+    typeAndBlur('invoice-inbox-review-line-0-price', '');
+    expect(posts).toHaveLength(0);
+    expect(tid('invoice-inbox-review-line-0-price').value).toMatch(/50,00/);
+  });
+
+  it('a missing quantity and price: red cells, the footer counts both codes, Revisar is disabled, totals ignore the line', async () => {
+    await mountLoaded(makeReview({}, {
+      lines: [line({ quantity: null, unitPrice: 10, taxRate: 21 }), line({ index: 1, quantity: 2, unitPrice: null, taxRate: 21 }), line({ index: 2, quantity: 1, unitPrice: 100, taxRate: 21 })],
+      validation: { missing: ['line[0].quantity', 'line[1].unitPrice'] },
+      header: { totalSource: 'lines' },
+    }));
+    expect(tid('invoice-inbox-review-line-0-quantity')).toHaveAttribute('aria-invalid', 'true');
+    expect(tid('invoice-inbox-review-line-1-price')).toHaveAttribute('aria-invalid', 'true');
+    expect(tid('invoice-inbox-review-line-1-quantity')).not.toHaveAttribute('aria-invalid');
+    expect(tid('invoice-inbox-review-line-2-price')).not.toHaveAttribute('aria-invalid');
+    expect(tid('invoice-inbox-review-pending')).toHaveTextContent('2 obligatorios pendientes');
+    expect(tid('invoice-inbox-review-mark-reviewed')).toBeDisabled();
+    expect(tid('invoice-inbox-review-total-base')).toHaveTextContent(M(100));
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(M(121));
+  });
+
+  it('filling the missing quantity clears the red cell once the server drops the code', async () => {
+    respond = (url, body) => {
+      if (!url.endsWith('/action/apply')) return undefined;
+      let document = state.document;
+      for (const op of body.operations) document = applyOperationLocally(document, op, {});
+      document = { ...document, validation: { missing: [] } };
+      tokenCount += 1;
+      state = { ...state, document, updated: `T${tokenCount}`, adjusted: true };
+      return jsonRes(200, state);
+    };
+    await mountLoaded(makeReview({}, { lines: [line({ quantity: null })], validation: { missing: ['line[0].quantity'] } }));
+    typeAndBlur('invoice-inbox-review-line-0-quantity', '3');
+    await waitFor(() => expect(editOps()).toEqual([{ op: 'setLine', index: 0, quantity: 3 }]));
+    await waitFor(() => expect(tid('invoice-inbox-review-line-0-quantity')).not.toHaveAttribute('aria-invalid'));
+    expect(tid('invoice-inbox-review-pending')).not.toHaveTextContent(/pendiente/);
+    expect(tid('invoice-inbox-review-mark-reviewed')).not.toBeDisabled();
+  });
+
+  it('a credit document (every line negative) totals negative and its mismatch banner formats both negatives', async () => {
+    await mountLoaded(makeReview({}, {
+      lines: [line({ quantity: -1, unitPrice: 100, taxRate: 21 }), line({ index: 1, quantity: -2, unitPrice: 10.5, taxRate: 21 })],
+      header: { totalSource: 'printed', totalAmount: -150 },
+    }));
+    expect(tid('invoice-inbox-review-total-base')).toHaveTextContent(M(-121));
+    expect(tid('invoice-inbox-review-total-tax-21')).toHaveTextContent(M(-25.41));
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(M(-150));
+    expect(tid('invoice-inbox-review-banner-mismatch')).toHaveTextContent(M(-146.41));
+    expect(tid('invoice-inbox-review-banner-mismatch')).toHaveTextContent(M(-150));
+  });
+});
+
+describe('editing — D and L tax rows (ETP-6050 S2)', () => {
+  it('a line-based tax shows its own row labelled "por línea", D before L at the same rate, and each with its base', async () => {
+    await mountLoaded(makeReview({}, {
+      lines: [
+        line({ index: 0, quantity: 1, unitPrice: 100, taxRate: 10, tax: { state: 'resolved', docTaxAmount: 'D' } }),
+        line({ index: 1, quantity: 1, unitPrice: 50, taxRate: 10, tax: { state: 'resolved', docTaxAmount: 'L' } }),
+      ],
+      header: { totalSource: 'lines' },
+    }));
+    const rows = screen.getAllByTestId(/^invoice-inbox-review-total-tax-10(-L)?$/);
+    expect(rows.map((r) => r.getAttribute('data-testid'))).toEqual(['invoice-inbox-review-total-tax-10', 'invoice-inbox-review-total-tax-10-L']);
+    expect(tid('invoice-inbox-review-total-tax-10')).toHaveTextContent(M(10));
+    expect(tid('invoice-inbox-review-total-tax-10-L')).toHaveTextContent(M(5));
+    expect(tid('invoice-inbox-review-total-tax-10-label')).toHaveTextContent(`IVA 10% s/ ${M(100)}`);
+    expect(tid('invoice-inbox-review-total-tax-10-L-label')).toHaveTextContent(L('invoiceInboxReviewTotalTaxLine', { rate: '10', base: M(50) }));
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(M(165));
+  });
+
+  it('only L lines: a single "-L" row and no D row; a rate with decimals keeps them in the id', async () => {
+    await mountLoaded(makeReview({}, {
+      lines: [line({ index: 0, quantity: 1, unitPrice: 100, taxRate: 5.5, tax: { state: 'resolved', docTaxAmount: 'L' } })],
+      header: { totalSource: 'lines' },
+    }));
+    expect(tid('invoice-inbox-review-total-tax-5.5-L')).toHaveTextContent(M(5.5));
+    expect(maybe('invoice-inbox-review-total-tax-5.5')).toBeNull();
+  });
+});
+
+describe('editing — mark as reviewed refusals (ETP-6050 S2)', () => {
+  it('not_valid adopts the recomputed codes and the new token locally: ERROR status, red cell, no re-read, no loop', async () => {
+    respond = (url) => (url.endsWith('/mark-reviewed')
+      ? refusal(422, { code: 'not_valid', missing: ['line[0].quantity'], documentStatus: 'ERROR', updated: 'T7' })
+      : undefined);
+    await mountLoaded(makeReview({}, { lines: [line({ quantity: null })] }));
+    // the stored verdict said valid (stale); the click is allowed
+    const reads = () => apiFetch.mock.calls.filter(([, o]) => !o?.method).length;
+    const before = reads();
+    fireEvent.click(tid('invoice-inbox-review-mark-reviewed'));
+    await waitFor(() => expect(tid('invoice-inbox-review-save-error')).toHaveTextContent(L('invoiceInboxSaveErrorNotValid')));
+    expect(reads()).toBe(before);
+    expect(posts.filter((p) => p.url.endsWith('/mark-reviewed'))).toHaveLength(1);
+    expect(tid('invoice-inbox-review-line-0-quantity')).toHaveAttribute('aria-invalid', 'true');
+    expect(tid('invoice-inbox-review-pending')).toHaveTextContent('1 obligatorio pendiente');
+    expect(tid('invoice-inbox-review-mark-reviewed')).toBeDisabled();
+    expect(maybe('invoice-inbox-review-notice')).toBeNull();
+    // no loop: nothing else is sent by itself
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    expect(posts.filter((p) => p.url.endsWith('/mark-reviewed'))).toHaveLength(1);
+  });
+
+  it('a later edit after not_valid carries the adopted token', async () => {
+    respond = (url, body) => {
+      if (url.endsWith('/mark-reviewed')) return refusal(422, { code: 'not_valid', missing: ['line[0].quantity'], documentStatus: 'ERROR', updated: 'T7' });
+      return undefined;
+    };
+    await mountLoaded(makeReview({}, { lines: [line({ quantity: null })] }));
+    fireEvent.click(tid('invoice-inbox-review-mark-reviewed'));
+    await waitFor(() => expect(tid('invoice-inbox-review-save-error')).toBeInTheDocument());
+    respond = undefined;
+    typeAndBlur('invoice-inbox-review-line-0-quantity', '3');
+    await waitFor(() => expect(posts.filter((p) => p.url.endsWith('/action/apply'))).toHaveLength(1));
+    expect(posts.at(-1).body.updated).toBe('T7');
+  });
+
+  it('a code-less 403 on a write reads "access denied" and offers NO retry (it would be refused again)', async () => {
+    respond = () => jsonRes(403, { error: { message: 'Forbidden by spec gate' } });
+    await mountLoaded();
+    typeAndBlur('invoice-inbox-review-line-0-quantity', '9');
+    await waitFor(() => expect(saveState()).toHaveAttribute('data-state', 'error'));
+    expect(tid('invoice-inbox-review-save-error')).toHaveTextContent(L('invoiceInboxSaveErrorAccess'));
+    expect(screen.queryByText(/Forbidden by spec gate/)).toBeNull();
+    expect(maybe('invoice-inbox-review-save-retry')).toBeNull();
+    expect(tid('invoice-inbox-review-line-0-quantity')).toHaveValue('2');
+  });
+
+  it('a code-less 403 on Marcar como revisada reads "access denied" with no retry either', async () => {
+    respond = (url) => (url.endsWith('/mark-reviewed') ? jsonRes(403, {}) : undefined);
+    await mountLoaded();
+    fireEvent.click(tid('invoice-inbox-review-mark-reviewed'));
+    await waitFor(() => expect(tid('invoice-inbox-review-save-error')).toHaveTextContent(L('invoiceInboxSaveErrorAccess')));
+    expect(maybe('invoice-inbox-review-save-retry')).toBeNull();
+  });
+
+  it('a coded 403 (feature_disabled) keeps its own reason and does offer Reintentar', async () => {
+    respond = () => refusal(403, { code: 'feature_disabled' });
+    await mountLoaded();
+    typeAndBlur('invoice-inbox-review-line-0-quantity', '9');
+    await waitFor(() => expect(tid('invoice-inbox-review-save-error')).toHaveTextContent(L('invoiceInboxReviewErrorFeatureDisabled')));
+    expect(tid('invoice-inbox-review-save-retry')).toBeInTheDocument();
+  });
+});
+
+describe('editing — a new product whose names are not resolved (ETP-6050 S2)', () => {
+  const newLine = (fresh) => line({ product: { state: 'new', id: null, candidates: [], new: fresh } });
+
+  it('an id with no resolved name shows the "unknown" text, keeps the id selected and sends nothing by itself', async () => {
+    await mountLoaded(makeReview({}, { lines: [newLine({ name: 'Tornillo', categoryId: 'C1', uomId: 'U1' })] }));
+    fireEvent.click(tid('invoice-inbox-review-line-0-product'));
+    expect(within(tid('invoice-inbox-review-line-0-new-category')).getByTestId('inline-add-field-inbox-line-0-category-chip')).toHaveTextContent(L('invoiceInboxReviewNameUnknown'));
+    expect(within(tid('invoice-inbox-review-line-0-new-uom')).getByTestId('inline-add-field-inbox-line-0-uom-chip')).toHaveTextContent(L('invoiceInboxReviewNameUnknown'));
+    expect(maybe('invoice-inbox-review-line-0-new-error')).toBeNull();
+    expect(posts).toHaveLength(0);
+  });
+
+  it('with a resolved name the name shows and the unknown text does not', async () => {
+    await mountLoaded(makeReview({}, { lines: [newLine({ name: 'Tornillo', categoryId: 'C1', category: 'Ferretería', uomId: 'U1', uom: 'Unidad' })] }));
+    fireEvent.click(tid('invoice-inbox-review-line-0-product'));
+    expect(tid('invoice-inbox-review-line-0-new-category')).toHaveTextContent('Ferretería');
+    expect(tid('invoice-inbox-review-line-0-new-uom')).toHaveTextContent('Unidad');
+    expect(tid('invoice-inbox-review-line-0-new-category')).not.toHaveTextContent(L('invoiceInboxReviewNameUnknown'));
+  });
+
+  it('picking a category sends only its id (the name is never echoed) and then shows the server-resolved name', async () => {
+    catalog = { C9: 'Tornillería' };
+    pickerItems([{ id: 'C9', name: 'Tornillería' }]);
+    await mountLoaded(makeReview({}, { lines: [newLine({ name: 'Tornillo' })], validation: { missing: ['line[0].product'] } }));
+    fireEvent.click(tid('invoice-inbox-review-line-0-product'));
+    const category = within(tid('invoice-inbox-review-line-0-new-category')).getByTestId('inline-add-field-inbox-line-0-category');
+    fireEvent.focus(category);
+    fireEvent.click(category);
+    fireEvent.mouseDown(await screen.findByTestId('inline-add-option-inbox-line-0-category-C9'));
+    await waitFor(() => expect(editOps()).toEqual([{ op: 'newProduct', index: 0, categoryId: 'C9' }]));
+    await waitFor(() => expect(tid('invoice-inbox-review-line-0-new-category')).toHaveTextContent('Tornillería'));
   });
 });

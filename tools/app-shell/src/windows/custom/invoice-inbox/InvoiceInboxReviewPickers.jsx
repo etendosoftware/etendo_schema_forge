@@ -14,6 +14,8 @@ export const PICKER_SELECTORS = Object.freeze({
   category: { spec: 'product', entity: 'product', column: 'M_Product_Category_ID', params: {} },
   uom: { spec: 'product', entity: 'product', column: 'C_UOM_ID', params: {} },
   country: { spec: 'contacts', entity: 'locationAddress', column: 'C_Country_ID', params: {} },
+  // The SAME selector the purchase-invoice lines use for their tax (the `tax` field, inputMode selector).
+  tax: { spec: 'purchase-invoice', entity: 'lines', column: 'C_Tax_ID', params: {} },
 });
 
 const NO_OPTIONS = Object.freeze([]);
@@ -27,15 +29,19 @@ const NO_OPTIONS = Object.freeze([]);
  * search is not a choice, and nothing is written until the user picks a row.
  *
  * @param {{kind: keyof typeof PICKER_SELECTORS, apiBaseUrl: string, value?: string|null,
- *   label?: string, placeholder?: string, fieldKey: string, onPick: (pick: {id: string,
+ *   label?: string, placeholder?: string, fieldKey: string, params?: object, onPick: (pick: {id: string,
  *   name: string, option: object}) => void}} props
  */
-export function EntityPicker({ kind, apiBaseUrl, value = null, label = '', placeholder = '', fieldKey, onPick }) {
+export function EntityPicker({ kind, apiBaseUrl, value = null, label = '', placeholder = '', fieldKey, onPick, params = null }) {
   const spec = PICKER_SELECTORS[kind];
   const selectorUrl = useMemo(
     () => deriveSelectorUrl(apiBaseUrl, spec.spec, spec.entity, spec.column),
     [apiBaseUrl, spec],
   );
+  // Extra selector context (the tax selector reads the document date and the supplier's address); keyed
+  // by content so a new object each render does not refetch.
+  const paramsKey = JSON.stringify(params ?? {});
+  const selectorContext = useMemo(() => ({ ...spec.params, ...JSON.parse(paramsKey) }), [spec, paramsKey]);
   const field = useMemo(() => ({ key: fieldKey, id: fieldKey, required: true }), [fieldKey]);
   return (
     <InlineSearchCombo
@@ -44,7 +50,7 @@ export function EntityPicker({ kind, apiBaseUrl, value = null, label = '', place
       displayLabel={label}
       options={NO_OPTIONS}
       selectorUrl={selectorUrl}
-      selectorContext={spec.params}
+      selectorContext={selectorContext}
       placeholder={placeholder}
       clearOnType={false}
       onChange={(id, name, option) => { if (id) onPick({ id, name, option: option ?? {} }); }}

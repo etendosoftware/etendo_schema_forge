@@ -1,9 +1,9 @@
 import { X } from 'lucide-react';
 import { useUI } from '@/i18n';
-import { formatCurrency } from '@/lib/formatCurrency.js';
+import { formatMoney } from './invoiceInboxMoney.js';
 import { errorCodeLabelKey } from './invoiceInboxMessages.js';
 import {
-  computeTotals, isSettledStatus, reviewBanners, totalMismatch,
+  computeTotals, currencyScale, isSettledStatus, reviewBanners, totalMismatch,
 } from './invoiceInboxReviewModel.js';
 import { ReviewBanner } from './InvoiceInboxReviewParts.jsx';
 
@@ -106,7 +106,8 @@ export default function InvoiceInboxReviewBanners({ review }) {
 export function InvoiceInboxReviewMismatchBanner({ review, currency }) {
   const ui = useUI();
   if (isSettledStatus(review.status)) return null;
-  const mismatch = totalMismatch(review.document?.header, computeTotals(review.document?.lines));
+  const scale = currencyScale(review.currency);
+  const mismatch = totalMismatch(review.document?.header, computeTotals(review.document?.lines, scale), scale);
   if (!mismatch) return null;
   return (
     <ReviewBanner
@@ -115,8 +116,8 @@ export function InvoiceInboxReviewMismatchBanner({ review, currency }) {
       title={ui('invoiceInboxReviewMismatchTitle')}
       data-testid="ReviewBanner__838958">
       {ui('invoiceInboxReviewMismatchBody', {
-        lines: formatCurrency(currency, mismatch.lines),
-        doc: formatCurrency(currency, mismatch.document),
+        lines: formatMoney(currency, mismatch.lines, scale),
+        doc: formatMoney(currency, mismatch.document, scale),
       })}
     </ReviewBanner>
   );

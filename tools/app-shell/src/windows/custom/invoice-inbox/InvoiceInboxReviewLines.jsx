@@ -5,14 +5,16 @@ import {
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { formatCurrency, formatGroupedNumber } from '@/lib/formatCurrency.js';
+import { formatGroupedNumber } from '@/lib/formatCurrency.js';
+import { formatMoney } from './invoiceInboxMoney.js';
 import {
-  buildOp, hasMissingTax, joinMeta, lineAmount, lineKey, lineRate, MAX_LINES, MAX_TEXT, missingSet,
+  buildOp, hasMissingLineField, hasMissingTax, joinMeta, lineAmount, lineFieldMissing, lineKey, lineRate, MAX_LINES, MAX_TEXT, missingSet,
   newProductName, productView, unresolvedProductCount,
 } from './invoiceInboxReviewModel.js';
 import { AiChip, FieldError, OptionRow, ReviewTag, SectionTitle } from './InvoiceInboxReviewParts.jsx';
 import { CommitInput, NumberCommitInput } from './InvoiceInboxReviewInputs.jsx';
 import { EntityPicker } from './InvoiceInboxReviewPickers.jsx';
+import { buildLineSelectorContext } from '@/lib/selectorContext.js';
 import { useReviewEditor } from './useInvoiceInboxReviewEditor.js';
 
 const NONE_VALUE = '__none__';
@@ -26,9 +28,10 @@ export const STACKED_BELOW_PX = 460;
 const STACKED_NUMBERS = 'grid grid-cols-[1fr_1.4fr_0.9fr_0.9fr_1.4fr] items-end gap-1.5';
 const CELL = 'h-[34px] px-2 text-[13px]';
 const MAX_QUANTITY_DECIMALS = 4;
-const MAX_PRICE_DECIMALS = 4;
+const MAX_PRICE_DECIMALS = 6;
 const MAX_RATE_DECIMALS = 2;
-const MAX_DISCOUNT_DECIMALS = 2;
+// The discount is stored with 4 decimals: shown with up to 4, trailing zeros trimmed (never padded).
+const MAX_DISCOUNT_DECIMALS = 4;
 /** `product.matchedBy` of a linked product → `genericLabels` key (decision 2: no "saved equivalence"). */
 const PRODUCT_MATCHED_BY_KEYS = Object.freeze({
   exact: 'invoiceInboxReviewProductMatchExact',
@@ -41,6 +44,13 @@ let opSequence = 0;
 function uniqueKey(prefix) {
   opSequence += 1;
   return `${prefix}:${opSequence}`;
+}
+
+/** The tooltip of the rate cell: the chosen tax's name; the printed OCR rate is only a hint, never sent back. */
+function taxTitle(line) {
+  const name = line.tax?.name ?? '';
+  const printed = line.taxRatePrinted ?? null;
+  return [name, printed != null ? `OCR: ${printed}%` : ''].filter(Boolean).join(' · ');
 }
 
 function rateText(line) {
@@ -62,6 +72,9 @@ function NewProductForm({ line, lineIndex, position, readOnly, missing, apiBaseU
   const incomplete = missing.has(`line[${lineIndex}].product`);
   const noCategory = incomplete && !String(fresh.categoryId ?? '').trim();
   const noUom = incomplete && !String(fresh.uomId ?? '').trim();
+  // The names are resolved from the ids at read time and only present when the id resolves: a
+  // committed id with no name is shown as unknown (never as an empty choice); only ids are ever sent.
+  const unknownName = ui('invoiceInboxReviewNameUnknown');
   const label = (text) => <span className="mb-1 block text-xs font-medium text-foreground">{text}<span className="ml-0.5 text-destructive" aria-hidden="true">*</span></span>;
   return (
     <div className="flex flex-col gap-2.5" data-testid={`invoice-inbox-review-line-${position}-new-product`}>
@@ -82,13 +95,13 @@ function NewProductForm({ line, lineIndex, position, readOnly, missing, apiBaseU
         <div data-testid={`invoice-inbox-review-line-${position}-new-category`} data-invalid={noCategory || undefined}>
           {label(ui('invoiceInboxReviewProductCategory'))}
           {readOnly || !editor ? (
-            <p className="text-[13px] text-muted-foreground">{fresh.category ?? ''}</p>
+            <p className="text-[13px] text-muted-foreground">{fresh.category ?? (fresh.categoryId ? unknownName : '')}</p>
           ) : (
             <EntityPicker
               kind="category"
               apiBaseUrl={apiBaseUrl}
               value={fresh.categoryId}
-              label={fresh.category ?? ''}
+              label={fresh.category ?? (fresh.categoryId ? unknownName : '')}
               placeholder={ui('invoiceInboxReviewProductCategory')}
               fieldKey={`inbox-line-${lineIndex}-category`}
               onPick={({ id, name }) => editor.commit(
@@ -102,13 +115,13 @@ function NewProductForm({ line, lineIndex, position, readOnly, missing, apiBaseU
         <div data-testid={`invoice-inbox-review-line-${position}-new-uom`} data-invalid={noUom || undefined}>
           {label(ui('invoiceInboxReviewProductUom'))}
           {readOnly || !editor ? (
-            <p className="text-[13px] text-muted-foreground">{fresh.uom ?? ''}</p>
+            <p className="text-[13px] text-muted-foreground">{fresh.uom ?? (fresh.uomId ? unknownName : '')}</p>
           ) : (
             <EntityPicker
               kind="uom"
               apiBaseUrl={apiBaseUrl}
               value={fresh.uomId}
-              label={fresh.uom ?? ''}
+              label={fresh.uom ?? (fresh.uomId ? unknownName : '')}
               placeholder={ui('invoiceInboxReviewProductUom')}
               fieldKey={`inbox-line-${lineIndex}-uom`}
               onPick={({ id, name }) => editor.commit(
@@ -364,14 +377,15 @@ function Labeled({ label, children, testId }) {
 }
 
 /** The editable cells of one line (the same in both layouts). */
-function lineCells({ line, lineIndex, position, currency, missingTax, readOnly, descriptionRef, ui, editor }) {
+function lineCells({ line, lineIndex, position, currency, scale, missingTax, missingQuantity, missingPrice, readOnly, descriptionRef, ui, editor }) {
   const commitLine = (field) => (value) => editor?.commit(`line:${lineIndex}:${field}`, buildOp.setLine(lineIndex, { [field]: value }));
-  const amountText = formatCurrency(currency, lineAmount(line));
+  const amountText = formatMoney(currency, lineAmount(line, scale), scale);
   const number = (field, display, label, extra = {}) => (
     <NumberCommitInput
       field={field}
       value={line[field]}
       display={display}
+      invalid={extra.invalid}
       readOnly={readOnly}
       ariaLabel={label}
       className={`${CELL} text-right tabular-nums`}
@@ -397,12 +411,14 @@ function lineCells({ line, lineIndex, position, currency, missingTax, readOnly, 
       'quantity',
       (value) => formatGroupedNumber(value, { maximumFractionDigits: MAX_QUANTITY_DECIMALS }),
       ui('invoiceInboxReviewColQuantity'),
+      { invalid: missingQuantity },
     ),
     price: number(
       'unitPrice',
-      (value) => formatCurrency(currency, value ?? 0, { maximumFractionDigits: MAX_PRICE_DECIMALS }),
+      // A missing price is shown empty (and red), not as 0: zero is a valid price.
+      (value) => (value == null ? '' : formatMoney(currency, value, scale, { maxDigits: MAX_PRICE_DECIMALS })),
       ui('invoiceInboxReviewColPrice'),
-      { testSuffix: 'price' },
+      { testSuffix: 'price', invalid: missingPrice },
     ),
     discount: (
       <NumberCommitInput
@@ -417,18 +433,17 @@ function lineCells({ line, lineIndex, position, currency, missingTax, readOnly, 
         testId={`invoice-inbox-review-line-${position}-discount`}
         data-testid="NumberCommitInput__review" />
     ),
+    // The rate is a read-only display: the tax is CHOSEN by id with the selector under the product chip
+    // (a typed rate is no longer offered). While a chosen tax has no known rate yet it shows "…".
     tax: (
-      <NumberCommitInput
-        field="taxRate"
-        value={lineRate(line)}
-        display={() => (missingTax ? '—' : rateText(line))}
-        readOnly={readOnly}
-        invalid={missingTax}
-        ariaLabel={ui('invoiceInboxReviewColTax')}
-        className={`${CELL} text-right tabular-nums`}
-        onCommit={commitLine('taxRate')}
-        testId={`invoice-inbox-review-line-${position}-tax`}
-        data-testid="NumberCommitInput__review" />
+      <Input
+        readOnly
+        value={line.tax?.state === 'pending' ? '…' : (missingTax ? '—' : rateText(line))}
+        title={taxTitle(line)}
+        aria-label={ui('invoiceInboxReviewColTax')}
+        aria-invalid={missingTax || undefined}
+        className={`${CELL} text-right tabular-nums ${missingTax ? 'border-destructive bg-[var(--status-destructive-bg)] text-destructive' : ''}`}
+        data-testid={`invoice-inbox-review-line-${position}-tax`} />
     ),
     amount: (
       <span className="whitespace-nowrap text-right text-[13px] font-semibold tabular-nums" title={amountText} data-testid={`invoice-inbox-review-line-${position}-amount`}>
@@ -438,12 +453,69 @@ function lineCells({ line, lineIndex, position, currency, missingTax, readOnly, 
   };
 }
 
-function LineRow({ line, position, currency, missing, readOnly, showActions, open, onToggle, onKeepOpen, stacked, apiBaseUrl, focusRequest, onFocused }) {
+/** The label of the chosen tax: its name (resolved by the server in the request language), else its rate. */
+function taxLabel(line) {
+  const tax = line.tax ?? {};
+  if (tax.name) return tax.name;
+  const rate = lineRate(line);
+  return rate == null ? '' : rateText(line);
+}
+
+/**
+ * The tax of a line, CHOSEN BY ID with the same selector the purchase-invoice lines use
+ * (`purchase-invoice/lines/selectors/C_Tax_ID`, through the shared `InlineSearchCombo`, so it opens on the
+ * committed tax). The selector context is the document date (`DateInvoiced`), the purchase side (`isSOTrx`)
+ * and the supplier's address when it is known. Picking sends `setLine {taxId}` (the server validates it and
+ * sets the line's rate to the tax's); re-picking the same tax writes nothing. Read only: the label as text.
+ */
+function TaxPicker({ line, position, lineIndex, document, readOnly, invalid, apiBaseUrl }) {
+  const ui = useUI();
+  const editor = useReviewEditor();
+  const header = document?.header ?? {};
+  const params = buildLineSelectorContext({
+    windowCategory: 'purchases',
+    headerRecord: { invoiceDate: header.invoiceDate, partnerAddress: header.vendor?.locationId },
+  });
+  const label = taxLabel(line);
+  if (!editor || readOnly) {
+    return <span className="min-w-0 flex-[1_1_150px] truncate text-xs text-muted-foreground" data-testid={`invoice-inbox-review-line-${position}-tax-name`}>{label}</span>;
+  }
+  return (
+    <div
+      className="min-w-[150px] max-w-[260px] flex-[1_1_150px]"
+      aria-invalid={invalid || undefined}
+      data-invalid={invalid || undefined}
+      data-testid={`invoice-inbox-review-line-${position}-tax-picker`}>
+      <EntityPicker
+        kind="tax"
+        apiBaseUrl={apiBaseUrl}
+        value={line.tax?.id ?? null}
+        label={label}
+        params={params}
+        placeholder={ui('invoiceInboxReviewTaxPlaceholder')}
+        fieldKey={`inbox-line-${lineIndex}-tax`}
+        onPick={({ id, name, option }) => {
+          if (line.tax?.id === id) return;
+          editor.commit(
+            `line:${lineIndex}:tax`,
+            buildOp.setLine(lineIndex, { taxId: id }),
+            { taxName: name, taxRate: option?.rate ?? option?.taxRate },
+          );
+        }}
+        data-testid="EntityPicker__tax" />
+    </div>
+  );
+}
+
+function LineRow({ line, position, currency, scale, missing, readOnly, showActions, open, onToggle, onKeepOpen, stacked, apiBaseUrl, focusRequest, onFocused, document }) {
   const ui = useUI();
   const editor = useReviewEditor();
   const lineIndex = lineKey(line, position);
   const descriptionRef = useRef(null);
-  const missingTax = missing.has(`line[${lineIndex}].tax`) || lineRate(line) == null;
+  const taxPending = line.tax?.state === 'pending';
+  const missingTax = !taxPending && (lineFieldMissing(missing, lineIndex, 'tax') || lineRate(line) == null);
+  const missingQuantity = lineFieldMissing(missing, lineIndex, 'quantity');
+  const missingPrice = lineFieldMissing(missing, lineIndex, 'unitPrice');
   const state = productView(line);
   const editable = Boolean(editor) && !readOnly;
   useEffect(() => {
@@ -452,7 +524,7 @@ function LineRow({ line, position, currency, missing, readOnly, showActions, ope
       onFocused();
     }
   }, [focusRequest, lineIndex, onFocused]);
-  const cells = lineCells({ line, lineIndex, position, currency, missingTax, readOnly, descriptionRef, ui, editor });
+  const cells = lineCells({ line, lineIndex, position, currency, scale, missingTax, missingQuantity, missingPrice, readOnly, descriptionRef, ui, editor });
   const trash = showActions && editable
     ? <DeleteLineButton
       position={position}
@@ -489,8 +561,21 @@ function LineRow({ line, position, currency, missing, readOnly, showActions, ope
           {trash}
         </div>
       )}
-      <div className="mt-1">
-        <ProductChip line={line} position={position} state={state} open={open} onToggle={onToggle} data-testid="ProductChip__review" />
+      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <div className="min-w-[180px] flex-[1_1_180px]">
+          <ProductChip line={line} position={position} state={state} open={open} onToggle={onToggle} data-testid="ProductChip__review" />
+        </div>
+        <TaxPicker
+          line={line}
+          position={position}
+          lineIndex={lineIndex}
+          document={document}
+          readOnly={readOnly}
+          invalid={missingTax}
+          apiBaseUrl={apiBaseUrl}
+          data-testid="TaxPicker__review" />
+      </div>
+      <div>
         {open && (
           <ProductPanel
             line={line}
@@ -509,7 +594,7 @@ function LineRow({ line, position, currency, missing, readOnly, showActions, ope
 }
 
 /** Confirmed / discarded: the compact list of the design — description, a muted detail line, the amount. */
-function ReadOnlyLines({ lines, currency }) {
+function ReadOnlyLines({ lines, currency, scale }) {
   const ui = useUI();
   if (lines.length === 0) return null;
   return (
@@ -519,7 +604,7 @@ function ReadOnlyLines({ lines, currency }) {
         const discount = Number(line.discount) || 0;
         const detail = joinMeta([
           line.product?.details?.searchKey,
-          `${formatGroupedNumber(line.quantity, { maximumFractionDigits: MAX_QUANTITY_DECIMALS })} × ${formatCurrency(currency, line.unitPrice ?? 0, { maximumFractionDigits: MAX_PRICE_DECIMALS })}`,
+          `${formatGroupedNumber(line.quantity, { maximumFractionDigits: MAX_QUANTITY_DECIMALS })} × ${formatMoney(currency, line.unitPrice ?? 0, scale, { maxDigits: MAX_PRICE_DECIMALS })}`,
           discount > 0 ? ui('invoiceInboxReviewLineDiscountDetail', { rate: formatGroupedNumber(discount, { maximumFractionDigits: MAX_DISCOUNT_DECIMALS }) }) : '',
           rate == null ? '' : ui('invoiceInboxReviewLineTaxDetail', { rate: formatGroupedNumber(rate, { maximumFractionDigits: MAX_RATE_DECIMALS }) }),
         ]);
@@ -533,7 +618,7 @@ function ReadOnlyLines({ lines, currency }) {
               <span className="block text-xs text-muted-foreground [overflow-wrap:anywhere]" data-testid={`invoice-inbox-review-line-${position}-detail`}>{detail}</span>
             </span>
             <span className="font-semibold tabular-nums" data-testid={`invoice-inbox-review-line-${position}-amount`}>
-              {formatCurrency(currency, lineAmount(line))}
+              {formatMoney(currency, lineAmount(line, scale), scale)}
             </span>
           </li>
         );
@@ -558,6 +643,8 @@ function lineErrors(document, ui) {
   return [
     missing.has('lines') ? ui('invoiceInboxReviewLinesRequired') : null,
     unresolvedProductsError(unresolved, ui),
+    hasMissingLineField(document, 'quantity') ? ui('invoiceInboxReviewQuantityMissingError') : null,
+    hasMissingLineField(document, 'unitPrice') ? ui('invoiceInboxReviewPriceMissingError') : null,
     hasMissingTax(document) ? ui('invoiceInboxReviewTaxMissingError') : null,
     missing.has('amount') ? ui('invoiceInboxReviewNoAmount') : null,
   ].filter(Boolean);
@@ -592,11 +679,11 @@ function useStacked(ref) {
  * `STACKED_BELOW_PX` each line stacks (description, then the five numbers with visible labels).
  * `locked` (confirmed / discarded) swaps the table for the compact read-only list.
  *
- * @param {{document: object, currency: string, readOnly?: boolean, showActions?: boolean,
+ * @param {{document: object, currency: string, scale?: number, readOnly?: boolean, showActions?: boolean,
  *   locked?: boolean, apiBaseUrl?: string}} props `showActions` false hides the add / delete affordances
  */
 export default function InvoiceInboxReviewLines({
-  document, currency, readOnly = true, showActions = true, locked = false, apiBaseUrl = '',
+  document, currency, scale = 2, readOnly = true, showActions = true, locked = false, apiBaseUrl = '',
 }) {
   const ui = useUI();
   const editor = useReviewEditor();
@@ -614,6 +701,15 @@ export default function InvoiceInboxReviewLines({
   const addLine = () => {
     const next = lines.reduce((max, line, position) => Math.max(max, lineKey(line, position)), -1) + 1;
     editor.commit(uniqueKey('add'), buildOp.addLine());
+    // The new line inherits the previous line's tax BY ID when that tax has one (else the server default).
+    const previous = lines.length ? lines[lines.length - 1] : null;
+    if (previous?.tax?.id) {
+      editor.commit(
+        `line:${next}:tax`,
+        buildOp.setLine(next, { taxId: previous.tax.id }),
+        { taxName: previous.tax.name, taxRate: previous.tax.rate },
+      );
+    }
     setFocusRequest(next);
   };
   return (
@@ -624,7 +720,7 @@ export default function InvoiceInboxReviewLines({
         {ui('invoiceInboxReviewSectionLines', { count: lines.length })}
       </SectionTitle>
       {locked ? (
-        <ReadOnlyLines lines={lines} currency={currency} data-testid="ReadOnlyLines__review" />
+        <ReadOnlyLines lines={lines} currency={currency} scale={scale} data-testid="ReadOnlyLines__review" />
       ) : (
         <div>
           {!stacked && (
@@ -649,12 +745,14 @@ export default function InvoiceInboxReviewLines({
                     line={line}
                     position={position}
                     currency={currency}
+                    scale={scale}
                     missing={missing}
                     readOnly={readOnly}
                     showActions={showActions}
                     open={open}
                     stacked={stacked}
                     apiBaseUrl={apiBaseUrl}
+                    document={document}
                     focusRequest={focusRequest}
                     onFocused={clearFocus}
                     onToggle={() => setToggled((prev) => ({ ...prev, [key]: !open }))}

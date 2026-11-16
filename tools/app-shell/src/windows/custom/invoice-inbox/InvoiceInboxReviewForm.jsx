@@ -3,7 +3,7 @@ import { useLocaleSwitch, useUI } from '@/i18n';
 import { CurrencyRatePicker } from '@/components/contract-ui/CurrencyRatePicker.jsx';
 import { DateField } from '@/components/ui/date-field';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
-import { buildOp, MAX_DOCUMENT_NO, missingSet } from './invoiceInboxReviewModel.js';
+import { buildOp, currencyScale, MAX_DOCUMENT_NO, missingSet } from './invoiceInboxReviewModel.js';
 import { DATE_FIELD_ICON, ReviewField, ReviewTag, SectionTitle } from './InvoiceInboxReviewParts.jsx';
 import { CommitInput } from './InvoiceInboxReviewInputs.jsx';
 import { ReviewEditorContext, useReviewEditor } from './useInvoiceInboxReviewEditor.js';
@@ -131,6 +131,7 @@ export default function InvoiceInboxReviewForm({
   const { locale } = useLocaleSwitch();
   const document = review.document ?? {};
   const missing = missingSet(document);
+  const scale = currencyScale(review.currency);
   const context = useMemo(() => (editor ? { ...editor, apiBaseUrl } : null), [editor, apiBaseUrl]);
   return (
     <ReviewEditorContext.Provider value={readOnly ? null : context}>
@@ -160,6 +161,7 @@ export default function InvoiceInboxReviewForm({
         <InvoiceInboxReviewLines
           document={document}
           currency={currency}
+          scale={scale}
           readOnly={readOnly}
           showActions={!locked}
           locked={settled}
@@ -169,6 +171,7 @@ export default function InvoiceInboxReviewForm({
           header={document.header}
           lines={document.lines}
           currency={currency}
+          scale={scale}
           data-testid="InvoiceInboxReviewTotals__form" />
         <InvoiceInboxReviewMismatchBanner review={review} currency={currency} data-testid="InvoiceInboxReviewMismatchBanner__form" />
       </div>
