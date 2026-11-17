@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { AlertCircle, Ban, FileText, Loader2, MailCheck } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
-import { useApiFetch } from '@/auth/useApiFetch.js';
+import { usePortalApiFetch } from '@/lib/portal/usePortalApiFetch.js';
 import {
   PORTAL_ERROR,
   PORTAL_LINK_STATE,
@@ -252,8 +252,9 @@ export default function PortalPage() {
   const ui = useUI();
   // `/sws/portal/*` is its own bounded context, so this is NOT the router's `apiBaseUrl`
   // (which already points at `/sws/neo`). Memoized because `apiFetch` is memoized on it.
+  // Outside the app's session scope: see `usePortalApiFetch` for why (ETP-6209).
   const baseUrl = useMemo(() => resolvePortalBaseUrl(), []);
-  const apiFetch = useApiFetch(baseUrl);
+  const apiFetch = usePortalApiFetch(baseUrl);
 
   const [view, setView] = useState(VIEW.loading);
   const [identity, setIdentity] = useState(null);
