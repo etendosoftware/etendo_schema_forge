@@ -86,8 +86,14 @@ const ADDRESS_PREVIEW_BADGE_BY_STATE = {
  * a locked pill with the truncated value, and a copy button. `testId` is reused as the base for
  * the copy button's id (`${testId}-copy`) — callers pass the existing
  * `location-legacy-banner-address{1,2}` ids unchanged.
+ *
+ * CP-7 (ETP-5806 QA, Isa) — Figma's "Pop Up Alert" reference shows a "Copiar" text button
+ * under each old line, not a bare icon. The shared `CopyButton` primitive already supports a
+ * `label` (see `@etendosoftware/app-shell-core/components/ui/copy-button.jsx`), so reuse it
+ * instead of a custom button.
  */
 function LegacyAddressLineRow({ label, value, testId }) {
+    const ui = useUI();
     return (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', flexShrink: 0, minWidth: 140 }}>
@@ -108,7 +114,7 @@ function LegacyAddressLineRow({ label, value, testId }) {
                     {value}
                 </span>
             </span>
-            <CopyButton value={value} data-testid={`${testId}-copy`} />
+            <CopyButton value={value} label={ui('copy')} data-testid={`${testId}-copy`} />
         </div>
     );
 }
@@ -569,10 +575,6 @@ export default function LocationEditorModal({
     // ETP-5806 — true for an EXISTING record that has free-text Address1/Address2 but none of
     // the 3 structured fields; drives the legacy-address warning banner.
     const [isLegacyAddress, setIsLegacyAddress] = useState(false);
-    // ETP-5806 follow-up — lets the user dismiss the legacy-address banner once they have
-    // copied what they needed into Street/Number/Building Name. Reset on every modal open
-    // (see the reset block below) so it never carries over into the next record.
-    const [legacyBannerDismissed, setLegacyBannerDismissed] = useState(false);
     const [countryPickerOpen, setCountryPickerOpen] = useState(false);
     const [countryQuery, setCountryQuery] = useState('');
     const [regionPickerOpen, setRegionPickerOpen] = useState(false);
@@ -678,7 +680,6 @@ export default function LocationEditorModal({
         baselineRef.current = EMPTY_FORM;
         setAttemptedSave(false);
         setIsLegacyAddress(false);
-        setLegacyBannerDismissed(false);
         const seedPatch = applyInitialSeed({initialValues, rowId: bplLinkId, setForm, baselineRef});
         // ETP-5654 round 2 — a CREATE seeded with OCR free text (address) but no structured
         // breakdown shows the same banner an EDIT of a legacy record does (see
@@ -1237,6 +1238,40 @@ export default function LocationEditorModal({
         }
     }
 
+    // CP-9 (ETP-5806 QA, Isa) — Escape closes, Enter saves. This is a hand-rolled
+    // `role="dialog"` div with no keyboard handling of its own (not built on a shared
+    // Dialog primitive that might already supply it), matching the convention used by
+    // other plain-div dialogs in this codebase (see ConfirmInOutModal.jsx's
+    // `onKeyDown={e => e.key === 'Escape' && onClose()}` on its own root).
+    //
+    // Escape is routed to the innermost open thing first — the country/region picker,
+    // if either is open — exactly like RecordCreateModal's own comment on this: "Escape
+    // belongs to the innermost dismissable thing". Without this, Escape while a picker is
+    // open would bubble past it (both pickers currently close only via their own X button
+    // or an outside click) straight to this handler and close the WHOLE modal instead of
+    // just the picker.
+    //
+    // Enter saves via the same `handleSave` the Save button calls, so it goes through the
+    // identical `saveDisabled`/`attemptedSave` gating — no second save path to keep in
+    // sync. Enter is ignored while a picker is open (its own search input has no Enter
+    // behavior of its own yet, so letting it fall through would save the form instead of
+    // doing nothing) and inside a <textarea> (none exist here today, but a literal newline
+    // must never be hijacked into a submit if one is added later).
+    function handleDialogKeyDown(e) {
+        if (e.key === 'Escape') {
+            if (countryPickerOpen) { setCountryPickerOpen(false); return; }
+            if (regionPickerOpen) { setRegionPickerOpen(false); return; }
+            onClose();
+            return;
+        }
+        if (e.key === 'Enter') {
+            if (countryPickerOpen || regionPickerOpen) return;
+            if (e.target?.tagName === 'TEXTAREA') return;
+            e.preventDefault();
+            handleSave();
+        }
+    }
+
     if (!open) return null;
 
     const INPUT = {
@@ -1275,7 +1310,7 @@ export default function LocationEditorModal({
         // dialog stays usable (useForeignDialog). Without it a tour that opens this
         // modal dims it from above and the user cannot type. It is also simply
         // correct a11y for a focus-trapping overlay.
-        <div role="dialog" aria-modal="true" data-testid="location-modal" style={{ position: 'fixed', inset: 0, zIndex: 150, background: 'hsl(var(--foreground) / .35)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div role="dialog" aria-modal="true" data-testid="location-modal" onKeyDown={handleDialogKeyDown} style={{ position: 'fixed', inset: 0, zIndex: 150, background: 'hsl(var(--foreground) / .35)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ background: 'hsl(var(--card))', borderRadius: 16, boxShadow: '0 8px 40px hsl(var(--foreground) / .18)', width: '100%', maxWidth: 560, margin: 16, display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 64px)', animation: 'fm-modal-in .2s cubic-bezier(.4,0,.2,1)' }}>
 
                 {/* Header */}
@@ -1326,8 +1361,14 @@ export default function LocationEditorModal({
                                 form.streetName/buildingNumber/buildingName here: that was the bug
                                 — as soon as the user pasted the old first line into Calle, the
                                 second line vanished from the (then reactive) preview before they
-                                had a chance to copy it. */}
-                            {structuredAddressEnabled && isLegacyAddress && !legacyBannerDismissed && (
+                                had a chance to copy it.
+
+                                CP-7 (ETP-5806 QA, Isa) — the dismiss "X" was removed: Figma's
+                                "Pop Up Alert" reference for this banner has no dismiss control,
+                                and the banner is otherwise already persistent by design (see
+                                above), so a dismiss affordance was never part of the intended
+                                UX — it just slipped in during the follow-up round. */}
+                            {structuredAddressEnabled && isLegacyAddress && (
                                 <div
                                     data-testid="location-legacy-address-banner"
                                     style={{
@@ -1337,30 +1378,19 @@ export default function LocationEditorModal({
                                         background: TONE_STYLES.info.background,
                                     }}
                                 >
-                                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                                            <Info
-                                                size={16}
-                                                style={{ color: TONE_STYLES.info.color, flexShrink: 0, marginTop: 1 }}
-                                                data-testid="Info__location-legacy-banner" />
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                                <div style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-                                                    {ui('legacyAddressBannerTitle')}
-                                                </div>
-                                                <div style={{ fontSize: 13, color: 'hsl(var(--foreground))' }}>
-                                                    {ui('legacyAddressWarning')}
-                                                </div>
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                                        <Info
+                                            size={16}
+                                            style={{ color: TONE_STYLES.info.color, flexShrink: 0, marginTop: 1 }}
+                                            data-testid="Info__location-legacy-banner" />
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                            <div style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
+                                                {ui('legacyAddressBannerTitle')}
+                                            </div>
+                                            <div style={{ fontSize: 13, color: 'hsl(var(--foreground))' }}>
+                                                {ui('legacyAddressWarning')}
                                             </div>
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setLegacyBannerDismissed(true)}
-                                            aria-label={ui('close')}
-                                            data-testid="location-legacy-banner-dismiss"
-                                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, flexShrink: 0, display: 'flex', alignItems: 'center' }}
-                                        >
-                                            <X size={14} style={{ color: 'hsl(var(--text-disabled))' }} data-testid="X__location-legacy-banner-dismiss" />
-                                        </button>
                                     </div>
                                     <LegacyAddressLineRow
                                         label={ui('legacyAddressOldTextLabel')}

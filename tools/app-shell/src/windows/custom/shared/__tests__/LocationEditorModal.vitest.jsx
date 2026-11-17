@@ -1062,6 +1062,26 @@ describe('LocationEditorModal', () => {
       expect(banner).toHaveTextContent('Calle OCR 99');
     });
 
+    // CP-7 (ETP-5806 QA, Isa) — repro: Figma's "Pop Up Alert" reference shows a visible
+    // "Copiar" text button under each old line, not a bare icon-only control.
+    it('renders a visible "Copiar" label on the copy button, not an icon-only control', async () => {
+      global.fetch = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            response: { data: [{ id: 'loc-legacy-label', address: 'Old Street 12', country: 'ES', 'country$_identifier': 'Spain' }] },
+            items: [],
+            hasMore: false,
+          }),
+        }),
+      );
+
+      renderModal({ rowId: 'loc-legacy-label' });
+
+      const copyBtn = await screen.findByTestId('location-legacy-banner-address1-copy');
+      expect(copyBtn).toHaveTextContent('copy');
+    });
+
     // ETP-5806 follow-up round 2 — the single `location-legacy-address-copy` button was
     // replaced by one copy button PER old line (`location-legacy-banner-address1-copy` /
     // `-address2-copy`), each copying only its own line instead of the old joined
@@ -1123,10 +1143,13 @@ describe('LocationEditorModal', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Legacy-address banner — persistence and dismiss (ETP-5806 follow-up round 2)
+  // Legacy-address banner — persistence, and no dismiss control (ETP-5806 follow-up,
+  // CP-7 round — rewritten, test-reuse-policy.md point 2: the dismiss "X" tests below
+  // were replaced because the control itself was removed to match Figma's "Pop Up
+  // Alert" reference, which has no dismiss affordance on this banner.)
   // ---------------------------------------------------------------------------
 
-  describe('legacy-address banner — persistence and dismiss (ETP-5806 follow-up round 2)', () => {
+  describe('legacy-address banner — persistence and no dismiss control (ETP-5806 CP-7)', () => {
     function mockLegacyRecord(rowId = 'loc-legacy-persist') {
       global.fetch = vi.fn(() =>
         Promise.resolve({
@@ -1156,30 +1179,15 @@ describe('LocationEditorModal', () => {
       expect(screen.getByTestId('location-legacy-address-banner')).toBeInTheDocument();
     });
 
-    it('hides when the dismiss button is clicked', async () => {
+    // CP-7 (ETP-5806 QA, Isa) — repro: Figma's "Pop Up Alert" reference for this banner
+    // carries no dismiss "X"; it must not be user-dismissable at all.
+    it('renders with no dismiss control', async () => {
       mockLegacyRecord();
       renderModal({ rowId: 'loc-legacy-persist' });
 
       await screen.findByTestId('location-legacy-address-banner');
 
-      fireEvent.click(screen.getByTestId('location-legacy-banner-dismiss'));
-
-      expect(screen.queryByTestId('location-legacy-address-banner')).not.toBeInTheDocument();
-    });
-
-    it('reappears after the modal is reopened for the same record (dismiss does not persist)', async () => {
-      mockLegacyRecord();
-      const { rerender, props } = renderModal({ rowId: 'loc-legacy-persist' });
-
-      await screen.findByTestId('location-legacy-address-banner');
-      fireEvent.click(screen.getByTestId('location-legacy-banner-dismiss'));
-      expect(screen.queryByTestId('location-legacy-address-banner')).not.toBeInTheDocument();
-
-      // Close and reopen the same modal instance.
-      rerender(<LocationEditorModal {...props} open={false} />);
-      rerender(<LocationEditorModal {...props} open={true} />);
-
-      await screen.findByTestId('location-legacy-address-banner');
+      expect(screen.queryByTestId('location-legacy-banner-dismiss')).not.toBeInTheDocument();
     });
   });
 
@@ -2046,5 +2054,74 @@ describe('LocationEditorModal — structured-address-for-sepa flag OFF', () => {
     expect(capturedBody.streetName).toBeNull();
     expect(capturedBody.buildingNumber).toBeNull();
     expect(capturedBody.buildingName).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Keyboard handling — Escape closes, Enter saves (ETP-5806 QA, Isa — CP-9)
+// ---------------------------------------------------------------------------
+
+describe('LocationEditorModal — keyboard handling (ETP-5806 CP-9)', () => {
+  beforeEach(() => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [], hasMore: false }) }),
+    );
+    useCapabilitiesOn();
+  });
+
+  it('closes the modal when Escape is pressed', () => {
+    const onClose = vi.fn();
+    renderModal({ onClose });
+
+    fireEvent.keyDown(screen.getByTestId('location-modal'), { key: 'Escape' });
+
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('saves (via the same handleSave path as the Save button) when Enter is pressed with every mandatory field filled', async () => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ items: [SPAIN_OPTION], hasMore: false }),
+      }),
+    );
+
+    renderModal();
+    await fillMandatoryFields();
+
+    fireEvent.keyDown(screen.getByTestId('location-modal'), { key: 'Enter' });
+
+    await vi.waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/locationAddress'),
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+  });
+
+  it('does not save on Enter while mandatory fields are empty (same guard as clicking Save)', () => {
+    const onSaved = vi.fn();
+    renderModal({ onSaved });
+
+    fireEvent.keyDown(screen.getByTestId('location-modal'), { key: 'Enter' });
+
+    // No inline errors were shown on open, but `handleSave`'s own guard still refuses:
+    // Enter must not bypass the same `saveDisabled` check the Save button is gated on.
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it('closes the open country picker on Escape instead of the whole modal', async () => {
+    const onClose = vi.fn();
+    renderModal({ onClose });
+
+    fireEvent.click(screen.getByTestId('location-field-country'));
+    // The picker's own heading ("countryLabel") also matches the field's own label text
+    // outside the picker, so target the picker by something unique to it instead.
+    await screen.findByPlaceholderText('countrySearchPlaceholder');
+
+    fireEvent.keyDown(screen.getByTestId('location-modal'), { key: 'Escape' });
+
+    expect(screen.queryByPlaceholderText('countrySearchPlaceholder')).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
   });
 });
