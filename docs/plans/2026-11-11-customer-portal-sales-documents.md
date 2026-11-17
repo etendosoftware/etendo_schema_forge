@@ -1054,14 +1054,14 @@ arrives, so every shared piece takes the new look as an opt-in (`PortalSection v
   este presupuesto?" (the recipient's email box) → Continuar sends; Rechazar → the six reasons
   (Figma radios; "Otros" requires "Describe el motivo"; Continuar disabled until valid) → "Confirma
   tu decisión por correo" (Cancelar · Volver · Enviar solicitud) sends; both end on "Revisa tu
-  correo electrónico" (Entendido). The recipient is the backend's `decision.maskedEmail` (first To
-  of the original send, masked). The email link's landing no longer enters the portal by itself:
+  correo electrónico" (Entendido). The recipient is the backend's `decision.email` (first To
+  of the original send, shown in full). The email link's landing no longer enters the portal by itself:
   it shows "¡Presupuesto aceptado!" / "¡Presupuesto rechazado!" with the summary (number, issue date
   or reason, total, status — app label, Figma colour) and "La empresa emisora ha sido notificada…",
   and its "Portal de clientes" button enters the portal on the quotation with the one-off notice
   (hidden without a portal token). The other landing states keep their logic in the same page.
   Backend fields (additive, `com.etendoerp.go`): `date`, `grandTotal`, `currency`, `documentStatus`
-  on the decision view/confirm answers; `decision.maskedEmail` on a decidable quotation's detail.
+  on the decision view/confirm answers; `decision.email` on a decidable quotation's detail.
 
 ---
 
@@ -1179,7 +1179,7 @@ pending-until-sent rule), so a failed send leaves no usable token.
   Scope: `findInScope(session, QUOTATION, id)`; then pending + not expired + a To recipient on the
   root send (else 409 `not_pending` / `expired` / `no_recipient`). Rate limits: the data limiter **plus** a per-quotation
   cool-down (e.g. 2 min, configurable like `PortalLinkConfig.java:48-50`) so the button cannot be used
-  to spam the contact. Answers `{state: "sent", maskedEmail}`. Requires `validate` = valid (an
+  to spam the contact. Answers `{state: "sent", email}`. Requires `validate` = valid (an
   expired link renews first, as today).
 - **`GET /decisions/me`** and **`POST /decisions/confirm`** — the confirmation landing. The token is
   read from `X-Portal-Decision-Token` (the email link is `/portal/decision/{token}`; the SPA moves it
@@ -1221,7 +1221,7 @@ pending-until-sent rule), so a failed send leaves no usable token.
   the same frame and classes, a radio list of the six fixed reasons and a required textarea for
   "Otros". → reuse its layout constants by extracting them if worthwhile (decide in DEV).
 - **"Correo enviado" state:** the panel replaces the buttons with "Se ha enviado un correo a
-  {maskedEmail} para confirmar la decisión." and a pending note until the page reloads.
+  {email} para confirmar la decisión." and a pending note until the page reloads.
 - **Landing `/portal/decision/:token`:** brand + document + decision + reason + "Confirmar" →
   result screen per state of C.5. Route registered next to `/portal/:token` (`runtime-routes.jsx`).
 - After a confirmed decision the quotation simply shows its new status (`ETGO_AC` / `CJ`); no buttons.
@@ -1248,7 +1248,7 @@ pending-until-sent rule), so a failed send leaves no usable token.
   email; ES/EN); reason find-or-create; `ETGO_AC` convertible (order and invoice) and advertised in `SalesQuotationHeaderHandler`; first To
   recipient chosen, CC never mailed, empty To refused.
 - sf (Vitest): buttons only with `canDecide`, disabled reason, reject modal validation ("Otros"
-  requires text), sent state with masked email, landing states; mocked E2E: request → landing → confirm.
+  requires text), sent state with the full email, landing states; mocked E2E: request → landing → confirm.
 - **Effort (rough):** backend 4.5–5.5 d (table + AD, the `ETGO_AC` list value and translations,
   endpoints, lock, two contracts, quotation methods + `@NeoExtension` migration, convert on
   `ETGO_AC`), SPA 2.5–3 d (portal, plus the app's Confirmar gate and status labels), tests 2–3 d,
@@ -1265,7 +1265,7 @@ Confirmar (convert) available on them; rejected ones show the portal reason and 
 
 **Decided (user, 2026-11-13):** a quotation with no `ValidUntil` is not expired (C.2); the
 confirmation goes to the first To recipient of the root send, never CC, buttons disabled when there is
-none (C.3); the portal shows the address masked (C.3); one click on the landing confirms, opening the
+none (C.3); the portal shows the address in full (C.3, revised to follow the Figma; it was masked first); one click on the landing confirms, opening the
 link never applies (C.5). By this plan: no sender notice when the sender cannot be resolved (C.6);
 KPI: only the hook points (`decision.requested`, `decision.confirmed`, `decision.voided`,
 `decision.not_applied` call sites in the service), names and semantics per the PO's new KPI
@@ -1295,7 +1295,7 @@ Built in both repos following C.0–C.11.
   routes in `PortalServlet`, the detail's `decision` block.
 - **SPA.** `PortalDecisionActions` (desktop panel row before "Descargar PDF"; mobile bottom bar),
   the portal reject modal (six fixed reasons; the "Otros" text is shown, required and sent only for
-  "Otros", cleared when another reason is picked — the server also drops it), the masked "correo
+  "Otros", cleared when another reason is picked — the server also drops it), the "correo
   enviado" state, `PortalDecisionPage` at `/portal/decision/:token`, i18n in three locales.
 
 ## C.13 PO answers applied (2026-11-13)

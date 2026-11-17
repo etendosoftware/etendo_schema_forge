@@ -102,7 +102,7 @@ async function installPortalMock(page, { me, confirmAnswer = null }) {
     }
     if (path === '/quotations/q-1/decision' && request.method() === 'POST') {
       requests.decisionBodies = [...(requests.decisionBodies ?? []), request.postDataJSON()];
-      return json(route, { state: 'sent', maskedEmail: 'c***@cliente.es' });
+      return json(route, { state: 'sent', email: 'compras@cliente.es' });
     }
     if (path === '/documents/quotation/q-1') return json(route, QUOTATION);
     if (path === '/documents') {
@@ -256,7 +256,7 @@ test.describe('Customer portal — mocked', () => {
       await page.goto(`/portal/${TOKEN}`);
       await expect(page.getByTestId('portal-panel-title')).toContainText('PR/0001');
       await answer(page);
-      await expect(page.getByTestId('portal-decision-sent')).toContainText('c***@cliente.es');
+      await expect(page.getByTestId('portal-decision-sent')).toContainText('compras@cliente.es');
       expect(requests.decisionBodies).toEqual([expectedBody]);
 
       // The email's button: the landing confirms once and shows the result; "Portal de clientes"

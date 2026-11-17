@@ -78,8 +78,8 @@ export default function PortalDecisionActions({
   // As items of the caller's wrapping row, a notice takes a whole line after the buttons.
   const noticeClass = inline ? 'order-last basis-full' : '';
   const close = () => setStep(null);
-  // Where the confirmation goes: the backend names the first To of the original send, masked.
-  const recipient = decision.maskedEmail;
+  // Where the confirmation goes: the backend names the first To of the original send, in full.
+  const recipient = decision.email;
 
   const submit = async (payload) => {
     setBusy(true);
@@ -87,7 +87,7 @@ export default function PortalDecisionActions({
     try {
       const result = await requestPortalDecision(apiFetch, token, document.id, payload);
       if (result.ok) {
-        setSentTo(result.maskedEmail ?? recipient ?? '');
+        setSentTo(result.email ?? recipient ?? '');
         setStep(STEP.sent);
       } else {
         setStep(null);
@@ -202,7 +202,7 @@ export default function PortalDecisionActions({
   );
 }
 
-/** The request left: the confirmation email went to the (masked) address. */
+/** The request left: the confirmation email went to this address. */
 function DecisionSentNotice({ email, bar, className }) {
   const ui = useUI();
   return (

@@ -410,8 +410,8 @@ export async function fetchPortalDocument(fetchImpl, token, kind, id) {
       canDecide: data.decision.canDecide === true,
       blockedReason: readableText(data.decision.blockedReason),
       acceptAvailable: data.decision.acceptAvailable === true,
-      // Where the confirmation will go, masked; named by the accept / reject popups.
-      maskedEmail: readableText(data.decision.maskedEmail),
+      // Where the confirmation will go, in full; named by the accept / reject popups.
+      email: readableText(data.decision.email),
     } : null,
   };
 }
@@ -490,7 +490,7 @@ async function decisionErrorOf(response) {
 
 /**
  * Asks to accept or reject a quotation; the confirmation goes by email to the main recipient.
- * Resolves `{ ok: true, maskedEmail }` or `{ ok: false, error }` ({@link PORTAL_DECISION_ERROR});
+ * Resolves `{ ok: true, email }` or `{ ok: false, error }` ({@link PORTAL_DECISION_ERROR});
  * a dead link throws {@link PORTAL_ERROR.invalidLink} like every other read.
  */
 export async function requestPortalDecision(fetchImpl, token, quotationId, {
@@ -521,7 +521,7 @@ export async function requestPortalDecision(fetchImpl, token, quotationId, {
   }
   if (response.ok) {
     const data = await response.json().catch(() => ({}));
-    return { ok: true, maskedEmail: readableText(data?.maskedEmail) };
+    return { ok: true, email: readableText(data?.email) };
   }
   return { ok: false, error: await decisionErrorOf(response) };
 }

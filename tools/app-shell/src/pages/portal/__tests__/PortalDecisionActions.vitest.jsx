@@ -3,7 +3,7 @@
 // rules under the whole page's routing. The request itself is the real `requestPortalDecision`;
 // only `apiFetch` (the network boundary) is a double.
 
-/** The mocked translation: the key, plus its variables, so the masked email and tenant show. */
+/** The mocked translation: the key, plus its variables, so the email and tenant show. */
 function t(key, vars) {
   return vars ? `${key} ${JSON.stringify(vars)}` : key;
 }
@@ -26,7 +26,7 @@ function jsonResponse(body, { status = 200 } = {}) {
 }
 
 const quotation = (decision) => ({ kind: 'QUOTATION', id: 'q-1', documentNo: 'PR/0001', decision });
-const OPEN = { canDecide: true, blockedReason: null, acceptAvailable: true, maskedEmail: 'co•••@acme.com' };
+const OPEN = { canDecide: true, blockedReason: null, acceptAvailable: true, email: 'contact@acme.com' };
 
 function renderActions(document, { apiFetch = vi.fn(), onInvalid = vi.fn(), variant } = {}) {
   render(
@@ -92,7 +92,7 @@ describe('PortalDecisionActions — Aceptar', () => {
     await user.click(screen.getByTestId('portal-decision-accept'));
 
     expect(screen.getByTestId('portal-accept-modal')).toHaveTextContent('portalAcceptConfirmTitle');
-    expect(screen.getByTestId('portal-decision-email')).toHaveTextContent('co•••@acme.com');
+    expect(screen.getByTestId('portal-decision-email')).toHaveTextContent('contact@acme.com');
     await user.click(screen.getByTestId('portal-accept-cancel'));
     await waitFor(() => expect(screen.queryByTestId('portal-accept-modal')).not.toBeInTheDocument());
     expect(apiFetch).not.toHaveBeenCalled();
@@ -100,7 +100,7 @@ describe('PortalDecisionActions — Aceptar', () => {
 
   it('sends on Continuar, then says to check the email, and keeps saying where it went', async () => {
     const user = userEvent.setup();
-    const apiFetch = vi.fn(async () => jsonResponse({ maskedEmail: 'c***@acme.com' }));
+    const apiFetch = vi.fn(async () => jsonResponse({ email: 'sales@acme.com' }));
     renderActions(quotation(OPEN), { apiFetch });
 
     await user.click(screen.getByTestId('portal-decision-accept'));
@@ -108,10 +108,10 @@ describe('PortalDecisionActions — Aceptar', () => {
 
     await waitFor(() => expect(screen.getByTestId('portal-check-email-modal')).toBeInTheDocument());
     expect(screen.getByTestId('portal-check-email-modal'))
-      .toHaveTextContent(t('portalCheckEmailDescription', { email: 'c***@acme.com' }));
+      .toHaveTextContent(t('portalCheckEmailDescription', { email: 'sales@acme.com' }));
     await user.click(screen.getByTestId('portal-check-email-ok'));
     await waitFor(() => expect(screen.queryByTestId('portal-check-email-modal')).not.toBeInTheDocument());
-    expect(screen.getByTestId('portal-decision-sent').textContent).toBe(t('portalDecisionSent', { email: 'c***@acme.com' }));
+    expect(screen.getByTestId('portal-decision-sent').textContent).toBe(t('portalDecisionSent', { email: 'sales@acme.com' }));
     expect(apiFetch.mock.calls[0][0]).toBe('/sws/portal/quotations/q-1/decision');
     expect(bodyOf(apiFetch)).toEqual({ decision: 'ACCEPT' });
     expect(screen.queryByTestId('portal-decision-accept')).not.toBeInTheDocument();
@@ -169,7 +169,7 @@ describe('PortalDecisionActions — Rechazar', () => {
     await user.click(screen.getByTestId('portal-reject-reason-delivery'));
     await user.click(screen.getByTestId('portal-reject-continue'));
     await waitFor(() => expect(screen.getByTestId('portal-reject-confirm-modal')).toBeInTheDocument());
-    expect(screen.getByTestId('portal-decision-email')).toHaveTextContent('co•••@acme.com');
+    expect(screen.getByTestId('portal-decision-email')).toHaveTextContent('contact@acme.com');
     expect(apiFetch).not.toHaveBeenCalled();
 
     await user.click(screen.getByTestId('portal-reject-back'));
@@ -179,7 +179,7 @@ describe('PortalDecisionActions — Rechazar', () => {
   });
 
   it('clears the "Otros" text when another reason is chosen, and sends no text with it', async () => {
-    const apiFetch = vi.fn(async () => jsonResponse({ maskedEmail: 'c***@acme.com' }));
+    const apiFetch = vi.fn(async () => jsonResponse({ email: 'sales@acme.com' }));
     const user = await openReject(apiFetch);
 
     await user.click(screen.getByTestId('portal-reject-reason-other'));
@@ -197,7 +197,7 @@ describe('PortalDecisionActions — Rechazar', () => {
   });
 
   it('sends the trimmed text only with "Otros"', async () => {
-    const apiFetch = vi.fn(async () => jsonResponse({ maskedEmail: 'c***@acme.com' }));
+    const apiFetch = vi.fn(async () => jsonResponse({ email: 'sales@acme.com' }));
     const user = await openReject(apiFetch);
 
     await user.click(screen.getByTestId('portal-reject-reason-other'));

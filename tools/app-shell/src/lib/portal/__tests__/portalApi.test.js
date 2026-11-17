@@ -446,14 +446,14 @@ describe('fetchPortalDocument', () => {
       kind: 'QUOTATION',
       id: 'q-1',
       decision: {
-        canDecide: 'true', blockedReason: ' expired ', acceptAvailable: true, maskedEmail: ' co•••@acme.com ',
+        canDecide: 'true', blockedReason: ' expired ', acceptAvailable: true, email: ' contact@acme.com ',
       },
     }));
 
     const document = await fetchPortalDocument(fetchImpl, TOKEN, 'QUOTATION', 'q-1');
 
     assert.deepEqual(document.decision, {
-      canDecide: false, blockedReason: 'expired', acceptAvailable: true, maskedEmail: 'co•••@acme.com',
+      canDecide: false, blockedReason: 'expired', acceptAvailable: true, email: 'contact@acme.com',
     });
   });
 });
@@ -545,11 +545,11 @@ describe('error mapping of the home, list, detail and printable calls', () => {
 
 describe('requestPortalDecision', () => {
   it('POSTs the decision with the portal token in its header, never in the URL', async () => {
-    const { fetchImpl, calls } = recordingFetch(() => jsonResponse({ maskedEmail: 'c***@acme.com' }));
+    const { fetchImpl, calls } = recordingFetch(() => jsonResponse({ email: 'contact@acme.com' }));
 
     const result = await requestPortalDecision(fetchImpl, TOKEN, 'q/1', { decision: 'ACCEPT' });
 
-    assert.deepEqual(result, { ok: true, maskedEmail: 'c***@acme.com' });
+    assert.deepEqual(result, { ok: true, email: 'contact@acme.com' });
     assert.equal(calls[0].path, '/sws/portal/quotations/q%2F1/decision');
     assert.deepEqual(calls[0].options, {
       method: 'POST',
