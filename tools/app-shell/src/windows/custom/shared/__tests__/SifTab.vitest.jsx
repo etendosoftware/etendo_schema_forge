@@ -1572,6 +1572,41 @@ describe('SifTab', () => {
       });
     });
 
+    // The "only R" filter is sales-only: purchase types have no 'R', so filtering a purchase
+    // rectificative would leave the Select empty.
+    it('purchase: the type Select keeps every purchase type on a rectificative invoice', () => {
+      render(<SifTab {...makeProps({
+        apiBaseUrl: '/sws/neo/purchase-invoice',
+        data: { documentStatus: 'DR', isRectificative: true, aeatsiiClaveTipoFc: 'F1' },
+      })} />);
+      ['F6', 'LC', 'F5', 'F1'].forEach((v) => {
+        expect(screen.getByTestId(`mock-select-option-${v}`)).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('mock-select-option-R')).not.toBeInTheDocument();
+    });
+
+    it('sales: a refetch carrying a non-R type re-fires R, and data holding R does not fire again', () => {
+      const onChange = vi.fn();
+      const props = (claveTipo) => makeProps({
+        recordId: 'inv-1',
+        data: { documentStatus: 'DR', isRectificative: true, aeatsiiClaveTipo: claveTipo },
+        onChange,
+      });
+      const rCalls = () => onChange.mock.calls.filter(([f, v]) => f === 'aeatsiiClaveTipo' && v === 'R');
+
+      const { rerender } = render(<SifTab {...props('R')} />);
+      expect(rCalls()).toHaveLength(0);
+
+      // Refetch replaces the record data with the stored F1.
+      rerender(<SifTab {...props('F1')} />);
+      expect(rCalls()).toHaveLength(1);
+
+      // The pending 'R' lands in data: no further call (no loop).
+      rerender(<SifTab {...props('R')} />);
+      rerender(<SifTab {...props('R')} />);
+      expect(rCalls()).toHaveLength(1);
+    });
+
     it('sales: sets R when isRectificative flips from false to true on the same record', () => {
       const onChange = vi.fn();
       const props = (isRectificative) => makeProps({
