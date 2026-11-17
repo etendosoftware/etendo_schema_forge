@@ -54,7 +54,9 @@ export async function api(method: string, path: string, options: RequestOptions 
     const response: ApiResponse = { method, path: resolvedPath, status: res.status, headers: res.headers, json, text };
     // Register before any assertion (conformance included) can throw: a record the
     // server created must be deleted even when the test that created it fails.
-    if (method === 'POST' && res.status >= 200 && res.status < 300 && typeof json?.data?.id === 'string') {
+    // An action (`.../actions/<name>`) answers the existing record: it created nothing.
+    if (method === 'POST' && res.status >= 200 && res.status < 300 && typeof json?.data?.id === 'string'
+      && !/\/actions\/[^/]+$/.test(resolvedPath.split('?')[0])) {
       created.push(`${resolvedPath.split('?')[0].replace(/\/$/, '')}/${json.data.id}`);
     }
     if (res.status >= 200 && res.status < 300 && !options.skipConformance) {
