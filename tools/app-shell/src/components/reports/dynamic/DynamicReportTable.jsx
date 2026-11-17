@@ -160,7 +160,7 @@ export default function DynamicReportTable({ rows, groups, mode, expanded, onTog
   const th = 'px-3 py-2 font-medium uppercase tracking-wide';
   const subLabels = { current: ui('dynamicReportAmount'), compared: ui('dynamicReportCompared'), variation: ui('dynamicReportVariation'), variationPct: ui('dynamicReportVariationPct') };
   return (
-    <StickyHScroll>
+    <StickyHScroll data-testid="StickyHScroll__2e8fe9">
       <table className="w-full border-collapse text-sm" data-testid="DynamicReportTable">
         <thead>
           <tr className="text-xs text-muted-foreground bg-muted border-b border-border/60">

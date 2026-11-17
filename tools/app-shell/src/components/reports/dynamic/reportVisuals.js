@@ -93,7 +93,8 @@ export function kpiCards(kpis, compare) {
     const refValue = kpis.ref[id];
     const percent = id === 'margin';
     const delta = compare ? kpiDelta(value, refValue, percent) : null;
-    const tone = id === 'result' && value ? (value > 0 ? 'positive' : 'negative') : null;
+    let tone = null;
+    if (id === 'result' && value) tone = value > 0 ? 'positive' : 'negative';
     return { id, percent, value, refValue, compare: Boolean(compare), delta, trend: compare ? kpiTrend(id, value, refValue) : null, up: value > refValue, tone };
   });
 }

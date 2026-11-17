@@ -82,10 +82,30 @@ export default function DynamicReportKpis({ kpis, compare }) {
   return (
     <TooltipProvider>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-5" data-testid="DynamicReportKpis">
-        <Kpi card={income} label={ui('dynamicReportKpiIncome')} hint={ui('dynamicReportKpiIncomeHint')} {...shared} />
-        <Kpi card={expenses} label={ui('dynamicReportKpiExpenses')} hint={ui('dynamicReportKpiExpensesHint')} {...shared} />
-        <Kpi card={result} label={ui('dynamicReportKpiResult')} hint={ui('dynamicReportKpiResultHint')} {...shared} />
-        <Kpi card={margin} label={ui('dynamicReportKpiMargin')} hint={ui('dynamicReportKpiMarginHint')} {...shared} />
+        <Kpi
+          card={income}
+          label={ui('dynamicReportKpiIncome')}
+          hint={ui('dynamicReportKpiIncomeHint')}
+          {...shared}
+          data-testid="Kpi__5cc5db" />
+        <Kpi
+          card={expenses}
+          label={ui('dynamicReportKpiExpenses')}
+          hint={ui('dynamicReportKpiExpensesHint')}
+          {...shared}
+          data-testid="Kpi__5cc5db" />
+        <Kpi
+          card={result}
+          label={ui('dynamicReportKpiResult')}
+          hint={ui('dynamicReportKpiResultHint')}
+          {...shared}
+          data-testid="Kpi__5cc5db" />
+        <Kpi
+          card={margin}
+          label={ui('dynamicReportKpiMargin')}
+          hint={ui('dynamicReportKpiMarginHint')}
+          {...shared}
+          data-testid="Kpi__5cc5db" />
       </div>
     </TooltipProvider>
   );

@@ -144,12 +144,14 @@ export default function DynamicReportPanel({
             </select>
           </label>
         )}
-        {['bPartnerId', 'productId'].map((name) => (
+        {['bPartnerId', 'productId'].map((name) => {
+          const named = state[`_display_${name}`] ? '-named' : '';
+          return (
           <div key={name} className="text-xs">
             <span>{label(name)}</span>
             <PopupMultiSelector
               // Remounts when the restored names land (the selector seeds its chips from props only once).
-              key={`${state[name] ? 'set' : 'empty'}${state[`_display_${name}`] ? '-named' : ''}`}
+              key={`${state[name] ? 'set' : 'empty'}${named}`}
               selector={name === 'bPartnerId' ? 'bpartner' : 'product'}
               label={label(name)}
               value={state[name]}
@@ -160,7 +162,8 @@ export default function DynamicReportPanel({
               data-testid={`DynamicReportPanel__${name}`}
             />
           </div>
-        ))}
+          );
+        })}
       </Section>
 
       <Section title={sectionLabel('agrupacion')} data-testid="Section__f52339">
