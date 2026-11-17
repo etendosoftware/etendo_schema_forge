@@ -44,8 +44,10 @@ Three read-only endpoints:
 supports public (unauthenticated) routes (used today for login/register). Add
 `{ path: 'portal', public: true, element: <PortalPage/> }`. This lands inside the tenant's own
 already-deployed shell — which is what gives us "portal per tenant" for free — and reuses
-`formatCurrency`, `parseCalendarDate`, i18n, and `useApiFetch` (passed the portal token instead of a
-NEO session token, per the existing `token` option documented in `docs/request-policy.md`).
+`formatCurrency`, `parseCalendarDate`, i18n, and the shared request helper (passed the portal token
+instead of a NEO session token, per the existing `token` option documented in
+`docs/request-policy.md`). Since ETP-6209 the portal builds that client outside the app's session
+scope (`usePortalApiFetch`), so the app's auth bootstrap cannot discard its answers on a cold open.
 
 ## 2.5 Gating — one feature flag, targeted at the account sending the invoice
 
