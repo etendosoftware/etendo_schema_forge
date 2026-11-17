@@ -21,10 +21,16 @@
 .ind-4 { padding-left: 22mm !important; }
 .ind-5 { padding-left: 27mm !important; }
 .ind-6 { padding-left: 32mm !important; }
-/* Period columns (ETP-6239): 8 pt, the base 3 mm cell padding kept. */
+/* Period columns (ETP-6239): 8 pt, the base 3 mm horizontal cell padding kept. */
 .period-table th, .period-table td { font-size: 8pt; }
 .period-table th.period-group { text-align: center; border-bottom: 1px solid #cbd5e1; }
 .period-table tr { page-break-inside: avoid; }
+/* 1 mm of vertical padding on the account rows (base 1.5 mm; the group-header rows keep their 2 mm): page 1 also
+   carries the headline cards, and without this the closing row of a 9-row report spilled alone onto its own page.
+   Chrome ignores break-avoid between table rows, so the saved height is the only lever. Known limit: whether the
+   last row ends up alone still depends on the row count, the filters and the branding height; if it comes back,
+   it gets its own ticket, not more padding tweaks. */
+.period-table tbody .tree-row td { padding-top: 1mm; padding-bottom: 1mm; }
 .period-table .ind-1 { padding-left: 4.5mm !important; }
 .period-table .ind-2 { padding-left: 7mm !important; }
 .period-table .ind-3 { padding-left: 9.5mm !important; }
@@ -32,6 +38,20 @@
 .period-table .ind-5 { padding-left: 14.5mm !important; }
 .period-table .ind-6 { padding-left: 17mm !important; }
 .period-note { margin-top: 3mm; font-size: 8pt; color: #64748b; }
+/* Headline cards (ETP-6239): one row of four, as on screen; green / red pill by good or bad news. */
+.kpi-row { display: flex; gap: 4mm; margin: 0 0 5mm; }
+.kpi-card { flex: 1 1 0; min-width: 0; border: 1px solid #e2e8f0; border-radius: 2mm; padding: 3mm 4mm; page-break-inside: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; } /* the PDF recipe does not print backgrounds by default: the tone edge and the pills need this */
+/* The app's --brand-lime (index.css); base.css's --color-accent-highlight is transparent in reports. */
+.kpi-card.positive { box-shadow: inset 1mm 0 0 hsl(83.3 94.4% 64.7%); }
+.kpi-card.negative { box-shadow: inset 1mm 0 0 #dc2626; }
+.kpi-label { font-size: 7pt; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--color-text-muted); }
+.kpi-value { font-size: 14pt; font-weight: 600; margin-top: 1mm; white-space: nowrap; }
+.kpi-sub { margin-top: 1mm; font-size: 7.5pt; color: var(--color-text-muted); white-space: nowrap; }
+.kpi-pill { display: inline-block; border-radius: 3mm; padding: 0 2mm; margin-right: 1.5mm; font-weight: 500; background: #f1f5f9; color: #475569; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.kpi-pill.improves { background: #dcfce7; color: #166534; }
+.kpi-pill.worsens { background: #fee2e2; color: #b91c1c; }
+.period-table th .cmp-against { display: block; font-size: 6.5pt; font-weight: 400; color: #64748b; }
+/* A compared date range wraps at its spaces ("(01/01/2025 –" / "31/12/2025)") instead of running into the next header; a month label is short enough to stay on one line. */
 </style>
 </head>
 <body><div class="report-container">
@@ -48,9 +68,25 @@
   </div>
   {{/if}}
 
+  {{#with (parseJson meta.params.kpis) as |cards|}}
+  {{!-- Headline cards (ETP-6239): only when the render carries them (the interactive view's PDF
+        sends `kpis`, the very figures on screen from kpiCards()); nothing otherwise. --}}
+  <div class="kpi-row">
+    {{#each cards as |card|}}
+    <div class="kpi-card {{card.tone}}">
+      <div class="kpi-label">{{lookup @root.meta.labels card.id}}</div>
+      <div class="kpi-value">{{#ifCond card.value '===' null}}&mdash;{{else}}{{formatCurrency card.value}}{{#if card.percent}} %{{/if}}{{/ifCond}}</div>
+      {{#if card.compare}}
+      <div class="kpi-sub">{{#if card.delta}}<span class="kpi-pill {{card.trend}}">{{#if card.up}}&#9650;{{else}}&#9660;{{/if}} {{formatCurrency card.delta.amount}} {{card.delta.unit}}</span>{{/if}}{{@root.meta.labels.kpiVs}} {{#ifCond card.refValue '===' null}}&mdash;{{else}}{{formatCurrency card.refValue}}{{#if card.percent}} %{{/if}}{{/ifCond}}</div>
+      {{/if}}
+    </div>
+    {{/each}}
+  </div>
+  {{/with}}
+
   {{#if meta.periods}}
   {{!-- Period columns (ETP-6239): one table per page of period groups (meta.columnPages: 2 groups a
-        page with a comparison, all in one without), the range total last. Concepto and the 2-row
+        page with a comparison; without one the periodPages helper cuts them in even pages of at most 7), the range total last. Concepto and the 2-row
         header repeat on every page. Explicit table-layout and widths: without them Chrome shrinks a
         wide table to fit and then cuts columns. --}}
   {{#each (periodPages meta.columnPages meta.columnPageSize) as |page|}}
@@ -66,7 +102,7 @@
       </tr>
       {{#if (periodMode @root.meta.params.compareMode)}}
       <tr>
-        {{#each page}}<th class="cell-amount">{{@root.meta.labels.periodAmount}}</th><th class="cell-amount">{{@root.meta.labels.periodCompared}}</th><th class="cell-amount">{{@root.meta.labels.periodVarAmount}}</th><th class="cell-amount">{{@root.meta.labels.periodVarPct}}</th>{{/each}}
+        {{#each page as |idx|}}<th class="cell-amount">{{@root.meta.labels.periodAmount}}</th><th class="cell-amount">{{@root.meta.labels.periodCompared}}{{#with (periodCompared @root.meta.params.periods idx @root.meta.params.compareMode @root.meta.params.columns @root.meta.locale) as |against|}}<span class="cmp-against">({{against}})</span>{{/with}}</th><th class="cell-amount">{{@root.meta.labels.periodVarAmount}}</th><th class="cell-amount">{{@root.meta.labels.periodVarPct}}</th>{{/each}}
       </tr>
       {{/if}}
     </thead>
@@ -92,7 +128,7 @@
     </tbody>
   </table>
   {{/each}}
-  {{#if meta.notes.hiddenCount}}<div class="period-note">{{meta.labels.periodHiddenPre}} {{meta.notes.hiddenCount}} {{meta.labels.periodHiddenPost}}</div>{{/if}}
+  {{#if meta.notes.hiddenCount}}<div class="period-note">{{#ifCond meta.notes.hiddenCount '===' 1}}{{meta.labels.periodHiddenPreOne}} 1 {{meta.labels.periodHiddenPostOne}}{{else}}{{meta.labels.periodHiddenPre}} {{meta.notes.hiddenCount}} {{meta.labels.periodHiddenPost}}{{/ifCond}}</div>{{/if}}
   {{#if meta.notes.hasPartial}}<div class="period-note">{{meta.labels.periodPartial}}</div>{{/if}}
   {{else}}
   <table class="report-table" style="table-layout: fixed;">

@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { canSplit } from './reportTree.js';
 import { cellParts, columnCount } from './reportColumns.js';
 import { rowShares, splitShares } from './reportVisuals.js';
+import StickyHScroll from './StickyHScroll.jsx';
 import { TrendPill } from './DynamicReportKpis.jsx';
 
 // Amounts are in the schema's currency, which the tree does not name: plain grouped numbers, as the PDF.
@@ -159,7 +160,7 @@ export default function DynamicReportTable({ rows, groups, mode, expanded, onTog
   const th = 'px-3 py-2 font-medium uppercase tracking-wide';
   const subLabels = { current: ui('dynamicReportAmount'), compared: ui('dynamicReportCompared'), variation: ui('dynamicReportVariation'), variationPct: ui('dynamicReportVariationPct') };
   return (
-    <div className="overflow-x-auto" data-testid="DynamicReportTable__scroll">
+    <StickyHScroll data-testid="StickyHScroll__2e8fe9">
       <table className="w-full border-collapse text-sm" data-testid="DynamicReportTable">
         <thead>
           <tr className="text-xs text-muted-foreground bg-muted border-b border-border/60">
@@ -170,7 +171,12 @@ export default function DynamicReportTable({ rows, groups, mode, expanded, onTog
           </tr>
           <tr className="text-xs text-muted-foreground bg-muted/40 border-b border-border">
             {groups.map((g) => g.columns.map((c, i) => (
-              <th key={`${g.pos}-${c}`} scope="col" className={cn(th, 'text-right whitespace-nowrap', i === 0 && 'border-l border-border/60')}>{subLabels[c]}</th>
+              <th key={`${g.pos}-${c}`} scope="col" className={cn(th, 'text-right whitespace-nowrap', i === 0 && 'border-l border-border/60')}>
+                {subLabels[c]}{c === 'compared' && g.comparedLabel ? ' ' : ''}
+                {c === 'compared' && g.comparedLabel && (
+                  <span className="block text-[10px] font-normal normal-case tracking-normal" data-testid="DynamicReportTable__comparedLabel">({g.comparedLabel})</span>
+                )}
+              </th>
             )))}
           </tr>
         </thead>
@@ -232,6 +238,6 @@ export default function DynamicReportTable({ rows, groups, mode, expanded, onTog
           })}
         </tbody>
       </table>
-    </div>
+    </StickyHScroll>
   );
 }

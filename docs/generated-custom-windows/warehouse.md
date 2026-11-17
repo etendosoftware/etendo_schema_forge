@@ -27,7 +27,7 @@ The list uses `WarehouseCustomTable` in place of the default generated table. Co
 |--------|----------|
 | **Name** | Bold, `font-semibold`, color `#121217` |
 | **Identifier** (Search Key) | Pill badge: `bg-[#F5F7F9]`, rounded-lg, `text-xs`, color `#3F3F50` |
-| **Location** | Resolved from `locationAddress$_identifier`, falls back to raw `locationAddress`. Not sortable. |
+| **Location** | Resolved from `locationAddress$_identifier`, falls back to raw `locationAddress`. The resolved identifier is sanitized through `sanitizeDashJoinedIdentifier` (`tools/app-shell/src/lib/locationAddress.js`, shared with Contacts' `eTGOLocation` column) before render, so an empty address segment (e.g. no building name) no longer shows as a double dash (`"Calle Mayor -  - Madrid"` → `"Calle Mayor - Madrid"`); a genuinely short non-empty segment is never dropped. Not sortable. |
 | **Products** | Dynamic count cell (`WarehouseProductCountCell`): fetches storageBins then binContents per warehouse row, aggregates via `aggregateProducts`, displays count of products with `qty != 0` (includes negative stock, excludes exact zero — see "Stock filtering semantics" below). Shows `—` while loading or on error. Not sortable. |
 
 Print and Link buttons are hidden (`hidePrint`, `hideLink`). The sort and refresh toolbar icons are the default `ListView` icons, same as `/sales-order` (ETP-5601). The list toolbar inherits the generic `ListView` padding (8 px, 56 px bar) with no window-level override (ETP-5603); the table uses 8 px padding (`tablePaddingX="px-2"`, etc.).
