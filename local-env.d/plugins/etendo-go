@@ -12,7 +12,7 @@
 #                    .env.local ETENDO_URL and context.url at its Tomcat
 #   up               `make dev-local-core` in the background, pointed at its Tomcat; the
 #                    `feature-flag` lines of worktree.conf for the SPA and, the boolean ones,
-#                    for the backend (ETGO_FLAG_*); Copilot when worktree.conf says `copilot on`
+#                    for the backend (ETGO_FLAG_*); Copilot when worktree.conf says `setting copilot=on`
 #   status           SPA URL, running or stopped; Copilot's when it is on
 #   stop|off|worktree-rm  stops that environment's SPA + BFF, and its Copilot
 # manifest and db-seed print nothing without modules/com.etendoerp.go.
@@ -83,10 +83,10 @@ sync_backend_flags() {
   cat "$tmp" > "$f"; rm -f "$tmp"
 }
 
-# worktree.conf `copilot on|off` (default off): this plugin runs the environment's Copilot.
+# worktree.conf `setting copilot=on|off` (default off): this plugin runs the environment's Copilot.
 copilot_wanted() {
   [[ -f "$ETENDO_ROOT/worktree.conf" ]] || return 1
-  awk '$1 == "copilot" { v = $2 } END { exit !(v == "on") }' "$ETENDO_ROOT/worktree.conf"
+  awk '$1 == "setting" && $2 ~ /^copilot=/ { v = substr($2, 9) } END { exit !(v == "on") }' "$ETENDO_ROOT/worktree.conf"
 }
 copilot_pid() { local p; p="$(cat "$COPILOT_PIDF" 2>/dev/null || true)"; [[ -n "$p" ]] && kill -0 "$p" 2>/dev/null && echo "$p"; }
 
@@ -173,15 +173,15 @@ reserve_copilot_ports() {
 start_copilot() {
   local p f port mcp changed=1
   if [[ ! -f "$COPILOT_DIR/run.py" ]]; then
-    echo "WARNING: copilot on, but $COPILOT_DIR/run.py is not in this checkout: Copilot not started" >&2; return 1
+    echo "WARNING: setting copilot=on, but $COPILOT_DIR/run.py is not in this checkout: Copilot not started" >&2; return 1
   fi
   if ! command -v uv >/dev/null 2>&1; then
-    echo "WARNING: copilot on, but uv is not installed: Copilot not started" >&2; return 1
+    echo "WARNING: setting copilot=on, but uv is not installed: Copilot not started" >&2; return 1
   fi
   reserve_copilot_ports
   port=$COPILOT_PORT mcp=$COPILOT_PORT_MCP
   if ! p="$(copilot_pid)" && { port_busy "$port" || port_busy "$mcp"; }; then
-    echo "WARNING: copilot on, but :$port or :$mcp is already in use by another process (a docker Copilot?): this environment's Copilot not started" >&2
+    echo "WARNING: setting copilot=on, but :$port or :$mcp is already in use by another process (a docker Copilot?): this environment's Copilot not started" >&2
     return 1
   fi
   while IFS= read -r f; do
