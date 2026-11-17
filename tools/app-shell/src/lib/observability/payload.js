@@ -277,7 +277,7 @@ function sanitizeEventProperty(key, value) {
   }
 
   if (ENUM_EVENT_PROPERTY_VALUES.has(key)) {
-    return ENUM_EVENT_PROPERTY_VALUES.get(key).has(value) ? value : SKIP_PROPERTY;
+    return sanitizeEnumProperty(key, value);
   }
 
   if (NUMERIC_EVENT_PROPERTY_KEYS.has(key)) {
@@ -300,6 +300,10 @@ function sanitizeListProperty(key, value) {
   const allowed = LIST_EVENT_PROPERTY_VALUES.get(key);
   const kept = [...new Set(value.filter(item => allowed.has(item)))];
   return kept.length > 0 ? kept : SKIP_PROPERTY;
+}
+
+function sanitizeEnumProperty(key, value) {
+  return ENUM_EVENT_PROPERTY_VALUES.get(key).has(value) ? value : SKIP_PROPERTY;
 }
 
 function isSafeNumberForKey(key, value) {
