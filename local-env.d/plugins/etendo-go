@@ -5,7 +5,7 @@
 # executable under <repo>/local-env.d/plugins as `<plugin> <hook>` with the
 # environment in LOCALENV_* variables (contract: etendo-localenv docs/design.md
 # §6.7). This one gives each local-env environment its own Etendo GO SPA:
-#   manifest         `seed GOClient v1` (part of the DB fingerprint)
+#   manifest         `seed GOClient v2` (part of the DB fingerprint)
 #   db-seed          the gradle invocations that load the GO sample client
 #   worktree-create  reserves SPA_PORT / BFF_PORT for the new environment, allows that SPA
 #                    origin, points the MCP / OAuth public URLs at it, the app-shell's
@@ -366,7 +366,11 @@ tomcat_reads() {
 
 case "$hook" in
   manifest)
-    [[ -d "$GO_MODULE" ]] && echo "seed GOClient v1"
+    # The version is bumped when com.etendoerp.go's GOClient sample dataset changes in a way a
+    # seeded DB must have: the fingerprint does not hash the dataset, so without a bump every
+    # environment keeps restoring the old seed. v2 (ETP-5850): GOClient's sequence for
+    # C_BPartner.EM_Etgo_Identifier, without which creating a contact fails.
+    [[ -d "$GO_MODULE" ]] && echo "seed GOClient v2"
     ;;
   db-seed)
     if [[ -d "$GO_MODULE" ]]; then
