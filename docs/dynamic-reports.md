@@ -26,3 +26,5 @@ F5, a bookmark or a shared link restore what the panel had. Nothing in this mech
 - Restoring Mes/Trimestre hides the panel silently (`setCollapsed(true, { persist: false })`): no `report_panel_toggled` event and no focus move.
 - **Restore.** The state is read when the view mounts, before the first query: one request, not the defaults and then a second. It emits no `report_filter_applied`. Restoring Mes / Trimestre hides the panel for the session like a manual pick.
 - **Old viewer.** Flag off, the old viewer keeps reading deep links (`?report=X&dateFrom=…`) from the query string, unchanged.
+
+**Horizontal scroll (ETP-6239):** a wide table scrolls inside its own box, so `StickyHScroll` adds a `sticky bottom-0` scrollbar proxy (screen only, hidden without overflow) mirrored with the box through `linesScrollSync`; the box's own bar is hidden while the proxy shows.
