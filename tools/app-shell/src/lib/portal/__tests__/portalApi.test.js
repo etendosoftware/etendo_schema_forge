@@ -671,6 +671,21 @@ describe('fetchPortalDecision / confirmPortalDecision', () => {
     });
   }
 
+  // QA BUG-3: a 200 whose body was cut is a lost answer, never "no longer pending".
+  for (const [label, call] of [
+    ['confirmation', confirmPortalDecision],
+    ['view', fetchPortalDecision],
+  ]) {
+    it(`maps an unreadable ${label} body to loadFailed, never to a state`, async () => {
+      const { fetchImpl } = recordingFetch(() => unparseableResponse());
+
+      await assert.rejects(
+        call(fetchImpl, DECISION_TOKEN),
+        expectPortalError(PORTAL_ERROR.loadFailed, { status: 200 }),
+      );
+    });
+  }
+
   for (const status of [401, 403, 404]) {
     it(`maps ${status} on the confirmation to the dead-link code`, async () => {
       const { fetchImpl } = recordingFetch(() => jsonResponse({}, { status }));

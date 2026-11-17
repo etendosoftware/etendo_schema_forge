@@ -20,7 +20,7 @@ function t(key, vars) {
 vi.mock('@/i18n', () => ({ useUI: () => t }));
 
 import { StrictMode } from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   MemoryRouter, Route, Routes, useLocation, useNavigationType,
@@ -266,6 +266,62 @@ describe('PortalDecisionPage — a confirm whose answer was lost', () => {
 
     await waitFor(() => expect(screen.getByTestId('portal-decision-invalid')).toBeInTheDocument());
     expect(viewCalls()).toHaveLength(0);
+  });
+
+  it('treats a 200 whose body cannot be read as a lost answer, and resends', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ...jsonResponse({}), json: async () => { throw new TypeError('body stream cut'); },
+    });
+    apiFetchMock.mockResolvedValueOnce(jsonResponse(APPLIED_REJECT));
+    renderLanding();
+
+    await waitFor(() => expect(screen.getByTestId('portal-decision-applied')).toBeInTheDocument());
+    expect(screen.queryByTestId('portal-decision-not_pending')).not.toBeInTheDocument();
+    expect(confirmCalls()).toHaveLength(2);
+  });
+
+  it('resends a 429 and ends on the failure card, never on the invalid-link one', async () => {
+    apiFetchMock.mockImplementation(async (path) => (path.endsWith('/decisions/confirm')
+      ? jsonResponse({}, { status: 429 })
+      : jsonResponse({ state: 'pending' })));
+    renderLanding();
+
+    await waitFor(() => expect(screen.getByTestId('portal-decision-failed')).toBeInTheDocument());
+    expect(screen.queryByTestId('portal-decision-invalid')).not.toBeInTheDocument();
+    expect(confirmCalls()).toHaveLength(2);
+    expect(viewCalls()).toHaveLength(1);
+  });
+
+  it('stops the chain when the customer leaves during the backoff: no resend, no navigation', async () => {
+    const DELAY_MS = 60;
+    apiFetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    apiFetchMock.mockResolvedValueOnce(jsonResponse({ ...APPLIED_REJECT, portalToken: 'tok-new', quotationId: 'q-1' }));
+    const consoleError = vi.spyOn(console, 'error');
+    const { unmount } = renderLanding({ resendDelayMs: DELAY_MS });
+
+    await waitFor(() => expect(confirmCalls()).toHaveLength(1));
+    unmount();
+    await new Promise((resolve) => { setTimeout(resolve, DELAY_MS * 3); });
+
+    expect(confirmCalls()).toHaveLength(1);
+    expect(viewCalls()).toHaveLength(0);
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  it('sends exactly one POST when "Reintentar" is clicked twice', async () => {
+    apiFetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    apiFetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    apiFetchMock.mockResolvedValueOnce(jsonResponse({ state: 'pending' }));
+    renderLanding();
+
+    await waitFor(() => expect(screen.getByTestId('portal-decision-failed')).toBeInTheDocument());
+    const retry = screen.getByTestId('portal-decision-retry');
+    fireEvent.click(retry);
+    fireEvent.click(retry);
+
+    await waitFor(() => expect(screen.getByTestId('portal-decision-applied')).toBeInTheDocument());
+    expect(confirmCalls()).toHaveLength(3);
   });
 
   /** The confirm POST and its resend both fail with no readable answer; the view answers `viewAnswer`. */

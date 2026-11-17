@@ -542,12 +542,26 @@ function normalizeDecision(data) {
   };
 }
 
+/**
+ * A decision answer's body, or {@link PORTAL_ERROR.loadFailed} when it cannot be read (ETP-6209
+ * QA BUG-3). Never `{}`: an empty answer normalizes to "no longer pending" with no way into the
+ * portal, which is a false state for a decision the backend has just applied. An unreadable body
+ * is a lost answer, and the landing treats it as one (resend, then the view).
+ */
+async function readDecisionBody(response) {
+  try {
+    return await response.json();
+  } catch (cause) {
+    throw portalError(PORTAL_ERROR.loadFailed, { status: response.status, cause });
+  }
+}
+
 /** The confirmation landing: what will be applied. Never applies anything. */
 export async function fetchPortalDecision(fetchImpl, decisionToken) {
   const response = await portalGet(fetchImpl, null, '/decisions/view', {
     headers: { [PORTAL_DECISION_TOKEN_HEADER]: decisionToken },
   });
-  return normalizeDecision(await response.json().catch(() => ({})));
+  return normalizeDecision(await readDecisionBody(response));
 }
 
 /**
@@ -560,5 +574,5 @@ export async function confirmPortalDecision(fetchImpl, decisionToken) {
     method: 'POST',
     headers: { [PORTAL_DECISION_TOKEN_HEADER]: decisionToken },
   });
-  return normalizeDecision(await response.json().catch(() => ({})));
+  return normalizeDecision(await readDecisionBody(response));
 }

@@ -88,6 +88,18 @@ export default function PortalDecisionPage({ resendDelayMs = CONFIRM_RESEND_DELA
   // The token whose confirmation was already sent: the POST goes out once per open, also under
   // StrictMode's double effect in development (a second POST would answer "already applied").
   const sentFor = useRef(null);
+  // Whether the page is still mounted: once the customer leaves, nothing the confirmation chain
+  // still has in flight may resend, navigate or set state (ETP-6209 QA BUG-1). Set back to true on
+  // mount, so StrictMode's mount → unmount → mount in development keeps it alive.
+  const alive = useRef(true);
+  // One confirmation chain at a time: a second click on "Reintentar" before the first re-renders
+  // must not send a second POST.
+  const inFlight = useRef(false);
+
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; };
+  }, []);
 
   /**
    * Last resort, once the confirm POST AND its resend both failed without an answer we could
@@ -97,21 +109,23 @@ export default function PortalDecisionPage({ resendDelayMs = CONFIRM_RESEND_DELA
    * nor the portal token, so it cannot claim "you have just rejected…" nor open the portal. A
    * still-pending decision, or a view that fails too, keeps the retry.
    */
-  const settleFromView = useCallback((decisionToken) => {
-    fetchPortalDecision(apiFetch, decisionToken).then((current) => {
+  const settleFromView = useCallback((decisionToken) => fetchPortalDecision(apiFetch, decisionToken)
+    .then((current) => {
+      if (!alive.current) return;
       if (current.state === PORTAL_DECISION_STATE.pending) {
         setView(VIEW.failed);
         return;
       }
       setDecision(current);
       setView(VIEW.ready);
-    }).catch((error) => {
+    }, (error) => {
+      if (!alive.current) return;
       setView(error?.code === PORTAL_ERROR.invalidLink ? VIEW.invalid : VIEW.failed);
-    });
-  }, [apiFetch]);
+    }), [apiFetch]);
 
   /** A confirm answer: into the portal when it carries a way in, else this page's own card. */
   const showResult = useCallback((result) => {
+    if (!alive.current) return;
     // ETP-6209: the customer is taken into the portal on the quotation, with a one-off notice in
     // the router state (never the URL). Without a way in, this page shows its own card.
     const entryPath = portalEntryPath(result);
@@ -124,8 +138,9 @@ export default function PortalDecisionPage({ resendDelayMs = CONFIRM_RESEND_DELA
   }, [navigate]);
 
   /**
-   * Sends the confirmation; when it fails without a readable answer (other than a dead link), it
-   * is resent ONCE before anything else. A request can be committed by the backend and still be
+   * Sends the confirmation; when it fails without a readable answer (other than a dead link) —
+   * no answer, a 5xx or 429, or a 200 whose body was cut mid-read — it is resent ONCE, after a
+   * short backoff, before anything else. A request can be committed by the backend and still be
    * lost on the way back (a cut connection — ETP-6209), and the customer must not be told to
    * retry a decision that already took effect. The resend is safe: the confirmation is single-use
    * server-side, so an applied decision is never applied twice, and its answer still carries the
@@ -137,7 +152,7 @@ export default function PortalDecisionPage({ resendDelayMs = CONFIRM_RESEND_DELA
    * claiming "you have just rejected…" would be false for a genuinely re-opened link.
    *
    * Anything that throws past these steps (rendering the result, navigating) ends on the failure
-   * card with its retry, never stuck on "applying".
+   * card with its retry, never stuck on "applying". Once the page is gone, the chain stops.
    */
   const apply = useCallback(() => {
     const trimmed = token.trim();
@@ -145,20 +160,27 @@ export default function PortalDecisionPage({ resendDelayMs = CONFIRM_RESEND_DELA
       setView(VIEW.invalid);
       return;
     }
+    if (inFlight.current) return;
+    inFlight.current = true;
     setView(VIEW.applying);
     const onFailure = (next) => (error) => {
+      if (!alive.current) return undefined;
       if (error?.code === PORTAL_ERROR.invalidLink) {
         setView(VIEW.invalid);
-        return;
+        return undefined;
       }
       return next();
     };
     const resend = () => wait(resendDelayMs)
-      .then(() => confirmPortalDecision(apiFetch, trimmed))
-      .then(showResult, onFailure(() => settleFromView(trimmed)));
+      .then(() => (alive.current ? confirmPortalDecision(apiFetch, trimmed) : undefined))
+      .then(
+        (result) => (result === undefined ? undefined : showResult(result)),
+        onFailure(() => settleFromView(trimmed)),
+      );
     confirmPortalDecision(apiFetch, trimmed)
       .then(showResult, onFailure(resend))
-      .catch(() => setView(VIEW.failed));
+      .catch(() => { if (alive.current) setView(VIEW.failed); })
+      .finally(() => { inFlight.current = false; });
   }, [apiFetch, token, showResult, settleFromView, resendDelayMs]);
 
   // The confirmation is the page's own POST, sent once on open (never a GET side effect).
