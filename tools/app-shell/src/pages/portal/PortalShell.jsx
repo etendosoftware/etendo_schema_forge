@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import { Languages, LayoutGrid, Search } from 'lucide-react';
+// The main screen's glyphs are the design's own Phosphor icons (spec of 2026-11-17), imported with
+// the library's `*Icon` names like the rest of the app (`pages/first-steps/firstStepsIcons.js`).
 import {
-  ArrowLeftToLine, ArrowRightToLine, Files, FileText, Home, Languages, LayoutGrid, Package, Receipt,
-  Rocket, Search, ShoppingCart, User,
-} from 'lucide-react';
+  ArrowLineLeftIcon, ArrowLineRightIcon, FilesIcon, FileTextIcon, HouseSimpleIcon, PackageIcon,
+  ReceiptIcon, RocketLaunchIcon, ShoppingCartSimpleIcon, UserIcon,
+} from '@phosphor-icons/react';
 import { useLocaleSwitch, useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -21,14 +24,14 @@ import { PORTAL_HIGHLIGHTS, PORTAL_KIND_META } from './portalPresentation.js';
 export const ETENDO_AI_URL = 'https://etendo.ai';
 
 /**
- * Icon per destination: the design's Phosphor glyphs (FileText, Receipt, ShoppingCartSimple,
- * Package) mapped to their closest equivalents in the app's icon family (Lucide).
+ * Icon per destination: the design's Phosphor glyphs, the same everywhere a kind is drawn (rail,
+ * home tiles, mobile bottom bar). Phosphor sizes by its `size` prop.
  */
 export const PORTAL_KIND_ICONS = Object.freeze({
-  QUOTATION: FileText,
-  ORDER: ShoppingCart,
-  SHIPMENT: Package,
-  INVOICE: Receipt,
+  QUOTATION: FileTextIcon,
+  ORDER: ShoppingCartSimpleIcon,
+  SHIPMENT: PackageIcon,
+  INVOICE: ReceiptIcon,
 });
 
 /** Where the rail's collapsed state is remembered: a per-viewer convenience, never required. */
@@ -209,7 +212,7 @@ export function PortalCustomer({ identity, variant = 'row' }) {
   return (
     <div className="flex min-w-0 items-center gap-2.5" title={name} data-testid="portal-customer">
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-        <User className="h-4 w-4" aria-hidden="true" data-testid="User__a5d12f" />
+        <UserIcon size={16} aria-hidden="true" data-testid="User__a5d12f" />
       </span>
       <span className="min-w-0 flex-1 truncate" data-testid="portal-customer-name">{name}</span>
     </div>
@@ -335,8 +338,8 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
             data-testid="portal-rail-toggle"
           >
             {collapsed
-              ? <ArrowRightToLine className="h-5 w-5" aria-hidden="true" data-testid="ArrowRightToLine__a5d12f" />
-              : <ArrowLeftToLine className="h-5 w-5" aria-hidden="true" data-testid="ArrowLeftToLine__a5d12f" />}
+              ? <ArrowLineRightIcon size={20} aria-hidden="true" data-testid="ArrowLineRight__a5d12f" />
+              : <ArrowLineLeftIcon size={20} aria-hidden="true" data-testid="ArrowLineLeft__a5d12f" />}
           </button>
         </div>
 
@@ -356,7 +359,7 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
               className={cn(RAIL_ICON_BUTTON, isActive('home') ? RAIL_ACTIVE : 'bg-muted')}
               data-testid="portal-nav-home"
             >
-              <Home className="h-5 w-5" aria-hidden="true" data-testid="Home__a5d12f" />
+              <HouseSimpleIcon size={20} aria-hidden="true" data-testid="HouseSimple__a5d12f" />
             </button>
             <button
               type="button"
@@ -365,7 +368,7 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
               className={cn(RAIL_ICON_BUTTON, documentsActive ? RAIL_ACTIVE : 'bg-muted')}
               data-testid="portal-nav-documents"
             >
-              <Files className="h-5 w-5" aria-hidden="true" data-testid="Files__a5d12f" />
+              <FilesIcon size={20} aria-hidden="true" data-testid="Files__a5d12f" />
               {totalBadge > 0 ? (
                 <span
                   className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-destructive px-1 text-[11px] font-semibold leading-none text-destructive-foreground"
@@ -390,7 +393,7 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
                 )}
                 data-testid="portal-nav-home"
               >
-                <Home className="h-5 w-5 text-muted-foreground" aria-hidden="true" data-testid="Home__a5d12f" />
+                <HouseSimpleIcon size={20} className="text-muted-foreground" aria-hidden="true" data-testid="HouseSimple__a5d12f" />
                 {ui('portalNavHome')}
               </button>
             </div>
@@ -496,7 +499,7 @@ function PortalCustomerIcon({ identity }) {
       className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-muted-foreground"
       data-testid="portal-customer"
     >
-      <User className="h-4 w-4" aria-hidden="true" data-testid="User__a5d12f" />
+      <UserIcon size={16} aria-hidden="true" data-testid="User__a5d12f" />
     </span>
   );
 }
@@ -510,7 +513,7 @@ function PortalPromo() {
   return (
     <aside className="mx-3 flex flex-col gap-2 rounded-lg border border-border bg-card p-3" data-testid="portal-promo">
       <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-border">
-        <Rocket className="h-4 w-4 text-muted-foreground" aria-hidden="true" data-testid="Rocket__a5d12f" />
+        <RocketLaunchIcon size={16} className="text-muted-foreground" aria-hidden="true" data-testid="RocketLaunch__a5d12f" />
       </span>
       <span className="text-sm font-semibold">{ui('portalPromoTitle')}</span>
       <span className="text-xs text-muted-foreground">{ui('portalPromoDescription')}</span>
@@ -546,7 +549,7 @@ function PortalBottomNav({ onNavigate, isActive }) {
   };
 
   const items = [
-    { key: 'home', Icon: Home, label: ui('portalNavHome'), active: isActive('home'), onClick: () => go({ view: 'home' }) },
+    { key: 'home', Icon: HouseSimpleIcon, label: ui('portalNavHome'), active: isActive('home'), onClick: () => go({ view: 'home' }) },
     ...MOBILE_PRIMARY_KINDS.map((kind) => ({
       key: kind.toLowerCase(),
       Icon: PORTAL_KIND_ICONS[kind],
@@ -582,7 +585,7 @@ function PortalBottomNav({ onNavigate, isActive }) {
                 className="flex items-center gap-3 px-4 py-3 text-left text-base hover:bg-muted"
                 data-testid={`portal-bottom-nav-${kind.toLowerCase()}`}
               >
-                <Icon className="h-5 w-5" aria-hidden="true" data-testid="Icon__a5d12f" />
+                <Icon size={20} aria-hidden="true" data-testid="Icon__a5d12f" />
                 {ui(PORTAL_KIND_META[kind].pluralKey)}
               </button>
             );
@@ -608,7 +611,7 @@ function PortalBottomNav({ onNavigate, isActive }) {
               active ? 'bg-[hsl(var(--accent-highlight))] text-[hsl(var(--accent-highlight-foreground))]' : '',
             )}
           >
-            <Icon className="h-5 w-5" aria-hidden="true" data-testid="Icon__a5d12f" />
+            <Icon size={20} aria-hidden="true" data-testid="Icon__a5d12f" />
           </span>
           {label}
         </button>

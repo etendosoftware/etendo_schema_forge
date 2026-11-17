@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
+import { ArrowRight } from 'lucide-react';
+// The design's own Phosphor icons (spec of 2026-11-17), with the library's `*Icon` names like the
+// rest of the app (`pages/first-steps/firstStepsIcons.js`). Phosphor sizes by its `size` prop.
 import {
-  ArrowRight, ArrowUpRight, BarChart3, BarChartHorizontal, CalendarDays, Check, ChevronDown,
-  ChevronRight, FileText, Smile,
-} from 'lucide-react';
+  ArrowUpRightIcon, CalendarBlankIcon, CaretDownIcon, CaretRightIcon, ChartBarHorizontalIcon,
+  ChartBarIcon, CheckIcon, FileTextIcon, SmileyIcon,
+} from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import {
@@ -152,7 +155,7 @@ export default function PortalHomeView({
                   className="hidden h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:bg-card hover:text-foreground md:flex"
                   data-testid="portal-recent-view-all"
                 >
-                  <ArrowUpRight className="h-4 w-4" aria-hidden="true" data-testid="ArrowUpRight__beaeb4" />
+                  <ArrowUpRightIcon size={16} aria-hidden="true" data-testid="ArrowUpRight__beaeb4" />
                 </button>
               </>
             )}
@@ -245,7 +248,7 @@ function Greeting({ identity, months, onMonthsChange }) {
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex items-center gap-3">
         <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground md:flex">
-          <Smile className="h-5 w-5" aria-hidden="true" data-testid="Smile__beaeb4" />
+          <SmileyIcon size={20} aria-hidden="true" data-testid="Smiley__beaeb4" />
         </div>
         <div className="flex min-w-0 flex-col gap-1 md:gap-0">
           {identity?.businessPartnerName ? (
@@ -270,12 +273,9 @@ function Greeting({ identity, months, onMonthsChange }) {
             className="hidden h-10 items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium md:inline-flex"
             data-testid="portal-period"
           >
-            <CalendarDays className="h-4 w-4" aria-hidden="true" data-testid="CalendarDays__beaeb4" />
+            <CalendarBlankIcon size={20} aria-hidden="true" data-testid="CalendarBlank__beaeb4" />
             {ui('portalPeriodMonths', { count: months })}
-            <ChevronDown
-              className="h-3.5 w-3.5"
-              aria-hidden="true"
-              data-testid="ChevronDown__beaeb4" />
+            <CaretDownIcon size={16} aria-hidden="true" data-testid="CaretDown__beaeb4" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" data-testid="DropdownMenuContent__beaeb4">
@@ -358,7 +358,7 @@ function Balance({ balances, paid }) {
       className="inline-flex items-center gap-1 rounded-lg bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
       data-testid={testId}
     >
-      <FileText className="h-3.5 w-3.5" aria-hidden="true" data-testid="FileText__beaeb4" />
+      <FileTextIcon size={14} aria-hidden="true" data-testid="FileText__beaeb4" />
       {count}
     </span>
   );
@@ -424,7 +424,7 @@ function KindTile({ kind, tile, onNavigate }) {
     >
       <span className="flex items-center gap-2 text-sm text-muted-foreground md:text-xs">
         <span className="hidden h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted md:flex">
-          <Icon className="h-3.5 w-3.5" aria-hidden="true" data-testid="Icon__beaeb4" />
+          <Icon size={16} aria-hidden="true" data-testid="Icon__beaeb4" />
         </span>
         {ui(PORTAL_KIND_META[kind].pluralKey)}
       </span>
@@ -471,7 +471,7 @@ function RecentDocuments({ recent, onOpen }) {
                 className="inline-flex min-w-0 max-w-[10rem] items-center gap-1 rounded-lg bg-muted px-2 py-0.5 text-xs text-muted-foreground"
                 title={document.documentNo}
               >
-                <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden="true" data-testid="FileText__beaeb4" />
+                <FileTextIcon size={14} className="shrink-0" aria-hidden="true" data-testid="FileText__beaeb4" />
                 <span className="truncate">{document.documentNo}</span>
               </span>
               <PortalRowBadge
@@ -488,10 +488,7 @@ function RecentDocuments({ recent, onOpen }) {
                 </span>
               ) : null}
             </span>
-            <ChevronRight
-              className="h-4 w-4 shrink-0 text-muted-foreground"
-              aria-hidden="true"
-              data-testid="ChevronRight__beaeb4" />
+            <CaretRightIcon size={16} className="shrink-0 text-muted-foreground" aria-hidden="true" data-testid="CaretRight__beaeb4" />
           </button>
           <button
             type="button"
@@ -615,7 +612,7 @@ function InvoicedChart({ chart, year }) {
           {year?.total > 0 ? (
             <span className="flex items-center gap-2 text-xs text-[var(--status-success-fg)]" data-testid="portal-up-to-date">
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--status-success-bg)]">
-                <Check className="h-3 w-3" aria-hidden="true" data-testid="Check__beaeb4" />
+                <CheckIcon size={12} aria-hidden="true" data-testid="Check__beaeb4" />
               </span>
               {ui('portalUpToDate', { upToDate: year.upToDate, total: year.total })}
             </span>
@@ -630,7 +627,7 @@ function InvoicedChart({ chart, year }) {
           </span>
         </div>
         <div className="flex h-10 items-center gap-1 rounded-xl bg-muted p-1" role="group" aria-label={ui('portalChartOrientation')}>
-          {[['vertical', BarChart3, 'portalChartVertical'], ['horizontal', BarChartHorizontal, 'portalChartHorizontal']].map(([value, Icon, labelKey]) => (
+          {[['vertical', ChartBarIcon, 'portalChartVertical'], ['horizontal', ChartBarHorizontalIcon, 'portalChartHorizontal']].map(([value, Icon, labelKey]) => (
             <button
               key={value}
               type="button"
@@ -644,7 +641,7 @@ function InvoicedChart({ chart, year }) {
               )}
               data-testid={`portal-chart-orientation-${value}`}
             >
-              <Icon className="h-[18px] w-[18px]" aria-hidden="true" data-testid="Icon__beaeb4" />
+              <Icon size={20} aria-hidden="true" data-testid="Icon__beaeb4" />
             </button>
           ))}
         </div>

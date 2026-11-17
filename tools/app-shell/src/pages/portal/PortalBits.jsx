@@ -1,4 +1,5 @@
 import { Search } from 'lucide-react';
+import { MagnifyingGlassIcon } from '@phosphor-icons/react';
 import { useLocale, useLocaleSwitch, useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { getStatusTone, statusLabel } from '@/lib/statusBadge.js';
@@ -245,10 +246,20 @@ export function PortalSearchPill({
         'flex h-12 items-center gap-2.5 rounded-full bg-muted px-4 md:gap-2 md:px-3.5',
         variant === 'header' ? 'md:h-10 md:bg-card md:px-4' : 'md:h-9',
       )}>
-        <Search
-          className="h-4 w-4 shrink-0 text-muted-foreground"
-          aria-hidden="true"
-          data-testid="Search__7a317e" />
+        {/* The main screen's top-bar pill takes the design's Phosphor glyph (spec of 2026-11-17);
+            the lists keep theirs until their own spec arrives. */}
+        {variant === 'header' ? (
+          <MagnifyingGlassIcon
+            size={20}
+            className="shrink-0 text-muted-foreground"
+            aria-hidden="true"
+            data-testid="MagnifyingGlass__7a317e" />
+        ) : (
+          <Search
+            className="h-4 w-4 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+            data-testid="Search__7a317e" />
+        )}
         <input
           type="search"
           value={value}
