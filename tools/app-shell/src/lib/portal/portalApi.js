@@ -533,6 +533,10 @@ function normalizeDecision(data) {
     reasonText: readableText(data?.reasonText),
     documentNo: readableText(data?.documentNo),
     tenantName: readableText(data?.tenantName),
+    // ETP-6209: the way into the portal after a confirmation (confirm POST only): a fresh portal
+    // token and the quotation it opens on. Absent when the customer cannot enter.
+    portalToken: readableText(data?.portalToken),
+    quotationId: readableText(data?.quotationId),
   };
 }
 
