@@ -3,7 +3,7 @@ import {
   columnCount, columnModel, cellParts, COLUMN_GRAINS, exportTooLong, modeHiddenCount, modeOf, periodLimit, rowsForMode, SCREEN_PERIODS,
 } from '../reportColumns.js';
 import { periodBuckets, serializePeriods } from '../dynamicDates.js';
-import { buildPeriodValues, EXPORT_MAX_BUCKETS } from '@etendosoftware/schema-forge-cli/src/report-periods.js';
+import { buildPeriodValues, EXPORT_MAX_BUCKETS, SCREEN_PERIODS as CORE_SCREEN_PERIODS } from '@etendosoftware/schema-forge-cli/src/report-periods.js';
 
 const range = { dateFrom: '2026-07-15', dateTo: '2026-09-30' };
 const buckets = (grain, opts) => periodBuckets(range, grain, opts).buckets;
@@ -13,7 +13,8 @@ const model = (over = {}) => columnModel({
 
 describe('reportColumns constants', () => {
   it('screen/PDF show the last 12 months / 8 quarters, or 6 / 4 with a comparison; exports accept 25 buckets', () => {
-    expect(SCREEN_PERIODS).toEqual({ month: { plain: 12, compared: 6 }, quarter: { plain: 8, compared: 4 } });
+    expect(SCREEN_PERIODS).toBe(CORE_SCREEN_PERIODS); // one source: core's
+    expect(SCREEN_PERIODS).toEqual({ month: { plain: 12, compared: 6 }, quarter: { plain: 8, compared: 4 } }); // sanity literal
     expect([periodLimit('month', 'none'), periodLimit('month', 'sly'), periodLimit('month', 'prev')]).toEqual([12, 6, 6]);
     expect([periodLimit('quarter', 'none'), periodLimit('quarter', 'sly')]).toEqual([8, 4]);
     expect(periodLimit('total', 'sly')).toBe(Infinity);

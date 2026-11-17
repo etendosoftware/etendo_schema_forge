@@ -1,5 +1,5 @@
 import { formatCalendarDate, formatCalendarMonthShort, formatCalendarQuarterShort } from '@/lib/dateOnly.js';
-import { buildPeriodValues, EXPORT_MAX_BUCKETS } from '@etendosoftware/schema-forge-cli/src/report-periods.js';
+import { buildPeriodValues, EXPORT_MAX_BUCKETS, SCREEN_PERIODS } from '@etendosoftware/schema-forge-cli/src/report-periods.js';
 import { comparedRanges, serializePeriods } from './dynamicDates.js';
 
 /**
@@ -14,11 +14,10 @@ export const modeOf = (compare) => MODES[compare] ?? 'none';
 
 export const COLUMN_GRAINS = Object.freeze(['total', 'month', 'quarter']);
 /**
- * Periods the screen and the PDF show besides the range; Excel / CSV print every one. A comparison
- * uses 4 columns per period instead of 1, so with one fewer periods fit the same width. The single
- * source for the screen, the PDF request and the hidden-periods note.
+ * Periods the screen and the PDF show besides the range (`SCREEN_PERIODS`, from core: `{ month|quarter: { plain, compared } }`);
+ * Excel / CSV print every one. The single source for the screen, the PDF request, the note and, in core, the row visibility.
  */
-export const SCREEN_PERIODS = Object.freeze({ month: { plain: 12, compared: 6 }, quarter: { plain: 8, compared: 4 } });
+export { SCREEN_PERIODS };
 /** How many periods (besides the range) a grain shows in a comparison mode; Infinity for the Total grain. */
 export const periodLimit = (grain, mode) => SCREEN_PERIODS[grain]?.[mode === 'none' ? 'plain' : 'compared'] ?? Infinity;
 /** Periods a comparison mode hides on top of what the request left out (the answer always holds the plain limit). */
