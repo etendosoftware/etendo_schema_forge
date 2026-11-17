@@ -27,6 +27,14 @@ import {
  * portal's generic invalid-link screen. A failed POST (network) offers a retry.
  */
 
+/**
+ * Pause before the one automatic resend of a lost confirmation: long enough for a dropped
+ * connection to come back, short enough that the customer still sees one "applying" step.
+ */
+export const CONFIRM_RESEND_DELAY_MS = 400;
+
+const wait = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+
 const VIEW = Object.freeze({ applying: 'applying', ready: 'ready', invalid: 'invalid', failed: 'failed' });
 
 /** Title, description and icon per state. */
@@ -68,7 +76,7 @@ function resultTitle(decision, copy) {
   return copy.titleKey;
 }
 
-export default function PortalDecisionPage() {
+export default function PortalDecisionPage({ resendDelayMs = CONFIRM_RESEND_DELAY_MS } = {}) {
   const { token = '' } = useParams();
   const ui = useUI();
   const baseUrl = useMemo(() => resolvePortalBaseUrl(), []);
@@ -127,6 +135,9 @@ export default function PortalDecisionPage() {
    * "already answered". That wording is kept on purpose: nothing in the answer tells this page's
    * own lost call apart from an earlier open of the same link (no timestamp, no request id), and
    * claiming "you have just rejected…" would be false for a genuinely re-opened link.
+   *
+   * Anything that throws past these steps (rendering the result, navigating) ends on the failure
+   * card with its retry, never stuck on "applying".
    */
   const apply = useCallback(() => {
     const trimmed = token.trim();
@@ -140,12 +151,15 @@ export default function PortalDecisionPage() {
         setView(VIEW.invalid);
         return;
       }
-      next();
+      return next();
     };
-    const resend = () => confirmPortalDecision(apiFetch, trimmed)
+    const resend = () => wait(resendDelayMs)
+      .then(() => confirmPortalDecision(apiFetch, trimmed))
       .then(showResult, onFailure(() => settleFromView(trimmed)));
-    confirmPortalDecision(apiFetch, trimmed).then(showResult, onFailure(resend));
-  }, [apiFetch, token, showResult, settleFromView]);
+    confirmPortalDecision(apiFetch, trimmed)
+      .then(showResult, onFailure(resend))
+      .catch(() => setView(VIEW.failed));
+  }, [apiFetch, token, showResult, settleFromView, resendDelayMs]);
 
   // The confirmation is the page's own POST, sent once on open (never a GET side effect).
   useEffect(() => {

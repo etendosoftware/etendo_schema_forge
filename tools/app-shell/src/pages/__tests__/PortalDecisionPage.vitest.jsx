@@ -1,8 +1,9 @@
 // @covers tools/app-shell/src/pages/PortalDecisionPage.jsx
 // @covers tools/app-shell/src/lib/portal/usePortalApiFetch.js
-// New file: the decision landing is its own public route with its own page; PortalPage's tests
-// cover the portal, not this one. The confirmation call is the real `confirmPortalDecision`; only
-// `apiFetch` (the network boundary) is a double.
+
+// The decision landing is its own public route with its own page; PortalPage's tests cover the
+// portal, not this one. The confirmation call is the real `confirmPortalDecision`; only `apiFetch`
+// (the network boundary) is a double.
 const apiFetchMock = vi.fn();
 // `real` lets one test drive the page through the REAL client over a stubbed `fetch`, to see
 // what the session scope does to the answer; every other test reads the mock's call options.
@@ -38,11 +39,15 @@ function jsonResponse(body, { status = 200 } = {}) {
   };
 }
 
-function renderLanding({ strict = false, path = `/portal/decision/${DECISION_TOKEN}` } = {}) {
+/**
+ * `resendDelayMs` defaults to 0 so the lost-confirm tests do not each wait the real backoff; the
+ * backoff itself has its own test below.
+ */
+function renderLanding({ strict = false, path = `/portal/decision/${DECISION_TOKEN}`, resendDelayMs = 0 } = {}) {
   const tree = (
     <MemoryRouter initialEntries={[path]}>
       <Routes>
-        <Route path="portal/decision/:token" element={<PortalDecisionPage />} />
+        <Route path="portal/decision/:token" element={<PortalDecisionPage resendDelayMs={resendDelayMs} />} />
         <Route path="portal/:token" element={<PortalArrivalProbe />} />
       </Routes>
     </MemoryRouter>
@@ -226,6 +231,22 @@ describe('PortalDecisionPage — a confirm whose answer was lost', () => {
     expect(confirmCalls()).toHaveLength(2);
     expect(confirmCalls()[1][1]).toStrictEqual(confirmCalls()[0][1]);
     expect(viewCalls()).toHaveLength(0);
+  });
+
+  it('waits the backoff before its one resend', async () => {
+    const DELAY_MS = 300;
+    apiFetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    const started = Date.now();
+    renderLanding({ resendDelayMs: DELAY_MS });
+
+    await waitFor(() => expect(confirmCalls()).toHaveLength(1));
+    await new Promise((resolve) => { setTimeout(resolve, DELAY_MS / 3); });
+    expect(confirmCalls()).toHaveLength(1);
+    expect(screen.getByTestId('portal-decision-applying')).toBeInTheDocument();
+
+    await waitFor(() => expect(screen.getByTestId('portal-decision-applied')).toBeInTheDocument());
+    expect(Date.now() - started).toBeGreaterThanOrEqual(DELAY_MS);
+    expect(confirmCalls()).toHaveLength(2);
   });
 
   it('shows the result card when the resend answers with no way into the portal', async () => {
