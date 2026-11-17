@@ -1857,7 +1857,7 @@ exposes on `businessPartner` (all writable, `inout`):
 | `last_name` | `etgoLastname` | Required for a person, refused for a company. |
 | `name` | `name` | Required for a company. For a person it is derived from first and last name, as the form does; a value other than that derivation is refused. No longer `required` in the manifest. |
 | `tax_id_key` | `oBTIKTaxIDKey` | AD list, published as an enum with its codes and labels. Defaulted before `tax_id` is validated. |
-| `category` | `businessPartnerCategory` | Lookup `GET /api/v1/contacts/lookups/category`, no context. |
+| `category` | `businessPartnerCategory` | Relationship to `contact-category`; lookup `GET /api/v1/contacts/lookups/category`, no context. |
 
 The rules live on the server (Etendo GO), not in the manifest: the manifest `required` flag cannot express a
 condition, so none of these fields is `required` and each carries a `publicApi.description` that states the rule
@@ -1873,8 +1873,9 @@ a stale form; the company one tells the user to mark the contact as a person, ma
 
 The category lookup forwards no context: the form's category selector has no validation rule and sends none,
 so the list is the tenant's active categories the key's role can read. Omitting `category` on create keeps the
-form's default (the organization's default category). Contact categories are not a public resource in V1, so
-`category` is a plain id attribute; the resource itself is later work.
+form's default (the organization's default category). Contact categories are a public resource
+(`contact-category`, published from the Business Partner Category window), so `category` is a relationship: it is
+written and read under `relationships` with `type` `contact-category`, the type the lookup values carry.
 
 The window itself is unchanged: `publicApi` only affects the public API manifest (the regen only bumps the
 contract version, `0.9.0` to `0.13.0`; the generated frontend does not change).

@@ -5,13 +5,21 @@ Maintain the general currency conversion rates the system uses when a document c
 
 Rates can originate from historical manual maintenance or from the conversion-rate downloader job (`com.smf.currency.conversionrate`). Auto-downloaded rates are flagged **Synced**. The audit trail for downloader runs lives in the companion window — see `conversion-rate-downloader-log.md`.
 
-## What this window allows
-The window is view-only. ETP-4474 added `window.readOnly: true`; ETP-4254 applies that existing declaration consistently to the API as well as the React UI:
+## What this window should allow
+The window is view-only. Users should be able to:
 
-- users can review Currency, To Currency, validity dates, multiply/divide factors and Synced
-- Create/Delete are hidden, and DetailView blocks edit/save
-- `ETGO_SF_ENTITY` exposes only `ISGET=Y` + `ISGETBYID=Y`; POST/PUT/PATCH/DELETE are `N`
-- rejected CRUD writes return `405 "<METHOD> not enabled for conversionRate"` to both the React app and MCP agents
+- list the conversion rates of each currency pair (Currency, To Currency) with their validity dates
+- review the multiply rate and the divide rate of a pair for a validity window
+
+The window also shows whether a rate was downloaded automatically (**Synced**); the public API does
+not publish that flag.
+
+ETP-4474 added `window.readOnly: true`; ETP-4254 applies that existing declaration consistently to
+the API as well as the React UI. Create and Delete are hidden, and DetailView blocks edit and save.
+`ETGO_SF_ENTITY` exposes only `ISGET=Y` + `ISGETBYID=Y` (POST/PUT/PATCH/DELETE are `N`), and a
+rejected CRUD write returns `405 "<METHOD> not enabled for conversionRate"` to both the React app
+and MCP agents. These implementation facts are prose, not bullets, on purpose: the public API
+manifest publishes the bullets of this section as the `conversion-rates` capabilities.
 
 The generated fields still carry the older `readOnlyLogic: "@sMFCRSynced@='Y'"` cascade, but the window-wide lock supersedes it. If manual maintenance becomes a requirement again, remove `window.readOnly` in `decisions.json` and re-evaluate the per-record lock; never hand-edit the contract. See [`../agentic-validation/agentic-write-exposure-criteria.md`](../agentic-validation/agentic-write-exposure-criteria.md).
 
@@ -46,3 +54,25 @@ The generated fields still carry the older `readOnlyLogic: "@sMFCRSynced@='Y'"` 
 - `artifacts/conversion-rates/generated/web/conversion-rates/ConversionRateTable.jsx` and `index.jsx` confirm the list columns, the `finance` category, and the standalone generated layout.
 - `tools/app-shell/src/menu.json` places the window in the Finance group with `windowId: "116"`.
 - Backend: `com.etendoerp.go` `InvoiceExchangeRateValidator` consumes these rates at completion; `com.smf.currency.conversionrate` owns the downloader that writes `Synced` records and the `conversion-rate-downloader-log` audit rows.
+
+## Public API — read-only `conversion-rates` — ETP-6174
+
+The public API publishes the window as `GET`/`LIST` only (`/api/v1/conversion-rates`), declared with
+`publicApi.readOnly: true` on `entities.header` in `decisions.json` (the entry renamed to the
+contract entity `conversionRate`; the manifest generator finds it by that name). The window's
+category (`finance`) is excluded by default; the window is published because it is listed in the
+generator's V1 allowlist. Every field is read-only (`out`); a write answers `404`, as NEO itself
+refuses one with `405`.
+
+The entity is curated (`publicApi.exposed: true`) on `currency`, `toCurrency`, `validFromDate`,
+`validToDate`, `multipleRateBy` and `divideRateBy`, so the downloader's `sMFCRSynced` flag stays out
+of the public API while the window keeps showing it (and keeps using it in `readOnlyLogic`).
+
+`multipleRateBy` and `divideRateBy` declare `"type": "number"`. Their AD reference (800019, Rate) is
+not mapped by the core extractor, which extracts them as `string`, while NEO answers a JSON number
+(the default CRUD serializes the `BigDecimal` as is). The override fixes the public type
+(`number`/`double`) and makes the read-only form and grid render the values as numbers. Same
+workaround as `sales-invoice` `exchangeRates.rate`; remove it once reference 800019 is mapped in
+`schema_forge_core`. Regenerated with `make regen ONLY=conversion-rates SKIP_EXTRACT=1 FROM_CACHE=1`
+(contract `0.7.0`; `ConversionRateForm.jsx`, `ConversionRateTable.jsx` and `mockData.js` change).
+Contract: `docs/public-api.md` §3.

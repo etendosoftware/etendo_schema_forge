@@ -98,6 +98,7 @@ Examples in the repository:
 
 - `artifacts/contacts/decisions.json` (entity `businessPartner`): `name`, `searchKey`, `taxId`, `web`, `email`, `phone`, `paymentMethod`, `pOPaymentMethod`, `businessPartnerCategory` (the last three with a lookup), and the person-or-company fields `etgoIsperson`, `etgoFirstname`, `etgoLastname` and `oBTIKTaxIDKey` (an AD list, published as an enum). `name`, `taxID` and the person fields carry a `description`.
 - `artifacts/product/decisions.json` (entity `product`): `searchKey`, `name`, `category` (internal `productCategory`), `description`, `salePrice` (internal `eTGOSalePrice`), `stock` (internal `eTGOStock`).
+- `artifacts/conversion-rates/decisions.json` (entity `header`, contract name `conversionRate`): `currency`, `toCurrency`, `validFromDate`, `validToDate`, `multipleRateBy`, `divideRateBy`. The curation keeps the downloader's `sMFCRSynced` flag out of the API while the window still shows it.
 
 Pipeline handling: `resolve-curated.js` copies `publicApi` as a whitelisted decision property
 (`core: cli/src/resolve-curated.js`) and `generate-contract.js` stamps it onto each contract
@@ -187,15 +188,21 @@ artifacts/<window>/contract.json
   | Sales orders | `sales-order`, `sales-order-lines` | Read and write; header `complete` |
   | Purchase orders | `purchase-order`, `purchase-order-lines` | Read and write; header `complete` |
   | Quotations | `sales-quotation`, `sales-quotation-quotationLine` | Read and write |
+  | Contact categories | `contact-category` (window and NEO spec `business-partner-category`) | Read and write; the Accounting tab is not published |
+  | Taxes | `tax` | `GET`, `LIST` only; the tax zone, translation, accounting and parameter tabs are not published |
+  | Tax categories | `tax-category` | `GET`, `LIST` only |
+  | Conversion rates | `conversion-rates` | `GET`, `LIST` only |
 
-  Invoices and their lines/exchange rates, shipments, receipts, goods movements, internal consumption, physical inventory, return receipts/shipments, warehouses, matched purchase invoices and fiscal monitors are outside V1. Contacts expose only addresses and contact persons as children. Taxes, tax categories and conversion rates are not published in this version. Contact categories are not a resource either: V1 offers them only as the values of the contact's `category` lookup. Excluded collections answer `404` (a gateway error, without `code`); removing a collection does not remove the app's corresponding window.
+  Invoices and their lines/exchange rates, shipments, receipts, goods movements, internal consumption, physical inventory, return receipts/shipments, warehouses, matched purchase invoices and fiscal monitors are outside V1. Contacts expose only addresses and contact persons as children. Excluded collections answer `404` (a gateway error, without `code`); removing a collection does not remove the app's corresponding window.
+
+- **The allowlist is the per-window opt-in, and it overrides the category exclusion.** The generator keeps a list of categories outside the public API scope (`accounting`, `configuration`, `crm`, `finance`, `hr`, `settings`, `setup`; `policy.excludedCategories` in the manifest), but a window listed in `publicApiV1Entities` is published whatever its category: listing it is the scope decision. `tax` (category `settings`), `tax-category` (`configuration`) and `conversion-rates` (`finance`) are published this way. Every window that is not in the allowlist stays out, whatever its category. The windows in `excludedWindows` (`policy.excludedWindows`) stay out even if someone lists them. The manifest records the rule as `policy.windowSelection: "allowlist-overrides-excluded-categories"`.
 
 - Every published window must have `artifacts/<window>/schema-raw.json`. The file is gitignored, so a clean checkout lacks it; when it is missing the generator fails and names the file, instead of producing a manifest without child resources and `updated`. Windows that are not published do not need it.
 - Resources must belong to the explicit allowlist. Allowed child tabs must also have their parent foreign key in `schema-raw.json`. When `decisions.window.secondaryTabs` is non-empty, only the listed tabs are published. Child tabs whose name matches `accounting`, or is exactly `Bank Account`, are skipped. The manifest lists these patterns in `policy.excludedChildTabs`. A tab under a child tab (`level: subline` in `schema-raw.json`, AD tab level 2, e.g. the order's *Line Tax*) is not published either: Etendo filters it by the child record, while the gateway nests one level and would pass the window's id, so it always read empty (ETP-6012).
-- The public resource name is `specName` for the primary entity and `specName-entityName` for the others.
+- The public resource name is `specName` for the primary entity and `specName-entityName` for the others. A window whose artifact name is not the name an integrator should see is renamed in `publicResourceNames` in the generator (`policy.publicResourceNames` in the manifest); today only `business-partner-category`, published as `contact-category`. The public name is the manifest key, the route (`/api/v1/contact-category`), the JSON:API `type`, the `parent.resource` of its children and the target of every relationship and lookup `type` that points to it. The entity keeps `specName: "business-partner-category"`, which is what the gateway sends to NEO (`/sws/neo/business-partner-category/businessPartnerCategory`); the gateway never derives the NEO spec from the public name.
 - Operations come from `backendContract.endpoints` plus a forced `GET` and `LIST`; `PATCH` is added whenever `PUT` exists. A resource with no field of direction `in` or `inout` is read-only: its operations are reduced to `GET`, `LIST`.
 - The functional texts (`functional.functionalSummary`, `functional.functionalCapabilities`) come from `docs/generated-custom-windows/<window>.md`. Capability lines and summary sentences that cite a ticket (`ETP-<number>`) or Jira are not published; when no summary sentence remains, the summary is `Public API resource for the <window> window.`
-- A relationship is added to a field whose `reference` resolves to another public resource.
+- A relationship is added to a field whose `reference` resolves to another public resource. When that field also publishes a lookup, the lookup `type` becomes the related resource's public name, so the ids a lookup lists are sent back with the type the relationship expects.
 - `scripts/validate-base-public-api-manifest.mjs` checks: `publicApi` is `true`; `fields.id.internalPath` is `id`; no resource named or titled `accounting`; every child has a parent, a foreign key, a path segment, `GET` and `LIST`, and either none or all of `POST`, `PUT`, `PATCH`, `DELETE`; every relationship target exists and has a valid cardinality and foreign key; every lookup is well formed; every enum is a non-empty list of distinct string codes of a string field, with a label for each code and none for any other; every field description is a non-empty string.
 
 ---
@@ -278,7 +285,7 @@ to find an id it cannot know beforehand, for example a payment method.
   top-level resources and published reference fields can have one; anything else fails the
   generation. A field without a lookup, a field that is not published and a child resource answer
   `404` (code `unknown_lookup` for a field of the resource), and nothing is sent to Etendo.
-- **Published today.** Four payment-method lookups (`type` `payment-method`), two order warehouse lookups (`type` `warehouse`) and the contact category lookup (`type` `business-partner-category`):
+- **Published today.** Four payment-method lookups (`type` `payment-method`), two order warehouse lookups (`type` `warehouse`) and the contact category lookup (`type` `contact-category`):
 
   | Route | Field | Fixed context sent to Etendo |
   |-------|-------|------------------------------|
@@ -300,8 +307,11 @@ to find an id it cannot know beforehand, for example a payment method.
   The category lookup lists the categories the app offers in the contact form: the field has no
   validation rule, so the list is the tenant's active categories the key's role can read, with no
   further filter (no context is sent). `category` is optional on create: when it is omitted, Etendo
-  assigns the default category, as the app does. Contact categories are not a published resource in
-  V1, so `category` is a plain attribute (the id), not a relationship.
+  assigns the default category, as the app does. Contact categories are a published resource
+  (`contact-category`), so `category` is a relationship: send the id under
+  `data.relationships.category` as `{ "data": { "type": "contact-category", "id": "..." } }`, and
+  read it there. The lookup answers values of `type` `contact-category`, ready to be sent as the
+  relationship; listing `GET /api/v1/contact-category` gives the same ids with all their fields.
 
   Each payment-method lookup lists the tenant's active payment methods, the same list the app offers in that field. The
   fixed context is forwarded to the field's selector; whether it narrows the list depends on that
@@ -428,7 +438,11 @@ Content-Type: application/vnd.api+json
 ```
 
 - **Master-child documents (lines).** A child resource is addressed through its master (`/api/v1/{master}/{masterId}/{child}`), for example `sales-order/{id}/lines`. The master foreign key (for example `salesOrder`) is never an attribute and is not part of the body: the gateway takes it from the URL and sends it to Etendo as `parentId`. A child resource's `type` is its own public name (`sales-order-lines`).
-- **Contacts.** `contacts` publishes no relationship fields today; if the manifest gains one it is exposed and validated exactly as above.
+> **Change for integrators (V1, contact categories and taxes published).** Publishing `contact-category` and `tax` turned two existing write fields into relationships: `contacts.category` and the `tax` of order and quotation lines. Before, both were plain id attributes; now a body that sends either under `attributes` is refused with `400` (`"<field>" is a relationship`), and responses carry them under `relationships` only. Send `{ "data": { "type": "contact-category", "id": "..." } }` or `{ "data": { "type": "tax", "id": "..." } }` instead. The contact's category lookup now answers values of `type` `contact-category`.
+
+- **Contact category (foreign key).** `contacts.category` points to `contact-category`. It is written and read under `relationships` like the product category; sending it under `attributes` is refused with `400`.
+- **Tax category (foreign key).** `tax.tax_category` points to `tax-category`. Both resources are read-only, so the relationship only appears in responses.
+- **Tax of a line (foreign key).** `tax` on `sales-order-lines`, `purchase-order-lines` and `sales-quotation-quotationLine` points to `tax`. It stays writable: send it under `relationships` as `{ "data": { "type": "tax", "id": "..." } }` and find the ids with `GET /api/v1/tax`. Before `tax` was published it was a plain id attribute.
 - Linkage types are validated on write: a relationship whose `type` is not the related resource returns `409`.
 
 ### 4.7 Content negotiation
@@ -810,7 +824,9 @@ Testable statements derived from this document, each linked to its section.
 ### Field selection and generation ([2](#2-field-selection-publicapi-curation-and-window-form-default), [3](#3-generation-chain))
 - [ ] A curated entity publishes only its fields with `publicApi.exposed === true` ([2](#2-field-selection-publicapi-curation-and-window-form-default))
 - [ ] A non-curated entity publishes its window form fields (`form` not `false`, visibility not `system` or `discarded`) and no grid-only field ([2](#default-exposure-window-form))
-- [ ] The manifest publishes exactly the twelve V1 resources listed in `policy.allowedResources`, including only address/contact-person children of contacts and read-only product costs
+- [ ] The manifest publishes exactly the sixteen V1 resources listed in `policy.allowedResources`, including only address/contact-person children of contacts and read-only product costs, taxes, tax categories and conversion rates ([3](#manifest-generate-base-public-api-manifestmjs-to-basev1json))
+- [ ] An allowlisted window is published whatever its category; a window outside the allowlist is not, whatever its category ([3](#manifest-generate-base-public-api-manifestmjs-to-basev1json))
+- [ ] A window renamed in `publicResourceNames` is published under its public name and keeps its `specName` for NEO; relationships and lookup types that point to it use the public name ([3](#manifest-generate-base-public-api-manifestmjs-to-basev1json))
 - [ ] No field in `policy.excludedFields` appears in the manifest, curated or derived ([2](#default-exposure-window-form))
 - [ ] The manifest declares `policy.fieldSelection` `curated-publicApi-else-window-form` and lists `policy.excludedFields` ([2](#2-field-selection-publicapi-curation-and-window-form-default))
 - [ ] Fields with `visibility` `system` or `discarded` are excluded even when exposed ([2](#field-rules-applied-by-the-manifest-generator))
