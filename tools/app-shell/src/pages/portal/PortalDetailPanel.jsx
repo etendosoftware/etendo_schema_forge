@@ -82,12 +82,13 @@ export function PortalDetailsCard({ document }) {
 }
 
 /**
- * "Documentos relacionados": a 12/16 heading with a round refresh button, then one row per real
- * related document — its kind and number, its date, its status (or an invoice's payment state) and
- * a chevron. Opening a row opens that document.
+ * "Documentos relacionados": a 12/16 heading with a round refresh button, then the document itself
+ * first ("Este", not a link), then one row per real related document — its kind and number, its
+ * date, its status (or an invoice's payment state) and a chevron. Opening a row opens that document.
  */
-export function PortalRelatedList({ related, refreshing, onRefresh, onOpen }) {
+export function PortalRelatedList({ current, related, refreshing, onRefresh, onOpen }) {
   const ui = useUI();
+  const rows = [...(current ? [{ ...current, isCurrent: true }] : []), ...related];
   return (
     <section className="flex flex-col" data-testid="portal-related-panel">
       <div className="flex items-center justify-between pb-1">
@@ -104,12 +105,25 @@ export function PortalRelatedList({ related, refreshing, onRefresh, onOpen }) {
           <ArrowsCounterClockwiseIcon size={16} className={refreshing ? 'animate-spin' : ''} aria-hidden="true" data-testid="ArrowsCounterClockwise__d3c1a0" />
         </button>
       </div>
-      {related.length === 0 ? (
+      {rows.length === 0 ? (
         <p className="py-2 text-xs text-[#6B7280]" data-testid="portal-related-empty">{ui('noRelatedDocuments')}</p>
       ) : (
         <ul className="flex flex-col gap-3 rounded-lg border border-[#E8EAEF] py-2">
-          {related.map((item) => {
+          {rows.map((item) => {
             const label = `${ui(documentLabelKey(item))} #${item.documentNo ?? ''}`;
+            if (item.isCurrent) {
+              // The document itself, first, as the Figma lists it: "Este", not a link.
+              return (
+                <li key={`current:${item.kind}:${item.id}`} className="flex items-center px-2 py-1" data-testid="portal-related-current">
+                  <span className="flex min-w-0 flex-1 flex-col pl-2 pr-4">
+                    <span className="text-sm leading-6 text-[#1B1A1F]">{label}</span>
+                    <span className="text-xs leading-5 text-[#6B7280]">{ui('portalRelatedThis')}</span>
+                  </span>
+                  <PortalRowBadge document={item} palette="figma" className={PANEL_BADGE} data-testid="PortalRowBadge__d3c1a0" />
+                  <span className="ml-1 w-5 shrink-0" aria-hidden="true" />
+                </li>
+              );
+            }
             return (
               <li key={`${item.kind}:${item.id}`}>
                 <button

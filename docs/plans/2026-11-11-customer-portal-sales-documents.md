@@ -1039,6 +1039,16 @@ arrives, so every shared piece takes the new look as an opt-in (`PortalSection v
   (red once past), Figma-palette status badges, and one "Total" row per currency of the rows shown.
   Orders, shipments and invoices keep their own tabs and columns (invoices: type, due date,
   payment state, outstanding; shipments: no amounts, no totals). Mobile list unchanged.
+- **Desktop detail = drawer over the list (Figma prototype).** A document opens over its kind's list,
+  which stays mounted underneath (tab, range and scroll kept): a backdrop dims the whole viewport
+  (`--scrim` at 35%), and "Panel PDC" floats 8px from the top, right and bottom, 70% of the
+  viewport wide (720–1344px; 1008px at 1440), with no page header. It closes with the panel's X,
+  Escape or a click on the backdrop; focus is trapped inside and returns to the opening row; a 200ms
+  slide-in respects reduced motion. `?view=doc&kind=&id=` keeps working: a deep link (the email's,
+  the home's tiles and recent rows) renders that kind's list behind the drawer, and closing lands on
+  it; a document opened from a tab carries `&group=` so closing returns to that tab. "Documentos
+  relacionados" lists the document itself first ("Este", not a link). Mobile keeps the full-page
+  detail (its list stays mounted but hidden).
 
 ---
 

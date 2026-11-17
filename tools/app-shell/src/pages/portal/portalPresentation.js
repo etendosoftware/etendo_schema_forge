@@ -209,7 +209,7 @@ export function toCalendarParam(date) {
  *
  * - `{ view: 'home' }`
  * - `{ view: 'list', kind, group? }` — `group` one of the kind's tabs ({@link PORTAL_KIND_GROUPS})
- * - `{ view: 'doc', kind, id }`
+ * - `{ view: 'doc', kind, id, group? }` — `group`: the list tab the document was opened from
  */
 export function readPortalView(searchParams) {
   const view = searchParams.get('view');
@@ -221,7 +221,10 @@ export function readPortalView(searchParams) {
   if (view === 'list' && PORTAL_KIND_META[kind]) {
     return isPortalGroup(kind, group) ? { view: 'list', kind, group } : { view: 'list', kind };
   }
-  if (view === 'doc' && PORTAL_KIND_META[kind] && id) return { view: 'doc', kind, id };
+  // A document keeps the list tab it was opened from (the list stays underneath it on desktop).
+  if (view === 'doc' && PORTAL_KIND_META[kind] && id) {
+    return isPortalGroup(kind, group) ? { view: 'doc', kind, id, group } : { view: 'doc', kind, id };
+  }
   if (view === 'home') return { view: 'home' };
   return null;
 }

@@ -143,10 +143,10 @@ test.describe('Customer portal — mocked', () => {
 
     // The link opens the document it was sent with.
     await expect(page.getByTestId('portal-document-detail')).toBeVisible();
-    await expect(page.getByTestId('portal-view-title')).toContainText('FV/0001');
+    await expect(page.getByTestId('portal-panel-title')).toContainText('FV/0001');
 
     // Back to that kind's list.
-    await page.getByTestId('portal-back').click();
+    await page.getByTestId('portal-panel-close').click();
     const list = page.getByTestId('portal-document-list');
     await expect(list.locator('[data-kind="INVOICE"]')).toBeVisible();
     await expect(page.getByTestId('portal-document-row')).toHaveCount(INVOICES.length);
@@ -176,7 +176,7 @@ test.describe('Customer portal — mocked', () => {
     // Another document.
     await page.getByTestId('portal-document-row').filter({ hasText: 'FV/0002' })
       .getByTestId('portal-document-open').click();
-    await expect(page.getByTestId('portal-view-title')).toContainText('FV/0002');
+    await expect(page.getByTestId('portal-panel-title')).toContainText('FV/0002');
 
     // Its PDF, fetched with the document, saved under a path-safe name.
     await expect(page.getByTestId('portal-download-pdf')).toBeEnabled();
@@ -248,7 +248,7 @@ test.describe('Customer portal — mocked', () => {
 
       // In the portal: the request applies nothing, it says where the confirmation email went.
       await page.goto(`/portal/${TOKEN}`);
-      await expect(page.getByTestId('portal-view-title')).toContainText('PR/0001');
+      await expect(page.getByTestId('portal-panel-title')).toContainText('PR/0001');
       await answer(page);
       await expect(page.getByTestId('portal-decision-sent')).toContainText('c***@cliente.es');
       expect(requests.decisionBodies).toEqual([expectedBody]);
@@ -261,13 +261,13 @@ test.describe('Customer portal — mocked', () => {
       const landed = new URL(page.url());
       expect(landed.pathname).toBe(`/portal/${TOKEN}`);
       expect(Object.fromEntries(landed.searchParams)).toEqual({ view: 'doc', kind: 'QUOTATION', id: 'q-1' });
-      await expect(page.getByTestId('portal-view-title')).toContainText('PR/0001');
+      await expect(page.getByTestId('portal-panel-title')).toContainText('PR/0001');
       if (reason) await expect(page.getByTestId('portal-arrival-notice-reason')).toContainText(reason);
       else await expect(page.getByTestId('portal-arrival-notice-reason')).toHaveCount(0);
 
       // The notice lived in the history entry's state only: a reload does not replay it.
       await page.reload();
-      await expect(page.getByTestId('portal-view-title')).toContainText('PR/0001');
+      await expect(page.getByTestId('portal-panel-title')).toContainText('PR/0001');
       await expect(page.getByTestId('portal-arrival-notice')).toHaveCount(0);
       expect(requests.decisionConfirms).toBe(1);
       expectTokenOnlyInHeader(requests);

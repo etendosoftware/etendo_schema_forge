@@ -28,6 +28,10 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
+import {
+  Sheet, SheetOverlay, SheetPortal, SheetTitle,
+} from '@/components/ui/sheet';
 import { PORTAL_KIND_META, documentLabelKey } from './portalPresentation.js';
 import PortalDecisionActions from './PortalDecisionActions.jsx';
 import { PortalDetailsCard, PortalRelatedList } from './PortalDetailPanel.jsx';
@@ -58,8 +62,38 @@ function formatMoneyText(currency, value) {
  * Comments and Accept / Reject (quotations) are agreed OUT items (Part C), so their slots are
  * left out.
  */
+/**
+ * The desktop drawer the detail opens in (Figma prototype, 2026-11-17): over the list it was opened
+ * from, a dimming backdrop over the whole viewport and "Panel PDC" as a sheet 8px from the top,
+ * right and bottom edges, 1008px wide at 1440 (70% of the viewport, 720–1344px; the side panel
+ * stays 320px). Closes with the panel's X, Escape or a click on the backdrop; Radix traps the focus
+ * inside and gives it back to what opened it (the list row). A 200ms slide-in, only without
+ * reduced motion. Built on the shared `Sheet` pieces with the Radix content directly, like the
+ * invoice inbox's review drawer, because `SheetContent` draws its own close button.
+ */
+const DETAIL_DRAWER = [
+  'fixed bottom-2 right-2 top-2 z-50 flex w-[clamp(720px,70vw,1344px)] max-w-[calc(100vw-16px)] flex-col',
+  'overflow-hidden rounded-xl outline-none',
+  'motion-safe:data-[state=open]:[animation:slide-in-from-right_200ms_ease-out]',
+].join(' ');
+
+function PortalDetailDrawer({ title, onClose, children }) {
+  return (
+    <Sheet open onOpenChange={(next) => { if (!next) onClose(); }} data-testid="Sheet__6a1d3b">
+      <SheetPortal data-testid="SheetPortal__6a1d3b">
+        <SheetOverlay className="bg-[hsl(var(--scrim)/0.35)]" data-testid="portal-detail-backdrop" />
+        <DialogPrimitive.Content aria-describedby={undefined} className={DETAIL_DRAWER} data-testid="portal-detail-drawer">
+          <SheetTitle className="sr-only" data-testid="SheetTitle__6a1d3b">{title}</SheetTitle>
+          {children}
+        </DialogPrimitive.Content>
+      </SheetPortal>
+    </Sheet>
+  );
+}
+
 export default function PortalDocumentDetailView({
   apiFetch, token, kind, id, identity, logoUrl, onNavigate, onInvalid,
+  listGroup = null, presentation = 'page',
 }) {
   const ui = useUI();
   const [document, setDocument] = useState(null);
@@ -136,10 +170,12 @@ export default function PortalDocumentDetailView({
   }, [apiFetch, token, kind, id, onInvalid]);
 
   const plural = ui(PORTAL_KIND_META[kind].pluralKey);
-  const back = () => onNavigate({ view: 'list', kind });
+  // Back to the list underneath, on the tab it was opened from.
+  const back = () => onNavigate(listGroup ? { view: 'list', kind, group: listGroup } : { view: 'list', kind });
+  const drawer = presentation === 'drawer';
 
   if (state !== 'ready') {
-    return (
+    const notReady = (
       <DocumentNotReady
         state={state}
         title={ui(PORTAL_KIND_META[kind].singularKey)}
@@ -148,6 +184,12 @@ export default function PortalDocumentDetailView({
         onNavigate={onNavigate}
         data-testid="DocumentNotReady__6a1d3b" />
     );
+    if (!drawer) return notReady;
+    return (
+      <PortalDetailDrawer title={ui(PORTAL_KIND_META[kind].singularKey)} onClose={back} data-testid="PortalDetailDrawer__6a1d3b">
+        <div className="flex min-h-0 flex-1 flex-col rounded-xl bg-card p-2">{notReady}</div>
+      </PortalDetailDrawer>
+    );
   }
 
   const title = `${ui(documentLabelKey(document))} ${document.documentNo ?? ''}`.trim();
@@ -155,7 +197,18 @@ export default function PortalDocumentDetailView({
   const pdfReady = pdf.status === 'ready';
   const showSheet = !document.hasPdf || pdf.status === 'failed' || pdf.status === 'unavailable';
 
-  return (
+  const lightbox = pdfReady ? (
+    <FileLightbox
+      open={lightboxOpen}
+      onClose={() => setLightboxOpen(false)}
+      file={{ objectUrl: pdf.url, fileName, mimeType: 'application/pdf' }}
+      data-testid="portal-pdf-lightbox"
+    />
+  ) : null;
+
+  // The page presentation (mobile, and desktop when not in the drawer) keeps its own headers: the
+  // mobile top bar and the desktop back + breadcrumb. The drawer has neither (Figma prototype).
+  const pageHeaders = (
     <>
       {/* Mobile top bar (design Movil-Documento) */}
       <header className="flex h-20 shrink-0 items-center gap-3 border-b border-border bg-card px-4 md:hidden">
@@ -192,7 +245,10 @@ export default function PortalDocumentDetailView({
         plural={plural}
         onBack={back}
         data-testid="DesktopHeader__6a1d3b" />
+    </>
+  );
 
+  const main = (
       <main
         // Desktop: the Figma's "Panel PDC" — the PDF area and the 320px side panel side by side,
         // full height, rounded only at the outer ends; the shell's 8px padding frames it.
@@ -262,10 +318,11 @@ export default function PortalDocumentDetailView({
             ) : null}
             <div className="px-3">
               <PortalRelatedList
+                current={document}
                 related={document.related}
                 refreshing={refreshingRelated}
                 onRefresh={refreshRelated}
-                onOpen={(item) => onNavigate({ view: 'doc', kind: item.kind, id: item.id })}
+                onOpen={(item) => onNavigate({ view: 'doc', kind: item.kind, id: item.id, ...(listGroup && item.kind === kind ? { group: listGroup } : {}) })}
                 data-testid="PortalRelatedList__6a1d3b" />
             </div>
           </div>
@@ -304,15 +361,21 @@ export default function PortalDocumentDetailView({
           </div>
         </aside>
       </main>
+  );
 
-      {pdfReady ? (
-        <FileLightbox
-          open={lightboxOpen}
-          onClose={() => setLightboxOpen(false)}
-          file={{ objectUrl: pdf.url, fileName, mimeType: 'application/pdf' }}
-          data-testid="portal-pdf-lightbox"
-        />
-      ) : null}
+  if (drawer) {
+    return (
+      <PortalDetailDrawer title={title} onClose={back} data-testid="PortalDetailDrawer__6a1d3b">
+        {main}
+        {lightbox}
+      </PortalDetailDrawer>
+    );
+  }
+  return (
+    <>
+      {pageHeaders}
+      {main}
+      {lightbox}
     </>
   );
 }

@@ -161,7 +161,10 @@ export default function PortalDocumentListView({
   const totalCount = page?.totalCount ?? 0;
   const hasMore = documents.length < totalCount;
   const plural = ui(PORTAL_KIND_META[kind].pluralKey);
-  const open = (document) => onNavigate({ view: 'doc', kind: document.kind || kind, id: document.id });
+  // The document keeps this list's tab, so closing it returns here as it was.
+  const open = (document) => onNavigate({
+    view: 'doc', kind: document.kind || kind, id: document.id, ...(group ? { group } : {}),
+  });
   const selectGroup = (code) => onNavigate(code ? { view: 'list', kind, group: code } : { view: 'list', kind });
 
   const tabs = [{ code: null, labelKey: 'portalStatusAll' }, ...(PORTAL_KIND_GROUPS[kind] ?? [])];

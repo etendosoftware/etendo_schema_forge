@@ -329,7 +329,7 @@ describe('PortalPage — token handling (plan §5.4)', () => {
     await pdfReady();
 
     await user.click(screen.getByTestId('portal-download-pdf'));
-    await user.click(screen.getByTestId('portal-back'));
+    await user.click(screen.getByTestId('portal-panel-close'));
     await listReady();
     await user.click(screen.getByTestId('portal-nav-home'));
     await shellReady();
@@ -420,7 +420,7 @@ describe('PortalPage — view in the URL', () => {
     await detailReady();
 
     expect(callsTo('/documents/invoice/inv-1')).toHaveLength(1);
-    expect(screen.getByTestId('portal-view-title').textContent).toBe('portalKindInvoice FV/0001');
+    expect(screen.getByTestId('portal-panel-title').textContent).toBe('portalKindInvoice FV/0001');
     expect(screen.getByTestId('location-probe').textContent).toBe('');
   });
 
@@ -491,7 +491,7 @@ describe('PortalPage — view in the URL', () => {
     renderPortal();
     await detailReady();
 
-    await user.click(screen.getByTestId('portal-back'));
+    await user.click(screen.getByTestId('portal-panel-close'));
     await listReady();
 
     expect(urlView()).toEqual({ view: 'list', kind: 'INVOICE' });
@@ -687,7 +687,7 @@ describe('PortalPage — home', () => {
 
     await detailReady();
     expect(callsTo('/documents/order/ord-1')).toHaveLength(1);
-    expect(screen.getByTestId('portal-view-title').textContent).toBe('portalKindOrder PV/0001');
+    expect(screen.getByTestId('portal-panel-title').textContent).toBe('portalKindOrder PV/0001');
   });
 
   it('switches the chart between vertical and horizontal bars, with the month and amount on hover', async () => {
@@ -1080,7 +1080,7 @@ describe('PortalPage — document detail', () => {
 
     await user.click(screen.getByRole('button', { name: /orderDoc/ }));
 
-    await waitFor(() => expect(screen.getByTestId('portal-view-title').textContent).toBe('portalKindOrder PV/0001'));
+    await waitFor(() => expect(screen.getByTestId('portal-panel-title').textContent).toBe('portalKindOrder PV/0001'));
     expect(callsTo('/documents/order/ord-1')).toHaveLength(1);
     expect(urlView()).toEqual({ view: 'doc', kind: 'ORDER', id: 'ord-1' });
   });
@@ -1098,6 +1098,29 @@ describe('PortalPage — document detail', () => {
       .filter(([path]) => !path.endsWith('/pdf'))).toHaveLength(reads + 1));
     expect(screen.queryByTestId('portal-document-loading')).not.toBeInTheDocument();
     expect(screen.getByTestId('portal-related-panel')).toBeInTheDocument();
+  });
+
+  it('opens a document from a list tab as a drawer over that list, and Escape returns to the tab', async () => {
+    const user = userEvent.setup();
+    renderPortal(`/portal/${TOKEN}?view=list&kind=INVOICE&group=pending`);
+    await listReady();
+    const listReads = listQueries().length;
+
+    await user.click(screen.getAllByTestId('portal-document-open')[0]);
+    await detailReady();
+
+    expect(screen.getByTestId('portal-detail-drawer')).toBeInTheDocument();
+    // The list stays underneath, not re-read.
+    expect(screen.getByTestId('portal-document-list')).toBeInTheDocument();
+    expect(urlView()).toEqual({ view: 'doc', kind: 'INVOICE', id: 'inv-1', group: 'pending' });
+    // The document itself heads its related documents, as "Este".
+    expect(screen.getByTestId('portal-related-current')).toHaveTextContent('portalRelatedThis');
+
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(screen.queryByTestId('portal-detail-drawer')).not.toBeInTheDocument());
+    expect(urlView()).toEqual({ view: 'list', kind: 'INVOICE', group: 'pending' });
+    expect(listQueries()).toHaveLength(listReads);
   });
 
   it('says the document is not available when it is not found', async () => {

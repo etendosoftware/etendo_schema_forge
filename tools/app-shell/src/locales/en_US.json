@@ -26700,6 +26700,7 @@
     "portalIssuedBy": "Issued by: {name}",
     "portalViewPdf": "View PDF",
     "portalDownloadPdf": "Download PDF",
+    "portalRelatedThis": "This one",
     "portalDownloadSelected": "Download selected",
     "portalDownloadSelectedFailed": "{count} selected documents could not be downloaded.",
     "portalPdfUnavailable": "PDF not available",

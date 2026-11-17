@@ -246,10 +246,35 @@ function portalStatusScreen(view, ui, tenantName, onRetry) {
   return null;
 }
 
+/** The portal's mobile breakpoint, Tailwind's `md` (the layout switches there). */
+const PORTAL_MD_QUERY = '(min-width: 768px)';
+
+/**
+ * Whether the viewport is below `md`, following resizes. Portal-local rather than the core's
+ * `useIsMobile`: that hook needs `window.matchMedia`, which jsdom lacks, and this one falls back to
+ * `innerWidth` so the page also renders where it is missing.
+ */
+function usePortalIsMobile() {
+  const read = () => (typeof window.matchMedia === 'function'
+    ? !window.matchMedia(PORTAL_MD_QUERY).matches
+    : window.innerWidth < 768);
+  const [isMobile, setIsMobile] = useState(read);
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return undefined;
+    const query = window.matchMedia(PORTAL_MD_QUERY);
+    const onChange = () => setIsMobile(!query.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+  return isMobile;
+}
+
 export default function PortalPage() {
   // The token arrives as a path segment because an email link cannot carry a header.
   const { token = '' } = useParams();
   const ui = useUI();
+  // Desktop opens a document as a drawer over its list; mobile keeps the full-page detail.
+  const isMobile = usePortalIsMobile();
   // `/sws/portal/*` is its own bounded context, so this is NOT the router's `apiBaseUrl`
   // (which already points at `/sws/neo`). Memoized because `apiFetch` is memoized on it.
   // Outside the app's session scope: see `usePortalApiFetch` for why (ETP-6209).
@@ -421,32 +446,42 @@ export default function PortalPage() {
   // Each view draws its own headers (desktop and mobile) and content card, as the design does:
   // they differ per screen (search pill, count chip, back button, mobile top bars).
   let body;
-  if (current.view === 'list') {
+  if (current.view === 'list' || current.view === 'doc') {
+    // Desktop (Figma prototype): a document opens as a drawer OVER its kind's list, which stays
+    // mounted underneath — closing returns to it with its tab, range and scroll as they were. A
+    // deep link to a document (the email's) renders that kind's list behind it too. Mobile keeps
+    // the full-page detail, so its list is hidden (still mounted) while a document is open.
+    const showDoc = current.view === 'doc';
     body = (
-      <PortalDocumentListView
-        apiFetch={apiFetch}
-        token={trimmedToken}
-        kind={current.kind}
-        group={current.group ?? null}
-        identity={identity}
-        kindCount={home?.tiles?.[current.kind]?.count}
-        onNavigate={navigate}
-        onInvalid={showInvalid}
-        data-testid="PortalDocumentListView__3db5f6" />
-    );
-  } else if (current.view === 'doc') {
-    body = (
-      <PortalDocumentDetailView
-        key={`${current.kind}:${current.id}`}
-        apiFetch={apiFetch}
-        token={trimmedToken}
-        kind={current.kind}
-        id={current.id}
-        identity={identity}
-        logoUrl={logoUrl}
-        onNavigate={navigate}
-        onInvalid={showInvalid}
-        data-testid="PortalDocumentDetailView__3db5f6" />
+      <>
+        <div className={showDoc && isMobile ? 'hidden' : 'contents'}>
+          <PortalDocumentListView
+            apiFetch={apiFetch}
+            token={trimmedToken}
+            kind={current.kind}
+            group={current.group ?? null}
+            identity={identity}
+            kindCount={home?.tiles?.[current.kind]?.count}
+            onNavigate={navigate}
+            onInvalid={showInvalid}
+            data-testid="PortalDocumentListView__3db5f6" />
+        </div>
+        {showDoc ? (
+          <PortalDocumentDetailView
+            key={`${current.kind}:${current.id}`}
+            apiFetch={apiFetch}
+            token={trimmedToken}
+            kind={current.kind}
+            id={current.id}
+            listGroup={current.group ?? null}
+            presentation={isMobile ? 'page' : 'drawer'}
+            identity={identity}
+            logoUrl={logoUrl}
+            onNavigate={navigate}
+            onInvalid={showInvalid}
+            data-testid="PortalDocumentDetailView__3db5f6" />
+        ) : null}
+      </>
     );
   } else {
     body = (
