@@ -560,6 +560,18 @@ export const PORTAL_CHART_ORIENTATIONS = Object.freeze(['vertical', 'horizontal'
  * can be added beside it (the spec's "Ingresos" / "Gastos" legend is pending with the PO: Jira
  * comment 149666) without reshaping the chart; every series reads its own amount from a bar.
  */
+/**
+ * The vertical chart's column gap, as a share of the plot width: the Figma draws 6 bars of
+ * ~79.33px with 56px gaps in a 756px plot, and every period keeps that bar:gap proportion.
+ */
+const FIGMA_BAR_PX = 756 / 6 - 56 * 5 / 6;
+const FIGMA_GAP_PX = 56;
+function chartColumnGap(count) {
+  const n = Math.max(count, 1);
+  const share = FIGMA_GAP_PX / (n * FIGMA_BAR_PX + (n - 1) * FIGMA_GAP_PX);
+  return `${(share * 100).toFixed(4)}%`;
+}
+
 const CHART_SERIES = Object.freeze([
   {
     key: 'invoiced',
@@ -623,7 +635,7 @@ function InvoicedChart({ chart, year }) {
         onBlur={() => setActive(null)}
         className={cn(
           'relative block outline-none focus-visible:ring-2 focus-visible:ring-ring',
-          vertical ? `w-full max-w-12 rounded-t ${series.vertical}` : `h-full rounded-r ${series.horizontal}`,
+          vertical ? `w-full rounded-t ${series.vertical}` : `h-full rounded-r ${series.horizontal}`,
         )}
         style={vertical ? { height: share(amount) } : { width: share(amount) }}
         data-testid="portal-chart-bar"
@@ -707,8 +719,11 @@ function InvoicedChart({ chart, year }) {
               />
             ))}
             <div
-              className="relative grid h-full items-end gap-4 px-2.5"
-              style={{ gridTemplateColumns: `repeat(${Math.max(bars.length, 1)}, minmax(0, 1fr))` }}
+              className="relative grid h-full items-end px-2.5"
+              style={{
+                gridTemplateColumns: `repeat(${Math.max(bars.length, 1)}, minmax(0, 1fr))`,
+                columnGap: chartColumnGap(bars.length),
+              }}
               data-testid="portal-chart-bars"
             >
               {bars.map((bar) => (
@@ -720,8 +735,11 @@ function InvoicedChart({ chart, year }) {
           </div>
           <span />
           <div
-            className="grid gap-4 px-2.5 text-center text-xs text-[#6C6C89]"
-            style={{ gridTemplateColumns: `repeat(${Math.max(bars.length, 1)}, minmax(0, 1fr))` }}
+            className="grid px-2.5 text-center text-xs text-[#6C6C89]"
+            style={{
+              gridTemplateColumns: `repeat(${Math.max(bars.length, 1)}, minmax(0, 1fr))`,
+              columnGap: chartColumnGap(bars.length),
+            }}
           >
             {/* Short month names without the trailing dot; with more than 6 bars every other label
                 is shown, so none is ever cut. */}
