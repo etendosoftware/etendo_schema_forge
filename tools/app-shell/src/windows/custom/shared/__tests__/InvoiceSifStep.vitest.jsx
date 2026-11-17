@@ -70,6 +70,9 @@ vi.mock('@/components/ui/select', () => {
 
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import {
+  BULK_RECTIFICATIVE_VF_KEY,
+  BulkInvoiceSifStepModal,
+  bulkSifFields,
   fetchSifPreview,
   hasSifSystems,
   InvoiceSifStepModal,
@@ -276,6 +279,189 @@ describe('resolveBulkSifPreview', () => {
     const b = preview({ siiAuthorizationAvailable: false });
     const res = await resolveBulkSifPreview(fetchByUrl({ a: jsonResponse(a), b: jsonResponse(b) }), ['a', 'b']);
     expect(res.preview.siiAuthorizationAvailable).toBe(false);
+  });
+});
+
+// The bulk step of "one invoice per selected order": ONE set of values, applied per order.
+describe('bulk step — per-order payload, blocking and mixed runs', () => {
+  const fetchAll = (list) => vi.fn((url) => Promise.resolve(jsonResponse(list[Number(url)])));
+  const resolve = (list) => resolveBulkSifPreview(fetchAll(list), list.map((_, i) => String(i)));
+
+  // An ordinary invoice: SII + VERI*FACTU, F-type codes only.
+  const ordinary = (fields = {}) => ({
+    systems: ['SII', 'Verifactu'],
+    rectificative: false,
+    fieldSpecs: [
+      { name: 'etsgDateOperation', system: 'SII', type: 'date' },
+      { name: 'aeatsiiClaveTipo', system: 'SII', type: 'option', options: ['F1', 'F2'] },
+      { name: 'aeatsiiDescripcionSii', system: 'SII', type: 'text' },
+      { name: 'etvfacInvType', system: 'Verifactu', type: 'option', options: ['F1', 'F2'] },
+    ],
+    fields: {
+      etsgDateOperation: '2026-11-10', aeatsiiClaveTipo: 'F1', aeatsiiDescripcionSii: 'Venta',
+      etvfacInvType: 'F1', ...fields,
+    },
+    siiAuthorizationAvailable: true,
+  });
+  // A rectificative: same fields plus the SII motive, and R-codes on VERI*FACTU's type.
+  const rectificative = (fields = {}) => ({
+    ...ordinary(),
+    rectificative: true,
+    fieldSpecs: [
+      { name: 'etsgDateOperation', system: 'SII', type: 'date' },
+      { name: 'aeatsiiClaveTipo', system: 'SII', type: 'option', options: ['F1', 'F2', 'R'] },
+      { name: 'aeatsiiMotivoRectif', system: 'SII', type: 'option', options: ['R1', 'R2', 'R3', 'R4', 'R5'] },
+      { name: 'aeatsiiDescripcionSii', system: 'SII', type: 'text' },
+      { name: 'etvfacInvType', system: 'Verifactu', type: 'option', options: ['R1', 'R2', 'R3', 'R4', 'R5'] },
+    ],
+    fields: {
+      etsgDateOperation: '2026-11-10', aeatsiiClaveTipo: 'R', aeatsiiMotivoRectif: null,
+      aeatsiiDescripcionSii: 'Abono', etvfacInvType: null, ...fields,
+    },
+  });
+
+  describe('bulkSifFields', () => {
+    it('sends an edited field that every order shares to every order', async () => {
+      const summary = await resolve([ordinary(), ordinary()]);
+      const payloads = bulkSifFields(summary, { ...summary.preview.fields, aeatsiiDescripcionSii: 'Editada' }, {});
+      expect(payloads.map(p => p.aeatsiiDescripcionSii)).toEqual(['Editada', 'Editada']);
+      expect(payloads[0]).toEqual({ ...ordinary().fields, aeatsiiDescripcionSii: 'Editada' });
+    });
+
+    it('a varying field left untouched keeps each order its own value; once set, all get it', async () => {
+      const summary = await resolve([ordinary({ aeatsiiClaveTipo: 'F1' }), ordinary({ aeatsiiClaveTipo: 'F2' })]);
+      expect(summary.varying).toEqual({ aeatsiiClaveTipo: true });
+      expect(bulkSifFields(summary, summary.preview.fields, summary.varying).map(p => p.aeatsiiClaveTipo))
+        .toEqual(['F1', 'F2']);
+      expect(bulkSifFields(summary, { ...summary.preview.fields, aeatsiiClaveTipo: 'F2' }, {})
+        .map(p => p.aeatsiiClaveTipo)).toEqual(['F2', 'F2']);
+    });
+
+    it('never sends an order a field its own preview does not have', async () => {
+      const siiOnly = { ...ordinary(), systems: ['SII'], fieldSpecs: ordinary().fieldSpecs.slice(0, 3) };
+      delete siiOnly.fields.etvfacInvType;
+      const summary = await resolve([siiOnly, ordinary()]);
+      // etvfacInvType exists on one order only: one value, not varying.
+      expect(summary.varying).toEqual({});
+      const payloads = bulkSifFields(summary, { ...summary.preview.fields, etvfacInvType: 'F2' }, {});
+      expect(payloads[0]).not.toHaveProperty('etvfacInvType');
+      expect(payloads[1].etvfacInvType).toBe('F2');
+    });
+
+    it('a mixed run: ordinary invoices get no rectification code, rectificatives the chosen ones', async () => {
+      const summary = await resolve([ordinary(), rectificative()]);
+      expect(summary.preview.mixed).toBe(true);
+      const values = {
+        ...summary.preview.fields,
+        aeatsiiMotivoRectif: 'R2',
+        [BULK_RECTIFICATIVE_VF_KEY]: 'R3',
+        etvfacInvType: 'F2',
+      };
+      const [plain, rect] = bulkSifFields(summary, values, {});
+      expect(plain).not.toHaveProperty('aeatsiiMotivoRectif');
+      expect(plain.etvfacInvType).toBe('F2');
+      expect(rect.aeatsiiMotivoRectif).toBe('R2');
+      expect(rect.etvfacInvType).toBe('R3');
+      expect(rect).not.toHaveProperty(BULK_RECTIFICATIVE_VF_KEY);
+    });
+
+    it('returns nothing for a summary without previews', () => {
+      expect(bulkSifFields(null, {}, {})).toEqual([]);
+    });
+  });
+
+  describe('useBulkSifStep blocking', () => {
+    it('a varying mandatory field blocks when one order has it empty, until it is set', async () => {
+      const summary = await resolve([ordinary({ aeatsiiDescripcionSii: 'Venta' }), ordinary({ aeatsiiDescripcionSii: '' })]);
+      expect(summary.varying).toEqual({ aeatsiiDescripcionSii: true });
+      const { result } = renderHook(() => useBulkSifStep(summary));
+      expect(result.current.valid).toBe(false);
+      expect(result.current.missing).toEqual(['aeatsiiDescripcionSii']);
+      act(() => result.current.setValue('aeatsiiDescripcionSii', 'Común'));
+      expect(result.current.valid).toBe(true);
+      expect(result.current.payloads().map(p => p.aeatsiiDescripcionSii)).toEqual(['Común', 'Común']);
+    });
+
+    it('a varying mandatory field filled on every order does not block', async () => {
+      const summary = await resolve([ordinary({ aeatsiiClaveTipo: 'F1' }), ordinary({ aeatsiiClaveTipo: 'F2' })]);
+      const { result } = renderHook(() => useBulkSifStep(summary));
+      expect(result.current.valid).toBe(true);
+    });
+
+    it('a shared mandatory field left blank blocks', async () => {
+      const summary = await resolve([ordinary({ aeatsiiDescripcionSii: null }), ordinary({ aeatsiiDescripcionSii: null })]);
+      const { result } = renderHook(() => useBulkSifStep(summary));
+      expect(result.current.missing).toEqual(['aeatsiiDescripcionSii']);
+      act(() => result.current.setValue('aeatsiiDescripcionSii', '  '));
+      expect(result.current.valid).toBe(false);
+      act(() => result.current.setValue('aeatsiiDescripcionSii', 'Venta'));
+      expect(result.current.valid).toBe(true);
+    });
+
+    it('empty rectification codes block until each one is chosen', async () => {
+      const summary = await resolve([ordinary(), rectificative()]);
+      const { result } = renderHook(() => useBulkSifStep(summary));
+      expect(result.current.missing).toEqual(['aeatsiiMotivoRectif', BULK_RECTIFICATIVE_VF_KEY]);
+      act(() => result.current.setValue('aeatsiiMotivoRectif', 'R1'));
+      expect(result.current.missing).toEqual([BULK_RECTIFICATIVE_VF_KEY]);
+      act(() => result.current.setValue(BULK_RECTIFICATIVE_VF_KEY, 'R1'));
+      expect(result.current.valid).toBe(true);
+    });
+  });
+
+  describe('BulkInvoiceSifStepModal', () => {
+    async function renderBulk(list, props = {}) {
+      const summary = await resolve(list);
+      const handlers = { onConfirm: vi.fn(), onCancel: vi.fn() };
+      render(<BulkInvoiceSifStepModal summary={summary} confirmLabel="Crear" notice="n" {...handlers} {...props} />);
+      return handlers;
+    }
+
+    it('a mixed run shows VERI*FACTU type twice: F codes for ordinary, R1-R5 tagged rectificative-only', async () => {
+      await renderBulk([ordinary(), rectificative()]);
+      const plain = screen.getByTestId('Select__sifstep_etvfacInvType');
+      const rect = screen.getByTestId(`Select__sifstep_${BULK_RECTIFICATIVE_VF_KEY}`);
+      expect(plain).toHaveTextContent('F1 -');
+      expect(plain).not.toHaveTextContent('R1 -');
+      ['R1', 'R2', 'R3', 'R4', 'R5'].forEach(code => expect(rect).toHaveTextContent(`${code} -`));
+      expect(rect).not.toHaveTextContent('F1 -');
+      const rectRow = rect.closest('div.space-y-1\\.5');
+      expect(rectRow).toHaveTextContent('invoiceSifStep.rectificativeOnly');
+      expect(plain.closest('div.space-y-1\\.5')).not.toHaveTextContent('invoiceSifStep.rectificativeOnly');
+      // The SII motive exists on the rectificatives only: tagged too, and mandatory.
+      expect(screen.getByTestId('Select__sifstep_aeatsiiMotivoRectif').closest('div.space-y-1\\.5'))
+        .toHaveTextContent('invoiceSifStep.rectificativeOnly');
+      expect(screen.getByTestId('RequiredMark__sifstep_sif-step-aeatsiiMotivoRectif')).toBeInTheDocument();
+    });
+
+    it('a run of rectificatives only does not tag anything as rectificative-only', async () => {
+      await renderBulk([rectificative(), rectificative()]);
+      expect(screen.queryByText(/invoiceSifStep\.rectificativeOnly/)).not.toBeInTheDocument();
+      expect(screen.queryByTestId(`Select__sifstep_${BULK_RECTIFICATIVE_VF_KEY}`)).not.toBeInTheDocument();
+    });
+
+    it('blocks the confirm until the rectification codes are chosen, then sends one payload per order', async () => {
+      const { onConfirm } = await renderBulk([ordinary(), rectificative()]);
+      const confirm = screen.getByTestId('invoice-sif-step-modal-confirm');
+      expect(confirm).toBeDisabled();
+      expect(screen.getByTestId('invoice-sif-step-required')).toHaveTextContent('invoiceSifStep.rectificationRequired');
+      fireEvent.click(screen.getByTestId('pick-Select__sifstep_aeatsiiMotivoRectif-R2'));
+      fireEvent.click(screen.getByTestId(`pick-Select__sifstep_${BULK_RECTIFICATIVE_VF_KEY}-R3`));
+      expect(confirm).not.toBeDisabled();
+      fireEvent.click(confirm);
+      expect(onConfirm).toHaveBeenCalledTimes(1);
+      const [plain, rect] = onConfirm.mock.calls[0][0];
+      expect(plain).toEqual(ordinary().fields);
+      expect(rect).toMatchObject({ aeatsiiMotivoRectif: 'R2', etvfacInvType: 'R3' });
+    });
+
+    it('× and Cancelar both cancel', async () => {
+      const { onCancel, onConfirm } = await renderBulk([ordinary(), ordinary()]);
+      fireEvent.click(screen.getByTestId('invoice-sif-step-modal-close'));
+      fireEvent.click(screen.getByTestId('invoice-sif-step-modal-cancel'));
+      expect(onCancel).toHaveBeenCalledTimes(2);
+      expect(onConfirm).not.toHaveBeenCalled();
+    });
   });
 });
 

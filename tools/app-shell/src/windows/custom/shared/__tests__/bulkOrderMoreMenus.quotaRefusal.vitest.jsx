@@ -57,6 +57,54 @@ vi.mock('@/components/ui/dropdown-menu.jsx', () => ({
   ),
 }));
 
+// Radix Select cannot be driven in jsdom (no pointer capture, portal content): a stand-in that keeps
+// the trigger, its disabled state and the selected label, and adds one `pick-<select testid>-<value>`
+// button per option so a test can choose a value in the bulk fiscal data step.
+vi.mock('@/components/ui/select', async () => {
+  const { createContext, useContext } = await import('react');
+  const Ctx = createContext({});
+  function SelectItem({ value, children }) {
+    return <div data-value={value}>{children}</div>;
+  }
+  function collect(node, acc) {
+    if (node == null || typeof node !== 'object') return acc;
+    if (Array.isArray(node)) { node.forEach(n => collect(n, acc)); return acc; }
+    if (node.type === SelectItem) { acc.push({ value: node.props.value, label: node.props.children }); return acc; }
+    if (node.props?.children !== undefined) collect(node.props.children, acc);
+    return acc;
+  }
+  function Select({ value, onValueChange, disabled, children, ...rest }) {
+    const items = collect(children, []);
+    const label = items.find(i => i.value === value)?.label;
+    return (
+      <Ctx.Provider value={{ disabled, label }}>
+        <div data-testid={rest['data-testid']} data-value={value ?? ''}>
+          {items.map(({ value: v }) => (
+            <button key={v} type="button" disabled={disabled}
+              data-testid={`pick-${rest['data-testid']}-${v}`} onClick={() => onValueChange(v)} />
+          ))}
+          {children}
+        </div>
+      </Ctx.Provider>
+    );
+  }
+  function SelectTrigger({ children, id, ...rest }) {
+    const { disabled } = useContext(Ctx);
+    return (
+      <button type="button" id={id} disabled={disabled} aria-required={rest['aria-required']}
+        data-testid={rest['data-testid']}>{children}</button>
+    );
+  }
+  function SelectValue({ placeholder }) {
+    const { label } = useContext(Ctx);
+    return <span>{label ?? placeholder}</span>;
+  }
+  return {
+    Select, SelectTrigger, SelectValue, SelectItem,
+    SelectContent: () => null,
+  };
+});
+
 import { toast } from 'sonner';
 import { showBulkActionToast } from '@/hooks/useBulkActionToast';
 import BulkOrderMoreMenu from '@generated/sales-order/custom/BulkOrderMoreMenu';
@@ -290,6 +338,48 @@ describe.each([
     const sent = Object.fromEntries(postsOf(invoiceAction).map(([u, init]) => [
       String(u).match(/header\/([^/]+)\//)[1], JSON.parse(init.body).sifFields]));
     expect(sent).toEqual({ 'so-a': preview('F1').fields, 'so-b': preview('F2').fields });
+  });
+
+  it('a value chosen in the step reaches every POST, the varying key included', async () => {
+    const refresh = renderMenu();
+    fireEvent.click(screen.getByText(new RegExp(`^${invoiceLabel}`)));
+    await screen.findByTestId('invoice-sif-step-modal');
+
+    // The varying SII key, set once, goes to both orders; so does a shared field changed.
+    fireEvent.click(screen.getByTestId('pick-Select__sifstep_aeatsiiClaveTipo-F4'));
+    fireEvent.click(screen.getByTestId('pick-Select__sifstep_etvfacInvType-F2'));
+    expect(screen.queryByTestId('Varies__sifstep_aeatsiiClaveTipo')).toBeNull();
+    fireEvent.click(screen.getByTestId('invoice-sif-step-modal-confirm'));
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+
+    const sent = postsOf(invoiceAction).map(([, init]) => JSON.parse(init.body).sifFields);
+    expect(sent).toHaveLength(2);
+    sent.forEach(fields => expect(fields).toEqual({
+      etsgDateOperation: '2026-11-11', aeatsiiClaveTipo: 'F4', etvfacInvType: 'F2',
+    }));
+  });
+
+  it('marks the mandatory fields and blocks the confirm while a shared one is empty', async () => {
+    previews = Object.fromEntries(Object.entries(KEYS).map(([id, k]) => [id, jsonResponse({
+      response: { data: preview(k, { fields: { etsgDateOperation: '2026-11-11', aeatsiiClaveTipo: k, etvfacInvType: null } }) },
+    })]));
+    const refresh = renderMenu();
+    fireEvent.click(screen.getByText(new RegExp(`^${invoiceLabel}`)));
+    await screen.findByTestId('invoice-sif-step-modal');
+
+    expect(screen.getByTestId('RequiredMark__sifstep_sif-step-aeatsiiClaveTipo')).toBeInTheDocument();
+    expect(screen.getByTestId('RequiredMark__sifstep_sif-step-etvfacInvType')).toBeInTheDocument();
+    expect(screen.getByTestId('SelectTrigger__sifstep_etvfacInvType')).toHaveAttribute('aria-required', 'true');
+    const confirm = screen.getByTestId('invoice-sif-step-modal-confirm');
+    expect(confirm).toBeDisabled();
+    expect(screen.getByTestId('invoice-sif-step-required')).toHaveTextContent('requiredFieldsMissing');
+
+    fireEvent.click(screen.getByTestId('pick-Select__sifstep_etvfacInvType-F1'));
+    expect(confirm).not.toBeDisabled();
+    fireEvent.click(confirm);
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    expect(postsOf(invoiceAction).map(([, init]) => JSON.parse(init.body).sifFields.etvfacInvType))
+      .toEqual(['F1', 'F1']);
   });
 
   it('is editable: the InfoBanner notice names the systems and every control is enabled', async () => {

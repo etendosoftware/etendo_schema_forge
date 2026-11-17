@@ -1814,6 +1814,34 @@ describe('SifTab', () => {
       expect(document.querySelector('#tbai-reverseinvoicecode')).toHaveAttribute('aria-required', 'true');
     });
 
+    it('TicketBAI (Bizkaia purchase rectificative): the code is shown but never marked', () => {
+      useFiscalConfig.mockReturnValue({
+        profile: 'tbai',
+        tbaiRecord: { etsgSifTerritory: 'BIZKAIA' },
+        earliestSiiCutoverDate: '2000-01-01T00:00:00.000Z',
+      });
+      render(<SifTab {...makeProps({
+        apiBaseUrl: '/sws/neo/purchase-invoice',
+        data: { documentStatus: 'DR', isRectificative: true, processed: false },
+      })} />);
+      expect(screen.getByText('sifDataTabs.field.tbaiReverseinvoicecode')).toBeInTheDocument();
+      const wrapper = document.querySelector('#tbai-reverseinvoicecode').closest('[data-testid="select-wrapper"]');
+      expect(wrapper).toHaveAttribute('data-disabled', 'false');
+      expect(mark('tbai-reverseinvoicecode')).not.toBeInTheDocument();
+      expect(document.querySelector('#tbai-reverseinvoicecode')).not.toHaveAttribute('aria-required');
+    });
+
+    it('SII: the exemption cause is never marked, even editable on a draft with exempt taxes', () => {
+      mockFiscalConfig('sii');
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', processed: false, hasExemptTaxes: true, aeatsiiCauseExemption: null },
+      })} />);
+      expect(screen.getByTestId('mock-selector-input')).toBeInTheDocument();
+      expect(mark('sif-exemption')).not.toBeInTheDocument();
+      // The fields next to it are marked, so the mark is rendered on this panel.
+      expect(mark('sif-siiType')).toBeInTheDocument();
+    });
+
     it('TicketBAI: the rectification code is not marked once processed', () => {
       mockFiscalConfig('tbai');
       render(<SifTab {...makeProps({
