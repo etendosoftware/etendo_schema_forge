@@ -1546,33 +1546,30 @@ describe('SifTab', () => {
       expect(rCalls).toHaveLength(2);
     });
 
-    it('sales: never overrides a type the user picked in the Select', () => {
-      const onChange = vi.fn();
-      const props = (claveTipo) => makeProps({
-        data: { documentStatus: 'DR', isRectificative: true, aeatsiiClaveTipo: claveTipo },
-        onChange,
+    // ETP-5747 review W1 repro: the server enforces 'R' on a sales rectificative draft, so the
+    // Select must not offer F1/F2/F4 there — a pick would silently revert to R after the save.
+    it('sales: the type Select offers only R on a rectificative invoice', () => {
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', isRectificative: true, aeatsiiClaveTipo: 'R' },
+      })} />);
+      expect(screen.getByTestId('mock-select-option-R')).toBeInTheDocument();
+      ['F1', 'F2', 'F4'].forEach((v) => {
+        expect(screen.queryByTestId(`mock-select-option-${v}`)).not.toBeInTheDocument();
       });
-      const { rerender } = render(<SifTab {...props('R')} />);
-      fireEvent.click(screen.getByTestId('mock-select-option-F1'));
-      expect(onChange).toHaveBeenCalledWith('aeatsiiClaveTipo', 'F1');
-      rerender(<SifTab {...props('F1')} />);
-      expect(onChange).not.toHaveBeenCalledWith('aeatsiiClaveTipo', 'R');
     });
 
-    it('sales: a type picked on one record does not block the R default on the next record', () => {
-      const onChange = vi.fn();
-      const props = (recordId, claveTipo) => makeProps({
-        recordId,
-        data: { documentStatus: 'DR', isRectificative: true, aeatsiiClaveTipo: claveTipo },
-        onChange,
-      });
-      const { rerender } = render(<SifTab {...props('inv-A', 'R')} />);
-      fireEvent.click(screen.getByTestId('mock-select-option-F1'));
-      rerender(<SifTab {...props('inv-A', 'F1')} />);
-      expect(onChange).not.toHaveBeenCalledWith('aeatsiiClaveTipo', 'R');
+    it('sales: a non-R type still held by a rectificative keeps its label on the trigger', () => {
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', isRectificative: true, aeatsiiClaveTipo: 'F1' },
+      })} />);
+      expect(document.querySelector('#sif-siiType')).toHaveTextContent('F1 - sifDataTabs.option.invoice');
+    });
 
-      rerender(<SifTab {...props('inv-B', 'F1')} />);
-      expect(onChange).toHaveBeenLastCalledWith('aeatsiiClaveTipo', 'R');
+    it('sales: a plain invoice keeps every SII type', () => {
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiClaveTipo: 'F1' } })} />);
+      ['F1', 'F2', 'F4', 'R'].forEach((v) => {
+        expect(screen.getByTestId(`mock-select-option-${v}`)).toBeInTheDocument();
+      });
     });
 
     it('sales: sets R when isRectificative flips from false to true on the same record', () => {
