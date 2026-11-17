@@ -1,7 +1,8 @@
 # Invoice Inbox
 
 "Bandeja de facturas" in Spanish. Epic ETP-6046; this guide covers ETP-6049 (list, upload and
-discard) and slice S1 of ETP-6050 (the read-only review panel).
+discard) and ETP-6050 (the review panel: read in S1; editing, autosave, `ADJUSTED`, line discount,
+supplier / product resolution and mark-as-reviewed in S2).
 Backend: ETP-6047 (table, flag, upload endpoint) and ETP-6048 (background reading) in
 `com.etendoerp.go`, `docs/neo-headless.md` §4.6b.
 
@@ -15,8 +16,8 @@ rows that are still being read. A document that is not wanted is discarded: it m
 "Descartadas", read-only, and nothing is created in Etendo.
 
 Not in this story:
-- editing a document, resolving suppliers and products, "Mark as reviewed" — ETP-6050 slices S2 / S3.
-  S1 only OPENS the panel (read only): see "Review panel (ETP-6050, S1)";
+- creating anything in Etendo: a new supplier / product is only STORED in the document (ETP-6051 creates
+  them on confirm); see "Review panel (ETP-6050, S1 and S2)";
 - Confirm, single and batch — ETP-6051. The batch bar shows Confirm disabled and the row's kebab is
   shown inert ("Próximamente");
 - "Mark for review" batch action — logic not in this story. The button is in the batch bar, shown
@@ -254,9 +255,10 @@ confirmation (`InvoiceInboxDiscardDialog.jsx`):
   updated afterwards.
 - Discarded documents are read-only, cannot be selected and keep no expiry (no purge exists).
 
-## Review panel (ETP-6050, S1)
+## Review panel (ETP-6050, S1 and S2)
 
-Read only. A drawer (`InvoiceInboxReviewDrawer.jsx`), its own shell used only by this window, built
+S1 is the read-only panel described here; S2 makes it editable (see "Editing (ETP-6050 S2)" below,
+which supersedes every "inert" / "disabled in S1" remark of this section). A drawer (`InvoiceInboxReviewDrawer.jsx`), its own shell used only by this window, built
 from the shared `Sheet` pieces (root, portal, overlay, title, close) plus the Radix content, to
 follow the design: flush to the right edge and the full viewport height, width
 `min(1280px, 100vw - 48px)`, 16px radius on the left corners, a 260 ms slide-in over a veil of
@@ -357,6 +359,86 @@ scrolls horizontally; the numeric line cells keep the design widths and carry th
   circular): at the end of the loaded rows, with `hasMore`, "next" loads the next page and moves
   to its first openable row (it keeps loading while a page brings only PROCESSING rows, and stops
   at a load error or the end). On close the page re-reads the rows opened and the counters.
+- **Editing (ETP-6050 S2)** (contract: `docs/plans/ETP-6050-invoice-inbox-review-panel.md` section 9.2; the
+  SPA never computes `adjusted` or the verdict, it shows what the server answers):
+  - Save model (`useInvoiceInboxReviewEditor.js`, wraps `useInvoiceInboxReview`): every edit is ONE
+    operation (`setHeader`, `setLine`, `addLine`, `removeLine`, `selectVendor`, `newVendor`,
+    `selectProduct`, `newProduct`; builders in `buildOp`) sent by `applyOperations`
+    (`POST .../header/{id}/action/apply`, body `{updated, operations}`, `timeout: 0`) through
+    `useRecordWriteQueue` keyed by the document: one write in flight, field edits coalesce by key
+    (`header:documentNo`, `line:<index>:<field>`, last value wins), structural / resolution operations
+    carry unique keys. The token (`updated`) of each answer feeds the next write. What was typed and not yet
+    answered is a pending overlay over the server copy (`applyPendingToReview`), so cells and totals are
+    live. Inputs (`CommitInput`) save after 700 ms without typing, on blur and on Enter through ONE
+    commit path; a value that cannot be sent (letters, out of range) is marked invalid, never sent and
+    reverts on blur; a blur without change writes nothing. The header slot shows "Guardando…" /
+    "Guardado" (`aria-live`, `data-state`) or the reason with "Reintentar". A 409 (`stale_document`,
+    `processing`, `not_editable`, `not_reviewable`) reloads the document, DROPS the unsaved local edits and
+    shows a dismissible notice; any other refusal or a network error rolls back to the last answer and shows
+    the reason (translated by `error.code`). Closing, previous / next and Discard wait for the pending saves
+    (`flush`) and stay put if one failed. A `beforeunload` guard is armed while saving.
+  - Header: Nº factura (text, over 20 characters the server reports `REFERENCE_TOO_LONG`, shown under the
+    field) and the date (shared `DateField`; the printed raw date is shown as a hint when it could not be parsed).
+  - Lines: Descripción | Cant. | Precio | **Dto. %** | IVA | Importe | trash, grid
+    `minmax(0,1fr) 54 74 52 56 80 30` (description 150px at the 560px pane). Below 460px of inner width
+    (ResizeObserver) each line stacks: description + trash, then the five numbers in a row with small
+    visible labels (the header row is hidden). The VAT cell is a READ-ONLY display of the effective rate (`taxRate`, else the resolved tax's `rate`); the tax is
+    CHOSEN BY ID with a selector under the line (see below), never typed. Numeric cells show the formatted value and, while focused,
+    the plain number (`formatPlainDecimal`, parsed with `parseLocaleNumber`; bounds and decimals mirror the
+    backend: quantity 4 decimals, unit price 6, discount 0-100 with 4, VAT 0-100 with 2; the discount is shown with up to 4 decimals, trailing zeros trimmed and never padded: `10%`, `12,3457%`, in the cell idle and focused and in the read-only list). The amount is
+    `lineAmount`: `round2(quantity x round6(price x (1 - discount/100)))`, exact BigInt arithmetic shared with
+    the backend through `tools/app-shell/__tests__/fixtures/invoice-inbox-totals.json`. The effective VAT
+    rate of a line is its `taxRate`, else the resolved tax's `rate`, rounded HALF_UP to 2 decimals before the
+    lines are grouped by rate (10.555 and 10.56 are one row); a line with no rate adds to the base only. The
+    OCR schema keys `discount_percent` / `discount_amount` are shared: the single-invoice "Extraer y completar"
+    flow and the MCP OCR tools ignore the discount, so discounted lines may show at the gross printed price there. "Añadir línea" appends
+    a line (the server gives it the previous line's tax rate, else the supplier's default; the new description
+    gets focus); the trash removes a line at once (no confirmation, no undo). Line `index` is a stable id.
+  - Tax by id: each line has a tax selector next to its product chip, the SAME selector the purchase-invoice lines
+    use (`purchase-invoice/lines/selectors/C_Tax_ID` through the shared `InlineSearchCombo`, opening on the committed
+    tax; context: `isSOTrx=N`, `DateInvoiced` from the document date, `C_BPartner_Location_ID` from the supplier's
+    address when known). Picking one sends `setLine {index, taxId}`; the server validates it (active, valid at the
+    document date, purchase side, tenant) and answers `lines[i].tax = {state, matchedBy: 'manual', id, name, rate}`
+    with the line's rate set to the tax's; 422 `unknown_tax` shows a translated message. The label is the tax name
+    (the rate when no name). The optimistic view uses the option's `rate` only if the selector exposes it; otherwise the
+    VAT cell shows "…" until the answer (the rate is never guessed). Re-picking the same tax writes nothing. A new line
+    inherits the previous line's tax by id (`addLine` then `setLine {taxId}`) when that tax has an id, else the server
+    default. A typed rate is never sent; the printed OCR rate is not echoed back.
+  - Quantity and price may be any sign (negative = credit / return line) or zero; a line lacking either is reported by
+    the server as `line[i].quantity` / `line[i].unitPrice`: the cell is red, the red line under the table says "Indica la
+    cantidad / el precio de todas las líneas" and the footer counter counts it. An empty price shows empty, not 0.
+    Totals, the mismatch banner and the signs go through `formatCurrency` / `formatGroupedNumber`.
+  - Currency and totals (ETP-6050 S2): `review.currency = {id, isoCode, symbol, scale}` (the vendor's purchase price
+    list currency, else the organization's; read only, shown with the shared `CurrencyRatePicker` in the header
+    section). `scale` (the currency's StdPrecision: 0 for JPY-like, 2 usually; 2 when absent) drives EVERY amount of
+    the panel: `formatMoney` (`invoiceInboxMoney.js`) calls the canonical `formatCurrency` with that scale as min / max
+    fraction digits (the global `formatCurrency` is untouched), in the lines' amounts, the totals card, the mismatch
+    banner and the compact read-only list; unit prices show up to 6 decimals (at least the scale). The mismatch
+    tolerance is ONE minimal unit of the currency. The totals rule is shared with the backend and the fixture
+    (`invoiceInboxReviewModel.js`, `computeTotals(lines, scale)`): `unit6 = round6(price x (1 - d/100))`,
+    `net = round_scale(quantity x unit6)`; a tax whose `tax.docTaxAmount` is `D` (default) is rounded ONCE per rate on the
+    sum of the nets, one that is `L` is rounded per line and summed; a rate may have both a D row and an L row (ascending
+    by rate, D before L; the L row reads "IVA {rate}% por línea s/ {base}"); the effective rate is `taxRate`, else
+    `tax.rate`, rounded HALF_UP to 2 decimals before grouping; BigInt only. Input scales: quantity 4, unit price 6,
+    discount 4, rate 2. The LIST's total cell still uses the organization currency: the list payload carries no
+    currency of its own.
+  - Supplier: "Cambiar" (linked) / "Buscar existente" (new) / the search (none, ambiguous) use the
+    purchase-invoice vendor selector (`isSOTrx=N`, `isVendor=Y`) through `EntityPicker` (the shared
+    `InlineSearchCombo`); candidates are live radios plus "Ninguno · crear proveedor nuevo" (`newVendor`
+    without fields); a NEW supplier's fields (name, NIF, address, postal code, city, country picker, e-mail,
+    phone) are editable and saved as `newVendor {fields}` into `vendor.extracted`.
+  - Product per line: candidates, search (purchase-invoice line product selector), "Crear producto nuevo" and,
+    for a new product, name plus category and unit pickers (only ids are sent; the names come back resolved from the ids in the request language and only when the id resolves, so a committed id without a name shows "Desconocido" and stays selected) (`product` spec selectors, opening on the committed
+    value) saved as `newProduct`; a new product needs category and unit to be complete.
+  - Footer: the counter comes from the server's `validation`; "Marcar como revisada" is enabled only on a
+    valid PENDING_REVIEW document with nothing saving (`mark-reviewed`, flushes first); the answers are: valid PENDING_REVIEW -> READY (`REVIEWED = Y`);
+    invalid PENDING_REVIEW (legacy rows or a lagging status) -> 422 `not_valid` with the recomputed `missing`,
+    the new `updated` token and `documentStatus` ERROR (the panel adopts all three without a reload, so the
+    counter, the field errors and the "Revisar" tag show what is missing); ERROR -> 409 `not_reviewable`;
+    READY with the current token -> 200 unchanged (old token -> 409 `stale_document`); CONFIRMED / DISCARDED /
+    FOREIGN_RECEIVER -> 409 `not_editable`; a READY document
+    shows "Revisada por ti" and an edit sends it back to PENDING_REVIEW; "Confirmar factura" stays disabled
+    ("Próximamente", ETP-6051). CONFIRMED / DISCARDED / FOREIGN_RECEIVER (`editable: false`) stay read only.
 - **Read errors** (`useInvoiceInboxReview.js`): 409 `processing`, `not_found`, `feature_disabled`,
   `org_not_allowed` and a network error show a message and "Reintentar" in the form pane; the
   viewer is independent.
@@ -370,10 +452,10 @@ scrolls horizontally; the numeric line cells keep the design widths and carry th
 - `due-date-extraction`: the panel shows no Vencimiento; the OCR schema does not extract a due date
   and how to handle it is still open (to be treated later; user decision 2026-11-12, ETP-6050
   decision 1).
-- `review-edit-and-resolution`: S1 is read only; editing with autosave, `ADJUSTED`, supplier and
-  product resolution and mark-as-reviewed are slices S2 / S3 of ETP-6050.
-- `revalidate-on-edit` stays open: the review read recomputes the validation at read time only; it
-  is persisted on edit in S2.
+- `review-edit-and-resolution`: what remains after S2 is the confirm (ETP-6051): a new supplier / product is
+  only stored, and the confirm must apply the single-invoice OCR seed (including inbox `unitPrice` ->
+  `listPrice`, `discount` -> `etgoDiscount`). Not in S2 either: document-level discount (`etgoTotalDiscount`).
+- `revalidate-on-edit` is CLOSED: every edit recomputes and persists the verdict (S2).
 
 ## Polling of PROCESSING rows
 
@@ -416,7 +498,8 @@ evaluated only by the backend, so the browser never emits `feature_flag_evaluate
 `InvoiceInboxReviewDrawer.jsx`, `InvoiceInboxReviewHeader.jsx`, `InvoiceInboxReviewViewer.jsx`,
 `InvoiceInboxReviewForm.jsx`, `InvoiceInboxReviewVendor.jsx`, `InvoiceInboxReviewLines.jsx`,
 `InvoiceInboxReviewTotals.jsx`, `InvoiceInboxReviewBanners.jsx`, `InvoiceInboxReviewFooter.jsx`,
-`InvoiceInboxReviewParts.jsx`, `invoiceInboxReviewModel.js`, `useInvoiceInboxReview.js`,
+`InvoiceInboxReviewParts.jsx`, `InvoiceInboxReviewInputs.jsx`, `InvoiceInboxReviewPickers.jsx`,
+`InvoiceInboxReviewSaveStatus.jsx`, `invoiceInboxReviewModel.js`, `useInvoiceInboxReview.js`, `useInvoiceInboxReviewEditor.js`,
 `useInvoiceInboxReviewNav.js`. Telemetry (ETP-6050): `useInvoiceInboxOpenedTracking.js`. Shared touch points:
 `SegmentedTabs.jsx` (optional `count` per item), `menu.json` (Purchases item),
 `lib/capabilityVisibility.js` (`INVOICE_INBOX_CAPABILITY`), `windows/registry.js` (`customLoaders`).
@@ -453,11 +536,13 @@ Review panel (prefix `invoice-inbox-review-`): `-drawer`, `-veil`, `-header`, `-
 `-vendor-ambiguous`, `-vendor-ambiguous-title`, `-vendor-in-document`, `-vendor-candidate-{id}`,
 `-vendor-likely-{id}`, `-vendor-none-option`, `-vendor-error`, `-vendor-new`, `-vendor-new-title`,
 `-vendor-new-hint`, `-vendor-search-existing`, `-vendor-new-{name|taxid|postalcode|address|city|country}`,
-`-vendor-none`, `-vendor-none-hint`; header section: `-header-section`, `-header-title`,
-`-invoice-no`, `-invoice-date` (+ `-tag`, `-error`, `-icon`; each field also `…-field`), the
+`-vendor-none`, `-vendor-none-hint`, `-vendor-change-panel`, `-vendor-search`, `-vendor-create-new`,
+`-vendor-new-{email|phone}`, `-vendor-new-country-field`; save state: `-save-state` (`data-state`),
+`-save-error`, `-save-retry`; notice: `-notice`, `-notice-dismiss`; header section: `-header-section`, `-header-title`,
+`-invoice-no`, `-invoice-date` (+ `-tag`, `-error`, `-icon`, `-raw`, `-control`; each field also `…-field`), the
 currency picker (`field-currency`, `currency-rate-readonly`); lines: `-lines`, `-lines-title`,
 `-lines-head`, `-lines-list`, `-lines-error`, `-line-{i}`,
-`-line-{i}-{description|quantity|price|tax|amount|detail|product|product-tag|product-name|panel|candidates|in-document|candidate-{id}|likely|none-option|search}`,
+`-line-{i}-{description|quantity|price|discount|tax|tax-picker|tax-name|amount|detail|product|product-tag|product-name|panel|candidates|in-document|candidate-{id}|likely|none-option|search|create-new|new-product|new-name|new-category|new-uom|new-error}`,
 `-line-delete-{i}`, `-add-line`; totals: `-totals`, `-total-base`,
 `-total-tax-{rate}`, `-total`, `-total-label`; footer: `-footer`, `-discard`, `-pending`,
 `-reviewed`, `-mark-reviewed`, `-confirm`.
@@ -502,6 +587,18 @@ Prerequisites: `etendo.go.flags.invoice-inbox=true` (Tomcat restart) and the spe
     right; a PROCESSING row does not open. Next/previous skip PROCESSING rows, stay within the
     current tab, and at the end of the loaded rows load the next page. Escape and an outside click
     close it. A CONFIRMED row shows the green banner with the invoice link and no footer; a
-    DISCARDED row, no footer. "Marcar como revisada" and "Confirmar factura" are disabled. Discard
-    from the footer uses the same dialog and closes the panel. English and Spanish: no untranslated
-    text. (Needs the backend `review` action deployed.)
+    DISCARDED row, no footer. "Confirmar factura" is disabled. Discard from the footer uses the same
+    dialog and closes the panel. English and Spanish: no untranslated text. (Needs the backend `review`
+    action deployed.)
+14. S2 (needs `apply` and `mark-reviewed` deployed; check after each edit with
+    `SELECT status, error_code, reviewed, adjusted, updated, current_data FROM etgo_incoming_document`):
+    edit a quantity: "Guardando…" then "Guardado", one `POST .../action/apply` whose body is
+    `{updated, operations:[{op:'setLine',...}]}`, totals live, `adjusted = 'Y'` after the first effective edit
+    and still `Y` after reverting; a blur without change sends nothing. Type `1,5`, `1.5`, `abc`, `1e12`,
+    a negative or over-100 discount: invalid ones are not sent. Add and delete lines (indexes stay stable).
+    Clear the date: status ERROR, "Revisar" tag. Pick a supplier candidate / search one / create a new one
+    (edit a field): taxes rebuilt, nothing created in `c_bpartner` / `m_product` / `c_invoice`. New product:
+    category and unit pickers open on the committed value. "Marcar como revisada" on a valid document: READY,
+    "Revisada por ti"; edit afterwards: back to PENDING_REVIEW. Two tabs on one document: the second edit
+    shows the notice and reloads. Widths 1280, 1024, 768 and a 420px pane: description never 0px, no horizontal
+    scroll. After closing, the row and the counters reflect the edit.
