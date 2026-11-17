@@ -80,15 +80,15 @@ vi.mock('../../../FmOverlays.jsx', () => ({
     ),
   ),
 }));
-vi.mock('lucide-react', () => ({
+vi.mock('@phosphor-icons/react', () => ({
   // ETP-5584 — the detail status chip shows DocumentStatusPill's Check icon for success tones.
-  Check: () => null,
-  Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null,
-  TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
-  Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
-  TrendingUp: () => null, TrendingDown: () => null, Clock: () => null,
-  ClipboardCheck: () => null, ReceiptText: () => null, Folder: () => null,
-  FileCheck: () => null, Landmark: () => null,
+  CheckIcon: () => null,
+  GearIcon: () => null, DownloadSimpleIcon: () => null, ArrowLeftIcon: () => null, FloppyDiskIcon: () => null, WarningOctagonIcon: () => null,
+  WarningIcon: () => null, CheckCircleIcon: () => null, ArrowsLeftRightIcon: () => null,
+  CalculatorIcon: () => null, CircleNotchIcon: () => null, DotsThreeVerticalIcon: () => null,
+  TrendUpIcon: () => null, TrendDownIcon: () => null, ClockIcon: () => null,
+  ClipboardTextIcon: () => null, ReceiptIcon: () => null, FolderIcon: () => null,
+  SealCheckIcon: () => null, BankIcon: () => null,
 }));
 
 import FmModel303Page from '../FmModel303Page.jsx';
@@ -288,7 +288,7 @@ describe('FmModel303Page — Guardar button (ETP-5338 pivot)', () => {
     unmount();
     render(<FmModel303Page decl={{ ...BASE_DECL, status: 'submitted_ack', submissionMethod: 'aeat_telematic' }} {...defaultProps} />);
     badge = screen.getByTestId('FmStatusChip__badge');
-    // (lucide-react is mocked to render nothing in this file, so the Check icon itself is not
+    // (@phosphor-icons/react is mocked to render nothing in this file, so the Check icon itself is not
     // asserted here — the tone that selects it is.)
     expect(badge.getAttribute('data-tone')).toBe('success');
     // the submissionMethod label stays on the same line, next to the chip

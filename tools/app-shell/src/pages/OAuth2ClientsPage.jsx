@@ -15,7 +15,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Shield, Plus, RefreshCw, Trash2, Key, MoreHorizontal, Copy, Ban, Pencil } from 'lucide-react';
+import {
+  ShieldIcon,
+  PlusIcon,
+  ArrowsClockwiseIcon,
+  TrashIcon,
+  KeyIcon,
+  DotsThreeIcon,
+  CopyIcon,
+  ProhibitIcon,
+  PencilSimpleIcon,
+} from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { toast } from 'sonner';
 
@@ -183,12 +193,12 @@ export default function OAuth2ClientsPage() {
             onClick={fetchClients}
             disabled={loading}
             data-testid="Button__82406d">
-            <RefreshCw
+            <ArrowsClockwiseIcon
               className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`}
               data-testid="RefreshCw__82406d" />
           </Button>
           <Button onClick={handleCreate} data-testid="Button__82406d">
-            <Plus className="h-4 w-4 mr-2" data-testid="Plus__82406d" />
+            <PlusIcon className="h-4 w-4 mr-2" data-testid="Plus__82406d" />
             {ui("oauthClientNew")}
           </Button>
         </div>
@@ -199,7 +209,7 @@ export default function OAuth2ClientsPage() {
             if (loading) {
               return (
             <div className="flex items-center justify-center py-12 text-muted-foreground">
-              <RefreshCw className="h-5 w-5 animate-spin mr-2" data-testid="RefreshCw__82406d" />
+              <ArrowsClockwiseIcon className="h-5 w-5 animate-spin mr-2" data-testid="RefreshCw__82406d" />
               {ui("loadingClients")}
             </div>
               );
@@ -208,7 +218,7 @@ export default function OAuth2ClientsPage() {
             if (clients.length === 0) {
               return (
             <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Shield
+              <ShieldIcon
                 className="h-12 w-12 text-muted-foreground/40 mb-4"
                 data-testid="Shield__82406d" />
               <h3 className="text-lg font-medium text-foreground mb-1">{ui("oauthClientNoClients")}</h3>
@@ -216,7 +226,7 @@ export default function OAuth2ClientsPage() {
                 {ui("oauthClientNoClientsDesc")}
               </p>
               <Button onClick={handleCreate} data-testid="Button__82406d">
-                <Plus className="h-4 w-4 mr-2" data-testid="Plus__82406d" />
+                <PlusIcon className="h-4 w-4 mr-2" data-testid="Plus__82406d" />
                 {ui("oauthClientCreateFirst")}
               </Button>
             </div>
@@ -247,7 +257,7 @@ export default function OAuth2ClientsPage() {
                         title={ui("oauthClickToCopy")}
                       >
                         {client.clientId?.slice(0, 12)}{ui('ellipsis')}
-                        <Copy className="h-3 w-3" data-testid="Copy__82406d" />
+                        <CopyIcon className="h-3 w-3" data-testid="Copy__82406d" />
                       </button>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground" data-testid="TableCell__82406d">
@@ -287,24 +297,24 @@ export default function OAuth2ClientsPage() {
                             size="icon"
                             className="h-8 w-8"
                             data-testid="Button__82406d">
-                            <MoreHorizontal className="h-4 w-4" data-testid="MoreHorizontal__82406d" />
+                            <DotsThreeIcon className="h-4 w-4" data-testid="MoreHorizontal__82406d" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" data-testid="DropdownMenuContent__82406d">
                           <DropdownMenuItem onClick={() => handleEdit(client)} data-testid="DropdownMenuItem__82406d">
-                            <Pencil className="h-4 w-4 mr-2" data-testid="Pencil__82406d" />
+                            <PencilSimpleIcon className="h-4 w-4 mr-2" data-testid="Pencil__82406d" />
                             {ui("edit")}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => handleRegenerateSecret(client)}
                             data-testid="DropdownMenuItem__82406d">
-                            <Key className="h-4 w-4 mr-2" data-testid="Key__82406d" />
+                            <KeyIcon className="h-4 w-4 mr-2" data-testid="Key__82406d" />
                             {ui("oauthRegenerateSecret")}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => handleRevokeTokens(client)}
                             data-testid="DropdownMenuItem__82406d">
-                            <Ban className="h-4 w-4 mr-2" data-testid="Ban__82406d" />
+                            <ProhibitIcon className="h-4 w-4 mr-2" data-testid="Ban__82406d" />
                             {ui("oauthRevokeTokens")}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator data-testid="DropdownMenuSeparator__82406d" />
@@ -312,7 +322,7 @@ export default function OAuth2ClientsPage() {
                             onClick={() => handleDelete(client)}
                             className="text-destructive focus:text-destructive"
                             data-testid="DropdownMenuItem__82406d">
-                            <Trash2 className="h-4 w-4 mr-2" data-testid="Trash2__82406d" />
+                            <TrashIcon className="h-4 w-4 mr-2" data-testid="Trash2__82406d" />
                             {ui("delete")}
                           </DropdownMenuItem>
                         </DropdownMenuContent>

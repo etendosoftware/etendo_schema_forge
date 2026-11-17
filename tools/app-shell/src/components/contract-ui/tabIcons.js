@@ -1,6 +1,15 @@
-import { List, Shield, Users, Landmark, MapPin, ReceiptText, ArrowLeftRight } from 'lucide-react';
-import { AttachmentIcon } from '@/components/attachments/AttachmentIcon';
-import { PricingIcon, WarehouseProductsIcon } from '@/components/ui/custom-icons';
+import {
+  ListBulletsIcon,
+  ShieldIcon,
+  UsersIcon,
+  BankIcon,
+  MapPinIcon,
+  ReceiptIcon,
+  ArrowsLeftRightIcon,
+  PaperclipIcon,
+  CoinsIcon,
+  PackageIcon,
+} from '@phosphor-icons/react';
 
 /**
  * Icon shown before the label of a secondary tab in DetailView's bottom tab strip, keyed by the
@@ -12,18 +21,18 @@ import { PricingIcon, WarehouseProductsIcon } from '@/components/ui/custom-icons
  * every window whose tab shares one of these keys gets the same icon.
  */
 export const TAB_ICONS = {
-  'custom:attachments': AttachmentIcon,
-  'custom:sif': Shield,
-  'custom:pricing': PricingIcon,
+  'custom:attachments': PaperclipIcon,
+  'custom:sif': ShieldIcon,
+  'custom:pricing': CoinsIcon,
   // Product's Movements tab (ETP-5889). The same two arrows the financial account's Movements tab uses.
-  'custom:movements': ArrowLeftRight,
-  'products': WarehouseProductsIcon,
+  'custom:movements': ArrowsLeftRightIcon,
+  'products': PackageIcon,
   // Business-partner tabs (Contacts window, ETP-5600 Figma).
-  'contact': Users,
-  'bankAccount': Landmark,
-  'locationAddress': MapPin,
-  'customerAccounting': ReceiptText,
-  'vendorAccounting': ReceiptText,
+  'contact': UsersIcon,
+  'bankAccount': BankIcon,
+  'locationAddress': MapPinIcon,
+  'customerAccounting': ReceiptIcon,
+  'vendorAccounting': ReceiptIcon,
 };
 
 /**
@@ -37,5 +46,5 @@ export const TAB_ICONS = {
  * exactly as before.
  */
 export function resolveTabIcon(tabKey, icon = null) {
-  return icon ?? TAB_ICONS[tabKey] ?? List;
+  return icon ?? TAB_ICONS[tabKey] ?? ListBulletsIcon;
 }

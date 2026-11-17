@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { Loader2 } from 'lucide-react';
+import { CircleNotchIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { useCurrency } from '@/hooks/useCurrency';
 import { Button } from '@/components/ui/button';
@@ -164,7 +164,7 @@ export default function InvoiceInboxReviewDrawer({
               )}
               {nav.advancing && (
                 <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground" data-testid="invoice-inbox-review-advancing">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" data-testid="Loader2__review-advancing" />
+                  <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" aria-hidden="true" data-testid="Loader2__review-advancing" />
                   {ui('invoiceInboxReviewLoadingNext')}
                 </p>
               )}

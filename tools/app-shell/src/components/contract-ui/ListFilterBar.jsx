@@ -1,7 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button.jsx';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover.jsx';
-import { ChevronDown, CalendarDays, Filter, Loader2 } from 'lucide-react';
+import {
+  CaretDownIcon,
+  CalendarBlankIcon,
+  FunnelSimpleIcon,
+  CircleNotchIcon,
+} from '@phosphor-icons/react';
 import { useLocale, useUI } from '@etendosoftware/app-shell-core';
 import { useDistinctValues } from '@/hooks/useDistinctValues.js';
 import { compareStatusCodes, statusLabel } from '@/lib/statusBadge.js';
@@ -384,11 +389,11 @@ export function ListFilterBar({
             >
               {activeStatusLabel}
               {statusLoading && (
-                <Loader2
+                <CircleNotchIcon
                   className="h-3.5 w-3.5 animate-spin text-muted-foreground"
                   data-testid="Loader2__6d5e90" />
               )}
-              <ChevronDown className="!size-4" data-testid="ChevronDown__6d5e90" />
+              <CaretDownIcon className="!size-4" data-testid="ChevronDown__6d5e90" />
             </Button>
           </PopoverTrigger>
           <PopoverContent align="start" className="w-60 p-0" data-testid="PopoverContent__6d5e90">
@@ -426,11 +431,11 @@ export function ListFilterBar({
             >
               {activeTypeLabel}
               {typeDistinct.loading && (
-                <Loader2
+                <CircleNotchIcon
                   className="h-3.5 w-3.5 animate-spin text-muted-foreground"
                   data-testid="Loader2__6d5e90" />
               )}
-              <ChevronDown className="!size-4" data-testid="ChevronDown__6d5e90" />
+              <CaretDownIcon className="!size-4" data-testid="ChevronDown__6d5e90" />
             </Button>
           </PopoverTrigger>
           <PopoverContent align="start" className="w-60 p-0" data-testid="PopoverContent__6d5e90">
@@ -464,9 +469,9 @@ export function ListFilterBar({
                 hasActiveDate ? 'border-primary/40' : '',
               ].join(' ')}
             >
-              <CalendarDays className="h-3.5 w-3.5" data-testid="CalendarDays__6d5e90" />
+              <CalendarBlankIcon className="h-3.5 w-3.5" data-testid="CalendarDays__6d5e90" />
               {activeDateLabel}
-              <ChevronDown className="!size-4" data-testid="ChevronDown__6d5e90" />
+              <CaretDownIcon className="!size-4" data-testid="ChevronDown__6d5e90" />
             </Button>
           </PopoverTrigger>
           <PopoverContent align="start" className="w-auto p-0" data-testid="PopoverContent__6d5e90">
@@ -488,7 +493,7 @@ export function ListFilterBar({
             data-testid="filter-advanced"
             className="relative inline-flex h-10 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm leading-6 font-medium text-[#121217] transition-colors hover:bg-[hsl(var(--muted))]"
           >
-            <Filter className="h-5 w-5 text-[#828FA3]" data-testid="Filter__6d5e90" />
+            <FunnelSimpleIcon className="h-5 w-5 text-[#828FA3]" data-testid="Filter__6d5e90" />
             <span>{ui('filters')}</span>
             {hasActiveAdvancedFilter && (
               <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-[hsl(var(--foreground))] text-primary-foreground text-[10px] font-semibold leading-none">

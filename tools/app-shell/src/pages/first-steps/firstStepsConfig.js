@@ -11,9 +11,7 @@
  * both of their bundles and broke every suite that mocks that package with a narrow set.
  * `iconName` is resolved to a component by `firstStepsIcons.js`, which only the page imports.
  *
- * The icons are Phosphor, not lucide: the design draws this list with the Phosphor set (same
- * family `SideMenu` already uses), and the two libraries' glyphs are not interchangeable at
- * 20px — a lucide stand-in reads visibly different from the mockup.
+ * The icons are Phosphor, the only icon family of the app (ETP-6155).
  *
  * Every entry carries:
  *   - `id`         stable identifier. Toggleable ids are persisted in `firstSteps.completed`;

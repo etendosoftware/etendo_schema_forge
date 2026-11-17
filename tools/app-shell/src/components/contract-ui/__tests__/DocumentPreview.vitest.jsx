@@ -5,10 +5,10 @@
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-vi.mock('lucide-react', () => ({
-  X: () => <span data-testid="icon-x" />,
-  Download: () => <span data-testid="icon-download" />,
-  FileText: () => <span data-testid="icon-filetext" />,
+vi.mock('@phosphor-icons/react', () => ({
+  XIcon: () => <span data-testid="icon-x" />,
+  DownloadSimpleIcon: () => <span data-testid="icon-download" />,
+  FileTextIcon: () => <span data-testid="icon-filetext" />,
 }));
 
 import { DocumentPreview } from '../DocumentPreview.jsx';

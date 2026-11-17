@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { EntityForm } from '@/components/contract-ui';
 import { PillToggle } from '@/components/PillToggle';
 import { SquareCheckbox } from '../shared/SquareCheckbox';
-import { ChevronDown, Tag } from 'lucide-react';
+import { CaretDownIcon, TagIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { useFeatureFlag, CONTACT_CATEGORY_TYPE } from '@/lib/flags';
 import { useContactsCacheInvalidation } from './contactsCacheInvalidation';
@@ -64,7 +64,7 @@ function DiscountSelect({ value, options, onChange, loading, disabled = false })
   return (
     <div className="relative">
       <div className="flex items-center gap-1.5 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none z-10">
-        <Tag size={13} className="text-muted-foreground" data-testid="Tag__7f0756" />
+        <TagIcon size={13} className="text-muted-foreground" data-testid="Tag__7f0756" />
       </div>
       <select
         className="h-10 w-full rounded-lg border border-[hsl(var(--border-control))] bg-card pl-8 pr-3 text-sm appearance-none cursor-pointer shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] transition-colors disabled:cursor-not-allowed"
@@ -77,7 +77,7 @@ function DiscountSelect({ value, options, onChange, loading, disabled = false })
           <option key={o.id} value={o.id}>{o._identifier}</option>
         ))}
       </select>
-      <ChevronDown
+      <CaretDownIcon
         size={13}
         className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground"
         data-testid="ChevronDown__7f0756" />

@@ -1,4 +1,4 @@
-import { Search } from 'lucide-react';
+import { MagnifyingGlassIcon } from '@phosphor-icons/react';
 import { useLocale, useLocaleSwitch, useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { getStatusTone, statusLabel } from '@/lib/statusBadge.js';
@@ -221,7 +221,7 @@ export function PortalSearchPill({ value, onChange, placeholder, label, testId, 
   return (
     <div className={cn('relative min-w-0', className)}>
       <label className="flex h-12 items-center gap-2.5 rounded-full bg-muted px-4 md:h-9 md:gap-2 md:px-3.5">
-        <Search
+        <MagnifyingGlassIcon
           className="h-4 w-4 shrink-0 text-muted-foreground"
           aria-hidden="true"
           data-testid="Search__7a317e" />

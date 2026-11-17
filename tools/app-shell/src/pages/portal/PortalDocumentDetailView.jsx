@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ArrowLeft, Download, FileX, Maximize, ZoomIn, ZoomOut,
-} from 'lucide-react';
+import { ArrowLeftIcon, ArrowsOutIcon, DownloadSimpleIcon, FileXIcon, MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon } from '@phosphor-icons/react';
 import { useLocale, useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -147,7 +145,7 @@ export default function PortalDocumentDetailView({
           className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[10px]"
           data-testid="portal-back-mobile"
         >
-          <ArrowLeft className="h-5 w-5" aria-hidden="true" data-testid="ArrowLeft__6a1d3b" />
+          <ArrowLeftIcon className="h-5 w-5" aria-hidden="true" data-testid="ArrowLeft__6a1d3b" />
         </button>
         <div className="flex min-w-0 flex-1 flex-col">
           <h1 className="truncate text-xl font-semibold leading-7">{title}</h1>
@@ -162,7 +160,7 @@ export default function PortalDocumentDetailView({
             className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[10px] border border-border bg-card disabled:opacity-50"
             data-testid="portal-download-pdf-mobile"
           >
-            <Download className="h-5 w-5" aria-hidden="true" data-testid="Download__6a1d3b" />
+            <DownloadSimpleIcon className="h-5 w-5" aria-hidden="true" data-testid="Download__6a1d3b" />
           </button>
         ) : null}
       </header>
@@ -212,7 +210,7 @@ export default function PortalDocumentDetailView({
             {document.hasPdf ? (
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" onClick={downloadPdf} disabled={!pdfReady} data-testid="portal-download-pdf">
-                  <Download
+                  <DownloadSimpleIcon
                     className="mr-1.5 h-4 w-4"
                     aria-hidden="true"
                     data-testid="Download__6a1d3b" />{ui('portalDownloadPdf')}
@@ -278,7 +276,7 @@ function DesktopHeader({ title, breadcrumb, plural, onBack }) {
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card"
         data-testid="portal-back"
       >
-        <ArrowLeft className="h-4 w-4" aria-hidden="true" data-testid="ArrowLeft__6a1d3b" />
+        <ArrowLeftIcon className="h-4 w-4" aria-hidden="true" data-testid="ArrowLeft__6a1d3b" />
       </button>
       <div className="flex min-w-0 flex-col">
         <h1 className="truncate text-lg font-semibold leading-7" data-testid="portal-view-title">{title}</h1>
@@ -345,13 +343,13 @@ function PortalPdfPreview({ url, onFullScreen }) {
             data-testid="portal-pdf-controls"
           >
             <button type="button" onClick={zoom.zoomIn} disabled={!zoom.canZoomIn} aria-label={ui('pdfViewerZoomIn')} className={control} data-testid="portal-pdf-zoom-in">
-              <ZoomIn className="h-3.5 w-3.5" aria-hidden="true" data-testid="ZoomIn__6a1d3b" />
+              <MagnifyingGlassPlusIcon className="h-3.5 w-3.5" aria-hidden="true" data-testid="ZoomIn__6a1d3b" />
             </button>
             <button type="button" onClick={onFullScreen} aria-label={ui('portalFullScreen')} className={control} data-testid="portal-pdf-full-screen">
-              <Maximize className="h-3.5 w-3.5" aria-hidden="true" data-testid="Maximize__6a1d3b" />
+              <ArrowsOutIcon className="h-3.5 w-3.5" aria-hidden="true" data-testid="Maximize__6a1d3b" />
             </button>
             <button type="button" onClick={zoom.zoomOut} disabled={!zoom.canZoomOut} aria-label={ui('pdfViewerZoomOut')} className={control} data-testid="portal-pdf-zoom-out">
-              <ZoomOut className="h-3.5 w-3.5" aria-hidden="true" data-testid="ZoomOut__6a1d3b" />
+              <MagnifyingGlassMinusIcon className="h-3.5 w-3.5" aria-hidden="true" data-testid="ZoomOut__6a1d3b" />
             </button>
           </div>
           <PdfViewer
@@ -497,7 +495,7 @@ function DocumentNotReady({ state, title, plural, onBack, onNavigate }) {
           <p className="text-sm text-muted-foreground" data-testid="portal-document-loading">{ui('loading')}</p>
         ) : (
           <div className="flex flex-col items-center px-6 py-12 text-center" data-testid="portal-document-unavailable">
-            <FileX
+            <FileXIcon
               className="h-8 w-8 text-muted-foreground"
               aria-hidden="true"
               data-testid="FileX__6a1d3b" />

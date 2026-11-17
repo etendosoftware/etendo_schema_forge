@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { CaretLeftIcon, CaretRightIcon } from '@phosphor-icons/react';
 import { useUI, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
@@ -114,7 +114,7 @@ export default function UnifiedCalendarPage() {
             aria-label={ui('ucalPrevMonth')}
             onClick={() => setMonthDate((d) => addMonths(d, -1))}
             data-testid="Button__3bd298">
-            <ChevronLeft className="h-5 w-5" data-testid="ChevronLeft__3bd298" />
+            <CaretLeftIcon className="h-5 w-5" data-testid="ChevronLeft__3bd298" />
           </Button>
           <Button
             variant="ghost"
@@ -122,7 +122,7 @@ export default function UnifiedCalendarPage() {
             aria-label={ui('ucalNextMonth')}
             onClick={() => setMonthDate((d) => addMonths(d, 1))}
             data-testid="Button__3bd298">
-            <ChevronRight className="h-5 w-5" data-testid="ChevronRight__3bd298" />
+            <CaretRightIcon className="h-5 w-5" data-testid="ChevronRight__3bd298" />
           </Button>
           <h2 className="text-lg font-semibold capitalize">
             {formatCalendarDate(monthDate, locale, { month: 'long', year: 'numeric' })}

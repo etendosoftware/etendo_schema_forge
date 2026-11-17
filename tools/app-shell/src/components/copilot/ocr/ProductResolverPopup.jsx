@@ -1,5 +1,14 @@
 import { useState, useMemo, useEffect, useRef, useId } from 'react';
-import { X, Ban, AlertTriangle, Loader2, Search, ChevronDown, Check, Plus } from 'lucide-react';
+import {
+  XIcon,
+  ProhibitIcon,
+  WarningIcon,
+  CircleNotchIcon,
+  MagnifyingGlassIcon,
+  CaretDownIcon,
+  CheckIcon,
+  PlusIcon,
+} from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -65,7 +74,7 @@ function SelectorOption({ option, selected, onPick, sizing = 'compact' }) {
       onClick={() => onPick(option)}
       className={`${base} ${pad} ${tone}`}
     >
-      <span className="w-4 shrink-0">{selected ? <Check size={14} data-testid="Check__b3ae11" /> : null}</span>
+      <span className="w-4 shrink-0">{selected ? <CheckIcon size={14} data-testid="Check__b3ae11" /> : null}</span>
       <span className="truncate">{option.label}</span>
     </button>
   );
@@ -129,7 +138,7 @@ export default function ProductResolverPopup({
             {ui('ocrProductResolverTitle')}
           </h2>
           <button onClick={cancel} aria-label={ui('cancel')} className="text-muted-foreground hover:text-muted-foreground">
-            <X size={18} data-testid="X__b3ae11" />
+            <XIcon size={18} data-testid="X__b3ae11" />
           </button>
         </div>
 
@@ -137,7 +146,7 @@ export default function ProductResolverPopup({
           <div className="px-5 pt-3">
             <InfoBanner
               tone="warning"
-              icon={AlertTriangle}
+              icon={WarningIcon}
               dismissible={false}
               data-testid="ocr-product-autoMatched-warning"
             >
@@ -248,7 +257,7 @@ function ProductRow({ row, selection, onSelect, selectorUrl, productSpecUrl, api
               title={row.suggestion.name}
               data-testid={`ocr-product-suggestion-${row.idx}`}
             >
-              <Check size={12} className="shrink-0 text-status-info-foreground" data-testid="Check__b3ae11" />
+              <CheckIcon size={12} className="shrink-0 text-status-info-foreground" data-testid="Check__b3ae11" />
               <span className="shrink-0 text-muted-foreground">{ui('ocrProductSuggested')}</span>
               <span className="truncate font-medium text-status-info-foreground">{row.suggestion.name}</span>
             </button>
@@ -262,7 +271,7 @@ function ProductRow({ row, selection, onSelect, selectorUrl, productSpecUrl, api
               className="ml-auto text-muted-foreground hover:text-foreground"
               data-testid={`ocr-product-skip-${row.idx}`}
             >
-              <Ban data-testid="Ban__b3ae11" />
+              <ProhibitIcon data-testid="Ban__b3ae11" />
               {ui('ocrProductSkip')}
             </Button>
           )}
@@ -367,8 +376,8 @@ function InlineSelector({ selectorUrl, apiFetch, token, initialQuery, value, ski
             className="flex min-w-0 flex-1 items-center gap-2 rounded-l-lg px-3 py-2 text-left text-sm focus:outline-none"
             data-testid={`ocr-product-main-${testIdSuffix}`}
           >
-            {undecided && <Plus size={14} className="shrink-0 text-status-info-foreground" data-testid="Plus__b3ae11" />}
-            {skipped && <Ban size={14} className="shrink-0 text-muted-foreground" data-testid="Ban__b3ae11" />}
+            {undecided && <PlusIcon size={14} className="shrink-0 text-status-info-foreground" data-testid="Plus__b3ae11" />}
+            {skipped && <ProhibitIcon size={14} className="shrink-0 text-muted-foreground" data-testid="Ban__b3ae11" />}
             <span className={`truncate ${mainTone}`}>{mainLabel}</span>
           </button>
           <PopoverTrigger asChild data-testid="PopoverTrigger__b3ae11">
@@ -378,7 +387,7 @@ function InlineSelector({ selectorUrl, apiFetch, token, initialQuery, value, ski
               className="flex shrink-0 items-center rounded-r-lg px-2 focus:outline-none"
               data-testid={`ocr-product-open-${testIdSuffix}`}
             >
-              <ChevronDown
+              <CaretDownIcon
                 size={16}
                 className="text-muted-foreground shrink-0"
                 data-testid="ChevronDown__b3ae11" />
@@ -392,7 +401,7 @@ function InlineSelector({ selectorUrl, apiFetch, token, initialQuery, value, ski
         onOpenAutoFocus={(event) => { event.preventDefault(); inputRef.current?.focus(); }}
         data-testid="PopoverContent__b3ae11">
         <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-2">
-          <Search size={14} className="text-muted-foreground shrink-0" data-testid="Search__b3ae11" />
+          <MagnifyingGlassIcon size={14} className="text-muted-foreground shrink-0" data-testid="Search__b3ae11" />
           <input
             ref={inputRef}
             type="text"
@@ -401,7 +410,7 @@ function InlineSelector({ selectorUrl, apiFetch, token, initialQuery, value, ski
             placeholder={ui('ocrProductSearchPlaceholder')}
             className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
           />
-          {loading && <Loader2
+          {loading && <CircleNotchIcon
             size={14}
             className="animate-spin text-muted-foreground"
             data-testid="Loader2__b3ae11" />}
@@ -413,7 +422,7 @@ function InlineSelector({ selectorUrl, apiFetch, token, initialQuery, value, ski
               onClick={() => { setOpen(false); onCreateNew(); }}
               className="flex w-full items-center gap-2 border-b border-border-subtle px-3 py-2 text-left text-sm text-status-info-foreground hover:bg-muted/50"
             >
-              <Plus size={14} className="shrink-0" data-testid="Plus__b3ae11" />
+              <PlusIcon size={14} className="shrink-0" data-testid="Plus__b3ae11" />
               <span className="truncate">{ui('createProduct')}</span>
             </button>
           )}
@@ -423,7 +432,7 @@ function InlineSelector({ selectorUrl, apiFetch, token, initialQuery, value, ski
             className="flex w-full items-center gap-2 border-b border-border-subtle px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted/50"
             data-testid={`ocr-product-skip-option-${testIdSuffix}`}
           >
-            <Ban size={14} className="shrink-0" data-testid="Ban__b3ae11" />
+            <ProhibitIcon size={14} className="shrink-0" data-testid="Ban__b3ae11" />
             <span className="truncate">{ui('ocrProductSkip')}</span>
           </button>
           {!loading && failed && (
@@ -536,12 +545,12 @@ function SelectorDialog({
         <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
           <h3 className="text-sm font-semibold text-foreground">{title}</h3>
           <button onClick={onClose} className="text-muted-foreground hover:text-muted-foreground">
-            <X size={16} data-testid="X__b3ae11" />
+            <XIcon size={16} data-testid="X__b3ae11" />
           </button>
         </div>
         <div className="px-4 py-3 border-b border-border-subtle">
           <div className="relative">
-            <Search
+            <MagnifyingGlassIcon
               size={14}
               className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
               data-testid="Search__b3ae11" />
@@ -562,13 +571,13 @@ function SelectorDialog({
               onClick={onCreateNew}
               className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left text-status-info-foreground hover:bg-muted/50 border-b border-border-subtle"
             >
-              <Plus size={14} className="shrink-0" data-testid="Plus__b3ae11" />
+              <PlusIcon size={14} className="shrink-0" data-testid="Plus__b3ae11" />
               <span className="truncate">{createLabel}</span>
             </button>
           )}
           {loading && (
             <div className="px-4 py-6 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
-              <Loader2 size={14} className="animate-spin" data-testid="Loader2__b3ae11" /> {ui('loading')}
+              <CircleNotchIcon size={14} className="animate-spin" data-testid="Loader2__b3ae11" /> {ui('loading')}
             </div>
           )}
           {!loading && failed && (
@@ -760,7 +769,7 @@ function ProductCreateForm({ initialName, productSpecUrl, taxId = null, apiFetch
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-border-subtle">
           <h2 className="text-base font-semibold text-foreground">{ui('ocrProductCreateTitle')}</h2>
           <button onClick={onCancel} aria-label={ui('cancel')} className="text-muted-foreground hover:text-muted-foreground">
-            <X size={18} data-testid="X__b3ae11" />
+            <XIcon size={18} data-testid="X__b3ae11" />
           </button>
         </div>
         <div className="px-6 py-4 space-y-3">
@@ -792,7 +801,7 @@ function ProductCreateForm({ initialName, productSpecUrl, taxId = null, apiFetch
               <span className={`truncate ${uom ? 'text-foreground' : 'text-muted-foreground'}`}>
                 {uom?.label || ui('ocrProductCreateSelect')}
               </span>
-              <ChevronDown
+              <CaretDownIcon
                 size={16}
                 className="text-muted-foreground shrink-0"
                 data-testid="ChevronDown__b3ae11" />
@@ -808,7 +817,7 @@ function ProductCreateForm({ initialName, productSpecUrl, taxId = null, apiFetch
               <span className={`truncate ${taxCategory ? 'text-foreground' : 'text-muted-foreground'}`}>
                 {taxCategory?.label || ui('ocrProductCreateSelect')}
               </span>
-              <ChevronDown
+              <CaretDownIcon
                 size={16}
                 className="text-muted-foreground shrink-0"
                 data-testid="ChevronDown__b3ae11" />
@@ -834,7 +843,7 @@ function ProductCreateForm({ initialName, productSpecUrl, taxId = null, apiFetch
             {ui('cancel')}
           </Button>
           <Button onClick={submit} disabled={submitting} data-testid="Button__b3ae11_create">
-            {submitting && <Loader2 size={13} className="animate-spin" data-testid="Loader2__b3ae11" />}
+            {submitting && <CircleNotchIcon size={13} className="animate-spin" data-testid="Loader2__b3ae11" />}
             {ui('ocrProductCreate')}
           </Button>
         </div>

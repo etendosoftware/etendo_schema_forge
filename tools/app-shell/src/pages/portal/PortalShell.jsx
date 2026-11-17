@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  FileText, Home, Languages, LayoutGrid, Receipt, Search, ShoppingBag, Truck, User,
-} from 'lucide-react';
+import { FileTextIcon, HouseIcon, MagnifyingGlassIcon, ReceiptIcon, ShoppingBagIcon, SquaresFourIcon, TranslateIcon, TruckIcon, UserIcon } from '@phosphor-icons/react';
 import { useLocaleSwitch, useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { PORTAL_DOCUMENT_KINDS } from '@/lib/portal/portalApi.js';
@@ -15,12 +13,12 @@ import { PORTAL_HIGHLIGHTS, PORTAL_KIND_META } from './portalPresentation.js';
 /** The credit links to the product's site (no shared constant exists for it). */
 const ETENDO_AI_URL = 'https://etendo.ai';
 
-/** Icon per destination; the design's own glyphs, from the app's icon family (Lucide). */
+/** Icon per destination; the design's own glyphs, from the app's icon family (Phosphor). */
 export const PORTAL_KIND_ICONS = Object.freeze({
-  QUOTATION: FileText,
-  ORDER: ShoppingBag,
-  SHIPMENT: Truck,
-  INVOICE: Receipt,
+  QUOTATION: FileTextIcon,
+  ORDER: ShoppingBagIcon,
+  SHIPMENT: TruckIcon,
+  INVOICE: ReceiptIcon,
 });
 
 /** The kinds the mobile bottom bar shows directly (design Movil-*); the rest live under "Más". */
@@ -100,7 +98,7 @@ export function PortalBrand({ identity, logoUrl, size = 'sm' }) {
 /**
  * The language choice (§B.8), the way the app offers it. In the app it is the "Idioma" section of
  * the user menu (`UserAvatarButton`); the portal has no user menu, so a discreet trigger — the
- * `Languages` icon with the current flag and name — opens the app's own `DropdownMenu` holding
+ * `TranslateIcon` icon with the current flag and name — opens the app's own `DropdownMenu` holding
  * that same section (`LanguageMenuSection`: the app's `APP_LOCALES`, rows and active marker).
  * Spanish is the default; the choice is the viewer's.
  */
@@ -119,7 +117,7 @@ export function PortalLanguageSwitch({ align = 'start', side = 'top', compact = 
           className="flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           data-testid="portal-language-switch"
         >
-          <Languages
+          <TranslateIcon
             className="h-3.5 w-3.5 shrink-0"
             aria-hidden="true"
             data-testid="Languages__a5d12f" />
@@ -177,7 +175,7 @@ export function PortalCustomer({ identity, variant = 'row' }) {
   return (
     <div className="flex min-w-0 items-center gap-2.5" title={name} data-testid="portal-customer">
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-        <User className="h-4 w-4" aria-hidden="true" data-testid="User__a5d12f" />
+        <UserIcon className="h-4 w-4" aria-hidden="true" data-testid="User__a5d12f" />
       </span>
       <span className="min-w-0 flex-1 truncate" data-testid="portal-customer-name">{name}</span>
     </div>
@@ -212,7 +210,7 @@ export function PortalMobileBrandBar({ identity, logoUrl, onSearch }) {
             className="flex h-10 w-10 items-center justify-center rounded-[10px] border border-border bg-card sm:h-12 sm:w-12"
             data-testid="portal-mobile-search"
           >
-            <Search className="h-5 w-5" aria-hidden="true" data-testid="Search__a5d12f" />
+            <MagnifyingGlassIcon className="h-5 w-5" aria-hidden="true" data-testid="Search__a5d12f" />
           </button>
         ) : null}
         <PortalLanguageSwitch
@@ -273,7 +271,7 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
             )}
             data-testid="portal-nav-home"
           >
-            <Home className="h-4 w-4" aria-hidden="true" data-testid="Home__a5d12f" />
+            <HouseIcon className="h-4 w-4" aria-hidden="true" data-testid="Home__a5d12f" />
             {ui('portalNavHome')}
           </button>
         </div>
@@ -364,7 +362,7 @@ function PortalBottomNav({ onNavigate, isActive }) {
   };
 
   const items = [
-    { key: 'home', Icon: Home, label: ui('portalNavHome'), active: isActive('home'), onClick: () => go({ view: 'home' }) },
+    { key: 'home', Icon: HouseIcon, label: ui('portalNavHome'), active: isActive('home'), onClick: () => go({ view: 'home' }) },
     ...MOBILE_PRIMARY_KINDS.map((kind) => ({
       key: kind.toLowerCase(),
       Icon: PORTAL_KIND_ICONS[kind],
@@ -373,7 +371,7 @@ function PortalBottomNav({ onNavigate, isActive }) {
       onClick: () => go({ view: 'list', kind }),
     })),
     {
-      key: 'more', Icon: LayoutGrid, label: ui('portalMore'), active: moreActive,
+      key: 'more', Icon: SquaresFourIcon, label: ui('portalMore'), active: moreActive,
       onClick: () => setMoreOpen((open) => !open), expanded: moreOpen,
     },
   ];

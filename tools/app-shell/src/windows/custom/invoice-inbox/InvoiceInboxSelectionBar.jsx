@@ -1,4 +1,4 @@
-import { Check, ClipboardCheck, Trash2 } from 'lucide-react';
+import { CheckIcon, ClipboardTextIcon, TrashIcon } from '@phosphor-icons/react';
 import SelectionToolbar from '@/components/contract-ui/SelectionToolbar.jsx';
 import { useUI } from '@/i18n';
 
@@ -33,7 +33,7 @@ function DiscardBarButton({ label, onDiscard, discarding }) {
       style={{ color: 'hsl(var(--floating-toolbar-fg))' }}
       data-testid="invoice-inbox-bulk-discard"
     >
-      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" data-testid="Trash2__ba835b" />
+      <TrashIcon className="h-3.5 w-3.5" aria-hidden="true" data-testid="Trash2__ba835b" />
       {label}
     </button>
   );
@@ -60,7 +60,7 @@ export default function InvoiceInboxSelectionBar({ count, onClear, onDiscard, di
       <span className="inline-flex items-center gap-1">
         <DisabledBarButton
           label={ui('invoiceInboxBulkMarkReview')}
-          icon={ClipboardCheck}
+          icon={ClipboardTextIcon}
           title={ui('comingSoon')}
           testId="invoice-inbox-bulk-mark-review"
           data-testid="DisabledBarButton__mr7c21" />
@@ -71,7 +71,7 @@ export default function InvoiceInboxSelectionBar({ count, onClear, onDiscard, di
           data-testid="DiscardBarButton__ba835b" />
         <DisabledBarButton
           label={ui('invoiceInboxBulkConfirm')}
-          icon={Check}
+          icon={CheckIcon}
           title={ui('comingSoon')}
           testId="invoice-inbox-bulk-confirm"
           data-testid="DisabledBarButton__ba835b" />

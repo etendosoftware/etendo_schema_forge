@@ -1,4 +1,10 @@
-import { Copy, FileText, Image as ImageIcon, Link2, Mail } from 'lucide-react';
+import {
+  CopyIcon,
+  FileTextIcon,
+  ImageIcon,
+  LinkSimpleIcon,
+  EnvelopeSimpleIcon,
+} from '@phosphor-icons/react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TruncatedText } from '@/components/ui/truncated-text';
 import { StatusTag } from '@/components/ui/status-tag';
@@ -57,7 +63,7 @@ export function formatReceived(raw, locale) {
  * height, so rows keep one height whatever the origin.
  */
 export function DocumentCell({ row, ui, locale }) {
-  const FileIcon = isImageFileName(row.fileName) ? ImageIcon : FileText;
+  const FileIcon = isImageFileName(row.fileName) ? ImageIcon : FileTextIcon;
   const byEmail = row.source === 'EMAIL';
   const received = formatReceived(row.created, locale);
   return (
@@ -74,7 +80,7 @@ export function DocumentCell({ row, ui, locale }) {
         <div className="flex h-4 items-center gap-1.5 whitespace-nowrap text-xs leading-4 text-muted-foreground">
           {byEmail && (
             <span className="inline-flex items-center gap-1.5" data-testid={`invoice-inbox-source-${row.id}`}>
-              <Mail className="h-3 w-3" aria-hidden="true" data-testid={`invoice-inbox-source-icon-${row.id}`} />
+              <EnvelopeSimpleIcon className="h-3 w-3" aria-hidden="true" data-testid={`invoice-inbox-source-icon-${row.id}`} />
               {ui('invoiceInboxSourceEmail')}
               {received && <span aria-hidden="true">·</span>}
             </span>
@@ -97,7 +103,7 @@ function VendorLines({ row, name, taxId, linked = false }) {
         data-testid="CellText__85f13c" />
       {taxId && (
         <div className="flex min-w-0 items-center gap-1 font-mono text-xs text-muted-foreground">
-          {linked && <Link2
+          {linked && <LinkSimpleIcon
             className="h-3 w-3 flex-none"
             aria-hidden="true"
             data-testid="Link2__85f13c" />}
@@ -160,7 +166,7 @@ export function NumberCell({ row, ui }) {
           className="ml-1.5 inline-flex align-[-2px] text-status-warning-foreground"
           data-testid={`invoice-inbox-duplicate-${row.id}`}
         >
-          <Copy className="h-3.5 w-3.5" aria-hidden="true" data-testid="Copy__85f13c" />
+          <CopyIcon className="h-3.5 w-3.5" aria-hidden="true" data-testid="Copy__85f13c" />
         </span>
       )}
     </span>

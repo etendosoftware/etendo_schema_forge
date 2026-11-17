@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ShieldAlert } from 'lucide-react';
+import { ShieldWarningIcon } from '@phosphor-icons/react';
 import { useUI, useMenuLabel } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import StatusCard from '@/components/StatusCard.jsx';
@@ -86,7 +86,7 @@ export default function RolesOverviewPage() {
               testId="RolesOverviewPage__noAccess"
               className="gap-2 py-16"
               data-testid="StatusCard__67e3bc">
-              <ShieldAlert className="h-10 w-10 text-muted-foreground/40 mb-2" data-testid="ShieldAlert__rolesOverview" />
+              <ShieldWarningIcon className="h-10 w-10 text-muted-foreground/40 mb-2" data-testid="ShieldAlert__rolesOverview" />
               <h3 className="text-lg font-medium text-foreground">{ui('rolesNoAccessTitle')}</h3>
               <p className="text-sm text-muted-foreground">{ui('rolesNoAccessMessage')}</p>
             </StatusCard>

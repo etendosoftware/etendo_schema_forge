@@ -48,19 +48,19 @@ vi.mock('../FmBoxes303.jsx', () => ({ default: () => null }));
 // ("Cannot create proxy with a non-object as target or handler"), most likely because some
 // property access along Vitest's/Vite's module-interop path (e.g. a well-known symbol or an
 // enumeration step) doesn't tolerate a trap that unconditionally returns a function for any
-// key. AeatSubmitFlow.jsx is mocked wholesale below, so its own lucide-react imports (Loader2,
+// key. AeatSubmitFlow.jsx is mocked wholesale below, so its own @phosphor-icons/react imports (Loader2,
 // TriangleAlert, OctagonAlert, CircleCheck, Download, Landmark) never execute in this file —
 // only FmModel303Page.jsx's own icon imports need stubbing here (Landmark included since
 // FmModel303Page.jsx also uses it for the "Go to Organization" button).
-vi.mock('lucide-react', () => ({
+vi.mock('@phosphor-icons/react', () => ({
   // ETP-5584 — the detail status chip shows DocumentStatusPill's Check icon for success tones.
-  Check: () => null,
-  Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null,
-  TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
-  Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
-  TrendingUp: () => null, TrendingDown: () => null, Clock: () => null,
-  ClipboardCheck: () => null, ReceiptText: () => null, Folder: () => null,
-  FileCheck: () => null, Landmark: () => null,
+  CheckIcon: () => null,
+  GearIcon: () => null, DownloadSimpleIcon: () => null, ArrowLeftIcon: () => null, FloppyDiskIcon: () => null, WarningOctagonIcon: () => null,
+  WarningIcon: () => null, CheckCircleIcon: () => null, ArrowsLeftRightIcon: () => null,
+  CalculatorIcon: () => null, CircleNotchIcon: () => null, DotsThreeVerticalIcon: () => null,
+  TrendUpIcon: () => null, TrendDownIcon: () => null, ClockIcon: () => null,
+  ClipboardTextIcon: () => null, ReceiptIcon: () => null, FolderIcon: () => null,
+  SealCheckIcon: () => null, BankIcon: () => null,
 }));
 
 // PresentModal mock: renders a button that, when clicked, reports the

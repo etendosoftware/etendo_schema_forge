@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { AlertCircle, Ban, CheckCircle2, FileText, Loader2 } from 'lucide-react';
+import { CheckCircleIcon, CircleNotchIcon, FileTextIcon, ProhibitIcon, WarningCircleIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { usePortalApiFetch } from '@/lib/portal/usePortalApiFetch.js';
@@ -196,7 +196,7 @@ export default function PortalDecisionPage({ resendDelayMs = CONFIRM_RESEND_DELA
       <Frame data-testid="Frame__be410c">
         <Card
           testId="portal-decision-applying"
-          icon={<Loader2
+          icon={<CircleNotchIcon
             className="h-8 w-8 animate-spin text-primary"
             data-testid="Loader2__be410c" />}
           title={ui('portalDecisionApplying')}
@@ -209,7 +209,7 @@ export default function PortalDecisionPage({ resendDelayMs = CONFIRM_RESEND_DELA
       <Frame data-testid="Frame__be410c">
         <Card
           testId="portal-decision-invalid"
-          icon={<Ban
+          icon={<ProhibitIcon
             className="h-8 w-8 text-muted-foreground"
             aria-hidden="true"
             data-testid="Ban__be410c" />}
@@ -224,7 +224,7 @@ export default function PortalDecisionPage({ resendDelayMs = CONFIRM_RESEND_DELA
       <Frame data-testid="Frame__be410c">
         <Card
           testId="portal-decision-failed"
-          icon={<AlertCircle
+          icon={<WarningCircleIcon
             className="h-8 w-8 text-destructive"
             aria-hidden="true"
             data-testid="AlertCircle__be410c" />}
@@ -249,11 +249,11 @@ export default function PortalDecisionPage({ resendDelayMs = CONFIRM_RESEND_DELA
         testId={appliedNow ? 'portal-decision-applied' : `portal-decision-${decision.state}`}
         tenantName={decision.tenantName}
         icon={copy.tone === 'success'
-          ? <CheckCircle2
+          ? <CheckCircleIcon
           className="h-8 w-8 text-[var(--status-success-fg)]"
           aria-hidden="true"
           data-testid="CheckCircle2__be410c" />
-          : <FileText
+          : <FileTextIcon
           className="h-8 w-8 text-muted-foreground"
           aria-hidden="true"
           data-testid="FileText__be410c" />}

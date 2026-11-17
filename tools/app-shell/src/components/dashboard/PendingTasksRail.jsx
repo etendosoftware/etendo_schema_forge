@@ -1,6 +1,16 @@
 import { useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, FileText, Truck, DollarSign, CreditCard, ShoppingBag, Box, Circle } from 'lucide-react';
+import {
+  CaretLeftIcon,
+  CaretRightIcon,
+  FileTextIcon,
+  TruckIcon,
+  CurrencyDollarIcon,
+  CreditCardIcon,
+  ShoppingBagIcon,
+  CubeIcon,
+  CircleIcon,
+} from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { resolveDashboardNavigation } from '@/lib/dashboardNavigation.js';
 import { DASHBOARD_KPI_IDS, trackDashboardKpi } from '@/lib/dashboardKpiTelemetry.js';
@@ -9,20 +19,20 @@ import { DASHBOARD_KPI_IDS, trackDashboardKpi } from '@/lib/dashboardKpiTelemetr
 // the payments card turns red when overdue (ETP-5017) while staying in the `payments` telemetry
 // bucket, so reusing `category` for color would silently corrupt the tracked type.
 const CATEGORY_MAP = {
-  overdueInvoices:               { category: 'sales',       tone: 'danger',  icon: FileText,    subjectKey: 'pendingSubjectSalesInvoices', stateKey: 'pendingStateOverdue'         },
-  overdueInvoices_plural:        { category: 'sales',       tone: 'danger',  icon: FileText,    subjectKey: 'pendingSubjectSalesInvoices', stateKey: 'pendingStateOverdue'         },
-  pendingSalesDeliveries:        { category: 'sales',       tone: 'danger',  icon: Truck,       subjectKey: 'pendingSubjectShipments',     stateKey: 'pendingStatePending'         },
-  pendingSalesDeliveries_plural: { category: 'sales',       tone: 'danger',  icon: Truck,       subjectKey: 'pendingSubjectShipments',     stateKey: 'pendingStatePending'         },
-  collectionsDueToday:           { category: 'collections', tone: 'warning', icon: DollarSign,  subjectKey: 'pendingSubjectCollections',   stateKey: 'pendingStateDueToday'        },
-  collectionsDueToday_plural:    { category: 'collections', tone: 'warning', icon: DollarSign,  subjectKey: 'pendingSubjectCollections',   stateKey: 'pendingStateDueToday'        },
-  paymentsDueToday:              { category: 'payments',    tone: 'warning', icon: CreditCard,  subjectKey: 'pendingSubjectPayments',      stateKey: 'pendingStateDueToday'        },
-  paymentsDueToday_plural:       { category: 'payments',    tone: 'warning', icon: CreditCard,  subjectKey: 'pendingSubjectPayments',      stateKey: 'pendingStateDueToday'        },
-  paymentsOverdue:               { category: 'payments',    tone: 'danger',  icon: CreditCard,  subjectKey: 'pendingSubjectPayments',      stateKey: 'pendingStateOverduePayments' },
-  paymentsOverdue_plural:        { category: 'payments',    tone: 'danger',  icon: CreditCard,  subjectKey: 'pendingSubjectPayments',      stateKey: 'pendingStateOverduePayments' },
-  pendingReceptions:             { category: 'purchases',   tone: 'info',    icon: ShoppingBag, subjectKey: 'pendingSubjectReceptions',    stateKey: 'pendingStatePending'         },
-  pendingReceptions_plural:      { category: 'purchases',   tone: 'info',    icon: ShoppingBag, subjectKey: 'pendingSubjectReceptions',    stateKey: 'pendingStatePending'         },
-  lowStockAlert:                 { category: 'stock',       tone: 'warning', icon: Box,         subjectKey: 'pendingSubjectStock',         stateKey: 'pendingStateLowStock'        },
-  lowStockAlerts:                { category: 'stock',       tone: 'warning', icon: Box,         subjectKey: 'pendingSubjectStock',         stateKey: 'pendingStateLowStock'        },
+  overdueInvoices:               { category: 'sales',       tone: 'danger',  icon: FileTextIcon,    subjectKey: 'pendingSubjectSalesInvoices', stateKey: 'pendingStateOverdue'         },
+  overdueInvoices_plural:        { category: 'sales',       tone: 'danger',  icon: FileTextIcon,    subjectKey: 'pendingSubjectSalesInvoices', stateKey: 'pendingStateOverdue'         },
+  pendingSalesDeliveries:        { category: 'sales',       tone: 'danger',  icon: TruckIcon,       subjectKey: 'pendingSubjectShipments',     stateKey: 'pendingStatePending'         },
+  pendingSalesDeliveries_plural: { category: 'sales',       tone: 'danger',  icon: TruckIcon,       subjectKey: 'pendingSubjectShipments',     stateKey: 'pendingStatePending'         },
+  collectionsDueToday:           { category: 'collections', tone: 'warning', icon: CurrencyDollarIcon,  subjectKey: 'pendingSubjectCollections',   stateKey: 'pendingStateDueToday'        },
+  collectionsDueToday_plural:    { category: 'collections', tone: 'warning', icon: CurrencyDollarIcon,  subjectKey: 'pendingSubjectCollections',   stateKey: 'pendingStateDueToday'        },
+  paymentsDueToday:              { category: 'payments',    tone: 'warning', icon: CreditCardIcon,  subjectKey: 'pendingSubjectPayments',      stateKey: 'pendingStateDueToday'        },
+  paymentsDueToday_plural:       { category: 'payments',    tone: 'warning', icon: CreditCardIcon,  subjectKey: 'pendingSubjectPayments',      stateKey: 'pendingStateDueToday'        },
+  paymentsOverdue:               { category: 'payments',    tone: 'danger',  icon: CreditCardIcon,  subjectKey: 'pendingSubjectPayments',      stateKey: 'pendingStateOverduePayments' },
+  paymentsOverdue_plural:        { category: 'payments',    tone: 'danger',  icon: CreditCardIcon,  subjectKey: 'pendingSubjectPayments',      stateKey: 'pendingStateOverduePayments' },
+  pendingReceptions:             { category: 'purchases',   tone: 'info',    icon: ShoppingBagIcon, subjectKey: 'pendingSubjectReceptions',    stateKey: 'pendingStatePending'         },
+  pendingReceptions_plural:      { category: 'purchases',   tone: 'info',    icon: ShoppingBagIcon, subjectKey: 'pendingSubjectReceptions',    stateKey: 'pendingStatePending'         },
+  lowStockAlert:                 { category: 'stock',       tone: 'warning', icon: CubeIcon,         subjectKey: 'pendingSubjectStock',         stateKey: 'pendingStateLowStock'        },
+  lowStockAlerts:                { category: 'stock',       tone: 'warning', icon: CubeIcon,         subjectKey: 'pendingSubjectStock',         stateKey: 'pendingStateLowStock'        },
 };
 
 const STATUS_BADGE_STYLES = {
@@ -37,7 +47,7 @@ function resolveTaskMeta(task) {
   const meta = key && CATEGORY_MAP[key];
   if (meta) return meta;
   console.warn('[PendingTasksRail] Unknown taskKey:', key, task);
-  return { category: 'other', tone: 'muted', icon: Circle, subjectKey: null, stateKey: null };
+  return { category: 'other', tone: 'muted', icon: CircleIcon, subjectKey: null, stateKey: null };
 }
 
 export function PendingTasksRail({ tasks = [] }) {
@@ -65,7 +75,7 @@ export function PendingTasksRail({ tasks = [] }) {
               onClick={() => scroll(-1)}
               className="h-8 w-8 rounded-full border bg-card flex items-center justify-center hover:bg-muted transition-colors"
             >
-              <ChevronLeft
+              <CaretLeftIcon
                 className="h-3.5 w-3.5"
                 style={{ color: 'hsl(var(--muted-foreground))' }}
                 data-testid="ChevronLeft__7e1000" />
@@ -75,7 +85,7 @@ export function PendingTasksRail({ tasks = [] }) {
               onClick={() => scroll(1)}
               className="h-8 w-8 rounded-full border bg-card flex items-center justify-center hover:bg-muted transition-colors"
             >
-              <ChevronRight
+              <CaretRightIcon
                 className="h-3.5 w-3.5"
                 style={{ color: 'hsl(var(--muted-foreground))' }}
                 data-testid="ChevronRight__7e1000" />

@@ -237,7 +237,7 @@ For QA and support scenarios, the authenticated user context switcher exposes a 
 3. **Tree shaking**: Vite/Rollup eliminates unused exports from ES modules
 4. **TailwindCSS purging**: Only used utility classes are included in production CSS
 5. **Dynamic imports for non-critical routes**: `OnboardingPage` and `SmartScanPage` use `lazy()`
-6. **Image optimization**: Icons via lucide-react (SVG, tree-shakeable); logos are small PNGs
+6. **Image optimization**: Icons via @phosphor-icons/react (SVG, tree-shakeable); logos are small PNGs
 7. **Font loading**: WOFF2 format (smallest); included in precache glob pattern
 
 ## Critical Failure Points

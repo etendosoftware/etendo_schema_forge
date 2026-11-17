@@ -1,6 +1,12 @@
 import { useState, useRef } from 'react';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
-import { ArrowRight, ArrowLeft, Check, Pencil, AlertTriangle } from 'lucide-react';
+import {
+  ArrowRightIcon,
+  ArrowLeftIcon,
+  CheckIcon,
+  PencilSimpleIcon,
+  WarningIcon,
+} from '@phosphor-icons/react';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
 import FiscalStepItem from './FiscalStepItem.jsx';
 import OrgDropdown from './FiscalOrgDropdown.jsx';
@@ -422,7 +428,7 @@ function ConfirmScreen({ resolvedSystem, selectedTerritory, alsoNational, volume
             disabled={saving}
             className="flex items-center gap-1.5"
             data-testid="fiscal-onboarding-confirm-back">
-            <ArrowLeft size={15} data-testid="ArrowLeft__e9ef3f" /> {ui('fiscal.onboarding.back').replace('←', '').trim()}
+            <ArrowLeftIcon size={15} data-testid="ArrowLeft__e9ef3f" /> {ui('fiscal.onboarding.back').replace('←', '').trim()}
           </Button>
           <p className="text-xs flex-1" style={{ color: 'hsl(var(--muted-foreground))' }}>{ui('fiscal.skip.hint')}</p>
           <button type="button" onClick={() => goTo('skipped')} className="text-sm" style={{ color: 'hsl(var(--foreground))' }}>
@@ -433,7 +439,7 @@ function ConfirmScreen({ resolvedSystem, selectedTerritory, alsoNational, volume
             disabled={saving || locked}
             className="flex items-center gap-1.5"
             data-testid="OnboardingWizard__confirmActivateButton">
-            <Check size={15} data-testid="Check__e9ef3f" />
+            <CheckIcon size={15} data-testid="Check__e9ef3f" />
             {saving ? ui('fiscal.onboarding.confirm.creating') : ui('fiscal.onboarding.confirm.btn')}
           </Button>
         </>
@@ -565,9 +571,8 @@ function BulletOptionCard({ label, bullets, selected, onPick, 'data-testid': tes
       <ul className="flex flex-col gap-1.5">
         {bullets.map((b) => (
           <li key={b} className="flex gap-2 text-sm leading-5" style={{ color: 'hsl(var(--muted-foreground))' }}>
-            <Check
+            <CheckIcon
               size={14}
-              strokeWidth={2.5}
               className="flex-shrink-0 mt-0.5 text-status-success-foreground"
               data-testid="Check__e9ef3f" />
             <span>{b}</span>
@@ -598,7 +603,7 @@ function InfoCard({ label, value, onEdit }) {
           onClick={onEdit}
           className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
         >
-          <Pencil size={13} strokeWidth={1.75} data-testid="Pencil__e9ef3f" />
+          <PencilSimpleIcon size={13} data-testid="Pencil__e9ef3f" />
         </button>
       )}
     </div>
@@ -664,7 +669,7 @@ function ManualScreen({ selectedTerritory, manualSystem, orgName, selectedOrg, o
             onClick={() => goTo('territory')}
             className="flex items-center gap-1.5"
             data-testid="Button__e9ef3f">
-            <ArrowLeft size={15} data-testid="ArrowLeft__e9ef3f" />{ui('fiscal.onboarding.back').replace('←', '').trim()}
+            <ArrowLeftIcon size={15} data-testid="ArrowLeft__e9ef3f" />{ui('fiscal.onboarding.back').replace('←', '').trim()}
           </Button>
           <span className="flex-1" />
           <Button
@@ -672,7 +677,7 @@ function ManualScreen({ selectedTerritory, manualSystem, orgName, selectedOrg, o
             disabled={!selectedTerritory || !manualSystem}
             className="flex items-center gap-1.5"
             data-testid="Button__e9ef3f">
-            {ui('fiscal.onboarding.continue').replace('›', '').trim()} <ArrowRight size={15} data-testid="ArrowRight__e9ef3f" />
+            {ui('fiscal.onboarding.continue').replace('›', '').trim()} <ArrowRightIcon size={15} data-testid="ArrowRight__e9ef3f" />
           </Button>
         </>
       }
@@ -775,7 +780,7 @@ function SubquestionScreen({ t, orgName, selectedOrg, orgList, onSelectOrg, onGo
             onClick={() => goTo('territory')}
             className="flex items-center gap-1.5"
             data-testid="Button__e9ef3f">
-            <ArrowLeft size={15} data-testid="ArrowLeft__e9ef3f" /> {ui('fiscal.onboarding.back').replace('←', '').trim()}
+            <ArrowLeftIcon size={15} data-testid="ArrowLeft__e9ef3f" /> {ui('fiscal.onboarding.back').replace('←', '').trim()}
           </Button>
           <p className="text-xs flex-1" style={{ color: 'hsl(var(--muted-foreground))' }}>{ui('fiscal.skip.hint')}</p>
           <button type="button" onClick={() => goTo('skipped')} className="text-sm" style={{ color: 'hsl(var(--foreground))' }}>
@@ -786,7 +791,7 @@ function SubquestionScreen({ t, orgName, selectedOrg, orgList, onSelectOrg, onGo
             disabled={!canContinueSubQ}
             className="flex items-center gap-1.5"
             data-testid="Button__e9ef3f">
-            {ui('fiscal.onboarding.continue').replace('›', '').trim()} <ArrowRight size={15} data-testid="ArrowRight__e9ef3f" />
+            {ui('fiscal.onboarding.continue').replace('›', '').trim()} <ArrowRightIcon size={15} data-testid="ArrowRight__e9ef3f" />
           </Button>
         </>
       }
@@ -1197,7 +1202,7 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome, for
         <div className="px-5 pt-4 flex-shrink-0">
           <InfoBanner
             tone="warning"
-            icon={AlertTriangle}
+            icon={WarningIcon}
             data-testid="OnboardingWizard__testModeBanner">
             {ui('fiscal.testModeLock.warning')}
           </InfoBanner>
@@ -1207,7 +1212,7 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome, for
         <div className="px-5 pt-4 flex-shrink-0">
           <InfoBanner
             tone="danger"
-            icon={AlertTriangle}
+            icon={WarningIcon}
             data-testid="OnboardingWizard__catalogErrorBanner">
             {catalogForbidden ? ui('fiscal.err.noPermission') : ui('fiscal.catalog.err.load', { error: catalogError })}
           </InfoBanner>

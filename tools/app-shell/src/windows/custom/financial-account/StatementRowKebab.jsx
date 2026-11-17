@@ -1,4 +1,9 @@
-import { MoreVertical, PlayCircle, RotateCcw, Trash2 } from 'lucide-react';
+import {
+  DotsThreeVerticalIcon,
+  PlayCircleIcon,
+  ArrowCounterClockwiseIcon,
+  TrashIcon,
+} from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { usePsd2ImportSettingsFlag } from '@/hooks/usePsd2ImportSettingsFlag.js';
 import { isDraftStatement } from './statementStatus.js';
@@ -107,7 +112,7 @@ export function StatementRowKebab({
             onClick={(e) => e.stopPropagation()}
             className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-[hsl(var(--border-subtle))]"
           >
-            <MoreVertical className="h-5 w-5" data-testid="MoreVertical__b97a5b" />
+            <DotsThreeVerticalIcon className="h-5 w-5" data-testid="MoreVertical__b97a5b" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
@@ -116,7 +121,7 @@ export function StatementRowKebab({
           onClick={(e) => e.stopPropagation()}
           data-testid="DropdownMenuContent__b97a5b">
           {gatedItem({
-            icon: PlayCircle,
+            icon: PlayCircleIcon,
             label: ui('financeAccountStatementsRowProcess'),
             onClick: onProcess,
             testid: 'statement-row-process',
@@ -124,7 +129,7 @@ export function StatementRowKebab({
             tip: lockedTip,
           })}
           {gatedItem({
-            icon: RotateCcw,
+            icon: ArrowCounterClockwiseIcon,
             label: ui('financeAccountStatementsRowReactivate'),
             onClick: onReactivate,
             testid: 'statement-row-reactivate',
@@ -143,7 +148,7 @@ export function StatementRowKebab({
             data-testid="statement-row-delete"
             onClick={() => onDelete?.(s)}
           >
-            <Trash2 className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="Trash2__b97a5b" />
+            <TrashIcon className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="Trash2__b97a5b" />
             <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
               {ui('financeAccountStatementsRowDelete')}
             </span>

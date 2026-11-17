@@ -6,16 +6,16 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
-vi.mock('lucide-react', () => ({
-  Package: (p) => <span {...p} data-testid="icon-package" />,
-  Warehouse: (p) => <span {...p} data-testid="icon-warehouse" />,
+vi.mock('@phosphor-icons/react', () => ({
+  PackageIcon: (p) => <span {...p} data-testid="icon-package" />,
+  WarehouseIcon: (p) => <span {...p} data-testid="icon-warehouse" />,
 }));
 
 import { render, screen, fireEvent } from '@testing-library/react';
 import ProductSidebarCollapsed from '../ProductSidebarCollapsed.jsx';
 
 describe('ProductSidebarCollapsed', () => {
-  it('is a named region carrying the collapsed marker, with real buttons and Lucide icons', () => {
+  it('is a named region carrying the collapsed marker, with real buttons and Phosphor icons', () => {
     render(<ProductSidebarCollapsed onSelectTab={vi.fn()} />);
     const strip = screen.getByTestId('ProductSidebarCollapsed');
     expect(strip.getAttribute('aria-label')).toBe('productSidePanel');

@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { XCircle } from 'lucide-react';
+import { XCircleIcon } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { useUI, useLocale, useMenuLabel } from '@/i18n';
 import { useNavigate } from 'react-router-dom';
@@ -59,7 +59,7 @@ const customMenuActions = ({ status }) => [
   {
     key: 'reject',
     labelKey: 'rejectQuotation',
-    icon: XCircle,
+    icon: XCircleIcon,
     // The XCircle icon already carries the destructive cue; the Figma
     // (Screenshot 2026-04-30 11-38-53) renders both icon and label in the
     // neutral dark-gray (hsl(var(--foreground))), not the legacy red text.

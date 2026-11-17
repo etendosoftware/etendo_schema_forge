@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
-  CircleAlert, ChevronDown, ChevronUp, Package, PackagePlus, Plus, Search, Trash2,
-} from 'lucide-react';
+  WarningCircleIcon,
+  CaretDownIcon,
+  CaretUpIcon,
+  PackageIcon,
+  PlusIcon,
+  MagnifyingGlassIcon,
+  TrashIcon,
+} from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -273,7 +279,7 @@ function ProductPanel({ line, position, lineIndex, readOnly, state, missing, api
           </div>
         ) : (
           <div className="relative">
-            <Search
+            <MagnifyingGlassIcon
               className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
               aria-hidden="true"
               data-testid={`Search__review-line-${position}`} />
@@ -299,7 +305,7 @@ function ChipBody({ line, state, position }) {
     const matchedKey = PRODUCT_MATCHED_BY_KEYS[product.matchedBy];
     return (
       <>
-        <Package className="h-3.5 w-3.5 flex-none text-muted-foreground" aria-hidden="true" data-testid={`Package__review-line-${position}`} />
+        <PackageIcon className="h-3.5 w-3.5 flex-none text-muted-foreground" aria-hidden="true" data-testid={`Package__review-line-${position}`} />
         <span className="min-w-0 truncate text-xs font-medium" data-testid={`invoice-inbox-review-line-${position}-product-name`}>{details.name}</span>
         {details.searchKey && <span className="whitespace-nowrap font-mono text-[11px] text-muted-foreground">{details.searchKey}</span>}
         {matchedKey && <span className="whitespace-nowrap text-[11px] text-muted-foreground">· {ui(matchedKey)}</span>}
@@ -327,7 +333,7 @@ function ChipBody({ line, state, position }) {
         <ReviewTag
           tone="info"
           label={ui('invoiceInboxReviewProductNewTag')}
-          icon={PackagePlus}
+          icon={PackageIcon}
           testId={`invoice-inbox-review-line-${position}-product-tag`}
           data-testid="ReviewTag__21702d" />
         <span className="min-w-0 truncate text-xs text-muted-foreground">
@@ -338,7 +344,7 @@ function ChipBody({ line, state, position }) {
   }
   return (
     <>
-      <CircleAlert className="h-3.5 w-3.5 flex-none text-destructive" aria-hidden="true" data-testid={`CircleAlert__review-line-${position}`} />
+      <WarningCircleIcon className="h-3.5 w-3.5 flex-none text-destructive" aria-hidden="true" data-testid={`CircleAlert__review-line-${position}`} />
       <span className="text-xs font-medium text-destructive">{ui('invoiceInboxReviewProductNone')}</span>
     </>
   );
@@ -346,7 +352,7 @@ function ChipBody({ line, state, position }) {
 
 /** The product chip as a button that toggles its panel (chevron at the right). */
 function ProductChip({ line, position, state, open, onToggle }) {
-  const Chevron = open ? ChevronUp : ChevronDown;
+  const Chevron = open ? CaretUpIcon : CaretDownIcon;
   return (
     <button
       type="button"
@@ -377,7 +383,7 @@ function DeleteLineButton({ position, onDelete }) {
       title={ui('deleteRowTooltip')}
       className="flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--destructive))] opacity-0 transition-all hover:bg-[var(--status-destructive-bg)] focus-visible:opacity-100 group-hover/line:opacity-100"
       data-testid={`invoice-inbox-review-line-delete-${position}`}>
-      <Trash2 className="h-4 w-4" aria-hidden="true" data-testid={`Trash2__review-line-${position}`} />
+      <TrashIcon className="h-4 w-4" aria-hidden="true" data-testid={`Trash2__review-line-${position}`} />
     </button>
   );
 }
@@ -794,7 +800,7 @@ export default function InvoiceInboxReviewLines({
               className="mt-1.5"
               onClick={addLine}
               data-testid="invoice-inbox-review-add-line">
-              <Plus className="h-4 w-4" aria-hidden="true" data-testid="Plus__review-add-line" />
+              <PlusIcon className="h-4 w-4" aria-hidden="true" data-testid="Plus__review-add-line" />
               {ui('invoiceInboxReviewAddLine')}
             </Button>
           )}

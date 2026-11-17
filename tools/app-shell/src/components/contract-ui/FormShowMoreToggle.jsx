@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronDown } from 'lucide-react';
+import { CaretDownIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 
 /**
@@ -20,7 +20,7 @@ export function FormShowMoreToggle({ expanded, onToggle, locked = false }) {
         className={`inline-flex items-center gap-1 rounded-md${locked ? ' cursor-not-allowed opacity-60' : ''} text-sm font-medium text-[hsl(var(--foreground))] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary`}
       >
         {ui(expanded ? 'showLessFormData' : 'showMoreFormData')}
-        <ChevronDown
+        <CaretDownIcon
           className={`h-4 w-4 transition-transform${expanded ? ' rotate-180' : ''}`}
           aria-hidden="true"
           data-testid="ChevronDown__form-show-more" />

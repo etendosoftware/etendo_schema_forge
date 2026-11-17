@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, MailCheck, X } from 'lucide-react';
+import { CheckIcon, EnvelopeSimpleOpenIcon, XIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -129,7 +129,7 @@ function DecisionSentNotice({ email, bar }) {
       className={cn('flex items-start gap-2 text-sm', bar ? 'rounded-xl border border-border bg-card p-4' : '')}
       data-testid="portal-decision-sent"
     >
-      <MailCheck
+      <EnvelopeSimpleOpenIcon
         className="mt-0.5 h-4 w-4 shrink-0 text-primary"
         aria-hidden="true"
         data-testid="MailCheck__a48dad" />
@@ -162,7 +162,7 @@ function DecisionButtons({ bar, acceptShown, busy, onReject, onAccept }) {
         disabled={busy}
         data-testid="portal-decision-reject"
       >
-        <X className="mr-1.5 h-4 w-4" aria-hidden="true" data-testid="X__a48dad" />{ui('portalDecisionReject')}
+        <XIcon className="mr-1.5 h-4 w-4" aria-hidden="true" data-testid="X__a48dad" />{ui('portalDecisionReject')}
       </Button>
       {acceptShown ? (
         <Button
@@ -171,7 +171,7 @@ function DecisionButtons({ bar, acceptShown, busy, onReject, onAccept }) {
           disabled={busy}
           data-testid="portal-decision-accept"
         >
-          <Check className="mr-1.5 h-4 w-4" aria-hidden="true" data-testid="Check__a48dad" />
+          <CheckIcon className="mr-1.5 h-4 w-4" aria-hidden="true" data-testid="Check__a48dad" />
           {ui(bar ? 'portalDecisionAcceptQuotation' : 'portalDecisionAccept')}
         </Button>
       ) : null}

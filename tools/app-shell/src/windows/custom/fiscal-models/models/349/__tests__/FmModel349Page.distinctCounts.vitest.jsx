@@ -80,15 +80,15 @@ vi.mock('../../../../../../components/contract-ui/DocumentPreview.jsx', () => ({
   DocumentPreview: () => null,
 }));
 vi.mock('../../../fiscal-models.css', () => ({}));
-vi.mock('lucide-react', () => ({
-  Download: () => null, FileDown: () => null, CircleCheck: () => null, Search: () => null,
-  RefreshCw: () => null, Globe: () => null, Eye: () => null, MoreVertical: () => null,
-  ChevronDown: () => null, ChevronRight: () => null, Users: () => null, FileEdit: () => null,
-  Clock: () => null, TriangleAlert: () => null, Folder: () => null, ReceiptText: () => null,
-  Calculator: () => null, PenLine: () => null, ShieldAlert: () => null, Info: () => null,
-  OctagonAlert: () => null, ArrowLeft: () => null, Save: () => null, FileText: () => null,
-  Star: () => null, ArrowUpRight: () => null, Loader2: () => null, X: () => null, Check: () => null,
-  FileCheck: () => null,
+vi.mock('@phosphor-icons/react', () => ({
+  DownloadSimpleIcon: () => null, CheckCircleIcon: () => null, MagnifyingGlassIcon: () => null,
+  ArrowsClockwiseIcon: () => null, GlobeIcon: () => null, EyeIcon: () => null, DotsThreeVerticalIcon: () => null,
+  CaretDownIcon: () => null, CaretRightIcon: () => null, UsersIcon: () => null,
+  ClockIcon: () => null, WarningIcon: () => null, FolderIcon: () => null, ReceiptIcon: () => null,
+  CalculatorIcon: () => null, PencilSimpleIcon: () => null, ShieldWarningIcon: () => null, InfoIcon: () => null,
+  WarningOctagonIcon: () => null, ArrowLeftIcon: () => null, FloppyDiskIcon: () => null, FileTextIcon: () => null,
+  StarIcon: () => null, ArrowUpRightIcon: () => null, CircleNotchIcon: () => null, XIcon: () => null, CheckIcon: () => null,
+  SealCheckIcon: () => null,
 }));
 
 import FmModel349Page from '../FmModel349Page.jsx';

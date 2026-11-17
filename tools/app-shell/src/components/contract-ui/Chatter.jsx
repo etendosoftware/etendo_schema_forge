@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { useLocaleSwitch } from '@/i18n/LocaleProvider';
-import { MessageSquare, Send, ChevronDown } from 'lucide-react';
+import { ChatIcon, PaperPlaneRightIcon, CaretDownIcon } from '@phosphor-icons/react';
 
 /**
  * Format a timestamp into a human-readable relative string.
@@ -154,7 +154,7 @@ export function Chatter({
         data-testid="CardHeader__a26193">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <MessageSquare
+            <ChatIcon
               className="h-4 w-4 text-muted-foreground"
               data-testid="MessageSquare__a26193" />
             <span className="text-sm font-medium">Notes &amp; Activity</span>
@@ -167,7 +167,7 @@ export function Chatter({
               </Badge>
             )}
           </div>
-          <ChevronDown
+          <CaretDownIcon
             className={cn(
               'h-4 w-4 text-muted-foreground transition-transform duration-200',
               !isCollapsed && 'rotate-180'
@@ -212,7 +212,7 @@ export function Chatter({
               disabled={!inputValue.trim()}
               aria-label="Send note"
               data-testid="Button__a26193">
-              <Send className="h-4 w-4" data-testid="Send__a26193" />
+              <PaperPlaneRightIcon className="h-4 w-4" data-testid="Send__a26193" />
             </Button>
           </form>
         </CardContent>

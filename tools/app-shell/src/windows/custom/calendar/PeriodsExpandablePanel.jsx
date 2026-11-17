@@ -2,7 +2,7 @@ import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
 import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
-import { DoorOpen, Lock } from 'lucide-react';
+import { DoorOpenIcon, LockIcon } from '@phosphor-icons/react';
 import { useUI, useLabel, useLocaleSwitch } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { formatCalendarMonthYear, parseCalendarDate } from '@/lib/dateOnly.js';
@@ -339,7 +339,7 @@ export default function PeriodsExpandablePanel({ parentId, apiBaseUrl, readOnly 
             disabled={running}
             className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors hover:bg-[hsl(var(--floating-toolbar-fg)/0.1)] disabled:opacity-50"
           >
-            <DoorOpen className="h-3.5 w-3.5" data-testid="DoorOpen__periodsBulkBar" />
+            <DoorOpenIcon className="h-3.5 w-3.5" data-testid="DoorOpen__periodsBulkBar" />
             {ui('periodsBulkOpen')}
           </button>
           <button
@@ -349,7 +349,7 @@ export default function PeriodsExpandablePanel({ parentId, apiBaseUrl, readOnly 
             disabled={running}
             className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors hover:bg-[hsl(var(--floating-toolbar-fg)/0.1)] disabled:opacity-50"
           >
-            <Lock className="h-3.5 w-3.5" data-testid="Lock__periodsBulkBar" />
+            <LockIcon className="h-3.5 w-3.5" data-testid="Lock__periodsBulkBar" />
             {ui('periodsBulkClose')}
           </button>
         </span>
