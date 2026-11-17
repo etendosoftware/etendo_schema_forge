@@ -1327,14 +1327,14 @@ Built in both repos following C.0–C.11.
    first-option fallback) is closed in `SalesQuotationHeaderHandler.afterHandle` (DEFAULTS drop
    `rejectReason`). Needs `make regen ONLY=sales-quotation PUSH_TO_NEO=1` + `export.database` (the NEO
    field is still read-only until pushed).
-4. **Quotation PDF "Motivo" (user decision 2026-11-16, Jira comment 149518 point 5).** A rejected
-   quotation's printable always shows one observation line "Motivo: <reason>": the tenant's reject
-   reason when the seller has set one, otherwise the customer's portal reason (and the "Otros" text),
-   read from the portal's note line; that line is left out of the observations so "Motivo" is not
-   printed twice. Built in `buildQuotationData` and `QuotationPrintableData` (every producer).
-   **The internal (tenant) reason is visible to the customer** — this is the PDF the customer
-   downloads from the portal and receives by email — and the user accepted this explicitly.
-   **Cache:** editing the reason moves the quotation's `updated`, so the stored PDF goes stale; the
+4. **Quotation PDF "Motivo" (Jira comment 149518 point 5, revised by QA).** A rejected quotation's
+   printable shows one observation line "Motivo: <reason>" with the customer's own portal reason
+   only (and the "Otros" text), read from the portal's note line; that line is left out of the
+   observations so "Motivo" is not printed twice. Built in `buildQuotationData` and
+   `QuotationPrintableData` (every producer). **The tenant's reject reason is never printed**: it
+   can be internal, and this is the PDF the customer downloads from the portal and receives by
+   email. A quotation rejected without a portal reason (e.g. in the app) prints no "Motivo" line.
+   **Cache:** editing the quotation moves the quotation's `updated`, so the stored PDF goes stale; the
    app's preview re-renders it, and the portal's `/pdf` now re-renders a stored PDF older than the
    document before serving it (D29).
 5. **One step for the 2FA.** The confirmation email's button names the decision ("Confirmar rechazo" /
