@@ -4,6 +4,7 @@ import { AlertCircle, Ban, FileText, Loader2, MailCheck } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { usePortalApiFetch } from '@/lib/portal/usePortalApiFetch.js';
+import { usePortalFavicon } from './portal/usePortalFavicon.js';
 import {
   PORTAL_ERROR,
   PORTAL_LINK_STATE,
@@ -275,6 +276,8 @@ export default function PortalPage() {
   const ui = useUI();
   // Desktop opens a document as a drawer over its list; mobile keeps the full-page detail.
   const isMobile = usePortalIsMobile();
+  // The tab icon: index.html's relative favicon does not resolve under /portal/<token>.
+  usePortalFavicon();
   // `/sws/portal/*` is its own bounded context, so this is NOT the router's `apiBaseUrl`
   // (which already points at `/sws/neo`). Memoized because `apiFetch` is memoized on it.
   // Outside the app's session scope: see `usePortalApiFetch` for why (ETP-6209).

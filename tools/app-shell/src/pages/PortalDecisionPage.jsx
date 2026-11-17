@@ -7,6 +7,7 @@ import {
 import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { usePortalApiFetch } from '@/lib/portal/usePortalApiFetch.js';
+import { usePortalFavicon } from './portal/usePortalFavicon.js';
 import {
   PORTAL_DECISION_STATE, PORTAL_ERROR, confirmPortalDecision, fetchPortalDecision,
   resolvePortalBaseUrl,
@@ -180,6 +181,8 @@ function DecisionSummary({ decision, notified }) {
 export default function PortalDecisionPage({ resendDelayMs = CONFIRM_RESEND_DELAY_MS } = {}) {
   const { token = '' } = useParams();
   const ui = useUI();
+  // The tab icon: index.html's relative favicon does not resolve under /portal/decision/….
+  usePortalFavicon();
   const baseUrl = useMemo(() => resolvePortalBaseUrl(), []);
   const apiFetch = usePortalApiFetch(baseUrl);
   const [view, setView] = useState(VIEW.applying);
