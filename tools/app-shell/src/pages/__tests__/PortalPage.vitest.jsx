@@ -571,9 +571,11 @@ describe('PortalPage — language', () => {
     renderPortal();
     await shellReady();
 
-    // The sidebar's trigger (the first) names the current language; Spanish when none is set.
+    // The rail has no language switch (as in the Figma); the mobile top bar's compact trigger
+    // shows the current language's flag — Spanish when none is set.
+    expect(within(screen.getByTestId('portal-sidebar')).queryByTestId('portal-language-switch')).not.toBeInTheDocument();
     const trigger = screen.getAllByTestId('portal-language-switch')[0];
-    expect(trigger).toHaveTextContent('Español');
+    expect(trigger).toHaveTextContent('🇪🇸');
     // The menu is closed until its trigger is clicked.
     expect(screen.queryByTestId('portal-language-en')).not.toBeInTheDocument();
     await user.click(trigger);

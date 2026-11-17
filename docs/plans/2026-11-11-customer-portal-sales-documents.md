@@ -986,8 +986,19 @@ arrives, so every shared piece takes the new look as an opt-in (`PortalSection v
 - **Pending with the PO (Jira comment 149666):** "Empieza gratis" goes to https://etendo.ai for now
   (`ETENDO_AI_URL` in `PortalShell.jsx`); no microphone in the search; no "Albaranes de devolución"
   in the rail (not a portal document kind); the "Ingresos" / "Gastos" legend is not drawn — the
-  single invoiced series keeps its label. Not built either: "Ayuda y soporte" (the portal has no
-  support channel to point to) and the top-bar buttons the design hides.
+  single invoiced series keeps its label. Not built either: the top-bar buttons the design hides.
+- **Pixel pass against the Figma (2026-11-17, user: "tal cual el figma").** Compared side by side
+  with the reference captures at 1440×703 in both rail states. Icons are the design's Phosphor ones
+  (`@phosphor-icons/react`, already a dependency). The rail footer is a rule, then "Ayuda y soporte"
+  (https://help.etendo.ai, provisional, new tab) and the customer, each with a chevron; **no
+  language switch in the rail** (user decision; the language resolves as before and the mobile top
+  bars keep theirs). The company box shows the tenant logo, its name and a decorative chevron.
+  Badges on the main screen use the Figma's hex colours (`PortalTag palette="figma"`), not the app
+  palette: a quotation awaiting an answer is blue, an invoice to pay yellow. The status **names**
+  stay the app's ("Bajo evaluación", "Completado", "Vencidas") until the PO decides (they conflict
+  with the "statuses exactly as the app" criterion). "Requiere tu atención" is as wide as its four
+  ~204px tiles and "Documentos recientes" ~520px, as the reference measures in both states; chart
+  months are three capitalised letters ("Sep", not "sept"), ticks "1,5K", sparse dotted gridlines.
 
 ---
 

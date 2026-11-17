@@ -42,13 +42,38 @@ const TAG_TONES = Object.freeze({
   neutral: 'bg-[var(--status-neutral-bg)] text-[var(--status-neutral-fg)] border-[var(--status-neutral-border)]',
 });
 
-/** The design's badge. */
-export function PortalTag({ tone = 'neutral', children, className, testId, ...rest }) {
+/**
+ * The main screen's badge colours, as the designer's Figma gives them (spec of 2026-11-17; the
+ * user asked for the main screen to match the Figma exactly, so these are its hex values rather
+ * than the app's `--status-*` palette). Light theme only, like the spec. Used through
+ * `palette="figma"`; every other portal view keeps {@link TAG_TONES}.
+ */
+const FIGMA_TAG_TONES = Object.freeze({
+  info: 'bg-[#EBEFFF] text-[#2B48BC] border-[#B0BEFF]',
+  success: 'bg-[#EEFBF4] text-[#17663A] border-[#B2EECC]',
+  warning: 'bg-[#FFF9EB] text-[#8A6100] border-[#FFDA85]',
+  caution: 'bg-[#FFF9EB] text-[#8A6100] border-[#FFDA85]',
+  destructive: 'bg-[#FEF0F4] text-[#D50B3E] border-[#FBB1C4]',
+  neutral: 'bg-[#F3F5F9] text-[#40465C] border-[#C7CBD3]',
+});
+
+/**
+ * Where the Figma colours a status differently from the app's tone (the label stays the app's):
+ * a quotation waiting for the customer (`UE`) is blue, an invoice still to pay is yellow.
+ */
+const FIGMA_STATUS_TONES = Object.freeze({ UE: 'info' });
+const FIGMA_PAYMENT_TONES = Object.freeze({ pending: 'warning' });
+
+/** The design's badge. `palette="figma"`: the main screen's Figma colours. */
+export function PortalTag({
+  tone = 'neutral', palette, children, className, testId, ...rest
+}) {
+  const tones = palette === 'figma' ? FIGMA_TAG_TONES : TAG_TONES;
   return (
     <span
       className={cn(
         'inline-flex items-center whitespace-nowrap rounded-lg border px-2.5 py-0.5 text-xs font-medium leading-4',
-        TAG_TONES[tone] ?? TAG_TONES.neutral,
+        tones[tone] ?? tones.neutral,
         className,
       )}
       {...rest}
@@ -61,13 +86,15 @@ export function PortalTag({ tone = 'neutral', children, className, testId, ...re
 }
 
 /** The document status, with the app's own label and tone (`statusLabel`, `getStatusTone`). */
-export function PortalDocumentStatus({ status, className }) {
+export function PortalDocumentStatus({ status, className, palette }) {
   const ui = useUI();
   const dictionary = useLocale();
   if (!status) return null;
+  const tone = (palette === 'figma' && FIGMA_STATUS_TONES[status]) || getStatusTone(status);
   return (
     <PortalTag
-      tone={getStatusTone(status)}
+      tone={tone}
+      palette={palette}
       className={className}
       testId="portal-document-status"
       data-status={status}
@@ -78,13 +105,17 @@ export function PortalDocumentStatus({ status, className }) {
 }
 
 /** An invoice's payment state, as the app shows it (see `invoicePaymentState`). */
-export function PortalPaymentStatus({ document, installments = null, useServerOverdue = false, className }) {
+export function PortalPaymentStatus({
+  document, installments = null, useServerOverdue = false, className, palette,
+}) {
   const ui = useUI();
   const state = invoicePaymentState(document, installments, { useServerOverdue });
   if (!state) return null;
+  const tone = (palette === 'figma' && FIGMA_PAYMENT_TONES[state.id]) || state.tone;
   return (
     <PortalTag
-      tone={state.tone}
+      tone={tone}
+      palette={palette}
       className={className}
       testId="portal-payment-status"
       data-state={state.id}
@@ -95,16 +126,18 @@ export function PortalPaymentStatus({ document, installments = null, useServerOv
 }
 
 /** The badge a row shows: an invoice's payment state, any other document's status. */
-export function PortalRowBadge({ document, className, useServerOverdue = false }) {
+export function PortalRowBadge({ document, className, useServerOverdue = false, palette }) {
   return document?.kind === 'INVOICE'
     ? <PortalPaymentStatus
     document={document}
     className={className}
     useServerOverdue={useServerOverdue}
+    palette={palette}
     data-testid="PortalPaymentStatus__7a317e" />
     : <PortalDocumentStatus
     status={document?.documentStatus}
     className={className}
+    palette={palette}
     data-testid="PortalDocumentStatus__7a317e" />;
 }
 
@@ -298,7 +331,9 @@ export function PortalDesktopHeader({ title, count, breadcrumb, search, size }) 
   return (
     <header
       className={cn(
-        'hidden items-center gap-4 px-1 pb-3 pt-1 md:grid',
+        'hidden items-center gap-4 px-1 md:grid',
+        // The main screen's 62px top bar sits closer to the window's top edge.
+        large ? '-mt-0.5 pb-2' : 'pb-3 pt-1',
         large
           ? 'grid-cols-[minmax(0,1fr)_minmax(0,392px)_minmax(0,1fr)]'
           : 'grid-cols-[minmax(0,1fr)_minmax(0,320px)_minmax(0,1fr)]',

@@ -12,7 +12,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { formatCurrency, formatGroupedNumber } from '@/lib/formatCurrency.js';
-import { formatDashboardAxisTick, niceScale } from '@/lib/dashboardNumberFormat.js';
+import { niceScale } from '@/lib/dashboardNumberFormat.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 import {
   PORTAL_CHART_MONTHS, PORTAL_ERROR, searchPortalDocuments,
@@ -82,7 +82,7 @@ export default function PortalHomeView({
         data-testid="PortalDesktopHeader__beaeb4" />
 
       <PortalMain
-        className="overflow-y-auto px-6 pb-28 pt-6 md:rounded-xl md:pb-3 md:pt-3"
+        className="overflow-y-auto px-6 pb-28 pt-6 md:gap-4 md:rounded-xl md:p-2"
         testId="portal-home"
         data-testid="PortalMain__beaeb4">
         {mobileSearchOpen ? <div className="md:hidden">{searchBox}</div> : null}
@@ -98,8 +98,9 @@ export default function PortalHomeView({
           onNavigate={onNavigate}
           data-testid="MobilePendingHero__beaeb4" />
 
-        {/* items-start: both cards hug their content, as in the design (no stretched tiles). */}
-        <div className="flex flex-wrap items-start gap-3">
+        {/* Desktop, as the spec measures it in both rail states: "Requiere tu atención" is as wide
+            as its four ~204px tiles, "Tu saldo" takes the rest; both as tall as the taller one. */}
+        <div className="flex flex-wrap items-start gap-3 md:grid md:grid-cols-[minmax(0,auto)_minmax(258px,1fr)] md:items-stretch md:gap-4">
           <section
             className="min-w-0 flex-[2_1_560px] overflow-hidden md:rounded-lg md:border md:border-border"
             aria-label={ui('portalAttentionTitle')}
@@ -108,7 +109,7 @@ export default function PortalHomeView({
             <div className="hidden h-10 items-center border-b border-border bg-muted px-3 py-2 md:flex">
               <h2 className={PORTAL_DASHBOARD_SECTION_TITLE}>{ui('portalAttentionTitle')}</h2>
             </div>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fit,minmax(150px,1fr))] md:gap-4 md:p-4">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(4,minmax(120px,204px))] md:gap-4 md:p-4">
               {TILE_ORDER.map((kind) => (
                 <KindTile
                   key={kind}
@@ -133,7 +134,8 @@ export default function PortalHomeView({
           </PortalSection>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(min(100%,380px),1fr))]">
+        {/* "Documentos recientes" keeps the spec's ~520px; the chart takes the rest. */}
+        <div className="grid gap-3 md:flex-1 md:grid-cols-[minmax(0,520px)_minmax(0,1fr)] md:gap-4">
           <PortalSection
             title={ui('portalRecentDocuments')}
             action={(
@@ -352,10 +354,10 @@ function MobilePendingHero({ balances, onNavigate }) {
  */
 function Balance({ balances, paid }) {
   const ui = useUI();
-  const badge = 'self-start rounded-lg border px-2 text-sm font-medium leading-6 tabular-nums';
+  const badge = 'self-start rounded-lg border px-2 text-sm leading-7 tabular-nums';
   const countPill = (count, testId) => (
     <span
-      className="inline-flex items-center gap-1 rounded-lg bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
+      className="inline-flex items-center gap-1 rounded-lg bg-[#F3F5F9] px-2 py-1 text-xs leading-4 text-[#40465C]"
       data-testid={testId}
     >
       <FileTextIcon size={14} aria-hidden="true" data-testid="FileText__beaeb4" />
@@ -363,7 +365,7 @@ function Balance({ balances, paid }) {
     </span>
   );
   return (
-    <div className="flex flex-col gap-3 p-3">
+    <div className="flex flex-col gap-4 p-3">
       <div className="flex flex-col gap-2" data-testid="portal-balance-paid">
         <span className="flex items-center gap-2 text-sm text-foreground">
           {ui('portalPaidThisYear')}
@@ -374,7 +376,7 @@ function Balance({ balances, paid }) {
         ) : paid.map((entry) => (
           <span
             key={entry.currency || 'none'}
-            className={`${badge} border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[var(--status-success-fg)]`}
+            className={`${badge} border-[#B2EECC] bg-[#EEFBF4] text-[#17663A]`}
             data-testid="portal-balance-paid-amount"
           >
             {formatCurrency(entry.currency, entry.paid)}
@@ -392,7 +394,7 @@ function Balance({ balances, paid }) {
         ) : balances.map((balance) => (
           <span
             key={balance.currency || 'none'}
-            className={`${badge} border-destructive/30 bg-[var(--status-destructive-bg)] text-destructive`}
+            className={`${badge} border-[#FBB1C4] bg-[#FEF0F4] text-[#D50B3E]`}
             data-testid="portal-balance-outstanding"
           >
             {formatCurrency(balance.currency, balance.outstanding)}
@@ -429,7 +431,8 @@ function KindTile({ kind, tile, onNavigate }) {
         {ui(PORTAL_KIND_META[kind].pluralKey)}
       </span>
       <span
-        className="text-[44px] font-medium leading-[48px] tabular-nums md:text-[60px] md:leading-[60px] md:[font-family:'Plus_Jakarta_Sans','Inter',sans-serif]"
+        // Proportional figures: Plus Jakarta's tabular "1" carries a base bar the design's does not.
+        className="text-[44px] font-medium leading-[48px] md:text-[60px] md:leading-[60px] md:[font-family:'Plus_Jakarta_Sans','Inter',sans-serif]"
         data-testid="portal-tile-count"
       >
         {shown ? tile.highlight.count : (tile?.count ?? 0)}
@@ -437,7 +440,8 @@ function KindTile({ kind, tile, onNavigate }) {
       {shown ? (
         <PortalTag
           tone={highlight.tone}
-          className="max-w-full self-start whitespace-normal md:rounded-full"
+          palette="figma"
+          className="max-w-full self-start whitespace-normal font-normal md:rounded-full"
           data-testid="PortalTag__beaeb4">{ui(highlight.labelKey)}</PortalTag>
       ) : (
         <span className="text-xs text-muted-foreground">{ui('portalTileTotal')}</span>
@@ -453,7 +457,7 @@ function RecentDocuments({ recent, onOpen }) {
     return <p className="px-4 py-6 text-sm text-muted-foreground">{ui('portalNoDocumentsYet')}</p>;
   }
   return (
-    <ul className="md:py-1.5">
+    <ul className="md:py-1">
       {recent.map((document) => (
         <li key={`${document.kind}:${document.id}`} className="border-b border-border last:border-b-0 md:border-b-0">
           {/* Desktop (spec of 2026-11-17): the kind, then its pills packed after it — the number
@@ -462,13 +466,13 @@ function RecentDocuments({ recent, onOpen }) {
           <button
             type="button"
             onClick={() => onOpen(document)}
-            className={`hidden min-h-8 w-full cursor-pointer items-center gap-2 px-3 py-1 text-left hover:bg-muted md:flex ${PORTAL_ROW_FOCUS}`}
+            className={`hidden h-10 w-full cursor-pointer items-center gap-2 px-4 text-left hover:bg-muted md:flex ${PORTAL_ROW_FOCUS}`}
             data-testid="portal-recent-document"
           >
             <span className="shrink-0 text-sm">{ui(documentLabelKey(document))}</span>
             <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
               <span
-                className="inline-flex min-w-0 max-w-[10rem] items-center gap-1 rounded-lg bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+                className="inline-flex min-w-0 max-w-[10rem] items-center gap-1 rounded-lg bg-[#F3F5F9] px-2 py-1 text-xs leading-4 text-[#40465C]"
                 title={document.documentNo}
               >
                 <FileTextIcon size={14} className="shrink-0" aria-hidden="true" data-testid="FileText__beaeb4" />
@@ -477,10 +481,12 @@ function RecentDocuments({ recent, onOpen }) {
               <PortalRowBadge
                 document={document}
                 useServerOverdue
-                className="rounded-full font-normal"
+                palette="figma"
+                // The recent rows' status pills are borderless in the design (the tiles' are not).
+                className="rounded-full border-transparent py-1 font-normal"
                 data-testid="PortalRowBadge__beaeb4" />
               {document.grandTotal != null ? (
-                <span className="rounded-full border border-border px-2 py-0.5 text-xs leading-4 text-muted-foreground tabular-nums">
+                <span className="rounded-full border border-[#C7CBD3] px-2 py-1 text-xs leading-4 text-[#6B7280] tabular-nums">
                   <PortalMoney
                     currency={document.currency}
                     value={document.grandTotal}
@@ -518,6 +524,11 @@ function RecentDocuments({ recent, onOpen }) {
     </ul>
   );
 }
+
+/** The design's sparse dotted gridlines: a 2px dot every 16px, in its border grey. */
+const GRID_DOT = 'radial-gradient(circle, #C7CBD3 1px, transparent 1.2px)';
+const GRID_DOTS_HORIZONTAL = Object.freeze({ backgroundImage: GRID_DOT, backgroundSize: '16px 2px', backgroundRepeat: 'repeat-x' });
+const GRID_DOTS_VERTICAL = Object.freeze({ backgroundImage: GRID_DOT, backgroundSize: '2px 16px', backgroundRepeat: 'repeat-y' });
 
 /** The chart's two orientations (spec of 2026-11-17: a two-button switch in the chart's header). */
 export const PORTAL_CHART_ORIENTATIONS = Object.freeze(['vertical', 'horizontal']);
@@ -557,13 +568,20 @@ function InvoicedChart({ chart, year }) {
   // nice maximum, not at the largest bar.
   const { niceMax: top, ticks } = niceScale(max);
   const share = (amount) => `${top > 0 ? (amount / top) * 100 : 0}%`;
-  const monthShort = (bar) => formatCalendarDate(`${bar.month}-01`, bcpLocale, { month: 'short' }).replace(/\.$/, '');
+  // The design's month labels: three letters, capitalised ("Jul", "Ago", "Sep" — not "sept.").
+  const monthShort = (bar) => {
+    const short = formatCalendarDate(`${bar.month}-01`, bcpLocale, { month: 'short' }).replace(/\./g, '').slice(0, 3);
+    return short.charAt(0).toLocaleUpperCase(bcpLocale) + short.slice(1);
+  };
   const monthLong = (bar) => formatCalendarDate(`${bar.month}-01`, bcpLocale, { month: 'long', year: 'numeric' });
   // A chart with no currency (no invoices yet) shows plain grouped figures.
   const amountText = (amount) => (chart?.currency
     ? formatCurrency(chart.currency, amount)
     : formatGroupedNumber(amount, { maximumFractionDigits: 2 }));
-  const tick = (value) => formatDashboardAxisTick(value, bcpLocale);
+  // The design's ticks ("0", "500", "1K", "1,5K"), with the instance's decimal separator.
+  const tick = (value) => (value >= 1000
+    ? `${formatGroupedNumber(value / 1000, { maximumFractionDigits: 1 })}K`
+    : formatGroupedNumber(value));
   const vertical = orientation === 'vertical';
 
   /** One bar of one series, with its tooltip while hovered or focused. */
@@ -648,20 +666,20 @@ function InvoicedChart({ chart, year }) {
       </div>
 
       {vertical ? (
-        <div className="grid grid-cols-[36px_minmax(0,1fr)] gap-x-2 gap-y-1.5">
-          <div className="relative h-[180px] text-right text-xs text-muted-foreground">
+        <div className="grid grid-cols-[36px_minmax(0,1fr)] gap-x-2 gap-y-2">
+          <div className="relative h-[157px] text-right text-xs text-[#6C6C89]">
             {ticks.map((value) => (
               <span key={value} className="absolute right-0 translate-y-1/2 leading-none" style={{ bottom: share(value) }}>
                 {tick(value)}
               </span>
             ))}
           </div>
-          <div className="relative h-[180px]">
-            {ticks.map((value) => (
+          <div className="relative h-[157px] border-x border-b border-[#C7CBD3]">
+            {ticks.filter((value) => value > 0).map((value) => (
               <span
                 key={value}
-                className="absolute inset-x-0 border-t border-dotted border-border"
-                style={{ bottom: share(value) }}
+                className="absolute inset-x-0 h-0.5 translate-y-1/2"
+                style={{ bottom: share(value), ...GRID_DOTS_HORIZONTAL }}
                 aria-hidden="true"
               />
             ))}
@@ -679,7 +697,7 @@ function InvoicedChart({ chart, year }) {
           </div>
           <span />
           <div
-            className="grid gap-4 px-2.5 text-center text-xs text-muted-foreground"
+            className="grid gap-4 px-2.5 text-center text-xs text-[#6C6C89]"
             style={{ gridTemplateColumns: `repeat(${Math.max(bars.length, 1)}, minmax(0, 1fr))` }}
           >
             {/* Short month names without the trailing dot; with more than 6 bars every other label
@@ -700,12 +718,12 @@ function InvoicedChart({ chart, year }) {
               </span>
             ))}
           </div>
-          <div className="relative pr-16">
-            {ticks.map((value) => (
+          <div className="relative mr-16 border-b border-l border-[#C7CBD3]">
+            {ticks.filter((value) => value > 0).map((value) => (
               <span
                 key={value}
-                className="absolute inset-y-0 border-l border-dotted border-border"
-                style={{ left: share(value) }}
+                className="absolute inset-y-0 w-0.5 -translate-x-1/2"
+                style={{ left: share(value), ...GRID_DOTS_VERTICAL }}
                 aria-hidden="true"
               />
             ))}
