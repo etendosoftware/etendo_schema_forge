@@ -1,9 +1,13 @@
+import { useMemo } from 'react';
 import { useLocaleSwitch, useUI } from '@/i18n';
 import { CurrencyRatePicker } from '@/components/contract-ui/CurrencyRatePicker.jsx';
+import { DateField } from '@/components/ui/date-field';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
-import { missingSet } from './invoiceInboxReviewModel.js';
+import { buildOp, currencyScale, MAX_DOCUMENT_NO, missingSet } from './invoiceInboxReviewModel.js';
 import { DATE_FIELD_ICON, ReviewField, ReviewTag, SectionTitle } from './InvoiceInboxReviewParts.jsx';
-import InvoiceInboxReviewBanners, { InvoiceInboxReviewMismatchBanner } from './InvoiceInboxReviewBanners.jsx';
+import { CommitInput } from './InvoiceInboxReviewInputs.jsx';
+import { ReviewEditorContext, useReviewEditor } from './useInvoiceInboxReviewEditor.js';
+import InvoiceInboxReviewBanners, { InvoiceInboxReviewMismatchBanner, InvoiceInboxReviewNotice } from './InvoiceInboxReviewBanners.jsx';
 import InvoiceInboxReviewVendor from './InvoiceInboxReviewVendor.jsx';
 import InvoiceInboxReviewLines from './InvoiceInboxReviewLines.jsx';
 import InvoiceInboxReviewTotals from './InvoiceInboxReviewTotals.jsx';
@@ -31,8 +35,11 @@ function CurrencyField({ review, currency }) {
 /** "Cabecera": invoice number and date (2 columns), then the currency (read only, decision 1). */
 function HeaderSection({ review, currency, missing, readOnly, locked, locale }) {
   const ui = useUI();
+  const editor = useReviewEditor();
+  const editable = Boolean(editor) && !readOnly;
   const header = review.document?.header;
   const dateMissing = missing.has('invoiceDate');
+  const tooLong = review.errorCode === 'REFERENCE_TOO_LONG';
   const date = header?.invoiceDate
     ? formatCalendarDate(header.invoiceDate, locale)
     : (header?.invoiceDateRaw ?? '');
@@ -47,7 +54,20 @@ function HeaderSection({ review, currency, missing, readOnly, locked, locale }) 
           value={header?.documentNo}
           readOnly={readOnly}
           disabled={locked}
+          invalid={tooLong}
+          error={tooLong ? ui('invoiceInboxReviewReferenceTooLong', { max: MAX_DOCUMENT_NO }) : null}
           testId="invoice-inbox-review-invoice-no"
+          control={editable ? (
+            <CommitInput
+              id="invoice-inbox-review-invoice-no"
+              value={header?.documentNo ?? ''}
+              display={(value) => String(value ?? '')}
+              invalid={tooLong}
+              maxLength={200}
+              onCommit={(value) => editor.commit('header:documentNo', buildOp.setHeader({ documentNo: value }))}
+              testId="invoice-inbox-review-invoice-no"
+              data-testid="CommitInput__fd4b42" />
+          ) : null}
           data-testid="ReviewField__fd4b42" />
         <ReviewField
           label={ui('invoiceInboxReviewFieldInvoiceDate')}
@@ -66,6 +86,25 @@ function HeaderSection({ review, currency, missing, readOnly, locked, locale }) 
             : null}
           error={dateMissing ? ui('invoiceInboxReviewDateRequired') : null}
           testId="invoice-inbox-review-invoice-date"
+          control={editable ? (
+            <div aria-invalid={dateMissing || undefined} data-testid="invoice-inbox-review-invoice-date-control">
+              <DateField
+                id="invoice-inbox-review-invoice-date"
+                value={header?.invoiceDate ?? ''}
+                className={dateMissing ? 'border-destructive bg-[var(--status-destructive-bg)]' : undefined}
+                onChange={(iso) => {
+                  // The shared field only reports a real day or ''; an unchanged day writes nothing.
+                  if ((iso || null) === (header?.invoiceDate || null)) return;
+                  editor.commit('header:invoiceDate', buildOp.setHeader({ invoiceDate: iso || null }));
+                }}
+                data-testid="invoice-inbox-review-invoice-date" />
+              {!header?.invoiceDate && header?.invoiceDateRaw && (
+                <p className="mt-1.5 text-xs text-muted-foreground [overflow-wrap:anywhere]" data-testid="invoice-inbox-review-invoice-date-raw">
+                  {ui('invoiceInboxReviewDateRawHint', { date: header.invoiceDateRaw })}
+                </p>
+              )}
+            </div>
+          ) : null}
           data-testid="ReviewField__fd4b42" />
         <CurrencyField review={review} currency={currency} data-testid="CurrencyField__review" />
       </div>
@@ -74,54 +113,68 @@ function HeaderSection({ review, currency, missing, readOnly, locked, locale }) 
 }
 
 /**
- * ETP-6050 F5 — the right pane's content: banners (failed, confirmed, duplicate) at the top,
- * Proveedor, Cabecera, Líneas, the totals card and, at the bottom, the total-mismatch banner. It
- * only reads the document (`review.document`, the `CURRENT_DATA` v1 contract plus the review
- * enrichment); `readOnly` is true in S1 and `locked` (nobody can edit this document at all:
- * confirmed, discarded, foreign receiver) additionally hides the add / delete affordances.
- * `settled` (confirmed / discarded) switches to the plain-text vendor, disabled header fields
- * and the compact line list.
+ * ETP-6050 F5 — the right pane's content: banners (failed, confirmed, duplicate) and the reload
+ * notice at the top, Proveedor, Cabecera, Líneas, the totals card and, at the bottom, the
+ * total-mismatch banner. It renders the EFFECTIVE review (server answer plus pending edits, see
+ * `useInvoiceInboxReviewEditor`) and provides the editor to the inputs through context; without an
+ * `editor` (or with `readOnly`) it is the read-only form of S1. `locked` (nobody can edit this
+ * document at all: confirmed, discarded, foreign receiver) additionally hides the add / delete
+ * affordances. `settled` switches to the plain-text vendor, disabled header fields and the compact
+ * line list.
  *
  * @param {{review: object, currency: string, readOnly?: boolean, locked?: boolean,
- *   settled?: boolean}} props
+ *   settled?: boolean, editor?: object|null, apiBaseUrl?: string}} props
  */
 export default function InvoiceInboxReviewForm({
-  review, currency, readOnly = true, locked = false, settled = false,
+  review, currency, readOnly = true, locked = false, settled = false, editor = null, apiBaseUrl = '',
 }) {
   const { locale } = useLocaleSwitch();
   const document = review.document ?? {};
   const missing = missingSet(document);
+  const scale = currencyScale(review.currency);
+  const context = useMemo(() => (editor ? { ...editor, apiBaseUrl } : null), [editor, apiBaseUrl]);
   return (
-    <div className="flex flex-col gap-[22px]" data-testid="invoice-inbox-review-form" data-readonly={readOnly || undefined}>
-      <InvoiceInboxReviewBanners review={review} data-testid="InvoiceInboxReviewBanners__form" />
-      <InvoiceInboxReviewVendor
-        document={document}
-        missing={missing}
-        readOnly={readOnly}
-        locked={settled}
-        data-testid="InvoiceInboxReviewVendor__form" />
-      <HeaderSection
-        review={review}
-        currency={currency}
-        missing={missing}
-        readOnly={readOnly}
-        locked={settled}
-        locale={locale}
-        data-testid="HeaderSection__form" />
-      <InvoiceInboxReviewLines
-        key={review.id}
-        document={document}
-        currency={currency}
-        readOnly={readOnly}
-        showActions={!locked}
-        locked={settled}
-        data-testid="InvoiceInboxReviewLines__form" />
-      <InvoiceInboxReviewTotals
-        header={document.header}
-        lines={document.lines}
-        currency={currency}
-        data-testid="InvoiceInboxReviewTotals__form" />
-      <InvoiceInboxReviewMismatchBanner review={review} currency={currency} data-testid="InvoiceInboxReviewMismatchBanner__form" />
-    </div>
+    <ReviewEditorContext.Provider value={readOnly ? null : context}>
+      <div className="flex flex-col gap-[22px]" data-testid="invoice-inbox-review-form" data-readonly={readOnly || undefined}>
+        {editor?.notice && (
+          <InvoiceInboxReviewNotice
+            noticeKey={editor.notice.key}
+            onDismiss={editor.dismissNotice}
+            data-testid="InvoiceInboxReviewNotice__form" />
+        )}
+        <InvoiceInboxReviewBanners review={review} data-testid="InvoiceInboxReviewBanners__form" />
+        <InvoiceInboxReviewVendor
+          document={document}
+          missing={missing}
+          readOnly={readOnly}
+          locked={settled}
+          apiBaseUrl={apiBaseUrl}
+          data-testid="InvoiceInboxReviewVendor__form" />
+        <HeaderSection
+          review={review}
+          currency={currency}
+          missing={missing}
+          readOnly={readOnly}
+          locked={settled}
+          locale={locale}
+          data-testid="HeaderSection__form" />
+        <InvoiceInboxReviewLines
+          document={document}
+          currency={currency}
+          scale={scale}
+          readOnly={readOnly}
+          showActions={!locked}
+          locked={settled}
+          apiBaseUrl={apiBaseUrl}
+          data-testid="InvoiceInboxReviewLines__form" />
+        <InvoiceInboxReviewTotals
+          header={document.header}
+          lines={document.lines}
+          currency={currency}
+          scale={scale}
+          data-testid="InvoiceInboxReviewTotals__form" />
+        <InvoiceInboxReviewMismatchBanner review={review} currency={currency} data-testid="InvoiceInboxReviewMismatchBanner__form" />
+      </div>
+    </ReviewEditorContext.Provider>
   );
 }

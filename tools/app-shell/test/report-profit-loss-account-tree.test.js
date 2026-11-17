@@ -803,6 +803,52 @@ describe('profit-loss splitQuery — one account split by org / contact / produc
   });
 });
 
+// ETP-6239 — the period queries read ledger lines through the very same
+// predicates as the queries they mirror, so a bucket can never see a row the
+// plain report would not (org, schema, R/C closing entries, dimensions, year).
+describe('profit-loss periodQuery / splitPeriodQuery — predicate parity (ETP-6239)', () => {
+  const facts = (sql) => sql.slice(sql.indexOf('FROM fact_acct fa WHERE'), sql.indexOf(' GROUP BY'));
+  const PERIOD = CONTRACT.sql.periodQuery;
+  const SPLIT_PERIOD = CONTRACT.sql.splitPeriodQuery;
+
+  it('periodQuery reads fact_acct with exactly sql.query\'s predicates', () => {
+    assert.ok(facts(SQL).length > 200, 'extracted the main predicates');
+    assert.equal(facts(PERIOD), facts(SQL));
+  });
+
+  it('splitPeriodQuery reads fact_acct with exactly splitQuery\'s predicates, subtree included', () => {
+    assert.ok(facts(CONTRACT.sql.splitQuery).includes('fa.account_id IN (SELECT node_id FROM sub)'));
+    assert.equal(facts(SPLIT_PERIOD), facts(CONTRACT.sql.splitQuery));
+  });
+
+  it('both keep the closing/regularisation exclusion and the org-tree check', () => {
+    for (const sql of [PERIOD, SPLIT_PERIOD]) {
+      assert.match(sql, /fa\.factaccttype NOT IN \('R', 'C'\)/);
+      assert.match(sql, /ad_isorgincluded\(o\.ad_org_id, '__ORGID__', '__CLIENT_ID__'\) <> -1/);
+    }
+  });
+
+  it('take their periods from __PERIODS__ once, and group days before joining the buckets', () => {
+    for (const sql of [PERIOD, SPLIT_PERIOD]) {
+      assert.equal(sql.split('__PERIODS__').length, 2);
+      assert.match(sql, /days AS MATERIALIZED/);
+      assert.match(sql, /own_amt_sly/);
+      assert.match(sql, /own_amt_prev/);
+    }
+  });
+
+  it('split period query groups by dimension and period and returns what the engine reads', () => {
+    for (const col of ['AS dimension_id', 'AS dimension_name', 'f.idx', 'f.own_amt', 'f.own_amt_sly', 'f.own_amt_prev']) {
+      assert.ok(SPLIT_PERIOD.includes(col), col);
+    }
+    assert.match(SPLIT_PERIOD, /CASE '__SPLITBY__' WHEN 'org' THEN fa\.ad_org_id WHEN 'bpartner' THEN fa\.c_bpartner_id ELSE fa\.m_product_id END AS dimension_id/);
+  });
+
+  it('periods is not a declared parameter (applyPlaceholders would paste it raw)', () => {
+    assert.equal(findParam('periods'), undefined);
+  });
+});
+
 // ── ETP-6080: variation columns in every export, only with a comparison ─────
 
 const VAR_ROWS = [

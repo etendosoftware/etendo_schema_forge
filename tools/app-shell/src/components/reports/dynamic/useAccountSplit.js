@@ -6,6 +6,8 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
  * when its row is opened: `/query` with `splitBy`, `splitNodeId` and `splitSign` (the row's
  * effective sign, so the parts carry the same sign as the account). The split query reads exactly
  * the main query's period, org and dimension predicates, so the parts add up to the row.
+ * ETP-6239: `params` carries `columns` / `periods`, so each part has `cells[]` (one per period) in every
+ * mode, Total included; the comparison is a display choice and never reloads a split.
  *
  * Any change of the params or the dimension drops every loaded split and aborts what is in flight.
  * Returns `{ splits, toggle }`: `splits[node_id]` = `{ loading, rows, error }`; `toggle(row)` opens
