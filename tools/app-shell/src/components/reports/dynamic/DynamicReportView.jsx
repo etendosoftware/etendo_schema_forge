@@ -10,7 +10,7 @@ import DynamicReportPanel from './DynamicReportPanel.jsx';
 import DynamicReportTable from './DynamicReportTable.jsx';
 import DynamicReportKpis from './DynamicReportKpis.jsx';
 import { RESULT_REPORT_IDS } from './dynamicReports.js';
-import { reportKpis } from './reportVisuals.js';
+import { kpiCards, reportKpis } from './reportVisuals.js';
 import DynamicDrillPanel from './DynamicDrillPanel.jsx';
 import { ENTRY_REPORT_ID, LEDGER_REPORT_ID } from './drillDown.js';
 import { useReportQuery } from './useReportQuery.js';
@@ -254,6 +254,8 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
           periods: serializePeriods(exportPlan.buckets),
           hiddenCount: String(exportPlan.hiddenCount),
           compareMode: mode,
+          // The PDF's headline cards: the very figures on screen (same pure function), as JSON the template parses.
+          kpis: format === 'pdf' && kpis ? JSON.stringify(kpiCards(kpis, compare)) : undefined,
           accountLevel: state.level,
           expandedNodeIds: expandedNodeIdsParam(expandedSet),
           // The exported header names the filters, not their ids (report-filters.js reads `_display_*`).

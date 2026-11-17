@@ -861,6 +861,20 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
       }
     });
 
+    it('the PDF carries the screen\'s headline cards as `kpis`; Excel and CSV do not', async () => {
+      await renderPeriods();
+      choose('DynamicReportPanel__year', 'Y25');
+      choose('DynamicReportPanel__compare', 'previous');
+      await settle();
+      const cards = JSON.parse((await exportAs('pdf')).kpis);
+      expect(cards.map((c) => c.id)).toEqual(['income', 'expenses', 'result', 'margin']);
+      expect(cards[0]).toMatchObject({ compare: true });
+      expect((await exportAs('csv')).kpis).toBeUndefined();
+      choose('DynamicReportPanel__compare', '');
+      await settle();
+      expect(JSON.parse((await exportAs('pdf')).kpis)[0]).toMatchObject({ compare: false, delta: null });
+    });
+
     it('compareMode follows the toggle, and is none without a comparison', async () => {
       await renderPeriods();
       expect((await exportAs('pdf')).compareMode).toBe('none');
@@ -1016,7 +1030,19 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
       for (const th of colgroups) expect(th).toHaveAttribute('colspan', '4');
       const subs = headerRows[1].querySelectorAll('th[scope="col"]');
       expect(subs).toHaveLength(24);
-      expect([...subs].slice(0, 4).map((th) => th.textContent)).toEqual(['dynamicReportAmount', 'dynamicReportCompared', 'dynamicReportVariation', 'dynamicReportVariationPct']);
+      expect([...subs].slice(0, 4).map((th) => th.textContent)).toEqual(['dynamicReportAmount', expect.stringMatching(/^dynamicReportCompared\(.+\)$/), 'dynamicReportVariation', 'dynamicReportVariationPct']);
+    });
+
+    it('Comparado names what it is compared against, under the header, and only with a comparison', async () => {
+      await renderPeriods();
+      await toMonths();
+      expect(screen.queryAllByTestId('DynamicReportTable__comparedLabel')).toHaveLength(0);
+      choose('DynamicReportPanel__compare', 'same-last-year');
+      const labels = await screen.findAllByTestId('DynamicReportTable__comparedLabel');
+      expect(labels).toHaveLength(6); // the 5 months on screen + the Total
+      const first = groupLabels()[0].replace(/\*$/, '').replace(/\d+$/, (y) => String(Number(y) - 1));
+      expect(labels[0]).toHaveTextContent(`(${first})`);
+      expect(labels.at(-1).textContent).toMatch(/^\(\d{2}\/\d{2}\/\d{4} – \d{2}\/\d{2}\/\d{4}\)$/);
     });
 
     it('scrolls horizontally inside its own wrapper', async () => {

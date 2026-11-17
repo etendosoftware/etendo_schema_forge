@@ -69,6 +69,11 @@
     "periodCompared": { "en_US": "Compared", "es_ES": "Comparado" },
     "periodVarAmount": { "en_US": "Var.", "es_ES": "Var." },
     "periodVarPct": { "en_US": "Var. %", "es_ES": "Var. %" },
+    "income": { "en_US": "Income", "es_ES": "Ingresos" },
+    "expenses": { "en_US": "Expenses", "es_ES": "Gastos" },
+    "result": { "en_US": "Result for the year", "es_ES": "Resultado del ejercicio" },
+    "margin": { "en_US": "Margin", "es_ES": "Margen" },
+    "kpiVs": { "en_US": "vs", "es_ES": "vs" },
     "periodHiddenPre": { "en_US": "Not shown:", "es_ES": "No se muestran" },
     "periodHiddenPost": { "en_US": "earlier periods. Excel and CSV include every period.", "es_ES": "períodos anteriores. Excel y CSV incluyen todos los períodos." },
     "periodPartial": { "en_US": "* Month or quarter incomplete within the chosen range.", "es_ES": "* Mes o trimestre incompleto dentro del rango elegido." }

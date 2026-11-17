@@ -905,3 +905,85 @@ describe('profit-loss exports — variation (ETP-6080)', () => {
     assert.match(excel, /<th>Reference Amount<\/th>\s*<\/tr>/);
   });
 });
+
+// ETP-6239 — the PDF's headline cards and "what Comparado is compared against".
+describe('profit-loss exports — headline cards and compared period (ETP-6239)', () => {
+  const PERIODS = [
+    { idx: 0, dateFrom: '2026-01-01', dateTo: '2026-02-28', partial: false },
+    { idx: 1, dateFrom: '2026-01-01', dateTo: '2026-01-31', partial: false },
+    { idx: 2, dateFrom: '2026-02-01', dateTo: '2026-02-28', partial: false },
+  ];
+  // from..to|sly|prev, bucket 0 first — what the view sends as `periods`.
+  const PERIODS_PARAM = '2026-01-01..2026-02-28|2025-01-01..2025-02-28|2025-11-01..2025-12-31,'
+    + '2026-01-01..2026-01-31|2025-01-01..2025-01-31|2025-12-01..2025-12-31,'
+    + '2026-02-01..2026-02-28|2025-02-01..2025-02-28|2026-01-01..2026-01-31';
+  const CELL = { amount: 10, sly: { amount: 5, variationAmount: 5, variationPct: 100 }, prev: { amount: 5, variationAmount: 5, variationPct: 100 } };
+  const PROW = { ...ROWS[0], cells: [CELL, CELL, CELL] };
+  const kpiCards = (compare) => [
+    { id: 'income', percent: false, value: 1200, refValue: 800, compare, delta: compare ? { amount: 50, unit: '%' } : null, trend: compare ? 'improves' : null, up: true, tone: null },
+    { id: 'expenses', percent: false, value: 400, refValue: 500, compare, delta: compare ? { amount: -20, unit: '%' } : null, trend: compare ? 'improves' : null, up: false, tone: null },
+    { id: 'result', percent: false, value: 800, refValue: 300, compare, delta: null, trend: null, up: true, tone: 'positive' },
+    { id: 'margin', percent: true, value: null, refValue: 37.5, compare, delta: null, trend: null, up: false, tone: null },
+  ];
+  const meta = (locale, params) => ({
+    ...META_BASE, locale, labels: LABELS[locale], periods: PERIODS, columnPages: [[0, 1], [2]], columnPageSize: 2, params: { periods: PERIODS_PARAM, ...params },
+  });
+  const pdf = (locale, params) => {
+    const hb = Handlebars.create();
+    registerReportHelpers(hb, HELPERS_CODE);
+    return hb.compile(expandBrandingPartial(readFileSync(resolve(ARTIFACT_DIR, 'template.hbs'), 'utf8')))({ css: '', meta: meta(locale, params), rows: [PROW] });
+  };
+
+  it('PDF: four cards with the value, the pill and "vs <compared>" when comparing', () => {
+    const html = pdf('es_ES', { columns: 'month', compareMode: 'sly', kpis: JSON.stringify(kpiCards(true)) });
+    assert.equal((html.match(/class="kpi-card/g) || []).length, 4);
+    for (const label of ['Ingresos', 'Gastos', 'Resultado del ejercicio', 'Margen']) assert.ok(html.includes(label), label);
+    assert.match(html, /1\.200,00/);
+    assert.match(html, /kpi-pill improves">&#9650; 50,00 %/);
+    assert.match(html, /kpi-pill improves">&#9660; -20,00 %/); // expenses fell: good news, arrow down
+    assert.match(html, /vs 800,00/);
+    assert.match(html, /vs 37,50 %/);
+    assert.match(html, /kpi-card positive/);
+    assert.match(html, /kpi-value">&mdash;/); // a missing margin
+  });
+
+  it('PDF: without a comparison the cards show no pill and no "vs"', () => {
+    const html = pdf('en_US', { columns: 'month', compareMode: 'none', kpis: JSON.stringify(kpiCards(false)) });
+    assert.equal((html.match(/class="kpi-card/g) || []).length, 4);
+    assert.doesNotMatch(html, /class="kpi-pill|class="kpi-sub/);
+  });
+
+  it('PDF: no cards when the render carries no kpis, or an invalid one', () => {
+    assert.doesNotMatch(pdf('es_ES', { columns: 'month', compareMode: 'none' }), /class="kpi-row"/);
+    assert.doesNotMatch(pdf('es_ES', { columns: 'month', compareMode: 'none', kpis: 'not json' }), /class="kpi-row"/);
+  });
+
+  it('PDF: the Comparado header names the compared month, the previous month, or the total range', () => {
+    const sly = pdf('es_ES', { columns: 'month', compareMode: 'sly' });
+    assert.match(sly, /Comparado<span class="cmp-against">\(ene 25\)<\/span>/);
+    assert.match(sly, /Comparado<span class="cmp-against">\(feb 25\)<\/span>/);
+    assert.match(sly, /Comparado<span class="cmp-against">\(01\/01\/2025 – 28\/02\/2025\)<\/span>/);
+    const prev = pdf('en_US', { columns: 'month', compareMode: 'prev' });
+    assert.match(prev, /Compared<span class="cmp-against">\(Dec 25\)<\/span>/);
+    assert.match(prev, /Compared<span class="cmp-against">\(11\/01\/2025 – 12\/31\/2025\)<\/span>/);
+    assert.doesNotMatch(pdf('es_ES', { columns: 'month', compareMode: 'none' }), /class="cmp-against"/);
+  });
+
+  it('Excel / CSV: the same text inside the one header cell, CSV through csvField', () => {
+    const hb = Handlebars.create();
+    registerReportHelpers(hb, HELPERS_CODE);
+    const data = { meta: meta('es_ES', { columns: 'quarter', compareMode: 'prev' }), rows: [PROW] };
+    const excel = hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-excel.hbs'), 'utf8'))(data);
+    assert.match(excel, /<th>T1 26 Comparado \(T4 25\)<\/th>/);
+    assert.match(excel, /<th>Total Comparado \(01\/11\/2025 – 31\/12\/2025\)<\/th>/);
+    const built = buildJsreportHelpersString(HELPERS_CODE);
+    const names = [...built.matchAll(/^function\s+(\w+)\s*\(/gm)].map((m) => m[1]);
+    // eslint-disable-next-line no-new-func
+    const emitted = new Function(`${built}\nreturn { ${names.join(', ')} };`)();
+    const hbJs = Handlebars.create();
+    for (const [name, fn] of Object.entries(emitted)) hbJs.registerHelper(name, fn);
+    const csv = hbJs.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-csv.hbs'), 'utf8'))(data).split('\n')[0];
+    assert.match(csv, /,"?T1 26 Comparado \(T4 25\)"?,/);
+    assert.doesNotMatch(csv, /&quot;|&amp;/);
+  });
+});

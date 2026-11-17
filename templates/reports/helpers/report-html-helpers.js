@@ -285,6 +285,48 @@ export function createReportHelpers({ numberFormat } = {}) {
     return value === 'sly' || value === 'prev' ? value : '';
   }
 
+  // ETP-6239 — what a Comparado column is compared against, read from the SAME `periods` request
+  // param the engine was asked with (`from..to|slyFrom..slyTo|prevFrom..prevTo`, bucket 0 first,
+  // so tuple `idx` is bucket `idx`): the compared month / quarter as a short label ("ene 25",
+  // "T1 25" / "Q1 25"), or, for the range total and the Total grain, the compared dates
+  // (dd/mm/yyyy in Spanish, mm/dd/yyyy otherwise, as the screen's chip). '' without a comparison.
+  function periodCompared(periodsParam, idx, mode, columns, locale) {
+    if (mode !== 'sly' && mode !== 'prev') return '';
+    var tuple = String(periodsParam || '').split(',')[idx];
+    var range = tuple && tuple.split('|')[mode === 'sly' ? 1 : 2];
+    var ends = range ? range.split('..') : [];
+    if (ends.length !== 2) return '';
+    var es = String(locale || 'en_US').slice(0, 2) === 'es';
+    var parts = ends[0].split('-');
+    if (idx !== 0 && (columns === 'month' || columns === 'quarter')) {
+      var months = {
+        es: ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'],
+        en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+      };
+      var month = Number(parts[1]) - 1;
+      var year = parts[0].slice(-2);
+      if (columns === 'quarter') return (es ? 'T' : 'Q') + (Math.floor(month / 3) + 1) + ' ' + year;
+      return months[es ? 'es' : 'en'][month] + ' ' + year;
+    }
+    function day(iso) {
+      var p = iso.split('-');
+      return es ? p[2] + '/' + p[1] + '/' + p[0] : p[1] + '/' + p[2] + '/' + p[0];
+    }
+    return day(ends[0]) + ' \u2013 ' + day(ends[1]);
+  }
+
+  // "Comparado (ene 25)" for the single header cell of Excel / CSV: the caption plus periodCompared.
+  function periodComparedHeader(caption, periodsParam, idx, mode, columns, locale) {
+    var against = periodCompared(periodsParam, idx, mode, columns, locale);
+    return against ? caption + ' (' + against + ')' : caption;
+  }
+
+  // A JSON string (a render param) as data for the template; null when it is missing or invalid.
+  function parseJson(value) {
+    if (typeof value !== 'string') return value && typeof value === 'object' ? value : null;
+    try { return JSON.parse(value); } catch (e) { return null; }
+  }
+
   // Columns a group header row spans: Concepto plus every sub-column of the page's groups.
   function periodSpan(groups, mode) {
     return 1 + groups * (mode === 'sly' || mode === 'prev' ? 4 : 1);
@@ -312,6 +354,9 @@ export function createReportHelpers({ numberFormat } = {}) {
     periodPages,
     periodMode,
     periodSpan,
+    periodCompared,
+    periodComparedHeader,
+    parseJson,
   };
 }
 
@@ -584,6 +629,38 @@ const JSREPORT_HELPER_SOURCES = {
 }`,
   periodSpan: `function periodSpan(groups, mode) {
   return 1 + groups * (mode === 'sly' || mode === 'prev' ? 4 : 1);
+}`,
+  periodCompared: `function periodCompared(periodsParam, idx, mode, columns, locale) {
+  if (mode !== 'sly' && mode !== 'prev') return '';
+  var tuple = String(periodsParam || '').split(',')[idx];
+  var range = tuple && tuple.split('|')[mode === 'sly' ? 1 : 2];
+  var ends = range ? range.split('..') : [];
+  if (ends.length !== 2) return '';
+  var es = String(locale || 'en_US').slice(0, 2) === 'es';
+  var parts = ends[0].split('-');
+  if (idx !== 0 && (columns === 'month' || columns === 'quarter')) {
+    var months = {
+      es: ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'],
+      en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    };
+    var month = Number(parts[1]) - 1;
+    var year = parts[0].slice(-2);
+    if (columns === 'quarter') return (es ? 'T' : 'Q') + (Math.floor(month / 3) + 1) + ' ' + year;
+    return months[es ? 'es' : 'en'][month] + ' ' + year;
+  }
+  function day(iso) {
+    var p = iso.split('-');
+    return es ? p[2] + '/' + p[1] + '/' + p[0] : p[1] + '/' + p[2] + '/' + p[0];
+  }
+  return day(ends[0]) + ' \\u2013 ' + day(ends[1]);
+}`,
+  periodComparedHeader: `function periodComparedHeader(caption, periodsParam, idx, mode, columns, locale) {
+  var against = periodCompared(periodsParam, idx, mode, columns, locale);
+  return against ? caption + ' (' + against + ')' : caption;
+}`,
+  parseJson: `function parseJson(value) {
+  if (typeof value !== 'string') return value && typeof value === 'object' ? value : null;
+  try { return JSON.parse(value); } catch (e) { return null; }
 }`,
 };
 

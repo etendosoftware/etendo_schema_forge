@@ -1,4 +1,4 @@
-import { formatCalendarMonthShort, formatCalendarQuarterShort } from '@/lib/dateOnly.js';
+import { formatCalendarDate, formatCalendarMonthShort, formatCalendarQuarterShort } from '@/lib/dateOnly.js';
 import { buildPeriodValues, EXPORT_MAX_BUCKETS } from '@etendosoftware/schema-forge-cli/src/report-periods.js';
 import { comparedRanges, serializePeriods } from './dynamicDates.js';
 
@@ -36,20 +36,29 @@ const COLUMNS_WITH_COMPARISON = ['current', 'compared', 'variation', 'variationP
  * The column groups of a result. `periods` are the answer's (`{idx, dateFrom, dateTo, partial}`),
  * `grain` the `columns` the answer was asked with. Each group: `pos` (its index in `row.cells`),
  * `label` (short, `*` when partial), `partial`, `current` (its range), `compared` (the range the
- * comparison reads, null without one) and `columns` (the sub-columns it shows).
+ * comparison reads, null without one), `comparedLabel` (what Comparado is compared against: the
+ * compared month / quarter's short label, or for the Total group and Total mode the compared
+ * range's dates; '' without a comparison) and `columns` (the sub-columns it shows).
  */
 export function columnModel({ periods, grain, mode, locale, quarterPrefix, totalLabel }) {
   const lang = (locale || 'en_US').replace('_', '-');
   const short = (p) => (grain === 'quarter' ? formatCalendarQuarterShort(p.dateFrom, quarterPrefix) : formatCalendarMonthShort(p.dateFrom, lang));
+  const comparedLabelOf = (p, compared) => {
+    if (!compared) return '';
+    if (grain === 'total' || p.idx === 0) return `${formatCalendarDate(compared.from, lang)} – ${formatCalendarDate(compared.to, lang)}`;
+    return short({ dateFrom: compared.from });
+  };
   const groups = (periods || []).map((p, pos) => {
     const partialMark = p.partial ? '*' : '';
     const label = p.idx === 0 ? totalLabel : `${short(p)}${partialMark}`;
+    const compared = mode === 'none' ? null : comparedRanges(p, grain)[mode];
     return {
       pos,
       label,
       partial: Boolean(p.partial),
       current: { from: p.dateFrom, to: p.dateTo },
-      compared: mode === 'none' ? null : comparedRanges(p, grain)[mode],
+      compared,
+      comparedLabel: comparedLabelOf(p, compared),
       columns: mode === 'none' ? ['current'] : COLUMNS_WITH_COMPARISON,
     };
   });

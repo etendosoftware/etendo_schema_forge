@@ -32,6 +32,18 @@
 .period-table .ind-5 { padding-left: 14.5mm !important; }
 .period-table .ind-6 { padding-left: 17mm !important; }
 .period-note { margin-top: 3mm; font-size: 8pt; color: #64748b; }
+/* Headline cards (ETP-6239): one row of four, as on screen; green / red pill by good or bad news. */
+.kpi-row { display: flex; gap: 4mm; margin: 0 0 5mm; }
+.kpi-card { flex: 1 1 0; min-width: 0; border: 1px solid #e2e8f0; border-radius: 2mm; padding: 3mm 4mm; page-break-inside: avoid; }
+.kpi-card.positive { box-shadow: inset 1mm 0 0 var(--color-accent-highlight, #cbd5e1); }
+.kpi-card.negative { box-shadow: inset 1mm 0 0 #dc2626; }
+.kpi-label { font-size: 7pt; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--color-text-muted); }
+.kpi-value { font-size: 14pt; font-weight: 600; margin-top: 1mm; white-space: nowrap; }
+.kpi-sub { margin-top: 1mm; font-size: 7.5pt; color: var(--color-text-muted); white-space: nowrap; }
+.kpi-pill { display: inline-block; border-radius: 3mm; padding: 0 2mm; margin-right: 1.5mm; font-weight: 500; background: #f1f5f9; color: #475569; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.kpi-pill.improves { background: #dcfce7; color: #166534; }
+.kpi-pill.worsens { background: #fee2e2; color: #b91c1c; }
+.period-table th .cmp-against { display: block; font-size: 6.5pt; font-weight: 400; color: #64748b; white-space: nowrap; }
 </style>
 </head>
 <body><div class="report-container">
@@ -47,6 +59,22 @@
     {{/each}}
   </div>
   {{/if}}
+
+  {{#with (parseJson meta.params.kpis) as |cards|}}
+  {{!-- Headline cards (ETP-6239): only when the render carries them (the interactive view's PDF
+        sends `kpis`, the very figures on screen from kpiCards()); nothing otherwise. --}}
+  <div class="kpi-row">
+    {{#each cards as |card|}}
+    <div class="kpi-card {{card.tone}}">
+      <div class="kpi-label">{{lookup @root.meta.labels card.id}}</div>
+      <div class="kpi-value">{{#ifCond card.value '===' null}}&mdash;{{else}}{{formatCurrency card.value}}{{#if card.percent}} %{{/if}}{{/ifCond}}</div>
+      {{#if card.compare}}
+      <div class="kpi-sub">{{#if card.delta}}<span class="kpi-pill {{card.trend}}">{{#if card.up}}&#9650;{{else}}&#9660;{{/if}} {{formatCurrency card.delta.amount}} {{card.delta.unit}}</span>{{/if}}{{@root.meta.labels.kpiVs}} {{#ifCond card.refValue '===' null}}&mdash;{{else}}{{formatCurrency card.refValue}}{{#if card.percent}} %{{/if}}{{/ifCond}}</div>
+      {{/if}}
+    </div>
+    {{/each}}
+  </div>
+  {{/with}}
 
   {{#if meta.periods}}
   {{!-- Period columns (ETP-6239): one table per page of period groups (meta.columnPages: 2 groups a
@@ -66,7 +94,7 @@
       </tr>
       {{#if (periodMode @root.meta.params.compareMode)}}
       <tr>
-        {{#each page}}<th class="cell-amount">{{@root.meta.labels.periodAmount}}</th><th class="cell-amount">{{@root.meta.labels.periodCompared}}</th><th class="cell-amount">{{@root.meta.labels.periodVarAmount}}</th><th class="cell-amount">{{@root.meta.labels.periodVarPct}}</th>{{/each}}
+        {{#each page as |idx|}}<th class="cell-amount">{{@root.meta.labels.periodAmount}}</th><th class="cell-amount">{{@root.meta.labels.periodCompared}}{{#with (periodCompared @root.meta.params.periods idx @root.meta.params.compareMode @root.meta.params.columns @root.meta.locale) as |against|}}<span class="cmp-against">({{against}})</span>{{/with}}</th><th class="cell-amount">{{@root.meta.labels.periodVarAmount}}</th><th class="cell-amount">{{@root.meta.labels.periodVarPct}}</th>{{/each}}
       </tr>
       {{/if}}
     </thead>

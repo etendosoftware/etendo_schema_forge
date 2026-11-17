@@ -72,6 +72,26 @@ describe('columnModel', () => {
     expect(prev[prev.length - 1].compared).toEqual({ from: '2026-06-15', to: '2026-08-31' });
   });
 
+  it('says what Comparado is compared against: the compared month / quarter, or the range for the Total', () => {
+    expect(model().map((g) => g.comparedLabel)).toEqual(['', '', '', '']);
+    // Same period last year: the same month, a year back. The total group names the compared dates.
+    expect(model({ mode: 'sly' }).map((g) => g.comparedLabel)).toEqual(['jul 25', 'ago 25', expect.stringMatching(/^sept? 25$/), '15/07/2025 – 30/09/2025']);
+    // Previous period: the previous calendar month; the total, the single D3 range.
+    expect(model({ mode: 'prev' }).map((g) => g.comparedLabel)).toEqual(['jun 26', 'jul 26', 'ago 26', '15/06/2026 – 31/08/2026']);
+    expect(model({ mode: 'sly', locale: 'en_US' }).map((g) => g.comparedLabel).slice(0, 2)).toEqual(['Jul 25', 'Aug 25']);
+  });
+
+  it('labels a compared quarter with the quarter prefix, and the Total mode with the compared dates', () => {
+    const quarters = { periods: buckets('quarter'), grain: 'quarter' };
+    expect(model({ ...quarters, mode: 'sly' })[0].comparedLabel).toBe('T3 25');
+    expect(model({ ...quarters, mode: 'prev' })[0].comparedLabel).toBe('T2 26');
+    expect(model({ ...quarters, mode: 'prev', locale: 'en_US', quarterPrefix: 'Q' })[0].comparedLabel).toBe('Q2 26');
+    const total = model({ periods: buckets('total'), grain: 'total', mode: 'prev', locale: 'en_US' });
+    // Previous period in Total mode: the same number of days (77), ending the day before the range; en-US dates, as the chip.
+    expect(total[0].comparedLabel).toBe('04/28/2026 – 07/14/2026');
+    expect(model({ periods: buckets('total'), grain: 'total', mode: 'sly' })[0].comparedLabel).toBe('15/07/2025 – 30/09/2025');
+  });
+
   it('the last N buckets for screen and PDF, every bucket for export', () => {
     const wide = { dateFrom: '2025-01-01', dateTo: '2026-12-31' };
     const screen = periodBuckets(wide, 'month', { maxShown: SCREEN_PERIODS.month }).buckets;
