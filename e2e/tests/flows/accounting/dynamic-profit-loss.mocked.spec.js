@@ -275,7 +275,7 @@ test.describe('Profit & Loss — period columns and the filter panel (ETP-6239)'
     await expect.poll(() => queries['report-general-ledger'].at(-1)).toMatchObject({ dateFrom: from, dateTo: to });
   });
 
-  test('a manual collapse survives a reload; the automatic one on Mes does not', async ({ page }) => {
+  test('a manual collapse survives a reload; the automatic one on Mes is session-only and the URL restores Mes', async ({ page }) => {
     await installMocks(page);
     await page.goto(REPORT);
     await expect(page.getByTestId('DynamicReportTable__row')).toHaveCount(2);
@@ -291,7 +291,12 @@ test.describe('Profit & Loss — period columns and the filter panel (ETP-6239)'
     await page.getByTestId('DynamicReportPanel__columns').selectOption('month');
     await expect(page.getByTestId('DynamicReportPanel__strip')).toBeVisible();
     await expect(page.getByTestId('DynamicReportPanel__expand')).toBeFocused();
+    // ETP-6239: Mes is in the URL, so a reload restores it and hides the panel again for the session...
+    await expect(page).toHaveURL(/columns=month/);
     await page.reload();
+    await expect(page.getByTestId('DynamicReportPanel__strip')).toBeVisible();
+    // ...but the hide itself was never stored: a clean link opens the panel expanded.
+    await page.goto(REPORT);
     await expect(page.getByTestId('DynamicReportPanel')).toBeVisible();
   });
 

@@ -20,6 +20,8 @@ import { useAccountSplit } from './useAccountSplit.js';
 import { REPORT_EVENTS, filterTypeOf, useReportTelemetry } from './reportTelemetry.js';
 import { matchingShortcut, matchingYear, openingPeriod, periodBuckets, pickedYearPeriod, serializePeriods, shortcutPeriod } from './dynamicDates.js';
 import { modeHiddenCount, periodLimit, exportTooLong as isExportTooLong, columnModel, modeOf, rowsForMode } from './reportColumns.js';
+import { readReportUrlState, urlStateSpec, writeReportUrlState } from './reportUrlState.js';
+import { useRestoredPickerNames } from './useRestoredPickerNames.js';
 import { expandedNodeIdsParam, foldExpansion, visibleRows } from './reportTree.js';
 
 const EXPORTS = [
@@ -65,8 +67,8 @@ function buildChips({ state, ui, label, fmt, orgName, reference, splitDimensions
     { key: 'period', label: ui('dynamicReportPeriodChip'), value: `${fmt(state.dateFrom)} – ${fmt(state.dateTo)}` },
     // The org has no `clear` on purpose: the query requires one, so it is changed in the panel, never removed.
     orgName && { key: 'org', label: label('orgId'), value: orgName },
-    state.bPartnerId && { key: 'bp', label: label('bPartnerId'), value: state._display_bPartnerId, clear: { bPartnerId: '', _display_bPartnerId: '' } },
-    state.productId && { key: 'product', label: label('productId'), value: state._display_productId, clear: { productId: '', _display_productId: '' } },
+    state.bPartnerId && { key: 'bp', label: label('bPartnerId'), value: state._display_bPartnerId || state.bPartnerId, clear: { bPartnerId: '', _display_bPartnerId: '' } },
+    state.productId && { key: 'product', label: label('productId'), value: state._display_productId || state.productId, clear: { productId: '', _display_productId: '' } },
     state.columns !== 'total' && { key: 'columns', label: ui('dynamicReportColumns'), value: ui(COLUMN_LABELS[state.columns]), clear: { columns: 'total' } },
     reference && { key: 'compare', label: ui('dynamicReportComparedWith'), value: `${fmt(reference.from)} – ${fmt(reference.to)}`, clear: { compare: '' } },
     state.splitBy && { key: 'split', label: ui('dynamicReportSplitChip'), value: splitDimensions.find((d) => d.value === state.splitBy)?.label, clear: { splitBy: '' } },
@@ -96,7 +98,7 @@ function initialState(defaultOrgId, period, level) {
  * `clear` can be removed from there. Exception: the organization chip is not removable, because the
  * query requires an org; it is changed in the panel.
  */
-export default function DynamicReportView({ report, onBack, selectedOrgId, roleOrgs = [], source = 'deep_link', reportAccess = null }) {
+export default function DynamicReportView({ report, onBack, selectedOrgId, roleOrgs = [], source = 'deep_link', reportAccess = null, search, onSearchChange }) {
   // The server refuses a drill step the role cannot open (ETP-6080), so the view does not offer it.
   const canOpen = (id) => Boolean(reportAccess?.[id]);
   const ui = useUI();
@@ -124,7 +126,25 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   const defaults = useReportDefaults(selectedOrgId);
   const [today] = useState(() => todayCalendarISO());
   const opening = useMemo(() => (defaults.loading ? null : openingPeriod(defaults.years, today)), [defaults.loading, defaults.years, today]);
-  const [state, setState] = useState(() => initialState(selectedOrgId, null, defaultLevel));
+  // The selections come back from the URL before the first query (no request with the defaults, then a second one).
+  // `search` / `onSearchChange` are the router's (the page passes them); on its own the view uses the address bar.
+  const [state, setState] = useState(() => ({
+    ...initialState(selectedOrgId, null, defaultLevel),
+    ...readReportUrlState(search ?? window.location.search, report, { orgIds: orgs.map((o) => o.id) }),
+  }));
+  useRestoredPickerNames(useMemo(() => urlStateSpec(report).pickers, [report]), state, setState);
+  // Every change goes back to the URL, minus the defaults (replace: filter tweaks do not fill the back history).
+  // Not while the defaults reload (the opening period is unknown then, and the defaults would be written).
+  const searchRef = useRef(search);
+  searchRef.current = search;
+  useEffect(() => {
+    if (defaults.loading) return;
+    const current = searchRef.current ?? window.location.search;
+    const next = writeReportUrlState(current, state, report, { orgId: selectedOrgId, dateFrom: opening?.dateFrom, dateTo: opening?.dateTo });
+    if (next.replace(/^\?/, '') === current.replace(/^\?/, '')) return;
+    if (onSearchChange) onSearchChange(next);
+    else window.history.replaceState(window.history.state, '', `${window.location.pathname}${next}${window.location.hash}`);
+  }, [state, report, selectedOrgId, opening, defaults.loading, onSearchChange]);
   // The opening period lands once the years have loaded; a user edit before that is kept.
   useEffect(() => {
     if (opening) setState((s) => (s.dateFrom ? s : { ...s, dateFrom: opening.dateFrom, dateTo: opening.dateTo }));
@@ -171,6 +191,13 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
     focusAfter.current = collapsed ? expandRef : collapseRef;
     panel.setCollapsed(collapsed, opts);
   };
+  // A link restored on Mes / Trimestre hides the panel for the session like a manual pick (D8).
+  const restoredPeriodColumns = useRef(state.columns !== 'total');
+  useEffect(() => {
+    if (restoredPeriodColumns.current && !panel.collapsed) togglePanel(true, 'auto_columns', { persist: false });
+    restoredPeriodColumns.current = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
+  }, []);
   useEffect(() => {
     focusAfter.current?.current?.focus();
     focusAfter.current = null;

@@ -1,0 +1,107 @@
+import { parseCalendarDate, todayCalendarISO } from '@/lib/dateOnly.js';
+
+/**
+ * ETP-6239 — the interactive reports' selections in the URL, so F5, a bookmark or a shared link
+ * restores them. Engine-level and pure (state ⇄ query string): nothing here names a report. What a
+ * report persists is derived from its own definition (`report.parameters`, the contract's):
+ *
+ *   - `orgId`                    when it declares an org parameter;
+ *   - `dateFrom` + `dateTo`      when it declares both as date parameters (written and read as a pair);
+ *   - each picker                every visible `search` parameter on a selector the panel offers
+ *                                (`PICKER_SELECTORS`), its ids comma-joined;
+ *   - `columns` + `compare`      when it declares `compareTo` (the period engine's marker: Columnas and
+ *                                the comparison are one feature, they travel together);
+ *   - `splitBy`                  when it declares `splitBy`.
+ *
+ * Only what differs from the default is written, so an untouched period stays out and tomorrow still
+ * opens on "1 January to today". The URL is user input: every value is checked and an invalid one is
+ * ignored (its default stays). Names of picked items are NOT in the URL (they would be unchecked text
+ * shown as a label and printed in the export header): the view resolves them by id.
+ */
+
+export const PICKER_SELECTORS = Object.freeze(['bpartner', 'product']);
+const ENUMS = {
+  compare: ['same-last-year', 'previous'],
+  columns: ['month', 'quarter'], // 'total' is the default, never written
+  splitBy: ['org', 'bpartner', 'product'],
+};
+const ID = /^[A-Za-z0-9_-]{1,64}$/;
+const ID_LIST = /^[A-Za-z0-9_-]{1,64}(,[A-Za-z0-9_-]{1,64}){0,99}$/;
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** What `report` persists, derived from its parameters. */
+export function urlStateSpec(report) {
+  const params = report?.parameters || [];
+  const has = (name) => params.some((p) => p.name === name);
+  const isDate = (name) => params.some((p) => p.name === name && p.type === 'date');
+  return {
+    org: has('orgId'),
+    period: isDate('dateFrom') && isDate('dateTo'),
+    pickers: params.filter((p) => p.type === 'search' && !p.hidden && PICKER_SELECTORS.includes(p.selector)).map((p) => ({ name: p.name, selector: p.selector })),
+    controls: [...(has('compareTo') ? ['columns', 'compare'] : []), ...(has('splitBy') ? ['splitBy'] : [])],
+  };
+}
+
+/** Every query-string key `report` owns: what a write clears (and sets back when it differs from the default). */
+export function reportUrlKeys(report) {
+  const spec = urlStateSpec(report);
+  return [...(spec.org ? ['orgId'] : []), ...(spec.period ? ['dateFrom', 'dateTo'] : []), ...spec.controls, ...spec.pickers.map((p) => p.name),
+    // `_display_*` names are neither written nor read (see above); listing them only lets a write drop one an old link carried.
+    ...spec.pickers.map((p) => `_display_${p.name}`)];
+}
+
+/** A real calendar day `yyyy-MM-dd` (2026-02-30 is not one), or null. */
+function validDay(raw) {
+  if (!DATE.test(raw ?? '')) return null;
+  const d = parseCalendarDate(raw);
+  return d && todayCalendarISO(d) === raw ? raw : null;
+}
+
+/**
+ * The view state patch a query string carries for `report`: only valid values. `orgIds` is the list
+ * the org picker can offer; a restored org outside it (unknown, or `0`/`*`) is ignored, so a link
+ * can never point the report at an org the user cannot choose.
+ */
+export function readReportUrlState(search, report, { orgIds = [] } = {}) {
+  const spec = urlStateSpec(report);
+  const q = new URLSearchParams(search || '');
+  const patch = {};
+  const orgId = q.get('orgId');
+  if (spec.org && orgId && ID.test(orgId) && new Set(orgIds).has(orgId)) patch.orgId = orgId;
+  if (spec.period) {
+    const from = validDay(q.get('dateFrom'));
+    const to = validDay(q.get('dateTo'));
+    // A period is both bounds, in order; half of one or a reversed one is ignored as a whole.
+    if (from && to && from <= to) Object.assign(patch, { dateFrom: from, dateTo: to });
+  }
+  for (const key of spec.controls) {
+    const v = q.get(key);
+    if (ENUMS[key].includes(v)) patch[key] = v;
+  }
+  for (const { name } of spec.pickers) {
+    const ids = q.get(name);
+    if (ids && ID_LIST.test(ids)) patch[name] = ids;
+  }
+  return patch;
+}
+
+/**
+ * The query string for `state`: the current `search` with this report's keys replaced by those that
+ * differ from `defaults` (`{ orgId, dateFrom, dateTo }`; an empty state date is simply not written).
+ * Keys that are not the report's (`report`, `category`) are left as they are.
+ */
+export function writeReportUrlState(search, state, report, defaults = {}) {
+  const spec = urlStateSpec(report);
+  const q = new URLSearchParams(search || '');
+  for (const key of reportUrlKeys(report)) q.delete(key);
+  const put = (key, value, def = '') => { if (value && value !== def) q.set(key, value); };
+  if (spec.org) put('orgId', state.orgId, defaults.orgId);
+  if (spec.period && state.dateFrom && state.dateTo && !(state.dateFrom === defaults.dateFrom && state.dateTo === defaults.dateTo)) {
+    q.set('dateFrom', state.dateFrom);
+    q.set('dateTo', state.dateTo);
+  }
+  for (const key of spec.controls) put(key, state[key], key === 'columns' ? 'total' : '');
+  for (const { name } of spec.pickers) put(name, state[name]);
+  const out = q.toString();
+  return out ? `?${out}` : '';
+}

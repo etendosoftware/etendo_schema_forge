@@ -2109,18 +2109,25 @@ export default function ReportViewerPage() {
   // ETP-6080 F10: a report picked from the list was opened from the menu; any other arrival
   // (a pasted URL, a favourite, a reload) counts as a deep link for `report_opened.source`.
   const [pickedReportId, setPickedReportId] = useState(null);
+  // A report's own selections live in the query string (the dynamic view writes them, the old viewer reads
+  // deep links from it), so they belong to that report only: leaving it keeps the category and nothing
+  // else, and a report picked from the list starts with just the category and itself (ETP-6239).
+  const categoryOnly = () => {
+    const params = new URLSearchParams();
+    if (categoryFilter) params.set('category', categoryFilter);
+    return params;
+  };
   const selectReport = (report) => {
     setPickedReportId(report.id);
-    const params = new URLSearchParams(searchParams);
+    const params = categoryOnly();
     params.set('report', report.id);
     setSearchParams(params);
   };
 
-  const clearReport = () => {
-    const params = new URLSearchParams(searchParams);
-    params.delete('report');
-    setSearchParams(params);
-  };
+  const clearReport = () => setSearchParams(categoryOnly());
+  // The dynamic view's own writes go through the router (replace: no new history entry), so the
+  // router and the address bar never disagree.
+  const writeViewSearch = useCallback((next) => setSearchParams(new URLSearchParams(next), { replace: true }), [setSearchParams]);
 
   // ETP-5116 — the Financial Reports and Informes de inventario pages had zero
   // real access control (any authenticated user, any role, could reach either
@@ -2153,6 +2160,8 @@ export default function ReportViewerPage() {
           roleOrgs={selectedRole?.orgList || []}
           source={pickedReportId === selectedReport.id ? 'menu' : 'deep_link'}
           reportAccess={reportAccess}
+          search={searchParams.toString()}
+          onSearchChange={writeViewSearch}
           data-testid="DynamicReportView__3c998a" />
       </Suspense>
     );

@@ -41,11 +41,13 @@ const REPORT = {
   title: { es_ES: 'Pérdidas y Ganancias' },
   sections: [{ id: 'periodo', label: { es_ES: 'Periodo' } }, { id: 'agrupacion', label: { es_ES: 'Agrupación' } }, { id: 'comparacion', label: { es_ES: 'Comparación' } }],
   parameters: [
-    { name: 'orgId', label: { es_ES: 'Organización' } },
-    { name: 'dateFrom', label: { es_ES: 'Fecha de Inicio' } },
-    { name: 'dateTo', label: { es_ES: 'Fecha de Fin' } },
-    { name: 'bPartnerId', label: { es_ES: 'Contacto' } },
-    { name: 'productId', label: { es_ES: 'Producto' } },
+    { name: 'orgId', type: 'search', selector: 'org', hidden: true, label: { es_ES: 'Organización' } },
+    { name: 'dateFrom', type: 'date', label: { es_ES: 'Fecha de Inicio' } },
+    { name: 'dateTo', type: 'date', label: { es_ES: 'Fecha de Fin' } },
+    { name: 'compareTo', type: 'toggle' },
+    { name: 'bPartnerId', type: 'search', selector: 'bpartner', label: { es_ES: 'Contacto' } },
+    { name: 'productId', type: 'search', selector: 'product', label: { es_ES: 'Producto' } },
+    { name: 'splitBy', type: 'string', hidden: true },
     { name: 'accountLevel', default: 'C', options: [{ value: 'E', label: { es_ES: 'Epígrafe' } }, { value: 'C', label: { es_ES: 'Cuenta' } }, { value: 'S', label: { es_ES: 'Subcuenta' } }] },
   ],
 };
@@ -88,6 +90,7 @@ const queries = () => queriesTo('profit-loss');
 
 function route(url, init) {
   if (url.includes('/report-selectors/acctschema')) return Promise.resolve(json({ items: [{ id: 'S1', name: 'Schema' }] }));
+  if (url.includes('/report-selectors/bpartner')) return Promise.resolve(json({ items: [{ id: 'BP1', name: 'Acme' }, { id: 'BP2', name: 'Beta' }] }));
   if (url.includes('/report-selectors/year')) return Promise.resolve(json({ items: years }));
   if (url.endsWith('/render')) return Promise.resolve({ ok: true, status: 200, blob: () => Promise.resolve(new Blob(['x'])) });
   if (url.endsWith('/report-general-ledger/query')) return Promise.resolve(json(ledgerAnswer(JSON.parse(init.body))));
@@ -107,6 +110,7 @@ const renderView = (props = {}) => render(<DynamicReportView report={REPORT} onB
 const rowIds = () => screen.queryAllByTestId('DynamicReportTable__row').map((r) => r.dataset.nodeId);
 
 beforeEach(() => {
+  window.history.replaceState(null, '', '/'); // the view writes its selections to the URL: start every test clean
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(2026, 10, 3, 12));
   years = JULY_YEARS;
@@ -1262,6 +1266,8 @@ describe('DynamicReportView — collapsible panel (ETP-6239 D8/D9)', () => {
       const { unmount } = await ready();
       fireEvent.change(screen.getByTestId('DynamicReportPanel__columns'), { target: { value: 'month' } });
       unmount();
+      // Opened afresh (the URL's columns would restore the hide, see the URL suite): nothing was stored.
+      window.history.replaceState(null, '', '/');
       await ready();
       expect(screen.getByTestId('DynamicReportPanel')).toBeInTheDocument();
     });
@@ -1303,5 +1309,108 @@ describe('dynamic report view — translations', () => {
       expect([...used].filter((k) => !labels[k]), locale).toEqual([]);
     }
     expect(used.size).toBeGreaterThan(20);
+  });
+});
+
+describe('DynamicReportView — selections in the URL (ETP-6239)', () => {
+  const eventsOf = (name) => trackMock.mock.calls.filter(([event]) => event === name);
+  const ORGS = [{ id: 'O1', name: 'Org 1' }, { id: 'O2', name: 'Org 2' }, { id: '0', name: '*' }];
+  const link = (query) => window.history.replaceState(null, '', `/report-viewer?report=profit-loss&${query}`);
+
+  it('restores the panel from the query string before the first query: one request, the restored params, no filter event', async () => {
+    link('columns=month&compare=same-last-year&dateFrom=2026-03-01&dateTo=2026-05-31&bPartnerId=BP1&splitBy=org&orgId=O2&bogus=1');
+    queryAnswer = periodAnswer;
+    renderView({ roleOrgs: ORGS });
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    await new Promise((r) => setTimeout(r, 450));
+    expect(queries()).toHaveLength(1);
+    expect(queries()[0]).toMatchObject({ columns: 'month', dateFrom: '2026-03-01', dateTo: '2026-05-31', bPartnerId: 'BP1', orgId: 'O2' });
+    // Mes hides the panel for the session, as a manual pick does.
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__expand'));
+    expect(screen.getByTestId('DynamicReportPanel__columns')).toHaveValue('month');
+    expect(screen.getByTestId('DynamicReportPanel__compare')).toHaveValue('same-last-year');
+    expect(eventsOf('report_filter_applied')).toHaveLength(0);
+    // A user's change does emit it.
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__compare'), { target: { value: 'previous' } });
+    await waitFor(() => expect(eventsOf('report_filter_applied')).toHaveLength(1));
+    expect(localStorage.getItem('etendo.reports.panel.collapsed:undefined')).toBeNull(); // the auto-hide stores nothing
+  });
+
+  it('a restored link on Mes hides the panel for the session; the Total does not', async () => {
+    link('columns=month');
+    renderView();
+    await waitFor(() => expect(screen.getByTestId('DynamicReportPanel__expand')).toBeInTheDocument());
+  });
+
+  it('a clean URL opens the defaults, and an invalid value is ignored and cleaned from the URL', async () => {
+    link('columns=week&compare=x&dateFrom=2026-02-30&dateTo=2026-03-01');
+    renderView();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    expect(queries()).toHaveLength(1);
+    expect(queries()[0]).toMatchObject({ columns: 'total', dateFrom: '2026-07-01', dateTo: '2026-11-03' });
+    expect(window.location.search).toBe('?report=profit-loss');
+  });
+
+  it('an org the role cannot pick (unknown, or *) falls back to the default org and leaves the URL', async () => {
+    for (const org of ['0123456789ABCDEF0123456789ABCDEF', '0']) {
+      apiFetchMock.mockClear();
+      link(`orgId=${org}`);
+      const view = renderView({ roleOrgs: ORGS });
+      await waitFor(() => expect(queries()).toHaveLength(1));
+      expect(queries()[0].orgId).toBe('O1');
+      expect(window.location.search).toBe('?report=profit-loss');
+      view.unmount();
+    }
+  });
+
+  it('a restored contact shows its id until its name is resolved by id, with no name taken from the URL', async () => {
+    link('bPartnerId=BP1&_display_bPartnerId=Spoofed');
+    renderView();
+    await waitFor(() => expect(screen.getByText('Acme')).toBeInTheDocument()); // the chip, from the selector
+    expect(screen.queryByText('Spoofed')).toBeNull();
+    expect(apiFetchMock.mock.calls.some(([u]) => u.includes('/report-selectors/bpartner'))).toBe(true);
+    await waitFor(() => expect(queries()).toHaveLength(1)); // the lookup never delays or repeats the query
+    expect(queries()[0].bPartnerId).toBe('BP1');
+    expect(window.location.search).not.toContain('_display');
+  });
+
+  it('a change replaces the URL (no new history entry) with only what differs from the default', async () => {
+    link('x=1');
+    const replace = vi.spyOn(window.history, 'replaceState');
+    const push = vi.spyOn(window.history, 'pushState');
+    renderView();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    expect(window.location.search).toBe('?report=profit-loss&x=1'); // untouched dates stay out
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__compare'), { target: { value: 'previous' } });
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__columns'), { target: { value: 'month' } }); // hides the panel (D8)
+    await waitFor(() => expect(window.location.search).toBe('?report=profit-loss&x=1&columns=month&compare=previous'));
+    expect(replace).toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__expand'));
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__columns'), { target: { value: 'total' } });
+    await waitFor(() => expect(window.location.search).toBe('?report=profit-loss&x=1&compare=previous'));
+    replace.mockRestore();
+    push.mockRestore();
+  });
+
+  it('writes through the router when the page hands one over, and reads its query string', async () => {
+    const onSearchChange = vi.fn();
+    renderView({ search: 'report=profit-loss&category=finance&compare=previous', onSearchChange });
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    expect(screen.getByTestId('DynamicReportPanel__compare')).toHaveValue('previous');
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__compare'), { target: { value: 'same-last-year' } });
+    await waitFor(() => expect(onSearchChange).toHaveBeenLastCalledWith('?report=profit-loss&category=finance&compare=same-last-year'));
+  });
+
+  it('does not write the defaults while they reload on an org change, so an untouched period stays out of the URL', async () => {
+    link('x=1');
+    const onSearchChange = vi.fn();
+    const view = renderView({ onSearchChange });
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    onSearchChange.mockClear();
+    view.rerender(<DynamicReportView report={REPORT} onBack={vi.fn()} selectedOrgId="O2" onSearchChange={onSearchChange} reportAccess={FULL_ACCESS} />);
+    await new Promise((r) => setTimeout(r, 50));
+    // While the years reload the opening period is unknown: nothing of the period is written.
+    expect(onSearchChange.mock.calls.map(([next]) => next).filter((next) => next.includes('dateFrom'))).toEqual([]);
   });
 });

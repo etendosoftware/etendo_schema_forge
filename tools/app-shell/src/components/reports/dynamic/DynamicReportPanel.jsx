@@ -147,7 +147,7 @@ export default function DynamicReportPanel({
           <div key={name} className="text-xs">
             <span>{label(name)}</span>
             <PopupMultiSelector
-              key={state[name] ? 'set' : 'empty'}
+              key={`${state[name] ? 'set' : 'empty'}${state[`_display_${name}`] ? '-named' : ''}`}
               selector={name === 'bPartnerId' ? 'bpartner' : 'product'}
               label={label(name)}
               value={state[name]}
