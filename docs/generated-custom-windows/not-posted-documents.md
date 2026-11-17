@@ -477,9 +477,19 @@ code, or a missing id, shows no link. It opens in the same tab; Back restores th
    post, or "Actualizar") uses the filters in effect **when it runs**, so a post that finishes
    after the user changed a filter never brings back the old results.
 4. **Contabilizar (selection)** — `POST /header/0/action/bulk-post` (`timeout: 0`); outcome via
-   the shared `showBulkActionToast` (same toast as every other list's bulk "Contabilizar"; a single
-   failed row shows its real backend error; when several failures share the same identity —
-   `messageKeys` + `messageParams` — that reason is shown once as the toast description, ETP-5591). Selected rows without `tableId` are never sent and are
+   the shared `showBulkActionToast` with `listFailures: true` (ETP-6286). A single failed row
+   (nothing else selected) shows its real backend error. Otherwise the count summary
+   ("Proceso ejecutado: …") carries, as description, the failed documents grouped by translated
+   reason, one line per reason: `INV-1, INV-2 +3 — <motivo>`. The reason is the same text the
+   per-row **Contabilizar** shows (same `messageKeys`/`messageParams` translation). Caps: 3 reason
+   lines, 3 labels per line (`+N` for the rest), labels clipped to 40 characters, reasons to 200
+   (whitespace collapsed); the documents of further reasons are counted in one
+   `bulkFailuresMore` line ("Y {n} documentos más; usa Contabilizar en la fila para ver el
+   motivo"). The Estado column only shows the coarse bucket (e.g. "Error"), so the per-row action
+   is the way to see a hidden reason. The label is the row's `description` (joined by `recordId`),
+   else its document-type label, never the UUID. A plan-quota refusal (ETP-5051) still replaces
+   the listing. The listing toast stays 10 s. Other lists keep the ETP-5316 default (counts only,
+   plus the ETP-5591 shared reason). Selected rows without `tableId` are never sent and are
    reported in the toast's **omitted** count (ETP-5209 bucket), not silently dropped. Then:
    selection cleared, reload. Leaving the page aborts an in-flight rows request.
 
@@ -495,7 +505,8 @@ document windows: `NotPostedDocumentsHandler` forwards `messageKeys` + `messageP
 
 This is exactly the text Relación albarán-factura shows (see `matched-purchase-invoices.md`).
 The bulk **Contabilizar** goes through `showBulkActionToast`: when exactly one row was sent and it
-failed, it shows that row's translated error (same identity); otherwise only the ok/failed counts.
+failed, it shows that row's translated error (same identity); otherwise the counts plus the
+failed documents grouped by that same translated reason (ETP-6286, see step 4 above).
 
 ### Locked-record posting error (ETP-5529)
 

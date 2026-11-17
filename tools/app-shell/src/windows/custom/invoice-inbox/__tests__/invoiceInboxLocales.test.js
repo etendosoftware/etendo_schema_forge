@@ -1,6 +1,8 @@
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxMessages.js
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxFilters.js
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxPage.jsx
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxReviewModel.js
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewDrawer.jsx
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -120,5 +122,162 @@ describe('Invoice Inbox locale keys', () => {
     assert.equal(g.invoiceInboxDiscardTitleOne, '¿Descartar esta factura?');
     assert.match(g.invoiceInboxDiscardTitleMany, /¿Descartar \{+\s*count\s*\}+ facturas\?/);
     assert.match(g.invoiceInboxErrorForeignReceiver, /La factura no está emitida a tu empresa/);
+  });
+
+  // Review panel (ETP-6050): the invoiceInboxReview* keys.
+  describe('review panel keys', () => {
+    const placeholders = (s) => [...String(s).matchAll(/\{\{?\s*(\w+)\s*\}?\}/g)].map((m) => m[1]).sort();
+    const reviewKeys = Object.keys(locales.en_US.genericLabels).filter((k) => k.startsWith('invoiceInboxReview'));
+
+    it('there are 80+ review keys in en_US and the sources use them', () => {
+      assert.ok(reviewKeys.length >= 80, `found ${reviewKeys.length}`);
+      const usedReview = inboxKeys.filter((k) => k.startsWith('invoiceInboxReview'));
+      assert.ok(usedReview.length >= 70, `sources use ${usedReview.length}`);
+      assert.deepEqual(usedReview.filter((k) => !reviewKeys.includes(k)), []);
+    });
+
+    for (const locale of ['es_ES', 'es_AR']) {
+      it(`${locale} defines exactly the review keys of en_US, non-empty, with the same placeholders`, () => {
+        const g = locales[locale].genericLabels;
+        const own = Object.keys(g).filter((k) => k.startsWith('invoiceInboxReview'));
+        assert.deepEqual(own.sort(), [...reviewKeys].sort());
+        for (const key of reviewKeys) {
+          assert.ok(String(g[key]).trim(), `${locale}.${key} empty`);
+          assert.deepEqual(placeholders(g[key]), placeholders(locales.en_US.genericLabels[key]), `${locale}.${key}`);
+        }
+      });
+    }
+
+    it('the singular variants carry no count placeholder and the plural ones do, in every locale', () => {
+      for (const json of Object.values(locales)) {
+        const g = json.genericLabels;
+        for (const key of ['invoiceInboxReviewVendorAmbiguousTitleOne', 'invoiceInboxReviewProductAmbiguousTagOne', 'invoiceInboxReviewPendingOne']) {
+          assert.deepEqual(placeholders(g[key]), [], key);
+        }
+        for (const key of ['invoiceInboxReviewVendorAmbiguousTitle', 'invoiceInboxReviewProductAmbiguousTag', 'invoiceInboxReviewPendingMany']) {
+          assert.deepEqual(placeholders(g[key]), ['count'], key);
+        }
+      }
+    });
+
+    it('the Spanish singular texts read as the design does', () => {
+      for (const l of ['es_ES', 'es_AR']) {
+        assert.equal(locales[l].genericLabels.invoiceInboxReviewVendorAmbiguousTitleOne, 'Etendo AI propone 1 proveedor');
+        assert.equal(locales[l].genericLabels.invoiceInboxReviewProductAmbiguousTagOne, '1 producto posible');
+      }
+    });
+
+    it('es_ES review texts have no voseo', () => {
+      for (const key of reviewKeys) {
+        assert.doesNotMatch(locales.es_ES.genericLabels[key], /\b(Podés|Tenés|Querés|Revisalas|vos)\b/, key);
+      }
+    });
+  });
+});
+
+// ETP-6050 S2: editing, autosave, line discount, resolution of vendor / product (31 new keys).
+describe('review panel editing keys (S2)', () => {
+  const placeholders = (s) => [...String(s).matchAll(/\{\{?\s*(\w+)\s*\}?\}/g)].map((m) => m[1]).sort();
+  const S2_KEYS = [
+    'invoiceInboxReviewColDiscount', 'invoiceInboxReviewLineDiscountDetail',
+    'invoiceInboxSaveSaving', 'invoiceInboxSaveSaved', 'invoiceInboxSaveReloadedTitle',
+    'invoiceInboxSaveErrorStale', 'invoiceInboxSaveErrorNotEditable', 'invoiceInboxSaveErrorNotReviewable',
+    'invoiceInboxSaveErrorNotValid', 'invoiceInboxSaveErrorInvalidValue', 'invoiceInboxSaveErrorTooManyLines',
+    'invoiceInboxSaveErrorLineNotFound', 'invoiceInboxSaveErrorUnknownVendor', 'invoiceInboxSaveErrorUnknownProduct',
+    'invoiceInboxSaveErrorUnknownCategory', 'invoiceInboxSaveErrorUnknownUom', 'invoiceInboxSaveErrorTooLarge',
+    'invoiceInboxSaveErrorAccess', 'invoiceInboxSaveErrorGeneric',
+    'invoiceInboxReviewProductMatchManual', 'invoiceInboxReviewVendorLinkedManual',
+    'invoiceInboxReviewProductCategory', 'invoiceInboxReviewProductUom', 'invoiceInboxReviewProductNewRequired',
+    'invoiceInboxReviewProductCreateNewButton', 'invoiceInboxReviewVendorCreateNewButton',
+    'invoiceInboxReviewFieldEmail', 'invoiceInboxReviewFieldPhone', 'invoiceInboxReviewLinesRequired',
+    'invoiceInboxReviewReferenceTooLong', 'invoiceInboxReviewDateRawHint',
+  ];
+
+  it('lists 31 distinct keys', () => {
+    assert.equal(new Set(S2_KEYS).size, 31);
+  });
+
+  for (const [locale, json] of Object.entries(locales)) {
+    it(`${locale} defines every S2 key, non-empty`, () => {
+      assert.deepEqual(S2_KEYS.filter((k) => !String(json.genericLabels[k] ?? '').trim()), []);
+    });
+  }
+
+  it('the S2 texts keep the same placeholders in every locale', () => {
+    for (const key of S2_KEYS) {
+      const base = placeholders(locales.en_US.genericLabels[key]);
+      for (const locale of ['es_ES', 'es_AR']) assert.deepEqual(placeholders(locales[locale].genericLabels[key]), base, `${locale}.${key}`);
+    }
+    assert.deepEqual(placeholders(locales.en_US.genericLabels.invoiceInboxReviewReferenceTooLong), ['max']);
+    assert.deepEqual(placeholders(locales.en_US.genericLabels.invoiceInboxReviewDateRawHint), ['date']);
+  });
+
+  it('every key the editor can show for a refusal exists (the model maps codes to these)', async () => {
+    const { SAVE_ERROR_LABEL_KEYS } = await import('../invoiceInboxReviewModel.js');
+    for (const key of Object.values(SAVE_ERROR_LABEL_KEYS)) {
+      for (const [locale, json] of Object.entries(locales)) assert.ok(json.genericLabels[key], `${locale}.${key}`);
+    }
+  });
+
+  it('the sources use the S2 keys (a key nothing reads is dead text)', () => {
+    assert.deepEqual(S2_KEYS.filter((k) => !inboxKeys.includes(k)), []);
+  });
+
+  it('es_ES S2 texts have no voseo', () => {
+    for (const key of S2_KEYS) {
+      assert.doesNotMatch(locales.es_ES.genericLabels[key], /\b(Podés|Tenés|Querés|vos)\b/, key);
+    }
+  });
+});
+
+
+// ETP-6050 S2 addenda: tax by id, validator codes, line-based tax rows, unknown names (6 more keys).
+describe('review panel keys added with the tax selector and the line codes (S2 addenda)', () => {
+  const placeholders = (s) => [...String(s).matchAll(/\{\{?\s*(\w+)\s*\}?\}/g)].map((m) => m[1]).sort();
+  const ADDENDA_KEYS = [
+    'invoiceInboxReviewNameUnknown', 'invoiceInboxReviewTotalTaxLine', 'invoiceInboxReviewQuantityMissingError',
+    'invoiceInboxReviewPriceMissingError', 'invoiceInboxSaveErrorUnknownTax', 'invoiceInboxReviewTaxPlaceholder',
+  ];
+
+  for (const [locale, json] of Object.entries(locales)) {
+    it(`${locale} defines the ${ADDENDA_KEYS.length} addenda keys, non-empty`, () => {
+      assert.deepEqual(ADDENDA_KEYS.filter((k) => !String(json.genericLabels[k] ?? '').trim()), []);
+    });
+  }
+
+  it('the sources read every addenda key (a key nothing reads is dead text)', () => {
+    const readViaModel = new Set(['invoiceInboxSaveErrorUnknownTax']);
+    assert.deepEqual(ADDENDA_KEYS.filter((k) => !inboxKeys.includes(k) && !readViaModel.has(k)), []);
+    assert.ok(inboxKeys.includes('invoiceInboxSaveErrorUnknownTax'), 'mapped from the unknown_tax code');
+  });
+
+  it('the line-based tax row keeps the same {rate} and {base} placeholders as the document-based one, in every locale', () => {
+    for (const [locale, json] of Object.entries(locales)) {
+      assert.deepEqual(placeholders(json.genericLabels.invoiceInboxReviewTotalTaxLine), ['base', 'rate'], locale);
+      assert.deepEqual(placeholders(json.genericLabels.invoiceInboxReviewTotalTax), ['base', 'rate'], locale);
+    }
+  });
+
+  it('the other addenda texts carry no placeholder', () => {
+    for (const [locale, json] of Object.entries(locales)) {
+      for (const key of ADDENDA_KEYS.filter((k) => k !== 'invoiceInboxReviewTotalTaxLine')) {
+        assert.deepEqual(placeholders(json.genericLabels[key]), [], `${locale}.${key}`);
+      }
+    }
+  });
+
+  it('es_ES has no voseo and es_AR uses it in the two "missing" errors', () => {
+    const voseo = /\b(Podés|Tenés|Querés|Indicá|Elegí|vos)\b/;
+    for (const key of ADDENDA_KEYS) assert.doesNotMatch(locales.es_ES.genericLabels[key], voseo, key);
+    assert.match(locales.es_AR.genericLabels.invoiceInboxReviewQuantityMissingError, /Indicá/);
+    assert.match(locales.es_AR.genericLabels.invoiceInboxReviewPriceMissingError, /Indicá/);
+  });
+
+  it('the Spanish texts are translated (not the English ones left in place)', () => {
+    for (const locale of ['es_ES', 'es_AR']) {
+      for (const key of ADDENDA_KEYS) {
+        assert.notEqual(locales[locale].genericLabels[key], locales.en_US.genericLabels[key], `${locale}.${key}`);
+      }
+    }
   });
 });

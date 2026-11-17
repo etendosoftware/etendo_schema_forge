@@ -16,6 +16,73 @@ import {
 import { QUOTATION_PDF_LABEL_KEYS, resolveLabelKeys } from './printableSources.js';
 
 // ---------------------------------------------------------------------------
+// The reject reason of a rejected quotation (ETP-6209 Part C)
+// ---------------------------------------------------------------------------
+/**
+ * The first words of the line the customer portal appends to a rejected quotation's notes
+ * (`portal-quotation-decision.note*` in com.etendoerp.go's `emails_{es_ES,en_US}.properties`,
+ * written in the decision's language). Keep in sync with those catalogs and with
+ * `QuotationPrintableData.PORTAL_NOTE_PREFIXES` (the server-side port).
+ */
+export const PORTAL_REJECT_NOTE_PREFIXES = Object.freeze([
+  'Rechazado por el cliente desde el portal.',
+  'Rejected by the customer from the portal.',
+]);
+/** The word before the reason inside that line, per catalog language. */
+const PORTAL_REJECT_REASON_MARKERS = Object.freeze(['Motivo:', 'Reason:']);
+const STATUS_REJECTED = 'CJ';
+
+/** The reason inside a portal note line: what follows its marker, without the closing period. */
+function reasonOfPortalNote(line) {
+  for (const marker of PORTAL_REJECT_REASON_MARKERS) {
+    const at = line.indexOf(marker);
+    if (at >= 0) {
+      const reason = line.slice(at + marker.length).trim().replace(/\.$/, '').trim();
+      return reason || null;
+    }
+  }
+  return null;
+}
+
+/**
+ * The quotation's notes and its printed reject reason (ETP-6209 Part C, Jira comment 149518 point 5).
+ *
+ * A rejected quotation (`CJ`) prints one observation line "Motivo: <reason>": the tenant's reject
+ * reason (`C_Reject_Reason`, `rejectReason$_identifier`) when the seller has set one, otherwise the
+ * customer's portal reason (the "Otros" text included) read from the portal's line in the notes.
+ * That portal line is taken out of the notes so the observations never say "Motivo" twice.
+ *
+ * **The tenant's internal reason is visible to the customer**: this PDF is the one the customer
+ * downloads from the portal and receives by email. The user accepted this explicitly (2026-11-16);
+ * do not "fix" it without a product decision.
+ *
+ * Other statuses keep their notes untouched and print no reason. Mirrored by
+ * `QuotationPrintableData.notesAndRejectReason` (server-side render) — change both together.
+ *
+ * @param {object} header the quotation's header record
+ * @returns {{ notes: string|null, rejectReason: string|null }}
+ */
+export function quotationNotesAndRejectReason(header) {
+  const description = header?.description || null;
+  if (header?.documentStatus !== STATUS_REJECTED) {
+    return { notes: description, rejectReason: null };
+  }
+  const kept = [];
+  let portalReason = null;
+  for (const line of String(description ?? '').split('\n')) {
+    const trimmed = line.trim();
+    if (PORTAL_REJECT_NOTE_PREFIXES.some((prefix) => trimmed.startsWith(prefix))) {
+      portalReason = reasonOfPortalNote(trimmed) ?? portalReason;
+    } else {
+      kept.push(line);
+    }
+  }
+  const notes = kept.join('\n').trim() || null;
+  const tenantReason = header['rejectReason$_identifier'] || null;
+  return { notes, rejectReason: tenantReason || portalReason };
+}
+
+// ---------------------------------------------------------------------------
 // Build quotation data for the template
 // ---------------------------------------------------------------------------
 export async function buildQuotationData(quotationId, base, token, currencyData = null) {
@@ -53,6 +120,7 @@ export async function buildQuotationData(quotationId, base, token, currencyData 
   const etgoTotalDiscount = Number(header.etgoTotalDiscount ?? 0);
   const { grossAmount, discountPerProduct, totalDiscountAmt } =
     computeDiscountBreakdown(linesRaw, etgoTotalDiscount, getGrossLine);
+  const { notes, rejectReason } = quotationNotesAndRejectReason(header);
 
   return {
     ...buildCompanyFields(session, header, companyLogoDataUrl, partnerLocation),
@@ -63,7 +131,9 @@ export async function buildQuotationData(quotationId, base, token, currencyData 
     customerName: header.businessPartner$_identifier || header.businessPartner || '—',
     paymentMethod: header.paymentMethod$_identifier || null,
     paymentTerms: header.paymentTerms$_identifier || null,
-    notes: header.description || null,
+    notes,
+    // ETP-6209: "Motivo: …" on a rejected quotation, see quotationNotesAndRejectReason.
+    rejectReason,
     lines,
     netAmount,
     taxAmount,

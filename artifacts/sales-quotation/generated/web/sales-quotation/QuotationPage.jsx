@@ -20,7 +20,6 @@ const breadcrumb = 'Sales / Sales Quotation';
 // @sf-generated-start summary:quotation
 const summary = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string' },
-  { key: 'rejectReason', column: 'C_Reject_Reason_ID', type: 'selector' },
 ];
 
 const statusField = 'documentStatus';
@@ -50,6 +49,9 @@ const draftMode = {
     "CL",
     "VO",
     "CJ"
+  ],
+  "keepSaveWhenCompletedFields": [
+    "rejectReason"
   ]
 };
 // @sf-generated-end draftMode:quotation
@@ -483,8 +485,8 @@ export default function QuotationPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         hideDeleteWhenComplete
-        hidePrintWhen={{"documentStatus":{"notIn":["UE","CA","ETGO_CI","CJ"]}}}
-        hideSaveStatuses={["CA","ETGO_CI","CL","VO","CJ"]}
+        hidePrintWhen={{"documentStatus":{"notIn":["UE","ETGO_AC","CA","ETGO_CI","CJ"]}}}
+        hideSaveStatuses={["CA","ETGO_CI","CL","VO"]}
         noHeaderBorder
         notesField="description"
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Order", config: {} } }]}

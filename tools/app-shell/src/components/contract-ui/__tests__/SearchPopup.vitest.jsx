@@ -186,6 +186,9 @@ describe('SearchPopup — committed value (ETP-5948)', () => {
       });
     });
   }
+  // ETP-6280 — the first option through a plain DOM query: a role query over ~1000 rows costs
+  // ~140 ms, and inside a waitFor it runs on every poll (it was most of the 1000-row walk's time).
+  const firstOption = () => document.querySelector('[role="option"]');
   const listOffsets = (loadPage) => loadPage.mock.calls.filter(([q]) => q === '').map(([, offset]) => offset);
   const labelLookups = (loadPage) => loadPage.mock.calls.filter(([q]) => q !== '');
 
@@ -211,21 +214,22 @@ describe('SearchPopup — committed value (ETP-5948)', () => {
     await waitFor(() => expect(screen.getByTestId('search-popup-option-acc-75')).toHaveAttribute('aria-selected', 'true'));
     expect(listOffsets(loadPage)).toEqual([0, 30, 60]);
     expect(labelLookups(loadPage)).toHaveLength(0);
-    expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'search-popup-option-acc-0');
+    expect(firstOption()).toHaveAttribute('data-testid', 'search-popup-option-acc-0');
   });
 
   it('stops at the 1000-row walk total, then pins the value on top through a label lookup', async () => {
     const loadPage = pager(2000);
     renderPopup({ loadPage, value: 'acc-1500', valueLabel: 'Account 1500' });
 
-    await waitFor(() => expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'search-popup-option-acc-1500'),
-      { timeout: 25000 });
+    // 34-page walk: ~0.75 s locally with coverage; CI has run ~4x slower than local, past the 5 s default.
+    await waitFor(() => expect(firstOption()).toHaveAttribute('data-testid', 'search-popup-option-acc-1500'),
+      { timeout: 10000 });
     expect(screen.getByTestId('search-popup-option-acc-1500')).toHaveAttribute('aria-selected', 'true');
     // A loader that ignores the size hint walks 30 rows at a time up to the 1000-row walk total.
     expect(listOffsets(loadPage)).toEqual(Array.from({ length: 34 }, (_, i) => i * 30));
     expect(labelLookups(loadPage)).toHaveLength(1);
     expect(screen.getAllByRole('option')).toHaveLength(1021);
-  }, 30000);
+  });
 
   // The backend matches each identifier column on its own, so "<code> - <name>" as a whole finds
   // nothing (seen live on the product account popup); the code alone does.
@@ -233,7 +237,7 @@ describe('SearchPopup — committed value (ETP-5948)', () => {
     const loadPage = sizedPager(2000);
     renderPopup({ loadPage, value: 'acc-1500', valueLabel: 'Account 1500 - Compras de mercaderías' });
 
-    await waitFor(() => expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'search-popup-option-acc-1500'));
+    await waitFor(() => expect(firstOption()).toHaveAttribute('data-testid', 'search-popup-option-acc-1500'));
     expect(labelLookups(loadPage).map(([q]) => q)).toEqual(['Account 1500 - Compras de mercaderías', 'Account 1500']);
   });
 
@@ -291,14 +295,14 @@ describe('SearchPopup — committed value (ETP-5948)', () => {
     await waitFor(() => expect(screen.getByTestId('search-popup-option-acc-600')).toHaveAttribute('aria-selected', 'true'));
     expect(listCalls(loadPage)).toEqual([[0, 100], [100, 900]]);
     expect(labelLookups(loadPage)).toHaveLength(0);
-    expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'search-popup-option-acc-0');
+    expect(firstOption()).toHaveAttribute('data-testid', 'search-popup-option-acc-0');
   });
 
   it('stops at 1000 rows and pins the value when it is further (ETP-6103)', async () => {
     const loadPage = sizedPager(2000);
     renderPopup({ loadPage, value: 'acc-1500', valueLabel: 'Account 1500' });
 
-    await waitFor(() => expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'search-popup-option-acc-1500'));
+    await waitFor(() => expect(firstOption()).toHaveAttribute('data-testid', 'search-popup-option-acc-1500'));
     expect(listCalls(loadPage)).toEqual([[0, 100], [100, 900]]);
     expect(screen.getAllByRole('option')).toHaveLength(1001);
   });
@@ -412,9 +416,9 @@ describe('SearchPopup — committed value (ETP-5948)', () => {
   it('releases the hold when the value is not found (ETP-6103)', async () => {
     const loadPage = sizedPager(2000);
     renderPopup({ loadPage, value: 'acc-1900', valueLabel: 'Account 1900' });
-    await waitFor(() => expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'search-popup-option-acc-1900'));
+    await waitFor(() => expect(firstOption()).toHaveAttribute('data-testid', 'search-popup-option-acc-1900'));
     expect(screen.queryByTestId('search-popup-locating')).toBeNull();
-    expect(screen.getAllByRole('option')[0]).not.toHaveClass('invisible');
+    expect(firstOption()).not.toHaveClass('invisible');
   });
 
   it('behaves as before without a value: nothing marked, no walk', async () => {
@@ -423,5 +427,67 @@ describe('SearchPopup — committed value (ETP-5948)', () => {
     await screen.findByTestId('search-popup-option-acc-0');
     expect(screen.queryAllByTestId('search-popup-check')).toHaveLength(0);
     expect(listOffsets(loadPage)).toEqual([0]);
+  });
+});
+
+// ETP-6280 — rows are memoized: appending a page renders only the new rows, a highlight move only
+// the rows whose state changed, and a new inline onSelect none. Each row render reads `option.name`
+// exactly once, so a counting getter counts row renders without touching the component. The loader
+// filters on a separate `label` so its own reads never inflate the count.
+describe('SearchPopup — row memoization (ETP-6280)', () => {
+  let rowRenders = 0;
+  const countedRow = (n) => {
+    const label = `Account ${String(n).padStart(4, '0')}`;
+    return { id: `acc-${n}`, label, get name() { rowRenders += 1; return label; } };
+  };
+  function countedPager(total) {
+    const all = Array.from({ length: total }, (_, i) => countedRow(i));
+    return vi.fn((q, offset, _signal, opts) => {
+      const size = opts?.limit ?? SEARCH_POPUP_PAGE_SIZE;
+      const matches = q ? all.filter((o) => o.label.includes(q)) : all;
+      return Promise.resolve({ items: matches.slice(offset, offset + size), hasMore: offset + size < matches.length });
+    });
+  }
+
+  it('renders only the new rows when a page is appended', async () => {
+    renderPopup({ loadPage: countedPager(200) });
+    await screen.findByTestId('search-popup-option-acc-29');
+    await act(async () => { observerCallback([{ isIntersecting: true }]); });
+    await screen.findByTestId('search-popup-option-acc-59');
+
+    rowRenders = 0;
+    await act(async () => { observerCallback([{ isIntersecting: true }]); });
+    await screen.findByTestId('search-popup-option-acc-89');
+    expect(rowRenders).toBe(SEARCH_POPUP_PAGE_SIZE);
+  });
+
+  it('re-renders only the rows whose highlight changed on each arrow key', async () => {
+    renderPopup({ loadPage: countedPager(30) });
+    await screen.findByTestId('search-popup-option-acc-29');
+    const input = screen.getByTestId('search-popup-input');
+
+    const perKey = [];
+    for (const key of ['ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowUp']) {
+      rowRenders = 0;
+      fireEvent.keyDown(input, { key });
+      perKey.push(rowRenders);
+    }
+    // The first press only gains a highlight (1 row); every later move loses one and gains one.
+    expect(perKey).toEqual([1, 2, 2, 2]);
+    expect(screen.getByTestId('search-popup-option-acc-1')).toHaveAttribute('data-highlighted', 'true');
+  });
+
+  it('does not re-render the rows for a new inline onSelect, and calls the latest one', async () => {
+    const loadPage = countedPager(30);
+    const props = { open: true, onClose: vi.fn(), loadPage, title: 'Cuenta' };
+    const { rerender } = render(<SearchPopup {...props} onSelect={vi.fn()} />);
+    await screen.findByTestId('search-popup-option-acc-29');
+
+    const latest = vi.fn();
+    rowRenders = 0;
+    rerender(<SearchPopup {...props} onSelect={latest} />);
+    expect(rowRenders).toBe(0);
+    fireEvent.click(screen.getByTestId('search-popup-option-acc-3'));
+    expect(latest).toHaveBeenCalledWith(expect.objectContaining({ id: 'acc-3' }));
   });
 });

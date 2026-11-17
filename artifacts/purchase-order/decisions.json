@@ -1,6 +1,7 @@
 {
   "$schema": "decisions-v2",
   "window": {
+    "publicApi": { "actions": ["complete"] },
     "category": "purchases",
     "name": "Purchase Order",
     "agentPrompt": "#REF#agent-prompts/purchase-order/spec.md",
@@ -163,7 +164,8 @@
           "reference": "PaymentMethod",
           "form": true,
           "section": "principal",
-          "seq": 70
+          "seq": 70,
+          "publicApi": { "lookup": { "context": { "IsSOTrx": "N" } } }
         },
         "paymentTerms": {
           "form": true,

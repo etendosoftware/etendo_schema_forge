@@ -19,7 +19,11 @@
       Variation columns (ETP-6080): only with a comparison AND only for a
       contract that declares `labels.variationAmount` (Profit & Loss; the
       Balance Sheet shares this file byte for byte and has no variation yet).
-      Raw values like the amounts; an empty cell when there is no % (reference 0). --}}
+      Raw values like the amounts; an empty cell when there is no % (reference 0).
+      Period columns (ETP-6239): with `meta.periods` the amount columns become one group per
+      bucket (every bucket, the range total last), each `label`, and with a comparison also
+      `label Compared`, `label Var.` and `label Var. %`. The Balance Sheet copy of this file
+      keeps the same loops, which come out empty for it (it never sends `periods`). --}}
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8">
 <style>
@@ -36,8 +40,16 @@
       <th>{{meta.labels.hdrType}}</th>
       <th>{{meta.labels.hdrCode}}</th>
       <th>{{meta.labels.hdrName}}</th>
+      {{#if meta.periods}}
+      {{#each (periodOrder meta.periods) as |idx|}}
+      {{#with (periodLabel (lookup @root.meta.periods idx) @root.meta.params.columns @root.meta.locale @root.meta.labels.T) as |label|}}
+      <th>{{label}}</th>{{#if (periodMode @root.meta.params.compareMode)}}<th>{{label}} {{@root.meta.labels.periodCompared}}</th><th>{{label}} {{@root.meta.labels.periodVarAmount}}</th><th>{{label}} {{@root.meta.labels.periodVarPct}}</th>{{/if}}
+      {{/with}}
+      {{/each}}
+      {{else}}
       <th>{{meta.labels.amount}}</th>
       {{#ifCond meta.params.compareTo '===' 'true'}}<th>{{meta.labels.amount_ref}}</th>{{#if meta.labels.variationAmount}}<th>{{meta.labels.variationAmount}}</th><th>{{meta.labels.variationPct}}</th>{{/if}}{{/ifCond}}
+      {{/if}}
     </tr></thead>
     <tbody>
       {{#each rows}}
@@ -47,8 +59,16 @@
         <td>{{#if this.isFormula}}{{#ifCond this.elementlevel '===' 'E'}}{{@root.meta.labels.T}}{{else}}{{lookup @root.meta.labels this.elementlevel}}{{/ifCond}}{{else}}{{lookup @root.meta.labels this.elementlevel}}{{/if}}</td>
         <td>{{this.value}}</td>
         <td>{{this.name}}</td>
+        {{#if @root.meta.periods}}
+        {{#each (periodOrder @root.meta.periods) as |idx|}}
+        {{#with (lookup ../cells idx) as |cell|}}
+        <td data-cell-type="number">{{cell.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#with (lookup cell (periodMode @root.meta.params.compareMode)) as |ref|}}<td data-cell-type="number">{{ref.amount}}</td><td data-cell-type="number">{{ref.variationAmount}}</td><td data-cell-type="number">{{ref.variationPct}}</td>{{/with}}{{/if}}
+        {{/with}}
+        {{/each}}
+        {{else}}
         <td data-cell-type="number">{{this.amount}}</td>
         {{#ifCond @root.meta.params.compareTo '===' 'true'}}<td data-cell-type="number">{{this.amount_ref}}</td>{{#if @root.meta.labels.variationAmount}}<td data-cell-type="number">{{this.variationAmount}}</td><td data-cell-type="number">{{this.variationPct}}</td>{{/if}}{{/ifCond}}
+        {{/if}}
       </tr>
       {{/each}}
     </tbody>

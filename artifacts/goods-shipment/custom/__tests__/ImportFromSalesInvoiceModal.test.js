@@ -1,6 +1,7 @@
 // @covers artifacts/goods-shipment/custom/ImportFromSalesInvoiceModal.jsx
 import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -85,6 +86,16 @@ describe('ImportFromSalesInvoiceModal — fetchDocuments', () => {
   });
 });
 
+describe('ImportFromSalesInvoiceModal — row total', () => {
+  // ETP-6002 CP-27: the invoice rows used to show 0,00 (`zeroDocumentTotal`); they now show the
+  // invoice's pending `amount`, which `availableInvoices` sends with `detail`, as the order popup.
+  it('takes the row total from the server pending amount, not a fixed 0', () => {
+    const source = readFileSync(join(__dirname, '..', 'ImportFromSalesInvoiceModal.jsx'), 'utf8');
+    assert.match(source, /getDocumentTotal=\{pendingDocumentTotal\}/);
+    assert.doesNotMatch(source, /zeroDocumentTotal/);
+  });
+});
+
 describe('ImportFromSalesInvoiceModal — fetchLines', () => {
   afterEach(() => { mock.reset(); });
 
@@ -92,7 +103,7 @@ describe('ImportFromSalesInvoiceModal — fetchLines', () => {
     const f = backend({
       lines: [
         { id: 'l2', lineNo: 20, product: 'p2', pendingQuantity: 0, orderLine: null, linked: true, inDraftDocuments: [] },
-        { id: 'l1', lineNo: 10, product: 'p1', 'product$_identifier': 'Widget', pendingQuantity: 3, orderLine: 'ol1', inDraftDocuments: [] },
+        { id: 'l1', lineNo: 10, product: 'p1', 'product$_identifier': 'Widget', pendingQuantity: 3, orderLine: 'ol1', inDraftDocuments: [], unitPrice: 2.5 },
         { id: 'l3', lineNo: 30, product: 'p3', pendingQuantity: 0, orderLine: 'ol3', inDraftDocuments: ['SH-D1'] },
       ],
     });
@@ -107,6 +118,8 @@ describe('ImportFromSalesInvoiceModal — fetchLines', () => {
     ]);
     assert.equal(out[0]._productName, 'Widget');
     assert.equal(out[1]._productName, 'l2');
+    // ETP-6002 CP-27: priced like the order popup's lines, so the row total follows them once loaded
+    assert.deepEqual(out.map(l => [l._unitPrice, l._lineNetAmount]), [[2.5, 7.5], [0, 0], [0, 0]]);
   });
 
   it('posts the invoice line linked to its order line when it has one', async () => {

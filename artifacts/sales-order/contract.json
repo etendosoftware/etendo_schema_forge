@@ -1,8 +1,8 @@
 {
-  "version": "0.39.0",
+  "version": "0.41.0",
   "generatedAt": "2026-05-12T16:47:39.614Z",
-  "updatedAt": "2026-11-05T13:33:53.106Z",
-  "checksum": "00cc82bd88b6b787",
+  "updatedAt": "2026-11-16T18:47:24.985Z",
+  "checksum": "1ae09bd52481f2cd",
   "frontendContract": {
     "window": {
       "id": "143",
@@ -269,6 +269,13 @@
                 "IsSOTrx"
               ]
             },
+            "publicApi": {
+              "lookup": {
+                "context": {
+                  "IsSOTrx": "Y"
+                }
+              }
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -347,6 +354,13 @@
               "source": "DR"
             },
             "enumValues": [
+              {
+                "value": "ETGO_AC",
+                "name": "Accepted",
+                "labels": {
+                  "es_ES": "Accepted"
+                }
+              },
               {
                 "value": "AE",
                 "name": "Automatic Evaluation",

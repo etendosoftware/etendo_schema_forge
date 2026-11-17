@@ -1,8 +1,8 @@
 {
-  "version": "0.31.0",
+  "version": "0.35.0",
   "generatedAt": "2026-06-26T16:40:04.731Z",
-  "updatedAt": "2026-10-28T17:26:17.716Z",
-  "checksum": "92348c7b02c3e2b1",
+  "updatedAt": "2026-11-16T13:50:00.211Z",
+  "checksum": "0b99ca74327459c8",
   "frontendContract": {
     "window": {
       "id": "6CB5B67ED33F47DFA334079D3EA2340E",
@@ -16,6 +16,7 @@
         "documentStatus": {
           "notIn": [
             "UE",
+            "ETGO_AC",
             "CA",
             "ETGO_CI",
             "CJ"
@@ -26,8 +27,7 @@
         "CA",
         "ETGO_CI",
         "CL",
-        "VO",
-        "CJ"
+        "VO"
       ],
       "customComponents": {
         "topbarRight": "QuotationTopbarActions",
@@ -380,7 +380,7 @@
             "label": "Reject Reason",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": false,
             "grid": false,
             "form": true,
@@ -396,9 +396,9 @@
               "js": "record.documentStatus === 'CJ'"
             },
             "readOnlyLogic": {
-              "raw": "@DocStatus@='CJ'|@DocStatus@='CA'",
+              "raw": "@DocStatus@!'CJ'",
               "evaluable": true,
-              "js": "record['documentStatus'] === 'CJ' || record['documentStatus'] === 'CA'"
+              "js": "record['documentStatus'] !== 'CJ'"
             }
           },
           {
@@ -418,6 +418,13 @@
               "source": "DR"
             },
             "enumValues": [
+              {
+                "value": "ETGO_AC",
+                "name": "Accepted",
+                "labels": {
+                  "es_ES": "Accepted"
+                }
+              },
               {
                 "value": "AE",
                 "name": "Automatic Evaluation",
@@ -713,6 +720,9 @@
             "CL",
             "VO",
             "CJ"
+          ],
+          "keepSaveWhenCompletedFields": [
+            "rejectReason"
           ]
         }
       },
@@ -1061,6 +1071,7 @@
         "documentStatus": {
           "notIn": [
             "UE",
+            "ETGO_AC",
             "CA",
             "ETGO_CI",
             "CJ"
@@ -1071,8 +1082,7 @@
         "CA",
         "ETGO_CI",
         "CL",
-        "VO",
-        "CJ"
+        "VO"
       ],
       "customComponents": {
         "topbarRight": "QuotationTopbarActions",
@@ -1284,7 +1294,7 @@
             "apiKey": "rejectReason",
             "column": "C_Reject_Reason_ID",
             "type": "foreignKey",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": false
           },
           {

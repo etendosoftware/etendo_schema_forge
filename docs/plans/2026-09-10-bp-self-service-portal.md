@@ -4,6 +4,11 @@ Status: **approved for MVP, ready for DEV** · Created 2026-09-10 ·
 Jira: **[ETP-5267](https://etendoproject.atlassian.net/browse/ETP-5267)** (epic ETP-3504 Etendo Next) ·
 Flag: **`bp-portal-link`** (backend-only, targeted per sending `ETGO_ACCOUNT` email, see §2.5)
 
+> **Superseded in part by [`2026-11-11-customer-portal-sales-documents.md`](2026-11-11-customer-portal-sales-documents.md)
+> (ETP-6209):** one link per document send valid 48 hours instead of one stable link per Business
+> Partner, renewal by email instead of manual revocation (the revoke action is removed), every sales
+> document email instead of the invoice only. Its §0 lists exactly which sections below no longer hold.
+
 ## 0. Goal
 
 Replicate the scope of Holded's native "Portal del cliente" inside Etendo Go, for the MVP only:
@@ -39,8 +44,10 @@ Three read-only endpoints:
 supports public (unauthenticated) routes (used today for login/register). Add
 `{ path: 'portal', public: true, element: <PortalPage/> }`. This lands inside the tenant's own
 already-deployed shell — which is what gives us "portal per tenant" for free — and reuses
-`formatCurrency`, `parseCalendarDate`, i18n, and `useApiFetch` (passed the portal token instead of a
-NEO session token, per the existing `token` option documented in `docs/request-policy.md`).
+`formatCurrency`, `parseCalendarDate`, i18n, and the shared request helper (passed the portal token
+instead of a NEO session token, per the existing `token` option documented in
+`docs/request-policy.md`). Since ETP-6209 the portal builds that client outside the app's session
+scope (`usePortalApiFetch`), so the app's auth bootstrap cannot discard its answers on a cold open.
 
 ## 2.5 Gating — one feature flag, targeted at the account sending the invoice
 

@@ -16,6 +16,14 @@ describe('drillDown', () => {
     });
   });
 
+  it('a cell range replaces the view period (a bucket or a compared range), the rest unchanged', () => {
+    expect(ledgerParams(VIEW, { node_id: 'N700', value: '700' }, { from: '2026-02-01', to: '2026-02-28' })).toEqual({
+      acctSchemaId: 'S1', orgId: 'O1', dateFrom: '2026-02-01', dateTo: '2026-02-28', bPartnerId: 'B1', productId: '',
+      accountId: 'N700', fromAccountId: '700', toAccountId: '700',
+    });
+    expect(ledgerParams(VIEW, { node_id: 'N700', value: '700' }, null).dateFrom).toBe('2026-07-01');
+  });
+
   it('the entry: only schema, org and the entry, so it keeps every line', () => {
     expect(entryParams(VIEW, 'G1')).toEqual({ acctSchemaId: 'S1', orgId: 'O1', factAcctGroupId: 'G1' });
   });
