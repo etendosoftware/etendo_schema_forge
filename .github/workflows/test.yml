@@ -114,6 +114,10 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_BRANCH: ${{ github.base_ref }}
+          # Organization variables (ETP-6298): raised without a PR; unset, the script
+          # falls back to 70 and 1.
+          COVERAGE_MINIMUM: ${{ vars.COVERAGE_MINIMUM }}
+          COVERAGE_TOLERANCE: ${{ vars.COVERAGE_TOLERANCE }}
         run: >-
           node scripts/compare-sonar-coverage.js --context ci
           --pull-request "$PR_NUMBER" --base-branch "$BASE_BRANCH"
