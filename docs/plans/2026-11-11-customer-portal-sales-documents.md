@@ -958,6 +958,37 @@ instead of an error. S1: `validate`, `findSentLink` and `renew` enter admin mode
 - **Status filter.** `?status=` values are trimmed one by one; empty values are dropped.
 - **Dead MVP copy (BUG-8).** The MVP's invoice-only i18n keys were removed from the three locales.
 
+**Main screen aligned with the designer's spec (2026-11-17, desktop only).** Home and shell only;
+the list, detail, decision and confirmation screens keep their current design until their own spec
+arrives, so every shared piece takes the new look as an opt-in (`PortalSection variant="dashboard"`,
+`PortalSearchPill variant="header"`, `PortalDesktopHeader size="lg"`).
+- **Rail.** Expanded (default, 240 px): the etendo.ai mark and name (the link to the product site
+  that used to be the footer's "Creado con etendo.ai"), the collapse button, the company (tenant
+  logo and name; no chevron — a link belongs to one company), "General · Inicio", "Mis documentos"
+  with the kinds in alphabetical order of the viewer's language and their count chips (blue
+  quotations to answer, red overdue invoices), the promo card "Lleva tu negocio más lejos" with
+  "Empieza gratis", then the customer and the ES/EN switch. Collapsed (56 px): icons only; "Mis
+  documentos" shows the total count and expands the rail. The promo card shows only while expanded.
+  The choice is remembered per browser (`localStorage`, `etendo.portal.railCollapsed`; the rail
+  works without it).
+- **Top bar.** "Portal del cliente" (20/32) with the same subtitle, the 392 px white search pill.
+- **Body.** Greeting with the smiley tile; tiles 154 px with the icon bubble, the 60 px figure and a
+  pill badge (icons: FileText, Receipt, ShoppingCart, Package — the closest Lucide glyphs to the
+  design's Phosphor ones); "Tu saldo" now lists "Pagado este año" first, each with a count pill and
+  an amount badge; "Documentos recientes" has the round arrow button (desktop) and rows with packed
+  pills, no amount pill for a shipment; section headers in Space Mono 12/16 (the font the app
+  already loads for `.font-mono`).
+- **Chart.** A legend item per series (one today: "Facturado"; built as a series list so a second
+  one can join), a vertical / horizontal switch, the success gradient, dotted gridlines at the
+  dashboard helpers' round ticks and a dark tooltip with month and amount on hover or focus.
+- **Colours.** Badges keep the app's status tokens (statuses must look as in the app), which differ
+  slightly from the spec's hex values (e.g. the info blue).
+- **Pending with the PO (Jira comment 149666):** "Empieza gratis" goes to https://etendo.ai for now
+  (`ETENDO_AI_URL` in `PortalShell.jsx`); no microphone in the search; no "Albaranes de devolución"
+  in the rail (not a portal document kind); the "Ingresos" / "Gastos" legend is not drawn — the
+  single invoiced series keeps its label. Not built either: "Ayuda y soporte" (the portal has no
+  support channel to point to) and the top-bar buttons the design hides.
+
 ---
 
 # Part C — Accept / reject a quotation from the portal (planned and built 2026-11-13; PO answers in C.13)

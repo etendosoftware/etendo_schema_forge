@@ -313,6 +313,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  // The rail remembers its collapsed state per browser; no test may leak it into the next.
+  localStorage.clear();
 });
 
 describe('PortalPage — token handling (plan §5.4)', () => {
@@ -536,6 +538,32 @@ describe('PortalPage — shell', () => {
   });
 });
 
+describe('PortalPage — rail', () => {
+  it('shows the promo card only while the rail is expanded, and remembers the choice', async () => {
+    const user = userEvent.setup();
+    renderPortal();
+    await shellReady();
+
+    const rail = screen.getByTestId('portal-sidebar');
+    expect(rail).toHaveAttribute('data-collapsed', 'false');
+    expect(within(rail).getByTestId('portal-promo-cta')).toHaveAttribute('href', 'https://etendo.ai');
+
+    await user.click(screen.getByTestId('portal-rail-toggle'));
+
+    expect(rail).toHaveAttribute('data-collapsed', 'true');
+    expect(screen.queryByTestId('portal-promo')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('portal-nav-quotation')).not.toBeInTheDocument();
+    // Collapsed, "Mis documentos" carries the total of the kinds' counts (2 quotations + 1 invoice).
+    expect(screen.getByTestId('portal-nav-documents-count').textContent).toBe('3');
+    expect(localStorage.getItem('etendo.portal.railCollapsed')).toBe('true');
+
+    // "Mis documentos" expands the rail again, to choose a kind.
+    await user.click(screen.getByTestId('portal-nav-documents'));
+    expect(rail).toHaveAttribute('data-collapsed', 'false');
+    expect(screen.getByTestId('portal-promo')).toBeInTheDocument();
+  });
+});
+
 describe('PortalPage — language', () => {
   it('opens the language menu from its trigger, names Spanish by default and switches to English', async () => {
     const user = userEvent.setup();
@@ -656,6 +684,33 @@ describe('PortalPage — home', () => {
     await detailReady();
     expect(callsTo('/documents/order/ord-1')).toHaveLength(1);
     expect(screen.getByTestId('portal-view-title').textContent).toBe('portalKindOrder PV/0001');
+  });
+
+  it('switches the chart between vertical and horizontal bars, with the month and amount on hover', async () => {
+    const user = userEvent.setup();
+    responses.home = jsonResponse({
+      ...HOME,
+      chart: { months: 3, currency: 'EUR', bars: [{ month: '2026-09', amount: 500 }, { month: '2026-10', amount: 1000 }] },
+    });
+    renderPortal();
+    await shellReady();
+
+    const chart = screen.getByTestId('portal-chart-body');
+    expect(chart).toHaveAttribute('data-orientation', 'vertical');
+    expect(screen.getByTestId('portal-chart-orientation-vertical')).toHaveAttribute('aria-pressed', 'true');
+    const tallest = screen.getAllByTestId('portal-chart-bar')[1];
+    expect(tallest.style.height).toBe('100%');
+
+    await user.click(screen.getByTestId('portal-chart-orientation-horizontal'));
+
+    expect(chart).toHaveAttribute('data-orientation', 'horizontal');
+    expect(screen.getByTestId('portal-chart-orientation-horizontal')).toHaveAttribute('aria-pressed', 'true');
+    const [half, full] = screen.getAllByTestId('portal-chart-bar');
+    expect([half.style.width, full.style.width]).toEqual(['50%', '100%']);
+
+    await user.hover(full);
+    // The canonical formatter puts a no-break space before the symbol.
+    expect(screen.getByTestId('portal-chart-tooltip')).toHaveTextContent(/1\.000,00\s€/);
   });
 
   it('refetches only the home aggregates for another chart period', async () => {
