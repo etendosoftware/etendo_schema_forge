@@ -826,6 +826,16 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
       expect(apiFetchMock.mock.calls.length).toBe(before);
     });
 
+    it('the note reads in the singular at the 13-month / 1-hidden boundary', async () => {
+      await renderPeriods();
+      choose('DynamicReportPanel__columns', 'month');
+      showPanel();
+      fireEvent.change(screen.getByTestId('DynamicReportPanel__dateFrom'), { target: { value: '2025-11-01' } }); // 13 months to 2026-11
+      expect(await screen.findByTestId('DynamicReportView__hiddenNote')).toHaveTextContent('dynamicReportHiddenPeriodsOne:1');
+      fireEvent.change(screen.getByTestId('DynamicReportPanel__dateFrom'), { target: { value: '2025-10-01' } });
+      await waitFor(() => expect(screen.getByTestId('DynamicReportView__hiddenNote')).toHaveTextContent('dynamicReportHiddenPeriods:2'));
+    });
+
     it('a 23-month range hides 11 months, 17 with a comparison; quarters hide 0 / 0 over 4 quarters and 4 over 8', async () => {
       await renderPeriods();
       choose('DynamicReportPanel__columns', 'month');

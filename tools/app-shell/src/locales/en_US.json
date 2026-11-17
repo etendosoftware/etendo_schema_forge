@@ -26821,6 +26821,7 @@
     "dynamicReportColumnsQuarter": "By quarter",
     "dynamicReportQuarterPrefix": "Q",
     "dynamicReportHiddenPeriods": "{count} earlier periods are not shown. Excel and CSV include every period.",
+    "dynamicReportHiddenPeriodsOne": "{count} earlier period is not shown. Excel and CSV include every period.",
     "dynamicReportPartialPeriods": "* Month or quarter incomplete within the chosen range.",
     "dynamicReportExportTooLong": "Excel and CSV take up to 24 months or 8 quarters. Shorten the period to export them.",
     "dynamicReportHidePanel": "Hide filters panel",

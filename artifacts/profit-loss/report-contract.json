@@ -76,6 +76,8 @@
     "kpiVs": { "en_US": "vs", "es_ES": "vs" },
     "periodHiddenPre": { "en_US": "Not shown:", "es_ES": "No se muestran" },
     "periodHiddenPost": { "en_US": "earlier periods. Excel and CSV include every period.", "es_ES": "períodos anteriores. Excel y CSV incluyen todos los períodos." },
+    "periodHiddenPreOne": { "en_US": "Not shown:", "es_ES": "No se muestra" },
+    "periodHiddenPostOne": { "en_US": "earlier period. Excel and CSV include every period.", "es_ES": "período anterior. Excel y CSV incluyen todos los períodos." },
     "periodPartial": { "en_US": "* Month or quarter incomplete within the chosen range.", "es_ES": "* Mes o trimestre incompleto dentro del rango elegido." }
   },
   "mockDataFile": "mock-data.json"

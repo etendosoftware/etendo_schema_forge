@@ -27059,6 +27059,7 @@
     "dynamicReportColumnsQuarter": "Por trimestre",
     "dynamicReportQuarterPrefix": "T",
     "dynamicReportHiddenPeriods": "No se muestran {count} períodos anteriores. Excel y CSV incluyen todos los períodos.",
+    "dynamicReportHiddenPeriodsOne": "No se muestra {count} período anterior. Excel y CSV incluyen todos los períodos.",
     "dynamicReportPartialPeriods": "* Mes o trimestre incompleto dentro del rango elegido.",
     "dynamicReportExportTooLong": "Excel y CSV admiten hasta 24 meses u 8 trimestres. Acorta el período para exportarlos.",
     "dynamicReportHidePanel": "Ocultar panel de filtros",

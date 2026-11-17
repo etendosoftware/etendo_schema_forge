@@ -1002,4 +1002,19 @@ describe('profit-loss exports — headline cards and compared period (ETP-6239)'
     assert.deepEqual(tables.map((t) => (t.match(/<th class="cell-amount period-group"/g) || []).length), [7, 6]);
     assert.ok(tables.every((t) => t.includes('Concepto')));
   });
+
+  it('PDF: the hidden-periods note is singular for 1 and plural for more, in es and en', () => {
+    const note = (locale, hiddenCount) => {
+      const hb = Handlebars.create();
+      registerReportHelpers(hb, HELPERS_CODE);
+      const html = hb.compile(expandBrandingPartial(readFileSync(resolve(ARTIFACT_DIR, 'template.hbs'), 'utf8')))({
+        css: '', meta: { ...meta(locale, { columns: 'month', compareMode: 'none' }), notes: { hiddenCount } }, rows: [PROW],
+      });
+      return /class="period-note">([^<]*)</.exec(html)[1];
+    };
+    assert.match(note('es_ES', 1), /^No se muestra 1 período anterior\./);
+    assert.match(note('es_ES', 2), /^No se muestran 2 períodos anteriores\./);
+    assert.match(note('en_US', 1), /^Not shown: 1 earlier period\./);
+    assert.match(note('en_US', 5), /^Not shown: 5 earlier periods\./);
+  });
 });

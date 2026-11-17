@@ -25,6 +25,10 @@
 .period-table th, .period-table td { font-size: 8pt; }
 .period-table th.period-group { text-align: center; border-bottom: 1px solid #cbd5e1; }
 .period-table tr { page-break-inside: avoid; }
+/* 1 mm of row padding (base 1.5 mm): page 1 also carries the headline cards, and without this the closing row of a
+   9-row report spilled alone onto its own page (Chrome ignores break-avoid between table rows, so there is no
+   way to keep the last rows together; the saved height is the fix). */
+.period-table tbody td { padding-top: 1mm; padding-bottom: 1mm; }
 .period-table .ind-1 { padding-left: 4.5mm !important; }
 .period-table .ind-2 { padding-left: 7mm !important; }
 .period-table .ind-3 { padding-left: 9.5mm !important; }
@@ -121,7 +125,7 @@
     </tbody>
   </table>
   {{/each}}
-  {{#if meta.notes.hiddenCount}}<div class="period-note">{{meta.labels.periodHiddenPre}} {{meta.notes.hiddenCount}} {{meta.labels.periodHiddenPost}}</div>{{/if}}
+  {{#if meta.notes.hiddenCount}}<div class="period-note">{{#ifCond meta.notes.hiddenCount '===' 1}}{{meta.labels.periodHiddenPreOne}} 1 {{meta.labels.periodHiddenPostOne}}{{else}}{{meta.labels.periodHiddenPre}} {{meta.notes.hiddenCount}} {{meta.labels.periodHiddenPost}}{{/ifCond}}</div>{{/if}}
   {{#if meta.notes.hasPartial}}<div class="period-note">{{meta.labels.periodPartial}}</div>{{/if}}
   {{else}}
   <table class="report-table" style="table-layout: fixed;">

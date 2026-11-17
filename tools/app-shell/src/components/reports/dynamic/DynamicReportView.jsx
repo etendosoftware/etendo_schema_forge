@@ -376,7 +376,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
                   data-testid="DynamicReportTable__c51cea" />
                 {(hiddenCount > 0 || hasPartial) && (
                   <div className="mt-2 text-xs text-muted-foreground" data-testid="DynamicReportView__periodNotes">
-                    {hiddenCount > 0 && <p data-testid="DynamicReportView__hiddenNote">{ui('dynamicReportHiddenPeriods', { count: hiddenCount })}</p>}
+                    {hiddenCount > 0 && <p data-testid="DynamicReportView__hiddenNote">{ui(hiddenCount === 1 ? 'dynamicReportHiddenPeriodsOne' : 'dynamicReportHiddenPeriods', { count: hiddenCount })}</p>}
                     {hasPartial && <p data-testid="DynamicReportView__partialNote">{ui('dynamicReportPartialPeriods')}</p>}
                   </div>
                 )}
