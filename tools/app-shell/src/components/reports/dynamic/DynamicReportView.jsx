@@ -19,7 +19,7 @@ import { useReportDefaults } from './useReportDefaults.js';
 import { useAccountSplit } from './useAccountSplit.js';
 import { REPORT_EVENTS, filterTypeOf, useReportTelemetry } from './reportTelemetry.js';
 import { matchingShortcut, matchingYear, openingPeriod, periodBuckets, pickedYearPeriod, serializePeriods, shortcutPeriod } from './dynamicDates.js';
-import { SCREEN_PERIODS, exportTooLong as isExportTooLong, columnModel, modeOf, rowsForMode } from './reportColumns.js';
+import { modeHiddenCount, periodLimit, exportTooLong as isExportTooLong, columnModel, modeOf, rowsForMode } from './reportColumns.js';
 import { expandedNodeIdsParam, foldExpansion, visibleRows } from './reportTree.js';
 
 const EXPORTS = [
@@ -132,11 +132,11 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
 
   const change = useCallback((patch) => setState((s) => ({ ...s, ...patch })), []);
   const mode = modeOf(state.compare);
-  // ETP-6239: every request carries both compared ranges, so the comparison is a display choice, not a request.
+  // ETP-6239: every request carries both compared ranges and the most periods any mode shows, so the comparison is a display choice, not a request.
   const range = useMemo(() => ({ dateFrom: state.dateFrom, dateTo: state.dateTo }), [state.dateFrom, state.dateTo]);
   const hasRange = Boolean(state.dateFrom && state.dateTo && state.dateFrom <= state.dateTo);
   const plan = useMemo(
-    () => (hasRange ? periodBuckets(range, state.columns, { maxShown: SCREEN_PERIODS[state.columns] }) : null),
+    () => (hasRange ? periodBuckets(range, state.columns, { maxShown: periodLimit(state.columns, 'none') }) : null),
     [hasRange, range, state.columns],
   );
   const queryParams = useMemo(() => ({
@@ -200,6 +200,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
     [answered, mode, locale, quarterPrefix, totalLabel],
   );
   const reference = compare ? groups.find((g) => g.pos === 0)?.compared : null;
+  const hiddenCount = answered.hiddenCount + modeHiddenCount(answered.periods, answered.grain, mode);
   const hasPartial = groups.some((g) => g.partial);
 
   // Folding: a base (the level, expand all, collapse all) plus the rows the user flipped since,
@@ -244,7 +245,8 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   const exportAs = async (format) => {
     setExporting(format);
     setExportError(null);
-    const exportPlan = format === 'pdf' ? plan : fullPlan;
+    // The PDF prints what the screen shows in this mode (a comparison shows fewer periods).
+    const exportPlan = format === 'pdf' ? periodBuckets(range, state.columns, { maxShown: periodLimit(state.columns, mode) }) : fullPlan;
     try {
       await downloadRender(apiFetch, report.id, format, {
         format,
@@ -372,9 +374,9 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
                   onToggleSplit={hasRange ? toggleSplit : undefined}
                   onOpenLedger={canOpen(LEDGER_REPORT_ID) ? openLedger : null}
                   data-testid="DynamicReportTable__c51cea" />
-                {(answered.hiddenCount > 0 || hasPartial) && (
+                {(hiddenCount > 0 || hasPartial) && (
                   <div className="mt-2 text-xs text-muted-foreground" data-testid="DynamicReportView__periodNotes">
-                    {answered.hiddenCount > 0 && <p data-testid="DynamicReportView__hiddenNote">{ui('dynamicReportHiddenPeriods', { count: answered.hiddenCount })}</p>}
+                    {hiddenCount > 0 && <p data-testid="DynamicReportView__hiddenNote">{ui('dynamicReportHiddenPeriods', { count: hiddenCount })}</p>}
                     {hasPartial && <p data-testid="DynamicReportView__partialNote">{ui('dynamicReportPartialPeriods')}</p>}
                   </div>
                 )}

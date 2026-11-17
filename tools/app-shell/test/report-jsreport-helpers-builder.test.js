@@ -479,7 +479,7 @@ describe('buildJsreportHelpersString — behavioural parity between the emitted 
       [[{ idx: 0 }, { idx: 1 }, { idx: 2 }]], [[{ idx: 0 }]], [[{ idx: 1 }, { idx: 2 }]], [[]], [null], [undefined],
     ],
     periodPages: [
-      [[[0, 1], [2, 3], [4]]], [[[0, 1, 2, 3, 4, 5, 6]]], [[[0]]], [[]], [null], [undefined],
+      [[[0, 1], [2, 3], [4]]], [[[0, 1, 2, 3, 4, 5, 6]]], [[[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]], 13], [[[0, 1, 2, 3, 4, 5, 6, 7, 8]], 9], [[[0, 1, 2, 3, 4, 5, 6, 7, 8]], 2], [[[0]]], [[]], [null], [undefined],
     ],
     periodMode: [['sly'], ['prev'], ['none'], [''], [null], [undefined], ['bogus']],
     periodSpan: [[2, 'sly'], [2, 'prev'], [7, 'none'], [1, undefined], [0, 'sly']],

@@ -15,6 +15,6 @@
   "sha256": {
     "common.js": "864b649efa5bc2bbf030c1a689948456e8b36466ecdad76abca98739b7c764b6",
     "jsreport-helpers.js": "d795dec6cacfcf5f7c73f03e41ed5dca25c77fe3b1365c7fd58a40309bb5a1f6",
-    "report-html-helpers.js": "5c3f23b04207f9c6e8c0d8794a3a604f43d8ad8ee20c4237b015b6a151159ad1"
+    "report-html-helpers.js": "c6800227055fec789bf4f0a09c4afa6ba3f2b5de440672bff1eb6b2bd20ee2dd"
   }
 }

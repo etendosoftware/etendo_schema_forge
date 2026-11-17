@@ -986,4 +986,20 @@ describe('profit-loss exports — headline cards and compared period (ETP-6239)'
     assert.match(csv, /,"?T1 26 Comparado \(T4 25\)"?,/);
     assert.doesNotMatch(csv, /&quot;|&amp;/);
   });
+
+  it('PDF without a comparison: 12 months + Total do not fit one page, so they print as two even pages, Concepto repeated', () => {
+    const periods = Array.from({ length: 13 }, (_, i) => ({ idx: i, dateFrom: '2026-01-01', dateTo: '2026-01-31', partial: false }));
+    const cells = periods.map(() => CELL);
+    const hb = Handlebars.create();
+    registerReportHelpers(hb, HELPERS_CODE);
+    const html = hb.compile(expandBrandingPartial(readFileSync(resolve(ARTIFACT_DIR, 'template.hbs'), 'utf8')))({
+      css: '',
+      meta: { ...META_BASE, locale: 'es_ES', labels: LABELS.es_ES, periods, columnPages: [periods.map((p) => p.idx)], columnPageSize: 13, params: { columns: 'month', compareMode: 'none' } },
+      rows: [{ ...ROWS[0], cells }],
+    });
+    const tables = html.split('<table class="report-table period-table').slice(1);
+    assert.equal(tables.length, 2);
+    assert.deepEqual(tables.map((t) => (t.match(/<th class="cell-amount period-group"/g) || []).length), [7, 6]);
+    assert.ok(tables.every((t) => t.includes('Concepto')));
+  });
 });

@@ -35,7 +35,8 @@
 /* Headline cards (ETP-6239): one row of four, as on screen; green / red pill by good or bad news. */
 .kpi-row { display: flex; gap: 4mm; margin: 0 0 5mm; }
 .kpi-card { flex: 1 1 0; min-width: 0; border: 1px solid #e2e8f0; border-radius: 2mm; padding: 3mm 4mm; page-break-inside: avoid; }
-.kpi-card.positive { box-shadow: inset 1mm 0 0 var(--color-accent-highlight, #cbd5e1); }
+/* The app's --brand-lime (index.css); base.css's --color-accent-highlight is transparent in reports. */
+.kpi-card.positive { box-shadow: inset 1mm 0 0 hsl(83.3 94.4% 64.7%); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .kpi-card.negative { box-shadow: inset 1mm 0 0 #dc2626; }
 .kpi-label { font-size: 7pt; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--color-text-muted); }
 .kpi-value { font-size: 14pt; font-weight: 600; margin-top: 1mm; white-space: nowrap; }

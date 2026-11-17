@@ -13,8 +13,16 @@ const MODES = { '': 'none', 'same-last-year': 'sly', previous: 'prev' };
 export const modeOf = (compare) => MODES[compare] ?? 'none';
 
 export const COLUMN_GRAINS = Object.freeze(['total', 'month', 'quarter']);
-/** Periods the screen and the PDF show besides the range; Excel / CSV print every one. */
-export const SCREEN_PERIODS = Object.freeze({ month: 6, quarter: 4 });
+/**
+ * Periods the screen and the PDF show besides the range; Excel / CSV print every one. A comparison
+ * uses 4 columns per period instead of 1, so with one fewer periods fit the same width. The single
+ * source for the screen, the PDF request and the hidden-periods note.
+ */
+export const SCREEN_PERIODS = Object.freeze({ month: { plain: 12, compared: 6 }, quarter: { plain: 8, compared: 4 } });
+/** How many periods (besides the range) a grain shows in a comparison mode; Infinity for the Total grain. */
+export const periodLimit = (grain, mode) => SCREEN_PERIODS[grain]?.[mode === 'none' ? 'plain' : 'compared'] ?? Infinity;
+/** Periods a comparison mode hides on top of what the request left out (the answer always holds the plain limit). */
+export const modeHiddenCount = (periods, grain, mode) => Math.max(0, (periods?.length ?? 1) - 1 - periodLimit(grain, mode));
 /**
  * Excel / CSV refusal: asks the server's own validator (core report-periods.js, D5), so the cap can
  * never drift from it. `plan` is `periodBuckets(range, grain)`.
@@ -62,8 +70,12 @@ export function columnModel({ periods, grain, mode, locale, quarterPrefix, total
       columns: mode === 'none' ? ['current'] : COLUMNS_WITH_COMPARISON,
     };
   });
+  // Only the last `periodLimit` periods of the mode show; `pos` still indexes the answer's `row.cells`.
+  const total = (periods || []).length;
+  const limit = periodLimit(grain, mode);
+  const kept = groups.filter((g) => g.pos === 0 || g.pos > total - 1 - limit);
   // The range's total goes last on screen ("se agrega al final la columna de total"); `pos` still indexes `row.cells`.
-  return [...groups.slice(1), ...groups.slice(0, 1)];
+  return [...kept.slice(1), ...kept.slice(0, 1)];
 }
 
 /** How many table columns after Concepto the groups take. */

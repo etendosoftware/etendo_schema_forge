@@ -753,8 +753,9 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
       await renderPeriods();
       choose('DynamicReportPanel__year', 'Y25'); // 2025-07-01 .. 2026-06-30: 12 months, 4 quarters
       choose('DynamicReportPanel__columns', 'month');
-      await waitFor(() => expect(queries().at(-1)).toMatchObject({ columns: 'month', dateFrom: '2025-07-01', hiddenCount: '6' }));
-      expect(queries().at(-1).periods.split(',')).toHaveLength(7);
+      // The request asks for the most periods any mode shows (12 months / 8 quarters); a comparison trims on screen.
+      await waitFor(() => expect(queries().at(-1)).toMatchObject({ columns: 'month', dateFrom: '2025-07-01', hiddenCount: '0' }));
+      expect(queries().at(-1).periods.split(',')).toHaveLength(13);
       choose('DynamicReportPanel__columns', 'quarter');
       await waitFor(() => expect(queries().at(-1)).toMatchObject({ columns: 'quarter', hiddenCount: '0' }));
       expect(queries().at(-1).periods.split(',')).toHaveLength(5);
@@ -807,12 +808,36 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
       expect(groupLabels()).toEqual([expect.stringMatching(/^jul 26$/), 'ago 26', expect.stringMatching(/^sept? 26$/), 'oct 26', 'nov 26', 'dynamicReportColumnsTotal']);
     });
 
-    it('the hidden-periods note carries the count from the answer; none when nothing is hidden', async () => {
+    it('the hidden-periods note counts what the mode hides: 12 months / 8 quarters, 6 / 4 with a comparison, with no new request', async () => {
       await renderPeriods();
       expect(screen.queryByTestId('DynamicReportView__hiddenNote')).toBeNull();
-      choose('DynamicReportPanel__year', 'Y25');
+      choose('DynamicReportPanel__year', 'Y25'); // 12 months, 4 quarters
       choose('DynamicReportPanel__columns', 'month');
+      await waitFor(() => expect(groupLabels()).toHaveLength(13)); // 12 months + Total, nothing hidden
+      expect(screen.queryByTestId('DynamicReportView__hiddenNote')).toBeNull();
+      const before = apiFetchMock.mock.calls.length;
+      choose('DynamicReportPanel__compare', 'previous');
       expect(await screen.findByTestId('DynamicReportView__hiddenNote')).toHaveTextContent('dynamicReportHiddenPeriods:6');
+      expect(groupLabels()).toHaveLength(7);
+      choose('DynamicReportPanel__compare', '');
+      await waitFor(() => expect(groupLabels()).toHaveLength(13));
+      expect(screen.queryByTestId('DynamicReportView__hiddenNote')).toBeNull();
+      await quiet();
+      expect(apiFetchMock.mock.calls.length).toBe(before);
+    });
+
+    it('a 23-month range hides 11 months, 17 with a comparison; quarters hide 0 / 0 over 4 quarters and 4 over 8', async () => {
+      await renderPeriods();
+      choose('DynamicReportPanel__columns', 'month');
+      showPanel();
+      fireEvent.change(screen.getByTestId('DynamicReportPanel__dateFrom'), { target: { value: '2025-01-01' } });
+      expect(await screen.findByTestId('DynamicReportView__hiddenNote')).toHaveTextContent('dynamicReportHiddenPeriods:11');
+      choose('DynamicReportPanel__compare', 'same-last-year');
+      await waitFor(() => expect(screen.getByTestId('DynamicReportView__hiddenNote')).toHaveTextContent('dynamicReportHiddenPeriods:17'));
+      choose('DynamicReportPanel__columns', 'quarter');
+      await waitFor(() => expect(screen.getByTestId('DynamicReportView__hiddenNote')).toHaveTextContent('dynamicReportHiddenPeriods:4'));
+      choose('DynamicReportPanel__compare', '');
+      await waitFor(() => expect(screen.queryByTestId('DynamicReportView__hiddenNote')).toBeNull());
     });
 
     it('the partial note and the * show only when a bucket is partial', async () => {
@@ -852,6 +877,14 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
       expect(pdf.periods.split(',')).toHaveLength(7);
       expect(pdf.hiddenCount).toBe('6');
       expect(pdf.compareMode).toBe('prev');
+      choose('DynamicReportPanel__compare', '');
+      await settle();
+      const plainPdf = await exportAs('pdf');
+      expect(plainPdf.periods.split(',')).toHaveLength(13);
+      expect(plainPdf.hiddenCount).toBe('0');
+      expect(plainPdf.compareMode).toBe('none');
+      choose('DynamicReportPanel__compare', 'previous');
+      await settle();
       for (const format of ['xlsx', 'csv']) {
         const params = await exportAs(format);
         expect(params.periods.split(',')).toHaveLength(13);
@@ -893,7 +926,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
       expect(screen.getByTestId('DynamicReportView__export-xlsx')).toBeDisabled();
       expect(screen.getByTestId('DynamicReportView__export-csv')).toBeDisabled();
       expect(screen.getByTestId('DynamicReportView__export-pdf')).toBeEnabled();
-      expect((await exportAs('pdf')).periods.split(',')).toHaveLength(7);
+      expect((await exportAs('pdf')).periods.split(',')).toHaveLength(13); // no comparison: 12 months + Total
       choose('DynamicReportPanel__columns', 'total');
       // The server refuses a range past from + 24 months in any grain (report-periods.js, D5).
       await waitFor(() => expect(screen.getByTestId('DynamicReportView__export-xlsx')).toBeDisabled());
