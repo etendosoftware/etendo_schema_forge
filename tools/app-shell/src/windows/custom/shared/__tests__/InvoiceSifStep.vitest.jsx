@@ -68,7 +68,7 @@ vi.mock('@/components/ui/select', () => {
   };
 });
 
-import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import {
   BULK_RECTIFICATIVE_VF_KEY,
   BulkInvoiceSifStepModal,
@@ -432,6 +432,32 @@ describe('bulk step — per-order payload, blocking and mixed runs', () => {
       expect(screen.getByTestId('Select__sifstep_aeatsiiMotivoRectif').closest('div.space-y-1\\.5'))
         .toHaveTextContent('invoiceSifStep.rectificativeOnly');
       expect(screen.getByTestId('RequiredMark__sifstep_sif-step-aeatsiiMotivoRectif')).toBeInTheDocument();
+    });
+
+    // Repro: the merged field took its kind from the FIRST order that had it, so with the
+    // rectificative first the fields every order shares were tagged rectificative-only.
+    it('a mixed run tags the same fields whatever the order of the orders', async () => {
+      const rowOf = testId => screen.getByTestId(testId).closest('div.space-y-1\\.5');
+      for (const list of [[ordinary(), rectificative()], [rectificative(), ordinary()]]) {
+        const { onConfirm } = await renderBulk(list);
+        ['Input__sifstep_aeatsiiDescripcionSii', 'Select__sifstep_aeatsiiClaveTipo',
+          'Select__sifstep_etvfacInvType'].forEach(testId =>
+          expect(rowOf(testId)).not.toHaveTextContent('invoiceSifStep.rectificativeOnly'));
+        [`Select__sifstep_${BULK_RECTIFICATIVE_VF_KEY}`, 'Select__sifstep_aeatsiiMotivoRectif'].forEach(testId =>
+          expect(rowOf(testId)).toHaveTextContent('invoiceSifStep.rectificativeOnly'));
+        // A shared field offers only the codes every order accepts: no 'R' for the ordinary one.
+        expect(screen.queryByTestId('pick-Select__sifstep_aeatsiiClaveTipo-R')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByTestId('pick-Select__sifstep_aeatsiiMotivoRectif-R2'));
+        fireEvent.click(screen.getByTestId(`pick-Select__sifstep_${BULK_RECTIFICATIVE_VF_KEY}-R3`));
+        fireEvent.click(screen.getByTestId('invoice-sif-step-modal-confirm'));
+        const payloads = onConfirm.mock.calls[0][0];
+        const plain = payloads[list.findIndex(p => !p.rectificative)];
+        const rect = payloads[list.findIndex(p => p.rectificative)];
+        expect(plain).toEqual(ordinary().fields);
+        expect(rect).toMatchObject({ aeatsiiMotivoRectif: 'R2', etvfacInvType: 'R3' });
+        cleanup();
+      }
     });
 
     it('a run of rectificatives only does not tag anything as rectificative-only', async () => {

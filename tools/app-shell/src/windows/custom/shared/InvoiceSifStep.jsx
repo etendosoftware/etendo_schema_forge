@@ -304,12 +304,24 @@ function mergePreviews(previews) {
   const mixed = previews.some(isRect) && previews.some(p => hasSifSystems(p) && !isRect(p));
   const systems = [];
   const specs = [];
-  const seen = new Set();
+  const byKey = new Map();
+  // Order-independent: a merged field is rectificative-only when EVERY order carrying it is a
+  // rectificative, and it offers only the codes every one of those orders accepts (so a value set
+  // in the step is valid for each invoice it goes to).
   const slots = previews.map(p => (p.fieldSpecs ?? []).map(spec => {
     const key = mixed && isRect(p) && spec.name === 'etvfacInvType' ? BULK_RECTIFICATIVE_VF_KEY : spec.name;
-    if (!seen.has(key)) {
-      seen.add(key);
-      specs.push({ ...spec, key, rectificative: isRect(p) });
+    const merged = byKey.get(key);
+    if (!merged) {
+      const created = { ...spec, key, rectificative: isRect(p) };
+      byKey.set(key, created);
+      specs.push(created);
+    } else {
+      merged.rectificative = merged.rectificative && isRect(p);
+      if (merged.options && spec.options) {
+        merged.options = merged.options.filter(code => spec.options.includes(code));
+      } else if (spec.options) {
+        merged.options = spec.options;
+      }
     }
     return { key, name: spec.name };
   }));
