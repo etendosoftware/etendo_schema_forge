@@ -14,6 +14,12 @@ import {
 } from '@/windows/custom/shared/useSifFieldPatcher.js';
 import { normalizeDateInputValue } from '@/windows/custom/fiscal-config/fiscalConfig.utils.js';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
+import RequiredMark from '@/components/ui/required-mark.jsx';
+import {
+  isRectificationCodeField,
+  isSifFieldRequired,
+  missingRequiredSifFields,
+} from '@/windows/custom/shared/sifRequiredFields.js';
 
 /**
  * ETP-6179 — the "Datos fiscales" step of every modal that creates AND completes an invoice in one
@@ -23,7 +29,10 @@ import { InfoBanner } from '@/components/InfoBanner.jsx';
  * Those flows build the invoice on the server and complete it at once, so the user never saw the
  * invoice's SIF tab: a rectificative left as an ordinary F1, with no SII motive and no TicketBAI
  * code. This step shows the editable SIF fields of the fiscal systems ACTIVE for the invoice's
- * organization, prefilled with what the invoice would get, before anything is confirmed.
+ * organization, prefilled with what the invoice would get, before anything is confirmed. The
+ * rectification codes of a rectificative come as the backend previews them: R1 preselected on a
+ * customer return's rectificative (editable), EMPTY on any other (the user chooses each one).
+ * The mandatory fields carry the app's red `*` (`sifRequiredFields.js`).
  *
  * The backend is the single source of truth (`sifDefaults` action, `InvoiceSifPreset` in
  * com.etendoerp.go): which systems apply, which fields are editable, their allowed codes and
@@ -85,11 +94,43 @@ export function sifOptionLabel(option, ui) {
     : `${option.value} - ${label}`;
 }
 
-// The rectification codes a rectificative invoice cannot be confirmed without — mirrors the
-// backend guard (RectificationFiscalCodeGuard), which refuses the same blanks with a 422.
-const REQUIRED_ON_RECTIFICATIVE = ['aeatsiiMotivoRectif', 'tbaiReverseinvoicecode', 'etvfacInvType'];
+/**
+ * What `sifRequiredFields.js` needs to know about the invoice a preview describes. The backend
+ * lists a rectification field on a SALES rectificative only, so a purchase one has none to mark.
+ */
+function requiredContextOf(preview) {
+  return {
+    rectificative: preview?.rectificative === true,
+    verifactu: (preview?.systems ?? []).includes('Verifactu'),
+  };
+}
+
+/** The key a field's value lives under in the step: its name, or the bulk slot (`key`). */
+const keyOf = spec => spec.key ?? spec.name;
+
+/**
+ * The rule's context for one field. A bulk run that mixes rectificative and ordinary invoices
+ * tags each merged field with the kind of invoice it belongs to (`spec.rectificative`).
+ */
+function specContext(spec, context) {
+  return spec.rectificative === undefined ? context : { ...context, rectificative: spec.rectificative };
+}
+
+/** The mandatory fields of the step — the ones shown — that are still empty. */
+function missingRequiredFields(preview, values) {
+  const context = requiredContextOf(preview);
+  return (preview?.fieldSpecs ?? [])
+    .filter(spec => isFieldShown(spec.name, values))
+    .filter(spec => missingRequiredSifFields([spec.name], { [spec.name]: values[keyOf(spec)] },
+      specContext(spec, context)).length > 0)
+    .map(keyOf);
+}
 
 // SifTab.jsx's display logic for the two VERI*FACTU flags: mutually exclusive on the type.
+// Known limit of a bulk run mixing ordinary and rectificative invoices: the two flags are ONE slot
+// shared by both kinds, shown by the ORDINARY type (`values.etvfacInvType`), not by the
+// rectificatives' own type (`BULK_RECTIFICATIVE_VF_KEY`). Such runs are practically unreachable
+// (orders do not produce rectificatives in a normal setup), so the slot is not split.
 function isFieldShown(name, values) {
   const invType = values.etvfacInvType;
   if (name === 'etvfacSimpinvart7273') return invType !== 'R5' && invType !== 'F2';
@@ -106,9 +147,12 @@ function isFieldShown(name, values) {
  * system with editable fields is active) or calls `proceed` straight away, so a modal wires ONE
  * handler: `onClick={() => sif.start(handleConfirm)}` — on the step, the same click confirms.
  *
- * Fails OPEN on a preview the server could not answer: the backend applies the same defaults
- * (document-type VERI*FACTU type, R4 on a rectificative) and refuses an invalid invoice with its
- * own 422, so a failed preview never blocks the flow, it only skips the review.
+ * Fails OPEN on a preview the server could not answer: no `sifFields` is sent then, and for that
+ * case alone the backend applies its own values (document-type VERI*FACTU type, and the R1
+ * fallback on a rectificative — `InvoiceSifPreset.unattendedRectificationFallback`) and refuses an
+ * invalid invoice with its own 422, so a failed preview never blocks the flow, it only skips the
+ * review. When the step IS shown, a rectificative's codes are what the preview gives (R1 on a
+ * customer return, empty otherwise) and blank ones block the confirm.
  *
  * @param {object} args
  * @param {boolean} args.enabled whether an invoice is going to be created at all
@@ -167,12 +211,10 @@ export function useInvoiceSifStep({ enabled, apiFetch, defaultsUrl, body, absolu
   }, [enabled, defaultsUrl, phase, fetchPreview]);
 
   const active = enabled && phase === 'active' && !!preview;
-  const valid = useMemo(() => {
-    if (!active) return true;
-    if (!preview.rectificative) return true;
-    const specs = new Set((preview.fieldSpecs ?? []).map(s => s.name));
-    return REQUIRED_ON_RECTIFICATIVE.every(name => !specs.has(name) || !!values[name]);
-  }, [active, preview, values]);
+  const missing = useMemo(
+    () => (active ? missingRequiredFields(preview, values) : []),
+    [active, preview, values]);
+  const valid = missing.length === 0;
 
   const setValue = useCallback((name, value) => {
     setValues(prev => ({ ...prev, [name]: value }));
@@ -186,8 +228,10 @@ export function useInvoiceSifStep({ enabled, apiFetch, defaultsUrl, body, absolu
     preview,
     values,
     setValue,
-    /** Every rectification code a rectificative needs is chosen. */
+    /** Every mandatory field (`sifRequiredFields.js`) has a value. */
     valid,
+    /** The mandatory fields still empty. */
+    missing,
     /** Primary click: shows the step, or runs `proceed` when there is none / it is showing. */
     start,
     /** Back to the modal's first screen; the values typed so far are kept. */
@@ -238,31 +282,69 @@ export function varyingFieldLabelKey(name) {
 }
 
 /**
- * Merges the previews of several invoices into one read-only summary: the systems and fields of
- * all of them, a field's value when every invoice gets the same one, and the field listed in
- * `varying` when they do not (or when an invoice does not have it at all).
+ * The bulk slot of VERI*FACTU's type on a rectificative when the run ALSO has ordinary invoices:
+ * the same backend field carries an ordinary type (F1/F2) on those and a rectification code
+ * (R1-R5) on the rectificatives, so the modal shows it twice, one control per kind.
+ */
+export const BULK_RECTIFICATIVE_VF_KEY = 'etvfacInvType#rectificative';
+
+function isBlankValue(value) {
+  return value == null || (typeof value === 'string' && value.trim() === '');
+}
+
+/**
+ * Merges the previews of several invoices into ONE editable set of values: the systems and
+ * fields of all of them, a field's value when every invoice that has it gets the same one, and
+ * the field listed in `varying` when they do not.
+ *
+ * Each field is keyed by its name, except VERI*FACTU's type on the rectificatives of a mixed run
+ * ({@link BULK_RECTIFICATIVE_VF_KEY}). Every merged spec carries `rectificative` (the kind of
+ * invoice it belongs to), so the mandatory rule and the rectification codes apply to the right
+ * invoices; `slots[i]` lists, for invoice `i`, which key feeds which of its own fields, and
+ * `blankIn` the varying fields that some invoice has empty.
  */
 function mergePreviews(previews) {
+  const isRect = p => p?.rectificative === true;
+  const mixed = previews.some(isRect) && previews.some(p => hasSifSystems(p) && !isRect(p));
   const systems = [];
   const specs = [];
-  const seen = new Set();
+  const byKey = new Map();
+  // Order-independent: a merged field is rectificative-only when EVERY order carrying it is a
+  // rectificative, and it offers only the codes every one of those orders accepts (so a value set
+  // in the step is valid for each invoice it goes to).
+  const slots = previews.map(p => (p.fieldSpecs ?? []).map(spec => {
+    const key = mixed && isRect(p) && spec.name === 'etvfacInvType' ? BULK_RECTIFICATIVE_VF_KEY : spec.name;
+    const merged = byKey.get(key);
+    if (!merged) {
+      const created = { ...spec, key, rectificative: isRect(p) };
+      byKey.set(key, created);
+      specs.push(created);
+    } else {
+      merged.rectificative = merged.rectificative && isRect(p);
+      if (merged.options && spec.options) {
+        merged.options = merged.options.filter(code => spec.options.includes(code));
+      } else if (spec.options) {
+        merged.options = spec.options;
+      }
+    }
+    return { key, name: spec.name };
+  }));
   previews.forEach(p => {
     (p.systems ?? []).forEach(sys => { if (!systems.includes(sys)) systems.push(sys); });
-    (p.fieldSpecs ?? []).forEach(spec => {
-      if (!seen.has(spec.name)) { seen.add(spec.name); specs.push(spec); }
-    });
   });
   const fields = {};
   const varying = {};
-  // Every spec'd field comes with its value from the backend (InvoiceSifPreset.defaults fills one
-  // per field spec), so a field missing from one preview means that invoice does not have it.
-  specs.forEach(({ name }) => {
-    const values = previews.map(p => JSON.stringify(p.fields?.[name] ?? null));
-    const has = previews.every(p => Object.prototype.hasOwnProperty.call(p.fields ?? {}, name));
-    if (has && values.every(v => v === values[0])) {
-      fields[name] = previews[0].fields[name];
+  const blankIn = {};
+  specs.forEach(({ key, name }) => {
+    // Only the invoices that have the field take part: the others never receive it.
+    const own = previews
+      .filter((p, i) => slots[i].some(slot => slot.key === key))
+      .map(p => p.fields?.[name] ?? null);
+    if (own.every(v => JSON.stringify(v) === JSON.stringify(own[0]))) {
+      fields[key] = own[0];
     } else {
-      varying[name] = true;
+      varying[key] = true;
+      if (own.some(isBlankValue)) blankIn[key] = true;
     }
   });
   const first = previews.find(hasSifSystems) ?? previews[0];
@@ -272,24 +354,29 @@ function mergePreviews(previews) {
       systems,
       fieldSpecs: specs,
       fields,
+      rectificative: previews.some(isRect),
+      mixed,
       siiAuthorizationAvailable: previews.every(p => p.siiAuthorizationAvailable === true),
     },
     varying,
+    blankIn,
+    slots,
   };
 }
 
 /**
  * ETP-6179 — the bulk "one invoice per selected order" flows. Fetches the preview of every order
- * and answers what the read-only summary shows:
+ * and answers what the bulk step shows:
  *   - `none`    : no order has an active fiscal system, or a preview could not be read (fail open,
- *                 as the single-record step does) — the flow runs as before, without a summary;
- *   - `summary` : a fiscal system is active — `preview` merges every order's data (a value when it
- *                 is the same for all, the field in `varying` when it is not) and `previews[i]` is
- *                 what order `i` will be sent as its own `sifFields`.
+ *                 as the single-record step does) — the flow runs as before, without the step;
+ *   - `summary` : a fiscal system is active — `preview` merges every order's data into ONE set of
+ *                 values the user edits (see {@link useBulkSifStep}); `previews[i]` is order `i`'s
+ *                 own preview.
  *
  * @param {Function} apiFetch an authenticated fetch
  * @param {string[]} urls one `.../action/sifDefaults` URL per order
- * @returns {Promise<{kind: 'none'|'summary', preview?: object, varying?: object, previews: object[]}>}
+ * @returns {Promise<{kind: 'none'|'summary', preview?: object, varying?: object, blankIn?: object,
+ *   slots?: object[][], previews: object[]}>}
  */
 export async function resolveBulkSifPreview(apiFetch, urls) {
   const previews = await Promise.all((urls ?? []).map(url => fetchSifPreview(apiFetch, url)));
@@ -300,12 +387,67 @@ export async function resolveBulkSifPreview(apiFetch, urls) {
 }
 
 /**
- * A fixed, read-only step over a preview, for {@link InvoiceSifStepModal} in `readOnly` mode;
- * `varying` names the fields whose value differs between the invoices of a bulk run.
+ * The `sifFields` each invoice of a bulk run is sent: for every field of ITS OWN preview, the
+ * value the user set in the step, or — for a field that differs between the invoices and that the
+ * user left untouched — that invoice's own preview value. An invoice never receives a field its
+ * preview does not have (an ordinary invoice gets no rectification code).
+ *
+ * @param {object} summary a `summary` answer of {@link resolveBulkSifPreview}
+ * @param {object} values the step's values, by key
+ * @param {object} varying the keys still varying (untouched by the user)
+ * @returns {object[]} one `sifFields` object per preview, in order
  */
-export function readOnlySifStep(preview, varying = {}) {
+export function bulkSifFields(summary, values, varying) {
+  return (summary?.previews ?? []).map((p, i) => Object.fromEntries(
+    (summary.slots?.[i] ?? []).map(({ key, name }) => [
+      name,
+      varying?.[key] ? (p.fields?.[name] ?? null) : (values?.[key] ?? null),
+    ])));
+}
+
+/**
+ * The bulk step's state: ONE set of values for every invoice of the run, editable like the
+ * single-record step and blocked by the same mandatory rule (`sifRequiredFields.js`). A field
+ * that differs between the invoices starts as "per customer" / "per order": left untouched, each
+ * invoice keeps its own value (it counts as filled, unless one of those values is empty and the
+ * field is mandatory); once the user sets it, that value goes to all of them.
+ *
+ * @param {object} summary a `summary` answer of {@link resolveBulkSifPreview}
+ */
+export function useBulkSifStep(summary) {
+  const preview = summary?.preview ?? null;
+  const [values, setValues] = useState(() => ({ ...(preview?.fields ?? {}) }));
+  const [varying, setVarying] = useState(() => ({ ...(summary?.varying ?? {}) }));
+
+  const setValue = useCallback((key, value) => {
+    setValues(prev => ({ ...prev, [key]: value }));
+    setVarying(prev => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }, []);
+
+  const missing = useMemo(() => {
+    if (!preview) return [];
+    const blankIn = summary?.blankIn ?? {};
+    // A varying field the user left untouched is as filled as every invoice's own value.
+    const effective = { ...values };
+    Object.keys(varying).forEach(key => { effective[key] = blankIn[key] ? null : '*'; });
+    return missingRequiredFields(preview, effective);
+  }, [preview, values, varying, summary]);
+
   return {
-    preview, values: preview?.fields ?? {}, varying, setValue: () => {}, valid: true, back: () => {},
+    preview,
+    values,
+    varying,
+    setValue,
+    missing,
+    valid: missing.length === 0,
+    back: () => {},
+    /** One `sifFields` per invoice, in the order of `summary.previews`. */
+    payloads: () => bulkSifFields(summary, values, varying),
   };
 }
 
@@ -314,27 +456,32 @@ export function withSifFields(body, sif) {
   return sif?.payload ? { ...body, sifFields: sif.payload } : body;
 }
 
-function FieldRow({ label, htmlFor, children, wide }) {
+function FieldRow({ label, htmlFor, children, wide, required }) {
   return (
     <div className={`space-y-1.5 min-w-0 ${wide ? 'col-span-2' : ''}`}>
       <Label htmlFor={htmlFor} className="text-sm text-foreground font-medium" data-testid="Label__sifstep">
         {label}
+        {required && <RequiredMark aria-hidden="true" data-testid={`RequiredMark__sifstep_${htmlFor}`} />}
       </Label>
       {children}
     </div>
   );
 }
 
-function OptionField({ id, spec, value, onChange, ui, disabled }) {
-  const allowed = new Set(spec.options ?? []);
-  const options = (FIELD_OPTIONS[spec.name] ?? []).filter(o => allowed.size === 0 || allowed.has(o.value));
+function OptionField({ id, spec, value, onChange, ui, disabled, required, placeholder = '—' }) {
+  // No `options` list means "every code of the field"; an EMPTY list (a bulk run whose orders
+  // accept no code in common) offers none.
+  const allowed = spec.options == null ? null : new Set(spec.options);
+  const options = (FIELD_OPTIONS[spec.name] ?? []).filter(o => allowed === null || allowed.has(o.value));
+  const key = keyOf(spec);
   return (
-    <Select value={value || undefined} onValueChange={onChange} disabled={disabled} data-testid={`Select__sifstep_${spec.name}`}>
+    <Select value={value || undefined} onValueChange={onChange} disabled={disabled} data-testid={`Select__sifstep_${key}`}>
       <SelectTrigger
         id={id}
+        aria-required={required || undefined}
         className="h-auto min-h-10 whitespace-normal text-left [&>span]:line-clamp-none"
-        data-testid={`SelectTrigger__sifstep_${spec.name}`}>
-        <SelectValue placeholder="—" data-testid="SelectValue__sifstep" />
+        data-testid={`SelectTrigger__sifstep_${key}`}>
+        <SelectValue placeholder={placeholder} data-testid="SelectValue__sifstep" />
       </SelectTrigger>
       <SelectContent className="z-[60]" data-testid="SelectContent__sifstep">
         {options.map(o => (
@@ -347,39 +494,47 @@ function OptionField({ id, spec, value, onChange, ui, disabled }) {
   );
 }
 
-function StepField({ spec, values, setValue, authorizationAvailable, ui, readOnly, varies }) {
-  const id = `sif-step-${spec.name}`;
-  const value = values[spec.name];
-  const label = ui(FIELD_LABEL_KEYS[spec.name] ?? spec.name);
+function StepField({ spec, values, setValue, authorizationAvailable, ui, readOnly, varies, requiredContext, mixed }) {
+  const key = keyOf(spec);
+  const id = `sif-step-${key}`;
+  // A field that still differs between the invoices of a bulk run shows no value of its own.
+  const value = varies ? undefined : values[key];
+  const baseLabel = ui(FIELD_LABEL_KEYS[spec.name] ?? spec.name);
+  // In a bulk run mixing ordinary and rectificative invoices, a field of the rectificatives only
+  // says so (VERI*FACTU's type then appears twice, once per kind).
+  const label = mixed && spec.rectificative
+    ? ui('invoiceSifStep.rectificativeOnly', { label: baseLabel })
+    : baseLabel;
+  // Only where the user can act on it: a read-only step marks nothing.
+  const required = !readOnly && isSifFieldRequired(spec.name, specContext(spec, requiredContext));
+  const variesText = varies ? ui(varyingFieldLabelKey(spec.name)) : null;
+  // "Per customer" / "per order": left alone, each invoice keeps its own value.
+  const variesNote = varies && (
+    <span className="text-xs italic text-muted-foreground" data-testid={`Varies__sifstep_${key}`}>
+      {variesText}
+    </span>
+  );
   let control;
-  if (varies) {
-    control = (
-      <Input
-        id={id}
-        type="text"
-        value={ui(varyingFieldLabelKey(spec.name))}
-        disabled
-        readOnly
-        className="bg-muted/40 italic"
-        data-testid={`Varies__sifstep_${spec.name}`} />
-    );
-  } else if (spec.type === 'option') {
+  if (spec.type === 'option') {
     control = <OptionField
       id={id}
       spec={spec}
       value={value}
-      onChange={v => setValue(spec.name, v)}
+      onChange={v => setValue(key, v)}
       ui={ui}
       disabled={readOnly}
+      required={required}
+      placeholder={variesText ?? '—'}
       data-testid="invoice-sif-step-option" />;
   } else if (spec.type === 'date') {
     control = (
       <DateField
         id={id}
         value={normalizeDateInputValue(value ?? '')}
-        onChange={iso => setValue(spec.name, iso || null)}
+        onChange={iso => setValue(key, iso || null)}
         disabled={readOnly}
-        data-testid={`DateField__sifstep_${spec.name}`} />
+        required={required}
+        data-testid={`DateField__sifstep_${key}`} />
     );
   } else if (spec.type === 'boolean') {
     // Box and label on one row, like the app's other checkbox fields.
@@ -390,11 +545,12 @@ function StepField({ spec, values, setValue, authorizationAvailable, ui, readOnl
           id={id}
           checked={Boolean(value)}
           disabled={disabled}
-          onToggle={v => setValue(spec.name, v)}
-          data-testid={`CheckboxField__sifstep_${spec.name}`} />
+          onToggle={v => setValue(key, v)}
+          data-testid={`CheckboxField__sifstep_${key}`} />
         <Label htmlFor={id} className="text-sm text-foreground font-medium" data-testid="Label__sifstep">
           {label}
         </Label>
+        {variesNote}
       </div>
     );
   } else {
@@ -403,18 +559,24 @@ function StepField({ spec, values, setValue, authorizationAvailable, ui, readOnl
         id={id}
         type="text"
         value={value ?? ''}
-        onChange={e => setValue(spec.name, e.target.value)}
+        placeholder={variesText ?? undefined}
+        onChange={e => setValue(key, e.target.value)}
         disabled={readOnly}
+        aria-required={required || undefined}
         className="bg-card"
-        data-testid={`Input__sifstep_${spec.name}`} />
+        data-testid={`Input__sifstep_${key}`} />
     );
   }
   return (
     <FieldRow
       label={label}
       htmlFor={id}
+      required={required}
       wide={spec.type === 'option' || spec.type === 'boolean'}
-      data-testid="invoice-sif-step-field">{control}</FieldRow>
+      data-testid="invoice-sif-step-field">
+      {control}
+      {variesNote}
+    </FieldRow>
   );
 }
 
@@ -434,6 +596,17 @@ export function InvoiceSifStepPanel({ sif, readOnly = false, notice, 'data-testi
 
   const specs = preview.fieldSpecs ?? [];
   const systems = preview.systems ?? [];
+  const requiredContext = requiredContextOf(preview);
+  // A missing rectification code gets its own sentence; any other empty mandatory field the
+  // app's generic one.
+  const missing = sif.missing ?? [];
+  const specByKey = new Map(specs.map(spec => [keyOf(spec), spec]));
+  const missingHintKey = missing.some(key => {
+    const spec = specByKey.get(key);
+    return spec && isRectificationCodeField(spec.name, specContext(spec, requiredContext));
+  })
+    ? 'invoiceSifStep.rectificationRequired'
+    : 'requiredFieldsMissing';
   // The host's own test id (each modal passes one) wraps the panel, whose inner id stays stable.
   const panel = (
     <div data-testid="invoice-sif-step" className="flex flex-col gap-5">
@@ -459,13 +632,15 @@ export function InvoiceSifStepPanel({ sif, readOnly = false, notice, 'data-testi
             <div className="grid grid-cols-2 gap-x-5 gap-y-4 p-4">
               {fields.map(spec => (
                 <StepField
-                  key={spec.name}
+                  key={keyOf(spec)}
                   spec={spec}
                   values={values}
                   setValue={setValue}
                   authorizationAvailable={preview.siiAuthorizationAvailable === true}
                   readOnly={readOnly}
-                  varies={!!sif.varying?.[spec.name]}
+                  varies={!!sif.varying?.[keyOf(spec)]}
+                  requiredContext={requiredContext}
+                  mixed={preview.mixed === true}
                   ui={ui}
                   data-testid="invoice-sif-step-step-field" />
               ))}
@@ -475,7 +650,7 @@ export function InvoiceSifStepPanel({ sif, readOnly = false, notice, 'data-testi
       })}
       {!readOnly && !sif.valid && (
         <div data-testid="invoice-sif-step-required" className="text-xs text-muted-foreground">
-          {ui('invoiceSifStep.rectificationRequired')}
+          {ui(missingHintKey)}
         </div>
       )}
     </div>
@@ -487,9 +662,10 @@ export function InvoiceSifStepPanel({ sif, readOnly = false, notice, 'data-testi
  * The step as a dialog of its own, for a flow whose first step is a shared modal it cannot
  * extend (the quotation's ActionChoiceModal). Same panel, with Back / Confirm.
  *
- * `readOnly` + `notice` + `onCancel` turn it into the bulk summary (one invoice per selected
- * order): the values are shown, never edited, and there is no Back (no earlier screen). The ×
- * and Cancelar always close without creating anything (`onClose`, or `onCancel` when given).
+ * `notice` + `onCancel` turn it into the bulk step (one invoice per selected order, see
+ * {@link BulkInvoiceSifStepModal}): the notice replaces the description and there is no Back (no
+ * earlier screen). `readOnly` disables every control. The × and Cancelar always close without
+ * creating anything (`onClose`, or `onCancel` when given).
  */
 export function InvoiceSifStepModal({
   sif, confirmLabel, loading = false, error, onConfirm, onClose, readOnly = false, notice, onCancel,
@@ -568,5 +744,31 @@ export function InvoiceSifStepModal({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * ETP-6179 — the bulk "one invoice per selected order" step: ONE editable set of fiscal values
+ * applied to every invoice of the run ({@link useBulkSifStep}), with the same red `*` and the
+ * same blocked confirm as the single-record step. Whoever wants other values on one invoice
+ * creates it individually (the notice says so).
+ *
+ * @param {object} props
+ * @param {object} props.summary a `summary` answer of {@link resolveBulkSifPreview}
+ * @param {Function} props.onConfirm receives one `sifFields` object per preview, in order
+ * @param {Function} props.onCancel closes without creating anything
+ */
+export function BulkInvoiceSifStepModal({ summary, notice, confirmLabel, loading = false, onConfirm, onCancel }) {
+  const sif = useBulkSifStep(summary);
+  return (
+    <InvoiceSifStepModal
+      sif={sif}
+      notice={notice}
+      confirmLabel={confirmLabel}
+      loading={loading}
+      onConfirm={() => onConfirm(sif.payloads())}
+      onCancel={onCancel}
+      onClose={onCancel}
+      data-testid="InvoiceSifStepModal__bulk" />
   );
 }

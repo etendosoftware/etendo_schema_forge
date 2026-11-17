@@ -69,6 +69,37 @@ export function kpiTrend(key, current, ref) {
 }
 
 /**
+ * The change of a KPI against the compared figure: points (`pp`) for a percentage, a relative `%`
+ * otherwise. null when there is nothing to show (a missing figure, no change, a zero reference).
+ */
+export function kpiDelta(value, refValue, percent) {
+  if (value == null || refValue == null || value === refValue) return null;
+  if (percent) return { amount: value - refValue, unit: 'pp' };
+  if (!refValue) return null;
+  return { amount: ((value - refValue) / Math.abs(refValue)) * 100, unit: '%' };
+}
+
+const KPI_IDS = ['income', 'expenses', 'result', 'margin'];
+
+/**
+ * The four headline cards as plain data, for the screen and for the PDF (which receives them in
+ * its render params): `{ id, percent, value, refValue, compare, delta, trend, up, tone }`. `delta`
+ * and `trend` are null without a comparison; `tone` ('positive' / 'negative' / null) is the edge
+ * of the result card.
+ */
+export function kpiCards(kpis, compare) {
+  return KPI_IDS.map((id) => {
+    const value = kpis.current[id];
+    const refValue = kpis.ref[id];
+    const percent = id === 'margin';
+    const delta = compare ? kpiDelta(value, refValue, percent) : null;
+    let tone = null;
+    if (id === 'result' && value) tone = value > 0 ? 'positive' : 'negative';
+    return { id, percent, value, refValue, compare: Boolean(compare), delta, trend: compare ? kpiTrend(id, value, refValue) : null, up: value > refValue, tone };
+  });
+}
+
+/**
  * Bar width (0..1) of a row: its weight within its parent, or, for a top-level line, within the
  * largest top-level line. null for formula rows and zero amounts (no bar).
  */

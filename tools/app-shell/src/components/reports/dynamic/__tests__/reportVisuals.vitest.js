@@ -1,5 +1,5 @@
 // @covers tools/app-shell/src/components/reports/dynamic/reportVisuals.js
-import { kpiTrend, reportKpis, rowShares, splitShares } from '../reportVisuals.js';
+import { kpiCards, kpiDelta, kpiTrend, reportKpis, rowShares, splitShares } from '../reportVisuals.js';
 
 // Two income lines, one expense line with a child, and a formula subtotal that must not count twice.
 const ROWS = [
@@ -91,5 +91,28 @@ describe('splitShares', () => {
   it('weighs each part within the parts total, by magnitude', () => {
     expect(splitShares([{ amount: 30 }, { amount: -10 }])).toEqual([0.75, 0.25]);
     expect(splitShares([{ amount: 0 }])).toEqual([0]);
+  });
+});
+
+describe('kpiDelta and kpiCards', () => {
+  it('the change is points for a percentage and a relative % otherwise, null when there is none', () => {
+    expect(kpiDelta(150, 100, false)).toEqual({ amount: 50, unit: '%' });
+    expect(kpiDelta(-50, -100, false)).toEqual({ amount: 50, unit: '%' });
+    expect(kpiDelta(40, 30, true)).toEqual({ amount: 10, unit: 'pp' });
+    expect(kpiDelta(10, 10, false)).toBeNull();
+    expect(kpiDelta(10, 0, false)).toBeNull();
+    expect(kpiDelta(null, 5, true)).toBeNull();
+    expect(kpiDelta(5, null, false)).toBeNull();
+  });
+
+  it('builds the four cards, with the change and the good / bad trend only when comparing', () => {
+    const kpis = reportKpis(ROWS);
+    const cards = kpiCards(kpis, true);
+    expect(cards.map((c) => c.id)).toEqual(['income', 'expenses', 'result', 'margin']);
+    expect(cards.find((c) => c.id === 'income')).toMatchObject({ value: 1200, refValue: 800, percent: false, trend: 'improves', up: true, delta: { amount: 50, unit: '%' } });
+    // Expenses went down (500 -> 400): good news although the figure fell.
+    expect(cards.find((c) => c.id === 'expenses')).toMatchObject({ trend: 'improves', up: false });
+    expect(cards.find((c) => c.id === 'margin')).toMatchObject({ percent: true, delta: { unit: 'pp' } });
+    for (const c of kpiCards(kpis, false)) expect(c).toMatchObject({ delta: null, trend: null });
   });
 });

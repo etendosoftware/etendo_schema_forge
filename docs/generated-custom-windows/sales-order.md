@@ -848,16 +848,32 @@ The printed order uses the organization's saved design (variant, color, font, te
 the window's confirm button, and answers the order re-read with `document_status` `CO`.
 
 - The API key needs `public-api:process`; a key without it gets `403`.
-- The order needs a payment method, which it inherits from its contact; without one Etendo refuses with
-  `422 business_rule`. **Known limitation:** a contact created through the API has no payment method and the
-  API cannot set one yet (no published contact payment-method fields, no payment-method lookup). Until a
-  follow-up (ETP-6160) publishes selector lookups, the caller must set `payment_method` on the order to an id it already
-  knows.
+- The order needs a payment method, which it inherits from its contact's `payment_method` when it is created;
+  without one Etendo refuses with `422 business_rule`. A contact created through the API has none: the caller
+  looks one up and sets it first (see "Public API — payment-method lookup" below).
 - Completing an order that is already `CO` answers `200` with `meta.alreadyApplied: true` and runs nothing.
 - A `PATCH` or `DELETE` on the completed order answers `422`; no public action reopens or voids it.
 
 Evidence: `gateway/e2e/support/orders.ts` (`complete action`), shared by the sales and purchase order flows.
 Contract: `docs/public-api.md` §4.2.1.
+
+## Public API — payment-method lookup — ETP-6160
+
+`decisions.json` declares a lookup on the header's `paymentMethod`
+(`publicApi.lookup: { "context": { "IsSOTrx": "Y" } }`), so the manifest publishes
+`GET /api/v1/sales-order/lookups/payment_method`. It lists the tenant's active payment methods, the same list the app
+offers, as `{ type: "payment-method", id, attributes: { label } }`, with `filter[search]` and
+`page[number]` / `page[size]`. The gateway calls `GET /sws/neo/sales-order/header/selectors/paymentMethod` with
+`IsSOTrx=Y` fixed; a caller's own parameters are refused with `400`. The context is forwarded to the field's
+selector; whether it narrows the list depends on that field's validation rule, as in the app. Integrators must not
+rely on the list being filtered by sales or purchase.
+
+An integrator with no id known beforehand completes an order this way: `GET /api/v1/contacts/lookups/payment_method`,
+`PATCH` the contact's `payment_method` (with `If-Match`), create the order (it inherits the value), then
+`POST /api/v1/sales-order/{id}/actions/complete`. Setting `payment_method` on the order directly, with an id from this
+window's lookup, works too.
+
+Evidence: `gateway/e2e/support/orders.ts` (`complete action`). Contract: `docs/public-api.md` §4.2.2.
 
 ## Fiscal data step before the invoice is created — ETP-6179
 
@@ -868,17 +884,27 @@ Contract: `docs/public-api.md` §4.2.1.
   SII key the customer's own default key when it declares one, else `F1`.
 - The list's bulk "Crear facturas" (`BulkOrderMoreMenu`, ONE invoice per selected order) reads the
   `sifDefaults` preview of every completed selected order first. Whenever a fiscal system is active
-  it shows the fiscal data READ-ONLY (`InvoiceSifStepModal` in `readOnly` mode) with the notice "All
+  it shows ONE EDITABLE set of fiscal data for every invoice of the run (`BulkInvoiceSifStepModal`),
+  with the same red `*` and the same blocked confirm as the single-record step, and the notice "All
   invoices will be created with this fiscal information for submission to <systems>. To use
-  different values on an invoice, create it individually." (`invoiceSifStep.bulkNotice`). A field
-  with the same value for every order shows it; a field that differs shows "Según cada cliente"
-  (`invoiceSifStep.variesPerCustomer`) for the SII key — customers with their own key, the only
-  realistic difference in GO, where a client has one organization and one fiscal system — and
-  "Según cada pedido" (`invoiceSifStep.variesPerOrder`) for anything else (e.g. an order created in
-  Classic with its own SII description or operation date). Confirm creates the invoices, each POST
-  sending its OWN order's preview values as `sifFields`; Cancel creates nothing. Editing per
-  invoice only happens in the individual flow.
-- When no system is active, or a preview cannot be read, no summary is shown and the run goes on as
+  different values on an invoice, create it individually." (`invoiceSifStep.bulkNotice`). The
+  values chosen there go to ALL the invoices; editing per invoice only happens in the individual
+  flow.
+  - A field with the same value for every order shows it. A field that differs starts empty with
+    the note "Según cada cliente" (`invoiceSifStep.variesPerCustomer`) for the SII key — customers
+    with their own key, the only realistic difference in GO — or "Según cada pedido"
+    (`invoiceSifStep.variesPerOrder`) for anything else (e.g. an order created in Classic with its
+    own SII description or operation date). Left untouched, each invoice keeps its own value; once
+    the user picks one, it goes to every invoice. An untouched differing field counts as filled,
+    unless it is mandatory and one order has it empty: then the user must set it.
+  - If an order of the run produces a rectificative, the rectification codes (SII motive,
+    TicketBAI code, VERI*FACTU R1–R5 type) are shown empty with `*` and must be chosen; they are
+    sent to the rectificative invoices only, never to the ordinary ones of the same run. In a run
+    that mixes both kinds those fields read "(solo facturas rectificativas)" and VERI*FACTU's type
+    appears twice, once per kind.
+  - Confirm creates the invoices, each POST sending the chosen values as its `sifFields` (plus its
+    own value for any differing field left untouched); Cancel or × creates nothing.
+- When no system is active, or a preview cannot be read, no step is shown and the run goes on as
   before: each invoice gets its own backend defaults.
 
 The step is shared (`tools/app-shell/src/windows/custom/shared/InvoiceSifStep.jsx`) and built
@@ -891,4 +917,9 @@ its invoice because of a fiscal problem. The values travel as `sifFields` in the
 body; the backend validates them with the same per-system rule as the invoice's own completion
 (`RectificationFiscalCodeGuard`, 422 `ETGO_InvoiceRectificationCodeRequired`). If the preview cannot
 be loaded the flow continues without the step: the backend applies the same defaults anyway.
+The mandatory fields of the step carry the red `*` and keep the primary button disabled while
+empty (SII *Tipo factura* and *Descripción SII*; VERI*FACTU *Tipo de factura*, *Descripción de la
+operación* and, with VERI*FACTU active, *Fecha operación*; on a rectificative also each system's
+rectification code, which order flows never preselect — only a customer return's preview comes with `R1`). The rule is shared with the invoices' SIF tab:
+`docs/ui-customization.md` §21b.
 Backend reference: `com.etendoerp.go` `docs/neo-headless.md` §4.12.36b (ETP-6179).

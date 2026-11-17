@@ -479,10 +479,24 @@ describe('buildJsreportHelpersString — behavioural parity between the emitted 
       [[{ idx: 0 }, { idx: 1 }, { idx: 2 }]], [[{ idx: 0 }]], [[{ idx: 1 }, { idx: 2 }]], [[]], [null], [undefined],
     ],
     periodPages: [
-      [[[0, 1], [2, 3], [4]]], [[[0, 1, 2, 3, 4, 5, 6]]], [[[0]]], [[]], [null], [undefined],
+      [[[0, 1], [2, 3], [4]]], [[[0, 1, 2, 3, 4, 5, 6]]], [[[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]], 13], [[[0, 1, 2, 3, 4, 5, 6, 7, 8]], 9], [[[0, 1, 2, 3, 4, 5, 6, 7, 8]], 2], [[[0]]], [[]], [null], [undefined],
     ],
     periodMode: [['sly'], ['prev'], ['none'], [''], [null], [undefined], ['bogus']],
     periodSpan: [[2, 'sly'], [2, 'prev'], [7, 'none'], [1, undefined], [0, 'sly']],
+    // ETP-6239: what Comparado is compared against (month / quarter label, or the dates for the
+    // total), its Excel / CSV header form, and the JSON param parser.
+    periodCompared: [
+      ['2026-01-01..2026-03-31|2025-01-01..2025-03-31|2025-10-01..2025-12-31,2026-03-01..2026-03-31|2025-03-01..2025-03-31|2026-02-01..2026-02-28', 1, 'sly', 'month', 'es_ES'], ['2026-01-01..2026-03-31|2025-01-01..2025-03-31|2025-10-01..2025-12-31,2026-03-01..2026-03-31|2025-03-01..2025-03-31|2026-02-01..2026-02-28', 1, 'prev', 'month', 'en_US'],
+      ['2026-01-01..2026-03-31|2025-01-01..2025-03-31|2025-10-01..2025-12-31,2026-03-01..2026-03-31|2025-03-01..2025-03-31|2026-02-01..2026-02-28', 1, 'sly', 'quarter', 'es_ES'], ['2026-01-01..2026-03-31|2025-01-01..2025-03-31|2025-10-01..2025-12-31,2026-03-01..2026-03-31|2025-03-01..2025-03-31|2026-02-01..2026-02-28', 1, 'prev', 'quarter', 'en_US'],
+      ['2026-01-01..2026-03-31|2025-01-01..2025-03-31|2025-10-01..2025-12-31,2026-03-01..2026-03-31|2025-03-01..2025-03-31|2026-02-01..2026-02-28', 0, 'sly', 'month', 'es_ES'], ['2026-01-01..2026-03-31|2025-01-01..2025-03-31|2025-10-01..2025-12-31,2026-03-01..2026-03-31|2025-03-01..2025-03-31|2026-02-01..2026-02-28', 0, 'prev', 'quarter', 'en_US'], ['2026-01-01..2026-03-31|2025-01-01..2025-03-31|2025-10-01..2025-12-31,2026-03-01..2026-03-31|2025-03-01..2025-03-31|2026-02-01..2026-02-28', 0, 'sly', 'total', undefined],
+      ['2026-01-01..2026-03-31|2025-01-01..2025-03-31|2025-10-01..2025-12-31,2026-03-01..2026-03-31|2025-03-01..2025-03-31|2026-02-01..2026-02-28', 1, 'none', 'month', 'es_ES'], ['2026-01-01..2026-03-31|2025-01-01..2025-03-31|2025-10-01..2025-12-31,2026-03-01..2026-03-31|2025-03-01..2025-03-31|2026-02-01..2026-02-28', 1, '', 'month', 'es_ES'], ['2026-01-01..2026-03-31|2025-01-01..2025-03-31|2025-10-01..2025-12-31,2026-03-01..2026-03-31|2025-03-01..2025-03-31|2026-02-01..2026-02-28', 5, 'sly', 'month', 'es_ES'],
+      [undefined, 1, 'sly', 'month', 'es_ES'], ['garbage', 0, 'prev', 'total', 'es_ES'],
+    ],
+    periodComparedHeader: [
+      ['Comparado', '2026-01-01..2026-03-31|2025-01-01..2025-03-31|2025-10-01..2025-12-31,2026-03-01..2026-03-31|2025-03-01..2025-03-31|2026-02-01..2026-02-28', 1, 'sly', 'month', 'es_ES'], ['Compared', '2026-01-01..2026-03-31|2025-01-01..2025-03-31|2025-10-01..2025-12-31,2026-03-01..2026-03-31|2025-03-01..2025-03-31|2026-02-01..2026-02-28', 0, 'prev', 'total', 'en_US'],
+      ['Comparado', '2026-01-01..2026-03-31|2025-01-01..2025-03-31|2025-10-01..2025-12-31,2026-03-01..2026-03-31|2025-03-01..2025-03-31|2026-02-01..2026-02-28', 1, 'none', 'month', 'es_ES'], ['Comparado', undefined, 1, 'sly', 'month', 'es_ES'],
+    ],
+    parseJson: [['[1,2]'], ['{"a":1}'], ['nope'], [''], [null], [undefined], [{ a: 1 }], [5]],
   };
 
   it('covers every parity-checked helper with at least one case (no silently untested helper)', () => {
@@ -501,6 +515,29 @@ describe('buildJsreportHelpersString — behavioural parity between the emitted 
           + `emitted string returned ${JSON.stringify(actual)}, live helper returned ${JSON.stringify(expected)}`,
         );
       }
+    });
+  }
+});
+
+describe('periodCompared / periodComparedHeader — pinned output, live and emitted (ETP-6239)', () => {
+  const live = createReportHelpers();
+  const emitted = evalBuiltHelpers(buildJsreportHelpersString(), ['periodCompared', 'periodComparedHeader']);
+  const QUARTER = '2026-01-01..2026-03-31|2025-01-01..2025-03-31|2025-10-01..2025-12-31,2026-01-01..2026-03-31|2025-01-01..2025-03-31|2025-10-01..2025-12-31';
+  const MONTH = '2026-01-01..2026-12-31|2025-01-01..2025-12-31|2025-01-01..2025-12-31,2026-01-01..2026-01-31|2025-01-01..2025-01-31|2025-12-01..2025-12-31';
+  const CASES = [
+    ['range total, es: dd/mm/yyyy', [QUARTER, 0, 'sly', 'total', 'es_ES'], '01/01/2025 \u2013 31/03/2025'],
+    ['range total, en: mm/dd/yyyy', [QUARTER, 0, 'sly', 'total', 'en_US'], '01/01/2025 \u2013 03/31/2025'],
+    ['quarter sly, es: T1 25', [QUARTER, 1, 'sly', 'quarter', 'es_ES'], 'T1 25'],
+    ['quarter sly, en: Q1 25', [QUARTER, 1, 'sly', 'quarter', 'en_US'], 'Q1 25'],
+    ['month prev across a year boundary, es: dic 25', [MONTH, 1, 'prev', 'month', 'es_ES'], 'dic 25'],
+    ['month prev across a year boundary, en: Dec 25', [MONTH, 1, 'prev', 'month', 'en_US'], 'Dec 25'],
+  ];
+  for (const [label, args, expected] of CASES) {
+    it(`${label}`, () => {
+      assert.equal(live.periodCompared(...args), expected);
+      assert.equal(emitted.periodCompared(...args), expected);
+      assert.equal(live.periodComparedHeader('C', ...args), `C (${expected})`);
+      assert.equal(emitted.periodComparedHeader('C', ...args), `C (${expected})`);
     });
   }
 });
