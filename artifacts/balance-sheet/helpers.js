@@ -10,3 +10,9 @@
 // (CWE-1236, ADR-0004). template-csv.hbs keeps calling {{{csvField x}}}
 // unchanged; the canonical helper now also prefixes an apostrophe when the
 // value starts with a formula trigger.
+
+// ETP-6239 — "sep 26 Comparado": a period group's label plus a sub-column caption, for the single
+// header row of the CSV export (periodLabel and the rest are canonical helpers).
+function periodCaption(label, caption) {
+  return label + ' ' + caption;
+}

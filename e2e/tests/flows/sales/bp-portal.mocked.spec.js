@@ -3,6 +3,9 @@
 // @covers tools/app-shell/src/pages/portal/PortalDocumentDetailView.jsx
 // @covers tools/app-shell/src/lib/portal/portalApi.js
 // @covers tools/app-shell/src/pages/portal/PortalHomeView.jsx
+// @covers tools/app-shell/src/pages/portal/PortalDecisionActions.jsx
+// @covers tools/app-shell/src/pages/PortalDecisionPage.jsx
+// @covers tools/app-shell/src/pages/portal/PortalArrivalNotice.jsx
 import { test, expect } from '../../helpers/test.js';
 
 /**
@@ -11,6 +14,9 @@ import { test, expect } from '../../helpers/test.js';
  * A. A valid link opens the document it was sent with; from there the customer goes to the list,
  *    filters it by status group (a tab) and date, opens another document and downloads its PDF.
  * B. An expired link renews itself: exactly one POST /renew, then the "new link sent" message.
+ * C. A pending quotation is rejected (with a reason) or accepted: the request only emails a
+ *    confirmation; the email's landing (`/portal/decision/:token`) confirms it and opens the portal
+ *    on the quotation with a one-off notice that a reload does not bring back.
  *
  * The portal is a public page: no `login()`, no session. Every `/sws/portal/*` route is mocked here
  * and answers 401 unless the request carries the token in the `X-Portal-Token` header, so a request
@@ -46,6 +52,18 @@ function detail(invoice) {
   };
 }
 
+/** A quotation the customer can still answer, Aceptar included (PORTAL_ACCEPT_ENABLED is on). */
+const QUOTATION = {
+  ...detail({
+    kind: 'QUOTATION', id: 'q-1', documentNo: 'PR/0001', date: '2026-08-01', documentStatus: 'UE',
+    currency: 'EUR', taxBase: 100, grandTotal: 121,
+  }),
+  hasPdf: false,
+  decision: { canDecide: true, acceptAvailable: true },
+};
+
+const DECISION_TOKEN = 'dec-e2e-0123456789abcdef';
+
 const json = (route, body, status = 200) => route.fulfill({
   status, contentType: 'application/json', body: JSON.stringify(body),
 });
@@ -56,13 +74,19 @@ const json = (route, body, status = 200) => route.fulfill({
  * Two routes, not one brace pattern (see the e2e guide's glob gotcha): `/sws/portal/**` covers every
  * sub-path, and the catch-all `/sws/**` is registered first so the portal route wins (LIFO).
  */
-async function installPortalMock(page, { me }) {
+async function installPortalMock(page, { me, confirmAnswer = null }) {
   const requests = [];
   await page.route('**/sws/**', (route) => json(route, {}));
   await page.route('**/sws/portal/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const path = url.pathname.replace(/^.*\/sws\/portal/, '');
+    // The confirmation landing carries the decision token in its own header, never the portal one.
+    if (path === '/decisions/confirm' && request.method() === 'POST') {
+      requests.decisionConfirms = (requests.decisionConfirms ?? 0) + 1;
+      return request.headers()['x-portal-decision-token'] === DECISION_TOKEN
+        ? json(route, confirmAnswer) : json(route, {}, 401);
+    }
     requests.push({ method: request.method(), path, url: request.url(), token: request.headers()['x-portal-token'] });
 
     if (request.headers()['x-portal-token'] !== TOKEN) return json(route, {}, 401);
@@ -76,6 +100,11 @@ async function installPortalMock(page, { me }) {
         recent: INVOICES,
       });
     }
+    if (path === '/quotations/q-1/decision' && request.method() === 'POST') {
+      requests.decisionBodies = [...(requests.decisionBodies ?? []), request.postDataJSON()];
+      return json(route, { state: 'sent', maskedEmail: 'c***@cliente.es' });
+    }
+    if (path === '/documents/quotation/q-1') return json(route, QUOTATION);
     if (path === '/documents') {
       return json(route, { documents: INVOICES, totalCount: INVOICES.length, statuses: ['CO', 'CL'], totals: [] });
     }
@@ -180,4 +209,68 @@ test.describe('Customer portal — mocked', () => {
     expect(requests.some((request) => request.path === '/home' || request.path.startsWith('/documents'))).toBe(false);
     expectTokenOnlyInHeader(requests);
   });
+
+  for (const { decision, answer, expectedBody, notice, reason } of [
+    {
+      decision: 'Rechazar, with a reason',
+      answer: async (page) => {
+        await page.getByTestId('portal-decision-panel').getByTestId('portal-decision-reject').click();
+        const modal = page.getByTestId('portal-reject-modal');
+        await modal.getByTestId('portal-reject-reason-other').check();
+        await modal.getByTestId('portal-reject-other-text').fill('Ya no lo necesitamos');
+        await modal.getByTestId('portal-reject-submit').click();
+      },
+      expectedBody: { decision: 'REJECT', reasonCode: 'OTHER', reasonText: 'Ya no lo necesitamos' },
+      notice: /Has rechazado el presupuesto PR\/0001|You have rejected quotation PR\/0001/,
+      reason: /Ya no lo necesitamos/,
+    },
+    {
+      decision: 'Aceptar',
+      answer: async (page) => {
+        await page.getByTestId('portal-decision-panel').getByTestId('portal-decision-accept').click();
+      },
+      expectedBody: { decision: 'ACCEPT' },
+      notice: /Has aceptado el presupuesto PR\/0001|You have accepted quotation PR\/0001/,
+      reason: null,
+    },
+  ]) {
+    test(`C: ${decision} emails a confirmation, whose landing opens the quotation with a one-off notice`, async ({ page }) => {
+      const requests = await installPortalMock(page, {
+        me: {
+          state: 'valid', businessPartnerName: 'Cliente Uno', tenantName: 'Acme SA', hasLogo: false,
+          entryDocument: { kind: 'QUOTATION', id: 'q-1' },
+        },
+        confirmAnswer: {
+          state: 'confirmed', appliedNow: true, documentNo: 'PR/0001', tenantName: 'Acme SA',
+          ...expectedBody, portalToken: TOKEN, quotationId: 'q-1',
+        },
+      });
+
+      // In the portal: the request applies nothing, it says where the confirmation email went.
+      await page.goto(`/portal/${TOKEN}`);
+      await expect(page.getByTestId('portal-view-title')).toContainText('PR/0001');
+      await answer(page);
+      await expect(page.getByTestId('portal-decision-sent')).toContainText('c***@cliente.es');
+      expect(requests.decisionBodies).toEqual([expectedBody]);
+
+      // The email's button: the landing confirms once and lands on the quotation, with the notice.
+      await page.goto(`/portal/decision/${DECISION_TOKEN}`);
+      const arrival = page.getByTestId('portal-arrival-notice');
+      await expect(arrival).toContainText(notice);
+      expect(requests.decisionConfirms).toBe(1);
+      const landed = new URL(page.url());
+      expect(landed.pathname).toBe(`/portal/${TOKEN}`);
+      expect(Object.fromEntries(landed.searchParams)).toEqual({ view: 'doc', kind: 'QUOTATION', id: 'q-1' });
+      await expect(page.getByTestId('portal-view-title')).toContainText('PR/0001');
+      if (reason) await expect(page.getByTestId('portal-arrival-notice-reason')).toContainText(reason);
+      else await expect(page.getByTestId('portal-arrival-notice-reason')).toHaveCount(0);
+
+      // The notice lived in the history entry's state only: a reload does not replay it.
+      await page.reload();
+      await expect(page.getByTestId('portal-view-title')).toContainText('PR/0001');
+      await expect(page.getByTestId('portal-arrival-notice')).toHaveCount(0);
+      expect(requests.decisionConfirms).toBe(1);
+      expectTokenOnlyInHeader(requests);
+    });
+  }
 });

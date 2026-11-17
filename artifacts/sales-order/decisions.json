@@ -1,6 +1,7 @@
 {
   "$schema": "decisions-v2",
   "window": {
+    "publicApi": { "actions": ["complete"] },
     "category": "sales",
     "name": "Sales Order",
     "agentPrompt": "#REF#agent-prompts/sales-order/spec.md",
