@@ -172,6 +172,31 @@ export function calendarISODaysAgo(days, reference = new Date()) {
   );
 }
 
+// Fixed 3-letter names, the same table as `periodLabel` in templates/reports/helpers/report-html-helpers.js
+// (canonical), so a column reads the same on screen and in the exports. Not Intl: ICU gives "sept".
+const MONTH_SHORT = {
+  es: ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'],
+  en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+};
+
+/**
+ * Short column label of a month: "sep 26" / "Sep 26" ("{mmm} {yy}").
+ * ETP-6239: the period columns of the interactive reports; identical to the exports' `periodLabel`.
+ */
+export function formatCalendarMonthShort(raw, locales = 'en-GB') {
+  const date = parseCalendarDate(raw);
+  if (!date) return '—';
+  const lang = String(locales || '').toLowerCase().startsWith('es') ? 'es' : 'en';
+  return `${MONTH_SHORT[lang][date.getMonth()]} ${String(date.getFullYear()).slice(-2)}`;
+}
+
+/** Short column label of the calendar quarter containing the day: "T3 26" (`quarterPrefix` 'T') / "Q3 26". */
+export function formatCalendarQuarterShort(raw, quarterPrefix = 'Q') {
+  const date = parseCalendarDate(raw);
+  if (!date) return '—';
+  return `${quarterPrefix}${Math.floor(date.getMonth() / 3) + 1} ${String(date.getFullYear()).slice(-2)}`;
+}
+
 /**
  * Formats a calendar month and two-digit year without locale-specific connector words, so fiscal
  * period labels consistently read "January 27" / "Enero 27" rather than persisted "Jan-27".

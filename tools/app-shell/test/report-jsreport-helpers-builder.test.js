@@ -1,3 +1,4 @@
+// @covers templates/reports/helpers/report-html-helpers.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -464,6 +465,24 @@ describe('buildJsreportHelpersString — behavioural parity between the emitted 
       ['Total = 1+1'], ['texto, con coma'], ['con "comillas"'], ['line\nbreak'],
       ['=1+1,extra'], [''], [null], [undefined], [0], [42],
     ],
+    // ETP-6239: period columns — label per grain and locale, the "*" of a partial bucket, the
+    // range total (idx 0), a missing period; the total-last orderings; the comparison mode.
+    periodLabel: [
+      [{ idx: 2, dateFrom: '2026-09-01' }, 'month', 'es_ES', 'Total'],
+      [{ idx: 2, dateFrom: '2026-09-01', partial: true }, 'month', 'en_US', 'Total'],
+      [{ idx: 3, dateFrom: '2026-07-01' }, 'quarter', 'es_ES', 'Total'],
+      [{ idx: 3, dateFrom: '2026-07-01', partial: true }, 'quarter', 'en_US', 'Total'],
+      [{ idx: 0, dateFrom: '2026-01-01' }, 'month', 'es_ES', 'Total'],
+      [null, 'month', 'es_ES', 'Total'], [undefined, 'month', undefined, 'Total'],
+    ],
+    periodOrder: [
+      [[{ idx: 0 }, { idx: 1 }, { idx: 2 }]], [[{ idx: 0 }]], [[{ idx: 1 }, { idx: 2 }]], [[]], [null], [undefined],
+    ],
+    periodPages: [
+      [[[0, 1], [2, 3], [4]]], [[[0, 1, 2, 3, 4, 5, 6]]], [[[0]]], [[]], [null], [undefined],
+    ],
+    periodMode: [['sly'], ['prev'], ['none'], [''], [null], [undefined], ['bogus']],
+    periodSpan: [[2, 'sly'], [2, 'prev'], [7, 'none'], [1, undefined], [0, 'sly']],
   };
 
   it('covers every parity-checked helper with at least one case (no silently untested helper)', () => {

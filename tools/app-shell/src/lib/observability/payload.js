@@ -79,6 +79,7 @@ export const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'fkAutoResolved',
   'fkCreated',
   'outcome',
+  'panelState',
   'position',
   'provider',
   'reason',
@@ -97,6 +98,7 @@ export const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'tags',
   'timestamp',
   'total',
+  'trigger',
   'type',
   'upgradeAction',
   // 'username' is intentionally allowlisted here even though the ETP-4352 GDPR

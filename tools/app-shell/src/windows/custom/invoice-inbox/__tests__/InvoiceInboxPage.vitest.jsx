@@ -692,7 +692,8 @@ describe('InvoiceInboxPage — review panel', () => {
     fireEvent.click(screen.getByTestId('row-r2'));
     await screen.findByTestId('invoice-inbox-review-form');
     fireEvent.click(screen.getByTestId('invoice-inbox-review-discard'));
-    expect(screen.getByTestId('invoice-inbox-discard-dialog-title')).toHaveTextContent('invoiceInboxDiscardTitleOne');
+    // The footer first waits for the pending saves (`flush`), then opens the dialog.
+    expect(await screen.findByTestId('invoice-inbox-discard-dialog-title')).toHaveTextContent('invoiceInboxDiscardTitleOne');
     mockApi.fetchNextPage.mockClear();
     mockApi.fetchCounts.mockClear();
     fireEvent.click(screen.getByTestId('invoice-inbox-discard-confirm'));
@@ -710,7 +711,7 @@ describe('InvoiceInboxPage — review panel', () => {
     fireEvent.click(screen.getByTestId('row-r2'));
     await screen.findByTestId('invoice-inbox-review-form');
     fireEvent.click(screen.getByTestId('invoice-inbox-review-discard'));
-    fireEvent.click(screen.getByTestId('invoice-inbox-discard-confirm'));
+    fireEvent.click(await screen.findByTestId('invoice-inbox-discard-confirm'));
     await waitFor(() => expect(toast.error).toHaveBeenCalled());
     expect(mockApi.discardInboxDocument).toHaveBeenCalledTimes(1);
     expect(drawer()).not.toBeNull();

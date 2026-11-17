@@ -4,7 +4,8 @@
  * relative to it: the list is `/header`, the upload is `/upload` (a built-in endpoint that NEO
  * dispatches before the spec router; the spec's CRUD is read-only), the discard is the action
  * `/header/{id}/action/discard`, the review read (ETP-6050) the GET action
- * `/header/{id}/action/review`.
+ * `/header/{id}/action/review`, its edits the POST actions `/header/{id}/action/apply` and
+ * `/header/{id}/action/mark-reviewed` (contract: docs/plans/ETP-6050-invoice-inbox-review-panel.md 9.2).
  */
 import { buildListQuery, COUNT_QUERIES, idsCriteria } from './invoiceInboxFilters.js';
 
@@ -16,6 +17,12 @@ export const UPLOAD_PART = 'files';
 export const DISCARD_ACTION = 'discard';
 /** NEO GET action that reads one document for the review panel (ETP-6050). */
 export const REVIEW_ACTION = 'review';
+/** NEO POST action that applies edit operations to a document (ETP-6050 S2). */
+export const APPLY_ACTION = 'apply';
+/** NEO POST action that marks a valid document as reviewed (ETP-6050 S2). */
+export const MARK_REVIEWED_ACTION = 'mark-reviewed';
+
+const HTTP_FORBIDDEN = 403;
 
 class InboxRequestError extends Error {
   constructor(status) {
@@ -149,6 +156,65 @@ export async function fetchReview(apiFetch, id, signal) {
   const json = await readJson(res);
   if (res.ok && json) return { status: 'ok', review: json };
   return { status: 'failed', code: json?.error?.code ?? null, httpStatus: res.status };
+}
+
+/** The failed outcome every action shares: the NEO `error.code` and the details the codes carry. */
+function failedOutcome(res, json) {
+  const error = json?.error ?? {};
+  // Detail keys (`field`, `index`, `max`, `missing`) sit directly in the `error` object; the row's
+  // status of `not_editable` / `not_reviewable` is `error.documentStatus` (`error.status` is the HTTP code).
+  const details = error;
+  return {
+    status: 'failed',
+    // The generic NEO spec gate answers a role without (write) window access with a code-less 403
+    // ({error:{message:'Access denied to spec for current role', status:403}}): derive the code, the
+    // SPA translates by code and never shows the server's English text.
+    code: error.code ?? (res.status === HTTP_FORBIDDEN ? 'access_denied' : null),
+    httpStatus: res.status,
+    field: details.field ?? null,
+    index: Number.isInteger(details.index) ? details.index : null,
+    missing: Array.isArray(details.missing) ? details.missing : null,
+    documentStatus: details.documentStatus ?? null,
+    // `not_valid` (422) carries the NEW token: adopt it without a reload.
+    updated: details.updated ?? null,
+  };
+}
+
+/**
+ * ETP-6050 S2 — applies edit operations: `POST /header/{id}/action/apply` with
+ * `{updated, operations}` (the optimistic-lock token travels in the BODY: `apiFetch` only injects
+ * it into PUT/PATCH). The answer is the review body of the saved row, whose `updated` is the next
+ * token. A write: `timeout: 0` (no default timeout, so a cut-off write cannot become a double
+ * submit). Never throws for an HTTP answer; no HTTP answer rejects with the core `NetworkError`.
+ *
+ * @param {Function} apiFetch
+ * @param {string} id document id
+ * @param {string} updated the token of the last answer
+ * @param {object[]} operations 1 to 50 operations (`buildOp` in invoiceInboxReviewModel.js)
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<{status: 'ok', review: object} | {status: 'failed', code: string|null,
+ *   httpStatus: number, field: string|null, index: number|null, missing: string[]|null,
+ *   documentStatus: string|null}>}
+ */
+export async function applyOperations(apiFetch, id, updated, operations, signal) {
+  const path = `${LIST_PATH}/${encodeURIComponent(id)}/action/${APPLY_ACTION}`;
+  const res = await apiFetch(path, { method: 'POST', body: JSON.stringify({ updated, operations }), timeout: 0, signal });
+  const json = await readJson(res);
+  if (res.ok && json) return { status: 'ok', review: json };
+  return failedOutcome(res, json);
+}
+
+/**
+ * ETP-6050 S2 — marks a valid document as reviewed: `POST /header/{id}/action/mark-reviewed` with
+ * `{updated}`. Same outcome shape as `applyOperations` (`not_valid` 422 carries `missing`;
+ * `not_reviewable` 409 carries `documentStatus`).
+ */
+export async function markReviewed(apiFetch, id, updated, signal) {
+  const path = `${LIST_PATH}/${encodeURIComponent(id)}/action/${MARK_REVIEWED_ACTION}`;
+  const res = await apiFetch(path, { method: 'POST', body: JSON.stringify({ updated }), timeout: 0, signal });
+  const json = await readJson(res);
+  if (res.ok && json) return { status: 'ok', review: json };
+  return failedOutcome(res, json);
 }
 
 /**
