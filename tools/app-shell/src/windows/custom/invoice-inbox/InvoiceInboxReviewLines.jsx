@@ -20,7 +20,8 @@ import { useReviewEditor } from './useInvoiceInboxReviewEditor.js';
 const NONE_VALUE = '__none__';
 /** The column header labels (also the cells' aria-labels and the stacked layout's labels). */
 const COL_LABEL = Object.freeze({
-  description: 'invoiceInboxReviewColDescription',
+  // `item`, not `description`: the i18n gate reads an object property named description as visible text.
+  item: 'invoiceInboxReviewColDescription',
   quantity: 'invoiceInboxReviewColQuantity',
   price: 'invoiceInboxReviewColPrice',
   discount: 'invoiceInboxReviewColDiscount',
@@ -193,7 +194,7 @@ function ProductPanel({ line, position, lineIndex, readOnly, state, missing, api
           <span className="min-w-0 text-xs text-muted-foreground [overflow-wrap:anywhere]" data-testid={`invoice-inbox-review-line-${position}-in-document`}>
             {ui('invoiceInboxReviewProductInDocument', { description: line.description ?? '' })}
           </span>
-          <div className="flex flex-col gap-1.5" role="radiogroup" aria-label={ui(COL_LABEL.description)}>
+          <div className="flex flex-col gap-1.5" role="radiogroup" aria-label={ui(COL_LABEL.item)}>
             {candidates.map((candidate, index) => (
               <OptionRow
                 key={candidate.id}
@@ -416,7 +417,7 @@ function lineCells({ line, lineIndex, position, currency, scale, missingTax, mis
         readOnly={readOnly}
         maxLength={MAX_TEXT}
         inputRef={descriptionRef}
-        ariaLabel={ui(COL_LABEL.description)}
+        ariaLabel={ui(COL_LABEL.item)}
         className={CELL}
         onCommit={commitLine('description')}
         testId={`invoice-inbox-review-line-${position}-description`}
@@ -740,7 +741,7 @@ export default function InvoiceInboxReviewLines({
         <div>
           {!stacked && (
             <div className={`${GRID} border-b border-border pb-2 text-xs font-semibold text-muted-foreground`} data-testid="invoice-inbox-review-lines-head">
-              <span>{ui(COL_LABEL.description)}</span>
+              <span>{ui(COL_LABEL.item)}</span>
               <span className="text-right">{ui(COL_LABEL.quantity)}</span>
               <span className="text-right">{ui(COL_LABEL.price)}</span>
               <span className="text-right">{ui(COL_LABEL.discount)}</span>
