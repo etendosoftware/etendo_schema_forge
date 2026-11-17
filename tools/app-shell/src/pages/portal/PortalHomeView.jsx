@@ -98,11 +98,14 @@ export default function PortalHomeView({
           onNavigate={onNavigate}
           data-testid="MobilePendingHero__beaeb4" />
 
-        {/* Desktop, as the Figma lays it out: a row at least 226px tall where "Requiere tu atención"
-            and "Tu saldo" keep the design's 901 : 443 (≈ 2 : 1) at every width, and the four tiles
-            share their card equally. A row grows when real content needs it (both cards keep the
-            same height: grid items stretch) and never stretches to the window; the body scrolls. */}
-        <div className="flex flex-wrap items-start gap-3 md:grid md:grid-cols-[minmax(0,2fr)_minmax(258px,1fr)] md:gap-4">
+        {/* Desktop, from both Figma frames: at the 1440px design width the four tiles are 205px
+            and "Requiere tu atención" hugs them (901px), "Tu saldo" takes the rest — 259px with the
+            rail expanded, 443px collapsed. Other widths keep that rail state's proportion (901 :
+            259 or 901 : 443), so the tiles grow or shrink with the window and "Tu saldo" never
+            balloons; "Tu saldo" never goes under 258px. The four tiles share their card equally. A
+            row is at least 226px tall and grows when real content needs it (both cards keep the
+            same height: grid items stretch); it never stretches to the window; the body scrolls. */}
+        <div className="flex flex-wrap items-start gap-3 md:grid md:grid-cols-[minmax(0,901fr)_minmax(258px,259fr)] md:items-stretch md:gap-4 md:group-data-[rail=collapsed]/shell:grid-cols-[minmax(0,901fr)_minmax(258px,443fr)]">
           <section
             className="min-w-0 flex-[2_1_560px] overflow-hidden md:flex md:min-h-[226px] md:flex-col md:rounded-lg md:border md:border-border"
             aria-label={ui('portalAttentionTitle')}

@@ -307,7 +307,13 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
   const totalBadge = kinds.reduce((sum, kind) => sum + (navBadgeOf(tiles, kind)?.count ?? 0), 0);
 
   return (
-    <div className="flex h-screen min-h-0 bg-background text-base text-foreground md:text-sm" data-testid="portal-shell">
+    // `group/shell` + `data-rail`: a view can size itself by the rail state (the main screen's
+    // first row keeps a different proportion with the rail collapsed, as the Figma frames do).
+    <div
+      className="group/shell flex h-screen min-h-0 bg-background text-base text-foreground md:text-sm"
+      data-rail={collapsed ? 'collapsed' : 'expanded'}
+      data-testid="portal-shell"
+    >
       {/* Desktop rail (spec of 2026-11-17) */}
       <nav
         aria-label={ui('portalPageTitle')}

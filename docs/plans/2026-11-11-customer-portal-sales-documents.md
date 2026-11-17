@@ -996,8 +996,11 @@ arrives, so every shared piece takes the new look as an opt-in (`PortalSection v
   Badges on the main screen use the Figma's hex colours (`PortalTag palette="figma"`), not the app
   palette: a quotation awaiting an answer is blue, an invoice to pay yellow. The status **names**
   stay the app's ("Bajo evaluación", "Completado", "Vencidas") until the PO decides (they conflict
-  with the "statuses exactly as the app" criterion). Row 1 is 226px tall with "Requiere tu atención" and
-  "Tu saldo" at the Figma's 901 : 443 (≈ 2 : 1) and the four tiles sharing their card equally;
+  with the "statuses exactly as the app" criterion). Row 1 is 226px tall; at the 1440px design width its four
+  tiles are 205px and "Requiere tu atención" hugs them (901px) while "Tu saldo" takes the rest
+  (259px rail expanded, 443px collapsed, as the two Figma frames). Other widths keep that rail
+  state's 901 : 259 or 901 : 443 proportion ("Tu saldo" never under 258px; the shell exposes the
+  rail state as `data-rail` for this);
   row 2 is 320px tall with "Documentos recientes" and the chart at 520 : 840 (documents never under
   440px, so a row stays on one line) and the chart filling its card. Rows never stretch to the
   window — the body scrolls — checked at 1280, 1366, 1440, 1536 and 1920 in both rail states.
