@@ -164,8 +164,9 @@ describe('review drawer — shell, loading and the header', () => {
     expect(position.className).toMatch(/whitespace-nowrap/);
     fireEvent.click(tid('invoice-inbox-review-prev'));
     fireEvent.click(tid('invoice-inbox-review-next'));
-    expect(nav.goPrev).toHaveBeenCalledTimes(1);
-    expect(nav.goNext).toHaveBeenCalledTimes(1);
+    // Moving on first waits for the pending saves (`flush`), so the nav call is async.
+    await waitFor(() => expect(nav.goPrev).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(nav.goNext).toHaveBeenCalledTimes(1));
   });
 
   it('header: no position text when the document is not among the loaded rows; chevrons disable at the ends', async () => {
@@ -210,13 +211,15 @@ describe('review drawer — shell, loading and the header', () => {
 });
 
 describe('review drawer — supplier', () => {
-  it('linked: name, "taxId · city" and how it was matched; Change is inert', async () => {
+  it('linked: name, "taxId · city" and how it was matched; Change opens the search', async () => {
     await renderLoaded(makeReview());
     expect(tid('invoice-inbox-review-vendor')).toHaveAttribute('data-state', 'linked');
     expect(tid('invoice-inbox-review-vendor-name')).toHaveTextContent('ACME SL');
     expect(tid('invoice-inbox-review-vendor-meta')).toHaveTextContent('B1234 · Madrid');
     expect(tid('invoice-inbox-review-vendor-matched-by')).toHaveTextContent('Vinculado por NIF');
-    expect(tid('invoice-inbox-review-vendor-change')).toHaveAttribute('aria-disabled', 'true');
+    expect(tid('invoice-inbox-review-vendor-change')).not.toHaveAttribute('aria-disabled');
+    fireEvent.click(tid('invoice-inbox-review-vendor-change'));
+    expect(tid('invoice-inbox-review-vendor-change-panel')).toBeInTheDocument();
   });
 
   it('linked by name reads "Vinculado por nombre"; an unknown matchedBy shows no tag', async () => {
@@ -261,11 +264,11 @@ describe('review drawer — supplier', () => {
     expect(tid('invoice-inbox-review-vendor-in-document')).toHaveTextContent('sin NIF legible');
   });
 
-  it('ambiguous candidates are disabled radios in the read-only panel', async () => {
+  it('ambiguous candidates are enabled radios (the choice is live from S2)', async () => {
     await renderLoaded(ambiguous(2));
     const radio = tid('invoice-inbox-review-vendor-candidate-c0');
     expect(radio).toHaveAttribute('role', 'radio');
-    expect(radio).toBeDisabled();
+    expect(radio).not.toBeDisabled();
     expect(within(tid('invoice-inbox-review-vendor-ambiguous')).getAllByRole('radio')).toHaveLength(3);
   });
 
@@ -281,8 +284,9 @@ describe('review drawer — supplier', () => {
     expect(tid('invoice-inbox-review-vendor-new-address')).toHaveValue('Rue 1');
     expect(tid('invoice-inbox-review-vendor-new-postalcode')).toHaveValue('75001');
     expect(tid('invoice-inbox-review-vendor-new-city')).toHaveValue('Paris');
-    expect(tid('invoice-inbox-review-vendor-new-country')).toHaveValue('Francia');
-    expect(tid('invoice-inbox-review-vendor-search-existing')).toHaveAttribute('aria-disabled', 'true');
+    // The country is a picker (its chip shows the NAME); "Buscar existente" is live.
+    expect(tid('invoice-inbox-review-vendor-new-country-field')).toHaveTextContent('Francia');
+    expect(tid('invoice-inbox-review-vendor-search-existing')).not.toHaveAttribute('aria-disabled');
   });
 
   it('new without a country falls back to España; without a name and missing vendor it shows the required error', async () => {
@@ -290,15 +294,15 @@ describe('review drawer — supplier', () => {
       header: { vendor: { state: 'new', extracted: { taxId: 'X1' } } },
       validation: { missing: ['vendor'] },
     }));
-    expect(tid('invoice-inbox-review-vendor-new-country')).toHaveValue('España');
+    expect(tid('invoice-inbox-review-vendor-new-country-field')).toHaveTextContent('España');
     expect(tid('invoice-inbox-review-vendor-new-name-error')).toHaveTextContent('Indica el proveedor');
     expect(tid('invoice-inbox-review-vendor-new-name')).toHaveAttribute('aria-invalid', 'true');
   });
 
-  it('none: the inert picker hint and, when missing, the red error', async () => {
+  it('none: the vendor search and, when missing, the red error', async () => {
     await renderLoaded(makeReview({}, { header: { vendor: { state: 'none' } }, validation: { missing: ['vendor'] } }));
     expect(tid('invoice-inbox-review-vendor')).toHaveAttribute('data-state', 'none');
-    expect(tid('invoice-inbox-review-vendor-none-hint')).toHaveAttribute('placeholder', 'Selecciona un proveedor de Etendo…');
+    expect(within(tid('invoice-inbox-review-vendor-none')).getByPlaceholderText('Selecciona un proveedor de Etendo…')).toBeInTheDocument();
     expect(tid('invoice-inbox-review-vendor-error')).toHaveTextContent('Indica el proveedor');
   });
 
@@ -336,7 +340,7 @@ describe('review drawer — lines and products', () => {
     fireEvent.click(tid('invoice-inbox-review-line-0-product'));
     expect(tid('invoice-inbox-review-line-0-product')).toHaveAttribute('aria-expanded', 'true');
     expect(tid('invoice-inbox-review-line-0-panel')).toHaveTextContent('Cambiar por otro producto');
-    expect(tid('invoice-inbox-review-line-0-search')).toHaveAttribute('aria-disabled', 'true');
+    expect(within(tid('invoice-inbox-review-line-0-search')).getByPlaceholderText('Buscar en el catálogo de Etendo…')).toBeInTheDocument();
     fireEvent.click(tid('invoice-inbox-review-line-0-product'));
     expect(maybe('invoice-inbox-review-line-0-panel')).toBeNull();
   });
@@ -351,7 +355,7 @@ describe('review drawer — lines and products', () => {
     expect(tid('invoice-inbox-review-line-0-likely')).toHaveTextContent('Más probable');
     expect(tid('invoice-inbox-review-line-0-candidate-p1')).toHaveTextContent('K1 · Cat · Ud');
     expect(tid('invoice-inbox-review-line-0-none-option')).toHaveTextContent('Ninguno · crear producto nuevo');
-    expect(tid('invoice-inbox-review-line-0-candidate-p0')).toBeDisabled();
+    expect(tid('invoice-inbox-review-line-0-candidate-p0')).not.toBeDisabled();
   });
 
   it('ambiguous with exactly 1 candidate uses the singular "1 producto posible"', async () => {
@@ -392,21 +396,24 @@ describe('review drawer — lines and products', () => {
 
   it('numeric cells carry the full value in title, and the amount is quantity x price', async () => {
     await renderLoaded(makeReview({}, { lines: [line({ quantity: 1234.5, unitPrice: 10.25, taxRate: 21 })] }));
-    for (const part of ['quantity', 'price', 'tax']) {
+    for (const part of ['quantity', 'price']) {
       const input = tid(`invoice-inbox-review-line-0-${part}`);
       expect(input.title).toBe(input.value);
       expect(input.title).not.toBe('');
     }
+    // The VAT cell is a read-only display of the effective rate (the tax is chosen with the selector).
+    expect(tid('invoice-inbox-review-line-0-tax')).toHaveValue('21%');
+    expect(tid('invoice-inbox-review-line-0-tax')).toHaveAttribute('readonly');
     expect(tid('invoice-inbox-review-line-0-amount')).toHaveTextContent(M(12653.63));
     expect(tid('invoice-inbox-review-line-0-amount').title).toBe(tid('invoice-inbox-review-line-0-amount').textContent);
   });
 
-  it('the line section counts lines in its title and all fields are read-only; add / delete are inert', async () => {
+  it('the line section counts lines in its title; fields, add and delete are live', async () => {
     await renderLoaded(makeReview({}, { lines: [line({ index: 0 }), line({ index: 1, description: 'B' })] }));
     expect(tid('invoice-inbox-review-lines-title')).toHaveTextContent('Líneas · 2');
-    expect(tid('invoice-inbox-review-line-1-description')).toHaveAttribute('readonly');
-    expect(tid('invoice-inbox-review-add-line')).toHaveAttribute('aria-disabled', 'true');
-    expect(tid('invoice-inbox-review-line-delete-0')).toHaveAttribute('aria-disabled', 'true');
+    expect(tid('invoice-inbox-review-line-1-description')).not.toHaveAttribute('readonly');
+    expect(tid('invoice-inbox-review-add-line')).not.toBeDisabled();
+    expect(tid('invoice-inbox-review-line-delete-0')).not.toHaveAttribute('aria-disabled');
   });
 
   it('zero lines: only the header row and the "no amount" line, no rows, totals in zeros', async () => {
@@ -438,22 +445,24 @@ describe('review drawer — lines and products', () => {
 });
 
 describe('review drawer — header section, currency and totals', () => {
-  it('invoice number and formatted date are read-only', async () => {
+  it('invoice number and formatted date are editable', async () => {
     await renderLoaded(makeReview());
     expect(tid('invoice-inbox-review-invoice-no')).toHaveValue('F-100');
-    expect(tid('invoice-inbox-review-invoice-no')).toHaveAttribute('readonly');
+    expect(tid('invoice-inbox-review-invoice-no')).not.toHaveAttribute('readonly');
     expect(tid('invoice-inbox-review-invoice-date')).toHaveValue(formatCalendarDate('2026-08-01', 'es_ES'));
   });
 
   it('the raw date is shown when the parsed one is missing', async () => {
     await renderLoaded(makeReview({}, { header: { invoiceDate: null, invoiceDateRaw: '1 ago 26' } }));
-    expect(tid('invoice-inbox-review-invoice-date')).toHaveValue('1 ago 26');
+    // The shared date field cannot show free text: the printed date is a hint under it.
+    expect(tid('invoice-inbox-review-invoice-date')).toHaveValue('');
+    expect(tid('invoice-inbox-review-invoice-date-raw')).toHaveTextContent('1 ago 26');
   });
 
   it('a missing date gets the "Revisar" tag, the red field and its error', async () => {
     await renderLoaded(makeReview({}, { header: { invoiceDate: null }, validation: { missing: ['invoiceDate'] } }));
     expect(tid('invoice-inbox-review-invoice-date-tag')).toHaveTextContent('Revisar');
-    expect(tid('invoice-inbox-review-invoice-date')).toHaveAttribute('aria-invalid', 'true');
+    expect(tid('invoice-inbox-review-invoice-date-control')).toHaveAttribute('aria-invalid', 'true');
     expect(tid('invoice-inbox-review-invoice-date-error')).toHaveTextContent('Indica la fecha de factura');
   });
 
@@ -585,7 +594,7 @@ describe('review drawer — footer', () => {
     expect(discard.textContent.trim()).toBe('');
     expect(discard.className).toMatch(/text-destructive/);
     fireEvent.click(discard);
-    expect(onDiscard).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(onDiscard).toHaveBeenCalledTimes(1));
     expect(onDiscard.mock.calls[0][0]).toMatchObject({ id: 'D1', status: 'PENDING_REVIEW' });
   });
 
@@ -602,12 +611,11 @@ describe('review drawer — footer', () => {
     expect(tid('invoice-inbox-review-pending')).toHaveTextContent('2 obligatorios pendientes');
   });
 
-  it('Mark as reviewed and Confirm are disabled with the coming-soon tooltip', async () => {
+  it('Confirm stays disabled with the coming-soon tooltip; Mark as reviewed is live on a valid document', async () => {
     await renderLoaded(makeReview());
-    for (const id of ['invoice-inbox-review-mark-reviewed', 'invoice-inbox-review-confirm']) {
-      expect(tid(id)).toBeDisabled();
-      expect(tid(`${id}-wrapper`)).toHaveAttribute('title', 'Próximamente');
-    }
+    expect(tid('invoice-inbox-review-confirm')).toBeDisabled();
+    expect(tid('invoice-inbox-review-confirm-wrapper')).toHaveAttribute('title', 'Próximamente');
+    expect(tid('invoice-inbox-review-mark-reviewed')).not.toBeDisabled();
     expect(tid('invoice-inbox-review-confirm')).toHaveTextContent('Confirmar factura');
   });
 
@@ -702,13 +710,13 @@ describe('review drawer — errors, retry and races', () => {
   });
 });
 
-describe('review drawer — it never writes', () => {
+describe('review drawer — reads and discards write nothing', () => {
   it('opening, reading and discarding through the footer fire only GETs of the review action', async () => {
     const { onDiscard } = await renderLoaded(makeReview({ status: 'READY' }, { lines: [line({ product: { state: 'ambiguous', candidates: [{ id: 'p1', name: 'P' }] } })] }));
     fireEvent.click(tid('invoice-inbox-review-line-0-product'));
     fireEvent.click(tid('invoice-inbox-review-line-0-product'));
     fireEvent.click(tid('invoice-inbox-review-discard'));
-    expect(onDiscard).toHaveBeenCalled();
+    await waitFor(() => expect(onDiscard).toHaveBeenCalled());
     expect(apiFetch).toHaveBeenCalledTimes(1);
     for (const [url, options] of apiFetch.mock.calls) {
       expect(url).toBe('/header/D1/action/review');
@@ -717,9 +725,9 @@ describe('review drawer — it never writes', () => {
     }
   });
 
-  it('disabled footer actions and inert controls fire nothing when clicked', async () => {
+  it('the disabled Confirm button and the "Cambiar" toggle fire nothing when clicked', async () => {
     await renderLoaded(makeReview({}, { header: { vendor: { state: 'linked', details: { name: 'A' } } } }));
-    for (const id of ['invoice-inbox-review-confirm', 'invoice-inbox-review-mark-reviewed', 'invoice-inbox-review-vendor-change', 'invoice-inbox-review-add-line', 'invoice-inbox-review-line-delete-0']) {
+    for (const id of ['invoice-inbox-review-confirm', 'invoice-inbox-review-vendor-change']) {
       fireEvent.click(tid(id));
     }
     expect(apiFetch).toHaveBeenCalledTimes(1);

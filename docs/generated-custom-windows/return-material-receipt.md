@@ -783,11 +783,18 @@ The popup opened by "Crear Factura Rectificativa" on a completed (CO), not-yet-i
 - **Confirmar** with *Crear factura rectificativa* on (`ConfirmWithCreditButtonBase` →
   `ConfirmInOutModal`, also the list row's confirm) and **Crear factura rectificativa** on a confirmed
   return (`CreateInvoiceConfirmModal`).
-- Rectificative: `R4` preselected for the SII motive, the TicketBAI code and the VERI*FACTU type, all
-  editable; SII key `R`/type `I` and the TicketBAI/VERI*FACTU reverse types are set automatically.
-  Before ETP-6179 this flow completed the invoice as an ordinary `F1`. Clearing a code blocks the
-  primary button (`invoiceSifStep.rectificationRequired`); an API caller that sends a blank code gets
-  422 `ETGO_InvoiceRectificationCodeRequired` and nothing is created.
+- Rectificative: the SII motive, the TicketBAI code and the VERI*FACTU type come **preselected as
+  `R1`** for the systems active for the organization (decided by the user, ETP-6179; the VERI*FACTU
+  type only offers `R1`–`R5` and never reads `F1`). Each stays editable and is marked mandatory with
+  the red `*`: clearing one disables the primary button and shows
+  `invoiceSifStep.rectificationRequired`. SII key `R`/type `I` and the TicketBAI/VERI*FACTU reverse
+  types are set automatically. Before ETP-6179 this flow completed the invoice as an ordinary `F1`.
+  The backend preselects `R1` because the preview is built from a return
+  (`AbstractReturnDocumentHeaderHandler` → `Target.withRectificationDefault`), not by window name.
+  An API caller that sends a code blank gets 422 `ETGO_InvoiceRectificationCodeRequired` and
+  nothing is created; a code it omits takes the preview's `R1`, and one that sends **no
+  `sifFields` at all** (also this screen when the preview could not be read) gets `R1` in every
+  active system (`InvoiceSifPreset.unattendedRectificationFallback`).
 
 How the step itself works — the backend `sifDefaults` preview, when it appears, the
 `sifFields` it sends and the fail-open rule — is described once in [sales-order.md → Fiscal data step before the invoice is created](sales-order.md#fiscal-data-step-before-the-invoice-is-created--etp-6179).

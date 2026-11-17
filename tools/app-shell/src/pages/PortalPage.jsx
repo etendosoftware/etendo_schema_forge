@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { AlertCircle, Ban, FileText, Loader2, MailCheck } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
-import { useApiFetch } from '@/auth/useApiFetch.js';
+import { usePortalApiFetch } from '@/lib/portal/usePortalApiFetch.js';
 import {
   PORTAL_ERROR,
   PORTAL_LINK_STATE,
@@ -15,6 +15,7 @@ import {
   resolvePortalBaseUrl,
 } from '@/lib/portal/portalApi.js';
 import PortalShell from './portal/PortalShell.jsx';
+import PortalArrivalNotice, { usePortalArrivalNotice } from './portal/PortalArrivalNotice.jsx';
 import PortalHomeView from './portal/PortalHomeView.jsx';
 import PortalDocumentListView from './portal/PortalDocumentListView.jsx';
 import PortalDocumentDetailView from './portal/PortalDocumentDetailView.jsx';
@@ -251,8 +252,9 @@ export default function PortalPage() {
   const ui = useUI();
   // `/sws/portal/*` is its own bounded context, so this is NOT the router's `apiBaseUrl`
   // (which already points at `/sws/neo`). Memoized because `apiFetch` is memoized on it.
+  // Outside the app's session scope: see `usePortalApiFetch` for why (ETP-6209).
   const baseUrl = useMemo(() => resolvePortalBaseUrl(), []);
-  const apiFetch = useApiFetch(baseUrl);
+  const apiFetch = usePortalApiFetch(baseUrl);
 
   const [view, setView] = useState(VIEW.loading);
   const [identity, setIdentity] = useState(null);
@@ -260,6 +262,8 @@ export default function PortalPage() {
   const [attempt, setAttempt] = useState(0);
   const [logoUrl, setLogoUrl] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  // ETP-6209: the one-off notice of a decision confirmation that led here (router state only).
+  const [arrivalNotice, dismissArrivalNotice] = usePortalArrivalNotice();
   // The home chart's period ("Últimos 12 meses"); a change refetches only the home aggregates.
   const [months, setMonths] = useState(12);
   const monthsRef = useRef(months);
@@ -467,6 +471,10 @@ export default function PortalPage() {
       tiles={home?.tiles}
       onNavigate={navigate}
       data-testid="PortalShell__3db5f6">
+      <PortalArrivalNotice
+        notice={arrivalNotice}
+        onDismiss={dismissArrivalNotice}
+        data-testid="PortalArrivalNotice__3db5f6" />
       {entryHidden && (
         <p
           role="status"

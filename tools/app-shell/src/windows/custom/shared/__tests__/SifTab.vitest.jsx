@@ -1,6 +1,7 @@
 // @covers tools/app-shell/src/windows/custom/shared/SifTab.jsx
 // @covers tools/app-shell/src/windows/custom/shared/useSifFieldPatcher.js
 // @covers tools/app-shell/src/windows/custom/shared/InvoiceSifStep.jsx
+// @covers tools/app-shell/src/windows/custom/shared/sifRequiredFields.js
 // Mocks must be declared before any imports that pull in the mocked modules.
 
 import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
@@ -46,13 +47,14 @@ vi.mock('@/components/ui/date-field', () => ({
   // relies on now (ETP-4463) — onBlur is left unused by SifTab itself, but the
   // mock still exposes it so any accidental future dependency on it would be
   // observable in a test rather than silently no-op-ing.
-  DateField: ({ id, value, onChange, onBlur, disabled }) => (
+  DateField: ({ id, value, onChange, onBlur, disabled, required }) => (
     <input
       data-testid={`date-${id}`}
       id={id}
       type="date"
       value={value}
       disabled={disabled}
+      required={required}
       onChange={(e) => onChange && onChange(e.target.value)}
       onBlur={(e) => onBlur && onBlur(e.target.value)}
     />
@@ -112,7 +114,9 @@ vi.mock('@/components/ui/select', () => {
 
   return {
     Select,
-    SelectTrigger: ({ id, children }) => <div id={id}>{children}</div>,
+    SelectTrigger: ({ id, children, ...rest }) => (
+      <div id={id} aria-required={rest['aria-required']}>{children}</div>
+    ),
     // ETP-5117: mirrors real Radix SelectValue — renders explicit children when
     // given (SifTab now passes a computed label/fallback for etvfacInvType) and
     // only falls back to the placeholder when no children are provided.
@@ -1703,6 +1707,149 @@ describe('SifTab', () => {
 
     // ETP-4783: etvfacReverseinvtype select removed from UI — no disabled/enabled
     // check needed. The field is always saved as 'I' via useSifFieldPatcher.
+  });
+
+  // ── mandatory-field marks (sifRequiredFields.js) ────────────────────────────
+  // The red `*` and aria-required follow the one shared rule: per panel, conditional on the
+  // invoice (rectificative / VERI*FACTU), and never on a field the user cannot edit.
+
+  describe('mandatory-field marks', () => {
+    const mark = (id) => screen.queryByTestId(`RequiredMark__sif_${id}`);
+
+    it('SII (sales draft): marks the invoice type and the SII description, not the operation date', () => {
+      mockFiscalConfig('sii');
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiClaveTipo: 'F1' } })} />);
+      expect(mark('sif-siiType')).toHaveTextContent('*');
+      expect(mark('sif-siiDesc')).toBeInTheDocument();
+      expect(document.querySelector('#sif-siiType')).toHaveAttribute('aria-required', 'true');
+      expect(screen.getByTestId('input-sif-siiDesc')).toHaveAttribute('aria-required', 'true');
+      // The operation date is mandatory only with VERI*FACTU, which never shares the tab with SII.
+      expect(mark('sif-etsgDateOperation')).not.toBeInTheDocument();
+      expect(screen.getByTestId('date-sif-etsgDateOperation')).not.toBeRequired();
+    });
+
+    it('SII: the rectification reason is marked when the SII type is R', () => {
+      mockFiscalConfig('sii');
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiClaveTipo: 'R' } })} />);
+      expect(mark('sif-siiMotivoRectif')).toBeInTheDocument();
+      expect(document.querySelector('#sif-siiMotivoRectif')).toHaveAttribute('aria-required', 'true');
+    });
+
+    it('SII: the rectification reason is marked on a rectificative document type', () => {
+      mockFiscalConfig('sii');
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', aeatsiiClaveTipo: 'R', isRectificative: true },
+      })} />);
+      expect(mark('sif-siiMotivoRectif')).toBeInTheDocument();
+    });
+
+    it('SII: nothing is marked once the invoice is processed', () => {
+      mockFiscalConfig('sii');
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'CO', processed: true, aeatsiiClaveTipo: 'R', isRectificative: true },
+      })} />);
+      ['sif-siiType', 'sif-siiDesc', 'sif-siiMotivoRectif', 'sif-etsgDateOperation'].forEach(id => {
+        expect(mark(id)).not.toBeInTheDocument();
+      });
+      expect(document.querySelector('#sif-siiType')).not.toHaveAttribute('aria-required');
+      expect(screen.getByTestId('input-sif-siiDesc')).not.toHaveAttribute('aria-required');
+    });
+
+    it('SII: the invoice type and reason are not marked once sent to SII', () => {
+      mockFiscalConfig('sii');
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', aeatsiiIssent: true, aeatsiiClaveTipo: 'R', isRectificative: true },
+      })} />);
+      expect(mark('sif-siiType')).not.toBeInTheDocument();
+      expect(mark('sif-siiMotivoRectif')).not.toBeInTheDocument();
+      expect(mark('sif-siiDesc')).not.toBeInTheDocument();
+    });
+
+    it('SII: nothing is marked for a read-only role, even on a draft', () => {
+      mockFiscalConfig('sii');
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiClaveTipo: 'R' } })} accessReadOnly />);
+      ['sif-siiType', 'sif-siiDesc', 'sif-siiMotivoRectif'].forEach(id => {
+        expect(mark(id)).not.toBeInTheDocument();
+      });
+    });
+
+    it('SII (purchase): marks only the invoice type and the SII description, never the reason', () => {
+      mockFiscalConfig('sii');
+      render(<SifTab {...makeProps({
+        apiBaseUrl: '/sws/neo/purchase-invoice',
+        data: { documentStatus: 'DR', aeatsiiClaveTipoFc: 'R', isRectificative: true },
+      })} />);
+      expect(mark('sif-siiType')).toBeInTheDocument();
+      expect(mark('sif-siiDesc')).toBeInTheDocument();
+      expect(screen.getByText('sifDataTabs.field.rectificationReason')).toBeInTheDocument();
+      expect(mark('sif-siiMotivoRectif')).not.toBeInTheDocument();
+      expect(document.querySelector('#sif-siiMotivoRectif')).not.toHaveAttribute('aria-required');
+      expect(mark('sif-etsgDateOperation')).not.toBeInTheDocument();
+    });
+
+    it('VERI*FACTU (draft): marks the operation date, the invoice type and the description', () => {
+      mockFiscalConfig('verifactu');
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', etvfacInvType: 'F1' } })} />);
+      expect(mark('sif-etsgDateOperation')).toBeInTheDocument();
+      expect(screen.getByTestId('date-sif-etsgDateOperation')).toBeRequired();
+      expect(mark('sif-vfInvType')).toBeInTheDocument();
+      expect(document.querySelector('#sif-vfInvType')).toHaveAttribute('aria-required', 'true');
+      expect(mark('sif-vfDesc')).toBeInTheDocument();
+      expect(screen.getByTestId('input-sif-vfDesc')).toHaveAttribute('aria-required', 'true');
+    });
+
+    it('VERI*FACTU: nothing is marked on a completed invoice', () => {
+      mockFiscalConfig('verifactu');
+      render(<SifTab {...makeProps({ data: { documentStatus: 'CO', etvfacInvType: 'F1' } })} />);
+      ['sif-etsgDateOperation', 'sif-vfInvType', 'sif-vfDesc'].forEach(id => {
+        expect(mark(id)).not.toBeInTheDocument();
+      });
+      expect(screen.getByTestId('date-sif-etsgDateOperation')).not.toBeRequired();
+    });
+
+    it('TicketBAI: the rectification code is marked on a draft rectificative', () => {
+      mockFiscalConfig('tbai');
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', isRectificative: true } })} />);
+      expect(mark('tbai-reverseinvoicecode')).toBeInTheDocument();
+      expect(document.querySelector('#tbai-reverseinvoicecode')).toHaveAttribute('aria-required', 'true');
+    });
+
+    it('TicketBAI (Bizkaia purchase rectificative): the code is shown but never marked', () => {
+      useFiscalConfig.mockReturnValue({
+        profile: 'tbai',
+        tbaiRecord: { etsgSifTerritory: 'BIZKAIA' },
+        earliestSiiCutoverDate: '2000-01-01T00:00:00.000Z',
+      });
+      render(<SifTab {...makeProps({
+        apiBaseUrl: '/sws/neo/purchase-invoice',
+        data: { documentStatus: 'DR', isRectificative: true, processed: false },
+      })} />);
+      expect(screen.getByText('sifDataTabs.field.tbaiReverseinvoicecode')).toBeInTheDocument();
+      const wrapper = document.querySelector('#tbai-reverseinvoicecode').closest('[data-testid="select-wrapper"]');
+      expect(wrapper).toHaveAttribute('data-disabled', 'false');
+      expect(mark('tbai-reverseinvoicecode')).not.toBeInTheDocument();
+      expect(document.querySelector('#tbai-reverseinvoicecode')).not.toHaveAttribute('aria-required');
+    });
+
+    it('SII: the exemption cause is never marked, even editable on a draft with exempt taxes', () => {
+      mockFiscalConfig('sii');
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', processed: false, hasExemptTaxes: true, aeatsiiCauseExemption: null },
+      })} />);
+      expect(screen.getByTestId('mock-selector-input')).toBeInTheDocument();
+      expect(mark('sif-exemption')).not.toBeInTheDocument();
+      // The fields next to it are marked, so the mark is rendered on this panel.
+      expect(mark('sif-siiType')).toBeInTheDocument();
+    });
+
+    it('TicketBAI: the rectification code is not marked once processed', () => {
+      mockFiscalConfig('tbai');
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'CO', isRectificative: true, processed: true },
+      })} />);
+      expect(screen.getByText('sifDataTabs.field.tbaiReverseinvoicecode')).toBeInTheDocument();
+      expect(mark('tbai-reverseinvoicecode')).not.toBeInTheDocument();
+    });
   });
 
   // ── edge cases ──────────────────────────────────────────────────────────────

@@ -1247,6 +1247,21 @@ Built in both repos following C.0–C.11.
    customer, expired plan) and applies nothing when the portal is closed for the customer.
 6. **Footer.** "Creado con etendo.ai" links to `https://etendo.ai` (new tab, `noopener noreferrer`); no
    shared constant existed.
+7. **The confirmation lands in the portal (PO, 2026-11-16).** The landing no longer ends on its own
+   card. After the one-step confirmation, whatever its state (applied now, answered before,
+   superseded, no longer pending, expired), the server mints a new portal link like a renewal (same
+   tenant, Business Partner, recipients and language as the decision's link; 48 h from now;
+   `LINK_ORIGIN = DECISION`, parent = the decision's link, root = its root) and marks it usable at
+   once, since no email carries it (`PortalDecisionEntry`). Its raw token comes back only in the
+   confirm POST's answer (`portalToken`, `quotationId`). The SPA opens
+   `/portal/<token>?view=doc&kind=QUOTATION&id=<quotationId>` and hands it a one-off notice through
+   router state, dropped from the history entry once read (`PortalArrivalNotice`): "Has aceptado el
+   presupuesto {n}", "Has rechazado el presupuesto {n}" with "Motivo: …", "Ya habías respondido este
+   presupuesto", no longer pending, expired. Opening the portal records `portal.link.opened` as usual
+   (origin `DECISION`). No link, and the landing keeps its card: invalid token, portal closed for the
+   customer by the access checks, or minting failed; the decision itself is applied or not exactly as
+   before. Bound: at most 10 `DECISION` links per decision link and day, besides the confirm route's
+   rate limiter. **Needs `update.database`** (`ETGO_PORTAL_LINK_ORIGIN_CHK` accepts `DECISION`).
 
 ---
 
@@ -1258,7 +1273,7 @@ are closed or moved to their own ticket.
 | Item | State | Notes |
 |---|---|---|
 | **Part C — accept / reject a quotation from the portal** | **Built, PO answers applied** | See Part C, C.13. Open: `ETGO_AC` in the core `STATUS_ORDER` (sort order only). |
-| **KPI semantics** | **Pending the PO** | The four events of §A.7 ship (`portal.link.sent`, `portal.link.opened`, `portal.link.renewed`, `portal.document.downloaded`, server-only). D-5 took *per send* (`ROOT_LINK_ID`) as the headline unit as proposed; the PO has not yet confirmed the metric definitions — per send vs per document, and whether opens by link scanners that run JS (counted today, §A.7) are filtered. Changing the reading needs no code: the events carry both `ROOT_LINK_ID` and `documentId`. |
+| **KPI semantics** | **Defined by the PO, emitted** | PO metrics (etendo-ai#22, 2026-11-16): invoices downloaded from the portal ÷ invoices sent with a portal link (≥ 30 %, also monthly absolute) and quotations answered from the portal ÷ quotations sent with a link (≥ 20 %, split accepted/rejected, manual decisions excluded). Emitted as Mixpanel backend KPIs by `PortalKpiTelemetry` (com.etendoerp.go): `backend_portal_document_sent` and `backend_portal_document_downloaded` (`type`, once per document; "first download" stamped atomically on `ETGO_PORTAL_LINK.FIRST_DOWNLOADED`, needs `update.database`) and `backend_quotation_decided` (`decision`, `source` portal/app; an app conversion of a portal-accepted `ETGO_AC` quotation is not counted again). Contract and Mixpanel recipes: go `docs/backend-observability.md` → *Customer Portal KPIs (ETP-6209)*. The `portal.*` usage events of §A.7 are unchanged. |
 | **Drop the unused `ETGO_PORTAL_ACCESS`** | **Follow-up, after a production check** | Kept as on `develop` in this delivery (§A.1, revised 2026-11-13). Check production for rows; if empty, drop the model XML and its dictionary rows in their own change. |
 | **Retention / purge job for `ETGO_PORTAL_LINK`** | **Asked of the PO** | Nothing deletes rows today. Pending rows (the email never left) are invalid forever and harmless (§A.2.7); expired rows are kept because **an expired link can be renewed at any age** — there is no maximum. The PO was asked the maximum age after which an expired link should no longer renew; that answer decides both the renewal cut-off and how long rows must be kept. |
 | **Plain-text 500 on the portal PDF route** | Optional cleanup | `GET /sws/portal/documents/{kind}/{id}/pdf` streams through `AnonymousAttachmentStreamer`, whose failure path writes a `text/plain` body (`writePlainError`) — the email download link's format — while every other portal error is JSON. The page only reads the status, so nothing is broken; aligning it would mean a JSON error for the portal caller without changing the email link's answers. |

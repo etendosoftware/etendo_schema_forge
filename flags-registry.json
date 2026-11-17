@@ -1697,7 +1697,7 @@
           ]
         }
       },
-      "$gatingComment": "ONE evaluator, the backend (InvoiceInboxFlag), evaluated at REQUEST ENTRY. Targeted PER ACCOUNT: FeatureFlagContext.forAccount(<ETGO_ACCOUNT email of the request user, via GoAccountResolver.currentAccountEmail()>).with(clientId); the targeting key, `Email` and lowercase `email` carry the account. Datadog rules are written on the lowercase `email` attribute only (never identifier, percentage or tenant attribute), because the web client and the backend use different targeting keys. With no resolvable account the context carries clientId only and the default stays off; never throws. The asynchronous OCR worker has no OBContext user, so it must NOT re-evaluate the flag; off-request callers use InvoiceInboxFlag.isEnabled(accountEmail, clientId) with values captured at request entry. Local: etendo.go.flags.invoice-inbox / ETGO_FLAG_INVOICE_INBOX (Tomcat restart). Hosted rollout: create the boolean setting `invoice-inbox` (default false) in Datadog Experimental/Production BEFORE targeting anyone. Toggle points: (1) InvoiceInboxUploadEndpoint (POST /sws/neo/invoice-inbox/upload), which refuses with 403 feature_disabled before reading the multipart; (2) since ETP-6049, SFWindowAccessMap publishes the same evaluation as capabilities.invoiceInbox, read by the SPA in two places only: the menu item (menu.json capability key) and the page guard (windows/custom/invoice-inbox/index.jsx). Still ONE evaluator: the browser never evaluates the flag. The capability is NOT access control by itself, but the API is gated too: (3) InvoiceInboxHeaderHandler, an @NeoExtension(spec=invoice-inbox, entity=header) pre-hook, refuses EVERY request on the spec (REST list/getById and MCP etendo_list/etendo_get, same NeoExtensionDispatcher READ surface) with the same 403 feature_disabled when the flag is off; flag on it returns null and the default handling runs, except for the discard action (POST .../header/{id}/action/discard, ETP-6049), which the same handle serves AFTER the flag check, so the action is behind the same gate with no second evaluation point; the page itself also requires the window access. A flag change reaches the SPA on the next access-map load. ETP-6048 adds no second evaluator: everything it added is only REACHABLE through that gated upload. The worker (InvoiceInboxProcessor, which the upload endpoint feeds through InvoiceInboxProcessor.submit) and the sweeper never evaluate the flag by design: a PROCESSING row exists only because the flag was on at upload, so turning the flag off does NOT stop rows already queued or processing. Pieces that run REGARDLESS of the flag (removal cost and blast radius): (a) InvoiceInboxSweeperStartup, a SessionAwareStartup that runs at every startup and every 2 minutes and scans etgo_incoming_document for stalled PROCESSING rows, a no-op when the table has none; (b) the SHARED OCR schema ocr/ocr-config.json gained total_amount (number|null, in required), which also changes the schema served by GET /sws/neo/ocrconfig to the SPA 'Extraer y completar' of /purchase-invoice and to the MCP: verified manually and by the 577 SPA vitests, no behavior change; (c) shared OCR client changes: OcrUnavailableException.retryable (the old constructor stays retryable) and CopilotOcrServiceClient classifying HTTP failures through HttpStatusException; (d) ReceiverTaxIdCheck now delegates to the new TaxIdNormalizer; (e) PurchaseInvoiceOcrLookups has new vendorsByTaxId and vendorTaxId, organizationTaxId now reads through OBDal.getInstance(), and selector failures log WARN, while OcrLookups gained default methods vendorsByTaxId and vendorTaxId; (f) three new columns on ETGO_INCOMING_DOCUMENT (PROCESSING_ATTEMPTS, PROCESSING_LEASE, PROCESSED_AT) ship unconditionally: the flag gates behaviour, not schema.",
+      "$gatingComment": "ONE evaluator, the backend (InvoiceInboxFlag), evaluated at REQUEST ENTRY. Targeted PER ACCOUNT: FeatureFlagContext.forAccount(<ETGO_ACCOUNT email of the request user, via GoAccountResolver.currentAccountEmail()>).with(clientId); the targeting key, `Email` and lowercase `email` carry the account. Datadog rules are written on the lowercase `email` attribute only (never identifier, percentage or tenant attribute), because the web client and the backend use different targeting keys. With no resolvable account the context carries clientId only and the default stays off; never throws. The asynchronous OCR worker has no OBContext user, so it must NOT re-evaluate the flag; off-request callers use InvoiceInboxFlag.isEnabled(accountEmail, clientId) with values captured at request entry. Local: etendo.go.flags.invoice-inbox / ETGO_FLAG_INVOICE_INBOX (Tomcat restart). Hosted rollout: create the boolean setting `invoice-inbox` (default false) in Datadog Experimental/Production BEFORE targeting anyone. Toggle points: (1) InvoiceInboxUploadEndpoint (POST /sws/neo/invoice-inbox/upload), which refuses with 403 feature_disabled before reading the multipart; (2) since ETP-6049, SFWindowAccessMap publishes the same evaluation as capabilities.invoiceInbox, read by the SPA in two places only: the menu item (menu.json capability key) and the page guard (windows/custom/invoice-inbox/index.jsx). Still ONE evaluator: the browser never evaluates the flag. The capability is NOT access control by itself, but the API is gated too: (3) InvoiceInboxHeaderHandler, an @NeoExtension(spec=invoice-inbox, entity=header) pre-hook, refuses EVERY request on the spec (REST list/getById and MCP etendo_list/etendo_get, same NeoExtensionDispatcher READ surface) with the same 403 feature_disabled when the flag is off; flag on it returns null and the default handling runs, except for the header actions (.../header/{id}/action/<name>): discard (POST, ETP-6049), review (GET), apply and mark-reviewed (POST) (ETP-6050 S1/S2), which the same handle serves AFTER the flag check, so every action is behind the same gate with no second evaluation point; the four actions are hidden from MCP (SPA-only surface); the page itself also requires the window access. A flag change reaches the SPA on the next access-map load. ETP-6048 adds no second evaluator: everything it added is only REACHABLE through that gated upload. The worker (InvoiceInboxProcessor, which the upload endpoint feeds through InvoiceInboxProcessor.submit) and the sweeper never evaluate the flag by design: a PROCESSING row exists only because the flag was on at upload, so turning the flag off does NOT stop rows already queued or processing. Pieces that run REGARDLESS of the flag (removal cost and blast radius): (a) InvoiceInboxSweeperStartup, a SessionAwareStartup that runs at every startup and every 2 minutes and scans etgo_incoming_document for stalled PROCESSING rows, a no-op when the table has none; (b) the SHARED OCR schema ocr/ocr-config.json gained total_amount (number|null, in required) and, in ETP-6050 S2, the line keys discount_percent and discount_amount (number|null, in required), whose descriptions tell the model the unit price is the printed price BEFORE the discount; the single-invoice 'Extraer y completar' flow and the MCP OCR tools ignore the discount, so for a discounted invoice those lines may now show at the gross printed price (known effect; mapping the discount in the single-invoice flow is a follow-up), which also changes the schema served by GET /sws/neo/ocrconfig to the SPA 'Extraer y completar' of /purchase-invoice and to the MCP: verified manually and by the 577 SPA vitests, no behavior change; (c) shared OCR client changes: OcrUnavailableException.retryable (the old constructor stays retryable) and CopilotOcrServiceClient classifying HTTP failures through HttpStatusException; (d) ReceiverTaxIdCheck now delegates to the new TaxIdNormalizer; (e) PurchaseInvoiceOcrLookups has new vendorsByTaxId and vendorTaxId, organizationTaxId now reads through OBDal.getInstance(), and selector failures log WARN, while OcrLookups gained default methods vendorsByTaxId and vendorTaxId; (f) three new columns on ETGO_INCOMING_DOCUMENT (PROCESSING_ATTEMPTS, PROCESSING_LEASE, PROCESSED_AT) ship unconditionally: the flag gates behaviour, not schema.",
       "paths": {
         "frontend": [
           "tools/app-shell/src/windows/custom/invoice-inbox/index.jsx",
@@ -1733,6 +1733,10 @@
           "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewTotals.jsx",
           "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewBanners.jsx",
           "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewFooter.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewInputs.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewPickers.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewSaveStatus.jsx",
+          "tools/app-shell/src/windows/custom/invoice-inbox/useInvoiceInboxReviewEditor.js",
           "tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewParts.jsx",
           "tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxReviewModel.js",
           "tools/app-shell/src/windows/custom/invoice-inbox/useInvoiceInboxReview.js",
@@ -1953,7 +1957,7 @@
             "root": "frontend",
             "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/invoiceInboxReviewModel.test.js",
             "expected": true,
-            "note": "ETP-6050 S1 (tester-functional, node --test): computeTotals per rate and cents, totalMismatch (1 cent no warning, 2 cents yes, only printed), documentTotal, missingSet/lineKey/unresolvedProductCount, vendorView/productView/joinMeta/extractedCountry, isReviewReadOnly/isOpenableRow, reviewBanners per status and error code, reviewNeighbors skipping PROCESSING, zoom range/step/initial fit."
+            "note": "ETP-6050 S1 (tester-functional, node --test): computeTotals per rate and cents, totalMismatch (1 cent no warning, 2 cents yes, only printed), documentTotal, missingSet/lineKey/unresolvedProductCount, vendorView/productView/joinMeta/extractedCountry, isReviewReadOnly/isOpenableRow, reviewBanners per status and error code, reviewNeighbors skipping PROCESSING, zoom range/step/initial fit. ETP-6050 S2: the shared totals fixture (13 cases, same file the backend reads), toScaled/divRoundHalfAway/normalizeNumber/sameNumber, buildOp and applyOperationLocally for the eight operations, applyPendingToReview, newProductComplete, saveErrorKey/isReloadCode, canMarkReviewed. ETP-6050 S2 addenda: totals edge cases (missing sides count for nothing, zero, negative price and quantity, credit document, discount out of range as 0, rounding at the scale boundary, 6-decimal unit price, D and L rows grouping and order, rate rounded to 2 decimals), scale 0 and 3 through documentTotal and totalMismatch, currencyScale bounds, line[i].quantity / unitPrice codes (exact match, footer counter, canMarkReviewed), input scales, tax by id optimistic copy (rate only when exposed, pending otherwise, 0% is real, inheritance on addLine with and without a tax id), unknown_tax and access_denied mapping, product.new without a resolved name."
           },
           {
             "root": "frontend",
@@ -1975,6 +1979,42 @@
           },
           {
             "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/InvoiceInboxReviewEditing.vitest.jsx",
+            "expected": true,
+            "note": "ETP-6050 S2 (tester-functional): write flows through the drawer against a stateful fake of apply / mark-reviewed: autosave (700 ms debounce, blur, Enter, invalid value reverts, no write without change), Guardando/Guardado live region, discount parsing under a comma locale and live totals, add/remove line with stable index, stacked layout below 460 px, supplier linked/ambiguous/new/none and product ambiguous/new flows with category and unit pickers opening on the committed value, Marcar como revisada rules, read-only states, 409/422/network refusals, close/prev/next/discard waiting for the saves. Ambiguous product -> Ninguno · crear producto nuevo keeps the panel with the required category and unit open (the earlier known-red case is green since the source fix). ETP-6050 S2 addenda: tax selector variants (option with and without rate, 0%, empty list, failing selector, supplier location and DateInvoiced in the query, unknown_tax rollback, missing tax red, read-only documents offer no picker, addLine inheritance with and without a tax id), currency scale 0 and 3 end to end (lines, price input, totals card, mismatch tolerance, read-only list, missing currency falls back to 2, read-only badge), price and quantity precision (6 and 4 decimals, rounding at the boundary), any sign / zero / missing values and the red cells, credit document, D and L total rows, mark-reviewed not_valid adoption without a re-read, code-less 403 without Reintentar, new product with unresolved names."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/useInvoiceInboxReviewEditor.vitest.jsx",
+            "expected": true,
+            "note": "ETP-6050 S2 (tester-functional): editor hook: pending overlay then server replace, one write in flight, same-key coalescing with token refresh, unique keys for structural operations, 409 reload + notice, 422 and network rollback, failed write discards the queue behind it, flush true/false and input flushers, no write after unmount, markReviewed flushes first and handles not_valid / not_reviewable / network, beforeunload guard, retry. ETP-6050 S2 addenda: markReviewed not_valid adopts the recomputed missing, the ERROR status and the new token with no reload and no loop (and keeps the previous ones when the refusal carries none), code-less 403 reads access_denied with no notice, unknown_tax rolls the tax pick back."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/invoiceInboxApi.vitest.js",
+            "expected": true,
+            "note": "ETP-6050 S2 (tester-functional): applyOperations and markReviewed request shape (POST, token and operations in the body, timeout 0, signal) and failed outcomes read from the error object (code, field, index, missing, documentStatus), non-JSON answers, network rejection."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/invoiceInboxMoney.vitest.js",
+            "expected": true,
+            "note": "ETP-6050 S2 (tester-functional): formatMoney shows exactly the currency scale as min and max fraction digits (0, 2, 3), pads and rounds, keeps the sign and groups big numbers, maxDigits above the scale shows up to 6 decimals for unit prices and never fewer than the scale, always through the canonical formatCurrency; under es-style and en-style instance separators and a left-side symbol."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/invoiceInboxLocales.test.js",
+            "expected": true,
+            "note": "ETP-6050 (tester-functional, node --test): the invoiceInbox* keys the sources use exist in en_US, es_ES and es_AR with the same placeholders; S2 adds the 31 editing / save / resolution keys and checks every refusal code maps to a defined key. S2 addenda: the 6 keys of the tax selector and the line codes exist in the three locales, are read by the sources, keep placeholders ({rate}, {base} on the per-line tax row), es_ES has no voseo and es_AR does in the two missing-value errors."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/InlineSearchCombo.vitest.jsx",
+            "expected": true,
+            "note": "ETP-6050 S2 (tester-functional): the portaled panel sets pointer-events auto so its options stay clickable under a modal dialog that locks <body>."
+          },
+          {
+            "root": "frontend",
             "path": "tools/app-shell/src/windows/custom/invoice-inbox/__tests__/InvoiceInboxReviewViewer.vitest.jsx",
             "expected": true,
             "note": "ETP-6050 S1 (tester-functional): read-only viewer, PDF page width 595*zoom/100, zoom range and readout, image branch, unavailable document, download link, no write operation wired."
@@ -1991,7 +2031,7 @@
             "root": "frontend",
             "path": "e2e/tests/flows/purchases/invoice-inbox-review-panel.mocked.spec.js",
             "expected": true,
-            "note": "ETP-6050 S1 (tester-functional, mocked): open from row and pencil, prev/next across a filter and past 50 of 130 rows, PROCESSING skipped, Escape/outside/X close with focus return, discard from the footer, main states from mocked review answers, no write request."
+            "note": "ETP-6050 S1 (tester-functional, mocked): open from row and pencil, prev/next across a filter and past 50 of 130 rows, PROCESSING skipped, Escape/outside/X close with focus return, discard from the footer, main states from mocked review answers, no write request. ETP-6050 S2: edit and save with the token in the body, discount and live totals, add/remove lines, ambiguous and new supplier, supplier search under the modal, ambiguous and new product with pickers, mark as reviewed and back to pending after an edit, 409 reload notice, 422 rollback, close and next waiting for a save, read-only states, 768 px stacked layout. ETP-6050 S2 addenda: pick a tax by id (rate '…' until the server answers, VAT row and total follow, selector asked with isSOTrx and DateInvoiced, re-pick writes nothing), new line inherits the tax by id, USD (2 decimals) and JPY (0 decimals) documents with the read-only badge, a line-based tax document with its own row, a negative line, a missing quantity red cell until filled, mark-reviewed 422 not_valid adopted without a re-read and fixed with the new token, code-less 403 with no retry, unknown_tax rollback."
           }
         ]
       },
@@ -2005,14 +2045,6 @@
           ]
         },
         {
-          "id": "revalidate-on-edit",
-          "kind": "scope",
-          "note": "The requirement that validation is recomputed on every edit is delivered here only as a reusable InvoiceInboxValidator and InvoiceInboxStatusPolicy, but nothing calls them on an edit yet: the caller is ETP-6050. Until then a row's ERROR / MISSING_FIELDS state only changes when the worker reads the document, so an edited row keeps a stale verdict. The review read (ETP-6050 S1) recomputes the validation at read time only, without persisting it; persisting it on edit is slice S2.",
-          "refs": [
-            "ETP-6050"
-          ]
-        },
-        {
           "id": "due-date-extraction",
           "kind": "scope",
           "note": "The review panel (ETP-6050) shows no Vencimiento: the OCR schema (ocr/ocr-config.json) does not extract a due date and how to handle it is still open; to be treated later (user decision 2026-11-12, ETP-6050 decision 1).",
@@ -2023,7 +2055,7 @@
         {
           "id": "review-edit-and-resolution",
           "kind": "scope",
-          "note": "ETP-6050 S1 delivers the read-only review panel; editing with autosave, ADJUSTED, supplier/product resolution and mark-as-reviewed are slices S2/S3 of the same story.",
+          "note": "ETP-6050 S2 delivers editing with autosave, ADJUSTED, line discount, supplier/product resolution and mark-as-reviewed (the revalidate-on-edit commitment is closed: every edit recomputes and persists the verdict). What is left is the confirm (ETP-6051): the panel only STORES a new supplier (vendor.extracted: name, taxId, address, postalCode, city, countryName, email, phone) and a new product (product.new: name, category, unit); ETP-6051 must create them applying the single-invoice OCR seed (header seed + address child seed, category by document nature, country by name with the Spain fallback, and inbox unitPrice -> listPrice with discount -> etgoDiscount) or the two flows diverge again (ETP-5654). Not in S2 either: document-level discount (etgoTotalDiscount), remembered equivalences, batch 'Marcar para revisión'.",
           "refs": [
             "ETP-6050"
           ]
@@ -2207,6 +2239,14 @@
           {
             "root": "frontend",
             "path": "tools/app-shell/src/components/reports/dynamic/__tests__/drillDown.vitest.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/reports/dynamic/__tests__/reportColumns.vitest.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/reports/dynamic/__tests__/useReportPanelCollapsed.vitest.jsx"
           }
         ],
         "e2e": [

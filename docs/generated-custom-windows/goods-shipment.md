@@ -661,8 +661,8 @@ Documentos and the button is back.
   **Crear factura de venta** on a confirmed shipment (`GoodsShipmentActions` →
   `CreateInvoiceConfirmModal`), including the list's bulk "Crear factura" of several shipments into
   ONE invoice (`BulkInvoiceFromShipment`, preview with the same `shipmentIds`).
-- The bulk "Crear factura" builds ONE invoice, so it shows the same editable step (not the
-  read-only summary of the order lists): the preview is asked with the same `shipmentIds` the
+- The bulk "Crear factura" builds ONE invoice, so it shows the single-record editable step (not
+  the one-set-for-all bulk step of the order lists): the preview is asked with the same `shipmentIds` the
   creation will send. Several shipments are invoiced with **no order on the invoice header**, so
   their preview carries no order either: SII description = the organization's default one,
   operation date = today. A single shipment with an order takes those values from the order, as

@@ -1,8 +1,9 @@
+import { X } from 'lucide-react';
 import { useUI } from '@/i18n';
-import { formatCurrency } from '@/lib/formatCurrency.js';
+import { formatMoney } from './invoiceInboxMoney.js';
 import { errorCodeLabelKey } from './invoiceInboxMessages.js';
 import {
-  computeTotals, isSettledStatus, reviewBanners, totalMismatch,
+  computeTotals, currencyScale, isSettledStatus, reviewBanners, totalMismatch,
 } from './invoiceInboxReviewModel.js';
 import { ReviewBanner } from './InvoiceInboxReviewParts.jsx';
 
@@ -105,7 +106,8 @@ export default function InvoiceInboxReviewBanners({ review }) {
 export function InvoiceInboxReviewMismatchBanner({ review, currency }) {
   const ui = useUI();
   if (isSettledStatus(review.status)) return null;
-  const mismatch = totalMismatch(review.document?.header, computeTotals(review.document?.lines));
+  const scale = currencyScale(review.currency);
+  const mismatch = totalMismatch(review.document?.header, computeTotals(review.document?.lines, scale), scale);
   if (!mismatch) return null;
   return (
     <ReviewBanner
@@ -114,9 +116,40 @@ export function InvoiceInboxReviewMismatchBanner({ review, currency }) {
       title={ui('invoiceInboxReviewMismatchTitle')}
       data-testid="ReviewBanner__838958">
       {ui('invoiceInboxReviewMismatchBody', {
-        lines: formatCurrency(currency, mismatch.lines),
-        doc: formatCurrency(currency, mismatch.document),
+        lines: formatMoney(currency, mismatch.lines, scale),
+        doc: formatMoney(currency, mismatch.document, scale),
       })}
     </ReviewBanner>
+  );
+}
+
+/**
+ * ETP-6050 S2-D4 — the notice shown after the document was reloaded because it changed under the
+ * editor (`stale_document`, `processing`, `not_editable`, `not_reviewable`): the unsaved local
+ * edits were dropped. Dismissible; the text is the translated message of the refusal's code.
+ *
+ * @param {{noticeKey: string, onDismiss: () => void}} props
+ */
+export function InvoiceInboxReviewNotice({ noticeKey, onDismiss }) {
+  const ui = useUI();
+  return (
+    <div className="relative" data-testid="invoice-inbox-review-notice-wrap">
+      <ReviewBanner
+        tone="warning"
+        testId="invoice-inbox-review-notice"
+        title={ui('invoiceInboxSaveReloadedTitle')}
+        data-testid="ReviewBanner__notice">
+        {ui(noticeKey)}
+      </ReviewBanner>
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label={ui('close')}
+        title={ui('close')}
+        className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full text-current opacity-70 hover:opacity-100"
+        data-testid="invoice-inbox-review-notice-dismiss">
+        <X className="h-3.5 w-3.5" aria-hidden="true" data-testid="X__review-notice" />
+      </button>
+    </div>
   );
 }
