@@ -1027,6 +1027,18 @@ arrives, so every shared piece takes the new look as an opt-in (`PortalSection v
   "Emitido por: …" and a 36×36 close button). Toolbar: the Figma's 4-button group — zoom in, full
   screen (as before), zoom out and a kebab whose only item is "Descargar PDF" (the design gives it
   no behaviour, so it offers nothing the portal did not already do).
+- **Desktop list = Figma "PC Presupuestos".** Header: the kind's title (20/32) with the kind's total
+  as a badge (the home tile's figure; the current query's when the home is not loaded) and the
+  "Mis documentos / <kind>" breadcrumb; the white search pill. Toolbar (padding 8px): the kind's
+  status tabs (#F3F5F9, selected white + shadow-sm), the date-range button (the app's picker in the
+  Figma's button), a funnel with the same status choices (the portal has no other quick filter),
+  refresh and "Descargar seleccionados" (disabled until a row is ticked; it downloads each ticked
+  document's PDF one after another through the detail's download path — no zip, a provisional
+  default). Table: checkbox column with select-all, the kind's columns at the Figma's widths, 40px
+  rows with #E3E7EC rules, "Válido hasta" with a #FFC233 dot while the quotation can be answered
+  (red once past), Figma-palette status badges, and one "Total" row per currency of the rows shown.
+  Orders, shipments and invoices keep their own tabs and columns (invoices: type, due date,
+  payment state, outstanding; shipments: no amounts, no totals). Mobile list unchanged.
 
 ---
 

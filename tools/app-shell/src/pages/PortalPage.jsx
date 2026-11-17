@@ -429,6 +429,7 @@ export default function PortalPage() {
         kind={current.kind}
         group={current.group ?? null}
         identity={identity}
+        kindCount={home?.tiles?.[current.kind]?.count}
         onNavigate={navigate}
         onInvalid={showInvalid}
         data-testid="PortalDocumentListView__3db5f6" />

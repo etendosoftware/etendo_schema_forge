@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { DateRangePopover } from '@/components/ui/date-range-popover';
 import { getDateBounds } from '@/lib/dateRangeBounds.js';
-import { PORTAL_ERROR, fetchPortalDocuments } from '@/lib/portal/portalApi.js';
+import { PORTAL_ERROR, fetchPortalDocumentPdf, fetchPortalDocuments } from '@/lib/portal/portalApi.js';
+import { portalPdfFileName } from '@/lib/portal/portalInvoices.js';
+import { saveBlobAsFile } from '@/lib/portal/portalDownload.js';
+import { PortalListToolbar as DesktopToolbar, PortalListTable as DesktopTable } from './PortalListDesktop.jsx';
 import { PortalCustomer, PortalLanguageSwitch } from './PortalShell.jsx';
 import {
-  PortalCountChip, PortalDate, PortalDesktopHeader, PortalDocumentStatus, PortalDueDate, PortalMain,
-  PortalMoney, PortalPaymentStatus, PortalRowBadge, PortalSearchPill, PortalValidUntil,
-  PORTAL_ROW_FOCUS, PortalInvoiceTypeBadge, portalRowActivation,
+  PortalCountChip, PortalDate, PortalDesktopHeader, PortalDocumentStatus, PortalMain,
+  PortalMoney, PortalRowBadge, PortalSearchPill,
+  PORTAL_ROW_FOCUS, PortalInvoiceTypeBadge,
 } from './PortalBits.jsx';
 import {
   PORTAL_KIND_GROUPS, PORTAL_KIND_META, documentLabelKey, initialPortalRange, quotationValidity,
@@ -32,7 +33,7 @@ const SEARCH_DEBOUNCE_MS = 300;
  * "Filtros" are agreed OUT items.
  */
 export default function PortalDocumentListView({
-  apiFetch, token, kind, group = null, identity = null, onNavigate, onInvalid,
+  apiFetch, token, kind, group = null, identity = null, kindCount = null, onNavigate, onInvalid,
 }) {
   const ui = useUI();
   const [range, setRange] = useState(() => initialPortalRange(group));
@@ -43,6 +44,10 @@ export default function PortalDocumentListView({
   const [failed, setFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [reload, setReload] = useState(0);
+  // "Descargar seleccionados" (Figma PC Presupuestos): the rows ticked in the desktop table.
+  const [selected, setSelected] = useState(() => new Set());
+  const [downloading, setDownloading] = useState(false);
+  const [downloadFailures, setDownloadFailures] = useState(0);
 
   // A new kind starts from the defaults: the rolling last month, or all time when the link named a
   // status group (`initialPortalRange`). Switching tabs inside the list keeps the chosen range.
@@ -106,7 +111,53 @@ export default function PortalDocumentListView({
     }
   }, [apiFetch, token, query, page?.documents?.length, onInvalid]);
 
+  // A new query shows other rows: what was ticked no longer applies.
+  useEffect(() => {
+    setSelected(new Set());
+    setDownloadFailures(0);
+  }, [query, reload]);
+
   const documents = page?.documents ?? [];
+  const toggleSelected = (id) => setSelected((current) => {
+    const next = new Set(current);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  });
+  const toggleAll = () => setSelected((current) => (
+    documents.length > 0 && documents.every((document) => current.has(document.id))
+      ? new Set() : new Set(documents.map((document) => document.id))));
+
+  /**
+   * Downloads each ticked document's PDF, one file per document and one after another, through the
+   * same path as the detail's "Descargar PDF" (the email's printable; no zip — provisional default).
+   * A document without a printable, or one that fails, is counted and reported; the rest still go.
+   */
+  const downloadSelected = async () => {
+    setDownloading(true);
+    setDownloadFailures(0);
+    let failures = 0;
+    try {
+      for (const document of documents.filter((row) => selected.has(row.id))) {
+        try {
+          // Sequential on purpose: one request at a time, and one save dialog at a time.
+          // eslint-disable-next-line no-await-in-loop
+          const blob = await fetchPortalDocumentPdf(apiFetch, token, document.kind || kind, document.id);
+          saveBlobAsFile(new Blob([blob], { type: 'application/pdf' }), portalPdfFileName(document));
+        } catch (error) {
+          if (error?.code === PORTAL_ERROR.invalidLink) {
+            onInvalid();
+            return;
+          }
+          failures += 1;
+        }
+      }
+    } finally {
+      setDownloading(false);
+      setDownloadFailures(failures);
+    }
+  };
+
   const totalCount = page?.totalCount ?? 0;
   const hasMore = documents.length < totalCount;
   const plural = ui(PORTAL_KIND_META[kind].pluralKey);
@@ -154,12 +205,14 @@ export default function PortalDocumentListView({
       placeholder={ui('portalSearchPlaceholder')}
       testId={mobile ? 'portal-search-mobile' : 'portal-search'}
       className={mobile ? 'flex-1' : undefined}
+      variant={mobile ? undefined : 'header'}
       data-testid="PortalSearchPill__c7f7d2" />
   );
 
   const footer = documents.length > 0 ? (
     <div className="flex flex-col items-center gap-2" data-testid="portal-pagination">
-      <p className="text-sm text-muted-foreground md:text-xs">
+      {/* Desktop shows nothing once everything is loaded, as the Figma's table ends on its totals. */}
+      <p className={cn('text-sm text-muted-foreground md:text-xs', hasMore ? '' : 'md:hidden')}>
         {hasMore
           ? ui('portalShowingDocuments', { shown: documents.length, total: totalCount })
           : ui('portalAllLoaded')}
@@ -214,44 +267,47 @@ export default function PortalDocumentListView({
 
       <PortalDesktopHeader
         title={plural}
-        count={totalCount}
-        breadcrumb={`${ui('portalNavMyDocuments')} / ${plural}`}
+        // The Figma's count is the kind's whole total (the home's tile figure), whatever the tab;
+        // without it (home not loaded), the current query's.
+        count={Number.isFinite(kindCount) ? kindCount : totalCount}
+        breadcrumb={<>{ui('portalNavMyDocuments')} / <span className="text-[#1B1A1F]">{plural}</span></>}
         search={searchPill(false)}
+        size="lg"
         data-testid="PortalDesktopHeader__c7f7d2" />
 
       <PortalMain
-        className="overflow-y-auto px-6 pb-28 pt-5 md:pb-3 md:pt-3"
+        className="overflow-y-auto px-6 pb-28 pt-5 md:gap-0 md:rounded-xl md:p-0"
         testId="portal-document-list"
         data-testid="PortalMain__c7f7d2">
-        <div className="hidden flex-wrap items-center gap-2 md:flex" data-kind={kind}>
-          {renderTabs(false)}
-          <DateRangePopover
-            value={range}
-            onChange={setRange}
-            testId="portal-date-range"
-            data-testid="DateRangePopover__c7f7d2" />
-          <div className="flex-1" />
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-10 w-10"
-            aria-label={ui('portalRefresh')}
-            onClick={() => setReload((value) => value + 1)}
-            data-testid="portal-refresh"
-          >
-            <RefreshCw className="h-4 w-4" aria-hidden="true" data-testid="RefreshCw__c7f7d2" />
-          </Button>
-        </div>
+        <DesktopToolbar
+          kind={kind}
+          tabs={tabs}
+          group={group}
+          onGroup={selectGroup}
+          range={range}
+          onRange={setRange}
+          onRefresh={() => setReload((value) => value + 1)}
+          selectedCount={selected.size}
+          downloading={downloading}
+          onDownloadSelected={downloadSelected}
+          data-testid="DesktopToolbar__c7f7d2" />
+        {downloadFailures > 0 ? (
+          <p className="hidden px-3 pb-2 text-sm text-destructive md:block" role="alert" data-testid="portal-download-selected-error">
+            {ui('portalDownloadSelectedFailed', { count: downloadFailures })}
+          </p>
+        ) : null}
 
-        {state}
+        <div className="md:px-3">{state}</div>
 
         {documents.length > 0 ? (
           <>
             <DesktopTable
               kind={kind}
-              page={page}
               documents={documents}
               onOpen={open}
+              selected={selected}
+              onToggle={toggleSelected}
+              onToggleAll={toggleAll}
               data-testid="DesktopTable__c7f7d2" />
             <ul className="flex flex-col gap-3 md:hidden" data-testid="portal-document-cards">
               {documents.map((document) => (
@@ -267,126 +323,9 @@ export default function PortalDocumentListView({
           </>
         ) : null}
 
-        {footer}
+        <div className="md:py-3">{footer}</div>
       </PortalMain>
     </>
-  );
-}
-
-function DesktopTable({ kind, page, documents, onOpen }) {
-  const ui = useUI();
-  const isInvoice = kind === 'INVOICE';
-  const isQuotation = kind === 'QUOTATION';
-  const hasAmounts = kind !== 'SHIPMENT';
-  const singleTotal = (page?.totals ?? []).length === 1 ? page.totals[0] : null;
-  // Columns before the amounts: date, number, reference, status, plus validity / due date, and
-  // for invoices the document type and the payment state.
-  const leadingColumns = 4 + (isQuotation || isInvoice ? 1 : 0) + (isInvoice ? 2 : 0);
-  // Headers stay on one line, as the design's (L2): the table scrolls sideways before it wraps.
-  const th = 'whitespace-nowrap px-2 py-3 font-semibold';
-  // Every column keeps its content width on one line; "Referencia" alone takes what is left and
-  // truncates (full text as a tooltip), so the amounts at the right always fit at 1280 px.
-  const td = 'whitespace-nowrap px-2 py-2.5';
-  // Invoices carry three more columns than the design's quotation list (due date, payment state,
-  // outstanding). Up to and including a 1280 px screen the tax base gives way (shown from 2xl,
-  // 1536 px), so "Imp. total" and "Pendiente" always fit and "Referencia" keeps a usable width;
-  // the tax base is still in the detail's summary. Tailwind's xl starts AT 1280, so it would not
-  // hide the column at 1280.
-  const taxBaseVisibility = isInvoice ? 'hidden 2xl:table-cell' : '';
-  return (
-    <div className="hidden overflow-x-auto md:block">
-      <table className="w-full border-collapse" data-testid="portal-document-table">
-        <thead>
-          <tr className="border-b border-border text-left text-xs leading-4">
-            <th className={`${th} pl-3`}>{ui(PORTAL_KIND_META[kind].dateColumnKey)}</th>
-            {/* The app's sales-invoice list: date, document type, number (`InvoiceHeaderTable`). */}
-            {isInvoice ? <th className={th}>{ui('documentType')}</th> : null}
-            <th className={th}>{ui('portalColDocumentNo')}</th>
-            <th className={`${th} w-full`}>{ui('portalColReference')}</th>
-            {isQuotation ? <th className={th}>{ui('portalColValidUntil')}</th> : null}
-            {isInvoice ? <th className={th}>{ui('portalColDueDate')}</th> : null}
-            <th className={th}>{ui('portalColStatus')}</th>
-            {isInvoice ? <th className={th}>{ui('portalColPaymentStatus')}</th> : null}
-            {hasAmounts ? <th className={`${th} ${taxBaseVisibility} text-right`}>{ui('portalColTaxBase')}</th> : null}
-            {hasAmounts ? <th className={`${th} pr-3 text-right`}>{ui('portalColTotal')}</th> : null}
-            {isInvoice ? <th className={`${th} pr-3 text-right`}>{ui('portalColOutstanding')}</th> : null}
-          </tr>
-        </thead>
-        <tbody>
-          {documents.map((document) => (
-            <tr
-              key={document.id}
-              className={`cursor-pointer border-b border-border hover:bg-muted ${PORTAL_ROW_FOCUS}`}
-              {...portalRowActivation(() => onOpen(document), `${ui(documentLabelKey(document))} ${document.documentNo ?? ''}`.trim())}
-              data-testid="portal-document-row"
-            >
-              <td className={`${td} pl-3 tabular-nums`}><PortalDate value={document.date} data-testid="PortalDate__c7f7d2" /></td>
-              {isInvoice ? <td className={td}><PortalInvoiceTypeBadge document={document} data-testid="PortalInvoiceTypeBadge__c7f7d2" /></td> : null}
-              <td className={`${td} whitespace-nowrap`}>
-                {/* The number stays its own link-like control; the row opens the same document. */}
-                <button
-                  type="button"
-                  onClick={(event) => { event.stopPropagation(); onOpen(document); }}
-                  className="hover:text-primary"
-                  data-testid="portal-document-open"
-                >
-                  {document.documentNo}
-                </button>
-              </td>
-              <td className={`${td} w-full max-w-0 truncate text-muted-foreground`} title={document.reference || undefined}>{document.reference || '—'}</td>
-              {isQuotation ? <td className={`${td} tabular-nums`}><PortalValidUntil document={document} data-testid="PortalValidUntil__c7f7d2" /></td> : null}
-              {isInvoice ? <td className={`${td} tabular-nums`}><PortalDueDate document={document} data-testid="PortalDueDate__c7f7d2" /></td> : null}
-              <td className={td}><PortalDocumentStatus
-                status={document.documentStatus}
-                data-testid="PortalDocumentStatus__c7f7d2" /></td>
-              {isInvoice ? <td className={td}><PortalPaymentStatus document={document} data-testid="PortalPaymentStatus__c7f7d2" /></td> : null}
-              {hasAmounts ? (
-                <td className={`${td} ${taxBaseVisibility} text-right tabular-nums`}>
-                  <PortalMoney
-                    currency={document.currency}
-                    value={document.taxBase}
-                    data-testid="PortalMoney__c7f7d2" />
-                </td>
-              ) : null}
-              {hasAmounts ? (
-                <td className={`${td} pr-3 text-right tabular-nums`}>
-                  <PortalMoney
-                    currency={document.currency}
-                    value={document.grandTotal}
-                    data-testid="PortalMoney__c7f7d2" />
-                </td>
-              ) : null}
-              {isInvoice ? (
-                <td className={`${td} pr-3 text-right tabular-nums`}>
-                  <PortalMoney
-                    currency={document.currency}
-                    value={document.outstandingAmount}
-                    data-testid="PortalMoney__c7f7d2" />
-                </td>
-              ) : null}
-            </tr>
-          ))}
-          {singleTotal && hasAmounts ? (
-            <tr className="font-semibold" data-testid="portal-document-totals">
-              <td colSpan={leadingColumns} />
-              <td className={`px-2 py-3 ${taxBaseVisibility} text-right tabular-nums`}>
-                <PortalMoney
-                  currency={singleTotal.currency}
-                  value={singleTotal.taxBase}
-                  data-testid="PortalMoney__c7f7d2" />
-              </td>
-              <td className="px-2 py-3 pr-3 text-right tabular-nums">
-                <PortalMoney
-                  currency={singleTotal.currency}
-                  value={singleTotal.grandTotal}
-                  data-testid="PortalMoney__c7f7d2" />
-              </td>
-              {isInvoice ? <td /> : null}
-            </tr>
-          ) : null}
-        </tbody>
-      </table>
-    </div>
   );
 }
 

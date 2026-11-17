@@ -2,6 +2,7 @@
 // @covers tools/app-shell/src/pages/portal/PortalShell.jsx
 // @covers tools/app-shell/src/pages/portal/PortalHomeView.jsx
 // @covers tools/app-shell/src/pages/portal/PortalDocumentListView.jsx
+// @covers tools/app-shell/src/pages/portal/PortalListDesktop.jsx
 // @covers tools/app-shell/src/pages/portal/PortalDocumentDetailView.jsx
 // @covers tools/app-shell/src/pages/portal/PortalDetailPanel.jsx
 // @covers tools/app-shell/src/pages/portal/PortalBits.jsx
@@ -781,6 +782,49 @@ describe('PortalPage — document list', () => {
     expect(listQueries().length).toBeGreaterThan(0);
     for (const query of listQueries()) {
       expect([query.get('dateFrom'), query.get('dateTo')]).toEqual(['2026-02-28', '2026-03-31']);
+    }
+  });
+
+  it('enables "Descargar seleccionados" only with a ticked row, and saves one PDF per document in turn', async () => {
+    const user = userEvent.setup();
+    renderPortal(listPath('INVOICE'));
+    await listReady();
+
+    const download = screen.getByTestId('portal-download-selected');
+    expect(download).toBeDisabled();
+    const boxes = screen.getAllByTestId('portal-select-row');
+    await user.click(boxes[0]);
+    await user.click(boxes[1]);
+    expect(download).toBeEnabled();
+    // Ticking a row never opens it.
+    expect(urlView()).toEqual({ view: 'list', kind: 'INVOICE' });
+
+    await user.click(download);
+
+    await waitFor(() => expect(saveBlobAsFile).toHaveBeenCalledTimes(2));
+    expect(saveBlobAsFile.mock.calls.map(([, name]) => name)).toEqual(['FV-0001.pdf', 'FV-0002.pdf']);
+    expect(callsTo('/documents/invoice/inv-1/pdf')).toHaveLength(1);
+    expect(callsTo('/documents/invoice/inv-2/pdf')).toHaveLength(1);
+  });
+
+  it('ticks every shown row from the header, and sums the shown rows per currency', async () => {
+    const user = userEvent.setup();
+    LISTS.invoice = {
+      ...LISTS.invoice,
+      documents: [...INVOICES, { ...INVOICES[0], id: 'inv-usd', documentNo: 'US/0001', currency: 'USD', taxBase: 10, grandTotal: 12 }],
+    };
+    try {
+      renderPortal(listPath('INVOICE'));
+      await listReady();
+
+      await user.click(screen.getByTestId('portal-select-all'));
+      expect(screen.getAllByTestId('portal-select-row').every((box) => box.checked)).toBe(true);
+      const totals = screen.getAllByTestId('portal-document-totals');
+      expect(totals).toHaveLength(2);
+      expect(totals[0]).toHaveTextContent(/1\.400,00\s€/);
+      expect(totals[1]).toHaveTextContent(/12,00/);
+    } finally {
+      LISTS.invoice = { documents: INVOICES, totalCount: 3, statuses: ['CO', 'CL'] };
     }
   });
 

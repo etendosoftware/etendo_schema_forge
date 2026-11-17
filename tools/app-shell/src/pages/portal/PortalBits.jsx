@@ -357,12 +357,26 @@ export function PortalDesktopHeader({ title, count, breadcrumb, search, size }) 
           >
             {title}
           </h1>
-          {count != null ? <PortalCountChip
+          {count != null && large ? (
+            // The Figma's count badge (PC Presupuestos): #F3F5F9, r8, 4px 8px, 12/16 #40465C.
+            <span
+              className="rounded-lg border border-[#C7CBD3] bg-[#F3F5F9] px-2 py-1 text-xs leading-4 tracking-[-0.005em] text-[#40465C]"
+              data-testid="portal-view-count"
+            >
+              {count}
+            </span>
+          ) : null}
+          {count != null && !large ? <PortalCountChip
             count={count}
             testId="portal-view-count"
             data-testid="PortalCountChip__7a317e" /> : null}
         </div>
-        <span className="truncate text-xs leading-4 text-muted-foreground" data-testid="portal-breadcrumb">{breadcrumb}</span>
+        <span
+          className={cn('truncate text-xs leading-4', large ? 'tracking-[-0.005em] text-[#81848F]' : 'text-muted-foreground')}
+          data-testid="portal-breadcrumb"
+        >
+          {breadcrumb}
+        </span>
       </div>
       {search ?? <div />}
       <div />

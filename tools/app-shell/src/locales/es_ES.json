@@ -26938,6 +26938,8 @@
     "portalIssuedBy": "Emitido por: {name}",
     "portalViewPdf": "Ver PDF",
     "portalDownloadPdf": "Descargar PDF",
+    "portalDownloadSelected": "Descargar seleccionados",
+    "portalDownloadSelectedFailed": "No se pudieron descargar {count} documentos seleccionados.",
     "portalPdfUnavailable": "PDF no disponible",
     "portalPdfUnavailableHint": "Este documento todavía no tiene una versión imprimible.",
     "portalTotal": "Total",
