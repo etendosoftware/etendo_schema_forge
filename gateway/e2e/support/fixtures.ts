@@ -7,12 +7,29 @@ import { RUN_PREFIX } from './env.ts';
 export const CONTACT_HINT =
   'Locally this is usually a 502 because the tenant lacks the EM_Etgo_Identifier sequence (known environment gap, not a gateway bug).';
 
-/** Creates a company: a contact with `name` and no `is_person` (a contact is a company by default). */
-export async function createContact(label: string, attributes: Record<string, unknown> = {}) {
+/**
+ * Creates a company: a contact with `name` and no `is_person` (a contact is a company by default).
+ * `relationships` maps a relationship field to [type, id], e.g. `{ category: ['contact-category', id] }`.
+ */
+export async function createContact(label: string, attributes: Record<string, unknown> = {}, relationships?: Record<string, [string, string]>) {
   return createRecord(
     'contacts',
-    resource('contacts', { name: `${RUN_PREFIX}-${label}`, email: `${RUN_PREFIX}-${label}@example.com`, phone: '600000000', ...attributes }),
+    resource('contacts', { name: `${RUN_PREFIX}-${label}`, email: `${RUN_PREFIX}-${label}@example.com`, phone: '600000000', ...attributes }, relationships),
     CONTACT_HINT,
+  );
+}
+
+/**
+ * Creates a contact category. It is a customer category and never the default one: with the
+ * contact-type rules on, Etendo refuses a category that is neither customer nor vendor, and the
+ * vendor flag is not published.
+ */
+export async function createContactCategory(label: string, attributes: Record<string, unknown> = {}) {
+  return createRecord(
+    'contact-category',
+    resource('contact-category', {
+      search_key: `${RUN_PREFIX}-${label}`, name: `${RUN_PREFIX}-${label}`, default: false, is_customer: true, ...attributes,
+    }),
   );
 }
 
