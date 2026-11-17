@@ -9,7 +9,6 @@ import {
 } from '@phosphor-icons/react';
 import { useLocaleSwitch, useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
 import { PORTAL_DOCUMENT_KINDS } from '@/lib/portal/portalApi.js';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuTrigger,
@@ -272,10 +271,21 @@ function navBadgeOf(tiles, kind) {
   return null;
 }
 
-/** The rail's 36×36 icon button (collapsed rail), the design's active state included. */
-const RAIL_ICON_BUTTON = 'relative flex h-9 w-9 items-center justify-center rounded-lg text-[#81848F] transition-colors hover:text-foreground';
-/** The design's active nav item: white, a 1px border and the extra-small shadow (Tailwind 3's `shadow-sm`). */
-const RAIL_ACTIVE = 'border border-[#C7CBD3] bg-card text-foreground shadow-sm';
+/*
+ * The rail's exact values from the Figma component "Portal Cliente Navigation Rail" (variants
+ * Expandido / Comprimido, 2026-11-17): hex colours and the Figma's shadow-xs, not app tokens, since
+ * the user asked for the main screen to match the Figma exactly.
+ */
+/** Figma shadow-xs. */
+const RAIL_SHADOW = 'shadow-[0_1px_2px_rgba(27,26,31,0.05)]';
+/** A 36×36 icon button on the rail's grey (collapse/expand, collapsed items). */
+const RAIL_ICON_BUTTON = 'relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F3F5F9] text-[#81848F] transition-colors hover:text-[#1B1A1F]';
+/** The active item: white, 1px #C7CBD3, shadow-xs. */
+const RAIL_ACTIVE = `border border-[#C7CBD3] bg-white ${RAIL_SHADOW}`;
+/** A 32px expanded item (padding 4px 8px). */
+const RAIL_ITEM = 'flex h-8 w-full items-center rounded-lg border border-transparent px-2 py-1 text-left text-sm leading-6 text-[#1B1A1F] transition-colors hover:bg-white/60';
+/** A group heading ("General", "Mis documentos"). */
+const RAIL_HEADING = 'px-4 py-1 text-xs leading-6 tracking-[-0.005em] text-[#6B7280]';
 
 /**
  * The portal's frame (ETP-6209 Part B, design "Escritorio" / "Móvil"; the main screen aligned with
@@ -310,21 +320,20 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
     // `group/shell` + `data-rail`: a view can size itself by the rail state (the main screen's
     // first row keeps a different proportion with the rail collapsed, as the Figma frames do).
     <div
-      className="group/shell flex h-screen min-h-0 bg-background text-base text-foreground md:text-sm"
+      // Desktop page background: the Figma's #F3F5F9 (the rail's grey buttons sit on it unseen).
+      className="group/shell flex h-screen min-h-0 bg-background text-base text-foreground md:bg-[#F3F5F9] md:text-sm"
       data-rail={collapsed ? 'collapsed' : 'expanded'}
       data-testid="portal-shell"
     >
-      {/* Desktop rail (spec of 2026-11-17) */}
+      {/* Desktop rail (Figma "Portal Cliente Navigation Rail") */}
       <nav
         aria-label={ui('portalPageTitle')}
-        className={cn(
-          'hidden h-screen shrink-0 flex-col overflow-y-auto py-2 md:flex',
-          collapsed ? 'w-14 items-center gap-3' : 'w-[240px] gap-3 px-2',
-        )}
+        className={cn('hidden h-screen shrink-0 flex-col md:flex', collapsed ? 'w-14' : 'w-[240px]')}
         data-collapsed={collapsed ? 'true' : 'false'}
         data-testid="portal-sidebar"
       >
-        <div className={cn('flex items-center', collapsed ? 'flex-col gap-3' : 'justify-between gap-2')}>
+        {/* Cabecera: 62px */}
+        <div className={cn('flex h-[62px] shrink-0 items-center px-2', collapsed ? 'justify-center' : 'justify-between')}>
           <a
             href={ETENDO_AI_URL}
             target="_blank"
@@ -334,121 +343,125 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
             data-testid="portal-created-with"
           >
             <img src="/logo-etendo-ai.png" alt="" className="h-10 w-10 shrink-0 rounded-lg" />
-            {collapsed ? null : <span className="text-lg font-semibold leading-7 tracking-[-0.01em]">etendo.ai</span>}
+            {collapsed ? null : <span className="text-lg font-semibold leading-7 tracking-[-0.01em] text-[#1B1A1F]">etendo.ai</span>}
           </a>
-          <button
-            type="button"
-            aria-label={ui(collapsed ? 'expandMenu' : 'collapseMenu')}
-            aria-expanded={!collapsed}
-            onClick={toggleRail}
-            className={cn(RAIL_ICON_BUTTON, 'mr-1')}
-            data-testid="portal-rail-toggle"
-          >
-            {collapsed
-              ? <ArrowLineRightIcon size={20} aria-hidden="true" data-testid="ArrowLineRight__a5d12f" />
-              : <ArrowLineLeftIcon size={20} aria-hidden="true" data-testid="ArrowLineLeft__a5d12f" />}
-          </button>
+          {collapsed ? null : (
+            <button
+              type="button"
+              aria-label={ui('collapseMenu')}
+              aria-expanded
+              onClick={toggleRail}
+              className={RAIL_ICON_BUTTON}
+              data-testid="portal-rail-toggle"
+            >
+              <ArrowLineLeftIcon size={20} aria-hidden="true" data-testid="ArrowLineLeft__a5d12f" />
+            </button>
+          )}
         </div>
 
-        <PortalCompany
-          identity={identity}
-          logoUrl={logoUrl}
-          collapsed={collapsed}
-          data-testid="PortalCompany__a5d12f" />
-
-        {collapsed ? (
-          <div className="flex flex-col items-center gap-2">
-            <button
-              type="button"
-              aria-label={ui('portalNavHome')}
-              aria-current={isActive('home') ? 'page' : undefined}
-              onClick={() => onNavigate({ view: 'home' })}
-              className={cn(RAIL_ICON_BUTTON, isActive('home') ? RAIL_ACTIVE : '')}
-              data-testid="portal-nav-home"
-            >
-              <HouseSimpleIcon size={20} weight={isActive('home') ? 'fill' : 'regular'} aria-hidden="true" data-testid="HouseSimple__a5d12f" />
-            </button>
-            <button
-              type="button"
-              aria-label={ui('portalNavMyDocuments')}
-              onClick={toggleRail}
-              className={cn(RAIL_ICON_BUTTON, documentsActive ? RAIL_ACTIVE : '')}
-              data-testid="portal-nav-documents"
-            >
-              <FilesIcon size={20} aria-hidden="true" data-testid="Files__a5d12f" />
-              {totalBadge > 0 ? (
-                <span
-                  className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#F3164E] px-1 text-[11px] font-semibold leading-none text-white"
-                  data-testid="portal-nav-documents-count"
-                >
-                  {/* A 36px icon cannot carry a 4-digit badge: past 99 it reads "99+"; the expanded
-                      rail shows each kind's exact count. */}
-                  {totalBadge > 99 ? '99+' : totalBadge}
-                </span>
-              ) : null}
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="flex flex-col gap-1">
-              <span className="px-4 pb-1 text-xs text-muted-foreground">{ui('portalNavGeneral')}</span>
+        {/* Menu list */}
+        <div className={cn('flex min-h-0 flex-1 flex-col overflow-y-auto', collapsed ? 'pl-2' : 'px-2')}>
+          {collapsed ? (
+            <div className="flex flex-col gap-2">
               <button
                 type="button"
+                aria-label={ui('expandMenu')}
+                aria-expanded={false}
+                onClick={toggleRail}
+                className={RAIL_ICON_BUTTON}
+                data-testid="portal-rail-toggle"
+              >
+                <ArrowLineRightIcon size={20} aria-hidden="true" data-testid="ArrowLineRight__a5d12f" />
+              </button>
+              <PortalCompany identity={identity} logoUrl={logoUrl} collapsed data-testid="PortalCompany__a5d12f" />
+              <button
+                type="button"
+                aria-label={ui('portalNavHome')}
                 aria-current={isActive('home') ? 'page' : undefined}
                 onClick={() => onNavigate({ view: 'home' })}
-                className={cn(
-                  'flex h-8 items-center gap-2 rounded-lg px-3.5 text-left text-sm transition-colors hover:text-primary',
-                  isActive('home') ? `${RAIL_ACTIVE} font-semibold` : '',
-                )}
+                className={cn(RAIL_ICON_BUTTON, isActive('home') ? RAIL_ACTIVE : '')}
                 data-testid="portal-nav-home"
               >
-                <HouseSimpleIcon
-                  size={20}
-                  weight={isActive('home') ? 'fill' : 'regular'}
-                  className={isActive('home') ? 'text-[#81848F]' : 'text-muted-foreground'}
-                  aria-hidden="true"
-                  data-testid="HouseSimple__a5d12f" />
-                {ui('portalNavHome')}
+                <HouseSimpleIcon size={20} weight={isActive('home') ? 'fill' : 'regular'} aria-hidden="true" data-testid="HouseSimple__a5d12f" />
+              </button>
+              <button
+                type="button"
+                aria-label={ui('portalNavMyDocuments')}
+                onClick={toggleRail}
+                className={cn(RAIL_ICON_BUTTON, documentsActive ? RAIL_ACTIVE : '')}
+                data-testid="portal-nav-documents"
+              >
+                <FilesIcon size={20} aria-hidden="true" data-testid="Files__a5d12f" />
+                {totalBadge > 0 ? (
+                  <span
+                    className="absolute -top-1.5 left-5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#F3164E] px-1 text-[11px] font-semibold leading-3 text-white"
+                    data-testid="portal-nav-documents-count"
+                  >
+                    {/* A 36px icon cannot carry a 4-digit badge: past 99 it reads "99+"; the
+                        expanded rail shows each kind's exact count. */}
+                    {totalBadge > 99 ? '99+' : totalBadge}
+                  </span>
+                ) : null}
               </button>
             </div>
-            <div className="flex flex-col">
-              <span className="px-4 pb-2 pt-2 text-xs text-muted-foreground">{ui('portalNavMyDocuments')}</span>
-              {kinds.map((kind) => {
-                const badge = navBadgeOf(tiles, kind);
-                const active = isActive('list', kind) || isActive('doc', kind);
-                return (
-                  <button
-                    key={kind}
-                    type="button"
-                    aria-current={active ? 'page' : undefined}
-                    onClick={() => onNavigate({ view: 'list', kind })}
-                    className={cn(
-                      'flex h-9 items-center justify-between rounded-lg px-4 text-left text-sm transition-colors hover:text-primary',
-                      active ? `${RAIL_ACTIVE} font-semibold` : '',
-                    )}
-                    data-testid={`portal-nav-${kind.toLowerCase()}`}
-                  >
-                    {ui(PORTAL_KIND_META[kind].pluralKey)}
-                    {badge ? (
-                      <PortalTag
-                        tone={badge.tone}
-                        palette="figma"
-                        className="h-6 min-w-6 justify-center rounded-full px-1.5 py-0 font-normal"
-                        testId="portal-nav-count"
-                        data-testid="PortalTag__a5d12f">
-                        {badge.count}
-                      </PortalTag>
-                    ) : null}
-                  </button>
-                );
-              })}
+          ) : (
+            <div className="flex flex-1 flex-col gap-2 pb-2">
+              <PortalCompany identity={identity} logoUrl={logoUrl} data-testid="PortalCompany__a5d12f" />
+              <div className="flex flex-col gap-1">
+                <span className={RAIL_HEADING}>{ui('portalNavGeneral')}</span>
+                <button
+                  type="button"
+                  aria-current={isActive('home') ? 'page' : undefined}
+                  onClick={() => onNavigate({ view: 'home' })}
+                  className={cn(RAIL_ITEM, isActive('home') ? `${RAIL_ACTIVE} font-medium` : '')}
+                  data-testid="portal-nav-home"
+                >
+                  <span className="flex shrink-0 pl-1">
+                    <HouseSimpleIcon
+                      size={20}
+                      weight={isActive('home') ? 'fill' : 'regular'}
+                      className="text-[#81848F]"
+                      aria-hidden="true"
+                      data-testid="HouseSimple__a5d12f" />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate pl-2 pr-4">{ui('portalNavHome')}</span>
+                </button>
+              </div>
+              {/* Figma layer "Operaciones": no leading icon, a trailing count. */}
+              <div className="flex flex-col gap-1">
+                <span className={RAIL_HEADING}>{ui('portalNavMyDocuments')}</span>
+                {kinds.map((kind) => {
+                  const badge = navBadgeOf(tiles, kind);
+                  const active = isActive('list', kind) || isActive('doc', kind);
+                  return (
+                    <button
+                      key={kind}
+                      type="button"
+                      aria-current={active ? 'page' : undefined}
+                      onClick={() => onNavigate({ view: 'list', kind })}
+                      className={cn(RAIL_ITEM, active ? `${RAIL_ACTIVE} font-medium` : '')}
+                      data-testid={`portal-nav-${kind.toLowerCase()}`}
+                    >
+                      <span className="min-w-0 flex-1 truncate pl-2 pr-4">{ui(PORTAL_KIND_META[kind].pluralKey)}</span>
+                      {badge ? (
+                        <PortalTag
+                          tone={badge.tone}
+                          palette="figma"
+                          className="rounded-full px-2 py-1 font-normal"
+                          testId="portal-nav-count"
+                          data-testid="PortalTag__a5d12f">
+                          {badge.count}
+                        </PortalTag>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex-1" />
+              <PortalPromo data-testid="PortalPromo__a5d12f" />
             </div>
-          </>
-        )}
-
-        <div className="flex-1" />
-
-        {collapsed ? null : <PortalPromo data-testid="PortalPromo__a5d12f" />}
+          )}
+        </div>
 
         <PortalRailFooter identity={identity} collapsed={collapsed} data-testid="PortalRailFooter__a5d12f" />
       </nav>
@@ -466,20 +479,24 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
   );
 }
 
+/** The customer's 20px avatar: the user glyph on the rail's grey, as the Figma draws it. */
+function RailUserAvatar() {
+  return (
+    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#F3F5F9]">
+      <UserIcon size={13} weight="fill" className="text-[#C7CBD3]" aria-hidden="true" data-testid="User__a5d12f" />
+    </span>
+  );
+}
+
 /**
- * The company the portal belongs to, where the design draws its company selector: the tenant's
- * logo and name in muted grey, with the design's chevron. There is only ever one company in a
- * portal link, so the chevron is decorative and nothing opens. Collapsed: the logo alone, named
- * by its tooltip. Without a logo, the initials tile stands in.
+ * The company the portal belongs to, where the design draws its company selector (224×32,
+ * white, shadow-xs): the tenant's 20px round logo, its name in grey and a decorative CaretDown —
+ * a portal link belongs to one company, so nothing opens. Collapsed: a 36×36 grey button with the
+ * logo, named by its tooltip. Without a logo the initials tile stands in.
  */
-function PortalCompany({ identity, logoUrl, collapsed }) {
+function PortalCompany({ identity, logoUrl, collapsed = false }) {
   const mark = logoUrl ? (
-    <img
-      src={logoUrl}
-      alt=""
-      className={cn('shrink-0 rounded-full object-contain', collapsed ? 'h-7 w-7' : 'h-5 w-5')}
-      data-testid="portal-logo"
-    />
+    <img src={logoUrl} alt="" className="h-5 w-5 shrink-0 rounded-full object-contain" data-testid="portal-logo" />
   ) : (
     <PortalLogoTile identity={identity} logoUrl={null} size="xs" data-testid="PortalLogoTile__a5d12f" />
   );
@@ -489,7 +506,7 @@ function PortalCompany({ identity, logoUrl, collapsed }) {
         role="img"
         aria-label={identity?.tenantName ?? ''}
         title={identity?.tenantName ?? undefined}
-        className="flex h-9 w-9 items-center justify-center"
+        className={RAIL_ICON_BUTTON}
         data-testid="portal-company"
       >
         {mark}
@@ -498,14 +515,14 @@ function PortalCompany({ identity, logoUrl, collapsed }) {
   }
   return (
     <div
-      className="flex h-8 min-w-0 items-center gap-2 rounded-lg border border-border bg-card px-2"
+      className={`flex h-8 w-full min-w-0 items-center rounded-lg border border-[#E3E7EC] bg-white px-2 py-1 ${RAIL_SHADOW}`}
       data-testid="portal-company"
     >
       {mark}
-      <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground" data-testid="portal-tenant-name">
+      <span className="min-w-0 flex-1 truncate px-1 text-sm font-medium leading-6 text-[#9A9CA8]" data-testid="portal-tenant-name">
         {identity?.tenantName ?? ''}
       </span>
-      <CaretDownIcon size={16} className="shrink-0 text-muted-foreground" aria-hidden="true" data-testid="CaretDown__a5d12f" />
+      <CaretDownIcon size={20} className="shrink-0 text-[#C7CBD3]" aria-hidden="true" data-testid="CaretDown__a5d12f" />
     </div>
   );
 }
@@ -514,8 +531,8 @@ function PortalCompany({ identity, logoUrl, collapsed }) {
 const PORTAL_HELP_URL = 'https://help.etendo.ai';
 
 /**
- * The rail's footer (spec of 2026-11-17): a top rule, then "Ayuda y soporte" (the help site, new
- * tab) and the customer, each with the design's chevron; collapsed, their icons only. No language
+ * The rail's footer ("Pie"): a top rule, then "Ayuda y soporte" (the help site, new tab) and the
+ * customer, 32px items with the Figma's chevron; collapsed, two 36×36 grey buttons. No language
  * switch here, as in the Figma (user decision, 2026-11-17): the language resolves as before, and
  * the mobile top bars keep their switch.
  */
@@ -524,77 +541,73 @@ function PortalRailFooter({ identity, collapsed }) {
   const name = identity?.businessPartnerName;
   if (collapsed) {
     return (
-      <div className="flex w-full flex-col items-center gap-2 border-t border-border pt-3">
-        <a
-          href={PORTAL_HELP_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={ui('helpAndSupport')}
-          title={ui('helpAndSupport')}
-          className={RAIL_ICON_BUTTON}
-          data-testid="portal-help"
-        >
-          <HeadsetIcon size={20} aria-hidden="true" data-testid="Headset__a5d12f" />
-        </a>
-        {name ? (
-          <span
-            role="img"
-            aria-label={name}
-            title={name}
-            className="flex h-9 w-9 items-center justify-center text-muted-foreground"
-            data-testid="portal-customer"
+      <div className="shrink-0 px-2">
+        <div className="flex flex-col justify-end gap-1 border-t border-[#E3E7EC] py-2">
+          <a
+            href={PORTAL_HELP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={ui('helpAndSupport')}
+            title={ui('helpAndSupport')}
+            className={RAIL_ICON_BUTTON}
+            data-testid="portal-help"
           >
-            <UserIcon size={12} weight="fill" className="text-[#C7CBD3]" aria-hidden="true" data-testid="User__a5d12f" />
-          </span>
-        ) : null}
+            <HeadsetIcon size={20} aria-hidden="true" data-testid="Headset__a5d12f" />
+          </a>
+          {name ? (
+            <span role="img" aria-label={name} title={name} className={RAIL_ICON_BUTTON} data-testid="portal-customer">
+              <RailUserAvatar data-testid="RailUserAvatar__a5d12f" />
+            </span>
+          ) : null}
+        </div>
       </div>
     );
   }
-  const row = 'flex h-9 items-center gap-2 rounded-lg px-3 text-sm';
   return (
-    <div className="flex flex-col border-t border-border pt-2">
-      <a
-        href={PORTAL_HELP_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={cn(row, 'hover:text-primary')}
-        data-testid="portal-help"
-      >
-        <HeadsetIcon size={20} className="shrink-0 text-muted-foreground" aria-hidden="true" data-testid="Headset__a5d12f" />
-        <span className="min-w-0 flex-1 truncate">{ui('helpAndSupport')}</span>
-        <CaretRightIcon size={16} className="shrink-0 text-muted-foreground" aria-hidden="true" data-testid="CaretRight__a5d12f" />
-      </a>
-      {name ? (
-        <div className={row} title={name} data-testid="portal-customer">
-          <span className="flex w-5 shrink-0 justify-center">
-            <UserIcon size={12} weight="fill" className="text-[#C7CBD3]" aria-hidden="true" data-testid="User__a5d12f" />
-          </span>
-          <span className="min-w-0 flex-1 truncate" data-testid="portal-customer-name">{name}</span>
-          <CaretRightIcon size={16} className="shrink-0 text-muted-foreground" aria-hidden="true" data-testid="CaretRight__a5d12f" />
-        </div>
-      ) : null}
+    <div className="shrink-0 px-2">
+      <div className="flex flex-col gap-1 border-t border-[#E3E7EC] py-2">
+        <a href={PORTAL_HELP_URL} target="_blank" rel="noopener noreferrer" className={RAIL_ITEM} data-testid="portal-help">
+          <HeadsetIcon size={20} className="shrink-0 text-[#81848F]" aria-hidden="true" data-testid="Headset__a5d12f" />
+          <span className="min-w-0 flex-1 truncate pl-2 pr-4">{ui('helpAndSupport')}</span>
+          <CaretRightIcon size={20} className="shrink-0 text-[#81848F]" aria-hidden="true" data-testid="CaretRight__a5d12f" />
+        </a>
+        {name ? (
+          <div className={cn(RAIL_ITEM, 'hover:bg-transparent')} title={name} data-testid="portal-customer">
+            <RailUserAvatar data-testid="RailUserAvatar__a5d12f" />
+            <span className="min-w-0 flex-1 truncate pl-2 pr-4" data-testid="portal-customer-name">{name}</span>
+            <CaretRightIcon size={20} className="shrink-0 text-[#81848F]" aria-hidden="true" data-testid="CaretRight__a5d12f" />
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
 
 /**
- * The expanded rail's promo card ("Lleva tu negocio más lejos"). "Empieza gratis" opens the
- * product's site in a new tab; its final destination is pending with the PO (Jira comment 149666).
+ * The expanded rail's banner ("Lleva tu negocio más lejos"), at the bottom of the menu list.
+ * "Empieza gratis" opens the product's site in a new tab; its final destination is pending with the
+ * PO (Jira comment 149666).
  */
 function PortalPromo() {
   const ui = useUI();
   return (
-    <aside className="flex flex-col rounded-lg border border-border bg-card p-3" data-testid="portal-promo">
-      <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-border">
-        <RocketLaunchIcon size={16} className="text-muted-foreground" aria-hidden="true" data-testid="RocketLaunch__a5d12f" />
-      </span>
-      <span className="mt-2 text-sm font-semibold leading-5">{ui('portalPromoTitle')}</span>
-      <span className="mt-1 text-xs leading-4 text-muted-foreground">{ui('portalPromoDescription')}</span>
-      <Button asChild className="mt-3 h-8 w-full rounded-lg" data-testid="Button__a5d12f">
-        <a href={ETENDO_AI_URL} target="_blank" rel="noopener noreferrer" data-testid="portal-promo-cta">
-          {ui('portalPromoCta')}
-        </a>
-      </Button>
+    <aside className="flex w-full flex-col gap-3 rounded-lg border border-[#E3E7EC] bg-white p-3" data-testid="portal-promo">
+      <div className="flex flex-col gap-1">
+        <span className={`flex h-8 w-8 items-center justify-center rounded-lg border border-[#C7CBD3] bg-white ${RAIL_SHADOW}`}>
+          <RocketLaunchIcon size={20} className="text-[#81848F]" aria-hidden="true" data-testid="RocketLaunch__a5d12f" />
+        </span>
+        <span className="text-sm font-medium leading-5 text-[#1B1A1F]">{ui('portalPromoTitle')}</span>
+        <span className="text-xs leading-4 text-[#6B7280]">{ui('portalPromoDescription')}</span>
+      </div>
+      <a
+        href={ETENDO_AI_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex h-8 w-full items-center justify-center rounded-lg bg-[#325CFF] px-2 py-1 text-sm font-medium leading-6 text-white hover:bg-[#2849CC]"
+        data-testid="portal-promo-cta"
+      >
+        {ui('portalPromoCta')}
+      </a>
     </aside>
   );
 }
