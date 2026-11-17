@@ -2949,6 +2949,46 @@
         ]
       },
       "$pathsComment": "Backend owned files added with ETP-6236 (com.etendoerp.go). The mcp-tests harness support (routines = true targets, the child KR) lives in this repo and reads no flag."
+    },
+    {
+      "id": "sii-import-dua",
+      "description": "Purchase invoice imports with DUA for SII (step 1): the SII panel of the purchase-invoice SIF tab shows an \"Importación (DUA)\" block with DUA (C_Invoice.EM_Aeatsii_Dua), DUA date (EM_Aeatsii_Fecha_Dua) and Multiple DUA (EM_Aeatsii_Multi_Dua) when the SII invoice type key is F5 or LC, mirroring the Classic display logic, so an F5 invoice can be saved with the DUA data the SII module demands. Off: the SIF tab as before. The three header fields are exposed by NEO regardless of the flag (decisions.json); the flag only hides the block.",
+      "owner": "AyelenGarcia01",
+      "jira": "ETP-6284",
+      "created": "2026-11-17",
+      "flag": {
+        "key": "sii-import-dua",
+        "defaultValue": false,
+        "ttl": "2027-03-31",
+        "ttlNote": "PLACEHOLDER, not a commitment: end of Q1 2027. Revisit once the later ETP-6284 steps (DUA per tax line, records preview, compensatory line) ship and the feature is validated on a real import client.",
+        "symbols": [
+          "sii-import-dua",
+          "SII_IMPORT_DUA",
+          "SiiImportDuaSection",
+          "sifDataTabs.field.dua",
+          "sifDataTabs.field.duaDate",
+          "sifDataTabs.field.multiDua"
+        ],
+        "$symbolsComment": "SiiImportDuaSection is how SifTab.jsx mounts the feature without naming the flag; the sifDataTabs.field.dua/duaDate/multiDua keys are the locale entries it adds to en_US/es_ES (the block title reuses the existing sifDataTabs.option.importDua)."
+      },
+      "$gatingComment": "Frontend-only, per account/user (the SPA evaluation context carries the account email). No backend evaluator: the SII module validates DUA/DUA date on its own whatever the flag says.",
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/windows/custom/shared/SiiImportDuaSection.jsx"
+        ],
+        "backend": []
+      },
+      "$pathsComment": "Owned code only. Shared toggle points (removal cost): SifTab.jsx (one mount, purchase invoices only), flag-keys.js, lib/flags/index.js, en_US.json, es_ES.json. The decisions.json declaration of the three header fields and their ETGO_SF_FIELD rows are not flag-gated and stay when the flag retires.",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/shared/__tests__/SiiImportDuaSection.vitest.jsx",
+            "expected": true,
+            "note": "To be written by tester-functional: flag off renders nothing; F5/LC show the block, F1/F6 hide it; Multiple DUA hides DUA/date; required mark on F5 only; readOnly disables all three."
+          }
+        ]
+      }
     }
   ]
 }

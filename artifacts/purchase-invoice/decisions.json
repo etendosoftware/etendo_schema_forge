@@ -582,6 +582,18 @@
           "visibility": "editable",
           "form": false
         },
+        "aeatsiiDua": {
+          "visibility": "editable",
+          "form": false
+        },
+        "aeatsiiFechaDua": {
+          "visibility": "editable",
+          "form": false
+        },
+        "aeatsiiMultiDua": {
+          "visibility": "editable",
+          "form": false
+        },
         "aeatsiiEjercicio": {
           "visibility": "discarded"
         },

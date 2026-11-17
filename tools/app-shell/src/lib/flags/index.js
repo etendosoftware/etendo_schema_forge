@@ -12,6 +12,7 @@ export {
   DOC_TEMPLATE_SELECTION,
   DYNAMIC_REPORTS,
   PSD2_STATEMENT_IMPORT_SETTINGS,
+  SII_IMPORT_DUA,
   FLAG_DEFAULTS,
   defaultForFlag,
 } from './flag-keys.js';

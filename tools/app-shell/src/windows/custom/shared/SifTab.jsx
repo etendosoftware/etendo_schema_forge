@@ -18,6 +18,8 @@ import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import RequiredMark from '@/components/ui/required-mark.jsx';
 // The one rule that says which SIF fields are mandatory, shared with the "Datos fiscales" step.
 import { isSifFieldRequired } from '@/windows/custom/shared/sifRequiredFields.js';
+// ETP-6284: purchase imports with DUA, behind the sii-import-dua flag (renders nothing when off).
+import SiiImportDuaSection from '@/windows/custom/shared/SiiImportDuaSection.jsx';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 function Field({ label, htmlFor, children, required = false }) {
@@ -685,6 +687,16 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                     data-testid="CheckboxField__b99c8b" />
                 </div>
               </Field>
+            )}
+            {isPurchaseInvoice && (
+              <SiiImportDuaSection
+                ui={ui}
+                siiTypeKey={getVal(siiTypeField)}
+                getVal={getVal}
+                getDateVal={getDateVal}
+                onChange={onChange}
+                readOnly={siiFieldReadOnly}
+                data-testid="SiiImportDuaSection__b99c8b" />
             )}
             <SifAttachmentsSection
               tableName="aeatsii_facturas"

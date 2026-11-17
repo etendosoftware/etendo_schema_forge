@@ -1,8 +1,8 @@
 {
-  "version": "0.8.0",
+  "version": "0.10.0",
   "generatedAt": "2026-09-17T15:12:05.434Z",
-  "updatedAt": "2026-11-03T16:54:27.647Z",
-  "checksum": "f6d26ad81c7b7f80",
+  "updatedAt": "2026-11-17T18:34:04.054Z",
+  "checksum": "480d7a56c668b3ce",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -1399,6 +1399,75 @@
             }
           },
           {
+            "name": "aeatsiiDua",
+            "apiKey": "aeatsiiDua",
+            "column": "EM_Aeatsii_Dua",
+            "label": "DUA",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 255
+            },
+            "displayLogic": {
+              "raw": "@AEATSII_AcogidaSII2@='Y' & (@EM_Aeatsii_Clave_Tipo_Fc@='F5' | @EM_Aeatsii_Clave_Tipo_Fc@='LC') & @EM_Aeatsii_Multi_Dua@='N'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "aeatsiiFechaDua",
+            "apiKey": "aeatsiiFechaDua",
+            "column": "EM_Aeatsii_Fecha_Dua",
+            "label": "DUA date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 19
+            },
+            "displayLogic": {
+              "raw": "@AEATSII_AcogidaSII2@='Y' & (@EM_Aeatsii_Clave_Tipo_Fc@='F5' | @EM_Aeatsii_Clave_Tipo_Fc@='LC') & @EM_Aeatsii_Multi_Dua@='N'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "aeatsiiMultiDua",
+            "apiKey": "aeatsiiMultiDua",
+            "column": "EM_Aeatsii_Multi_Dua",
+            "label": "Multiple DUA",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
+            "displayLogic": {
+              "raw": "@AEATSII_AcogidaSII2@='Y' & (@EM_Aeatsii_Clave_Tipo_Fc@='F5' | @EM_Aeatsii_Clave_Tipo_Fc@='LC')",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@='VO') & @Processed@='Y'",
+              "evaluable": true,
+              "js": "(record['em_aeatsii_estado'] === 'CO' || record['em_aeatsii_estado'] === 'AE' || record['documentStatus'] === 'VO') && (record['processed'] === true || record['processed'] === 'Y')"
+            }
+          },
+          {
             "name": "tbaiIssent",
             "apiKey": "tbaiIssent",
             "column": "EM_Tbai_Issent",
@@ -1863,6 +1932,13 @@
           },
           {
             "name": "aeatsiiIsauthorization",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "aeatsiiMultiDua",
             "derivation": {
               "type": "computed",
               "source": "N"
@@ -6108,7 +6184,7 @@
             "apiKey": "aeatsiiDua",
             "column": "EM_Aeatsii_Dua",
             "type": "string",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -6116,7 +6192,7 @@
             "apiKey": "aeatsiiFechaDua",
             "column": "EM_Aeatsii_Fecha_Dua",
             "type": "date",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -6124,7 +6200,7 @@
             "apiKey": "aeatsiiMultiDua",
             "column": "EM_Aeatsii_Multi_Dua",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -11252,6 +11328,14 @@
         "description": "Default value for 'aeatsiiIssent' in header should be a string"
       },
       {
+        "id": "t-default-value-type-header-aeatsiiMultiDua",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "aeatsiiMultiDua",
+        "runner": "node",
+        "description": "Default value for 'aeatsiiMultiDua' in header should be a string"
+      },
+      {
         "id": "t-default-value-type-header-currency",
         "category": "default-value-type",
         "entity": "header",
@@ -11484,6 +11568,14 @@
         "description": "Display logic for 'aeatsiiDescripcionSii' in header should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-header-aeatsiiDua",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiDua",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiDua' in header should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-header-aeatsiiErrorRegistral",
         "category": "displaylogic-evaluable",
         "entity": "header",
@@ -11500,6 +11592,14 @@
         "description": "Display logic for 'aeatsiiEstado' in header should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-header-aeatsiiFechaDua",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiFechaDua",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiFechaDua' in header should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-header-aeatsiiFechaRegCont",
         "category": "displaylogic-evaluable",
         "entity": "header",
@@ -11514,6 +11614,14 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Display logic for 'aeatsiiIssent' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-aeatsiiMultiDua",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiMultiDua",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiMultiDua' in header should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-header-costcenter",
@@ -11684,6 +11792,14 @@
         "description": "Display logic for 'aeatsiiDescripcionSii' in header should be valid JS"
       },
       {
+        "id": "t-displaylogic-valid-header-aeatsiiDua",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiDua",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiDua' in header should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-header-aeatsiiErrorRegistral",
         "category": "displaylogic-valid",
         "entity": "header",
@@ -11700,6 +11816,14 @@
         "description": "Display logic for 'aeatsiiEstado' in header should be valid JS"
       },
       {
+        "id": "t-displaylogic-valid-header-aeatsiiFechaDua",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiFechaDua",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiFechaDua' in header should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-header-aeatsiiFechaRegCont",
         "category": "displaylogic-valid",
         "entity": "header",
@@ -11714,6 +11838,14 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Display logic for 'aeatsiiIssent' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-aeatsiiMultiDua",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiMultiDua",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiMultiDua' in header should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-header-costcenter",
@@ -12188,6 +12320,14 @@
         "description": "Field 'aeatsiiDescripcionSii' should be present in header"
       },
       {
+        "id": "t-field-presence-header-aeatsiiDua",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiDua",
+        "runner": "node",
+        "description": "Field 'aeatsiiDua' should be present in header"
+      },
+      {
         "id": "t-field-presence-header-aeatsiiErrorCode",
         "category": "field-presence",
         "entity": "header",
@@ -12220,6 +12360,14 @@
         "description": "Field 'aeatsiiEstado' should be present in header"
       },
       {
+        "id": "t-field-presence-header-aeatsiiFechaDua",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiFechaDua",
+        "runner": "node",
+        "description": "Field 'aeatsiiFechaDua' should be present in header"
+      },
+      {
         "id": "t-field-presence-header-aeatsiiFechaRegCont",
         "category": "field-presence",
         "entity": "header",
@@ -12242,6 +12390,14 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Field 'aeatsiiIssent' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-aeatsiiMultiDua",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiMultiDua",
+        "runner": "node",
+        "description": "Field 'aeatsiiMultiDua' should be present in header"
       },
       {
         "id": "t-field-presence-header-businessPartner",
@@ -13468,6 +13624,14 @@
         "description": "Field 'aeatsiiDescripcionSii' should have type 'string' in header"
       },
       {
+        "id": "t-field-type-header-aeatsiiDua",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiDua",
+        "runner": "node",
+        "description": "Field 'aeatsiiDua' should have type 'string' in header"
+      },
+      {
         "id": "t-field-type-header-aeatsiiErrorCode",
         "category": "field-type",
         "entity": "header",
@@ -13500,6 +13664,14 @@
         "description": "Field 'aeatsiiEstado' should have type 'string' in header"
       },
       {
+        "id": "t-field-type-header-aeatsiiFechaDua",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiFechaDua",
+        "runner": "node",
+        "description": "Field 'aeatsiiFechaDua' should have type 'string' in header"
+      },
+      {
         "id": "t-field-type-header-aeatsiiFechaRegCont",
         "category": "field-type",
         "entity": "header",
@@ -13522,6 +13694,14 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Field 'aeatsiiIssent' should have type 'boolean' in header"
+      },
+      {
+        "id": "t-field-type-header-aeatsiiMultiDua",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiMultiDua",
+        "runner": "node",
+        "description": "Field 'aeatsiiMultiDua' should have type 'boolean' in header"
       },
       {
         "id": "t-field-type-header-businessPartner",
@@ -14548,6 +14728,14 @@
         "description": "Read-only logic for 'aeatsiiIssent' in header should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-header-aeatsiiMultiDua",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiMultiDua",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiMultiDua' in header should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-header-businessPartner",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -15146,6 +15334,14 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Read-only logic for 'aeatsiiIssent' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-aeatsiiMultiDua",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiMultiDua",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiMultiDua' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-businessPartner",
@@ -16981,14 +17177,6 @@
         "description": "System field 'aeatsiiDescription' should exist in backend but not frontend for header"
       },
       {
-        "id": "t-system-field-header-aeatsiiDua",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiDua",
-        "runner": "node",
-        "description": "System field 'aeatsiiDua' should exist in backend but not frontend for header"
-      },
-      {
         "id": "t-system-field-header-aeatsiiDup",
         "category": "system-field",
         "entity": "header",
@@ -17003,14 +17191,6 @@
         "field": "aeatsiiEjercicio",
         "runner": "node",
         "description": "System field 'aeatsiiEjercicio' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-aeatsiiFechaDua",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiFechaDua",
-        "runner": "node",
-        "description": "System field 'aeatsiiFechaDua' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-aeatsiiFechaOperacion",
@@ -17067,14 +17247,6 @@
         "field": "aeatsiiMotivoRectif",
         "runner": "node",
         "description": "System field 'aeatsiiMotivoRectif' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-aeatsiiMultiDua",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiMultiDua",
-        "runner": "node",
-        "description": "System field 'aeatsiiMultiDua' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-aeatsiiPeriodo",
@@ -18921,25 +19093,25 @@
       }
     ],
     "summary": {
-      "total": 1016,
+      "total": 1028,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 13,
-        "default-value-type": 39,
-        "displaylogic-evaluable": 25,
-        "displaylogic-valid": 25,
-        "field-presence": 160,
-        "field-type": 160,
-        "readonlylogic-evaluable": 75,
-        "readonlylogic-valid": 75,
+        "default-value-type": 40,
+        "displaylogic-evaluable": 28,
+        "displaylogic-valid": 28,
+        "field-presence": 163,
+        "field-type": 163,
+        "readonlylogic-evaluable": 76,
+        "readonlylogic-valid": 76,
         "rule-declared": 23,
         "searchable-filters": 6,
         "selector-endpoint": 54,
-        "system-field": 322,
+        "system-field": 319,
         "visibility": 13
       },
       "byRunner": {
-        "node": 1016,
+        "node": 1028,
         "junit": 0
       }
     }
