@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
-  ArrowLeft, Download, FileX, Maximize, ZoomIn, ZoomOut,
+  ArrowLeft, Download, FileX,
 } from 'lucide-react';
 import { useLocale, useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -19,9 +19,15 @@ import { portalPdfFileName } from '@/lib/portal/portalInvoices.js';
 import { saveBlobAsFile } from '@/lib/portal/portalDownload.js';
 import {
   PortalDate, PortalMain, PortalMoney, PortalPaymentStatus, PortalSection, PORTAL_SECTION_TITLE,
-  PORTAL_FIGMA_BUTTON_SECONDARY,
+  PORTAL_FIGMA_BUTTON_SECONDARY, PORTAL_FIGMA_SHADOW,
 } from './PortalBits.jsx';
-import { DownloadSimpleIcon, XIcon } from '@phosphor-icons/react';
+import {
+  CornersOutIcon, DotsThreeVerticalIcon, DownloadSimpleIcon, MagnifyingGlassMinusIcon,
+  MagnifyingGlassPlusIcon, XIcon,
+} from '@phosphor-icons/react';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { PORTAL_KIND_META, documentLabelKey } from './portalPresentation.js';
 import PortalDecisionActions from './PortalDecisionActions.jsx';
 import { PortalDetailsCard, PortalRelatedList } from './PortalDetailPanel.jsx';
@@ -188,13 +194,15 @@ export default function PortalDocumentDetailView({
         data-testid="DesktopHeader__6a1d3b" />
 
       <main
-        className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-2 pb-28 pt-1 md:flex-row md:gap-0 md:overflow-hidden md:rounded-lg md:bg-card md:p-0"
+        // Desktop: the Figma's "Panel PDC" — the PDF area and the 320px side panel side by side,
+        // full height, rounded only at the outer ends; the shell's 8px padding frames it.
+        className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-2 pb-28 pt-1 md:flex-row md:items-stretch md:gap-0 md:overflow-hidden md:p-0"
         data-testid="portal-document-detail"
       >
         {/* Left pane: the printable, or the data sheet when there is none */}
         <section
           aria-label={ui('portalPreviewLabel')}
-          className="relative hidden min-w-0 flex-1 overflow-y-auto bg-[hsl(var(--border-subtle))] md:flex md:flex-col"
+          className="relative isolate hidden min-w-0 flex-1 overflow-hidden rounded-l-xl bg-[#E3E7EC] md:flex md:flex-col"
           data-testid="portal-document-preview"
         >
           <PreviewPane
@@ -204,24 +212,24 @@ export default function PortalDocumentDetailView({
             issuer={issuer}
             logoUrl={logoUrl}
             onFullScreen={() => setLightboxOpen(true)}
+            onDownload={downloadPdf}
             data-testid="PreviewPane__6a1d3b" />
         </section>
 
         {/* Right pane */}
-        <aside className="flex min-w-0 flex-col gap-4 md:w-[320px] md:flex-none md:gap-0 md:overflow-y-auto md:border-l md:border-border">
+        <aside className="flex min-w-0 flex-col gap-4 md:w-[320px] md:flex-none md:gap-0 md:overflow-y-auto md:rounded-r-xl md:bg-white">
           {/* Desktop panel (Figma, 2026-11-17): the title with "Emitido por" and the close button,
               then "Botones principales" — Aceptar / Rechazar where they apply, Descargar PDF. */}
-          <div className="hidden items-start justify-between gap-2 border-b border-[#E3E7EC] p-3 md:flex">
-            <div className="flex min-w-0 flex-col">
-              <span className="text-xl font-medium leading-7 text-[#1B1A1F]" data-testid="portal-panel-title">{title}</span>
-              <span className="text-xs leading-4 text-[#6B7280]">{ui('portalIssuedBy', { name: issuer })}</span>
-            </div>
+          {/* Cabecera: 68px, padding 12px, the close button 36×36 at the top right. */}
+          <div className="relative hidden h-[68px] shrink-0 flex-col justify-center border-b border-[#E3E7EC] p-3 pr-12 md:flex">
+            <h2 className="truncate text-xl font-semibold leading-7 tracking-[-0.005em] text-[#1B1A1F]" data-testid="portal-panel-title">{title}</h2>
+            <span className="truncate text-xs leading-4 tracking-[-0.005em] text-[#6B7280]">{ui('portalIssuedBy', { name: issuer })}</span>
             <button
               type="button"
               aria-label={ui('close')}
               title={ui('close')}
               onClick={back}
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[#81848F] hover:bg-[#F3F5F9]"
+              className="absolute right-2 top-1 flex h-9 w-9 items-center justify-center rounded-lg text-[#81848F] hover:bg-[#F3F5F9]"
               data-testid="portal-panel-close"
             >
               <XIcon size={20} aria-hidden="true" data-testid="X__6a1d3b" />
@@ -330,80 +338,67 @@ function DesktopHeader({ title, breadcrumb, plural, onBack }) {
   );
 }
 
-/**
- * The page card's widest default width. Readable width, not fit-to-page: a real A4 page fitted
- * to the visible height comes out about 590 px wide on a 960 px tall screen, its 9 pt body text at
- * about 7 px. At 900 px that text renders at about 13–14 px, the design's text size; the rest of
- * the page and the next pages scroll.
- */
-const PREVIEW_PAGE_WIDTH = 900;
-/** Grey canvas around the page, on every side. */
-const PREVIEW_GUTTER = 20;
-/** `PdfViewer` fits the page to its box ("width" mode); the box carries the size. */
-const FIT_BOX_ZOOM = Object.freeze({ scale: 1, fitMode: 'width' });
+/** The PDF area's padding (Figma "Panel PDC": 24px top, 28px sides, none at the bottom). */
+const PREVIEW_PADDING = Object.freeze({ top: 24, right: 28, bottom: 0, left: 28 });
+
+/** One 44×38 button of the toolbar group. */
+const PREVIEW_TOOL = 'flex h-[38px] w-11 items-center justify-center bg-white text-[#81848F] hover:bg-[#F3F5F9] disabled:cursor-not-allowed disabled:opacity-40';
 
 /**
  * The printable in the app's PDF viewer (`PdfViewer`, as the invoice and file previews use it),
- * laid out as the design's preview pane: a grey canvas (`--border-subtle`, one step darker than
- * the app background, as the design's) with the page as a centred white card, and the three
- * controls — zoom in, full screen (the app's `FileLightbox`), zoom out — on the page's top-right
- * corner. They stay in place while the page scrolls: the scroll happens inside `PdfViewer`, under
- * them.
+ * laid out as the Figma's "Panel PDC" PDF area: on #E3E7EC, the page fills the area's width minus
+ * its 28px sides, starts 24px from the top and runs into the bottom edge, scrolling inside the area
+ * (the page keeps the viewer's own white sheet and shadow-md). `usePdfZoom`'s scale multiplies that
+ * fitted width.
  *
- * The page's width is computed here and handed to `PdfViewer` as the width of its box: by default
- * the readable width, {@link PREVIEW_PAGE_WIDTH} or the pane minus its gutters when narrower; the
- * rest of the page and the next pages scroll vertically. `usePdfZoom`'s scale multiplies that
- * default. No CSS transform: the PDF is rendered at the size shown.
+ * The toolbar is the Figma's button group at the area's top right: zoom in, full screen (the app's
+ * `FileLightbox`, as before), zoom out and a kebab. The design gives the kebab no behaviour, so it
+ * offers only what the portal already does for this document: "Descargar PDF".
  */
-function PortalPdfPreview({ url, onFullScreen }) {
+function PortalPdfPreview({ url, onFullScreen, onDownload }) {
   const ui = useUI();
   const zoom = usePdfZoom();
-  const paneRef = useRef(null);
-  const [pane, setPane] = useState({ width: 0 });
-
-  useEffect(() => {
-    const element = paneRef.current;
-    if (!element) return undefined;
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setPane({ width: entry.contentRect.width });
-      }
-    });
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-
-  const baseWidth = Math.min(PREVIEW_PAGE_WIDTH, Math.max(pane.width - 2 * PREVIEW_GUTTER, 0));
-  const pageWidth = Math.round(baseWidth * zoom.scale);
-  const control = 'flex h-8 w-8 items-center justify-center text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40';
-
+  const divider = 'w-px self-stretch bg-[#E3E7EC]';
   return (
-    <div ref={paneRef} className="min-h-0 flex-1 overflow-x-auto" data-testid="portal-pdf-pane">
-      {pageWidth > 0 ? (
-        <div className="relative mx-auto h-full" style={{ width: pageWidth }}>
-          <div
-            className="absolute right-2.5 z-10 flex rounded-md border border-border bg-card"
-            style={{ top: PREVIEW_GUTTER + 10 }}
-            data-testid="portal-pdf-controls"
-          >
-            <button type="button" onClick={zoom.zoomIn} disabled={!zoom.canZoomIn} aria-label={ui('pdfViewerZoomIn')} className={control} data-testid="portal-pdf-zoom-in">
-              <ZoomIn className="h-3.5 w-3.5" aria-hidden="true" data-testid="ZoomIn__6a1d3b" />
+    <div className="relative min-h-0 flex-1" data-testid="portal-pdf-pane">
+      <div
+        className={`absolute right-2 top-2 z-10 flex overflow-hidden rounded-lg border border-[#C7CBD3] p-px ${PORTAL_FIGMA_SHADOW}`}
+        data-testid="portal-pdf-controls"
+      >
+        <button type="button" onClick={zoom.zoomIn} disabled={!zoom.canZoomIn} aria-label={ui('pdfViewerZoomIn')} className={`${PREVIEW_TOOL} rounded-l-[7px]`} data-testid="portal-pdf-zoom-in">
+          <MagnifyingGlassPlusIcon size={20} aria-hidden="true" data-testid="MagnifyingGlassPlus__6a1d3b" />
+        </button>
+        <span className={divider} aria-hidden="true" />
+        <button type="button" onClick={onFullScreen} aria-label={ui('portalFullScreen')} className={PREVIEW_TOOL} data-testid="portal-pdf-full-screen">
+          <CornersOutIcon size={20} aria-hidden="true" data-testid="CornersOut__6a1d3b" />
+        </button>
+        <span className={divider} aria-hidden="true" />
+        <button type="button" onClick={zoom.zoomOut} disabled={!zoom.canZoomOut} aria-label={ui('pdfViewerZoomOut')} className={PREVIEW_TOOL} data-testid="portal-pdf-zoom-out">
+          <MagnifyingGlassMinusIcon size={20} aria-hidden="true" data-testid="MagnifyingGlassMinus__6a1d3b" />
+        </button>
+        <span className={divider} aria-hidden="true" />
+        <DropdownMenu data-testid="DropdownMenu__6a1d3b">
+          <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__6a1d3b">
+            <button type="button" aria-label={ui('moreOptions')} className={`${PREVIEW_TOOL} rounded-r-[7px]`} data-testid="portal-pdf-more">
+              <DotsThreeVerticalIcon size={20} aria-hidden="true" data-testid="DotsThreeVertical__6a1d3b" />
             </button>
-            <button type="button" onClick={onFullScreen} aria-label={ui('portalFullScreen')} className={control} data-testid="portal-pdf-full-screen">
-              <Maximize className="h-3.5 w-3.5" aria-hidden="true" data-testid="Maximize__6a1d3b" />
-            </button>
-            <button type="button" onClick={zoom.zoomOut} disabled={!zoom.canZoomOut} aria-label={ui('pdfViewerZoomOut')} className={control} data-testid="portal-pdf-zoom-out">
-              <ZoomOut className="h-3.5 w-3.5" aria-hidden="true" data-testid="ZoomOut__6a1d3b" />
-            </button>
-          </div>
-          <PdfViewer
-            url={url}
-            zoom={FIT_BOX_ZOOM}
-            hideToolbar
-            contentPadding={{ top: PREVIEW_GUTTER, right: 0, bottom: PREVIEW_GUTTER, left: 0 }}
-            data-testid="PdfViewer__6a1d3b" />
-        </div>
-      ) : null}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" data-testid="DropdownMenuContent__6a1d3b">
+            <DropdownMenuItem onSelect={onDownload} data-testid="portal-pdf-more-download">
+              <DownloadSimpleIcon size={16} className="mr-2 text-[#81848F]" aria-hidden="true" data-testid="DownloadSimple__6a1d3b" />
+              {ui('portalDownloadPdf')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      <div className="absolute inset-0">
+        <PdfViewer
+          url={url}
+          zoom={zoom}
+          hideToolbar
+          contentPadding={PREVIEW_PADDING}
+          data-testid="PdfViewer__6a1d3b" />
+      </div>
     </div>
   );
 }
@@ -564,11 +559,11 @@ function DocumentNotReady({ state, title, plural, onBack, onNavigate }) {
 }
 
 /** The left pane: the data sheet when there is no printable, else the PDF once it arrives. */
-function PreviewPane({ showSheet, pdf, document, issuer, logoUrl, onFullScreen }) {
+function PreviewPane({ showSheet, pdf, document, issuer, logoUrl, onFullScreen, onDownload }) {
   const ui = useUI();
   if (showSheet) {
     return (
-      <div className="flex flex-col gap-3 p-5">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-5">
         <p className="mx-auto w-full max-w-[640px] text-sm text-muted-foreground" data-testid="portal-pdf-unavailable">
           <span className="font-medium text-foreground">{ui('portalPdfUnavailable')}</span>
           {' · '}{ui(pdf.status === 'failed' ? 'portalDownloadFailed' : 'portalPdfUnavailableHint')}
@@ -586,6 +581,7 @@ function PreviewPane({ showSheet, pdf, document, issuer, logoUrl, onFullScreen }
       <PortalPdfPreview
         url={pdf.url}
         onFullScreen={onFullScreen}
+        onDownload={onDownload}
         data-testid="PortalPdfPreview__6a1d3b" />
     );
   }

@@ -1021,6 +1021,12 @@ arrives, so every shared piece takes the new look as an opt-in (`PortalSection v
   re-reads the document in place. Not built: "Comentarios" (on hold, no backend) and the greyed
   "Pedido – Pendiente de creación" placeholder (user decision). The mobile detail keeps the app's
   preview cards.
+- **"Panel PDC" (desktop detail content, Figma).** The PDF area (#E3E7EC, rounded 12px on the left,
+  24px top / 28px side padding, the page filling its width and running into the bottom edge,
+  scrolling inside) and the 320px white side panel (rounded 12px on the right; 68px header with
+  "Emitido por: …" and a 36×36 close button). Toolbar: the Figma's 4-button group — zoom in, full
+  screen (as before), zoom out and a kebab whose only item is "Descargar PDF" (the design gives it
+  no behaviour, so it offers nothing the portal did not already do).
 
 ---
 

@@ -974,6 +974,21 @@ describe('PortalPage — document detail', () => {
     expect(callsTo('/documents/invoice/inv-1/pdf')).toHaveLength(1);
   });
 
+  it('offers only "Descargar PDF" in the preview toolbar kebab, and it saves the same file', async () => {
+    const user = userEvent.setup();
+    responses.me = jsonResponse(WITH_ENTRY);
+    renderPortal();
+    await detailReady();
+    await pdfReady();
+
+    await user.click(screen.getByTestId('portal-pdf-more'));
+    expect(screen.getAllByRole('menuitem')).toHaveLength(1);
+    await user.click(screen.getByTestId('portal-pdf-more-download'));
+
+    expect(saveBlobAsFile).toHaveBeenCalledWith(expect.any(Blob), 'FV-0001.pdf');
+    expect(callsTo('/documents/invoice/inv-1/pdf')).toHaveLength(1);
+  });
+
   for (const [label, pdfAnswer, note] of [
     ['has none the server could render (404)', jsonResponse({}, { status: 404 }), 'portalPdfUnavailableHint'],
     ['failed to arrive', jsonResponse({}, { status: 500 }), 'portalDownloadFailed'],

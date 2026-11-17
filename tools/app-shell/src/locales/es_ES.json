@@ -26935,7 +26935,7 @@
     "portalListEmptyHint": "Prueba con otro rango de fechas o estado.",
     "portalBack": "Volver a {list}",
     "portalBackToHome": "Volver al inicio",
-    "portalIssuedBy": "Emitido por {name}",
+    "portalIssuedBy": "Emitido por: {name}",
     "portalViewPdf": "Ver PDF",
     "portalDownloadPdf": "Descargar PDF",
     "portalPdfUnavailable": "PDF no disponible",

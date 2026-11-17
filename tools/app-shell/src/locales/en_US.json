@@ -26697,7 +26697,7 @@
     "portalListEmptyHint": "Try another date range or status.",
     "portalBack": "Back to {list}",
     "portalBackToHome": "Back to home",
-    "portalIssuedBy": "Issued by {name}",
+    "portalIssuedBy": "Issued by: {name}",
     "portalViewPdf": "View PDF",
     "portalDownloadPdf": "Download PDF",
     "portalPdfUnavailable": "PDF not available",
