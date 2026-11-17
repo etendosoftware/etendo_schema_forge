@@ -47,6 +47,11 @@ test('no relationship is duplicated inside attributes in the OpenAPI schemas', (
       if (!resource?.properties?.attributes) continue;
       const entityName = resource.properties.type.enum[0];
       const entity = manifest.entities[entityName] as any;
+      // A lookup lists values of a reference (type payment-method, ...), not a published resource.
+      if (!entity) {
+        assert.match(path, /\/lookups\//, `${method} ${path}: resource type ${entityName} is not in the manifest`);
+        continue;
+      }
       for (const [field, definition] of Object.entries(entity.fields as Record<string, any>)) {
         if (!definition.relationship) continue;
         assert.equal(resource.properties.attributes.properties[field], undefined, `${method} ${path}: ${entityName}.${field} is in attributes`);
