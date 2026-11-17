@@ -20,7 +20,7 @@ function t(key, vars) {
 vi.mock('@/i18n', () => ({ useUI: () => t }));
 
 import { StrictMode } from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   MemoryRouter, Route, Routes, useLocation, useNavigationType,
@@ -309,7 +309,7 @@ describe('PortalDecisionPage — a confirm whose answer was lost', () => {
     consoleError.mockRestore();
   });
 
-  it('sends exactly one POST when "Reintentar" is clicked twice', async () => {
+  it('sends exactly one POST when "Reintentar" is clicked twice before the page re-renders', async () => {
     apiFetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
     apiFetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
     apiFetchMock.mockResolvedValueOnce(jsonResponse({ state: 'pending' }));
@@ -317,8 +317,13 @@ describe('PortalDecisionPage — a confirm whose answer was lost', () => {
 
     await waitFor(() => expect(screen.getByTestId('portal-decision-failed')).toBeInTheDocument());
     const retry = screen.getByTestId('portal-decision-retry');
-    fireEvent.click(retry);
-    fireEvent.click(retry);
+    // Both clicks inside ONE act: React renders only when the act ends, so the second click still
+    // reaches the button's handler and only the in-flight guard can stop a second chain.
+    // (`fireEvent.click` wraps each click in its own act, which removes the button in between.)
+    act(() => {
+      retry.click();
+      retry.click();
+    });
 
     await waitFor(() => expect(screen.getByTestId('portal-decision-applied')).toBeInTheDocument());
     expect(confirmCalls()).toHaveLength(3);

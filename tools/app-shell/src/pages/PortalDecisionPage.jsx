@@ -93,7 +93,8 @@ export default function PortalDecisionPage({ resendDelayMs = CONFIRM_RESEND_DELA
   // mount, so StrictMode's mount → unmount → mount in development keeps it alive.
   const alive = useRef(true);
   // One confirmation chain at a time: a second click on "Reintentar" before the first re-renders
-  // must not send a second POST.
+  // must not send a second POST. Per page instance, not per token: no in-app flow navigates from
+  // one decision token to another; each email link is a fresh page load.
   const inFlight = useRef(false);
 
   useEffect(() => {
