@@ -347,8 +347,9 @@ describe('useInvoiceSifStep', () => {
     expect(result.current.payload.aeatsiiClaveTipo).toBe('F2');
   });
 
-  // The backend preselects no rectification code (never R4): both come empty on a rectificative,
-  // VERI*FACTU's type included, and the step stays invalid until the user chooses each one.
+  // A rectificative whose preview preselects no code (any rectificative but a customer return's,
+  // which comes with R1): both come empty, VERI*FACTU's type included, and the step stays invalid
+  // until the user chooses each one.
   it('a rectificative comes with no code preselected and is invalid until each one is chosen', async () => {
     const p = preview({
       rectificative: true,

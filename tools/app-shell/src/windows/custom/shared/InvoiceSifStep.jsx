@@ -29,9 +29,10 @@ import {
  * Those flows build the invoice on the server and complete it at once, so the user never saw the
  * invoice's SIF tab: a rectificative left as an ordinary F1, with no SII motive and no TicketBAI
  * code. This step shows the editable SIF fields of the fiscal systems ACTIVE for the invoice's
- * organization, prefilled with what the invoice would get, before anything is confirmed. On a
- * rectificative the rectification codes come EMPTY (never a preselected R4): the user chooses
- * each one, and the mandatory fields carry the app's red `*` (`sifRequiredFields.js`).
+ * organization, prefilled with what the invoice would get, before anything is confirmed. The
+ * rectification codes of a rectificative come as the backend previews them: R1 preselected on a
+ * customer return's rectificative (editable), EMPTY on any other (the user chooses each one).
+ * The mandatory fields carry the app's red `*` (`sifRequiredFields.js`).
  *
  * The backend is the single source of truth (`sifDefaults` action, `InvoiceSifPreset` in
  * com.etendoerp.go): which systems apply, which fields are editable, their allowed codes and
@@ -143,10 +144,11 @@ function isFieldShown(name, values) {
  * handler: `onClick={() => sif.start(handleConfirm)}` — on the step, the same click confirms.
  *
  * Fails OPEN on a preview the server could not answer: no `sifFields` is sent then, and for that
- * case alone the backend applies its own values (document-type VERI*FACTU type, and the R4
+ * case alone the backend applies its own values (document-type VERI*FACTU type, and the R1
  * fallback on a rectificative — `InvoiceSifPreset.unattendedRectificationFallback`) and refuses an
  * invalid invoice with its own 422, so a failed preview never blocks the flow, it only skips the
- * review. When the step IS shown, a rectificative's codes come empty and the user must choose.
+ * review. When the step IS shown, a rectificative's codes are what the preview gives (R1 on a
+ * customer return, empty otherwise) and blank ones block the confirm.
  *
  * @param {object} args
  * @param {boolean} args.enabled whether an invoice is going to be created at all

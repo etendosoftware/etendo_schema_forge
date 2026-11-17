@@ -884,6 +884,6 @@ be loaded the flow continues without the step: the backend applies the same defa
 The mandatory fields of the step carry the red `*` and keep the primary button disabled while
 empty (SII *Tipo factura* and *Descripción SII*; VERI*FACTU *Tipo de factura*, *Descripción de la
 operación* and, with VERI*FACTU active, *Fecha operación*; on a rectificative also each system's
-rectification code, which is never preselected). The rule is shared with the invoices' SIF tab:
+rectification code, which order flows never preselect — only a customer return's preview comes with `R1`). The rule is shared with the invoices' SIF tab:
 `docs/ui-customization.md` §21b.
 Backend reference: `com.etendoerp.go` `docs/neo-headless.md` §4.12.36b (ETP-6179).

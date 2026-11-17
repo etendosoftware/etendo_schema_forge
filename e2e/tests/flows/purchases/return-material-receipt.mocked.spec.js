@@ -607,17 +607,17 @@ test.describe('return-material-receipt — CO form actions (no existing invoice)
 
 /**
  * A rectificative invoice is created AND confirmed in one call, so the modal shows the mandatory
- * "Datos fiscales" step before creating it. The backend preview preselects NO rectification code
- * (SII motive, VERI*FACTU type come empty): the step marks them mandatory, keeps the confirm
- * disabled until the user chooses each one, and the chosen values travel as `sifFields` in
- * createReturnInvoice next to `originInvoices`.
+ * "Datos fiscales" step before creating it. The backend preview of a customer return's
+ * rectificative preselects R1 (SII motive, VERI*FACTU type): the step shows it, marks the fields
+ * mandatory, lets the user change it, keeps the confirm disabled while one is cleared, and the
+ * values travel as `sifFields` in createReturnInvoice next to `originInvoices`.
  */
 test.describe('return-material-receipt — CO rectificative invoice with the fiscal data step', () => {
   const SIF_PREVIEW = {
     systems: ['SII', 'Verifactu'],
     rectificative: true,
     sales: true,
-    fields: { etsgDateOperation: '2026-11-10', aeatsiiMotivoRectif: null, etvfacInvType: null },
+    fields: { etsgDateOperation: '2026-11-10', aeatsiiMotivoRectif: 'R1', etvfacInvType: 'R1' },
     fieldSpecs: [
       { name: 'etsgDateOperation', system: 'SII', type: 'date' },
       { name: 'aeatsiiMotivoRectif', system: 'SII', type: 'option', options: ['R1', 'R2', 'R3', 'R4', 'R5'] },
@@ -633,7 +633,7 @@ test.describe('return-material-receipt — CO rectificative invoice with the fis
     await installReturnReceiptMocks(page, { suggestedInvoiceIds: ['rect-inv-a'], state, sifPreview: SIF_PREVIEW });
   });
 
-  test('preselects no rectification code, blocks until each is chosen, Atrás keeps the modal, and posts sifFields on confirm', async ({ page }) => {
+  test('preselects R1 per system, is editable and mandatory, Atrás keeps the modal, and posts sifFields on confirm', async ({ page }) => {
     await page.goto('/return-material-receipt/ret-003');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
@@ -652,25 +652,21 @@ test.describe('return-material-receipt — CO rectificative invoice with the fis
     expect(state.invoicePosts).toHaveLength(0);
     await expect(step.getByTestId('invoice-sif-step-SII')).toBeVisible();
     await expect(step.getByTestId('invoice-sif-step-Verifactu')).toBeVisible();
-    // No code is preselected: both selects are empty, marked mandatory, and the confirm is blocked.
+    // R1 is preselected in both systems, marked mandatory, and nothing blocks the confirm.
     const motive = step.getByTestId('SelectTrigger__sifstep_aeatsiiMotivoRectif');
     const vfType = step.getByTestId('SelectTrigger__sifstep_etvfacInvType');
-    await expect(motive).not.toContainText('R4');
-    await expect(vfType).not.toContainText('R4');
+    await expect(motive).toContainText('R1 - ');
+    await expect(vfType).toContainText('R1 - ');
     await expect(motive).toHaveAttribute('aria-required', 'true');
     await expect(vfType).toHaveAttribute('aria-required', 'true');
-    await expect(step.getByTestId('invoice-sif-step-required')).toBeVisible();
-    await expect(primary).toBeDisabled();
+    await expect(step.getByTestId('invoice-sif-step-required')).toHaveCount(0);
+    await expect(primary).toBeEnabled();
 
-    // The user chooses each code; only then is the confirm available.
-    await motive.click();
-    await page.getByTestId('SelectItem__sifstep_R1').click();
-    await expect(primary).toBeDisabled();
+    // Still editable: the user changes the VERI*FACTU code.
     await vfType.click();
     await page.getByTestId('SelectItem__sifstep_R2').click();
-    await expect(motive).toContainText('R1 - ');
     await expect(vfType).toContainText('R2 - ');
-    await expect(step.getByTestId('invoice-sif-step-required')).toHaveCount(0);
+    await expect(motive).toContainText('R1 - ');
     await expect(primary).toBeEnabled();
 
     // Atrás: back to the first screen, nothing created; the step comes back unchanged.

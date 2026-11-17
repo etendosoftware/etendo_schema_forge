@@ -2850,6 +2850,11 @@ invoice-creating modals (`isSifFieldRequired` in
 - **VERI\*FACTU:** *Fecha operación*, *Tipo de factura*, *Descripción de la operación*.
 - **TicketBAI:** *Código de factura rectificativa*, on a rectificative (the field only shows then).
 
+A rectificative created by hand in this window still gets no preselected rectification code: the
+user chooses it (ETP-5745 CP-14, `SalesRectificativeFiscalDefaults`). Only the rectificative a
+customer return creates through its "Datos fiscales" step comes with `R1` preselected
+(`return-material-receipt.md`).
+
 None of these columns is mandatory in the AD: the list mirrors what each fiscal system refuses when
 empty (SII's pre-send validation, VERI\*FACTU's `InitialValidator`, and
 `RectificationFiscalCodeGuard`, which blocks the completion of a rectificative with no code). The
