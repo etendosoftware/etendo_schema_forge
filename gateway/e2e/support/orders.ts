@@ -95,6 +95,70 @@ export function describeOrderFlow(kind: 'sales-order' | 'purchase-order'): void 
       await expectDeleted(order);
     });
 
+    // An order in a currency other than the organization's (docs/public-api.md 4.12): the header
+    // carries the tenant's conversion rate as `currency_rate`, and a line created without a price
+    // is priced from the catalog converted with that rate.
+    describe('foreign currency', () => {
+      const orderDate = new Date().toISOString().slice(0, 10);
+      let setup: ForeignCurrencySetup | undefined;
+      let skipReason = '';
+      let foreign: LifecycleSpec;
+
+      it('finds a foreign currency with a published conversion rate from the organization currency', async (t) => {
+        const found = await findForeignCurrency(kind, { contactId, addressId, warehouseId }, orderDate);
+        if (typeof found === 'string') {
+          skipReason = found;
+          t.skip(found);
+          return;
+        }
+        setup = found;
+      });
+
+      it('answers the published rate as currency_rate on create, and a line without list_price is converted', async (t) => {
+        if (!setup) return t.skip(skipReason);
+        const { currencyId, rate, catalogPrice, productId: pricedProductId } = setup;
+        const header = await createDraftOrder(kind, { contactId, addressId, warehouseId }, { order_date: orderDate, currency: currencyId });
+        foreign = { collection: kind, type: kind, id: header.id, firstPatch: {}, secondPatch: {} };
+        assert.equal(header.data.attributes.currency, currencyId);
+        assert.equal(Number(header.data.attributes.currency_rate), rate, 'currency_rate is the multiple_rate_by of the published conversion rate');
+
+        const line = await createRecord(
+          `${kind}/${header.id}/lines`,
+          resource(`${kind}-lines`, { ordered_quantity: 1, discount: 0 }, { product: ['product', pricedProductId] }),
+        );
+        assert.equal(Number(line.data.attributes.list_price), round2(catalogPrice * rate),
+          `list_price is the catalog price ${catalogPrice} x rate ${rate}, rounded to 2 decimals`);
+      });
+
+      it('a line created WITH list_price keeps it unchanged', async (t) => {
+        if (!setup) return t.skip(skipReason);
+        const line = await createRecord(
+          `${kind}/${foreign.id}/lines`,
+          resource(`${kind}-lines`, { ordered_quantity: 1, list_price: 7.77, discount: 0 }, { product: ['product', setup.productId] }),
+        );
+        assert.equal(Number(line.data.attributes.list_price), 7.77, 'a caller price is in the document currency and is never converted');
+      });
+
+      it('a PATCH sending currency_rate keeps the sent rate', async (t) => {
+        if (!setup) return t.skip(skipReason);
+        const sent = round2(setup.rate * 2 + 0.5);
+        const { etag } = await readWithEtag(itemPath(foreign));
+        const res = await patch(foreign, { currency_rate: sent }, etag);
+        expectStatus(res, 200);
+        assert.equal(Number(res.json.data.attributes.currency_rate), sent, 'the PATCH answers the rate that was sent');
+        const { res: reread } = await readWithEtag(itemPath(foreign));
+        assert.equal(Number(reread.json.data.attributes.currency_rate), sent, 'the rate is kept on read');
+      });
+
+      it('accepts currency_rate on create and keeps the sent rate', async (t) => {
+        if (!setup) return t.skip(skipReason);
+        const sent = round2(setup.rate * 3 + 0.25);
+        const header = await createDraftOrder(kind, { contactId, addressId, warehouseId },
+          { order_date: orderDate, currency: setup.currencyId, currency_rate: sent });
+        assert.equal(Number(header.data.attributes.currency_rate), sent, 'a rate sent on create is kept, not replaced by the published one');
+      });
+    });
+
     // Runs last: a completed order cannot be deleted, so it outlives the run (see cleanupCreated).
     // The integrator's flow, with no id known beforehand: look a payment method up, set it on the
     // contact, create an order (it inherits it) and complete it.
@@ -210,11 +274,61 @@ const COMPLETED_WRITE_STATUS = 422;
 async function createDraftOrder(
   kind: string,
   { contactId, addressId, warehouseId }: { contactId: string; addressId: string; warehouseId: string },
+  extra: Record<string, unknown> = {},
 ) {
   return createRecord(
     kind,
-    resource(kind, { order_date: '2026-10-14', partner_address: addressId, warehouse: warehouseId }, {
+    resource(kind, { order_date: '2026-10-14', partner_address: addressId, warehouse: warehouseId, ...extra }, {
       business_partner: ['contacts', contactId],
     }),
   );
+}
+
+const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+
+interface ForeignCurrencySetup { currencyId: string; rate: number; catalogPrice: number; productId: string }
+
+const MAX_PRODUCT_CANDIDATES = 10;
+
+/**
+ * The organization currency is read from a draft order created without `currency` (Etendo defaults
+ * it), and the foreign one from the first published conversion rate that starts at it and is valid
+ * on `orderDate`. The catalog price of a product is what the same line costs on that org-currency
+ * order (no `list_price` sent), which is the price list the foreign order converts, so the
+ * expectation does not depend on how the tenant maintains product prices. Returns the reason to
+ * skip when the tenant lacks the setup.
+ */
+async function findForeignCurrency(
+  kind: string,
+  ids: { contactId: string; addressId: string; warehouseId: string },
+  orderDate: string,
+): Promise<ForeignCurrencySetup | string> {
+  const probe = await createDraftOrder(kind, ids, { order_date: orderDate });
+  const orgCurrency = probe.data.attributes.currency;
+  if (typeof orgCurrency !== 'string' || !orgCurrency) return `the ${kind} created without currency carries no currency: cannot tell the organization currency`;
+
+  const rates = await api('GET', 'conversion-rates?page[size]=100');
+  expectStatus(rates, 200);
+  const match = (rates.json.data as Array<{ attributes: Record<string, any> }>).find(({ attributes: a }) =>
+    a.currency === orgCurrency && a.to_currency && a.to_currency !== orgCurrency && Number(a.multiple_rate_by) > 0
+    && (!a.valid_from_date || a.valid_from_date <= orderDate) && (!a.valid_to_date || a.valid_to_date >= orderDate));
+  if (!match) {
+    return `the tenant has no conversion rate from the organization currency (${orgCurrency}) valid on ${orderDate}: `
+      + 'add one (Currency > Conversion Rates) to run the foreign-currency order checks';
+  }
+
+  const products = await api('GET', `product?page[size]=${MAX_PRODUCT_CANDIDATES}`);
+  expectStatus(products, 200);
+  for (const product of products.json.data as Array<{ id: string }>) {
+    const res = await api('POST', `${kind}/${probe.id}/lines`, {
+      body: resource(`${kind}-lines`, { ordered_quantity: 1, discount: 0 }, { product: ['product', product.id] }),
+    });
+    if (res.status !== 201) continue;
+    const price = Number(res.json.data.attributes.list_price);
+    if (Number.isFinite(price) && price > 0) {
+      return { currencyId: match.attributes.to_currency, rate: Number(match.attributes.multiple_rate_by), catalogPrice: price, productId: product.id };
+    }
+  }
+  return `no product among the first ${MAX_PRODUCT_CANDIDATES} has a positive catalog price on the ${kind} price list: `
+    + 'the tenant needs a priced product to check the conversion';
 }
