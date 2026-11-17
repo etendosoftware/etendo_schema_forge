@@ -481,7 +481,7 @@ evaluated only by the backend, so the browser never emits `feature_flag_evaluate
   vendors, amounts or document ids.
 - Adoption = `invoice_inbox_opened` over `session_started` in Mixpanel (report not created yet, tracked in
   etendo-kpis). Emission table: `docs/ops/mixpanel-kpi-emission-spec.md`.
-- Caveats: adoption = `invoice_inbox_opened` over `session_started` in Mixpanel; demo tenants (tenant_type D) and test accounts are NOT excluded yet (the ETGO_Account test-account indicator is pending with Platform); `account_id` carries the tenant `clientId`, as in ETP-5889, while etendo-kpis notes that `etgo_account_id` replaces `account_id` for backend events (a frontend migration, if any, must move ETP-5889 and this event together).
+- Caveats: adoption = `invoice_inbox_opened` over `session_started` in Mixpanel; since ETP-6072 the events carry `tenant_type` so demo tenants can be excluded in the query; test accounts are NOT excluded yet (the ETGO_Account test-account indicator is pending with Platform); `account_id` carries the tenant `clientId`, as in ETP-5889, while etendo-kpis notes that `etgo_account_id` replaces `account_id` for backend events (a frontend migration, if any, must move ETP-5889 and this event together).
 - Hosted Datadog setting `invoice-inbox`: created 2026-11-13, boolean, default false, team Plataforma, server only,
   no targeting rules, disabled in Production.
 

@@ -1,5 +1,6 @@
 import { KPI_BOOLEAN_KEYS, KPI_NUMERIC_RANGES, isNumberInRange } from './propertyPolicy.js';
 import { ROLE_GROUP_VALUES } from './roleGroups.js';
+import { TENANT_TYPE_VALUES } from './tenantType.js';
 
 const DENYLISTED_PROPERTY_KEYS = new Set([
   'authCode',
@@ -96,6 +97,7 @@ export const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'supportRequested',
   'support_session',
   'tags',
+  'tenant_type',
   'timestamp',
   'total',
   'trigger',
@@ -161,6 +163,11 @@ const BOOLEAN_EVENT_PROPERTY_KEYS = new Set([
 // The only keys that may carry a list, each with its closed set of values (ETP-6043).
 const LIST_EVENT_PROPERTY_VALUES = new Map([
   ['role_groups', ROLE_GROUP_VALUES],
+]);
+
+// String keys with a closed set of values (ETP-6072): any other value, or a non-string, is dropped.
+const ENUM_EVENT_PROPERTY_VALUES = new Map([
+  ['tenant_type', TENANT_TYPE_VALUES],
 ]);
 
 const SKIP_PROPERTY = Symbol('skip-property');
@@ -267,6 +274,10 @@ function sanitizeEventProperty(key, value) {
 
   if (LIST_EVENT_PROPERTY_VALUES.has(key)) {
     return sanitizeListProperty(key, value);
+  }
+
+  if (ENUM_EVENT_PROPERTY_VALUES.has(key)) {
+    return ENUM_EVENT_PROPERTY_VALUES.get(key).has(value) ? value : SKIP_PROPERTY;
   }
 
   if (NUMERIC_EVENT_PROPERTY_KEYS.has(key)) {
