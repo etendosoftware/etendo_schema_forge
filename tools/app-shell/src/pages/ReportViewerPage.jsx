@@ -509,7 +509,7 @@ function SearchInput({ selector, value, displayValue, onChange, multi, minLength
 
 // Multi-select popup: shows selected tags + a "+" button that opens a modal with
 // a searchable list and checkboxes. Used for Business Partner, Product, Project.
-export function PopupMultiSelector({ selector, label, onChange, value = '', displayValue = '' }) {
+export function PopupMultiSelector({ selector, label, onChange, value = '', displayValue = '', displayNames = null, maxItems = Infinity }) {
   const ui = useUI();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -524,7 +524,8 @@ export function PopupMultiSelector({ selector, label, onChange, value = '', disp
   const [confirmed, setConfirmed] = useState(() => {
     if (!value) return [];
     const ids = value.split(',').filter(Boolean);
-    const names = displayValue ? displayValue.split(', ') : [];
+    // `displayNames` (an array) is exact; the joined string splits wrongly on a name containing ", ".
+    const names = displayNames ?? (displayValue ? displayValue.split(', ') : []);
     return ids.map((id, i) => ({ id, name: names[i] || id }));
   });
   // Frozen at openModal() time — "what was confirmed as of the last OK". Options matching
@@ -569,24 +570,25 @@ export function PopupMultiSelector({ selector, label, onChange, value = '', disp
 
   const toggleItem = (item) => {
     const exists = pending.some(s => s.id === item.id);
+    if (!exists && pending.length >= maxItems) return; // at the cap: the hint below says why
     setPending(exists ? pending.filter(s => s.id !== item.id) : [...pending, item]);
   };
 
   const confirm = () => {
     setConfirmed(pending);
-    onChange(pending.map(s => s.id).join(','), pending.map(s => s.name).join(', '));
+    onChange(pending.map(s => s.id).join(','), pending.map(s => s.name).join(', '), pending.map(s => s.name));
     setOpen(false);
   };
 
   const removeConfirmed = (id) => {
     const next = confirmed.filter(s => s.id !== id);
     setConfirmed(next);
-    onChange(next.map(s => s.id).join(','), next.map(s => s.name).join(', '));
+    onChange(next.map(s => s.id).join(','), next.map(s => s.name).join(', '), next.map(s => s.name));
   };
 
   const clearAll = () => {
     setConfirmed([]);
-    onChange('', '');
+    onChange('', '', []);
   };
 
   const MAX_VISIBLE_TAGS = 3;
@@ -603,10 +605,11 @@ export function PopupMultiSelector({ selector, label, onChange, value = '', disp
     optionsListContent = orderedOptions.map(o => {
       const isSelected = pending.some(s => s.id === o.id);
       return (
-        <label key={o.id} className="flex items-center gap-3 px-4 py-2 hover:bg-muted/40 cursor-pointer">
+        <label key={o.id} className={`flex items-center gap-3 px-4 py-2 hover:bg-muted/40 ${!isSelected && pending.length >= maxItems ? 'opacity-60' : 'cursor-pointer'}`}>
           <input
             type="checkbox"
             checked={isSelected}
+            disabled={!isSelected && pending.length >= maxItems}
             onChange={() => toggleItem(o)}
             className="w-4 h-4 accent-primary shrink-0"
           />
@@ -674,7 +677,7 @@ export function PopupMultiSelector({ selector, label, onChange, value = '', disp
               {optionsListContent}
             </div>
             <div className="flex items-center justify-between px-4 py-3 border-t border-border/30 bg-muted/20">
-              <span className="text-xs text-muted-foreground">{ui('selected', { count: pending.length })}</span>
+              <span className="text-xs text-muted-foreground">{ui('selected', { count: pending.length })}<span role="status" data-testid="PopupMultiSelector__maxItems">{pending.length >= maxItems && ` · ${ui('dynamicReportMaxItems', { max: maxItems })}`}</span></span>
               <div className="flex gap-2">
                 <button onClick={() => setOpen(false)} className="h-8 px-3 text-xs rounded-md border border-border hover:bg-muted/50">{ui('cancel')}</button>
                 <button onClick={confirm} className="h-8 px-3 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90">OK</button>
@@ -2109,18 +2112,25 @@ export default function ReportViewerPage() {
   // ETP-6080 F10: a report picked from the list was opened from the menu; any other arrival
   // (a pasted URL, a favourite, a reload) counts as a deep link for `report_opened.source`.
   const [pickedReportId, setPickedReportId] = useState(null);
+  // A report's own selections live in the query string (the dynamic view writes them, the old viewer reads
+  // deep links from it), so they belong to that report only: leaving it keeps the category and nothing
+  // else, and a report picked from the list starts with just the category and itself (ETP-6239).
+  const categoryOnly = () => {
+    const params = new URLSearchParams();
+    if (categoryFilter) params.set('category', categoryFilter);
+    return params;
+  };
   const selectReport = (report) => {
     setPickedReportId(report.id);
-    const params = new URLSearchParams(searchParams);
+    const params = categoryOnly();
     params.set('report', report.id);
     setSearchParams(params);
   };
 
-  const clearReport = () => {
-    const params = new URLSearchParams(searchParams);
-    params.delete('report');
-    setSearchParams(params);
-  };
+  const clearReport = () => setSearchParams(categoryOnly());
+  // The dynamic view's own writes go through the router (replace: no new history entry), so the
+  // router and the address bar never disagree.
+  const writeViewSearch = useCallback((next) => setSearchParams(new URLSearchParams(next), { replace: true }), [setSearchParams]);
 
   // ETP-5116 — the Financial Reports and Informes de inventario pages had zero
   // real access control (any authenticated user, any role, could reach either
@@ -2153,6 +2163,8 @@ export default function ReportViewerPage() {
           roleOrgs={selectedRole?.orgList || []}
           source={pickedReportId === selectedReport.id ? 'menu' : 'deep_link'}
           reportAccess={reportAccess}
+          search={searchParams.toString()}
+          onSearchChange={writeViewSearch}
           data-testid="DynamicReportView__3c998a" />
       </Suspense>
     );
