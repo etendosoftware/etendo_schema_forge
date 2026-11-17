@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/windows/custom/shared/InvoiceSifStep.jsx
+// @covers tools/app-shell/src/windows/custom/shared/sifRequiredFields.js
 //
 // The "Datos fiscales" step shared by every invoice-creating modal: the pure helpers, the
 // state hook, the panel and the stand-alone dialog. The host modals are covered in their own
@@ -14,12 +15,13 @@ vi.mock('@/windows/custom/fiscal-config/fiscalConfig.utils.js', () => ({
 }));
 
 vi.mock('@/components/ui/date-field', () => ({
-  DateField: ({ id, value, onChange, disabled, ...rest }) => (
+  DateField: ({ id, value, onChange, disabled, required, ...rest }) => (
     <input
       id={id}
       type="date"
       value={value}
       disabled={disabled}
+      required={required}
       data-testid={rest['data-testid']}
       onChange={(e) => onChange && onChange(e.target.value)}
     />
@@ -57,7 +59,9 @@ vi.mock('@/components/ui/select', () => {
   }
   return {
     Select,
-    SelectTrigger: ({ children, id }) => <div id={id}>{children}</div>,
+    SelectTrigger: ({ children, id, ...rest }) => (
+      <div id={id} aria-required={rest['aria-required']} data-testid={rest['data-testid']}>{children}</div>
+    ),
     SelectValue: ({ placeholder }) => <span>{placeholder}</span>,
     SelectContent: ({ children }) => <div>{children}</div>,
     SelectItem,
@@ -353,6 +357,66 @@ describe('useInvoiceSifStep', () => {
     expect(result.current.payload).toMatchObject({ aeatsiiMotivoRectif: 'R1', etvfacInvType: 'R2' });
   });
 
+  it('an empty mandatory field that is not a code (SII description) also blocks the step', async () => {
+    const p = preview({ fields: { ...preview().fields, aeatsiiDescripcionSii: '' } });
+    const { result } = setup(vi.fn().mockResolvedValue(jsonResponse(p)));
+    await act(async () => { await result.current.start(vi.fn()); });
+    expect(result.current.valid).toBe(false);
+    expect(result.current.missing).toEqual(['aeatsiiDescripcionSii']);
+    act(() => result.current.setValue('aeatsiiDescripcionSii', '   '));
+    expect(result.current.valid).toBe(false);
+    act(() => result.current.setValue('aeatsiiDescripcionSii', 'Venta'));
+    expect(result.current.valid).toBe(true);
+    expect(result.current.missing).toEqual([]);
+  });
+
+  it('on an ordinary invoice an empty rectification motive does not block', async () => {
+    const { result } = setup(vi.fn().mockResolvedValue(jsonResponse(preview())));
+    await act(async () => { await result.current.start(vi.fn()); });
+    expect(result.current.values.aeatsiiMotivoRectif).toBeNull();
+    expect(result.current.valid).toBe(true);
+  });
+
+  it('the operation date blocks only when VERI*FACTU is active', async () => {
+    const siiOnly = preview({
+      systems: ['SII'], fieldSpecs: SII_SPEC, fields: { ...preview().fields, etsgDateOperation: null },
+    });
+    const first = setup(vi.fn().mockResolvedValue(jsonResponse(siiOnly)));
+    await act(async () => { await first.result.current.start(vi.fn()); });
+    expect(first.result.current.valid).toBe(true);
+
+    const withVf = preview({ fields: { ...preview().fields, etsgDateOperation: null } });
+    const second = setup(vi.fn().mockResolvedValue(jsonResponse(withVf)));
+    await act(async () => { await second.result.current.start(vi.fn()); });
+    expect(second.result.current.missing).toEqual(['etsgDateOperation']);
+  });
+
+  it('a mandatory field the preview does not list never blocks', async () => {
+    // VERI*FACTU's description is mandatory, but the backend did not offer it as editable.
+    const { result } = setup(vi.fn().mockResolvedValue(jsonResponse(preview())));
+    await act(async () => { await result.current.start(vi.fn()); });
+    expect(result.current.values.etvfacVerifacDesc).toBeUndefined();
+    expect(result.current.missing).toEqual([]);
+  });
+
+  it('Back keeps the codes already chosen on a rectificative', async () => {
+    const p = preview({
+      rectificative: true,
+      fields: { ...preview().fields, aeatsiiMotivoRectif: null, etvfacInvType: null },
+    });
+    const apiFetch = vi.fn().mockResolvedValue(jsonResponse(p));
+    const proceed = vi.fn();
+    const { result } = setup(apiFetch);
+    await act(async () => { await result.current.start(proceed); });
+    act(() => result.current.setValue('aeatsiiMotivoRectif', 'R1'));
+    act(() => result.current.back());
+    await act(async () => { await result.current.start(proceed); });
+    expect(result.current.active).toBe(true);
+    expect(result.current.values.aeatsiiMotivoRectif).toBe('R1');
+    expect(result.current.missing).toEqual(['etvfacInvType']);
+    expect(proceed).not.toHaveBeenCalled();
+  });
+
   it('goes back to idle when the invoice is no longer requested', async () => {
     const apiFetch = vi.fn().mockResolvedValue(jsonResponse(preview()));
     const { result, rerender } = setup(apiFetch);
@@ -426,6 +490,64 @@ describe('InvoiceSifStepPanel', () => {
     render(<InvoiceSifStepPanel
       sif={editableStep(p, undefined, { valid: false, missing: ['aeatsiiMotivoRectif', 'etvfacInvType'] })} />);
     expect(screen.getByTestId('invoice-sif-step-required')).toHaveTextContent('invoiceSifStep.rectificationRequired');
+  });
+
+  it('names empty mandatory fields with the generic hint when no rectification code is missing', () => {
+    const p = preview({ fields: { ...preview().fields, aeatsiiDescripcionSii: '' } });
+    render(<InvoiceSifStepPanel
+      sif={editableStep(p, undefined, { valid: false, missing: ['aeatsiiDescripcionSii'] })} />);
+    expect(screen.getByTestId('invoice-sif-step-required')).toHaveTextContent('requiredFieldsMissing');
+    expect(screen.getByTestId('invoice-sif-step-required')).not.toHaveTextContent('rectificationRequired');
+  });
+
+  it('marks every mandatory field of an ordinary invoice with * and aria-required', () => {
+    render(<InvoiceSifStepPanel sif={editableStep(preview())} />);
+    ['aeatsiiClaveTipo', 'aeatsiiDescripcionSii', 'etvfacInvType', 'etsgDateOperation'].forEach(name => {
+      expect(screen.getByTestId(`RequiredMark__sifstep_sif-step-${name}`)).toHaveTextContent('*');
+    });
+    expect(screen.getByTestId('SelectTrigger__sifstep_aeatsiiClaveTipo')).toHaveAttribute('aria-required', 'true');
+    expect(screen.getByTestId('SelectTrigger__sifstep_etvfacInvType')).toHaveAttribute('aria-required', 'true');
+    expect(screen.getByTestId('Input__sifstep_aeatsiiDescripcionSii')).toHaveAttribute('aria-required', 'true');
+    expect(screen.getByTestId('DateField__sifstep_etsgDateOperation')).toBeRequired();
+    // The rectification motive is not mandatory on an ordinary invoice.
+    expect(screen.queryByTestId('RequiredMark__sifstep_sif-step-aeatsiiMotivoRectif')).not.toBeInTheDocument();
+    expect(screen.getByTestId('SelectTrigger__sifstep_aeatsiiMotivoRectif')).not.toHaveAttribute('aria-required');
+  });
+
+  it('does not mark the operation date when VERI*FACTU is not active', () => {
+    render(<InvoiceSifStepPanel sif={editableStep(preview({ systems: ['SII'], fieldSpecs: SII_SPEC }))} />);
+    expect(screen.queryByTestId('RequiredMark__sifstep_sif-step-etsgDateOperation')).not.toBeInTheDocument();
+    expect(screen.getByTestId('DateField__sifstep_etsgDateOperation')).not.toBeRequired();
+    expect(screen.getByTestId('RequiredMark__sifstep_sif-step-aeatsiiClaveTipo')).toBeInTheDocument();
+  });
+
+  it('on a rectificative, the three codes render empty and are marked mandatory', () => {
+    const p = preview({
+      systems: ['SII', 'Verifactu', 'TicketBAI'],
+      fieldSpecs: [...SII_SPEC, ...VF_SPEC, { name: 'tbaiReverseinvoicecode', system: 'TicketBAI', type: 'option' }],
+      rectificative: true,
+      fields: { ...preview().fields, aeatsiiMotivoRectif: null, etvfacInvType: null, tbaiReverseinvoicecode: null },
+    });
+    render(<InvoiceSifStepPanel sif={editableStep(p)} />);
+    ['aeatsiiMotivoRectif', 'etvfacInvType', 'tbaiReverseinvoicecode'].forEach(name => {
+      expect(screen.getByTestId(`Select__sifstep_${name}`)).toHaveAttribute('data-value', '');
+      expect(screen.getByTestId(`RequiredMark__sifstep_sif-step-${name}`)).toBeInTheDocument();
+      expect(screen.getByTestId(`SelectTrigger__sifstep_${name}`)).toHaveAttribute('aria-required', 'true');
+    });
+  });
+
+  it('marks nothing in read-only mode', () => {
+    const p = preview({ rectificative: true });
+    const { container } = render(<InvoiceSifStepPanel sif={readOnlySifStep(p)} readOnly />);
+    expect(container.querySelector('[data-testid^="RequiredMark__sifstep_"]')).toBeNull();
+    expect(container.querySelector('[aria-required]')).toBeNull();
+    expect(screen.getByTestId('DateField__sifstep_etsgDateOperation')).not.toBeRequired();
+  });
+
+  it('does not mark a field shown as varying, but still marks the others', () => {
+    render(<InvoiceSifStepPanel sif={{ ...editableStep(preview()), varying: { aeatsiiClaveTipo: true } }} />);
+    expect(screen.queryByTestId('RequiredMark__sifstep_sif-step-aeatsiiClaveTipo')).not.toBeInTheDocument();
+    expect(screen.getByTestId('RequiredMark__sifstep_sif-step-aeatsiiDescripcionSii')).toBeInTheDocument();
   });
 
   it('read-only: every control is disabled, the notice replaces the description, no warning', () => {
