@@ -1000,7 +1000,11 @@ arrives, so every shared piece takes the new look as an opt-in (`PortalSection v
   "Tu saldo" at the Figma's 901 : 443 (≈ 2 : 1) and the four tiles sharing their card equally;
   row 2 is 320px tall with "Documentos recientes" and the chart at 520 : 840 (documents never under
   440px, so a row stays on one line) and the chart filling its card. Rows never stretch to the
-  window — the body scrolls — checked at 1280, 1366, 1440, 1536 and 1920 in both rail states; chart
+  window — the body scrolls — checked at 1280, 1366, 1440, 1536 and 1920 in both rail states.
+  The 226 / 320 px heights are minimums: real content (several currencies, long amounts, many
+  recent rows) grows the row and both cards keep the same height; balance badges sit side by side
+  and wrap, a recent row wraps rather than clips, a 4–5 digit tile figure steps down in size, and
+  the collapsed "Mis documentos" badge reads "99+" past 99; chart
   months are three capitalised letters ("Sep", not "sept"), ticks "1,5K", sparse dotted gridlines.
 
 ---

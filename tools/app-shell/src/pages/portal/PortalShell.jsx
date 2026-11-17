@@ -375,7 +375,9 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
                   className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#F3164E] px-1 text-[11px] font-semibold leading-none text-white"
                   data-testid="portal-nav-documents-count"
                 >
-                  {totalBadge}
+                  {/* A 36px icon cannot carry a 4-digit badge: past 99 it reads "99+"; the expanded
+                      rail shows each kind's exact count. */}
+                  {totalBadge > 99 ? '99+' : totalBadge}
                 </span>
               ) : null}
             </button>

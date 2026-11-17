@@ -98,12 +98,13 @@ export default function PortalHomeView({
           onNavigate={onNavigate}
           data-testid="MobilePendingHero__beaeb4" />
 
-        {/* Desktop, as the Figma lays it out: a 226px row where "Requiere tu atención" and "Tu
-            saldo" keep the design's 901 : 443 (≈ 2 : 1) at every width, and the four tiles share
-            their card equally. Rows never stretch to the window; the body scrolls instead. */}
+        {/* Desktop, as the Figma lays it out: a row at least 226px tall where "Requiere tu atención"
+            and "Tu saldo" keep the design's 901 : 443 (≈ 2 : 1) at every width, and the four tiles
+            share their card equally. A row grows when real content needs it (both cards keep the
+            same height: grid items stretch) and never stretches to the window; the body scrolls. */}
         <div className="flex flex-wrap items-start gap-3 md:grid md:grid-cols-[minmax(0,2fr)_minmax(258px,1fr)] md:gap-4">
           <section
-            className="min-w-0 flex-[2_1_560px] overflow-hidden md:flex md:h-[226px] md:flex-col md:rounded-lg md:border md:border-border"
+            className="min-w-0 flex-[2_1_560px] overflow-hidden md:flex md:min-h-[226px] md:flex-col md:rounded-lg md:border md:border-border"
             aria-label={ui('portalAttentionTitle')}
             data-testid="portal-tiles"
           >
@@ -124,7 +125,7 @@ export default function PortalHomeView({
 
           <PortalSection
             title={ui('portalBalanceTitle')}
-            className="hidden flex-[1_1_280px] md:block md:h-[226px]"
+            className="hidden flex-[1_1_280px] md:block md:min-h-[226px]"
             testId="portal-balance"
             variant="dashboard"
             data-testid="PortalSection__beaeb4">
@@ -135,7 +136,7 @@ export default function PortalHomeView({
           </PortalSection>
         </div>
 
-        {/* A 320px row: "Documentos recientes" and the chart keep the design's 520 : 840 at every
+        {/* A row at least 320px tall (it grows with its content): "Documentos recientes" and the chart keep the design's 520 : 840 at every
             width (the Figma's 520px card beside a growing chart, as a ratio so neither empties),
             the documents never under the 440px their widest row needs on one line. */}
         <div className="grid gap-3 md:grid-cols-[minmax(440px,520fr)_minmax(0,840fr)] md:gap-4">
@@ -164,7 +165,7 @@ export default function PortalHomeView({
                 </button>
               </>
             )}
-            className="rounded-xl md:flex md:h-[320px] md:flex-col"
+            className="rounded-xl md:flex md:min-h-[320px] md:flex-col"
             testId="portal-recent"
             variant="dashboard"
             data-testid="PortalSection__beaeb4">
@@ -173,7 +174,7 @@ export default function PortalHomeView({
 
           <PortalSection
             title={ui('portalInvoicedPerMonth')}
-            className="hidden md:flex md:h-[320px] md:flex-col"
+            className="hidden md:flex md:min-h-[320px] md:flex-col"
             testId="portal-chart"
             variant="dashboard"
             data-testid="PortalSection__beaeb4">
@@ -357,7 +358,8 @@ function MobilePendingHero({ balances, onNavigate }) {
  */
 function Balance({ balances, paid }) {
   const ui = useUI();
-  const badge = 'self-start rounded-lg border px-2 text-sm leading-7 tabular-nums';
+  // One badge per currency; several sit side by side and wrap (never stacked into a clipped column).
+  const badge = 'whitespace-nowrap rounded-lg border px-2 text-sm leading-7 tabular-nums';
   const countPill = (count, testId) => (
     <span
       className="inline-flex items-center gap-1 rounded-lg bg-[#F3F5F9] px-2 py-1 text-xs leading-4 text-[#40465C]"
@@ -374,6 +376,7 @@ function Balance({ balances, paid }) {
           {ui('portalPaidThisYear')}
           {countPill(paid.reduce((sum, entry) => sum + entry.count, 0), 'portal-balance-paid-count')}
         </span>
+        <span className="flex flex-wrap gap-2">
         {paid.length === 0 ? (
           <span className={`${badge} border-border text-muted-foreground`}>—</span>
         ) : paid.map((entry) => (
@@ -385,6 +388,7 @@ function Balance({ balances, paid }) {
             {formatCurrency(entry.currency, entry.paid)}
           </span>
         ))}
+        </span>
       </div>
       <div className="h-px bg-border" />
       <div className="flex flex-col gap-2" data-testid="portal-balance-pending">
@@ -392,6 +396,7 @@ function Balance({ balances, paid }) {
           {ui('portalPendingPayment')}
           {countPill(balances.reduce((sum, balance) => sum + balance.pendingCount, 0), 'portal-balance-pending-count')}
         </span>
+        <span className="flex flex-wrap gap-2">
         {balances.length === 0 ? (
           <span className={`${badge} border-border text-muted-foreground`} data-testid="portal-balance-empty">—</span>
         ) : balances.map((balance) => (
@@ -403,10 +408,14 @@ function Balance({ balances, paid }) {
             {formatCurrency(balance.currency, balance.outstanding)}
           </span>
         ))}
+        </span>
       </div>
     </div>
   );
 }
+
+/** The tile figure's desktop size by its number of digits (the design's 60px up to three). */
+const TILE_FIGURE_SIZES = Object.freeze({ 4: 'md:text-[44px]', 5: 'md:text-[34px]' });
 
 /**
  * One kind's tile: the figure the kind calls out (or its total), and that figure's badge. Desktop
@@ -420,11 +429,12 @@ function KindTile({ kind, tile, onNavigate }) {
   const shown = Boolean(highlight) && tile.highlight.count > 0;
   const target = shown && highlight.group
     ? { view: 'list', kind, group: highlight.group } : { view: 'list', kind };
+  const figure = shown ? tile.highlight.count : (tile?.count ?? 0);
   return (
     <button
       type="button"
       onClick={() => onNavigate(target)}
-      className={`flex flex-col gap-2 rounded-xl border border-border bg-card p-[18px] text-left hover:border-primary md:h-full md:min-h-0 md:justify-between md:gap-0 md:rounded-lg md:p-3 md:shadow-sm ${PORTAL_ROW_FOCUS}`}
+      className={`flex min-w-0 flex-col gap-2 rounded-xl border border-border bg-card p-[18px] text-left hover:border-primary md:h-full md:min-h-0 md:justify-between md:gap-0 md:rounded-lg md:p-3 md:shadow-sm ${PORTAL_ROW_FOCUS}`}
       data-testid={`portal-tile-${kind.toLowerCase()}`}
     >
       <span className="flex items-center gap-2 text-sm text-muted-foreground md:text-xs">
@@ -435,10 +445,15 @@ function KindTile({ kind, tile, onNavigate }) {
       </span>
       <span
         // Proportional figures: Plus Jakarta's tabular "1" carries a base bar the design's does not.
-        className="text-[44px] font-medium leading-[48px] md:text-[60px] md:leading-[60px] md:[font-family:'Plus_Jakarta_Sans','Inter',sans-serif]"
+        // The design's 60px fits three digits in the narrowest tile (1280px, rail expanded); a
+        // longer figure steps down so it never overflows its tile.
+        className={cn(
+          "text-[44px] font-medium leading-[48px] md:leading-[60px] md:[font-family:'Plus_Jakarta_Sans','Inter',sans-serif]",
+          TILE_FIGURE_SIZES[Math.min(String(figure).length, 5)] ?? 'md:text-[60px]',
+        )}
         data-testid="portal-tile-count"
       >
-        {shown ? tile.highlight.count : (tile?.count ?? 0)}
+        {figure}
       </span>
       {shown ? (
         <PortalTag
@@ -460,7 +475,7 @@ function RecentDocuments({ recent, onOpen }) {
     return <p className="px-4 py-6 text-sm text-muted-foreground">{ui('portalNoDocumentsYet')}</p>;
   }
   return (
-    <ul className="md:min-h-0 md:flex-1 md:overflow-y-auto md:py-1">
+    <ul className="md:py-1">
       {recent.map((document) => (
         <li key={`${document.kind}:${document.id}`} className="border-b border-border last:border-b-0 md:border-b-0">
           {/* Desktop (spec of 2026-11-17): the kind, then its pills packed after it — the number
@@ -469,11 +484,12 @@ function RecentDocuments({ recent, onOpen }) {
           <button
             type="button"
             onClick={() => onOpen(document)}
-            className={`hidden h-10 w-full cursor-pointer items-center gap-2 px-4 text-left hover:bg-muted md:flex ${PORTAL_ROW_FOCUS}`}
+            className={`hidden min-h-10 w-full cursor-pointer items-center gap-2 px-4 py-1 text-left hover:bg-muted md:flex ${PORTAL_ROW_FOCUS}`}
             data-testid="portal-recent-document"
           >
             <span className="shrink-0 text-sm">{ui(documentLabelKey(document))}</span>
-            <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+            {/* One line at the design's widths; wraps rather than clips when a row cannot fit. */}
+            <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
               <span
                 className="inline-flex min-w-0 max-w-[10rem] shrink-0 items-center gap-1 rounded-lg bg-[#F3F5F9] px-2 py-1 text-xs leading-4 text-[#40465C]"
                 title={document.documentNo}

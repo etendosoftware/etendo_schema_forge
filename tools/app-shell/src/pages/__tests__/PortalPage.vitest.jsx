@@ -715,6 +715,28 @@ describe('PortalPage — home', () => {
     expect(screen.getByTestId('portal-chart-tooltip')).toHaveTextContent(/1\.000,00\s€/);
   });
 
+  it('shows one balance badge per currency, side by side in a wrapping row', async () => {
+    responses.home = jsonResponse({
+      ...HOME,
+      balances: [
+        { currency: 'EUR', outstanding: 1234567.89, pendingCount: 3 },
+        { currency: 'USD', outstanding: 98765.43, pendingCount: 1 },
+      ],
+      paidThisYear: [{ currency: 'EUR', paid: 10, count: 1 }, { currency: 'USD', paid: 20, count: 2 }],
+    });
+    renderPortal();
+    await shellReady();
+
+    const pending = screen.getAllByTestId('portal-balance-outstanding');
+    expect(pending).toHaveLength(2);
+    expect(pending[0].parentElement).toBe(pending[1].parentElement);
+    expect(pending[0].parentElement).toHaveClass('flex-wrap');
+    expect(screen.getByTestId('portal-balance-pending-count').textContent).toBe('4');
+    const paid = screen.getAllByTestId('portal-balance-paid-amount');
+    expect(paid).toHaveLength(2);
+    expect(paid[0].parentElement).toHaveClass('flex-wrap');
+  });
+
   it('refetches only the home aggregates for another chart period', async () => {
     const user = userEvent.setup();
     renderPortal();
