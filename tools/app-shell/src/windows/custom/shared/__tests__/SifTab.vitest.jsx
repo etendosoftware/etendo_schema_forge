@@ -1157,6 +1157,21 @@ describe('SifTab', () => {
       expect(screen.queryByText(/^F3 - /)).not.toBeInTheDocument();
     });
 
+    // ETP-5747 CP-6: a rectificative invoice is only ever R1-R5 for VERI*FACTU.
+    it('offers only R1-R5 on a rectificative invoice', () => {
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', isRectificative: true } })} />);
+      ['R1', 'R2', 'R3', 'R4', 'R5'].forEach((v) => {
+        expect(screen.getByText(`${v} - sifDataTabs.option.vf${v}`)).toBeInTheDocument();
+      });
+      expect(screen.queryByText(/^F[1-3] - sifDataTabs\.option\.vf/)).not.toBeInTheDocument();
+    });
+
+    // A legacy F1 still stored on a rectificative keeps its label on the trigger, not blank.
+    it('keeps the label of a non-R value stored on a rectificative invoice', () => {
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', isRectificative: true, etvfacInvType: 'F1' } })} />);
+      expect(document.querySelector('#sif-vfInvType')).toHaveTextContent('F1 - sifDataTabs.option.vfF1');
+    });
+
     // One "CODE - Label" format: a locale label that already starts with its code
     // ("F1 - Factura…", the real VERI*FACTU labels) is shown as it is, so the code never doubles.
     it('shows the code once when the translated label already starts with it', () => {

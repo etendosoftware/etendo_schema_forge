@@ -455,6 +455,12 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
   const vfInvTypeLabel = vfInvTypeOption
     ? sifOptionLabel(vfInvTypeOption, ui)
     : vfInvType || undefined;
+  // ETP-5747 CP-6: a rectificative invoice can only be an R1-R5 for VERI*FACTU, so the dropdown
+  // offers only those. A non-R value it may still hold (legacy or Classic) keeps its label above,
+  // looked up in the full list, so the trigger never goes blank.
+  const vfInvTypeOptions = data?.isRectificative
+    ? VERIFACTU_INV_TYPE_OPTIONS.filter(o => o.value.startsWith('R'))
+    : VERIFACTU_INV_TYPE_OPTIONS;
 
   // Report up to DetailView whether the SIF tab has anything to show at all. ETP-4888
   // reintroduces a minimal TBAI rail (Adjuntos only — see the "tbai" panel below), so a
@@ -676,7 +682,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                   <SelectValue placeholder="—" data-testid="SelectValue__b99c8b">{vfInvTypeLabel}</SelectValue>
                 </SelectTrigger>
                 <SelectContent data-testid="SelectContent__b99c8b">
-                  {VERIFACTU_INV_TYPE_OPTIONS.map(o => (
+                  {vfInvTypeOptions.map(o => (
                     <SelectItem key={o.value} value={o.value} data-testid="SelectItem__b99c8b">{sifOptionLabel(o, ui)}</SelectItem>
                   ))}
                 </SelectContent>
