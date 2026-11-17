@@ -1365,6 +1365,15 @@
           },
           "reference": null
         },
+        "currency_rate": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "eTGOCurrencyRate",
+          "dataType": {
+            "type": "number"
+          },
+          "reference": null
+        },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
@@ -1754,6 +1763,15 @@
           },
           "reference": null
         },
+        "currency_rate": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "eTGOCurrencyRate",
+          "dataType": {
+            "type": "number"
+          },
+          "reference": null
+        },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
@@ -2127,6 +2145,15 @@
           "internalPath": "description",
           "dataType": {
             "type": "string"
+          },
+          "reference": null
+        },
+        "currency_rate": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "eTGOCurrencyRate",
+          "dataType": {
+            "type": "number"
           },
           "reference": null
         },

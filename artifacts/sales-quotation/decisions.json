@@ -82,6 +82,11 @@
   },
   "entities": {
     "header": {
+      "publicApi": {
+        "inputFields": [
+          { "name": "currency_rate", "internalPath": "eTGOCurrencyRate", "dataType": "number", "readable": true }
+        ]
+      },
       "name": "quotation",
       "draftMode": {
         "enabled": true,

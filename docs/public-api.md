@@ -590,6 +590,37 @@ Configuration (environment of the gateway): `PUBLIC_API_RATE_LIMIT` (requests, d
 
 ---
 
+### 4.12 Document currency, exchange rate and line prices
+
+`sales-quotation`, `sales-order` and `purchase-order` publish the header's `currency` (`inout`, the
+id of a currency) and `currency_rate` (`inout`, number, internal `eTGOCurrencyRate`): the
+organization-to-document multiply rate, the one the application shows next to the currency as
+"USD — 1,47" and lets the user edit with the pencil. One unit of the organization's currency is
+`currency_rate` units of the document's currency. It is `1` or empty on a document in the
+organization's own currency. The API applies the application's rules (Etendo enforces them, the
+gateway only maps the name):
+
+- **Recalculated** on a create, and on a write that changes `currency` or `order_date` without
+  sending `currency_rate`: the tenant's conversion rate valid on `order_date`, replacing a rate set
+  earlier by hand.
+- **A rate sent is kept**: a write that sends a positive `currency_rate` (alone, or together with a
+  new currency or date) saves it as sent, as when the user types it.
+- **Kept** by a write that changes neither the currency nor the date and does not send it.
+- **Back to the organization currency** sets it to `1`.
+- **Refused without one** (`422`, nothing saved): a document in a foreign currency whose rate ends
+  up empty, because no conversion rate is configured for `order_date` and none was sent, or
+  because the write sent `null`/`0`. Completing such a document is refused too.
+
+**Line prices in the document currency.** A line created without a price (`list_price` absent) is
+priced from the document's price list, as in the application. When the document is in a foreign
+currency and its price list is in the organization's currency, those prices are converted with the
+document's `currency_rate` (price × rate, rounded to the currency's price precision, 2 for EUR and
+USD), and the line is always in the document's currency. With a rate of 1.47, a product priced 12
+EUR is created at 17.64 USD, the same line the application creates. A `list_price` sent by the
+caller is taken as a price in the document's currency and is never converted. Changing the
+header's `currency` or `currency_rate` later does not re-price existing lines (neither does the
+application); delete and re-create a line to price it at the new rate.
+
 ## 5. API key management contract (`/oauth2/api-keys`)
 
 Implemented in `go: oauth2/OAuth2Servlet.java` (inner class `PublicApiKeyHandlers`) with the
@@ -872,6 +903,8 @@ Testable statements derived from this document, each linked to its section.
 - [ ] `PUT` or `PATCH` with the current ETag succeeds and returns an `ETag` equal to the updated record's `meta.etag` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
 - [ ] Sending `updated` in a write body returns `400` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
 - [ ] `DELETE` succeeds without `If-Match` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
+- [ ] On a foreign-currency order, a line created without `list_price` is priced from the price list converted by the header's `currency_rate`, in the order's currency; a `list_price` sent is kept as sent ([4.12](#412-document-currency-exchange-rate-and-line-prices))
+- [ ] `currency_rate` sent with a currency change is kept; a currency or `order_date` change without it recalculates it; a foreign-currency order with no rate is refused with `422` ([4.12](#412-document-currency-exchange-rate-and-line-prices))
 - [ ] `GET /api/v1/{resource}/lookups/{field}` of a declared lookup calls `/sws/neo/{spec}/{entity}/selectors/{selector}` with `limit`, `offset`, `q` and only the manifest's fixed context, and answers `data` items of the lookup `type` with `attributes.label` plus `meta.page` and `links` ([4.2.2](#422-lookups))
 - [ ] A lookup with any parameter other than `filter[search]`, `page[number]`, `page[size]` returns `400`; an undeclared lookup returns `404 unknown_lookup`; neither reaches Etendo ([4.2.2](#422-lookups))
 - [ ] A lookup Etendo answers with `404` returns `502`; a `403` passes through; a `401` evicts the cached token ([4.2.2](#422-lookups))

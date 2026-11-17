@@ -932,3 +932,21 @@ operación* and, with VERI*FACTU active, *Fecha operación*; on a rectificative 
 rectification code, which order flows never preselect — only a customer return's preview comes with `R1`). The rule is shared with the invoices' SIF tab:
 `docs/ui-customization.md` §21b.
 Backend reference: `com.etendoerp.go` `docs/neo-headless.md` §4.12.36b (ETP-6179).
+
+## Public API — exchange rate and line currency — ETP-6177
+
+`decisions.json` publishes the header's exchange rate (`eTGOCurrencyRate`, `form: false`) as the
+public field `currency_rate` (`inout`, number) through `entities.header.publicApi.inputFields`, so an
+integrator reads and sets the rate the window shows next to the currency and edits with the pencil.
+The rate rules are the window's own ETP-5840 rules, enforced by Etendo on every channel: a write
+that changes the currency or the order date without a rate recalculates it, a positive rate sent is kept,
+a foreign-currency document left without a rate is refused (`422`).
+
+Line pricing (Etendo GO, `OrderLineCurrencyConversion`): a line created through the API (or REST,
+batch, `etendo_create`) without a price is priced from the price list and, when the order is in a
+foreign currency and the price list in the organization's, converted by the header's rate, with the
+line in the order's currency — the same result as adding the line in this window ("Line conversion
+based on saved state"). A price sent is never converted. Existing lines are not re-priced when the
+header currency or rate changes, in the window or through the API.
+
+Contract: `docs/public-api.md` §4.12.
