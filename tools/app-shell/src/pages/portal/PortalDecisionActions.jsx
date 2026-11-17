@@ -407,15 +407,20 @@ function ReasonRadio({ checked, name, value, onChange, label, testId }) {
           className="peer absolute inset-0 cursor-pointer opacity-0"
           data-testid={testId}
         />
+        {/* Ring and dot are ONE element, so they share one centre by construction: the Figma's 14.5px
+            ring with its 1.5px border, and the 8px dot painted as a radial gradient from that same
+            centre. Two nested boxes (a 14.5px ring holding an 8px dot) put the dot 1.75px from the
+            ring's inner edge, a fraction each side rounds differently, and it read off-centre. */}
         <span
           className={cn(
-            'flex h-[14.5px] w-[14.5px] items-center justify-center rounded-full border-[1.5px] bg-white peer-focus-visible:ring-2 peer-focus-visible:ring-ring',
-            checked ? 'border-[#325CFF]' : `border-[#C7CBD3] ${PORTAL_FIGMA_SHADOW}`,
+            'box-border block h-[14.5px] w-[14.5px] rounded-full border-[1.5px] bg-white peer-focus-visible:ring-2 peer-focus-visible:ring-ring',
+            checked
+              ? 'border-[#325CFF] [background-image:radial-gradient(circle_at_center,#325CFF_4px,transparent_4.5px)]'
+              : `border-[#C7CBD3] ${PORTAL_FIGMA_SHADOW}`,
           )}
           aria-hidden="true"
-        >
-          {checked ? <span className="h-2 w-2 rounded-full bg-[#325CFF]" /> : null}
-        </span>
+          data-testid="portal-reject-radio-mark"
+        />
       </span>
       {label}
     </label>
