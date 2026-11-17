@@ -224,9 +224,10 @@ Its value (36 characters) stays under the gateway's opaque-value scrub. `errorCo
 | Event | When | Properties |
 |-------|------|-----------|
 | `report_opened` | Once per report session, when the first request answers | `source` (`menu` when picked from the report list, else `deep_link`), `outcome`, `durationMs`, `errorCode`, `account_id` |
-| `report_filter_applied` | One per user change, when its result is visible or its request failed. Never for the defaults, "Limpiar filtros" or a change whose request was replaced inside the debounce | `type` (`period`, `organization`, `account_level`, `business_partner`, `product`, `comparison`), `outcome`, `durationMs` (none for `account_level`: nothing loads), `errorCode`, `account_id` |
+| `report_filter_applied` | One per user change, when its result is visible or its request failed. Never for the defaults, "Limpiar filtros" or a change whose request was replaced inside the debounce | `type` (`period`, `organization`, `account_level`, `business_partner`, `product`, `comparison`, `columns`), `outcome`, `durationMs` (none for `account_level` and `comparison`: nothing loads), `errorCode`, `account_id` |
 | `report_group_toggled` | A row folded or unfolded, expand all, collapse all | `type` (`expand`, `collapse`, `expand_all`, `collapse_all`), `outcome: success`, `account_id` |
 | `report_drilldown` | A drill-down step | `type` (`ledger`, `entry` timed from the click to the answer; `document` when the tab opens), `outcome` (`success`, `error` incl. a blocked pop-up, `no_document` for an entry with no window), `account_id` |
+| `report_panel_toggled` | The "Personalizar informe" panel was hidden or shown (ETP-6239) | `panelState` (`collapsed`, `expanded`), `trigger` (`user` for the button, `auto_columns` when choosing Mes/Trimestre hid it), `outcome: success`, `account_id`. The property is `panelState` and not `state`: the payload policy denylists `state` (OAuth) and would drop it |
 
 ### `account_id` and `internal_user` on report and walkthrough events (ETP-6230)
 
