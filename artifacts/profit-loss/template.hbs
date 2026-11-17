@@ -21,14 +21,16 @@
 .ind-4 { padding-left: 22mm !important; }
 .ind-5 { padding-left: 27mm !important; }
 .ind-6 { padding-left: 32mm !important; }
-/* Period columns (ETP-6239): 8 pt, the base 3 mm cell padding kept. */
+/* Period columns (ETP-6239): 8 pt, the base 3 mm horizontal cell padding kept. */
 .period-table th, .period-table td { font-size: 8pt; }
 .period-table th.period-group { text-align: center; border-bottom: 1px solid #cbd5e1; }
 .period-table tr { page-break-inside: avoid; }
-/* 1 mm of row padding (base 1.5 mm): page 1 also carries the headline cards, and without this the closing row of a
-   9-row report spilled alone onto its own page (Chrome ignores break-avoid between table rows, so there is no
-   way to keep the last rows together; the saved height is the fix). */
-.period-table tbody td { padding-top: 1mm; padding-bottom: 1mm; }
+/* 1 mm of vertical padding on the account rows (base 1.5 mm; the group-header rows keep their 2 mm): page 1 also
+   carries the headline cards, and without this the closing row of a 9-row report spilled alone onto its own page.
+   Chrome ignores break-avoid between table rows, so the saved height is the only lever. Known limit: whether the
+   last row ends up alone still depends on the row count, the filters and the branding height; if it comes back,
+   it gets its own ticket, not more padding tweaks. */
+.period-table tbody .tree-row td { padding-top: 1mm; padding-bottom: 1mm; }
 .period-table .ind-1 { padding-left: 4.5mm !important; }
 .period-table .ind-2 { padding-left: 7mm !important; }
 .period-table .ind-3 { padding-left: 9.5mm !important; }
