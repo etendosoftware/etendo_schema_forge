@@ -137,7 +137,9 @@ function readableAmount(value) {
  * described in this module's docstring.
  *
  * `fetchImpl` is injected rather than imported so the caller supplies the memoized `apiFetch`
- * from `useApiFetch` (and a test supplies a double) — the same shape `lib/upgrade/api.js` uses.
+ * from `usePortalApiFetch` (and a test supplies a double) — the same shape `lib/upgrade/api.js`
+ * uses. Not `useApiFetch`: that client is bound to the app's session and discards an answer that
+ * arrives after the session identity changed, which a cold open from an email always risks.
  */
 async function portalGet(fetchImpl, token, path, {
   invalidOn = INVALID_TOKEN_STATUSES,

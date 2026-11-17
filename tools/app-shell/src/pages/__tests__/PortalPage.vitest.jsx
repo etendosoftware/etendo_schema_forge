@@ -10,7 +10,7 @@ const apiFetchMock = vi.fn();
 
 // The page's only door to the network. Mocked at the hook rather than at `fetch` so the
 // request OPTIONS are observable — that is what the plan's §5.4 assertion below reads.
-vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => apiFetchMock }));
+vi.mock('@/lib/portal/usePortalApiFetch.js', () => ({ usePortalApiFetch: () => apiFetchMock }));
 
 // The download plumbing lives in its own module so a test can see what would be saved.
 vi.mock('@/lib/portal/portalDownload.js', () => ({ saveBlobAsFile: vi.fn() }));

@@ -3,9 +3,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { AlertCircle, Ban, CheckCircle2, FileText, Loader2 } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
-import { useApiFetch } from '@/auth/useApiFetch.js';
+import { usePortalApiFetch } from '@/lib/portal/usePortalApiFetch.js';
 import {
-  PORTAL_DECISION_STATE, PORTAL_ERROR, confirmPortalDecision, resolvePortalBaseUrl,
+  PORTAL_DECISION_STATE, PORTAL_ERROR, confirmPortalDecision, fetchPortalDecision,
+  resolvePortalBaseUrl,
 } from '@/lib/portal/portalApi.js';
 import { PORTAL_REJECT_REASONS } from './portal/portalPresentation.js';
 import {
@@ -71,7 +72,7 @@ export default function PortalDecisionPage() {
   const { token = '' } = useParams();
   const ui = useUI();
   const baseUrl = useMemo(() => resolvePortalBaseUrl(), []);
-  const apiFetch = useApiFetch(baseUrl);
+  const apiFetch = usePortalApiFetch(baseUrl);
   const [view, setView] = useState(VIEW.applying);
   const [decision, setDecision] = useState(null);
   const navigate = useNavigate();
@@ -79,6 +80,30 @@ export default function PortalDecisionPage() {
   // The token whose confirmation was already sent: the POST goes out once per open, also under
   // StrictMode's double effect in development (a second POST would answer "already applied").
   const sentFor = useRef(null);
+
+  /**
+   * The confirm POST failed without an answer we could read: before saying "we could not apply
+   * it", ask the read-only view whether it was applied anyway. A request can be committed by the
+   * backend and still lost on the way back (a cut connection, a discarded response — ETP-6209),
+   * and the customer must not be told to retry a decision that already took effect.
+   *
+   * Only a decision that is no longer `pending` replaces the failure card, and it shows what the
+   * view says (for one this open applied, "this decision was already applied"): the view never
+   * carries `appliedNow` nor the portal token, so it cannot claim "you have just rejected…" nor
+   * open the portal. A still-pending decision, or a view that fails too, keeps the retry.
+   */
+  const settleFromView = useCallback((decisionToken) => {
+    fetchPortalDecision(apiFetch, decisionToken).then((current) => {
+      if (current.state === PORTAL_DECISION_STATE.pending) {
+        setView(VIEW.failed);
+        return;
+      }
+      setDecision(current);
+      setView(VIEW.ready);
+    }).catch((error) => {
+      setView(error?.code === PORTAL_ERROR.invalidLink ? VIEW.invalid : VIEW.failed);
+    });
+  }, [apiFetch]);
 
   const apply = useCallback(() => {
     const trimmed = token.trim();
@@ -98,9 +123,13 @@ export default function PortalDecisionPage() {
       setDecision(result);
       setView(VIEW.ready);
     }).catch((error) => {
-      setView(error?.code === PORTAL_ERROR.invalidLink ? VIEW.invalid : VIEW.failed);
+      if (error?.code === PORTAL_ERROR.invalidLink) {
+        setView(VIEW.invalid);
+        return;
+      }
+      settleFromView(trimmed);
     });
-  }, [apiFetch, token, navigate]);
+  }, [apiFetch, token, navigate, settleFromView]);
 
   // The confirmation is the page's own POST, sent once on open (never a GET side effect).
   useEffect(() => {

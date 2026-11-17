@@ -1,9 +1,16 @@
 // @covers tools/app-shell/src/pages/PortalDecisionPage.jsx
+// @covers tools/app-shell/src/lib/portal/usePortalApiFetch.js
 // New file: the decision landing is its own public route with its own page; PortalPage's tests
 // cover the portal, not this one. The confirmation call is the real `confirmPortalDecision`; only
 // `apiFetch` (the network boundary) is a double.
 const apiFetchMock = vi.fn();
-vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => apiFetchMock }));
+// `real` lets one test drive the page through the REAL client over a stubbed `fetch`, to see
+// what the session scope does to the answer; every other test reads the mock's call options.
+const hookMode = { real: false };
+vi.mock('@/lib/portal/usePortalApiFetch.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { usePortalApiFetch: (base) => (hookMode.real ? actual.usePortalApiFetch(base) : apiFetchMock) };
+});
 
 /** The mocked translation: the key, plus its variables, so the number and tenant show. */
 function t(key, vars) {
@@ -17,6 +24,7 @@ import userEvent from '@testing-library/user-event';
 import {
   MemoryRouter, Route, Routes, useLocation, useNavigationType,
 } from 'react-router-dom';
+import { registerApiSession, resetApiSessionForTests } from '@etendosoftware/app-shell-core/auth';
 import PortalDecisionPage from '../PortalDecisionPage.jsx';
 
 const DECISION_TOKEN = 'dec-0123456789abcdef';
@@ -56,6 +64,7 @@ function PortalArrivalProbe() {
 }
 
 const confirmCalls = () => apiFetchMock.mock.calls.filter(([path]) => path.endsWith('/decisions/confirm'));
+const viewCalls = () => apiFetchMock.mock.calls.filter(([path]) => path.endsWith('/decisions/view'));
 
 const APPLIED_REJECT = {
   state: 'confirmed', appliedNow: true, decision: 'REJECT', reasonCode: 'OTHER',
@@ -86,6 +95,55 @@ describe('PortalDecisionPage — the confirmation POST', () => {
     await waitFor(() => expect(screen.getByTestId('portal-decision-applied')).toBeInTheDocument());
     // A second POST would answer "already applied" and hide what this open did.
     expect(confirmCalls()).toHaveLength(1);
+  });
+});
+
+describe('PortalDecisionPage — a cold open from the email', () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    hookMode.real = false;
+    globalThis.fetch = realFetch;
+    resetApiSessionForTests();
+  });
+
+  it('shows the applied decision when the app session identity settles while the POST is in flight', async () => {
+    // The customer has no app session: the auth bootstrap resolves the identity (unknown, then
+    // anonymous) in parallel with the confirm POST. The backend answers 200 and has committed
+    // the decision; that answer must not be discarded as belonging to a superseded session.
+    let identityReplaced = false;
+    const scope = {
+      capture: () => ({}),
+      isSameIdentity: () => !identityReplaced,
+      isCurrent: () => !identityReplaced,
+    };
+    registerApiSession({ getToken: () => null, onUnauthorized: () => {}, scope });
+    globalThis.fetch = vi.fn(async () => {
+      identityReplaced = true;
+      return new Response(JSON.stringify(APPLIED_REJECT), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    hookMode.real = true;
+
+    renderLanding();
+
+    await waitFor(() => expect(screen.getByTestId('portal-decision-applied')).toBeInTheDocument());
+    expect(screen.queryByTestId('portal-decision-failed')).not.toBeInTheDocument();
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('never routes a portal 401 to the app logout, even with a session registered', async () => {
+    const onUnauthorized = vi.fn();
+    registerApiSession({ getToken: () => 'app-jwt', onUnauthorized });
+    globalThis.fetch = vi.fn(async () => new Response('{}', {
+      status: 401, headers: { 'Content-Type': 'application/json' },
+    }));
+    hookMode.real = true;
+
+    renderLanding();
+
+    await waitFor(() => expect(screen.getByTestId('portal-decision-invalid')).toBeInTheDocument());
+    expect(onUnauthorized).not.toHaveBeenCalled();
   });
 });
 
@@ -139,6 +197,7 @@ describe('PortalDecisionPage — what it says', () => {
   it('offers a retry when the POST never completed, and the retry confirms', async () => {
     const user = userEvent.setup();
     apiFetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    apiFetchMock.mockResolvedValueOnce(jsonResponse({ state: 'pending', documentNo: 'PR/0001' }));
     renderLanding();
 
     await waitFor(() => expect(screen.getByTestId('portal-decision-failed')).toBeInTheDocument());
@@ -146,6 +205,54 @@ describe('PortalDecisionPage — what it says', () => {
 
     await waitFor(() => expect(screen.getByTestId('portal-decision-applied')).toBeInTheDocument());
     expect(confirmCalls()).toHaveLength(2);
+  });
+});
+
+describe('PortalDecisionPage — a confirm whose answer was lost', () => {
+  /** The confirm POST fails with no readable answer; the view answers `viewAnswer`. */
+  function confirmLostThenView(viewAnswer) {
+    apiFetchMock.mockImplementation(async (path) => {
+      if (path.endsWith('/decisions/confirm')) throw new TypeError('Failed to fetch');
+      return viewAnswer();
+    });
+  }
+
+  it('shows the decision as applied when the view says the lost POST took effect', async () => {
+    confirmLostThenView(() => jsonResponse({
+      state: 'confirmed', appliedNow: false, decision: 'REJECT', documentNo: 'PR/0001', tenantName: 'Acme SA',
+    }));
+    renderLanding();
+
+    await waitFor(() => expect(screen.getByTestId('portal-decision-confirmed')).toBeInTheDocument());
+    expect(screen.getByTestId('portal-decision-confirmed').querySelector('h1').textContent)
+      .toBe('portalDecisionConfirmedTitle');
+    expect(screen.queryByTestId('portal-decision-retry')).not.toBeInTheDocument();
+    expect(viewCalls()).toHaveLength(1);
+    expect(viewCalls()[0][1]).toStrictEqual({
+      token: null, headers: { 'X-Portal-Decision-Token': DECISION_TOKEN }, on401: 'ignore',
+    });
+    expect(screen.queryByTestId('portal-arrival-probe')).not.toBeInTheDocument();
+  });
+
+  for (const [label, viewAnswer] of [
+    ['the decision is still pending', () => jsonResponse({ state: 'pending' })],
+    ['the view fails too', () => { throw new TypeError('Failed to fetch'); }],
+  ]) {
+    it(`keeps the failure and its retry when ${label}`, async () => {
+      confirmLostThenView(viewAnswer);
+      renderLanding();
+
+      await waitFor(() => expect(screen.getByTestId('portal-decision-failed')).toBeInTheDocument());
+      expect(screen.getByTestId('portal-decision-retry')).toBeInTheDocument();
+      expect(confirmCalls()).toHaveLength(1);
+    });
+  }
+
+  it('shows the invalid-link screen when the view rejects the token', async () => {
+    confirmLostThenView(() => jsonResponse({}, { status: 401 }));
+    renderLanding();
+
+    await waitFor(() => expect(screen.getByTestId('portal-decision-invalid')).toBeInTheDocument());
   });
 });
 
