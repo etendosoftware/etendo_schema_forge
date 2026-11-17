@@ -607,17 +607,30 @@ gateway only maps the name):
   new currency or date) saves it as sent, as when the user types it.
 - **Kept** by a write that changes neither the currency nor the date and does not send it.
 - **Back to the organization currency** sets it to `1`.
-- **Refused without one** (`422`, nothing saved): a document in a foreign currency whose rate ends
-  up empty, because no conversion rate is configured for `order_date` and none was sent, or
-  because the write sent `null`/`0`. Completing such a document is refused too.
+- **Refused without one** (`422`, nothing saved): a write that sends both `currency` and
+  `order_date` (or an update, which knows them from the stored document) and leaves a
+  foreign-currency document with an empty rate, because no conversion rate is configured for
+  `order_date` and none was sent, or because the write sent `null`/`0`. Completing such a
+  document is refused too.
+- **Exception, a create that omits `currency` or `order_date`.** Etendo fills them after the
+  record is saved, so it cannot refuse the create any more: when no rate is configured, the
+  document is created (`201`) without a rate. Etendo attaches a warning to its answer, which the
+  gateway does not relay. The document's next write and its completion are refused with `422`
+  until it has a rate. Send both fields on create to get the refusal up front.
 
 **Line prices in the document currency.** A line created without a price (`list_price` absent) is
 priced from the document's price list, as in the application. When the document is in a foreign
 currency and its price list is in the organization's currency, those prices are converted with the
 document's `currency_rate` (price × rate, rounded to the currency's price precision, 2 for EUR and
-USD), and the line is always in the document's currency. With a rate of 1.47, a product priced 12
-EUR is created at 17.64 USD, the same line the application creates. A `list_price` sent by the
-caller is taken as a price in the document's currency and is never converted. Changing the
+USD). Every new line takes the document's currency, whether its price came from the price list or
+from the caller. With a rate of 1.47, a product priced 12 EUR is created at 17.64 USD, the same
+line the application creates. That holds when the product's list price equals its standard price.
+When they differ, the API converts each one separately and keeps the discount between them, while
+the application sets both to the converted price. A `list_price` sent by the caller is taken as a
+price in the document's currency and is never converted. When the document has no rate, or the
+price list is in a third currency, the line takes the document's currency but keeps the price
+list's prices unconverted (a foreign-currency document without a rate is normally refused, see
+above). Changing the
 header's `currency` or `currency_rate` later does not re-price existing lines (neither does the
 application); delete and re-create a line to price it at the new rate.
 
@@ -904,7 +917,7 @@ Testable statements derived from this document, each linked to its section.
 - [ ] Sending `updated` in a write body returns `400` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
 - [ ] `DELETE` succeeds without `If-Match` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
 - [ ] On a foreign-currency order, a line created without `list_price` is priced from the price list converted by the header's `currency_rate`, in the order's currency; a `list_price` sent is kept as sent ([4.12](#412-document-currency-exchange-rate-and-line-prices))
-- [ ] `currency_rate` sent with a currency change is kept; a currency or `order_date` change without it recalculates it; a foreign-currency order with no rate is refused with `422` ([4.12](#412-document-currency-exchange-rate-and-line-prices))
+- [ ] `currency_rate` sent with a currency change is kept; a currency or `order_date` change without it recalculates it; a write that sends `currency` and `order_date` (or an update) leaving a foreign-currency order with no rate is refused with `422`; a create omitting either is saved without a rate and its next write is refused ([4.12](#412-document-currency-exchange-rate-and-line-prices))
 - [ ] `GET /api/v1/{resource}/lookups/{field}` of a declared lookup calls `/sws/neo/{spec}/{entity}/selectors/{selector}` with `limit`, `offset`, `q` and only the manifest's fixed context, and answers `data` items of the lookup `type` with `attributes.label` plus `meta.page` and `links` ([4.2.2](#422-lookups))
 - [ ] A lookup with any parameter other than `filter[search]`, `page[number]`, `page[size]` returns `400`; an undeclared lookup returns `404 unknown_lookup`; neither reaches Etendo ([4.2.2](#422-lookups))
 - [ ] A lookup Etendo answers with `404` returns `502`; a `403` passes through; a `401` evicts the cached token ([4.2.2](#422-lookups))
