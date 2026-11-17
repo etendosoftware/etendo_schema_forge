@@ -166,7 +166,7 @@ const LIST_EVENT_PROPERTY_VALUES = new Map([
 ]);
 
 // String keys with a closed set of values (ETP-6072): any other value, or a non-string, is dropped.
-const ENUM_EVENT_PROPERTY_VALUES = new Map([
+export const ENUM_EVENT_PROPERTY_VALUES = new Map([
   ['tenant_type', TENANT_TYPE_VALUES],
 ]);
 
