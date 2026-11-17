@@ -82,15 +82,12 @@ export default function PortalDecisionPage() {
   const sentFor = useRef(null);
 
   /**
-   * The confirm POST failed without an answer we could read: before saying "we could not apply
-   * it", ask the read-only view whether it was applied anyway. A request can be committed by the
-   * backend and still lost on the way back (a cut connection, a discarded response — ETP-6209),
-   * and the customer must not be told to retry a decision that already took effect.
-   *
-   * Only a decision that is no longer `pending` replaces the failure card, and it shows what the
-   * view says (for one this open applied, "this decision was already applied"): the view never
-   * carries `appliedNow` nor the portal token, so it cannot claim "you have just rejected…" nor
-   * open the portal. A still-pending decision, or a view that fails too, keeps the retry.
+   * Last resort, once the confirm POST AND its resend both failed without an answer we could
+   * read: before saying "we could not apply it", ask the read-only view whether it was applied
+   * anyway. Only a decision that is no longer `pending` replaces the failure card, and it shows
+   * what the view says ("this decision was already applied"): the view never carries `appliedNow`
+   * nor the portal token, so it cannot claim "you have just rejected…" nor open the portal. A
+   * still-pending decision, or a view that fails too, keeps the retry.
    */
   const settleFromView = useCallback((decisionToken) => {
     fetchPortalDecision(apiFetch, decisionToken).then((current) => {
@@ -105,6 +102,32 @@ export default function PortalDecisionPage() {
     });
   }, [apiFetch]);
 
+  /** A confirm answer: into the portal when it carries a way in, else this page's own card. */
+  const showResult = useCallback((result) => {
+    // ETP-6209: the customer is taken into the portal on the quotation, with a one-off notice in
+    // the router state (never the URL). Without a way in, this page shows its own card.
+    const entryPath = portalEntryPath(result);
+    if (entryPath) {
+      navigate(entryPath, { replace: true, state: { [PORTAL_NOTICE_STATE_KEY]: portalDecisionNotice(result) } });
+      return;
+    }
+    setDecision(result);
+    setView(VIEW.ready);
+  }, [navigate]);
+
+  /**
+   * Sends the confirmation; when it fails without a readable answer (other than a dead link), it
+   * is resent ONCE before anything else. A request can be committed by the backend and still be
+   * lost on the way back (a cut connection — ETP-6209), and the customer must not be told to
+   * retry a decision that already took effect. The resend is safe: the confirmation is single-use
+   * server-side, so an applied decision is never applied twice, and its answer still carries the
+   * portal token, so the customer still enters the portal.
+   *
+   * Its answer says `appliedNow: false` when the lost call had applied it, so the notice reads
+   * "already answered". That wording is kept on purpose: nothing in the answer tells this page's
+   * own lost call apart from an earlier open of the same link (no timestamp, no request id), and
+   * claiming "you have just rejected…" would be false for a genuinely re-opened link.
+   */
   const apply = useCallback(() => {
     const trimmed = token.trim();
     if (!trimmed) {
@@ -112,24 +135,17 @@ export default function PortalDecisionPage() {
       return;
     }
     setView(VIEW.applying);
-    confirmPortalDecision(apiFetch, trimmed).then((result) => {
-      // ETP-6209: the customer is taken into the portal on the quotation, with a one-off notice in
-      // the router state (never the URL). Without a way in, this page shows its own card.
-      const entryPath = portalEntryPath(result);
-      if (entryPath) {
-        navigate(entryPath, { replace: true, state: { [PORTAL_NOTICE_STATE_KEY]: portalDecisionNotice(result) } });
-        return;
-      }
-      setDecision(result);
-      setView(VIEW.ready);
-    }).catch((error) => {
+    const onFailure = (next) => (error) => {
       if (error?.code === PORTAL_ERROR.invalidLink) {
         setView(VIEW.invalid);
         return;
       }
-      settleFromView(trimmed);
-    });
-  }, [apiFetch, token, navigate, settleFromView]);
+      next();
+    };
+    const resend = () => confirmPortalDecision(apiFetch, trimmed)
+      .then(showResult, onFailure(() => settleFromView(trimmed)));
+    confirmPortalDecision(apiFetch, trimmed).then(showResult, onFailure(resend));
+  }, [apiFetch, token, showResult, settleFromView]);
 
   // The confirmation is the page's own POST, sent once on open (never a GET side effect).
   useEffect(() => {

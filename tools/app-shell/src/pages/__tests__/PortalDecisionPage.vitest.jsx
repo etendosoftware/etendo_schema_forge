@@ -194,8 +194,9 @@ describe('PortalDecisionPage — what it says', () => {
     });
   }
 
-  it('offers a retry when the POST never completed, and the retry confirms', async () => {
+  it('offers a retry when the POST and its resend never completed, and the retry confirms', async () => {
     const user = userEvent.setup();
+    apiFetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
     apiFetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
     apiFetchMock.mockResolvedValueOnce(jsonResponse({ state: 'pending', documentNo: 'PR/0001' }));
     renderLanding();
@@ -204,12 +205,49 @@ describe('PortalDecisionPage — what it says', () => {
     await user.click(screen.getByTestId('portal-decision-retry'));
 
     await waitFor(() => expect(screen.getByTestId('portal-decision-applied')).toBeInTheDocument());
-    expect(confirmCalls()).toHaveLength(2);
+    expect(confirmCalls()).toHaveLength(3);
   });
 });
 
 describe('PortalDecisionPage — a confirm whose answer was lost', () => {
-  /** The confirm POST fails with no readable answer; the view answers `viewAnswer`. */
+  it('resends the confirmation once and enters the portal on its answer, as already answered', async () => {
+    apiFetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    apiFetchMock.mockResolvedValueOnce(jsonResponse({
+      state: 'confirmed', appliedNow: false, decision: 'REJECT', documentNo: 'PR/0001',
+      portalToken: 'tok-new', quotationId: 'q-1',
+    }));
+    renderLanding();
+
+    await waitFor(() => expect(screen.getByTestId('portal-arrival-probe')).toBeInTheDocument());
+    const probe = screen.getByTestId('portal-arrival-probe');
+    expect(probe.dataset.path).toBe('/portal/tok-new?view=doc&kind=QUOTATION&id=q-1');
+    expect(probe.dataset.navigation).toBe('REPLACE');
+    expect(JSON.parse(probe.dataset.state).portalNotice.messageKey).toBe('portalNoticeAlreadyAnswered');
+    expect(confirmCalls()).toHaveLength(2);
+    expect(confirmCalls()[1][1]).toStrictEqual(confirmCalls()[0][1]);
+    expect(viewCalls()).toHaveLength(0);
+  });
+
+  it('shows the result card when the resend answers with no way into the portal', async () => {
+    apiFetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    apiFetchMock.mockResolvedValueOnce(jsonResponse(APPLIED_REJECT));
+    renderLanding();
+
+    await waitFor(() => expect(screen.getByTestId('portal-decision-applied')).toBeInTheDocument());
+    expect(confirmCalls()).toHaveLength(2);
+    expect(viewCalls()).toHaveLength(0);
+  });
+
+  it('shows the invalid-link screen, without the view, when the resend rejects the token', async () => {
+    apiFetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    apiFetchMock.mockResolvedValueOnce(jsonResponse({}, { status: 401 }));
+    renderLanding();
+
+    await waitFor(() => expect(screen.getByTestId('portal-decision-invalid')).toBeInTheDocument());
+    expect(viewCalls()).toHaveLength(0);
+  });
+
+  /** The confirm POST and its resend both fail with no readable answer; the view answers `viewAnswer`. */
   function confirmLostThenView(viewAnswer) {
     apiFetchMock.mockImplementation(async (path) => {
       if (path.endsWith('/decisions/confirm')) throw new TypeError('Failed to fetch');
@@ -217,7 +255,7 @@ describe('PortalDecisionPage — a confirm whose answer was lost', () => {
     });
   }
 
-  it('shows the decision as applied when the view says the lost POST took effect', async () => {
+  it('falls back to the view when the resend is lost too, and shows a settled decision', async () => {
     confirmLostThenView(() => jsonResponse({
       state: 'confirmed', appliedNow: false, decision: 'REJECT', documentNo: 'PR/0001', tenantName: 'Acme SA',
     }));
@@ -227,6 +265,7 @@ describe('PortalDecisionPage — a confirm whose answer was lost', () => {
     expect(screen.getByTestId('portal-decision-confirmed').querySelector('h1').textContent)
       .toBe('portalDecisionConfirmedTitle');
     expect(screen.queryByTestId('portal-decision-retry')).not.toBeInTheDocument();
+    expect(confirmCalls()).toHaveLength(2);
     expect(viewCalls()).toHaveLength(1);
     expect(viewCalls()[0][1]).toStrictEqual({
       token: null, headers: { 'X-Portal-Decision-Token': DECISION_TOKEN }, on401: 'ignore',
@@ -244,7 +283,7 @@ describe('PortalDecisionPage — a confirm whose answer was lost', () => {
 
       await waitFor(() => expect(screen.getByTestId('portal-decision-failed')).toBeInTheDocument());
       expect(screen.getByTestId('portal-decision-retry')).toBeInTheDocument();
-      expect(confirmCalls()).toHaveLength(1);
+      expect(confirmCalls()).toHaveLength(2);
     });
   }
 
