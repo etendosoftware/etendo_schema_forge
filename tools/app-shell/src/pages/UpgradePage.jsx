@@ -1814,9 +1814,9 @@ export default function UpgradePage() {
                 ui={ui}
                 data-testid="PlanSummary__58bad7" />
 
-              {selectedPlan?.secondMonthFree === true && (
+              {selectedPlan?.freeTrialDays > 0 && (
                 <p className="text-sm text-muted-foreground" data-testid="upgrade-monthly-promotion">
-                  {ui('upgradeMonthlyIntroductoryOffer')}
+                  {ui('upgradeMonthlyFreeTrial', { days: selectedPlan.freeTrialDays })}
                 </p>
               )}
 

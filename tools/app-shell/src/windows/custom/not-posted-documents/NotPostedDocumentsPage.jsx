@@ -378,16 +378,20 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
         toast.error(ui('postingFailed'));
         return;
       }
-      // Same outcome toast every other list's bulk "Contabilizar" shows. A single failed row
-      // surfaces its real backend error; more than one gets the generic count summary.
+      // A single failed row surfaces its real backend error. Otherwise, unlike the other lists,
+      // the failed rows are listed with their reason (ETP-6286): posting errors are
+      // document-level and fixable from here, and the Estado column only shows a coarse bucket.
+      // Joined by recordId, not by position; the label never falls back to the UUID.
+      const labelById = new Map(postable.map((r) => [r.documentId, r.description || r.documentTypeLabel]));
       const failed = (json.results ?? [])
         .filter((r) => r.success !== true)
         .map((r) => ({
+          label: labelById.get(r.recordId),
           message: r.message,
           messageKeys: extractBackendMessageKeys(r),
           messageParams: extractBackendMessageParams(r),
         }));
-      showBulkActionToast(ui, { ok: json.ok ?? 0, omitted, failed });
+      showBulkActionToast(ui, { ok: json.ok ?? 0, omitted, failed }, { listFailures: true });
       clearSelection();
       reload();
     } catch {

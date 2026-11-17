@@ -636,6 +636,15 @@ describe('fetchPortalDecision / confirmPortalDecision', () => {
       {
         state: 'confirmed', appliedNow: true, decision: 'REJECT', reasonCode: 'OTHER',
         reasonText: 'Ya no', documentNo: 'PR/0001', tenantName: 'Acme SA',
+        portalToken: null, quotationId: null,
+      },
+    ],
+    [
+      'exposes the way into the portal: the fresh portal token and the quotation it opens on',
+      { state: 'confirmed', appliedNow: true, decision: 'ACCEPT', portalToken: 'tok-new', quotationId: 'q-1' },
+      {
+        state: 'confirmed', appliedNow: true, decision: 'ACCEPT', reasonCode: null, reasonText: null,
+        documentNo: null, tenantName: null, portalToken: 'tok-new', quotationId: 'q-1',
       },
     ],
     [
@@ -643,7 +652,7 @@ describe('fetchPortalDecision / confirmPortalDecision', () => {
       { state: 'confirmed', appliedNow: 'true' },
       {
         state: 'confirmed', appliedNow: false, decision: null, reasonCode: null, reasonText: null,
-        documentNo: null, tenantName: null,
+        documentNo: null, tenantName: null, portalToken: null, quotationId: null,
       },
     ],
     [
@@ -651,7 +660,7 @@ describe('fetchPortalDecision / confirmPortalDecision', () => {
       { state: 'weird' },
       {
         state: 'not_pending', appliedNow: false, decision: null, reasonCode: null, reasonText: null,
-        documentNo: null, tenantName: null,
+        documentNo: null, tenantName: null, portalToken: null, quotationId: null,
       },
     ],
   ]) {
@@ -659,6 +668,21 @@ describe('fetchPortalDecision / confirmPortalDecision', () => {
       const { fetchImpl } = recordingFetch(() => jsonResponse(body));
 
       assert.deepEqual(await confirmPortalDecision(fetchImpl, DECISION_TOKEN), expected);
+    });
+  }
+
+  // QA BUG-3: a 200 whose body was cut is a lost answer, never "no longer pending".
+  for (const [label, call] of [
+    ['confirmation', confirmPortalDecision],
+    ['view', fetchPortalDecision],
+  ]) {
+    it(`maps an unreadable ${label} body to loadFailed, never to a state`, async () => {
+      const { fetchImpl } = recordingFetch(() => unparseableResponse());
+
+      await assert.rejects(
+        call(fetchImpl, DECISION_TOKEN),
+        expectPortalError(PORTAL_ERROR.loadFailed, { status: 200 }),
+      );
     });
   }
 

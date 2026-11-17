@@ -5,6 +5,11 @@ Jira: ETP-6216. Scope: the functional application and the Etendo GO billing adap
 Status: implemented and committed on `feature/ETP-6216`; publication checks are in progress.
 Human QA and live Stripe validation remain pending. No deployment has been performed.
 
+> **Superseded offer (ETP-6082).** The monthly "second month free" offer described below is no
+> longer sold: new monthly purchases get a 30-day free trial, once per account. Purchases already
+> recorded with the second-month terms keep them. Current contract:
+> `com.etendoerp.go/docs/checkout-promotion.md`.
+
 ## Problem
 
 Before this change, creating a purchase looked up an unfinished purchase by account and company

@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { AlertCircle, Ban, CheckCircle2, FileText, Loader2 } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
-import { useApiFetch } from '@/auth/useApiFetch.js';
+import { usePortalApiFetch } from '@/lib/portal/usePortalApiFetch.js';
 import {
-  PORTAL_DECISION_STATE, PORTAL_ERROR, confirmPortalDecision, resolvePortalBaseUrl,
+  PORTAL_DECISION_STATE, PORTAL_ERROR, confirmPortalDecision, fetchPortalDecision,
+  resolvePortalBaseUrl,
 } from '@/lib/portal/portalApi.js';
 import { PORTAL_REJECT_REASONS } from './portal/portalPresentation.js';
+import {
+  PORTAL_NOTICE_STATE_KEY, portalDecisionNotice, portalEntryPath,
+} from './portal/portalDecisionArrival.js';
 
 /**
  * The confirmation landing of a portal quotation decision (ETP-6209 Part C): the page the
@@ -22,6 +26,14 @@ import { PORTAL_REJECT_REASONS } from './portal/portalPresentation.js';
  * single use and never expires; a second open answers what happened to it. Unknown tokens get the
  * portal's generic invalid-link screen. A failed POST (network) offers a retry.
  */
+
+/**
+ * Pause before the one automatic resend of a lost confirmation: long enough for a dropped
+ * connection to come back, short enough that the customer still sees one "applying" step.
+ */
+export const CONFIRM_RESEND_DELAY_MS = 400;
+
+const wait = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 
 const VIEW = Object.freeze({ applying: 'applying', ready: 'ready', invalid: 'invalid', failed: 'failed' });
 
@@ -64,32 +76,113 @@ function resultTitle(decision, copy) {
   return copy.titleKey;
 }
 
-export default function PortalDecisionPage() {
+export default function PortalDecisionPage({ resendDelayMs = CONFIRM_RESEND_DELAY_MS } = {}) {
   const { token = '' } = useParams();
   const ui = useUI();
   const baseUrl = useMemo(() => resolvePortalBaseUrl(), []);
-  const apiFetch = useApiFetch(baseUrl);
+  const apiFetch = usePortalApiFetch(baseUrl);
   const [view, setView] = useState(VIEW.applying);
   const [decision, setDecision] = useState(null);
+  const navigate = useNavigate();
 
   // The token whose confirmation was already sent: the POST goes out once per open, also under
   // StrictMode's double effect in development (a second POST would answer "already applied").
   const sentFor = useRef(null);
+  // Whether the page is still mounted: once the customer leaves, nothing the confirmation chain
+  // still has in flight may resend, navigate or set state (ETP-6209 QA BUG-1). Set back to true on
+  // mount, so StrictMode's mount → unmount → mount in development keeps it alive.
+  const alive = useRef(true);
+  // One confirmation chain at a time: a second click on "Reintentar" before the first re-renders
+  // must not send a second POST. Per page instance, not per token: no in-app flow navigates from
+  // one decision token to another; each email link is a fresh page load.
+  const inFlight = useRef(false);
 
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; };
+  }, []);
+
+  /**
+   * Last resort, once the confirm POST AND its resend both failed without an answer we could
+   * read: before saying "we could not apply it", ask the read-only view whether it was applied
+   * anyway. Only a decision that is no longer `pending` replaces the failure card, and it shows
+   * what the view says ("this decision was already applied"): the view never carries `appliedNow`
+   * nor the portal token, so it cannot claim "you have just rejected…" nor open the portal. A
+   * still-pending decision, or a view that fails too, keeps the retry.
+   */
+  const settleFromView = useCallback((decisionToken) => fetchPortalDecision(apiFetch, decisionToken)
+    .then((current) => {
+      if (!alive.current) return;
+      if (current.state === PORTAL_DECISION_STATE.pending) {
+        setView(VIEW.failed);
+        return;
+      }
+      setDecision(current);
+      setView(VIEW.ready);
+    }, (error) => {
+      if (!alive.current) return;
+      setView(error?.code === PORTAL_ERROR.invalidLink ? VIEW.invalid : VIEW.failed);
+    }), [apiFetch]);
+
+  /** A confirm answer: into the portal when it carries a way in, else this page's own card. */
+  const showResult = useCallback((result) => {
+    if (!alive.current) return;
+    // ETP-6209: the customer is taken into the portal on the quotation, with a one-off notice in
+    // the router state (never the URL). Without a way in, this page shows its own card.
+    const entryPath = portalEntryPath(result);
+    if (entryPath) {
+      navigate(entryPath, { replace: true, state: { [PORTAL_NOTICE_STATE_KEY]: portalDecisionNotice(result) } });
+      return;
+    }
+    setDecision(result);
+    setView(VIEW.ready);
+  }, [navigate]);
+
+  /**
+   * Sends the confirmation; when it fails without a readable answer (other than a dead link) —
+   * no answer, a 5xx or 429, or a 200 whose body was cut mid-read — it is resent ONCE, after a
+   * short backoff, before anything else. A request can be committed by the backend and still be
+   * lost on the way back (a cut connection — ETP-6209), and the customer must not be told to
+   * retry a decision that already took effect. The resend is safe: the confirmation is single-use
+   * server-side, so an applied decision is never applied twice, and its answer still carries the
+   * portal token, so the customer still enters the portal.
+   *
+   * Its answer says `appliedNow: false` when the lost call had applied it, so the notice reads
+   * "already answered". That wording is kept on purpose: nothing in the answer tells this page's
+   * own lost call apart from an earlier open of the same link (no timestamp, no request id), and
+   * claiming "you have just rejected…" would be false for a genuinely re-opened link.
+   *
+   * Anything that throws past these steps (rendering the result, navigating) ends on the failure
+   * card with its retry, never stuck on "applying". Once the page is gone, the chain stops.
+   */
   const apply = useCallback(() => {
     const trimmed = token.trim();
     if (!trimmed) {
       setView(VIEW.invalid);
       return;
     }
+    if (inFlight.current) return;
+    inFlight.current = true;
     setView(VIEW.applying);
-    confirmPortalDecision(apiFetch, trimmed).then((result) => {
-      setDecision(result);
-      setView(VIEW.ready);
-    }).catch((error) => {
-      setView(error?.code === PORTAL_ERROR.invalidLink ? VIEW.invalid : VIEW.failed);
-    });
-  }, [apiFetch, token]);
+    const onFailure = (next) => (error) => {
+      if (!alive.current) return undefined;
+      if (error?.code === PORTAL_ERROR.invalidLink) {
+        setView(VIEW.invalid);
+        return undefined;
+      }
+      return next();
+    };
+    const resend = () => wait(resendDelayMs)
+      .then(() => (alive.current ? confirmPortalDecision(apiFetch, trimmed) : undefined))
+      .then(
+        (result) => (result === undefined ? undefined : showResult(result)),
+        onFailure(() => settleFromView(trimmed)),
+      );
+    confirmPortalDecision(apiFetch, trimmed)
+      .then(showResult, onFailure(resend))
+      .catch(() => { if (alive.current) setView(VIEW.failed); })
+      .finally(() => { inFlight.current = false; });
+  }, [apiFetch, token, showResult, settleFromView, resendDelayMs]);
 
   // The confirmation is the page's own POST, sent once on open (never a GET side effect).
   useEffect(() => {
