@@ -626,7 +626,26 @@ export default function reportApiPlugin(options = {}) {
               };
               const queryCfg = queries[type];
               if (!queryCfg) throw new Error(`Unknown selector type: ${type}`);
-              const search = `%${q}%`;
+              // ETP-6239: `ids` resolves exactly those rows (bpartner/product only; q/limit/offset ignored,
+              // blank or invalid = empty, capped at 100). Mirrors ReportSelectorsServlet's `ids`; keep both in sync.
+              const idsRaw = url.searchParams.get('ids');
+              const byIds = idsRaw !== null;
+              let idList = [];
+              if (byIds) {
+                if (type !== 'bpartner' && type !== 'product') {
+                  res.statusCode = 400;
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({ error: `ids is not supported for ${type}` }));
+                  return;
+                }
+                idList = [...new Set(idsRaw.split(',').map((s) => s.trim()))].slice(0, 100);
+                if (idList.length === 0 || idList.some((i) => !/^[A-Za-z0-9_-]{1,64}$/.test(i))) {
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({ items: [], totalCount: 0, hasMore: false }));
+                  return;
+                }
+              }
+              const search = byIds ? '%' : `%${q}%`;
               const whereFragments = [queryCfg.fromWhere];
               // $1 = search; additional dynamic params start at $2
               const values = [search];
@@ -685,13 +704,17 @@ export default function reportApiPlugin(options = {}) {
                 whereFragments.push(`AND ev.c_element_id IN (SELECT c_element_id FROM c_acctschema_element WHERE c_acctschema_id = $${values.length} AND c_element_id IS NOT NULL)`);
               }
 
+              if (byIds) {
+                values.push(idList);
+                whereFragments.push(`AND ${type === 'bpartner' ? 'c_bpartner_id' : 'm_product_id'} = ANY($${values.length})`);
+              }
               const fullFromWhere = whereFragments.join(' ');
               const countSql = `SELECT COUNT(*)::int AS total ${fullFromWhere}`;
               const rowsSql = `${queryCfg.select} ${fullFromWhere} ${queryCfg.orderBy} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`;
 
               const countResult = await pool.query(countSql, values);
               const totalCount = countResult.rows[0]?.total ?? 0;
-              const { rows } = await pool.query(rowsSql, [...values, limit, offset]);
+              const { rows } = await pool.query(rowsSql, [...values, byIds ? 100 : limit, byIds ? 0 : offset]);
               res.setHeader('Content-Type', 'application/json');
               res.end(JSON.stringify({
                 items: rows,

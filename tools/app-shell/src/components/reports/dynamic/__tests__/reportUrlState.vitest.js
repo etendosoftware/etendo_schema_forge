@@ -1,5 +1,5 @@
 // @covers tools/app-shell/src/components/reports/dynamic/reportUrlState.js
-import { readReportUrlState, reportUrlKeys, urlStateSpec, writeReportUrlState } from '../reportUrlState.js';
+import { MAX_PICKER_IDS, readReportUrlState, reportUrlKeys, urlStateSpec, writeReportUrlState } from '../reportUrlState.js';
 
 // The P&L's own definition (the contract's parameters), and a synthetic one that shares no
 // parameter set with it: the helper must serve both with no change.
@@ -94,6 +94,13 @@ describe('readReportUrlState', () => {
     expect(read('?dateFrom=2026-3-1&dateTo=2026-03-31')).toEqual({});
     expect(read("?bPartnerId=A,'B&productId=" + 'x'.repeat(65))).toEqual({});
     expect(read('?columns=total')).toEqual({}); // total is the default, never a restore
+  });
+
+  it('a filter holds at most MAX_PICKER_IDS ids: a longer list keeps the first ones', () => {
+    const ids = Array.from({ length: 120 }, (_, i) => `ID${i}`);
+    const patch = readReportUrlState(`?bPartnerId=${ids.join(',')}`, PL);
+    expect(patch.bPartnerId.split(',')).toEqual(ids.slice(0, MAX_PICKER_IDS));
+    expect(MAX_PICKER_IDS).toBe(100);
   });
 
   it('an org is restored only when the picker can offer it: unknown, 0 and * are ignored', () => {

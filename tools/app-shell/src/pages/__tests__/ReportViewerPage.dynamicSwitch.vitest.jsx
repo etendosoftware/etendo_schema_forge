@@ -6,10 +6,16 @@ import { DYNAMIC_REPORT_IDS, opensDynamicView } from '@/components/reports/dynam
 
 let mockSearchParams = new URLSearchParams();
 let lastView = null;
+const setSearchParamsSpy = vi.fn();
 // Stateful, so picking a report from the list re-renders the page like the router would.
 vi.mock('react-router-dom', async () => {
   const { useState } = await import('react');
-  return { useSearchParams: () => useState(mockSearchParams) };
+  return {
+    useSearchParams: () => {
+      const [value, set] = useState(mockSearchParams);
+      return [value, (next, opts) => { setSearchParamsSpy(next, opts); set(next); }];
+    },
+  };
 });
 // The view itself is covered in its own suite; here only what the page hands it.
 vi.mock('@/components/reports/dynamic/DynamicReportView.jsx', () => ({
@@ -167,7 +173,9 @@ describe('ReportViewerPage — URL selections do not leak between reports (ETP-6
     render(<ReportViewerPage />);
     await screen.findByTestId('DynamicReportView');
     expect(lastView.onSearchChange).toBeInstanceOf(Function);
+    setSearchParamsSpy.mockClear();
     act(() => lastView.onSearchChange('category=finance&compare=previous&report=profit-loss'));
+    expect(setSearchParamsSpy).toHaveBeenCalledWith(expect.any(URLSearchParams), { replace: true });
     await waitFor(() => expect(screen.getByTestId('DynamicReportView').dataset.search).toBe('category=finance&compare=previous&report=profit-loss'));
   });
 });

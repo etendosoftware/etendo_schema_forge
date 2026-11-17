@@ -27008,6 +27008,7 @@
     "dynamicReportSamePeriodLastYear": "Mismo período del año anterior",
     "dynamicReportPreviousPeriod": "Período anterior",
     "dynamicReportSplitBy": "Desglosar cuentas por",
+    "dynamicReportMaxItems": "Máximo {max} elementos por filtro",
     "dynamicReportNoSplit": "Sin desglose",
     "dynamicReportSplitNone": "(sin asignar)",
     "dynamicReportShowSplit": "Ver el desglose de {name}",

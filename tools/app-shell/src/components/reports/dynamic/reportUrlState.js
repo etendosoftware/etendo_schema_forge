@@ -26,8 +26,18 @@ const ENUMS = {
   splitBy: ['org', 'bpartner', 'product'],
 };
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
-const ID_LIST = /^[A-Za-z0-9_-]{1,64}(,[A-Za-z0-9_-]{1,64}){0,99}$/;
+// Mirrors ReportSelectorsServlet MAX_IDS: the `ids` lookup resolves at most this many, so a filter holds at most this many.
+export const MAX_PICKER_IDS = 100;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * The controls `report` offers (the panel shows exactly these, and the URL persists exactly these):
+ * Columnas and the comparison travel together (`compareTo`), the split is `splitBy`.
+ */
+export function reportOffers(report) {
+  const has = (name) => (report?.parameters || []).some((p) => p.name === name);
+  return { columns: has('compareTo'), compare: has('compareTo'), splitBy: has('splitBy') };
+}
 
 /** What `report` persists, derived from its parameters. */
 export function urlStateSpec(report) {
@@ -38,7 +48,7 @@ export function urlStateSpec(report) {
     org: has('orgId'),
     period: isDate('dateFrom') && isDate('dateTo'),
     pickers: params.filter((p) => p.type === 'search' && !p.hidden && PICKER_SELECTORS.includes(p.selector)).map((p) => ({ name: p.name, selector: p.selector })),
-    controls: [...(has('compareTo') ? ['columns', 'compare'] : []), ...(has('splitBy') ? ['splitBy'] : [])],
+    controls: Object.entries(reportOffers(report)).filter(([, on]) => on).map(([key]) => key),
   };
 }
 
@@ -79,8 +89,9 @@ export function readReportUrlState(search, report, { orgIds = [] } = {}) {
     if (ENUMS[key].includes(v)) patch[key] = v;
   }
   for (const { name } of spec.pickers) {
-    const ids = q.get(name);
-    if (ids && ID_LIST.test(ids)) patch[name] = ids;
+    // A list beyond the cap keeps its first MAX_PICKER_IDS; an invalid id drops the whole value.
+    const ids = (q.get(name) || '').split(',').filter(Boolean).slice(0, MAX_PICKER_IDS);
+    if (ids.length && ids.every((id) => ID.test(id))) patch[name] = ids.join(',');
   }
   return patch;
 }

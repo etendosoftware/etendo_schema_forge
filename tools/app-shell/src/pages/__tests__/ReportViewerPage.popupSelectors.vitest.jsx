@@ -114,7 +114,7 @@ vi.mock('@/components/ui/dialog', () => ({
   DialogTitle: ({ children }) => <h2>{children}</h2>,
 }));
 
-import ReportViewerPage from '../ReportViewerPage.jsx';
+import ReportViewerPage, { PopupMultiSelector } from '../ReportViewerPage.jsx';
 
 const BASE_REPORT = {
   id: 'report-1',
@@ -1750,5 +1750,35 @@ describe('ReportViewerPage — gl-entry-drilldown dialog (ETP-5013)', () => {
       // extraParams still win for the account being drilled into.
       expect(sent.fromAccountId).toBe('43000000');
     });
+  });
+});
+
+// ETP-6239: the dynamic report caps a filter at MAX_PICKER_IDS and carries names as an array.
+describe('PopupMultiSelector — maxItems cap and exact names (ETP-6239)', () => {
+  it('blocks the selection past maxItems and says why; a selected item can still be unchecked', async () => {
+    const user = userEvent.setup();
+    globalThis.fetch = vi.fn().mockResolvedValue(makeSelectorResponse([{ id: 'a', name: 'Acme' }, { id: 'b', name: 'Beta' }, { id: 'c', name: 'Gamma' }]));
+    const onChange = vi.fn();
+    render(<PopupMultiSelector selector="bpartner" label="Contacts" onChange={onChange} maxItems={2} />);
+    await user.click(screen.getByText('Contacts'));
+    await waitFor(() => expect(screen.getByText('Gamma')).toBeInTheDocument());
+    const [a, b, c] = screen.getAllByRole('checkbox');
+    await user.click(a);
+    await user.click(b);
+    expect(c).toBeDisabled();
+    await user.click(c);
+    expect(screen.getByTestId('PopupMultiSelector__maxItems')).toBeInTheDocument();
+    await user.click(a); // unchecking frees a slot
+    expect(c).not.toBeDisabled();
+    await user.click(c);
+    await user.click(screen.getByText('OK'));
+    expect(onChange).toHaveBeenCalledWith('b,c', 'Beta, Gamma', ['Beta', 'Gamma']);
+  });
+
+  it('seeds one chip per entry of displayNames, so a name with a comma stays one chip', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(makeSelectorResponse([]));
+    render(<PopupMultiSelector selector="bpartner" label="Contacts" value="i1,i2" displayValue="A, B, Acme, S.L." displayNames={['A, B', 'Acme, S.L.']} onChange={vi.fn()} />);
+    expect(screen.getByText('A, B')).toBeInTheDocument();
+    expect(screen.getByText('Acme, S.L.')).toBeInTheDocument();
   });
 });

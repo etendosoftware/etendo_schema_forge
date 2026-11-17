@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
 import { PopupMultiSelector } from '@/pages/ReportViewerPage.jsx';
+import { MAX_PICKER_IDS } from './reportUrlState.js';
 import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 
@@ -42,7 +43,7 @@ function Section({ title, children }) {
 export default function DynamicReportPanel({
   state, onChange, onShortcut, onPickYear, onLevel, onExpandAll, onCollapseAll, onReset,
   shortcut, yearId, years, orgs, splitDimensions, levelOptions, label, sectionLabel, noFiscalYear,
-  collapsed = false, onToggleCollapsed, activeFilterCount = 0, collapseRef, expandRef,
+  offers = { columns: true, compare: true, splitBy: true }, collapsed = false, onToggleCollapsed, activeFilterCount = 0, collapseRef, expandRef,
 }) {
   const ui = useUI();
   const toggleLabel = ui(collapsed ? 'dynamicReportShowPanel' : 'dynamicReportHidePanel');
@@ -147,12 +148,15 @@ export default function DynamicReportPanel({
           <div key={name} className="text-xs">
             <span>{label(name)}</span>
             <PopupMultiSelector
+              // Remounts when the restored names land (the selector seeds its chips from props only once).
               key={`${state[name] ? 'set' : 'empty'}${state[`_display_${name}`] ? '-named' : ''}`}
               selector={name === 'bPartnerId' ? 'bpartner' : 'product'}
               label={label(name)}
               value={state[name]}
               displayValue={state[`_display_${name}`]}
-              onChange={(ids, names) => onChange({ [name]: ids, [`_display_${name}`]: names })}
+              displayNames={state[`_names_${name}`]}
+              maxItems={MAX_PICKER_IDS}
+              onChange={(ids, names, list) => onChange({ [name]: ids, [`_display_${name}`]: names, [`_names_${name}`]: list })}
               data-testid={`DynamicReportPanel__${name}`}
             />
           </div>
@@ -169,24 +173,24 @@ export default function DynamicReportPanel({
           <Button variant="outline" className="h-8 px-2 text-xs" onClick={onExpandAll} data-testid="DynamicReportPanel__expandAll">{ui('expandAll')}</Button>
           <Button variant="outline" className="h-8 px-2 text-xs" onClick={onCollapseAll} data-testid="DynamicReportPanel__collapseAll">{ui('collapseAll')}</Button>
         </div>
-        <label className="text-xs">{ui('dynamicReportSplitBy')}
+        {offers.splitBy && <label className="text-xs">{ui('dynamicReportSplitBy')}
           <select className={selectClass} value={state.splitBy} onChange={(e) => onChange({ splitBy: e.target.value })} data-testid="DynamicReportPanel__splitBy">
             <option value="">{ui('dynamicReportNoSplit')}</option>
             {splitDimensions.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
           </select>
-        </label>
+        </label>}
       </Section>
 
-      <Section title={sectionLabel('comparacion')} data-testid="Section__f52339">
-        <label className="text-xs">{ui('dynamicReportColumns')}
+      {(offers.columns || offers.compare) && <Section title={sectionLabel('comparacion')} data-testid="Section__f52339">
+        {offers.columns && <label className="text-xs">{ui('dynamicReportColumns')}
           <select className={selectClass} value={state.columns} onChange={(e) => onChange({ columns: e.target.value })} data-testid="DynamicReportPanel__columns">
             {COLUMN_OPTIONS.map(([value, key]) => <option key={value} value={value}>{ui(key)}</option>)}
           </select>
-        </label>
-        <select className={selectClass} value={state.compare} onChange={(e) => onChange({ compare: e.target.value })} aria-label={label('compareTo')} data-testid="DynamicReportPanel__compare">
+        </label>}
+        {offers.compare && <select className={selectClass} value={state.compare} onChange={(e) => onChange({ compare: e.target.value })} aria-label={label('compareTo')} data-testid="DynamicReportPanel__compare">
           {COMPARISONS.map(([value, key]) => <option key={value} value={value}>{ui(key)}</option>)}
-        </select>
-      </Section>
+        </select>}
+      </Section>}
 
       <div className="px-3 py-3 border-t border-border/40">
         <Button variant="outline" className="w-full h-9 text-sm" onClick={onReset} data-testid="DynamicReportPanel__reset">{ui('resetFilters')}</Button>

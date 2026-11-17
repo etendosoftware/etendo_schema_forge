@@ -20,7 +20,7 @@ import { useAccountSplit } from './useAccountSplit.js';
 import { REPORT_EVENTS, filterTypeOf, useReportTelemetry } from './reportTelemetry.js';
 import { matchingShortcut, matchingYear, openingPeriod, periodBuckets, pickedYearPeriod, serializePeriods, shortcutPeriod } from './dynamicDates.js';
 import { modeHiddenCount, periodLimit, exportTooLong as isExportTooLong, columnModel, modeOf, rowsForMode } from './reportColumns.js';
-import { readReportUrlState, urlStateSpec, writeReportUrlState } from './reportUrlState.js';
+import { readReportUrlState, reportOffers, urlStateSpec, writeReportUrlState } from './reportUrlState.js';
 import { useRestoredPickerNames } from './useRestoredPickerNames.js';
 import { expandedNodeIdsParam, foldExpansion, visibleRows } from './reportTree.js';
 
@@ -67,8 +67,8 @@ function buildChips({ state, ui, label, fmt, orgName, reference, splitDimensions
     { key: 'period', label: ui('dynamicReportPeriodChip'), value: `${fmt(state.dateFrom)} – ${fmt(state.dateTo)}` },
     // The org has no `clear` on purpose: the query requires one, so it is changed in the panel, never removed.
     orgName && { key: 'org', label: label('orgId'), value: orgName },
-    state.bPartnerId && { key: 'bp', label: label('bPartnerId'), value: state._display_bPartnerId || state.bPartnerId, clear: { bPartnerId: '', _display_bPartnerId: '' } },
-    state.productId && { key: 'product', label: label('productId'), value: state._display_productId || state.productId, clear: { productId: '', _display_productId: '' } },
+    state.bPartnerId && { key: 'bp', label: label('bPartnerId'), value: state._display_bPartnerId || state.bPartnerId, clear: { bPartnerId: '', _display_bPartnerId: '', _names_bPartnerId: null } },
+    state.productId && { key: 'product', label: label('productId'), value: state._display_productId || state.productId, clear: { productId: '', _display_productId: '', _names_productId: null } },
     state.columns !== 'total' && { key: 'columns', label: ui('dynamicReportColumns'), value: ui(COLUMN_LABELS[state.columns]), clear: { columns: 'total' } },
     reference && { key: 'compare', label: ui('dynamicReportComparedWith'), value: `${fmt(reference.from)} – ${fmt(reference.to)}`, clear: { compare: '' } },
     state.splitBy && { key: 'split', label: ui('dynamicReportSplitChip'), value: splitDimensions.find((d) => d.value === state.splitBy)?.label, clear: { splitBy: '' } },
@@ -81,7 +81,7 @@ const pick = (labelObj, locale) => labelObj?.[locale] || labelObj?.en_US || labe
 function initialState(defaultOrgId, period, level) {
   return {
     orgId: defaultOrgId || '', dateFrom: period?.dateFrom || '', dateTo: period?.dateTo || '',
-    bPartnerId: '', _display_bPartnerId: '', productId: '', _display_productId: '',
+    bPartnerId: '', _display_bPartnerId: '', _names_bPartnerId: null, productId: '', _display_productId: '', _names_productId: null,
     compare: '', columns: 'total', splitBy: '', level,
   };
 }
@@ -194,7 +194,8 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   // A link restored on Mes / Trimestre hides the panel for the session like a manual pick (D8).
   const restoredPeriodColumns = useRef(state.columns !== 'total');
   useEffect(() => {
-    if (restoredPeriodColumns.current && !panel.collapsed) togglePanel(true, 'auto_columns', { persist: false });
+    // Silent: nothing the user did, so no panel event and no focus move.
+    if (restoredPeriodColumns.current && !panel.collapsed) panel.setCollapsed(true, { persist: false });
     restoredPeriodColumns.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
   }, []);
@@ -343,6 +344,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
           onLevel={setLevel}
           onExpandAll={() => { groupToggled('expand_all'); refold('all'); }}
           onCollapseAll={() => { groupToggled('collapse_all'); refold('none'); }}
+          offers={reportOffers(report)}
           onReset={reset}
           shortcut={shortcut}
           yearId={matchingYear(state, defaults.years, today)?.id}

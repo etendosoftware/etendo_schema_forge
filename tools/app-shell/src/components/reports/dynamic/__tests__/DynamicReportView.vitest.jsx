@@ -26,8 +26,11 @@ vi.mock('@/components/ui/date-field', () => ({
 }));
 // The old viewer's multi picker: a stub that commits one contact when clicked.
 vi.mock('@/pages/ReportViewerPage.jsx', () => ({
-  PopupMultiSelector: ({ label, onChange, 'data-testid': testId }) => (
-    <button type="button" data-testid={testId} onClick={() => onChange('B1', 'Acme')}>{label}</button>
+  PopupMultiSelector: ({ label, onChange, displayNames, displayValue, 'data-testid': testId }) => (
+    <>
+      <button type="button" data-testid={testId} onClick={() => onChange('B1', 'Acme', ['Acme'])}>{label}</button>
+      {(displayNames ?? (displayValue ? displayValue.split(', ') : [])).map((n) => <span key={n} data-testid="PickerChip">{n}</span>)}
+    </>
   ),
   buildReportFilename: (id, format) => `${id}.${format}`,
 }));
@@ -90,7 +93,12 @@ const queries = () => queriesTo('profit-loss');
 
 function route(url, init) {
   if (url.includes('/report-selectors/acctschema')) return Promise.resolve(json({ items: [{ id: 'S1', name: 'Schema' }] }));
-  if (url.includes('/report-selectors/bpartner')) return Promise.resolve(json({ items: [{ id: 'BP1', name: 'Acme' }, { id: 'BP2', name: 'Beta' }] }));
+  if (url.includes('/report-selectors/bpartner')) {
+    const all = [{ id: 'BP1', name: 'Acme' }, { id: 'BP2', name: 'Beta' }, { id: 'BP3', name: 'Smith, John' }, { id: 'BP4', name: 'A, B' }, { id: 'BP5', name: 'Acme, S.L.' }];
+    const ids = new URL(url, 'http://x').searchParams.get('ids');
+    // `ids` answers exactly those rows (as the servlet does); without it, the usual search page.
+    return Promise.resolve(json({ items: ids === null ? all.slice(0, 2) : all.filter((b) => ids.split(',').includes(b.id)) }));
+  }
   if (url.includes('/report-selectors/year')) return Promise.resolve(json({ items: years }));
   if (url.endsWith('/render')) return Promise.resolve({ ok: true, status: 200, blob: () => Promise.resolve(new Blob(['x'])) });
   if (url.endsWith('/report-general-ledger/query')) return Promise.resolve(json(ledgerAnswer(JSON.parse(init.body))));
@@ -1366,12 +1374,73 @@ describe('DynamicReportView — selections in the URL (ETP-6239)', () => {
   it('a restored contact shows its id until its name is resolved by id, with no name taken from the URL', async () => {
     link('bPartnerId=BP1&_display_bPartnerId=Spoofed');
     renderView();
-    await waitFor(() => expect(screen.getByText('Acme')).toBeInTheDocument()); // the chip, from the selector
+    await waitFor(() => expect(screen.getAllByText('Acme').length).toBeGreaterThan(0)); // the chip, from the selector
     expect(screen.queryByText('Spoofed')).toBeNull();
     expect(apiFetchMock.mock.calls.some(([u]) => u.includes('/report-selectors/bpartner'))).toBe(true);
     await waitFor(() => expect(queries()).toHaveLength(1)); // the lookup never delays or repeats the query
     expect(queries()[0].bPartnerId).toBe('BP1');
     expect(window.location.search).not.toContain('_display');
+  });
+
+  it('resolves restored names with one ?ids= lookup, one chip per contact', async () => {
+    link('bPartnerId=BP1,BP3');
+    renderView();
+    await waitFor(() => expect(screen.getAllByTestId('PickerChip').map((c) => c.textContent)).toEqual(['Acme', 'Smith, John']));
+    const lookups = apiFetchMock.mock.calls.map(([u]) => u).filter((u) => u.includes('/report-selectors/bpartner'));
+    expect(lookups).toEqual(['/sws/report-selectors/bpartner?ids=BP1%2CBP3']);
+  });
+
+  it('names containing a comma survive the URL round trip as single chips, and reach the PDF header exactly', async () => {
+    link('bPartnerId=BP4,BP5');
+    renderView();
+    await waitFor(() => expect(screen.getAllByTestId('PickerChip').map((c) => c.textContent)).toEqual(['A, B', 'Acme, S.L.']));
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    expect(window.location.search).not.toMatch(/A%2C\+B|Acme/); // ids only: no names in the link
+    fireEvent.click(screen.getByTestId('DynamicReportView__export-pdf'));
+    await waitFor(() => expect(apiFetchMock.mock.calls.some(([u]) => u.endsWith('/render'))).toBe(true));
+    const [, init] = apiFetchMock.mock.calls.find(([u]) => u.endsWith('/render'));
+    expect(JSON.parse(init.body).params._display_bPartnerId).toBe('A, B, Acme, S.L.');
+  });
+
+  it('drops a well-formed id the lookup does not know from the selection, the query and the URL', async () => {
+    link('bPartnerId=BP1,STALE9');
+    const view1 = renderView();
+    await waitFor(() => expect(window.location.search).toBe('?report=profit-loss&bPartnerId=BP1'));
+    await waitFor(() => expect(queries().at(-1).bPartnerId).toBe('BP1'));
+    view1.unmount();
+    link('bPartnerId=STALE9');
+    const view = renderView();
+    await waitFor(() => expect(window.location.search).toBe('?report=profit-loss'));
+    await waitFor(() => expect(queries().at(-1).bPartnerId).toBe(''));
+    view.unmount();
+  });
+
+  it('a lookup that fails keeps the restored id (nothing is dropped on an error)', async () => {
+    link('bPartnerId=BP1');
+    const base = apiFetchMock.getMockImplementation();
+    apiFetchMock.mockImplementation((u, i) => (u.includes('ids=') ? Promise.resolve(json({}, { ok: false, status: 500 })) : base(u, i)));
+    renderView();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    expect(window.location.search).toContain('bPartnerId=BP1');
+    apiFetchMock.mockImplementation(base);
+  });
+
+  it('restoring Mes hides the panel silently: no panel event', async () => {
+    link('columns=month');
+    renderView();
+    await waitFor(() => expect(screen.getByTestId('DynamicReportPanel__expand')).toBeInTheDocument());
+    expect(eventsOf('report_panel_toggled')).toHaveLength(0);
+  });
+
+  it('the panel offers Columnas/Comparar/Dividir only when the contract declares them, like the URL', async () => {
+    const bare = { ...REPORT, parameters: REPORT.parameters.filter((p) => !['compareTo', 'splitBy'].includes(p.name)) };
+    link('columns=month&compare=previous&splitBy=org');
+    renderView({ report: bare });
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    expect(screen.queryByTestId('DynamicReportPanel__columns')).toBeNull();
+    expect(screen.queryByTestId('DynamicReportPanel__compare')).toBeNull();
+    expect(screen.queryByTestId('DynamicReportPanel__splitBy')).toBeNull();
+    expect(queries()[0]).toMatchObject({ columns: 'total' }); // the link's controls are not the report's: ignored, and left in the URL untouched
   });
 
   it('a change replaces the URL (no new history entry) with only what differs from the default', async () => {

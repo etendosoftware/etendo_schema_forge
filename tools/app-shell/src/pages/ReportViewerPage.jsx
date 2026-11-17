@@ -509,7 +509,7 @@ function SearchInput({ selector, value, displayValue, onChange, multi, minLength
 
 // Multi-select popup: shows selected tags + a "+" button that opens a modal with
 // a searchable list and checkboxes. Used for Business Partner, Product, Project.
-export function PopupMultiSelector({ selector, label, onChange, value = '', displayValue = '' }) {
+export function PopupMultiSelector({ selector, label, onChange, value = '', displayValue = '', displayNames = null, maxItems = Infinity }) {
   const ui = useUI();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -524,7 +524,8 @@ export function PopupMultiSelector({ selector, label, onChange, value = '', disp
   const [confirmed, setConfirmed] = useState(() => {
     if (!value) return [];
     const ids = value.split(',').filter(Boolean);
-    const names = displayValue ? displayValue.split(', ') : [];
+    // `displayNames` (an array) is exact; the joined string splits wrongly on a name containing ", ".
+    const names = displayNames ?? (displayValue ? displayValue.split(', ') : []);
     return ids.map((id, i) => ({ id, name: names[i] || id }));
   });
   // Frozen at openModal() time — "what was confirmed as of the last OK". Options matching
@@ -569,24 +570,25 @@ export function PopupMultiSelector({ selector, label, onChange, value = '', disp
 
   const toggleItem = (item) => {
     const exists = pending.some(s => s.id === item.id);
+    if (!exists && pending.length >= maxItems) return; // at the cap: the hint below says why
     setPending(exists ? pending.filter(s => s.id !== item.id) : [...pending, item]);
   };
 
   const confirm = () => {
     setConfirmed(pending);
-    onChange(pending.map(s => s.id).join(','), pending.map(s => s.name).join(', '));
+    onChange(pending.map(s => s.id).join(','), pending.map(s => s.name).join(', '), pending.map(s => s.name));
     setOpen(false);
   };
 
   const removeConfirmed = (id) => {
     const next = confirmed.filter(s => s.id !== id);
     setConfirmed(next);
-    onChange(next.map(s => s.id).join(','), next.map(s => s.name).join(', '));
+    onChange(next.map(s => s.id).join(','), next.map(s => s.name).join(', '), next.map(s => s.name));
   };
 
   const clearAll = () => {
     setConfirmed([]);
-    onChange('', '');
+    onChange('', '', []);
   };
 
   const MAX_VISIBLE_TAGS = 3;
@@ -607,6 +609,7 @@ export function PopupMultiSelector({ selector, label, onChange, value = '', disp
           <input
             type="checkbox"
             checked={isSelected}
+            disabled={!isSelected && pending.length >= maxItems}
             onChange={() => toggleItem(o)}
             className="w-4 h-4 accent-primary shrink-0"
           />
@@ -674,7 +677,7 @@ export function PopupMultiSelector({ selector, label, onChange, value = '', disp
               {optionsListContent}
             </div>
             <div className="flex items-center justify-between px-4 py-3 border-t border-border/30 bg-muted/20">
-              <span className="text-xs text-muted-foreground">{ui('selected', { count: pending.length })}</span>
+              <span className="text-xs text-muted-foreground">{ui('selected', { count: pending.length })}{pending.length >= maxItems && <span role="status" data-testid="PopupMultiSelector__maxItems"> · {ui('dynamicReportMaxItems', { max: maxItems })}</span>}</span>
               <div className="flex gap-2">
                 <button onClick={() => setOpen(false)} className="h-8 px-3 text-xs rounded-md border border-border hover:bg-muted/50">{ui('cancel')}</button>
                 <button onClick={confirm} className="h-8 px-3 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90">OK</button>
