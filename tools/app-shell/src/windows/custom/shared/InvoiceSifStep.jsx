@@ -127,6 +127,10 @@ function missingRequiredFields(preview, values) {
 }
 
 // SifTab.jsx's display logic for the two VERI*FACTU flags: mutually exclusive on the type.
+// Known limit of a bulk run mixing ordinary and rectificative invoices: the two flags are ONE slot
+// shared by both kinds, shown by the ORDINARY type (`values.etvfacInvType`), not by the
+// rectificatives' own type (`BULK_RECTIFICATIVE_VF_KEY`). Such runs are practically unreachable
+// (orders do not produce rectificatives in a normal setup), so the slot is not split.
 function isFieldShown(name, values) {
   const invType = values.etvfacInvType;
   if (name === 'etvfacSimpinvart7273') return invType !== 'R5' && invType !== 'F2';
@@ -465,8 +469,10 @@ function FieldRow({ label, htmlFor, children, wide, required }) {
 }
 
 function OptionField({ id, spec, value, onChange, ui, disabled, required, placeholder = '—' }) {
-  const allowed = new Set(spec.options ?? []);
-  const options = (FIELD_OPTIONS[spec.name] ?? []).filter(o => allowed.size === 0 || allowed.has(o.value));
+  // No `options` list means "every code of the field"; an EMPTY list (a bulk run whose orders
+  // accept no code in common) offers none.
+  const allowed = spec.options == null ? null : new Set(spec.options);
+  const options = (FIELD_OPTIONS[spec.name] ?? []).filter(o => allowed === null || allowed.has(o.value));
   const key = keyOf(spec);
   return (
     <Select value={value || undefined} onValueChange={onChange} disabled={disabled} data-testid={`Select__sifstep_${key}`}>

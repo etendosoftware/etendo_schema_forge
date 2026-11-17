@@ -3305,6 +3305,12 @@ Behaviour the hook already owns — do not re-implement it:
     the ordinary F1/F2 one and the R1–R5 one of the rectificatives
     (`BULK_RECTIFICATIVE_VF_KEY`), since it is one backend field with two meanings. Which order is
     a rectificative comes from each preview's own `rectificative` flag.
+    Known limit: in such a mixed run the two VERI\*FACTU flags (`etvfacSimpinvart7273` /
+    `etvfacInvNoIDArt61d`) are one slot shared by both kinds and are shown according to the
+    ordinary invoices' type, not the rectificatives' R-code. Mixed runs are practically unreachable
+    (orders do not produce rectificatives in a normal setup), so the slot is not split.
+  - **Shared option fields** offer only the codes every invoice carrying them accepts; if they
+    accept none in common, the select offers nothing.
 - **Option labels:** any SIF select uses `sifOptionLabel(option, ui)` ("CODE - Label", the code
   once), as the SIF tab does.
 

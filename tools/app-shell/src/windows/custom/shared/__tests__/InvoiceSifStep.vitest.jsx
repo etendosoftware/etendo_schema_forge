@@ -303,19 +303,19 @@ describe('bulk step — per-order payload, blocking and mixed runs', () => {
     },
     siiAuthorizationAvailable: true,
   });
-  // A rectificative: same fields plus the SII motive, and R-codes on VERI*FACTU's type.
+  // A sales rectificative as the backend previews it: the SII motive INSTEAD of the SII key, and
+  // R-codes on VERI*FACTU's type.
   const rectificative = (fields = {}) => ({
     ...ordinary(),
     rectificative: true,
     fieldSpecs: [
       { name: 'etsgDateOperation', system: 'SII', type: 'date' },
-      { name: 'aeatsiiClaveTipo', system: 'SII', type: 'option', options: ['F1', 'F2', 'R'] },
       { name: 'aeatsiiMotivoRectif', system: 'SII', type: 'option', options: ['R1', 'R2', 'R3', 'R4', 'R5'] },
       { name: 'aeatsiiDescripcionSii', system: 'SII', type: 'text' },
       { name: 'etvfacInvType', system: 'Verifactu', type: 'option', options: ['R1', 'R2', 'R3', 'R4', 'R5'] },
     ],
     fields: {
-      etsgDateOperation: '2026-11-10', aeatsiiClaveTipo: 'R', aeatsiiMotivoRectif: null,
+      etsgDateOperation: '2026-11-10', aeatsiiMotivoRectif: null,
       aeatsiiDescripcionSii: 'Abono', etvfacInvType: null, ...fields,
     },
   });
@@ -445,8 +445,6 @@ describe('bulk step — per-order payload, blocking and mixed runs', () => {
           expect(rowOf(testId)).not.toHaveTextContent('invoiceSifStep.rectificativeOnly'));
         [`Select__sifstep_${BULK_RECTIFICATIVE_VF_KEY}`, 'Select__sifstep_aeatsiiMotivoRectif'].forEach(testId =>
           expect(rowOf(testId)).toHaveTextContent('invoiceSifStep.rectificativeOnly'));
-        // A shared field offers only the codes every order accepts: no 'R' for the ordinary one.
-        expect(screen.queryByTestId('pick-Select__sifstep_aeatsiiClaveTipo-R')).not.toBeInTheDocument();
 
         fireEvent.click(screen.getByTestId('pick-Select__sifstep_aeatsiiMotivoRectif-R2'));
         fireEvent.click(screen.getByTestId(`pick-Select__sifstep_${BULK_RECTIFICATIVE_VF_KEY}-R3`));
@@ -458,6 +456,25 @@ describe('bulk step — per-order payload, blocking and mixed runs', () => {
         expect(rect).toMatchObject({ aeatsiiMotivoRectif: 'R2', etvfacInvType: 'R3' });
         cleanup();
       }
+    });
+
+    // A shared option field offers only the codes every order carrying it accepts, and an EMPTY
+    // intersection offers none (never every code, which would let a value go to an invoice that
+    // refuses it).
+    it('a shared option field offers the intersection of the codes, and none when it is empty', async () => {
+      const withKeys = codes => ({
+        ...ordinary(),
+        fieldSpecs: ordinary().fieldSpecs.map(spec => (spec.name === 'aeatsiiClaveTipo' ? { ...spec, options: codes } : spec)),
+      });
+      const picks = () => ['F1', 'F2', 'F4'].filter(code =>
+        screen.queryByTestId(`pick-Select__sifstep_aeatsiiClaveTipo-${code}`));
+
+      await renderBulk([withKeys(['F1', 'F2']), withKeys(['F2', 'F4'])]);
+      expect(picks()).toEqual(['F2']);
+      cleanup();
+
+      await renderBulk([withKeys(['F1']), withKeys(['F4'])]);
+      expect(picks()).toEqual([]);
     });
 
     it('a run of rectificatives only does not tag anything as rectificative-only', async () => {
