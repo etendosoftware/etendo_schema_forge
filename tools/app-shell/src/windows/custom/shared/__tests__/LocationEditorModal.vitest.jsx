@@ -238,6 +238,23 @@ describe('LocationEditorModal', () => {
     expect(cancelButton()).toBeInTheDocument();
   });
 
+  // CP-7 (ETP-5806 QA, Isa) — regression guard for the Save button's color. A previous
+  // round shipped a black/lime pattern on a misread Figma reference; it was corrected to
+  // the standard primary-action blue (matching InlineCreateModal's `inline-create-submit`).
+  // The button markup lives once in the Footer, unconditionally — same classes whether or
+  // not the legacy-address banner is showing — so this one assertion on a normal (no
+  // banner) create form guards both states; the second test below pins it explicitly for
+  // the legacy-banner-shown state too, so a future split of the two render paths cannot
+  // silently regress just one of them.
+  it('renders the Save button with the current blue classes, not the old black/lime set', () => {
+    renderModal();
+    const classList = saveButton().className;
+    expect(classList).toContain('border-primary');
+    expect(classList).toContain('bg-primary');
+    expect(classList).toContain('text-primary-foreground');
+    expect(classList).not.toMatch(/black|lime/i);
+  });
+
   it('calls onClose when cancel button is clicked', () => {
     const { props } = renderModal();
     fireEvent.click(cancelButton());
@@ -986,6 +1003,33 @@ describe('LocationEditorModal', () => {
       expect(banner).toHaveTextContent('Old Street 12, 3B');
     });
 
+    // CP-7 (ETP-5806 QA) — pins the Save button's blue classes specifically while the
+    // legacy-address banner IS showing, complementing the normal-state assertion above
+    // ("renders the Save button with the current blue classes..."). Both must hold: the
+    // button is declared once, unconditionally, in the Footer — but a future refactor
+    // that splits the banner-shown and normal render paths must not regress just one.
+    it('keeps the Save button on the current blue classes while the legacy-address banner is shown', async () => {
+      global.fetch = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            response: { data: [{ id: 'loc-legacy-color', address: 'Old Street 12', country: 'ES', 'country$_identifier': 'Spain' }] },
+            items: [],
+            hasMore: false,
+          }),
+        }),
+      );
+
+      renderModal({ rowId: 'loc-legacy-color' });
+
+      await screen.findByTestId('location-legacy-address-banner');
+      const classList = saveButton().className;
+      expect(classList).toContain('border-primary');
+      expect(classList).toContain('bg-primary');
+      expect(classList).toContain('text-primary-foreground');
+      expect(classList).not.toMatch(/black|lime/i);
+    });
+
     it('does not show the banner when editing a record that already has structured fields', async () => {
       global.fetch = vi.fn(() =>
         Promise.resolve({
@@ -1062,9 +1106,14 @@ describe('LocationEditorModal', () => {
       expect(banner).toHaveTextContent('Calle OCR 99');
     });
 
-    // CP-7 (ETP-5806 QA, Isa) — repro: Figma's "Pop Up Alert" reference shows a visible
-    // "Copiar" text button under each old line, not a bare icon-only control.
-    it('renders a visible "Copiar" label on the copy button, not an icon-only control', async () => {
+    // REWRITTEN (CP-7, ETP-5806 QA, Isa) — an earlier round read Figma's "Pop Up Alert"
+    // reference as showing a visible "Copiar" text button and asserted a text label. Isa
+    // confirmed the icon-only button (matching `CopyButton`'s only other call site,
+    // `CopyBlock`, which never passes `label`) was correct as-is — see `LegacyAddressLineRow`'s
+    // doc comment above. This test now guards the current, correct contract: no visible text
+    // label, only the icon, with the translated "copy" action exposed via `aria-label`/`title`
+    // for accessibility.
+    it('renders an icon-only copy button, with no visible text label', async () => {
       global.fetch = vi.fn(() =>
         Promise.resolve({
           ok: true,
@@ -1079,7 +1128,10 @@ describe('LocationEditorModal', () => {
       renderModal({ rowId: 'loc-legacy-label' });
 
       const copyBtn = await screen.findByTestId('location-legacy-banner-address1-copy');
-      expect(copyBtn).toHaveTextContent('copy');
+      // No visible text node — only the (mocked) icon, which renders with no text children.
+      expect(copyBtn).toHaveTextContent('');
+      expect(copyBtn).toHaveAttribute('aria-label', 'copy');
+      expect(copyBtn).toHaveAttribute('title', 'copy');
     });
 
     // ETP-5806 follow-up round 2 — the single `location-legacy-address-copy` button was
@@ -1149,7 +1201,7 @@ describe('LocationEditorModal', () => {
   // Alert" reference, which has no dismiss affordance on this banner.)
   // ---------------------------------------------------------------------------
 
-  describe('legacy-address banner — persistence and no dismiss control (ETP-5806 CP-7)', () => {
+  describe('legacy-address banner — persistence and dismiss (ETP-5806 CP-7)', () => {
     function mockLegacyRecord(rowId = 'loc-legacy-persist') {
       global.fetch = vi.fn(() =>
         Promise.resolve({
@@ -1179,15 +1231,51 @@ describe('LocationEditorModal', () => {
       expect(screen.getByTestId('location-legacy-address-banner')).toBeInTheDocument();
     });
 
-    // CP-7 (ETP-5806 QA, Isa) — repro: Figma's "Pop Up Alert" reference for this banner
-    // carries no dismiss "X"; it must not be user-dismissable at all.
-    it('renders with no dismiss control', async () => {
+    // REWRITTEN (ETP-5806 CP-7, Isa) — an earlier round read Figma's "Pop Up Alert" reference
+    // as having no dismiss control and asserted the banner was NOT dismissable. Isa later
+    // confirmed the dismiss "X" should be there (see the component's doc comment above the
+    // banner); this test now guards the correct, current contract: the "X" exists and clicking
+    // it hides the banner for the current modal session.
+    it('lets the user dismiss the banner, hiding it for the current session', async () => {
       mockLegacyRecord();
       renderModal({ rowId: 'loc-legacy-persist' });
 
       await screen.findByTestId('location-legacy-address-banner');
 
-      expect(screen.queryByTestId('location-legacy-banner-dismiss')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('location-legacy-banner-dismiss'));
+
+      expect(screen.queryByTestId('location-legacy-address-banner')).not.toBeInTheDocument();
+    });
+
+    // Regression test for a bug fixed today (ETP-5806 QA, Isa, CP-7 follow-up): before the
+    // fix, `legacyBannerDismissed` was never reset, so dismissing the banner once suppressed
+    // the warning permanently across reopens of the SAME record even though nothing was
+    // saved. The fix resets `legacyBannerDismissed` to false on the same "Reset and load data
+    // on open" effect that reseeds `isLegacyAddress` (keyed on `open`).
+    it('shows the banner again after closing (Cancel) and reopening the same record, even though it was dismissed before closing', async () => {
+      mockLegacyRecord();
+      const baseProps = {
+        open: true,
+        onClose: vi.fn(),
+        onSaved: vi.fn(),
+        rowId: 'loc-legacy-persist',
+        bpId: 'bp-1',
+        apiBase: '/api/contacts',
+        token: 'tok',
+      };
+      const { rerender } = render(<LocationEditorModal {...baseProps} />);
+
+      await screen.findByTestId('location-legacy-address-banner');
+      fireEvent.click(screen.getByTestId('location-legacy-banner-dismiss'));
+      expect(screen.queryByTestId('location-legacy-address-banner')).not.toBeInTheDocument();
+
+      // Close the modal (Cancel) — the parent controls `open`.
+      rerender(<LocationEditorModal {...baseProps} open={false} />);
+
+      // Reopen for the SAME record — nothing was saved.
+      rerender(<LocationEditorModal {...baseProps} open={true} />);
+
+      expect(await screen.findByTestId('location-legacy-address-banner')).toBeInTheDocument();
     });
   });
 

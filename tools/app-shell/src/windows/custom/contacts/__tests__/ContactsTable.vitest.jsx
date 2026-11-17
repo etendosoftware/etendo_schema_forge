@@ -244,6 +244,32 @@ describe('ContactsTable', () => {
     });
   });
 
+  // ETP-5806 follow-up — the computed eTGOLocation column resolves to a dash-joined
+  // identifier string that can carry consecutive empty segments (e.g. a country with no
+  // region); sanitizeDashJoinedIdentifier collapses them before rendering (@/lib/locationAddress.js).
+  describe('eTGOLocation column (dash-joined identifier sanitization, ETP-5806 follow-up)', () => {
+    function renderLocationCell(row) {
+      render(<ContactsTable {...defaultProps} />);
+      const column = dataTableProps.columns.find((c) => c.key === 'eTGOLocation');
+      return render(<div data-testid="location-cell">{column.render(row)}</div>);
+    }
+
+    it('collapses consecutive empty segments in a dash-joined identifier', () => {
+      renderLocationCell({ id: 'bp-1', 'eTGOLocation$_identifier': 'Calle, 123 -  -  - Madrid -  - España' });
+      expect(screen.getByTestId('location-cell')).toHaveTextContent('Calle, 123 - Madrid - España');
+    });
+
+    it('falls back to the TextCell placeholder (—) when the identifier is undefined, instead of an empty string', () => {
+      renderLocationCell({ id: 'bp-2' });
+      expect(screen.getByTestId('location-cell')).toHaveTextContent('—');
+    });
+
+    it('falls back to the TextCell placeholder (—) when the identifier is explicitly null', () => {
+      renderLocationCell({ id: 'bp-3', 'eTGOLocation$_identifier': null });
+      expect(screen.getByTestId('location-cell')).toHaveTextContent('—');
+    });
+  });
+
   describe('empty list (emptyListContext)', () => {
     it('renders ContactsEmptyState instead of the grid, handing it the context', () => {
       render(<ContactsTable {...defaultProps} emptyListContext={{ onCreate: vi.fn() }} />);

@@ -84,4 +84,19 @@ describe('sanitizeDashJoinedIdentifier', () => {
     assert.equal(sanitizeDashJoinedIdentifier(null), '');
     assert.equal(sanitizeDashJoinedIdentifier(''), '');
   });
+
+  // Regression guard (QA, ETP-5806): collapses only genuinely-empty segments, never a
+  // non-empty one even when it is short or sits right next to a collapsed pair. Real
+  // live example via MCP: the two consecutive blank segments ("" between "2" and "- -"
+  // before "Madrid") collapse, while "2", "Madrid" and "MADRID" — all short, all
+  // dash-adjacent — must survive untouched. This already works today because the
+  // implementation is split-then-filter(Boolean), never a dash-collapsing regex; this
+  // test exists to catch a future "simplification" that would merge non-empty segments.
+  it('never swallows a short non-empty segment adjacent to collapsed empty ones', () => {
+    const raw = 'P, 1 - 2 -  -  - Madrid - MADRID - España';
+    assert.equal(
+      sanitizeDashJoinedIdentifier(raw),
+      'P, 1 - 2 - Madrid - MADRID - España',
+    );
+  });
 });
