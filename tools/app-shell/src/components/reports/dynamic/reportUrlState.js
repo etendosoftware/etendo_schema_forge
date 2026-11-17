@@ -90,7 +90,7 @@ export function readReportUrlState(search, report, { orgIds = [] } = {}) {
   }
   for (const { name } of spec.pickers) {
     // A list beyond the cap keeps its first MAX_PICKER_IDS; an invalid id drops the whole value.
-    const ids = (q.get(name) || '').split(',').filter(Boolean).slice(0, MAX_PICKER_IDS);
+    const ids = [...new Set((q.get(name) || '').split(',').filter(Boolean))].slice(0, MAX_PICKER_IDS);
     if (ids.length && ids.every((id) => ID.test(id))) patch[name] = ids.join(',');
   }
   return patch;

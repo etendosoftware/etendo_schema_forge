@@ -101,6 +101,8 @@ describe('readReportUrlState', () => {
     const patch = readReportUrlState(`?bPartnerId=${ids.join(',')}`, PL);
     expect(patch.bPartnerId.split(',')).toEqual(ids.slice(0, MAX_PICKER_IDS));
     expect(MAX_PICKER_IDS).toBe(100);
+    // Duplicates count once, before the cap.
+    expect(readReportUrlState(`?bPartnerId=${[...ids.slice(0, 99), ...ids.slice(0, 99), 'ID200', 'ID201'].join(',')}`, PL).bPartnerId.split(',')).toEqual([...ids.slice(0, 99), 'ID200']);
   });
 
   it('an org is restored only when the picker can offer it: unknown, 0 and * are ignored', () => {

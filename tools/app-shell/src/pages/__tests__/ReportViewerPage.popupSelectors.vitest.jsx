@@ -1767,8 +1767,9 @@ describe('PopupMultiSelector — maxItems cap and exact names (ETP-6239)', () =>
     await user.click(b);
     expect(c).toBeDisabled();
     await user.click(c);
-    expect(screen.getByTestId('PopupMultiSelector__maxItems')).toBeInTheDocument();
-    await user.click(a); // unchecking frees a slot
+    expect(screen.getByTestId('PopupMultiSelector__maxItems')).toHaveTextContent('dynamicReportMaxItems'); // the region is always mounted; its text appears at the cap
+    await user.click(a);
+    expect(screen.getByTestId('PopupMultiSelector__maxItems')).toBeEmptyDOMElement(); // unchecking frees a slot
     expect(c).not.toBeDisabled();
     await user.click(c);
     await user.click(screen.getByText('OK'));

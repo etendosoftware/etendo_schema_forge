@@ -605,7 +605,7 @@ export function PopupMultiSelector({ selector, label, onChange, value = '', disp
     optionsListContent = orderedOptions.map(o => {
       const isSelected = pending.some(s => s.id === o.id);
       return (
-        <label key={o.id} className="flex items-center gap-3 px-4 py-2 hover:bg-muted/40 cursor-pointer">
+        <label key={o.id} className={`flex items-center gap-3 px-4 py-2 hover:bg-muted/40 ${!isSelected && pending.length >= maxItems ? 'opacity-60' : 'cursor-pointer'}`}>
           <input
             type="checkbox"
             checked={isSelected}
@@ -677,7 +677,7 @@ export function PopupMultiSelector({ selector, label, onChange, value = '', disp
               {optionsListContent}
             </div>
             <div className="flex items-center justify-between px-4 py-3 border-t border-border/30 bg-muted/20">
-              <span className="text-xs text-muted-foreground">{ui('selected', { count: pending.length })}{pending.length >= maxItems && <span role="status" data-testid="PopupMultiSelector__maxItems"> · {ui('dynamicReportMaxItems', { max: maxItems })}</span>}</span>
+              <span className="text-xs text-muted-foreground">{ui('selected', { count: pending.length })}<span role="status" data-testid="PopupMultiSelector__maxItems">{pending.length >= maxItems && ` · ${ui('dynamicReportMaxItems', { max: maxItems })}`}</span></span>
               <div className="flex gap-2">
                 <button onClick={() => setOpen(false)} className="h-8 px-3 text-xs rounded-md border border-border hover:bg-muted/50">{ui('cancel')}</button>
                 <button onClick={confirm} className="h-8 px-3 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90">OK</button>

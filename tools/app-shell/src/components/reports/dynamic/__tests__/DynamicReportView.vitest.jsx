@@ -1402,17 +1402,29 @@ describe('DynamicReportView — selections in the URL (ETP-6239)', () => {
     expect(JSON.parse(init.body).params._display_bPartnerId).toBe('A, B, Acme, S.L.');
   });
 
-  it('drops a well-formed id the lookup does not know from the selection, the query and the URL', async () => {
+  it('drops an id the lookup does not know when others resolve, but never clears a filter whose ids all fail to resolve', async () => {
     link('bPartnerId=BP1,STALE9');
     const view1 = renderView();
     await waitFor(() => expect(window.location.search).toBe('?report=profit-loss&bPartnerId=BP1'));
     await waitFor(() => expect(queries().at(-1).bPartnerId).toBe('BP1'));
     view1.unmount();
     link('bPartnerId=STALE9');
-    const view = renderView();
-    await waitFor(() => expect(window.location.search).toBe('?report=profit-loss'));
-    await waitFor(() => expect(queries().at(-1).bPartnerId).toBe(''));
-    view.unmount();
+    renderView();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    await new Promise((r) => setTimeout(r, 100));
+    expect(window.location.search).toBe('?report=profit-loss&bPartnerId=STALE9'); // kept: not silently company-wide
+    expect(queries().at(-1).bPartnerId).toBe('STALE9');
+  });
+
+  it('a backend that ignores `ids` and answers its first page drops nothing', async () => {
+    link('bPartnerId=BP1,BP9');
+    const base = apiFetchMock.getMockImplementation();
+    apiFetchMock.mockImplementation((u, i) => (u.includes('ids=') ? Promise.resolve(json({ items: [{ id: 'BP1', name: 'Acme' }, { id: 'BP2', name: 'Beta' }] })) : base(u, i)));
+    renderView();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    await new Promise((r) => setTimeout(r, 100));
+    expect(window.location.search).toContain('bPartnerId=BP1%2CBP9');
+    apiFetchMock.mockImplementation(base);
   });
 
   it('a lookup that fails keeps the restored id (nothing is dropped on an error)', async () => {

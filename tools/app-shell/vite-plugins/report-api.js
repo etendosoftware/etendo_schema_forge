@@ -638,15 +638,17 @@ export default function reportApiPlugin(options = {}) {
                   res.end(JSON.stringify({ error: `ids is not supported for ${type}` }));
                   return;
                 }
-                idList = [...new Set(idsRaw.split(',').map((s) => s.trim()))].slice(0, 100);
-                if (idList.length === 0 || idList.some((i) => !/^[A-Za-z0-9_-]{1,64}$/.test(i))) {
+                // Invalid ids are dropped one by one (the servlet's charset), the valid ones kept; none left = empty.
+                idList = [...new Set(idsRaw.split(',').map((s) => s.trim()))].filter((i) => /^[0-9A-Fa-f-]{1,36}$/.test(i)).slice(0, 100);
+                if (idList.length === 0) {
                   res.setHeader('Content-Type', 'application/json');
                   res.end(JSON.stringify({ items: [], totalCount: 0, hasMore: false }));
                   return;
                 }
               }
               const search = byIds ? '%' : `%${q}%`;
-              const whereFragments = [queryCfg.fromWhere];
+              // `ids` ignores isactive like the servlet: a deactivated contact/product still resolves its name.
+              const whereFragments = [byIds ? queryCfg.fromWhere.replace("isactive='Y'", '1=1') : queryCfg.fromWhere];
               // $1 = search; additional dynamic params start at $2
               const values = [search];
 
