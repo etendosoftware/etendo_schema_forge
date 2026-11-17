@@ -1,5 +1,9 @@
 // @covers tools/app-shell/src/windows/registry.js
 // @covers tools/app-shell/src/windows/RedirectWindow.jsx
+// @covers tools/app-shell/src/menu.json
+// The remittance loader test below resolves the route guard, not the generated window behind it:
+// stubbing the generated module keeps that import light (the full window timed out under suite load).
+vi.mock('@generated/remittance/generated/web/remittance/index.jsx', () => ({ default: () => null }));
 import { buildMenuGroups, getAllWindowNames, apiOnlyWindows, buildWindowMap, filterMenuGroupsByAccess } from '../registry';
 import menuConfig from '../../menu.json';
 import { defaultNavigation, optionalNavigation, hiddenNavigation, navigationProfiles, expectedNavigation, navigationPermissions, expectNavigation } from './navigationExpectations.js';
@@ -268,6 +272,69 @@ describe('registry', () => {
       expect(reports.items.map(i => i.name)).toContain('report-viewer-finance');
     });
 
+    describe('item gated by BOTH accessWindowId and a capability (invoice-inbox)', () => {
+      const inbox = () => [{ group: 'Purchases', items: [{ name: 'invoice-inbox', accessWindowId: 'AW1', capability: 'invoiceInbox' }] }];
+      const names = result => result.flatMap(g => g.items.map(i => i.name));
+
+      it('is visible only when the capability is true and the window access is granted', () => {
+        expect(names(filterMenuGroupsByAccess(inbox(), null, { invoiceInbox: true }, { AW1: 'full' }))).toEqual(['invoice-inbox']);
+      });
+
+      it('is hidden when the capability is true but the window access is not granted', () => {
+        expect(names(filterMenuGroupsByAccess(inbox(), null, { invoiceInbox: true }, {}))).toEqual([]);
+      });
+
+      it('is hidden when the window access is granted but the capability is false', () => {
+        expect(names(filterMenuGroupsByAccess(inbox(), null, { invoiceInbox: false }, { AW1: 'full' }))).toEqual([]);
+      });
+
+      it('stays hidden for an admin without the capability (the admin bypass only waives window access)', () => {
+        expect(names(filterMenuGroupsByAccess(inbox(), null, { isAdminOrClientAdmin: true }, {}))).toEqual([]);
+      });
+
+      it('is visible for an admin who has the capability, without a window grant', () => {
+        expect(names(filterMenuGroupsByAccess(inbox(), null, { isAdminOrClientAdmin: true, invoiceInbox: true }, {}))).toEqual(['invoice-inbox']);
+      });
+    });
+
+    // ETP-6148 — the real menu.json entry, not a synthetic one: Finance › Remittance is gated by
+    // the Classic Remittance window grant AND the per-account sepaRemittances capability.
+    describe('remittance menu entry (accessWindowId + sepaRemittances)', () => {
+      const REMITTANCE_WINDOW = 'FF8080812E71F7C7012E71FD0499001B';
+      const visible = (capabilities, windowAccess) => filterMenuGroupsByAccess(
+        buildMenuGroups(), new Set(), capabilities, windowAccess,
+      ).flatMap(g => g.items.map(i => i.name)).includes('remittance');
+
+      it('is declared in Finance with its window anchor and capability', () => {
+        const finance = menuConfig.menu.find(g => g.items.some(i => i.name === 'remittance'));
+        const item = finance.items.find(i => i.name === 'remittance');
+        expect(finance.group).toBe('Finance');
+        expect(item).toMatchObject({ accessWindowId: REMITTANCE_WINDOW, capability: 'sepaRemittances' });
+        expect(item.windowId).toBeUndefined();
+      });
+
+      it('is visible with the capability and the window grant', () => {
+        expect(visible({ sepaRemittances: true }, { [REMITTANCE_WINDOW]: 'full' })).toBe(true);
+      });
+
+      it('is hidden without the capability, even with the window grant', () => {
+        expect(visible({ sepaRemittances: false }, { [REMITTANCE_WINDOW]: 'full' })).toBe(false);
+        expect(visible({}, { [REMITTANCE_WINDOW]: 'full' })).toBe(false);
+      });
+
+      it('is hidden without the window grant, even with the capability', () => {
+        expect(visible({ sepaRemittances: true }, {})).toBe(false);
+      });
+
+      it('is hidden for an admin without the capability', () => {
+        expect(visible({ isAdminOrClientAdmin: true }, {})).toBe(false);
+      });
+
+      it('is hidden while the access maps are loading', () => {
+        expect(visible(null, null)).toBe(false);
+      });
+    });
+
     it('shows an accessWindowId-gated item when windowAccess[id] is "read-only" (presence, not tier value, is what is checked)', () => {
       const groups = [{
         group: 'Reports',
@@ -519,7 +586,9 @@ describe('registry', () => {
       const { allowedIds, capabilities, windowAccess } = navigationPermissions([entry]);
       const groups = filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess, NOT_DISMISSED);
       const bypassedAnchors = entry.capability === 'isAdminOrClientAdmin'
-        ? defaultNavigation.filter(candidate => candidate.accessWindowId) : [];
+        // The admin bypass only waives the accessWindowId axis; an entry that ALSO declares its own
+        // capability (invoice-inbox -> invoiceInbox) stays hidden until that capability is granted.
+        ? defaultNavigation.filter(candidate => candidate.accessWindowId && !candidate.capability) : [];
       // A capability is a NAMED BOOLEAN, not a per-entry grant: switching one on reveals every
       // entry gated on that same name, not only the entry we asked for. Latent until ETP-5269
       // added a second `isAdminOrClientAdmin` entry next to `roles` — with one entry per
@@ -707,6 +776,16 @@ describe('registry', () => {
     it('simple-g-l-journal loads the record-keeping redirect', async () => {
       const { default: Redirect } = await buildWindowMap()['simple-g-l-journal'].loader();
       expect(Redirect.name).toBe('RedirectWindowKeepPath');
+    });
+
+    // ETP-6148 — the remittance entry loads the route guard, not the bare generated window, so a
+    // URL typed by hand still meets the capability + window-access check.
+    it('remittance loads the capability + window-access route guard', async () => {
+      const entry = buildWindowMap().remittance;
+      expect(entry).toBeDefined();
+      const mod = await entry.loader();
+      expect(mod.default.name).toBe('RemittanceRoute');
+      expect(mod.REMITTANCE_WINDOW_ID).toBe('FF8080812E71F7C7012E71FD0499001B');
     });
 
     it('does not register a hidden window without redirect or routeOnly', () => {

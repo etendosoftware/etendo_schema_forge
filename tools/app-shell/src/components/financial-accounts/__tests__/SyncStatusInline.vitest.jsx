@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/components/financial-accounts/SyncStatusInline.jsx
 // @covers tools/app-shell/src/components/financial-accounts/LastSyncLabel.jsx
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({
@@ -11,12 +11,20 @@ vi.mock('@/i18n', () => ({
       financeAccountsNeverSynced: 'Nunca sincronizada',
       financeAccountsSyncPending: 'Sincronización pendiente',
       financeAccountsConnectBank: 'Conectar banco',
+      financeAccountsBankSyncInProgress: 'Sincronización en curso, por favor espere…',
     };
     return map[key] ?? key;
   },
 }));
 
+// The shared bank-sync state (BankSyncContext) is real; only its network edge is stubbed.
+const mockSync = vi.fn();
+vi.mock('@/hooks/useBankConnectionActions.js', () => ({
+  useBankConnectionActions: () => ({ sync: mockSync, syncStatus: vi.fn().mockResolvedValue({}) }),
+}));
+
 import { SyncStatusInline } from '../SyncStatusInline.jsx';
+import { BankSyncProvider, useBankSync } from '@/windows/custom/financial-account/BankSyncContext.jsx';
 
 const NOW = new Date('2026-10-06T12:00:00Z').getTime();
 const SIXTY_SECONDS_AGO = '2026-10-06T11:59:00Z';
@@ -214,3 +222,79 @@ describe('SyncStatusInline — never-synced tone', () => {
   });
 });
 
+
+// ETP-6154 — while a bank sync of the account runs (from any entry point of the window), the line
+// says so instead of the last-sync age. `syncing` overrides the shared state for a host rendered
+// outside the provider (the detail header, in the page chrome).
+describe('SyncStatusInline — bank sync in progress', () => {
+  const IN_PROGRESS = 'Sincronización en curso, por favor espere…';
+  const CONNECTED = { id: 'acc-1', type: 'B', bankConnected: true, lastSyncDate: SIXTY_SECONDS_AGO };
+  const sibling = {};
+  function OtherEntryPoint() {
+    sibling.bankSync = useBankSync();
+    return null;
+  }
+
+  let finishSync;
+  beforeEach(() => {
+    mockSync.mockReset();
+    mockSync.mockImplementation(() => new Promise((resolve) => { finishSync = resolve; }));
+  });
+
+  function renderInWindow(props) {
+    return render(
+      <BankSyncProvider>
+        <OtherEntryPoint />
+        <SyncStatusInline {...props} />
+      </BankSyncProvider>,
+    );
+  }
+
+  it('shows the in-progress line while the shared state says the account syncs', async () => {
+    renderInWindow({ account: CONNECTED });
+    expect(screen.getByText(SYNCED_1_MIN)).toBeInTheDocument();
+
+    await act(async () => { sibling.bankSync.startSync('acc-1'); });
+
+    const line = screen.getByTestId('account-sync-in-progress-acc-1');
+    expect(line).toHaveTextContent(IN_PROGRESS);
+    expect(line).toHaveAttribute('aria-live', 'polite');
+    expect(screen.queryByText(SYNCED_1_MIN)).toBeNull();
+
+    await act(async () => { finishSync({ status: 'OK' }); });
+    expect(screen.queryByTestId('account-sync-in-progress-acc-1')).toBeNull();
+    expect(screen.getByText(SYNCED_1_MIN)).toBeInTheDocument();
+  });
+
+  it('ignores a sync of another account', async () => {
+    renderInWindow({ account: CONNECTED });
+    await act(async () => { sibling.bankSync.startSync('acc-2'); });
+
+    expect(screen.queryByTestId('account-sync-in-progress-acc-1')).toBeNull();
+    expect(screen.getByText(SYNCED_1_MIN)).toBeInTheDocument();
+  });
+
+  it('syncing=true shows the in-progress line outside any provider', () => {
+    render(<SyncStatusInline account={CONNECTED} syncing />);
+    expect(screen.getByTestId('account-sync-in-progress-acc-1')).toHaveTextContent(IN_PROGRESS);
+  });
+
+  it('syncing=false wins over the shared state', async () => {
+    renderInWindow({ account: CONNECTED, syncing: false });
+    await act(async () => { sibling.bankSync.startSync('acc-1'); });
+
+    expect(screen.queryByTestId('account-sync-in-progress-acc-1')).toBeNull();
+    expect(screen.getByText(SYNCED_1_MIN)).toBeInTheDocument();
+  });
+
+  it('never shows it for an account that is not bank-connected', () => {
+    render(<SyncStatusInline account={{ ...CONNECTED, bankConnected: false, countryIso: 'ES' }} syncing />);
+    expect(screen.queryByTestId('account-sync-in-progress-acc-1')).toBeNull();
+  });
+
+  it('lets a pending connection keep its own warning', () => {
+    render(<SyncStatusInline account={{ ...CONNECTED, bankConnectionPending: true }} syncing />);
+    expect(screen.queryByTestId('account-sync-in-progress-acc-1')).toBeNull();
+    expect(screen.getByText('Sincronización pendiente')).toBeInTheDocument();
+  });
+});

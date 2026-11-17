@@ -307,7 +307,7 @@ export function DetailView({
   formScrollPaddingX = null, sidebarFormScrollPaddingX = null,
   contentOverflow = 'auto',
   formCardPadding = 'p-6',
-  primaryTabsVariant = 'default',
+  primaryTabsVariant = 'default', tabsActiveAccent = 'default', // tabsActiveAccent 'primary': blue active secondary tab
   refetchAfterSave = false,
   secondaryTabsPaddingY = 'py-2.5',
   secondaryTabsShowHoverLine = true,
@@ -2447,7 +2447,7 @@ export function DetailView({
                           getIndicatorCls={() => (linesLayout === 'inlineEditable'
                             ? 'absolute bottom-0 left-0 right-0 h-[2px] bg-foreground'
                             : 'absolute bottom-0 left-2 right-2 h-0.5 bg-foreground rounded-full')}
-                          buttonProps={{ paddingY: secondaryTabsPaddingY, showHoverLine: secondaryTabsShowHoverLine }}
+                          buttonProps={{ paddingY: secondaryTabsPaddingY, showHoverLine: secondaryTabsShowHoverLine, activeAccent: tabsActiveAccent }}
                           data-testid="DetailTabStrip__fa3275" />
                       </div>
 

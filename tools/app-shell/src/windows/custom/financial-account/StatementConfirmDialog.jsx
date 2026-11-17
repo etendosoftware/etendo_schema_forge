@@ -42,9 +42,15 @@ const VARIANT_KEYS = {
  *   busy: boolean,
  *   onConfirm: () => void,
  *   onClose: () => void,
+ *   notice?: import('react').ReactNode,
  * }} props
+ *
+ * `notice` (optional, ETP-6151) is rendered under the description — the Imported Statements tab
+ * passes the bank re-import warning there when deleting a statement of a bank-connected account.
  */
-export function StatementConfirmDialog({ variant, statement, busy, onConfirm, onClose }) {
+export function StatementConfirmDialog({
+  variant, statement, busy, onConfirm, onClose, notice = null,
+}) {
   const ui = useUI();
   const open = variant != null && statement != null;
   const isDelete = variant === 'delete';
@@ -60,14 +66,16 @@ export function StatementConfirmDialog({ variant, statement, busy, onConfirm, on
       open={open}
       onOpenChange={(v) => { if (!v) onClose(); }}
       data-testid="Dialog__858de3">
-      <DialogContent className="max-w-md" data-testid="statement-confirm-dialog">
+      <DialogContent className={notice ? 'max-w-sm bg-card' : 'max-w-md'} data-testid="statement-confirm-dialog">
         <DialogHeader data-testid="DialogHeader__858de3">
           <DialogTitle data-testid="DialogTitle__858de3">{title}</DialogTitle>
           <DialogDescription data-testid="DialogDescription__858de3">{body}</DialogDescription>
         </DialogHeader>
+        {notice}
         <DialogFooter data-testid="DialogFooter__858de3">
           <Button
             variant="outline"
+            size={notice ? 'sm' : undefined}
             onClick={onClose}
             disabled={busy}
             data-testid="Button__858de3">
@@ -75,6 +83,7 @@ export function StatementConfirmDialog({ variant, statement, busy, onConfirm, on
           </Button>
           <Button
             variant={isDelete ? 'destructive' : 'default'}
+            size={notice ? 'sm' : undefined}
             onClick={onConfirm}
             disabled={busy}
             data-testid="statement-confirm-action"

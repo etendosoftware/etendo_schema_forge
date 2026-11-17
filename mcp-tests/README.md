@@ -56,6 +56,8 @@ Tests: `cd mcp-tests && .venv/bin/python -m unittest discover -s tests -t .`
 | `make mcp-compare` | The same suite against two targets, concurrently, under one `compareId`; ends by writing `summary.json` + `summary.md`. | `TARGETS` (`local,holded`), `SUITE`, `SUBJECT` (first target), `REPEAT` (3), `CONCURRENCY` (4), `SEED` (random), `MODEL` |
 | `make mcp-report` | Re-derives `summary.json` + `summary.md` from a comparison's files. Never contacts an MCP or an LLM. | `RUN` (`<compareId>` or a path, required) |
 | `make mcp-stability` | Winner agreement between two comparisons (the ≥ 90 % acceptance target). | `A`, `B` (`compareId`s, required) |
+| `make mcp-compare-routines` | After a KR2.1 comparison, reruns only the tasks it lost that have a routine, with the routines target, and writes both KRs (ETP-6236). | `BASE` (the KR2.1 compareId), `TARGETS` (`<routines target>,<reference>`, required), `REPEAT`, `CONCURRENCY`, `MODEL` |
+| `make mcp-report-routines` | Etendo, Etendo + rutina and the reference side by side, per task, with both KRs (ETP-6236). Writes `runs/<WITH>/routines-vs-base.md`. | `BASE` (comparison without routines), `WITH` (comparison whose Etendo target has `routines = true`) |
 | `make mcp-login` | Pre-warm or refresh a target's OAuth token. Never a prerequisite. | `TARGET` |
 | `make mcp-ui` | The optional Streamlit panel (design §9); it reads `runs/` and can launch single runs. | — |
 
@@ -157,6 +159,48 @@ harness-marker rows, a half-finished earlier seed) and only warns about what it 
 suite sha, rule version, catalogue sha, fixture hash…), when either run is unofficial, or when run B
 reuses run A's `seedId` on any target. Concurrency may differ; it is shown, not compared.
 
+### The "Etendo + rutina" column (child KR of KR2.1, ETP-6236)
+
+The Etendo GO MCP can save **routines** (`etendo_routine`): a known flow run in one call with
+parameters. A task's `platforms.etendo-go` block may declare the routine that solves it
+(`routine: {name, description, params, steps}`, the arguments of `etendo_routine` mode save; only
+Etendo blocks may). On a target with routines, the prompt of a task whose routine was preloaded
+ends with a fixed hint, *"Tenés una rutina guardada para esto: revisá tus rutinas."* (recorded in
+`run.json` as `routineHint`): the child KR measures what the routine is worth when the user knows
+it exists. Without the hint the agent did not look for routines (0 of 2 in the 2026-11-12 pilot),
+which the KR2.1 already measures. Every other prompt is unchanged.
+
+- `etendo_routine` is behind the backend flag `mcp-routines` (off by default, per account): turn it
+  on for the account of every Etendo target that runs with routines
+  (`etendo.go.flags.mcp-routines=true` locally). Without the tool a `routines = true` target is
+  refused before anything is measured.
+- A target with `routines = true` in `config.toml` (Etendo GO only) installs every selected task's
+  routine under its user before the first attempt (replacing one of the same name) and deletes them
+  at the end. `run.json` and `compare.json` record what was installed; a server that refuses a
+  routine aborts the run (exit 2).
+- Any **other** Etendo GO target whose MCP offers `etendo_routine` must have **no** routine saved:
+  the KR2.1 is measured without them. A leftover aborts the run and is named.
+- **The child KR ("KR2.1 hijo (Etendo + rutina)")** answers "how far do routines take us": it is
+  the KR2.1 with every task Etendo **lost** that has a routine replaced by its result with the
+  routine. A task Etendo already wins is never run again and never changes. Same formula and
+  denominator as the KR2.1, so the child KR is never below it.
+- **Workflow.** The list of losses comes from the KR2.1 run itself, so the routines run follows it:
+
+  ```bash
+  make mcp-compare SUITE=okr TARGETS=local,holded REPEAT=3                       # 1. KR2.1
+  make mcp-compare-routines BASE=<compareId of 1> TARGETS=local-routines,holded REPEAT=3
+  ```
+
+  Step 2 asks `runner.report routine-reruns` for the tasks step 1 lost that declare a routine,
+  compares only those (same suite) and writes `routines-vs-base.md` with both KRs and the three
+  columns per task. `make mcp-report-routines BASE= WITH=` re-derives it later.
+- The routines run's own summary is headed "KR2.1 hijo" and lists in how many attempts the agent
+  ran the routine (`items.routineRuns`). A comparison with routines never pairs with one without
+  them in `mcp-stability`.
+
+Tasks without a routine run as plain Etendo in the routines column. The routines in `okr.yaml`
+were each run with `etendo_routine` mode run on a local environment before being committed.
+
 ## 4. Reading `summary.md`
 
 `runs/<compareId>/summary.md` is the copy-paste projection of `summary.json`. It holds counts and
@@ -167,21 +211,35 @@ otherwise `UNOFFICIAL`, and the figure is still fully reported but is not a KR n
 run whose targets could not check some entities because their MCP does not offer the tool says so:
 `OFFICIAL — 10 entities not verifiable on holded (tools not offered)`. Read it as official, with the
 listed entities taken on trust: their freshness rests on the account having been freshly
-initialized and seeded, not on a read. The KR line (plan `2026-10-22-mcp-okr-metric-base-plan.md`
-§3.3) is *(Etendo Win + Etendo Only) / evaluated tasks* against an 80 % target, always followed by
-the five results, because they say different things about the product:
+initialized and seeded, not on a read. The KR line is *Etendo Win / tasks both platforms can do*
+(Etendo Win + Holded Win + empate) against an 80 % target (Valentin, 2026-11-04; it was
+*(Etendo Win + Etendo Only) / evaluated* until report v6, plan `2026-10-22-mcp-okr-metric-base-plan.md`
+§3.3):
 
-- **Etendo Only / Holded Only** — the other platform declared the task `notPossible` (rule step 0);
-- **Etendo Win / Holded Win** — both sides ran it and rule 2 decided: successes, unrecovered errors,
-  median total tokens of the conversation (catalogue included) with a 10 % margin, then median calls
-  with a 20 % margin;
-- **empate** — nothing separated them.
+- **Etendo Win / Holded Win** — both sides ran it and rule 3 decided. First, **Etendo has to work
+  every time** (rule 3, Valentin 2026-11-05): an Etendo attempt without success loses the task to
+  Holded, whatever Holded did, decided as `1-subjectFailed` (an error the agent recovered from is
+  not a failure). Then successes, unrecovered errors, median total tokens of the conversation
+  (catalogue included) with a 10 % margin, then median calls with a 20 % margin;
+- **empate** — nothing separated them; it counts in the denominator.
 
-Rule 2 requires real token usage: a task where a side has a success without it is *not evaluable*
-(there is no byte fallback — bytes leave the tool catalogue out).
+**Failure feedback.** A target with `feedback_on_failure = "<tool>"` in `config.toml` (the Etendo
+targets set `etendo_feedback`) reports every failed attempt through that tool, after the
+measurement and in a session of its own, so it costs the comparison nothing: the agent's own report
+plus what the harness saw (the effect not found, a wrong answer, tool calls that returned an
+error), with the run, probe and attempt in the summary. The call and its answer are kept in the
+attempt file as `failureFeedback`. A harness error is not a product failure and is not reported.
 
-Ties count in the denominator; not-evaluable and excluded tasks do not. The next line pins the rule
-version, its parameters sha, `REPEAT` and the report version.
+The next line, **Notas**, names the tasks only one platform can do: **Etendo Only / Holded Only**,
+where the other platform declared the task `notPossible` (rule step 0). They do not move the
+number — a task one side cannot do says nothing about which MCP is better — and are listed by id
+so each one can be reviewed as product input. A task part of which both can do is split in the
+suite: the shared part is its own task and counts; the original stays and lands in the notes.
+
+The rule requires real token usage: a task where a side has a success without it is *not evaluable*
+(there is no byte fallback — bytes leave the tool catalogue out). Not-evaluable and excluded tasks
+are out of both the number and the notes. The line after the notes pins the rule version, its
+parameters sha, `REPEAT` and the report version.
 
 **Freshness.** One row per target (`fresh` > `clean` > `unverified` > `dirty`, from least to most
 severe; `unknown` = no checklist), with the initialization instant, `seedId` and the number of

@@ -75,3 +75,21 @@ export function getNeoBaseUrl() {
 export function getSpecBaseUrl(spec) {
   return `${getNeoBaseUrl()}/${spec}`;
 }
+
+/**
+ * ETP-6143 — the inverse of {@link getSpecBaseUrl}: the spec name when `url` is EXACTLY the shape
+ * `getSpecBaseUrl` builds (`/etendo/sws/neo/product`), otherwise `null`.
+ *
+ * Deliberately strict rather than "take the last segment": ETP-5371 is what chopping an arbitrary
+ * base URL leads to. A caller that gets `null` keeps whatever it did before.
+ *
+ * @param {string} url
+ * @returns {string|null}
+ */
+export function specFromBaseUrl(url) {
+  if (typeof url !== 'string') return null;
+  const root = `${getNeoBaseUrl()}/`;
+  if (!url.startsWith(root)) return null;
+  const spec = url.slice(root.length);
+  return /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(spec) ? spec : null;
+}

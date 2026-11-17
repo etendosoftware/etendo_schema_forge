@@ -1,3 +1,4 @@
+// @covers artifacts/goods-receipt/custom/GoodsReceiptActions.jsx
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -125,10 +126,11 @@ describe('GoodsReceiptActions', () => {
     });
 
     it('handleCreateInvoice accepts priceListId and threads it into the POST body', () => {
-      assert.match(src, /const handleCreateInvoice = async \(priceListId\) => \{/);
+      assert.match(src, /const handleCreateInvoice = async \(priceListId, _originInvoices, sifFields\) => \{/);
       assert.match(
         src,
-        /body: JSON\.stringify\(\{ priceListId \}\)/,
+        // ETP-6179: plus the "Datos fiscales" step's values, when the modal produced them
+        /body: JSON\.stringify\(sifFields \? \{ priceListId, sifFields \} : \{ priceListId \}\)/,
       );
     });
 
@@ -298,7 +300,7 @@ describe('GoodsReceiptActions', () => {
     it('guards re-entrant calls with the creatingInvoice flag before doing anything else', () => {
       assert.match(
         src,
-        /const handleCreateInvoice = async \(priceListId\) => \{\s*if \(creatingInvoice\) return;\s*setCreatingInvoice\(true\);/,
+        /const handleCreateInvoice = async \(priceListId, _originInvoices, sifFields\) => \{\s*if \(creatingInvoice\) return;\s*setCreatingInvoice\(true\);/,
       );
     });
 

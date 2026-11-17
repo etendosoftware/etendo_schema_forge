@@ -22,6 +22,8 @@ import {
 import { useUI } from '@/i18n';
 import { ACCOUNT_TYPE } from './tokens';
 import { canConnectToSaltEdge } from './saltEdgeEligibility.js';
+import { BankSyncIcon } from './BankSyncIcon.jsx';
+import { useBankSyncStatus } from '@/windows/custom/financial-account/BankSyncContext.jsx';
 
 /**
  * "Reconectar" for a connection that is still connected but has stopped refreshing (ETP-5089).
@@ -30,8 +32,8 @@ import { canConnectToSaltEdge } from './saltEdgeEligibility.js';
  * Its own flag, `bankConnectionStale`: unlike `bankReconnectable` (deactivated, can be revived) it
  * keeps every connected action (sync, disconnect). Same reconnect flow as a deactivated account's
  * item: the popup re-authorizes the existing connection and its callback refreshes the health that
- * flagged it. Cable, not that item's RefreshCw: it sits right under "Sincronizar ahora", which
- * already uses RefreshCw, so the two must not look alike.
+ * flagged it. Cable, not that item's RefreshCw: it sits right under "Sincronizar ahora", so the two
+ * must not look alike (that one used RefreshCw too until ETP-6154 gave it the bank-sync icon).
  */
 function StaleReconnectMenuItem({ account, ui, onBankConnectionAction }) {
   if (account.bankConnected !== true || account.bankConnectionStale !== true) {
@@ -45,6 +47,37 @@ function StaleReconnectMenuItem({ account, ui, onBankConnectionAction }) {
       <Cable className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="CableReconnectStale__ffaf9f" />
       <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
         {ui('financeAccountsBankConnectionReconnect')}
+      </span>
+    </DropdownMenuItem>
+  );
+}
+
+/**
+ * "Traer extractos" (bank-connected accounts only — the caller decides).
+ *
+ * ETP-6154: reads the window's shared bank-sync state, so while a fetch of this account runs —
+ * started from here or from any other entry point — the item is disabled, its icon bobs and the
+ * label says the fetch is in progress. `title` carries the same text the row button's tooltip shows
+ * (a Radix tooltip inside a menu item would fight the menu for focus and hover).
+ */
+function SyncNowMenuItem({ account, ui, onBankConnectionAction }) {
+  const { syncing } = useBankSyncStatus(account.id);
+  return (
+    <DropdownMenuItem
+      disabled={syncing}
+      aria-busy={syncing}
+      title={ui(syncing ? 'financeAccountsBankSyncInProgress' : 'financeAccountsBankSyncTooltip')}
+      onClick={() => onBankConnectionAction?.('syncNow', account)}
+      data-testid={`account-row-menu-sync-${account.id}`}
+    >
+      {/* 16px, like its siblings: the item's `[&>svg]:size-4` shrinks their bare svgs, and this
+          icon is a wrapper span the rule does not reach. */}
+      <BankSyncIcon
+        spinning={syncing}
+        className="h-4 w-4 text-[hsl(var(--text-disabled))]"
+        data-testid={`account-row-menu-sync-icon-${account.id}`} />
+      <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
+        {ui(syncing ? 'financeAccountsBankSyncInProgress' : 'financeAccountsMenuSyncNow')}
       </span>
     </DropdownMenuItem>
   );
@@ -100,15 +133,11 @@ function AccountRowMenuWriteItems({
         <>
           {bankConnected ? (
             <>
-              <DropdownMenuItem
-                onClick={() => onBankConnectionAction?.('syncNow', account)}
-                data-testid={`account-row-menu-sync-${account.id}`}
-              >
-                <RefreshCw className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="RefreshCw__ffaf9f" />
-                <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
-                  {ui('financeAccountsMenuSyncNow')}
-                </span>
-              </DropdownMenuItem>
+              <SyncNowMenuItem
+                account={account}
+                ui={ui}
+                onBankConnectionAction={onBankConnectionAction}
+                data-testid="SyncNowMenuItem__ffaf9f" />
               <StaleReconnectMenuItem
                 account={account}
                 ui={ui}

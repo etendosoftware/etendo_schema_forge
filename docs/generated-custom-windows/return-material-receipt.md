@@ -777,3 +777,34 @@ An `unpost` of a return receipt that is not posted is refused with **422** (`ETG
 ## "Generar factura rectificativa" title on the post-confirm invoice popup — ETP-5688
 
 The popup opened by "Crear Factura Rectificativa" on a completed (CO), not-yet-invoiced return is the shared `CreateInvoiceConfirmModal`, previously titled with the generic `soManageDocsTitle` ("Generar factura"). It now takes an optional `title` prop (default unchanged elsewhere); `ConfirmWithCreditButtonBase` forwards its `createInvoiceModalTitle` prop, which this window supplies as `returnReceipt.createRectificativeInvoiceTitle` ("Generar factura rectificativa"). The draft-time `ConfirmInOutModal` title ("¿Gestionar factura rectificativa?") and the row-hover Confirmar are unchanged.
+
+## Fiscal data step before the invoice is created — ETP-6179
+
+- **Confirmar** with *Crear factura rectificativa* on (`ConfirmWithCreditButtonBase` →
+  `ConfirmInOutModal`, also the list row's confirm) and **Crear factura rectificativa** on a confirmed
+  return (`CreateInvoiceConfirmModal`).
+- Rectificative: `R4` preselected for the SII motive, the TicketBAI code and the VERI*FACTU type, all
+  editable; SII key `R`/type `I` and the TicketBAI/VERI*FACTU reverse types are set automatically.
+  Before ETP-6179 this flow completed the invoice as an ordinary `F1`. Clearing a code blocks the
+  primary button (`invoiceSifStep.rectificationRequired`); an API caller that sends a blank code gets
+  422 `ETGO_InvoiceRectificationCodeRequired` and nothing is created.
+
+How the step itself works — the backend `sifDefaults` preview, when it appears, the
+`sifFields` it sends and the fail-open rule — is described once in [sales-order.md → Fiscal data step before the invoice is created](sales-order.md#fiscal-data-step-before-the-invoice-is-created--etp-6179).
+
+## Doc type and number survive picking the customer — ETP-5837 (QA round 1)
+
+Choosing the customer on a new return no longer switches the document to the shipment doc type. Before, the number
+preview jumped to the next "Albarán de venta" number (`<1000039>` became `<1000076>`), although the saved record still took
+the return number. `etendo_defaults` with a `recordContext.businessPartner` had the same bug. It returned
+`documentType: "Albarán de venta"` and the shipment number. An agent that copied that doc type into `etendo_create` would have
+created a return with the shipment doc type. Both paths now keep "Albarán de devolución de cliente" and its sequence, with or
+without the customer.
+
+The cause was in the shared `DocTypeResolver#dropDocTypesOutsideTabFilter` (`com.etendoerp.go`). It is meant to drop a callout's
+doc type that this tab's filter (`documentType.return=true`) does not allow. But it gave up on `M_InOut`, which has no
+`C_DocTypeTarget_ID` column. Reference: `modules/com.etendoerp.go/docs/neo-headless.md`, "Interactive callouts and the tab's
+doc-type filter".
+
+Manual check: Ventas → Albarán de devolución → Nuevo, note the number, pick a customer. The number and the doc type stay the
+same, and Save stores that number.

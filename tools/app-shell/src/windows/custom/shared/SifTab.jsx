@@ -12,6 +12,8 @@ import {
   TBAI_REVERSEINVOICECODE_OPTIONS,
 } from '@/windows/custom/shared/useSifFieldPatcher.js';
 import SifAttachmentsSection from '@/windows/custom/shared/SifAttachmentsSection.jsx';
+// ETP-6179: the code once — some option labels already start with it ("F1 - Factura…").
+import { sifOptionLabel } from '@/windows/custom/shared/InvoiceSifStep.jsx';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -451,7 +453,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
   // instead of an empty trigger.
   const vfInvTypeOption = VERIFACTU_INV_TYPE_OPTIONS.find(o => o.value === vfInvType);
   const vfInvTypeLabel = vfInvTypeOption
-    ? `${vfInvTypeOption.value} — ${ui(vfInvTypeOption.labelKey)}`
+    ? sifOptionLabel(vfInvTypeOption, ui)
     : vfInvType || undefined;
 
   // Report up to DetailView whether the SIF tab has anything to show at all. ETP-4888
@@ -539,7 +541,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                 </SelectTrigger>
                 <SelectContent data-testid="SelectContent__b99c8b">
                   {siiTypeOptions.map(o => (
-                    <SelectItem key={o.value} value={o.value} data-testid="SelectItem__b99c8b">{o.value} — {ui(o.labelKey)}</SelectItem>
+                    <SelectItem key={o.value} value={o.value} data-testid="SelectItem__b99c8b">{sifOptionLabel(o, ui)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -559,7 +561,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                   </SelectTrigger>
                   <SelectContent data-testid="SelectContent__b99c8b">
                     {SII_MOTIVO_RECTIF_OPTIONS.map(o => (
-                      <SelectItem key={o.value} value={o.value} data-testid="SelectItem__b99c8b">{o.value} — {ui(o.labelKey)}</SelectItem>
+                      <SelectItem key={o.value} value={o.value} data-testid="SelectItem__b99c8b">{sifOptionLabel(o, ui)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -675,7 +677,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                 </SelectTrigger>
                 <SelectContent data-testid="SelectContent__b99c8b">
                   {VERIFACTU_INV_TYPE_OPTIONS.map(o => (
-                    <SelectItem key={o.value} value={o.value} data-testid="SelectItem__b99c8b">{o.value} — {ui(o.labelKey)}</SelectItem>
+                    <SelectItem key={o.value} value={o.value} data-testid="SelectItem__b99c8b">{sifOptionLabel(o, ui)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -761,7 +763,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                   <SelectContent data-testid="SelectContent__tbai_reversecode">
                     {TBAI_REVERSEINVOICECODE_OPTIONS.map(o => (
                       <SelectItem key={o.value} value={o.value} data-testid="SelectItem__tbai_reversecode">
-                        {o.value} — {ui(o.labelKey)}
+                        {sifOptionLabel(o, ui)}
                       </SelectItem>
                     ))}
                   </SelectContent>

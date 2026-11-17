@@ -663,7 +663,10 @@ describe('PurchaseOrderActions', () => {
 
         it('hides the button behind loading, not behind a tick', () => {
           assert.equal(docsDecision({ ...state, loading: true }).bailsOut, true);
-          assert.match(createDocsSrc, /onClick=\{handleCreate\} disabled=\{loading \|\| !canCreate\}/);
+          // ETP-6179: the click first goes through the "Datos fiscales" step (sif.start), and the
+          // gate also waits for that step; loading and !canCreate still disable it.
+          assert.match(createDocsSrc, /onClick=\{\(\) => sif\.start\(handleCreate\)\} disabled=\{submitDisabled\}/);
+          assert.match(createDocsSrc, /const submitDisabled = loading \|\| !canCreate \|\|/);
         });
       });
     }

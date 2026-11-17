@@ -1,9 +1,18 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-config/CertExpiryBanner.jsx
 import { render, screen, fireEvent } from '@testing-library/react';
+import esES from '@/locales/es_ES.json';
 
 // --- Mocks ----------------------------------------------------------------
 
+// `i18n.dict` null → ui() echoes the key (most tests); set to a real genericLabels dictionary →
+// ui() resolves and interpolates it, so a test can assert the copy the user actually reads.
+const i18n = vi.hoisted(() => ({ dict: null }));
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key, params) => {
+    if (!i18n.dict) return key;
+    const text = i18n.dict[key] ?? key;
+    return text.replace(/\{(\w+)\}/g, (m, name) => (params && name in params ? String(params[name]) : m));
+  },
 }));
 
 vi.mock('lucide-react', () => ({
@@ -166,5 +175,54 @@ describe('CertExpiryBanner — i18n keys', () => {
   it('uses fiscal.cert.expiry.dismiss as aria-label on the dismiss button', () => {
     render(<CertExpiryBanner daysLeft={45} />);
     expect(screen.getByRole('button', { name: 'fiscal.cert.expiry.dismiss' })).toBeInTheDocument();
+  });
+});
+
+// ETP-6053 — with the real backend the banner finally renders, so its copy must make sense at
+// every edge: an expired certificate, one expiring today, and a single remaining day.
+describe('CertExpiryBanner — expired, today and singular copy (es_ES, ETP-6053)', () => {
+  beforeEach(() => { i18n.dict = esES.genericLabels; });
+  afterEach(() => { i18n.dict = null; });
+
+  it.each(['prominent', 'subtle'])('shows the expired copy for daysLeft = -12, not dismissable (%s)', (variant) => {
+    render(<CertExpiryBanner daysLeft={-12} variant={variant} />);
+    expect(screen.getByText('El certificado digital ha caducado')).toBeInTheDocument();
+    expect(screen.getByText(/Sube un certificado vigente desde Configuración fiscal\./)).toBeInTheDocument();
+    expect(screen.queryByText(/-12/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cerrar' })).not.toBeInTheDocument();
+  });
+
+  it('uses the critical icon for an expired certificate', () => {
+    render(<CertExpiryBanner daysLeft={-1} />);
+    expect(screen.getByTestId('icon-octagon-alert')).toBeInTheDocument();
+  });
+
+  it.each(['prominent', 'subtle'])('shows "vence hoy" for daysLeft = 0, not dismissable (%s)', (variant) => {
+    render(<CertExpiryBanner daysLeft={0} variant={variant} />);
+    expect(screen.getByText('El certificado digital vence hoy')).toBeInTheDocument();
+    expect(screen.queryByText(/0 días/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cerrar' })).not.toBeInTheDocument();
+  });
+
+  it('uses the singular for daysLeft = 1', () => {
+    render(<CertExpiryBanner daysLeft={1} />);
+    expect(screen.getByText('El certificado vence en 1 día')).toBeInTheDocument();
+  });
+
+  it('keeps the plural for daysLeft = 15', () => {
+    render(<CertExpiryBanner daysLeft={15} />);
+    expect(screen.getByText('El certificado vence en 15 días')).toBeInTheDocument();
+    expect(screen.getByText('Renueva tu certificado digital para evitar interrupciones en los envíos fiscales.')).toBeInTheDocument();
+  });
+
+  it('every _one key exists in en_US, es_ES and es_AR next to its plural', async () => {
+    const [en, ar] = await Promise.all([import('@/locales/en_US.json'), import('@/locales/es_AR.json')]);
+    const keys = [
+      'fiscal.cert.expiry.warn.title_one', 'fiscal.cert.expiry.critical.title_one',
+      'fiscal.cert.expiry.today.title', 'fiscal.cert.expiry.expired.title', 'fiscal.cert.expiry.expired.body',
+    ];
+    for (const dict of [esES, en.default ?? en, ar.default ?? ar]) {
+      for (const k of keys) expect(dict.genericLabels[k], k).toBeTruthy();
+    }
   });
 });

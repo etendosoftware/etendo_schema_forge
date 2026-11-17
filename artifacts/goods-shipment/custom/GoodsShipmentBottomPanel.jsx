@@ -5,6 +5,7 @@ import { LinesBottomSection } from '@/components/contract-ui';
 import RelatedDocuments from './RelatedDocuments';
 import ImportFromSalesOrderModal from './ImportFromSalesOrderModal';
 import ImportFromSalesInvoiceModal from './ImportFromSalesInvoiceModal';
+import { IMPORT_SAVE_OPTIONS } from '@/windows/custom/shared/importSaveOptions.js';
 
 function ShipmentLinesEmptyState({ data, recordId, apiBaseUrl, token, onAddLine, canAddLine, onSave, onRefresh, forceOpen, onForceOpenHandled }) {
   const ui = useUI();
@@ -24,7 +25,7 @@ function ShipmentLinesEmptyState({ data, recordId, apiBaseUrl, token, onAddLine,
 
   const handleImportOrderClick = async () => {
     if (onSave) {
-      const shouldOpen = await onSave('order');
+      const shouldOpen = await onSave('order', IMPORT_SAVE_OPTIONS);
       if (!shouldOpen) return;
     }
     setShowOrderModal(true);
@@ -32,7 +33,7 @@ function ShipmentLinesEmptyState({ data, recordId, apiBaseUrl, token, onAddLine,
 
   const handleImportInvoiceClick = async () => {
     if (onSave) {
-      const shouldOpen = await onSave('invoice');
+      const shouldOpen = await onSave('invoice', IMPORT_SAVE_OPTIONS);
       if (!shouldOpen) return;
     }
     setShowInvoiceModal(true);
@@ -120,12 +121,12 @@ const ShipmentLineActions = forwardRef(function ShipmentLineActions(
   }, [forceOpen, onForceOpenHandled]);
 
   const openOrderModal = async () => {
-    if (onSave) { const ok = await onSave('order'); if (!ok) return; }
+    if (onSave) { const ok = await onSave('order', IMPORT_SAVE_OPTIONS); if (!ok) return; }
     setShowOrderModal(true);
   };
 
   const openInvoiceModal = async () => {
-    if (onSave) { const ok = await onSave('invoice'); if (!ok) return; }
+    if (onSave) { const ok = await onSave('invoice', IMPORT_SAVE_OPTIONS); if (!ok) return; }
     setShowInvoiceModal(true);
   };
 

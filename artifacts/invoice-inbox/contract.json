@@ -1,0 +1,1407 @@
+{
+  "version": "0.2.1",
+  "generatedAt": "2026-11-03T14:49:56.386Z",
+  "updatedAt": "2026-11-03T14:50:17.594Z",
+  "checksum": "c56db59e273c80c1",
+  "frontendContract": {
+    "window": {
+      "id": "81AC659E93504927B459E0CAE80CE923",
+      "name": "Invoice Inbox",
+      "primaryEntity": "header",
+      "category": "purchases",
+      "hidePrint": true,
+      "layoutType": "custom"
+    },
+    "entities": {
+      "header": {
+        "tableName": "etgo_incoming_document",
+        "tabId": "AB6E71CD965B41B1913B44BE660456FA",
+        "tabName": "Header",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
+            "label": "Active",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "Y"
+            },
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
+          },
+          {
+            "name": "discardedAt",
+            "apiKey": "discardedAt",
+            "column": "Discarded_At",
+            "label": "Discarded At",
+            "type": "dateTime",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 19
+            }
+          },
+          {
+            "name": "businessPartner",
+            "apiKey": "businessPartner",
+            "column": "C_BPartner_ID",
+            "label": "Business Partner",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "reference": "BPartner",
+            "inputMode": "selector",
+            "gridOrder": 4,
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "invoiceDate",
+            "apiKey": "invoiceDate",
+            "column": "DateInvoiced",
+            "label": "Invoice Date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "gridOrder": 8,
+            "validation": {
+              "maxLength": 10
+            }
+          },
+          {
+            "name": "grandTotalAmount",
+            "apiKey": "grandTotalAmount",
+            "column": "GrandTotal",
+            "label": "Grand Total Amount",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "gridOrder": 9,
+            "validation": {
+              "maxLength": 22
+            }
+          },
+          {
+            "name": "invoice",
+            "apiKey": "invoice",
+            "column": "C_Invoice_ID",
+            "label": "Invoice",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "reference": "Invoice",
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "targetType",
+            "apiKey": "targetType",
+            "column": "Target_Type",
+            "label": "Target Type",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "PURCHASE_INVOICE"
+            },
+            "enumValues": [
+              {
+                "value": "PURCHASE_INVOICE",
+                "name": "Purchase invoice",
+                "labels": {
+                  "es_ES": "Purchase invoice"
+                }
+              }
+            ],
+            "defaultValue": "PURCHASE_INVOICE",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "reviewed",
+            "apiKey": "reviewed",
+            "column": "Reviewed",
+            "label": "Reviewed",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
+          },
+          {
+            "name": "adjusted",
+            "apiKey": "adjusted",
+            "column": "Adjusted",
+            "label": "Adjusted",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
+          },
+          {
+            "name": "orderReference",
+            "apiKey": "orderReference",
+            "column": "POReference",
+            "label": "Order Reference",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "gridOrder": 7,
+            "validation": {
+              "maxLength": 20
+            }
+          },
+          {
+            "name": "extractedTaxID",
+            "apiKey": "extractedTaxID",
+            "column": "Extracted_TaxID",
+            "label": "Extracted Tax ID",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "gridOrder": 6,
+            "validation": {
+              "maxLength": 30
+            }
+          },
+          {
+            "name": "sender",
+            "apiKey": "sender",
+            "column": "Sender",
+            "label": "Sender",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "fileName",
+            "apiKey": "fileName",
+            "column": "File_Name",
+            "label": "File Name",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": false,
+            "sourceRequired": true,
+            "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "extractedName",
+            "apiKey": "extractedName",
+            "column": "Extracted_Name",
+            "label": "Extracted Name",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "gridOrder": 5,
+            "validation": {
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "duplicateOfInvoice",
+            "apiKey": "duplicateOfInvoice",
+            "column": "Duplicate_Invoice_ID",
+            "label": "Duplicate Of Invoice",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "reference": "Invoice",
+            "inputMode": "search",
+            "gridOrder": 12,
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "status",
+            "apiKey": "status",
+            "column": "Status",
+            "label": "Status",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "PROCESSING"
+            },
+            "enumValues": [
+              {
+                "value": "PROCESSING",
+                "name": "Processing",
+                "labels": {
+                  "es_ES": "Processing"
+                }
+              },
+              {
+                "value": "PENDING_REVIEW",
+                "name": "Pending review",
+                "labels": {
+                  "es_ES": "Pending review"
+                }
+              },
+              {
+                "value": "ERROR",
+                "name": "Error",
+                "labels": {
+                  "es_ES": "Error"
+                }
+              },
+              {
+                "value": "READY",
+                "name": "Ready to confirm",
+                "labels": {
+                  "es_ES": "Ready to confirm"
+                }
+              },
+              {
+                "value": "CONFIRMED",
+                "name": "Confirmed",
+                "labels": {
+                  "es_ES": "Confirmed"
+                }
+              },
+              {
+                "value": "DISCARDED",
+                "name": "Discarded",
+                "labels": {
+                  "es_ES": "Discarded"
+                }
+              }
+            ],
+            "defaultValue": "PROCESSING",
+            "gridOrder": 10,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "source",
+            "apiKey": "source",
+            "column": "Source",
+            "label": "Source",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "UPLOAD"
+            },
+            "enumValues": [
+              {
+                "value": "UPLOAD",
+                "name": "Manual upload",
+                "labels": {
+                  "es_ES": "Manual upload"
+                }
+              },
+              {
+                "value": "EMAIL",
+                "name": "Email",
+                "labels": {
+                  "es_ES": "Email"
+                }
+              }
+            ],
+            "defaultValue": "UPLOAD",
+            "gridOrder": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "errorCode",
+            "apiKey": "errorCode",
+            "column": "Error_Code",
+            "label": "Error Code",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "enumValues": [
+              {
+                "value": "UNREADABLE",
+                "name": "Unreadable document",
+                "labels": {
+                  "es_ES": "Unreadable document"
+                }
+              },
+              {
+                "value": "SERVICE_FAILURE",
+                "name": "Extraction service failed",
+                "labels": {
+                  "es_ES": "Extraction service failed"
+                }
+              },
+              {
+                "value": "FOREIGN_RECEIVER",
+                "name": "Receiver tax ID is not the company's",
+                "labels": {
+                  "es_ES": "Receiver tax ID is not the company's"
+                }
+              },
+              {
+                "value": "MISSING_FIELDS",
+                "name": "Required data missing",
+                "labels": {
+                  "es_ES": "Required data missing"
+                }
+              },
+              {
+                "value": "REFERENCE_TOO_LONG",
+                "name": "Supplier reference too long",
+                "labels": {
+                  "es_ES": "Supplier reference too long"
+                }
+              },
+              {
+                "value": "CONFIRM_FAILED",
+                "name": "Confirmation failed",
+                "labels": {
+                  "es_ES": "Confirmation failed"
+                }
+              }
+            ],
+            "gridOrder": 11,
+            "validation": {
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "label": "Created",
+            "type": "dateTime",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "fromConfig",
+              "source": "new Date()"
+            },
+            "defaultValue": "@#Date@",
+            "gridOrder": 3,
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            }
+          }
+        ],
+        "searchableFields": [],
+        "computedFields": [
+          {
+            "name": "active",
+            "derivation": {
+              "type": "computed",
+              "source": "Y"
+            }
+          },
+          {
+            "name": "targetType",
+            "derivation": {
+              "type": "computed",
+              "source": "PURCHASE_INVOICE"
+            }
+          },
+          {
+            "name": "reviewed",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "adjusted",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "status",
+            "derivation": {
+              "type": "computed",
+              "source": "PROCESSING"
+            }
+          },
+          {
+            "name": "source",
+            "derivation": {
+              "type": "computed",
+              "source": "UPLOAD"
+            }
+          },
+          {
+            "name": "creationDate",
+            "derivation": {
+              "type": "fromConfig",
+              "source": "new Date()"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "backendContract": {
+    "window": {
+      "id": "81AC659E93504927B459E0CAE80CE923",
+      "name": "Invoice Inbox",
+      "primaryEntity": "header",
+      "category": "purchases",
+      "hidePrint": true,
+      "layoutType": "custom"
+    },
+    "entities": {
+      "header": {
+        "tableName": "etgo_incoming_document",
+        "tabId": "AB6E71CD965B41B1913B44BE660456FA",
+        "tabName": "Header",
+        "fields": [
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
+            "type": "boolean",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "discardedAt",
+            "apiKey": "discardedAt",
+            "column": "Discarded_At",
+            "type": "dateTime",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "businessPartner",
+            "apiKey": "businessPartner",
+            "column": "C_BPartner_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "invoiceDate",
+            "apiKey": "invoiceDate",
+            "column": "DateInvoiced",
+            "type": "date",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "grandTotalAmount",
+            "apiKey": "grandTotalAmount",
+            "column": "GrandTotal",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "invoice",
+            "apiKey": "invoice",
+            "column": "C_Invoice_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "extractedData",
+            "apiKey": "extractedData",
+            "column": "Extracted_Data",
+            "type": "text",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "currentData",
+            "apiKey": "currentData",
+            "column": "Current_Data",
+            "type": "text",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "targetType",
+            "apiKey": "targetType",
+            "column": "Target_Type",
+            "type": "enum",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "reviewed",
+            "apiKey": "reviewed",
+            "column": "Reviewed",
+            "type": "boolean",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "adjusted",
+            "apiKey": "adjusted",
+            "column": "Adjusted",
+            "type": "boolean",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "orderReference",
+            "apiKey": "orderReference",
+            "column": "POReference",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "extractedTaxID",
+            "apiKey": "extractedTaxID",
+            "column": "Extracted_TaxID",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "sender",
+            "apiKey": "sender",
+            "column": "Sender",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "fileName",
+            "apiKey": "fileName",
+            "column": "File_Name",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "extractedName",
+            "apiKey": "extractedName",
+            "column": "Extracted_Name",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "duplicateOfInvoice",
+            "apiKey": "duplicateOfInvoice",
+            "column": "Duplicate_Invoice_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "status",
+            "apiKey": "status",
+            "column": "Status",
+            "type": "enum",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "source",
+            "apiKey": "source",
+            "column": "Source",
+            "type": "enum",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "errorCode",
+            "apiKey": "errorCode",
+            "column": "Error_Code",
+            "type": "enum",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Etgo_Incoming_Document_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "Createdby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "processedAt",
+            "apiKey": "processedAt",
+            "column": "Processed_At",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "processingAttempts",
+            "apiKey": "processingAttempts",
+            "column": "Processing_Attempts",
+            "type": "integer",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "processingLease",
+            "apiKey": "processingLease",
+            "column": "Processing_Lease",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "Updatedby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      }
+    },
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/header",
+        "entity": "header",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/header/:id",
+        "entity": "header",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/header",
+        "entity": "header",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/header/:id",
+        "entity": "header",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/header/:id",
+        "entity": "header",
+        "supportedFilters": []
+      }
+    ],
+    "processEndpoints": []
+  },
+  "apiPrediction": {
+    "specName": "invoice-inbox",
+    "baseUrl": "/sws/neo/invoice-inbox",
+    "crud": {
+      "header": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
+        "listUrl": "/sws/neo/invoice-inbox/header",
+        "detailUrl": "/sws/neo/invoice-inbox/header/{id}",
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
+      }
+    },
+    "selectors": [
+      {
+        "entity": "header",
+        "field": "businessPartner",
+        "column": "C_BPartner_ID",
+        "reference": "BPartner",
+        "inputMode": "selector",
+        "url": "/sws/neo/invoice-inbox/header/selectors/businessPartner"
+      },
+      {
+        "entity": "header",
+        "field": "invoice",
+        "column": "C_Invoice_ID",
+        "reference": "Invoice",
+        "inputMode": "selector",
+        "url": "/sws/neo/invoice-inbox/header/selectors/invoice"
+      },
+      {
+        "entity": "header",
+        "field": "duplicateOfInvoice",
+        "column": "Duplicate_Invoice_ID",
+        "reference": "Invoice",
+        "inputMode": "search",
+        "url": "/sws/neo/invoice-inbox/header/selectors/duplicateOfInvoice"
+      }
+    ],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "purchases"
+    }
+  },
+  "testManifest": {
+    "tests": [
+      {
+        "id": "t-crud-flags-header",
+        "category": "crud-flags",
+        "entity": "header",
+        "runner": "node",
+        "description": "CRUD flags for 'header' should all be booleans"
+      },
+      {
+        "id": "t-default-value-type-header-active",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "active",
+        "runner": "node",
+        "description": "Default value for 'active' in header should be a string"
+      },
+      {
+        "id": "t-default-value-type-header-adjusted",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "adjusted",
+        "runner": "node",
+        "description": "Default value for 'adjusted' in header should be a string"
+      },
+      {
+        "id": "t-default-value-type-header-creationDate",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "Default value for 'creationDate' in header should be a string"
+      },
+      {
+        "id": "t-default-value-type-header-reviewed",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "reviewed",
+        "runner": "node",
+        "description": "Default value for 'reviewed' in header should be a string"
+      },
+      {
+        "id": "t-default-value-type-header-source",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "source",
+        "runner": "node",
+        "description": "Default value for 'source' in header should be a string"
+      },
+      {
+        "id": "t-default-value-type-header-status",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "status",
+        "runner": "node",
+        "description": "Default value for 'status' in header should be a string"
+      },
+      {
+        "id": "t-default-value-type-header-targetType",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "targetType",
+        "runner": "node",
+        "description": "Default value for 'targetType' in header should be a string"
+      },
+      {
+        "id": "t-field-presence-header-active",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-adjusted",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "adjusted",
+        "runner": "node",
+        "description": "Field 'adjusted' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-businessPartner",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Field 'businessPartner' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-creationDate",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "Field 'creationDate' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-discardedAt",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "discardedAt",
+        "runner": "node",
+        "description": "Field 'discardedAt' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-duplicateOfInvoice",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "duplicateOfInvoice",
+        "runner": "node",
+        "description": "Field 'duplicateOfInvoice' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-errorCode",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "errorCode",
+        "runner": "node",
+        "description": "Field 'errorCode' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-extractedName",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "extractedName",
+        "runner": "node",
+        "description": "Field 'extractedName' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-extractedTaxID",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "extractedTaxID",
+        "runner": "node",
+        "description": "Field 'extractedTaxID' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-fileName",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "fileName",
+        "runner": "node",
+        "description": "Field 'fileName' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-grandTotalAmount",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "grandTotalAmount",
+        "runner": "node",
+        "description": "Field 'grandTotalAmount' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-invoice",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "invoice",
+        "runner": "node",
+        "description": "Field 'invoice' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-invoiceDate",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "invoiceDate",
+        "runner": "node",
+        "description": "Field 'invoiceDate' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-orderReference",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "orderReference",
+        "runner": "node",
+        "description": "Field 'orderReference' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-reviewed",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "reviewed",
+        "runner": "node",
+        "description": "Field 'reviewed' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-sender",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "sender",
+        "runner": "node",
+        "description": "Field 'sender' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-source",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "source",
+        "runner": "node",
+        "description": "Field 'source' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-status",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "status",
+        "runner": "node",
+        "description": "Field 'status' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-targetType",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "targetType",
+        "runner": "node",
+        "description": "Field 'targetType' should be present in header"
+      },
+      {
+        "id": "t-field-type-header-active",
+        "category": "field-type",
+        "entity": "header",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should have type 'boolean' in header"
+      },
+      {
+        "id": "t-field-type-header-adjusted",
+        "category": "field-type",
+        "entity": "header",
+        "field": "adjusted",
+        "runner": "node",
+        "description": "Field 'adjusted' should have type 'boolean' in header"
+      },
+      {
+        "id": "t-field-type-header-businessPartner",
+        "category": "field-type",
+        "entity": "header",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Field 'businessPartner' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-creationDate",
+        "category": "field-type",
+        "entity": "header",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "Field 'creationDate' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-discardedAt",
+        "category": "field-type",
+        "entity": "header",
+        "field": "discardedAt",
+        "runner": "node",
+        "description": "Field 'discardedAt' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-duplicateOfInvoice",
+        "category": "field-type",
+        "entity": "header",
+        "field": "duplicateOfInvoice",
+        "runner": "node",
+        "description": "Field 'duplicateOfInvoice' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-errorCode",
+        "category": "field-type",
+        "entity": "header",
+        "field": "errorCode",
+        "runner": "node",
+        "description": "Field 'errorCode' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-extractedName",
+        "category": "field-type",
+        "entity": "header",
+        "field": "extractedName",
+        "runner": "node",
+        "description": "Field 'extractedName' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-extractedTaxID",
+        "category": "field-type",
+        "entity": "header",
+        "field": "extractedTaxID",
+        "runner": "node",
+        "description": "Field 'extractedTaxID' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-fileName",
+        "category": "field-type",
+        "entity": "header",
+        "field": "fileName",
+        "runner": "node",
+        "description": "Field 'fileName' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-grandTotalAmount",
+        "category": "field-type",
+        "entity": "header",
+        "field": "grandTotalAmount",
+        "runner": "node",
+        "description": "Field 'grandTotalAmount' should have type 'number' in header"
+      },
+      {
+        "id": "t-field-type-header-invoice",
+        "category": "field-type",
+        "entity": "header",
+        "field": "invoice",
+        "runner": "node",
+        "description": "Field 'invoice' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-invoiceDate",
+        "category": "field-type",
+        "entity": "header",
+        "field": "invoiceDate",
+        "runner": "node",
+        "description": "Field 'invoiceDate' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-orderReference",
+        "category": "field-type",
+        "entity": "header",
+        "field": "orderReference",
+        "runner": "node",
+        "description": "Field 'orderReference' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-reviewed",
+        "category": "field-type",
+        "entity": "header",
+        "field": "reviewed",
+        "runner": "node",
+        "description": "Field 'reviewed' should have type 'boolean' in header"
+      },
+      {
+        "id": "t-field-type-header-sender",
+        "category": "field-type",
+        "entity": "header",
+        "field": "sender",
+        "runner": "node",
+        "description": "Field 'sender' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-source",
+        "category": "field-type",
+        "entity": "header",
+        "field": "source",
+        "runner": "node",
+        "description": "Field 'source' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-status",
+        "category": "field-type",
+        "entity": "header",
+        "field": "status",
+        "runner": "node",
+        "description": "Field 'status' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-targetType",
+        "category": "field-type",
+        "entity": "header",
+        "field": "targetType",
+        "runner": "node",
+        "description": "Field 'targetType' should have type 'string' in header"
+      },
+      {
+        "id": "t-selector-endpoint-header-businessPartner",
+        "category": "selector-endpoint",
+        "entity": "header",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Selector endpoint for 'businessPartner' in header should exist"
+      },
+      {
+        "id": "t-selector-endpoint-header-duplicateOfInvoice",
+        "category": "selector-endpoint",
+        "entity": "header",
+        "field": "duplicateOfInvoice",
+        "runner": "node",
+        "description": "Selector endpoint for 'duplicateOfInvoice' in header should exist"
+      },
+      {
+        "id": "t-selector-endpoint-header-invoice",
+        "category": "selector-endpoint",
+        "entity": "header",
+        "field": "invoice",
+        "runner": "node",
+        "description": "Selector endpoint for 'invoice' in header should exist"
+      },
+      {
+        "id": "t-system-field-header-client",
+        "category": "system-field",
+        "entity": "header",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-createdBy",
+        "category": "system-field",
+        "entity": "header",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-currentData",
+        "category": "system-field",
+        "entity": "header",
+        "field": "currentData",
+        "runner": "node",
+        "description": "System field 'currentData' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-extractedData",
+        "category": "system-field",
+        "entity": "header",
+        "field": "extractedData",
+        "runner": "node",
+        "description": "System field 'extractedData' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-id",
+        "category": "system-field",
+        "entity": "header",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-organization",
+        "category": "system-field",
+        "entity": "header",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-processedAt",
+        "category": "system-field",
+        "entity": "header",
+        "field": "processedAt",
+        "runner": "node",
+        "description": "System field 'processedAt' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-processingAttempts",
+        "category": "system-field",
+        "entity": "header",
+        "field": "processingAttempts",
+        "runner": "node",
+        "description": "System field 'processingAttempts' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-processingLease",
+        "category": "system-field",
+        "entity": "header",
+        "field": "processingLease",
+        "runner": "node",
+        "description": "System field 'processingLease' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-updated",
+        "category": "system-field",
+        "entity": "header",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-updatedBy",
+        "category": "system-field",
+        "entity": "header",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-visibility-header",
+        "category": "visibility",
+        "entity": "header",
+        "runner": "node",
+        "description": "Entity 'header' should only expose visible fields in frontend"
+      }
+    ],
+    "summary": {
+      "total": 61,
+      "byCategory": {
+        "crud-flags": 1,
+        "default-value-type": 7,
+        "field-presence": 19,
+        "field-type": 19,
+        "selector-endpoint": 3,
+        "system-field": 11,
+        "visibility": 1
+      },
+      "byRunner": {
+        "node": 61,
+        "junit": 0
+      }
+    }
+  }
+}

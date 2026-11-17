@@ -1,3 +1,4 @@
+// @covers artifacts/financial-account/custom/AccountsHeaderTable.jsx
 /**
  * AccountsHeaderTable — handler wiring.
  *
@@ -14,7 +15,7 @@
  * cell renderers and that custom shared-cell renderer for every row — the real
  * `ReconcilePill` / `AccountRowActions` then drive the handlers exactly as in the browser.
  */
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 /**
  * ui() echoes the key for every label EXCEPT the one entry below, and that exception is
@@ -45,6 +46,7 @@ vi.mock('@/i18n', () => ({
 
 const toastError = vi.fn();
 const toastInfo = vi.fn();
+const toastWarning = vi.fn();
 const toastSuccess = vi.fn();
 // ETP-5457 — the slot reads the access tier of this window and of match-rule through
 // useWindowAccess, which reaches useAuth. Full access keeps every existing assertion valid.
@@ -56,14 +58,20 @@ vi.mock('sonner', () => ({
   toast: {
     error: (...a) => toastError(...a),
     info: (...a) => toastInfo(...a),
+    warning: (...a) => toastWarning(...a),
     success: (...a) => toastSuccess(...a),
   },
 }));
 
 const mockSync = vi.fn();
 const mockDisconnect = vi.fn();
+// ETP-6154 — the status endpoint is only offered to the shared bank-sync suite below; left
+// undefined, BankSyncContext neither discovers nor polls, which keeps the suites above unchanged.
+const syncStatusHolder = { fn: undefined };
 vi.mock('@/hooks/useBankConnectionActions.js', () => ({
-  useBankConnectionActions: () => ({ sync: mockSync, disconnect: mockDisconnect }),
+  useBankConnectionActions: () => ({
+    sync: mockSync, disconnect: mockDisconnect, syncStatus: syncStatusHolder.fn,
+  }),
   launchSaltEdgePopup: vi.fn(),
 }));
 
@@ -156,6 +164,9 @@ vi.mock('react-router-dom', () => ({
 }));
 
 import AccountsHeaderTable from '@generated/financial-account/custom/AccountsHeaderTable.jsx';
+import {
+  BankSyncProvider, BANK_SYNC_POLL_INTERVAL_MS,
+} from '@/windows/custom/financial-account/BankSyncContext.jsx';
 
 /** Bank-connected account: exposes the sync button and the disconnect menu item. */
 const CONNECTED = {
@@ -278,13 +289,15 @@ describe('AccountsHeaderTable — bank connection sync action', () => {
     expect(onDataMutated).toHaveBeenCalled();
   });
 
-  it('shows an info toast on a WARNING sync', async () => {
+  // ETP-6154 — the list now reports through the shared bankSyncNotify.js, which (like the other
+  // two entry points since ETP-5181) announces a WARNING with toast.warning, not toast.info.
+  it('shows a warning toast on a WARNING sync', async () => {
     mockSync.mockResolvedValue({ status: 'WARNING', message: 'partial' });
     renderTable();
 
     fireEvent.click(screen.getByTestId('account-row-refresh-acc-1'));
 
-    await waitFor(() => expect(toastInfo).toHaveBeenCalledWith('partial'));
+    await waitFor(() => expect(toastWarning).toHaveBeenCalledWith('partial'));
   });
 
   it('shows an error toast on an ERROR status', async () => {
@@ -561,5 +574,98 @@ describe('AccountsHeaderTable — refresh without a host callback', () => {
     fireEvent.click(screen.getByTestId('account-row-refresh-acc-1'));
 
     await waitFor(() => expect(toastSuccess).toHaveBeenCalled());
+  });
+});
+
+// ETP-6154 — inside the window's BankSyncProvider the list tracks its bank-connected rows (a sync
+// already running for one of them shows as in progress), starts row / kebab syncs through the
+// shared state, and reloads itself once when a sync ends that nobody else reloads for.
+describe('AccountsHeaderTable — shared bank-sync state', () => {
+  const syncStatus = vi.fn();
+  beforeEach(() => {
+    syncStatusHolder.fn = syncStatus;
+    syncStatus.mockReset();
+    syncStatus.mockResolvedValue({ 'acc-1': { inProgress: false } });
+  });
+  afterEach(() => {
+    syncStatusHolder.fn = undefined;
+    vi.useRealTimers();
+  });
+
+  function renderInWindow(data = [CONNECTED, OFFLINE]) {
+    return render(
+      <BankSyncProvider>
+        <AccountsHeaderTable data={data} meta={{ summary: null }} onDataMutated={onDataMutated} />
+      </BankSyncProvider>,
+    );
+  }
+
+  it('reads the sync status of the bank-connected rows only', async () => {
+    renderInWindow();
+    await waitFor(() => expect(syncStatus).toHaveBeenCalledTimes(1));
+    expect(syncStatus).toHaveBeenCalledWith(['acc-1']);
+  });
+
+  it('a row sync disables and spins the row button and the kebab item until it ends, then reloads once', async () => {
+    let finishSync;
+    mockSync.mockImplementation(() => new Promise((resolve) => { finishSync = resolve; }));
+    renderInWindow();
+
+    await act(async () => { fireEvent.click(screen.getByTestId('account-row-refresh-acc-1')); });
+    expect(mockSync).toHaveBeenCalledWith('acc-1');
+    expect(screen.getByTestId('account-row-refresh-acc-1')).toBeDisabled();
+    expect(screen.getByTestId('account-row-refresh-icon-acc-1')).toHaveAttribute('data-spinning', 'true');
+    openRowMenu('acc-1');
+    expect(await screen.findByTestId('account-row-menu-sync-acc-1')).toHaveAttribute('data-disabled');
+
+    await act(async () => { finishSync({ status: 'OK', message: 'done' }); });
+    expect(screen.getByTestId('account-row-refresh-acc-1')).toBeEnabled();
+    expect(onDataMutated).toHaveBeenCalledTimes(1);
+    expect(toastSuccess).toHaveBeenCalledTimes(1);
+    expect(toastSuccess).toHaveBeenCalledWith('done');
+  });
+
+  it('a kebab sync of a row whose sync already runs sends no second request', async () => {
+    mockSync.mockImplementation(() => new Promise(() => {}));
+    renderInWindow();
+
+    await act(async () => { fireEvent.click(screen.getByTestId('account-row-refresh-acc-1')); });
+    openRowMenu('acc-1');
+    // Pointer events are blocked by CSS in a browser; dispatching the click proves the shared
+    // guard holds even if one ever got through.
+    await act(async () => { fireEvent.click(await screen.findByTestId('account-row-menu-sync-acc-1')); });
+
+    expect(mockSync).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a sync already running on load as in progress and reloads silently when it ends', async () => {
+    vi.useFakeTimers();
+    syncStatus
+      .mockResolvedValueOnce({ 'acc-1': { inProgress: true } })
+      .mockResolvedValueOnce({ 'acc-1': { inProgress: false, lastSyncDate: new Date(Date.now() + 1000).toISOString() } });
+    renderInWindow();
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+
+    expect(screen.getByTestId('account-row-refresh-acc-1')).toBeDisabled();
+    expect(screen.getByTestId('account-row-refresh-icon-acc-1')).toHaveAttribute('data-spinning', 'true');
+    expect(onDataMutated).not.toHaveBeenCalled();
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(BANK_SYNC_POLL_INTERVAL_MS); });
+
+    expect(screen.getByTestId('account-row-refresh-acc-1')).toBeEnabled();
+    expect(onDataMutated).toHaveBeenCalledTimes(1);
+    expect(toastSuccess).not.toHaveBeenCalled();
+    expect(toastError).not.toHaveBeenCalled();
+    expect(mockSync).not.toHaveBeenCalled();
+  });
+
+  it('a timed-out row sync keeps spinning without a toast while the bridge keeps working', async () => {
+    mockSync.mockRejectedValue(new Error('BANK_CONNECTION_TIMEOUT'));
+    renderInWindow();
+
+    await act(async () => { fireEvent.click(screen.getByTestId('account-row-refresh-acc-1')); });
+
+    expect(screen.getByTestId('account-row-refresh-acc-1')).toBeDisabled();
+    expect(toastError).not.toHaveBeenCalled();
   });
 });

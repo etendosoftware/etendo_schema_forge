@@ -11,6 +11,7 @@ import { StatementLinesInline } from './StatementLinesInline';
 import { StatementRowKebab } from './StatementRowKebab';
 import { getContractGridColumns } from '@/components/financial-accounts/contractColumns';
 import { SortableHeaderLabel } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
+import { usePsd2ImportSettingsFlag } from '@/hooks/usePsd2ImportSettingsFlag.js';
 import { isDraftStatement } from './statementStatus.js';
 import { RowExpandToggle } from '@/components/contract-ui/RowExpandToggle.jsx';
 
@@ -249,7 +250,8 @@ export function StatementsTable({
   // instead of keeping the ones fetched when it was first opened (ETP-4921). Purely a pass-down
   // to StatementLinesInline; nothing in this component reads it.
   linesRefreshToken = 0,
-  // PSD2-connected account: its statements are read-only (ETP-4921). Pass-down to RowActions.
+  // PSD2-connected account: its statements cannot be edited by hand (ETP-4921) but can be deleted,
+  // processed ones included (ETP-6151). Pass-down to RowActions.
   bankConnected = false,
   // The window's "read-only" access tier (ETP-5457) — see the JSDoc above. Distinct from
   // `bankConnected`: that one is about where the statements come from, this one about the role.
@@ -411,18 +413,26 @@ function renderBody({
 // Trailing per-row actions: Edit + Delete reveal on hover (drafts only, mirroring
 // the sales-order grid), with the kebab in the middle holding Procesar / Reactivar.
 //
-// On a PSD2-connected account they never reveal at all (ETP-4921): its statements come from the
-// bank and must not be hand-edited or deleted. They are hidden rather than shown disabled because
-// that is what this row already does for a processed statement — the explanation lives on the
-// kebab's disabled Reactivar, the one affordance that stays visible.
+// On a PSD2-connected account Edit never reveals (ETP-4921): its statements come from the bank and
+// must not be hand-edited. It is hidden rather than shown disabled because that is what this row
+// already does for a processed statement — the explanation lives on the kebab's disabled
+// Reactivar. Delete, on the other hand, reveals on EVERY row of such an account, processed ones
+// included (ETP-6151): the backend reactivates and deletes a bank statement in one step, refusing
+// only a posted one or one with matched lines, and the confirm dialog warns that the movements
+// come back on the next sync unless "Importar desde" is moved.
 //
 // Under the window's "read-only" access tier (ETP-5457) StatementRow does not render this at all.
 function RowActions({ statement: s, actions, ui, bankConnected = false }) {
-  const isDraft = isDraftStatement(s) && !bankConnected;
+  // Flag `psd2-statement-import-settings` off: a bank-connected account shows neither Edit nor
+  // Delete, as before ETP-6151.
+  const importSettingsEnabled = usePsd2ImportSettingsFlag();
+  const isDraft = isDraftStatement(s);
+  const canEdit = isDraft && !bankConnected;
+  const canDelete = importSettingsEnabled ? (isDraft || bankConnected) : canEdit;
   const iconBtn = 'inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors';
   return (
     <>
-      {isDraft ? (
+      {canEdit ? (
         <button
           type="button"
           data-testid={`statement-row-edit-${s.id}`}
@@ -441,7 +451,7 @@ function RowActions({ statement: s, actions, ui, bankConnected = false }) {
         onDelete={actions.onDelete}
         bankConnected={bankConnected}
         data-testid="StatementRowKebab__3acaeb" />
-      {isDraft ? (
+      {canDelete ? (
         <button
           type="button"
           data-testid={`statement-row-delete-${s.id}`}

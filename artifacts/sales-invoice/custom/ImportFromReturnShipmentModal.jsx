@@ -1,6 +1,8 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
-import { useApiFetch } from '@/auth/useApiFetch.js';
 import { apiFetch as moduleApiFetch } from '@/auth/api.js';
+import { listAll, listLines, newestCreatedFirst } from '@/windows/custom/shared/importActionClient.js';
+import useImportLoadFailureToast from '@/windows/custom/shared/useImportLoadFailureToast.js';
+import { pricingContextOf } from '@/windows/custom/shared/invoiceImportPricing.js';
 
 /**
  * Import invoice lines from a completed sales Return Material Receipt
@@ -22,32 +24,19 @@ import { apiFetch as moduleApiFetch } from '@/auth/api.js';
  * Return receipt lines carry no pricing (same as goods-shipment lines), so
  * pricing is resolved through the same callout cascade used by
  * ImportFromShipmentModal (SL_Invoice_Product → PriceActual →
- * SL_Invoice_Amt). Unlike a normal shipment import, ARI_RM (return invoice)
- * lines must carry a NEGATIVE invoiced quantity — Etendo rejects positive
- * ones at completion.
+ * SL_Invoice_Amt) on expand (the row total) and again per
+ * selected line at import. Unlike a normal shipment import,
+ * ARI_RM (return invoice) lines must carry a NEGATIVE invoiced quantity —
+ * Etendo rejects positive ones at completion.
  *
- * Already-imported detection uses the sales-invoice line's goodsShipmentLine
- * field (M_InOutLine_ID) — the same column ImportFromShipmentModal uses for
- * normal shipments, since a return receipt line and a regular shipment line
- * both live in M_InOutLine; their IDs never collide, so a single column
- * safely tracks both origins.
- *
- * ETP-4459 (partial import): detection is quantity-aware, not presence-only.
- * A return-receipt line can be split across multiple invoices (e.g. 10
- * returned, 5 invoiced so far), so fetchDocuments sums abs(invoicedQuantity)
- * per goodsShipmentLine — combining the current invoice's own lines with any
- * invoiced from other invoices — into invoicedQtyByGoodsShipmentLine.
- * fetchLines then derives remainingQty = movementQuantity - alreadyInvoiced
- * and only marks a line as _alreadyImported once remainingQty hits 0. The
- * separate salesOrderLine-based duplicate check (a different join, catching
- * a DIFFERENT return-receipt line already invoiced against the same order
- * line — e.g. an order whose return was split across two separate return
- * receipts) is built the same cross-invoice way — current invoice's lines
- * plus every other invoice's — but stays boolean/conservative for blocking
- * purposes: its "already invoiced" quantity lives in a different unit
- * universe (original sale qty vs. returned qty) and can't be safely netted
- * against movementQuantity, so any recorded match there still fully blocks
- * the line rather than attempting a fragile reconciliation.
+ * ETP-6099: the candidates and their lines come from the invoice's own
+ * `availableReturns` / `availableReturnLines` actions (com.etendoerp.go,
+ * ImportInOutLinesIntoInvoiceHandler), which apply what this modal used to
+ * compute client-side (ETP-4459): the quantity left per return line after
+ * every invoice line linked to it (partial import), the conservative
+ * order-line block (`blockedReason: orderLineInvoiced`), the
+ * not-invoiced-in-full and same-currency document rules. Opening the popup
+ * is one list read; each expanded return one lines read.
  */
 
 const resolveLinePrice = async (base, productId, qty, invoiceHeader, auxData = {}) => {
@@ -116,175 +105,65 @@ const resolveLinePrice = async (base, productId, qty, invoiceHeader, auxData = {
   }
 };
 
-const fetchDocuments = async ({ base, bpId, invoiceId }) => {
-  // Fetch header first so we can pass its priceList to the product selector.
-  // ProductPriceSelectorPolicy only enriches _PSTD / _PLIST when priceList is
-  // provided as a context param; without it the callout receives PSTD=0 and
-  // returns the wrong price.
-  const invoicedLinesFilter = encodeURIComponent(
-    JSON.stringify([{ fieldName: 'goodsShipmentLine', operator: 'notNull' }]),
-  );
-  const [returnRes, invLinesRes, allInvoicedLinesRes, headerRes] = await Promise.all([
-    moduleApiFetch(`${base}/return-material-receipt/returnMaterialReceipt?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
-    moduleApiFetch(`${base}/sales-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`),
-    moduleApiFetch(`${base}/sales-invoice/lines?criteria=${invoicedLinesFilter}&_startRow=0&_endRow=2000`),
-    moduleApiFetch(`${base}/sales-invoice/header/${invoiceId}`),
-  ]);
+/**
+ * ETP-6099 — ONE `availableReturns` read of the invoice lists the customer's completed returns not
+ * invoiced in full and in the invoice's currency when the return has a sales order (server filtered), the covered ones too at `pendingLines: 0`
+ * (`includeCovered`), which the popup hides (`isReturnCovered`); `detail` adds `sourceDocumentNo`.
+ * Rejects with `ImportLoadError` on a refusal; the component shows `describeLoadFailure`.
+ */
+const fetchDocuments = async ({ base, invoiceId }) => {
+  const rows = await listAll({
+    apiFetch: moduleApiFetch, base, spec: 'sales-invoice', targetId: invoiceId,
+    action: 'availableReturns', params: { includeCovered: true, detail: true },
+  });
+  // Newest created first, as the old `_sortBy=creationDate desc` read listed them.
+  const documents = newestCreatedFirst(rows).map(r => ({ ...r, movementDate: r.date, sourceShipmentDocNo: r.sourceDocumentNo || '' }));
+  return { documents, sharedContext: { invoiceId }, excludedByCurrency: false };
+};
 
-  // Quantity-aware tracking (ETP-4459): a return-receipt line can be partially
-  // imported (e.g. 10 returned, 5 invoiced so far → 5 still importable), so we
-  // sum how much has already been invoiced per goodsShipmentLine instead of just
-  // flagging presence. Invoice lines store a NEGATIVE invoicedQuantity for ARI_RM
-  // (see buildLineBody below) — always compare/accumulate absolute values.
-  const invoicedQtyByGoodsShipmentLine = new Map();
-  // Secondary, coarser join (see fetchLines): total invoiced qty against the
-  // underlying sales-order-line, regardless of return-receipt path.
-  const invoicedQtyByOrderLine = new Map();
-  const addQty = (map, key, qty) => {
-    if (!key || !qty) return;
-    map.set(key, (map.get(key) || 0) + qty);
-  };
-
-  // Lines already on THIS invoice (relevant when re-editing a draft invoice).
-  const currentInvoiceLineIds = new Set();
-  if (invLinesRes.ok) {
-    const invLines = (await invLinesRes.json())?.response?.data || [];
-    invLines.forEach(il => {
-      if (il.id) currentInvoiceLineIds.add(il.id);
-      const qty = Math.abs(Number(il.invoicedQuantity) || 0);
-      if (il.goodsShipmentLine) addQty(invoicedQtyByGoodsShipmentLine, il.goodsShipmentLine, qty);
-      if (il.salesOrderLine) addQty(invoicedQtyByOrderLine, il.salesOrderLine, qty);
-    });
-  }
-
-  // Return receipt lines already invoiced from OTHER invoices — prevents
-  // double-invoicing the same line. This query is unscoped by invoice, so it
-  // re-returns the current invoice's own lines too; skip records whose id was
-  // already summed above so the same underlying invoice line isn't counted twice.
-  if (allInvoicedLinesRes.ok) {
-    const all = (await allInvoicedLinesRes.json())?.response?.data || [];
-    all.forEach(il => {
-      if (il.id && currentInvoiceLineIds.has(il.id)) return;
-      const qty = Math.abs(Number(il.invoicedQuantity) || 0);
-      if (il.goodsShipmentLine) addQty(invoicedQtyByGoodsShipmentLine, il.goodsShipmentLine, qty);
-      if (il.salesOrderLine) addQty(invoicedQtyByOrderLine, il.salesOrderLine, qty);
-    });
-  }
-
-  let invoiceHeader = {};
-  if (headerRes.ok) {
-    invoiceHeader = (await headerRes.json())?.response?.data?.[0] || {};
-  }
-
-  const priceListId = invoiceHeader.priceList;
-  const selectorUrl = `${base}/sales-invoice/lines/selectors/M_Product_ID?limit=500&offset=0${priceListId ? `&priceList=${encodeURIComponent(priceListId)}` : ''}`;
-  const selectorRes = await moduleApiFetch(selectorUrl);
-
-  const productAuxMap = {};
-  if (selectorRes.ok) {
-    const selData = await selectorRes.json();
-    for (const item of (selData?.items || [])) {
-      if (item.id && item._aux) {
-        const aux = {};
-        for (const [suffix, val] of Object.entries(item._aux)) {
-          aux[`product${suffix}`] = val;
-        }
-        productAuxMap[item.id] = aux;
-      }
-    }
-  }
-
-  let candidates = [];
-  if (returnRes.ok) {
-    const all = (await returnRes.json())?.response?.data || [];
-    candidates = all.filter(r =>
-      r.documentStatus === 'CO'
-      && r.businessPartner === bpId
-      && Number(r.invoiceStatus || 0) < 100
-    );
-  }
-
-  // Return receipts have no currency of their own (M_InOut has no C_Currency_ID
-  // column) — resolve it via the linked sales order, same as goods-shipment.
-  // Receipts with no linked order can't be compared, so they're never excluded.
-  const invoiceCurrency = invoiceHeader.currency || null;
-  let documents = candidates;
-  let excludedByCurrency = false;
-  if (invoiceCurrency) {
-    const orderIds = [...new Set(candidates.filter(r => r.salesOrder).map(r => r.salesOrder))];
-    const orderCurrencyMap = {};
-    await Promise.all(orderIds.map(async (id) => {
-      try {
-        const r = await moduleApiFetch(`${base}/sales-order/header/${id}`);
-        if (r.ok) {
-          const o = (await r.json())?.response?.data?.[0];
-          if (o) orderCurrencyMap[id] = o.currency;
-        }
-      } catch { /* ignore — treat as unresolved, don't exclude */ }
-    }));
-    documents = candidates.filter(r => !r.salesOrder || orderCurrencyMap[r.salesOrder] === invoiceCurrency);
-    excludedByCurrency = documents.length === 0 && candidates.length > 0;
-  }
-
+/**
+ * One `availableReturnLines` row in the shape the popup reads: a line whose order line is already invoiced
+ * (`orderLineInvoiced`) or that is credited in full (`creditedInFull`) is greyed at 0.
+ * Otherwise it offers what the server says is left to credit (positive; the import negates it).
+ * The price (callout, `priceData`) feeds the row total.
+ */
+const returnLineRow = (r, priceData = {}) => {
+  const pending = Number(r.pendingQuantity) || 0;
+  const blocked = !!r.blockedReason || pending <= 0;
   return {
-    documents,
-    sharedContext: { invoiceHeader, productAuxMap, invoicedQtyByGoodsShipmentLine, invoicedQtyByOrderLine },
-    excludedByCurrency,
+    ...r,
+    salesOrderLine: r.orderLine ?? null,
+    _productName: r['product$_identifier'] || r.id,
+    _maxQty: blocked ? 0 : pending,
+    _unitPrice: Number(priceData.unitPrice) || Number(priceData.grossUnitPrice) || 0,
+    _lineNetAmount: Number(priceData.lineNetAmount ?? 0),
+    _tax: priceData.tax || null,
+    _uOM: priceData.uOM || r.uOM || null,
+    _alreadyImported: blocked,
+    _orderDiscount: Number(r.orderLineDiscount) || 0,
   };
 };
 
+/** ONE `availableReturnLines` read per return, lines with nothing left included. */
 const fetchLines = async ({ base, docId, sharedContext }) => {
-  const res = await moduleApiFetch(`${base}/return-material-receipt/returnMaterialReceiptLine?parentId=${docId}&_startRow=0&_endRow=200`);
-  if (!res.ok) return [];
-  const json = await res.json();
-  const lines = json?.response?.data || [];
-  const { invoiceHeader, productAuxMap, invoicedQtyByGoodsShipmentLine, invoicedQtyByOrderLine } = sharedContext;
-
-  // Batch-fetch the referenced sales order lines to carry their discount into the
-  // invoice. M_InOutLine has no Discount column — the value lives on C_OrderLine.
-  const orderLineIds = [...new Set(lines.filter(l => l.salesOrderLine).map(l => l.salesOrderLine))];
-  const orderDiscounts = {};
-  await Promise.all(orderLineIds.map(async (id) => {
-    try {
-      const r = await moduleApiFetch(`${base}/sales-order/lines/${id}`);
-      if (r.ok) {
-        const d = await r.json();
-        const ol = d?.response?.data?.[0];
-        if (ol && Number(ol.discount) > 0) orderDiscounts[id] = Number(ol.discount);
-      }
-    } catch { /* ignore — missing order line means 0 discount */ }
-  }));
-
-  return Promise.all(lines.map(async (l) => {
-    const movementQty = Number(l.movementQuantity) || 0;
-    const alreadyInvoicedQty = invoicedQtyByGoodsShipmentLine?.get(l.id) || 0;
-    const remainingQty = Math.max(0, movementQty - alreadyInvoicedQty);
-
-    // Secondary duplicate-detection path: catches the same underlying sales-order-line
-    // already invoiced through a DIFFERENT return-receipt line (not via this one) —
-    // cross-invoice, same current-plus-elsewhere merge as invoicedQtyByGoodsShipmentLine
-    // above. That invoiced quantity lives in a different unit universe (original sale
-    // qty, not returned qty) than movementQty/remainingQty above, so it can't be netted
-    // against them without risking an incorrect (over-permissive) remaining amount.
-    // Kept conservative: any recorded quantity against the same salesOrderLine fully
-    // blocks the line, same as the original boolean behavior.
-    const orderLineBlocked = !!(l.salesOrderLine && invoicedQtyByOrderLine?.get(l.salesOrderLine));
-
-    const qty = movementQty || 1;
-    const priceData = l.product ? await resolveLinePrice(base, l.product, qty, invoiceHeader, productAuxMap[l.product] || {}) : {};
-    return {
-      ...l,
-      _productName: l['product$_identifier'] || l.id,
-      _maxQty: orderLineBlocked ? 0 : remainingQty,
-      _unitPrice: Number(priceData.unitPrice) || Number(priceData.grossUnitPrice) || 0,
-      _lineNetAmount: Number(priceData.lineNetAmount ?? 0),
-      _tax: priceData.tax || null,
-      _uOM: priceData.uOM || l.uOM || null,
-      _alreadyImported: orderLineBlocked || remainingQty <= 0,
-      _orderDiscount: orderDiscounts[l.salesOrderLine] || 0,
-    };
+  const rows = await listLines({
+    apiFetch: moduleApiFetch, base, spec: 'sales-invoice', targetId: sharedContext?.invoiceId,
+    action: 'availableReturnLines', params: { returnId: docId, includeCovered: true, detail: true },
+  });
+  // The row total shown once a return without a source number is expanded is the sum of its
+  // priced lines, as before: the callout prices each line here, on expand (never on open).
+  const { invoiceHeader, productAuxMap } = await pricingContextOf({ apiFetch: moduleApiFetch, base, spec: 'sales-invoice', sharedContext });
+  return Promise.all(rows.map(async (r) => {
+    const qty = Math.abs(Number(r.movementQuantity)) || 1;
+    const priceData = r.product
+      ? await resolveLinePrice(base, r.product, qty, invoiceHeader, productAuxMap[r.product] || {})
+      : {};
+    return returnLineRow(r, priceData);
   }));
 };
+
+/** A return with nothing left to credit is not listed (it used to be hidden once its lines loaded). */
+const isReturnCovered = (doc) => Number(doc.pendingLines) === 0;
 
 const getDocDisplay = (doc) => {
   const sourceRef = doc.sourceShipmentDocNo || '';
@@ -295,8 +174,9 @@ const getDocDisplay = (doc) => {
   };
 };
 
+// The price callout runs here, per selected line at IMPORT time (never on open).
 const buildLineBody = async ({ line, qty, invoiceId, lineNo, sharedContext, base }) => {
-  const { invoiceHeader, productAuxMap } = sharedContext;
+  const { invoiceHeader, productAuxMap } = await pricingContextOf({ apiFetch: moduleApiFetch, base, spec: 'sales-invoice', sharedContext });
   // Re-resolve price for the actual import qty so lineNetAmount is correct.
   const priceData = await resolveLinePrice(base, line.product, qty, invoiceHeader, productAuxMap[line.product] || {});
   const calloutGrossUnitPrice = Number(priceData.grossUnitPrice) || 0;
@@ -339,11 +219,8 @@ const buildLineBody = async ({ line, qty, invoiceId, lineNo, sharedContext, base
 };
 
 export default function ImportFromReturnShipmentModal(props) {
-  // ETP-4576 - the credential belongs to apiFetch, not to the component.
-  // Empty base ON PURPOSE: these modals pull from ANOTHER spec than their own window
-  // (an invoice importing shipment lines), and resolveApiUrl only skips a prefix that
-  // matches - so a configured base doubles it and 404s.
-  const apiFetch = useApiFetch('');
+  // ETP-6099 — a failed read is not «nothing to import»: tell the user, show an empty list.
+  const handlers = useImportLoadFailureToast(fetchDocuments, fetchLines);
   return (
     <ImportLinesModal
       {...props}
@@ -355,8 +232,10 @@ export default function ImportFromReturnShipmentModal(props) {
       noCurrencyMatchMessageKey="noReturnShipmentsMatchCurrency"
       successMessageKey="linesImportedFromReturnShipment"
       showPriceColumns={false}
-      fetchDocuments={fetchDocuments}
-      fetchLines={fetchLines}
+      eagerLoadLines={false}
+      isDocumentCovered={isReturnCovered}
+      fetchDocuments={handlers.fetchDocuments}
+      fetchLines={handlers.fetchLines}
       getDocDisplay={getDocDisplay}
       buildLineBody={buildLineBody}
     />

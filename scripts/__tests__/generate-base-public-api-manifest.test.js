@@ -216,6 +216,19 @@ describe('buildEntity — API-only input fields declared in decisions.json', () 
     assert.equal(entity.fields.city_name, undefined);
   });
 
+  it('publishes writable: false as a read-only out field, never required, also without write endpoints', () => {
+    const inputFields = [{ name: 'country_code', internalPath: 'countryCode', writable: false, readable: true, required: true }];
+    for (const methods of [['GET', 'POST'], ['GET']]) {
+      const entity = buildEntity({
+        specName: 'contacts', entityName: 'header', contract: contractFor('contacts', curatedFields, { methods }),
+        functional, parent: null, rawEntity: null, inputFields,
+      });
+      assert.deepEqual(entity.fields.country_code, {
+        sourceVisibility: 'readOnly', direction: 'out', internalPath: 'countryCode', dataType: { type: 'string' }, reference: null,
+      }, methods.join());
+    }
+  });
+
   it('rejects a name that collides with a published field', () => {
     assert.throws(() => buildEntity({
       specName: 'contacts', entityName: 'header', contract: contractFor('contacts', curatedFields),

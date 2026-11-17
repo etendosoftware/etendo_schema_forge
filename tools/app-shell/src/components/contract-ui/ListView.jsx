@@ -418,6 +418,10 @@ function canCreateRecords(hideCreate, windowReadOnly) {
   return !hideCreate && !windowReadOnly;
 }
 
+function isImportOffered(importConfig, windowReadOnly) {
+  return Boolean(importConfig?.enabled) && !windowReadOnly;
+}
+
 function offersImportInNewMenu(canCreate, visibleNewActions) {
   return canCreate && visibleNewActions.some((action) => action.opensImportDialog);
 }
@@ -1164,8 +1168,10 @@ export function ListView({
   // selectionBarRightActions consumer that runs its own delete loop but still
   // wants the same reselect-only-the-failed-rows behavior (see
   // `reselectFailed` passed into selectionBarRightActions further down).
-  const applyBulkDeleteOutcome = useCallback((succeeded, failed) => {
-    if (succeeded.length > 0) hook.refresh();
+  // ETP-6143 — `outcomeUnknown`: a bulk-delete job whose result could not be read may have
+  // deleted any of the rows, so refetch and (failed is empty) clear the selection.
+  const applyBulkDeleteOutcome = useCallback((succeeded, failed, { outcomeUnknown } = {}) => {
+    if (succeeded.length > 0 || outcomeUnknown) hook.refresh();
     if (failed.length === 0) {
       clearSelection();
     } else {
@@ -1272,9 +1278,9 @@ export function ListView({
   // A `newActions` item may declare `opensImportDialog: true` instead of an `onClick`: it then
   // opens this window's own import dialog (`window.import`). It is dropped when the window has
   // no enabled import. When the split menu offers the import, the standalone import icon is
-  // redundant and is not rendered; it stays whenever the menu is unavailable (read-only
-  // window, `hideCreate`), so the import is never left unreachable.
-  const importEnabled = Boolean(importConfig?.enabled);
+  // redundant and is not rendered; it stays when the menu is unavailable (`hideCreate`), so the
+  // import is never left unreachable. A read-only window offers no import at all: it creates records.
+  const importEnabled = isImportOffered(importConfig, windowReadOnly);
   const visibleNewActions = newActions.filter((action) => !action.opensImportDialog || importEnabled);
   const isSplitNew = visibleNewActions.length > 0;
   const importInNewMenu = offersImportInNewMenu(canCreate, visibleNewActions);

@@ -5,9 +5,6 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 
-const mockApiFetch = vi.fn();
-vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => mockApiFetch }));
-
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }));
@@ -26,20 +23,10 @@ vi.mock('@/components/ui/checkbox', () => ({
 }));
 
 import { render, renderHook, screen, fireEvent } from '@testing-library/react';
-import { toast } from 'sonner';
 import useOrderGlobalDiscountImport from '../useOrderGlobalDiscountImport.jsx';
-
-const BASE = '/sws/neo';
-
-const HEADER_ENDPOINT = 'purchase-invoice/header';
 
 function hookProps() {
   return renderHook(() => useOrderGlobalDiscountImport()).result.current;
-}
-
-/** The hook as the client import path uses it: with a header endpoint, so it has afterImport. */
-function clientHookProps() {
-  return renderHook(() => useOrderGlobalDiscountImport({ headerEndpoint: HEADER_ENDPOINT })).result.current;
 }
 
 /**
@@ -71,7 +58,6 @@ function renderPanel(sel) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockApiFetch.mockReset();
 });
 
 describe('useOrderGlobalDiscountImport — document row', () => {
@@ -177,94 +163,16 @@ describe('useOrderGlobalDiscountImport — selection panel', () => {
   });
 });
 
-// Client import path (purchases, importVia 'client', until MCP-2 is decided): restored from the
-// pre-unification suite. The header % is PATCHed from the browser after the line POSTs.
-describe('useOrderGlobalDiscountImport — afterImport header PATCH (client path)', () => {
-  const ORDERS = [{ id: 'SO-A', pct: 10 }, { id: 'SO-B', pct: 0 }];
-
-  function afterImportArgs({ selected, imported, invoicePct = null, invoiceHasLines = false, invoiceStateKnown = true, carryOn = true }) {
-    const sel = selection({ orders: ORDERS, invoicePct, invoiceHasLines, invoiceStateKnown, carryOn });
-    return {
-      documents: sel.documents,
-      sharedContext: sel.sharedContext,
-      selectedDocIds: new Set(selected),
-      importedDocIds: new Set(imported),
-      extraState: sel.extraState,
-      base: BASE,
-      invoiceId: 'inv-1',
-    };
-  }
-
-  it.each([
-    { name: 'toggle off', args: { selected: ['SO-A'], imported: ['SO-A'], carryOn: false }, result: { carried: false } },
-    { name: 'invoice already at the same %', args: { selected: ['SO-A'], imported: ['SO-A'], invoicePct: 10 }, result: { carried: true, pct: 10 } },
-    { name: 'invoice-has-lines warning', args: { selected: ['SO-A'], imported: ['SO-A'], invoiceHasLines: true }, result: { carried: false } },
-    { name: 'mixed selection whose 0 % order failed to import (B1)', args: { selected: ['SO-A', 'SO-B'], imported: ['SO-A'] }, result: { carried: false } },
-    { name: 'nothing imported', args: { selected: ['SO-A'], imported: [] }, result: { carried: false } },
-    { name: 'invoice header or lines could not be read', args: { selected: ['SO-A'], imported: ['SO-A'], invoiceStateKnown: false }, result: { carried: false } },
-  ])('no PATCH: $name', async ({ args, result }) => {
-    expect(await clientHookProps().afterImport(afterImportArgs(args))).toEqual(result);
-    expect(mockApiFetch).not.toHaveBeenCalled();
-  });
-
-  const HEADER_URL = `${BASE}/${HEADER_ENDPOINT}/inv-1`;
-  const headerRead = (row) => ({ ok: true, json: async () => ({ response: { data: row ? [row] : [] } }) });
-  const runCarry = () => clientHookProps().afterImport(afterImportArgs({ selected: ['SO-A'], imported: ['SO-A'] }));
-
-  it('PATCHes the header with the % when the toggle is on and the invoice has none', async () => {
-    mockApiFetch
-      .mockResolvedValueOnce(headerRead({ etgoTotalDiscount: null, updated: 'X' }))
-      .mockResolvedValueOnce({ ok: true });
-    const result = await runCarry();
-    expect(result).toEqual({ carried: true, pct: 10 });
-    expect(mockApiFetch).toHaveBeenCalledTimes(2);
-    expect(mockApiFetch.mock.calls[0]).toEqual([HEADER_URL]);
-    expect(mockApiFetch.mock.calls[1]).toEqual([HEADER_URL, {
-      method: 'PATCH',
-      body: JSON.stringify({ etgoTotalDiscount: 10, updated: 'X' }),
-    }]);
-  });
-
-  it.each([
-    ['0', 0],
-    ['null', null],
-  ])('re-read with etgoTotalDiscount %s → PATCH carries the fresh updated', async (_name, current) => {
-    mockApiFetch
-      .mockResolvedValueOnce(headerRead({ etgoTotalDiscount: current, updated: '2025-01-15T10:00:00Z' }))
-      .mockResolvedValueOnce({ ok: true });
-    expect(await runCarry()).toEqual({ carried: true, pct: 10 });
-    expect(mockApiFetch).toHaveBeenCalledTimes(2);
-    expect(JSON.parse(mockApiFetch.mock.calls[1][1].body)).toEqual({ etgoTotalDiscount: 10, updated: '2025-01-15T10:00:00Z' });
-  });
-
-  it.each([
-    ['answers not ok', () => mockApiFetch.mockResolvedValueOnce({ ok: false })],
-    ['throws', () => mockApiFetch.mockRejectedValueOnce(new Error('network'))],
-    ['returns no row', () => mockApiFetch.mockResolvedValueOnce(headerRead(null))],
-    ['shows a % set meanwhile (5)', () => mockApiFetch.mockResolvedValueOnce(headerRead({ etgoTotalDiscount: 5, updated: 'X' }))],
-  ])('reports failedPct without PATCH when the header re-read %s', async (_name, arrange) => {
-    arrange();
-    expect(await runCarry()).toEqual({ carried: false, failedPct: 10 });
-    expect(mockApiFetch).toHaveBeenCalledTimes(1);
-    expect(mockApiFetch.mock.calls[0]).toEqual([HEADER_URL]);
-  });
-
-  it.each([
-    ['answers not ok', () => mockApiFetch.mockResolvedValueOnce({ ok: false })],
-    ['rejects', () => mockApiFetch.mockRejectedValueOnce(new Error('network'))],
-  ])('reports failedPct when the PATCH %s', async (_name, arrange) => {
-    mockApiFetch.mockResolvedValueOnce(headerRead({ etgoTotalDiscount: null, updated: 'X' }));
-    arrange();
-    expect(await runCarry()).toEqual({ carried: false, failedPct: 10 });
-    expect(mockApiFetch).toHaveBeenCalledTimes(2);
-    expect(mockApiFetch.mock.calls[1][1].method).toBe('PATCH');
+// ETP-5828 QA MCP-2 — both directions import with ONE importOrderLines call that carries the
+// discount server-side: the hook writes nothing from the browser (no afterImport header PATCH).
+describe('useOrderGlobalDiscountImport — no browser-side write', () => {
+  it('offers no afterImport', () => {
+    expect(hookProps().afterImport).toBeUndefined();
   });
 });
 
 describe('useOrderGlobalDiscountImport — success toast', () => {
   it.each([
-    { name: 'client PATCH failed', args: { count: 1, afterImportResult: { carried: false, failedPct: 10 } }, expected: { message: 'importGlobalDiscountPatchFailed:{"pct":"10"}', variant: 'warning' } },
-    { name: 'client PATCH failed on a partial import', args: { count: 1, partial: true, afterImportResult: { carried: false, failedPct: 10 } }, expected: { message: 'importGlobalDiscountPatchFailed:{"pct":"10"}', variant: 'warning' } },
     { name: 'carried, one line', args: { count: 1, afterImportResult: { carried: true, pct: 10 } }, expected: { message: 'importGlobalDiscountImportedOne:{"count":1,"pct":"10"}' } },
     { name: 'carried, many lines', args: { count: 2, afterImportResult: { carried: true, pct: 10 } }, expected: { message: 'importGlobalDiscountImportedMany:{"count":2,"pct":"10"}' } },
     { name: 'carried on a partial import', args: { count: 1, partial: true, afterImportResult: { carried: true, pct: 10 } }, expected: null },

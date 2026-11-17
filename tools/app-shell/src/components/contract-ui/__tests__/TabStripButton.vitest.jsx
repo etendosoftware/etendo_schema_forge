@@ -58,6 +58,15 @@ describe('TabStripButton', () => {
     });
   });
 
+  // ETP-5791 — the tab's own `icon` (e.g. a CustomLines `tabIcon`) is drawn instead of the icon
+  // its key resolves to.
+  it('draws the icon it is given instead of the one of its key', () => {
+    const OwnIcon = (props) => <svg data-testid="own-tab-icon" {...props} />;
+    const { button } = renderButton({ icon: OwnIcon });
+    expect(button.querySelector('[data-testid="own-tab-icon"]')).not.toBeNull();
+    expect(button.querySelectorAll('svg')).toHaveLength(1);
+  });
+
   describe('disabled (with disabledHint)', () => {
     const HINT = 'attachmentsSaveFirstHint';
 
@@ -161,6 +170,32 @@ describe('TabStripButton', () => {
       const { button: activeBtn } = renderButton({ testId: 'tab-nohover-active', isActive: true, showHoverLine: false });
       const activeIndicator = activeBtn.querySelector('span.bg-foreground');
       expect(activeIndicator).not.toBeNull();
+    });
+  });
+
+  describe('activeAccent', () => {
+    it('keeps the dark foreground active style by default', () => {
+      const { button } = renderButton({ isActive: true });
+      expect(button.className).toContain('text-foreground');
+      expect(button.querySelector('span.bg-foreground')).not.toBeNull();
+    });
+
+    it("'primary' paints the active text and underline with the brand blue", () => {
+      const { button } = renderButton({ isActive: true, activeAccent: 'primary' });
+      expect(button.className).toContain('text-primary');
+      expect(button.className).not.toContain('text-foreground');
+      expect(button.querySelector('span.bg-primary')).not.toBeNull();
+      expect(button.querySelector('span.bg-foreground')).toBeNull();
+    });
+
+    it("'primary' also recolours a custom indicator when showHoverLine is false", () => {
+      const { button } = renderButton({ isActive: true, activeAccent: 'primary', showHoverLine: false, indicatorCls: 'absolute bottom-0 h-0.5 bg-foreground' });
+      expect(button.querySelector('span.bg-primary')).not.toBeNull();
+    });
+
+    it("'primary' leaves inactive tabs muted", () => {
+      const { button } = renderButton({ isActive: false, activeAccent: 'primary' });
+      expect(button.className).toContain('text-muted-foreground');
     });
   });
 });

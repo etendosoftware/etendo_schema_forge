@@ -367,6 +367,11 @@ describe('buildAccountReportTree — flattening', () => {
       // report (Profit & Loss) never flips isGroupStart.
       group: 'G1',
       isGroupStart: false,
+      // ETP-6080 — the interactive view folds by `parentId` (nearest listed
+      // ancestor; null under the root container) and colours the trend by the
+      // effective `sign`.
+      parentId: null,
+      sign: 'D',
     });
   });
 
@@ -671,5 +676,32 @@ describe('buildAccountReportTree — isGroupStart across multiple c_acct_rpt_gro
     ];
     const out = buildAccountReportTree(sameGroup, []);
     assert.deepEqual(out.map((r) => r.isGroupStart), [false, false]);
+  });
+});
+
+// ETP-6239 — the dev plugin forwards period data to the shared core modules
+// exactly as the production report-server does (its mirror test is in
+// schema_forge_core/tools/report-server/__tests__/server.test.js). Behaviour
+// itself is tested in core (report-periods / report-query / report-grouping).
+describe('report-api.js — period columns wiring (ETP-6239)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const SRC = readFileSync(new URL('../vite-plugins/report-api.js', import.meta.url), 'utf8');
+
+  it('runs the SQL with the cap of the render format (xlsx/csv 25, pdf/html 7)', () => {
+    assert.match(SRC, /maxPeriodBuckets:\s*maxPeriodBucketsFor\(format\)/);
+  });
+
+  it('feeds periodRows/periodSpec and the normalised compareMode to buildRenderAccountTree, null otherwise', () => {
+    assert.match(SRC, /const \{ rows, openingRows, operandRows, periodRows, periodSpec \} = await runReportSql/);
+    assert.match(SRC, /result\.periodRows\s*\?\s*\{ periodRows: result\.periodRows, spec: result\.periodSpec, compareMode: normalizeCompareMode\(params\.compareMode\) \}\s*:\s*null/);
+  });
+
+  it('spreads the same buildPeriodMeta into meta (columnPages, notes, periods)', () => {
+    assert.match(SRC, /\.\.\.neoMeta, \.\.\.buildPeriodMeta\(result\.periodSpec, \{ format, compareMode: params\.compareMode \}\)/);
+  });
+
+  it('answers a ReportPeriodsError with its status and code (400), not 500', () => {
+    assert.match(SRC, /res\.statusCode = e\?\.name === 'ReportPeriodsError' \? e\.status : 500/);
+    assert.match(SRC, /\{ error: e\.message, code: e\.code \}/);
   });
 });

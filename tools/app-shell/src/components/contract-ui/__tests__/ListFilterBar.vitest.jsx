@@ -1397,6 +1397,45 @@ describe('ListFilterBar status and type menus (real list)', () => {
       expect(screen.getAllByRole('option')[0].querySelector('[data-testid="StatusTag__filter-option"]')).toBeNull();
     });
 
+    // ETP-6148 — the pill takes the same per-column tone as the grid cell: the status column's
+    // own `enumVariants` win for the codes it declares, the global catalog for the rest.
+    describe('per-column tones (statusCol.enumVariants)', () => {
+      const renderWithVariants = (enumVariants, ...codes) => {
+        distinctValuesOverride.current = distinctOf(...codes);
+        render(
+          <ListFilterBar
+            columns={[STATUS_COLS[0], { ...STATUS_COLS[1], enumVariants }]}
+            columnFilters={{}}
+            onFilterChange={vi.fn()} />,
+        );
+      };
+      const toneOf = (option) => option.querySelector('.status-tag').className.match(/status-tag--(\w+)/)[1];
+
+      it('colours a declared code with the column tone, overriding the global one', async () => {
+        const user = userEvent.setup();
+        renderWithVariants({ CO: 'info' }, 'CO');
+        await openStatus(user);
+        expect(toneOf(screen.getAllByRole('option')[1])).toBe('info');
+      });
+
+      it('maps a declared Tag variant to its tone', async () => {
+        const user = userEvent.setup();
+        renderWithVariants({ DR: 'orange' }, 'DR');
+        await openStatus(user);
+        expect(toneOf(screen.getAllByRole('option')[1])).toBe('caution');
+      });
+
+      it('keeps the global tone for the codes the column does not declare', async () => {
+        const user = userEvent.setup();
+        renderWithVariants({ DR: 'red' }, 'DR', 'CO', 'VO');
+        await openStatus(user);
+        const tones = Object.fromEntries(
+          screen.getAllByRole('option').slice(1).map((o) => [o.textContent, toneOf(o)]),
+        );
+        expect(tones).toEqual({ Draft: 'destructive', Complete: 'success', Void: 'destructive' });
+      });
+    });
+
     it('selects the code and closes the menu when a tag is clicked', async () => {
       const user = userEvent.setup();
       const onFilterChange = vi.fn();

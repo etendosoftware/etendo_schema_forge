@@ -26,7 +26,6 @@ export default function OnboardingPage() {
     brandHref: import.meta.env.VITE_WEBSITE_URL || undefined,
     localeCodes: ['es_ES', 'en_US'],
     countryCodes: ['ES'],
-    sectorCodes: ['technology', 'services', 'commerce', 'manufacturing'],
     // 'advisory' (Asesoría) was retired from Etendo GO by ETP-5190 — the multi-client
     // advisory profile is not a shape the product serves. The core ProfileStep falls back to
     // ['company', 'freelancer', 'advisory'] when this key is absent, so it must stay explicit.
@@ -41,7 +40,6 @@ export default function OnboardingPage() {
       clientName: '',
       fiscalIdValue: '',
       address: '',
-      sector: 'technology',
       // ETP-5426: the "include sample data" opt-in starts unticked, without exception.
       includeSampleData: false,
     },

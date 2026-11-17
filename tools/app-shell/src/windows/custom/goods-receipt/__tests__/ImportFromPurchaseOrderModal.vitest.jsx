@@ -1,6 +1,7 @@
-// Mocks must come before imports (Vitest hoisting)
-
-// Capture the props that the wrapper forwards to the generic ImportLinesModal.
+// @covers artifacts/goods-receipt/custom/ImportFromPurchaseOrderModal.jsx
+// @covers tools/app-shell/src/windows/custom/shared/inOutImport.js
+// @covers tools/app-shell/src/windows/custom/shared/importActionClient.js
+// @covers tools/app-shell/src/windows/custom/shared/useImportLoadFailureToast.js
 let captured = null;
 vi.mock('@/components/contract-ui/ImportLinesModal', () => ({
   default: (props) => {
@@ -28,10 +29,8 @@ describe('ImportFromPurchaseOrderModal — static prop contract', () => {
   it('forwards incoming props and the fixed config to ImportLinesModal', () => {
     render(<ImportFromPurchaseOrderModal invoiceId="receipt-1" bpId="bp-1" base={base} headers={headers} />);
     expect(captured).toBeTruthy();
-    // incoming props forwarded
     expect(captured.invoiceId).toBe('receipt-1');
     expect(captured.bpId).toBe('bp-1');
-    // static config
     expect(captured.linesEndpoint).toBe('goods-receipt/goodsReceiptLine');
     expect(captured.titleKey).toBe('importFromPurchaseOrder');
     expect(captured.searchPlaceholderKey).toBe('searchPurchaseOrder');
@@ -39,7 +38,9 @@ describe('ImportFromPurchaseOrderModal — static prop contract', () => {
     expect(captured.noSearchResultsKey).toBe('noOrdersMatchYourSearch');
     expect(captured.successMessageKey).toBe('linesImportedFromPurchaseOrder');
     expect(captured.showPriceColumns).toBe(false);
-    // callbacks present
+    expect(captured.eagerLoadLines).toBe(false);
+    expect(captured.isDocumentCovered({ pendingLines: 0 })).toBe(true);
+    expect(captured.getDocumentTotal({ amount: 3 })).toBe(3);
     expect(typeof captured.fetchDocuments).toBe('function');
     expect(typeof captured.fetchLines).toBe('function');
     expect(typeof captured.afterImport).toBe('function');
@@ -55,24 +56,37 @@ describe('ImportFromPurchaseOrderModal — fetchDocuments', () => {
     render(<ImportFromPurchaseOrderModal invoiceId="receipt-1" bpId="bp-1" base={base} headers={headers} />);
     const { fetchDocuments } = captured;
 
-    globalThis.fetch = vi.fn((url) => {
-      if (url.includes('/purchase-order/header')) {
+    globalThis.fetch = vi.fn((url, opts) => {
+      if (url.endsWith('/goods-receipt/goodsReceipt/receipt-1/action/availableOrders')) {
+        expect(JSON.parse(opts.body)).toMatchObject({ includeCovered: true });
         return Promise.resolve(jsonRes([
-          { id: 'o1', documentStatus: 'CO', businessPartner: 'bp-1', deliveryStatusPurchase: 0 },   // keep
-          { id: 'o2', documentStatus: 'CO', businessPartner: 'bp-1', deliveryStatusPurchase: 100 },  // drop (fully delivered)
-          { id: 'o3', documentStatus: 'DR', businessPartner: 'bp-1', deliveryStatusPurchase: 0 },    // drop (not completed)
-          { id: 'o4', documentStatus: 'CO', businessPartner: 'bp-2', deliveryStatusPurchase: 0 },    // drop (other vendor)
+          { id: 'o1', documentNo: 'PO-1', date: '2026-02-01', businessPartner: 'bp-1', pendingLines: 2 },
         ]));
       }
-      // current receipt lines + other-draft receipts list
-      if (url.includes('/goodsReceiptLine')) return Promise.resolve(jsonRes([]));
-      if (url.includes('/goodsReceipt?')) return Promise.resolve(jsonRes([]));
-      return Promise.resolve(jsonRes([]));
+      throw new Error(`unexpected request ${url}`);
     });
 
     const { documents, sharedContext } = await fetchDocuments({ base, headers, bpId: 'bp-1', invoiceId: 'receipt-1' });
     expect(documents.map((d) => d.id)).toEqual(['o1']);
-    expect(sharedContext).toHaveProperty('draftInfo');
+    expect(documents[0].orderDate).toBe('2026-02-01');
+    expect(sharedContext).toEqual({ targetId: 'receipt-1' });
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ImportFromPurchaseOrderModal — list order', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('lists the orders newest CREATED first, as before, whatever order the action returns', async () => {
+    render(<ImportFromPurchaseOrderModal invoiceId="receipt-1" bpId="bp-1" base={base} headers={headers} />);
+    const { fetchDocuments } = captured;
+    globalThis.fetch = vi.fn(() => Promise.resolve(jsonRes([
+      { id: 'o-old', date: '2026-03-01', creationDate: '2026-01-01T10:00:00Z', pendingLines: 1 },
+      { id: 'o-new', date: '2026-02-01', creationDate: '2026-02-15T10:00:00Z', pendingLines: 1 },
+      { id: 'o-mid', date: '2026-01-01', creationDate: '2026-02-01T10:00:00Z', pendingLines: 1 },
+    ])));
+    const { documents } = await fetchDocuments({ base, headers, bpId: 'bp-1', invoiceId: 'receipt-1' });
+    expect(documents.map((d) => d.id)).toEqual(['o-new', 'o-mid', 'o-old']);
   });
 });
 
@@ -83,13 +97,17 @@ describe('ImportFromPurchaseOrderModal — fetchLines', () => {
     render(<ImportFromPurchaseOrderModal invoiceId="receipt-1" bpId="bp-1" base={base} headers={headers} />);
     const { fetchLines } = captured;
 
-    globalThis.fetch = vi.fn(() => Promise.resolve(jsonRes([
-      { id: 'l1', orderedQuantity: 10, deliveredQuantity: 2, 'product$_identifier': 'Widget' },
-      { id: 'l2', orderedQuantity: 5, deliveredQuantity: 5 },   // fully delivered -> pending 0
-      { id: 'l3', orderedQuantity: 0, deliveredQuantity: 0 },   // filtered out (not ordered)
-    ])));
+    globalThis.fetch = vi.fn((url, opts) => {
+      expect(url).toBe(`${base}/goods-receipt/goodsReceipt/receipt-1/action/availableOrderLines`);
+      expect(JSON.parse(opts.body)).toEqual({ orderId: 'o1', includeCovered: true, detail: true });
+      return Promise.resolve(jsonRes([
+        { id: 'l1', lineNo: 10, orderedQuantity: 10, deliveredQuantity: 2, pendingQuantity: 5, inDraftDocuments: ['GR-9'], 'product$_identifier': 'Widget' },
+        { id: 'l2', lineNo: 20, orderedQuantity: 5, deliveredQuantity: 5, pendingQuantity: 0, inDraftDocuments: [] },   // fully delivered -> pending 0
+        { id: 'l3', lineNo: 30, orderedQuantity: 0, deliveredQuantity: 0, pendingQuantity: 0, inDraftDocuments: [] },   // filtered out (not ordered)
+      ]));
+    });
 
-    const sharedContext = { draftInfo: { l1: { qty: 3, docNos: new Set(['GR-9']) } } };
+    const sharedContext = { targetId: 'receipt-1' };
     const lines = await fetchLines({ base, headers, docId: 'o1', sharedContext });
 
     expect(lines.map((l) => l.id)).toEqual(['l1', 'l2']); // l3 filtered
@@ -109,7 +127,7 @@ describe('ImportFromPurchaseOrderModal — fetchLines', () => {
     render(<ImportFromPurchaseOrderModal invoiceId="receipt-1" bpId="bp-1" base={base} headers={headers} />);
     const { fetchLines } = captured;
     globalThis.fetch = vi.fn(() => Promise.resolve({ ok: false, json: async () => ({}) }));
-    const lines = await fetchLines({ base, headers, docId: 'o1', sharedContext: { draftInfo: {} } });
+    const lines = await fetchLines({ base, headers, docId: 'o1', sharedContext: { targetId: 'receipt-1' } });
     expect(lines).toEqual([]);
   });
 });
@@ -160,9 +178,6 @@ describe('ImportFromPurchaseOrderModal — buildLineBody', () => {
       salesOrderLine: 'l1',
       lineNo: 10,
     });
-    // orderQuantity is intentionally NOT sent: it maps to M_InOutLine.QuantityOrder
-    // (secondary-UOM order qty), which the m_inoutline check constraint requires to be
-    // NULL unless M_Product_UOM_ID is set. Sending it broke single-UOM products (HTTP 500).
     expect(body).not.toHaveProperty('orderQuantity');
   });
 });

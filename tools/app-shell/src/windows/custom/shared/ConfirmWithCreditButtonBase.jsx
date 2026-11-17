@@ -78,6 +78,9 @@ export default function ConfirmWithCreditButtonBase({
 
   const rectifiableInvoicesUrl =
     `${base}/${specName}/${entityName}/${data?.id || recordId}/action/rectifiableInvoices`;
+  // ETP-6179: the rectificative invoice's "Datos fiscales" step (R4 preselected per system).
+  const sifDefaultsUrl =
+    `${base}/${specName}/${entityName}/${data?.id || recordId}/action/sifDefaults`;
 
   return (
     <>
@@ -138,7 +141,9 @@ export default function ConfirmWithCreditButtonBase({
           title={createInvoiceModalTitle}
           token={token}
           rectifiableInvoicesUrl={rectifiableInvoicesUrl}
-          onConfirm={(_priceListId, originInvoices) => handleCreateReturnInvoice(originInvoices)}
+          sifDefaultsUrl={sifDefaultsUrl}
+          onConfirm={(_priceListId, originInvoices, sifFields) =>
+            handleCreateReturnInvoice(originInvoices, sifFields)}
           onClose={() => setShowModal(false)}
           data-testid="CreateInvoiceConfirmModal__f9608e" />,
         document.body,

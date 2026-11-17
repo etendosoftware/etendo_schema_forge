@@ -4,6 +4,10 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-config/ChangeSifDialog.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-config/fiscalSystemApi.js
 // @covers tools/app-shell/src/windows/custom/fiscal-config/useFiscalCatalog.js
+// @covers tools/app-shell/src/windows/custom/fiscal-config/CertSection.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-config/FiscalStatusSummary.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-config/useCertExpiry.js
+// @covers tools/app-shell/src/windows/custom/fiscal-config/CertExpiryBanner.jsx
 import { test, expect } from '../../helpers/test.js';
 import { login, navigateTo, MOCK_ORG_ID } from '../../helpers/auth.js';
 import { t } from '../../helpers/i18n.js';
@@ -164,11 +168,13 @@ test.describe('Fiscal Config — wizard interaction', () => {
 // ── Certificate upload helpers ────────────────────────────────────────────────
 
 const FAKE_P12 = Buffer.from('fakep12content');
+// The upload details carry ISO yyyy-MM-dd dates (ETP-6053). Day ≠ month, so a swapped day and
+// month in the done step would show.
 const FAKE_CERT_DETAILS = {
   subject: 'CN=Empresa Test S.L., O=Test',
   issuer: 'CN=FNMT Clase 2 CA',
-  validFrom: '2024-01-01',
-  validTo: '2026-01-01',
+  validFrom: '2025-07-02',
+  validTo: '2027-07-01',
   algorithm: 'SHA256withRSA',
 };
 
@@ -254,6 +260,10 @@ test.describe('Fiscal Config — certificate upload flow', () => {
     // Verify spinner appears briefly, then done screen
     await expect(page.getByText(t('fiscal.cert.success.title'))).toBeVisible({ timeout: 6_000 });
     await expect(page.getByRole('button', { name: t('fiscal.cert.btn.use') })).toBeVisible();
+    // The ISO validity dates are shown in the UI locale (es_ES: dd/MM/yyyy).
+    await expect(page.getByText('02/07/2025', { exact: true })).toBeVisible();
+    await expect(page.getByText('01/07/2027', { exact: true })).toBeVisible();
+    await expect(page.getByText(FAKE_CERT_DETAILS.validTo)).toHaveCount(0);
   });
 
   test('confirmNif path: POST returns pendingNifConfirmation → user confirms → done', async ({ page }) => {
@@ -1083,5 +1093,49 @@ test.describe('Fiscal Config — Save gating, unsaved-changes guard and status p
     await expect(page).toHaveURL(/\/dashboard/);
     await expect(prompt).toHaveCount(0);
     expect(puts).toHaveLength(1);
+  });
+});
+
+// ETP-6053 — GET /certificate returns validTo as ISO yyyy-MM-dd. The "Estado" panel and the
+// certificate section show it in the UI locale, and the expiry banner counts the days from it.
+test.describe('Fiscal Config — certificate validity from GET /certificate', () => {
+  async function setupWithCertificate(page, validTo) {
+    await loginWithOrg(page);
+    await installTbaiSaveMocks(page);
+    // Registered after installTbaiSaveMocks' exists:false handler, so it wins.
+    await page.route('**/certificate{/**,}**', route => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ exists: true, validTo }),
+      });
+    });
+    await navigateTo(page, 'fiscal-config');
+  }
+
+  test('the status panel and the certificate section show validTo as dd/MM/yyyy', async ({ page }) => {
+    await setupWithCertificate(page, '2027-07-01');
+    const validUntil = t('fiscal.cert.validUntil', { date: '01/07/2027' });
+
+    const panel = page.getByTestId('FiscalStatusSummary__panel');
+    await expect(panel).toBeVisible({ timeout: 8_000 });
+    await expect(panel.getByTestId('FiscalStatusSummary__row-cert')).toContainText(validUntil);
+
+    // The certificate section: the "Certificado cargado" name and its date share one block.
+    const certRow = page.getByText(t('fiscal.cert.loaded'), { exact: true }).locator('..');
+    await expect(certRow).toContainText(validUntil);
+    // More than 60 days ahead: no expiry banner.
+    await expect(page.getByText(t('fiscal.cert.expiry.body'))).toHaveCount(0);
+  });
+
+  test('a certificate expiring in 15 days shows the critical expiry banner', async ({ page }) => {
+    // daysUntil counts in UTC calendar days, so the fixture date is built the same way.
+    const in15Days = new Date(Date.now() + 15 * 86_400_000).toISOString().slice(0, 10);
+    await setupWithCertificate(page, in15Days);
+
+    await expect(page.getByText(t('fiscal.cert.expiry.critical.title', { days: 15 })).first())
+      .toBeVisible({ timeout: 8_000 });
+    // Critical (≤ 30 days): it cannot be dismissed.
+    await expect(page.getByRole('button', { name: t('fiscal.cert.expiry.dismiss'), exact: true })).toHaveCount(0);
   });
 });

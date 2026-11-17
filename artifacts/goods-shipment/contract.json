@@ -1,8 +1,8 @@
 {
   "version": "0.6.0",
   "generatedAt": "2026-08-13T11:56:58.444Z",
-  "updatedAt": "2026-11-05T13:33:52.064Z",
-  "checksum": "43e55be038eda582",
+  "updatedAt": "2026-11-12T14:51:06.823Z",
+  "checksum": "fc425bb174a283d3",
   "frontendContract": {
     "window": {
       "id": "169",
@@ -1000,8 +1000,7 @@
               "source": "0"
             }
           }
-        ],
-        "javaQualifier": "goodsShipmentLineHandler"
+        ]
       }
     }
   },
@@ -1942,8 +1941,7 @@
             "visibility": "system",
             "required": true
           }
-        ],
-        "javaQualifier": "goodsShipmentLineHandler"
+        ]
       }
     },
     "endpoints": [

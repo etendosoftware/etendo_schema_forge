@@ -1,6 +1,8 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
-import { useApiFetch } from '@/auth/useApiFetch.js';
 import { apiFetch as moduleApiFetch } from '@/auth/api.js';
+import { listAll, listLines, newestCreatedFirst } from '@/windows/custom/shared/importActionClient.js';
+import useImportLoadFailureToast from '@/windows/custom/shared/useImportLoadFailureToast.js';
+import { pricingContextOf } from '@/windows/custom/shared/invoiceImportPricing.js';
 
 /**
  * Shipment lines don't carry pricing — we resolve unit price, tax, and uOM
@@ -84,146 +86,95 @@ const resolveLinePrice = async (base, productId, qty, invoiceHeader, auxData = {
   }
 };
 
+/**
+ * Whether the empty list is empty because of the currency: a completed shipment of the customer in
+ * another currency, not invoiced in full, exists. Only asked when `availableShipments` lists
+ * nothing, so the popup still tells «no shipments in this currency» apart from «no shipments».
+ */
+const shipmentsInOtherCurrency = async (base, invoiceId, bpId) => {
+  try {
+    const headerRes = await moduleApiFetch(`${base}/sales-invoice/header/${invoiceId}`);
+    if (!headerRes.ok) return false;
+    const currency = (await headerRes.json())?.response?.data?.[0]?.currency;
+    if (!currency || !bpId) return false;
+    const criteria = encodeURIComponent(JSON.stringify([
+      { fieldName: 'businessPartner', operator: 'equals', value: bpId },
+      { fieldName: 'documentStatus', operator: 'equals', value: 'CO' },
+      { fieldName: 'etgoCurrency', operator: 'notEqual', value: currency },
+    ]));
+    const res = await moduleApiFetch(`${base}/goods-shipment/goodsShipment?criteria=${criteria}&_startRow=0&_endRow=50`);
+    if (!res.ok) return false;
+    const others = (await res.json())?.response?.data || [];
+    return others.some(s => s.invoiced !== true && Number(s.invoiceStatus ?? 0) < 100);
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * ETP-6099 — ONE `availableShipments` read of the invoice lists the customer's completed shipments
+ * in the invoice's currency (server filtered), the covered ones too at `pendingLines: 0`
+ * (`includeCovered`), which the popup hides (`isShipmentCovered`); `detail` adds `orderDocumentNo`.
+ * Rejects with `ImportLoadError` on a refusal; the component shows
+ * `describeLoadFailure`.
+ */
 const fetchDocuments = async ({ base, bpId, invoiceId }) => {
-  // Fetch header first so we can pass its priceList to the product selector.
-  // ProductPriceSelectorPolicy only enriches _PSTD / _PLIST when priceList is
-  // provided as a context param; without it the callout receives PSTD=0 and
-  // returns the wrong price.
-  const invoicedLinesFilter = encodeURIComponent(
-    JSON.stringify([{ fieldName: 'goodsShipmentLine', operator: 'notNull' }]),
-  );
-  const [shipRes, invLinesRes, allInvoicedLinesRes, headerRes] = await Promise.all([
-    moduleApiFetch(`${base}/goods-shipment/goodsShipment?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
-    moduleApiFetch(`${base}/sales-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`),
-    moduleApiFetch(`${base}/sales-invoice/lines?criteria=${invoicedLinesFilter}&_startRow=0&_endRow=2000`),
-    moduleApiFetch(`${base}/sales-invoice/header/${invoiceId}`),
-  ]);
+  const rows = await listAll({
+    apiFetch: moduleApiFetch, base, spec: 'sales-invoice', targetId: invoiceId,
+    action: 'availableShipments', params: { includeCovered: true, detail: true },
+  });
+  // Newest created first, as the old `_sortBy=creationDate desc` read listed them.
+  const documents = newestCreatedFirst(rows).map(r => ({ ...r, movementDate: r.date }));
+  const excludedByCurrency = documents.length === 0 && await shipmentsInOtherCurrency(base, invoiceId, bpId);
+  return { documents, sharedContext: { invoiceId }, excludedByCurrency };
+};
 
-  const alreadyImportedShipmentLines = new Set();
-  const alreadyImportedOrderLines = new Set();
-  if (invLinesRes.ok) {
-    const invLines = (await invLinesRes.json())?.response?.data || [];
-    invLines.forEach(il => {
-      if (il.goodsShipmentLine) alreadyImportedShipmentLines.add(il.goodsShipmentLine);
-      if (il.salesOrderLine) alreadyImportedOrderLines.add(il.salesOrderLine);
-    });
-  }
-
-  // Shipment lines already used in other invoices — prevents double-invoicing the same line.
-  const invoicedElsewhere = new Set();
-  if (allInvoicedLinesRes.ok) {
-    const all = (await allInvoicedLinesRes.json())?.response?.data || [];
-    all.forEach(il => {
-      if (il.goodsShipmentLine && !alreadyImportedShipmentLines.has(il.goodsShipmentLine)) {
-        invoicedElsewhere.add(il.goodsShipmentLine);
-      }
-    });
-  }
-
-  let invoiceHeader = {};
-  if (headerRes.ok) {
-    invoiceHeader = (await headerRes.json())?.response?.data?.[0] || {};
-  }
-
-  const priceListId = invoiceHeader.priceList;
-  const selectorUrl = `${base}/sales-invoice/lines/selectors/M_Product_ID?limit=500&offset=0${priceListId ? `&priceList=${encodeURIComponent(priceListId)}` : ''}`;
-  const selectorRes = await moduleApiFetch(selectorUrl);
-
-  const productAuxMap = {};
-  if (selectorRes.ok) {
-    const selData = await selectorRes.json();
-    for (const item of (selData?.items || [])) {
-      if (item.id && item._aux) {
-        const aux = {};
-        for (const [suffix, val] of Object.entries(item._aux)) {
-          aux[`product${suffix}`] = val;
-        }
-        productAuxMap[item.id] = aux;
-      }
-    }
-  }
-
-  let candidates = [];
-  if (shipRes.ok) {
-    const all = (await shipRes.json())?.response?.data || [];
-    candidates = all.filter(s =>
-      s.documentStatus === 'CO'
-      && s.businessPartner === bpId
-      && s.invoiced !== true
-    );
-  }
-
-  // Shipments have no currency of their own (M_InOut has no C_Currency_ID column) —
-  // resolve it via the linked sales order. Shipments with no linked order can't be
-  // compared, so they're never excluded by this filter.
-  const invoiceCurrency = invoiceHeader.currency || null;
-  let documents = candidates;
-  let excludedByCurrency = false;
-  if (invoiceCurrency) {
-    const orderIds = [...new Set(candidates.filter(s => s.salesOrder).map(s => s.salesOrder))];
-    const orderCurrencyMap = {};
-    await Promise.all(orderIds.map(async (id) => {
-      try {
-        const r = await moduleApiFetch(`${base}/sales-order/header/${id}`);
-        if (r.ok) {
-          const o = (await r.json())?.response?.data?.[0];
-          if (o) orderCurrencyMap[id] = o.currency;
-        }
-      } catch { /* ignore — treat as unresolved, don't exclude */ }
-    }));
-    documents = candidates.filter(s => !s.salesOrder || orderCurrencyMap[s.salesOrder] === invoiceCurrency);
-    excludedByCurrency = documents.length === 0 && candidates.length > 0;
-  }
-
+/**
+ * One `availableShipmentLines` row in the shape the popup reads. A line already on this invoice or
+ * on another one is greyed (and shows its shipped quantity, as before); otherwise it offers what
+ * the server says is left (draft invoices deducted). The order line's discount travels to the import;
+ * the price (callout, `priceData`) feeds the row total.
+ */
+const shipmentLineRow = (r, priceData = {}) => {
+  const pending = Number(r.pendingQuantity) || 0;
+  const imported = !!(r.importedHere || r.invoicedElsewhere) || pending === 0;
   return {
-    documents,
-    sharedContext: { invoiceHeader, productAuxMap, alreadyImportedShipmentLines, alreadyImportedOrderLines, invoicedElsewhere },
-    excludedByCurrency,
+    ...r,
+    salesOrderLine: r.orderLine ?? null,
+    _productName: r['product$_identifier'] || r.id,
+    _maxQty: imported ? (Number(r.movementQuantity) || 0) : pending,
+    _unitPrice: Number(priceData.unitPrice) || Number(priceData.grossUnitPrice) || 0,
+    _lineNetAmount: Number(priceData.lineNetAmount ?? 0),
+    _tax: priceData.tax || null,
+    _uOM: priceData.uOM || r.uOM || null,
+    _alreadyImported: imported,
+    _orderDiscount: Number(r.orderLineDiscount) || 0,
   };
 };
 
+/** ONE `availableShipmentLines` read per shipment, lines with nothing left included. */
 const fetchLines = async ({ base, docId, sharedContext }) => {
-  const res = await moduleApiFetch(`${base}/goods-shipment/goodsShipmentLine?parentId=${docId}&_startRow=0&_endRow=200`);
-  if (!res.ok) return [];
-  const json = await res.json();
-  const lines = json?.response?.data || [];
-  const { invoiceHeader, productAuxMap, alreadyImportedShipmentLines, alreadyImportedOrderLines, invoicedElsewhere } = sharedContext;
-
-  // Batch-fetch the referenced sales order lines to carry their discount into the
-  // invoice. M_InOutLine has no Discount column — the value lives on C_OrderLine.
-  const orderLineIds = [...new Set(lines.filter(l => l.salesOrderLine).map(l => l.salesOrderLine))];
-  const orderDiscounts = {};
-  await Promise.all(orderLineIds.map(async (id) => {
-    try {
-      const r = await moduleApiFetch(`${base}/sales-order/lines/${id}`);
-      if (r.ok) {
-        const d = await r.json();
-        const ol = d?.response?.data?.[0];
-        if (ol && Number(ol.discount) > 0) orderDiscounts[id] = Number(ol.discount);
-      }
-    } catch { /* ignore — missing order line means 0 discount */ }
-  }));
-
-  return Promise.all(lines.map(async (l) => {
-    const imported = alreadyImportedShipmentLines?.has(l.id) || alreadyImportedOrderLines?.has(l.salesOrderLine) || invoicedElsewhere?.has(l.id);
-    const qty = Number(l.movementQuantity) || 1;
-    const priceData = l.product ? await resolveLinePrice(base, l.product, qty, invoiceHeader, productAuxMap[l.product] || {}) : {};
-    return {
-      ...l,
-      _productName: l['product$_identifier'] || l.id,
-      _maxQty: Number(l.movementQuantity) || 0,
-      _unitPrice: Number(priceData.unitPrice) || Number(priceData.grossUnitPrice) || 0,
-      _lineNetAmount: Number(priceData.lineNetAmount ?? 0),
-      _tax: priceData.tax || null,
-      _uOM: priceData.uOM || l.uOM || null,
-      _alreadyImported: !!imported,
-      _orderDiscount: orderDiscounts[l.salesOrderLine] || 0,
-    };
+  const rows = await listLines({
+    apiFetch: moduleApiFetch, base, spec: 'sales-invoice', targetId: sharedContext?.invoiceId,
+    action: 'availableShipmentLines', params: { shipmentId: docId, includeCovered: true, detail: true },
+  });
+  // The row total the popup shows once a document is expanded is the sum of its priced lines,
+  // as before: the callout prices each line here, on expand (never on open).
+  const { invoiceHeader, productAuxMap } = await pricingContextOf({ apiFetch: moduleApiFetch, base, spec: 'sales-invoice', sharedContext });
+  return Promise.all(rows.map(async (r) => {
+    const qty = Number(r.movementQuantity) || 1;
+    const priceData = r.product
+      ? await resolveLinePrice(base, r.product, qty, invoiceHeader, productAuxMap[r.product] || {})
+      : {};
+    return shipmentLineRow(r, priceData);
   }));
 };
 
+/** A shipment with nothing left to import is not listed (it used to be hidden once its lines loaded). */
+const isShipmentCovered = (doc) => Number(doc.pendingLines) === 0;
+
 const getDocDisplay = (doc) => {
-  const orderRef = (doc['salesOrder$_identifier'] || '').split(' - ')[0] || '';
+  const orderRef = doc.orderDocumentNo || '';
   return {
     docNo: doc.documentNo || doc.id,
     date: doc.movementDate,
@@ -231,8 +182,9 @@ const getDocDisplay = (doc) => {
   };
 };
 
+// The price callout runs here, per selected line at IMPORT time (never on open).
 const buildLineBody = async ({ line, qty, invoiceId, lineNo, sharedContext, base }) => {
-  const { invoiceHeader, productAuxMap } = sharedContext;
+  const { invoiceHeader, productAuxMap } = await pricingContextOf({ apiFetch: moduleApiFetch, base, spec: 'sales-invoice', sharedContext });
   // Re-resolve price for the actual import qty so lineNetAmount is correct.
   const priceData = await resolveLinePrice(base, line.product, qty, invoiceHeader, productAuxMap[line.product] || {});
   const calloutGrossUnitPrice = Number(priceData.grossUnitPrice) || 0;
@@ -276,11 +228,8 @@ const buildLineBody = async ({ line, qty, invoiceId, lineNo, sharedContext, base
 };
 
 export default function ImportFromShipmentModal(props) {
-  // ETP-4576 - the credential belongs to apiFetch, not to the component.
-  // Empty base ON PURPOSE: these modals pull from ANOTHER spec than their own window
-  // (an invoice importing shipment lines), and resolveApiUrl only skips a prefix that
-  // matches - so a configured base doubles it and 404s.
-  const apiFetch = useApiFetch('');
+  // ETP-6099 — a failed read is not «nothing to import»: tell the user, show an empty list.
+  const handlers = useImportLoadFailureToast(fetchDocuments, fetchLines);
   return (
     <ImportLinesModal
       {...props}
@@ -292,8 +241,10 @@ export default function ImportFromShipmentModal(props) {
       noCurrencyMatchMessageKey="noShipmentsMatchCurrency"
       successMessageKey="linesImportedFromShipment"
       showPriceColumns={false}
-      fetchDocuments={fetchDocuments}
-      fetchLines={fetchLines}
+      eagerLoadLines={false}
+      isDocumentCovered={isShipmentCovered}
+      fetchDocuments={handlers.fetchDocuments}
+      fetchLines={handlers.fetchLines}
       getDocDisplay={getDocDisplay}
       buildLineBody={buildLineBody}
     />

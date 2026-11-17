@@ -1,7 +1,6 @@
 import { useLabel, useUI } from '@/i18n';
 import { CUSTOMER_FIELD, VENDOR_FIELD, isChecked } from './bpCategoryContactTypes.js';
 import { SquareCheckbox } from '@/windows/custom/shared/SquareCheckbox.jsx';
-import { useNotifyOnHeaderSave } from './useAssociatedContactsNotice.js';
 
 const TYPE_OPTIONS = [
   { field: CUSTOMER_FIELD, column: 'EM_Etgo_Iscustomer' },
@@ -11,8 +10,13 @@ const TYPE_OPTIONS = [
 /**
  * Contact category header — the "Tipo de contacto" group (ETP-5791).
  *
- * Declared in decisions.json as the `customRenderer` of `etgoIscustomer`; it also owns
- * `etgoIsvendor` (declared `form: false`), writing it through EntityForm's `onFieldChange`.
+ * Since the Figma alignment the contact type lives in the Accounting tab
+ * (`BpCategoryAccountingPanel`). This header group is the FALLBACK for a role without the
+ * "Show Accounting Fields" capability, for which that tab is hidden (`detailVisibleWhenCapability`):
+ * without it such a role could not set a type, and the backend refuses a category with none. The
+ * window wrapper sets it as the `customRenderer` of `etgoIscustomer` only in that case (flag on).
+ * It also owns `etgoIsvendor` (declared `form: false`), writing it through EntityForm's
+ * `onFieldChange`.
  * `ownsLabel` makes EntityForm leave the legend to this component, so the required asterisk
  * and the "inherited by new contacts only" hint sit on the legend line.
  *
@@ -21,13 +25,11 @@ const TYPE_OPTIONS = [
  * (`ETGO_BPGroupContactTypeRequired`, translated by lib/backendErrors.js) and the form rolls
  * the toggle back. A new category starts with both unchecked (AD default `N`).
  *
- * It is also the always-mounted piece of the detail form, so it hosts the "saved with associated
- * contacts" notice (see useAssociatedContactsNotice.js).
+ * The "saved with associated contacts" notice is hosted by the window wrapper's form, not here.
  */
 export default function ContactTypeField({ record, readOnly, onFieldChange, onCommit, required = true }) {
   const ui = useUI();
   const t = useLabel();
-  useNotifyOnHeaderSave(record);
 
   const toggle = (field) => {
     if (readOnly) return;

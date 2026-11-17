@@ -825,4 +825,137 @@ describe('CreateInvoiceConfirmModal', () => {
       expect(screen.queryByTestId('Skeleton__cardAmount')).not.toBeInTheDocument();
     });
   });
+
+  // ETP-6179 — the mandatory "Datos fiscales" step: shown only when the sifDefaults preview lists
+  // an active fiscal system, its values handed to onConfirm as the THIRD argument, never before
+  // the final confirm. A preview that fails is skipped (fail open).
+  describe('fiscal data step (ETP-6179)', () => {
+    const SIF_URL = '/sws/neo/sales-order/header/SO-1/action/sifDefaults';
+    const PREVIEW = {
+      systems: ['SII'],
+      rectificative: false,
+      fields: { etsgDateOperation: '2026-11-10', aeatsiiClaveTipo: 'F1', aeatsiiDescripcionSii: 'Venta' },
+      fieldSpecs: [
+        { name: 'etsgDateOperation', system: 'SII', type: 'date' },
+        { name: 'aeatsiiClaveTipo', system: 'SII', type: 'option', options: ['F1', 'F2'] },
+        { name: 'aeatsiiDescripcionSii', system: 'SII', type: 'text' },
+      ],
+      siiAuthorizationAvailable: false,
+    };
+
+    function mockSifFetch(answer) {
+      const fetchMock = vi.fn((url) => {
+        if (String(url).includes('sifDefaults')) return answer();
+        return Promise.resolve({ ok: true, json: async () => ({ response: { data: [] } }) });
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      return fetchMock;
+    }
+    const ok = (data) => () => Promise.resolve({ ok: true, status: 200, json: async () => ({ response: { data } }) });
+    const primary = () => screen.getByTestId('invoice-confirm-primary-btn');
+    const sifCalls = (fetchMock) => fetchMock.mock.calls.filter(([u]) => String(u).includes('sifDefaults'));
+
+    it('asks nothing and confirms directly when no sifDefaultsUrl is given', async () => {
+      const fetchMock = mockSifFetch(ok(PREVIEW));
+      const { props } = renderModal();
+      fireEvent.click(primary());
+      await waitFor(() => expect(props.onConfirm).toHaveBeenCalledTimes(1));
+      expect(props.onConfirm.mock.calls[0]).toHaveLength(2);
+      expect(sifCalls(fetchMock)).toHaveLength(0);
+    });
+
+    it('does not ask for the preview until the primary button is pressed', () => {
+      const fetchMock = mockSifFetch(ok(PREVIEW));
+      renderModal({ sifDefaultsUrl: SIF_URL });
+      expect(sifCalls(fetchMock)).toHaveLength(0);
+    });
+
+    it('shows the step when a system is active, posting the preview body, without confirming', async () => {
+      const fetchMock = mockSifFetch(ok(PREVIEW));
+      const { props } = renderModal({ sifDefaultsUrl: SIF_URL, sifDefaultsBody: { shipmentIds: ['s1', 's2'] } });
+      fireEvent.click(primary());
+
+      await screen.findByTestId('invoice-sif-step');
+      expect(screen.getByText('invoiceSifStep.title')).toBeInTheDocument();
+      expect(screen.getByTestId('invoice-sif-step-SII')).toBeInTheDocument();
+      expect(props.onConfirm).not.toHaveBeenCalled();
+      const [url, init] = sifCalls(fetchMock)[0];
+      expect(String(url)).toBe(SIF_URL);
+      expect(init.method).toBe('POST');
+      expect(JSON.parse(init.body)).toEqual({ shipmentIds: ['s1', 's2'] });
+    });
+
+    it('hands the step values to onConfirm as the third argument only on the final confirm', async () => {
+      mockSifFetch(ok(PREVIEW));
+      const { props } = renderModal({ sifDefaultsUrl: SIF_URL });
+      fireEvent.click(primary());
+      await screen.findByTestId('invoice-sif-step');
+
+      fireEvent.change(screen.getByTestId('Input__sifstep_aeatsiiDescripcionSii'), { target: { value: 'Editada' } });
+      fireEvent.click(primary());
+
+      await waitFor(() => expect(props.onConfirm).toHaveBeenCalledTimes(1));
+      const [, , sifFields] = props.onConfirm.mock.calls[0];
+      expect(sifFields).toEqual({ ...PREVIEW.fields, aeatsiiDescripcionSii: 'Editada' });
+    });
+
+    it('Atrás returns to the first screen and keeps the edits when the step is shown again', async () => {
+      const fetchMock = mockSifFetch(ok(PREVIEW));
+      renderModal({ sifDefaultsUrl: SIF_URL });
+      fireEvent.click(primary());
+      await screen.findByTestId('invoice-sif-step');
+      fireEvent.change(screen.getByTestId('Input__sifstep_aeatsiiDescripcionSii'), { target: { value: 'Editada' } });
+
+      fireEvent.click(screen.getByTestId('invoice-confirm-sif-back-btn'));
+      expect(screen.queryByTestId('invoice-sif-step')).not.toBeInTheDocument();
+      expect(screen.getByText('soManageDocsTitle')).toBeInTheDocument();
+
+      fireEvent.click(primary());
+      await screen.findByTestId('invoice-sif-step');
+      expect(screen.getByTestId('Input__sifstep_aeatsiiDescripcionSii')).toHaveValue('Editada');
+      expect(sifCalls(fetchMock)).toHaveLength(1);
+    });
+
+    it('cancelling on the step closes without confirming', async () => {
+      mockSifFetch(ok(PREVIEW));
+      const { props } = renderModal({ sifDefaultsUrl: SIF_URL });
+      fireEvent.click(primary());
+      await screen.findByTestId('invoice-sif-step');
+      fireEvent.click(screen.getByText('cancel'));
+      expect(props.onClose).toHaveBeenCalledTimes(1);
+      expect(props.onConfirm).not.toHaveBeenCalled();
+    });
+
+    it('blocks the confirm on a rectificative until the rectification code is chosen', async () => {
+      mockSifFetch(ok({
+        ...PREVIEW,
+        rectificative: true,
+        fields: { ...PREVIEW.fields, aeatsiiMotivoRectif: null },
+        fieldSpecs: [...PREVIEW.fieldSpecs, { name: 'aeatsiiMotivoRectif', system: 'SII', type: 'option' }],
+      }));
+      renderModal({ sifDefaultsUrl: SIF_URL });
+      fireEvent.click(primary());
+      await screen.findByTestId('invoice-sif-step');
+      expect(primary()).toBeDisabled();
+      expect(screen.getByTestId('invoice-sif-step-required')).toBeInTheDocument();
+    });
+
+    it('confirms directly, without the step, when no fiscal system is active', async () => {
+      mockSifFetch(ok({ systems: [], fields: {}, fieldSpecs: [] }));
+      const { props } = renderModal({ sifDefaultsUrl: SIF_URL });
+      fireEvent.click(primary());
+      await waitFor(() => expect(props.onConfirm).toHaveBeenCalledTimes(1));
+      expect(props.onConfirm.mock.calls[0]).toHaveLength(2);
+      expect(screen.queryByTestId('invoice-sif-step')).not.toBeInTheDocument();
+    });
+
+    it('fails open: a preview that fails confirms without the step', async () => {
+      mockSifFetch(() => Promise.resolve({ ok: false, status: 500, json: async () => ({}) }));
+      const { props } = renderModal({ sifDefaultsUrl: SIF_URL });
+      fireEvent.click(primary());
+      await waitFor(() => expect(props.onConfirm).toHaveBeenCalledTimes(1));
+      expect(props.onConfirm.mock.calls[0]).toHaveLength(2);
+      expect(screen.queryByTestId('invoice-sif-step')).not.toBeInTheDocument();
+    });
+  });
 });

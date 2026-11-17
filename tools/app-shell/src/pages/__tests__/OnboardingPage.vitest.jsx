@@ -619,9 +619,6 @@ describe('OnboardingPage', () => {
     fireEvent.change(await screen.findByLabelText(/streetNameLabel/), {
       target: { value: 'Secret Street 123' },
     });
-    fireEvent.change(screen.getByLabelText(/onboardingSectorLabel/), {
-      target: { value: 'services' },
-    });
     fireEvent.click(screen.getByText('back'));
 
     expect(track).toHaveBeenCalledWith('onboarding_setup_step_back', {
@@ -1891,6 +1888,8 @@ describe('OnboardingPage', () => {
     it('keeps submit disabled until the email is well formed', async () => {
       localStorage.removeItem('sf_platform_token');
       const { container } = await renderAtRegister();
+      // ETP-6082: the business sector is required too; choose it so only the email is left.
+      fireEvent.change(container.querySelector('#reg-sector'), { target: { value: 'servicios' } });
 
       expect(screen.getByTestId('action-register-submit')).toBeDisabled();
       ['ada', 'ada@', 'ada@example'].forEach((value) => {

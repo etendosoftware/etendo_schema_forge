@@ -1526,6 +1526,28 @@
         }
       ]
     },
+    "71ffdfc8865e7daf652e4f855e18d8bb6126fff59ba2b01e651989778533de54": {
+      "checksum": "79b0802ce9cd62f8895e17c1823556741c6f65fa53e8714ea0576de94b8c3805",
+      "params": [
+        "FF8080812E71F7C7012E71FD0499001B"
+      ],
+      "rows": [
+        {
+          "ad_callout_id": "FF8080812ECEBED5012ECED1344F000D",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "callout_class": "org.openbravo.module.remittance.ad_callouts.REM_RemittanceType_FinAccount",
+          "callout_name": "REM_RemittanceType_FinAccount",
+          "columnname": "REM_Remittance_Type_ID"
+        },
+        {
+          "ad_callout_id": "FF80808130A410480130A42FBE9A000C",
+          "ad_table_id": "FF808081307557870130755E0F110009",
+          "callout_class": "org.openbravo.module.remittance.ad_callouts.REM_Instruction_BPAccount",
+          "callout_name": "REM_Instruction_BPAccount",
+          "columnname": "C_Bpartner_ID"
+        }
+      ]
+    },
     "7a3f9d7a689e84e5d068b46c04ad4a3a05634954d924672e2d18f287019437e0": {
       "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "params": [
@@ -2152,6 +2174,13 @@
           "columnname": "ProductType"
         }
       ]
+    },
+    "d01d6bbdb647d8f235cf05767cb7e3b8fedecd48ddc2f90a6c39a4c16b91c599": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "81AC659E93504927B459E0CAE80CE923"
+      ],
+      "rows": []
     },
     "d662d14030fac3baa877a952c407845b671ac76cf66c642a820067d5b864d82a": {
       "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",

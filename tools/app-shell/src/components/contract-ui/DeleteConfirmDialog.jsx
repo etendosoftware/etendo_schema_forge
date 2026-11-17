@@ -46,14 +46,29 @@ function preventWhile(locked) {
  *   onConfirm: () => void,
  *   onClose: () => void,
  *   testIdScope?: string,
+ *   notice?: import('react').ReactNode,
  * }} props
+ *
+ * `notice` (optional) is an extra block rendered under the description — a host-specific
+ * consequence the user must read before confirming (e.g. the Imported Statements tab warns that a
+ * bank-connected account re-imports deleted movements on the next sync, ETP-6151). Omitted by
+ * default, so every other surface renders exactly as before.
  */
 export function DeleteConfirmDialog({
-  open, count, deleting = false, onConfirm, onClose, testIdScope = 'batch-delete',
+  open, count, deleting = false, progress = null, onConfirm, onClose, testIdScope = 'batch-delete',
+  notice = null,
 }) {
   const ui = useUI();
   const scope = testIdScope;
   const lock = preventWhile(deleting);
+  // ETP-6143 — a server-side bulk delete reports how far it got; the per-row path does not.
+  const total = progress?.total || count;
+  const processed = Math.min(progress?.processed ?? 0, total);
+  const showProgress = deleting && progress != null && total > 0;
+  const percent = showProgress ? Math.round((processed / total) * 100) : 0;
+  let description = ui('bulkDeleteConfirmMessage', { count });
+  if (showProgress) description = ui('bulkDeleteProgressMessage', { processed, total });
+  else if (deleting) description = ui('bulkDeleteInProgressMessage', { count });
 
   return (
     <Dialog
@@ -63,7 +78,11 @@ export function DeleteConfirmDialog({
       <DialogContent
         // `[&>button]:hidden` hides the primitive's own corner X (DialogContent's only direct
         // <button> child) while deleting; the footer buttons sit inside DialogFooter.
-        className={deleting ? 'max-w-sm [&>button]:hidden' : 'max-w-sm'}
+        className={[
+          'max-w-sm',
+          notice ? 'bg-card' : '',
+          deleting ? '[&>button]:hidden' : '',
+        ].filter(Boolean).join(' ')}
         aria-busy={deleting || undefined}
         onEscapeKeyDown={lock}
         onPointerDownOutside={lock}
@@ -72,11 +91,23 @@ export function DeleteConfirmDialog({
         <DialogHeader data-testid={`DialogHeader__${scope}`}>
           <DialogTitle data-testid={`DialogTitle__${scope}`}>{ui('bulkDeleteConfirmTitle')}</DialogTitle>
           <DialogDescription aria-live="polite" data-testid={`DialogDescription__${scope}`}>
-            {deleting
-              ? ui('bulkDeleteInProgressMessage', { count })
-              : ui('bulkDeleteConfirmMessage', { count })}
+            {description}
           </DialogDescription>
         </DialogHeader>
+        {notice}
+        {showProgress && (
+          <div
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={total}
+            aria-valuenow={processed}
+            className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+            data-testid={`${scope}-progress`}>
+            <div
+              className="h-full bg-destructive transition-[width] duration-300"
+              style={{ width: `${percent}%` }} />
+          </div>
+        )}
         <DialogFooter data-testid={`DialogFooter__${scope}`}>
           <DialogClose asChild data-testid={`DialogClose__${scope}`}>
             <Button

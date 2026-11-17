@@ -7,7 +7,6 @@ import { resolve } from 'node:path';
 
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 vi.mock('lucide-react', () => ({
-  PanelRightOpen: (p) => <span {...p} data-testid="icon-panel-open" />,
   Package: (p) => <span {...p} data-testid="icon-package" />,
   Warehouse: (p) => <span {...p} data-testid="icon-warehouse" />,
 }));
@@ -17,24 +16,21 @@ import ProductSidebarCollapsed from '../ProductSidebarCollapsed.jsx';
 
 describe('ProductSidebarCollapsed', () => {
   it('is a named region carrying the collapsed marker, with real buttons and Lucide icons', () => {
-    render(<ProductSidebarCollapsed onOpen={vi.fn()} onSelectTab={vi.fn()} />);
+    render(<ProductSidebarCollapsed onSelectTab={vi.fn()} />);
     const strip = screen.getByTestId('ProductSidebarCollapsed');
     expect(strip.getAttribute('aria-label')).toBe('productSidePanel');
     expect(strip.getAttribute('data-product-sidebar-collapsed')).toBe('true');
     const buttons = screen.getAllByRole('button');
-    expect(buttons).toHaveLength(3);
+    expect(buttons).toHaveLength(2);
     buttons.forEach((b) => { expect(b.getAttribute('type')).toBe('button'); expect(b.className).toContain('focus-visible:ring-2'); });
-    expect(screen.getByTestId('icon-panel-open')).toBeInTheDocument();
+    expect(screen.queryByTestId('ProductSidebarOpenButton')).toBeNull();
     expect(screen.getByTestId('icon-package')).toBeInTheDocument();
     expect(screen.getByTestId('icon-warehouse')).toBeInTheDocument();
   });
 
-  it('routes the open button and each tab icon to its callback', () => {
-    const onOpen = vi.fn();
+  it('routes each tab icon to its callback', () => {
     const onSelectTab = vi.fn();
-    render(<ProductSidebarCollapsed onOpen={onOpen} onSelectTab={onSelectTab} />);
-    fireEvent.click(screen.getByTestId('ProductSidebarOpenButton'));
-    expect(onOpen).toHaveBeenCalledTimes(1);
+    render(<ProductSidebarCollapsed onSelectTab={onSelectTab} />);
     fireEvent.click(screen.getByTestId('ProductSidebarStripSummary'));
     fireEvent.click(screen.getByTestId('ProductSidebarStripWarehouses'));
     expect(onSelectTab.mock.calls).toEqual([['summary'], ['warehouses']]);

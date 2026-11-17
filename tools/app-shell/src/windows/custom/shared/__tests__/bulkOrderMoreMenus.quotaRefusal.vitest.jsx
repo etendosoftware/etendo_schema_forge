@@ -23,6 +23,8 @@ vi.mock('@/i18n', () => ({
     if (key === 'backendError.quotaExceeded') return `Límite del plan alcanzado: ${params.resource}`;
     if (key === 'processExecuted') return '{ok} ok, {failed} failed';
     if (key === 'backendError.draftInvoiceCoversPending') return `La factura borrador ${params.docs} ya cubre lo pendiente`;
+    if (key === 'invoiceSifStep.bulkNotice') return `Bulk notice: ${params.systems}`;
+    if (key === 'listConjunctionAnd') return 'y';
     return key;
   },
 }));
@@ -207,7 +209,11 @@ describe('BulkOrderMoreMenu — createDraftInvoice leaves the draft rule to the 
     fireEvent.click(screen.getByText(/^soBulkCreateInvoices/));
     await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
 
-    const urls = mockApiFetch.mock.calls.map(([u]) => String(u));
+    // ETP-6179: the fiscal-data preview (sifDefaults) is read first; none is active here, so the
+    // run goes straight on and only the invoice POSTs remain to compare.
+    const allUrls = mockApiFetch.mock.calls.map(([u]) => String(u));
+    const urls = allUrls.filter((u) => !u.includes('/action/sifDefaults'));
+    expect(allUrls.some((u) => u.includes('/action/sifDefaults'))).toBe(true);
     expect(urls.some((u) => u.includes('/action/checkDraftInvoice'))).toBe(false);
     expect(urls).toEqual(ROWS.filter((r) => r.post).map((r) => URL(r.id, 'createDraftInvoice')));
     expect(mockApiFetch.mock.calls.every(([, init]) => init?.method === 'POST')).toBe(true);
@@ -217,5 +223,158 @@ describe('BulkOrderMoreMenu — createDraftInvoice leaves the draft rule to the 
       failed: ROWS.filter((r) => r.failure).map((r) => ({ documentNo: r.id.toUpperCase(), message: r.failure })),
     });
     expect(toast.warning).toHaveBeenCalledWith('2 ok, 2 failed');
+  });
+});
+
+// ETP-6179 — with a fiscal system active, "Crear facturas" first shows the fiscal data read-only.
+// The orders here differ only in the SII key (customers with their own key): the shared fields show
+// their value, the key shows "per customer", and each order's POST carries its OWN preview values.
+// Both menus share the flow, so both are pinned; the receipt / shipment action never asks.
+describe.each([
+  ['BulkOrderMoreMenu', BulkOrderMoreMenu, '/sws/neo/sales-order', 'soBulkCreateInvoices', 'createDraftInvoice',
+    'soBulkCreateShipments', 'createShipment'],
+  ['BulkPurchaseOrderMoreMenu', BulkPurchaseOrderMoreMenu, '/sws/neo/purchase-order', 'poBulkCreateInvoices',
+    'createPurchaseInvoice', 'poBulkCreateReceipts', 'createGoodsReceipt'],
+])('%s — read-only fiscal data summary before bulk invoicing (ETP-6179)', (
+  _name, Menu, apiBaseUrl, invoiceLabel, invoiceAction, otherLabel, otherAction,
+) => {
+  const preview = (siiKey, extra = {}) => ({
+    systems: ['SII', 'Verifactu'], sales: true, rectificative: false,
+    fields: { etsgDateOperation: '2026-11-11', aeatsiiClaveTipo: siiKey, etvfacInvType: 'F1' },
+    fieldSpecs: [
+      { name: 'etsgDateOperation', system: 'SII', type: 'date' },
+      { name: 'aeatsiiClaveTipo', system: 'SII', type: 'option', options: ['F1', 'F2', 'F4'] },
+      { name: 'etvfacInvType', system: 'Verifactu', type: 'option' },
+    ],
+    siiAuthorizationAvailable: false,
+    ...extra,
+  });
+  const KEYS = { 'so-a': 'F1', 'so-b': 'F2' };
+  let previews;
+
+  const sifCalls = () => mockApiFetch.mock.calls.filter(([u]) => String(u).includes('/action/sifDefaults'));
+  const postsOf = (action) => mockApiFetch.mock.calls.filter(([u]) => String(u).includes(`/action/${action}`));
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    previews = Object.fromEntries(Object.entries(KEYS).map(([id, k]) => [id, jsonResponse({ response: { data: preview(k) } })]));
+    mockApiFetch.mockImplementation((url, init = {}) => {
+      const [, id, action] = String(url).match(/\/header\/([^/]+)\/action\/(\w+)/) ?? [];
+      if (action === 'sifDefaults') return Promise.resolve(previews[id]);
+      if (init.method === 'POST') return Promise.resolve(jsonResponse({ response: { data: { id: `inv-${id}` } } }));
+      // Draft pre-checks (GET): no draft anywhere.
+      return Promise.resolve(jsonResponse({ response: { data: [] } }));
+    });
+  });
+
+  function renderMenu(rows = [order('so-a'), order('so-b')]) {
+    const refresh = vi.fn();
+    render(<Menu selectedRows={rows} clearSelection={vi.fn()} token="tok" apiBaseUrl={apiBaseUrl} refresh={refresh} />);
+    return refresh;
+  }
+
+  it('shows "per customer" for the differing SII key and sends each order its own values', async () => {
+    const refresh = renderMenu();
+    fireEvent.click(screen.getByText(new RegExp(`^${invoiceLabel}`)));
+
+    await screen.findByTestId('invoice-sif-step-modal');
+    expect(screen.getByTestId('Varies__sifstep_aeatsiiClaveTipo'))
+      .toHaveValue('invoiceSifStep.variesPerCustomer');
+    expect(screen.queryByTestId('Varies__sifstep_etsgDateOperation')).toBeNull();
+    expect(postsOf(invoiceAction)).toHaveLength(0);
+
+    fireEvent.click(screen.getByTestId('invoice-sif-step-modal-confirm'));
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+
+    const sent = Object.fromEntries(postsOf(invoiceAction).map(([u, init]) => [
+      String(u).match(/header\/([^/]+)\//)[1], JSON.parse(init.body).sifFields]));
+    expect(sent).toEqual({ 'so-a': preview('F1').fields, 'so-b': preview('F2').fields });
+  });
+
+  it('is read-only: the InfoBanner notice names the systems and every control is disabled', async () => {
+    renderMenu();
+    fireEvent.click(screen.getByText(new RegExp(`^${invoiceLabel}`)));
+    await screen.findByTestId('invoice-sif-step-modal');
+
+    expect(screen.getByTestId('invoice-sif-step-notice'))
+      .toHaveTextContent('Bulk notice: sifDataTabs.tab.sii y sifDataTabs.tab.verifactu');
+    expect(screen.queryByText('invoiceSifStep.description')).toBeNull();
+    expect(screen.getByTestId('SelectTrigger__sifstep_etvfacInvType')).toBeDisabled();
+    expect(screen.getByTestId('Varies__sifstep_aeatsiiClaveTipo')).toBeDisabled();
+    const date = screen.getByTestId('invoice-sif-step-SII').querySelector('#sif-step-etsgDateOperation');
+    expect(date).toBeDisabled();
+    // A bulk summary has no earlier screen to go back to.
+    expect(screen.queryByTestId('invoice-sif-step-modal-back')).toBeNull();
+    expect(screen.getByTestId('invoice-sif-step-modal-confirm')).toHaveTextContent(`${invoiceLabel} (2)`);
+  });
+
+  it('shows the shared value when every order gets the same one', async () => {
+    previews['so-b'] = jsonResponse({ response: { data: preview('F1') } });
+    renderMenu();
+    fireEvent.click(screen.getByText(new RegExp(`^${invoiceLabel}`)));
+    await screen.findByTestId('invoice-sif-step-modal');
+    expect(screen.queryByTestId('Varies__sifstep_aeatsiiClaveTipo')).toBeNull();
+    expect(screen.getByTestId('SelectTrigger__sifstep_aeatsiiClaveTipo')).toHaveTextContent('F1 - sifDataTabs.option.invoice');
+  });
+
+  it('creates nothing when the summary is cancelled', async () => {
+    renderMenu();
+    fireEvent.click(screen.getByText(new RegExp(`^${invoiceLabel}`)));
+    await screen.findByTestId('invoice-sif-step-modal');
+    fireEvent.click(screen.getByTestId('invoice-sif-step-modal-cancel'));
+
+    await waitFor(() => expect(screen.queryByTestId('invoice-sif-step-modal')).toBeNull());
+    expect(postsOf(invoiceAction)).toHaveLength(0);
+  });
+
+  it('creates nothing when the summary is closed with the ×', async () => {
+    renderMenu();
+    fireEvent.click(screen.getByText(new RegExp(`^${invoiceLabel}`)));
+    await screen.findByTestId('invoice-sif-step-modal');
+    fireEvent.click(screen.getByTestId('invoice-sif-step-modal-close'));
+
+    await waitFor(() => expect(screen.queryByTestId('invoice-sif-step-modal')).toBeNull());
+    expect(postsOf(invoiceAction)).toHaveLength(0);
+  });
+
+  it('shows no modal and posts without sifFields when no order has an active system', async () => {
+    previews = {
+      'so-a': jsonResponse({ response: { data: { systems: [], fields: {}, fieldSpecs: [] } } }),
+      'so-b': jsonResponse({ response: { data: { systems: [], fields: {}, fieldSpecs: [] } } }),
+    };
+    const refresh = renderMenu();
+    fireEvent.click(screen.getByText(new RegExp(`^${invoiceLabel}`)));
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+
+    expect(screen.queryByTestId('invoice-sif-step-modal')).toBeNull();
+    expect(postsOf(invoiceAction)).toHaveLength(2);
+    postsOf(invoiceAction).forEach(([, init]) => expect(JSON.parse(init.body)).toEqual({}));
+  });
+
+  it('fails open: one unreadable preview skips the summary and posts without sifFields', async () => {
+    previews['so-b'] = jsonResponse({ error: 'boom' }, { ok: false, status: 500 });
+    const refresh = renderMenu();
+    fireEvent.click(screen.getByText(new RegExp(`^${invoiceLabel}`)));
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+
+    expect(screen.queryByTestId('invoice-sif-step-modal')).toBeNull();
+    postsOf(invoiceAction).forEach(([, init]) => expect(JSON.parse(init.body)).not.toHaveProperty('sifFields'));
+  });
+
+  it('only previews the completed orders', async () => {
+    renderMenu([order('so-a'), { id: 'so-dr', documentNo: 'SO-DR', documentStatus: 'DR' }]);
+    fireEvent.click(screen.getByText(new RegExp(`^${invoiceLabel}`)));
+    await screen.findByTestId('invoice-sif-step-modal');
+    expect(sifCalls().map(([u]) => String(u))).toEqual([`${apiBaseUrl}/header/so-a/action/sifDefaults`]);
+  });
+
+  it(`never asks for fiscal data on ${otherAction}`, async () => {
+    const refresh = renderMenu();
+    fireEvent.click(screen.getByText(new RegExp(`^${otherLabel}`)));
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+
+    expect(sifCalls()).toHaveLength(0);
+    expect(screen.queryByTestId('invoice-sif-step-modal')).toBeNull();
+    postsOf(otherAction).forEach(([, init]) => expect(JSON.parse(init.body)).toEqual({}));
   });
 });

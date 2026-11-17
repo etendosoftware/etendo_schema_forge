@@ -3,7 +3,7 @@
  *
  * Exposes endpoints for migrated Jasper reports:
  *   GET  /api/reports                    — list available migrated reports
- *   GET  /api/reports/:id/data           — execute SQL and return JSON rows
+ *   POST /api/reports/:id/query          — report data as JSON for the interactive view (ETP-6080)
  *   POST /api/reports/:id/render         — render via jsreport (returns HTML/PDF/etc)
  */
 
@@ -22,12 +22,14 @@ import { loadReportCli } from './report-cli.js';
 // every static import here always has. See report-cli.js / design id 455
 // ("Local verification of the plugin") and tasks id 458 (WU3.1/WU3.2).
 const { REPORT_UI_STRINGS, pickLabel, buildContractLabels } = await loadReportCli('report-i18n');
-const { resolveGrouping, buildNestedGroups, buildAccountReportTree, foldOpeningBalance, foldAggregateRows } =
+const { resolveGrouping, buildNestedGroups, buildAccountReportTree, buildRenderAccountTree, foldOpeningBalance, foldAggregateRows } =
   await loadReportCli('report-grouping');
 const { applyPlaceholders } = await loadReportCli('report-sql');
 const { filterAndTransformParams } = await loadReportCli('report-filters');
 const { hydrateDocumentBranding, resolveCompanyLogoDataUrl } = await loadReportCli('report-branding');
-const { resolveReportSession, reportAuthErrorBody } = await loadReportCli('report-auth');
+const { resolveReportSession, reportAuthErrorBody, assertReportOrgAccess, assertReportAccess } = await loadReportCli('report-auth');
+const { handleReportQuery, runReportSql } = await loadReportCli('report-query');
+const { buildPeriodMeta, normalizeCompareMode, maxPeriodBucketsFor } = await loadReportCli('report-periods');
 
 const ARTIFACTS_DIR = resolve(import.meta.dirname, '../../../artifacts');
 const ROOT = resolve(ARTIFACTS_DIR, '..');
@@ -151,7 +153,7 @@ function listReports() {
  *   VITE_MOCK=true  → use mock data files
  *   VITE_MOCK=false → use real data (NEO API or Jasper SQL)
  */
-async function fetchReportData(reportId, { limit, session, params = {}, locale } = {}) {
+async function fetchReportData(reportId, { limit, session, params = {}, locale, format } = {}) {
   const contractPath = join(ARTIFACTS_DIR, reportId, 'report-contract.json');
   const contract = JSON.parse(readFileSync(contractPath, 'utf8'));
 
@@ -397,24 +399,10 @@ async function fetchReportData(reportId, { limit, session, params = {}, locale }
 
     if (limit) sql = sql.replace(/;\s*$/, '') + ` LIMIT ${parseInt(limit, 10)}`;
 
-    const { rows } = await pool.query(sql);
-
-    // Optional opening-balance query (ETP-4898 — Libro Mayor's "Initial Balance"/Saldo inicial).
-    // Same placeholder rules as the main query, just no LIMIT — it's already pre-aggregated.
-    let openingRows = null;
-    if (contract.sql?.openingQuery) {
-      const openingSql = applyPlaceholders(contract.sql.openingQuery, { clientId, params, contract, locale });
-      openingRows = (await pool.query(openingSql)).rows;
-    }
-
-    // Optional formula-operand query (ETP-4899 — Profit & Loss's computed nodes,
-    // e.g. "A) RESULTADO DE EXPLOTACIÓN (1+2+...+12)"). Same placeholder rules;
-    // consumed by buildAccountReportTree(), never rendered directly.
-    let operandRows = null;
-    if (contract.sql?.operandsQuery) {
-      const operandsSql = applyPlaceholders(contract.sql.operandsQuery, { clientId, params, contract, locale });
-      operandRows = (await pool.query(operandsSql)).rows;
-    }
+    // Main query plus Libro Mayor's openingQuery (ETP-4898) and Profit & Loss's
+    // operandsQuery (ETP-4899): core's runner, shared with `/query` and the report-server.
+    // `periods` (ETP-6239) also returns periodRows/periodSpec; the cap depends on the format.
+    const { rows, openingRows, operandRows, periodRows, periodSpec } = await runReportSql(pool, contract, { clientId, params, locale, mainSql: sql, maxPeriodBuckets: maxPeriodBucketsFor(format) });
 
     // Company logo for listing reports (ETP-5013) — "document" contracts
     // (print-*) resolve org_logo_id from their own header SQL row (see the
@@ -427,7 +415,44 @@ async function fetchReportData(reportId, { limit, session, params = {}, locale }
       etendoBase: etendoUrl,
     });
 
-    return { rows, contract, openingRows, operandRows, companyLogoDataUrl };
+    return { rows, contract, openingRows, operandRows, periodRows, periodSpec, companyLogoDataUrl };
+  } finally {
+    await pool.end();
+  }
+}
+
+/**
+ * A pg pool on the Etendo DB from gradle.properties (same settings as
+ * fetchReportData's). Synchronous: handleReportQuery calls it without await.
+ */
+function createReportPool() {
+  const gradlePath = findGradleProps();
+  if (!gradlePath) throw new Error('gradle.properties not found');
+  const gradle = parseGradleProps(gradlePath);
+  const pg = _require('pg');
+  return new pg.Pool({
+    host: gradle['bbdd.host'] || 'localhost',
+    port: parseInt(gradle['bbdd.port']) || 5432,
+    user: gradle['bbdd.user'],
+    password: gradle['bbdd.password'],
+    database: gradle['bbdd.sid'],
+    max: 3,
+  });
+}
+
+/**
+ * ETP-6080: throws ReportAuthError(403) when the role cannot read the requested
+ * org. Only SQL reports are checked (assertReportOrgAccess skips one whose SQL
+ * never reads `__ORGID__`), so NEO and document reports open no pool at all.
+ */
+async function checkRenderOrgAccess(reportId, session, params) {
+  const contractPath = join(ARTIFACTS_DIR, reportId, 'report-contract.json');
+  if (!existsSync(contractPath)) return;
+  const contract = JSON.parse(readFileSync(contractPath, 'utf8'));
+  if (!contract.sql) return;
+  const pool = createReportPool();
+  try {
+    await assertReportOrgAccess(pool, session, { contract, params });
   } finally {
     await pool.end();
   }
@@ -553,7 +578,11 @@ export default function reportApiPlugin(options = {}) {
                 'year': {
                   fromWhere: `FROM c_year y JOIN c_calendar c ON c.c_calendar_id = y.c_calendar_id WHERE y.isactive='Y' ${byClient('y.ad_client_id')} AND (y.year || ' (' || c.name || ')') ILIKE $1`,
                   orderBy: 'ORDER BY y.year DESC',
-                  select: `SELECT y.c_year_id AS id, y.year || ' (' || c.name || ')' AS name, y.year || ' (' || c.name || ')' AS label`
+                  // ETP-6080: the year's first/last day (yyyy-MM-dd, from its periods) so the
+                  // view can preload a July-to-June year. Mirrors ReportSelectorsServlet.buildYearQuery.
+                  select: `SELECT y.c_year_id AS id, y.year || ' (' || c.name || ')' AS name, y.year || ' (' || c.name || ')' AS label,`
+                    + ` (SELECT to_char(MIN(p.startdate), 'YYYY-MM-DD') FROM c_period p WHERE p.c_year_id = y.c_year_id) AS "startDate",`
+                    + ` (SELECT to_char(MAX(p.enddate), 'YYYY-MM-DD') FROM c_period p WHERE p.c_year_id = y.c_year_id) AS "endDate"`
                 },
                 'currency': {
                   // Unlike every other selector above, this used to skip byClient(...) entirely
@@ -602,10 +631,13 @@ export default function reportApiPlugin(options = {}) {
               // $1 = search; additional dynamic params start at $2
               const values = [search];
 
+              // ETP-6080: the calendar the org actually uses — its own or the one it inherits
+              // from its calendar owner; no owner (org not ready) = no years. Mirrors
+              // ReportSelectorsServlet.buildYearQuery (com.etendoerp.go); keep both in sync.
               if (type === 'year' && selectedOrgId) {
                 values.push(selectedOrgId);
                 whereFragments.push(
-                  `AND EXISTS (SELECT 1 FROM ad_org o WHERE o.c_calendar_id = c.c_calendar_id AND o.ad_org_id = $${values.length})`
+                  `AND c.c_calendar_id = (SELECT o.c_calendar_id FROM ad_org o WHERE o.ad_org_id = ad_org_getcalendarowner($${values.length}))`
                 );
               }
 
@@ -686,36 +718,29 @@ export default function reportApiPlugin(options = {}) {
           return;
         }
 
-        // GET /api/reports/:id/data — fetch report data from DB
-        const dataMatch = path.match(/^\/api\/reports\/([\w-]+)\/data$/);
-        if (req.method === 'GET' && dataMatch) {
-          const reportId = dataMatch[1];
-          const limit = url.searchParams.get('limit');
-
-          // ETP-5460: resolve identity from the session cookie BEFORE any
-          // report data fetch — a missing/invalid/CSRF-rejected session must
-          // reach the SPA with the exact status resolveReportSession decided
-          // (401/403/502), never a generic 500, and must never touch the DB
-          // or call NEO at all.
-          let session;
+        // POST /api/reports/:id/query — JSON data for the interactive view (ETP-6080).
+        // The whole route (session, org check, SQL, response shape) is the shared
+        // handleReportQuery, the same one the report-server runs.
+        const queryMatch = path.match(/^\/api\/reports\/([\w-]+)\/query$/);
+        if (req.method === 'POST' && queryMatch) {
+          let body;
           try {
-            session = await resolveReportSession(req.headers, { method: req.method, etendoBase: etendoUrl });
-          } catch (e) {
-            const { status, body } = reportAuthErrorBody(e);
-            res.statusCode = status;
+            let raw = '';
+            for await (const chunk of req) raw += chunk;
+            body = JSON.parse(raw || '{}');
+          } catch {
+            res.statusCode = 400;
             res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify(body));
+            res.end(JSON.stringify({ error: 'Invalid JSON body', code: 'INVALID_BODY' }));
             return;
           }
-
-          try {
-            const { rows, contract } = await fetchReportData(reportId, { limit, session });
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ rows, contract, count: rows.length }));
-          } catch (e) {
-            res.statusCode = 500;
-            res.end(JSON.stringify({ error: e.message }));
-          }
+          const result = await handleReportQuery(
+            { reportId: queryMatch[1], headers: req.headers, method: req.method, body },
+            { artifactsDir: ARTIFACTS_DIR, etendoBase: etendoUrl, createPool: createReportPool },
+          );
+          res.statusCode = result.status;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(result.body));
           return;
         }
 
@@ -735,6 +760,8 @@ export default function reportApiPlugin(options = {}) {
           let session;
           try {
             session = await resolveReportSession(req.headers, { method: req.method, etendoBase: etendoUrl });
+            // ETP-6080: the role must be allowed to open this report, as on /query.
+            await assertReportAccess(session, reportId, { etendoBase: etendoUrl });
           } catch (e) {
             const { status, body: errorBody } = reportAuthErrorBody(e);
             res.statusCode = status;
@@ -743,8 +770,22 @@ export default function reportApiPlugin(options = {}) {
             return;
           }
 
+          // ETP-6080: the same org check /query runs, before any report data is read.
           try {
-            const result = await fetchReportData(reportId, { limit, session, params, locale });
+            await checkRenderOrgAccess(reportId, session, params);
+          } catch (e) {
+            const { status, body: errorBody } = e?.name === 'ReportAuthError'
+              ? reportAuthErrorBody(e)
+              : { status: 500, body: { error: 'ORG_CHECK_FAILED', code: 'ORG_CHECK_FAILED' } };
+            if (status === 500) console.error(`[report-api] org check ${reportId}:`, e?.message);
+            res.statusCode = status;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify(errorBody));
+            return;
+          }
+
+          try {
+            const result = await fetchReportData(reportId, { limit, session, params, locale, format });
             let { rows, contract, documentData, neoMeta = {}, openingRows, operandRows, companyLogoDataUrl } = result;
 
             // Account-report tree reports (ETP-4899 — Profit & Loss): the SQL returns
@@ -752,10 +793,8 @@ export default function reportApiPlugin(options = {}) {
             // account-level cutoff) is assembled here, replacing `rows` so
             // recordCount/totals and the Excel/CSV templates keep working unchanged.
             if (contract.sql?.operandsQuery !== undefined && Array.isArray(rows)) {
-              rows = buildAccountReportTree(rows, operandRows, {
-                accountLevel: params.accountLevel || 'S',
-                showOnlyWithValue: params.showOnlyAccountsWithValue === 'true',
-              });
+              rows = buildRenderAccountTree(rows, operandRows, params, contract,
+                result.periodRows ? { periodRows: result.periodRows, spec: result.periodSpec, compareMode: normalizeCompareMode(params.compareMode) } : null);
             }
 
             // Handle groupBy parameter: find the dimension param whose groupByValue matches and
@@ -825,7 +864,7 @@ export default function reportApiPlugin(options = {}) {
             const isInteractive = format === 'html' || format === 'preview';
             const templateData = documentData
               ? { css, meta: { title, generatedAt: new Date().toISOString(), filters: activeFilters, params, locale, ui, labels, isInteractive }, header: documentData.header, lines: documentData.lines, taxes: documentData.taxes }
-              : { css, meta: { title, generatedAt: new Date().toISOString(), recordCount, filters: activeFilters, params, locale, ui, labels, totals, groupLabel, descriptionLabel, dimensionLabel, dimensionField, groups, tbGroups, companyLogoDataUrl, isInteractive, ...neoMeta }, rows };
+              : { css, meta: { title, generatedAt: new Date().toISOString(), recordCount, filters: activeFilters, params, locale, ui, labels, totals, groupLabel, descriptionLabel, dimensionLabel, dimensionField, groups, tbGroups, companyLogoDataUrl, isInteractive, ...neoMeta, ...buildPeriodMeta(result.periodSpec, { format, compareMode: params.compareMode }) }, rows };
 
             // Document (print-*) reports render a QR of the header. QRCode.toDataURL
             // is async while Handlebars.compile is sync, so the QR cannot be a helper
@@ -922,9 +961,10 @@ export default function reportApiPlugin(options = {}) {
             const buffer = Buffer.from(await jsRes.arrayBuffer());
             res.end(buffer);
           } catch (e) {
-            res.statusCode = 500;
+            // ETP-6239: a bad `periods` value is the caller's, not a server failure.
+            res.statusCode = e?.name === 'ReportPeriodsError' ? e.status : 500;
             res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ error: e.message }));
+            res.end(JSON.stringify(e?.name === 'ReportPeriodsError' ? { error: e.message, code: e.code } : { error: e.message }));
           }
           return;
         }

@@ -180,3 +180,83 @@ export function toastBatchDeleteOutcome(ui, { succeeded, failed, total, errors }
     succeeded: succeeded.length, total, failed: failed.length,
   }));
 }
+
+/**
+ * ETP-6143 — op id of the `index`-th record of a bulk delete. Positional, so the job's per-row
+ * results map back to the selection without trusting anything else the server echoes.
+ */
+function bulkDeleteOpId(index) {
+  return `del-${index}`;
+}
+
+/**
+ * ETP-6143 — the `/sws/neo/batch` operations that delete `items` in ONE request instead of one
+ * `DELETE /{entity}/{id}` per row. Sent with `async: true`, each operation is its own job row, so a
+ * record still in use fails alone and the job reports progress row by row.
+ *
+ * @param {Array<{id: string}>} items
+ * @param {{spec: string, entity: string}} target
+ * @returns {Array<object>}
+ */
+export function buildBulkDeleteOperations(items, { spec, entity }) {
+  return items.map((item, index) => ({
+    id: bulkDeleteOpId(index),
+    spec,
+    entity,
+    method: 'DELETE',
+    recordId: item.id,
+  }));
+}
+
+function bulkDeleteRowError(row) {
+  const message = row?.error?.message;
+  const status = row?.error?.status;
+  return Object.assign(new Error(message || (status ? `HTTP ${status}` : 'not processed')),
+    typeof status === 'number' ? { status } : {});
+}
+
+/**
+ * ETP-6143 — turns the envelope `useBatch().runBatch(ops, { async: true })` resolves with into the
+ * `{ succeeded, failed, errors }` triage `runBatchDelete` produces, so the outcome toast and the
+ * host's `onOutcome` cannot tell the two transports apart.
+ *
+ *   - `committed: true` → every record was deleted;
+ *   - `partial: true` → per row: committed rows succeeded, refused rows failed with the server's own
+ *     status and message, rows the job never reached (cancelled / interrupted) failed with no status;
+ *   - anything else (a synchronous, atomic failure) → nothing was deleted.
+ *
+ * @param {Array<T>} items the records, in the order the operations were built
+ * @param {object} envelope
+ * @returns {{succeeded: Array<T>, failed: Array<T>, errors: Array<Error>}}
+ * @template T
+ */
+export function outcomeFromBulkDeleteEnvelope(items, envelope) {
+  if (envelope?.committed === true) {
+    return { succeeded: [...items], failed: [], errors: [] };
+  }
+  const succeeded = [];
+  const failed = [];
+  const errors = [];
+  if (envelope?.partial && Array.isArray(envelope.rows)) {
+    const rowByOpId = new Map();
+    envelope.rows.forEach((row) => {
+      (Array.isArray(row?.ids) ? row.ids : []).forEach((opId) => rowByOpId.set(opId, row));
+    });
+    items.forEach((item, index) => {
+      const row = rowByOpId.get(bulkDeleteOpId(index));
+      if (row?.committed === true) {
+        succeeded.push(item);
+      } else {
+        failed.push(item);
+        errors.push(bulkDeleteRowError(row));
+      }
+    });
+    return { succeeded, failed, errors };
+  }
+  const error = bulkDeleteRowError(envelope);
+  items.forEach((item) => {
+    failed.push(item);
+    errors.push(error);
+  });
+  return { succeeded, failed, errors };
+}

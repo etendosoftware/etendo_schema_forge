@@ -209,6 +209,36 @@ describe('DocumentTemplatesPage', () => {
     expect(api.list).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps the other tab\'s unsaved draft when a save fails and the page reloads', async () => {
+    // A new array on every read, like the real endpoint: the reload must not reset a section whose own data did not change.
+    api.list.mockImplementation(async () => []);
+    api.save.mockRejectedValue(new Error('Not allowed'));
+    render(<DocumentTemplatesPage />);
+    await ready();
+    fireEvent.change(el(`${DOC}__variant`), { target: { value: 'modern' } });
+    fireEvent.click(el('DocumentTemplatesPage__tab-listings'));
+    fireEvent.change(el(`${LST}__stripes`), { target: { value: 'on' } });
+    fireEvent.click(el(`${LST}__save`));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+      'documentTemplatesSaveFailed', { description: 'Not allowed' }));
+    await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2));
+    await ready();
+    expect(el(`${DOC}__variant`).value).toBe('modern');
+    expect(el(`${DOC}__save`).disabled).toBe(false);
+  });
+
+  it('shows what the server holds for a section whose own data changed on reload', async () => {
+    api.list.mockResolvedValueOnce([]).mockResolvedValue([{ docType: 'listing', variant: 'compact' }]);
+    api.save.mockRejectedValue(new Error('Not allowed'));
+    render(<DocumentTemplatesPage />);
+    await ready();
+    fireEvent.click(el('DocumentTemplatesPage__tab-listings'));
+    fireEvent.change(el(`${LST}__variant`), { target: { value: 'modern' } });
+    fireEvent.click(el(`${LST}__save`));
+    await waitFor(() => expect(el(`${LST}__variant`).value).toBe('compact'));
+    expect(el(`${LST}__save`).disabled).toBe(true);
+  });
+
   it('says so when the saved design cannot be loaded', async () => {
     api.list.mockRejectedValue(new Error('boom'));
     render(<DocumentTemplatesPage />);

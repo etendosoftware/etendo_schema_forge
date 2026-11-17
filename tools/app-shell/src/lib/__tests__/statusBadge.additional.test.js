@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/lib/statusBadge.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -255,5 +256,41 @@ describe('statusLabel', () => {
     assert.equal(statusLabel('RPAP', {}, null, null), 'Awaiting Payment');
     assert.equal(statusLabel('RPPC', {}, null, null), 'Payment Cleared');
     assert.equal(statusLabel('RPVOID', {}, null, null), 'Void');
+  });
+});
+
+describe('Remittance payment statuses (REM_SENT / REM_CANCEL)', () => {
+  it('maps REM_SENT to the warning tone regardless of casing', () => {
+    assert.equal(getStatusTone('REM_SENT'), 'warning');
+    assert.equal(getStatusTone('rem_sent'), 'warning');
+  });
+
+  it('maps REM_CANCEL to the success tone regardless of casing', () => {
+    assert.equal(getStatusTone('REM_CANCEL'), 'success');
+    assert.equal(getStatusTone('rem_cancel'), 'success');
+  });
+
+  it('resolves REM_SENT and REM_CANCEL to their i18n label keys', () => {
+    const requested = [];
+    const translate = (key) => {
+      requested.push(key);
+      return `t:${key}`;
+    };
+    assert.equal(statusLabel('REM_SENT', {}, translate, null), 't:statusRemSent');
+    assert.equal(statusLabel('REM_CANCEL', {}, translate, null), 't:statusRemCancel');
+    assert.deepEqual(requested, ['statusRemSent', 'statusRemCancel']);
+  });
+
+  it('prefers genericLabels for the remittance label keys', () => {
+    const dictionary = {
+      genericLabels: { statusRemSent: 'Enviado en remesa', statusRemCancel: 'Liquidado en remesa' },
+    };
+    assert.equal(statusLabel('REM_SENT', dictionary, null, null), 'Enviado en remesa');
+    assert.equal(statusLabel('REM_CANCEL', dictionary, null, null), 'Liquidado en remesa');
+  });
+
+  it('humanizes the remittance label keys when no translation is available', () => {
+    assert.equal(statusLabel('REM_SENT', {}, null, null), 'Rem Sent');
+    assert.equal(statusLabel('REM_CANCEL', {}, null, null), 'Rem Cancel');
   });
 });

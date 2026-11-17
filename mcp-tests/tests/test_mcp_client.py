@@ -206,6 +206,9 @@ class WhereTest(unittest.TestCase):
         self.assertEqual(mcp_client.count_matching([{"a": True}], {"a": 1}), 0)
         self.assertEqual(mcp_client.count_matching([{"a": "x"}], {"a": "X"}), 0)
         self.assertEqual(mcp_client.count_matching([{"a": [{"b": 2}]}], {"a.0.b": 2}), 1)
+        # Holded writes amounts with a decimal comma ("36,30"); a grouped "1,234.5" stays text.
+        self.assertEqual(mcp_client.count_matching([{"a": "36,30"}], {"a": 36.3}), 1)
+        self.assertEqual(mcp_client.count_matching([{"a": "1,234.5"}], {"a": 1234.5}), 0)
 
     def test_a_partial_page_is_not_verifiable(self):
         payload = {"data": [{"a": 1}], "totalRows": 50}

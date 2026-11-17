@@ -211,6 +211,55 @@ Route tracking ignores query-string and hash-only changes.
 | `onboarding_environment_enter_succeeded` | Environment entry succeeds. |
 | `onboarding_environment_enter_failed` | Environment entry fails. |
 
+### Interactive report events (ETP-6080, flag `dynamic-reports`)
+
+Emitted by the interactive report view (`components/reports/dynamic/reportTelemetry.js`), as agreed
+in the reports KPI analysis (PR #25). Every event carries `specName` (the report id), `account_id` (ETP-6230, see below) and
+`reportSessionId`, a random UUID per report session. `reportSessionId` is in the host allowlist
+(`payload.js`) and in `TRUSTED_CONTEXT_KEYS` (`observability/core.js`): its name contains
+`session`, so without the trusted entry the gateway redacts it and the funnels break with no error.
+Its value (36 characters) stays under the gateway's opaque-value scrub. `errorCode` is a class
+(`network`, `http_500`, `org_access_denied`), never a message.
+
+| Event | When | Properties |
+|-------|------|-----------|
+| `report_opened` | Once per report session, when the first request answers | `source` (`menu` when picked from the report list, else `deep_link`), `outcome`, `durationMs`, `errorCode`, `account_id` |
+| `report_filter_applied` | One per user change, when its result is visible or its request failed. Never for the defaults, "Limpiar filtros" or a change whose request was replaced inside the debounce | `type` (`period`, `organization`, `account_level`, `business_partner`, `product`, `comparison`, `columns`), `outcome`, `durationMs` (none for `account_level` and `comparison`: nothing loads), `errorCode`, `account_id` |
+| `report_group_toggled` | A row folded or unfolded, expand all, collapse all | `type` (`expand`, `collapse`, `expand_all`, `collapse_all`), `outcome: success`, `account_id` |
+| `report_drilldown` | A drill-down step | `type` (`ledger`, `entry` timed from the click to the answer; `document` when the tab opens), `outcome` (`success`, `error` incl. a blocked pop-up, `no_document` for an entry with no window), `account_id` |
+| `report_panel_toggled` | The "Personalizar informe" panel was hidden or shown (ETP-6239) | `panelState` (`collapsed`, `expanded`), `trigger` (`user` for the button, `auto_columns` when choosing Mes/Trimestre hid it), `outcome: success`, `account_id`. The property is `panelState` and not `state`: the payload policy denylists `state` (OAuth) and would drop it |
+
+### `account_id` and `internal_user` on report and walkthrough events (ETP-6230)
+
+The six events `report_opened`, `report_filter_applied`, `report_group_toggled`, `report_drilldown`,
+`walkthrough_started` and `walkthrough_finished` now carry an explicit `account_id`
+(`getSessionIdentity().clientId`, read per event, never memoized; omitted when the identity is not
+resolved yet). It is declared in each event's property list (`events.js`): before, the walkthrough
+events did not declare it, so `buildObservabilityEvent` dropped it and they relied only on the
+Mixpanel group super property that `trackSessionStarted` registers. That super property is not there
+yet when the event fires first (right after sign-in/onboarding, before `session_started` finished its
+flag-context await), which is why many `walkthrough_finished` events reached Mixpanel with no
+`account_id`. Report events go through `startReportTiming` / `trackReportEvent`; walkthrough events through `emit()`
+in `lib/walkthrough/walkthrough-events.js`.
+
+`internal_user` (boolean) is on every event once an email is known, sent as observability context
+(`setContext`, so it never depends on the Mixpanel super-property allowlist of core). It is derived
+from the signed-in account's email domain against `INTERNAL_EMAIL_DOMAINS`
+(`lib/observability/internalUser.js`: `etendo.software`, `etendo.ai`, `smfconsulting.es`; the domain is
+the text after the last `@`, compared case-insensitively), set by `useAccountIdentity` through
+`setInternalUserContext` (cleared when the user signs out). The email itself is never sent. The
+property is **absent** (not `false`) when no email is known. It is in `SAFE_EVENT_PROPERTY_KEYS` and
+`BOOLEAN_EVENT_PROPERTY_KEYS` (`payload.js`).
+
+**Saved reports must filter it null-safe.** Events with no `internal_user` (unknown email) count as
+external. Use "`internal_user` is not true" (the collector's `not (internal_user == true)`), never a
+filter that drops events where the property is missing; a plain `internal_user != true` that excludes
+nulls would silently remove those events from every KPI. See
+`etendo-kpis` `docs/mixpanel-saved-reports.md` (filters every report must carry).
+
+The SPA domain list is hard-coded in `internalUser.js`, while the backend list is configurable; the two
+must be kept in sync by hand (the domain is taken after the last `@` on both sides).
+
 ### Health Score events (ETP-4209)
 
 These three events feed the customer Health Score dashboard in Mixpanel.

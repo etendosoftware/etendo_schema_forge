@@ -15,7 +15,8 @@ import unittest
 from pathlib import Path
 
 from runner.steps import StepError, parse_steps, resolve_refs, run_steps
-from runner.suite import attempt_marker, interpolate, interpolate_args, load_suite
+from runner.fixture import MARKER_RE
+from runner.suite import attempt_marker, interpolate, interpolate_args, load_suite, probe_tag
 
 
 def _suite(text: str) -> Path:
@@ -48,6 +49,29 @@ class LoaderTest(unittest.TestCase):
         self.assertEqual(len(probe.setup), 1)
         self.assertEqual(probe.setup[0].save_as, "invoice")
         self.assertEqual(probe.teardown[1].for_each, "{{steps.payments.items}}")
+
+    def test_an_aliased_fixture_is_spliced_before_the_probes_own_steps(self):
+        # ETP-5848: `- *fixture` inside a setup list, then steps of the probe's own.
+        suite = load_suite(_suite("""
+            window: w
+            x-fixtures:
+              base: &base
+                - { tool: create_contact, saveAs: bp }
+                - { tool: create_invoice, saveAs: invoice }
+            probes:
+              - id: p
+                mode: write
+                prompt: hi
+                setup:
+                  - *base
+                  - { tool: create_bank_movement, saveAs: movement }
+        """))
+        self.assertEqual([s.tool for s in suite.probe("p").setup],
+                         ["create_contact", "create_invoice", "create_bank_movement"])
+
+    def test_a_list_nested_two_levels_is_still_refused(self):
+        with self.assertRaises(ValueError):
+            parse_steps([[[{"tool": "a"}]]], probe_id="p", phase="setup")
 
     def test_a_probe_without_steps_has_empty_tuples(self):
         probe = load_suite(_suite("""
@@ -120,11 +144,26 @@ class InterpolateTest(unittest.TestCase):
 
     def test_an_attempt_marker_replaces_it_everywhere(self):
         marker = attempt_marker("R", "p", 2)
-        self.assertEqual(marker, "R-p-a2")
+        self.assertEqual(marker, f"R-{probe_tag('p')}-a2")
         self.assertEqual(interpolate("{{marker}} {{runId}} {{probeId}} {{timestamp}}", marker=marker, **self.KW),
-                         "R-p-a2 R p T")
+                         f"{marker} R p T")
         self.assertEqual(interpolate_args({"a": [{"b": "x-{{marker}}"}], "n": 3}, marker=marker, **self.KW),
-                         {"a": [{"b": "x-R-p-a2"}], "n": 3})
+                         {"a": [{"b": f"x-{marker}"}], "n": 3})
+
+    def test_okr_markers_fit_etendo_name_column_and_never_collide(self):
+        # "Cliente {{marker}} Norte" in a comparison failed Etendo's 60-character name column
+        # (run 20261105T134559-cmp-8eed): the probe is tagged, not named, inside the marker.
+        ids = [p.id for p in load_suite(Path(__file__).resolve().parent.parent / "suites/okr.yaml").probes]
+        compare_id = "20261105T134559-cmp-8eed"
+        longest = max(len(f"Cliente {attempt_marker(compare_id, i, 9)} Norte") for i in ids)
+        self.assertLessEqual(longest, 60)
+        self.assertEqual(len({probe_tag(i) for i in ids}), len(ids))
+        self.assertRegex(attempt_marker(compare_id, ids[0], 1), MARKER_RE)
+
+    def test_date_tokens_bound_the_attempt_s_day_month_and_year(self):
+        kw = {**self.KW, "timestamp": "2026-11-05T15:07:13Z"}
+        self.assertEqual(interpolate("{{today}} {{monthStart}} {{yearStart}}", **kw),
+                         "2026-11-05 2026-11-01 2026-01-01")
 
 
 class ResolveRefsTest(unittest.TestCase):
@@ -236,6 +275,43 @@ class RunStepsTest(unittest.TestCase):
                           FakeServer({}), phase="teardown", saved={"pays": {"items": []}})
         self.assertFalse(records[0]["ok"])
         self.assertIn("not a list", records[0]["error"])
+
+    def test_aggregate_saves_the_sum_of_the_matching_rows(self):
+        page = {"items": [
+            {"subtotal": "100,00", "client": "A", "draft": False},
+            {"subtotal": "36,30", "client": "B", "draft": False},
+            {"subtotal": "50", "client": "A", "draft": True},
+        ], "has_more": False}
+        records, saved = _run([{"tool": "list", "saveAs": "s",
+                                "aggregate": {"value": "subtotal", "where": {"draft": False}}}],
+                              FakeServer({"list": page}), phase="setup")
+        self.assertTrue(records[0]["ok"])
+        self.assertEqual(saved["s"], {"sum": 136.3, "count": 2})
+
+    def test_aggregate_groups_ranks_and_walks_into_rows(self):
+        page = {"items": [
+            {"client": "A", "lines": [{"name": "Agua", "units": "2", "price": "10,00", "cost": "4"}]},
+            {"client": "B", "lines": [{"name": "Fernet", "units": "1", "price": "30", "cost": "10"},
+                                     {"name": "Agua", "units": "1", "price": "10", "cost": "4"}]},
+        ]}
+        _, saved = _run([{"tool": "list", "saveAs": "best",
+                          "aggregate": {"rows": "items.*.lines", "value": "units * (price - cost)",
+                                        "groupBy": "name", "top": 1}}],
+                        FakeServer({"list": page}), phase="setup")
+        self.assertEqual(saved["best"], {"groups": [{"key": "Fernet", "sum": 20.0, "count": 1}]})
+
+    def test_aggregate_fails_on_a_partial_page_or_a_missing_number(self):
+        # A sum over part of the documents, or over a row with no amount, is not the figure.
+        for page in ({"items": [{"subtotal": "1"}], "has_more": True}, {"items": [{"total": "1"}]}):
+            records, saved = _run([{"tool": "list", "saveAs": "s", "aggregate": {"value": "subtotal"}}],
+                                  FakeServer({"list": page}), phase="setup")
+            self.assertFalse(records[0]["ok"])
+            self.assertNotIn("s", saved)
+
+    def test_aggregate_is_validated_when_the_suite_loads(self):
+        for spec in ({}, {"value": "__import__('os')"}, {"value": "a", "top": 3}, {"value": "a", "x": 1}):
+            with self.assertRaises(ValueError):
+                parse_steps([{"tool": "t", "aggregate": spec}], probe_id="p", phase="setup")
 
 
 V2 = """
@@ -373,6 +449,39 @@ class SuiteV2Test(unittest.TestCase):
             expectEffect: { tool: t, args: {}, where: { a: 1 } }
         """
         self._rejects(v1, "where")
+
+
+    # ETP-6236: the routine of the "Etendo + routine" column.
+    ROUTINE = """
+        routine:
+          name: invoice-debt
+          description: Reads what an invoice still owes
+          params: { doc: { type: string, required: true, description: Document number } }
+          steps: [{ id: inv, tool: etendo_list, args: { filters: { documentNo: "$param.doc" } } }]
+"""
+
+    def test_a_routine_resolves_with_its_platform(self):
+        suite = self._load(V2.replace("        expectAnswer: [{ number: 121, tolerance: 0.01 }]\n",
+                                      "        expectAnswer: [{ number: 121, tolerance: 0.01 }]\n" + self.ROUTINE))
+        routine = suite.probes[0].for_platform("etendo-go").routine
+        self.assertEqual(routine.name, "invoice-debt")
+        self.assertEqual(routine.save_args(), {
+            "mode": "save", "name": "invoice-debt", "description": "Reads what an invoice still owes",
+            "steps": [{"id": "inv", "tool": "etendo_list",
+                       "args": {"filters": {"documentNo": "$param.doc"}}}],
+            "params": {"doc": {"type": "string", "required": True, "description": "Document number"}}})
+        self.assertIsNone(self._load(V2).probes[0].for_platform("etendo-go").routine)
+
+    def test_a_routine_is_etendo_only_and_well_formed(self):
+        holded = V2.replace(
+            '        notPossible: { kind: setup, reason: "no invoices", missingTools: [create_invoice] }\n',
+            "        expectAnswer: [{ number: 121, tolerance: 0.01 }]\n" + self.ROUTINE)
+        self._rejects(holded, "Etendo GO MCP feature")
+        anchor = "        expectAnswer: [{ number: 121, tolerance: 0.01 }]\n"
+        self._rejects(V2.replace(anchor, anchor + self.ROUTINE.replace("invoice-debt", "Invoice Debt")),
+                      "routine.name")
+        self._rejects(V2.replace(anchor, anchor + self.ROUTINE.replace(
+            "description: Reads what an invoice still owes", "description: ''")), "routine.description")
 
 
 if __name__ == "__main__":

@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
+  "version": "0.5.0",
   "generatedAt": "2026-09-08T16:52:49.566Z",
-  "updatedAt": "2026-09-28T18:01:56.640Z",
-  "checksum": "8da4349e96ceb1a5",
+  "updatedAt": "2026-11-12T11:01:42.179Z",
+  "checksum": "6ddbe2ca814e70de",
   "frontendContract": {
     "window": {
       "id": "112",
@@ -11,6 +11,9 @@
       "category": "settings",
       "hideCreate": true,
       "hideDeleteButton": true,
+      "customComponents": {
+        "headerTable": "SequenceHeaderTable"
+      },
       "detailEntity": null,
       "listSortBy": "name asc",
       "labelOverrides": {
@@ -52,6 +55,10 @@
               {
                 "value": "Standard Order",
                 "name": "documentSequenceSalesOrder"
+              },
+              {
+                "value": "Quotation",
+                "name": "documentSequenceSalesQuotation"
               },
               {
                 "value": "AR Invoice",
@@ -191,7 +198,6 @@
             }
           }
         ],
-        "javaQualifier": "document-sequence",
         "hideDelete": true
       }
     }
@@ -204,6 +210,9 @@
       "category": "settings",
       "hideCreate": true,
       "hideDeleteButton": true,
+      "customComponents": {
+        "headerTable": "SequenceHeaderTable"
+      },
       "detailEntity": null,
       "listSortBy": "name asc",
       "labelOverrides": {
@@ -431,8 +440,7 @@
             "visibility": "discarded",
             "required": true
           }
-        ],
-        "javaQualifier": "document-sequence"
+        ]
       }
     },
     "endpoints": [

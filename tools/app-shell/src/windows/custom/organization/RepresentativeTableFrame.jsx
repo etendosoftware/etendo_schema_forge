@@ -1,8 +1,7 @@
 /**
  * The table shell of the "Representante legal / Modelo 390" section (ETP-5716, ETP-5831): the
- * bordered, fixed-layout table with a muted header row. Shared by the legal representatives grid
- * (`RepresentantesLegalesSection`) and the single natural-person row of `Modelo390IdentitySection`,
- * so both identity branches of the section read as the same grid.
+ * bordered, fixed-layout table with a muted header row, used by the legal representatives grid
+ * (`RepresentantesLegalesSection`).
  *
  * `head` is the content of the header row (`<th>` cells, see `RepresentativeHeaderCell`);
  * `children` are the body rows.

@@ -1,5 +1,6 @@
 import { MoreVertical, PlayCircle, RotateCcw, Trash2 } from 'lucide-react';
 import { useUI } from '@/i18n';
+import { usePsd2ImportSettingsFlag } from '@/hooks/usePsd2ImportSettingsFlag.js';
 import { isDraftStatement } from './statementStatus.js';
 import {
   DropdownMenu,
@@ -25,11 +26,12 @@ import {
  * ETP-5111 it is a kebab item instead: the inline action hides itself for a processed statement, so
  * on that row the affordance was simply absent and the refusal had nowhere to be explained.
  *
- * `bankConnected` (ETP-4921) closes the whole edit path on a PSD2-connected account: its
- * statements come from the bank and must not be hand-edited. Reactivar is the only door —
- * Edit already hides itself for a processed statement and Delete is refused for one, and
- * reactivating is what would reopen both — so disabling it here is what makes the account
- * read-only. It is an
+ * `bankConnected` (ETP-4921) closes the edit path on a PSD2-connected account: its statements
+ * come from the bank and must not be hand-edited. Reactivar is the door to editing — Edit hides
+ * itself for a processed statement and reactivating is what would reopen it — so disabling it here
+ * is what keeps the content read-only. Delete is NOT closed by it (ETP-6151): on a connected
+ * account the backend reactivates and deletes a processed statement in one step (refusing only a
+ * posted one or one with matched lines), so Eliminar works there without exposing Reactivar. It is an
  * ACCOUNT-level flag on purpose: nothing on the statement itself records that it came from the
  * bank (the PSD2 module only sets `fileName` from a translated AD_MESSAGE, so its value depends
  * on the language the sync ran in). Keying off the connection is coherent with what this window
@@ -55,6 +57,9 @@ export function StatementRowKebab({
   statement: s, onProcess, onReactivate, onDelete, bankConnected = false, windowReadOnly = false,
 }) {
   const ui = useUI();
+  // ETP-6151 — flag `psd2-statement-import-settings`: on, a bank-connected account's statements can
+  // be deleted, so the tooltip only says they cannot be edited.
+  const importSettingsEnabled = usePsd2ImportSettingsFlag();
   // After every hook (Rules of Hooks), same as MovementRowKebab.
   if (windowReadOnly) return null;
   const isDraft = isDraftStatement(s);
@@ -62,9 +67,13 @@ export function StatementRowKebab({
   // Its own wording rather than the "already processed" one: the user must not be left thinking
   // this unblocks by processing or reactivating something. Nothing they can do in this window
   // unblocks it — the account is connected to the bank.
-  const reactivateTip = bankConnected
-    ? ui('financeAccountStatementsRowBankSyncedTooltip')
-    : ui('financeAccountStatementsRowReactivateTooltip');
+  let reactivateTipKey = 'financeAccountStatementsRowReactivateTooltip';
+  if (bankConnected) {
+    reactivateTipKey = importSettingsEnabled
+      ? 'financeAccountStatementsRowBankSyncedEditTooltip'
+      : 'financeAccountStatementsRowBankSyncedTooltip';
+  }
+  const reactivateTip = ui(reactivateTipKey);
 
   // A menu item active only when `enabled`, otherwise disabled with a tooltip.
   const gatedItem = ({ icon: Icon, label, onClick, testid, enabled, tip }) => {
@@ -126,9 +135,10 @@ export function StatementRowKebab({
               It used to exist only as an inline hover quick-action in `StatementsTable`, which
               hides itself for a processed statement, so on a processed row the action was simply
               absent and the user had no way to learn why. Offered on every row: the confirm
-              dialog opens, and the backend's 400 (translated in `runConfirm`) explains that the
-              statement has to be reactivated first. Same rule the movements kebab and the three
-              bulk-delete trash buttons follow. */}
+              dialog opens, and the backend's 400 (translated in `runConfirm`) explains why a
+              refused statement cannot go (not a draft on an unconnected account; posted or with
+              matched lines on a bank-connected one, ETP-6151). Same rule the movements kebab and
+              the three bulk-delete trash buttons follow. */}
           <DropdownMenuItem
             data-testid="statement-row-delete"
             onClick={() => onDelete?.(s)}

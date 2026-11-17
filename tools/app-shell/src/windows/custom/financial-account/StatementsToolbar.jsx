@@ -1,10 +1,17 @@
 import { useMemo } from 'react';
-import { ArrowLeft, ChevronDown, Plus, RefreshCw, Upload } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Plus, Upload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
 import { AdvancedFilterButton } from '@/components/contract-ui/AdvancedFilterButton.jsx';
 import { DateRangePopover } from '@/components/ui/date-range-popover';
 import { RefreshButton } from '@/components/financial-accounts';
+import { BankSyncIcon } from '@/components/financial-accounts/BankSyncIcon.jsx';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { StatementStatusFilter } from './StatementStatusFilter';
 import { buildStatementFilterColumns } from './statementAdvancedFilter';
 import { useSplitButtonDropdown } from './useSplitButtonDropdown';
@@ -68,21 +75,38 @@ function ImportSplitButton({ ui, onImportClick, onManualClick }) {
  * Replaces the import split-button for bank-synced accounts: statements come only from Salt Edge,
  * so manual import / manual creation are not offered — instead this single action runs the bank
  * statement fetch (the Etendo Go equivalent of Classic's "Get Bank Statement" button).
+ *
+ * ETP-6154: `syncing` is the window's shared bank-sync state for this account (the tab reads it
+ * from BankSyncContext), so the button also stays disabled and spinning while a sync started from
+ * the list or the Edit account modal runs. The tooltip trigger is a wrapper span because a
+ * disabled button fires no pointer events, which would hide the "in progress" tooltip.
  */
 function SyncStatementsButton({ ui, onClick, syncing }) {
+  const tooltip = ui(syncing ? 'financeAccountsBankSyncInProgress' : 'financeAccountsBankSyncTooltip');
   return (
-    <button
-      type="button"
-      data-testid="statements-bank-sync-button"
-      onClick={onClick}
-      disabled={syncing}
-      className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3 text-sm font-medium leading-6 text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
-    >
-      <RefreshCw
-        className={`h-5 w-5 ${syncing ? 'animate-spin' : ''}`}
-        data-testid="RefreshCw__8a428c" />
-      {ui('financeAccountStatementsBankConnectionSync')}
-    </button>
+    <TooltipProvider data-testid="TooltipProvider__8a428c">
+      <Tooltip delayDuration={0} data-testid="Tooltip__8a428c">
+        <TooltipTrigger asChild data-testid="TooltipTrigger__8a428c">
+          <span className="inline-flex" data-testid="statements-bank-sync-wrap">
+            <button
+              type="button"
+              data-testid="statements-bank-sync-button"
+              onClick={onClick}
+              disabled={syncing}
+              aria-busy={syncing}
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3 text-sm font-medium leading-6 text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <BankSyncIcon
+                spinning={syncing}
+                className="h-5 w-5"
+                data-testid="statements-bank-sync-icon" />
+              {ui('financeAccountStatementsBankConnectionSync')}
+            </button>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent data-testid="TooltipContent__8a428c">{tooltip}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 

@@ -119,7 +119,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   6. Sign in as a user with no role assigned (or a role with zero window/process access) and confirm the "No access" screen renders instead of the sidebar, and that navigating directly to a known window URL (e.g. `/sales-order`) also lands on the blocking screen rather than the window.
   7. Repeat step 6 with `?embedded=1` appended to the URL and confirm the blocking screen still renders (not the bare routed page or a blank frame).
   8. While signed in as a user with an assigned role and visible sidebar, have an administrator revoke that role (or drop it to zero window/process access) in another session, then trigger a fresh role-menu fetch (e.g. reload or navigate) and confirm the sidebar is replaced by the blocking screen rather than staying visible alongside it.
-  9. As a non-admin with a non-empty role menu, check Finance Reports, Inventory Reports, and Smart Scan against that role's permission-anchor grants: `full` or `read-only` shows the entry; a missing grant hides it even though the route is a custom page. Confirm granted entries also open successfully. Since ETP-5830 no system role template grants Smart Scan, so a role built from a template does not see it; only Admin/client-admin (sidebar exemption above) or a role with a hand-made grant does.
+  9. As a non-admin with a non-empty role menu, check Finance Reports, Inventory Reports, and Smart Scan against that role's permission-anchor grants: `full` or `read-only` shows the entry; a missing grant hides it even though the route is a custom page. Confirm granted entries also open successfully. Since ETP-5830 no system role template grants Smart Scan, so a role built from a template does not see it. It is blocked for every role, Admin/client-admin included: the admin `windowAccess` map only contains a permission-anchor window on which some role holds an active grant, and since ETP-5830 no role does, so the anchor resolves to `none` for Admin too. Only a hand-made grant on some role brings it back, and then for Admin as well.
   10. As GOAdmin or GOClient Admin, confirm all three anchor entries are visible and open successfully. On a fresh load, confirm menu-tree entries wait for `SFListMenu`, while capability/anchor entries wait for their own maps or the admin exemption; neither nullable map state should briefly expose restricted entries.
 
 ### 3. Generated/custom window loading
@@ -469,6 +469,94 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
     `account`), sent before the portal session is requested.
   - `account_subscription_moved_clicked`, the "Go to My companies" button on `/account`.
   - No event carries a company id or name.
+
+#### 3.2a-sexies Changing plan from `/account` (ETP-5053)
+
+- **Where:** `tools/app-shell/src/components/account/SubscriptionSection.jsx` (the **Change plan**
+  action, `SubscriptionSection__changePlan`, and the pending line `SubscriptionSection__pendingChange`)
+  and `tools/app-shell/src/components/account/PlanChangeDialog.jsx` (the dialog).
+- **When the action is offered:** on a renewing subscription (`status` in `RENEWING_STATUSES`) that
+  has a catalog plan (`planName`). A past-due or canceled subscription gets no action: the backend
+  refuses it anyway (`409 SUBSCRIPTION_NOT_CURRENT`). The dialog applies the same set
+  (`lib/upgrade/subscriptionStatus.js`) to the `subscriptionStatus` of the offer
+  (`PlanChangeDialog__notCurrent`).
+- **Data:** `GET /sws/go/billing/subscription/plan-changes` (`lib/upgrade/api.js` →
+  `getPlanChanges`), the active *Allowed plan changes* rows of the current plan: each target with
+  `timing` (`immediate` / `period_end`), `intervalChange`, its catalog price, and `quotas[]` — the
+  tenant's **current** usage measured against the **target** plan's limits (the `QuotaItem` shape of
+  §3.2a-quater). The dialog offers nothing the backend does not list
+  (`PlanChangeDialog__none` when the list is empty).
+- **Before confirming** (`PlanChangeDialog__consequences`), for the chosen target: the timing note
+  (`planChangeImmediateNote` for an upgrade — applies now, the difference invoiced today, the billing
+  date unchanged; `planChangeIntervalNote` for monthly → annual — billing switches to yearly and
+  keeps the billing date, today the yearly price minus the unused part of the period;
+  `planChangeIntervalToMonthlyNote` for an annual → monthly change applied now (not offered by
+  default, an operator can configure it) — billing switches to monthly and keeps the billing date,
+  the unused part of the period is credited against the next invoices; the note is picked by the
+  target's `billingInterval`;
+  `planChangePeriodEndNote` with the current period end for a downgrade — nothing changes before
+  then), for an upgrade **the charge line** (`PlanChangeDialog__charge`: `planChangeChargeTodayCard`
+  "You will be charged {amount} today on your {brand} ending in {last4}", `planChangeChargeToday`
+  without a saved card, `planChangeChargeLoading` while it is quoted, `planChangeChargeUnknown`
+  when the quote fails — the confirm stays enabled then; a quoted `amountDue` of `0` is shown as a
+  zero charge, only a missing one is unknown), the quota note (`planChangeQuotaKept`,
+  always: the quota year follows the billing period, which flexible billing keeps), and **one line
+  per exceeded quota of the target**
+  (`PlanChangeDialog__quotaExceededItem`, `planChangeQuotaExceeded`: "{resource}: you have used
+  {consumed} of the {included} included in {plan}. New records of this kind will be refused from the
+  effective date until your next anniversary; existing data stays available."), or
+  `planChangeQuotaFine` when nothing is exceeded. The numbers are today's: usage at the period end
+  will be higher, so the copy says "you have used", never a promise about the boundary.
+- **Quote:** selecting an upgrade posts `POST /sws/go/billing/subscription/plan-change/preview`
+  (`previewPlanChange`): `amountDue`, `currency`, `paymentMethod` and the `prorationDate` it was
+  computed at. A downgrade charges nothing today and is not quoted. The confirm button waits for
+  the quote.
+- **Confirm:** `POST /sws/go/billing/subscription/plan-change` (`requestPlanChange`, with the
+  quote's `prorationDate`, so the charge equals the amount shown). The saved card is charged at
+  once; the plan changes only when that payment succeeds. When it needs the customer (a decline,
+  or the bank asks to authenticate) the answer has `paymentRequired: true`: the dialog says
+  `planChangePaymentRequired` and offers **Complete the payment**
+  (`PlanChangeDialog__completePayment`, the provider's invoice page in a new tab); the plan changes
+  as soon as it is paid. That page has no return address, so the dialog adds
+  `planChangePaymentReturnHint` (close the payment tab and come back) and, while the payment is
+  outstanding, asks the section to re-read the subscription every time the tab becomes visible
+  again (`visibilitychange`/`focus` → `onChanged`; both fire on one return, so a recheck within
+  1 s of the previous one is skipped) and every 5 s while the tab stays visible
+  (`PAYMENT_RECHECK_INTERVAL_MS`: the webhook may land after the customer is back), stopping when
+  the change has applied or the dialog closes; once the section's `planKey` is the target
+  (the paid invoice applied the change and its webhook updated the row) the dialog turns into the
+  **Plan changed** confirmation. Closing and reopening the dialog keeps the outstanding payment
+  (its link, no options): offering the options again would let the customer confirm the same
+  upgrade a second time, with a new quote and a second invoice; once the change has applied a
+  reopen starts from the options again. Otherwise the answer is
+  shown in place (`PlanChangeDialog__done`: `planChangeDoneImmediate` with the new plan, or
+  `planChangeDoneScheduled` with the date; `planChangeAlreadyPending` when the same downgrade was
+  already scheduled) and the section re-reads the subscription in the background (`onChanged` →
+  `refresh`, no loading state, so the dialog stays on its confirmation until the customer closes
+  it), so the plan, the quotas and the pending line follow. Refusals keep the dialog open with their own line: `planChangeNotAllowed`
+  (409 `PLAN_CHANGE_NOT_ALLOWED`), `planChangeNotCurrent` (409 `SUBSCRIPTION_NOT_CURRENT`),
+  `planChangeFailed` (anything else); a 401 is handed to the host as everywhere on the page.
+  A refusal or failure line belongs to the option it was about: picking another option clears it.
+- **Keeping the current plan:** while a downgrade is pending the backend lists the changes of the
+  plan it moves to, with the current plan first as `timing: "keep"` (badge `planChangeTimingKeep`,
+  note `planChangeKeepNote` "Cancels the scheduled change to {plan}…", no charge line, no quote).
+  Confirming it cancels the scheduled downgrade; the answer has `pendingCancelled: true` and the
+  dialog says `planChangePendingCancelled`.
+- **Pending downgrade:** while `pendingChange` is set on `GET /billing/subscription`, the section
+  shows `subscriptionPendingChange` ("Your plan changes to {plan} on {date}") persistently; the
+  dialog repeats it (`PlanChangeDialog__pending`). It disappears when the change applies at the
+  period end or an upgrade releases it.
+- **Formatting:** prices through `formatCurrency` with the `upgradePlanPriceMonthly` /
+  `upgradePlanPriceYearly` keys (present in all three locales: the UI has no locale fallback, a
+  missing key shows raw); dates through `formatCalendarDate`. Strings in `en_US.json`,
+  `es_ES.json` and `es_AR.json` (`locales/__tests__/plan-change-locale-parity.vitest.js` pins parity).
+- **Test ids:** `PlanChangeDialog__root`, `__loading`, `__unavailable`, `__retry`, `__none`,
+  `__pending`, `__options`, `__option` (with `data-plan-key`, `data-timing`), `__optionName`,
+  `__optionPrice`, `__optionTiming`, `__optionIcon` / `__optionSelectedIcon` (with `data-selected` on
+  the option), `__consequences`, `__timingNote`, `__quotaKept`, `__quotaFine`,
+  `__charge` (with `data-preview-status`), `__quotaExceeded`, `__quotaExceededItem`, `__error`,
+  `__doneBlock`, `__done`, `__completePayment`, `__confirm`, `__close`.
+- **Backend reference:** `com.etendoerp.go/docs/plan-changes.md`.
 
 #### 3.2b Global header layout at the 1280×720 minimum (ETP-5504)
 
@@ -1154,7 +1242,9 @@ What a read-only role gets, surface by surface:
 | `/new` reached by URL | redirected to the list, with no defaults fetch (skipped for `?embedded=1`) | `useNewRouteEditingReset` in `detailViewHelpers.jsx` |
 | "Open the add row" hand-offs (`openAddSecondaryLine`, `openCustomTabAdd` router state on `/{id}`) | not gated: they are router state, not URL, and only an in-app save sets them, which a read-only role cannot do | `DetailView.jsx` deep-link effect |
 | Sub-tab tables (inline and non-inline) | no "+ Añadir", no inline edit, no delete, no hover pencil; an empty tab shows an empty table, not the add illustration (same as `readOnlyLogic` tabs) | `SecondaryTableTab` — `tabReadOnly = windowReadOnly \|\| readOnlyLogic` |
+| List (`ListView` + shared `DataTable`) | no row trash (legacy column or hover), no hover pencil, no import (toolbar icon, "Nuevo" split-menu item, empty-state import). The empty state drops its "Crea un nuevo registro para empezar." create hint and keeps only the "no records yet" text (list-modal windows do the same under `window.readOnly`). Row click still opens the record to view, so the hidden pencil (whose no-handler fallback was the same open) is not a regression | `DataTable` `rowWritesOff`, `ListView` `importEnabled` |
 | Sub-tab sidebar detail / form sub-tabs | read-only form, no Save/Delete | sidebar + `SecondaryFormTab` |
+| Row preview (Order, Purchase order, Quotation) | the primary button reads "Ver" with an eye icon instead of "Editar"; same action, opens the locked form | `PreviewActionButtons` `readOnly` |
 | Sub-tabs with a `customAddModal` (Contactos → Dirección) | row click opens nothing — the address modal has no read-only mode | `resolveSecondaryRowClickHandler` |
 | Custom `Panel` sub-tabs and `CustomLines` | receive `editing=false` / `readOnly` | `SecondaryPanelTab`, primary Panel |
 | Attachments tab | no upload dropzone, no delete, no description edit; download and preview kept | `AttachmentsTab` `accessReadOnly` |
@@ -1163,7 +1253,15 @@ What a read-only role gets, surface by surface:
 dropzone. A completed document keeps accepting attachments (`isDocumentReadOnly` is ignored,
 ETP-5526), and `readOnly` alone removes deletion only (ETP-5432). Attachment errors now go through
 `translateBackendError`, so the backend's `accessDeniedToSpec` 403 shows as a translated toast,
-not the raw English message.
+not the raw English message. `extractApiErrorMessage(res, t)` (`lib/apiError.js`) gives the same
+result to the other callers that pass the UI translator (`ContactsTable` delete,
+`BillingPreferencesForm`, `useRepresentantesLegales`): without `t` it keeps the raw backend text.
+
+On the list, the gate lives in `DataTable` itself: when `rowQuickActions.readOnly` or
+`windowReadOnly` is set (`ListView` passes both, from the static `window.readOnly` or the runtime
+Solo-lectura tier), `onDeleteRow` and `onEditRow` are dropped at the entry, so a custom header table
+that passes its own handler cannot reopen the trash. `hideCreate` alone (no read-only) still keeps the
+standalone import icon.
 
 Custom panels that write on their own each take the signal explicitly: Contactos → Financiero
 (`BillingPreferencesForm`, `FiscalDefaultsSection`), Calendario → Períodos

@@ -100,6 +100,7 @@ async function registerAndReachProfile(page, ts) {
   await page.getByTestId('action-switch-to-register').click();
   await page.locator('#reg-name').fill('QA User');
   await page.locator('#reg-email').fill(`qa-len-${ts}@example.com`);
+  await page.getByTestId('sector-select').selectOption('servicios');
   await page.getByTestId('action-register-submit').click();
   await expect(page.getByText(/vamos a dejar todo listo/i)).toBeVisible({ timeout: 5_000 });
 }
@@ -142,6 +143,7 @@ test.describe('ETP-4665 — Step 1 length limits', () => {
 
     await page.locator('#reg-name').fill('QA User');
     await page.locator('#reg-email').fill('qa@example.com');
+    await page.getByTestId('sector-select').selectOption('servicios');
     await page.getByTestId('action-register-submit').click();
 
     await expect(page.getByText(`El campo no puede superar los ${LIMITS.email} caracteres.`))
@@ -171,6 +173,7 @@ test.describe('ETP-4665 — Step 2 length limits', () => {
     await expect(regName).toHaveValue(longName.slice(0, LIMITS.accountName));
 
     await page.locator('#reg-email').fill(`qa-prefill-${ts}@example.com`);
+    await page.getByTestId('sector-select').selectOption('servicios');
       await page.getByTestId('action-register-submit').click();
     await expect(page.getByText(/vamos a dejar todo listo/i)).toBeVisible({ timeout: 5_000 });
 

@@ -1,14 +1,27 @@
 // @covers tools/app-shell/src/windows/custom/product/productMovements.js
+// @covers tools/app-shell/src/locales/en_US.json
+// @covers tools/app-shell/src/locales/es_ES.json
+// @covers tools/app-shell/src/locales/es_AR.json
 // ETP-5889 — what the Movements tab asks NEO for, and how it labels each transaction.
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   DEFAULT_MOVEMENTS_PERIOD,
+  MOVEMENTS_TABLE_MIN_HEIGHT,
+  extractMovementTotals,
   MOVEMENTS_DEFAULT_SORT,
+  buildAnyMovementQuery,
   buildMovementsCriteria,
+  MOVEMENT_BUCKETS,
   buildMovementsQuery,
+  buildTypeLabelOrder,
   formatProcessTime,
   isMovementsSortKey,
   isStorableProduct,
+  isUnfilteredMovements,
+  resolveMovementBucket,
   resolveMovementType,
+  resolveMovementsEmptyKind,
   shouldShowMovementsTab,
   signedQuantity,
 } from '../productMovements';
@@ -77,7 +90,8 @@ describe('productMovements (ETP-5889)', () => {
       ]);
     });
 
-    it('turns the default period into the last 7 calendar days, both ends included', () => {
+    it('turns the default period (last 7 days) into 7 calendar days, both ends included', () => {
+      expect(DEFAULT_MOVEMENTS_PERIOD).toEqual({ presetId: 'last7' });
       expect(buildMovementsCriteria({ dateRange: DEFAULT_MOVEMENTS_PERIOD })).toEqual([
         { fieldName: 'movementDate', operator: 'greaterOrEqual', value: '2026-10-22' },
         { fieldName: 'movementDate', operator: 'lessOrEqual', value: '2026-10-28' },
@@ -162,6 +176,132 @@ describe('productMovements (ETP-5889)', () => {
     });
   });
 
+  describe('Type sort by the visible label (typeLabelOrder)', () => {
+    const order = 'vendor-receipt,customer-shipment,vendor-return,customer-return,transfer,internal-consumption,inventory-in,inventory-out';
+    const typeSort = (direction) => ({ key: 'type', direction });
+
+    it('sends the bucket order next to the Type sort, ascending and descending', () => {
+      const asc = parse(buildMovementsQuery({ productId: 'p1', sort: typeSort('asc'), typeOrder: order })).params;
+      expect(asc.get('_sortBy')).toBe(`etgoDocKind,${TIE_DESC}`);
+      expect(asc.get('typeLabelOrder')).toBe(order);
+      const desc = parse(buildMovementsQuery({ productId: 'p1', sort: typeSort('desc'), typeOrder: order })).params;
+      expect(desc.get('_sortBy')).toBe(`-etgoDocKind,${TIE_DESC}`);
+      expect(desc.get('typeLabelOrder')).toBe(order);
+    });
+
+    it('sends it for the Type column only', () => {
+      for (const key of ['date', 'warehouse', 'quantity', 'cost']) {
+        const { params } = parse(buildMovementsQuery({ productId: 'p1', sort: { key, direction: 'asc' }, typeOrder: order }));
+        expect(params.has('typeLabelOrder')).toBe(false);
+      }
+      expect(parse(buildMovementsQuery({ productId: 'p1', typeOrder: order })).params.has('typeLabelOrder')).toBe(false);
+    });
+
+    it('sends nothing when there is no order to send (the previous request, unchanged)', () => {
+      const { params } = parse(buildMovementsQuery({ productId: 'p1', sort: typeSort('asc') }));
+      expect(params.has('typeLabelOrder')).toBe(false);
+      expect(params.get('_sortBy')).toBe(`etgoDocKind,${TIE_DESC}`);
+    });
+
+    const dictionary = {
+      es: {
+        productMovementsTypeVendorReceipt: 'Albarán de compra',
+        movTypeVendorReturn: 'Devolución a proveedor',
+        productMovementsTypeCustomerShipment: 'Albarán de venta',
+        movTypeCustomerReturn: 'Devolución de cliente',
+        productMovementsTypeTransfer: 'Transferencia entre almacenes',
+        movTypeInternalConsumption: 'Consumo interno',
+        productMovementsTypeInventoryIn: 'Entrada de inventario',
+        productMovementsTypeInventoryOut: 'Salida de inventario',
+      },
+      en: {
+        productMovementsTypeVendorReceipt: 'Goods receipt',
+        movTypeVendorReturn: 'Vendor Return',
+        productMovementsTypeCustomerShipment: 'Sales delivery note',
+        movTypeCustomerReturn: 'Customer Return',
+        productMovementsTypeTransfer: 'Transfer between warehouses',
+        movTypeInternalConsumption: 'Internal Consumption',
+        productMovementsTypeInventoryIn: 'Inventory in',
+        productMovementsTypeInventoryOut: 'Inventory out',
+      },
+    };
+
+    it('orders the buckets alphabetically by the label of the active language', () => {
+      expect(buildTypeLabelOrder((key) => dictionary.es[key], 'es_ES').split(',')).toEqual([
+        'vendor-receipt', 'customer-shipment', 'internal-consumption', 'vendor-return',
+        'customer-return', 'inventory-in', 'inventory-out', 'transfer',
+      ]);
+    });
+
+    it('gives another order in another language', () => {
+      const es = buildTypeLabelOrder((key) => dictionary.es[key], 'es_ES');
+      const en = buildTypeLabelOrder((key) => dictionary.en[key], 'en_US');
+      expect(en.split(',')).toEqual([
+        'customer-return', 'vendor-receipt', 'internal-consumption', 'inventory-in',
+        'inventory-out', 'customer-shipment', 'transfer', 'vendor-return',
+      ]);
+      expect(en).not.toBe(es);
+      // es_AR collates like es_ES for these labels
+      expect(buildTypeLabelOrder((key) => dictionary.es[key], 'es_AR')).toBe(es);
+    });
+
+    it('lists every bucket exactly once, whatever the language', () => {
+      for (const [locale, dict] of [['es_ES', dictionary.es], ['en_US', dictionary.en]]) {
+        expect(buildTypeLabelOrder((key) => dict[key], locale).split(',').sort()).toEqual([...MOVEMENT_BUCKETS].sort());
+      }
+    });
+
+    it('survives an unusable locale and a missing label (falls back to the default collation / the bucket order)', () => {
+      expect(() => buildTypeLabelOrder((key) => dictionary.en[key], 'not a locale!')).not.toThrow();
+      expect(buildTypeLabelOrder(() => undefined, 'en_US')).toBe(MOVEMENT_BUCKETS.join(','));
+    });
+  });
+
+  // The SAME table is in ProductTransactionsHandlerTest.BUCKET_CASES (com.etendoerp.go): it is the contract
+  // between this rule and the SQL one that ranks the rows for the Type sort. [kind, quantity, movementType, bucket]
+  describe('resolveMovementBucket (shared table of cases with the backend)', () => {
+    const CASES = [
+      ['goods-receipt', 5, 'V+', 'vendor-receipt'],
+      ['goods-receipt', 0, 'V+', 'vendor-receipt'],
+      ['goods-receipt', -5, 'V-', 'vendor-return'],
+      ['return-to-vendor-shipment', -1, 'V-', 'vendor-return'],
+      ['goods-shipment', -3, 'C-', 'customer-shipment'],
+      ['goods-shipment', 0, 'C-', 'customer-shipment'],
+      ['goods-shipment', 3, 'C+', 'customer-return'],
+      ['return-material-receipt', 2, 'C+', 'customer-return'],
+      ['goods-movements', 1, 'M+', 'transfer'],
+      ['goods-movements', -1, 'M-', 'transfer'],
+      ['internal-consumption', -1, 'D-', 'internal-consumption'],
+      ['physical-inventory', 2, 'I+', 'inventory-in'],
+      ['physical-inventory', 0, 'I+', 'inventory-in'],
+      ['physical-inventory', -2, 'I-', 'inventory-out'],
+      [null, 4, 'V+', 'vendor-receipt'],
+      [null, -4, 'V-', 'vendor-return'],
+      [null, -4, 'C-', 'customer-shipment'],
+      [null, 4, 'C+', 'customer-return'],
+      [null, 4, 'I+', 'inventory-in'],
+      [null, -4, 'I-', 'inventory-out'],
+      [null, 4, 'M+', 'transfer'],
+      [null, -4, 'M-', 'transfer'],
+      [null, 4, 'D+', 'internal-consumption'],
+      [null, -4, 'D-', 'internal-consumption'],
+      [null, 4, 'P+', 'unlabeled'],
+      [null, 4, null, 'unlabeled'],
+      ['something-new', 4, 'V+', 'vendor-receipt'],
+      ['something-new', 4, 'P+', 'unlabeled'],
+      ['goods-shipment', -3, 'V+', 'customer-shipment'],
+    ];
+
+    it.each(CASES)('kind=%s qty=%s type=%s -> %s', (etgoDocKind, movementQuantity, movementType, bucket) => {
+      expect(resolveMovementBucket({ etgoDocKind, movementQuantity, movementType }) ?? 'unlabeled').toBe(bucket);
+    });
+
+    it('knows exactly the buckets the backend accepts', () => {
+      const produced = [...new Set(CASES.map(([, , , bucket]) => bucket).filter((b) => b !== 'unlabeled'))].sort();
+      expect([...MOVEMENT_BUCKETS].sort()).toEqual(produced);
+    });
+  });
+
   describe('resolveMovementType', () => {
     const type = (row) => resolveMovementType(row);
 
@@ -242,6 +382,153 @@ describe('productMovements (ETP-5889)', () => {
       expect(formatProcessTime('2026-11-03T16:21:43+02:00')).toBe('16:21');
       expect(spy).not.toHaveBeenCalled();
       spy.mockRestore();
+    });
+  });
+
+  describe('empty-state probe', () => {
+    it('isUnfilteredMovements is true only without period, direction and warehouse', () => {
+      expect(isUnfilteredMovements({ direction: 'all', dateRange: null, warehouseId: null })).toBe(true);
+      expect(isUnfilteredMovements({ direction: 'in' })).toBe(false);
+      expect(isUnfilteredMovements({ warehouseId: 'w' })).toBe(false);
+      expect(isUnfilteredMovements({ dateRange: DEFAULT_MOVEMENTS_PERIOD })).toBe(false);
+    });
+
+    it('buildAnyMovementQuery asks for one record with no criteria and the same sort', () => {
+      const { route, params, criteria } = parse(buildAnyMovementQuery({ productId: 'p1' }));
+      expect(route).toBe('/transactions');
+      expect(params.get('parentId')).toBe('p1');
+      expect(params.get('_startRow')).toBe('0');
+      expect(params.get('_endRow')).toBe('0');
+      expect(params.get('_sortBy')).toBe(TIE_DESC);
+      expect(criteria).toEqual([]);
+    });
+
+    it('resolveMovementsEmptyKind decides the empty state', () => {
+      const filtered = { direction: 'in' };
+      expect(resolveMovementsEmptyKind({ filters: {}, probe: undefined })).toBe('none');
+      expect(resolveMovementsEmptyKind({ filters: filtered, probe: undefined })).toBe('checking');
+      expect(resolveMovementsEmptyKind({ filters: filtered, probe: 'none' })).toBe('none');
+      expect(resolveMovementsEmptyKind({ filters: filtered, probe: 'any' })).toBe('filtered');
+      expect(resolveMovementsEmptyKind({ filters: filtered, probe: 'failed' })).toBe('filtered');
+    });
+  });
+});
+
+// The Type sort order is built from the labels the user really reads, so it is checked against the shipped
+// locale files, not a hand-written dictionary: a reworded label that changes the order must be seen here.
+describe('Type sort order with the shipped locale labels (all 8 buckets)', () => {
+  const load = (name) => JSON.parse(readFileSync(resolve(process.cwd(), 'src/locales', `${name}.json`), 'utf8'));
+  const labelsOf = (locale) => load(locale).genericLabels;
+  const BUCKET_LABEL_KEYS = {
+    'vendor-receipt': 'productMovementsTypeVendorReceipt',
+    'vendor-return': 'movTypeVendorReturn',
+    'customer-shipment': 'productMovementsTypeCustomerShipment',
+    'customer-return': 'movTypeCustomerReturn',
+    transfer: 'productMovementsTypeTransfer',
+    'internal-consumption': 'movTypeInternalConsumption',
+    'inventory-in': 'productMovementsTypeInventoryIn',
+    'inventory-out': 'productMovementsTypeInventoryOut',
+  };
+
+  it('sorts es_ES ascending by the Spanish label, with every bucket once', () => {
+    const labels = labelsOf('es_ES');
+    const order = buildTypeLabelOrder((key) => labels[key], 'es_ES').split(',');
+    expect(order).toEqual([
+      'vendor-receipt', 'customer-shipment', 'internal-consumption', 'vendor-return',
+      'customer-return', 'inventory-in', 'inventory-out', 'transfer',
+    ]);
+    expect([...order].sort()).toEqual([...MOVEMENT_BUCKETS].sort());
+  });
+
+  it('sorts en_US ascending by the English label and differs from es_ES', () => {
+    const en = labelsOf('en_US');
+    const es = labelsOf('es_ES');
+    const enOrder = buildTypeLabelOrder((key) => en[key], 'en_US');
+    expect(enOrder.split(',')).toEqual([
+      'customer-return', 'vendor-receipt', 'internal-consumption', 'inventory-in',
+      'inventory-out', 'customer-shipment', 'transfer', 'vendor-return',
+    ]);
+    expect(enOrder).not.toBe(buildTypeLabelOrder((key) => es[key], 'es_ES'));
+  });
+
+  it('resolves the visible labels the user reads in each language, in ascending order', () => {
+    for (const locale of ['es_ES', 'en_US']) {
+      const labels = labelsOf(locale);
+      const order = buildTypeLabelOrder((key) => labels[key], locale).split(',');
+      const visible = order.map((bucket) => labels[BUCKET_LABEL_KEYS[bucket]]);
+      expect(visible.every((label) => typeof label === 'string' && label.length > 0)).toBe(true);
+      const collator = new Intl.Collator(locale.replace('_', '-'));
+      expect([...visible].sort(collator.compare)).toEqual(visible);
+    }
+  });
+
+  it('sends the same order in the request for either direction, only for the Type sort', () => {
+    const labels = labelsOf('es_ES');
+    const typeOrder = buildTypeLabelOrder((key) => labels[key], 'es_ES');
+    const asc = parse(buildMovementsQuery({ productId: 'p', sort: { key: 'type', direction: 'asc' }, typeOrder })).params;
+    const desc = parse(buildMovementsQuery({ productId: 'p', sort: { key: 'type', direction: 'desc' }, typeOrder })).params;
+    expect(asc.get('_sortBy').startsWith('etgoDocKind,')).toBe(true);
+    expect(desc.get('_sortBy').startsWith('-etgoDocKind,')).toBe(true);
+    expect(asc.get('typeLabelOrder')).toBe(typeOrder);
+    expect(desc.get('typeLabelOrder')).toBe(typeOrder);
+  });
+});
+
+describe('locale parity of the Movements tab and side panel keys', () => {
+  const KEYS = ['stockUnavailable', 'stockUnavailableDesc', 'stockHistoryUnavailable', 'productMovementsEmptyText', 'productMovementsCost'];
+  const labelsOf = (name) => JSON.parse(readFileSync(resolve(process.cwd(), 'src/locales', `${name}.json`), 'utf8')).genericLabels;
+
+  it.each(['en_US', 'es_ES', 'es_AR'])('%s defines every key with a non-empty text', (locale) => {
+    const labels = labelsOf(locale);
+    for (const key of KEYS) {
+      expect(typeof labels[key], `${locale}.${key}`).toBe('string');
+      expect(labels[key].trim().length, `${locale}.${key}`).toBeGreaterThan(0);
+    }
+  });
+
+  it('translates the Spanish locales (not the English text)', () => {
+    const en = labelsOf('en_US');
+    for (const locale of ['es_ES', 'es_AR']) {
+      const labels = labelsOf(locale);
+      for (const key of KEYS) expect(labels[key], `${locale}.${key}`).not.toBe(en[key]);
+    }
+  });
+});
+
+describe('period totals (ETP-5889 M4)', () => {
+  it('asks for the totals on the first page only, and only when the caller wants them', () => {
+    const base = { productId: 'p1' };
+    expect(parse(buildMovementsQuery({ ...base, withTotals: true, start: 0 })).params.get('etgoTotals')).toBe('true');
+    expect(parse(buildMovementsQuery({ ...base, withTotals: true, start: 50 })).params.has('etgoTotals')).toBe(false);
+    expect(parse(buildMovementsQuery(base)).params.has('etgoTotals')).toBe(false);
+    expect(parse(buildAnyMovementQuery(base)).params.has('etgoTotals')).toBe(false);
+  });
+
+  it('keeps the table floor at 340 px', () => {
+    expect(MOVEMENTS_TABLE_MIN_HEIGHT).toBe(340);
+  });
+
+  describe('extractMovementTotals', () => {
+    it('reads response.totals', () => {
+      expect(extractMovementTotals({ response: { data: [], totals: { netQuantity: -7, count: 3 } } })).toEqual({ netQuantity: -7, count: 3 });
+    });
+    it('reads a top-level totals, fractional and zero sums', () => {
+      expect(extractMovementTotals({ totals: { netQuantity: 0.5, count: 0 } })).toEqual({ netQuantity: 0.5, count: 0 });
+    });
+    it.each([
+      ['undefined', undefined],
+      ['null', null],
+      ['no totals', { response: { data: [] } }],
+      ['null totals', { response: { totals: null } }],
+      ['string quantity', { response: { totals: { netQuantity: '5', count: 1 } } }],
+      ['string count', { response: { totals: { netQuantity: 5, count: '1' } } }],
+      ['NaN quantity', { response: { totals: { netQuantity: Number.NaN, count: 1 } } }],
+      ['Infinity quantity', { response: { totals: { netQuantity: Infinity, count: 1 } } }],
+      ['missing count', { response: { totals: { netQuantity: 5 } } }],
+      ['fractional count', { response: { totals: { netQuantity: 5, count: 1.5 } } }],
+      ['negative count', { response: { totals: { netQuantity: 5, count: -1 } } }],
+    ])('returns null for %s', (_name, json) => {
+      expect(extractMovementTotals(json)).toBeNull();
     });
   });
 });

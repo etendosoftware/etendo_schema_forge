@@ -11,28 +11,36 @@ the ORDER of the steps, what a step compares, or how a margin is computed is a
 `RULE_VERSION` bump; changing a threshold is a parameter change, visible in the
 recorded parameters and their sha.
 
-Steps, subject vs reference (rule 2, plan 2026-10-22 §3.4: tokens before calls):
+Steps, subject vs reference (rule 3, 2026-11-05; rule 2 was plan 2026-10-22 §3.4):
 
   0. Capability (D49): exactly one side `notPossible` -> the other wins.
      Both `notPossible` -> excluded (invalid task). A stale declaration
      (`invalidDeclaration`) or a side short of N measured, verified attempts
      -> not evaluable.
-  1. More successful attempts wins. Both 0/N -> tie: later steps would
-     otherwise reward whoever gives up faster.
-  2. Fewer unrecovered errors (summed over the measured attempts) wins.
-  3. Median total loop tokens over successful attempts (input + output of the
+  1. The subject must always succeed (rule 3, Valentin 2026-11-05): an attempt
+     of the SUBJECT without success loses the task to the reference, whatever
+     the reference did — even 0/N. An error the agent recovered from is not a
+     failure. Decided as `1-subjectFailed`.
+  2. More successful attempts wins. Both 0/N -> tie: later steps would
+     otherwise reward whoever gives up faster. After step 1 the subject has
+     N/N, so only a reference with fewer successes is decided here.
+  3. Fewer unrecovered errors (summed over the measured attempts) wins.
+  4. Median total loop tokens over successful attempts (input + output of the
      whole conversation, so the tool catalogue sent every turn is included);
      the lower wins if the relative gap |a-b| / max(a,b) >= tokensMargin.
      Real token usage is required: when either side lacks it on any
      successful attempt the task is not evaluable. There is no byte fallback,
      because result bytes leave the catalogue out and would favour the
      heavier catalogue.
-  4. Median calls over SUCCESSFUL attempts; the lower wins if the relative
+  5. Median calls over SUCCESSFUL attempts; the lower wins if the relative
      gap >= callsMargin.
-  5. Otherwise a tie (it still counts in the KR denominator).
+  6. Otherwise a tie (it still counts in the KR denominator).
 
-Rule 1 (calls before errors before tokens, with a byte fallback) is retired:
-a suite declaring `ruleVersion: 1` is refused.
+The `decidedBy` labels keep the names of rule 2 (`1-success`, `2-unrecovered`,
+`3-tokens`, `4-calls`, `5-tie`) so summaries stay comparable; the new step is
+`1-subjectFailed`. Rule 1 (calls before errors before tokens, with a byte
+fallback) is retired: a suite declaring `ruleVersion: 1` is refused, and so is
+`ruleVersion: 2` now (rule 2 never lost a task to a failed subject attempt).
 """
 
 from __future__ import annotations
@@ -42,7 +50,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
-RULE_VERSION = 2
+RULE_VERSION = 3
 
 DEFAULT_PARAMETERS: dict[str, float] = {
     # Plan §5.6 / §9 decision 8.
@@ -166,6 +174,11 @@ def decide(subject: Side, reference: Side, params: dict[str, Any] | None = None)
         if side.not_evaluable:
             return Decision("notEvaluable", reason=f"{name}: {side.not_evaluable}")
 
+    # --- step 1 (rule 3): the subject must always succeed --------------------
+    if subject.successes < subject.attempts:
+        return Decision("decided", REFERENCE, "1-subjectFailed",
+                        margin={"step": 1, "subject": subject.successes, "attempts": subject.attempts,
+                                "reference": reference.successes})
     # Tokens are required (plan §3.4): a side with successes but no real usage
     # cannot be compared on cost, so the task is not evaluable rather than
     # decided on something that leaves the catalogue out.

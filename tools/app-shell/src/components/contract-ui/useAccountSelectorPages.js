@@ -25,13 +25,13 @@ export function selectorItemLabel(item) {
  *
  * @param {string|null} selectorUrl — the field's selector endpoint (absolute or `/sws/...`)
  * @param {object} [selectorContext] — extra query params sent with every request
- * @returns {(query: string, offset: number, signal?: AbortSignal) => Promise<{items: object[], hasMore: boolean}>}
+ * @returns {(query: string, offset: number, signal?: AbortSignal, opts?: {limit: number}) => Promise<{items: object[], hasMore: boolean}>}
  */
 export function useAccountSelectorPages(selectorUrl, selectorContext) {
   const apiFetch = useApiFetch();
-  return useCallback(async (query, offset, signal) => {
+  return useCallback(async (query, offset, signal, opts) => {
     if (!selectorUrl) return { items: [], hasMore: false };
-    const params = { ...(selectorContext || {}), limit: SEARCH_POPUP_PAGE_SIZE, offset };
+    const params = { ...(selectorContext || {}), limit: opts?.limit ?? SEARCH_POPUP_PAGE_SIZE, offset };
     if (query) params.q = query;
     const res = await apiFetch(buildUrlWithParams(selectorUrl, params), { baseUrl: '', signal });
     if (!res.ok) throw new Error(`Account selector request failed: ${res.status}`);

@@ -1,3 +1,5 @@
+// @covers artifacts/goods-receipt/custom/GoodsReceiptBottomPanel.jsx
+// @covers tools/app-shell/src/windows/custom/shared/importSaveOptions.js
 // Mocks must come before imports (Vitest hoisting)
 
 vi.mock('@/i18n', () => ({
@@ -111,7 +113,7 @@ describe('GoodsReceiptBottomPanel.linesEmptyState', () => {
       await act(async () => {
         fireEvent.click(screen.getByText('importFromPurchaseOrder'));
       });
-      expect(onSave).toHaveBeenCalledWith('order');
+      expect(onSave).toHaveBeenCalledWith('order', { skipSaveWhenClean: true });
       expect(screen.queryByTestId('import-order-modal')).not.toBeInTheDocument();
     });
 
@@ -121,7 +123,7 @@ describe('GoodsReceiptBottomPanel.linesEmptyState', () => {
       await act(async () => {
         fireEvent.click(screen.getByText('importFromPurchaseInvoice'));
       });
-      expect(onSave).toHaveBeenCalledWith('invoice');
+      expect(onSave).toHaveBeenCalledWith('invoice', { skipSaveWhenClean: true });
       expect(screen.queryByTestId('import-invoice-modal')).not.toBeInTheDocument();
     });
 
@@ -131,7 +133,7 @@ describe('GoodsReceiptBottomPanel.linesEmptyState', () => {
       await act(async () => {
         fireEvent.click(screen.getByText('importFromPurchaseOrder'));
       });
-      expect(onSave).toHaveBeenCalledWith('order');
+      expect(onSave).toHaveBeenCalledWith('order', { skipSaveWhenClean: true });
       const modal = screen.getByTestId('import-order-modal');
       expect(modal).toHaveAttribute('data-invoice-id', 'receipt-1');
       expect(modal).toHaveAttribute('data-bp', 'bp-1');
@@ -148,12 +150,14 @@ describe('GoodsReceiptBottomPanel.linesEmptyState', () => {
   });
 
   describe('forceOpen prop (post save+navigate path)', () => {
-    it('auto-opens the invoice modal when forceOpen==="invoice" and calls onForceOpenHandled', () => {
+    it('auto-opens the invoice modal when forceOpen==="invoice" and calls onForceOpenHandled without saving again', () => {
       const onForceOpenHandled = vi.fn();
-      renderEmptyState({ forceOpen: 'invoice', onForceOpenHandled });
+      const { props } = renderEmptyState({ forceOpen: 'invoice', onForceOpenHandled });
       expect(screen.getByTestId('import-invoice-modal')).toBeInTheDocument();
       expect(screen.queryByTestId('import-order-modal')).not.toBeInTheDocument();
       expect(onForceOpenHandled).toHaveBeenCalled();
+      // forceOpen is the re-delivery after DetailView already saved: the popup opens without onSave.
+      expect(props.onSave).not.toHaveBeenCalled();
     });
 
     it('auto-opens the order modal for any other forceOpen value', () => {
@@ -218,7 +222,7 @@ describe('GoodsReceiptBottomPanel.detailExtraActions (GoodsReceiptLineActions)',
       await act(async () => {
         fireEvent.click(screen.getByText('importFromPurchaseOrder'));
       });
-      expect(onSave).toHaveBeenCalledWith('order');
+      expect(onSave).toHaveBeenCalledWith('order', { skipSaveWhenClean: true });
       expect(screen.queryByTestId('import-order-modal')).not.toBeInTheDocument();
     });
 
@@ -250,7 +254,7 @@ describe('GoodsReceiptBottomPanel.detailExtraActions (GoodsReceiptLineActions)',
       await act(async () => {
         fireEvent.click(screen.getByTestId('trigger-order'));
       });
-      expect(onSave).toHaveBeenCalledWith('order');
+      expect(onSave).toHaveBeenCalledWith('order', { skipSaveWhenClean: true });
       expect(screen.getByTestId('import-order-modal')).toBeInTheDocument();
     });
 
@@ -260,7 +264,7 @@ describe('GoodsReceiptBottomPanel.detailExtraActions (GoodsReceiptLineActions)',
       await act(async () => {
         fireEvent.click(screen.getByTestId('trigger-invoice'));
       });
-      expect(onSave).toHaveBeenCalledWith('invoice');
+      expect(onSave).toHaveBeenCalledWith('invoice', { skipSaveWhenClean: true });
       expect(screen.queryByTestId('import-invoice-modal')).not.toBeInTheDocument();
     });
   });

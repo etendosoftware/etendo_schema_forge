@@ -136,6 +136,30 @@ describe('useFiscalModelsCatalog', () => {
     expect(mockApiFetch).toHaveBeenCalledTimes(2);
   });
 
+  // ETP-5831 (review W2) — a re-read while the drawer's PUT is in flight must not overwrite the
+  // optimistic toggle; the caller holds `activeModels` through `holdActiveModels`.
+  it('leaves activeModels alone while holdActiveModels says so, and still updates the rest', async () => {
+    mockApiFetch.mockResolvedValueOnce(jsonResponse({ 303: true }));
+    let hold = false;
+    const { result, rerender } = renderHook(({ key }) => useFiscalModelsCatalog(API, key, { holdActiveModels: () => hold }), {
+      initialProps: { key: 'token-1' },
+    });
+    await waitFor(() => expect(result.current.activeModels).toEqual({ 303: true }));
+    act(() => result.current.setActiveModels({ 303: false }));
+
+    hold = true;
+    mockApiFetch.mockResolvedValueOnce(jsonResponse({ 303: true, _unavailable: ['390'] }));
+    rerender({ key: 'token-2' });
+    await waitFor(() => expect(result.current.unavailableModels).toEqual(['390']));
+    expect(mockApiFetch).toHaveBeenCalledTimes(2);
+    expect(result.current.activeModels).toEqual({ 303: false });
+
+    hold = false;
+    mockApiFetch.mockResolvedValueOnce(jsonResponse({ 303: true }));
+    rerender({ key: 'token-3' });
+    await waitFor(() => expect(result.current.activeModels).toEqual({ 303: true }));
+  });
+
   it('clears a previous error when a refresh succeeds', async () => {
     mockApiFetch.mockRejectedValueOnce(new Error('first'));
     const { result, rerender } = renderHook(({ key }) => useFiscalModelsCatalog(API, key), {

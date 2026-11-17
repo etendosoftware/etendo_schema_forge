@@ -611,6 +611,14 @@ export const api = {
       "processType": "obuiapp"
     },
     {
+      "entity": "bankStatementLines",
+      "field": "pSD2DiscardLine",
+      "column": "EM_PSD2_Discard_Line",
+      "url": "/sws/neo/financial-account/bankStatementLines/{id}/action/pSD2DiscardLine",
+      "processId": "4CE3F562002C459E860C97E5C3E44FF9",
+      "processType": "obuiapp"
+    },
+    {
       "entity": "reconciliations",
       "field": "aPRMPrintDetailed",
       "column": "EM_APRM_PrintDetailed",

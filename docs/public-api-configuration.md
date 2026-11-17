@@ -61,11 +61,16 @@ payment terms). A read-only field is never marked required.
 Values the API accepts that are not contract fields. `readable: true` also returns them on GET
 (`inout`); otherwise they are `in`. Ignored on a resource without write endpoints.
 
+`writable: false` declares a read-only value instead (`out`, never `required`): one the entity's
+handler adds to every read, published even on a resource without write endpoints (`readable` and `required` are ignored). The handler
+must really return it under `internalPath`, or the attribute never appears.
+
 ```json
 "locationAddress": {
   "publicApi": {
     "inputFields": [
-      { "name": "city_name", "internalPath": "cityName", "dataType": "string", "required": true, "readable": true }
+      { "name": "city_name", "internalPath": "cityName", "dataType": "string", "required": true, "readable": true },
+      { "name": "country_code", "internalPath": "countryCode", "dataType": "string", "writable": false }
     ]
   }
 }

@@ -25,7 +25,7 @@ import { DateField } from '@/components/ui/date-field';
 import { CELL_RENDERERS, renderNeutralTagCell } from './DataTable.cellRenderers.jsx';
 import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from './GridColumnHeaderControls.jsx';
 import { tagColumnsFromAux } from '@/lib/auxReference.js';
-import { resolveFkNavigation } from './fkNavigation.js';
+import { resolveColumnLink, resolveFkNavigation } from './fkNavigation.js';
 import { getEmailFieldError, getPhoneFieldError, getWebsiteFieldError } from './recipientEdits.js';
 import { getContactsTextFieldError, filterContactsInputValue } from './contactsFieldValidation.js';
 import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
@@ -881,7 +881,7 @@ function TableSkeleton({ columns }) {
  * filters, where "create a new record" is wrong. `{ title, description?, action?, testId? }`;
  * `action` is any node (typically a "clear filters" button).
  */
-function EmptyState({ hasFilter, totalCount, override }) {
+function EmptyState({ hasFilter, totalCount, override, readOnly = false }) {
   const ui = useUI();
   if (override) {
     return (
@@ -906,7 +906,7 @@ function EmptyState({ hasFilter, totalCount, override }) {
       ) : (
         <>
           <p className="text-sm font-medium">{ui('noRecordsYet')}</p>
-          <p className="text-xs mt-1">{ui('createNewRecord')}</p>
+          {!readOnly && <p className="text-xs mt-1">{ui('createNewRecord')}</p>}
         </>
       )}
     </div>
@@ -2798,6 +2798,7 @@ function TableDataRow({
   onCloneRow,
   quickActionsEnabled,
   rowQuickActions,
+  rowWritesOff = false,
   entity,
   apiBaseUrl,
   token,
@@ -2806,6 +2807,7 @@ function TableDataRow({
 }) {
   const isSelectedLine = selectedRowId != null && row.id === selectedRowId;
   const rowDisabled = isRowSelectable && !isRowSelectable(row);
+  // Read-only: the hover pencil is a write affordance; row click still opens the record to view.
 
   return (
     <TableRow
@@ -2881,7 +2883,7 @@ function TableDataRow({
               >
                 <Check className="h-5 w-5" aria-hidden="true" data-testid="Check__eb5261" />
               </button>
-            ) : (
+            ) : !rowWritesOff && (
               <button
                 type="button"
                 onClick={(e) => {
@@ -3042,6 +3044,7 @@ function renderTableRows({
   emptyState,
   ...rowProps
 }) {
+  const { rowWritesOff } = rowProps;
   if (hideDataRows) return null;
   if (filteredData.length === 0 && !addRow?.active) {
     return (
@@ -3051,6 +3054,7 @@ function renderTableRows({
             hasFilter={hasActiveFilter}
             totalCount={data.length}
             override={emptyState}
+            readOnly={rowWritesOff}
             data-testid="EmptyState__eb5261" />
         </TableCell>
       </TableRow>
@@ -3105,6 +3109,16 @@ function renderFooterCell({ col, totals, serverTotals, filteredData, sessionCurr
  * there is nothing to total or the caller opted out via `showFooterTotals`.
  * Extracted so its column-mapping branches don't nest inside DataTable.
  */
+// Row write handlers are dropped when the window or its quick actions are read-only (ETP-5830).
+function gateRowWriteHandlers(rowQuickActions, windowReadOnly, onDeleteRowProp, onEditRowProp) {
+  const rowWritesOff = !!(rowQuickActions?.readOnly || windowReadOnly);
+  return {
+    rowWritesOff,
+    onDeleteRow: rowWritesOff ? null : onDeleteRowProp,
+    onEditRow: rowWritesOff ? null : onEditRowProp,
+  };
+}
+
 function renderFooterRow({
   totals, showFooterTotals, selectable, visibleColumns, filteredData,
   hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled,
@@ -3211,7 +3225,7 @@ export function DataTable({
   selectorContext,
   onDataMutated,
   labelOverrides,
-  onDeleteRow,
+  onDeleteRow: onDeleteRowProp,
   onCloneRow,
   /**
    * Row Quick Actions overlay (ETP-3914 slice 2).
@@ -3251,7 +3265,7 @@ export function DataTable({
   hiddenColumns = [],
   linesLayout,
   hoverRowActions = false,
-  onEditRow = null,
+  onEditRow: onEditRowProp = null,
   editingRowId = null,
   onSaveRow = null,
   onCancelEdit = null,
@@ -3269,7 +3283,13 @@ export function DataTable({
   // ETP-5757 — list GET envelope siblings (`meta.listTotals`); see serverTotals below.
   meta,
   gridView = null,
+  windowReadOnly = false,
 }) {
+  // A read-only window drops the row write handlers once, at the entry: every branch below
+  // (legacy trash column, hover actions, row pencil) reads these names.
+  const { rowWritesOff, onDeleteRow, onEditRow } = gateRowWriteHandlers(
+    rowQuickActions, windowReadOnly, onDeleteRowProp, onEditRowProp,
+  );
   const t = useLabel(labelOverrides);
   const tMenu = useMenuLabel();
   const ui = useUI();
@@ -3506,7 +3526,9 @@ export function DataTable({
     // column works whatever cell type it resolves to. Fails closed: no registry entry, no
     // resolvable id, or no `navigate` prop (DataTable is deliberately Router-agnostic) all
     // fall through to the renderer's own output, untouched.
-    const navigateTo = navigate ? resolveFkNavigation(col.column, row) : null;
+    // ETP-6148 — a column's own declarative `link` (decisions.json) wins over the shared
+    // AD-column registry; both fail closed.
+    const navigateTo = navigate ? (resolveColumnLink(col.link, row) ?? resolveFkNavigation(col.column, row)) : null;
     const rendered = renderer({
       row,
       col,
@@ -3807,7 +3829,7 @@ export function DataTable({
               rowHoverStyle,
               editingRowId, handleRowActivation, hoverRowActions, onSaveRow, onCancelEdit,
               onEditRow, onDeleteRow, deletingRows, setDeletingRows, ui, legacyDeleteEnabled,
-              onCloneRow, quickActionsEnabled, rowQuickActions, entity, apiBaseUrl, token,
+              onCloneRow, quickActionsEnabled, rowQuickActions, rowWritesOff, entity, apiBaseUrl, token,
               hasDimensionsPanel, quickActionsColWidthPx,
             })}
             {addRow?.active && (

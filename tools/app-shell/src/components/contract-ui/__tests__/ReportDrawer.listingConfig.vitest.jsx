@@ -1,12 +1,15 @@
 // ETP-5988 — the list print (ReportDrawer) applies the organization's saved list design: the CSS
 // and the logo reach the jsreport payload; with no configuration the payload is the current one.
 // @covers tools/app-shell/src/components/contract-ui/ReportDrawer.jsx
-import { render, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 
+// A stable translator, like the real hook's: `ui` is a dependency of the preview effect, so a new
+// function on every render would re-run it forever and `loading` would never settle.
+const t = vi.hoisted(() => (key) => key);
 vi.mock('@/i18n', () => ({
-  useUI: vi.fn(() => (key) => key),
-  useLabel: () => (key) => key,
-  useMenuLabel: () => (key) => key,
+  useUI: () => t,
+  useLabel: () => t,
+  useMenuLabel: () => t,
   useLocale: () => ({}),
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
@@ -14,10 +17,10 @@ vi.mock('@/lib/useAnimatedOpen.js', () => ({ useAnimatedOpen: (open) => ({ shoul
 vi.mock('@/lib/resolveIdentifier.js', () => ({ resolveIdentifier: (row, key) => row?.[key] ?? '' }));
 vi.mock('@/lib/statusBadge.js', () => ({ statusLabel: (raw) => raw }));
 
-const config = vi.hoisted(() => ({ value: null, logo: 'data:image/png;base64,AAA=', calls: [] }));
+const config = vi.hoisted(() => ({ value: null, logo: 'data:image/png;base64,AAA=', calls: [], gate: null, logoFails: false }));
 vi.mock('@/windows/custom/shared/docTemplateConfig.js', () => ({
-  loadDocTemplateConfig: async (...a) => { config.calls.push(a); return config.value; },
-  loadCompanyLogo: async () => config.logo,
+  loadDocTemplateConfig: async (...a) => { config.calls.push(a); if (config.gate) await config.gate; return config.value; },
+  loadCompanyLogo: async () => { if (config.logoFails) throw new Error('logo unreadable'); return config.logo; },
 }));
 
 const mockFetch = vi.fn();
@@ -41,6 +44,8 @@ describe('ReportDrawer — saved list design', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     config.calls = [];
+    config.gate = null;
+    config.logoFails = false;
     mockFetch.mockImplementation((url) => {
       if (url.includes('/jsreport/api/ping')) return Promise.resolve({ ok: true });
       if (url === '/jsreport/api/report') return Promise.resolve({ ok: true, text: async () => '<html></html>' });
@@ -81,5 +86,27 @@ describe('ReportDrawer — saved list design', () => {
     expect(data.css).not.toContain('variant:');
     expect(data.css).not.toContain('/* style');
     expect(data.meta.logo).toBeNull();
+  });
+
+  it('keeps the exports disabled until the saved design has loaded', async () => {
+    let release;
+    config.gate = new Promise((resolve) => { release = resolve; });
+    config.value = { variant: 'compact', color: '#B91C1C' };
+    render(<ReportDrawer {...PROPS} />);
+    // The records and the jsreport check are done, the design is not: a file now would carry neither the style nor the logo.
+    await screen.findByText('1 records');
+    expect(screen.getByRole('button', { name: 'pdf' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'excel' })).toBeDisabled();
+    release();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'pdf' })).toBeEnabled());
+  });
+
+  it('a logo that cannot be read does not keep the exports waiting', async () => {
+    config.value = { variant: 'classic', showLogo: 'on', logo: null };
+    config.logoFails = true;
+    render(<ReportDrawer {...PROPS} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'pdf' })).toBeEnabled());
+    await waitFor(() => expect(reportCall()).not.toBeNull());
+    expect(reportCall().data.meta.logo).toBeNull();
   });
 });

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/fkNavigation.js
 /**
  * Unit tests for the ETP-5075 FK click-through navigation registry.
  *
@@ -129,4 +130,72 @@ test('resolveFkNavigation — documented fallback (no idField) uses the FK colum
   } finally {
     delete FK_NAVIGATION_TARGETS[TEMP_COLUMN];
   }
+});
+
+// ---------------------------------------------------------------------------
+// resolveColumnLink — a column's declarative `link` (decisions.json field `link`)
+// ---------------------------------------------------------------------------
+
+const INVOICE_LINK = {
+  idField: 'invoice',
+  window: { field: 'invoiceSalesTransaction', values: { true: 'sales-invoice', false: 'purchase-invoice' } },
+};
+
+test('resolveColumnLink — fixed window resolves to /<window>/<id>', async () => {
+  const { resolveColumnLink } = await loadModule();
+  assert.equal(resolveColumnLink({ idField: 'invoice', window: 'sales-invoice' }, { invoice: 'INV1' }), '/sales-invoice/INV1');
+});
+
+test('resolveColumnLink — trims the id and accepts a numeric one', async () => {
+  const { resolveColumnLink } = await loadModule();
+  assert.equal(resolveColumnLink({ idField: 'invoice', window: 'sales-invoice' }, { invoice: '  INV1 ' }), '/sales-invoice/INV1');
+  assert.equal(resolveColumnLink({ idField: 'invoice', window: 'sales-invoice' }, { invoice: 42 }), '/sales-invoice/42');
+});
+
+for (const [value, expected] of [
+  [true, '/sales-invoice/INV1'],
+  [false, '/purchase-invoice/INV1'],
+  ['Y', '/sales-invoice/INV1'],
+  ['N', '/purchase-invoice/INV1'],
+  ['true', '/sales-invoice/INV1'],
+  ['false', '/purchase-invoice/INV1'],
+]) {
+  test(`resolveColumnLink — per-row window picks ${expected} for ${JSON.stringify(value)}`, async () => {
+    const { resolveColumnLink } = await loadModule();
+    assert.equal(resolveColumnLink(INVOICE_LINK, { invoice: 'INV1', invoiceSalesTransaction: value }), expected);
+  });
+}
+
+test('resolveColumnLink — per-row window with a plain string value', async () => {
+  const { resolveColumnLink } = await loadModule();
+  const link = { idField: 'doc', window: { field: 'docKind', values: { ORDER: 'sales-order', INVOICE: 'sales-invoice' } } };
+  assert.equal(resolveColumnLink(link, { doc: 'D1', docKind: 'ORDER' }), '/sales-order/D1');
+});
+
+for (const [label, row] of [
+  ['missing', { invoiceSalesTransaction: true }],
+  ['null', { invoice: null, invoiceSalesTransaction: true }],
+  ['empty', { invoice: '', invoiceSalesTransaction: true }],
+  ['blank', { invoice: '   ', invoiceSalesTransaction: true }],
+]) {
+  test(`resolveColumnLink — ${label} id returns null so the cell stays plain`, async () => {
+    const { resolveColumnLink } = await loadModule();
+    assert.equal(resolveColumnLink(INVOICE_LINK, row), null);
+    assert.equal(resolveColumnLink({ idField: 'invoice', window: 'sales-invoice' }, row), null);
+  });
+}
+
+for (const [label, value] of [['unmatched', 'X'], ['missing', undefined], ['null', null]]) {
+  test(`resolveColumnLink — ${label} per-row selector value returns null`, async () => {
+    const { resolveColumnLink } = await loadModule();
+    assert.equal(resolveColumnLink(INVOICE_LINK, { invoice: 'INV1', invoiceSalesTransaction: value }), null);
+  });
+}
+
+test('resolveColumnLink — no link, no row or no idField returns null', async () => {
+  const { resolveColumnLink } = await loadModule();
+  assert.equal(resolveColumnLink(undefined, { invoice: 'INV1' }), null);
+  assert.equal(resolveColumnLink(null, { invoice: 'INV1' }), null);
+  assert.equal(resolveColumnLink({ idField: 'invoice', window: 'sales-invoice' }, null), null);
+  assert.equal(resolveColumnLink({ window: 'sales-invoice' }, { invoice: 'INV1' }), null);
 });

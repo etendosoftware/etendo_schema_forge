@@ -1,7 +1,10 @@
 {{!-- Profit & Loss — indented account-report tree (ETP-4899).
       Rows arrive pre-flattened from buildAccountReportTree(): each carries its
       own `indentClass` and `isHeading`, so this template needs no arithmetic
-      (and therefore no new Handlebars helper). --}}
+      (and therefore no new Handlebars helper). With a comparison it adds the
+      variation in amount and % (ETP-6080, from addVariation); no % when the
+      reference is 0. With expandedNodeIds the rows are already the expanded
+      ones (buildRenderAccountTree), so the print matches the screen. --}}
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8">
 <style>
@@ -18,6 +21,17 @@
 .ind-4 { padding-left: 22mm !important; }
 .ind-5 { padding-left: 27mm !important; }
 .ind-6 { padding-left: 32mm !important; }
+/* Period columns (ETP-6239): 8 pt, the base 3 mm cell padding kept. */
+.period-table th, .period-table td { font-size: 8pt; }
+.period-table th.period-group { text-align: center; border-bottom: 1px solid #cbd5e1; }
+.period-table tr { page-break-inside: avoid; }
+.period-table .ind-1 { padding-left: 4.5mm !important; }
+.period-table .ind-2 { padding-left: 7mm !important; }
+.period-table .ind-3 { padding-left: 9.5mm !important; }
+.period-table .ind-4 { padding-left: 12mm !important; }
+.period-table .ind-5 { padding-left: 14.5mm !important; }
+.period-table .ind-6 { padding-left: 17mm !important; }
+.period-note { margin-top: 3mm; font-size: 8pt; color: #64748b; }
 </style>
 </head>
 <body><div class="report-container">
@@ -34,10 +48,57 @@
   </div>
   {{/if}}
 
+  {{#if meta.periods}}
+  {{!-- Period columns (ETP-6239): one table per page of period groups (meta.columnPages: 2 groups a
+        page with a comparison, all in one without), the range total last. Concepto and the 2-row
+        header repeat on every page. Explicit table-layout and widths: without them Chrome shrinks a
+        wide table to fit and then cuts columns. --}}
+  {{#each (periodPages meta.columnPages meta.columnPageSize) as |page|}}
+  <table class="report-table period-table {{#if (periodMode @root.meta.params.compareMode)}}with-compare{{/if}}" style="table-layout: fixed;{{#unless @first}} page-break-before: always;{{/unless}}">
+    <colgroup>
+      <col style="width:45mm">
+      {{#each page}}{{#if (periodMode @root.meta.params.compareMode)}}<col><col><col><col>{{else}}<col>{{/if}}{{/each}}
+    </colgroup>
+    <thead>
+      <tr>
+        <th rowspan="2">{{@root.meta.labels.periodConcept}}</th>
+        {{#each page as |idx|}}<th class="cell-amount period-group" colspan="{{#if (periodMode @root.meta.params.compareMode)}}4{{else}}1{{/if}}">{{periodLabel (lookup @root.meta.periods idx) @root.meta.params.columns @root.meta.locale @root.meta.labels.T}}</th>{{/each}}
+      </tr>
+      {{#if (periodMode @root.meta.params.compareMode)}}
+      <tr>
+        {{#each page}}<th class="cell-amount">{{@root.meta.labels.periodAmount}}</th><th class="cell-amount">{{@root.meta.labels.periodCompared}}</th><th class="cell-amount">{{@root.meta.labels.periodVarAmount}}</th><th class="cell-amount">{{@root.meta.labels.periodVarPct}}</th>{{/each}}
+      </tr>
+      {{/if}}
+    </thead>
+    <tbody>
+      {{#each @root.rows as |row|}}
+      {{#if row.isGroupStart}}
+      <tr class="group-header">
+        <td colspan="{{periodSpan page.length @root.meta.params.compareMode}}">{{row.group}}</td>
+      </tr>
+      {{/if}}
+      <tr class="tree-row {{#if row.isHeading}}heading{{/if}}">
+        <td class="{{row.indentClass}}">{{row.element}}</td>
+        {{#each page as |idx|}}
+        {{#with (lookup row.cells idx) as |cell|}}
+        <td class="cell-amount">{{formatCurrency cell.amount}}</td>
+        {{#if (periodMode @root.meta.params.compareMode)}}
+        {{#with (lookup cell (periodMode @root.meta.params.compareMode)) as |ref|}}<td class="cell-amount">{{formatCurrency ref.amount}}</td><td class="cell-amount">{{formatCurrency ref.variationAmount}}</td><td class="cell-amount">{{#if ref.variationPct}}{{formatCurrency ref.variationPct}} %{{else}}{{#ifCond ref.variationPct '===' 0}}{{formatCurrency ref.variationPct}} %{{/ifCond}}{{/if}}</td>{{/with}}
+        {{/if}}
+        {{/with}}
+        {{/each}}
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+  {{/each}}
+  {{#if meta.notes.hiddenCount}}<div class="period-note">{{meta.labels.periodHiddenPre}} {{meta.notes.hiddenCount}} {{meta.labels.periodHiddenPost}}</div>{{/if}}
+  {{#if meta.notes.hasPartial}}<div class="period-note">{{meta.labels.periodPartial}}</div>{{/if}}
+  {{else}}
   <table class="report-table" style="table-layout: fixed;">
     <colgroup>
       {{#ifCond meta.params.compareTo '===' 'true'}}
-      <col style="width:60%"><col style="width:20%"><col style="width:20%">
+      <col style="width:40%"><col style="width:17%"><col style="width:17%"><col style="width:16%"><col style="width:10%">
       {{else}}
       <col style="width:75%"><col style="width:25%">
       {{/ifCond}}
@@ -46,24 +107,25 @@
       <tr>
         <th>{{meta.labels.element}}</th>
         <th class="cell-amount">{{meta.labels.amount}}</th>
-        {{#ifCond meta.params.compareTo '===' 'true'}}<th class="cell-amount">{{meta.labels.amount_ref}}</th>{{/ifCond}}
+        {{#ifCond meta.params.compareTo '===' 'true'}}<th class="cell-amount">{{meta.labels.amount_ref}}</th><th class="cell-amount">{{meta.labels.variationAmount}}</th><th class="cell-amount">{{meta.labels.variationPct}}</th>{{/ifCond}}
       </tr>
     </thead>
     <tbody>
       {{#each rows}}
       {{#if this.isGroupStart}}
       <tr class="group-header">
-        <td colspan="{{#ifCond @root.meta.params.compareTo '===' 'true'}}3{{else}}2{{/ifCond}}">{{this.group}}</td>
+        <td colspan="{{#ifCond @root.meta.params.compareTo '===' 'true'}}5{{else}}2{{/ifCond}}">{{this.group}}</td>
       </tr>
       {{/if}}
       <tr class="tree-row {{#if this.isHeading}}heading{{/if}}">
         <td class="{{this.indentClass}}">{{this.element}}</td>
         <td class="cell-amount">{{formatCurrency this.amount}}</td>
-        {{#ifCond @root.meta.params.compareTo '===' 'true'}}<td class="cell-amount">{{formatCurrency this.amount_ref}}</td>{{/ifCond}}
+        {{#ifCond @root.meta.params.compareTo '===' 'true'}}<td class="cell-amount">{{formatCurrency this.amount_ref}}</td><td class="cell-amount">{{formatCurrency this.variationAmount}}</td><td class="cell-amount">{{#if this.variationPct}}{{formatCurrency this.variationPct}} %{{else}}{{#ifCond this.variationPct '===' 0}}{{formatCurrency this.variationPct}} %{{/ifCond}}{{/if}}</td>{{/ifCond}}
       </tr>
       {{/each}}
     </tbody>
   </table>
+  {{/if}}
 
   {{#if meta.isInteractive}}
   <div class="print-only-footer-note">{{meta.ui.printedOn}} {{formatDate meta.generatedAt}}</div>

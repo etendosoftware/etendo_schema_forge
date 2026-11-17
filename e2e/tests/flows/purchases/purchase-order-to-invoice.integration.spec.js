@@ -252,7 +252,7 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
         'Modal title should say "Importar desde pedido"',
       ).toBeVisible({ timeout: 5_000 });
 
-      // Wait for eager-loading of PO lines
+      // Wait for the order list (ETP-6099: the lines are read when the order is expanded)
       await waitForLoadingIndicatorsGone(page, { timeout: 30_000 }).catch(() => {});
       await slow(page);
     });
@@ -267,6 +267,11 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
         `PO ${poDocNo} should appear in the import modal`,
       ).toBeVisible({ timeout: 10_000 });
       await poRow.click();
+      // ETP-6099: expanding the order reads its lines; wait for them before selecting (since
+      // ETP-5828 QA UI-3 a tick during the read also selects on arrival, but the step reads clearer).
+      await expect(page.getByTestId('ImportLinesModal__lineRow').first(),
+        `PO ${poDocNo} lines should load once the order is expanded`,
+      ).toBeVisible({ timeout: 15_000 });
       await slow(page);
     });
 
@@ -274,7 +279,8 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
       await page.getByRole('checkbox').first().click({ force: true });
       await slow(page);
 
-      const importSelectedBtn = page.getByRole('button', { name: /importar seleccionados|import selected/i });
+      // ETP-5828 (QA UI-6): the button counts lines — «Importar seleccionadas (N)».
+      const importSelectedBtn = page.getByRole('button', { name: /importar seleccionad[ao]s|import selected/i });
       await expect(importSelectedBtn,
         '"Import selected" button should be enabled after selecting lines',
       ).toBeEnabled({ timeout: 8_000 });

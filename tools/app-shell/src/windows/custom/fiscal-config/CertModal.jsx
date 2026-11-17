@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { useUI } from '@/i18n';
+import { useUI, useLocaleSwitch } from '@/i18n';
+import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { FileText, Upload, Eye, EyeOff, Lock, TriangleAlert, Check, Info } from 'lucide-react';
+import { CircularProgress, useSimulatedProgress } from './CircularProgress.jsx';
 import FiscalStepItem from './FiscalStepItem.jsx';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -80,30 +82,11 @@ function MiniStepper({ step, ui }) {
   );
 }
 
-function CircularProgress({ progress }) {
-  const r = 54;
-  const circ = 2 * Math.PI * r;
-  const offset = circ - (progress / 100) * circ;
-  return (
-    <svg width="140" height="140" viewBox="0 0 140 140" className="mx-auto">
-      <circle cx="70" cy="70" r={r} fill="none" stroke="hsl(var(--border-subtle))" strokeWidth="8" />
-      <circle
-        cx="70" cy="70" r={r}
-        fill="none" stroke="hsl(var(--foreground))" strokeWidth="8"
-        strokeDasharray={circ} strokeDashoffset={offset}
-        strokeLinecap="round"
-        transform="rotate(-90 70 70)"
-        style={{ transition: 'stroke-dashoffset 0.2s ease' }}
-      />
-      <text x="70" y="76" textAnchor="middle" fontSize="22" fontWeight="600" fill="hsl(var(--foreground))">
-        {progress}%
-      </text>
-    </svg>
-  );
-}
-
 export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUpload, debugInitialState }) {
   const ui = useUI();
+  const { locale } = useLocaleSwitch();
+  // The upload details carry ISO yyyy-MM-dd dates; shown in the UI locale (ETP-6053).
+  const certDate = (raw) => raw && formatCalendarDate(raw, locale || 'es_ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
 
   const CONTEXT_SUBTITLE = {
@@ -120,23 +103,12 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
   const [errMsg,      setErrMsg]      = useState(debugInitialState?.errMsg ?? null);
   const [certDetails, setCertDetails] = useState(debugInitialState?.certDetails ?? null);
   const [pendingNif,  setPendingNif]  = useState(debugInitialState?.pendingNif ?? null);
-  const [progress,    setProgress]    = useState(0);
   const inputRef = useRef(null);
 
   const subtitle = CONTEXT_SUBTITLE[context] ?? ui('fiscal.cert.subtitle.default');
 
-  // Animate circular progress when in verify step
-  useEffect(() => {
-    if (step !== 'verify') { setProgress(0); return; }
-    setProgress(0);
-    const id = setInterval(() => {
-      setProgress(p => {
-        if (p >= 90) { clearInterval(id); return 90; }
-        return p + 4;
-      });
-    }, 80);
-    return () => clearInterval(id);
-  }, [step]);
+  // Circular progress, animated while in the verify step
+  const progress = useSimulatedProgress(step === 'verify');
 
   function pickFile(f) {
     if (!f) return;
@@ -415,8 +387,8 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
                   [ui('fiscal.cert.detail.file'),      file?.name],
                   [ui('fiscal.cert.detail.holder'),    parseCN(certDetails?.subject)],
                   [ui('fiscal.cert.detail.issuer'),    parseCN(certDetails?.issuer)],
-                  [ui('fiscal.cert.detail.validFrom'), certDetails?.validFrom],
-                  [ui('fiscal.cert.detail.validTo'),   certDetails?.validTo],
+                  [ui('fiscal.cert.detail.validFrom'), certDate(certDetails?.validFrom)],
+                  [ui('fiscal.cert.detail.validTo'),   certDate(certDetails?.validTo)],
                   [ui('fiscal.cert.detail.algorithm'), certDetails?.algorithm],
                 ].filter(([, v]) => v).map(([k, v]) => (
                   <div key={k} className="flex items-center px-4 py-2.5 gap-4">

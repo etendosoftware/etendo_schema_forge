@@ -705,5 +705,13 @@ describe('renderSaveActions — existing-record Save look (primarySave)', () => 
     render(<>{renderSaveActions(existingParams(overrides))}</>);
     const save = screen.getByTestId('action-save');
     expect(save.classList.contains('bg-primary')).toBe(primary);
+    expect(save.className).not.toContain('--primary-hover-strong');
+  });
+
+  it("primarySave: 'strong' keeps the filled look and adds the dedicated hover token", () => {
+    render(<>{renderSaveActions(existingParams({ primarySave: 'strong' }))}</>);
+    const save = screen.getByTestId('action-save');
+    expect(save.classList.contains('bg-primary')).toBe(true);
+    expect(save.className).toContain('hover:!bg-[var(--primary-hover-strong)]');
   });
 });

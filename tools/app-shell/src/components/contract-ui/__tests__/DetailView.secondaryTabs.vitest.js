@@ -158,6 +158,8 @@ describe('getSecondaryRowUpdateHandler', () => {
     const row = { id: 'r1', qty: 1 };
 
     await expect(handler(row, 'qty', 5, undefined)).rejects.toThrow('server-error');
+    // ETP-6140 — already toasted: InlineLinesPanel must not report it again.
+    await expect(handler(row, 'qty', 5, undefined)).rejects.toMatchObject({ userNotified: true });
 
     const hk = ctx.secondaryHooks[0].handleUpdateChild;
     expect(hk).toHaveBeenNthCalledWith(1, 'r1', { qty: 5 });

@@ -4,7 +4,7 @@
 // Extracted from the retired AccountRow (ETP-4658) so the testids and the
 // sync-visibility rule have a single definition; the generic DataTable renders them
 // inside its shared sticky `rowQuickActions` cell in AccountsHeaderTable.
-import { Pencil, RefreshCw } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -12,7 +12,9 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useUI } from '@/i18n';
+import { useBankSyncStatus } from '@/windows/custom/financial-account/BankSyncContext.jsx';
 import { AccountRowMenu } from './AccountRowMenu.jsx';
+import { BankSyncIcon } from './BankSyncIcon.jsx';
 
 export function AccountRowActions({
   account,
@@ -28,6 +30,8 @@ export function AccountRowActions({
   windowReadOnly = false,
 }) {
   const ui = useUI();
+  const { syncing } = useBankSyncStatus(account.id);
+  const syncLabel = ui(syncing ? 'financeAccountsBankSyncInProgress' : 'financeAccountsBankSyncTooltip');
 
   return (
     <TooltipProvider data-testid="TooltipProvider__acctactions">
@@ -54,22 +58,33 @@ export function AccountRowActions({
             <TooltipContent data-testid="TooltipContent__acctactions">{ui('financeAccountsMenuEdit')}</TooltipContent>
           </Tooltip>
         )}
-        {/* Sync is only meaningful for bank-connected accounts — same statement fetch as the
-            kebab's "Sincronizar ahora" / the statements tab's "Sincronizar extractos". */}
+        {/* Fetching statements is only meaningful for bank-connected accounts — same bank fetch
+            as the kebab's "Traer extractos" and the statements tab's.
+            ETP-6154: while a fetch of this account runs (from ANY entry point — the shared
+            BankSyncContext), the button is disabled with its icon bobbing. The trigger is a
+            wrapper span because a disabled button fires no pointer events, which would keep the
+            "in progress" tooltip from ever showing. */}
         {!windowReadOnly && account.bankConnected === true ? (
           <Tooltip delayDuration={0} data-testid="Tooltip__acctactions">
             <TooltipTrigger asChild data-testid="TooltipTrigger__acctactions">
-              <button
-                type="button"
-                aria-label={ui('financeAccountsMenuSyncNow')}
-                data-testid={`account-row-refresh-${account.id}`}
-                onClick={() => onBankConnectionAction?.('syncNow', account)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--border-subtle))]"
-              >
-                <RefreshCw className="h-5 w-5" data-testid="RefreshCw__acctactions" />
-              </button>
+              <span className="inline-flex" data-testid={`account-row-refresh-wrap-${account.id}`}>
+                <button
+                  type="button"
+                  aria-label={syncLabel}
+                  aria-busy={syncing}
+                  disabled={syncing}
+                  data-testid={`account-row-refresh-${account.id}`}
+                  onClick={() => onBankConnectionAction?.('syncNow', account)}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--border-subtle))] disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                >
+                  <BankSyncIcon
+                    spinning={syncing}
+                    className="h-5 w-5"
+                    data-testid={`account-row-refresh-icon-${account.id}`} />
+                </button>
+              </span>
             </TooltipTrigger>
-            <TooltipContent data-testid="TooltipContent__acctactions">{ui('financeAccountsMenuSyncNow')}</TooltipContent>
+            <TooltipContent data-testid="TooltipContent__acctactions">{syncLabel}</TooltipContent>
           </Tooltip>
         ) : null}
         <AccountRowMenu

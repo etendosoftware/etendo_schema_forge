@@ -2,22 +2,21 @@
 /**
  * Contact category header — "Tipo de contacto". Two checkboxes (Customer, Vendor/Creditor),
  * each named by its AD label. Toggling one writes the flipped value of that field and commits;
- * read-only blocks both. The field draws its own legend (required asterisk + hint) and mounts
- * the "saved with contacts" notice for the header record.
+ * read-only blocks both. The field draws its own legend (required asterisk + hint).
+ *
+ * Since the Figma alignment it is only the header fallback for a role without the accounting
+ * capability, and the "saved with contacts" notice is hosted by the window wrapper's form
+ * (guarded in index.vitest.jsx), not here.
  */
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  notifyOnSave: vi.fn(),
   ui: (key) => `ui:${key}`,
   label: (column) => `label:${column}`,
 }));
 vi.mock('@/i18n', () => ({ useUI: () => mocks.ui, useLabel: () => mocks.label }));
-vi.mock('@generated/business-partner-category/custom/useAssociatedContactsNotice.js', () => ({
-  useNotifyOnHeaderSave: mocks.notifyOnSave,
-}));
 
 import ContactTypeField from '@generated/business-partner-category/custom/ContactTypeField.jsx';
 
@@ -32,10 +31,6 @@ function renderField(props) {
   render(<ContactTypeField record={{}} onFieldChange={onFieldChange} onCommit={onCommit} {...props} />);
   return { onFieldChange, onCommit };
 }
-
-beforeEach(() => {
-  mocks.notifyOnSave.mockReset();
-});
 
 describe('ContactTypeField', () => {
   describe.each(FIELDS)('%s', (field, label) => {
@@ -67,11 +62,5 @@ describe('ContactTypeField', () => {
     const legend = within(group).getByText('ui:bpCategoryContactType').closest('legend');
     expect(legend).toHaveTextContent('ui:bpCategoryContactType*ui:bpCategoryContactTypeHint');
     expect(ContactTypeField.ownsLabel).toBe(true);
-  });
-
-  it('mounts the saved-with-contacts notice for the header record', () => {
-    const record = { id: 'G-1', updated: 't1' };
-    renderField({ record });
-    expect(mocks.notifyOnSave).toHaveBeenCalledWith(record);
   });
 });

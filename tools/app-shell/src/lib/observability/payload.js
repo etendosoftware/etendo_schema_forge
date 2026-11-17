@@ -25,6 +25,7 @@ const DENYLISTED_PROPERTY_KEYS = new Set([
 
 export const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'account_id',
+  'internal_user',
   'action',
   'accuracy',
   'app',
@@ -78,9 +79,11 @@ export const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'fkAutoResolved',
   'fkCreated',
   'outcome',
+  'panelState',
   'position',
   'provider',
   'reason',
+  'reportSessionId',
   'role_groups',
   'route',
   'routePattern',
@@ -95,6 +98,7 @@ export const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'tags',
   'timestamp',
   'total',
+  'trigger',
   'type',
   'upgradeAction',
   // 'username' is intentionally allowlisted here even though the ETP-4352 GDPR
@@ -149,6 +153,7 @@ const BOOLEAN_EVENT_PROPERTY_KEYS = new Set([
   ...KPI_BOOLEAN_KEYS,
   'auto_opened',
   'enabled',
+  'internal_user',
   'mockMode',
   'supportRequested',
 ]);

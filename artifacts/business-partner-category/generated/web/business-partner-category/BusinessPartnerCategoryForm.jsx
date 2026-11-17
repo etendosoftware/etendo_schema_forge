@@ -1,5 +1,4 @@
 import { EntityForm } from '@/components/contract-ui';
-import ContactTypeField from '../../../custom/ContactTypeField';
 
 // @sf-generated-start fields:businessPartnerCategory
 const fields = [
@@ -7,7 +6,7 @@ const fields = [
   { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, section: 'principal', maxLength: 60 },
   { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'principal', maxLength: 255, span: 2, rows: 1 },
   { key: 'default', column: 'IsDefault', type: 'checkbox', label: 'Default', required: true, section: 'principal' },
-  { key: 'etgoIscustomer', column: 'EM_Etgo_Iscustomer', type: 'checkbox', label: 'Customer', required: true, section: 'principal', span: 4, customRenderer: ContactTypeField },
+  { key: 'etgoIscustomer', column: 'EM_Etgo_Iscustomer', type: 'checkbox', label: 'Customer', required: true, section: 'principal' },
 ];
 // @sf-generated-end fields:businessPartnerCategory
 

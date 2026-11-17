@@ -64,3 +64,42 @@ export function resolveFkNavigation(column, record) {
 
   return `/${target.window}/${id}`;
 }
+
+/**
+ * ETP-6148 — normalize a row value into the key of a `link.window.values` map: booleans and
+ * the Y/N flags DAL boolean columns can come as both read as `'true'` / `'false'`.
+ */
+function linkValueKey(value) {
+  if (value === true || value === 'Y') return 'true';
+  if (value === false || value === 'N') return 'false';
+  return value == null ? '' : String(value);
+}
+
+/**
+ * ETP-6148 — resolve a grid column's declarative `link` (decisions.json field `link`, carried
+ * onto the generated column) into a route. Unlike {@link FK_NAVIGATION_TARGETS}, which is a
+ * shared registry keyed by AD column, a `link` is declared by ONE window on ONE column, so it
+ * changes nothing anywhere else. Shape:
+ *
+ * - `{ idField, window: '<spec>' }` — always the same target window;
+ * - `{ idField, window: { field, values: { <value>: '<spec>' } } }` — the target window is
+ *   picked per row from a sibling field's value (e.g. an invoice's `salesTransaction`:
+ *   `true` → sales invoice, `false` → purchase invoice).
+ *
+ * `idField` names the row key holding the target record id. Fails CLOSED — `null` when the
+ * id is missing or no window matches — so the cell keeps its plain rendering.
+ *
+ * @param {object|null|undefined} link - The column's `link` declaration.
+ * @param {object|null|undefined} row - The row being rendered.
+ * @returns {string|null} Route to navigate to, or `null` when not navigable.
+ */
+export function resolveColumnLink(link, row) {
+  if (!link || !row || !link.idField) return null;
+  const rawId = row[link.idField];
+  const id = rawId == null ? '' : String(rawId).trim();
+  if (!id) return null;
+  const window = typeof link.window === 'string'
+    ? link.window
+    : link.window?.values?.[linkValueKey(row[link.window?.field])];
+  return window ? `/${window}/${id}` : null;
+}

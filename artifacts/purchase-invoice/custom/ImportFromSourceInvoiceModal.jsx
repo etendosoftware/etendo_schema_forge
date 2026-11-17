@@ -1,7 +1,9 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { apiFetch as moduleApiFetch } from '@/auth/api.js';
-import { getApSubtype } from './purchaseInvoiceSubtype';
+import { listAll, listLines } from '@/windows/custom/shared/importActionClient.js';
+import useImportLoadFailureToast from '@/windows/custom/shared/useImportLoadFailureToast.js';
+import { newestCreatedFirst } from '@/windows/custom/shared/invoiceOrderImport.js';
 
 /**
  * Import invoice lines from a completed standard ("Factura") purchase invoice
@@ -11,13 +13,11 @@ import { getApSubtype } from './purchaseInvoiceSubtype';
  * PurchaseInvoiceBottomPanel.jsx).
  *
  * Per ETP-4737 acceptance criteria ("Importar desde Factura origen muestra
- * solo facturas de Tipo Factura"): the source-invoice picker is filtered to
- * `apInvoiceSubtype === 'FAC'` only — a rectificative invoice can never be
- * used to rectify another rectificative invoice. This filter is applied
- * client-side via `getApSubtype()` because `apInvoiceSubtype` is a virtual
- * field computed at GET-response time (PurchaseInvoiceHeaderHandler), not a
- * persisted/Hibernate-mapped property, so it cannot be expressed as backend
- * list criteria.
+ * solo facturas de Tipo Factura"): the source-invoice picker lists plain
+ * (FAC) invoices only — a rectificative invoice can never be used to rectify
+ * another rectificative invoice. Since ETP-6099 the `availableOriginInvoices`
+ * action decides it server-side (it used to be filtered here with
+ * `getApSubtype()`, `apInvoiceSubtype` being a GET-time virtual field).
  *
  * Lines are copied with a NEGATIVE invoiced quantity by default (mirrors
  * ImportFromGoodsReturnModal) — importing from a source invoice models
@@ -44,8 +44,9 @@ import { getApSubtype } from './purchaseInvoiceSubtype';
  * C_InvoiceLine id) in its POST body, persisted by `InvoiceLineHandler#persistSourceInvoiceLine`
  * into `EM_ETGO_Source_Invoiceline_ID` — a self-referencing FK on C_InvoiceLine (same
  * pattern as `BOM_Parent_ID`). Surfaced back on GET as the same key
- * (`enrichSourceInvoiceLineId`), so `fetchDocuments` can build the already-imported set and
- * `fetchLines` marks matching source lines `_alreadyImported`, blocking re-selection.
+ * (`enrichSourceInvoiceLineId`). Since ETP-6099 the server reads that link: an
+ * `availableOriginInvoiceLines` row says `importedHere`, and `fetchLines` marks it
+ * `_alreadyImported`, blocking re-selection.
  */
 
 const resolveLinePrice = async (base, productId, qty, invoiceHeader, auxData = {}) => {
@@ -92,57 +93,57 @@ const resolveLinePrice = async (base, productId, qty, invoiceHeader, auxData = {
   }
 };
 
-const fetchDocuments = async ({ base, bpId, invoiceId }) => {
-  const [res, invLinesRes] = await Promise.all([
-    moduleApiFetch(`${base}/purchase-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
-    moduleApiFetch(`${base}/purchase-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`),
-  ]);
+const SPEC = 'purchase-invoice';
 
-  let documents = [];
-  if (res.ok) {
-    const all = (await res.json())?.response?.data || [];
-    documents = all.filter(inv =>
-      inv.id !== invoiceId
-      && inv.documentStatus === 'CO'
-      && inv.businessPartner === bpId
-      && getApSubtype(inv) === 'FAC'
-    );
-  }
-
-  // ETP-4737: which source lines are already imported into THIS invoice, via the
-  // EM_ETGO_Source_Invoiceline_ID link persisted by buildLineBody below and
-  // surfaced on GET as sourceInvoiceLineId (InvoiceLineHandler#enrichSourceInvoiceLineId).
-  const alreadyImportedSourceLineIds = new Set();
-  if (invLinesRes.ok) {
-    const invLines = (await invLinesRes.json())?.response?.data || [];
-    invLines.forEach(il => { if (il.sourceInvoiceLineId) alreadyImportedSourceLineIds.add(il.sourceInvoiceLineId); });
-  }
-
+/**
+ * ETP-6099 (speed): the candidates come from THIS invoice's `availableOriginInvoices` action
+ * (com.etendoerp.go `ImportOriginInvoiceLinesHandler`, the one the MCP calls): the supplier's
+ * completed, non-rectificative (FAC) invoices, newest created first (re-sorted by the row's
+ * `creationDate`, the action answers by invoice date), every page read, no currency filter (as
+ * before). `detail` adds the row `amount` (the doc total), and `includeCovered` also brings the
+ * ones whose lines are all imported here (pendingLines 0), which the row hides as before. It
+ * replaced the company-wide 500-invoice GET filtered here and this invoice's lines GET.
+ */
+const fetchDocuments = async ({ base, invoiceId }) => {
+  const rows = await listAll({
+    apiFetch: moduleApiFetch, base, spec: SPEC, targetId: invoiceId,
+    action: 'availableOriginInvoices', params: { includeCovered: true, detail: true },
+  }).then(newestCreatedFirst);
   return {
-    documents,
-    sharedContext: { productAuxMap: {}, alreadyImportedSourceLineIds },
+    documents: rows.map(r => ({ ...r, invoiceDate: r.date, documentStatus: 'CO' })),
+    sharedContext: { invoiceId },
     excludedByCurrency: false,
   };
 };
 
+/**
+ * One `availableOriginInvoiceLines` call per source invoice; `detail` adds the price, quantity
+ * and `importedHere` keys the popup reads. `includeCovered` brings the lines
+ * already imported here at pendingQuantity 0 with `importedHere`; they are shown (greyed) with the
+ * source line's own quantity, as before. The row carries the price, discount, tax and UoM
+ * `buildLineBody` falls back to (the product callout still runs at import time).
+ */
 const fetchLines = async ({ base, docId, sharedContext }) => {
-  const res = await moduleApiFetch(`${base}/purchase-invoice/lines?parentId=${docId}&_startRow=0&_endRow=200`);
-  if (!res.ok) return [];
-  const json = await res.json();
-  const lines = json?.response?.data || [];
-  const alreadyImportedSourceLineIds = sharedContext?.alreadyImportedSourceLineIds;
+  const invoiceId = sharedContext?.invoiceId;
+  if (!invoiceId) return [];
+  const lines = await listLines({
+    apiFetch: moduleApiFetch, base, spec: SPEC, targetId: invoiceId,
+    action: 'availableOriginInvoiceLines', params: { invoiceId: docId, includeCovered: true, detail: true },
+  });
   return lines.map(l => {
-    const qty = Math.abs(Number(l.invoicedQuantity)) || 0;
+    const imported = !!l.importedHere;
+    const qty = imported ? Math.abs(Number(l.invoicedQuantity)) || 0 : (Number(l.pendingQuantity) || 0);
     const unitPrice = Number(l.unitPrice) || 0;
     return {
       ...l,
+      etgoDiscount: l.discount ?? l.etgoDiscount,
       _productName: l['product$_identifier'] || l.id,
       _maxQty: qty,
       _unitPrice: unitPrice,
       _lineNetAmount: unitPrice * qty,
       _tax: l.tax || null,
       _uOM: l.uOM || null,
-      _alreadyImported: !!alreadyImportedSourceLineIds?.has(l.id),
+      _alreadyImported: imported,
     };
   });
 };
@@ -151,6 +152,14 @@ const getDocDisplay = (doc) => ({
   docNo: doc.documentNo || doc.id,
   date: doc.invoiceDate,
 });
+
+// ETP-6099 — the lines are read only when an invoice is opened (`eagerLoadLines` off), so the row
+// decides from the `availableOriginInvoices` row: an invoice with nothing left to import is hidden,
+// and the row total is its `amount` (unit price × |quantity| over all its lines, the ones already
+// imported here included, as the loaded lines added up), negated like the quantities shown.
+// Without an `amount` (older backend) the modal sums the loaded lines.
+const isDocumentCovered = (doc) => doc.pendingLines != null && Number(doc.pendingLines) === 0;
+const getDocumentTotal = (doc) => (doc.amount == null ? null : -Math.abs(Number(doc.amount)));
 
 const afterImport = async ({ importedDocIds, base, invoiceId }) => {
   // ETP-4919: importing from a second (or third...) source invoice must not lose the link to
@@ -208,6 +217,9 @@ export default function ImportFromSourceInvoiceModal(props) {
   // (an invoice importing shipment lines), and resolveApiUrl only skips a prefix that
   // matches - so a configured base doubles it and 404s.
   const apiFetch = useApiFetch('');
+  // ETP-6099 — a refused read is told (describeLoadFailure toast) and the list shows what an empty
+  // answer shows, like the order import.
+  const handlers = useImportLoadFailureToast(fetchDocuments, fetchLines);
   return (
     <ImportLinesModal
       {...props}
@@ -219,9 +231,12 @@ export default function ImportFromSourceInvoiceModal(props) {
       successMessageKey="linesImportedFromSourceInvoice"
       showPriceColumns={false}
       negativeQuantity
-      fetchDocuments={fetchDocuments}
-      fetchLines={fetchLines}
+      fetchDocuments={handlers.fetchDocuments}
+      fetchLines={handlers.fetchLines}
       getDocDisplay={getDocDisplay}
+      eagerLoadLines={false}
+      isDocumentCovered={isDocumentCovered}
+      getDocumentTotal={getDocumentTotal}
       buildLineBody={buildLineBody}
       afterImport={afterImport}
     />

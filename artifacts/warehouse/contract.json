@@ -1,8 +1,8 @@
 {
   "version": "0.24.0",
   "generatedAt": "2026-04-29T18:11:37.816Z",
-  "updatedAt": "2026-10-16T12:07:18.911Z",
-  "checksum": "8c33a6e1dfa8a797",
+  "updatedAt": "2026-11-11T19:46:05.303Z",
+  "checksum": "58e1372ab27c96a1",
   "frontendContract": {
     "window": {
       "id": "139",
@@ -578,8 +578,7 @@
           }
         ],
         "searchableFields": [],
-        "computedFields": [],
-        "javaQualifier": "productTransactionsHandler"
+        "computedFields": []
       },
       "binContents": {
         "tableName": "M_Storage_Detail",
@@ -1484,8 +1483,7 @@
             "visibility": "system",
             "required": true
           }
-        ],
-        "javaQualifier": "productTransactionsHandler"
+        ]
       },
       "binContents": {
         "tableName": "M_Storage_Detail",
