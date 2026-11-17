@@ -78,7 +78,8 @@ export default function ConfirmWithCreditButtonBase({
 
   const rectifiableInvoicesUrl =
     `${base}/${specName}/${entityName}/${data?.id || recordId}/action/rectifiableInvoices`;
-  // ETP-6179: the rectificative invoice's "Datos fiscales" step (R4 preselected per system).
+  // ETP-6179: the rectificative invoice's "Datos fiscales" step (R1 preselected as the
+  // rectification code of every active system on a customer return, editable).
   const sifDefaultsUrl =
     `${base}/${specName}/${entityName}/${data?.id || recordId}/action/sifDefaults`;
 

@@ -43,7 +43,7 @@ The guard also changes what "Reactivar" does mechanically when it already knows 
 
 **Rectificative SIF fields are right straight after the save, without a reload (ETP-5747):** a rectificative created with its document type already set kept SII "Tipo factura" at `F1` until the page was reloaded, and TicketBAI / VERI*FACTU never got their rectificative values. Two causes, both fixed in com.etendoerp.go (`SalesInvoiceHeaderHandler`, `SalesRectificativeFiscalDefaults`; contract in `neo-headless.md`, ETP-5747):
 - **SII.** The `aeatsiiClaveTipo = 'R'` effect in `useSifFieldPatcher.js` keys on `data.isRectificative`, which only the detail GET injected. Creating the invoice from a button that saves first ("Importar desde factura origen", "Añadir línea") adopts the POST response as the record (`primeSaved` + `justSaved`, no post-save read), so the flag stayed absent and the effect never fired. The header's POST/PUT/PATCH response now carries `isRectificative` (with the other form keys a header write can change; exact keys and when each is added: `neo-headless.md`, ETP-5747), so the effect fires right after the save: the SIF tab shows `R` (pending; `aeatsiiTipoRectif` keeps auto-defaulting to `I`, CP-11). Since QA pass 1 (below) the server also stores `R` + `I` itself, so this pending value is only the instant echo before the save. Second cause, found in manual testing (FVR1000002): after importing, "Importar desde factura origen" re-reads the record (`onRefresh` → `fetchById`), which replaces every pending edit with the stored values — `F1`, and an empty `aeatsiiTipoRectif` — and both effects were one-shot per record (`${recordId}:…` ref guards), so they never re-applied until a page reload. Both now re-apply whenever the record (draft, SII active, rectificative document type) shows a type other than `R`, respectively an `R` with an empty tipo. There is no user choice to respect: on a sales rectificative the "Tipo factura" Select offers only `R`, the type the server enforces (QA pass 1, below). The two VERI*FACTU effects in the same hook had the same one-shot guard and now follow the same rule: `etvfacInvType` gets `F1` whenever it is blank (non-rectificative invoices only), and `etvfacReverseinvtype` gets `I` whenever the invoice type is `R*` and it is blank. Both fill a blank value only, so they never override a user choice or the `R*` type / reverse type the server copied from the document type. The reverse type used to be written as `I` even over a stored value; it no longer is. TicketBAI has no client-side default to fix: `tbaiReverseinvoicecode` is only written by the user's Select or by the server.
-- **TicketBAI / VERI*FACTU.** Their fields were only filled by the doc-type callout (trigger `transactionDocument`). They are now defaulted on the server after every header save of a draft rectificative, whatever channel created it (SPA, MCP, batch). With TicketBAI active for the org, the invoice is always marked as a reverse invoice (`tbaiIsreverseinvoice = Y`), and the reverse type gets "Por diferencias" (`I`) when empty; the TicketBAI code is never picked (ETP-5745 CP-14). With VERI*FACTU active, a plain `F*` invoice type is cleared to empty (see QA pass 1 below) and, once the user picked `R1`–`R5`, the reverse type takes the document type's one (or `I`) when empty. An `R*` type or a reverse type / code the user already chose is kept. The write response carries the values written, so the SIF tab shows them at once. Exact rules: `neo-headless.md`, ETP-5747.
+- **TicketBAI / VERI*FACTU.** Their fields were only filled by the doc-type callout (trigger `transactionDocument`). They are now defaulted on the server after every header save of a draft rectificative, whatever channel created it (SPA, MCP, batch). With TicketBAI active for the org, the invoice is always marked as a reverse invoice (`tbaiIsreverseinvoice = Y`), and the reverse type gets "Por diferencias" (`I`) when empty; With VERI*FACTU active, a plain `F*` invoice type is cleared to empty (see QA pass 1 below) and, once the user picked `R1`–`R5`, the reverse type takes the document type's one (or `I`) when empty. **No motive/code is ever auto-picked on a manual rectificative (ETP-5745 CP-14, superseding the original ETP-5747 `R4` default):** the SII motive, the TicketBAI code and the VERI*FACTU `R1`–`R5` type stay empty until the user chooses them, and `RectificationFiscalCodeGuard` blocks completion meanwhile. Only the customer return's "Datos fiscales" step preselects `R1` (ETP-6179, see `return-material-receipt.md`). An `R*` type or a reverse type / code the user already chose is kept. The write response carries the values written, so the SIF tab shows them at once. Exact rules: `neo-headless.md`, ETP-5747.
 - Plain (non-rectificative) invoices, completed invoices and purchase invoices are untouched.
 
 **Rectificative SIF fields, QA pass 1 (ETP-5747 CP-5/CP-6/CP-10/CP-11):** no fiscal reason code is ever picked for the user (SII motivo, TicketBAI code, VERI*FACTU `R1`–`R5`); completion stays blocked by `RectificationFiscalCodeGuard` until each active system has one. What changed:
@@ -2842,3 +2842,29 @@ VERI\*FACTU *Tipo factura*, TicketBAI *Código factura rectificativa*) now rende
 a label that already starts with its code is shown as it is, any other one gets the `"CODE - "`
 prefix. The "Datos fiscales" step of the invoice-creating modals uses the same function, so the tab
 and the step always read alike. No locale key changed.
+
+## Mandatory fields of the SIF tab carry the red `*` — ETP-6179
+
+The SIF tab marks its mandatory fields with the app's red `*` (`RequiredMark`, with
+`aria-required` on the control), from the same rule as the "Datos fiscales" step of the
+invoice-creating modals (`isSifFieldRequired` in
+`tools/app-shell/src/windows/custom/shared/sifRequiredFields.js`; full table in
+`docs/ui-customization.md` §21b):
+
+- **SII:** *Tipo factura*, *Descripción SII*; *Motivo de rectificación* when the invoice is a
+  rectificative (the field only shows then). *Fecha operación* only when VERI\*FACTU is active too.
+- **VERI\*FACTU:** *Fecha operación*, *Tipo de factura*, *Descripción de la operación*.
+- **TicketBAI:** *Código de factura rectificativa*, on a rectificative (the field only shows then).
+
+A rectificative created by hand in this window still gets no preselected rectification code: the
+user chooses it (ETP-5745 CP-14, `SalesRectificativeFiscalDefaults`). Only the rectificative a
+customer return creates through its "Datos fiscales" step comes with `R1` preselected
+(`return-material-receipt.md`).
+
+None of these columns is mandatory in the AD: the list mirrors what each fiscal system refuses when
+empty (SII's pre-send validation, VERI\*FACTU's `InitialValidator`, and
+`RectificationFiscalCodeGuard`, which blocks the completion of a rectificative with no code). The
+SII *Causa exención* is not marked: an exempt tax without a cause only raises a warning toast. The
+`*` is hidden on a field the user cannot edit (a completed or sent invoice, a read-only role), as
+in the header form. The marker is purely visual here: saving a draft is not blocked, and the
+completion is refused by the server exactly as before.
