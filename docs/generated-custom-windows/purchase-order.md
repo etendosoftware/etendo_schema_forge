@@ -744,8 +744,9 @@ shared by both handlers):
   code. The invoice header carries the order, so Fecha operación and Descripción SII come from the
   order when it has them.
 - The list's bulk "Crear facturas" (`BulkPurchaseOrderMoreMenu`, one invoice per selected order)
-  shows the same read-only fiscal-data summary as the sales order's bulk menu, with SII fields only;
-  the rules (when it appears, "Según cada cliente / pedido", each order sending its own values) are in
+  shows the same editable fiscal-data step as the sales order's bulk menu (ONE set of values applied
+  to every invoice), with SII fields only and no rectification code; the rules (when it appears,
+  "Según cada cliente / pedido", what an untouched differing field sends, the `*`) are in
   [sales-order.md → Fiscal data step before the invoice is created](sales-order.md#fiscal-data-step-before-the-invoice-is-created--etp-6179).
 
 How the step itself works — the backend `sifDefaults` preview, when it appears, the

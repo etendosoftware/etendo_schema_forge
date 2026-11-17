@@ -226,16 +226,17 @@ describe('BulkOrderMoreMenu — createDraftInvoice leaves the draft rule to the 
   });
 });
 
-// ETP-6179 — with a fiscal system active, "Crear facturas" first shows the fiscal data read-only.
-// The orders here differ only in the SII key (customers with their own key): the shared fields show
-// their value, the key shows "per customer", and each order's POST carries its OWN preview values.
+// ETP-6179 — with a fiscal system active, "Crear facturas" first shows ONE editable set of fiscal
+// data for every invoice of the run. The orders here differ only in the SII key (customers with
+// their own key): the shared fields show their value, the key shows "per customer", and — left
+// untouched — each order's POST carries its OWN value for it.
 // Both menus share the flow, so both are pinned; the receipt / shipment action never asks.
 describe.each([
   ['BulkOrderMoreMenu', BulkOrderMoreMenu, '/sws/neo/sales-order', 'soBulkCreateInvoices', 'createDraftInvoice',
     'soBulkCreateShipments', 'createShipment'],
   ['BulkPurchaseOrderMoreMenu', BulkPurchaseOrderMoreMenu, '/sws/neo/purchase-order', 'poBulkCreateInvoices',
     'createPurchaseInvoice', 'poBulkCreateReceipts', 'createGoodsReceipt'],
-])('%s — read-only fiscal data summary before bulk invoicing (ETP-6179)', (
+])('%s — editable fiscal data step before bulk invoicing (ETP-6179)', (
   _name, Menu, apiBaseUrl, invoiceLabel, invoiceAction, otherLabel, otherAction,
 ) => {
   const preview = (siiKey, extra = {}) => ({
@@ -279,7 +280,7 @@ describe.each([
 
     await screen.findByTestId('invoice-sif-step-modal');
     expect(screen.getByTestId('Varies__sifstep_aeatsiiClaveTipo'))
-      .toHaveValue('invoiceSifStep.variesPerCustomer');
+      .toHaveTextContent('invoiceSifStep.variesPerCustomer');
     expect(screen.queryByTestId('Varies__sifstep_etsgDateOperation')).toBeNull();
     expect(postsOf(invoiceAction)).toHaveLength(0);
 
@@ -291,7 +292,7 @@ describe.each([
     expect(sent).toEqual({ 'so-a': preview('F1').fields, 'so-b': preview('F2').fields });
   });
 
-  it('is read-only: the InfoBanner notice names the systems and every control is disabled', async () => {
+  it('is editable: the InfoBanner notice names the systems and every control is enabled', async () => {
     renderMenu();
     fireEvent.click(screen.getByText(new RegExp(`^${invoiceLabel}`)));
     await screen.findByTestId('invoice-sif-step-modal');
@@ -299,10 +300,12 @@ describe.each([
     expect(screen.getByTestId('invoice-sif-step-notice'))
       .toHaveTextContent('Bulk notice: sifDataTabs.tab.sii y sifDataTabs.tab.verifactu');
     expect(screen.queryByText('invoiceSifStep.description')).toBeNull();
-    expect(screen.getByTestId('SelectTrigger__sifstep_etvfacInvType')).toBeDisabled();
-    expect(screen.getByTestId('Varies__sifstep_aeatsiiClaveTipo')).toBeDisabled();
+    expect(screen.getByTestId('SelectTrigger__sifstep_etvfacInvType')).not.toBeDisabled();
+    // The varying key stays a control of its own, empty, with the "per customer" note.
+    expect(screen.getByTestId('SelectTrigger__sifstep_aeatsiiClaveTipo')).not.toBeDisabled();
     const date = screen.getByTestId('invoice-sif-step-SII').querySelector('#sif-step-etsgDateOperation');
-    expect(date).toBeDisabled();
+    expect(date).not.toBeDisabled();
+    expect(screen.getByTestId('invoice-sif-step-modal-confirm')).not.toBeDisabled();
     // A bulk summary has no earlier screen to go back to.
     expect(screen.queryByTestId('invoice-sif-step-modal-back')).toBeNull();
     expect(screen.getByTestId('invoice-sif-step-modal-confirm')).toHaveTextContent(`${invoiceLabel} (2)`);

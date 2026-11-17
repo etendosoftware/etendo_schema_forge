@@ -3194,7 +3194,7 @@ every current flow:
 | Confirm with invoice (orders, shipments, receipts, returns) | `ConfirmInOutModal` (also behind `ConfirmWithCreditButtonBase`), the order `ConfirmModal`s in `OrderCreateInvoice.jsx` / `PurchaseOrderActions.jsx` |
 | Create the invoice of a confirmed document (single and bulk ONE-invoice) | `CreateInvoiceConfirmModal` via its `sifDefaultsUrl` / `sifDefaultsBody` props; the orders' `CreateDocsModal` |
 | Quotation «Facturar directamente» | `QuotationConfirmModal` → `InvoiceSifStepModal` (its own dialog, because `ActionChoiceModal` cannot host it) |
-| Bulk "one invoice per selected order" | `BulkOrderMoreMenu` / `BulkPurchaseOrderMoreMenu` → `resolveBulkSifPreview` + `InvoiceSifStepModal` in `readOnly` mode |
+| Bulk "one invoice per selected order" | `BulkOrderMoreMenu` / `BulkPurchaseOrderMoreMenu` → `resolveBulkSifPreview` + `BulkInvoiceSifStepModal` (editable, one set of values for every invoice) |
 
 **The backend is the source of truth.** The step is built from the source record's
 `POST …/action/sifDefaults` (`InvoiceSifPreset` in `com.etendoerp.go`, `neo-headless.md` §4.12.36b):
@@ -3230,7 +3230,7 @@ The SII exemption cause is deliberately NOT in the list: an exempt tax without a
 a non-blocking warning toast. The marker is the app's own `RequiredMark`
 (`@/components/ui/required-mark.jsx`, `aria-hidden`), with `aria-required` / `required` on the
 control, and — like the header form — it is not shown on a field the user cannot edit (a completed
-invoice, a read-only role, the read-only bulk summary). To make a field mandatory or stop it being
+invoice, a read-only role). To make a field mandatory or stop it being
 so, change `sifRequiredFields.js` only: the tab, the step's `*` and the step's blocked button all
 follow.
 
@@ -3277,16 +3277,29 @@ Behaviour the hook already owns — do not re-implement it:
 - A modal that cannot host the panel (a shared first screen) renders `InvoiceSifStepModal`
   (× / Cancelar / Atrás / confirm) instead; remember the option the user picked so Atrás returns to
   it (`QuotationConfirmModal`'s `chosenOption`).
-- **Bulk, one invoice per document:** never an editable step per invoice. Fetch every preview with
-  `resolveBulkSifPreview(apiFetch, urls)`; on `kind: 'summary'` show
-  `InvoiceSifStepModal` with `sif={readOnlySifStep(preview, varying)}`, `readOnly`,
-  `notice={ui('invoiceSifStep.bulkNotice', …)}` and `onCancel`; a field that differs reads
-  "Según cada cliente" (SII key) or "Según cada pedido" (anything else). Each POST then sends its
-  OWN document's `previews[i].fields` as `sifFields`. On `kind: 'none'` run as before. The
-  read-only summary marks no field mandatory and never blocks. The bulk flows only reach ordinary
-  invoices today (the order and shipment lists exclude return document types); a bulk flow that
-  could produce a rectificative would send its empty codes and be refused by the server, so it
-  needs a product decision first.
+- **Bulk, one invoice per document:** ONE editable set of values for every invoice of the run,
+  never an editable step per invoice (whoever wants other values on one invoice creates it
+  individually; `invoiceSifStep.bulkNotice` says so). Fetch every preview with
+  `resolveBulkSifPreview(apiFetch, urls)`; on `kind: 'summary'` render
+  `BulkInvoiceSifStepModal` with `summary`, `notice={ui('invoiceSifStep.bulkNotice', …)}`,
+  `confirmLabel`, `loading`, `onCancel`, and an `onConfirm(sifFieldsList)` that sends
+  `sifFieldsList[i]` as the `sifFields` of the POST of the document behind `previews[i]`. On
+  `kind: 'none'` run as before. What it does (`useBulkSifStep`, `bulkSifFields`):
+  - **Same `*` and same blocking** as the single-record step (`sifRequiredFields.js`).
+  - **A field that differs between the invoices** starts empty with the note "Según cada cliente"
+    (SII key) or "Según cada pedido" (anything else). Left untouched, each invoice keeps its OWN
+    preview value, and it counts as filled — unless the field is mandatory and one of those values
+    is empty (e.g. an order with no SII description): then it blocks until the user sets it. Once
+    the user sets a value, it goes to every invoice that has the field.
+  - **Fields are compared only among the invoices that have them**, and an invoice is only ever
+    sent the fields of its own preview: an ordinary invoice never receives a rectification code.
+  - **Rectificatives in the run:** their codes come empty with `*` (never preselected) and block
+    until chosen; the chosen codes go to the rectificative invoices only. When the run MIXES
+    ordinary and rectificative invoices, the fields of the rectificatives read "(solo facturas
+    rectificativas)" (`invoiceSifStep.rectificativeOnly`), and VERI\*FACTU's type appears twice —
+    the ordinary F1/F2 one and the R1–R5 one of the rectificatives
+    (`BULK_RECTIFICATIVE_VF_KEY`), since it is one backend field with two meanings. Which order is
+    a rectificative comes from each preview's own `rectificative` flag.
 - **Option labels:** any SIF select uses `sifOptionLabel(option, ui)` ("CODE - Label", the code
   once), as the SIF tab does.
 

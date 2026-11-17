@@ -74,8 +74,8 @@ import {
   hasSifSystems,
   InvoiceSifStepModal,
   InvoiceSifStepPanel,
-  readOnlySifStep,
   resolveBulkSifPreview,
+  useBulkSifStep,
   sifOptionLabel,
   useInvoiceSifStep,
   varyingFieldLabelKey,
@@ -169,19 +169,23 @@ describe('varyingFieldLabelKey', () => {
   });
 });
 
-describe('readOnlySifStep', () => {
-  it('exposes the preview fields as values, always valid and with no-op setters', () => {
+// ETP-6179: the bulk step is EDITABLE — one set of values for every invoice of the run.
+describe('useBulkSifStep', () => {
+  it('starts from the merged values; setting a varying field makes it apply to every invoice', () => {
     const p = preview();
-    const step = readOnlySifStep(p, { aeatsiiClaveTipo: true });
-    expect(step.values).toBe(p.fields);
-    expect(step.valid).toBe(true);
-    expect(step.varying).toEqual({ aeatsiiClaveTipo: true });
-    expect(() => step.setValue('x', 1)).not.toThrow();
-    expect(step.back()).toBeUndefined();
+    const { result } = renderHook(() => useBulkSifStep({ preview: p, varying: { aeatsiiClaveTipo: true } }));
+    expect(result.current.values).toEqual(p.fields);
+    expect(result.current.valid).toBe(true);
+    expect(result.current.varying).toEqual({ aeatsiiClaveTipo: true });
+    act(() => result.current.setValue('aeatsiiClaveTipo', 'F2'));
+    expect(result.current.values.aeatsiiClaveTipo).toBe('F2');
+    expect(result.current.varying).toEqual({});
   });
 
-  it('tolerates a null preview', () => {
-    expect(readOnlySifStep(null).values).toEqual({});
+  it('tolerates a null summary', () => {
+    const { result } = renderHook(() => useBulkSifStep(null));
+    expect(result.current.values).toEqual({});
+    expect(result.current.valid).toBe(true);
   });
 });
 
@@ -251,13 +255,20 @@ describe('resolveBulkSifPreview', () => {
     expect(res.preview.systems).toEqual(['SII', 'Verifactu']);
   });
 
-  it('marks a field varying when one order does not have it, and unions systems and specs', async () => {
+  it('compares a field only among the orders that have it, and unions systems and specs', async () => {
     const a = { systems: ['SII'], fieldSpecs: [SII_SPEC[0]], fields: { etsgDateOperation: '2026-11-10' }, siiAuthorizationAvailable: true };
     const b = { systems: ['Verifactu'], fieldSpecs: [VF_SPEC[0]], fields: { etvfacInvType: 'F1' }, siiAuthorizationAvailable: true };
     const res = await resolveBulkSifPreview(fetchByUrl({ a: jsonResponse(a), b: jsonResponse(b) }), ['a', 'b']);
     expect(res.preview.systems).toEqual(['SII', 'Verifactu']);
     expect(res.preview.fieldSpecs.map(s => s.name)).toEqual(['etsgDateOperation', 'etvfacInvType']);
-    expect(res.varying).toEqual({ etsgDateOperation: true, etvfacInvType: true });
+    // Each field exists on one order only, so it has one value and does not vary; each order is
+    // only ever sent its own fields.
+    expect(res.varying).toEqual({});
+    expect(res.preview.fields).toEqual({ etsgDateOperation: '2026-11-10', etvfacInvType: 'F1' });
+    expect(res.slots).toEqual([
+      [{ key: 'etsgDateOperation', name: 'etsgDateOperation' }],
+      [{ key: 'etvfacInvType', name: 'etvfacInvType' }],
+    ]);
   });
 
   it('offers the SII authorization only when every order allows it', async () => {
@@ -538,15 +549,15 @@ describe('InvoiceSifStepPanel', () => {
 
   it('marks nothing in read-only mode', () => {
     const p = preview({ rectificative: true });
-    const { container } = render(<InvoiceSifStepPanel sif={readOnlySifStep(p)} readOnly />);
+    const { container } = render(<InvoiceSifStepPanel sif={editableStep(p)} readOnly />);
     expect(container.querySelector('[data-testid^="RequiredMark__sifstep_"]')).toBeNull();
     expect(container.querySelector('[aria-required]')).toBeNull();
     expect(screen.getByTestId('DateField__sifstep_etsgDateOperation')).not.toBeRequired();
   });
 
-  it('does not mark a field shown as varying, but still marks the others', () => {
+  it('marks a varying mandatory field too: the bulk step is editable', () => {
     render(<InvoiceSifStepPanel sif={{ ...editableStep(preview()), varying: { aeatsiiClaveTipo: true } }} />);
-    expect(screen.queryByTestId('RequiredMark__sifstep_sif-step-aeatsiiClaveTipo')).not.toBeInTheDocument();
+    expect(screen.getByTestId('RequiredMark__sifstep_sif-step-aeatsiiClaveTipo')).toBeInTheDocument();
     expect(screen.getByTestId('RequiredMark__sifstep_sif-step-aeatsiiDescripcionSii')).toBeInTheDocument();
   });
 
@@ -554,7 +565,7 @@ describe('InvoiceSifStepPanel', () => {
     const p = preview();
     render(
       <InvoiceSifStepPanel
-        sif={{ ...readOnlySifStep(p), valid: false }}
+        sif={editableStep(p, undefined, { valid: false })}
         readOnly
         notice="bulk notice" />,
     );
@@ -569,16 +580,16 @@ describe('InvoiceSifStepPanel', () => {
     expect(screen.queryByTestId('invoice-sif-step-required')).not.toBeInTheDocument();
   });
 
-  it('shows a varying field as "per customer" / "per order" text instead of its control', () => {
+  it('keeps a varying field editable, empty, with a "per customer" / "per order" note', () => {
     const p = preview();
     render(
       <InvoiceSifStepPanel
-        sif={readOnlySifStep(p, { aeatsiiClaveTipo: true, etvfacInvType: true })}
-        readOnly />,
+        sif={{ ...editableStep(p), varying: { aeatsiiClaveTipo: true, etvfacInvType: true } }} />,
     );
-    expect(screen.getByTestId('Varies__sifstep_aeatsiiClaveTipo')).toHaveValue('invoiceSifStep.variesPerCustomer');
-    expect(screen.getByTestId('Varies__sifstep_etvfacInvType')).toHaveValue('invoiceSifStep.variesPerOrder');
-    expect(screen.queryByTestId('Select__sifstep_aeatsiiClaveTipo')).not.toBeInTheDocument();
+    expect(screen.getByTestId('Varies__sifstep_aeatsiiClaveTipo')).toHaveTextContent('invoiceSifStep.variesPerCustomer');
+    expect(screen.getByTestId('Varies__sifstep_etvfacInvType')).toHaveTextContent('invoiceSifStep.variesPerOrder');
+    expect(screen.getByTestId('Select__sifstep_aeatsiiClaveTipo')).toHaveAttribute('data-value', '');
+    expect(screen.getByTestId('Select__sifstep_aeatsiiClaveTipo')).toHaveAttribute('data-disabled', 'false');
   });
 });
 
@@ -608,9 +619,9 @@ describe('InvoiceSifStepModal', () => {
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 
-  it('with onCancel (bulk summary): no Atrás, Cancelar calls onCancel, × still calls onClose', () => {
+  it('with onCancel (bulk step): no Atrás, Cancelar calls onCancel, × still calls onClose', () => {
     const onCancel = vi.fn();
-    const { onClose } = renderModal({ onCancel, readOnly: true, sif: readOnlySifStep(preview()) });
+    const { onClose } = renderModal({ onCancel, sif: editableStep(preview()) });
     expect(screen.queryByTestId('invoice-sif-step-modal-back')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('invoice-sif-step-modal-cancel'));
     expect(onCancel).toHaveBeenCalledTimes(1);
