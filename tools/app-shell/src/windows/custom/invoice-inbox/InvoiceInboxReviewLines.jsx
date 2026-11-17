@@ -18,6 +18,15 @@ import { buildLineSelectorContext } from '@/lib/selectorContext.js';
 import { useReviewEditor } from './useInvoiceInboxReviewEditor.js';
 
 const NONE_VALUE = '__none__';
+/** The column header labels (also the cells' aria-labels and the stacked layout's labels). */
+const COL_LABEL = Object.freeze({
+  description: 'invoiceInboxReviewColDescription',
+  quantity: 'invoiceInboxReviewColQuantity',
+  price: 'invoiceInboxReviewColPrice',
+  discount: 'invoiceInboxReviewColDiscount',
+  tax: 'invoiceInboxReviewColTax',
+  amount: 'invoiceInboxReviewColAmount',
+});
 /**
  * Description | Cant. | Precio | Dto. % | IVA | Importe | action — the column widths of plan 9.4(d):
  * 346px of columns plus 24px of gaps leaves the description 150px at the 560px pane.
@@ -51,6 +60,12 @@ function taxTitle(line) {
   const name = line.tax?.name ?? '';
   const printed = line.taxRatePrinted ?? null;
   return [name, printed != null ? `OCR: ${printed}%` : ''].filter(Boolean).join(' · ');
+}
+
+/** The VAT cell text: "…" while a chosen tax has no known rate, "—" when the tax is missing, else the rate. */
+function taxCellText(line, missingTax) {
+  if (line.tax?.state === 'pending') return '…';
+  return missingTax ? '—' : rateText(line);
 }
 
 function rateText(line) {
@@ -178,7 +193,7 @@ function ProductPanel({ line, position, lineIndex, readOnly, state, missing, api
           <span className="min-w-0 text-xs text-muted-foreground [overflow-wrap:anywhere]" data-testid={`invoice-inbox-review-line-${position}-in-document`}>
             {ui('invoiceInboxReviewProductInDocument', { description: line.description ?? '' })}
           </span>
-          <div className="flex flex-col gap-1.5" role="radiogroup" aria-label={ui('invoiceInboxReviewColDescription')}>
+          <div className="flex flex-col gap-1.5" role="radiogroup" aria-label={ui(COL_LABEL.description)}>
             {candidates.map((candidate, index) => (
               <OptionRow
                 key={candidate.id}
@@ -401,7 +416,7 @@ function lineCells({ line, lineIndex, position, currency, scale, missingTax, mis
         readOnly={readOnly}
         maxLength={MAX_TEXT}
         inputRef={descriptionRef}
-        ariaLabel={ui('invoiceInboxReviewColDescription')}
+        ariaLabel={ui(COL_LABEL.description)}
         className={CELL}
         onCommit={commitLine('description')}
         testId={`invoice-inbox-review-line-${position}-description`}
@@ -410,14 +425,14 @@ function lineCells({ line, lineIndex, position, currency, scale, missingTax, mis
     quantity: number(
       'quantity',
       (value) => formatGroupedNumber(value, { maximumFractionDigits: MAX_QUANTITY_DECIMALS }),
-      ui('invoiceInboxReviewColQuantity'),
+      ui(COL_LABEL.quantity),
       { invalid: missingQuantity },
     ),
     price: number(
       'unitPrice',
       // A missing price is shown empty (and red), not as 0: zero is a valid price.
       (value) => (value == null ? '' : formatMoney(currency, value, scale, { maxDigits: MAX_PRICE_DECIMALS })),
-      ui('invoiceInboxReviewColPrice'),
+      ui(COL_LABEL.price),
       { testSuffix: 'price', invalid: missingPrice },
     ),
     discount: (
@@ -427,7 +442,7 @@ function lineCells({ line, lineIndex, position, currency, scale, missingTax, mis
         display={() => discountText(line)}
         readOnly={readOnly}
         placeholder="0"
-        ariaLabel={ui('invoiceInboxReviewColDiscount')}
+        ariaLabel={ui(COL_LABEL.discount)}
         className={`${CELL} text-right tabular-nums`}
         onCommit={commitLine('discount')}
         testId={`invoice-inbox-review-line-${position}-discount`}
@@ -438,9 +453,9 @@ function lineCells({ line, lineIndex, position, currency, scale, missingTax, mis
     tax: (
       <Input
         readOnly
-        value={line.tax?.state === 'pending' ? '…' : (missingTax ? '—' : rateText(line))}
+        value={taxCellText(line, missingTax)}
         title={taxTitle(line)}
-        aria-label={ui('invoiceInboxReviewColTax')}
+        aria-label={ui(COL_LABEL.tax)}
         aria-invalid={missingTax || undefined}
         className={`${CELL} text-right tabular-nums ${missingTax ? 'border-destructive bg-[var(--status-destructive-bg)] text-destructive' : ''}`}
         data-testid={`invoice-inbox-review-line-${position}-tax`} />
@@ -543,11 +558,11 @@ function LineRow({ line, position, currency, scale, missing, readOnly, showActio
             {trash}
           </div>
           <div className={STACKED_NUMBERS}>
-            <Labeled label={ui('invoiceInboxReviewColQuantity')} data-testid="Labeled__quantity">{cells.quantity}</Labeled>
-            <Labeled label={ui('invoiceInboxReviewColPrice')} data-testid="Labeled__price">{cells.price}</Labeled>
-            <Labeled label={ui('invoiceInboxReviewColDiscount')} data-testid="Labeled__discount">{cells.discount}</Labeled>
-            <Labeled label={ui('invoiceInboxReviewColTax')} data-testid="Labeled__tax">{cells.tax}</Labeled>
-            <Labeled label={ui('invoiceInboxReviewColAmount')} data-testid="Labeled__amount">{cells.amount}</Labeled>
+            <Labeled label={ui(COL_LABEL.quantity)} data-testid="Labeled__quantity">{cells.quantity}</Labeled>
+            <Labeled label={ui(COL_LABEL.price)} data-testid="Labeled__price">{cells.price}</Labeled>
+            <Labeled label={ui(COL_LABEL.discount)} data-testid="Labeled__discount">{cells.discount}</Labeled>
+            <Labeled label={ui(COL_LABEL.tax)} data-testid="Labeled__tax">{cells.tax}</Labeled>
+            <Labeled label={ui(COL_LABEL.amount)} data-testid="Labeled__amount">{cells.amount}</Labeled>
           </div>
         </div>
       ) : (
@@ -725,12 +740,12 @@ export default function InvoiceInboxReviewLines({
         <div>
           {!stacked && (
             <div className={`${GRID} border-b border-border pb-2 text-xs font-semibold text-muted-foreground`} data-testid="invoice-inbox-review-lines-head">
-              <span>{ui('invoiceInboxReviewColDescription')}</span>
-              <span className="text-right">{ui('invoiceInboxReviewColQuantity')}</span>
-              <span className="text-right">{ui('invoiceInboxReviewColPrice')}</span>
-              <span className="text-right">{ui('invoiceInboxReviewColDiscount')}</span>
-              <span className="text-right">{ui('invoiceInboxReviewColTax')}</span>
-              <span className="text-right">{ui('invoiceInboxReviewColAmount')}</span>
+              <span>{ui(COL_LABEL.description)}</span>
+              <span className="text-right">{ui(COL_LABEL.quantity)}</span>
+              <span className="text-right">{ui(COL_LABEL.price)}</span>
+              <span className="text-right">{ui(COL_LABEL.discount)}</span>
+              <span className="text-right">{ui(COL_LABEL.tax)}</span>
+              <span className="text-right">{ui(COL_LABEL.amount)}</span>
               <span />
             </div>
           )}

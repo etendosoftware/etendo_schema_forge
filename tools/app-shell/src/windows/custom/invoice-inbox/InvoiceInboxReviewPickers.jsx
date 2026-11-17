@@ -8,14 +8,15 @@ import { deriveSelectorUrl } from '@/components/copilot/ocr/ocrQuery.js';
  * category and unit selectors, and the contacts' country selector. A search is always a selector
  * `q` (never a raw `_neoWhere`, which the production WAF blocks).
  */
+const PURCHASE_INVOICE = 'purchase-invoice';
 export const PICKER_SELECTORS = Object.freeze({
-  vendor: { spec: 'purchase-invoice', entity: 'header', column: 'C_BPartner_ID', params: { isSOTrx: 'N', isVendor: 'Y' } },
-  product: { spec: 'purchase-invoice', entity: 'lines', column: 'M_Product_ID', params: {} },
+  vendor: { spec: PURCHASE_INVOICE, entity: 'header', column: 'C_BPartner_ID', params: { isSOTrx: 'N', isVendor: 'Y' } },
+  product: { spec: PURCHASE_INVOICE, entity: 'lines', column: 'M_Product_ID', params: {} },
   category: { spec: 'product', entity: 'product', column: 'M_Product_Category_ID', params: {} },
   uom: { spec: 'product', entity: 'product', column: 'C_UOM_ID', params: {} },
   country: { spec: 'contacts', entity: 'locationAddress', column: 'C_Country_ID', params: {} },
   // The SAME selector the purchase-invoice lines use for their tax (the `tax` field, inputMode selector).
-  tax: { spec: 'purchase-invoice', entity: 'lines', column: 'C_Tax_ID', params: {} },
+  tax: { spec: PURCHASE_INVOICE, entity: 'lines', column: 'C_Tax_ID', params: {} },
 });
 
 const NO_OPTIONS = Object.freeze([]);

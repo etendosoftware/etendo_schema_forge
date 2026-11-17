@@ -793,3 +793,17 @@ describe('ETP-6050 S2 — product.new without a resolved name', () => {
     assert.equal(newProductComplete(next.lines[0]), true);
   });
 });
+
+describe('omitKeys', () => {
+  it('returns a copy without the keys, keeping the other keys in order and nested values shared', async () => {
+    const { omitKeys } = await import('../invoiceInboxReviewModel.js');
+    const nested = { a: 1 };
+    const source = { id: 1, name: 'x', keep: nested, state: 'linked', details: {} };
+    const copy = omitKeys(source, ['id', 'name', 'details', 'missing']);
+    assert.deepEqual(Object.keys(copy), ['keep', 'state']);
+    assert.equal(copy.keep, nested);
+    assert.equal(source.id, 1, 'the source is untouched');
+    assert.deepEqual(omitKeys({}, ['a']), {});
+  });
+});
+

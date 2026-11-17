@@ -406,10 +406,22 @@ export function normalizeNumber(field, parsed) {
   return value < spec.min || value > spec.max ? { ok: false } : { ok: true, value };
 }
 
+/** A line number as a comparable value: null for empty (0 when `absentIsZero`), else its numeric value. */
+function comparableNumber(value, absentIsZero) {
+  if (value == null || value === '') return absentIsZero ? 0 : null;
+  return Number(value);
+}
+
 /** Numeric equality of two optional line numbers (null equals null; an absent discount equals 0). */
 export function sameNumber(a, b, { absentIsZero = false } = {}) {
-  const norm = (v) => (v == null || v === '' ? (absentIsZero ? 0 : null) : Number(v));
-  return norm(a) === norm(b);
+  return comparableNumber(a, absentIsZero) === comparableNumber(b, absentIsZero);
+}
+
+/** A shallow copy of `obj` without the given keys (nested values are shared, key order is kept). */
+export function omitKeys(obj, keys) {
+  const copy = { ...obj };
+  for (const key of keys) delete copy[key];
+  return copy;
 }
 
 const defined = (obj) => Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
@@ -465,9 +477,14 @@ function applyTaxChoice(line, taxId, hint) {
     return;
   }
   const rate = hint.taxRate != null && Number.isFinite(Number(hint.taxRate)) ? Number(hint.taxRate) : null;
-  line.tax = { state: rate == null ? 'pending' : 'resolved', matchedBy: 'manual', id: taxId, name: hint.taxName ?? '', ...(rate == null ? {} : { rate }) };
-  if (rate == null) delete line.taxRate;
-  else line.taxRate = rate;
+  const known = rate != null;
+  line.tax = { state: known ? 'resolved' : 'pending', matchedBy: 'manual', id: taxId, name: hint.taxName ?? '' };
+  if (known) {
+    line.tax.rate = rate;
+    line.taxRate = rate;
+  } else {
+    delete line.taxRate;
+  }
 }
 
 function newLine(lines) {
@@ -496,68 +513,81 @@ function withVendor(document, vendor) {
  *   copies of what the operation picked (the wire operation carries ids only)
  */
 export function applyOperationLocally(document, op, hint = {}) {
-  const doc = document ?? {};
-  const header = doc.header ?? {};
-  const lines = Array.isArray(doc.lines) ? doc.lines : [];
-  switch (op?.op) {
-    case 'setHeader': {
-      const next = { ...header };
-      if ('documentNo' in op) next.documentNo = op.documentNo;
-      if ('invoiceDate' in op) {
-        if (op.invoiceDate) next.invoiceDate = op.invoiceDate;
-        else delete next.invoiceDate;
-      }
-      return { ...doc, header: next };
-    }
-    case 'setLine':
-      return { ...doc, lines: mapLine(lines, op.index, (line) => setLinePatch(line, op, hint)) };
-    case 'addLine':
-      return { ...doc, lines: [...lines, newLine(lines)] };
-    case 'removeLine':
-      return { ...doc, lines: lines.filter((line, position) => indexOf(line, position) !== op.index) };
-    case 'selectVendor': {
-      const vendor = header.vendor ?? {};
-      return withVendor(doc, {
-        ...vendor, state: 'linked', matchedBy: 'manual', id: op.id, name: hint.name ?? vendor.name,
-        details: { name: hint.name ?? '', taxId: hint.taxId ?? '', city: hint.city ?? '' },
-      });
-    }
-    case 'newVendor': {
-      const { id: _id, name: _name, matchedBy: _matchedBy, details: _details, ...vendor } = header.vendor ?? {};
-      return withVendor(doc, {
-        ...vendor, state: 'new', candidates: vendor.candidates ?? [], extracted: { ...(vendor.extracted ?? {}), ...(op.fields ?? {}) },
-      });
-    }
-    case 'selectProduct':
-      return {
-        ...doc,
-        lines: mapLine(lines, op.index, (line) => {
-          const { new: _new, ...product } = line.product ?? {};
-          return {
-            ...line,
-            product: {
-              ...product, state: 'linked', matchedBy: 'manual', id: op.id, name: hint.name,
-              details: { name: hint.name ?? '', searchKey: hint.searchKey ?? '' },
-            },
-          };
-        }),
-      };
-    case 'newProduct':
-      return {
-        ...doc,
-        lines: mapLine(lines, op.index, (line) => {
-          const product = line.product ?? {};
-          const fresh = { name: line.description ?? '', ...(product.new ?? {}) };
-          for (const key of ['name', 'categoryId', 'uomId']) if (key in op) fresh[key] = op[key];
-          if ('categoryId' in op) fresh.category = op.categoryId == null ? null : (hint.category ?? fresh.category);
-          if ('uomId' in op) fresh.uom = op.uomId == null ? null : (hint.uom ?? fresh.uom);
-          return { ...line, product: { ...product, state: 'new', id: null, new: fresh } };
-        }),
-      };
-    default:
-      return doc;
-  }
+  const apply = LOCAL_OPERATIONS[op?.op];
+  return apply ? apply(document ?? {}, op, hint) : (document ?? {});
 }
+
+const linesOf = (doc) => (Array.isArray(doc.lines) ? doc.lines : []);
+
+function localSetHeader(doc, op) {
+  const next = { ...doc.header };
+  if ('documentNo' in op) next.documentNo = op.documentNo;
+  if ('invoiceDate' in op) {
+    if (op.invoiceDate) next.invoiceDate = op.invoiceDate;
+    else delete next.invoiceDate;
+  }
+  return { ...doc, header: next };
+}
+
+function localSelectVendor(doc, op, hint) {
+  const vendor = doc.header?.vendor ?? {};
+  return withVendor(doc, {
+    ...vendor, state: 'linked', matchedBy: 'manual', id: op.id, name: hint.name ?? vendor.name,
+    details: { name: hint.name ?? '', taxId: hint.taxId ?? '', city: hint.city ?? '' },
+  });
+}
+
+function localNewVendor(doc, op) {
+  const vendor = omitKeys(doc.header?.vendor ?? {}, ['id', 'name', 'matchedBy', 'details']);
+  return withVendor(doc, {
+    ...vendor, state: 'new', candidates: vendor.candidates ?? [], extracted: { ...(vendor.extracted ?? {}), ...(op.fields ?? {}) },
+  });
+}
+
+function localSelectProduct(doc, op, hint) {
+  return {
+    ...doc,
+    lines: mapLine(linesOf(doc), op.index, (line) => ({
+      ...line,
+      product: {
+        ...omitKeys(line.product ?? {}, ['new']),
+        state: 'linked', matchedBy: 'manual', id: op.id, name: hint.name,
+        details: { name: hint.name ?? '', searchKey: hint.searchKey ?? '' },
+      },
+    })),
+  };
+}
+
+/** The display copy of a picked category / unit name: null when cleared, else the hint, else what was there. */
+function pickedName(id, hintName, current) {
+  if (id == null) return null;
+  return hintName ?? current;
+}
+
+function localNewProduct(doc, op, hint) {
+  return {
+    ...doc,
+    lines: mapLine(linesOf(doc), op.index, (line) => {
+      const product = line.product ?? {};
+      const fresh = { name: line.description ?? '', ...(product.new ?? {}) };
+      for (const key of ['name', 'categoryId', 'uomId']) if (key in op) fresh[key] = op[key];
+      if ('categoryId' in op) fresh.category = pickedName(op.categoryId, hint.category, fresh.category);
+      if ('uomId' in op) fresh.uom = pickedName(op.uomId, hint.uom, fresh.uom);
+      return { ...line, product: { ...product, state: 'new', id: null, new: fresh } };
+    }),
+  };
+}
+
+const LOCAL_OPERATIONS = Object.freeze({
+  setHeader: localSetHeader,
+  setLine: (doc, op, hint) => ({ ...doc, lines: mapLine(linesOf(doc), op.index, (line) => setLinePatch(line, op, hint)) }),
+  addLine: (doc) => ({ ...doc, lines: [...linesOf(doc), newLine(linesOf(doc))] }),
+  removeLine: (doc, op) => ({ ...doc, lines: linesOf(doc).filter((line, position) => indexOf(line, position) !== op.index) }),
+  selectVendor: localSelectVendor,
+  newVendor: localNewVendor,
+  selectProduct: localSelectProduct,
+  newProduct: localNewProduct,
+});
 
 /** The review answer with each pending `{op, hint}` applied in order (the pending edits on screen). */
 export function applyPendingToReview(review, pending) {
