@@ -1073,7 +1073,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
       for (const th of colgroups) expect(th).toHaveAttribute('colspan', '4');
       const subs = headerRows[1].querySelectorAll('th[scope="col"]');
       expect(subs).toHaveLength(24);
-      expect([...subs].slice(0, 4).map((th) => th.textContent)).toEqual(['dynamicReportAmount', expect.stringMatching(/^dynamicReportCompared\(.+\)$/), 'dynamicReportVariation', 'dynamicReportVariationPct']);
+      expect([...subs].slice(0, 4).map((th) => th.textContent)).toEqual(['dynamicReportAmount', expect.stringMatching(/^dynamicReportCompared \(.+\)$/), 'dynamicReportVariation', 'dynamicReportVariationPct']);
     });
 
     it('Comparado names what it is compared against, under the header, and only with a comparison', async () => {

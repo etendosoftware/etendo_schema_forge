@@ -171,7 +171,7 @@ export default function DynamicReportTable({ rows, groups, mode, expanded, onTog
           <tr className="text-xs text-muted-foreground bg-muted/40 border-b border-border">
             {groups.map((g) => g.columns.map((c, i) => (
               <th key={`${g.pos}-${c}`} scope="col" className={cn(th, 'text-right whitespace-nowrap', i === 0 && 'border-l border-border/60')}>
-                {subLabels[c]}
+                {subLabels[c]}{c === 'compared' && g.comparedLabel ? ' ' : ''}
                 {c === 'compared' && g.comparedLabel && (
                   <span className="block text-[10px] font-normal normal-case tracking-normal" data-testid="DynamicReportTable__comparedLabel">({g.comparedLabel})</span>
                 )}
