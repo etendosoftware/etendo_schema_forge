@@ -98,6 +98,15 @@ describe('PortalDecisionActions — Aceptar', () => {
     expect(screen.queryByTestId('portal-decision-accept')).not.toBeInTheDocument();
   });
 
+  it('lays Aceptar then Rechazar out as items of the side panel row (inline variant)', () => {
+    renderActions(quotation(OPEN), { variant: 'inline' });
+
+    const panel = screen.getByTestId('portal-decision-panel');
+    expect(panel).toHaveClass('contents');
+    const [first, second] = panel.querySelectorAll('button');
+    expect([first.dataset.testid, second.dataset.testid]).toEqual(['portal-decision-accept', 'portal-decision-reject']);
+  });
+
   it('labels the mobile bar button as accepting the quotation, under its hint', () => {
     renderActions(quotation(OPEN), { variant: 'bar' });
 

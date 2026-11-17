@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Check, MailCheck, X } from 'lucide-react';
+import { CheckIcon, XIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,7 @@ import {
 import {
   PORTAL_ACCEPT_ENABLED, PORTAL_REJECT_REASONS, PORTAL_REJECT_REASON_OTHER,
 } from './portalPresentation.js';
+import { PORTAL_FIGMA_BUTTON_PRIMARY, PORTAL_FIGMA_BUTTON_SECONDARY } from './PortalBits.jsx';
 
 const MAX_REASON_TEXT = 2000;
 
@@ -33,7 +35,10 @@ const ERROR_KEYS = Object.freeze({
  * never applies anything: it emails a confirmation to the main recipient of the original send, and
  * the panel then says where it went (masked).
  *
- * @param {'panel'|'bar'} variant the desktop panel's button row, or the mobile bottom bar
+ * @param {'panel'|'bar'|'inline'} variant the panel's button row, the mobile bottom bar, or
+ *   `inline`: the desktop side panel of the Figma (2026-11-17) — Aceptar, Rechazar as the Figma's
+ *   32px buttons, laid out as items of the caller's own wrapping row (the caller adds "Descargar
+ *   PDF" after them); notices and errors take a full line at the end of that row.
  */
 export default function PortalDecisionActions({
   apiFetch, token, document, tenantName, onInvalid, variant = 'panel',
@@ -49,6 +54,9 @@ export default function PortalDecisionActions({
 
   const acceptShown = PORTAL_ACCEPT_ENABLED && decision.acceptAvailable;
   const bar = variant === 'bar';
+  const inline = variant === 'inline';
+  // As items of the caller's wrapping row, a notice takes a whole line after the buttons.
+  const noticeClass = inline ? 'order-last basis-full' : '';
 
   const submit = async (payload) => {
     setBusy(true);
@@ -69,17 +77,25 @@ export default function PortalDecisionActions({
     }
   };
 
-  if (sentTo != null) return <DecisionSentNotice email={sentTo} bar={bar} data-testid="DecisionSentNotice__a48dad" />;
+  if (sentTo != null) return <DecisionSentNotice email={sentTo} bar={bar} className={noticeClass} data-testid="DecisionSentNotice__a48dad" />;
   if (!decision.canDecide) {
     return (
       <DecisionBlockedNotice
         reason={decision.blockedReason}
         tenantName={tenantName}
+        className={noticeClass}
         data-testid="DecisionBlockedNotice__a48dad" />
     );
   }
 
-  const buttons = (
+  const buttons = inline ? (
+    <InlineDecisionButtons
+      acceptShown={acceptShown}
+      busy={busy}
+      onReject={() => setRejectOpen(true)}
+      onAccept={() => submit({ decision: 'ACCEPT' })}
+      data-testid="InlineDecisionButtons__a48dad" />
+  ) : (
     <DecisionButtons
       bar={bar}
       acceptShown={acceptShown}
@@ -91,7 +107,7 @@ export default function PortalDecisionActions({
 
   return (
     <div
-      className={cn('flex flex-col gap-2.5', bar ? 'rounded-xl border border-border bg-card p-4' : '')}
+      className={cn(inline ? 'contents' : 'flex flex-col gap-2.5', bar ? 'rounded-xl border border-border bg-card p-4' : '')}
       data-testid={bar ? 'portal-decision-bar' : 'portal-decision-panel'}
     >
       {bar && acceptShown ? (
@@ -101,7 +117,7 @@ export default function PortalDecisionActions({
       ) : null}
       {buttons}
       {error ? (
-        <p className="text-sm text-destructive" role="alert" data-testid="portal-decision-error">
+        <p className={cn('text-sm text-destructive', noticeClass)} role="alert" data-testid="portal-decision-error">
           {ui(error, { tenantName: tenantName ?? '' })}
         </p>
       ) : null}
@@ -121,12 +137,12 @@ export default function PortalDecisionActions({
  * app's `RejectQuotationModal`, which lists and creates the tenant's reasons through NEO.
  */
 /** The request left: the confirmation email went to the masked address. */
-function DecisionSentNotice({ email, bar }) {
+function DecisionSentNotice({ email, bar, className }) {
   const ui = useUI();
   return (
     <p
       role="status"
-      className={cn('flex items-start gap-2 text-sm', bar ? 'rounded-xl border border-border bg-card p-4' : '')}
+      className={cn('flex items-start gap-2 text-sm', bar ? 'rounded-xl border border-border bg-card p-4' : '', className)}
       data-testid="portal-decision-sent"
     >
       <MailCheck
@@ -139,14 +155,33 @@ function DecisionSentNotice({ email, bar }) {
 }
 
 /** Why the quotation cannot be answered now; nothing when it is simply no longer pending. */
-function DecisionBlockedNotice({ reason, tenantName }) {
+function DecisionBlockedNotice({ reason, tenantName, className }) {
   const ui = useUI();
   const key = ERROR_KEYS[reason];
   if (!key || reason === PORTAL_DECISION_ERROR.notPending) return null;
   return (
-    <p className="text-sm text-muted-foreground" data-testid="portal-decision-blocked">
+    <p className={cn('text-sm text-muted-foreground', className)} data-testid="portal-decision-blocked">
       {ui(key, { tenantName: tenantName ?? '' })}
     </p>
+  );
+}
+
+/** The Figma side panel's buttons: Aceptar (primary) first, then Rechazar. */
+function InlineDecisionButtons({ acceptShown, busy, onReject, onAccept }) {
+  const ui = useUI();
+  return (
+    <>
+      {acceptShown ? (
+        <button type="button" className={PORTAL_FIGMA_BUTTON_PRIMARY} onClick={onAccept} disabled={busy} data-testid="portal-decision-accept">
+          <CheckIcon size={20} aria-hidden="true" data-testid="Check__a48dad" />
+          <span className="px-1">{ui('portalDecisionAccept')}</span>
+        </button>
+      ) : null}
+      <button type="button" className={PORTAL_FIGMA_BUTTON_SECONDARY} onClick={onReject} disabled={busy} data-testid="portal-decision-reject">
+        <XIcon size={20} className="text-[#81848F]" aria-hidden="true" data-testid="X__a48dad" />
+        <span className="px-1">{ui('portalDecisionReject')}</span>
+      </button>
+    </>
   );
 }
 

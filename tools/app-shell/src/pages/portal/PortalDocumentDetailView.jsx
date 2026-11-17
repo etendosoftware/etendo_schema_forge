@@ -19,9 +19,12 @@ import { portalPdfFileName } from '@/lib/portal/portalInvoices.js';
 import { saveBlobAsFile } from '@/lib/portal/portalDownload.js';
 import {
   PortalDate, PortalMain, PortalMoney, PortalPaymentStatus, PortalSection, PORTAL_SECTION_TITLE,
+  PORTAL_FIGMA_BUTTON_SECONDARY,
 } from './PortalBits.jsx';
+import { DownloadSimpleIcon, XIcon } from '@phosphor-icons/react';
 import { PORTAL_KIND_META, documentLabelKey } from './portalPresentation.js';
 import PortalDecisionActions from './PortalDecisionActions.jsx';
+import { PortalDetailsCard, PortalRelatedList } from './PortalDetailPanel.jsx';
 
 /** Quantities may be fractional (kg, hours): never round them to an integer. */
 function formatQuantity(value) {
@@ -116,6 +119,16 @@ export default function PortalDocumentDetailView({
     if (pdf.blob) saveBlobAsFile(pdf.blob, fileName);
   }, [pdf.blob, fileName]);
 
+  // "Documentos relacionados" refresh: re-reads the document quietly (no loading screen) and
+  // keeps everything else on the page as it is.
+  const [refreshingRelated, setRefreshingRelated] = useState(false);
+  const refreshRelated = useCallback(() => {
+    setRefreshingRelated(true);
+    fetchPortalDocument(apiFetch, token, kind, id).then(setDocument).catch((error) => {
+      if (error?.code === PORTAL_ERROR.invalidLink) onInvalid();
+    }).finally(() => setRefreshingRelated(false));
+  }, [apiFetch, token, kind, id, onInvalid]);
+
   const plural = ui(PORTAL_KIND_META[kind].pluralKey);
   const back = () => onNavigate({ view: 'list', kind });
 
@@ -195,35 +208,64 @@ export default function PortalDocumentDetailView({
         </section>
 
         {/* Right pane */}
-        <aside className="flex min-w-0 flex-col gap-4 md:w-[380px] md:flex-none md:gap-0 md:overflow-y-auto md:border-l md:border-border">
-          <div className="hidden flex-col gap-2.5 border-b border-border p-3.5 md:flex">
-            <div className="flex flex-col">
-              <span className="text-base font-semibold leading-6">{title}</span>
-              <span className="text-xs leading-4 text-muted-foreground">{ui('portalIssuedBy', { name: issuer })}</span>
+        <aside className="flex min-w-0 flex-col gap-4 md:w-[320px] md:flex-none md:gap-0 md:overflow-y-auto md:border-l md:border-border">
+          {/* Desktop panel (Figma, 2026-11-17): the title with "Emitido por" and the close button,
+              then "Botones principales" — Aceptar / Rechazar where they apply, Descargar PDF. */}
+          <div className="hidden items-start justify-between gap-2 border-b border-[#E3E7EC] p-3 md:flex">
+            <div className="flex min-w-0 flex-col">
+              <span className="text-xl font-medium leading-7 text-[#1B1A1F]" data-testid="portal-panel-title">{title}</span>
+              <span className="text-xs leading-4 text-[#6B7280]">{ui('portalIssuedBy', { name: issuer })}</span>
             </div>
-            {/* Part C: Aceptar / Rechazar, where the board draws them (before Descargar PDF). */}
+            <button
+              type="button"
+              aria-label={ui('close')}
+              title={ui('close')}
+              onClick={back}
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[#81848F] hover:bg-[#F3F5F9]"
+              data-testid="portal-panel-close"
+            >
+              <XIcon size={20} aria-hidden="true" data-testid="X__6a1d3b" />
+            </button>
+          </div>
+          <div className="hidden flex-wrap gap-2 px-3 pt-2 md:flex" data-testid="portal-panel-buttons">
             <PortalDecisionActions
               apiFetch={apiFetch}
               token={token}
               document={document}
               tenantName={identity?.tenantName}
               onInvalid={onInvalid}
+              variant="inline"
               data-testid="PortalDecisionActions__6a1d3b" />
             {document.hasPdf ? (
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={downloadPdf} disabled={!pdfReady} data-testid="portal-download-pdf">
-                  <Download
-                    className="mr-1.5 h-4 w-4"
-                    aria-hidden="true"
-                    data-testid="Download__6a1d3b" />{ui('portalDownloadPdf')}
-                </Button>
-              </div>
+              <button type="button" className={PORTAL_FIGMA_BUTTON_SECONDARY} onClick={downloadPdf} disabled={!pdfReady} data-testid="portal-download-pdf">
+                <DownloadSimpleIcon size={20} className="text-[#81848F]" aria-hidden="true" data-testid="DownloadSimple__6a1d3b" />
+                <span className="px-1">{ui('portalDownloadPdf')}</span>
+              </button>
             ) : null}
           </div>
 
-          {/* The app's own preview cards (`windows/custom/shared/preview-cards`), as the quotation,
-              order, invoice and shipment previews use them; they bring their own margins. */}
-          <div className="flex flex-col pb-4" data-testid="portal-document-cards-panel">
+          {/* "Tabla": the details card and the related documents (desktop). */}
+          <div className="hidden flex-col gap-4 py-3 md:flex" data-testid="portal-document-details">
+            <div className="px-3">
+              <PortalDetailsCard document={document} data-testid="PortalDetailsCard__6a1d3b" />
+            </div>
+            {document.kind === 'INVOICE' && document.installments.length > 1 ? (
+              <div className="px-3"><Installments document={document} data-testid="Installments__6a1d3b" /></div>
+            ) : null}
+            <div className="px-3">
+              <PortalRelatedList
+                related={document.related}
+                refreshing={refreshingRelated}
+                onRefresh={refreshRelated}
+                onOpen={(item) => onNavigate({ view: 'doc', kind: item.kind, id: item.id })}
+                data-testid="PortalRelatedList__6a1d3b" />
+            </div>
+          </div>
+
+          {/* Mobile: the app's own preview cards (`windows/custom/shared/preview-cards`), as the
+              quotation, order, invoice and shipment previews use them; they bring their own
+              margins. The desktop panel above follows the Figma instead. */}
+          <div className="flex flex-col pb-4 md:hidden" data-testid="portal-document-cards-panel">
             <PortalSummary document={document} data-testid="PortalSummary__6a1d3b" />
             {document.kind === 'INVOICE' && document.installments.length > 1 ? (
               <div className="mx-4 mt-5"><Installments document={document} data-testid="Installments__6a1d3b" /></div>

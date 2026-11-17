@@ -3,6 +3,7 @@
 // @covers tools/app-shell/src/pages/portal/PortalHomeView.jsx
 // @covers tools/app-shell/src/pages/portal/PortalDocumentListView.jsx
 // @covers tools/app-shell/src/pages/portal/PortalDocumentDetailView.jsx
+// @covers tools/app-shell/src/pages/portal/PortalDetailPanel.jsx
 // @covers tools/app-shell/src/pages/portal/PortalBits.jsx
 // @covers tools/app-shell/src/pages/portal/PortalArrivalNotice.jsx
 // Mocks BEFORE imports.
@@ -1023,6 +1024,21 @@ describe('PortalPage — document detail', () => {
     await waitFor(() => expect(screen.getByTestId('portal-view-title').textContent).toBe('portalKindOrder PV/0001'));
     expect(callsTo('/documents/order/ord-1')).toHaveLength(1);
     expect(urlView()).toEqual({ view: 'doc', kind: 'ORDER', id: 'ord-1' });
+  });
+
+  it('refreshes the related documents in place, without the loading screen', async () => {
+    const user = userEvent.setup();
+    responses.me = jsonResponse(WITH_ENTRY);
+    renderPortal();
+    await detailReady();
+    const reads = callsTo('/documents/invoice/inv-1').filter(([path]) => !path.endsWith('/pdf')).length;
+
+    await user.click(screen.getByTestId('portal-related-refresh'));
+
+    await waitFor(() => expect(callsTo('/documents/invoice/inv-1')
+      .filter(([path]) => !path.endsWith('/pdf'))).toHaveLength(reads + 1));
+    expect(screen.queryByTestId('portal-document-loading')).not.toBeInTheDocument();
+    expect(screen.getByTestId('portal-related-panel')).toBeInTheDocument();
   });
 
   it('says the document is not available when it is not found', async () => {

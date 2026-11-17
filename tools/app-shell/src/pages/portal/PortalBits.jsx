@@ -170,6 +170,15 @@ export function PortalValidUntil({ document }) {
   );
 }
 
+/** The Figma's shadow-xs, for the screens aligned with the designer's spec. */
+export const PORTAL_FIGMA_SHADOW = 'shadow-[0_1px_2px_rgba(27,26,31,0.05)]';
+
+/** The Figma's 32px primary button (padding 4px 8px, #325CFF, r8, Inter 500 14/24 white). */
+export const PORTAL_FIGMA_BUTTON_PRIMARY = 'inline-flex h-8 items-center rounded-lg bg-[#325CFF] px-2 py-1 text-sm font-medium leading-6 text-white transition-colors hover:bg-[#2849CC] disabled:pointer-events-none disabled:opacity-50';
+
+/** The Figma's 32px secondary button (white, 1px #C7CBD3, shadow-xs, r8, Inter 500 14/24). */
+export const PORTAL_FIGMA_BUTTON_SECONDARY = `inline-flex h-8 items-center rounded-lg border border-[#C7CBD3] bg-white px-2 py-1 text-sm font-medium leading-6 text-[#1B1A1F] transition-colors hover:bg-[#F3F5F9] disabled:pointer-events-none disabled:opacity-50 ${PORTAL_FIGMA_SHADOW}`;
+
 /** Focus ring every clickable portal row shows when reached by keyboard. */
 export const PORTAL_ROW_FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 

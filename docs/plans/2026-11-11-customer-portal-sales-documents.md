@@ -1009,6 +1009,18 @@ arrives, so every shared piece takes the new look as an opt-in (`PortalSection v
   and wrap, a recent row wraps rather than clips, a 4–5 digit tile figure steps down in size, and
   the collapsed "Mis documentos" badge reads "99+" past 99; chart
   months are three capitalised letters ("Sep", not "sept"), ticks "1,5K", sparse dotted gridlines.
+- **Rail = Figma component "Portal Cliente Navigation Rail" (Expandido / Comprimido).** 62px header,
+  224×32 company selector, group headings, 32px items (no kind icons in "Mis documentos"), the
+  banner pushed to the bottom of the menu list, footer items with chevrons; collapsed: 36×36 grey
+  buttons and the 18px #F3164E count badge. Desktop page background #F3F5F9.
+- **Document detail side panel (desktop, Figma 2026-11-17).** 320px panel: title, "Emitido por" and
+  a close button (back to the list); one wrapping row of 32px buttons — Aceptar (primary) and
+  Rechazar where the quotation can be answered (the decision popups behind them are unchanged), and
+  Descargar PDF; the "Detalles" card (total header; date, validity, status, tax base, taxes, plus
+  the invoice rows the story requires) and "Documentos relacionados" with a refresh button that
+  re-reads the document in place. Not built: "Comentarios" (on hold, no backend) and the greyed
+  "Pedido – Pendiente de creación" placeholder (user decision). The mobile detail keeps the app's
+  preview cards.
 
 ---
 
