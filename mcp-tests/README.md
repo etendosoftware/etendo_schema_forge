@@ -159,6 +159,15 @@ harness-marker rows, a half-finished earlier seed) and only warns about what it 
 suite sha, rule version, catalogue sha, fixture hash…), when either run is unofficial, or when run B
 reuses run A's `seedId` on any target. Concurrency may differ; it is shown, not compared.
 
+### Files handed to the agent (ETP-5850)
+
+A v2 probe may list `files: [<name>, …]`: files under `fixtures/files/` that the user "hands
+over" (the prompt names them). The agent then gets one tool next to the MCP's, `upload_file
+(file_name, url)`, which PUTs that file's raw bytes to a URL — what a client with file access does
+with the `curl` a server hands out. It knows no platform: the MCP decides how a file gets in (an
+upload URL in Etendo GO; a platform whose tool wants the bytes inline as an argument cannot be fed
+this way). Its calls are recorded like any other. An unknown name, or a path, fails the suite load.
+
 ### The "Etendo + rutina" column (child KR of KR2.1, ETP-6236)
 
 The Etendo GO MCP can save **routines** (`etendo_routine`): a known flow run in one call with
