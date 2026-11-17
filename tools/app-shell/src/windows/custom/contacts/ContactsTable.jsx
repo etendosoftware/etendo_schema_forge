@@ -14,6 +14,7 @@ import { useContactsCacheInvalidation } from './contactsCacheInvalidation';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { stripUrlScheme, toWebsiteHref } from './contactsWebUrl.js';
 import ContactsEmptyState from './ContactsEmptyState.jsx';
+import { sanitizeDashJoinedIdentifier } from '@/lib/locationAddress.js';
 
 const filters = ['searchKey', 'name', 'etgoFirstname', 'etgoLastname'];
 
@@ -222,7 +223,16 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
         // minus prefix is required, a trailing ` desc` makes Openbravo miss the
         // identifier path and answer 500.
         sortMode: 'identifier',
-        render: (row) => <TextCell value={row['eTGOLocation$_identifier']} data-testid="TextCell__5c74a8" />,
+        render: (row) => {
+          const locationIdentifier = row['eTGOLocation$_identifier'];
+          // Guarded: sanitizeDashJoinedIdentifier coerces a non-string (null/undefined, the
+          // "no address" case) to '', which would defeat TextCell's `value ?? '—'` fallback.
+          return (
+            <TextCell
+              value={locationIdentifier ? sanitizeDashJoinedIdentifier(locationIdentifier) : locationIdentifier}
+              data-testid="TextCell__5c74a8" />
+          );
+        },
       },
       {
         key: 'etgoWeb', column: 'EM_Etgo_Web', type: 'string', label: t('webColumn'),

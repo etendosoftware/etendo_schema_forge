@@ -3,6 +3,7 @@ import { DataTable } from '@/components/contract-ui';
 import { aggregateProducts } from './warehouseUtils';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { sanitizeDashJoinedIdentifier } from '@/lib/locationAddress.js';
 const inFlightCounts = new Map();
 
 async function fetchProductCount(warehouseId, apiFetch, apiBaseUrl) {
@@ -90,7 +91,7 @@ const columns = [
     render: (row) => {
       const label = row['locationAddress$_identifier'] ?? row.locationAddress ?? null;
       if (!label) return <span className="text-muted-foreground text-sm">—</span>;
-      return <span className="text-sm text-[hsl(var(--foreground))]">{label}</span>;
+      return <span className="text-sm text-[hsl(var(--foreground))]">{sanitizeDashJoinedIdentifier(label)}</span>;
     },
   },
   {
