@@ -142,6 +142,16 @@ function mcpWellKnownPlugin() {
   };
 }
 
+// Every `@radix-ui/*` package that @etendosoftware/app-shell-core depends on. Used for both
+// `resolve.dedupe` and `optimizeDeps.include`, so they cannot drift apart.
+const CORE_RADIX_DEPS = [
+  '@radix-ui/react-collapsible', '@radix-ui/react-dialog',
+  '@radix-ui/react-dropdown-menu', '@radix-ui/react-label',
+  '@radix-ui/react-popover', '@radix-ui/react-select',
+  '@radix-ui/react-separator', '@radix-ui/react-slot',
+  '@radix-ui/react-switch', '@radix-ui/react-tooltip',
+];
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   // Target Etendo instance for dev proxy. Override via ETENDO_URL in .env.local
@@ -327,11 +337,7 @@ export default defineConfig(({ mode }) => {
       'react', 'react-dom', 'react-router-dom', 'sonner', 'lucide-react',
       'clsx', 'cmdk', 'next-themes', 'date-fns', 'react-day-picker',
       'class-variance-authority', 'tailwind-merge',
-      '@radix-ui/react-collapsible', '@radix-ui/react-dialog',
-      '@radix-ui/react-dropdown-menu', '@radix-ui/react-label',
-      '@radix-ui/react-popover', '@radix-ui/react-select',
-      '@radix-ui/react-separator', '@radix-ui/react-slot',
-      '@radix-ui/react-switch', '@radix-ui/react-tooltip',
+      ...CORE_RADIX_DEPS,
     ],
     // Ensure modules imported from artifacts/ resolve to app-shell node_modules
     modules: [resolve(__dirname, 'node_modules'), 'node_modules'],
@@ -365,7 +371,13 @@ export default defineConfig(({ mode }) => {
     // extra requests, 30+ seconds just for page.goto() to settle in CI (ETP-4431
     // / ETP-4433). Explicitly including it forces pre-bundling (and therefore
     // tree-shaking) regardless of the exclusion above.
-    include: ['react-day-picker'],
+    //
+    // Radix needs the same, ALL packages together: they keep open layers in a module-level
+    // registry. A direct `@radix-ui/react-dialog` import makes Vite pre-bundle the Dialog while
+    // the Popover stays raw, so they get separate registries and a popover inside a modal keeps
+    // the `pointer-events: none` Radix puts on <body> (ETP-6229: date clicks in a modal did
+    // nothing). One esbuild pass shares the layer chunks. Dev only; Rollup bundles one copy.
+    include: ['react-day-picker', ...CORE_RADIX_DEPS],
   },
   server: {
     allowedHosts: env.VITE_ALLOWED_HOSTS ? env.VITE_ALLOWED_HOSTS.split(',') : [],
