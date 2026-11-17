@@ -26,7 +26,7 @@ function jsonResponse(body, { status = 200 } = {}) {
 }
 
 const quotation = (decision) => ({ kind: 'QUOTATION', id: 'q-1', documentNo: 'PR/0001', decision });
-const OPEN = { canDecide: true, blockedReason: null, acceptAvailable: true };
+const OPEN = { canDecide: true, blockedReason: null, acceptAvailable: true, maskedEmail: 'co•••@acme.com' };
 
 function renderActions(document, { apiFetch = vi.fn(), onInvalid = vi.fn(), variant } = {}) {
   render(
@@ -84,14 +84,33 @@ describe('PortalDecisionActions — when it shows', () => {
 });
 
 describe('PortalDecisionActions — Aceptar', () => {
-  it('asks to accept and says where the confirmation went', async () => {
+  it('asks first, naming where the confirmation goes, and sends nothing on Cancelar', async () => {
+    const user = userEvent.setup();
+    const apiFetch = vi.fn();
+    renderActions(quotation(OPEN), { apiFetch });
+
+    await user.click(screen.getByTestId('portal-decision-accept'));
+
+    expect(screen.getByTestId('portal-accept-modal')).toHaveTextContent('portalAcceptConfirmTitle');
+    expect(screen.getByTestId('portal-decision-email')).toHaveTextContent('co•••@acme.com');
+    await user.click(screen.getByTestId('portal-accept-cancel'));
+    await waitFor(() => expect(screen.queryByTestId('portal-accept-modal')).not.toBeInTheDocument());
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('sends on Continuar, then says to check the email, and keeps saying where it went', async () => {
     const user = userEvent.setup();
     const apiFetch = vi.fn(async () => jsonResponse({ maskedEmail: 'c***@acme.com' }));
     renderActions(quotation(OPEN), { apiFetch });
 
     await user.click(screen.getByTestId('portal-decision-accept'));
+    await user.click(screen.getByTestId('portal-accept-continue'));
 
-    await waitFor(() => expect(screen.getByTestId('portal-decision-sent')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('portal-check-email-modal')).toBeInTheDocument());
+    expect(screen.getByTestId('portal-check-email-modal'))
+      .toHaveTextContent(t('portalCheckEmailDescription', { email: 'c***@acme.com' }));
+    await user.click(screen.getByTestId('portal-check-email-ok'));
+    await waitFor(() => expect(screen.queryByTestId('portal-check-email-modal')).not.toBeInTheDocument());
     expect(screen.getByTestId('portal-decision-sent').textContent).toBe(t('portalDecisionSent', { email: 'c***@acme.com' }));
     expect(apiFetch.mock.calls[0][0]).toBe('/sws/portal/quotations/q-1/decision');
     expect(bodyOf(apiFetch)).toEqual({ decision: 'ACCEPT' });
@@ -124,16 +143,39 @@ describe('PortalDecisionActions — Rechazar', () => {
     return user;
   }
 
-  it('needs a reason, and a text for "Otros", before it can be sent', async () => {
+  /** Continuar from the reasons, then Enviar solicitud from the confirmation popup. */
+  async function confirmAndSend(user) {
+    await user.click(screen.getByTestId('portal-reject-continue'));
+    await waitFor(() => expect(screen.getByTestId('portal-reject-confirm-modal')).toBeInTheDocument());
+    await user.click(screen.getByTestId('portal-reject-submit'));
+  }
+
+  it('needs a reason, and a text for "Otros", before it can continue', async () => {
     const user = await openReject(vi.fn());
 
-    expect(screen.getByTestId('portal-reject-submit')).toBeDisabled();
+    expect(screen.getByTestId('portal-reject-continue')).toBeDisabled();
     await user.click(screen.getByTestId('portal-reject-reason-other'));
-    expect(screen.getByTestId('portal-reject-submit')).toBeDisabled();
+    expect(screen.getByTestId('portal-reject-continue')).toBeDisabled();
     await user.type(screen.getByTestId('portal-reject-other-text'), '   ');
-    expect(screen.getByTestId('portal-reject-submit')).toBeDisabled();
+    expect(screen.getByTestId('portal-reject-continue')).toBeDisabled();
     await user.type(screen.getByTestId('portal-reject-other-text'), 'Ya no');
-    expect(screen.getByTestId('portal-reject-submit')).toBeEnabled();
+    expect(screen.getByTestId('portal-reject-continue')).toBeEnabled();
+  });
+
+  it('asks to confirm by email before sending, and Volver keeps the chosen reason', async () => {
+    const apiFetch = vi.fn();
+    const user = await openReject(apiFetch);
+
+    await user.click(screen.getByTestId('portal-reject-reason-delivery'));
+    await user.click(screen.getByTestId('portal-reject-continue'));
+    await waitFor(() => expect(screen.getByTestId('portal-reject-confirm-modal')).toBeInTheDocument());
+    expect(screen.getByTestId('portal-decision-email')).toHaveTextContent('co•••@acme.com');
+    expect(apiFetch).not.toHaveBeenCalled();
+
+    await user.click(screen.getByTestId('portal-reject-back'));
+    await waitFor(() => expect(screen.getByTestId('portal-reject-modal')).toBeInTheDocument());
+    expect(screen.getByTestId('portal-reject-reason-delivery')).toBeChecked();
+    expect(apiFetch).not.toHaveBeenCalled();
   });
 
   it('clears the "Otros" text when another reason is chosen, and sends no text with it', async () => {
@@ -148,9 +190,9 @@ describe('PortalDecisionActions — Rechazar', () => {
     expect(screen.getByTestId('portal-reject-other-text')).toHaveValue('');
 
     await user.click(screen.getByTestId('portal-reject-reason-price'));
-    await user.click(screen.getByTestId('portal-reject-submit'));
+    await confirmAndSend(user);
 
-    await waitFor(() => expect(screen.getByTestId('portal-decision-sent')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('portal-check-email-modal')).toBeInTheDocument());
     expect(bodyOf(apiFetch)).toEqual({ decision: 'REJECT', reasonCode: 'PRICE' });
   });
 
@@ -160,9 +202,9 @@ describe('PortalDecisionActions — Rechazar', () => {
 
     await user.click(screen.getByTestId('portal-reject-reason-other'));
     await user.type(screen.getByTestId('portal-reject-other-text'), '  Ya no lo necesitamos  ');
-    await user.click(screen.getByTestId('portal-reject-submit'));
+    await confirmAndSend(user);
 
-    await waitFor(() => expect(screen.getByTestId('portal-decision-sent')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('portal-check-email-modal')).toBeInTheDocument());
     expect(bodyOf(apiFetch)).toEqual({ decision: 'REJECT', reasonCode: 'OTHER', reasonText: 'Ya no lo necesitamos' });
   });
 });
@@ -181,6 +223,7 @@ describe('PortalDecisionActions — a refused request', () => {
       renderActions(quotation(OPEN), { apiFetch: vi.fn(async () => answer()) });
 
       await user.click(screen.getByTestId('portal-decision-accept'));
+      await user.click(screen.getByTestId('portal-accept-continue'));
 
       await waitFor(() => expect(screen.getByTestId('portal-decision-error')).toBeInTheDocument());
       expect(screen.getByTestId('portal-decision-error').textContent).toBe(t(key, { tenantName: 'Acme SA' }));
@@ -196,6 +239,7 @@ describe('PortalDecisionActions — a refused request', () => {
     });
 
     await user.click(screen.getByTestId('portal-decision-accept'));
+    await user.click(screen.getByTestId('portal-accept-continue'));
 
     await waitFor(() => expect(onInvalid).toHaveBeenCalledTimes(1));
     expect(screen.queryByTestId('portal-decision-error')).not.toBeInTheDocument();

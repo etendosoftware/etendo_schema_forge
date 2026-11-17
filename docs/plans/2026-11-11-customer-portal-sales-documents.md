@@ -1049,6 +1049,19 @@ arrives, so every shared piece takes the new look as an opt-in (`PortalSection v
   it; a document opened from a tab carries `&group=` so closing returns to that tab. "Documentos
   relacionados" lists the document itself first ("Este", not a link). Mobile keeps the full-page
   detail (its list stays mounted but hidden).
+- **Decision popups and confirmation page (Figma, 2026-11-17).** One 456px modal style (white, r8,
+  the "Overlay/Light" shadow, 32px round close, 40px fully rounded buttons). Aceptar → "¿Deseas aceptar
+  este presupuesto?" (the recipient's email box) → Continuar sends; Rechazar → the six reasons
+  (Figma radios; "Otros" requires "Describe el motivo"; Continuar disabled until valid) → "Confirma
+  tu decisión por correo" (Cancelar · Volver · Enviar solicitud) sends; both end on "Revisa tu
+  correo electrónico" (Entendido). The recipient is the backend's `decision.maskedEmail` (first To
+  of the original send, masked). The email link's landing no longer enters the portal by itself:
+  it shows "¡Presupuesto aceptado!" / "¡Presupuesto rechazado!" with the summary (number, issue date
+  or reason, total, status — app label, Figma colour) and "La empresa emisora ha sido notificada…",
+  and its "Portal de clientes" button enters the portal on the quotation with the one-off notice
+  (hidden without a portal token). The other landing states keep their logic in the same page.
+  Backend fields (additive, `com.etendoerp.go`): `date`, `grandTotal`, `currency`, `documentStatus`
+  on the decision view/confirm answers; `decision.maskedEmail` on a decidable quotation's detail.
 
 ---
 

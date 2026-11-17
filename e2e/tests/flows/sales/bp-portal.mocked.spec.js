@@ -218,7 +218,10 @@ test.describe('Customer portal — mocked', () => {
         const modal = page.getByTestId('portal-reject-modal');
         await modal.getByTestId('portal-reject-reason-other').check();
         await modal.getByTestId('portal-reject-other-text').fill('Ya no lo necesitamos');
-        await modal.getByTestId('portal-reject-submit').click();
+        // Reasons → "Confirma tu decisión por correo" → Enviar solicitud sends.
+        await modal.getByTestId('portal-reject-continue').click();
+        await page.getByTestId('portal-reject-confirm-modal').getByTestId('portal-reject-submit').click();
+        await page.getByTestId('portal-check-email-ok').click();
       },
       expectedBody: { decision: 'REJECT', reasonCode: 'OTHER', reasonText: 'Ya no lo necesitamos' },
       notice: /Has rechazado el presupuesto PR\/0001|You have rejected quotation PR\/0001/,
@@ -228,13 +231,16 @@ test.describe('Customer portal — mocked', () => {
       decision: 'Aceptar',
       answer: async (page) => {
         await page.getByTestId('portal-decision-panel').getByTestId('portal-decision-accept').click();
+        // "¿Deseas aceptar este presupuesto?" → Continuar sends.
+        await page.getByTestId('portal-accept-continue').click();
+        await page.getByTestId('portal-check-email-ok').click();
       },
       expectedBody: { decision: 'ACCEPT' },
       notice: /Has aceptado el presupuesto PR\/0001|You have accepted quotation PR\/0001/,
       reason: null,
     },
   ]) {
-    test(`C: ${decision} emails a confirmation, whose landing opens the quotation with a one-off notice`, async ({ page }) => {
+    test(`C: ${decision} emails a confirmation, whose landing confirms and leads to the quotation with a one-off notice`, async ({ page }) => {
       const requests = await installPortalMock(page, {
         me: {
           state: 'valid', businessPartnerName: 'Cliente Uno', tenantName: 'Acme SA', hasLogo: false,
@@ -253,8 +259,11 @@ test.describe('Customer portal — mocked', () => {
       await expect(page.getByTestId('portal-decision-sent')).toContainText('c***@cliente.es');
       expect(requests.decisionBodies).toEqual([expectedBody]);
 
-      // The email's button: the landing confirms once and lands on the quotation, with the notice.
+      // The email's button: the landing confirms once and shows the result; "Portal de clientes"
+      // opens the quotation, with the notice.
       await page.goto(`/portal/decision/${DECISION_TOKEN}`);
+      await expect(page.getByTestId('portal-decision-applied')).toBeVisible();
+      await page.getByTestId('portal-decision-enter').click();
       const arrival = page.getByTestId('portal-arrival-notice');
       await expect(arrival).toContainText(notice);
       expect(requests.decisionConfirms).toBe(1);

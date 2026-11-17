@@ -17,7 +17,11 @@ vi.mock('@/lib/portal/usePortalApiFetch.js', async (importOriginal) => {
 function t(key, vars) {
   return vars ? `${key} ${JSON.stringify(vars)}` : key;
 }
-vi.mock('@/i18n', () => ({ useUI: () => t }));
+vi.mock('@/i18n', () => ({
+  useUI: () => t,
+  useLocale: () => ({}),
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
+}));
 
 import { StrictMode } from 'react';
 import { act, render, screen, waitFor } from '@testing-library/react';
@@ -158,9 +162,12 @@ describe('PortalDecisionPage — what it says', () => {
 
     await waitFor(() => expect(screen.getByTestId('portal-decision-applied')).toBeInTheDocument());
     const card = screen.getByTestId('portal-decision-applied');
-    expect(card.querySelector('h1').textContent).toBe('portalDecisionAppliedRejectTitle PR/0001');
+    expect(card.querySelector('h1').textContent).toBe('portalDecisionRejectedTitle');
+    expect(screen.getByTestId('portal-decision-summary-number')).toHaveTextContent('PR/0001');
+    // "Otros": the customer's own words stand in for the reason's label.
     expect(screen.getByTestId('portal-decision-reason').textContent)
-      .toBe('portalRejectReasonLabel: portalRejectReasonOther — Ya no lo necesitamos');
+      .toBe('portalRejectReasonLabelYa no lo necesitamos');
+    expect(screen.getByTestId('portal-decision-notified')).toBeInTheDocument();
   });
 
   it('says an acceptance applied now as an acceptance, with no reason line', async () => {
@@ -169,8 +176,10 @@ describe('PortalDecisionPage — what it says', () => {
 
     await waitFor(() => expect(screen.getByTestId('portal-decision-applied')).toBeInTheDocument());
     expect(screen.getByTestId('portal-decision-applied').querySelector('h1').textContent)
-      .toBe('portalDecisionAppliedAcceptTitle PR/0001');
+      .toBe('portalDecisionAcceptedTitle');
+    // An acceptance shows the issue date where a rejection shows its reason.
     expect(screen.queryByTestId('portal-decision-reason')).not.toBeInTheDocument();
+    expect(screen.getByTestId('portal-decision-summary-date')).toBeInTheDocument();
   });
 
   for (const [label, body, testId, title] of [
@@ -185,7 +194,8 @@ describe('PortalDecisionPage — what it says', () => {
 
       await waitFor(() => expect(screen.getByTestId(testId)).toBeInTheDocument());
       expect(screen.getByTestId(testId).querySelector('h1').textContent).toBe(title);
-      expect(screen.queryByTestId('portal-decision-reason')).not.toBeInTheDocument();
+      // Only a confirmed rejection names its reason in the summary (a re-opened link does too).
+      if (body.state !== 'confirmed') expect(screen.queryByTestId('portal-decision-reason')).not.toBeInTheDocument();
     });
   }
 
@@ -216,6 +226,7 @@ describe('PortalDecisionPage — what it says', () => {
 
 describe('PortalDecisionPage — a confirm whose answer was lost', () => {
   it('resends the confirmation once and enters the portal on its answer, as already answered', async () => {
+    const user = userEvent.setup();
     apiFetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
     apiFetchMock.mockResolvedValueOnce(jsonResponse({
       state: 'confirmed', appliedNow: false, decision: 'REJECT', documentNo: 'PR/0001',
@@ -223,6 +234,8 @@ describe('PortalDecisionPage — a confirm whose answer was lost', () => {
     }));
     renderLanding();
 
+    await waitFor(() => expect(screen.getByTestId('portal-decision-confirmed')).toBeInTheDocument());
+    await user.click(screen.getByTestId('portal-decision-enter'));
     await waitFor(() => expect(screen.getByTestId('portal-arrival-probe')).toBeInTheDocument());
     const probe = screen.getByTestId('portal-arrival-probe');
     expect(probe.dataset.path).toBe('/portal/tok-new?view=doc&kind=QUOTATION&id=q-1');
@@ -378,10 +391,16 @@ describe('PortalDecisionPage — a confirm whose answer was lost', () => {
 });
 
 describe('PortalDecisionPage — the way into the portal', () => {
-  it('opens the portal on the quotation, replacing the landing, with the notice in router state only', async () => {
+  it('opens the portal on the quotation from "Portal de clientes", replacing the landing, with the notice in router state only', async () => {
+    const user = userEvent.setup();
     apiFetchMock.mockResolvedValue(jsonResponse({ ...APPLIED_REJECT, portalToken: 'tok-new', quotationId: 'q-1' }));
     // StrictMode: the effect runs twice, the confirmation still goes out once.
     renderLanding({ strict: true });
+
+    // The page shows its result first; nothing navigates by itself.
+    await waitFor(() => expect(screen.getByTestId('portal-decision-applied')).toBeInTheDocument());
+    expect(screen.queryByTestId('portal-arrival-probe')).not.toBeInTheDocument();
+    await user.click(screen.getByTestId('portal-decision-enter'));
 
     await waitFor(() => expect(screen.getByTestId('portal-arrival-probe')).toBeInTheDocument());
     const probe = screen.getByTestId('portal-arrival-probe');
@@ -403,6 +422,7 @@ describe('PortalDecisionPage — the way into the portal', () => {
     renderLanding();
 
     await waitFor(() => expect(screen.getByTestId('portal-decision-applied')).toBeInTheDocument());
+    expect(screen.queryByTestId('portal-decision-enter')).not.toBeInTheDocument();
     expect(screen.queryByTestId('portal-arrival-probe')).not.toBeInTheDocument();
   });
 });

@@ -410,6 +410,8 @@ export async function fetchPortalDocument(fetchImpl, token, kind, id) {
       canDecide: data.decision.canDecide === true,
       blockedReason: readableText(data.decision.blockedReason),
       acceptAvailable: data.decision.acceptAvailable === true,
+      // Where the confirmation will go, masked; named by the accept / reject popups.
+      maskedEmail: readableText(data.decision.maskedEmail),
     } : null,
   };
 }
@@ -539,6 +541,11 @@ function normalizeDecision(data) {
     // token and the quotation it opens on. Absent when the customer cannot enter.
     portalToken: readableText(data?.portalToken),
     quotationId: readableText(data?.quotationId),
+    // The confirmation page's summary (ETP-6209 redesign).
+    date: readableText(data?.date),
+    grandTotal: readableAmount(data?.grandTotal),
+    currency: readableText(data?.currency),
+    documentStatus: readableText(data?.documentStatus),
   };
 }
 

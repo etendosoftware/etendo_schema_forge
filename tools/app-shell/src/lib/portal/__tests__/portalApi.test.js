@@ -445,12 +445,16 @@ describe('fetchPortalDocument', () => {
     const { fetchImpl } = recordingFetch(() => jsonResponse({
       kind: 'QUOTATION',
       id: 'q-1',
-      decision: { canDecide: 'true', blockedReason: ' expired ', acceptAvailable: true },
+      decision: {
+        canDecide: 'true', blockedReason: ' expired ', acceptAvailable: true, maskedEmail: ' co•••@acme.com ',
+      },
     }));
 
     const document = await fetchPortalDocument(fetchImpl, TOKEN, 'QUOTATION', 'q-1');
 
-    assert.deepEqual(document.decision, { canDecide: false, blockedReason: 'expired', acceptAvailable: true });
+    assert.deepEqual(document.decision, {
+      canDecide: false, blockedReason: 'expired', acceptAvailable: true, maskedEmail: 'co•••@acme.com',
+    });
   });
 });
 
@@ -626,6 +630,20 @@ describe('fetchPortalDecision / confirmPortalDecision', () => {
     ]);
   });
 
+  it('reads the summary the confirmation page shows', async () => {
+    const { fetchImpl } = recordingFetch(() => jsonResponse({
+      state: 'confirmed', appliedNow: true, decision: 'ACCEPT', date: '2026-10-01',
+      grandTotal: '2450.00', currency: 'EUR', documentStatus: 'ETGO_AC',
+    }));
+
+    const result = await confirmPortalDecision(fetchImpl, DECISION_TOKEN);
+
+    assert.deepEqual(
+      [result.date, result.grandTotal, result.currency, result.documentStatus],
+      ['2026-10-01', 2450, 'EUR', 'ETGO_AC'],
+    );
+  });
+
   for (const [label, body, expected] of [
     [
       'reads the applied decision, appliedNow included',
@@ -637,6 +655,7 @@ describe('fetchPortalDecision / confirmPortalDecision', () => {
         state: 'confirmed', appliedNow: true, decision: 'REJECT', reasonCode: 'OTHER',
         reasonText: 'Ya no', documentNo: 'PR/0001', tenantName: 'Acme SA',
         portalToken: null, quotationId: null,
+        date: null, grandTotal: null, currency: null, documentStatus: null,
       },
     ],
     [
@@ -645,6 +664,7 @@ describe('fetchPortalDecision / confirmPortalDecision', () => {
       {
         state: 'confirmed', appliedNow: true, decision: 'ACCEPT', reasonCode: null, reasonText: null,
         documentNo: null, tenantName: null, portalToken: 'tok-new', quotationId: 'q-1',
+        date: null, grandTotal: null, currency: null, documentStatus: null,
       },
     ],
     [
@@ -653,6 +673,7 @@ describe('fetchPortalDecision / confirmPortalDecision', () => {
       {
         state: 'confirmed', appliedNow: false, decision: null, reasonCode: null, reasonText: null,
         documentNo: null, tenantName: null, portalToken: null, quotationId: null,
+        date: null, grandTotal: null, currency: null, documentStatus: null,
       },
     ],
     [
@@ -661,6 +682,7 @@ describe('fetchPortalDecision / confirmPortalDecision', () => {
       {
         state: 'not_pending', appliedNow: false, decision: null, reasonCode: null, reasonText: null,
         documentNo: null, tenantName: null, portalToken: null, quotationId: null,
+        date: null, grandTotal: null, currency: null, documentStatus: null,
       },
     ],
   ]) {
