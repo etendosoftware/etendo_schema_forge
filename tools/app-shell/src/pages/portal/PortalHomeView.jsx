@@ -98,18 +98,19 @@ export default function PortalHomeView({
           onNavigate={onNavigate}
           data-testid="MobilePendingHero__beaeb4" />
 
-        {/* Desktop, as the spec measures it in both rail states: "Requiere tu atención" is as wide
-            as its four ~204px tiles, "Tu saldo" takes the rest; both as tall as the taller one. */}
-        <div className="flex flex-wrap items-start gap-3 md:grid md:grid-cols-[minmax(0,auto)_minmax(258px,1fr)] md:items-stretch md:gap-4">
+        {/* Desktop, as the Figma lays it out: a 226px row where "Requiere tu atención" and "Tu
+            saldo" keep the design's 901 : 443 (≈ 2 : 1) at every width, and the four tiles share
+            their card equally. Rows never stretch to the window; the body scrolls instead. */}
+        <div className="flex flex-wrap items-start gap-3 md:grid md:grid-cols-[minmax(0,2fr)_minmax(258px,1fr)] md:gap-4">
           <section
-            className="min-w-0 flex-[2_1_560px] overflow-hidden md:rounded-lg md:border md:border-border"
+            className="min-w-0 flex-[2_1_560px] overflow-hidden md:flex md:h-[226px] md:flex-col md:rounded-lg md:border md:border-border"
             aria-label={ui('portalAttentionTitle')}
             data-testid="portal-tiles"
           >
             <div className="hidden h-10 items-center border-b border-border bg-muted px-3 py-2 md:flex">
               <h2 className={PORTAL_DASHBOARD_SECTION_TITLE}>{ui('portalAttentionTitle')}</h2>
             </div>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(4,minmax(120px,204px))] md:gap-4 md:p-4">
+            <div className="grid grid-cols-2 gap-3 md:min-h-0 md:flex-1 md:grid-cols-4 md:gap-4 md:p-4">
               {TILE_ORDER.map((kind) => (
                 <KindTile
                   key={kind}
@@ -123,7 +124,7 @@ export default function PortalHomeView({
 
           <PortalSection
             title={ui('portalBalanceTitle')}
-            className="hidden flex-[1_1_280px] md:block"
+            className="hidden flex-[1_1_280px] md:block md:h-[226px]"
             testId="portal-balance"
             variant="dashboard"
             data-testid="PortalSection__beaeb4">
@@ -134,8 +135,10 @@ export default function PortalHomeView({
           </PortalSection>
         </div>
 
-        {/* "Documentos recientes" keeps the spec's ~520px; the chart takes the rest. */}
-        <div className="grid gap-3 md:flex-1 md:grid-cols-[minmax(0,520px)_minmax(0,1fr)] md:gap-4">
+        {/* A 320px row: "Documentos recientes" and the chart keep the design's 520 : 840 at every
+            width (the Figma's 520px card beside a growing chart, as a ratio so neither empties),
+            the documents never under the 440px their widest row needs on one line. */}
+        <div className="grid gap-3 md:grid-cols-[minmax(440px,520fr)_minmax(0,840fr)] md:gap-4">
           <PortalSection
             title={ui('portalRecentDocuments')}
             action={(
@@ -161,7 +164,7 @@ export default function PortalHomeView({
                 </button>
               </>
             )}
-            className="rounded-xl"
+            className="rounded-xl md:flex md:h-[320px] md:flex-col"
             testId="portal-recent"
             variant="dashboard"
             data-testid="PortalSection__beaeb4">
@@ -170,7 +173,7 @@ export default function PortalHomeView({
 
           <PortalSection
             title={ui('portalInvoicedPerMonth')}
-            className="hidden md:block"
+            className="hidden md:flex md:h-[320px] md:flex-col"
             testId="portal-chart"
             variant="dashboard"
             data-testid="PortalSection__beaeb4">
@@ -421,7 +424,7 @@ function KindTile({ kind, tile, onNavigate }) {
     <button
       type="button"
       onClick={() => onNavigate(target)}
-      className={`flex flex-col gap-2 rounded-xl border border-border bg-card p-[18px] text-left hover:border-primary md:h-[154px] md:justify-between md:gap-0 md:rounded-lg md:p-3 md:shadow-sm ${PORTAL_ROW_FOCUS}`}
+      className={`flex flex-col gap-2 rounded-xl border border-border bg-card p-[18px] text-left hover:border-primary md:h-full md:min-h-0 md:justify-between md:gap-0 md:rounded-lg md:p-3 md:shadow-sm ${PORTAL_ROW_FOCUS}`}
       data-testid={`portal-tile-${kind.toLowerCase()}`}
     >
       <span className="flex items-center gap-2 text-sm text-muted-foreground md:text-xs">
@@ -457,7 +460,7 @@ function RecentDocuments({ recent, onOpen }) {
     return <p className="px-4 py-6 text-sm text-muted-foreground">{ui('portalNoDocumentsYet')}</p>;
   }
   return (
-    <ul className="md:py-1">
+    <ul className="md:min-h-0 md:flex-1 md:overflow-y-auto md:py-1">
       {recent.map((document) => (
         <li key={`${document.kind}:${document.id}`} className="border-b border-border last:border-b-0 md:border-b-0">
           {/* Desktop (spec of 2026-11-17): the kind, then its pills packed after it — the number
@@ -470,9 +473,9 @@ function RecentDocuments({ recent, onOpen }) {
             data-testid="portal-recent-document"
           >
             <span className="shrink-0 text-sm">{ui(documentLabelKey(document))}</span>
-            <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
               <span
-                className="inline-flex min-w-0 max-w-[10rem] items-center gap-1 rounded-lg bg-[#F3F5F9] px-2 py-1 text-xs leading-4 text-[#40465C]"
+                className="inline-flex min-w-0 max-w-[10rem] shrink-0 items-center gap-1 rounded-lg bg-[#F3F5F9] px-2 py-1 text-xs leading-4 text-[#40465C]"
                 title={document.documentNo}
               >
                 <FileTextIcon size={14} className="shrink-0" aria-hidden="true" data-testid="FileText__beaeb4" />
@@ -624,7 +627,7 @@ function InvoicedChart({ chart, year }) {
   };
 
   return (
-    <div className="flex flex-col gap-3 px-3 py-3" data-testid="portal-chart-body" data-orientation={orientation}>
+    <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 py-3" data-testid="portal-chart-body" data-orientation={orientation}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-4">
           {year?.total > 0 ? (
@@ -666,15 +669,16 @@ function InvoicedChart({ chart, year }) {
       </div>
 
       {vertical ? (
-        <div className="grid grid-cols-[36px_minmax(0,1fr)] gap-x-2 gap-y-2">
-          <div className="relative h-[157px] text-right text-xs text-[#6C6C89]">
+        // The plot fills what the 320px card leaves below the header row.
+        <div className="grid min-h-0 flex-1 grid-cols-[36px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] gap-x-2 gap-y-2">
+          <div className="relative h-full min-h-[80px] text-right text-xs text-[#6C6C89]">
             {ticks.map((value) => (
               <span key={value} className="absolute right-0 translate-y-1/2 leading-none" style={{ bottom: share(value) }}>
                 {tick(value)}
               </span>
             ))}
           </div>
-          <div className="relative h-[157px] border-x border-b border-[#C7CBD3]">
+          <div className="relative h-full min-h-[80px] border-x border-b border-[#C7CBD3]">
             {ticks.filter((value) => value > 0).map((value) => (
               <span
                 key={value}
@@ -710,7 +714,7 @@ function InvoicedChart({ chart, year }) {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-[40px_minmax(0,1fr)] gap-x-2 gap-y-1.5">
+        <div className="grid min-h-0 flex-1 grid-cols-[40px_minmax(0,1fr)] content-start gap-x-2 gap-y-1.5 overflow-y-auto">
           <div className="flex flex-col gap-1.5 text-right text-xs text-muted-foreground">
             {bars.map((bar) => (
               <span key={bar.month} className="flex h-5 items-center justify-end whitespace-nowrap" data-testid="portal-chart-label">
