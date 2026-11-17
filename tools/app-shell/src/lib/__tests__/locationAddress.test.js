@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildLocationAddressLines } from '../locationAddress.js';
+import { buildLocationAddressLines, sanitizeDashJoinedIdentifier } from '../locationAddress.js';
 
 describe('buildLocationAddressLines', () => {
   it('returns location lines in postal-friendly order', () => {
@@ -58,5 +58,30 @@ describe('buildLocationAddressLines', () => {
   it('falls back to the summary string when structured fields are missing', () => {
     const lines = buildLocationAddressLines({}, 'Sevilla, Pl. Mayor, 78');
     assert.deepEqual(lines, ['Sevilla, Pl. Mayor, 78']);
+  });
+});
+
+// CP-8b (ETP-5806 QA, Isa) — repro for "- -" empty separators shown in Organización/Almacén
+// when the generic `$_identifier` string has blank segments (segunda línea, región).
+describe('sanitizeDashJoinedIdentifier', () => {
+  it('drops empty segments left by blank address parts, with no doubled or dangling separator', () => {
+    const raw = 'Calle de Alcalá, 40 -  - 28014 - Madrid -  - España';
+    assert.equal(
+      sanitizeDashJoinedIdentifier(raw),
+      'Calle de Alcalá, 40 - 28014 - Madrid - España',
+    );
+  });
+
+  it('leaves an already-clean identifier untouched', () => {
+    assert.equal(
+      sanitizeDashJoinedIdentifier('Santa Fe - 446 - 5800 - Rio Cuarto - España'),
+      'Santa Fe - 446 - 5800 - Rio Cuarto - España',
+    );
+  });
+
+  it('passes through non-string input unchanged (undefined/null/empty)', () => {
+    assert.equal(sanitizeDashJoinedIdentifier(undefined), '');
+    assert.equal(sanitizeDashJoinedIdentifier(null), '');
+    assert.equal(sanitizeDashJoinedIdentifier(''), '');
   });
 });
