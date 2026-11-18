@@ -13,6 +13,7 @@ import Handlebars from 'handlebars';
 import { registerReportHelpers, buildJsreportHelpersString } from '../../../templates/reports/helpers/report-html-helpers.js';
 import { buildContractLabels } from '@etendosoftware/schema-forge-cli/src/report-i18n.js';
 import { expandBrandingPartial } from './reportBrandingPartialHelper.js';
+import { registerJsreportHelpers } from './reportJsreportHelpers.js';
 
 // ETP-4899 — balance-sheet ("Balance de Situación") is the SAME indented
 // account-report tree as profit-loss. In Etendo Classic both are literally one
@@ -607,16 +608,6 @@ describe('balance-sheet template.hbs — Reference Amount column visibility', ()
     assert.match(html, /<th class="cell-amount">Importe de Referencia<\/th>/);
   });
 });
-
-// The Excel render path gets its helpers the way production does (report-api.js): the jsreport
-// helper string built from the canonical set plus the report's own helpers.js, evaluated.
-function registerJsreportHelpers(hb, code) {
-  const built = buildJsreportHelpersString(code);
-  const names = [...built.matchAll(/^function\s+(\w+)\s*\(/gm)].map((m) => m[1]);
-  // eslint-disable-next-line no-new-func
-  const helpers = new Function(`${built}\nreturn { ${names.join(', ')} };`)();
-  for (const [name, fn] of Object.entries(helpers)) hb.registerHelper(name, fn);
-}
 
 // ── Excel ───────────────────────────────────────────────────────────────────
 
