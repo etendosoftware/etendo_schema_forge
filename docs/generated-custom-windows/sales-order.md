@@ -932,3 +932,7 @@ operación* and, with VERI*FACTU active, *Fecha operación*; on a rectificative 
 rectification code, which order flows never preselect — only a customer return's preview comes with `R1`). The rule is shared with the invoices' SIF tab:
 `docs/ui-customization.md` §21b.
 Backend reference: `com.etendoerp.go` `docs/neo-headless.md` §4.12.36b (ETP-6179).
+
+## Rate and cost fields are numeric — ETP-6342
+
+Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. The header `eTGOCurrencyRate` (`EM_ETGO_Currency_Rate`) is now `decimal` in the contract (`tsType: number`).

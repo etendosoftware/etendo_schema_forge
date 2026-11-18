@@ -1834,6 +1834,10 @@ Product-only visual changes, all driven by tokens and opt-in props so no other w
 The JS side is `chartSeriesColor(index)` and `CHART_AREA_OPACITY_VAR` in `tools/app-shell/src/lib/chartPalette.js` (they only return `var(...)` references, no colour literal in components). Positive quantities reuse the existing `--status-success-fg`.
 - **Height and scroll model.** See "Layout and scroll model" in the Movements tab section: the 340 px floor supersedes the 200 px floor of "Movements tab scroll bound" above, and the box height is the remaining space (`maxHeight`), not a fixed guess.
 
+## Rate and cost fields are numeric — ETP-6342
+
+Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. **Cost** (`cost`, `Cost`) on the `price` entity is now `decimal` in the contract (`tsType: number`), and the product import's `cost` column is typed `decimal` as well.
+
 ## Agent prompt — ETP-5850
 
 `product/transactions` (the Movements tab, read-only) carries an `agentPrompt`: it is every stock
