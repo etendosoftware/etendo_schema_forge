@@ -651,7 +651,8 @@ The rate rules are the window's own ETP-5840 rules, enforced by Etendo on every 
 that changes the currency or the quotation date (`orderDate`) without a rate recalculates it, a positive rate sent is kept,
 a foreign-currency document left without a rate is refused (`422`), except a create that omits
 the currency or the date: Etendo fills them after saving, so that create is saved without a rate
-and its next write is refused (`docs/public-api.md` §4.12).
+and its next write is refused (`docs/public-api.md` §4.12). Once the document is processed the rate is
+locked, as the rate picker is: a write that changes it answers `422`, whatever the currency.
 
 Line pricing (Etendo GO, `OrderLineCurrencyConversion`): a line created through the API (or REST,
 batch, `etendo_create`) without a price is priced from the price list and, when the quotation is in a

@@ -607,6 +607,9 @@ gateway only maps the name):
   new currency or date) saves it as sent, as when the user types it.
 - **Kept** by a write that changes neither the currency nor the date and does not send it.
 - **Back to the organization currency** sets it to `1`.
+- **Locked once completed**: a write that changes `currency_rate` on a completed document is
+  refused with `422` (nothing saved), whatever its currency, as in the application, where the rate
+  cannot be edited once the document is processed. Sending the stored value back is not a change.
 - **Refused without one** (`422`, nothing saved): a write that sends both `currency` and
   `order_date` (or an update, which knows them from the stored document) and leaves a
   foreign-currency document with an empty rate, because no conversion rate is configured for
@@ -916,6 +919,7 @@ Testable statements derived from this document, each linked to its section.
 - [ ] `PUT` or `PATCH` with the current ETag succeeds and returns an `ETag` equal to the updated record's `meta.etag` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
 - [ ] Sending `updated` in a write body returns `400` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
 - [ ] `DELETE` succeeds without `If-Match` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
+- [ ] A `PATCH` that changes `currency_rate` on a completed order answers `422` and leaves the rate unchanged, also on an order in the organization's currency ([4.12](#412-document-currency-exchange-rate-and-line-prices))
 - [ ] On a foreign-currency order, a line created without `list_price` is priced from the price list converted by the header's `currency_rate`, in the order's currency; a `list_price` sent is kept as sent ([4.12](#412-document-currency-exchange-rate-and-line-prices))
 - [ ] `currency_rate` sent with a currency change is kept; a currency or `order_date` change without it recalculates it; a write that sends `currency` and `order_date` (or an update) leaving a foreign-currency order with no rate is refused with `422`; a create omitting either is saved without a rate and its next write is refused ([4.12](#412-document-currency-exchange-rate-and-line-prices))
 - [ ] `GET /api/v1/{resource}/lookups/{field}` of a declared lookup calls `/sws/neo/{spec}/{entity}/selectors/{selector}` with `limit`, `offset`, `q` and only the manifest's fixed context, and answers `data` items of the lookup `type` with `attributes.label` plus `meta.page` and `links` ([4.2.2](#422-lookups))
