@@ -571,14 +571,15 @@ function chartColumnGap(count) {
  * The chart's series. One: what the customer was invoiced per month, named "Gastos" (PO answer:
  * for the customer, what they were invoiced is their expense). Kept as a list so a series can be
  * added without reshaping the chart; every series reads its own amount from a bar. The legend
- * swatch is the Figma's "Gastos" one (#F53D6B, 14×4); the bars keep the success gradient.
+ * swatch is the bars' green (user decision: the Figma's red "Gastos" swatch was an artefact of the
+ * generic chart).
  */
 const CHART_SERIES = Object.freeze([
   {
     key: 'invoiced',
     labelKey: 'expenses',
     amountOf: (bar) => bar.amount,
-    swatch: 'bg-[#F53D6B]',
+    swatch: 'bg-[hsl(var(--status-done-badge))]',
     // The spec's gradient (#26A95F → #EEFBF4), from the app's success tokens.
     vertical: 'bg-gradient-to-t from-[var(--status-success-bg)] to-[hsl(var(--status-done-badge))]',
     horizontal: 'bg-gradient-to-r from-[var(--status-success-bg)] to-[hsl(var(--status-done-badge))]',

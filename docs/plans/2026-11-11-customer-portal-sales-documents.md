@@ -1019,8 +1019,8 @@ arrives, so every shared piece takes the new look as an opt-in (`PortalSection v
 - **PO final answers (2026-11-18, supersede the matching points above).**
   - 2 (search): pending a decision; unchanged.
   - 4: the chart's legend reads only "Gastos" (en "Expenses", the app's `expenses` key): one series,
-    since what the customer was invoiced is their expense. The legend swatch takes the Figma's
-    "Gastos" swatch (#F53D6B, 14×4); the bars keep the green success gradient.
+    since what the customer was invoiced is their expense. The legend swatch is green to match the
+    bars (user decision; the Figma's red "Gastos" swatch was an artefact of the generic chart).
   - 5: "Ayuda y soporte" is removed from the rail (link, help URL constant and icon). The
     `helpAndSupport` key stays: the app's side menu uses it.
   - 7: the user menu has the app's user-popup look: a header with the customer's name and email,
