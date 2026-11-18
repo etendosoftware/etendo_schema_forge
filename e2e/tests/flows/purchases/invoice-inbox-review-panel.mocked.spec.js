@@ -18,6 +18,8 @@
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewPickers.jsx
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewSaveStatus.jsx
 // @covers tools/app-shell/src/components/contract-ui/InlineSearchCombo.jsx
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxConfirmModel.js
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxInvoiceLink.jsx
 // New file justification: invoice-inbox-upload-and-status.mocked.spec.js covers the list, uploads and
 // discard of the window; the review panel is a different flow (open, walk, close, states) with its
 // own mocked `review` action, so it gets its own spec instead of growing that one.
@@ -183,6 +185,7 @@ async function handleWrite(state, id, kind, body) {
   const doc = state.docs[id];
   state.log.push(`POST ${kind} ${id}`);
   if (state.hold) await state.hold;
+  if (kind === 'apply' && state.applyDelayMs) await new Promise((resolve) => setTimeout(resolve, state.applyDelayMs));
   const forced = state.refuse?.(kind, body);
   if (forced) return forced;
   if (!doc) return refusal(404, 'not_found');
@@ -233,7 +236,33 @@ async function installSelectors(page, state) {
   });
 }
 
+/** ETP-6051: the confirm action of the fake server (answers the 9.2 contract: invoice, createdProducts, totalMismatch). */
+async function handleConfirm(state, id, body) {
+  const doc = state.docs[id];
+  state.log.push(`POST confirm ${id}`);
+  state.confirms.push({ id, body });
+  if (state.confirmHold) await state.confirmHold;
+  const forced = state.confirmRefuse?.[id];
+  if (forced) return forced;
+  if (!doc) return refusal(404, 'not_found');
+  if (body?.updated != null && body.updated !== doc.updated) return refusal(409, 'stale_document');
+  const retry = doc.status === 'ERROR' && ['CONFIRM_FAILED', 'MISSING_FIELDS'].includes(doc.errorCode);
+  if (!['PENDING_REVIEW', 'READY'].includes(doc.status) && !retry) return refusal(409, 'not_confirmable', { documentStatus: doc.status });
+  state.invoiceSeq += 1;
+  const documentNo = `FC${1000142 + state.invoiceSeq}`;
+  const invoice = { id: `inv-${id}`, documentNo, identifier: documentNo };
+  state.docs[id] = { ...structuredClone(doc), status: 'CONFIRMED', editable: false, invoice, updated: `T${++state.tokens}` };
+  const target = state.rows.find((r) => r.id === id);
+  if (target) Object.assign(target, { status: 'CONFIRMED', invoice: invoice.id, 'invoice$documentNo': documentNo });
+  return {
+    status: 200,
+    body: { id, status: 'CONFIRMED', invoice, adjusted: Boolean(doc.adjusted), createdVendor: false, createdProducts: 0, totalMismatch: Boolean(state.mismatch?.has(id)), alreadyConfirmed: false },
+  };
+}
+
 async function installInboxMock(page, state) {
+  state.confirms = [];
+  state.invoiceSeq = 0;
   state.reviewReads = [];
   state.writes = [];
   state.log = [];
@@ -263,6 +292,14 @@ async function installInboxMock(page, state) {
       live(id);
       const result = await handleWrite(state, id, write[2], req.postDataJSON());
       state.applied = [...(state.applied ?? []), { id, kind: write[2], body: req.postDataJSON(), status: result.status }];
+      await json(result.status, result.body);
+      return;
+    }
+    const confirm = url.pathname.match(/\/header\/([^/]+)\/action\/confirm$/);
+    if (req.method() === 'POST' && confirm) {
+      const id = decodeURIComponent(confirm[1]);
+      live(id);
+      const result = await handleConfirm(state, id, req.postDataJSON());
       await json(result.status, result.body);
       return;
     }
@@ -680,14 +717,14 @@ test.describe('Invoice Inbox — review panel editing (S2)', () => {
     await expect(tid(page, 'inline-add-option-inbox-line-0-category-C1')).toHaveAttribute('aria-selected', 'true');
   });
 
-  test('mark as reviewed: READY and "Revisada por ti", Confirm stays disabled; an edit afterwards goes back to pending', async ({ page }) => {
+  test('mark as reviewed: READY and "Revisada por ti", Confirm stays enabled; an edit afterwards goes back to pending', async ({ page }) => {
     state.reviews = { rev1: review('rev1', 'PENDING_REVIEW') };
     await openDoc(page, state, 'rev1');
     await expect(tid(page, 'invoice-inbox-review-mark-reviewed')).toBeEnabled();
     await tid(page, 'invoice-inbox-review-mark-reviewed').click();
     await expect(tid(page, 'invoice-inbox-review-reviewed')).toHaveText('Revisada por ti');
     await expect(tid(page, 'invoice-inbox-review-mark-reviewed')).toHaveCount(0);
-    await expect(tid(page, 'invoice-inbox-review-confirm')).toBeDisabled();
+    await expect(tid(page, 'invoice-inbox-review-confirm')).toBeEnabled();
     const marks = (state.applied ?? []).filter((w) => w.kind === 'mark-reviewed');
     expect(marks).toHaveLength(1);
     expect(marks[0].body).toEqual({ updated: 'T0' });
@@ -994,5 +1031,340 @@ test.describe('Invoice Inbox — review panel: tax, currency scale and validator
     await tid(page, 'inline-add-option-inbox-line-0-tax-T4').click();
     await expect(tid(page, 'invoice-inbox-review-save-error')).toContainText('El impuesto elegido no está disponible para esta línea');
     await expect(tid(page, 'invoice-inbox-review-line-0-tax')).toHaveValue('21%');
+  });
+});
+
+// ── ETP-6051: confirm from the panel ───────────────────────────────────────────────────────────
+
+test.describe('Invoice Inbox — review panel confirm', () => {
+  let state;
+  test.beforeEach(() => { state = { rows: seedRows(), confirmRefuse: {}, mismatch: new Set() }; });
+  const toasts = (page) => page.locator('[data-sonner-toast]');
+
+  test('confirm sends the token, toasts with the new number and jumps to the next pending document; the confirmed one leaves the counter', async ({ page }) => {
+    await openDoc(page, state, 'rdy1');
+    await tid(page, 'invoice-inbox-review-confirm').click();
+    await expect(tid(page, 'invoice-inbox-review-title')).toHaveText('rev1.pdf');
+    expect(state.confirms).toEqual([{ id: 'rdy1', body: { updated: 'T0' } }]);
+    await expect(toasts(page).filter({ hasText: 'Factura registrada en Etendo' })).toContainText('FC1000143');
+    await expect(tid(page, 'invoice-inbox-review-position')).toHaveText('1 de 3');
+    // The list behind already shows it confirmed.
+    await expect(tid(page, 'invoice-inbox-filter-count-confirmed')).toHaveText('2');
+  });
+
+  test('on the last pending document the panel closes and the list reloads', async ({ page }) => {
+    await openDoc(page, state, 'rev2');
+    await tid(page, 'invoice-inbox-review-confirm').click();
+    await expect(drawer(page)).toHaveCount(0);
+    expect(state.confirms.map((c) => c.id)).toEqual(['rev2']);
+    await expect(tid(page, 'invoice-inbox-filter-count-confirmed')).toHaveText('2');
+  });
+
+  test('past the loaded page it loads the next page and moves on (130 rows)', async ({ page }) => {
+    state.rows = Array.from({ length: 130 }, (_, i) => row(`b${String(i).padStart(3, '0')}`, 'READY'));
+    await openInbox(page, state);
+    await rowOf(page, 'b049').getByTestId('invoice-inbox-document-b049').click();
+    await expect(tid(page, 'invoice-inbox-review-form')).toBeVisible();
+    await tid(page, 'invoice-inbox-review-confirm').click();
+    await expect(tid(page, 'invoice-inbox-review-title')).toHaveText('b050.pdf');
+    expect(state.confirms.map((c) => c.id)).toEqual(['b049']);
+  });
+
+  test('while the confirm is in flight Next, close and a second click do nothing; the answer then moves on', async ({ page }) => {
+    let release;
+    state.confirmHold = new Promise((resolve) => { release = resolve; });
+    await openDoc(page, state, 'rdy1');
+    await tid(page, 'invoice-inbox-review-confirm').click();
+    await expect(tid(page, 'invoice-inbox-review-confirm')).toBeDisabled();
+    await expect(tid(page, 'invoice-inbox-review-next')).toBeDisabled();
+    await expect(tid(page, 'invoice-inbox-review-prev')).toBeDisabled();
+    await page.keyboard.press('Escape');
+    await tid(page, 'invoice-inbox-review-close').click({ force: true });
+    await expect(drawer(page)).toBeVisible();
+    release();
+    await expect(tid(page, 'invoice-inbox-review-title')).toHaveText('rev1.pdf');
+    expect(state.confirms).toHaveLength(1);
+  });
+
+  test('a double click sends ONE confirm', async ({ page }) => {
+    await openDoc(page, state, 'rdy1');
+    await tid(page, 'invoice-inbox-review-confirm').dblclick();
+    await expect(tid(page, 'invoice-inbox-review-title')).toHaveText('rev1.pdf');
+    expect(state.confirms).toHaveLength(1);
+  });
+
+  test('a saved edit is followed by a confirm that carries the token of that save', async ({ page }) => {
+    await openDoc(page, state, 'rdy1');
+    await typeInto(page, 'invoice-inbox-review-line-0-quantity', '3');
+    await expect(tid(page, 'invoice-inbox-review-save-state')).toHaveAttribute('data-state', 'saved');
+    await tid(page, 'invoice-inbox-review-confirm').click();
+    await expect(tid(page, 'invoice-inbox-review-title')).toHaveText('rev1.pdf');
+    expect(ops(state)).toEqual([{ op: 'setLine', index: 0, quantity: 3 }]);
+    expect(state.confirms).toEqual([{ id: 'rdy1', body: { updated: 'T1' } }]);
+    expect(state.log.indexOf('POST apply rdy1')).toBeLessThan(state.log.indexOf('POST confirm rdy1'));
+  });
+
+  test('clicking Confirm with a save in flight is not swallowed: one apply, then ONE confirm with the token of that save', async ({ page }) => {
+    let release;
+    await openDoc(page, state, 'rdy1');
+    state.hold = new Promise((resolve) => { release = resolve; });
+    await tid(page, 'invoice-inbox-review-line-0-quantity').fill('3');
+    await tid(page, 'invoice-inbox-review-line-0-quantity').blur();
+    await expect(tid(page, 'invoice-inbox-review-confirm')).toBeEnabled();
+    await tid(page, 'invoice-inbox-review-confirm').click();
+    await expect.poll(() => state.log.includes('POST apply rdy1')).toBe(true);
+    expect(state.confirms).toEqual([]);
+    state.hold = null;
+    release();
+    await expect(tid(page, 'invoice-inbox-review-title')).toHaveText('rev1.pdf');
+    expect(ops(state)).toEqual([{ op: 'setLine', index: 0, quantity: 3 }]);
+    expect(state.confirms).toEqual([{ id: 'rdy1', body: { updated: 'T1' } }]);
+  });
+
+  test('typing a quantity and clicking Confirm with NO blur: the click blurs, one slow apply, then one confirm with the new token', async ({ page }) => {
+    state.applyDelayMs = 600;
+    await openDoc(page, state, 'rdy1');
+    await tid(page, 'invoice-inbox-review-line-0-quantity').fill('3');
+    await tid(page, 'invoice-inbox-review-confirm').click();
+    await expect(tid(page, 'invoice-inbox-review-title')).toHaveText('rev1.pdf');
+    expect(applied(state)).toHaveLength(1);
+    expect(ops(state)).toEqual([{ op: 'setLine', index: 0, quantity: 3 }]);
+    expect(state.confirms).toEqual([{ id: 'rdy1', body: { updated: 'T1' } }]);
+    expect(state.log.indexOf('POST apply rdy1')).toBeLessThan(state.log.indexOf('POST confirm rdy1'));
+  });
+
+  test('a failed save sends no confirm and the save error stays on the panel', async ({ page }) => {
+    state.refuse = (kind) => (kind === 'apply' ? refusal(422, 'invalid_value') : null);
+    await openDoc(page, state, 'rdy1');
+    await tid(page, 'invoice-inbox-review-line-0-quantity').fill('3');
+    await tid(page, 'invoice-inbox-review-confirm').click();
+    await expect(tid(page, 'invoice-inbox-review-save-error')).toBeVisible();
+    expect(state.confirms).toEqual([]);
+    await expect(tid(page, 'invoice-inbox-review-save-error')).toBeVisible();
+    await expect(tid(page, 'invoice-inbox-review-title')).toHaveText('rdy1.pdf');
+  });
+
+  test('a failed confirm reads "Reintentar", shows the stored reason, and retrying confirms', async ({ page }) => {
+    state.reviews = { rev1: review('rev1', 'ERROR', { errorCode: 'CONFIRM_FAILED', errorDetail: 'No hay un período contable abierto' }) };
+    state.rows.find((r) => r.id === 'rev1').status = 'ERROR';
+    state.rows.find((r) => r.id === 'rev1').errorCode = 'CONFIRM_FAILED';
+    await openDoc(page, state, 'rev1');
+    await expect(tid(page, 'invoice-inbox-review-confirm')).toHaveText('Reintentar');
+    await expect(tid(page, 'invoice-inbox-review-banner-confirm-failed')).toContainText('No hay un período contable abierto');
+    await tid(page, 'invoice-inbox-review-confirm').click();
+    await expect(toasts(page).filter({ hasText: 'Factura registrada en Etendo' })).toBeVisible();
+    expect(state.confirms.map((c) => c.id)).toEqual(['rev1']);
+  });
+
+  test('a total mismatch is mentioned in the toast and keeps the success tone', async ({ page }) => {
+    state.mismatch = new Set(['rdy1']);
+    await openDoc(page, state, 'rdy1');
+    await tid(page, 'invoice-inbox-review-confirm').click();
+    await expect(toasts(page).filter({ hasText: '1 con total distinto al impreso' })).toBeVisible();
+    await expect(toasts(page).filter({ hasText: '1 con total distinto al impreso' })).toHaveAttribute('data-type', 'success');
+  });
+
+  test('stale_document on the confirm reloads the document with a notice and does not move on', async ({ page }) => {
+    state.confirmRefuse = { rdy1: refusal(409, 'stale_document') };
+    await openDoc(page, state, 'rdy1');
+    await tid(page, 'invoice-inbox-review-confirm').click();
+    await expect(tid(page, 'invoice-inbox-review-notice')).toBeVisible();
+    await expect(tid(page, 'invoice-inbox-review-title')).toHaveText('rdy1.pdf');
+  });
+
+  test('the exchange-rate and vendor-address blockers show their banner and keep Confirm disabled', async ({ page }) => {
+    state.reviews = {
+      rdy1: review('rdy1', 'READY', {}, { validation: { missing: ['exchangeRate'] } }),
+      rev1: review('rev1', 'PENDING_REVIEW', {}, { validation: { missing: ['vendorAddress'] } }),
+    };
+    await openDoc(page, state, 'rdy1');
+    await expect(tid(page, 'invoice-inbox-review-banner-blocker-exchangeRate-title')).toHaveText('Falta el tipo de cambio');
+    await expect(tid(page, 'invoice-inbox-review-confirm')).toBeDisabled();
+    await tid(page, 'invoice-inbox-review-next').click();
+    await expect(tid(page, 'invoice-inbox-review-banner-blocker-vendorAddress-title')).toHaveText('El proveedor no tiene dirección');
+    await expect(tid(page, 'invoice-inbox-review-confirm')).toBeDisabled();
+  });
+
+  test('a CONFIRMED document links to its purchase invoice', async ({ page }) => {
+    state.reviews = { conf1: review('conf1', 'CONFIRMED', { editable: false, invoice: { id: 'I1', documentNo: '10000007' } }) };
+    await openDoc(page, state, 'conf1');
+    await expect(tid(page, 'invoice-inbox-review-invoice-link')).toHaveAttribute('href', /\/purchase-invoice\/I1$/);
+  });
+
+  for (const [code, status, text] of [
+    ['duplicate_invoice', 409, 'Ya existe una factura de este proveedor con el mismo número.'],
+    ['price_list_tax_included', 422, 'sin impuestos incluidos'],
+    ['missing_exchange_rate', 422, 'No hay tipo de cambio'],
+    ['vendor_address_missing', 422, 'no tiene una dirección utilizable'],
+    ['QUOTA_EXCEEDED', 402, 'no tiene facturas disponibles'],
+  ]) {
+    test(`${code}: a full-width refusal banner at the top, no retry, the panel stays on the document`, async ({ page }) => {
+      state.confirmRefuse = { rdy1: refusal(status, code) };
+      await page.setViewportSize({ width: 1568, height: 900 });
+      await openDoc(page, state, 'rdy1');
+      await tid(page, 'invoice-inbox-review-confirm').click();
+      const banner = tid(page, 'invoice-inbox-review-refusal');
+      await expect(banner).toContainText(text);
+      await expect(banner).toContainText('No se pudo confirmar la factura');
+      await expect(banner.getByRole('button', { name: /reintentar/i })).toHaveCount(0);
+      await expect(tid(page, 'invoice-inbox-review-title')).toHaveText('rdy1.pdf');
+      await expect(toasts(page)).toHaveCount(0);
+      // Complete, wrapping text: nothing clipped.
+      const clipped = await banner.evaluate((el) => el.scrollWidth - el.clientWidth);
+      expect(clipped).toBeLessThanOrEqual(0);
+      await tid(page, 'invoice-inbox-review-refusal-dismiss').click();
+      await expect(banner).toHaveCount(0);
+    });
+  }
+
+  for (const width of [360, 390, 420]) {
+    test(`at ${width} px the header keeps the close button with a refusal showing, the lines fit and nothing scrolls sideways`, async ({ page }) => {
+      state.confirmRefuse = { rdy1: refusal(409, 'duplicate_invoice') };
+      await page.setViewportSize({ width, height: 800 });
+      await openDoc(page, state, 'rdy1');
+      await tid(page, 'invoice-inbox-review-confirm').click();
+      await expect(tid(page, 'invoice-inbox-review-refusal')).toBeVisible();
+      const close = await tid(page, 'invoice-inbox-review-close').boundingBox();
+      expect(close.x).toBeGreaterThanOrEqual(0);
+      expect(close.x + close.width).toBeLessThanOrEqual(width);
+      const pageOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(pageOverflow).toBeLessThanOrEqual(0);
+      const scrollOverflow = await tid(page, 'invoice-inbox-review-scroll').evaluate((el) => el.scrollWidth - el.clientWidth);
+      expect(scrollOverflow).toBeLessThanOrEqual(0);
+      for (const field of ['quantity', 'price', 'discount', 'tax']) {
+        const box = await tid(page, `invoice-inbox-review-line-0-${field}`).boundingBox();
+        expect(box, field).not.toBeNull();
+        expect(box.x, field).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width, field).toBeLessThanOrEqual(width);
+        expect(box.width, field).toBeGreaterThan(28);
+      }
+    });
+  }
+
+  test('the footer primary button stays clear of the floating chat bubble (76 px of right padding)', async ({ page }) => {
+    await openDoc(page, state, 'rdy1');
+    const footer = tid(page, 'invoice-inbox-review-footer');
+    const padding = await footer.evaluate((el) => parseFloat(getComputedStyle(el).paddingRight));
+    expect(padding).toBeGreaterThanOrEqual(76);
+    // Both rectangles in ONE evaluation: the drawer slides in, so two separate reads could straddle a frame.
+    const gap = await page.evaluate(() => {
+      const button = document.querySelector('[data-testid="invoice-inbox-review-confirm"]').getBoundingClientRect();
+      const area = document.querySelector('[data-testid="invoice-inbox-review-footer"]').getBoundingClientRect();
+      return area.right - button.right;
+    });
+    expect(gap).toBeGreaterThanOrEqual(76);
+  });
+});
+
+// ── Fast double activation of the footer / header controls (a real dblclick, two clicks a few ms apart) ──
+test.describe('Invoice Inbox — review panel: double activation', () => {
+  let state;
+  test.beforeEach(() => { state = { rows: seedRows(), confirmRefuse: {}, mismatch: new Set(), reviews: { rev1: review('rev1', 'PENDING_REVIEW') } }; });
+  const marks = () => (state.applied ?? []).filter((w) => w.kind === 'mark-reviewed');
+
+  test('a double click on "Marcar como revisada" sends ONE mark-reviewed (server still answering)', async ({ page }) => {
+    let release;
+    await openDoc(page, state, 'rev1');
+    state.hold = new Promise((resolve) => { release = resolve; });
+    await tid(page, 'invoice-inbox-review-mark-reviewed').dblclick();
+    await expect.poll(() => state.log.filter((l) => l === 'POST mark-reviewed rev1').length).toBe(1);
+    await expect(tid(page, 'invoice-inbox-review-mark-reviewed')).toBeDisabled();
+    state.hold = null;
+    release();
+    await expect(tid(page, 'invoice-inbox-review-reviewed')).toHaveText('Revisada por ti');
+    expect(state.log.filter((l) => l === 'POST mark-reviewed rev1')).toHaveLength(1);
+    expect(marks()).toHaveLength(1);
+    expect(marks()[0].body).toEqual({ updated: 'T0' });
+  });
+
+  test('a double click on "Marcar como revisada" with a fast server sends ONE mark-reviewed', async ({ page }) => {
+    await openDoc(page, state, 'rev1');
+    await tid(page, 'invoice-inbox-review-mark-reviewed').dblclick();
+    await expect(tid(page, 'invoice-inbox-review-reviewed')).toHaveText('Revisada por ti');
+    expect(state.log.filter((l) => l === 'POST mark-reviewed rev1')).toHaveLength(1);
+  });
+
+  test('a double click on Confirmar sends ONE confirm (server still answering)', async ({ page }) => {
+    let release;
+    state.confirmHold = new Promise((resolve) => { release = resolve; });
+    await openDoc(page, state, 'rev1');
+    await tid(page, 'invoice-inbox-review-confirm').dblclick();
+    await expect.poll(() => state.confirms.length).toBe(1);
+    release();
+    await expect(tid(page, 'invoice-inbox-review-title')).toHaveText('rev2.pdf');
+    expect(state.confirms).toHaveLength(1);
+  });
+
+  test('while mark-reviewed runs a click on Confirmar sends nothing; once it answers Confirmar sends ONE', async ({ page }) => {
+    let release;
+    await openDoc(page, state, 'rev1');
+    state.hold = new Promise((resolve) => { release = resolve; });
+    await tid(page, 'invoice-inbox-review-mark-reviewed').click();
+    await expect.poll(() => state.log.includes('POST mark-reviewed rev1')).toBe(true);
+    await expect(tid(page, 'invoice-inbox-review-confirm')).toBeDisabled();
+    await tid(page, 'invoice-inbox-review-confirm').click({ force: true });
+    expect(state.confirms).toEqual([]);
+    state.hold = null;
+    release();
+    await expect(tid(page, 'invoice-inbox-review-reviewed')).toHaveText('Revisada por ti');
+    expect(state.confirms).toEqual([]);
+    await tid(page, 'invoice-inbox-review-confirm').click();
+    await expect(tid(page, 'invoice-inbox-review-title')).toHaveText('rev2.pdf');
+    expect(state.confirms).toEqual([{ id: 'rev1', body: { updated: 'T1' } }]);
+  });
+
+  test('while Confirmar runs a click on "Marcar como revisada" sends nothing', async ({ page }) => {
+    let release;
+    state.confirmHold = new Promise((resolve) => { release = resolve; });
+    await openDoc(page, state, 'rev1');
+    await tid(page, 'invoice-inbox-review-confirm').click();
+    await expect.poll(() => state.confirms.length).toBe(1);
+    await expect(tid(page, 'invoice-inbox-review-mark-reviewed')).toBeDisabled();
+    await tid(page, 'invoice-inbox-review-mark-reviewed').click({ force: true });
+    release();
+    await expect(tid(page, 'invoice-inbox-review-title')).toHaveText('rev2.pdf');
+    expect(marks()).toHaveLength(0);
+    expect(state.confirms).toHaveLength(1);
+  });
+
+  test('after a stale_document refusal a second click on Confirmar sends again with the re-read token', async ({ page }) => {
+    state.confirmRefuse = { rev1: refusal(409, 'stale_document') };
+    await openDoc(page, state, 'rev1');
+    await tid(page, 'invoice-inbox-review-confirm').click();
+    await expect(tid(page, 'invoice-inbox-review-notice')).toBeVisible();
+    state.confirmRefuse = {};
+    await tid(page, 'invoice-inbox-review-confirm').click();
+    await expect(tid(page, 'invoice-inbox-review-title')).toHaveText('rev2.pdf');
+    expect(state.confirms).toHaveLength(2);
+    expect(state.confirms[1].body).toEqual({ updated: 'T0' });
+  });
+
+  // Two activations inside the same task (nothing re-rendered between them): the walk moves ONE document.
+  // A real dblclick is NOT pinned: its second click lands on the already re-rendered button of the next
+  // document, which is a genuine second "Next" (the panel shows k1 for a few ms), and its timing is not stable.
+  for (const [control, start, expected, reads] of [
+    ['next', 'k0', '2 de 6', ['k0', 'k1']],
+    ['prev', 'k3', '3 de 6', ['k3', 'k2']],
+  ]) {
+    test(`two ${control} activations before the panel re-renders move ONE document`, async ({ page }) => {
+      state.rows = Array.from({ length: 6 }, (_, i) => row(`k${i}`, 'READY'));
+      await openInbox(page, state);
+      await rowOf(page, start).getByTestId(`invoice-inbox-document-${start}`).click();
+      await expect(tid(page, 'invoice-inbox-review-form')).toBeVisible();
+      await tid(page, `invoice-inbox-review-${control}`).evaluate((el) => { el.click(); el.click(); });
+      await expect(tid(page, 'invoice-inbox-review-position')).toHaveText(expected);
+      await expect(tid(page, 'invoice-inbox-review-form')).toBeVisible();
+      expect(state.reviewReads).toEqual(reads);
+    });
+  }
+
+  test('a double click on the footer Discard opens ONE confirmation and sends ONE discard', async ({ page }) => {
+    await openDoc(page, state, 'rev1');
+    await tid(page, 'invoice-inbox-review-discard').dblclick();
+    await expect(page.getByTestId('invoice-inbox-discard-dialog')).toHaveCount(1);
+    expect(state.writes).toEqual([]);
+    await page.getByTestId('invoice-inbox-discard-confirm').click();
+    await expect(drawer(page)).toHaveCount(0);
+    expect(state.writes).toEqual(['POST discard rev1']);
   });
 });

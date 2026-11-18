@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isOpenableRow, reviewNeighbors } from './invoiceInboxReviewModel.js';
 
+const NO_IDS = Object.freeze([]);
+
 /**
  * The element that opened the panel: the focused one (the pencil button), else the pencil of the
  * clicked row (a row click focuses nothing), else the row itself.
@@ -42,17 +44,24 @@ function totalFor(serverTotal, hasMore, loadedOpenable) {
  * remembered and `restoreFocus()` gives it focus when the panel closes, unless it left the DOM.
  *
  * @param {{rows: object[], hasMore: boolean, loading: boolean, loadError: boolean,
- *   loadMore: () => void, onClosed?: (ids: string[]) => void, serverTotal?: number|null}} options
+ *   loadMore: () => void, onClosed?: (ids: string[]) => void, serverTotal?: number|null,
+ *   skipIds?: string[]}} options `skipIds`: documents left out of the walk and the counter (confirmed from the panel)
  */
 export function useInvoiceInboxReviewNav({
-  rows, hasMore, loading, loadError, loadMore, onClosed, serverTotal = null,
+  rows, hasMore, loading, loadError, loadMore, onClosed, serverTotal = null, skipIds = NO_IDS,
 }) {
   const [openId, setOpenId] = useState(null);
   const [advancing, setAdvancing] = useState(false);
   const visitedRef = useRef(new Set());
   const triggerRef = useRef(null);
 
-  const neighbors = useMemo(() => reviewNeighbors(rows, openId), [rows, openId]);
+  // Documents confirmed from the panel this session are still in `rows` until the list reloads:
+  // they leave the walk and the "n de total" counter at once (the open one always stays).
+  const walkRows = useMemo(
+    () => (skipIds.length ? rows.filter((row) => row.id === openId || !skipIds.includes(row.id)) : rows),
+    [rows, skipIds, openId],
+  );
+  const neighbors = useMemo(() => reviewNeighbors(walkRows, openId), [walkRows, openId]);
   const { prevId, nextId } = neighbors;
 
   const show = useCallback((id) => {
@@ -109,6 +118,8 @@ export function useInvoiceInboxReviewNav({
   return {
     openId,
     open,
+    /** Shows another document without touching the remembered opener (a confirm moving on). */
+    goTo: show,
     close,
     goPrev,
     goNext,

@@ -30,7 +30,7 @@ export default function InvoiceInboxReviewSaveStatus({ save, onRetry }) {
   }
   if (save.status === 'error') {
     return (
-      <span className="inline-flex items-center gap-2 text-destructive" data-state="error" data-testid="invoice-inbox-review-save-state">
+      <span className="inline-flex min-w-0 items-center gap-2 text-destructive" data-state="error" data-testid="invoice-inbox-review-save-state">
         <span className="max-w-[320px] truncate" title={save.errorText ?? ui(save.errorKey)} data-testid="invoice-inbox-review-save-error">
           {save.errorText ?? ui(save.errorKey)}
         </span>
