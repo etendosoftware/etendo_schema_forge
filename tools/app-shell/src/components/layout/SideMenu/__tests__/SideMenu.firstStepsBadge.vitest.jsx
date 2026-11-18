@@ -13,6 +13,7 @@
  * expectation with the link still being there.
  */
 import { render, screen } from '@testing-library/react';
+import { allIconsAs } from '@/test/iconMock.js';
 
 const mockUseLocation = vi.fn(() => ({ pathname: '/dashboard', search: '' }));
 vi.mock('react-router-dom', () => ({
@@ -91,32 +92,9 @@ vi.mock('@/components/ui/button.jsx', () => ({
 vi.mock('@/components/UserAvatarButton.jsx', () => ({
   UserAvatarButton: () => <div data-testid="user-avatar" />,
 }));
-// Mirrors SideMenu's own import list. A Proxy does not work here: vitest checks the mock's
-// named exports up front and rejects anything it cannot see.
-vi.mock('@phosphor-icons/react', () => {
-  const iconStub = ({ className }) => <span className={className} />;
-  return {
-    ClipboardText: iconStub,
-    House: iconStub,
-    Star: iconStub,
-    IdentificationCard: iconStub,
-    ShareNetwork: iconStub,
-    ChartLineUp: iconStub,
-    Receipt: iconStub,
-    Bank: iconStub,
-    Package: iconStub,
-    Briefcase: iconStub,
-    Users: iconStub,
-    Presentation: iconStub,
-    Plug: iconStub,
-    Gear: iconStub,
-    Flask: iconStub,
-    SquaresFour: iconStub,
-    Eye: iconStub,
-    FileCode: iconStub,
-    Storefront: iconStub,
-  };
-});
+// Every icon SideMenu imports, stubbed (allIconsAs takes the list from the real module).
+vi.mock('@phosphor-icons/react', async (importOriginal) =>
+  allIconsAs(({ className }) => <span className={className} />, importOriginal));
 
 const hook = vi.hoisted(() => ({ value: null }));
 vi.mock('@/pages/first-steps/useFirstSteps.js', () => ({

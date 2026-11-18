@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Loader2, Minus, Plus, Trash2 } from 'lucide-react';
+import { CircleNotchIcon, MinusIcon, PlusIcon, TrashIcon } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
 import { parseBoolean } from '@/lib/parseBoolean.js';
@@ -153,7 +153,7 @@ function PriceStepper({ value, prefix, disabled, onCommit }) {
         disabled={disabled}
         className="w-10 h-[38px] flex items-center justify-center border-l border-[hsl(var(--border-subtle))] text-[hsl(var(--text-disabled))] hover:bg-muted disabled:opacity-40 shrink-0"
       >
-        <Minus size={16} data-testid="Minus__d76b90" />
+        <MinusIcon size={16} data-testid="Minus__d76b90" />
       </button>
       <button
         type="button"
@@ -161,7 +161,7 @@ function PriceStepper({ value, prefix, disabled, onCommit }) {
         disabled={disabled}
         className="w-10 h-[38px] flex items-center justify-center border-l border-[hsl(var(--border-subtle))] text-[hsl(var(--text-disabled))] hover:bg-muted disabled:opacity-40 shrink-0"
       >
-        <Plus size={16} data-testid="Plus__d76b90" />
+        <PlusIcon size={16} data-testid="Plus__d76b90" />
       </button>
     </div>
   );
@@ -495,7 +495,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     return (
       <div className="p-2">
         <div className="rounded-xl border border-border-subtle bg-card p-4 text-sm text-muted-foreground flex items-center gap-2">
-          <Loader2 size={14} className="animate-spin" data-testid="Loader2__d76b90" />
+          <CircleNotchIcon size={14} className="animate-spin" data-testid="Loader2__d76b90" />
           {ui('loadingPricing')}
         </div>
       </div>
@@ -632,7 +632,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
                 data-testid="price-add-cancel"
                 className="w-8 h-8 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive hover:bg-destructive disabled:opacity-40 transition-all"
               >
-                <Trash2 className="h-5 w-5" data-testid="Trash2__d76b90" />
+                <TrashIcon className="h-5 w-5" data-testid="Trash2__d76b90" />
               </button>
             </div>
           </div>
@@ -694,7 +694,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
                     data-testid={`price-delete-${row.id}`}
                     className="w-8 h-8 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive-foreground hover:bg-destructive disabled:opacity-40 opacity-0 group-hover/row:opacity-100 transition-all"
                   >
-                    {saving ? <Loader2 size={18} className="animate-spin" data-testid="Loader2__d76b90" /> : <Trash2 className="h-5 w-5" data-testid="Trash2__d76b90" />}
+                    {saving ? <CircleNotchIcon size={18} className="animate-spin" data-testid="Loader2__d76b90" /> : <TrashIcon className="h-5 w-5" data-testid="Trash2__d76b90" />}
                   </button>}
                 </div>
               </div>

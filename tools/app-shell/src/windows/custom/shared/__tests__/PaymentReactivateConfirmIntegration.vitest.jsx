@@ -145,7 +145,6 @@ vi.mock('../../../../components/contract-ui/DocumentTotalsPanel.jsx', () => ({ d
 vi.mock('../../../../components/contract-ui/BalanceFooterPanel.jsx', () => ({ default: () => null }));
 vi.mock('../../../../components/contract-ui/LinesSelectionBar.jsx', () => ({ default: () => null }));
 vi.mock('../../../../components/contract-ui/DocumentStatusPill.jsx', () => ({ default: ({ label, status }) => <span data-testid="status-pill">{label ?? status}</span> }));
-vi.mock('@/components/attachments/AttachmentIcon', () => ({ AttachmentIcon: () => <span>A</span> }));
 
 // `EntityForm` is what FinPaymentForm/HeaderForm actually render (they're
 // one-line wrappers around it). It's the heaviest leaf in the tree and

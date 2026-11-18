@@ -1,4 +1,4 @@
-import { IconicDotsVerticalIcon, IconicEditIcon, IconicTrashIcon } from '@/components/ui/custom-icons';
+import { DotsThreeVerticalIcon, PencilSimpleIcon, TrashIcon } from '@phosphor-icons/react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ROW_ACTION_BUTTON_DESTRUCTIVE, ROW_ACTION_BUTTON_NEUTRAL } from '@/components/contract-ui/rowVisuals.js';
 import { useUI } from '@/i18n';
@@ -45,7 +45,7 @@ function ActionButton({ label, tooltip, className, onClick, inert = false, testI
 /**
  * ETP-6049 — the hover actions of an inbox row, rendered through DataTable's `rowQuickActions`
  * custom `render` slot (the slot `AccountRowActions` uses), with the shared row-action visuals
- * (`rowVisuals.js`) and Iconic icons of `RowQuickActions`. The canonical `RowQuickActions` cannot
+ * (`rowVisuals.js`) and icons of `RowQuickActions`. The canonical `RowQuickActions` cannot
  * express this row: its Edit always runs `onEdit` under an "Edit" title, its kebab only shows
  * with menu items and opens a menu, and its trash is "Delete".
  *
@@ -70,7 +70,7 @@ export default function InvoiceInboxRowActions({ row, onDiscard, onOpen }) {
           onClick={() => onOpen?.(row)}
           testId={`invoice-inbox-row-edit-${row.id}`}
           data-testid="ActionButton__invoice-inbox-row">
-          <IconicEditIcon className="h-5 w-5" data-testid="IconicEditIcon__invoice-inbox-row" />
+          <PencilSimpleIcon className="h-5 w-5" aria-hidden="true" data-testid="IconicEditIcon__invoice-inbox-row" />
         </ActionButton>
         <ActionButton
           label={ui('quickAction.more')}
@@ -79,7 +79,7 @@ export default function InvoiceInboxRowActions({ row, onDiscard, onOpen }) {
           inert
           testId={`invoice-inbox-row-more-${row.id}`}
           data-testid="ActionButton__invoice-inbox-row">
-          <IconicDotsVerticalIcon className="h-5 w-5" data-testid="IconicDotsVerticalIcon__invoice-inbox-row" />
+          <DotsThreeVerticalIcon className="h-5 w-5" aria-hidden="true" data-testid="IconicDotsVerticalIcon__invoice-inbox-row" />
         </ActionButton>
         {isSelectableRow(row) && (
           <ActionButton
@@ -89,7 +89,7 @@ export default function InvoiceInboxRowActions({ row, onDiscard, onOpen }) {
             onClick={() => onDiscard?.(row)}
             testId={`invoice-inbox-row-discard-${row.id}`}
             data-testid="ActionButton__invoice-inbox-row">
-            <IconicTrashIcon className="h-5 w-5" data-testid="IconicTrashIcon__invoice-inbox-row" />
+            <TrashIcon className="h-5 w-5" aria-hidden="true" data-testid="IconicTrashIcon__invoice-inbox-row" />
           </ActionButton>
         )}
       </div>

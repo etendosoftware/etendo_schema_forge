@@ -1,6 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { TrendingUp, TrendingDown, Check, Minus, Sparkles, Plus } from 'lucide-react';
+import {
+  TrendUpIcon,
+  TrendDownIcon,
+  CheckIcon,
+  MinusIcon,
+  SparkleIcon,
+  PlusIcon,
+} from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { useLocaleSwitch } from '@/i18n';
 import { useCopilot } from '@/components/CopilotContext';
@@ -18,7 +25,8 @@ function TrendPill({ pct }) {
   if (pct === null || pct === undefined) return null;
   const isUp = pct > 0;
   const isFlat = pct === 0;
-  const Icon = isFlat ? Minus : isUp ? TrendingUp : TrendingDown;
+  const trendingIcon = isUp ? TrendUpIcon : TrendDownIcon;
+  const Icon = isFlat ? MinusIcon : trendingIcon;
   return (
     <span
       className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-medium"
@@ -82,8 +90,8 @@ export function BestProductsList({ sellers = [], products = [], currencyLabel = 
           subtitle={ui('bestProductsEmptySubtitle')}
           width="340px"
           actions={canCreateSale ? [
-            { key: 'copilot', icon: Sparkles, label: ui('createWithCopilot'), onClick: openCopilot, variant: 'secondary' },
-            { key: 'new', icon: Plus, label: ui('newSale'), onClick: () => navigate('/sales-invoice/new'), variant: 'primary' },
+            { key: 'copilot', icon: SparkleIcon, label: ui('createWithCopilot'), onClick: openCopilot, variant: 'secondary' },
+            { key: 'new', icon: PlusIcon, label: ui('newSale'), onClick: () => navigate('/sales-invoice/new'), variant: 'primary' },
           ] : []}
           data-testid="DashboardEmptyState__4d53b7" />
       ) : (<>
@@ -107,7 +115,7 @@ export function BestProductsList({ sellers = [], products = [], currencyLabel = 
           {hasPositiveTrend && (
             <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--status-success-fg)' }}>
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '20px', height: '20px', background: 'var(--status-success-bg)', borderRadius: '10px', flexShrink: 0 }}>
-                <Check
+                <CheckIcon
                   style={{ width: '12.5px', height: '12.5px', color: 'var(--status-success-fg)' }}
                   data-testid="Check__4d53b7" />
               </div>
@@ -117,7 +125,7 @@ export function BestProductsList({ sellers = [], products = [], currencyLabel = 
           {hasNegativeTrend && (
             <div className="flex items-center gap-2 text-xs" style={{ color: 'hsl(var(--destructive))' }}>
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '20px', height: '20px', background: 'var(--status-destructive-bg)', borderRadius: '10px', flexShrink: 0 }}>
-                <TrendingDown
+                <TrendDownIcon
                   style={{ width: '12.5px', height: '12.5px', color: 'hsl(var(--destructive))' }}
                   data-testid="TrendingDown__4d53b7" />
               </div>

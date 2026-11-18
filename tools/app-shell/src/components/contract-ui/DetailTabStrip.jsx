@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { CaretDownIcon } from '@phosphor-icons/react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu.jsx';
 import { useUI } from '@/i18n';
 import TabStripButton, { tabStripButtonBaseCls, TAB_COUNT_CHIP_CLS } from './TabStripButton.jsx';
@@ -80,7 +80,7 @@ export default function DetailTabStrip({
         <span className={MORE_TRIGGER_CLS}>
           <GhostText text={ui('more')} data-testid="GhostText__detailTabStripProbeMore" />
           <span className={COUNT_CHIP_CLS}><GhostText text={String(tabs.length)} data-testid="GhostText__detailTabStripProbeMoreCount" /></span>
-          <ChevronDown className="h-4 w-4" data-testid="ChevronDown__detailTabStripProbe" />
+          <CaretDownIcon className="h-4 w-4" data-testid="ChevronDown__detailTabStripProbe" />
         </span>
       </div>
       </div>
@@ -110,7 +110,7 @@ export default function DetailTabStrip({
             >
               {ui('more')}
               <span className={COUNT_CHIP_CLS}>{hidden.length}</span>
-              <ChevronDown className="h-4 w-4" data-testid="ChevronDown__detailTabStrip" />
+              <CaretDownIcon className="h-4 w-4" data-testid="ChevronDown__detailTabStrip" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-[200px]" data-testid="detail-tab-more-menu">

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Filter } from 'lucide-react';
+import { FunnelSimpleIcon } from '@phosphor-icons/react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AdvancedFilterBuilder } from '@/components/contract-ui/AdvancedFilterBuilder.jsx';
 import { useUI } from '@/i18n';
@@ -45,7 +45,7 @@ export function AdvancedFilterButton({ columns, rows = [], value = null, onChang
             className,
           )}
         >
-          <Filter className="h-5 w-5 text-[#828FA3]" data-testid="Filter__1026f3" />
+          <FunnelSimpleIcon className="h-5 w-5 text-[#828FA3]" data-testid="Filter__1026f3" />
           <span>{ui('filters')}</span>
           {activeConditions > 0 ? (
             <span className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[hsl(var(--foreground))] px-1 text-[10px] font-semibold leading-none text-primary-foreground">

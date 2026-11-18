@@ -1,5 +1,7 @@
 import React from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { CaretDownIcon } from '@phosphor-icons/react';
+import { findIcon } from '@/test/iconGlyph.js';
 import userEvent from '@testing-library/user-event';
 
 // Mock i18n hooks — return the key as-is
@@ -156,10 +158,10 @@ describe('CreatableSearchSelect chip mode (ETP-4000)', () => {
     // The component fires a lazy fetch on mount → loading=true initially (renders Loader2).
     // Wait for the fetch to resolve so ChevronDown takes over.
     await waitFor(() => {
-      const chevron = container.querySelector('svg.lucide-chevron-down');
+      const chevron = findIcon(container, CaretDownIcon);
       expect(chevron).not.toBeNull();
     });
-    const chevron = container.querySelector('svg.lucide-chevron-down');
+    const chevron = findIcon(container, CaretDownIcon);
     expect(chevron.parentElement.getAttribute('class')).toMatch(/(^|\s)ml-auto(\s|$)/);
   });
 
@@ -168,10 +170,10 @@ describe('CreatableSearchSelect chip mode (ETP-4000)', () => {
       <Harness initialValue="ADDR-1" initialDisplay="123 Main St" />
     );
     await waitFor(() => {
-      const chevron = container.querySelector('svg.lucide-chevron-down');
+      const chevron = findIcon(container, CaretDownIcon);
       expect(chevron).not.toBeNull();
     });
-    const chevron = container.querySelector('svg.lucide-chevron-down');
+    const chevron = findIcon(container, CaretDownIcon);
     expect(chevron.parentElement.getAttribute('class')).toMatch(/(^|\s)ml-auto(\s|$)/);
   });
 

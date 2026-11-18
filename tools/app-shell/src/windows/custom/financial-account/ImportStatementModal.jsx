@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { AlertTriangle, ArrowRight, Check, ChevronDown, Download, FileText, UploadCloud, X } from 'lucide-react';
+import {
+  WarningIcon,
+  ArrowRightIcon,
+  CheckIcon,
+  CaretDownIcon,
+  DownloadSimpleIcon,
+  FileTextIcon,
+  CloudArrowUpIcon,
+  XIcon,
+} from '@phosphor-icons/react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
@@ -237,7 +246,7 @@ function StepperItem({ label, isActive, isDone, index }) {
           badgeClass,
         )}
       >
-        {isDone ? <Check className="h-3 w-3" data-testid="Check__de9647" /> : index + 1}
+        {isDone ? <CheckIcon className="h-3 w-3" data-testid="Check__de9647" /> : index + 1}
       </span>
       <span>{label}</span>
     </div>
@@ -303,7 +312,7 @@ function Dropzone({ onPick, dragging, onDragOver, onDragLeave, onDrop, ui }) {
         className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-lg border border-[hsl(var(--border-control))] bg-card text-[hsl(var(--text-disabled))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]"
         aria-hidden="true"
       >
-        <UploadCloud className="h-5 w-5" data-testid="UploadCloud__de9647" />
+        <CloudArrowUpIcon className="h-5 w-5" data-testid="UploadCloud__de9647" />
       </div>
       <div className="text-sm font-medium text-[hsl(var(--foreground))]">
         {dragging
@@ -357,7 +366,7 @@ function TemplateLinks({ ui }) {
 
   return (
     <div className="mt-3 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1 text-xs text-[hsl(var(--muted-foreground))]">
-      <Download
+      <DownloadSimpleIcon
         className="h-3.5 w-3.5 shrink-0"
         aria-hidden="true"
         data-testid="Download__de9647" />
@@ -407,7 +416,7 @@ function SelectedFile({
         className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-[hsl(var(--foreground))] text-primary-foreground/90"
         aria-hidden="true"
       >
-        <FileText className="h-5 w-5" data-testid="FileText__de9647" />
+        <FileTextIcon className="h-5 w-5" data-testid="FileText__de9647" />
       </div>
       <div className="truncate text-sm font-semibold text-[hsl(var(--foreground))]">{file.name}</div>
       <div className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
@@ -573,7 +582,7 @@ function PreviewLines({ lines, max = 5, currency, bcpLocale, ui }) {
             {showAll
               ? ui('financeAccountStatementsImportShowLess')
               : ui('financeAccountStatementsImportShowAll')}
-            <ChevronDown
+            <CaretDownIcon
               className={cn('h-4 w-4 text-[hsl(var(--text-disabled))] transition-transform', showAll && 'rotate-180')}
               data-testid="ChevronDown__de9647" />
           </button>
@@ -615,7 +624,7 @@ function EmptyOrErrorBody({ view, ui, inputRef, dragging, setDragging, handlePic
       <TemplateLinks ui={ui} data-testid="TemplateLinks__de9647" />
       {view === 'error' ? (
         <div className="mt-3 flex items-start gap-2 rounded-lg bg-[var(--status-destructive-bg)] py-3 pl-1.5 pr-2">
-          <AlertTriangle className="h-6 w-6 shrink-0 text-[hsl(var(--destructive))]" data-testid="AlertTriangle__de9647" />
+          <WarningIcon className="h-6 w-6 shrink-0 text-[hsl(var(--destructive))]" data-testid="AlertTriangle__de9647" />
           <span className="flex-1 px-1 text-sm font-medium leading-6 text-[hsl(var(--destructive))]">
             {ui(errorKey ?? 'financeAccountStatementsImportErrorBody')}
           </span>
@@ -625,7 +634,7 @@ function EmptyOrErrorBody({ view, ui, inputRef, dragging, setDragging, handlePic
             aria-label={ui('financeAccountStatementsImportCloseBtn')}
             className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[hsl(var(--text-disabled))] transition-colors hover:bg-[var(--status-destructive-bg)]"
           >
-            <X className="h-5 w-5" data-testid="X__de9647" />
+            <XIcon className="h-5 w-5" data-testid="X__de9647" />
           </button>
         </div>
       ) : null}
@@ -736,7 +745,7 @@ function MappingBody({
           style={{ backgroundColor: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)' }}
           data-testid="import-review-error-summary"
         >
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" data-testid="AlertTriangle__de9647" />
+          <WarningIcon className="mt-0.5 h-4 w-4 shrink-0" data-testid="AlertTriangle__de9647" />
           <span>{ui('financeAccountStatementsImportReviewErrors', { count: errorCount })}</span>
         </div>
       ) : null}
@@ -802,7 +811,7 @@ function PreviewBody({ previewData, accountCurrency, bcpLocale, ui }) {
           style={{ backgroundColor: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)' }}
           data-testid="import-discarded-lines"
         >
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" data-testid="AlertTriangle__de9647" />
+          <WarningIcon className="mt-0.5 h-4 w-4 shrink-0" data-testid="AlertTriangle__de9647" />
           <span>
             {ui('financeAccountStatementsImportDiscardedLines', { count: previewData.discardedLines })}
           </span>
@@ -914,7 +923,7 @@ function PreviewFooterButton({ ui, importing, previewData, handleConfirmImport }
       disabled={importing}
       className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full bg-[hsl(var(--foreground))] px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-50"
     >
-      <Check className="h-5 w-5" data-testid="Check__de9647" />
+      <CheckIcon className="h-5 w-5" data-testid="Check__de9647" />
       {ui('financeAccountStatementsImportConfirm', {
         count: previewData?.lineCount ?? 0,
       })}
@@ -937,7 +946,7 @@ function DefaultFooterButtons({ ui, view, busy, handleContinue, sendableCount })
         disabled ? 'cursor-not-allowed bg-[hsl(var(--border-control))]' : 'bg-[hsl(var(--foreground))] hover:bg-[hsl(var(--foreground))]',
       )}
     >
-      <ArrowRight className="h-5 w-5" data-testid="ArrowRight__de9647" />
+      <ArrowRightIcon className="h-5 w-5" data-testid="ArrowRight__de9647" />
       {ui('financeAccountStatementsImportContinue')}
     </button>
   );

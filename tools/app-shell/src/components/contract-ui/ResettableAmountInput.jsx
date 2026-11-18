@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { RotateCcw } from 'lucide-react';
+import { ArrowCounterClockwiseIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 import { formatCurrency } from '@/lib/formatCurrency.js';
@@ -130,7 +130,7 @@ export function ResettableAmountInput({
           ].join(' ')}
           data-testid={`${dataTestId}-reset`}
         >
-          <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" data-testid="RotateCcw__6148r3" />
+          <ArrowCounterClockwiseIcon className="h-3.5 w-3.5" aria-hidden="true" data-testid="RotateCcw__6148r3" />
         </button>
       )}
       {message && (

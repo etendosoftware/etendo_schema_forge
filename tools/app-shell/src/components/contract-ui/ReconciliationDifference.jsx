@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertCircle, BookText, Check } from 'lucide-react';
+import { WarningCircleIcon, BookOpenTextIcon, CheckIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import {
   Dialog,
@@ -54,7 +54,7 @@ export function DifferenceBanner({ info, currency, onDismiss, onPost, windowRead
       data-testid="recon-difference-banner"
     >
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--status-warning-border)]">
-        <AlertCircle className="h-4 w-4 text-[var(--status-warning-fg)]" data-testid="AlertCircle__recon-diff" />
+        <WarningCircleIcon className="h-4 w-4 text-[var(--status-warning-fg)]" data-testid="AlertCircle__recon-diff" />
       </span>
       {/* Title only. The design's subtitle ("El extracto es de X y ya has conciliado Y con Mov. Z")
           was dropped: its three figures are all on screen already — the line total in the left
@@ -89,7 +89,7 @@ export function DifferenceBanner({ info, currency, onDismiss, onPost, windowRead
             className="h-9 gap-1.5 px-3.5 text-[13px] font-semibold bg-[hsl(var(--text-primary))] text-primary-foreground hover:bg-accent-highlight hover:text-accent-highlight-foreground"
             data-testid="recon-difference-open"
           >
-            <BookText className="h-[15px] w-[15px]" data-testid="BookText__recon-diff" />
+            <BookOpenTextIcon className="h-[15px] w-[15px]" data-testid="BookText__recon-diff" />
             {ui('financeReconcileDiffAction')}
           </Button>
         )}
@@ -265,7 +265,7 @@ export function DifferenceModal({
             disabled={busy || !glItem?.id}
             className="gap-1.5 bg-[hsl(var(--text-primary))] text-primary-foreground hover:bg-accent-highlight hover:text-accent-highlight-foreground"
             data-testid="recon-difference-confirm">
-            <Check className="h-4 w-4" data-testid="Check__recon-difference" />
+            <CheckIcon className="h-4 w-4" data-testid="Check__recon-difference" />
             {ui('financeReconcileDiffConfirm')}
           </Button>
         </DialogFooter>

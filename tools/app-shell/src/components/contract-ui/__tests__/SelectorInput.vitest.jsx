@@ -21,9 +21,9 @@ vi.mock('@/lib/selectorCatalog.js', () => ({
   getCatalogOptions: () => [],
 }));
 
-vi.mock('lucide-react', () => ({
-  Loader2: () => <span data-testid="loader" />,
-  ChevronDown: () => <span data-testid="icon-chevron" />,
+vi.mock('@phosphor-icons/react', () => ({
+  CircleNotchIcon: () => <span data-testid="loader" />,
+  CaretDownIcon: () => <span data-testid="icon-chevron" />,
 }));
 
 // Mock Radix Select to avoid the full UI tree.

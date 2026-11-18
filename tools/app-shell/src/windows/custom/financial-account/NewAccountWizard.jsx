@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import {
-  ArrowLeft,
-  Landmark,
-  Wallet,
-  CreditCard,
-  ChevronRight,
-  ChevronDown,
-  Link2,
-  PencilLine,
-} from 'lucide-react';
+  ArrowLeftIcon,
+  BankIcon,
+  WalletIcon,
+  CreditCardIcon,
+  CaretRightIcon,
+  CaretDownIcon,
+  LinkSimpleIcon,
+  PencilSimpleIcon,
+} from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -250,7 +250,7 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
                 data-testid="new-account-back"
                 className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[hsl(var(--border-control))] text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]"
               >
-                <ArrowLeft className="h-4 w-4" data-testid="ArrowLeft__24760b" />
+                <ArrowLeftIcon className="h-4 w-4" data-testid="ArrowLeft__24760b" />
               </button>
             ) : null}
             <DialogTitle className="text-xl leading-7" data-testid="DialogTitle__24760b">{titles[step]}</DialogTitle>
@@ -279,7 +279,7 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
             data-testid="account-connection-options"
           >
             <ConnectionCard
-              icon={Link2}
+              icon={LinkSimpleIcon}
               iconTone="green"
               title={ui('financeAccountsNewConnectionOnline')}
               description={ui(accountType === 'CA'
@@ -294,7 +294,7 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
               testid="account-connection-online"
               data-testid="ConnectionCard__24760b" />
             <ConnectionCard
-              icon={PencilLine}
+              icon={PencilSimpleIcon}
               iconTone="neutral"
               title={ui('financeAccountsNewConnectionOffline')}
               description={ui(accountType === 'CA'
@@ -354,9 +354,9 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
 }
 
 const TYPE_CARDS = [
-  { type: 'B', icon: Landmark, image: '/illustrations/account-type-bank.png', titleKey: 'financeAccountsNewTypeBank', descKey: 'financeAccountsNewTypeBankDesc' },
-  { type: 'C', icon: Wallet, image: '/illustrations/account-type-cash.png', titleKey: 'financeAccountsNewTypeCash', descKey: 'financeAccountsNewTypeCashDesc' },
-  { type: 'CA', icon: CreditCard, image: '/illustrations/account-type-card.png', titleKey: 'financeAccountsNewTypeCard', descKey: 'financeAccountsNewTypeCardDesc' },
+  { type: 'B', icon: BankIcon, image: '/illustrations/account-type-bank.png', titleKey: 'financeAccountsNewTypeBank', descKey: 'financeAccountsNewTypeBankDesc' },
+  { type: 'C', icon: WalletIcon, image: '/illustrations/account-type-cash.png', titleKey: 'financeAccountsNewTypeCash', descKey: 'financeAccountsNewTypeCashDesc' },
+  { type: 'CA', icon: CreditCardIcon, image: '/illustrations/account-type-card.png', titleKey: 'financeAccountsNewTypeCard', descKey: 'financeAccountsNewTypeCardDesc' },
 ];
 
 function TypePicker({ ui, onPick }) {
@@ -444,7 +444,7 @@ function BankPicker({ ui, query, onQueryChange, country, onCountryChange, onPick
                   className="flex h-full w-[60px] shrink-0 items-center justify-center gap-2 border-r border-[hsl(var(--border-subtle))] hover:bg-[hsl(var(--muted))] focus:outline-none"
                 >
                   <span className="text-base leading-none">{selectedFlag}</span>
-                  <ChevronDown
+                  <CaretDownIcon
                     className="h-4 w-4 shrink-0 text-[hsl(var(--text-disabled))]"
                     data-testid="ChevronDown__24760b" />
                 </button>
@@ -510,7 +510,7 @@ function BankPicker({ ui, query, onQueryChange, country, onCountryChange, onPick
                 />
               ) : (
                 <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-[hsl(var(--border-control))] bg-card shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]">
-                  <Landmark className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Landmark__24760b" />
+                  <BankIcon className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Landmark__24760b" />
                 </span>
               )}
               <span className="line-clamp-2 w-full text-left text-sm font-medium leading-5 text-[hsl(var(--foreground))]">{bank.name}</span>
@@ -540,8 +540,8 @@ function InstitutionList({ ui, bank, onPick }) {
         <p className="text-sm font-medium leading-6 text-[hsl(var(--foreground))]">{ui('financeAccountsNewBankLabel')}</p>
         <div className="flex h-10 w-full items-center overflow-hidden rounded-lg border border-[hsl(var(--border-control))] bg-card shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]">
           <div className="flex h-full w-[60px] shrink-0 items-center justify-center gap-0.5 border-r border-[hsl(var(--border-subtle))] px-2">
-            <Landmark className="h-4 w-4 text-[hsl(var(--text-disabled))]" data-testid="Landmark__24760b" />
-            <ChevronDown className="h-4 w-4 text-[hsl(var(--text-disabled))]" data-testid="ChevronDown__24760b" />
+            <BankIcon className="h-4 w-4 text-[hsl(var(--text-disabled))]" data-testid="Landmark__24760b" />
+            <CaretDownIcon className="h-4 w-4 text-[hsl(var(--text-disabled))]" data-testid="ChevronDown__24760b" />
           </div>
           <span className="flex-1 px-3 text-sm leading-6 text-[hsl(var(--foreground))]">{bank?.name ?? ''}</span>
         </div>
@@ -560,12 +560,12 @@ function InstitutionList({ ui, bank, onPick }) {
             >
               <span className="flex flex-1 items-center gap-2">
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--border-subtle))] text-[hsl(var(--text-disabled))]">
-                  <Landmark className="h-3.5 w-3.5" data-testid="Landmark__24760b" />
+                  <BankIcon className="h-3.5 w-3.5" data-testid="Landmark__24760b" />
                 </span>
                 <span className="text-sm leading-6 text-[hsl(var(--foreground))]">{inst.name}</span>
               </span>
               <span className="flex shrink-0 items-center pr-1">
-                <ChevronRight className="h-4 w-4 text-[hsl(var(--text-disabled))]" data-testid="ChevronRight__24760b" />
+                <CaretRightIcon className="h-4 w-4 text-[hsl(var(--text-disabled))]" data-testid="ChevronRight__24760b" />
               </span>
             </button>
           ))}

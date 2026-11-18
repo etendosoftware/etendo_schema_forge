@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Info } from 'lucide-react';
+import { InfoIcon } from '@phosphor-icons/react';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useCurrency } from '@/hooks/useCurrency';
@@ -132,7 +132,7 @@ export function BlockingBpBanner({ calloutResult, blockingCondition, completionS
   if (!banner) return null;
 
   return (
-    <InfoBanner tone="info" icon={Info} className="mb-4" data-testid="bp-blocking-banner">
+    <InfoBanner tone="info" icon={InfoIcon} className="mb-4" data-testid="bp-blocking-banner">
       {resolveBannerText(banner, effectiveCurrencyCode)}
     </InfoBanner>
   );

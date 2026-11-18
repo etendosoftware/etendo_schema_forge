@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { WarningIcon } from '@phosphor-icons/react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { useBankConnectionActions } from '@/hooks/useBankConnectionActions';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
@@ -68,7 +68,7 @@ export function BankReimportNotice({ importFromDate = null, testId = 'statement-
       className="flex items-start gap-2 rounded-lg bg-[var(--status-warning-bg)] px-3 py-2"
       data-testid={testId}
     >
-      <AlertTriangle
+      <WarningIcon
         className="mt-0.5 h-4 w-4 shrink-0 text-[var(--status-warning-fg)]"
         data-testid="AlertTriangle__bankreimport" />
       <p className="text-sm text-[var(--status-warning-fg)]">{text}</p>

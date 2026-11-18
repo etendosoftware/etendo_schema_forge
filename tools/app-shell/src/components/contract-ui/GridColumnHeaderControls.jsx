@@ -1,5 +1,5 @@
 import { Children, cloneElement } from 'react';
-import { GripVertical } from 'lucide-react';
+import { DotsSixVerticalIcon } from '@phosphor-icons/react';
 
 export function gridHeaderProps(col, gridView) {
   const id = col.gridViewId;
@@ -38,7 +38,7 @@ export function gridReorderHandle(col, gridView, label, ui) {
           gridView.moveByKeyboard(id, event.key === 'ArrowLeft' ? -1 : 1);
         }
       }}>
-      <GripVertical aria-hidden="true" className="h-3 w-3" data-testid="GripVertical__4a1082" />
+      <DotsSixVerticalIcon aria-hidden="true" className="h-3 w-3" data-testid="GripVertical__4a1082" />
     </span>
   );
 }

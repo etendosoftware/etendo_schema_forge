@@ -37,9 +37,9 @@ vi.mock('@/components/ui/button', () => ({
   ),
 }));
 
-vi.mock('lucide-react', () => ({
-  AlertTriangle: (props) => <svg {...props} />,
-  Loader2: (props) => <svg {...props} />,
+vi.mock('@phosphor-icons/react', () => ({
+  WarningIcon: (props) => <svg {...props} />,
+  CircleNotchIcon: (props) => <svg {...props} />,
 }));
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';

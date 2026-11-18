@@ -31,9 +31,9 @@ vi.mock('../roles/useRolesOverviewData.js', () => ({
   buildRowKey: (category, windowId) => `${category}::${windowId}`,
 }));
 
-vi.mock('lucide-react', () => ({
-  ShieldAlert: (p) => <span data-testid={p['data-testid']} {...p} />,
-  Users: (p) => <span data-testid={p['data-testid']} {...p} />,
+vi.mock('@phosphor-icons/react', () => ({
+  ShieldWarningIcon: (p) => <span data-testid={p['data-testid']} {...p} />,
+  UsersIcon: (p) => <span data-testid={p['data-testid']} {...p} />,
 }));
 
 vi.mock('@/components/ui/card', () => ({

@@ -1,5 +1,5 @@
 import { useRef, useState, lazy, Suspense } from 'react';
-import { FileText, Loader2, AlertCircle } from 'lucide-react';
+import { FileTextIcon, CircleNotchIcon, WarningCircleIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { matchOcrDocType, getOcrDocType } from '@/components/copilot/ocr/ocrDocTypes';
 import { useMainAttachment } from './useMainAttachment.js';
@@ -107,7 +107,7 @@ function AttachmentErrorRow({ pickError, storeFailed }) {
   if (!errorText) return null;
   return (
     <div className="flex items-start gap-2 text-xs text-destructive">
-      <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__c851a1" />
+      <WarningCircleIcon className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__c851a1" />
       <span>{errorText}</span>
     </div>
   );
@@ -126,7 +126,7 @@ function EmptyDocumentDropzone({ canAttach, isDragOver, dropHandlers, onPick }) 
         isDragOver ? 'border-primary bg-primary/5' : 'border-border-control hover:bg-muted'
       }`}
     >
-      <FileText className="h-8 w-8 opacity-40" data-testid="FileText__c851a1" />
+      <FileTextIcon className="h-8 w-8 opacity-40" data-testid="FileText__c851a1" />
       <span className="text-xs">{ui('ocrSidePanelNoAttachments')}</span>
       {canAttach && (
         <span className="text-xs font-medium text-foreground">{ui('ocrSidePanelAttach')}</span>
@@ -189,7 +189,7 @@ function DocumentView({ recordId, token, apiBaseUrl, docTypeId, readOnly = false
   if (isBusy && !storedFile) {
     return (
       <div className="flex h-full min-h-[360px] flex-1 items-center justify-center rounded-xl border-2 border-dashed border-border-control text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__c851a1" />
+        <CircleNotchIcon className="h-5 w-5 animate-spin" data-testid="Loader2__c851a1" />
       </div>
     );
   }
@@ -197,7 +197,7 @@ function DocumentView({ recordId, token, apiBaseUrl, docTypeId, readOnly = false
   if (!storedFile && readOnly) {
     return (
       <div data-testid="ocr-side-panel-readonly-empty" className="flex min-h-[360px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border-control text-muted-foreground">
-        <FileText className="h-8 w-8 opacity-40" data-testid="FileText__c851a1" />
+        <FileTextIcon className="h-8 w-8 opacity-40" data-testid="FileText__c851a1" />
         <span className="text-xs">{ui('ocrSidePanelNoAttachments')}</span>
       </div>
     );
@@ -228,7 +228,7 @@ function DocumentView({ recordId, token, apiBaseUrl, docTypeId, readOnly = false
         <Suspense
           fallback={(
             <div className="flex h-full items-center justify-center text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__c851a1" />
+              <CircleNotchIcon className="h-5 w-5 animate-spin" data-testid="Loader2__c851a1" />
             </div>
           )}
           data-testid="Suspense__c851a1">

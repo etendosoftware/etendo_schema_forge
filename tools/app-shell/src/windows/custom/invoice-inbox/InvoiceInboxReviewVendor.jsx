@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Building2, Search, UserPlus } from 'lucide-react';
+import { BuildingsIcon, MagnifyingGlassIcon, UserPlusIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -144,7 +144,7 @@ function LinkedVendor({ view, readOnly, apiBaseUrl }) {
         className="flex items-center gap-3 rounded-xl border border-border p-3"
         data-testid="invoice-inbox-review-vendor-linked">
         <span className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] bg-muted text-muted-foreground">
-          <Building2 className="h-[18px] w-[18px]" aria-hidden="true" data-testid="Building2__review-vendor" />
+          <BuildingsIcon className="h-[18px] w-[18px]" aria-hidden="true" data-testid="Building2__review-vendor" />
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold" data-testid="invoice-inbox-review-vendor-name">{view.name}</p>
@@ -286,7 +286,7 @@ function NewVendor({ view, missing, readOnly, apiBaseUrl }) {
       className="flex flex-col gap-3 rounded-xl border border-border bg-muted/50 p-3.5"
       data-testid="invoice-inbox-review-vendor-new">
       <div className="flex flex-wrap items-start gap-2.5">
-        <UserPlus className="mt-px h-[18px] w-[18px] flex-none text-primary" aria-hidden="true" data-testid="UserPlus__review-vendor" />
+        <UserPlusIcon className="mt-px h-[18px] w-[18px] flex-none text-primary" aria-hidden="true" data-testid="UserPlus__review-vendor" />
         <p className="min-w-[180px] flex-1 text-[13px] leading-normal text-muted-foreground [overflow-wrap:anywhere]" data-testid="invoice-inbox-review-vendor-new-hint">
           <b className="font-bold text-foreground" data-testid="invoice-inbox-review-vendor-new-title">
             {ui('invoiceInboxReviewVendorNewTitle')}.
@@ -297,7 +297,7 @@ function NewVendor({ view, missing, readOnly, apiBaseUrl }) {
         <GhostButton
           label={ui('invoiceInboxReviewVendorSearchExisting')}
           testId="invoice-inbox-review-vendor-search-existing"
-          icon={<Search className="h-3.5 w-3.5" aria-hidden="true" data-testid="Search__review-vendor" />}
+          icon={<MagnifyingGlassIcon className="h-3.5 w-3.5" aria-hidden="true" data-testid="Search__review-vendor" />}
           editable={editable}
           onClick={() => setSearching((open) => !open)}
           data-testid="GhostButton__3b4318" />
@@ -375,7 +375,7 @@ function NoVendor({ view, missing, readOnly, apiBaseUrl }) {
           className="self-start"
           onClick={actions.createNew}
           data-testid="invoice-inbox-review-vendor-create-new">
-          <UserPlus className="h-3.5 w-3.5" aria-hidden="true" data-testid="UserPlus__review-vendor-create" />
+          <UserPlusIcon className="h-3.5 w-3.5" aria-hidden="true" data-testid="UserPlus__review-vendor-create" />
           {ui('invoiceInboxReviewVendorCreateNewButton')}
         </Button>
       )}

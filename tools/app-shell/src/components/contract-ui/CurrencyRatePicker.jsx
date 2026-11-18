@@ -1,5 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ChevronDown, Loader2, Pencil, Check, X } from 'lucide-react';
+import {
+  CaretDownIcon,
+  CircleNotchIcon,
+  PencilSimpleIcon,
+  CheckIcon,
+  XIcon,
+} from '@phosphor-icons/react';
 import { Label } from '@/components/ui/label';
 import { FIELD_HEIGHT, LABEL_GAP } from '@/components/ui/formDensity';
 import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
@@ -383,7 +389,7 @@ export function CurrencyRatePicker({
             className="text-status-success-foreground hover:text-status-success-foreground p-0.5 rounded"
             title={ui('confirm')}
           >
-            <Check className="h-3.5 w-3.5" data-testid={"Check__" + field.id} />
+            <CheckIcon className="h-3.5 w-3.5" data-testid={"Check__" + field.id} />
           </button>
           <button
             data-testid="currency-rate-cancel"
@@ -392,7 +398,7 @@ export function CurrencyRatePicker({
             className="text-muted-foreground hover:text-foreground p-0.5 rounded"
             title={ui('cancel')}
           >
-            <X className="h-3.5 w-3.5" data-testid={"X__" + field.id} />
+            <XIcon className="h-3.5 w-3.5" data-testid={"X__" + field.id} />
           </button>
         </div>
       ) : (
@@ -430,11 +436,11 @@ export function CurrencyRatePicker({
               </span>
             )}
             {loading ? (
-              <Loader2
+              <CircleNotchIcon
                 className="h-4 w-4 text-[hsl(var(--text-disabled))] animate-spin shrink-0 ml-1"
                 data-testid={"Loader2__trigger__" + field.id} />
             ) : (
-              <ChevronDown
+              <CaretDownIcon
                 className="h-4 w-4 opacity-50 shrink-0 ml-1"
                 data-testid={"ChevronDown__" + field.id} />
             )}
@@ -455,7 +461,7 @@ export function CurrencyRatePicker({
               onClick={handleRateEdit}
               className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
             >
-              <Pencil className="h-3.5 w-3.5" data-testid={"Pencil__" + field.id} />
+              <PencilSimpleIcon className="h-3.5 w-3.5" data-testid={"Pencil__" + field.id} />
             </button>
           )}
         </div>
@@ -518,7 +524,7 @@ export function CurrencyRatePicker({
                 >
                   <span className="flex items-center gap-1.5">
                     {isSelected
-                      ? <Check className="h-3.5 w-3.5 text-primary shrink-0" data-testid="currency-rate-option-check" />
+                      ? <CheckIcon className="h-3.5 w-3.5 text-primary shrink-0" data-testid="currency-rate-option-check" />
                       : <span className="w-3.5 shrink-0" />}
                     {opt.isoCode}
                   </span>

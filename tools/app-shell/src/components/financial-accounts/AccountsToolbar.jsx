@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Search, Plus, Filter } from 'lucide-react';
+import { MagnifyingGlassIcon, PlusIcon, FunnelSimpleIcon } from '@phosphor-icons/react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useUI } from '@/i18n';
@@ -70,7 +70,7 @@ export function AccountsToolbar({
       </div>
       <div className="flex items-center gap-2">
         <div className="relative h-10 w-[232px]">
-          <Search
+          <MagnifyingGlassIcon
             className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[#828FA3]"
             data-testid="Search__c01b81" />
           <Input
@@ -98,7 +98,7 @@ export function AccountsToolbar({
             className="h-10 w-[188px] gap-1 rounded-lg border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))] [&_svg]:size-5"
             data-testid="cuentas-matching-rules-button"
           >
-            <Filter className="text-[#828FA3]" data-testid="Filter__c01b81" />
+            <FunnelSimpleIcon className="text-[#828FA3]" data-testid="Filter__c01b81" />
             {ui('financeAccountsMatchingRules')}
           </Button>
         )}
@@ -110,7 +110,7 @@ export function AccountsToolbar({
             className="group h-10 w-[153px] gap-2 rounded-lg bg-primary pl-2 pr-3 text-sm font-medium leading-6 text-primary-foreground transition-colors hover:bg-primary/90 [&_svg]:size-5"
             data-testid="cuentas-new-account-button"
           >
-            <Plus
+            <PlusIcon
               className="text-primary-foreground/90 group-hover:text-primary-foreground"
               data-testid="Plus__c01b81" />
             {ui('financeAccountsNewAccount')}
