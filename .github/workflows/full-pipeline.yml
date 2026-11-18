@@ -27,9 +27,10 @@ name: Full Pipeline
 #   pw-cell-results-*              the raw results cell-report reads
 #
 # Secrets: ETENDOBOT_TOKEN reads etendo_core, com.etendoerp.go, etendo-localenv, the GitHub modules
-# and the npm packages; NEXUS_USER/NEXUS_PASSWORD resolve the Gradle dependencies; BITBUCKET_SSH_KEY
-# clones the Bitbucket modules and com.etendoerp.jenkins.pipelines; LOCALENV_CACHE_RO_KEY/SECRET read
-# the snapshot cache; DD_API_KEY (optional, EU site) sends the metrics.
+# and the npm packages; BITBUCKET_SSH_KEY clones the Bitbucket modules and
+# com.etendoerp.jenkins.pipelines; LOCALENV_CACHE_RO_KEY/SECRET read the snapshot cache; DD_API_KEY
+# (optional, EU site) sends the metrics. No Nexus credentials: building the environment does not
+# need them (ETP-6367).
 
 # Only what reaches main: the daily cut (mergeblock/*), a hotfix (hotfix/*) and the push to main.
 # Feature branches keep the mini pipeline (mini-pipeline.yml) on their PRs into develop.
@@ -276,8 +277,6 @@ jobs:
         uses: ./etendo_core/modules/com.etendoerp.go/.github/actions/etendo-env
         with:
           etendobot_token: ${{ secrets.ETENDOBOT_TOKEN }}
-          nexus_user: ${{ secrets.NEXUS_USER }}
-          nexus_password: ${{ secrets.NEXUS_PASSWORD }}
           bitbucket_ssh_key: ${{ secrets.BITBUCKET_SSH_KEY }}
           core_branch: ${{ env.CORE_BRANCH }}
           module_branch: ${{ env.MODULE_BRANCH }}
