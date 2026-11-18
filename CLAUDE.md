@@ -396,8 +396,8 @@ live in `.claude/hooks/`.
 
 Why: `--no-verify` skips `.githooks/pre-push`, the only local gate that catches
 failing tests and Sonar regressions before CI (coverage drops are caught by the
-PR's `Sonar Build` check, `docs/coverage-gate.md`). Bypassing it converts a seconds-long local failure into a 1h+ Jenkins
-cycle. When the gate blocks a push, **fixing what it reports is the task** — do
+PR's `Unit tests + Sonar + coverage` check, `docs/coverage-gate.md`). Bypassing it converts a seconds-long local failure into a
+full CI cycle. When the gate blocks a push, **fixing what it reports is the task** — do
 not route around it. If the gate itself is broken, say so and stop.
 
 The hook denies a segment only when it is a real invocation: it blanks quoted
