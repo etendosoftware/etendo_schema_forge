@@ -1,13 +1,24 @@
-import { MagnifyingGlassIcon, SquaresFourIcon } from '@phosphor-icons/react';
+import {
+  MagnifyingGlassIcon,
+  SquaresFourIcon,
+  ArrowLineLeftIcon,
+  ArrowLineRightIcon,
+  CaretDownIcon,
+  CaretRightIcon,
+  FilesIcon,
+  FileTextIcon,
+  HouseSimpleIcon,
+  PackageIcon,
+  ReceiptIcon,
+  RocketLaunchIcon,
+  ShoppingCartSimpleIcon,
+  UserIcon,
+} from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
 
 // The main screen's glyphs are the design's own Phosphor icons (spec of 2026-11-17), imported with
 // the library's `*Icon` names like the rest of the app (`pages/first-steps/firstStepsIcons.js`).
-import {
-  ArrowLineLeftIcon, ArrowLineRightIcon, CaretDownIcon, CaretRightIcon, FilesIcon, FileTextIcon,
-  HouseSimpleIcon, PackageIcon, ReceiptIcon, RocketLaunchIcon, ShoppingCartSimpleIcon,
-  UserIcon,
-} from '@phosphor-icons/react';
+
 import { useLocaleSwitch, useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { PORTAL_DOCUMENT_KINDS } from '@/lib/portal/portalApi.js';

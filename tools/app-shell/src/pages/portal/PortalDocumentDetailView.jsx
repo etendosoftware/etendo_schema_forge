@@ -1,4 +1,13 @@
-import { ArrowLeftIcon, FileXIcon } from '@phosphor-icons/react';
+import {
+  ArrowLeftIcon,
+  FileXIcon,
+  CornersOutIcon,
+  DotsThreeVerticalIcon,
+  DownloadSimpleIcon,
+  MagnifyingGlassMinusIcon,
+  MagnifyingGlassPlusIcon,
+  XIcon,
+} from '@phosphor-icons/react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useLocale, useUI } from '@/i18n';
@@ -20,10 +29,7 @@ import {
   PortalDate, PortalMain, PortalMoney, PortalPaymentStatus, PortalSection, PORTAL_SECTION_TITLE,
   PORTAL_FIGMA_BUTTON_SECONDARY, PORTAL_FIGMA_SHADOW,
 } from './PortalBits.jsx';
-import {
-  CornersOutIcon, DotsThreeVerticalIcon, DownloadSimpleIcon, MagnifyingGlassMinusIcon,
-  MagnifyingGlassPlusIcon, XIcon,
-} from '@phosphor-icons/react';
+
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';

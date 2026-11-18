@@ -1,12 +1,20 @@
-import { ArrowRightIcon } from '@phosphor-icons/react';
+import {
+  ArrowRightIcon,
+  ArrowUpRightIcon,
+  CalendarBlankIcon,
+  CaretDownIcon,
+  CaretRightIcon,
+  ChartBarHorizontalIcon,
+  ChartBarIcon,
+  CheckIcon,
+  FileTextIcon,
+  SmileyIcon,
+} from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
 // The design's own Phosphor icons (spec of 2026-11-17), with the library's `*Icon` names like the
 // rest of the app (`pages/first-steps/firstStepsIcons.js`). Phosphor sizes by its `size` prop.
-import {
-  ArrowUpRightIcon, CalendarBlankIcon, CaretDownIcon, CaretRightIcon, ChartBarHorizontalIcon,
-  ChartBarIcon, CheckIcon, FileTextIcon, SmileyIcon,
-} from '@phosphor-icons/react';
+
 import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import {

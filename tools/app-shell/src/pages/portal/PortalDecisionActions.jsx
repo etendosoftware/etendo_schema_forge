@@ -1,10 +1,15 @@
-import { EnvelopeSimpleOpenIcon } from '@phosphor-icons/react';
+import {
+  EnvelopeSimpleOpenIcon,
+  CheckCircleIcon,
+  CheckIcon,
+  EnvelopeOpenIcon,
+  EnvelopeSimpleIcon,
+  XIcon,
+} from '@phosphor-icons/react';
 import { useState } from 'react';
 
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import {
-  CheckCircleIcon, CheckIcon, EnvelopeOpenIcon, EnvelopeSimpleIcon, XIcon,
-} from '@phosphor-icons/react';
+
 import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';

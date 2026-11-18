@@ -1,10 +1,16 @@
-import { CircleNotchIcon } from '@phosphor-icons/react';
+import {
+  CircleNotchIcon,
+  CalendarBlankIcon,
+  CheckCircleIcon,
+  FileTextIcon,
+  InfoIcon,
+  ProhibitIcon,
+  WarningCircleIcon,
+} from '@phosphor-icons/react';
 import { Component, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
-import {
-  CalendarBlankIcon, CheckCircleIcon, FileTextIcon, InfoIcon, ProhibitIcon, WarningCircleIcon,
-} from '@phosphor-icons/react';
+
 import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { usePortalApiFetch } from '@/lib/portal/usePortalApiFetch.js';
