@@ -2868,3 +2868,7 @@ SII *Causa exención* is not marked: an exempt tax without a cause only raises a
 `*` is hidden on a field the user cannot edit (a completed or sent invoice, a read-only role), as
 in the header form. The marker is purely visual here: saving a draft is not blocked, and the
 completion is refused by the server exactly as before.
+
+## Rate and cost fields are numeric — ETP-6342
+
+Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. The header `eTGOCurrencyRate` (`EM_ETGO_Currency_Rate`) is now `decimal` in the contract (`tsType: number`).

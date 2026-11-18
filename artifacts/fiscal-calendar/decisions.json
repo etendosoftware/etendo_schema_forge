@@ -112,7 +112,7 @@
           "visibility": "discarded"
         }
       },
-      "agentPrompt": "To know whether a date falls in an open period, do not walk the calendar: call etendo_list on spec 'open-close-period-control', entity 'periodControl', with filters {startingDate:{lte:<date>}, endingDate:{gte:<date>}}; its status says whether the period is open (O)."
+      "agentPrompt": "To know whether a date falls in an open period, do not walk the calendar: call etendo_list on spec 'open-close-period-control', entity 'periodControl', with filters {startingDate:{lte:<date>}, endingDate:{gte:<date>}}; its status says whether the period is open (O). The fiscal-year start (a January-December, April-March, July-June or October-September year) cannot be changed through this API, and creating or deleting years does not change it: tell the user the account owner chooses it in the app, in Primeros pasos > 'Revisar calendario contable' > Modificar, only while no period has been opened and nothing has been posted; a later year takes its start when its periods are created in the Calendario window (Crear períodos)."
     },
     "period": {
       "exclude": true,

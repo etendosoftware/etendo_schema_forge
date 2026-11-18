@@ -91,6 +91,7 @@ fija. Se itera; todavía **no son pruebas de la suite**.
 | 53 | `f-invoice-from-photo` | Factura de proveedor desde una foto JPG, en borrador (ETP-5735) | Factura de compra (Subir factura) | 📄 | no |
 | 54 | `w-contact-category-vendor` | Contacto en la categoría Proveedor: hereda solo proveedor (ETP-5791, flag `contact-category-type`) | Contactos, Categoría de contacto | 📄 | no |
 | 55 | `w-contact-own-category` | Contacto en una categoría propia cliente y proveedor: hereda los dos (ETP-5791) | Contactos, Categoría de contacto | 📄 | no |
+| 56 | `e-fiscal-year-start` | Pedir un ejercicio de julio a junio: el MCP no lo cambia y el agente manda a Primeros pasos (ETP-5577) | Calendario | 📄 | no |
 | | **Errores y negativas** | | | | |
 | 39 | `e-unknown-document` | Documento que no existe | Factura | 📄 | sí |
 | 40 | ~~`e-invalid-write`~~ | Cantidad negativa — **retirada del KR** (Etendo la acepta por diseño) | Pedido | 📄 | — |

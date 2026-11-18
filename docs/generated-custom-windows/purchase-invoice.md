@@ -3202,3 +3202,7 @@ hidden once the field is read-only (completed or sent invoice, read-only role). 
 the "Datos fiscales" step of the invoice-creating modals uses
 (`tools/app-shell/src/windows/custom/shared/sifRequiredFields.js`; full table in
 `docs/ui-customization.md` §21b, user-facing detail in `sales-invoice.md`).
+
+## Rate and cost fields are numeric — ETP-6342
+
+Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. The header `eTGOCurrencyRate` (`EM_ETGO_Currency_Rate`) is now `decimal` in the contract (`tsType: number`).
