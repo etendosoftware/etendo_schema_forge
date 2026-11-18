@@ -46,3 +46,7 @@ The generated fields still carry the older `readOnlyLogic: "@sMFCRSynced@='Y'"` 
 - `artifacts/conversion-rates/generated/web/conversion-rates/ConversionRateTable.jsx` and `index.jsx` confirm the list columns, the `finance` category, and the standalone generated layout.
 - `tools/app-shell/src/menu.json` places the window in the Finance group with `windowId: "116"`.
 - Backend: `com.etendoerp.go` `InvoiceExchangeRateValidator` consumes these rates at completion; `com.smf.currency.conversionrate` owns the downloader that writes `Synced` records and the `conversion-rate-downloader-log` audit rows.
+
+## Rate and cost fields are numeric — ETP-6342
+
+Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. **Multiple Rate By** (`multipleRateBy`, `MultiplyRate`) and **Divide Rate By** (`divideRateBy`, `DivideRate`) are now `decimal` in the contract (`tsType: number`): the form renders them as number inputs and the list as numeric columns, without the former 22-character `maxLength`.
