@@ -114,6 +114,7 @@ function route(url, init) {
 }
 
 const FULL_ACCESS = { 'profit-loss': 'full', 'report-general-ledger': 'full', 'report-journal-entries': 'full' };
+const TWO_ORGS = [{ id: 'O1', name: 'Spain' }, { id: 'O2', name: 'USA' }];
 const renderView = (props = {}) => render(<DynamicReportView report={REPORT} onBack={vi.fn()} selectedOrgId="O1" reportAccess={FULL_ACCESS} {...props} />);
 const rowIds = () => screen.queryAllByTestId('DynamicReportTable__row').map((r) => r.dataset.nodeId);
 
@@ -286,7 +287,7 @@ describe('DynamicReportView — comparison and chips', () => {
 
 describe('DynamicReportView — split, errors and exports', () => {
   it('with dateFrom after dateTo the split toggle is not offered: no request, no parts', async () => {
-    renderView();
+    renderView({ roleOrgs: TWO_ORGS });
     await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
     fireEvent.click(screen.getByTestId('DynamicReportPanel__expandAll'));
     fireEvent.change(screen.getByTestId('DynamicReportPanel__splitBy'), { target: { value: 'org' } });
@@ -329,7 +330,7 @@ describe('DynamicReportView — split, errors and exports', () => {
   });
 
   it('with a split dimension, a leaf account lists its parts by that dimension', async () => {
-    renderView();
+    renderView({ roleOrgs: TWO_ORGS });
     await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
     fireEvent.click(screen.getByTestId('DynamicReportPanel__expandAll'));
     fireEvent.change(screen.getByTestId('DynamicReportPanel__splitBy'), { target: { value: 'org' } });
@@ -361,7 +362,7 @@ describe('DynamicReportView — split, errors and exports', () => {
   });
 
   it('PDF export renders what the screen shows: same filters, level and expanded rows', async () => {
-    renderView({ roleOrgs: [{ id: 'O1', name: 'Spain' }] });
+    renderView({ roleOrgs: TWO_ORGS });
     await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
     fireEvent.click(screen.getByTestId('DynamicReportView__export-pdf'));
     await waitFor(() => expect(apiFetchMock.mock.calls.some(([u]) => u.endsWith('/render'))).toBe(true));
@@ -735,7 +736,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
 
   describe('the request', () => {
     it('Total mode carries columns, periods and hiddenCount, and nothing of the comparison', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       const [params] = queries();
       expect(params).toMatchObject({
         columns: 'total', hiddenCount: '0',
@@ -747,7 +748,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
     });
 
     it('Mes sends the range plus the shown months, each with its compared ranges, and no year', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       await toMonths();
       const params = queries().at(-1);
       const tuples = params.periods.split(',');
@@ -762,7 +763,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
     });
 
     it('Trimestre sends quarters; a long range sends only the last N plus hiddenCount', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       choose('DynamicReportPanel__year', 'Y25'); // 2025-07-01 .. 2026-06-30: 12 months, 4 quarters
       choose('DynamicReportPanel__columns', 'month');
       // The request asks for the most periods any mode shows (12 months / 8 quarters); a comparison trims on screen.
@@ -776,7 +777,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
 
   describe('the comparison toggle sends no request (D4)', () => {
     it('in Total mode', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       await settle();
       const before = apiFetchMock.mock.calls.length;
       choose('DynamicReportPanel__compare', 'same-last-year');
@@ -788,7 +789,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
     });
 
     it('in Mes mode, and the compared columns appear for every period', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       await toMonths();
       await settle();
       const before = apiFetchMock.mock.calls.length;
@@ -805,7 +806,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
 
   describe('stale data and notes', () => {
     it('Total → Mes while the old answer is still shown: labels stay consistent with it, then follow the new answer', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       let release;
       queryAnswer = (params) => (params.columns === 'month'
         ? new Promise((res) => { release = () => res(periodAnswer(params)); })
@@ -821,7 +822,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
     });
 
     it('the hidden-periods note counts what the mode hides: 12 months / 8 quarters, 6 / 4 with a comparison, with no new request', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       expect(screen.queryByTestId('DynamicReportView__hiddenNote')).toBeNull();
       choose('DynamicReportPanel__year', 'Y25'); // 12 months, 4 quarters
       choose('DynamicReportPanel__columns', 'month');
@@ -839,7 +840,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
     });
 
     it('the note reads in the singular at the 13-month / 1-hidden boundary', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       choose('DynamicReportPanel__columns', 'month');
       showPanel();
       fireEvent.change(screen.getByTestId('DynamicReportPanel__dateFrom'), { target: { value: '2025-11-01' } }); // 13 months to 2026-11
@@ -849,7 +850,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
     });
 
     it('a 23-month range hides 11 months, 17 with a comparison; quarters hide 0 / 0 over 4 quarters and 4 over 8', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       choose('DynamicReportPanel__columns', 'month');
       showPanel();
       fireEvent.change(screen.getByTestId('DynamicReportPanel__dateFrom'), { target: { value: '2025-01-01' } });
@@ -889,7 +890,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
     };
 
     it('PDF sends the last N plus hiddenCount; Excel and CSV send every bucket; all send compareMode', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       choose('DynamicReportPanel__year', 'Y25');
       choose('DynamicReportPanel__columns', 'month');
       choose('DynamicReportPanel__compare', 'previous');
@@ -917,7 +918,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
     });
 
     it('the PDF carries the screen\'s headline cards as `kpis`; Excel and CSV do not', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       choose('DynamicReportPanel__year', 'Y25');
       choose('DynamicReportPanel__compare', 'previous');
       await settle();
@@ -931,14 +932,14 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
     });
 
     it('compareMode follows the toggle, and is none without a comparison', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       expect((await exportAs('pdf')).compareMode).toBe('none');
       choose('DynamicReportPanel__compare', 'same-last-year');
       expect((await exportAs('csv')).compareMode).toBe('sly');
     });
 
     it('over 25 buckets Excel and CSV are disabled with a translated message; PDF still works; Total mode obeys the 24-month cap', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       choose('DynamicReportPanel__columns', 'month');
       showPanel();
       fireEvent.change(screen.getByTestId('DynamicReportPanel__dateFrom'), { target: { value: '2020-01-01' } });
@@ -959,7 +960,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
     });
 
     it('a server refusal of an export shows its translated message, not the generic one', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       apiFetchMock.mockImplementation((url, init) => (url.endsWith('/render')
         ? Promise.resolve({ ok: false, status: 400, json: () => Promise.resolve({ code: 'PERIOD_RANGE_TOO_LONG' }) })
         : route(url, init)));
@@ -970,7 +971,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
 
   describe('drill (D7)', () => {
     it('a current cell opens the ledger of its bucket; the total column opens the whole range', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       await toMonths();
       await openLeaf();
       // Groups in screen order: jul, ago, sep, oct, nov, Total.
@@ -984,7 +985,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
     });
 
     it('a Comparado cell opens the compared range; for the total it is the single D3 range', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       await toMonths();
       choose('DynamicReportPanel__compare', 'previous');
       await openLeaf();
@@ -999,7 +1000,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
     });
 
     it('Comparado under same-period-last-year opens last year\'s bucket', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       await toMonths();
       choose('DynamicReportPanel__compare', 'same-last-year');
       await openLeaf();
@@ -1008,7 +1009,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
     });
 
     it('the variation cells are not clickable', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       await toMonths();
       choose('DynamicReportPanel__compare', 'previous');
       await openLeaf();
@@ -1020,7 +1021,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
 
   describe('telemetry (D9)', () => {
     it('the comparison is emitted at once with no durationMs, and sends no request', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       await settle();
       choose('DynamicReportPanel__compare', 'previous');
       const [applied] = sent('report_filter_applied');
@@ -1031,7 +1032,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
     });
 
     it('Columnas is a timed filter: one event with durationMs once its result is in', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       await waitFor(() => expect(sent('report_opened')).toHaveLength(1));
       choose('DynamicReportPanel__columns', 'month');
       await waitFor(() => expect(sent('report_filter_applied')).toHaveLength(1));
@@ -1042,13 +1043,13 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
 
   describe('chips and the panel', () => {
     it('has the Columnas select with the three grains', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       const options = within(screen.getByTestId('DynamicReportPanel__columns')).getAllByRole('option').map((o) => [o.value, o.textContent]);
       expect(options).toEqual([['total', 'dynamicReportColumnsTotal'], ['month', 'dynamicReportColumnsMonth'], ['quarter', 'dynamicReportColumnsQuarter']]);
     });
 
     it('the comparison chip shows the total group\'s compared range, per mode and grain', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       choose('DynamicReportPanel__compare', 'same-last-year');
       expect(await screen.findByTestId('DynamicReportView__chip-compare')).toHaveTextContent('01/07/2025 – 03/11/2025');
       choose('DynamicReportPanel__compare', 'previous');
@@ -1060,7 +1061,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
     });
 
     it('a Columnas chip shows outside Total and its remove button goes back to Total', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       expect(screen.queryByTestId('DynamicReportView__chip-columns')).toBeNull();
       await toMonths();
       expect(screen.getByTestId('DynamicReportView__chip-columns')).toHaveTextContent('dynamicReportColumnsMonth');
@@ -1072,7 +1073,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
 
   describe('the table', () => {
     it('has a two-row header: Concepto spans both, each period is a colgroup over its sub-columns', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       await toMonths();
       choose('DynamicReportPanel__compare', 'previous');
       const table = screen.getByTestId('DynamicReportTable');
@@ -1089,7 +1090,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
     });
 
     it('Comparado names what it is compared against, under the header, and only with a comparison', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       await toMonths();
       expect(screen.queryAllByTestId('DynamicReportTable__comparedLabel')).toHaveLength(0);
       choose('DynamicReportPanel__compare', 'same-last-year');
@@ -1101,7 +1102,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
     });
 
     it('scrolls horizontally inside its own wrapper', async () => {
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       expect(screen.getByTestId('DynamicReportTable__scroll').className).toContain('overflow-x-auto');
       expect(screen.getByTestId('DynamicReportTable__scroll')).toContainElement(screen.getByTestId('DynamicReportTable'));
     });
@@ -1137,7 +1138,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
         periods: periodsOf(params),
         rows: [{ node_id: 'O1', name: 'Spain', cells: periodsOf(params).map((_, pos) => cellOf(600 + pos)) }],
       });
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       await toMonths();
       await openLeaf();
       choose('DynamicReportPanel__splitBy', 'org');
@@ -1155,7 +1156,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
         periods: periodsOf(params),
         rows: [{ node_id: 'O1', name: 'Spain', cells: periodsOf(params).map((_, pos) => cellOf(600 + pos)) }],
       });
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       choose('DynamicReportPanel__columns', 'quarter');
       await waitFor(() => expect(groupLabels()).toHaveLength(3));
       choose('DynamicReportPanel__compare', 'previous');
@@ -1180,7 +1181,7 @@ describe('DynamicReportView — collapsible panel (ETP-6239 D8/D9)', () => {
     await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
     return view;
   };
-  const ROLE_ORGS = [{ id: 'O1', name: 'Spain' }];
+  const ROLE_ORGS = TWO_ORGS;
   const quietMs = () => new Promise((r) => setTimeout(r, 450));
   beforeEach(() => localStorage.clear());
 
@@ -1501,5 +1502,36 @@ describe('DynamicReportView — selections in the URL (ETP-6239)', () => {
     await new Promise((r) => setTimeout(r, 50));
     // While the years reload the opening period is unknown: nothing of the period is written.
     expect(onSearchChange.mock.calls.map(([next]) => next).filter((next) => next.includes('dateFrom'))).toEqual([]);
+  });
+});
+
+// ETP-6080 (QA CP-8 note) — same rule as the org picker: Organización only for a role with several orgs.
+describe('DynamicReportView — Organización split and chip (ETP-6080)', () => {
+  const splitValues = () => [...screen.getByTestId('DynamicReportPanel__splitBy').querySelectorAll('option')].map((o) => o.value);
+
+  it('a single-org role has no org split option and no org chip', async () => {
+    queryAnswer = periodAnswer;
+    renderView({ roleOrgs: [{ id: 'O1', name: 'Spain' }] });
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    expect(splitValues()).not.toContain('org');
+    expect(splitValues()).toContain('bpartner');
+    expect(screen.queryByTestId('DynamicReportView__chip-org')).toBeNull();
+  });
+
+  it('a role with two orgs has both', async () => {
+    queryAnswer = periodAnswer;
+    renderView({ roleOrgs: TWO_ORGS });
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    expect(splitValues()).toContain('org');
+    expect(screen.getByTestId('DynamicReportView__chip-org')).toBeInTheDocument();
+  });
+
+  it('a link restored with splitBy=org for a single-org role ends with no split and no chip', async () => {
+    window.history.replaceState(null, '', '/report-viewer?report=profit-loss&splitBy=org');
+    queryAnswer = periodAnswer;
+    renderView({ roleOrgs: [{ id: 'O1', name: 'Spain' }] });
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    expect(screen.getByTestId('DynamicReportPanel__splitBy')).toHaveValue('');
+    expect(screen.queryByTestId('DynamicReportView__chip-split')).toBeNull();
   });
 });

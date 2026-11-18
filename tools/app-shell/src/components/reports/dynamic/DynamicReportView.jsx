@@ -115,9 +115,10 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   const levelParam = paramOf('accountLevel');
   const defaultLevel = levelParam?.default || 'C';
   const levelOptions = (levelParam?.options || []).map((o) => ({ value: o.value, label: pick(o.label, locale) }));
-  const splitDimensions = SPLIT_DIMENSIONS.map(([value, name]) => ({ value, label: label(name) }));
   // Q7: the org picker only when the role reaches more than one org; `0` (*) is not an org to pick.
   const orgs = useMemo(() => roleOrgs.filter((o) => o?.id && o.id !== '0'), [roleOrgs]);
+  // Same rule for the Organización split and chip: with one org there is nothing to tell apart.
+  const splitDimensions = SPLIT_DIMENSIONS.filter(([value]) => value !== 'org' || orgs.length > 1).map(([value, name]) => ({ value, label: label(name) }));
 
   useSetPageMeta({
     title,
@@ -265,7 +266,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   };
   const reset = () => { setState(initialState(selectedOrgId, opening, defaultLevel)); refold('level'); };
 
-  const orgName = orgs.find((o) => o.id === state.orgId)?.name;
+  const orgName = orgs.length > 1 ? orgs.find((o) => o.id === state.orgId)?.name : undefined;
   const [exporting, setExporting] = useState(null);
   const [exportError, setExportError] = useState(null);
   // PDF prints what the screen shows; Excel / CSV print every period, up to the cap (D5).

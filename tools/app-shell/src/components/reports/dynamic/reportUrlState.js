@@ -88,6 +88,8 @@ export function readReportUrlState(search, report, { orgIds = [] } = {}) {
     const v = q.get(key);
     if (ENUMS[key].includes(v)) patch[key] = v;
   }
+  // The Organización split only exists for a role that reaches more than one org (the panel hides it otherwise).
+  if (patch.splitBy === 'org' && orgIds.length <= 1) delete patch.splitBy;
   for (const { name } of spec.pickers) {
     // A list beyond the cap keeps its first MAX_PICKER_IDS; an invalid id drops the whole value.
     const ids = [...new Set((q.get(name) || '').split(',').filter(Boolean))].slice(0, MAX_PICKER_IDS);
