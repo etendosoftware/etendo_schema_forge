@@ -33,14 +33,8 @@ vi.mock('../../../fiscalModelsUtils.js', async (importOriginal) => {
   const actual = await importOriginal();
   return { ...actual, showIaeActivityReminder: vi.fn() };
 });
-vi.mock('@phosphor-icons/react', () => ({
-  CircleNotchIcon: () => null,
-  WarningIcon: () => null,
-  WarningOctagonIcon: () => null,
-  CheckCircleIcon: () => null,
-  DownloadSimpleIcon: () => null,
-  BankIcon: () => null,
-}));
+import { allIconsAs } from '@/test/iconMock.js';
+vi.mock('@phosphor-icons/react', async importOriginal => allIconsAs(() => null, importOriginal));
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AeatSubmitFlow from '../AeatSubmitFlow.jsx';

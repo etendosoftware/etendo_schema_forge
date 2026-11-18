@@ -52,16 +52,8 @@ vi.mock('../FmBoxes303.jsx', () => ({ default: () => null }));
 // TriangleAlert, OctagonAlert, CircleCheck, Download, Landmark) never execute in this file —
 // only FmModel303Page.jsx's own icon imports need stubbing here (Landmark included since
 // FmModel303Page.jsx also uses it for the "Go to Organization" button).
-vi.mock('@phosphor-icons/react', () => ({
-  // ETP-5584 — the detail status chip shows DocumentStatusPill's Check icon for success tones.
-  CheckIcon: () => null,
-  GearIcon: () => null, DownloadSimpleIcon: () => null, ArrowLeftIcon: () => null, FloppyDiskIcon: () => null, WarningOctagonIcon: () => null,
-  WarningIcon: () => null, CheckCircleIcon: () => null, ArrowsLeftRightIcon: () => null,
-  CalculatorIcon: () => null, CircleNotchIcon: () => null, DotsThreeVerticalIcon: () => null,
-  TrendUpIcon: () => null, TrendDownIcon: () => null, ClockIcon: () => null,
-  ClipboardTextIcon: () => null, ReceiptIcon: () => null, FolderIcon: () => null,
-  SealCheckIcon: () => null, BankIcon: () => null,
-}));
+import { allIconsAs } from '@/test/iconMock.js';
+vi.mock('@phosphor-icons/react', async importOriginal => allIconsAs(() => null, importOriginal));
 
 // PresentModal mock: renders a button that, when clicked, reports the
 // 'aeat_telematic' sentinel status — exactly like selecting the 3rd path

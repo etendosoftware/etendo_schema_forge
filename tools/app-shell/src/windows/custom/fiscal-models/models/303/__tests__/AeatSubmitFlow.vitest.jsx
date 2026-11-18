@@ -15,14 +15,8 @@ vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => stableApiFetch }));
 vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => ({ selectedOrg: { id: 'org-1' } }) }));
 vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u ?? '' }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
-vi.mock('@phosphor-icons/react', () => ({
-  CircleNotchIcon: () => null,
-  WarningIcon: () => null,
-  WarningOctagonIcon: () => null,
-  CheckCircleIcon: () => null,
-  DownloadSimpleIcon: () => null,
-  BankIcon: () => null,
-}));
+import { allIconsAs } from '@/test/iconMock.js';
+vi.mock('@phosphor-icons/react', async importOriginal => allIconsAs(() => null, importOriginal));
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';

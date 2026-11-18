@@ -84,16 +84,8 @@ vi.mock('../../../../../../components/contract-ui/DocumentPreview.jsx', () => ({
   DocumentPreview: () => null,
 }));
 vi.mock('../../../fiscal-models.css', () => ({}));
-vi.mock('@phosphor-icons/react', () => ({
-  DownloadSimpleIcon: () => null, CheckCircleIcon: () => null, MagnifyingGlassIcon: () => null,
-  ArrowsClockwiseIcon: () => null, GlobeIcon: () => null, EyeIcon: () => null, DotsThreeVerticalIcon: () => null,
-  CaretDownIcon: () => null, CaretRightIcon: () => null, UsersIcon: () => null,
-  ClockIcon: () => null, WarningIcon: () => null, FolderIcon: () => null, ReceiptIcon: () => null,
-  CalculatorIcon: () => null, PencilSimpleIcon: () => null, ShieldWarningIcon: () => null, InfoIcon: () => null,
-  WarningOctagonIcon: () => null, ArrowLeftIcon: () => null, FloppyDiskIcon: () => null, FileTextIcon: () => null,
-  StarIcon: () => null, ArrowUpRightIcon: () => null, CircleNotchIcon: () => null, XIcon: () => null, CheckIcon: () => null,
-  SealCheckIcon: () => null,
-}));
+import { allIconsAs } from '@/test/iconMock.js';
+vi.mock('@phosphor-icons/react', async importOriginal => allIconsAs(() => null, importOriginal));
 
 import { toast } from 'sonner';
 import { compute349Operators, validate349Vies } from '../../../fiscalModelsUtils.js';

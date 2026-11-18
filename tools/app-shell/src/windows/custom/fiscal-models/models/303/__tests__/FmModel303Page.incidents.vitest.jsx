@@ -75,16 +75,8 @@ vi.mock('../../../FmTabContent.jsx', () => ({
   ),
 }));
 vi.mock('../FmBoxes303.jsx', () => ({ default: () => null }));
-vi.mock('@phosphor-icons/react', () => ({
-  // ETP-5584 — the detail status chip renders a Phosphor Check for success tones.
-  CheckIcon: () => null,
-  GearIcon: () => null, DownloadSimpleIcon: () => null, ArrowLeftIcon: () => null, FloppyDiskIcon: () => null, WarningOctagonIcon: () => null,
-  WarningIcon: () => null, CheckCircleIcon: () => null, ArrowsLeftRightIcon: () => null,
-  CalculatorIcon: () => null, CircleNotchIcon: () => null, DotsThreeVerticalIcon: () => null,
-  TrendUpIcon: () => null, TrendDownIcon: () => null, ClockIcon: () => null,
-  ClipboardTextIcon: () => null, ReceiptIcon: () => null, FolderIcon: () => null,
-  SealCheckIcon: () => null, BankIcon: () => null,
-}));
+import { allIconsAs } from '@/test/iconMock.js';
+vi.mock('@phosphor-icons/react', async importOriginal => allIconsAs(() => null, importOriginal));
 
 // PresentModal mock: renders a button that reports the 'aeat_telematic' sentinel status,
 // so tests can open AeatSubmitFlow (matches FmModel303Page.aeatFlow.vitest.jsx's pattern).
