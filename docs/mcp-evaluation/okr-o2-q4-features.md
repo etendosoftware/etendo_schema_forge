@@ -10,13 +10,13 @@ secundaria: una prueba que Holded no puede hacer igual suma, como Solo Etendo.
 | | Pruebas | Posibles en ambos | Solo Etendo |
 |---|---:|---:|---:|
 | Suite inicial (1-47) | 47 | 39 | 8 |
-| Agregadas en la T3 (48-55) | 8 | 3 | 5 |
-| **Total** | **55** | **42** | **13** |
+| Agregadas en la T3 (48-56) | 9 | 3 | 6 |
+| **Total** | **56** | **42** | **14** |
 
 - **KR2.1** (Etendo Win ÷ posibles en ambos): 79,5 % (31 de 39), medido sobre las 47 iniciales, no
-  oficial. Las 8 nuevas todavía no entraron en una medición contra Holded.
+  oficial. Las 9 nuevas todavía no entraron en una medición contra Holded.
 - **Features del Q4 con prueba:** 6. **Sin prueba todavía:** 6 (ver abajo).
-- Las 8 nuevas pasaron en una corrida con el agente en un local-env sobre `develop` con los flags del
+- Las 9 nuevas pasaron en una corrida con el agente en un local-env sobre `develop` con los flags del
   Q4 prendidos. Los bloques de Holded de 49, 50 y 52 están escritos y sin pilotear.
 
 ## Pruebas agregadas en la T3
@@ -31,6 +31,12 @@ secundaria: una prueba que Holded no puede hacer igual suma, como Solo Etendo.
 | 53 | `f-invoice-from-photo` | Factura de proveedor desde una foto JPG (ETP-5735) | No: `upload_inbox` pide los bytes del archivo como argumento | ✅ 14 llamadas, ~512k tokens |
 | 54 | `w-contact-category-vendor` | Categoría de contacto: el contacto hereda el tipo (ETP-5791, roadmap #1) | No: Holded no tiene categorías que definan el tipo | ✅ 5 llamadas |
 | 55 | `w-contact-own-category` | Lo mismo, en una categoría propia cliente y proveedor | No | ✅ 7 llamadas |
+| 56 | `e-fiscal-year-start` | Calendario contable en Primeros pasos (ETP-5577, roadmap #18): cambiar el inicio del ejercicio no se puede por MCP; el agente lo dice y manda a «Revisar calendario contable» | No: Holded no tiene calendario contable | ✅ 2 llamadas |
+
+La 56 prueba un rechazo: el inicio del ejercicio lo elige el dueño una vez, en Primeros pasos, y el
+MCP no lo puede cambiar. El prompt del `year` de `fiscal-calendar` se lo dice al agente; la prueba
+pasa si no aparece un ejercicio que empiece en julio y la respuesta nombra Primeros pasos. Abrir
+períodos, lo único del calendario que un agente hace seguido, ya lo cubre `f-open-period`.
 
 La 54 y la 55 necesitan el flag `contact-category-type` prendido para la cuenta medida: apagado
 (el default) la categoría no se lee y el contacto queda cliente. En producción hoy está prendido solo
