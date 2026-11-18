@@ -42,7 +42,7 @@ function Section({ title, children }) {
  */
 export default function DynamicReportPanel({
   state, onChange, onShortcut, onPickYear, onLevel, onExpandAll, onCollapseAll, onReset,
-  shortcut, yearId, years, orgs, splitDimensions, levelOptions, label, sectionLabel, noFiscalYear,
+  shortcut, yearId, years, orgs, splitDimensions, levelOptions, label, sectionLabel, noFiscalYear, selectorOf,
   offers = { columns: true, compare: true, splitBy: true }, collapsed = false, onToggleCollapsed, activeFilterCount = 0, collapseRef, expandRef,
 }) {
   const ui = useUI();
@@ -152,7 +152,7 @@ export default function DynamicReportPanel({
             <PopupMultiSelector
               // Remounts when the restored names land (the selector seeds its chips from props only once).
               key={`${state[name] ? 'set' : 'empty'}${named}`}
-              selector={name === 'bPartnerId' ? 'bpartner' : 'product'}
+              selector={selectorOf?.(name) ?? (name === 'bPartnerId' ? 'bpartner' : 'product')}
               label={label(name)}
               value={state[name]}
               displayValue={state[`_display_${name}`]}

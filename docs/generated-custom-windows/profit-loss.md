@@ -6,7 +6,7 @@ Show the result of a period (revenue, expenses and the profit or loss they add u
 ## What this report should allow
 - Browse the report from the Finance / Reports menu listed as **Pérdidas y Ganancias** (es) / **Profit & Loss** (en).
 - Pick an Accounting Schema (General Ledger), a Year or a date range, and optionally a comparison year or date range.
-- Filter by one or more business partners (**Contacto**) and products (**Producto**) in the **Dimensiones** section (ETP-6080). Both are optional multi-select popups; empty means no filter.
+- Filter by one or more business partners (**Contacto**) and products (**Producto**) in the **Dimensiones** section (ETP-6080). Both are optional multi-select popups; empty means no filter. The product picker uses the `product-all` selector (any active product of the role's organizations, services included), not `product`, which only lists products with stock (ETP-6080).
 - Choose the account level (Heading / Account / Breakdown / Subaccount) and whether to show only accounts with value.
 - Render the report inline as HTML preview and download it as PDF, XLSX, or CSV. XLSX and CSV share the Balance Sheet's flat grid (see `balance-sheet.md`).
 - With the `dynamic-reports` flag on, the report's card (and list row) in *Informes* carries a sparkle mark (top-right corner of the card; tooltip *Interactivo: …*) and a soft primary glow (`DynamicReportBadge.jsx`; only reports in `DYNAMIC_REPORT_IDS`). Use the interactive view instead: live filters, an on-screen tree, comparison, splits by dimension and a drill-down to the ledger, the entry and the document (see *Interactive view* below).

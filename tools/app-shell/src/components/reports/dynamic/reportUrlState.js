@@ -19,7 +19,7 @@ import { parseCalendarDate, todayCalendarISO } from '@/lib/dateOnly.js';
  * shown as a label and printed in the export header): the view resolves them by id.
  */
 
-export const PICKER_SELECTORS = Object.freeze(['bpartner', 'product']);
+export const PICKER_SELECTORS = Object.freeze(['bpartner', 'product', 'product-all']);
 const ENUMS = {
   compare: ['same-last-year', 'previous'],
   columns: ['month', 'quarter'], // 'total' is the default, never written

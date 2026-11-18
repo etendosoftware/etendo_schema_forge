@@ -49,7 +49,7 @@ const REPORT = {
     { name: 'dateTo', type: 'date', label: { es_ES: 'Fecha de Fin' } },
     { name: 'compareTo', type: 'toggle' },
     { name: 'bPartnerId', type: 'search', selector: 'bpartner', label: { es_ES: 'Contacto' } },
-    { name: 'productId', type: 'search', selector: 'product', label: { es_ES: 'Producto' } },
+    { name: 'productId', type: 'search', selector: 'product-all', label: { es_ES: 'Producto' } },
     { name: 'splitBy', type: 'string', hidden: true },
     { name: 'accountLevel', default: 'C', options: [{ value: 'E', label: { es_ES: 'Epígrafe' } }, { value: 'C', label: { es_ES: 'Cuenta' } }, { value: 'S', label: { es_ES: 'Subcuenta' } }] },
   ],
@@ -1388,6 +1388,14 @@ describe('DynamicReportView — selections in the URL (ETP-6239)', () => {
     await waitFor(() => expect(screen.getAllByTestId('PickerChip').map((c) => c.textContent)).toEqual(['Acme', 'Smith, John']));
     const lookups = apiFetchMock.mock.calls.map(([u]) => u).filter((u) => u.includes('/report-selectors/bpartner'));
     expect(lookups).toEqual(['/sws/report-selectors/bpartner?ids=BP1%2CBP3']);
+  });
+
+  it('resolves a restored product through the contract selector (product-all), not the stock-scoped one', async () => {
+    link('productId=PR1');
+    renderView();
+    await waitFor(() => expect(apiFetchMock.mock.calls.map(([u]) => u).some((u) => u.includes('/report-selectors/product-all?ids='))).toBe(true));
+    const lookups = apiFetchMock.mock.calls.map(([u]) => u).filter((u) => u.includes('/report-selectors/product'));
+    expect(lookups).toEqual(['/sws/report-selectors/product-all?ids=PR1']);
   });
 
   it('names containing a comma survive the URL round trip as single chips, and reach the PDF header exactly', async () => {

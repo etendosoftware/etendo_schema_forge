@@ -110,6 +110,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   const params = report.parameters || [];
   const paramOf = (name) => params.find((p) => p.name === name);
   const label = (name) => pick(paramOf(name)?.label, locale) || name;
+  const selectorOf = (name) => paramOf(name)?.selector;
   const sectionLabel = (id) => pick((report.sections || []).find((s) => s.id === id)?.label, locale);
   const levelParam = paramOf('accountLevel');
   const defaultLevel = levelParam?.default || 'C';
@@ -332,6 +333,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
 
       <div className="flex-1 min-h-0 flex flex-col md:flex-row">
         <DynamicReportPanel
+          selectorOf={selectorOf}
           collapsed={panel.collapsed}
           onToggleCollapsed={togglePanel}
           activeFilterCount={activeFilterCount}
