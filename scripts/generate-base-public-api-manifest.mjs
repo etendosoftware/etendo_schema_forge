@@ -2,6 +2,17 @@ import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+// The agreed v1 surface is explicit: adding a window or a UI child tab must
+// never publish a new public resource without a scope decision.
+export const publicApiV1Entities = Object.freeze({
+  contacts: ['businessPartner', 'locationAddress', 'contact'],
+  product: ['product', 'costing'],
+  'product-category': ['productCategory'],
+  'purchase-order': ['header', 'lines'],
+  'sales-order': ['header', 'lines'],
+  'sales-quotation': ['quotation', 'quotationLine'],
+});
+
 const excludedCategories = new Set([
   // These modules are not part of the public API scope.
   'accounting',
@@ -58,12 +69,6 @@ const excludedChildTabs = [
   // back when the team that owns banking data decides on it.
   /^bank account$/i,
 ];
-
-export const fiscalMonitorWindows = new Set([
-  'monitor-verifactu',
-  'sii-monitor',
-  'tbai-facturas-enviadas',
-]);
 
 // Fields that are never published, whether curated or derived from the window
 // form. Deriving the default exposure from the form is opt-out, so this list is
@@ -138,14 +143,11 @@ export function isCurated(source) {
 //   fields its window list shows (`visibility === 'readOnly' && grid !== false`),
 //   e.g. document status and totals. The added fields are read-only, so they
 //   are published `out`.
-// - Fiscal monitors are never derived: their curation belongs to the Spanish
-//   localization team, so without it they publish only `id` and `updated`.
 // - `system` / `discarded` fields and `neverExposedFields` are never published.
-export function isPublicField(field, { curated, specName }) {
+export function isPublicField(field, { curated }) {
   if (field.visibility === 'system' || field.visibility === 'discarded') return false;
   if (neverExposedFields.has(field.name)) return false;
   if (curated) return field.publicApi?.exposed === true;
-  if (fiscalMonitorWindows.has(specName)) return false;
   if (field.form !== false) return true;
   return field.visibility === 'readOnly' && field.grid !== false;
 }
@@ -267,16 +269,48 @@ export function inputFieldsOf(decisions, entityName) {
   return Array.isArray(list) ? list : [];
 }
 
+// A lookup lets an integrator list the valid ids of a reference field without knowing them
+// beforehand (GET /api/v1/<resource>/lookups/<field>). Declared per field in decisions.json as
+// `publicApi.lookup: true` or `publicApi.lookup: { context: { <param>: <value> } }`. The context
+// is fixed configuration (the parameters the window's own selector sends, such as IsSOTrx):
+// the gateway forwards only these values, never the caller's. Any other shape is refused.
+/** Selector parameters the gateway fills itself (search and page): never a lookup context key. */
+export const RESERVED_LOOKUP_CONTEXT_KEYS = new Set(['q', 'limit', 'offset']);
+
+export function lookupOf(field, where) {
+  const lookup = field?.publicApi?.lookup;
+  if (lookup === undefined || lookup === false) return undefined;
+  if (lookup === true) return { context: {} };
+  const shapeError = () => new Error(`${where}: publicApi.lookup must be true or { context: { <param>: "<value>" } }`);
+  if (typeof lookup !== 'object' || lookup === null || Array.isArray(lookup)) throw shapeError();
+  for (const key of Object.keys(lookup)) {
+    if (key !== 'context') throw shapeError();
+  }
+  const context = lookup.context ?? {};
+  if (typeof context !== 'object' || context === null || Array.isArray(context)
+    || Object.entries(context).some(([name, value]) => !/^[A-Za-z_#][A-Za-z0-9_]*$/.test(name) || typeof value !== 'string')) {
+    throw shapeError();
+  }
+  for (const name of Object.keys(context)) {
+    if (RESERVED_LOOKUP_CONTEXT_KEYS.has(name)) {
+      throw new Error(`${where}: publicApi.lookup context cannot use "${name}"; q, limit and offset are set by the gateway`);
+    }
+  }
+  return { context: { ...context } };
+}
+
 // Exposure policy declared by the product cell in decisions.json:
 // - `window.publicApi.actions: ["complete"]`: actions the window publishes (absent: none).
 // - `entities.<entity>.publicApi.readOnly: true`: GET/LIST only, every field `out`.
 // - `entities.<entity>.fields.<field>.publicApi.readOnly: true` (or the entity-level list
 //   `entities.<entity>.publicApi.readOnlyFields: ["field"]`): the field is `out`.
+// - `entities.<entity>.fields.<field>.publicApi.lookup`: publishes a lookup of the field's valid
+//   values (see lookupOf). Top-level resources only; the field must be published and a reference.
 // - `entities.<entity>.fields.<field>.publicApi.required: true`: a writable field the API
 //   refuses to create without. Declared, not derived: the contract's `required` also covers
 //   fields NEO fills by itself (e.g. an order's address or price list).
 // Field names are the internal (contract) names. Platform guardrails
-// (`neverExposedFields`, fiscal monitors) are applied by the generator and win over this.
+// (`neverExposedFields`) are applied by the generator and win over this.
 export function exposurePolicyOf(decisions, entityName) {
   const entity = decisions?.entities?.[entityName];
   const actions = decisions?.window?.publicApi?.actions;
@@ -288,18 +322,55 @@ export function exposurePolicyOf(decisions, entityName) {
   const requiredFields = new Set(
     Object.entries(entity?.fields ?? {}).filter(([, field]) => field?.publicApi?.required === true).map(([name]) => name),
   );
+  const lookups = new Map();
+  for (const [name, field] of Object.entries(entity?.fields ?? {})) {
+    const lookup = lookupOf(field, `${entityName}.${name}`);
+    if (lookup) lookups.set(name, lookup);
+  }
   return {
     actions: Array.isArray(actions) ? actions : [],
     readOnly: entity?.publicApi?.readOnly === true,
     readOnlyFields,
     requiredFields,
+    lookups,
   };
+}
+
+/**
+ * Path segment of the lookups of a resource. The lookup route is declared before the child-list
+ * route, so it only shadows a child list whose parent id is literally `lookups`, which generated
+ * ids never are. Refusing a child resource with this segment is hygiene: it keeps the two kinds of
+ * route visibly apart.
+ */
+export const LOOKUPS_SEGMENT = 'lookups';
+
+// Attaches each declared lookup to its published field. Fail closed: a lookup on a child
+// resource, on a field that is not published, or on a field with no reference is a
+// configuration error, never a silently missing route.
+function attachLookups({ fields, lookups, specName, entityName, parent }) {
+  for (const [internalName, lookup] of lookups ?? []) {
+    const where = `${specName}/${entityName}.${internalName}`;
+    if (parent) {
+      throw new Error(`${where}: publicApi.lookup is only supported on top-level resources, not on a child resource`);
+    }
+    const published = Object.values(fields).find((field) => field.internalPath === internalName);
+    if (!published) {
+      throw new Error(`${where}: publicApi.lookup is declared on a field the public API does not publish`);
+    }
+    if (!published.reference) {
+      throw new Error(`${where}: publicApi.lookup needs a reference field (a foreign key); this field has no reference`);
+    }
+    published.lookup = { selector: internalName, type: pathSegment(published.reference), context: lookup.context };
+  }
 }
 
 export function buildEntity({
   specName, entityName, contract, functional, parent, rawEntity, inputFields = [],
-  policy = { actions: [], readOnly: false, readOnlyFields: new Set(), requiredFields: new Set() },
+  policy = { actions: [], readOnly: false, readOnlyFields: new Set(), requiredFields: new Set(), lookups: new Map() },
 }) {
+  if (parent && pathSegment(entityName) === LOOKUPS_SEGMENT) {
+    throw new Error(`${specName}/${entityName}: a child resource cannot use the path segment "${LOOKUPS_SEGMENT}", it is kept for lookups (hygiene: the two kinds of route stay apart)`);
+  }
   const source = contract.frontendContract.entities[entityName];
   const backend = contract.backendContract ?? {};
   const backendEntity = backend.entities?.[entityName] ?? {};
@@ -317,8 +388,6 @@ export function buildEntity({
   if (operations.includes('PUT') && !operations.includes('PATCH')) {
     operations.push('PATCH');
   }
-  const readOnlyFiscalMonitor = fiscalMonitorWindows.has(specName);
-  if (readOnlyFiscalMonitor) operations = ['GET', 'LIST'];
   const pubName = publicName(specName, entityName, contract.frontendContract.window.primaryEntity);
   const readOnlyResource = policy.readOnly;
   if (readOnlyResource) operations = ['GET', 'LIST'];
@@ -328,7 +397,7 @@ export function buildEntity({
   const curated = isCurated(source);
   for (const field of source.fields ?? []) {
     assertNoFieldMapping(field, `${specName}/${entityName}`);
-    if (!isPublicField(field, { curated, specName })) continue;
+    if (!isPublicField(field, { curated })) continue;
     const apiName = publicFieldName(field.publicApi?.name ?? field.name);
     if (fields[apiName]) {
       throw new Error(`Public field name collision in ${specName}/${entityName}: ${apiName}`);
@@ -404,6 +473,8 @@ export function buildEntity({
   // source to the actual NEO response key.
   if (fields.id) fields.id.internalPath = 'id';
 
+  attachLookups({ fields, lookups: policy.lookups, specName, entityName, parent });
+
   // A resource with nothing to write is read-only: create, update and delete
   // would bypass the processes that own those rows (matching, tax recompute).
   const hasWritableField = Object.values(fields).some((field) => field.direction !== 'out');
@@ -414,10 +485,9 @@ export function buildEntity({
     specName,
     entityName,
     publicApi: true,
-    ...(readOnlyFiscalMonitor ? { group: 'Fiscal Monitors' } : {}),
     operations,
     fields,
-    processes: readOnlyFiscalMonitor || parent || !policy.actions.length ? [] : buildProcesses({ source, entityName, actions: policy.actions }),
+    processes: parent || !policy.actions.length ? [] : buildProcesses({ source, entityName, actions: policy.actions }),
     ...(parent ? {
       parent: {
         resource: parent.resource,
@@ -446,7 +516,7 @@ export async function generateManifest({
 } = {}) {
   const entities = {};
   for (const entry of await readdir(artifactsRoot, { withFileTypes: true })) {
-    if (!entry.isDirectory() || excludedWindows.has(entry.name)) continue;
+    if (!entry.isDirectory() || !Object.hasOwn(publicApiV1Entities, entry.name) || excludedWindows.has(entry.name)) continue;
     const contractPath = join(artifactsRoot, entry.name, 'contract.json');
     let contract;
     try {
@@ -483,6 +553,7 @@ export async function generateManifest({
     const primaryTable = primaryRaw?.tableName;
     const primaryIdField = primaryRaw?.fields?.find((field) => field.type === 'id');
     for (const entityName of Object.keys(contract.frontendContract?.entities ?? {})) {
+      if (!publicApiV1Entities[entry.name].includes(entityName)) continue;
       const source = contract.frontendContract.entities[entityName];
       const rawEntity = rawContract?.entities?.find((candidate) => candidate.tableName === source?.tableName);
       const isPrimary = entityName === primaryEntityName;
@@ -573,7 +644,8 @@ export async function generateManifest({
     apiVersion: 'v1',
     generatedFrom: 'artifacts/*/contract.json',
     policy: {
-      entitySelection: 'primary-entity-and-schema-linked-children-per-base-window',
+      entitySelection: 'explicit-v1-resources-with-schema-linked-children',
+      allowedResources: publicApiV1Entities,
       fieldSelection: 'curated-publicApi-else-form-plus-readonly-list',
       excludedCategories: [...excludedCategories],
       excludedWindows: [...excludedWindows],
@@ -581,11 +653,12 @@ export async function generateManifest({
       excludedFields: [...neverExposedFields],
       // Mechanism, not a list of windows: what a window publishes beyond the
       // conservative default is declared in its own decisions.json.
-      guardrails: ['neverExposedFields', 'fiscalMonitors'],
+      guardrails: ['neverExposedFields'],
       actions: 'window.publicApi.actions in decisions.json (absent means none)',
       readOnlyResources: 'entities.<entity>.publicApi.readOnly in decisions.json',
       readOnlyFields: 'fields.<field>.publicApi.readOnly or entities.<entity>.publicApi.readOnlyFields in decisions.json',
       inputFields: 'entities.<entity>.publicApi.inputFields in decisions.json',
+      lookups: 'entities.<entity>.fields.<field>.publicApi.lookup in decisions.json (top-level resources only)',
       failClosed: true,
     },
     entities,

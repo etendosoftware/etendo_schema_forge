@@ -40,7 +40,7 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { showBulkActionToast, persistBulkActionResult } from '@/hooks/useBulkActionToast';
 import { joinWithConjunction, translateBackendErrorBody, translateQuotaRefusalBody } from '@/lib/backendErrors.js';
 import {
-  InvoiceSifStepModal, readOnlySifStep, resolveBulkSifPreview,
+  BulkInvoiceSifStepModal, resolveBulkSifPreview,
 } from '@/windows/custom/shared/InvoiceSifStep.jsx';
 const COMPLETED = 'CO';
 const DRAFT = 'DR';
@@ -90,16 +90,14 @@ const SYSTEM_LABEL_KEYS = {
 
 /**
  * ETP-6179: the preview of the invoices this run would create — one `sifDefaults` per COMPLETED
- * selected order (the others fail before reaching the backend anyway) — plus, per order id, the
- * values that order's POST sends as its own `sifFields`.
+ * selected order (the others fail before reaching the backend anyway) — plus the ids of those
+ * orders, in the order of the previews, to address each one's `sifFields`.
  */
 async function previewBulkInvoices(rows, apiBaseUrl) {
   const completed = rows.filter(row => (row.documentStatus || row.docStatus) === COMPLETED);
   const bulk = await resolveBulkSifPreview(moduleApiFetch,
     completed.map(row => `${apiBaseUrl}/header/${row.id}/action/sifDefaults`));
-  const fieldsByOrderId = Object.fromEntries(
-    completed.map((row, i) => [row.id, bulk.previews[i]?.fields ?? null]));
-  return { ...bulk, fieldsByOrderId };
+  return { ...bulk, orderIds: completed.map(row => row.id) };
 }
 
 async function runBulkPurchaseOrderAction({ rows, action, apiBaseUrl, token, ui, sifFieldsByOrderId }) {
@@ -129,8 +127,8 @@ async function runBulkPurchaseOrderAction({ rows, action, apiBaseUrl, token, ui,
       const res = await moduleApiFetch(`${apiBaseUrl}/header/${row.id}/action/${action}`, {
         method: 'POST',
         
-        // ETP-6179: each order's OWN fiscal data, as its preview gave it (the summary showed
-        // the values they share and "per customer / per order" for the ones they do not).
+        // ETP-6179: the fiscal data chosen in the bulk step, as it applies to THIS order (a field
+        // left "per customer / per order" keeps this order's own value; see bulkSifFields).
         body: JSON.stringify(isInvoice && sifFieldsByOrderId?.[row.id]
           ? { sifFields: sifFieldsByOrderId[row.id] } : {}),
       });
@@ -168,7 +166,7 @@ async function runBulkPurchaseOrderAction({ rows, action, apiBaseUrl, token, ui,
 export default function BulkPurchaseOrderMoreMenu({ selectedRows, clearSelection, token, apiBaseUrl, refresh, windowReadOnly }) {
   const ui = useUI();
   const [running, setRunning] = useState(false);
-  // ETP-6179: the read-only fiscal-data summary shown before creating the invoices.
+  // ETP-6179: the editable fiscal-data step shown before creating the invoices.
   const [sifSummary, setSifSummary] = useState(null);
 
   if (!selectedRows || selectedRows.length === 0 || windowReadOnly) return null;
@@ -197,9 +195,10 @@ export default function BulkPurchaseOrderMoreMenu({ selectedRows, clearSelection
     }, 600);
   };
 
-  // ETP-6179: before creating one invoice per order, show the fiscal data they will get, read-only,
-  // whenever a fiscal system is active: a field's value when it is the same for every order, "per
-  // customer" (SII key) or "per order" when it differs. With no system active, or a preview that
+  // ETP-6179: before creating one invoice per order, show ONE editable set of fiscal data for all
+  // of them whenever a fiscal system is active: a field's value when it is the same for every
+  // order, "per customer" (SII key) or "per order" when it differs, until the user sets it — then
+  // that value goes to every invoice. With no system active, or a preview that
   // could not be read, the run goes on as before and each invoice gets its backend defaults.
   const handleSelect = (action) => async () => {
     if (running) return;
@@ -215,9 +214,12 @@ export default function BulkPurchaseOrderMoreMenu({ selectedRows, clearSelection
     await run(action);
   };
 
-  const confirmSifSummary = async () => {
+  // Every invoice of the run gets the values chosen in the step (bulkSifFields).
+  const confirmSifSummary = async (sifFieldsList) => {
     const summary = sifSummary;
-    await run('createPurchaseInvoice', summary?.fieldsByOrderId);
+    const sifFieldsByOrderId = Object.fromEntries(
+      (summary?.orderIds ?? []).map((id, i) => [id, sifFieldsList[i] ?? null]));
+    await run('createPurchaseInvoice', sifFieldsByOrderId);
     setSifSummary(null);
   };
 
@@ -260,15 +262,13 @@ export default function BulkPurchaseOrderMoreMenu({ selectedRows, clearSelection
       </DropdownMenuContent>
     </DropdownMenu>
     {sifSummary && createPortal(
-      <InvoiceSifStepModal
-        sif={readOnlySifStep(sifSummary.preview, sifSummary.varying)}
-        readOnly
+      <BulkInvoiceSifStepModal
+        summary={sifSummary}
         notice={summaryNotice}
         confirmLabel={`${ui('poBulkCreateInvoices')} (${selectedRows.length})`}
         loading={running}
         onConfirm={confirmSifSummary}
         onCancel={() => setSifSummary(null)}
-        onClose={() => setSifSummary(null)}
         data-testid="InvoiceSifStepModal__bulk6179" />,
       document.body,
     )}

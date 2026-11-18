@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { BadGatewayException, BadRequestException, ConflictException, NotAcceptableException, UnsupportedMediaTypeException, HttpException, PreconditionFailedException } from '@nestjs/common';
 import { PublicApiController, toEtag, versionFromIfMatch } from '../src/public-api/public-api.controller.ts';
 import { toErrorDocument } from '../src/public-api/json-api-http.ts';
+import { mapAttributes, mapRelationships } from '../src/public-api/json-api-request.ts';
 import type { PublicApiSchema } from '@etendosoftware/api-gateway-core';
 
 const schema: PublicApiSchema = {
@@ -395,6 +396,37 @@ test('an unknown action is a 404 coded unknown_action', async () => {
   const { status, errors } = toErrorDocument(refusal);
   assert.equal(status, 404);
   assert.equal(errors[0].code, 'unknown_action');
+});
+
+test('an inherited object name is an unknown resource: 404 without calling Etendo', async () => {
+  let calls = 0;
+  const controller = new PublicApiController(schema, 'http://neo.local/etendo', (async () => { calls += 1; throw new Error('no'); }) as any);
+  const req = { neoJwt: 'jwt' } as any;
+  const body = (type: string) => ({ data: { type, attributes: { name: 'x' } } });
+  for (const name of ['constructor', 'toString', '__proto__']) {
+    const attempts: Array<[string, () => Promise<unknown>]> = [
+      ['list', () => controller.list(name, req)],
+      ['get', () => controller.get(name, 'r1', req)],
+      ['create', () => controller.create(name, body(name), req)],
+      ['lookup', () => controller.lookup(name, 'name', req)],
+      ['listChild as parent', () => controller.listChild(name, 'p1', 'lines', req)],
+      ['listChild as child', () => controller.listChild('businessPartner', 'p1', name, req)],
+      ['getChild as child', () => controller.getChild('businessPartner', 'p1', name, 'r1', req)],
+    ];
+    for (const [label, attempt] of attempts) {
+      const error = await attempt().then(() => undefined, (refusal: unknown) => refusal);
+      assert.equal(statusOf(error), 404, `${label}(${name}) must answer 404, got ${String(error)}`);
+    }
+  }
+  assert.equal(calls, 0, 'Etendo is never called for an unknown resource');
+});
+
+test('an inherited object name in a request body is refused as a non-writable field', () => {
+  for (const key of ['constructor', 'toString', '__proto__']) {
+    const members = JSON.parse(`{"${key}": "x"}`);
+    assert.throws(() => mapAttributes(schema.entities.businessPartner, members), BadRequestException, `attribute ${key}`);
+    assert.throws(() => mapRelationships(schema.entities.businessPartner, members), BadRequestException, `relationship ${key}`);
+  }
 });
 
 test('updated stays read-only in the body; the version travels in If-Match', async () => {
@@ -975,4 +1007,127 @@ test('a single-record read is not a list and carries no pagination', async () =>
   const single = await controller.get('contacts', 'c-1', request) as any;
   assert.equal(single.links, undefined);
   assert.equal(single.meta, undefined);
+});
+
+test('runAction evicts the cached token when Etendo answers the action with 401', async () => {
+  let evictions = 0;
+  const { calls, fn } = actionFetch(() => new Response(JSON.stringify({ error: { status: 401, message: 'Token has been revoked' } }), { status: 401 }), okRead);
+  const controller = new PublicApiController(actionSchema(), 'http://neo.local/etendo', fn);
+  await assert.rejects(
+    () => controller.runAction('salesDoc', 'd1', 'complete', { neoJwt: 'jwt', evictNeoJwt: () => { evictions += 1; } } as any),
+    (error: unknown) => error instanceof HttpException && error.getStatus() === 401,
+  );
+  assert.equal(evictions, 1);
+  assert.equal(calls.length, 1, 'no re-read after a refused action');
+});
+
+// ---- lookups (ETP-6160) ----
+
+const lookupSchema = (): PublicApiSchema => {
+  const s = actionSchema() as any;
+  s.entities.salesDoc.fields.paymentMethod = {
+    publicApi: true, direction: 'inout', internalPath: 'paymentMethod', reference: 'PaymentMethod',
+    lookup: { selector: 'paymentMethod', type: 'payment-method', context: { IsSOTrx: 'Y' } },
+  };
+  s.entities.salesDoc.fields.paymentTerms = { publicApi: true, direction: 'inout', internalPath: 'paymentTerms', reference: 'PaymentTerm' };
+  s.entities.salesDocLine.fields.uom = {
+    publicApi: true, direction: 'inout', internalPath: 'uOM', reference: 'UOM',
+    lookup: { selector: 'uOM', type: 'uom', context: {} },
+  };
+  return s;
+};
+
+const SELECTOR_ANSWER = { items: [{ id: 'pm-1', label: 'Cash' }, { id: 'pm-2', label: 'Card' }], columns: [], totalCount: 5, hasMore: true };
+
+function lookupController(status: number, body: unknown, calls: Array<{ url: string; init?: RequestInit }> = []) {
+  const fn = async (url: string, init?: RequestInit) => {
+    calls.push({ url, init });
+    return new Response(body === null ? null : JSON.stringify(body), { status });
+  };
+  return new PublicApiController(lookupSchema(), 'http://neo.local/etendo', fn as typeof fetch);
+}
+
+test('lookup calls the NEO selector with limit, offset, the search text and only the declared context', async () => {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  await lookupController(200, SELECTOR_ANSWER, calls).lookup('salesDoc', 'paymentMethod', request, { filter: { search: 'ca & co' }, page: { number: '2', size: '2' } });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, 'http://neo.local/etendo/sws/neo/sales-doc/header/selectors/paymentMethod?limit=2&offset=2&q=ca%20%26%20co&IsSOTrx=Y');
+  assert.equal(calls[0].init?.method, 'GET');
+  assert.equal((calls[0].init?.headers as Record<string, string>).Authorization, 'Bearer jwt-abc');
+});
+
+test('lookup answers a JSON:API collection of the lookup type with id, label, meta.page.total and links', async () => {
+  const result = (await lookupController(200, SELECTOR_ANSWER).lookup('salesDoc', 'paymentMethod', request, { page: { size: '2' } })) as any;
+  assert.deepEqual(result.data, [
+    { type: 'payment-method', id: 'pm-1', attributes: { label: 'Cash' } },
+    { type: 'payment-method', id: 'pm-2', attributes: { label: 'Card' } },
+  ]);
+  assert.deepEqual(result.meta, { page: { number: 1, size: 2, total: 5 } });
+  assert.equal(result.links.self, '/api/v1/salesDoc/lookups/paymentMethod?page[number]=1&page[size]=2');
+  assert.equal(result.links.next, '/api/v1/salesDoc/lookups/paymentMethod?page[number]=2&page[size]=2');
+  assert.equal(result.links.last, '/api/v1/salesDoc/lookups/paymentMethod?page[number]=3&page[size]=2');
+});
+
+test('lookup defaults to 50 values per page, keeps filter[search] in the links and omits an implausible total', async () => {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const result = (await lookupController(200, { items: [{ id: 'pm-1', label: 'Cash' }], totalCount: -1 }, calls)
+    .lookup('salesDoc', 'paymentMethod', request, { filter: { search: 'ca' } })) as any;
+  assert.match(calls[0].url, /\?limit=50&offset=0&q=ca&IsSOTrx=Y$/);
+  assert.deepEqual(result.meta, { page: { number: 1, size: 50 } });
+  assert.equal(result.links.self, '/api/v1/salesDoc/lookups/paymentMethod?filter[search]=ca&page[number]=1&page[size]=50');
+});
+
+test('lookup answers 404 unknown_lookup, without calling Etendo, for a field without a lookup or no field at all', async () => {
+  for (const field of ['paymentTerms', 'nope', 'documentStatus', '__proto__']) {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const { status, errors } = toErrorDocument(await lookupController(200, SELECTOR_ANSWER, calls).lookup('salesDoc', field, request, {}).catch((error) => error));
+    assert.equal(status, 404, field);
+    assert.equal(errors[0].code, 'unknown_lookup', field);
+    assert.equal(calls.length, 0, field);
+  }
+});
+
+test('lookup answers 404 for a child resource and an unknown resource, without calling Etendo', async () => {
+  for (const entity of ['salesDocLine', 'nope']) {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const refusal = await lookupController(200, SELECTOR_ANSWER, calls).lookup(entity, 'uom', request, {}).catch((error) => error);
+    assert.equal(toErrorDocument(refusal).status, 404, entity);
+    assert.equal(calls.length, 0, entity);
+  }
+});
+
+test('lookup refuses any other query parameter with 400 before calling Etendo', async () => {
+  const cases: Array<[Record<string, unknown>, string]> = [
+    [{ IsSOTrx: 'N' }, 'IsSOTrx'],
+    [{ q: 'x' }, 'q'],
+    [{ sort: 'label' }, 'sort'],
+    [{ filter: { label: 'x' } }, 'filter[label]'],
+    [{ filter: { search: ['a', 'b'] } }, 'filter[search]'],
+    [{ filter: { search: 'x'.repeat(256) } }, 'filter[search]'],
+    [{ filter: 'x' }, 'filter'],
+    [{ page: { size: '101' } }, 'page[size]'],
+    [{ page: { number: '0' } }, 'page[number]'],
+  ];
+  for (const [query, parameter] of cases) {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const { status, errors } = toErrorDocument(await lookupController(200, SELECTOR_ANSWER, calls).lookup('salesDoc', 'paymentMethod', request, query).catch((error) => error));
+    assert.equal(status, 400, parameter);
+    assert.equal(errors[0].source?.parameter, parameter);
+    assert.equal(calls.length, 0, parameter);
+  }
+});
+
+test('lookup passes a 403 through and evicts the cached token on a 401', async () => {
+  assert.equal((await statusAndErrors(lookupController(403, { error: { status: 403, message: 'No access to this window' } }).lookup('salesDoc', 'paymentMethod', request, {}))).status, 403);
+  let evictions = 0;
+  const evicting = { neoJwt: 'jwt', evictNeoJwt: () => { evictions += 1; } } as any;
+  assert.equal((await statusAndErrors(lookupController(401, { error: { status: 401, message: 'revoked' } }).lookup('salesDoc', 'paymentMethod', evicting, {}))).status, 401);
+  assert.equal(evictions, 1);
+});
+
+test('lookup answers 502 when Etendo does not know the selector, does not answer, or answers without items', async () => {
+  assert.equal((await statusAndErrors(lookupController(404, { error: { status: 404, message: 'Field not found' } }).lookup('salesDoc', 'paymentMethod', request, {}))).status, 502);
+  assert.equal((await statusAndErrors(lookupController(200, { response: { data: [] } }).lookup('salesDoc', 'paymentMethod', request, {}))).status, 502);
+  const offline = new PublicApiController(lookupSchema(), 'http://neo.local/etendo', (async () => { throw new TypeError('fetch failed'); }) as any);
+  assert.equal((await statusAndErrors(offline.lookup('salesDoc', 'paymentMethod', request, {}))).status, 502);
 });

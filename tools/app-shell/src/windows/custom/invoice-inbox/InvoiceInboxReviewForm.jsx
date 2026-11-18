@@ -7,7 +7,7 @@ import { buildOp, currencyScale, MAX_DOCUMENT_NO, missingSet } from './invoiceIn
 import { DATE_FIELD_ICON, ReviewField, ReviewTag, SectionTitle } from './InvoiceInboxReviewParts.jsx';
 import { CommitInput } from './InvoiceInboxReviewInputs.jsx';
 import { ReviewEditorContext, useReviewEditor } from './useInvoiceInboxReviewEditor.js';
-import InvoiceInboxReviewBanners, { InvoiceInboxReviewMismatchBanner, InvoiceInboxReviewNotice } from './InvoiceInboxReviewBanners.jsx';
+import InvoiceInboxReviewBanners, { InvoiceInboxReviewMismatchBanner, InvoiceInboxReviewNotice, InvoiceInboxReviewRefusal } from './InvoiceInboxReviewBanners.jsx';
 import InvoiceInboxReviewVendor from './InvoiceInboxReviewVendor.jsx';
 import InvoiceInboxReviewLines from './InvoiceInboxReviewLines.jsx';
 import InvoiceInboxReviewTotals from './InvoiceInboxReviewTotals.jsx';
@@ -141,6 +141,12 @@ export default function InvoiceInboxReviewForm({
             noticeKey={editor.notice.key}
             onDismiss={editor.dismissNotice}
             data-testid="InvoiceInboxReviewNotice__form" />
+        )}
+        {editor?.refusal && (
+          <InvoiceInboxReviewRefusal
+            refusalKey={editor.refusal.key}
+            onDismiss={editor.dismissRefusal}
+            data-testid="InvoiceInboxReviewRefusal__form" />
         )}
         <InvoiceInboxReviewBanners review={review} data-testid="InvoiceInboxReviewBanners__form" />
         <InvoiceInboxReviewVendor

@@ -446,7 +446,7 @@ await stop({ status: 'success' });
 Payloads are normalized before providers receive them:
 
 - Allowed common fields: `app`, `environment`, `hostname`, `mockMode`, `role_groups`,
-  `route`, `routePattern`, `timestamp`, and `windowName`.
+  `route`, `routePattern`, `tenant_type`, `timestamp`, and `windowName`.
 - Allowed KPI numeric fields: `accuracy`, `attempt`, `count`, `durationMs`,
   `position`, `score`, `step`, and `value`. These must be finite numbers within
   their configured bounds; strings and booleans are dropped for numeric keys.
@@ -483,6 +483,32 @@ free text per tenant. `useSessionStartTracking` keeps them in the common context
 with `setContext`, before `session_started` fires, follows a role switch, and
 clears them on unmount. In a Mixpanel `where`, filter with
 `"warehouse" in properties["role_groups"]`. Mapping: `lib/observability/roleGroups.js`.
+
+### `tenant_type` (ETP-6072)
+
+Every event carries `tenant_type` once the current environment is known, so KPIs
+can leave demo tenants out (consumer: `etendo-kpis`). It is not `environment`, which
+is the deployment (`VITE_APP_ENV`: prod, staging, e2e). The payload policy keeps only
+the two values below and drops anything else, including the backend casing.
+
+| Value | When |
+|---|---|
+| `demo` | The current row of `GET /sws/go/environments` has `environmentType` `DEMO` |
+| `productive` | It has `environmentType` `PRODUCTIVE`, also when a canceled subscription makes its `plan` read `free` |
+| *(absent)* | The list has not loaded, no row matches the session's client, or the row reports no type |
+
+The source is `environmentType`, never `plan`. `useTenantTypeContext` (mounted by
+`useSessionStartTracking`) keeps the value in the common context with `setContext`,
+follows the current tenant, and clears it on unmount. The list loads asynchronously,
+so events sent before it settles go out without the property: read its absence as
+unknown. `session_started` waits for the list (at most 5 s, then it goes out without
+the property), because it is the denominator of the adoption KPIs and a filter on the
+numerator alone would bias them. A company switch is a
+hard navigation, so the next page resolves the new tenant. Backend events of
+`com.etendoerp.go` do not go through the SPA and do not carry it; historical events
+are not backfilled. In a Mixpanel `where`, exclude demo tenants and keep the unknown
+ones with `not (properties["tenant_type"] == "demo")`. Mapping:
+`lib/observability/tenantType.js`.
 
 The health event helpers read `account_id` from the in-memory session identity
 (`lib/sessionIdentity.js`), which `trackSessionStarted` records on sign-in and

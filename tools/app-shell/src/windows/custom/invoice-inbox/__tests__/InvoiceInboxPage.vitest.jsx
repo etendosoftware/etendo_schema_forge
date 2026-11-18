@@ -13,6 +13,9 @@
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxUploadLog.js
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxReviewDrawer.jsx
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/useInvoiceInboxReviewNav.js
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxConfirmDialog.jsx
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/useInvoiceInboxConfirm.js
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxConfirmModel.js
 import { useEffect, useState } from 'react';
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 
@@ -23,6 +26,7 @@ const mockApi = {
   uploadInboxFile: vi.fn(),
   discardInboxDocument: vi.fn(),
   fetchReview: vi.fn(),
+  confirmInboxDocument: vi.fn(),
 };
 vi.mock('../invoiceInboxApi.js', () => ({
   fetchNextPage: (...a) => mockApi.fetchNextPage(...a),
@@ -33,6 +37,7 @@ vi.mock('../invoiceInboxApi.js', () => ({
   uploadInboxFile: (...a) => mockApi.uploadInboxFile(...a),
   discardInboxDocument: (...a) => mockApi.discardInboxDocument(...a),
   fetchReview: (...a) => mockApi.fetchReview(...a),
+  confirmInboxDocument: (...a) => mockApi.confirmInboxDocument(...a),
 }));
 vi.mock('../InvoiceInboxReviewViewer.jsx', () => ({ default: ({ documentId }) => <div data-testid="viewer-stub" data-doc={documentId} /> }));
 vi.mock('@/hooks/useCurrencyPrecision.js', () => ({ useCurrencyPrecision: () => 2 }));
@@ -246,13 +251,13 @@ describe('InvoiceInboxPage — cells', () => {
 });
 
 describe('InvoiceInboxPage — batch bar and upload cards', () => {
-  it('the batch bar shows the count with Discard enabled, Mark for review and Confirm still disabled', async () => {
+  it('the batch bar shows the count with Discard and Confirm enabled (r2 and r3 are confirmable) and Mark for review disabled', async () => {
     await renderPage();
     fireEvent.click(screen.getByTestId('check-r2'));
     fireEvent.click(screen.getByTestId('check-r3'));
     expect(screen.getByTestId('invoice-inbox-selection-count')).toHaveTextContent('invoiceInboxSelectedMany');
     expect(screen.getByTestId('invoice-inbox-bulk-mark-review')).toBeDisabled();
-    expect(screen.getByTestId('invoice-inbox-bulk-confirm')).toBeDisabled();
+    expect(screen.getByTestId('invoice-inbox-bulk-confirm')).toBeEnabled();
     expect(screen.getByTestId('invoice-inbox-bulk-discard')).toBeEnabled();
     // Design order: Mark for review, Discard, Confirm.
     const order = ['mark-review', 'discard', 'confirm']
@@ -727,5 +732,232 @@ describe('InvoiceInboxPage — review panel', () => {
     await waitFor(() => expect(drawer()).toBeNull());
     expect(mockApi.discardInboxDocument).not.toHaveBeenCalled();
     expect(mockApi.uploadInboxFile).not.toHaveBeenCalled();
+  });
+});
+
+function deferredPromise() {
+  let resolve;
+  const promise = new Promise((r) => { resolve = r; });
+  return { promise, resolve };
+}
+const confirmedAnswer = (id, documentNo, extra = {}) => ({
+  status: 'confirmed', result: { id, status: 'CONFIRMED', invoice: { id: `inv-${id}`, documentNo }, createdProducts: 0, ...extra },
+});
+
+describe('InvoiceInboxPage — batch confirm', () => {
+  const selectTwo = () => {
+    fireEvent.click(screen.getByTestId('check-r2'));
+    fireEvent.click(screen.getByTestId('check-r3'));
+  };
+  const openDialog = () => fireEvent.click(screen.getByTestId('invoice-inbox-bulk-confirm'));
+  const runConfirm = () => fireEvent.click(screen.getByTestId('invoice-inbox-confirm-confirm'));
+
+  it('the batch Confirm is disabled, with its tooltip, when no selected row is confirmable (an unreadable error)', async () => {
+    await renderPage();
+    fireEvent.click(screen.getByTestId('check-r4'));
+    const button = screen.getByTestId('invoice-inbox-bulk-confirm');
+    expect(button).toBeDisabled();
+    expect(button.parentElement).toHaveAttribute('title', 'invoiceInboxConfirmNoneConfirmable');
+    fireEvent.click(screen.getByTestId('check-r2'));
+    expect(screen.getByTestId('invoice-inbox-bulk-confirm')).toBeEnabled();
+  });
+
+  it('Confirm opens the dialog for the confirmable rows of the selection; Cancel sends nothing', async () => {
+    await renderPage();
+    selectTwo();
+    openDialog();
+    expect(screen.getByTestId('invoice-inbox-confirm-dialog-title')).toHaveTextContent('invoiceInboxConfirmTitleMany:{"count":2}');
+    fireEvent.click(screen.getByTestId('invoice-inbox-confirm-cancel'));
+    await waitFor(() => expect(screen.queryByTestId('invoice-inbox-confirm-dialog')).toBeNull());
+    expect(mockApi.confirmInboxDocument).not.toHaveBeenCalled();
+    expect(screen.getByTestId('invoice-inbox-selection-count')).toBeInTheDocument();
+  });
+
+  it('sends one request per row IN ORDER and one at a time, then toasts with the numbering, closes, clears and refreshes', async () => {
+    const first = deferredPromise();
+    mockApi.confirmInboxDocument
+      .mockImplementationOnce(() => first.promise)
+      .mockResolvedValueOnce(confirmedAnswer('r3', 'FC1000144'));
+    await renderPage();
+    selectTwo();
+    openDialog();
+    mockApi.fetchNextPage.mockClear();
+    mockApi.fetchCounts.mockClear();
+    runConfirm();
+    await waitFor(() => expect(mockApi.confirmInboxDocument).toHaveBeenCalledTimes(1));
+    // The dialog is locked and shows the progress while the first request is pending.
+    expect(screen.getByTestId('invoice-inbox-confirm-dialog-body')).toHaveTextContent('invoiceInboxConfirmInProgress:{"done":0,"total":2}');
+    expect(screen.getByTestId('invoice-inbox-confirm-confirm')).toBeDisabled();
+    expect(mockApi.confirmInboxDocument).toHaveBeenCalledTimes(1);
+    await act(async () => { first.resolve(confirmedAnswer('r2', 'FC1000143')); });
+    await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1));
+    expect(mockApi.confirmInboxDocument.mock.calls.map((c) => c[1])).toEqual(['r2', 'r3']);
+    expect(toast.success.mock.calls[0][0]).toContain('invoiceInboxConfirmedToastMany:{"count":2}');
+    expect(toast.success.mock.calls[0][0]).toContain('invoiceInboxConfirmRange:{"from":"FC1000143","to":"FC1000144"}');
+    await waitFor(() => expect(screen.queryByTestId('invoice-inbox-confirm-dialog')).toBeNull());
+    expect(screen.queryByTestId('invoice-inbox-selection-bar')).toBeNull();
+    await waitFor(() => expect(mockApi.fetchNextPage).toHaveBeenCalled());
+    await waitFor(() => expect(mockApi.fetchCounts).toHaveBeenCalled());
+  });
+
+  it('a double click on the dialog Confirm sends the requests once', async () => {
+    mockApi.confirmInboxDocument.mockResolvedValue(confirmedAnswer('r2', 'FC1'));
+    await renderPage();
+    fireEvent.click(screen.getByTestId('check-r2'));
+    openDialog();
+    runConfirm();
+    runConfirm();
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(mockApi.confirmInboxDocument).toHaveBeenCalledTimes(1);
+  });
+
+  it('skipped rows are counted in the dialog and never sent', async () => {
+    mockApi.confirmInboxDocument.mockResolvedValue(confirmedAnswer('r2', 'FC1'));
+    await renderPage();
+    fireEvent.click(screen.getByTestId('check-r2'));
+    fireEvent.click(screen.getByTestId('check-r4'));
+    openDialog();
+    expect(screen.getByTestId('invoice-inbox-confirm-dialog-title')).toHaveTextContent('invoiceInboxConfirmTitleOne');
+    expect(screen.getByTestId('invoice-inbox-confirm-skipped')).toHaveTextContent('invoiceInboxConfirmSkippedOne');
+    runConfirm();
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(mockApi.confirmInboxDocument.mock.calls.map((c) => c[1])).toEqual(['r2']);
+  });
+
+  it('a partial run (one refused, one ok) shows a warning with the reason', async () => {
+    mockApi.confirmInboxDocument
+      .mockResolvedValueOnce(confirmedAnswer('r2', 'FC1'))
+      .mockResolvedValueOnce({ status: 'failed', code: 'duplicate_invoice', httpStatus: 409 });
+    await renderPage();
+    selectTwo();
+    openDialog();
+    runConfirm();
+    await waitFor(() => expect(toast.warning).toHaveBeenCalledTimes(1));
+    expect(toast.warning.mock.calls[0][0]).toContain('invoiceInboxConfirmPartialOne:{"failed":1,"reason":"invoiceInboxConfirmReasonDuplicate"}');
+  });
+
+  it('a stopping code (feature flag off) stops the run and reports the unsent documents', async () => {
+    mockApi.confirmInboxDocument.mockResolvedValueOnce({ status: 'failed', code: 'feature_disabled', httpStatus: 403 });
+    await renderPage();
+    selectTwo();
+    openDialog();
+    runConfirm();
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+    expect(mockApi.confirmInboxDocument).toHaveBeenCalledTimes(1);
+    expect(toast.error.mock.calls[0][0]).toContain('invoiceInboxConfirmNotSent:{"count":1}');
+  });
+
+  it('a network error stops the run with the translated text', async () => {
+    mockApi.confirmInboxDocument.mockRejectedValueOnce(Object.assign(new Error('Sin conexión'), { name: 'NetworkError', code: 'NETWORK' }));
+    await renderPage();
+    selectTwo();
+    openDialog();
+    runConfirm();
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+    expect(toast.error.mock.calls[0][0]).toContain('Sin conexión');
+  });
+
+  it('a CONFIRM_FAILED row is confirmable again from the batch bar', async () => {
+    mockApi.fetchNextPage.mockResolvedValue(page([{ id: 'f1', status: 'ERROR', errorCode: 'CONFIRM_FAILED', fileName: 'f.pdf' }]));
+    mockApi.confirmInboxDocument.mockResolvedValue(confirmedAnswer('f1', 'FC9'));
+    render(<InvoiceInboxPage apiBaseUrl="/sws/neo/invoice-inbox" />);
+    await screen.findByTestId('row-f1');
+    fireEvent.click(screen.getByTestId('check-f1'));
+    openDialog();
+    runConfirm();
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(mockApi.confirmInboxDocument.mock.calls[0][1]).toBe('f1');
+  });
+});
+
+describe('InvoiceInboxPage — confirm from the review panel', () => {
+  const drawer = () => screen.queryByTestId('invoice-inbox-review-drawer');
+  const open = async (id) => {
+    fireEvent.click(screen.getByTestId(`row-${id}`));
+    await screen.findByTestId('invoice-inbox-review-form');
+  };
+
+  it('confirms, toasts, and jumps to the next pending document of the list', async () => {
+    mockApi.confirmInboxDocument.mockResolvedValue(confirmedAnswer('r2', 'FC1'));
+    await renderPage();
+    await open('r2');
+    await waitFor(() => expect(screen.getByTestId('invoice-inbox-review-confirm')).toBeEnabled());
+    fireEvent.click(screen.getByTestId('invoice-inbox-review-confirm'));
+    await waitFor(() => expect(screen.getByTestId('viewer-stub')).toHaveAttribute('data-doc', 'r3'));
+    expect(mockApi.confirmInboxDocument).toHaveBeenCalledTimes(1);
+    expect(mockApi.confirmInboxDocument.mock.calls[0][1]).toBe('r2');
+    expect(mockApi.confirmInboxDocument.mock.calls[0][2]).toBeNull();
+    expect(toast.success).toHaveBeenCalledWith('invoiceInboxConfirmedToastOne · FC1');
+    expect(drawer()).not.toBeNull();
+  });
+
+  it('on the last pending document it closes the panel and reloads the list and counters', async () => {
+    mockApi.confirmInboxDocument.mockResolvedValue(confirmedAnswer('r7', 'FC7'));
+    await renderPage();
+    await open('r7');
+    await waitFor(() => expect(screen.getByTestId('invoice-inbox-review-confirm')).toBeEnabled());
+    mockApi.fetchNextPage.mockClear();
+    mockApi.fetchCounts.mockClear();
+    fireEvent.click(screen.getByTestId('invoice-inbox-review-confirm'));
+    await waitFor(() => expect(drawer()).toBeNull());
+    expect(toast.success).toHaveBeenCalled();
+    await waitFor(() => expect(mockApi.fetchNextPage).toHaveBeenCalled());
+    await waitFor(() => expect(mockApi.fetchCounts).toHaveBeenCalled());
+  });
+
+  it('loads the next page when the next pending document is beyond the loaded rows', async () => {
+    mockApi.fetchNextPage
+      .mockResolvedValueOnce(page([{ id: 'a1', status: 'READY', fileName: 'a.pdf' }], true))
+      .mockResolvedValueOnce(page([{ id: 'a2', status: 'READY', fileName: 'b.pdf' }], false));
+    mockApi.confirmInboxDocument.mockResolvedValue(confirmedAnswer('a1', 'FC1'));
+    render(<InvoiceInboxPage apiBaseUrl="/sws/neo/invoice-inbox" />);
+    await screen.findByTestId('row-a1');
+    fireEvent.click(screen.getByTestId('row-a1'));
+    await screen.findByTestId('invoice-inbox-review-form');
+    await waitFor(() => expect(screen.getByTestId('invoice-inbox-review-confirm')).toBeEnabled());
+    fireEvent.click(screen.getByTestId('invoice-inbox-review-confirm'));
+    await waitFor(() => expect(screen.getByTestId('viewer-stub')).toHaveAttribute('data-doc', 'a2'));
+    expect(mockApi.fetchNextPage).toHaveBeenCalledTimes(2);
+  });
+
+  it('the document confirmed from the panel leaves the position counter at once', async () => {
+    mockApi.confirmInboxDocument.mockResolvedValue(confirmedAnswer('r2', 'FC1'));
+    await renderPage();
+    await open('r2');
+    expect(screen.getByTestId('invoice-inbox-review-position')).toHaveTextContent('"total":6');
+    await waitFor(() => expect(screen.getByTestId('invoice-inbox-review-confirm')).toBeEnabled());
+    fireEvent.click(screen.getByTestId('invoice-inbox-review-confirm'));
+    await waitFor(() => expect(screen.getByTestId('viewer-stub')).toHaveAttribute('data-doc', 'r3'));
+    expect(screen.getByTestId('invoice-inbox-review-position')).toHaveTextContent('"total":5');
+  });
+
+  it('while the confirm is in flight, Previous/Next and close do nothing and the button is locked', async () => {
+    const gate = deferredPromise();
+    mockApi.confirmInboxDocument.mockImplementation(() => gate.promise);
+    await renderPage();
+    await open('r3');
+    await waitFor(() => expect(screen.getByTestId('invoice-inbox-review-confirm')).toBeEnabled());
+    fireEvent.click(screen.getByTestId('invoice-inbox-review-confirm'));
+    await waitFor(() => expect(screen.getByTestId('invoice-inbox-review-confirm')).toBeDisabled());
+    expect(screen.getByTestId('invoice-inbox-review-next')).toBeDisabled();
+    expect(screen.getByTestId('invoice-inbox-review-prev')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('invoice-inbox-review-close'));
+    expect(drawer()).not.toBeNull();
+    fireEvent.click(screen.getByTestId('invoice-inbox-review-confirm'));
+    expect(mockApi.confirmInboxDocument).toHaveBeenCalledTimes(1);
+    await act(async () => { gate.resolve(confirmedAnswer('r3', 'FC3')); });
+  });
+
+  it('a refused confirm (duplicate) keeps the panel on the document with the full refusal banner and no toast', async () => {
+    mockApi.confirmInboxDocument.mockResolvedValue({ status: 'failed', code: 'duplicate_invoice', httpStatus: 409 });
+    await renderPage();
+    await open('r2');
+    await waitFor(() => expect(screen.getByTestId('invoice-inbox-review-confirm')).toBeEnabled());
+    fireEvent.click(screen.getByTestId('invoice-inbox-review-confirm'));
+    expect(await screen.findByTestId('invoice-inbox-review-refusal')).toHaveTextContent('invoiceInboxConfirmErrorDuplicate');
+    expect(screen.getByTestId('viewer-stub')).toHaveAttribute('data-doc', 'r2');
+    expect(toast.success).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('invoice-inbox-review-refusal-dismiss'));
+    expect(screen.queryByTestId('invoice-inbox-review-refusal')).toBeNull();
   });
 });

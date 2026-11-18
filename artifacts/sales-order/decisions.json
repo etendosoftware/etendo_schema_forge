@@ -157,7 +157,8 @@
         },
         "paymentMethod": {
           "reference": "PaymentMethod",
-          "section": "principal"
+          "section": "principal",
+          "publicApi": { "lookup": { "context": { "IsSOTrx": "Y" } } }
         },
         "paymentTerms": {
           "section": "principal",
@@ -169,7 +170,8 @@
           "createNamePlaceholderKey": "paymentTermDaysPlaceholder"
         },
         "warehouse": {
-          "inputMode": "search"
+          "inputMode": "search",
+          "publicApi": { "lookup": true }
         },
         "salesRepresentative": {
           "visibility": "system"

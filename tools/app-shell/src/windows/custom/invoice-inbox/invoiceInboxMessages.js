@@ -103,6 +103,41 @@ export function discardReasonKey(code) {
   return DISCARD_ERROR_LABEL_KEYS[code] ?? DISCARD_FALLBACK_KEY;
 }
 
+/**
+ * Refusal of one confirm (`error.code` of the action's answer), as a reason fragment shown after a
+ * colon in the toast (ETP-6051). `access_denied` and `not_found` are derived from a code-less 403 /
+ * 404 (`discardFailureCode`, shared).
+ */
+export const CONFIRM_ERROR_LABEL_KEYS = Object.freeze({
+  not_confirmable: 'invoiceInboxConfirmReasonNotConfirmable',
+  not_found: 'invoiceInboxDiscardReasonNotFound',
+  org_not_allowed: 'invoiceInboxConfirmReasonOrg',
+  access_denied: 'invoiceInboxConfirmReasonAccess',
+  feature_disabled: 'invoiceInboxDiscardReasonFeatureDisabled',
+  stale_document: 'invoiceInboxConfirmReasonStale',
+  not_valid: 'invoiceInboxConfirmReasonNotValid',
+  duplicate_invoice: 'invoiceInboxConfirmReasonDuplicate',
+  missing_exchange_rate: 'invoiceInboxConfirmReasonExchangeRate',
+  vendor_address_missing: 'invoiceInboxConfirmReasonVendorAddress',
+  QUOTA_EXCEEDED: 'invoiceInboxConfirmReasonQuota',
+  price_list_tax_included: 'invoiceInboxConfirmReasonPriceListTax',
+  confirm_failed: 'invoiceInboxConfirmReasonFailed',
+});
+export const CONFIRM_FALLBACK_KEY = 'invoiceInboxConfirmReasonGeneric';
+/** Several different reasons in one batch. */
+export const CONFIRM_SEVERAL_KEY = 'invoiceInboxConfirmReasonSeveral';
+
+/**
+ * Confirm codes after which no other document can succeed (the account, the role or the plan quota
+ * is refused): the rest of the queue is not sent. Per-document refusals (`org_not_allowed`,
+ * `not_valid`, `duplicate_invoice`, `missing_exchange_rate`, `confirm_failed`…) do not stop it.
+ */
+export const CONFIRM_STOPPING_CODES = new Set(['feature_disabled', 'access_denied', 'QUOTA_EXCEEDED']);
+
+export function confirmReasonKey(code) {
+  return CONFIRM_ERROR_LABEL_KEYS[code] ?? CONFIRM_FALLBACK_KEY;
+}
+
 export function statusLabelKey(status) {
   return STATUS_LABEL_KEYS[status] ?? null;
 }

@@ -3,6 +3,7 @@ import { MapPin, ChevronRight, Pencil } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { Label } from '@/components/ui/label';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
+import { sanitizeDashJoinedIdentifier } from '@/lib/locationAddress.js';
 import LocationEditorModal from '../../windows/custom/shared/LocationEditorModal';
 
 /**
@@ -40,6 +41,11 @@ export default function LocationModalField({
   const ui = useUI();
   const [open, setOpen] = useState(false);
   const hasValue = Boolean(value);
+  // CP-8b (ETP-5806 QA) — `displayValue` is the server's generic `<field>$_identifier`
+  // string, segments joined unconditionally with " - " even when a part (segunda línea,
+  // región) is blank. Sanitized once here so every caller (Organization, Warehouse) gets
+  // the fix automatically instead of patching each call site.
+  const cleanDisplayValue = sanitizeDashJoinedIdentifier(displayValue);
 
   const handleSaved = (id, name) => {
     onChange?.(id, name);
@@ -85,7 +91,7 @@ export default function LocationModalField({
           className={
             'flex-1 truncate ' + (hasValue ? 'text-foreground' : 'text-muted-foreground')
           }>
-          {hasValue ? displayValue || value : ui('locationFieldPlaceholder')}
+          {hasValue ? cleanDisplayValue || value : ui('locationFieldPlaceholder')}
         </span>
         {hasValue
           ? <Pencil size={14} className="shrink-0 text-muted-foreground" data-testid="Pencil__location-modal-field" />

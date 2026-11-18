@@ -1,8 +1,8 @@
 {
-  "version": "0.40.0",
+  "version": "0.42.0",
   "generatedAt": "2026-05-12T16:47:39.614Z",
-  "updatedAt": "2026-11-16T13:50:00.034Z",
-  "checksum": "019f16649d3273e6",
+  "updatedAt": "2026-11-16T18:48:35.105Z",
+  "checksum": "7d5bef6c05343158",
   "frontendContract": {
     "window": {
       "id": "143",
@@ -269,6 +269,13 @@
                 "IsSOTrx"
               ]
             },
+            "publicApi": {
+              "lookup": {
+                "context": {
+                  "IsSOTrx": "Y"
+                }
+              }
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -323,6 +330,9 @@
             "validation": {
               "required": true,
               "maxLength": 22
+            },
+            "publicApi": {
+              "lookup": true
             },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
