@@ -1,8 +1,8 @@
 {
-  "version": "0.2.1",
+  "version": "0.4.0",
   "generatedAt": "2026-11-03T14:49:56.386Z",
-  "updatedAt": "2026-11-03T14:50:17.594Z",
-  "checksum": "c56db59e273c80c1",
+  "updatedAt": "2026-11-17T16:54:48.911Z",
+  "checksum": "474f1c6317c8daa9",
   "frontendContract": {
     "window": {
       "id": "81AC659E93504927B459E0CAE80CE923",
@@ -485,6 +485,75 @@
               "required": true,
               "maxLength": 19
             }
+          },
+          {
+            "name": "currency",
+            "apiKey": "currency",
+            "column": "C_Currency_ID",
+            "label": "C_Currency_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "reference": "Currency",
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "errorDetail",
+            "apiKey": "errorDetail",
+            "column": "Error_Detail",
+            "label": "Error_Detail",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 2000
+            }
+          },
+          {
+            "name": "newProducts",
+            "apiKey": "newProducts",
+            "column": "New_Products",
+            "label": "New_Products",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 10
+            }
+          },
+          {
+            "name": "totalMismatch",
+            "apiKey": "totalMismatch",
+            "column": "Total_Mismatch",
+            "label": "Total_Mismatch",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [],
@@ -536,6 +605,13 @@
             "derivation": {
               "type": "fromConfig",
               "source": "new Date()"
+            }
+          },
+          {
+            "name": "totalMismatch",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
             }
           }
         ]
@@ -796,6 +872,38 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "currency",
+            "apiKey": "currency",
+            "column": "C_Currency_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "errorDetail",
+            "apiKey": "errorDetail",
+            "column": "Error_Detail",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "newProducts",
+            "apiKey": "newProducts",
+            "column": "New_Products",
+            "type": "integer",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "totalMismatch",
+            "apiKey": "totalMismatch",
+            "column": "Total_Mismatch",
+            "type": "boolean",
+            "visibility": "readOnly",
+            "required": true
           }
         ]
       }
@@ -878,6 +986,14 @@
         "reference": "Invoice",
         "inputMode": "search",
         "url": "/sws/neo/invoice-inbox/header/selectors/duplicateOfInvoice"
+      },
+      {
+        "entity": "header",
+        "field": "currency",
+        "column": "C_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/invoice-inbox/header/selectors/currency"
       }
     ],
     "actions": [],
@@ -964,6 +1080,14 @@
         "description": "Default value for 'targetType' in header should be a string"
       },
       {
+        "id": "t-default-value-type-header-totalMismatch",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "totalMismatch",
+        "runner": "node",
+        "description": "Default value for 'totalMismatch' in header should be a string"
+      },
+      {
         "id": "t-field-presence-header-active",
         "category": "field-presence",
         "entity": "header",
@@ -996,6 +1120,14 @@
         "description": "Field 'creationDate' should be present in header"
       },
       {
+        "id": "t-field-presence-header-currency",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "currency",
+        "runner": "node",
+        "description": "Field 'currency' should be present in header"
+      },
+      {
         "id": "t-field-presence-header-discardedAt",
         "category": "field-presence",
         "entity": "header",
@@ -1018,6 +1150,14 @@
         "field": "errorCode",
         "runner": "node",
         "description": "Field 'errorCode' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-errorDetail",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "errorDetail",
+        "runner": "node",
+        "description": "Field 'errorDetail' should be present in header"
       },
       {
         "id": "t-field-presence-header-extractedName",
@@ -1068,6 +1208,14 @@
         "description": "Field 'invoiceDate' should be present in header"
       },
       {
+        "id": "t-field-presence-header-newProducts",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "newProducts",
+        "runner": "node",
+        "description": "Field 'newProducts' should be present in header"
+      },
+      {
         "id": "t-field-presence-header-orderReference",
         "category": "field-presence",
         "entity": "header",
@@ -1116,6 +1264,14 @@
         "description": "Field 'targetType' should be present in header"
       },
       {
+        "id": "t-field-presence-header-totalMismatch",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "totalMismatch",
+        "runner": "node",
+        "description": "Field 'totalMismatch' should be present in header"
+      },
+      {
         "id": "t-field-type-header-active",
         "category": "field-type",
         "entity": "header",
@@ -1148,6 +1304,14 @@
         "description": "Field 'creationDate' should have type 'string' in header"
       },
       {
+        "id": "t-field-type-header-currency",
+        "category": "field-type",
+        "entity": "header",
+        "field": "currency",
+        "runner": "node",
+        "description": "Field 'currency' should have type 'string' in header"
+      },
+      {
         "id": "t-field-type-header-discardedAt",
         "category": "field-type",
         "entity": "header",
@@ -1170,6 +1334,14 @@
         "field": "errorCode",
         "runner": "node",
         "description": "Field 'errorCode' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-errorDetail",
+        "category": "field-type",
+        "entity": "header",
+        "field": "errorDetail",
+        "runner": "node",
+        "description": "Field 'errorDetail' should have type 'string' in header"
       },
       {
         "id": "t-field-type-header-extractedName",
@@ -1220,6 +1392,14 @@
         "description": "Field 'invoiceDate' should have type 'string' in header"
       },
       {
+        "id": "t-field-type-header-newProducts",
+        "category": "field-type",
+        "entity": "header",
+        "field": "newProducts",
+        "runner": "node",
+        "description": "Field 'newProducts' should have type 'number' in header"
+      },
+      {
         "id": "t-field-type-header-orderReference",
         "category": "field-type",
         "entity": "header",
@@ -1268,12 +1448,28 @@
         "description": "Field 'targetType' should have type 'string' in header"
       },
       {
+        "id": "t-field-type-header-totalMismatch",
+        "category": "field-type",
+        "entity": "header",
+        "field": "totalMismatch",
+        "runner": "node",
+        "description": "Field 'totalMismatch' should have type 'boolean' in header"
+      },
+      {
         "id": "t-selector-endpoint-header-businessPartner",
         "category": "selector-endpoint",
         "entity": "header",
         "field": "businessPartner",
         "runner": "node",
         "description": "Selector endpoint for 'businessPartner' in header should exist"
+      },
+      {
+        "id": "t-selector-endpoint-header-currency",
+        "category": "selector-endpoint",
+        "entity": "header",
+        "field": "currency",
+        "runner": "node",
+        "description": "Selector endpoint for 'currency' in header should exist"
       },
       {
         "id": "t-selector-endpoint-header-duplicateOfInvoice",
@@ -1388,18 +1584,18 @@
       }
     ],
     "summary": {
-      "total": 61,
+      "total": 71,
       "byCategory": {
         "crud-flags": 1,
-        "default-value-type": 7,
-        "field-presence": 19,
-        "field-type": 19,
-        "selector-endpoint": 3,
+        "default-value-type": 8,
+        "field-presence": 23,
+        "field-type": 23,
+        "selector-endpoint": 4,
         "system-field": 11,
         "visibility": 1
       },
       "byRunner": {
-        "node": 61,
+        "node": 71,
         "junit": 0
       }
     }

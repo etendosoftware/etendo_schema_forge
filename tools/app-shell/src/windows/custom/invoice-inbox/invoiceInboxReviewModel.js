@@ -5,7 +5,7 @@
  * (`docs/neo-headless.md`, "CURRENT_DATA contract") plus the enrichment the review action adds
  * (`vendor.details`, `product.details`, `candidates[].city|searchKey|category|uom`).
  */
-import { STATUS } from './invoiceInboxFilters.js';
+import { CONFIRMABLE_ERROR_CODES, STATUS } from './invoiceInboxFilters.js';
 
 /**
  * Exact-decimal money math (ETP-6050 S2, plan 9.4c). The ONE formula the backend shares
@@ -123,12 +123,20 @@ export function lineAmount(line, scale = DEFAULT_SCALE) {
   return unitsToNumber(lineNetUnits(line, scale), scale);
 }
 
-/** The VAT rate of a line: the reader's `taxRate`, else the resolved tax's rate, else null. */
-export function lineRate(line) {
-  const raw = line?.taxRate ?? line?.tax?.rate;
+/** A finite number from a raw value; null for null, "" and anything not numeric. */
+function finiteRate(raw) {
   if (raw == null || raw === '') return null;
   const rate = Number(raw);
   return Number.isFinite(rate) ? rate : null;
+}
+
+/**
+ * The VAT rate of a line: the reader's `taxRate` when it is a finite number, else the resolved
+ * tax's rate, else null. A non-numeric `taxRate` ("" or text) falls back to `tax.rate`, as the
+ * backend does (SPA/backend parity on a non-numeric taxRate).
+ */
+export function lineRate(line) {
+  return finiteRate(line?.taxRate) ?? finiteRate(line?.tax?.rate);
 }
 
 /** True when the line's tax is LINE-based ('L'); the default is document-based ('D'). */
@@ -205,11 +213,15 @@ export function documentTotal(header, totals, scale = DEFAULT_SCALE) {
  */
 export function totalMismatch(header, totals, scale = DEFAULT_SCALE) {
   if (header?.totalSource !== 'printed') return null;
-  const printed = Number(header?.totalAmount);
-  if (!Number.isFinite(printed)) return null;
-  const diff = Math.abs(roundUnits(printed, scale) - roundUnits(totals.linesTotal, scale));
-  if (diff <= MISMATCH_TOLERANCE_UNITS) return null;
-  return { lines: totals.linesTotal, document: Math.round(printed * 10 ** scale) / 10 ** scale };
+  // A printed total that is null, empty, text or not finite NEVER warns (`Number(null)` is 0).
+  const printed = toScaled(header?.totalAmount, scale);
+  if (printed === null) return null;
+  const lines = toScaled(totals.linesTotal, scale) ?? 0n;
+  // Strictly MORE than one minimal unit of the currency's own scale, in exact integer units
+  // (half-up away from zero, symmetric for negatives; no float `Math.round`).
+  const diff = printed > lines ? printed - lines : lines - printed;
+  if (diff <= BigInt(MISMATCH_TOLERANCE_UNITS)) return null;
+  return { lines: totals.linesTotal, document: Number(printed) / 10 ** scale };
 }
 
 /** True when line `lineIndex` lacks its `field` (`quantity`, `unitPrice`, `tax`, `product`): a `line[i].field` code. */
@@ -326,26 +338,36 @@ export function vendorView(document) {
   };
 }
 
+/**
+ * The banner of a document's stored error: unreadable (only while untouched: once the user edited
+ * it, ADJUSTED, the data on screen is theirs), a failed confirm (with the reason the server stored)
+ * or another error code. None for MISSING_FIELDS (the fields show it) or without an error.
+ */
+function errorBanners(review) {
+  if (review.status !== STATUS.ERROR || !review.errorCode) return [];
+  if (review.errorCode === 'UNREADABLE') return review.adjusted ? [] : [{ kind: 'unreadable' }];
+  if (review.errorCode === 'CONFIRM_FAILED') return [{ kind: 'confirmFailed', detail: review.errorDetail ?? null }];
+  if (review.errorCode === 'MISSING_FIELDS') return [];
+  return [{ kind: 'error', code: review.errorCode }];
+}
+
+/** Confirm blockers and duplicate warnings: only on a document that is still open. */
+function openDocumentBanners(review) {
+  const banners = confirmBlockers(review.document).map((blocker) => ({ kind: 'blocker', blocker }));
+  const duplicate = review.document?.header?.duplicate;
+  if (duplicate?.state === 'found' && duplicate.invoices?.length) {
+    banners.push({ kind: 'duplicate', invoice: duplicate.invoices[0] });
+  }
+  if (duplicate?.inbox?.length) banners.push({ kind: 'duplicateInbox', files: duplicate.inbox });
+  return banners;
+}
+
 /** The review banners to show, in order, derived from the answer. Pure so the rules are testable. */
 export function reviewBanners(review) {
-  const banners = [];
-  if (!review) return banners;
-  if (review.status === STATUS.CONFIRMED) banners.push({ kind: 'confirmed' });
-  // The unreadable banner only while the document is untouched: once the user edited it (ADJUSTED)
-  // the data on screen is theirs.
-  if (review.status === STATUS.ERROR && review.errorCode === 'UNREADABLE' && !review.adjusted) {
-    banners.push({ kind: 'unreadable' });
-  } else if (review.status === STATUS.ERROR && review.errorCode && review.errorCode !== 'UNREADABLE'
-    && review.errorCode !== 'MISSING_FIELDS') {
-    banners.push({ kind: 'error', code: review.errorCode });
-  }
-  if (!SETTLED.has(review.status)) {
-    const duplicate = review.document?.header?.duplicate;
-    if (duplicate?.state === 'found' && duplicate.invoices?.length) {
-      banners.push({ kind: 'duplicate', invoice: duplicate.invoices[0] });
-    }
-    if (duplicate?.inbox?.length) banners.push({ kind: 'duplicateInbox', files: duplicate.inbox });
-  }
+  if (!review) return [];
+  const banners = review.status === STATUS.CONFIRMED ? [{ kind: 'confirmed' }] : [];
+  banners.push(...errorBanners(review));
+  if (!SETTLED.has(review.status)) banners.push(...openDocumentBanners(review));
   return banners;
 }
 
@@ -570,6 +592,10 @@ function localNewProduct(doc, op, hint) {
     lines: mapLine(linesOf(doc), op.index, (line) => {
       const product = line.product ?? {};
       const fresh = { name: line.description ?? '', ...(product.new ?? {}) };
+      // Re-sending the committed id is a no-op (the server keeps the source); a different id is the
+      // user's choice, so its source becomes `manual` (the server does the same).
+      if ('categoryId' in op && op.categoryId !== fresh.categoryId) fresh.categorySource = 'manual';
+      if ('uomId' in op && op.uomId !== fresh.uomId) fresh.uomSource = 'manual';
       for (const key of ['name', 'categoryId', 'uomId']) if (key in op) fresh[key] = op[key];
       if ('categoryId' in op) fresh.category = pickedName(op.categoryId, hint.category, fresh.category);
       if ('uomId' in op) fresh.uom = pickedName(op.uomId, hint.uom, fresh.uom);
@@ -613,6 +639,13 @@ export const SAVE_ERROR_LABEL_KEYS = Object.freeze({
   processing: 'invoiceInboxReviewErrorProcessing',
   not_editable: 'invoiceInboxSaveErrorNotEditable',
   not_reviewable: 'invoiceInboxSaveErrorNotReviewable',
+  not_confirmable: 'invoiceInboxSaveErrorNotConfirmable',
+  duplicate_invoice: 'invoiceInboxConfirmErrorDuplicate',
+  missing_exchange_rate: 'invoiceInboxConfirmErrorExchangeRate',
+  vendor_address_missing: 'invoiceInboxConfirmErrorVendorAddress',
+  QUOTA_EXCEEDED: 'invoiceInboxConfirmErrorQuota',
+  price_list_tax_included: 'invoiceInboxConfirmErrorPriceListTax',
+  confirm_failed: 'invoiceInboxConfirmErrorFailed',
   not_valid: 'invoiceInboxSaveErrorNotValid',
   unknown_tax: 'invoiceInboxSaveErrorUnknownTax',
   invalid_value: 'invoiceInboxSaveErrorInvalidValue',
@@ -641,7 +674,7 @@ export function saveErrorKey(code) {
  * Refusals that mean "the document is not what you were editing": the SPA reloads it, drops the
  * unsaved local edits and shows a notice (S2-D4), instead of rolling back and offering a retry.
  */
-const RELOAD_CODES = new Set(['stale_document', 'processing', 'not_editable', 'not_reviewable']);
+const RELOAD_CODES = new Set(['stale_document', 'processing', 'not_editable', 'not_reviewable', 'not_confirmable']);
 
 export function isReloadCode(code) {
   return RELOAD_CODES.has(code);
@@ -650,4 +683,34 @@ export function isReloadCode(code) {
 /** The "Marcar como revisada" button is enabled only on a valid PENDING_REVIEW document. */
 export function canMarkReviewed(review) {
   return review?.status === STATUS.PENDING_REVIEW && review?.editable !== false && pendingCount(review.document) === 0;
+}
+
+/** A failed confirm the document can be retried from (stored `ERROR` / `CONFIRM_FAILED`). */
+export function isConfirmRetry(review) {
+  return review?.status === STATUS.ERROR && review?.errorCode === 'CONFIRM_FAILED';
+}
+
+/**
+ * "Confirmar factura" is enabled on a PENDING_REVIEW or READY document, or on an ERROR one whose code is
+ * CONFIRM_FAILED ("Reintentar") or MISSING_FIELDS (completed since: the server recomputes), that the user may edit and that has no required field pending. Marking as reviewed
+ * is not a precondition (ETP-6051).
+ */
+export function canConfirm(review) {
+  if (!review || review.editable === false) return false;
+  const confirmable = review.status === STATUS.PENDING_REVIEW || review.status === STATUS.READY
+    || (review.status === STATUS.ERROR && CONFIRMABLE_ERROR_CODES.has(review.errorCode));
+  return confirmable && pendingCount(review.document) === 0;
+}
+
+/** `validation.missing` codes the server adds for a confirm blocker that no input shows, by kind. */
+const BLOCKER_CODES = Object.freeze({ exchangeRate: 'exchangeRate', vendorAddress: 'vendorAddress' });
+
+/**
+ * The blockers of a confirm the server reports in `validation.missing` that no input shows (the
+ * exchange rate of the document currency, a vendor without a usable address): the kinds present, in
+ * the order of `BLOCKER_CODES`.
+ */
+export function confirmBlockers(document) {
+  const codes = missingSet(document);
+  return Object.entries(BLOCKER_CODES).filter(([, code]) => codes.has(code)).map(([kind]) => kind);
 }
