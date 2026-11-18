@@ -568,7 +568,10 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   the middle column even when a page has no title and no back button. The column gap is **20px**
   (`gap-5`, ETP-5504 QA): the left column ends exactly 20px before the search's left edge, and
   symmetrically the right column starts 20px after its right edge.
-  - **Search** (`topbar-search-slot` > `global-search-trigger`): fixed `w-[392px]`, **exactly
+  - **Search** (`topbar-search-slot` > `global-search-trigger`): the pill itself is the shared,
+    presentational `components/layout/SearchBar.jsx` (ETP-6209; also used by the customer portal
+    with its own search), while `TopBar.jsx` keeps the global search state, scopes, vector search
+    and popup and passes them in as props. Fixed `w-[392px]`, **exactly
     centered in the visible bar** (the header's border box) whatever the width of the title block
     or of the actions — the two side tracks are equal `1fr` tracks and the header has no
     horizontal padding (the 24px right inset is `pr-6` on the actions group, inside column 3), so

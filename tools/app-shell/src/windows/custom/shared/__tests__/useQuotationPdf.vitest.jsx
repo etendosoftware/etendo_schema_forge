@@ -102,9 +102,9 @@ describe('quotationNotesAndRejectReason', () => {
       { notes: 'Gracias por la oferta', rejectReason: 'Precio demasiado alto' },
     ],
     [
-      'CJ + portal line + tenant reason: only the tenant reason, and the line still leaves',
+      'CJ + portal line + tenant reason: only the portal reason, the internal one is never printed',
       { documentStatus: 'CJ', description: `Gracias\n${PORTAL_ES}`, 'rejectReason$_identifier': 'Competencia' },
-      { notes: 'Gracias', rejectReason: 'Competencia' },
+      { notes: 'Gracias', rejectReason: 'Precio demasiado alto' },
     ],
     [
       'CJ + "Otros: <text>": the free text is the reason',
@@ -117,9 +117,9 @@ describe('quotationNotesAndRejectReason', () => {
       { notes: null, rejectReason: 'Delivery too late' },
     ],
     [
-      'CJ with only a tenant reason: the notes stay as they are',
+      'CJ with only a tenant reason: the notes stay as they are and no reason is printed',
       { documentStatus: 'CJ', description: 'Nota interna', 'rejectReason$_identifier': 'Competencia' },
-      { notes: 'Nota interna', rejectReason: 'Competencia' },
+      { notes: 'Nota interna', rejectReason: null },
     ],
     [
       'not rejected: the notes are untouched, portal line included, and there is no reason',

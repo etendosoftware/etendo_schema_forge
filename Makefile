@@ -19,6 +19,7 @@ endif
 test: ## Run all unit tests (CLI data-fixes + repo scripts + app-shell + artifacts + vitest)
 	node --test 'cli/test/*.test.js'
 	node --test 'scripts/__tests__/*.test.js'
+	node --test 'e2e/tests/helpers/__tests__/*.test.js'
 	node --test 'tools/app-shell/src/**/__tests__/*.test.js'
 	node --test 'tools/app-shell/test/*.test.js'
 	node --test 'artifacts/**/__tests__/*.test.js'
