@@ -17640,6 +17640,7 @@
     "backendError.importDirectionMismatch": "El documento de origen no es del mismo tipo (venta o compra).",
     "backendError.importQuantityExceedsPending": "No se pueden importar {requested} de {product}: solo quedan {pending} pendientes en esta línea (las cantidades ya incluidas en documentos en borrador cuentan como usadas).",
     "backendError.importQuantityNothingPendingOnLine": "No se pueden importar {requested} de {product}: no queda nada pendiente en esta línea (las cantidades ya incluidas en documentos en borrador cuentan como usadas).",
+    "backendError.importQuantityExceedsLineMaximum": "No se puede guardar {requested} de {product}: el máximo para esta línea es {pending}.",
     "backendError.importLineNotInDocument": "Una de las líneas seleccionadas no pertenece al documento de origen.",
     "backendError.importNothingPending": "No queda nada pendiente de importar de este documento.",
     "backendError.importInvalidLine": "Una de las líneas o cantidades seleccionadas no es válida.",

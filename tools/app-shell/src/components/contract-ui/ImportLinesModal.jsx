@@ -12,7 +12,7 @@ import { NumberStepperInput } from '@/components/contract-ui/NumberStepperInput.
 import { RowExpandToggle } from '@/components/contract-ui/RowExpandToggle.jsx';
 import { formatCurrency, formatPlainDecimal } from '@/lib/formatCurrency.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
-import { translateQuotaRefusalBody } from '@/lib/backendErrors.js';
+import { translateMappedImportRefusal, translateQuotaRefusalBody } from '@/lib/backendErrors.js';
 import { cn } from '@/lib/utils';
 
 // A draft is valid when it parses to a finite magnitude in (0, maxQty]. Sign is
@@ -383,10 +383,20 @@ export default function ImportLinesModal({
     toast.success(ui(successMessageKey, { count }));
   };
 
+  // ETP-6002 CP-30: why the server refused a line, when it says so with an import refusal code.
+  const readImportRefusal = async (res) => {
+    try {
+      return translateMappedImportRefusal(await res.json(), ui);
+    } catch {
+      return null;
+    }
+  };
+
   // One POST per selected line, in document order; line numbers step by 10.
   const postSelectedLines = async () => {
     let lineNo = 10;
     let errors = 0;
+    let refusal = null;
     let importedCount = 0;
     const importedDocIds = new Set();
     for (const { line, qty, docId } of collectSelectedLines()) {
@@ -396,11 +406,14 @@ export default function ImportLinesModal({
       const res = await apiFetch(`/${linesEndpoint}`, {
         method: 'POST', headers, body: JSON.stringify(lineBody), on401: 'ignore', timeout: 0,
       });
-      if (!res.ok) errors++;
-      else { importedDocIds.add(docId); importedCount++; }
+      if (res.ok) { importedDocIds.add(docId); importedCount++; }
+      else {
+        errors++;
+        refusal = refusal ?? await readImportRefusal(res);
+      }
       lineNo += 10;
     }
-    return { errors, importedCount, importedDocIds };
+    return { errors, importedCount, importedDocIds, refusal };
   };
 
   const runAfterImport = (importedDocIds) => (afterImport
@@ -412,10 +425,11 @@ export default function ImportLinesModal({
 
   // Default: one POST per selected line against `linesEndpoint`.
   const importViaPerLinePost = async () => {
-    const { errors, importedCount, importedDocIds } = await postSelectedLines();
+    const { errors, importedCount, importedDocIds, refusal } = await postSelectedLines();
     const afterImportResult = await runAfterImport(importedDocIds);
     if (errors > 0) {
       toast.warning(ui('importedLinesWithErrors', { count: importedCount, errors }));
+      if (refusal) toast.error(refusal);
       showCustomToast(getSuccessToast?.({ ...selection, count: importedCount, importedDocIds, afterImportResult, partial: true }));
     } else {
       showSuccessToast({ count: importedCount, importedDocIds, afterImportResult });
