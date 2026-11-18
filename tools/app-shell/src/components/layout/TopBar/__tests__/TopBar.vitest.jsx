@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/components/layout/TopBar/TopBar.jsx
+// @covers tools/app-shell/src/components/layout/SearchBar.jsx
 /**
  * TopBar — the app shell header. Covers the title truncation fix (ETP-4764 follow-up): a long
  * record name (e.g. a bank account's full name + IBAN) used to overflow the header and run
