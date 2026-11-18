@@ -13,6 +13,9 @@
 # CLOSED: `e-closed-period` depends on it. Products are read by name ("Agua", "Fernet", "Cerveza").
 # GOClient has no service: create once a product "Hora de instalación" (searchKey INSTALACION, type
 # service) with a 50 € price on "Tarifa de venta principal" (`f-order-direct-invoice`).
+# GOClient needs at least one document in its invoice inbox (Bandeja de facturas), uploaded once
+# from the app or with POST /sws/neo/invoice-inbox/upload (flag invoice-inbox on): the MCP cannot
+# add one (`q-invoice-inbox`).
 # GOClient has no G/L item for transfers between its own accounts: create once, in the chart
 # "Arbol de cuentas GO", the subaccount 55500001 "Traspasos internos" under 5550 (its G/L item comes
 # with it) (`f-bank-account-transfer`). The bank account "Cuenta de Banco" of GOClient receives the
@@ -327,6 +330,61 @@ x-fixtures:
       args: { spec: product, entity: stock, parentId: "{{steps.agua.data.0.id}}",
               filters: { warehouse: "{{steps.main.data.0.id}}" } }
       saveAs: stock
+
+  # A product of its own (Producto {{marker}}) with three completed movements this month: two goods
+  # receipts from a supplier (140 and 160 units) and one shipment to a customer (130 units).
+  # Quantities of 100 and above, so the answer's numbers need no anchor text.
+  product-with-movements: &product-with-movements
+    - tool: etendo_create
+      args: { spec: product, entity: product, fields: { name: "Producto {{marker}}", searchKey: "P{{marker}}" } }
+      saveAs: product
+    - tool: etendo_create
+      args: { spec: contacts, entity: businessPartner, fields: { name: "Prov. {{marker}}", vendor: true } }
+      saveAs: sup
+    - tool: etendo_create
+      args: { spec: contacts, entity: locationAddress, parentId: "{{steps.sup.data.id}}",
+              fields: { country: "106", addressLine1: "Calle Industria 1", cityName: "Madrid", postalCode: "28002" } }
+      saveAs: supaddress
+    - tool: etendo_create
+      args: { spec: goods-receipt, entity: goodsReceipt,
+              fields: { businessPartner: "{{steps.sup.data.id}}", partnerAddress: "{{steps.supaddress.data.id}}",
+                        description: "{{marker}} 1" } }
+      saveAs: receipt1
+    - tool: etendo_create
+      args: { spec: goods-receipt, entity: goodsReceiptLine, parentId: "{{steps.receipt1.data.id}}",
+              fields: { product: "{{steps.product.data.id}}", movementQuantity: 140 } }
+    - tool: etendo_action
+      args: { spec: goods-receipt, entity: goodsReceipt, id: "{{steps.receipt1.data.id}}",
+              action: documentAction, parameters: { docAction: CO } }
+    - tool: etendo_create
+      args: { spec: goods-receipt, entity: goodsReceipt,
+              fields: { businessPartner: "{{steps.sup.data.id}}", partnerAddress: "{{steps.supaddress.data.id}}",
+                        description: "{{marker}} 2" } }
+      saveAs: receipt2
+    - tool: etendo_create
+      args: { spec: goods-receipt, entity: goodsReceiptLine, parentId: "{{steps.receipt2.data.id}}",
+              fields: { product: "{{steps.product.data.id}}", movementQuantity: 160 } }
+    - tool: etendo_action
+      args: { spec: goods-receipt, entity: goodsReceipt, id: "{{steps.receipt2.data.id}}",
+              action: documentAction, parameters: { docAction: CO } }
+    - tool: etendo_create
+      args: { spec: contacts, entity: businessPartner, fields: { name: "Cliente {{marker}}" } }
+      saveAs: bp
+    - tool: etendo_create
+      args: { spec: contacts, entity: locationAddress, parentId: "{{steps.bp.data.id}}",
+              fields: { country: "106", addressLine1: "Calle Mayor 1", cityName: "Madrid", postalCode: "28001" } }
+      saveAs: address
+    - tool: etendo_create
+      args: { spec: goods-shipment, entity: goodsShipment,
+              fields: { businessPartner: "{{steps.bp.data.id}}", partnerAddress: "{{steps.address.data.id}}",
+                        description: "{{marker}}" } }
+      saveAs: shipment
+    - tool: etendo_create
+      args: { spec: goods-shipment, entity: goodsShipmentLine, parentId: "{{steps.shipment.data.id}}",
+              fields: { product: "{{steps.product.data.id}}", movementQuantity: 130 } }
+    - tool: etendo_action
+      args: { spec: goods-shipment, entity: goodsShipment, id: "{{steps.shipment.data.id}}",
+              action: documentAction, parameters: { docAction: CO } }
 
   # --- Holded setups (docs/mcp-evaluation/okr-o2-holded-coverage.md; catalogue of 367 tools) ---
   # Holded answers a create with `{id}` and a list with `{items, cursor, has_more}`. Products are
@@ -2230,3 +2288,147 @@ probes:
         notPossible:
           kind: goal
           reason: "Holded's MCP has no accounting calendar or fiscal-year setting."
+
+  # Q4 feature (ETP-5889, roadmap #4): the product's movements (Product > Movements, spec
+  # product/transactions). Behind the per-account flag product-movements-tab for the tab; the
+  # MCP reads the movements either way. Holded has no movement history per product.
+  - id: q-product-purchased-units
+    category: query
+    mode: read
+    prompt: "¿Cuántas unidades de Producto {{marker}} entraron por compras este mes?"
+    platforms:
+      etendo-go:
+        setup: *product-with-movements
+        expectAnswer:
+          all: [{ number: 300 }]
+          none: [{ number: 430 }]
+      holded:
+        notPossible:
+          kind: goal
+          reason: "Holded's MCP has no movement history per product: only the current stock (get_product_stock, get_warehouse_stock) and the stock in transit."
+
+  - id: q-product-movements
+    category: query
+    mode: read
+    prompt: "¿Qué movimientos tuvo Producto {{marker}}?"
+    platforms:
+      etendo-go:
+        setup: *product-with-movements
+        expectAnswer:
+          all: [{ number: 140 }, { number: 160 }, { number: 130 }]
+      holded:
+        notPossible:
+          kind: goal
+          reason: "Holded's MCP has no movement history per product: only the current stock (get_product_stock, get_warehouse_stock) and the stock in transit."
+
+  # Q4 feature (ETP-6046 epic, roadmap #3): the invoice inbox. Its actions (review, confirm,
+  # discard) are kept for people (ETP-6051); an agent reads it. The MCP cannot add a document, so
+  # the data needs one already there (header comment); the setup reads the newest and the answer
+  # must carry its total. Behind the per-account flag invoice-inbox. Holded reads its inbox too.
+  - id: q-invoice-inbox
+    category: query
+    mode: read
+    prompt: "¿Qué facturas tengo en la bandeja de facturas, pendientes de pasar a compras?"
+    platforms:
+      etendo-go:
+        setup:
+          - tool: etendo_list
+            args: { spec: invoice-inbox, entity: header,
+                    filters: { status: { in: [PENDING_REVIEW, READY, ERROR] } },
+                    fields: [grandTotalAmount, orderReference], limit: 1 }
+            saveAs: inbox
+        expectAnswer:
+          all: [{ number: "{{steps.inbox.data.0.grandTotalAmount}}", tolerance: 0.01 }]
+      holded:
+        notPossible:
+          kind: setup
+          reason: "Holded's MCP can upload to its inbox only with the file bytes as an argument (upload_inbox), which the harness setup does not send; the account would need a document in its inbox first, as Etendo does."
+
+  # Q4 feature (ETP-6080, ETP-6239, roadmap #20): Profit and Loss over a range. Since ETP-5850,
+  # generate_profit_loss takes the dates without a year id. GOClient posts January-April 2026 only:
+  # the second quarter has sales AND a cost, so its result differs from its sales and a sales total
+  # does not pass. The setup runs the report with every row (showOnlyAccountsWithValue false keeps
+  # the row order fixed: row 27 is "D) RESULTADO DEL EJERCICIO" at heading level) and the answer
+  # must carry that result.
+  - id: q-profit-quarter
+    category: query
+    mode: read
+    prompt: "¿Cuál fue el resultado del segundo trimestre de 2026?"
+    platforms:
+      etendo-go:
+        setup:
+          - tool: generate_profit_loss
+            args: { parameters: { dateFrom: "2026-04-01", dateTo: "2026-06-30", accountLevel: E,
+                                  showOnlyAccountsWithValue: false } }
+            saveAs: pl
+        expectAnswer:
+          all: [{ number: "{{steps.pl.response.data.27.amount}}", tolerance: 0.01 }]
+      holded:
+        notPossible:
+          kind: goal
+          reason: "Holded's MCP has no Profit and Loss report: only ledger entries and account balances."
+
+  # Same feature, month by month as the app's Month view: generate_profit_loss breakdown (ETP-5850).
+  # January to April: April's result is not its sales (see above). The prompt names the report: asked
+  # only "how much did we earn", the agent reads the dashboard's sales/expense widget instead.
+  - id: q-profit-by-month
+    category: query
+    mode: read
+    prompt: "Pasame la cuenta de pérdidas y ganancias mes a mes, de enero a abril de 2026: ¿qué resultado dio cada mes?"
+    platforms:
+      etendo-go:
+        setup:
+          - tool: generate_profit_loss
+            args: { parameters: { dateFrom: "2026-01-01", dateTo: "2026-04-30", accountLevel: E,
+                                  showOnlyAccountsWithValue: false, breakdown: month } }
+            saveAs: pl
+        expectAnswer:
+          all:
+            - { number: "{{steps.pl.response.data.27.byPeriod.2026-01}}", tolerance: 0.01 }
+            - { number: "{{steps.pl.response.data.27.byPeriod.2026-02}}", tolerance: 0.01 }
+            - { number: "{{steps.pl.response.data.27.byPeriod.2026-04}}", tolerance: 0.01 }
+      holded:
+        notPossible:
+          kind: goal
+          reason: "Holded's MCP has no Profit and Loss report: only ledger entries and account balances."
+
+  # Q4 feature (ETP-6209, roadmap #22): the customer portal. Since ETP-5850 the contacts action
+  # portalLink hands the user the link (Holded: get_contact_portal_link). Behind the per-account
+  # flag bp-portal-link. The customer needs a completed invoice (the portal opens on a document) and
+  # an email (an expired link is renewed there). No MCP read shows the link afterwards, so the
+  # answer must carry a link to the portal.
+  - id: w-portal-link
+    category: write
+    mode: write
+    prompt: "Pasame el link del portal de Cliente {{marker}} así se lo mando por WhatsApp."
+    platforms:
+      etendo-go:
+        setup:
+          - tool: etendo_create
+            args: { spec: contacts, entity: businessPartner,
+                    fields: { name: "Cliente {{marker}}", etgoEmail: compras@mcpflow.test } }
+            saveAs: bp
+          - tool: etendo_create
+            args: { spec: contacts, entity: locationAddress, parentId: "{{steps.bp.data.id}}",
+                    fields: { country: "106", addressLine1: "Calle Mayor 1", cityName: "Madrid", postalCode: "28001" } }
+            saveAs: address
+          - tool: etendo_list
+            args: { spec: product, entity: product, filters: { name: "Agua" }, fields: [id] }
+            saveAs: agua
+          - tool: etendo_create
+            args: { spec: sales-invoice, entity: header,
+                    fields: { businessPartner: "{{steps.bp.data.id}}", partnerAddress: "{{steps.address.data.id}}",
+                              description: "{{marker}}" } }
+            saveAs: invoice
+          - tool: etendo_create
+            args: { spec: sales-invoice, entity: lines, parentId: "{{steps.invoice.data.id}}",
+                    fields: { product: "{{steps.agua.data.0.id}}", invoicedQuantity: 1, unitPrice: 100 } }
+          - tool: etendo_action
+            args: { spec: sales-invoice, entity: header, id: "{{steps.invoice.data.id}}",
+                    action: documentAction, parameters: { docAction: CO } }
+        expectAnswer:
+          all: [{ text: "portal" }, { anyOf: [{ text: "http" }, { text: "https" }] }]
+      holded:
+        setup: *h-customer
+        expectAnswer:
+          all: [{ text: "portal" }, { anyOf: [{ text: "http" }, { text: "https" }] }]

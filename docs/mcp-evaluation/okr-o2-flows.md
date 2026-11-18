@@ -92,6 +92,12 @@ fija. Se itera; todavía **no son pruebas de la suite**.
 | 54 | `w-contact-category-vendor` | Contacto en la categoría Proveedor: hereda solo proveedor (ETP-5791, flag `contact-category-type`) | Contactos, Categoría de contacto | 📄 | no |
 | 55 | `w-contact-own-category` | Contacto en una categoría propia cliente y proveedor: hereda los dos (ETP-5791) | Contactos, Categoría de contacto | 📄 | no |
 | 56 | `e-fiscal-year-start` | Pedir un ejercicio de julio a junio: el MCP no lo cambia y el agente manda a Primeros pasos (ETP-5577) | Calendario | 📄 | no |
+| 57 | `q-product-purchased-units` | Unidades de un producto que entraron por compras este mes (ETP-5889) | Productos, Movimientos | 📄 | no |
+| 58 | `q-product-movements` | Qué movimientos tuvo un producto (ETP-5889) | Productos, Movimientos | 📄 | no |
+| 59 | `q-invoice-inbox` | Qué facturas hay en la bandeja, pendientes de pasar a compras (ETP-6046) | Bandeja de facturas | 📄 | no |
+| 60 | `q-profit-quarter` | Resultado de un trimestre en Pérdidas y Ganancias (ETP-6080/6239) | Informes | 📄 | no |
+| 61 | `q-profit-by-month` | Pérdidas y Ganancias mes a mes (ETP-6239) | Informes | 📄 | no |
+| 62 | `w-portal-link` | El link del portal de un cliente para mandárselo (ETP-6209) | Contactos, Portal | 📄 | sí |
 | | **Errores y negativas** | | | | |
 | 39 | `e-unknown-document` | Documento que no existe | Factura | 📄 | sí |
 | 40 | ~~`e-invalid-write`~~ | Cantidad negativa — **retirada del KR** (Etendo la acepta por diseño) | Pedido | 📄 | — |

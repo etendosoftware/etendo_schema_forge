@@ -1,8 +1,8 @@
 # OKR O2 — Pruebas sobre las features del Q4 (T3)
 
-**Tarea:** ETP-5850 (T3), etendo-ai#36. **Suite:** `mcp-tests/suites/okr.yaml`. **Al:** 17 nov 2026.
+**Tarea:** ETP-5850 (T3), etendo-ai#36. **Suite:** `mcp-tests/suites/okr.yaml`. **Al:** 18 nov 2026.
 
-El objetivo de la T3 es **dar cobertura a lo nuevo de Etendo GO**. La comparación con Holded es
+El objetivo de la T3 es **dar cobertura a lo nuevo de Etendo.ai**. La comparación con Holded es
 secundaria: una prueba que Holded no puede hacer igual suma, como Solo Etendo.
 
 ## Resumen
@@ -10,14 +10,15 @@ secundaria: una prueba que Holded no puede hacer igual suma, como Solo Etendo.
 | | Pruebas | Posibles en ambos | Solo Etendo |
 |---|---:|---:|---:|
 | Suite inicial (1-47) | 47 | 39 | 8 |
-| Agregadas en la T3 (48-56) | 9 | 3 | 6 |
-| **Total** | **56** | **42** | **14** |
+| Agregadas en la T3 (48-62) | 15 | 4 | 11 |
+| **Total** | **62** | **43** | **19** |
 
 - **KR2.1** (Etendo Win ÷ posibles en ambos): 79,5 % (31 de 39), medido sobre las 47 iniciales, no
-  oficial. Las 9 nuevas todavía no entraron en una medición contra Holded.
-- **Features del Q4 con prueba:** 6. **Sin prueba todavía:** 6 (ver abajo).
-- Las 9 nuevas pasaron en una corrida con el agente en un local-env sobre `develop` con los flags del
-  Q4 prendidos. Los bloques de Holded de 49, 50 y 52 están escritos y sin pilotear.
+  oficial. Las 15 nuevas todavía no entraron en una medición contra Holded.
+- **Features del Q4 con prueba:** 11 (roadmap #1, #3, #4, #17/#24, #18, #20, #22 y las de Finanzas
+  sin issue). **No posibles:** Modelo 390 (#27) y última sincronización PSD2 (#16).
+- Las 15 nuevas pasaron en una corrida con el agente en un local-env sobre `develop` con los flags del
+  Q4 prendidos. Los bloques de Holded de 49, 50, 52 y 62 están escritos y sin pilotear.
 
 ## Pruebas agregadas en la T3
 
@@ -32,6 +33,30 @@ secundaria: una prueba que Holded no puede hacer igual suma, como Solo Etendo.
 | 54 | `w-contact-category-vendor` | Categoría de contacto: el contacto hereda el tipo (ETP-5791, roadmap #1) | No: Holded no tiene categorías que definan el tipo | ✅ 5 llamadas |
 | 55 | `w-contact-own-category` | Lo mismo, en una categoría propia cliente y proveedor | No | ✅ 7 llamadas |
 | 56 | `e-fiscal-year-start` | Calendario contable en Primeros pasos (ETP-5577, roadmap #18): cambiar el inicio del ejercicio no se puede por MCP; el agente lo dice y manda a «Revisar calendario contable» | No: Holded no tiene calendario contable | ✅ 2 llamadas |
+| 57 | `q-product-purchased-units` | Movimientos por producto (ETP-5889, roadmap #4): unidades que entraron por compras | No: Holded no tiene historial de movimientos por producto | ✅ 6 llamadas |
+| 58 | `q-product-movements` | Lo mismo: qué movimientos tuvo el producto | No | ✅ 8 llamadas |
+| 59 | `q-invoice-inbox` | Bandeja de facturas (ETP-6046, roadmap #3): qué hay pendiente de pasar a compras | No medible: la preparación no puede subir a su bandeja | ✅ 1 llamada |
+| 60 | `q-profit-quarter` | Pérdidas y Ganancias de un trimestre (ETP-6080/6239, roadmap #20) | No: su MCP no tiene el informe | ✅ 2 llamadas |
+| 61 | `q-profit-by-month` | Pérdidas y Ganancias mes a mes | No | ✅ 6 llamadas |
+| 62 | `w-portal-link` | Portal del cliente (ETP-6209, roadmap #22): el link del portal de un cliente | Sí (`get_contact_portal_link`), sin pilotear | ✅ 2 llamadas |
+
+La 57 y la 58 leen `product/transactions`, la pestaña Movimientos del producto. En el primer piloto de
+la 58 el agente no la encontró (buscó en las líneas de cada tipo de documento): ETP-5850 agregó un
+prompt a esa entidad y a `goods-movements` que lo manda ahí, y pasó.
+
+La 59 necesita un documento en la bandeja de la cuenta medida, porque el MCP no puede subir a la
+bandeja (se sube desde la app). Revisar, corregir, confirmar y descartar quedan, a propósito, solo
+para personas (ETP-6051): la 53 ya cubre lo que un agente hace con un escaneo, cargar la factura.
+
+La 60 y la 61 usan dos cambios de ETP-5850 en `generate_profit_loss`: el año (`yearId`) deja de ser
+obligatorio si se pasan las dos fechas, y `breakdown` da columnas por mes o trimestre, como la vista
+Mes / Trimestre de la app. Usan el segundo trimestre y enero a abril de 2026 porque abril tiene un
+costo: el resultado no coincide con las ventas, y un total de ventas no pasa. Con "¿cuánto ganamos
+cada mes?" el agente leyó el widget de ventas y gastos del tablero; la 61 nombra el informe.
+
+La 62 usa la acción `portalLink` de Contactos, nueva en ETP-5850 (ver *Portal del cliente* abajo). El
+link también viaja en el email de cada documento (flag `bp-portal-link`), pero el MCP no muestra el
+cuerpo del email enviado, así que ese caso queda cubierto por `w-send-invoice`.
 
 La 56 prueba un rechazo: el inicio del ejercicio lo elige el dueño una vez, en Primeros pasos, y el
 MCP no lo puede cambiar. El prompt del `year` de `fiscal-calendar` se lo dice al agente; la prueba
@@ -49,30 +74,49 @@ archivos. La extracción necesita el servicio de Copilot levantado. El CIF de la
 pasa el dígito de control de Etendo, así que el proveedor lo crea el setup, por nombre y sin NIF. La
 foto no imprime el NIF del receptor: la extracción lo avisa (`receiver_tax_id_absent`) y no bloquea.
 
-## Mejoras para poder probar lo que falta
+## Mejoras hechas en ETP-5850 para poder probar
 
-Features que ya están en Etendo GO pero que una prueba no puede medir todavía. Cada una necesita un
-cambio de nuestro lado.
-
-| Feature | Qué falta | Dónde | Prueba que habilita |
+| Feature | Qué faltaba | Cambio | Prueba |
 |---|---|---|---|
-| Pérdidas y Ganancias por mes o trimestre (ETP-6080, ETP-6239) | `generate_profit_loss` sin columnas por período (la UI tiene Total / Mes / Trimestre); `yearId` obligatorio y sin forma de saber cuál es el año del calendario de la organización (en GOClient hay dos 2026) | MCP de GO | "¿Cuánto vendimos cada mes de este trimestre?" |
-| Factura de proveedor desde una foto: fecha | `etendo_extract_invoice_document` devuelve `invoiceDateIso` con el texto leído ("15 de enero de 2026"), no en formato ISO; el agente de la prueba usó la fecha de hoy porque el pedido lo dice | MCP de GO (bug) | Aplicar la fecha de la factura |
-| Remesas: selector del tipo | `etendo_selectors` de `remittanceType` con `recordContext.financialAccount` devuelve vacío; `etendo_defaults` sí trae el tipo (el agente salió por ahí) | MCP de GO (bug) | Mejora la 48, no la habilita |
+| Pérdidas y Ganancias por mes o trimestre (ETP-6080, ETP-6239) | `generate_profit_loss` sin columnas por período; `yearId` obligatorio (en GOClient hay dos 2026) | `breakdown: month \| quarter` y `yearId` opcional con las dos fechas (com.etendoerp.go) | 60, 61 |
+| Portal del cliente (ETP-6209) | El link solo salía dentro del email del documento | Acción `portalLink` en Contactos: el link del cliente para compartirlo (com.etendoerp.go) | 62 |
+| Movimientos por producto (ETP-5889) | El agente no encontraba `product/transactions` | Prompt en `product/transactions` y en `goods-movements` | 57, 58 |
+| Calendario contable (ETP-5577) | Nada le decía al agente que el inicio del ejercicio no se cambia por MCP | Prompt en `fiscal-calendar/year` | 56 |
+| Factura de proveedor desde una foto: fecha | `invoiceDateIso` venía con la fecha escrita | Corregido (com.etendoerp.go #1656) | 53 |
+| Remesas: selector del tipo | El selector de `remittanceType` devolvía vacío | Corregido (com.etendoerp.go #1656) | 48 |
 
-## Features a seguir hasta que terminen
+## Portal del cliente: la acción `portalLink`
 
-Features del Q4 en curso o sin exponer en el MCP. Cuando lleguen al MCP se escribe su prueba.
+`etendo_action` sobre `contacts/businessPartner`, acción `portalLink`: devuelve `url`, `expiresAt`,
+`entryDocument` (el documento más reciente del cliente, donde abre el portal) y `renewalEmail`. Es el
+mismo link que lleva el email de un documento, con origen `SHARED`. Reglas: flag `bp-portal-link`
+de la cuenta; acceso de escritura a Contactos; el cliente no puede estar bloqueado ni inactivo;
+necesita un email de contacto (un link vencido se renueva por email) y algún documento que el portal
+muestre; queda registrado quién lo pidió y no cuenta como "enviado por email". Detalle en
+`com.etendoerp.go/docs/customer-portal.md` §6c.
 
-| Feature | Estado | Qué falta para la prueba | Prueba posible |
-|---|---|---|---|
-| Bandeja de facturas (épica ETP-6046) | Partes 1-3 en control de calidad; 4 (revisión, ETP-6050) en curso; 5 (confirmar y descartar, ETP-6051) definida | El spec `invoice-inbox` es solo lectura en el MCP: falta pasar un documento a factura de compra o descartarlo | "Pasá a compras las facturas que llegaron hoy" (Holded lo hace: `upload_inbox`, `export_inbox`) |
-| Movimientos de producto (ETP-5889) | En revisión, flag `product-movements-tab` | La pestaña no está en el MCP: el spec `product` no tiene esa entidad | "¿Qué movimientos tuvo el Producto X este mes?" |
-| Portal del cliente (ETP-6209) | En curso, flag `bp-portal-link` | Sin acción en el MCP | "Mandale a Cliente X el link para ver sus facturas" (Holded: `get_contact_portal_link`) |
-| Motivo de rectificación en la facturación automática (ETP-6179) | En curso | — | Rectificativa con motivo desde un albarán o pedido |
-| Movimientos rechazados (ETP-5581, flag `bank-bounce-suggestions`) | En producción para Finanzas | `discardPair` solo acepta líneas sincronizadas por PSD2; por MCP no se pueden crear | Necesita un banco PSD2 de prueba conectado |
-| Ajustes de importación PSD2 (ETP-6151) | En revisión | Necesita una cuenta con conexión bancaria | Igual que la anterior |
-| Modelo 390 (ETP-6183) | En revisión, en Classic | No está en el MCP de GO | — |
+## Flags para la corrida oficial
+
+Los flags son por cuenta. En producción hoy están prendidos solo para una lista de cuentas; para
+medir estas pruebas, la cuenta del harness tiene que estar en la lista de cada flag (Datadog). En un
+local-env se prenden con `feature-flag <key>=true` en el `worktree.conf`.
+
+| Flag | Pruebas | Si está apagado |
+|---|---|---|
+| `sepa-remittances` | 48 | No hay remesas: la prueba falla |
+| `contact-category-type` | 54, 55 | La categoría no define el tipo: fallan |
+| `invoice-inbox` | 59 | La bandeja responde `feature_disabled`: falla |
+| `bp-portal-link` | 62 | `portalLink` responde `feature_disabled`: falla |
+| `product-movements-tab` | 57, 58 | Solo la pestaña de la app; el MCP lee los movimientos igual [no probado con el flag apagado] |
+
+## Features a seguir
+
+| Feature | Estado | Qué falta |
+|---|---|---|
+| Motivo de rectificación en la facturación automática (ETP-6179) | En curso | Rectificativa con motivo desde un albarán o pedido |
+| Movimientos rechazados (ETP-5581, flag `bank-bounce-suggestions`) | En producción para Finanzas | `discardPair` solo acepta líneas sincronizadas por PSD2; necesita un banco PSD2 de prueba |
+| Ajustes de importación PSD2 (ETP-6151) y última sincronización (#16) | En revisión / Done | Necesita una cuenta con conexión bancaria |
+| Modelo 390 (ETP-6183) | En revisión, en Classic | No está en el MCP de Etendo.ai |
 
 ## Fuera de la T3
 
