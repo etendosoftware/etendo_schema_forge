@@ -746,9 +746,65 @@ describe('purchaseInvoiceDescriptor', () => {
           });
         });
 
-        it('exposes the threshold constant', () => {
-          expect(PRODUCT_AUTO_MATCH_MIN_SIMILARITY).toBe(90);
+        describe('whole-string similarity and backend match type (ETP-5895)', () => {
+          // What the endpoint sends today: score = greatest(similarity, word_similarity), plus the
+          // whole-string similarity and, from ETP-5895, the match type.
+          const row = (id, name, score, text, matchType = 'fuzzy') => ({
+            id, name, similarityPercent: String(score), textSimilarityPercent: String(text), matchType,
+          });
+
+          it('takes a near-identical name (missing unit) that clearly leads the rest', () => {
+            expect(classify('Bebida Energética 0,5',
+              row('p1', 'Bebida Energética 0,5L', 95.5, 87.5), row('p2', 'Bebida Isotónica 0,5L', 70, 60)))
+              .toEqual({ id: 'p1' });
+          });
+
+          it('suggests a name that only CONTAINS the description, even at a score of 100', () => {
+            expect(classify('Mantenimiento Web',
+              row('p1', 'Servicio de desarrollo y mantenimiento web', 100, 43.9)))
+              .toEqual({ suggestion: { id: 'p1', name: 'Servicio de desarrollo y mantenimiento web' } });
+          });
+
+          it('suggests when the runner-up is within the gap', () => {
+            expect(classify('Cerveza Ale 0,5', row('p1', 'Cerveza Ale 0,5L', 94, 88), row('p2', 'Cerveza Ale 0,33L', 90, 80)))
+              .toEqual({ suggestion: { id: 'p1', name: 'Cerveza Ale 0,5L' } });
+          });
+
+          it('treats exactly the threshold as auto and just below it as a suggestion', () => {
+            const at = PRODUCT_AUTO_MATCH_MIN_SIMILARITY;
+            expect(classify('Widget A', row('p1', 'Widget AB', 95, at))).toEqual({ id: 'p1' });
+            expect(classify('Widget A', row('p1', 'Widget AB', 95, at - 0.1)))
+              .toEqual({ suggestion: { id: 'p1', name: 'Widget AB' } });
+          });
+
+          it('no longer takes a different variant that legacy scored at 96.7 ("M8" vs "M9")', () => {
+            expect(classify('Tornillo M8', row('p1', 'Tornillo M9', 96.7, 69.2)))
+              .toEqual({ suggestion: { id: 'p1', name: 'Tornillo M9' } });
+          });
+
+          it('takes the one candidate the backend marks exact, e.g. by its search key', () => {
+            expect(classify('MTR-001', row('p1', 'Cubic Meter', 100, 30), row('p2', 'Meter', 100, 25, 'exact')))
+              .toEqual({ id: 'p2' });
+          });
+
+          it('takes the one candidate the backend marks normalized when none is exact', () => {
+            expect(classify('Camion grua', row('p1', 'Camión grúa', 70, 70, 'normalized'), row('p2', 'Camion', 100, 60)))
+              .toEqual({ id: 'p1' });
+          });
+
+          it('suggests when two candidates are marked exact by the backend', () => {
+            expect(classify('MTR-001', row('p1', 'Meter', 100, 25, 'exact'), row('p2', 'Metre', 100, 25, 'exact')))
+              .toEqual({ suggestion: { id: 'p1', name: 'Meter' } });
+          });
+
+          it('reads exactMatch when the backend predates match_type', () => {
+            const old = { id: 'p2', name: 'Meter', similarityPercent: '100', textSimilarityPercent: '25', exactMatch: true };
+            expect(classify('MTR-001', row('p1', 'Cubic Meter', 100, 30), old)).toEqual({ id: 'p2' });
+          });
         });
+
+        // The cases below send no textSimilarityPercent: an older backend, where the endpoint
+        // score >= PRODUCT_AUTO_MATCH_LEGACY_MIN_SCORE held by one candidate still decides.
 
         it('auto-assigns a single 96.7% candidate (one-char difference)', () => {
           expect(classify('Tornillo M8', cand('p1', 'Tornillo M9', '96.7'))).toEqual({ id: 'p1' });

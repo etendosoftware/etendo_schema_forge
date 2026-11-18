@@ -2086,16 +2086,27 @@ Line products are looked up with `simSearch` (Product, `minSimPercent: 50`, `qty
   one); this is the safe direction by design. The trim uses the explicit ECMAScript whitespace set
   on both sides (NBSP and other Unicode spaces included), so "Arnés " with a trailing NBSP equals
   "Arnés".
-- **Single highest near-identical candidate (ETP-5654, 4th QA pass):** when no exact name
-  applies, the candidate with the highest `similarityPercent` is assigned automatically if that
-  value is **>= 90** (inclusive; `PRODUCT_AUTO_MATCH_MIN_SIMILARITY`) and exactly **one**
-  candidate holds it — even if a runner-up is also >= 90 (96 beats 94). If two or more candidates
-  tie at the highest value (e.g. "talla L" and "talla M" both at 96.7) nothing is assigned and the
-  first candidate returned by the search is only suggested; a tie lower down (96, 94, 94) does not
-  block. A missing, blank or non-numeric similarity (`undefined`, `''`, `NaN`, `"96.7%"`) never
-  qualifies. Two products with the same exact name stay ambiguous. The Java OCR review
-  (`OcrProductMatch`, `auto_matched` state) applies the same rule.
-- **Any other candidate** (highest similarity below 90, a tie at the top, or two products with the same
+- **Exactly one candidate the search marks as equal (ETP-5895):** the endpoint now returns
+  `match_type` (`exact` = equal ignoring case and spaces, `normalized` = equal once accents are
+  ignored, `fuzzy` = anything else) for every identifier column, so a description that is the
+  product's **search key** also resolves. One such candidate → assigned; two or more → suggestion.
+  A backend that only sends `exact_match` counts as `exact`.
+- **Single near-identical candidate (ETP-5895, replaces the ETP-5654 score rule):** when nothing
+  is equal, the candidate with the highest **whole-string similarity** (`textSimilarityPercent`,
+  pg_trgm `similarity`) is assigned automatically if it is **>= 85** (inclusive;
+  `PRODUCT_AUTO_MATCH_MIN_SIMILARITY`) and leads the runner-up by **>= 10 points**
+  (`PRODUCT_AUTO_MATCH_MIN_GAP`); a tie at the top never qualifies. The endpoint score
+  (`similarityPercent` = `greatest(similarity, word_similarity)`) is no longer used here: it gives
+  100 to any name that merely **contains** the description, which auto-assigned partial names.
+  Measured on the demo catalog: a missing last letter or unit ("Bebida Energética 0,5" →
+  "… 0,5L", 87.5) still resolves, a partial name ("Mantenimiento Web" inside "Servicio de
+  desarrollo y mantenimiento web", 43.9) and a sibling variant ("Tornillo M8" vs "Tornillo M9")
+  no longer do, with no wrong assignment. A backend that does not send `text_similarity_percent`
+  keeps the previous rule (`similarityPercent >= 90` held by exactly one candidate,
+  `PRODUCT_AUTO_MATCH_LEGACY_MIN_SCORE`). A missing, blank or non-numeric value
+  (`undefined`, `''`, `NaN`, `"96.7%"`) never qualifies. The Java OCR review (`OcrProductMatch`,
+  `auto_matched` state) applies the same rule.
+- **Any other candidate** (nothing equal and no clear near-identical name, or two products with the same
   exact name) → the line goes to the "Asociar productos" popup, where the best candidate is only **suggested**
   (ETP-5654): the row starts undecided and the suggestion shows as a one-click chip below the
   selector (`ocr-product-suggestion-{idx}`, "Suggested: <name>"). Nothing is selected until the user

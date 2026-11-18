@@ -231,30 +231,54 @@ export function normalizeProductName(value) {
     .replaceAll('\u0001', 'ñ');
 }
 
-/** Minimum similarity (0-100, inclusive) at which a catalog product is taken automatically. */
-export const PRODUCT_AUTO_MATCH_MIN_SIMILARITY = 90;
+/**
+ * Whole-string similarity (0-100, inclusive) at which a catalog product is taken automatically
+ * (ETP-5895). It is `text_similarity_percent`, not the endpoint score: the score counts a name that
+ * merely CONTAINS the description as 100 ("Mantenimiento Web" inside "Servicio de desarrollo y
+ * mantenimiento web"), while the whole-string similarity stays high only for near-identical names
+ * ("Agua sin Gas 1" vs "Agua sin Gas 1L": 82-88 for a missing letter or unit).
+ */
+export const PRODUCT_AUTO_MATCH_MIN_SIMILARITY = 85;
+/** Lead, in whole-string similarity points, the best candidate needs over the runner-up. */
+export const PRODUCT_AUTO_MATCH_MIN_GAP = 10;
+/** Score threshold kept for a backend that does not send `text_similarity_percent` yet. */
+export const PRODUCT_AUTO_MATCH_LEGACY_MIN_SCORE = 90;
 
 // Defensive parse: simSearch hands the percentage over as a string (trailing '%' stripped), and
 // anything missing or non-numeric ('', undefined, '96.7%') must never count as a match.
-function parseSimilarity(candidate) {
-  const raw = candidate?.similarityPercent;
+function parsePercent(raw) {
   if (raw == null || (typeof raw === 'string' && raw.trim() === '')) return NaN;
   const value = Number(raw);
   return Number.isFinite(value) ? value : NaN;
 }
 
-// The candidate to take by similarity, or null when it is not safe: the highest valid similarity
-// must reach the threshold and be held by exactly ONE candidate (strict equality on the parsed
-// numbers). A tie at the top is ambiguous, so the user decides; a tie lower down does not matter.
-function pickBySimilarity(candidates) {
+// How the backend says a candidate relates to the description: 2 equal ignoring case and spaces,
+// 1 equal once accents are ignored too, 0 otherwise. The backend compares every identifier column
+// (a product's search key too), so it can find what the name-only step 1 cannot.
+function backendMatchRank(candidate) {
+  if (candidate?.matchType === 'exact' || (candidate?.matchType == null && candidate?.exactMatch === true)) return 2;
+  return candidate?.matchType === 'normalized' ? 1 : 0;
+}
+
+// The candidate to take by similarity, or null when it is not safe: the highest valid value must
+// reach the threshold and be held by exactly ONE candidate (strict equality on the parsed numbers),
+// leading the runner-up by `minGap`. A tie at the top is ambiguous, so the user decides.
+function pickBy(candidates, valueOf, minValue, minGap) {
   const scored = candidates
-    .map((c) => ({ c, sim: parseSimilarity(c) }))
-    .filter((x) => !Number.isNaN(x.sim));
-  if (scored.length === 0) return null;
-  const top = Math.max(...scored.map((x) => x.sim));
-  if (top < PRODUCT_AUTO_MATCH_MIN_SIMILARITY) return null;
-  const holders = scored.filter((x) => x.sim === top);
-  return holders.length === 1 ? holders[0].c : null;
+    .map((c) => ({ c, value: parsePercent(valueOf(c)) }))
+    .filter((x) => !Number.isNaN(x.value))
+    .sort((a, b) => b.value - a.value);
+  if (scored.length === 0 || scored[0].value < minValue) return null;
+  const runnerUp = scored.length > 1 ? scored[1].value : -Infinity;
+  if (runnerUp === scored[0].value || scored[0].value - runnerUp < minGap) return null;
+  return scored[0].c;
+}
+
+function pickBySimilarity(candidates) {
+  const hasTextSimilarity = candidates.some((c) => c.textSimilarityPercent != null);
+  return hasTextSimilarity
+    ? pickBy(candidates, (c) => c.textSimilarityPercent, PRODUCT_AUTO_MATCH_MIN_SIMILARITY, PRODUCT_AUTO_MATCH_MIN_GAP)
+    : pickBy(candidates, (c) => c.similarityPercent, PRODUCT_AUTO_MATCH_LEGACY_MIN_SCORE, 0);
 }
 
 /**
@@ -262,31 +286,37 @@ function pickBySimilarity(candidates) {
  *  1. exactly one candidate whose name equals the description (trim, case- and accent-
  *     insensitive via `normalizeProductName`; ñ stays distinct) → `{ id }`; two or more exact
  *     names (also "Arnés X" + "Arnes X" for "Arnés X") are ambiguous → suggestion;
- *  2. the HIGHEST valid similarityPercent, when it is >= PRODUCT_AUTO_MATCH_MIN_SIMILARITY
- *     (90, inclusive) and held by exactly one candidate → `{ id }` (ETP-5654), even if a
- *     runner-up is also >= 90. A tie at the top (two or more with the same value) is ambiguous
- *     → suggestion (the first candidate); a tie lower down does not block. A missing or
- *     non-numeric similarity never qualifies;
- *  3. otherwise, when there is any candidate (>= minSimPercent) → `{ suggestion }` with the
+ *  2. exactly one candidate the backend marks as equal (`matchType` 'exact', or 'normalized' when
+ *     only accents differ; the search key counts too) → `{ id }`; two or more → suggestion;
+ *  3. the candidate with the HIGHEST whole-string similarity (`textSimilarityPercent`), when it is
+ *     >= PRODUCT_AUTO_MATCH_MIN_SIMILARITY and leads the runner-up by PRODUCT_AUTO_MATCH_MIN_GAP
+ *     → `{ id }` (a missing letter or unit). A backend without that field falls back to the
+ *     endpoint score >= PRODUCT_AUTO_MATCH_LEGACY_MIN_SCORE held by one candidate (ETP-5654).
+ *     A missing or non-numeric value never qualifies;
+ *  4. otherwise, when there is any candidate (>= minSimPercent) → `{ suggestion }` with the
  *     first one: the user must confirm it in the popup (a partial name such as "Mantenimiento
  *     Web" vs "Servicio de desarrollo y mantenimiento web" is a different product);
- *  4. no candidates → `{}`.
- * Exported for testing.
+ *  5. no candidates → `{}`.
+ * Mirrors OcrProductMatch in com.etendoerp.go; keep both identical. Exported for testing.
  */
 export function classifyProductMatch(description, match) {
   const candidates = (Array.isArray(match?.candidates) && match.candidates.length > 0
     ? match.candidates
     : [match]).filter((c) => c?.id);
   if (candidates.length === 0) return {};
+  const best = candidates[0];
+  const suggestion = { suggestion: { id: best.id, name: String(best.name ?? best.id) } };
   const wanted = normalizeProductName(description);
   const exact = wanted ? candidates.filter((c) => normalizeProductName(c.name) === wanted) : [];
   if (exact.length === 1) return { id: exact[0].id };
-  if (exact.length === 0) {
-    const bySimilarity = pickBySimilarity(candidates);
-    if (bySimilarity) return { id: bySimilarity.id };
+  if (exact.length > 1) return suggestion;
+  const bestRank = Math.max(...candidates.map(backendMatchRank));
+  if (bestRank > 0) {
+    const equal = candidates.filter((c) => backendMatchRank(c) === bestRank);
+    return equal.length === 1 ? { id: equal[0].id } : suggestion;
   }
-  const best = candidates[0];
-  return { suggestion: { id: best.id, name: String(best.name ?? best.id) } };
+  const bySimilarity = pickBySimilarity(candidates);
+  return bySimilarity ? { id: bySimilarity.id } : suggestion;
 }
 
 /**
