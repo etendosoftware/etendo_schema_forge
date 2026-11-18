@@ -2952,6 +2952,28 @@ server-side ordering on a large catalog.
 
 ---
 
+### 19d. A window's own create modal on a selector — `FieldCreateContext` (ETP-6209)
+
+For a selector whose record the generic `allowCreate` (§19c) cannot create — it only POSTs `{ name }`
+to a CRUD spec — a custom window can give the field a "+ create" row that opens the window's OWN modal.
+The window wraps its `GeneratedApp` in `FieldCreateContext.Provider`
+(`tools/app-shell/src/components/contract-ui/FieldCreateContext.js`) with a value keyed by field key:
+
+```jsx
+<FieldCreateContext.Provider value={{
+  rejectReason: { label: `+ ${ui('createRejectReason')}`, onOpen: (query, onSelect) => openMyModal(query, onSelect) },
+}}>
+```
+
+`EntityForm`'s searchable selector (`renderSearchSelectField` → `CreatableSearchSelect`) shows the row
+for that field; `onOpen(query, onSelect)` opens the modal, and calling `onSelect({ id, name })` selects
+the created record in the field. No provider, a field the value does not name, or a field that declares
+`allowCreate` (which wins): exactly the previous behaviour. Nothing in `decisions.json` — the context
+lives in the window's custom code, so it survives regeneration. Only user: sales-quotation's
+`rejectReason` (editable on a rejected quotation), which opens the reject flow's
+`CreateRejectReasonModal` (`createRejectReason` action) — `tools/app-shell/src/windows/custom/sales-quotation/index.jsx`.
+Sibling of `CreateContactContext` (the contact create on `type: 'search'` fields).
+
 ### 20. Follow-up documents — `FollowUpDocumentButton` + `draftMode.afterProcess` (ETP-5576)
 
 A generic flow that offers the document that naturally follows a completed one (today:

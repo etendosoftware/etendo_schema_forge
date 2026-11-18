@@ -1027,11 +1027,14 @@ arrives, so every shared piece takes the new look as an opt-in (`PortalSection v
     then the language. `GET /sws/portal/me` now also answers `email` (additive): the first valid To
     of the link's root send, the address the portal already treats as the customer
     (`PortalDecisionService.confirmationRecipient`), `""` when none.
-  - A (app, sales quotation: create a reject reason from the editable "Motivo de rechazo"): not
-    built. The generic `allowCreate` (`InlineCreateSelector`) POSTs `{ name }` to a CRUD spec
-    (`/sws/neo/{createSpec}/{createEntity}`); reject reasons have no NEO spec and are created
-    through the `createRejectReason` action on the quotation, which the generic field cannot call.
-    Options are with the coordinator.
+  - A (app, sales quotation: create a reject reason from the editable "Motivo de rechazo"): built
+    (user decision). The field offers "+ Crear razón" and opens the reject flow's own
+    `CreateRejectReasonModal` (`createRejectReason` action); the created reason is selected in the
+    field. The generic `allowCreate` could not do it (it POSTs `{ name }` to a CRUD spec and reject
+    reasons have none), so a small backwards-compatible hook was added: `FieldCreateContext`, read by
+    `EntityForm`'s searchable selector and provided by the window's custom code
+    (`windows/custom/sales-quotation/index.jsx`); no `decisions.json` change
+    (`docs/ui-customization.md` §19d).
   - B (internal reasons in the notes): investigated, no change. No path writes the tenant's reason
     into the notes; the only notes write is the portal's own line (`PortalDecisionService.appendNote`).
 - **Pixel pass against the Figma (2026-11-17, user: "tal cual el figma").** Compared side by side
