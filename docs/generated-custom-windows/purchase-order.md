@@ -811,7 +811,7 @@ and its next write is refused (`docs/public-api.md` §4.12).
 Line pricing (Etendo GO, `OrderLineCurrencyConversion`): a line created through the API (or REST,
 batch, `etendo_create`) without a price is priced from the price list and, when the order is in a
 foreign currency and the price list in the organization's, converted by the header's rate. Every new
-line takes the order's currency, whatever its price came from. The result matches adding the line
+line for a product takes the order's currency, whatever its price came from. The result matches adding the line
 in this window ("Line conversion based on saved state") when the product's list price equals its
 standard price; otherwise the server converts each one separately and keeps the discount between
 them, where the window sets both to the converted price. A price sent is never converted. Without a

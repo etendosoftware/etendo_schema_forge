@@ -622,8 +622,8 @@ gateway only maps the name):
 priced from the document's price list, as in the application. When the document is in a foreign
 currency and its price list is in the organization's currency, those prices are converted with the
 document's `currency_rate` (price × rate, rounded to the currency's price precision, 2 for EUR and
-USD). Every new line takes the document's currency, whether its price came from the price list or
-from the caller. With a rate of 1.47, a product priced 12 EUR is created at 17.64 USD, the same
+USD). Every new line for a product takes the document's currency, whether its price came from the
+price list or from the caller. With a rate of 1.47, a product priced 12 EUR is created at 17.64 USD, the same
 line the application creates. That holds when the product's list price equals its standard price.
 When they differ, the API converts each one separately and keeps the discount between them, while
 the application sets both to the converted price. A `list_price` sent by the caller is taken as a
