@@ -149,6 +149,7 @@ If the Jira summary exceeds that budget: truncate it to fit within 80 chars tota
 Execute:
   gh pr create \
     --draft \
+    --assignee @me \
     --title "<pr_title_prefix> <summary_fragment_truncated_to_fit_80_chars>" \
     --base <base_branch> \
     --head <branch_name> \
