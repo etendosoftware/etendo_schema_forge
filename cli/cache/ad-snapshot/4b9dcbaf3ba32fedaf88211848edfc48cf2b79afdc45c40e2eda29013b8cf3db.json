@@ -1715,18 +1715,11 @@
       ]
     },
     "9875b64b4d474916c9d42e3986d743e8a881ac53d52dca07ea47fb490bfea6df": {
-      "checksum": "82f8a89bd16becbef6524520e675c0379ea98fe3dd6bcc9e74fe6070c9dcabf4",
+      "checksum": "3a7efe8168cc3bcde4058375d91ea66c598c650b3b1d40cceef2b9aa0c3b4087",
       "params": [
         "6CB5B67ED33F47DFA334079D3EA2340E"
       ],
       "rows": [
-        {
-          "ad_callout_id": "107",
-          "ad_table_id": "259",
-          "classname": "org.openbravo.erpCommon.ad_callouts.SE_Order_BPartner",
-          "columnname": "C_BPartner_ID",
-          "name": "SE_Order_BPartner"
-        },
         {
           "ad_callout_id": "108",
           "ad_table_id": "259",
@@ -1868,11 +1861,18 @@
           "name": "OperativeQuantity_To_BaseQuantity"
         },
         {
-          "ad_callout_id": "B95E999B9C554E399A20B41D11657FDE",
+          "ad_callout_id": "344DD8DC110749D4B006C07EB5744BD0",
           "ad_table_id": "259",
-          "classname": "org.openbravo.erpCommon.ad_callouts.SE_Order_BPartnerLocation",
+          "classname": "com.etendoerp.advanced.bank.account.management.ad_callouts.OrderBankAccountAssigner",
           "columnname": "C_BPartner_Location_ID",
-          "name": "SE_Order_BPartnerLocation"
+          "name": "OrderBankAccountAssigner"
+        },
+        {
+          "ad_callout_id": "7BDCFBDAA4E244789CE7351F0F2AE25C",
+          "ad_table_id": "259",
+          "classname": "org.openbravo.module.remittance.ad_callouts.REM_Order_Default_Bankaccount",
+          "columnname": "C_BPartner_ID",
+          "name": "REM_Order_Default_Bankaccount"
         },
         {
           "ad_callout_id": "BE4B8516395242B5BC072CDEAAD86163",
