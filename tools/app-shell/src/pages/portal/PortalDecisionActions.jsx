@@ -287,10 +287,12 @@ const MODAL_SHADOW = 'shadow-[0_0_0_1px_rgba(27,26,31,0.1),0_24px_48px_rgba(27,2
 
 /** The popups' 40px fully rounded buttons (padding 8px 12px, label 14/24 500 with 0 8px). */
 const MODAL_BUTTON = 'inline-flex h-10 items-center justify-center rounded-full px-3 py-2 text-sm font-medium leading-6 transition-colors disabled:pointer-events-none';
-const MODAL_SECONDARY = `${MODAL_BUTTON} border border-[#C7CBD3] bg-white text-[#1B1A1F] hover:bg-[#F3F5F9] ${PORTAL_FIGMA_SHADOW}`;
+/** The app's outline button hover (`components/ui/button`); the label keeps the Figma's colour. */
+const MODAL_NEUTRAL_HOVER = 'hover:bg-accent';
+const MODAL_SECONDARY = `${MODAL_BUTTON} border border-[#C7CBD3] bg-white text-[#1B1A1F] ${MODAL_NEUTRAL_HOVER} ${PORTAL_FIGMA_SHADOW}`;
 const MODAL_PRIMARY = `${MODAL_BUTTON} bg-[#325CFF] text-white hover:bg-[#2849CC] disabled:opacity-50`;
 const MODAL_DANGER = `${MODAL_BUTTON} bg-[#F53D6B] text-white hover:bg-[#D50B3E] disabled:bg-[#FBB1C4]`;
-const MODAL_GHOST = `${MODAL_BUTTON} text-[#1B1A1F] hover:bg-[#F3F5F9]`;
+const MODAL_GHOST = `${MODAL_BUTTON} text-[#1B1A1F] ${MODAL_NEUTRAL_HOVER}`;
 
 /** A popup button's label (the Figma's inner 0 8px padding). */
 function ButtonLabel({ children }) {

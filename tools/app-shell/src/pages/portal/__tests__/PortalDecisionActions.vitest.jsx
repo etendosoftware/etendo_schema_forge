@@ -171,6 +171,10 @@ describe('PortalDecisionActions — Rechazar', () => {
     await waitFor(() => expect(screen.getByTestId('portal-reject-confirm-modal')).toBeInTheDocument());
     expect(screen.getByTestId('portal-decision-email')).toHaveTextContent('contact@acme.com');
     expect(apiFetch).not.toHaveBeenCalled();
+    // Volver and Cancelar take the app's outline hover; the label keeps the Figma's colour.
+    for (const testId of ['portal-reject-back', 'portal-reject-confirm-cancel']) {
+      expect(screen.getByTestId(testId)).toHaveClass('hover:bg-accent', 'text-[#1B1A1F]');
+    }
 
     await user.click(screen.getByTestId('portal-reject-back'));
     await waitFor(() => expect(screen.getByTestId('portal-reject-modal')).toBeInTheDocument());
