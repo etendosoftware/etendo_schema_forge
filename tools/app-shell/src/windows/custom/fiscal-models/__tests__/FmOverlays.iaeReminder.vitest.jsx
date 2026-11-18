@@ -14,10 +14,10 @@ vi.mock('../fiscal-models.css', () => ({}));
 vi.mock('@/components/related-documents/helpers.js', () => ({
   neoBase: (u) => u,
 }));
-vi.mock('lucide-react', () => ({
-  Star: () => null, Play: () => null, ArrowUpRight: () => null, Info: () => null,
-  OctagonAlert: () => null, TriangleAlert: () => null, X: () => null,
-  Check: () => null, ChevronDown: () => null, Search: () => null,
+vi.mock('@phosphor-icons/react', () => ({
+  StarIcon: () => null, PlayIcon: () => null, ArrowUpRightIcon: () => null, InfoIcon: () => null,
+  WarningOctagonIcon: () => null, WarningIcon: () => null, XIcon: () => null,
+  CheckIcon: () => null, CaretDownIcon: () => null, MagnifyingGlassIcon: () => null,
 }));
 vi.mock('@/windows/custom/shared/CheckboxField.jsx', () => ({
   CheckboxField: ({ checked, onToggle }) => (

@@ -1,4 +1,6 @@
 import { render, screen } from '@testing-library/react';
+import { ArrowUpIcon, ArrowDownIcon } from '@phosphor-icons/react';
+import { findIcon } from '@/test/iconGlyph.js';
 
 vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
 
@@ -76,7 +78,7 @@ function renderSummaryRevenue(trend) {
   return {
     ...utils,
     text: block.textContent,
-    arrow: icon.getAttribute('class').match(/arrow-(up|down)/)[1],
+    arrow: findIcon(block, ArrowUpIcon) === icon ? 'up' : findIcon(block, ArrowDownIcon) === icon ? 'down' : null,
     badgeStyle: icon.parentElement.getAttribute('style') ?? '',
   };
 }

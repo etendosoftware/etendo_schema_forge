@@ -1,6 +1,5 @@
 import { useRef, useState } from 'react';
-import { LineChart } from 'lucide-react';
-import { IconicArrowUpIcon, IconicArrowDownIcon } from '@/components/ui/custom-icons';
+import { ChartLineIcon, ArrowUpIcon, ArrowDownIcon } from '@phosphor-icons/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { StatusTag } from '@/components/ui/status-tag';
 import { BPChartSVGContent } from './BPChartSVGContent';
@@ -83,9 +82,8 @@ function buildKpis(stats) {
 
 // ─── Trend badge ────────────────────────────────────────────────────────────
 
-// Direction icons: the Figma "Iconic" arrows (24-grid, filled, currentColor), so the
-// arrow takes the chip's text colour (#17663A / #D50B3E).
-const TREND_ICONS = { up: IconicArrowUpIcon, down: IconicArrowDownIcon };
+// Direction icons: Phosphor arrows drawn in currentColor, so the arrow takes the chip's text colour (#17663A / #D50B3E).
+const TREND_ICONS = { up: ArrowUpIcon, down: ArrowDownIcon };
 
 /**
  * ETP-5600 (QA pass 2) — the largest variation shown in full: up to |9.999| % the
@@ -341,7 +339,7 @@ export default function ContactsSummaryWidget({ data, optionalProvider = false }
             onClick={() => setChartOpen(true)}
             className="shrink-0 flex items-center gap-1 px-2 py-1 h-8 bg-[hsl(var(--muted))] rounded-lg text-sm font-medium text-[hsl(var(--foreground))] hover:brightness-95 transition-all"
           >
-            <LineChart className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="LineChart__22ed51" />
+            <ChartLineIcon className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="LineChart__22ed51" />
             {ui('bpViewChart')}
           </button>
         </div>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { WarningIcon } from '@phosphor-icons/react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
@@ -337,7 +337,7 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
             className="shrink-0 rounded-full p-0.5 text-status-warning-foreground hover:bg-status-warning/20"
             data-testid="line-action-tax-sif"
           >
-            <AlertTriangle className="h-4 w-4" data-testid="AlertTriangleIcon__taxSifBadge" />
+            <WarningIcon className="h-4 w-4" data-testid="AlertTriangleIcon__taxSifBadge" />
           </button>
         );
       },

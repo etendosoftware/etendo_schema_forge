@@ -1,7 +1,13 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useUI } from '@/i18n';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FileJson, Search, History, Loader2, FolderOpen } from 'lucide-react';
+import {
+  FileCodeIcon,
+  MagnifyingGlassIcon,
+  ClockCounterClockwiseIcon,
+  CircleNotchIcon,
+  FolderOpenIcon,
+} from '@phosphor-icons/react';
 
 const ARTIFACT_FILES = [
   { key: 'schema-raw.json', labelKey: 'artifactSchemaRaw' },
@@ -169,14 +175,14 @@ export default function ArtifactViewerPage() {
       <aside className="flex w-[220px] shrink-0 flex-col border-r border-border-subtle bg-card">
         <div className="border-b border-border-subtle p-3">
           <div className="flex items-center gap-2 mb-2">
-            <FileJson className="h-4 w-4 text-muted-foreground" data-testid="FileJson__8fb485" />
+            <FileCodeIcon className="h-4 w-4 text-muted-foreground" data-testid="FileJson__8fb485" />
             <h2 className="text-sm font-semibold text-foreground">{ui("artifactsTitle")}</h2>
             <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
               {windows.length}
             </span>
           </div>
           <div className="relative">
-            <Search
+            <MagnifyingGlassIcon
               className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
               data-testid="Search__8fb485" />
             <input
@@ -213,7 +219,7 @@ export default function ArtifactViewerPage() {
         {!selectedWindow ? (
           <div className="flex flex-1 items-center justify-center text-muted-foreground">
             <div className="text-center">
-              <FolderOpen
+              <FolderOpenIcon
                 className="mx-auto mb-3 h-12 w-12 text-muted-foreground"
                 data-testid="FolderOpen__8fb485" />
               <p className="text-sm">{ui("selectWindowFromList")}</p>
@@ -248,7 +254,7 @@ export default function ArtifactViewerPage() {
 
               {/* Version selector */}
               <div className="flex items-center gap-2">
-                <History className="h-3.5 w-3.5 text-muted-foreground" data-testid="History__8fb485" />
+                <ClockCounterClockwiseIcon className="h-3.5 w-3.5 text-muted-foreground" data-testid="History__8fb485" />
                 <select
                   value={selectedRef || ''}
                   onChange={(e) => setSelectedRef(e.target.value || null)}
@@ -273,7 +279,7 @@ export default function ArtifactViewerPage() {
             <div className="flex-1 overflow-auto p-4">
               {loading && (
                 <div className="flex items-center justify-center py-16">
-                  <Loader2
+                  <CircleNotchIcon
                     className="h-6 w-6 animate-spin text-muted-foreground"
                     data-testid="Loader2__8fb485" />
                   <span className="ml-2 text-sm text-muted-foreground">{ui("loading")}</span>

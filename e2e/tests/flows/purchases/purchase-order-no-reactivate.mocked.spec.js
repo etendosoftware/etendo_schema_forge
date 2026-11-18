@@ -123,7 +123,7 @@ test.describe('Purchase Order detail — Reactivate in kebab menu follows hasLin
     await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 8_000 });
 
     // The global TopBar renders its own "Más" (favorites/help) button using
-    // the same MoreVertical lucide icon, and it sits earlier in the DOM than
+    // the same kebab (DotsThreeVerticalIcon) icon, and it sits earlier in the DOM than
     // the document-actions kebab — a generic icon-filter locator would grab
     // the wrong button. `action-more` is the stable, unique test id for the
     // document-actions kebab (see DetailMoreActionsMenu.jsx).

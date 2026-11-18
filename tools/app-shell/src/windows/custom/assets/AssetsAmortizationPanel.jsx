@@ -3,7 +3,7 @@ import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx'
 import { renderGridViewCells } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, ArrowUpRight, Trash2 } from 'lucide-react';
+import { CircleNotchIcon, ArrowUpRightIcon, TrashIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { StatusTag } from '@/components/ui/status-tag';
 import { useCurrency } from '@/hooks/useCurrency';
@@ -24,7 +24,7 @@ function PeriodLink({ label, onClick }) {
       <span className="border-b border-[hsl(var(--text-disabled))] group-hover:border-[hsl(var(--foreground))] transition-colors leading-6">
         {label}
       </span>
-      <ArrowUpRight className="h-4 w-4 text-[hsl(var(--foreground))]" data-testid="ArrowUpRight__34159c" />
+      <ArrowUpRightIcon className="h-4 w-4 text-[hsl(var(--foreground))]" data-testid="ArrowUpRight__34159c" />
     </button>
   );
 }
@@ -210,7 +210,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
     if (loading) {
       return (
         <div className="text-xs text-muted-foreground py-4 text-center inline-flex items-center gap-1.5 justify-center w-full">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__34159c" />
+          <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__34159c" />
           {ui('assetsLoading')}
         </div>
       );
@@ -339,7 +339,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
           onClick={handleDeleteSelected}
           className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
         >
-          <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__34159c" />
+          <TrashIcon className="h-3.5 w-3.5" data-testid="Trash2__34159c" />
         </button>
       </SelectionToolbar>
       {batchDeleteDialog}

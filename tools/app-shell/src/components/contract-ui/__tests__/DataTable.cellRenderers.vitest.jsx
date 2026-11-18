@@ -54,8 +54,9 @@ vi.mock('@/hooks/useNeoImage', () => ({
   useNeoImage: (...args) => useNeoImageMock(...args),
 }));
 
-vi.mock('@/components/ui/box-icon', () => ({
-  BoxIcon: () => <span data-testid="box-icon" />,
+vi.mock('@phosphor-icons/react', async (importOriginal) => ({
+  ...(await importOriginal()),
+  PackageIcon: () => <span data-testid="box-icon" />,
 }));
 
 import {

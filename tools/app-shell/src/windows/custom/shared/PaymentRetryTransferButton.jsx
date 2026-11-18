@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { RotateCcw } from 'lucide-react';
+import { ArrowCounterClockwiseIcon } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -140,10 +140,9 @@ export default function PaymentRetryTransferButton({
       // survives the move from a red pill to a standard button.
       className="inline-flex items-center justify-center gap-2 h-10 px-3 shrink-0 whitespace-nowrap rounded-lg border border-border bg-card text-[#121217] text-sm leading-6 font-medium transition-colors hover:bg-muted/30 disabled:opacity-50 disabled:cursor-default"
     >
-      <RotateCcw
+      <ArrowCounterClockwiseIcon
         size={20}
         className="text-[var(--status-destructive-fg)]"
-        strokeWidth={2.5}
         aria-hidden="true"
         data-testid="RotateCcw__8d4aeb" />
       {ui('cpRetryTransfer')}

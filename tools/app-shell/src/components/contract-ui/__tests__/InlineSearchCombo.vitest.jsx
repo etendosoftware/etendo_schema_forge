@@ -2,10 +2,10 @@
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-vi.mock('lucide-react', () => ({
-  ChevronDown: () => <span data-testid="chevron" />,
-  X: () => <span data-testid="x-icon" />,
-  Check: () => <span data-testid="check-icon" />,
+vi.mock('@phosphor-icons/react', () => ({
+  CaretDownIcon: () => <span data-testid="chevron" />,
+  XIcon: () => <span data-testid="x-icon" />,
+  CheckIcon: () => <span data-testid="check-icon" />,
 }));
 vi.mock('@/lib/buildUrlWithParams.js', () => ({
   buildUrlWithParams: (url, params) => {
@@ -394,7 +394,7 @@ describe('InlineSearchCombo — ETP-5846 current selection is identified on reop
     expect(screen.getByTestId('inline-add-option-tax-iva10')).toHaveAttribute('aria-selected', 'false');
     expect(screen.getByTestId('inline-add-option-tax-exento')).toHaveAttribute('aria-selected', 'false');
     // The marker is visible, not ARIA-only: the check icon is rendered INSIDE the
-    // committed row (the lucide mock stands in for the real `Check`).
+    // committed row (the Phosphor mock stands in for the real `Check`).
     await waitFor(() => {
       expect(within(screen.getByTestId('inline-add-option-tax-iva21')).getByTestId('check-icon')).toBeInTheDocument();
     });

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ArrowLeft, ChevronDown, Plus, Upload } from 'lucide-react';
+import { ArrowLeftIcon, CaretDownIcon, PlusIcon, UploadSimpleIcon } from '@phosphor-icons/react';
 import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
 import { AdvancedFilterButton } from '@/components/contract-ui/AdvancedFilterButton.jsx';
@@ -32,7 +32,7 @@ function ImportSplitButton({ ui, onImportClick, onManualClick }) {
         onClick={onImportClick}
         className="inline-flex h-10 items-center gap-2 rounded-l-lg bg-primary px-3 text-sm font-medium leading-6 text-primary-foreground transition-colors hover:bg-primary/90"
       >
-        <Upload className="h-5 w-5" data-testid="Upload__8a428c" />
+        <UploadSimpleIcon className="h-5 w-5" data-testid="Upload__8a428c" />
         {ui('financeAccountStatementsImport')}
       </button>
       <button
@@ -44,7 +44,7 @@ function ImportSplitButton({ ui, onImportClick, onManualClick }) {
         onClick={() => setOpen((o) => !o)}
         className="inline-flex h-10 w-10 items-center justify-center rounded-r-lg border-l border-inverse-border/20 bg-primary text-primary-foreground transition-colors hover:bg-primary/90"
       >
-        <ChevronDown
+        <CaretDownIcon
           className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`}
           data-testid="ChevronDown__8a428c" />
       </button>
@@ -60,7 +60,7 @@ function ImportSplitButton({ ui, onImportClick, onManualClick }) {
             onClick={() => { setOpen(false); onManualClick(); }}
             className="flex w-full items-center gap-2 px-2 py-1 text-left hover:bg-[hsl(var(--muted))]"
           >
-            <Plus className="h-6 w-6 shrink-0 text-[hsl(var(--text-disabled))]" data-testid="Plus__8a428c" />
+            <PlusIcon className="h-6 w-6 shrink-0 text-[hsl(var(--text-disabled))]" data-testid="Plus__8a428c" />
             <span className="text-sm text-[hsl(var(--foreground))]">
               {ui('financeAccountStatementsManualMenuItem')}
             </span>
@@ -171,7 +171,7 @@ export function StatementsToolbar({
         onClick={() => navigate(-1)}
         className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-card text-[#828FA3] transition-colors hover:bg-[hsl(var(--muted))] hover:text-foreground"
       >
-        <ArrowLeft className="h-5 w-5" data-testid="ArrowLeft__8a428c" />
+        <ArrowLeftIcon className="h-5 w-5" data-testid="ArrowLeft__8a428c" />
       </button>
       {/* Status filter — first, mirroring the standard list toolbar (e.g. Sales Order). */}
       <StatementStatusFilter

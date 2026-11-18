@@ -1,4 +1,4 @@
-import { ArrowLeftRight } from 'lucide-react';
+import { ArrowsLeftRightIcon } from '@phosphor-icons/react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
@@ -33,7 +33,7 @@ export default function ViewMovementsLink({ period }) {
         data-testid="ProductViewMovementsLink"
       >
         <span className="underline underline-offset-2">{ui('productMovementsViewLink')}</span>
-        <ArrowLeftRight size={16} aria-hidden="true" data-testid="ArrowLeftRight__1e0b27" />
+        <ArrowsLeftRightIcon size={16} aria-hidden="true" data-testid="ArrowLeftRight__1e0b27" />
       </button>
     </div>
   );

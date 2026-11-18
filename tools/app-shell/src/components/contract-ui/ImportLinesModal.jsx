@@ -2,9 +2,14 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import {
-  CircleCheck, Loader2, Search, SquareCheck, X,
-} from 'lucide-react';
-import { InfoIcon, WarningIcon } from '@phosphor-icons/react';
+  CheckCircleIcon,
+  CircleNotchIcon,
+  MagnifyingGlassIcon,
+  CheckSquareIcon,
+  XIcon,
+  InfoIcon,
+  WarningIcon,
+} from '@phosphor-icons/react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -473,7 +478,7 @@ export default function ImportLinesModal({
     if (selectionSize === 0) return ui('selectLinesToImport');
     return (
       <>
-        <CircleCheck size={20} aria-hidden="true" className={cn('shrink-0', ICON_COLOR)} data-testid="CircleCheck__b0ad7a" />
+        <CheckCircleIcon size={20} aria-hidden="true" className={cn('shrink-0', ICON_COLOR)} data-testid="CircleCheck__b0ad7a" />
         <span>{countLinesInFooter ? renderLinesCount() : ui('selected', { count: selectionSize })}</span>
       </>
     );
@@ -485,8 +490,8 @@ export default function ImportLinesModal({
       className="flex h-full min-h-[120px] flex-col items-center justify-center gap-2 px-6 text-center text-sm text-muted-foreground"
     >
       {spinner
-        ? <Loader2 size={20} aria-hidden="true" className={cn('animate-spin', ICON_COLOR)} data-testid="Loader2__b0ad7a" />
-        : <Search size={20} aria-hidden="true" className={ICON_COLOR} data-testid="Search__b0ad7a" />}
+        ? <CircleNotchIcon size={20} aria-hidden="true" className={cn('animate-spin', ICON_COLOR)} data-testid="Loader2__b0ad7a" />
+        : <MagnifyingGlassIcon size={20} aria-hidden="true" className={ICON_COLOR} data-testid="Search__b0ad7a" />}
       <p>{message}</p>
     </div>
   );
@@ -762,7 +767,7 @@ export default function ImportLinesModal({
           data-testid="ImportLinesModal__close"
           className={cn('absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted', ICON_COLOR)}
         >
-          <X size={20} aria-hidden="true" data-testid="X__b0ad7a" />
+          <XIcon size={20} aria-hidden="true" data-testid="X__b0ad7a" />
         </button>
 
         <div className="flex shrink-0 flex-col gap-0.5 py-3 pl-7 pr-12">
@@ -775,7 +780,7 @@ export default function ImportLinesModal({
         <div className="flex min-h-0 flex-1 flex-col gap-2 px-7 pb-3">
           <div className="flex h-10 shrink-0 items-center gap-3">
             <label className="relative flex h-10 min-w-0 flex-1 items-center">
-              <Search
+              <MagnifyingGlassIcon
                 size={20}
                 aria-hidden="true"
                 className={cn('pointer-events-none absolute left-2', ICON_COLOR)}
@@ -800,7 +805,7 @@ export default function ImportLinesModal({
               data-testid="ImportLinesModal__selectAll"
               className="inline-flex h-10 shrink-0 items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium leading-6 text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
             >
-              <SquareCheck size={20} aria-hidden="true" className={ICON_COLOR} data-testid="SquareCheck__b0ad7a" />
+              <CheckSquareIcon size={20} aria-hidden="true" className={ICON_COLOR} data-testid="SquareCheck__b0ad7a" />
               {ui(allVisibleSelected ? 'deselectAll' : 'selectAll')}
             </button>
           </div>

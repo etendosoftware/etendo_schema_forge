@@ -1,4 +1,4 @@
-import { Trash2 } from 'lucide-react';
+import { TrashIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import LifecycleConfirmModal from '@/windows/custom/shared/LifecycleConfirmModal';
 
@@ -41,7 +41,7 @@ export default function BankConnectionDeleteConfirmModal({ onConfirm, onClose })
       warning={ui('financeAccountsBankConnectionDeleteWarning')}
       confirmLabel={ui('financeAccountsBankConnectionDeleteAction')}
       cancelLabel={ui('cancel')}
-      confirmIcon={<Trash2 width={15} height={15} strokeWidth={2.2} data-testid="DeleteConnectionIcon__bc4764" />}
+      confirmIcon={<TrashIcon width={15} height={15} data-testid="DeleteConnectionIcon__bc4764" />}
       onConfirm={onConfirm}
       onClose={onClose}
       testIdPrefix="bank-connection-delete-confirm"

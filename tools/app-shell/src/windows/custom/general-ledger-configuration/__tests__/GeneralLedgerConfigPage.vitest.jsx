@@ -50,8 +50,8 @@ vi.mock('@/components/ui/button', () => ({
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
-vi.mock('lucide-react', () => ({
-  Check: (props) => <svg data-testid="icon-check" {...props} />,
+vi.mock('@phosphor-icons/react', () => ({
+  CheckIcon: (props) => <svg data-testid="icon-check" {...props} />,
 }));
 
 import GeneralLedgerConfigPage from '../GeneralLedgerConfigPage.jsx';

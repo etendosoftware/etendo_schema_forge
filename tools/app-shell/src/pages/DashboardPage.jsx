@@ -1,12 +1,12 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
-  FileText,
-  ShoppingCart,
-  Users,
-  DollarSign,
-  TrendingUp,
-} from 'lucide-react';
+  FileTextIcon,
+  ShoppingCartIcon,
+  UsersIcon,
+  CurrencyDollarIcon,
+  TrendUpIcon,
+} from '@phosphor-icons/react';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { useDashboardWidgetAccess } from '@/hooks/useDashboardWidgetAccess.js';
 import { groupIntoRows, maxWidthFor, rowHeight } from '@/lib/dashboardRowLayout.js';
@@ -37,7 +37,7 @@ import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
  * ----------------------------------------------------------------*/
 
 const ICON_MAP = {
-  DollarSign, FileText, ShoppingCart, Users, TrendingUp,
+  DollarSign: CurrencyDollarIcon, FileText: FileTextIcon, ShoppingCart: ShoppingCartIcon, Users: UsersIcon, TrendingUp: TrendUpIcon,
 };
 
 /* ------------------------------------------------------------------
@@ -52,9 +52,9 @@ const ICON_MAP = {
  */
 function useQuickActions(ui) {
   return useMemo(() => [
-    { label: ui('quickAccessSalesOrders'),  to: '/sales-order/new',   window: 'sales-order',   icon: TrendingUp, testId: 'quick-action-sales-order-new', analyticsAction: 'create_sales_order' },
-    { label: ui('quickAccessSalesInvoices'), to: '/sales-invoice/new', window: 'sales-invoice', icon: FileText, testId: 'quick-action-sales-invoice-new', analyticsAction: 'create_sales_invoice' },
-    { label: ui('quickAccessContacts'),      to: '/contacts/new',      window: 'contacts',      icon: Users, testId: 'quick-action-contacts-new', analyticsAction: 'create_contact' },
+    { label: ui('quickAccessSalesOrders'),  to: '/sales-order/new',   window: 'sales-order',   icon: TrendUpIcon, testId: 'quick-action-sales-order-new', analyticsAction: 'create_sales_order' },
+    { label: ui('quickAccessSalesInvoices'), to: '/sales-invoice/new', window: 'sales-invoice', icon: FileTextIcon, testId: 'quick-action-sales-invoice-new', analyticsAction: 'create_sales_invoice' },
+    { label: ui('quickAccessContacts'),      to: '/contacts/new',      window: 'contacts',      icon: UsersIcon, testId: 'quick-action-contacts-new', analyticsAction: 'create_contact' },
   ], [ui]);
 }
 
@@ -77,7 +77,7 @@ function DashboardContent({ apiBaseUrl }) {
 
   const dashboardCurrency = useCurrency();
   const isCurrencyReady = dashboardCurrency !== null;
-  const resolvedKpis = kpis.map((k) => ({ ...k, icon: ICON_MAP[k.icon] || DollarSign }));
+  const resolvedKpis = kpis.map((k) => ({ ...k, icon: ICON_MAP[k.icon] || CurrencyDollarIcon }));
   const allQuickActions = useQuickActions(ui);
 
   // ETP-5088 — role-derived visibility. Every widget below renders only when its own gate opens,

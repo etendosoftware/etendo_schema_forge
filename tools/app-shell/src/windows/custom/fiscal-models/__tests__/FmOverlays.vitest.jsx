@@ -17,11 +17,11 @@ vi.mock('../fiscal-models.css', () => ({}));
 vi.mock('@/components/related-documents/helpers.js', () => ({
   neoBase: (u) => u,
 }));
-vi.mock('lucide-react', () => ({
-  Star: () => null, Play: () => null, ArrowUpRight: () => null, Info: () => null,
-  OctagonAlert: () => null, TriangleAlert: () => null, X: () => null,
-  Check: () => null, ChevronDown: () => null, Search: () => null,
-  FileText: () => null, Landmark: () => null,
+vi.mock('@phosphor-icons/react', () => ({
+  StarIcon: () => null, PlayIcon: () => null, ArrowUpRightIcon: () => null, InfoIcon: () => null,
+  WarningOctagonIcon: () => null, WarningIcon: () => null, XIcon: () => null,
+  CheckIcon: () => null, CaretDownIcon: () => null, MagnifyingGlassIcon: () => null,
+  FileTextIcon: () => null, BankIcon: () => null,
 }));
 vi.mock('@/windows/custom/shared/CheckboxField.jsx', () => ({
   CheckboxField: ({ checked, disabled, onToggle, onClick }) => (
@@ -1133,7 +1133,7 @@ describe('NewDeclModal', () => {
       const selectedOption = options.find(o => o.className.includes('fm-newdecl-year-option--selected'));
       expect(selectedOption).toBeTruthy();
       expect(selectedOption.textContent.trim()).toBe(currentYear.trim());
-      // lucide-react is mocked to `() => null` in this file, so the Check icon
+      // @phosphor-icons/react is mocked to `() => null` in this file, so the Check icon
       // itself can't be asserted on here; aria-selected carries the same signal.
       expect(selectedOption.getAttribute('aria-selected')).toBe('true');
     });

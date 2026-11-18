@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Check, Circle, Clock, Receipt } from 'lucide-react';
+import { CheckIcon, CircleIcon, ClockIcon, ReceiptIcon } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils.js';
@@ -43,8 +43,8 @@ const CREATE_INVOICE_TO = '/sales-invoice/new';
 
 /**
  * The solid green completion badge from the design: a filled disc with a white check, not a
- * ring. `lucide`'s `CheckCircle` cannot draw it — its circle is a stroke, so filling it leaves
- * the check as a hairline of the page background rather than a bold white tick.
+ * ring. A regular-weight `CheckCircleIcon` cannot draw it — its circle is an outline, so filling
+ * it leaves the check as a hairline of the page background rather than a bold white tick.
  */
 function StepDoneBadge({ stepId }) {
   return (
@@ -52,9 +52,8 @@ function StepDoneBadge({ stepId }) {
       className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--status-done-badge))] text-[hsl(var(--status-done-badge-fg))]"
       data-testid={`first-steps-done-${stepId}`}
     >
-      <Check
+      <CheckIcon
         className="h-5 w-5"
-        strokeWidth={3}
         aria-hidden="true"
         data-testid="Check__45a28a" />
     </span>
@@ -248,7 +247,7 @@ function StepRow({
                       data-testid="StepAction__45a28a" />
                     {Boolean(step.minutes) && (
                       <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Clock className="h-3.5 w-3.5" data-testid={`first-steps-time-${step.id}`} />
+                        <ClockIcon className="h-3.5 w-3.5" data-testid={`first-steps-time-${step.id}`} />
                         {step.minutes} {ui('minutes')}
                       </span>
                     )}
@@ -272,7 +271,7 @@ function StepRow({
                     done && 'border-primary bg-primary text-primary-foreground',
                   )}
                 >
-                  {done && <Check className="h-3 w-3" data-testid={`first-steps-toggle-check-${step.id}`} />}
+                  {done && <CheckIcon className="h-3 w-3" data-testid={`first-steps-toggle-check-${step.id}`} />}
                 </span>
                 {ui('markAsCompleted')}
               </label>}
@@ -283,13 +282,13 @@ function StepRow({
         <div className="shrink-0 flex items-center gap-3 mt-0.5">
           {!done && !expanded && Boolean(step.minutes) && (
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Clock className="h-3.5 w-3.5" data-testid={`first-steps-collapsed-time-${step.id}`} />
+              <ClockIcon className="h-3.5 w-3.5" data-testid={`first-steps-collapsed-time-${step.id}`} />
               {step.minutes} {ui('minutes')}
             </span>
           )}
           {done && <StepDoneBadge stepId={step.id} data-testid="StepDoneBadge__45a28a" />}
           {!done && expanded && (
-            <Circle
+            <CircleIcon
               className="h-8 w-8 text-muted-foreground/30"
               data-testid={`first-steps-pending-${step.id}`} />
           )}
@@ -453,7 +452,7 @@ export default function FirstStepsPage() {
                   className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
                   data-testid="first-steps-create-invoice"
                 >
-                  <Receipt className="h-4 w-4" data-testid="first-steps-create-invoice-icon" />
+                  <ReceiptIcon className="h-4 w-4" data-testid="first-steps-create-invoice-icon" />
                   {ui('createInvoice')}
                 </button>
                 {!dismissed && (
@@ -463,7 +462,7 @@ export default function FirstStepsPage() {
                     className="flex items-center gap-1.5 rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted/50"
                     data-testid="first-steps-finish-setup"
                   >
-                    <Check className="h-4 w-4" data-testid="first-steps-finish-setup-icon" />
+                    <CheckIcon className="h-4 w-4" data-testid="first-steps-finish-setup-icon" />
                     {ui('firstStepsFinishSetup')}
                   </button>
                 )}
