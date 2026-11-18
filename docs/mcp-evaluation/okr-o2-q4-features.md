@@ -81,6 +81,7 @@ foto no imprime el NIF del receptor: la extracción lo avisa (`receiver_tax_id_a
 | Pérdidas y Ganancias por mes o trimestre (ETP-6080, ETP-6239) | `generate_profit_loss` sin columnas por período; `yearId` obligatorio (en GOClient hay dos 2026) | `breakdown: month \| quarter` y `yearId` opcional con las dos fechas (com.etendoerp.go) | 60, 61 |
 | Portal del cliente (ETP-6209) | El link solo salía dentro del email del documento | Acción `portalLink` en Contactos: el link del cliente para compartirlo (com.etendoerp.go) | 62 |
 | Movimientos por producto (ETP-5889) | El agente no encontraba `product/transactions` | Prompt en `product/transactions` y en `goods-movements` | 57, 58 |
+| Bandeja de facturas (ETP-6046) | El agente filtró `status: "pending"`, que no existe, y el MCP respondió 0 filas sin error | Prompt en `invoice-inbox/header` con los códigos de estado | 59 |
 | Calendario contable (ETP-5577) | Nada le decía al agente que el inicio del ejercicio no se cambia por MCP | Prompt en `fiscal-calendar/year` | 56 |
 | Factura de proveedor desde una foto: fecha | `invoiceDateIso` venía con la fecha escrita | Corregido (com.etendoerp.go #1656) | 53 |
 | Remesas: selector del tipo | El selector de `remittanceType` devolvía vacío | Corregido (com.etendoerp.go #1656) | 48 |

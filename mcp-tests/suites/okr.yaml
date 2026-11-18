@@ -2315,7 +2315,8 @@ probes:
       etendo-go:
         setup: *product-with-movements
         expectAnswer:
-          all: [{ number: 140 }, { number: 160 }, { number: 130 }]
+          # The shipment may be written signed ("-130"): either sign is the same movement.
+          all: [{ number: 140 }, { number: 160 }, { anyOf: [{ number: 130 }, { number: -130 }] }]
       holded:
         notPossible:
           kind: goal
