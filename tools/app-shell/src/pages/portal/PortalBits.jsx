@@ -1,4 +1,4 @@
-import { MagnifyingGlassIcon } from '@phosphor-icons/react';
+import { SearchBar } from '@/components/layout/SearchBar.jsx';
 import { useLocale, useLocaleSwitch, useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { getStatusTone, statusLabel } from '@/lib/statusBadge.js';
@@ -41,13 +41,38 @@ const TAG_TONES = Object.freeze({
   neutral: 'bg-[var(--status-neutral-bg)] text-[var(--status-neutral-fg)] border-[var(--status-neutral-border)]',
 });
 
-/** The design's badge. */
-export function PortalTag({ tone = 'neutral', children, className, testId, ...rest }) {
+/**
+ * The main screen's badge colours, as the designer's Figma gives them (spec of 2026-11-17; the
+ * user asked for the main screen to match the Figma exactly, so these are its hex values rather
+ * than the app's `--status-*` palette). Light theme only, like the spec. Used through
+ * `palette="figma"`; every other portal view keeps {@link TAG_TONES}.
+ */
+const FIGMA_TAG_TONES = Object.freeze({
+  info: 'bg-[#EBEFFF] text-[#2B48BC] border-[#B0BEFF]',
+  success: 'bg-[#EEFBF4] text-[#17663A] border-[#B2EECC]',
+  warning: 'bg-[#FFF9EB] text-[#8A6100] border-[#FFDA85]',
+  caution: 'bg-[#FFF9EB] text-[#8A6100] border-[#FFDA85]',
+  destructive: 'bg-[#FEF0F4] text-[#D50B3E] border-[#FBB1C4]',
+  neutral: 'bg-[#F3F5F9] text-[#40465C] border-[#C7CBD3]',
+});
+
+/**
+ * Where the Figma colours a status differently from the app's tone (the label stays the app's):
+ * a quotation waiting for the customer (`UE`) is blue, an invoice still to pay is yellow.
+ */
+const FIGMA_STATUS_TONES = Object.freeze({ UE: 'info' });
+const FIGMA_PAYMENT_TONES = Object.freeze({ pending: 'warning' });
+
+/** The design's badge. `palette="figma"`: the main screen's Figma colours. */
+export function PortalTag({
+  tone = 'neutral', palette, children, className, testId, ...rest
+}) {
+  const tones = palette === 'figma' ? FIGMA_TAG_TONES : TAG_TONES;
   return (
     <span
       className={cn(
         'inline-flex items-center whitespace-nowrap rounded-lg border px-2.5 py-0.5 text-xs font-medium leading-4',
-        TAG_TONES[tone] ?? TAG_TONES.neutral,
+        tones[tone] ?? tones.neutral,
         className,
       )}
       {...rest}
@@ -60,13 +85,15 @@ export function PortalTag({ tone = 'neutral', children, className, testId, ...re
 }
 
 /** The document status, with the app's own label and tone (`statusLabel`, `getStatusTone`). */
-export function PortalDocumentStatus({ status, className }) {
+export function PortalDocumentStatus({ status, className, palette }) {
   const ui = useUI();
   const dictionary = useLocale();
   if (!status) return null;
+  const tone = (palette === 'figma' && FIGMA_STATUS_TONES[status]) || getStatusTone(status);
   return (
     <PortalTag
-      tone={getStatusTone(status)}
+      tone={tone}
+      palette={palette}
       className={className}
       testId="portal-document-status"
       data-status={status}
@@ -77,13 +104,17 @@ export function PortalDocumentStatus({ status, className }) {
 }
 
 /** An invoice's payment state, as the app shows it (see `invoicePaymentState`). */
-export function PortalPaymentStatus({ document, installments = null, useServerOverdue = false, className }) {
+export function PortalPaymentStatus({
+  document, installments = null, useServerOverdue = false, className, palette,
+}) {
   const ui = useUI();
   const state = invoicePaymentState(document, installments, { useServerOverdue });
   if (!state) return null;
+  const tone = (palette === 'figma' && FIGMA_PAYMENT_TONES[state.id]) || state.tone;
   return (
     <PortalTag
-      tone={state.tone}
+      tone={tone}
+      palette={palette}
       className={className}
       testId="portal-payment-status"
       data-state={state.id}
@@ -94,16 +125,18 @@ export function PortalPaymentStatus({ document, installments = null, useServerOv
 }
 
 /** The badge a row shows: an invoice's payment state, any other document's status. */
-export function PortalRowBadge({ document, className, useServerOverdue = false }) {
+export function PortalRowBadge({ document, className, useServerOverdue = false, palette }) {
   return document?.kind === 'INVOICE'
     ? <PortalPaymentStatus
     document={document}
     className={className}
     useServerOverdue={useServerOverdue}
+    palette={palette}
     data-testid="PortalPaymentStatus__7a317e" />
     : <PortalDocumentStatus
     status={document?.documentStatus}
     className={className}
+    palette={palette}
     data-testid="PortalDocumentStatus__7a317e" />;
 }
 
@@ -135,6 +168,15 @@ export function PortalValidUntil({ document }) {
     </span>
   );
 }
+
+/** The Figma's shadow-xs, for the screens aligned with the designer's spec. */
+export const PORTAL_FIGMA_SHADOW = 'shadow-[0_1px_2px_rgba(27,26,31,0.05)]';
+
+/** The Figma's 32px primary button (padding 4px 8px, #325CFF, r8, Inter 500 14/24 white). */
+export const PORTAL_FIGMA_BUTTON_PRIMARY = 'inline-flex h-8 items-center rounded-lg bg-[#325CFF] px-2 py-1 text-sm font-medium leading-6 text-white transition-colors hover:bg-[#2849CC] disabled:pointer-events-none disabled:opacity-50';
+
+/** The Figma's 32px secondary button (white, 1px #C7CBD3, shadow-xs, r8, Inter 500 14/24). */
+export const PORTAL_FIGMA_BUTTON_SECONDARY = `inline-flex h-8 items-center rounded-lg border border-[#C7CBD3] bg-white px-2 py-1 text-sm font-medium leading-6 text-[#1B1A1F] transition-colors hover:bg-[#F3F5F9] disabled:pointer-events-none disabled:opacity-50 ${PORTAL_FIGMA_SHADOW}`;
 
 /** Focus ring every clickable portal row shows when reached by keyboard. */
 export const PORTAL_ROW_FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
@@ -200,15 +242,31 @@ export function PortalInvoiceTypeBadge({ document, className }) {
   );
 }
 
-/** A section with the design's grey header band. */
-export function PortalSection({ title, action, children, className = '', testId }) {
+/**
+ * The main screen's section titles on desktop (designer's spec of 2026-11-17): Space Mono 12/16,
+ * the font the app already loads for `.font-mono` (`index.css`). Named here rather than through
+ * `md:font-mono`, which Tailwind maps to its own monospace stack, not to Space Mono. Mobile keeps
+ * {@link PORTAL_SECTION_TITLE}.
+ */
+export const PORTAL_DASHBOARD_SECTION_TITLE = `${PORTAL_SECTION_TITLE} md:[font-family:'Space_Mono',ui-monospace,monospace] md:font-normal md:text-foreground`;
+
+/**
+ * A section with the design's grey header band. `variant="dashboard"` is the main screen's
+ * (spec of 2026-11-17): a 40px band with 8/12 padding and the Space Mono title, on desktop only;
+ * the other views keep the default until their own spec arrives.
+ */
+export function PortalSection({ title, action, children, className = '', testId, variant }) {
+  const dashboard = variant === 'dashboard';
   return (
     <section
       className={`min-w-0 overflow-hidden rounded-lg border border-border bg-card md:rounded-lg ${className}`}
       data-testid={testId}
     >
-      <div className="flex h-14 items-center justify-between border-b border-border bg-muted px-5 md:h-12 md:px-3">
-        <h2 className={PORTAL_SECTION_TITLE}>{title}</h2>
+      <div className={cn(
+        'flex h-14 items-center justify-between border-b border-border bg-muted px-5',
+        dashboard ? 'md:h-10 md:px-3 md:py-2' : 'md:h-12 md:px-3',
+      )}>
+        <h2 className={dashboard ? PORTAL_DASHBOARD_SECTION_TITLE : PORTAL_SECTION_TITLE}>{title}</h2>
         {action}
       </div>
       {children}
@@ -216,25 +274,25 @@ export function PortalSection({ title, action, children, className = '', testId 
   );
 }
 
-/** The design's search pill (header of Inicio and the lists). */
-export function PortalSearchPill({ value, onChange, placeholder, label, testId, className, children }) {
+/**
+ * The portal's search box: the app's own search bar (`components/layout/SearchBar.jsx`, the top
+ * bar's pill, no microphone; PO answer, ETP-6209) around the portal's own search — the caller keeps
+ * its data source (`searchPortalDocuments` on Inicio, the list's own query) and passes its results
+ * panel as `children`, so the customer only ever sees their documents. Full width of its container.
+ */
+export function PortalSearchPill({
+  value, onChange, placeholder, label, testId, className, children,
+}) {
   return (
     <div className={cn('relative min-w-0', className)}>
-      <label className="flex h-12 items-center gap-2.5 rounded-full bg-muted px-4 md:h-9 md:gap-2 md:px-3.5">
-        <MagnifyingGlassIcon
-          className="h-4 w-4 shrink-0 text-muted-foreground"
-          aria-hidden="true"
-          data-testid="Search__7a317e" />
-        <input
-          type="search"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          aria-label={label ?? placeholder}
-          placeholder={placeholder}
-          className="min-w-0 flex-1 border-0 bg-transparent text-base outline-none md:text-sm"
-          data-testid={testId}
-        />
-      </label>
+      <SearchBar
+        className="w-full"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        ariaLabel={label ?? placeholder}
+        inputTestId={testId}
+        data-testid="SearchBar__7a317e" />
       {children}
     </div>
   );
@@ -256,21 +314,50 @@ export function PortalCountChip({ count, testId }) {
  * The desktop view header of Inicio and the lists (design: a three-column grid — title and
  * breadcrumb, the search pill centred, an empty column).
  */
-export function PortalDesktopHeader({ title, count, breadcrumb, search }) {
+export function PortalDesktopHeader({ title, count, breadcrumb, search, size }) {
+  // `size="lg"`: the main screen's top bar (spec of 2026-11-17) — a 20/32 title and a 392px
+  // search column. The other views keep the default until their own spec arrives.
+  const large = size === 'lg';
   return (
     <header
-      className="hidden grid-cols-[minmax(0,1fr)_minmax(0,320px)_minmax(0,1fr)] items-center gap-4 px-1 pb-3 pt-1 md:grid"
+      className={cn(
+        'hidden items-center gap-4 px-1 md:grid',
+        // The main screen's 62px top bar sits closer to the window's top edge.
+        large ? '-mt-0.5 pb-2' : 'pb-3 pt-1',
+        large
+          ? 'grid-cols-[minmax(0,1fr)_minmax(0,392px)_minmax(0,1fr)]'
+          : 'grid-cols-[minmax(0,1fr)_minmax(0,320px)_minmax(0,1fr)]',
+      )}
       data-testid="portal-view-header"
     >
       <div className="flex min-w-0 flex-col">
         <div className="flex items-center gap-2">
-          <h1 className="truncate text-lg font-semibold leading-7" data-testid="portal-view-title">{title}</h1>
-          {count != null ? <PortalCountChip
+          <h1
+            className={cn('truncate font-semibold', large ? 'text-xl leading-8' : 'text-lg leading-7')}
+            data-testid="portal-view-title"
+          >
+            {title}
+          </h1>
+          {count != null && large ? (
+            // The Figma's count badge (PC Presupuestos): #F3F5F9, r8, 4px 8px, 12/16 #40465C.
+            <span
+              className="rounded-lg border border-[#C7CBD3] bg-[#F3F5F9] px-2 py-1 text-xs leading-4 tracking-[-0.005em] text-[#40465C]"
+              data-testid="portal-view-count"
+            >
+              {count}
+            </span>
+          ) : null}
+          {count != null && !large ? <PortalCountChip
             count={count}
             testId="portal-view-count"
             data-testid="PortalCountChip__7a317e" /> : null}
         </div>
-        <span className="truncate text-xs leading-4 text-muted-foreground" data-testid="portal-breadcrumb">{breadcrumb}</span>
+        <span
+          className={cn('truncate text-xs leading-4', large ? 'tracking-[-0.005em] text-[#81848F]' : 'text-muted-foreground')}
+          data-testid="portal-breadcrumb"
+        >
+          {breadcrumb}
+        </span>
       </div>
       {search ?? <div />}
       <div />

@@ -1,8 +1,8 @@
 {
-  "version": "0.15.0",
+  "version": "0.16.0",
   "generatedAt": "2026-05-04T17:00:26.053Z",
-  "updatedAt": "2026-09-24T10:36:54.565Z",
-  "checksum": "104c257bdb6f87e5",
+  "updatedAt": "2026-11-18T15:10:54.827Z",
+  "checksum": "b18924ae8f2d38ea",
   "frontendContract": {
     "window": {
       "id": "FEF76C3E0F104F06A89AAD15A4A4A35C",
@@ -6808,7 +6808,7 @@
             "name": "eTGOCurrencyRate",
             "apiKey": "eTGOCurrencyRate",
             "column": "EM_ETGO_Currency_Rate",
-            "type": "string",
+            "type": "decimal",
             "visibility": "discarded",
             "required": false
           },
@@ -8278,7 +8278,7 @@
             "name": "eTGOCurrencyRate",
             "apiKey": "eTGOCurrencyRate",
             "column": "EM_ETGO_Currency_Rate",
-            "type": "string",
+            "type": "decimal",
             "visibility": "discarded",
             "required": false
           },
@@ -10066,7 +10066,7 @@
             "name": "eTGOCurrencyRate",
             "apiKey": "eTGOCurrencyRate",
             "column": "EM_ETGO_Currency_Rate",
-            "type": "string",
+            "type": "decimal",
             "visibility": "discarded",
             "required": false
           },
@@ -11536,7 +11536,7 @@
             "name": "eTGOCurrencyRate",
             "apiKey": "eTGOCurrencyRate",
             "column": "EM_ETGO_Currency_Rate",
-            "type": "string",
+            "type": "decimal",
             "visibility": "discarded",
             "required": false
           },

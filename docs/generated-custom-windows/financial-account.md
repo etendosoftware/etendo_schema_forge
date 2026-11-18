@@ -4050,3 +4050,7 @@ The full app-shell `npm run test:all` suite passed, including these reconciliati
 authenticated preference persistence and human QA remain pending. See the
 [`financial-account README`](../../tools/app-shell/src/windows/custom/financial-account/README.md)
 for the full inventory and fallback rules.
+
+## Rate and cost fields are numeric — ETP-6342
+
+Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. `foreignConversionRate` (`Foreign_Convert_Rate`) on the `transaction` entity is now `decimal` in the backend contract. No frontend field changes.

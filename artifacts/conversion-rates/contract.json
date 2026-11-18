@@ -1,8 +1,8 @@
 {
-  "version": "0.6.0",
+  "version": "0.7.0",
   "generatedAt": "2026-05-21T20:22:50.312Z",
-  "updatedAt": "2026-09-24T10:36:49.706Z",
-  "checksum": "ce64facbec866051",
+  "updatedAt": "2026-11-18T15:10:46.636Z",
+  "checksum": "fa5ec27ccbe877a3",
   "frontendContract": {
     "window": {
       "id": "116",
@@ -127,8 +127,8 @@
             "apiKey": "multipleRateBy",
             "column": "MultiplyRate",
             "label": "Multiple Rate By",
-            "type": "string",
-            "tsType": "string",
+            "type": "decimal",
+            "tsType": "number",
             "visibility": "editable",
             "required": true,
             "grid": true,
@@ -152,8 +152,8 @@
             "apiKey": "divideRateBy",
             "column": "DivideRate",
             "label": "Divide Rate By",
-            "type": "string",
-            "tsType": "string",
+            "type": "decimal",
+            "tsType": "number",
             "visibility": "editable",
             "required": true,
             "grid": true,
@@ -285,7 +285,7 @@
             "name": "multipleRateBy",
             "apiKey": "multipleRateBy",
             "column": "MultiplyRate",
-            "type": "string",
+            "type": "decimal",
             "visibility": "editable",
             "required": true
           },
@@ -293,7 +293,7 @@
             "name": "divideRateBy",
             "apiKey": "divideRateBy",
             "column": "DivideRate",
-            "type": "string",
+            "type": "decimal",
             "visibility": "editable",
             "required": true
           },
@@ -569,7 +569,7 @@
         "entity": "conversionRate",
         "field": "divideRateBy",
         "runner": "node",
-        "description": "Field 'divideRateBy' should have type 'string' in conversionRate"
+        "description": "Field 'divideRateBy' should have type 'number' in conversionRate"
       },
       {
         "id": "t-field-type-conversionRate-multipleRateBy",
@@ -577,7 +577,7 @@
         "entity": "conversionRate",
         "field": "multipleRateBy",
         "runner": "node",
-        "description": "Field 'multipleRateBy' should have type 'string' in conversionRate"
+        "description": "Field 'multipleRateBy' should have type 'number' in conversionRate"
       },
       {
         "id": "t-field-type-conversionRate-sMFCRSynced",

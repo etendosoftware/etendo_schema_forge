@@ -17647,7 +17647,7 @@
       ]
     },
     "fa638b0275c54ed43e026984d9d0ead5c579201abcaa69a9a54077393354cc53": {
-      "checksum": "0f4a7159c57185fc09bc8b2252bd22f4c60439fa0e811385c2f453a0b7ec31ed",
+      "checksum": "0fe8e65fae3652c0b11930368a0f644e0955f223054a65c552b74e1373945c51",
       "params": [
         [
           "150",
@@ -17685,6 +17685,12 @@
           "name": "Automatic",
           "name_es": "Automático",
           "value": "CRP"
+        },
+        {
+          "ad_reference_id": "FF80818130217A350130218D802B0011",
+          "name": "Accepted",
+          "name_es": "Accepted",
+          "value": "ETGO_AC"
         },
         {
           "ad_reference_id": "FF80818130217A350130218D802B0011",

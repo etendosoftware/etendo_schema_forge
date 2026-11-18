@@ -24,6 +24,7 @@ import ProductSearchDrawer from './ProductSearchDrawer.jsx';
 import { resolveLookupDrawer } from './lookupDrawers.js';
 import { committedItemFromRow } from './selectorSelection.js';
 import { CreateContactContext } from './CreateContactContext.js';
+import { FieldCreateContext } from './FieldCreateContext.js';
 import { PartnerAddressPicker } from './PartnerAddressPicker.jsx';
 import { CurrencyRatePicker, resolveRateDateField } from './CurrencyRatePicker.jsx';
 import PrefixedInput from './PrefixedInput.jsx';
@@ -860,6 +861,8 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
   const loadedMinDateValues = useLoadedMinDateValues(data, fields);
   const effectiveSelectorContext = useMemo(() => selectorContext ?? {}, [selectorContext]);
   const capabilities = useCapabilitiesSafe();
+  // A custom window's own create modal for a selector field (FieldCreateContext); null = none.
+  const fieldCreateCtx = React.useContext(FieldCreateContext);
   const visibleBaseFields = fields.filter(f => !excludeFields.includes(f.key));
   let displayFields;
   if (section) {
@@ -1037,6 +1040,13 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
     const createTitle = f.createTitleKey
       ? resolveUiKey(ui, f.createTitleKey)
       : (resolveUiKey(ui, f.createLabelKey) ?? '');
+    // A window-provided create modal (FieldCreateContext), only when the generic one is not set.
+    const customCreate = !canCreate ? fieldCreateCtx?.[f.key] : null;
+    const customCreateProps = customCreate ? {
+      createLabel: customCreate.label,
+      // onOpen's callback receives `{ id, name }`; CreatableSearchSelect's onCreated `(id, name)`.
+      onCreateRequest: (query, onCreated) => customCreate.onOpen(query, (opt) => onCreated(opt.id, opt.name)),
+    } : {};
     return (
       <div key={f.key} className={LABEL_GAP}>
         <Label
@@ -1056,7 +1066,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
             namePlaceholder={resolveUiKey(ui, f.createNamePlaceholderKey)}
             data-testid="InlineCreateSelector__a8d626" />
         ) : (
-          <CreatableSearchSelect {...commonProps} data-testid="CreatableSearchSelect__a8d626" />
+          <CreatableSearchSelect {...commonProps} {...customCreateProps} data-testid="CreatableSearchSelect__a8d626" />
         )}
       </div>
     );

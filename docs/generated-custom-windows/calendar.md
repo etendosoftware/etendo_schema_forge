@@ -147,7 +147,8 @@ keep every spec single-window, and let the custom frontend do the aggregation.
   open is the owner's decision: the "Revisar calendario contable" First Steps row (confirm the
   calendar, or regenerate it with another fiscal-year start while nothing depends on it — see
   `com.etendoerp.go/docs/onboarding-flow.md`, "Accounting calendar review") ends here, on
-  `/calendar`. Opening any period also completes that row. Demos keep their periods open through
+  `/calendar`. Opening any period also completes that row. The MCP cannot regenerate the calendar: the `fiscal-calendar` `year` agent prompt tells
+  the agent to send the user to that First Steps row for a fiscal-year start change (ETP-5850). Demos keep their periods open through
   the end of the trial. Ships unflagged by decision (2026-10-14): the initial state, the review step and the
   refusal recovery land in one release, so a flag would guard nothing. A document dated in a period that is not open is refused with
   `PeriodNotAvailable`; the refusal toast offers **Ir al calendario** (or, while the review is

@@ -22436,7 +22436,7 @@
       ]
     },
     "9875b64b4d474916c9d42e3986d743e8a881ac53d52dca07ea47fb490bfea6df": {
-      "checksum": "55f430454942ecde261f1d418e2883407df1afd7578c25abde363193351763b2",
+      "checksum": "e41c02e3e7e8c372925b45ad59d2c90c82ad5de69d0b779f374445a1dbb98b09",
       "params": [
         "6CB5B67ED33F47DFA334079D3EA2340E"
       ],
@@ -23087,12 +23087,6 @@
           "ad_column_id": "50E460F9A753421FA0B3D59D0F1F8B8B",
           "ad_table_id": "259",
           "columnname": "EM_Aeatsii_Descripcion_Sii",
-          "position": "94"
-        },
-        {
-          "ad_column_id": "57565D3A8F7249F4A88B6E2CC25ED592",
-          "ad_table_id": "259",
-          "columnname": "EM_Etabam_Bankaccount_ID",
           "position": "94"
         },
         {
@@ -28918,7 +28912,7 @@
       ]
     },
     "d01d6bbdb647d8f235cf05767cb7e3b8fedecd48ddc2f90a6c39a4c16b91c599": {
-      "checksum": "116af576db677dc1e0d9ab9e15fcc4140fcaaaabd6c5b1670165766fc63cd257",
+      "checksum": "9f9f230fb1ef5b6025127ce3f924ace1bd5d99133dbe8384a9a14be90d63f614",
       "params": [
         "81AC659E93504927B459E0CAE80CE923"
       ],
@@ -28984,6 +28978,12 @@
           "position": null
         },
         {
+          "ad_column_id": "97180CFB542C417E894F77D67FE44207",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "C_Currency_ID",
+          "position": null
+        },
+        {
           "ad_column_id": "6BE813C5FFA341B9AD6ECC930D3CC8C9",
           "ad_table_id": "1531A29104874CAF9246FC081422074A",
           "columnname": "C_Invoice_ID",
@@ -29020,6 +29020,12 @@
           "position": null
         },
         {
+          "ad_column_id": "CAC3D80AB1D64F7BA9C9D379BE5AEEA8",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Error_Detail",
+          "position": null
+        },
+        {
           "ad_column_id": "FEFF0B31557A4774AA97506E9813B57A",
           "ad_table_id": "1531A29104874CAF9246FC081422074A",
           "columnname": "Extracted_Data",
@@ -29047,6 +29053,12 @@
           "ad_column_id": "BFE5FD2768634A1FA9DF5A13A27F3F5D",
           "ad_table_id": "1531A29104874CAF9246FC081422074A",
           "columnname": "GrandTotal",
+          "position": null
+        },
+        {
+          "ad_column_id": "70D4CED00F1C4A108D6D447D059A105D",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "New_Products",
           "position": null
         },
         {
@@ -29101,6 +29113,12 @@
           "ad_column_id": "83C5C8A10B914A7AB811404A1F142BA9",
           "ad_table_id": "1531A29104874CAF9246FC081422074A",
           "columnname": "Target_Type",
+          "position": null
+        },
+        {
+          "ad_column_id": "8BE8A542ABF443D6A637F8782B4DF4A4",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Total_Mismatch",
           "position": null
         }
       ]

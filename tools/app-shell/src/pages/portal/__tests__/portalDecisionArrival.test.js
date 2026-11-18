@@ -3,7 +3,7 @@
 // (the portal's presentation rules), not the way from a decision confirmation into the portal.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { portalDecisionNotice, portalEntryPath } from '../portalDecisionArrival.js';
+import { portalEntryPath } from '../portalDecisionArrival.js';
 
 describe('portalEntryPath', () => {
   it('opens the portal on the quotation, with the token path-encoded and the view in the query', () => {
@@ -24,44 +24,6 @@ describe('portalEntryPath', () => {
   ]) {
     it(`is null with ${label}, so the landing keeps its own card`, () => {
       assert.equal(portalEntryPath(result), null);
-    });
-  }
-});
-
-describe('portalDecisionNotice', () => {
-  const neutral = (messageKey, number = 'PR/0001') => ({
-    messageKey, tone: 'neutral', number, reasonCode: null, reasonText: null,
-  });
-
-  for (const [label, result, expected] of [
-    [
-      'an acceptance applied now',
-      { state: 'confirmed', appliedNow: true, decision: 'ACCEPT', documentNo: 'PR/0001', reasonCode: 'PRICE' },
-      { messageKey: 'portalNoticeAccepted', tone: 'success', number: 'PR/0001', reasonCode: null, reasonText: null },
-    ],
-    [
-      'a rejection applied now, with its reason and the "Otros" text',
-      {
-        state: 'confirmed', appliedNow: true, decision: 'REJECT', documentNo: 'PR/0001',
-        reasonCode: 'OTHER', reasonText: 'Ya no lo necesitamos',
-      },
-      {
-        messageKey: 'portalNoticeRejected', tone: 'success', number: 'PR/0001',
-        reasonCode: 'OTHER', reasonText: 'Ya no lo necesitamos',
-      },
-    ],
-    [
-      'a confirmation already applied by an earlier open',
-      { state: 'confirmed', appliedNow: false, decision: 'REJECT', documentNo: 'PR/0001', reasonCode: 'PRICE' },
-      neutral('portalNoticeAlreadyAnswered'),
-    ],
-    ['a voided request (another decision won)', { state: 'voided', documentNo: 'PR/0001' }, neutral('portalNoticeAlreadyAnswered')],
-    ['a quotation no longer pending', { state: 'not_pending', documentNo: 'PR/0001' }, neutral('portalNoticeNotPending')],
-    ['an expired quotation', { state: 'expired', documentNo: 'PR/0001' }, neutral('portalNoticeExpired')],
-    ['an unknown state, and no number', { state: 'weird' }, neutral('portalNoticeNotPending', '')],
-  ]) {
-    it(`describes ${label}`, () => {
-      assert.deepEqual(portalDecisionNotice(result), expected);
     });
   }
 });
