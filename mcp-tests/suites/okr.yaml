@@ -1969,3 +1969,242 @@ probes:
           tool: list_banking_account_bank_movements
           args: { id: "{{steps.bank.groups.0.key}}", limit: 200 }
           where: { description: "Transferencia de Cliente {{marker}}", status: reconciled }
+
+  # Q4 feature (ETP-5850): SEPA remittances, behind the sepa-remittances flag. Only a Bank account
+  # created while the flag is on gets the remittance payment methods, so the setup creates its own,
+  # with a country and an IBAN (a remittance account needs both). The customer carries a tax ID: the
+  # SEPA mandate identifier is taken from it. The invoice is due tomorrow (payment term "1 Día") and
+  # a new remittance is due today, so the invoice only shows up once the agent moves the remittance
+  # due date: the same rule the UI's «Seleccionar desde factura» applies.
+  - id: f-sepa-remittance
+    category: flow
+    mode: write
+    prompt: "Armá una remesa de cobro en la cuenta Banco {{marker}} con la factura pendiente de Cliente {{marker}} y procesala."
+    platforms:
+      etendo-go:
+        setup:
+          - tool: etendo_create
+            args: { spec: financial-account, entity: account,
+                    fields: { name: "Banco {{marker}}", type: B, currency: "102", country: "106",
+                              iBAN: "ES9121000418450200051332" } }
+            saveAs: bank
+          - tool: etendo_create
+            args: { spec: contacts, entity: businessPartner, fields: { name: "Cliente {{marker}}", taxID: "12345678Z" } }
+            saveAs: bp
+          - tool: etendo_create
+            args:
+              spec: contacts
+              entity: locationAddress
+              parentId: "{{steps.bp.data.id}}"
+              fields: { country: "106", addressLine1: "Calle Mayor 1", cityName: "Madrid", postalCode: "28001" }
+            saveAs: address
+          - tool: etendo_list
+            args: { spec: product, entity: product, filters: { name: "Agua" }, fields: [id] }
+            saveAs: agua
+          - tool: etendo_create
+            args:
+              spec: sales-invoice
+              entity: header
+              fields:
+                businessPartner: "{{steps.bp.data.id}}"
+                partnerAddress: "{{steps.address.data.id}}"
+                description: "{{marker}}"
+            saveAs: invoice
+          - tool: etendo_create
+            args:
+              spec: sales-invoice
+              entity: lines
+              parentId: "{{steps.invoice.data.id}}"
+              fields: { product: "{{steps.agua.data.0.id}}", invoicedQuantity: 1, unitPrice: 100 }
+          - tool: etendo_action
+            args: { spec: sales-invoice, entity: header, id: "{{steps.invoice.data.id}}",
+                    action: documentAction, parameters: { docAction: CO } }
+        expectEffect:
+          tool: etendo_list
+          args: { spec: remittance, entity: remittance,
+                  filters: { financialAccount: "{{steps.bank.data.id}}", remittanceStatus: PR } }
+      holded:
+        notPossible:
+          kind: goal
+          reason: "Holded's MCP only reads remittances (list_remittances, get_remittance), and the test account's plan has no remittance module (Treasury > Remittances redirects to an upsell page)."
+
+  # Q4 feature (ETP-5840): a foreign-currency document takes the exchange rate of the conversion range
+  # in force on its reference date. The expected rate is read from the same range the server uses
+  # (EUR -> USD in the seed), so the check holds whatever rate the environment carries.
+  - id: f-foreign-currency-invoice
+    category: flow
+    mode: write
+    prompt: "Facturale a Cliente {{marker}} 1 Agua a 100 dólares estadounidenses y confirmala."
+    platforms:
+      etendo-go:
+        setup:
+          - *customer
+          - tool: etendo_list
+            args: { spec: conversion-rates, filters: { currency: "102", toCurrency: "100" }, fields: [multipleRateBy] }
+            saveAs: rate
+        expectEffect:
+          tool: etendo_list
+          args: { spec: sales-invoice, entity: header,
+                  filters: { businessPartner: "{{steps.bp.data.id}}", currency: "100", documentStatus: CO },
+                  fields: [id, eTGOCurrencyRate] }
+          where: { eTGOCurrencyRate: "{{steps.rate.data.0.multipleRateBy}}" }
+      holded:
+        setup: *h-customer
+        expectEffect:
+          tool: list_invoices
+          args: { contact_id: "{{steps.bp.id}}", limit: 50 }
+          where: { currency: USD, draft: false }
+
+  # Q4 feature (ETP-5828): invoicing an order with a global discount keeps that discount on the
+  # invoice («Descuento total»). The order is booked with a payment method, as Etendo requires.
+  - id: f-order-global-discount
+    category: flow
+    mode: write
+    prompt: "Facturale a Cliente {{marker}} el pedido que tiene pendiente."
+    platforms:
+      etendo-go:
+        setup:
+          - *customer
+          - tool: etendo_create
+            args: { spec: sales-order, entity: header,
+                    fields: { businessPartner: "{{steps.bp.data.id}}", partnerAddress: "{{steps.address.data.id}}",
+                              paymentMethod: Efectivo, etgoTotalDiscount: 10, description: "{{marker}}" } }
+            saveAs: order
+          - tool: etendo_create
+            args: { spec: sales-order, entity: lines, parentId: "{{steps.order.data.id}}",
+                    fields: { product: Agua, orderedQuantity: 2, unitPrice: 100 } }
+          - tool: etendo_action
+            args: { spec: sales-order, entity: header, id: "{{steps.order.data.id}}",
+                    action: documentAction, parameters: { docAction: CO } }
+        expectEffect:
+          tool: etendo_list
+          args: { spec: sales-invoice, entity: header,
+                  filters: { businessPartner: "{{steps.bp.data.id}}", documentStatus: CO, etgoTotalDiscount: 10 } }
+      holded:
+        setup:
+          - *h-customer
+          - tool: list_products
+            args: { name: "Agua", limit: 5 }
+            saveAs: agua
+          - tool: create_sales_order
+            args: { contact_id: "{{steps.bp.id}}", date: "{{today}}", description: "{{marker}}", discount: 10,
+                    items: [{ name: "Agua", product_id: "{{steps.agua.items.0.id}}", units: 2, price: 100 }] }
+        expectEffect:
+          tool: list_invoices
+          args: { contact_id: "{{steps.bp.id}}", limit: 50 }
+          where: { draft: false, discount: 10 }
+
+  # Q4 feature (ETP-5791): a contact can be customer and supplier at once.
+  - id: w-customer-vendor-contact
+    category: write
+    mode: write
+    prompt: "Dá de alta a Distribuidora {{marker}}: nos compra y también le compramos."
+    platforms:
+      etendo-go:
+        expectEffect:
+          tool: etendo_list
+          args: { spec: contacts, entity: businessPartner,
+                  filters: { name: "Distribuidora {{marker}}", customer: true, vendor: true } }
+      holded:
+        notPossible:
+          kind: goal
+          reason: "A Holded contact has one type (client, supplier, debtor, creditor or lead): it cannot be marked as both customer and supplier."
+
+  # Q4 feature (ETP-5826): the predefined payment terms in days (1 to 364). The customer gets the
+  # 45-day term as its default for sales.
+  - id: w-payment-term-days
+    category: write
+    mode: write
+    prompt: "A Cliente {{marker}} cobrale siempre a 45 días."
+    platforms:
+      etendo-go:
+        setup:
+          - *customer
+          - tool: etendo_list
+            args: { spec: payment-term, filters: { overduePaymentDaysRule: 45 }, fields: [id] }
+            saveAs: term
+        expectEffect:
+          tool: etendo_list
+          args: { spec: contacts, entity: businessPartner,
+                  filters: { id: "{{steps.bp.data.id}}", paymentTerms: "{{steps.term.data.0.id}}" } }
+      holded:
+        setup: *h-customer
+        expectEffect:
+          tool: get_contact
+          args: { contactId: "{{steps.bp.id}}" }
+          where: { "defaults.due_days": 45 }
+
+  # Q4 feature (ETP-5735): a supplier invoice read from a photo (JPG). The agent gets the file and
+  # uploads it with the harness's upload_file tool to the URL the MCP hands out, as a client with
+  # file access would. The photo's CIF (B12345678) fails Etendo's check digit, so the vendor is
+  # created by the setup, by name and with no tax ID; it carries the marker, so the duplicate check
+  # (same vendor and number) never sees an earlier attempt's invoice.
+  - id: f-invoice-from-photo
+    category: flow
+    mode: write
+    files: [supplier-invoice-photo.jpeg]
+    prompt: "Te paso la foto de una factura de El Rápido {{marker}}, el técnico de las lavadoras: supplier-invoice-photo.jpeg. Cargala en compras como borrador, con el número de la factura y la fecha de hoy, y usá el producto Reparación {{marker}} en todas las líneas. No hace falta que me consultes nada."
+    platforms:
+      etendo-go:
+        setup:
+          - tool: etendo_create
+            args: { spec: contacts, entity: businessPartner,
+                    fields: { name: "El Rápido {{marker}}", customer: false, vendor: true } }
+            saveAs: vendor
+          - tool: etendo_create
+            args:
+              spec: contacts
+              entity: locationAddress
+              parentId: "{{steps.vendor.data.id}}"
+              fields: { country: "106", addressLine1: "Calle Alcalá 123", cityName: "Madrid", postalCode: "28009" }
+          - tool: etendo_create
+            args: { spec: product, entity: product, fields: { name: "Reparación {{marker}}", searchKey: "{{marker}}" } }
+        expectEffect:
+          tool: etendo_list
+          args: { spec: purchase-invoice, entity: header,
+                  filters: { businessPartner: "{{steps.vendor.data.id}}", orderReference: "492335",
+                           grandTotalAmount: 211.75 } }
+      holded:
+        notPossible:
+          kind: goal
+          reason: "Holded's upload_inbox takes the file's bytes inline as a tool argument, so the image has to pass through the conversation; Etendo hands out an upload URL instead. The agent has the file, not its bytes in context."
+
+  # Q4 feature (ETP-5791, roadmap #1): a new contact inherits its types from its category. Behind the
+  # per-account flag contact-category-type (off by default): with it off the category is ignored
+  # and the contact is created as a customer, so the measured account must have it on. The prompt
+  # names the category only; sending customer/vendor explicitly wins over the category, by design.
+  - id: w-contact-category-vendor
+    category: write
+    mode: write
+    prompt: "Dá de alta a Distribuciones {{marker}} en la categoría de contacto Proveedor."
+    platforms:
+      etendo-go:
+        expectEffect:
+          tool: etendo_list
+          args: { spec: contacts, entity: businessPartner,
+                  filters: { name: "Distribuciones {{marker}}", vendor: true, customer: false } }
+      holded:
+        notPossible:
+          kind: goal
+          reason: "Holded has no contact categories that define the contact type: a contact has one type of its own."
+
+  # Same feature, on a category of our own that is customer and vendor: the setup creates it.
+  - id: w-contact-own-category
+    category: write
+    mode: write
+    prompt: "Dá de alta a Servicios {{marker}} en la categoría de contacto Categoría {{marker}}."
+    platforms:
+      etendo-go:
+        setup:
+          - tool: etendo_create
+            args: { spec: business-partner-category,
+                    fields: { name: "Categoría {{marker}}", searchKey: "{{marker}}",
+                              etgoIscustomer: true, etgoIsvendor: true } }
+        expectEffect:
+          tool: etendo_list
+          args: { spec: contacts, entity: businessPartner,
+                  filters: { name: "Servicios {{marker}}", customer: true, vendor: true } }
+      holded:
+        notPossible:
+          kind: goal
+          reason: "Holded has no contact categories that define the contact type: a contact has one type of its own."

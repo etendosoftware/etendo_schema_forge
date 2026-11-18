@@ -157,6 +157,15 @@ What the GO plugin adds on `up`:
   `export ETGO_ALLOWED_ORIGINS=http://localhost:<port>,http://127.0.0.1:<port>` into
   `<env>/build/local-env/env` (merged with any value already there) at creation, or on
   the first `up` of an older environment. Tomcat inherits it from that file.
+- points `context.url` at the environment's Tomcat (worktrees only), so the MCP's upload URLs
+  (`etendo_request_*_upload`) name this Tomcat and not the main checkout's :8080;
+- exports each boolean `feature-flag <key>=<value>` line of `worktree.conf` as
+  `ETGO_FLAG_<KEY>` in `<env>/build/local-env/env`, so the backend sees the flags too (not only
+  the SPA). A value in `Openbravo.properties` still wins;
+- with `setting copilot=on` in `worktree.conf`, runs the environment's `modules/com.etendoerp.copilot`
+  (`uv run python run.py`) on its own ports (5007+ in a worktree) and points `copilot.host` /
+  `copilot.port` at it: needed for OCR (*Subir factura*, `etendo_extract_invoice_document`, the
+  invoice inbox). `status` shows it; `stop` stops it. Details: `docs/local-env-plugin.md`.
 
 JUnit inside an environment, from `<env>`: `./gradlew test --no-daemon --tests '...'`.
 Its config already points at the environment's DB.

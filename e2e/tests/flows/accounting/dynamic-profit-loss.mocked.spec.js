@@ -204,7 +204,7 @@ test.describe('Profit & Loss — period columns and the filter panel (ETP-6239)'
     await login(page);
   });
 
-  // The previous calendar year is a full one: Mes always has the 6 shown months, whatever today is.
+  // The previous calendar year is a full one: Mes shows its 12 months plus Total (13 groups) whatever today is.
   async function openMonths(page) {
     const queries = await installMocks(page);
     await page.goto(REPORT);
@@ -213,7 +213,7 @@ test.describe('Profit & Loss — period columns and the filter panel (ETP-6239)'
     await expect.poll(() => queries['profit-loss'].at(-1).dateFrom.slice(0, 4)).toBe(String(new Date().getFullYear() - 1));
     await page.getByTestId('DynamicReportPanel__columns').selectOption('month');
     await expect.poll(() => queries['profit-loss'].at(-1).columns).toBe('month');
-    await expect(groups(page)).toHaveCount(7);
+    await expect(groups(page)).toHaveCount(13);
     return queries;
   }
 
@@ -238,6 +238,30 @@ test.describe('Profit & Loss — period columns and the filter panel (ETP-6239)'
     expect(queries['profit-loss']).toHaveLength(sent);
   });
 
+  test('Mes: turning the comparison on, switching it and off sends no /query; columns and the hidden note follow', async ({ page }) => {
+    const queries = await openMonths(page);
+    const note = page.getByTestId('DynamicReportView__hiddenNote');
+    const variation = page.getByTestId('DynamicReportTable__variation');
+    await expect(note).toHaveCount(0);
+    await page.getByTestId('DynamicReportPanel__expand').click();
+    const sent = queries['profit-loss'].length;
+    const compare = page.getByTestId('DynamicReportPanel__compare');
+    // Comparing halves the periods shown: 6 months + Total, and 6 months hidden.
+    await compare.selectOption('same-last-year');
+    await expect(groups(page)).toHaveCount(7);
+    await expect(variation).toHaveCount(2 * 7);
+    await expect(note).toHaveText(t('dynamicReportHiddenPeriods', { count: 6 }));
+    await compare.selectOption('previous');
+    await expect(groups(page)).toHaveCount(7);
+    await expect(note).toHaveText(t('dynamicReportHiddenPeriods', { count: 6 }));
+    await compare.selectOption('');
+    await expect(groups(page)).toHaveCount(13);
+    await expect(variation).toHaveCount(0);
+    await expect(note).toHaveCount(0);
+    await page.waitForTimeout(600); // longer than the query debounce
+    expect(queries['profit-loss']).toHaveLength(sent);
+  });
+
   test('a period cell drills into the ledger of that bucket\'s dates', async ({ page }) => {
     const queries = await openMonths(page);
     await page.getByTestId('DynamicReportPanel__expand').click();
@@ -251,7 +275,7 @@ test.describe('Profit & Loss — period columns and the filter panel (ETP-6239)'
     await expect.poll(() => queries['report-general-ledger'].at(-1)).toMatchObject({ dateFrom: from, dateTo: to });
   });
 
-  test('a manual collapse survives a reload; the automatic one on Mes does not', async ({ page }) => {
+  test('a manual collapse survives a reload; the automatic one on Mes is session-only and the URL restores Mes', async ({ page }) => {
     await installMocks(page);
     await page.goto(REPORT);
     await expect(page.getByTestId('DynamicReportTable__row')).toHaveCount(2);
@@ -267,7 +291,12 @@ test.describe('Profit & Loss — period columns and the filter panel (ETP-6239)'
     await page.getByTestId('DynamicReportPanel__columns').selectOption('month');
     await expect(page.getByTestId('DynamicReportPanel__strip')).toBeVisible();
     await expect(page.getByTestId('DynamicReportPanel__expand')).toBeFocused();
+    // ETP-6239: Mes is in the URL, so a reload restores it and hides the panel again for the session...
+    await expect(page).toHaveURL(/columns=month/);
     await page.reload();
+    await expect(page.getByTestId('DynamicReportPanel__strip')).toBeVisible();
+    // ...but the hide itself was never stored: a clean link opens the panel expanded.
+    await page.goto(REPORT);
     await expect(page.getByTestId('DynamicReportPanel')).toBeVisible();
   });
 

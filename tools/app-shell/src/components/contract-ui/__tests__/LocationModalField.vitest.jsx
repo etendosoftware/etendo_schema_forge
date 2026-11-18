@@ -96,6 +96,18 @@ describe('LocationModalField', () => {
       expect(screen.queryByText('locationFieldPlaceholder')).not.toBeInTheDocument();
     });
 
+    // CP-8b (ETP-5806 QA, Isa) — repro: the server's raw `$_identifier` string joins every
+    // segment with " - " unconditionally, so a blank optional part (segunda línea, región)
+    // used to surface as a dangling "- -" in Organización/Almacén. Must render sanitized.
+    it('sanitizes a raw identifier with blank segments instead of rendering doubled/dangling separators', () => {
+      renderField({
+        value: 'loc-100',
+        displayValue: 'Calle de Alcalá, 40 -  - 28014 - Madrid -  - España',
+      });
+      expect(screen.getByText('Calle de Alcalá, 40 - 28014 - Madrid - España')).toBeInTheDocument();
+      expect(screen.queryByText(/- -/)).not.toBeInTheDocument();
+    });
+
     it('opens the modal in EDIT mode (rowId = value)', () => {
       renderField({ value: 'loc-99', displayValue: 'Santa Fe' });
       fireEvent.click(screen.getByTestId('LocationModalField__fld-loc'));
