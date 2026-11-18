@@ -10,13 +10,13 @@ secundaria: una prueba que Holded no puede hacer igual suma, como Solo Etendo.
 | | Pruebas | Posibles en ambos | Solo Etendo |
 |---|---:|---:|---:|
 | Suite inicial (1-47) | 47 | 39 | 8 |
-| Agregadas en la T3 (48-53) | 6 | 3 | 3 |
-| **Total** | **53** | **42** | **11** |
+| Agregadas en la T3 (48-55) | 8 | 3 | 5 |
+| **Total** | **55** | **42** | **13** |
 
 - **KR2.1** (Etendo Win ÷ posibles en ambos): 79,5 % (31 de 39), medido sobre las 47 iniciales, no
-  oficial. Las 6 nuevas todavía no entraron en una medición contra Holded.
+  oficial. Las 8 nuevas todavía no entraron en una medición contra Holded.
 - **Features del Q4 con prueba:** 6. **Sin prueba todavía:** 6 (ver abajo).
-- Las 6 nuevas pasaron en una corrida con el agente en un local-env sobre `develop` con los flags del
+- Las 8 nuevas pasaron en una corrida con el agente en un local-env sobre `develop` con los flags del
   Q4 prendidos. Los bloques de Holded de 49, 50 y 52 están escritos y sin pilotear.
 
 ## Pruebas agregadas en la T3
@@ -29,6 +29,13 @@ secundaria: una prueba que Holded no puede hacer igual suma, como Solo Etendo.
 | 51 | `w-customer-vendor-contact` | Contacto cliente y proveedor (ETP-5791) | No: un contacto tiene un solo tipo | ✅ 6 llamadas |
 | 52 | `w-payment-term-days` | Condiciones de pago en días (ETP-5826) | Sí, sin pilotear | ✅ 4 llamadas |
 | 53 | `f-invoice-from-photo` | Factura de proveedor desde una foto JPG (ETP-5735) | No: `upload_inbox` pide los bytes del archivo como argumento | ✅ 14 llamadas, ~512k tokens |
+| 54 | `w-contact-category-vendor` | Categoría de contacto: el contacto hereda el tipo (ETP-5791, roadmap #1) | No: Holded no tiene categorías que definan el tipo | ✅ 5 llamadas |
+| 55 | `w-contact-own-category` | Lo mismo, en una categoría propia cliente y proveedor | No | ✅ 7 llamadas |
+
+La 54 y la 55 necesitan el flag `contact-category-type` prendido para la cuenta medida: apagado
+(el default) la categoría no se lee y el contacto queda cliente. En producción hoy está prendido solo
+para una lista de cuentas. Un `customer`/`vendor` que el agente mande explícito gana sobre la
+categoría, a propósito.
 
 La 53 usa `files:` del harness: la prueba le pasa al agente `fixtures/files/supplier-invoice-photo.jpeg`
 y una tool `upload_file` para subirlo a la URL que da el MCP, como haría un cliente con acceso a

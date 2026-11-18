@@ -60,12 +60,13 @@ export default function InvoiceInboxReviewHeader({
   const FileIcon = isImageFileName(document.fileName) ? ImageIcon : FileTextIcon;
   return (
     <header
-      className="flex h-[60px] flex-none items-center gap-3 border-b border-border pl-5 pr-4"
+      className="flex h-[60px] flex-none items-center gap-3 border-b border-border pl-5 pr-4 max-[480px]:gap-2 max-[480px]:pl-3 max-[480px]:pr-2"
       data-testid="invoice-inbox-review-header">
-      <FileIcon className="h-[18px] w-[18px] flex-none text-muted-foreground" aria-hidden="true" data-testid="FileIcon__review-header" />
+      <FileIcon className="h-[18px] w-[18px] flex-none text-muted-foreground max-[480px]:hidden" aria-hidden="true" data-testid="FileIcon__review-header" />
       <div className="min-w-0">
-        <div className="flex items-center gap-2.5">
-          <SheetTitle className="min-w-0 truncate text-[17px] font-bold leading-tight tracking-tight" title={document.fileName ?? ''} data-testid="invoice-inbox-review-title">
+        {/* Under 480px (a phone: the drawer is the whole viewport) the tag wraps under the name, and the origin line, the position and the file icon go: there is no room for them next to prev / next / close. */}
+        <div className="flex items-center gap-2.5 max-[480px]:flex-wrap max-[480px]:gap-y-0.5">
+          <SheetTitle className="min-w-0 truncate text-[17px] font-bold leading-tight tracking-tight max-[480px]:basis-full" title={document.fileName ?? ''} data-testid="invoice-inbox-review-title">
             {document.fileName ?? ''}
           </SheetTitle>
           {document.status && (
@@ -77,19 +78,19 @@ export default function InvoiceInboxReviewHeader({
             </span>
           )}
         </div>
-        <p className="truncate text-xs leading-snug text-muted-foreground" data-testid="invoice-inbox-review-origin">
+        <p className="truncate text-xs leading-snug text-muted-foreground max-[480px]:hidden" data-testid="invoice-inbox-review-origin">
           {originLine(document, ui, formatReceived(document.created, locale))}
         </p>
       </div>
       <span className="flex-1" />
       <span
-        className="min-h-4 flex-none whitespace-nowrap text-xs font-medium text-muted-foreground"
+        className="min-h-4 min-w-0 max-w-[40%] shrink overflow-hidden whitespace-nowrap text-xs font-medium text-muted-foreground max-[480px]:max-w-[88px]"
         aria-live="polite"
         data-testid="invoice-inbox-review-save-status">
         {saveStatus}
       </span>
       {position != null && (
-        <span className="ml-2 flex-none whitespace-nowrap font-mono text-xs font-medium text-muted-foreground tabular-nums" data-testid="invoice-inbox-review-position">
+        <span className="ml-2 flex-none whitespace-nowrap font-mono text-xs font-medium text-muted-foreground tabular-nums max-[480px]:hidden" data-testid="invoice-inbox-review-position">
           {ui('invoiceInboxReviewPosition', { n: position, total })}
         </span>
       )}
