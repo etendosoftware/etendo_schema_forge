@@ -10,14 +10,19 @@ const manifest = JSON.parse(
 
 test('publishes only explicitly curated fields for Contacts and Product', () => {
   assert.deepEqual(Object.keys(manifest.entities.contacts.fields).sort(), [
+    'category',
     'email',
+    'first_name',
     'id',
+    'is_person',
+    'last_name',
     'name',
     'payment_method',
     'phone',
     'purchase_payment_method',
     'search_key',
     'tax_id',
+    'tax_id_key',
     'updated',
     'web',
   ]);
@@ -33,10 +38,11 @@ test('publishes only explicitly curated fields for Contacts and Product', () => 
   ]);
 });
 
-test('publishes the six UI selectors with their transaction context', () => {
+test('publishes the seven UI selectors with their transaction context', () => {
   const lookups = Object.fromEntries(Object.entries(manifest.entities).flatMap(([resource, entity]: [string, any]) =>
     Object.entries(entity.fields).filter(([, field]: [string, any]) => field.lookup).map(([name, field]: [string, any]) => [`${resource}.${name}`, field.lookup])));
   assert.deepEqual(lookups, {
+    'contacts.category': { selector: 'businessPartnerCategory', type: 'business-partner-category', context: {} },
     'contacts.payment_method': { selector: 'paymentMethod', type: 'payment-method', context: { FIN_ISRECEIPT: 'Y' } },
     'contacts.purchase_payment_method': { selector: 'pOPaymentMethod', type: 'payment-method', context: { FIN_ISRECEIPT: 'N' } },
     'purchase-order.warehouse': { selector: 'warehouse', type: 'warehouse', context: {} },
@@ -47,6 +53,23 @@ test('publishes the six UI selectors with their transaction context', () => {
   for (const name of ['payment_method', 'purchase_payment_method']) {
     assert.equal(manifest.entities.contacts.fields[name].direction, 'inout', `contacts.${name} is writable`);
   }
+});
+
+test('publishes a contact as a person or a company: no field is required, the rules are described', () => {
+  const fields = manifest.entities.contacts.fields;
+  for (const name of ['name', 'first_name', 'last_name', 'is_person', 'tax_id_key', 'category', 'phone']) {
+    assert.equal(fields[name].direction, 'inout', `contacts.${name} is writable`);
+    assert.equal(fields[name].required, undefined, `contacts.${name} is not required in every case`);
+  }
+  assert.deepEqual(fields.is_person.dataType, { type: 'boolean' });
+  assert.match(fields.name.description, /Required for a company/);
+  assert.match(fields.name.description, /For a person Etendo derives it/);
+  for (const name of ['first_name', 'last_name']) {
+    assert.match(fields[name].description, /Required when is_person is true/);
+    assert.match(fields[name].description, /Refused for a company/);
+  }
+  assert.equal(fields.tax_id_key.internalPath, 'oBTIKTaxIDKey');
+  assert.equal(fields.tax_id_key.enumLabels['1'], 'NIF');
 });
 
 test('does not publish Contacts child tabs without explicit public API curation', () => {
@@ -102,10 +125,24 @@ test('every write-enabled resource has a writable field and publishes updated fo
   }
 });
 
-test('publishes no internal ticket or Jira reference in the functional texts', () => {
+test('publishes no internal ticket or Jira reference in the functional texts nor in a field description', () => {
   for (const [resource, entity] of entities) {
     const texts = [entity.functional.functionalSummary, ...entity.functional.functionalCapabilities];
+    for (const field of Object.values(entity.fields) as any[]) if (field.description) texts.push(field.description);
     for (const text of texts) assert.doesNotMatch(text, /\bETP-\d+\b|\bjira\b/i, resource);
+  }
+});
+
+test('publishes the codes of an AD list with a label each, and never on a reference', () => {
+  const orderStatus = manifest.entities['sales-order'].fields.document_status;
+  assert.ok(orderStatus.dataType.enum.includes('CO') && orderStatus.dataType.enum.includes('DR'));
+  for (const [resource, entity] of entities) {
+    for (const [name, field] of Object.entries(entity.fields) as Array<[string, any]>) {
+      if (!field.dataType.enum) continue;
+      assert.equal(field.dataType.type, 'string', `${resource}.${name}`);
+      assert.equal(field.reference, null, `${resource}.${name}`);
+      assert.deepEqual(Object.keys(field.enumLabels), field.dataType.enum, `${resource}.${name}`);
+    }
   }
 });
 

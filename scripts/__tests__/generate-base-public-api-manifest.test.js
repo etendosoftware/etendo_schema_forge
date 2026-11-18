@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import {
   assertNoFieldMapping,
   buildEntity,
+  enumOf,
   generateManifest,
   inputFieldsOf,
   isCurated,
@@ -17,6 +18,7 @@ import {
   isPublicField,
   lookupOf,
   neverExposedFields,
+  publicDescriptionOf,
   publicFieldName,
   publicFunctionalText,
 } from '../generate-base-public-api-manifest.mjs';
@@ -155,6 +157,44 @@ describe('buildEntity — non-curated entity derives its form and read-only list
     assert.deepEqual(fields.active.dataType, { type: 'boolean' });
     assert.deepEqual(fields.status.dataType, { type: 'string' });
     assert.deepEqual(fields.description.dataType, { type: 'string' });
+  });
+
+  it('publishes the codes of an AD list as dataType.enum with their labels, on any resource', () => {
+    const { fields } = build('sales-order', [
+      { name: 'docStatus', visibility: 'readOnly', form: true, type: 'enum', enumValues: [
+        { value: 'DR', name: 'Draft', labels: { es_ES: 'Borrador' } }, { value: 'CO', name: 'Completed' },
+        { value: 'DR', name: 'Duplicate' }, { value: '', name: 'Empty' }, { name: 'No code' },
+      ] },
+      { name: 'unnamed', visibility: 'editable', form: true, type: 'enum', enumValues: [{ value: 'X' }] },
+      { name: 'noValues', visibility: 'editable', form: true, type: 'enum', enumValues: [] },
+      { name: 'flag', visibility: 'editable', form: true, type: 'boolean', enumValues: [{ value: 'Y', name: 'Yes' }] },
+      { name: 'partner', visibility: 'editable', form: true, type: 'foreignKey', reference: 'BusinessPartner', enumValues: [{ value: 'A', name: 'A' }] },
+    ]);
+    assert.deepEqual(fields.doc_status.dataType, { type: 'string', enum: ['DR', 'CO'] }, 'the first label of a repeated code wins; empty codes are dropped');
+    assert.deepEqual(fields.doc_status.enumLabels, { DR: 'Draft', CO: 'Completed' }, 'the label is the AD name, not a translation');
+    assert.deepEqual(fields.unnamed.enumLabels, { X: 'X' }, 'a code without a name is its own label');
+    for (const name of ['no_values', 'flag', 'partner']) {
+      assert.equal(fields[name].dataType.enum, undefined, `${name} publishes no enum`);
+      assert.equal(fields[name].enumLabels, undefined, `${name} publishes no labels`);
+    }
+    assert.equal(enumOf({ enumValues: null }), null);
+  });
+
+  it('publishes publicApi.description from decisions.json, and refuses an empty one or one citing an internal reference', () => {
+    const fieldsOf = (description) => {
+      const policy = exposurePolicyOf({ entities: { header: { fields: { name: { publicApi: { exposed: true, description } } } } } }, 'header');
+      return buildEntity({
+        specName: 'contacts', entityName: 'header', functional, parent: null, rawEntity: null, policy,
+        contract: contractFor('contacts', [{ name: 'name', visibility: 'editable', form: true, type: 'string' }]),
+      }).fields;
+    };
+    assert.equal(fieldsOf('  Required for a company.  ').name.description, 'Required for a company.');
+    assert.equal(fieldsOf(undefined).name.description, undefined);
+    assert.equal(build('contacts', [{ name: 'name', visibility: 'editable', form: true, type: 'string' }]).fields.name.description, undefined);
+    assert.throws(() => fieldsOf(''), /header\.name: publicApi\.description must be a non-empty string/);
+    assert.throws(() => fieldsOf(7), /must be a non-empty string/);
+    assert.throws(() => fieldsOf('See ETP-6175.'), /cites an internal reference/);
+    assert.throws(() => publicDescriptionOf({ publicApi: { description: 'Ask in Jira' } }, 'x'), /cites an internal reference/);
   });
 
   it('marks every derived field out when the entity has no write endpoint', () => {
@@ -687,7 +727,7 @@ describe('buildEntity — lookups declared in decisions.json', () => {
   });
 });
 
-describe('validate-base-public-api-manifest — lookup shape', () => {
+describe('validate-base-public-api-manifest — lookup, enum and description shape', () => {
   let root;
   const validator = new URL('../validate-base-public-api-manifest.mjs', import.meta.url).pathname;
   const field = (extra = {}) => ({ sourceVisibility: 'editable', direction: 'inout', internalPath: 'paymentMethod', dataType: { type: 'string' }, reference: 'PaymentMethod', ...extra });
@@ -735,6 +775,32 @@ describe('validate-base-public-api-manifest — lookup shape', () => {
       const result = run(manifestWith(field({ lookup: { selector: 'paymentMethod', type: 'payment-method', context: { [name]: '1' } } })));
       assert.equal(result.ok, false, name);
       assert.match(result.output, new RegExp(`context cannot use reserved parameter "${name}"`));
+    }
+  });
+
+  it('accepts an enum with a label per code, and a description, and counts the enum', () => {
+    const result = run(manifestWith(field({ reference: null, dataType: { type: 'string', enum: ['1', '2'] }, enumLabels: { 1: 'NIF', 2: 'VAT' }, description: 'Kind of tax id.' })));
+    assert.equal(result.ok, true, result.output);
+    assert.match(result.output, /1 enums/);
+  });
+
+  it('rejects a malformed enum, its labels or an empty description', () => {
+    const enumField = (dataType, enumLabels, extra = {}) => field({ reference: null, dataType, enumLabels, ...extra });
+    const cases = [
+      [enumField({ type: 'string', enum: [] }, {}), /dataType.enum must be a non-empty list of distinct string codes/],
+      [enumField({ type: 'string', enum: ['1', '1'] }, { 1: 'a' }), /distinct string codes/],
+      [enumField({ type: 'string', enum: [1] }, { 1: 'a' }), /distinct string codes/],
+      [enumField({ type: 'string' }, { 1: 'a' }), /distinct string codes/],
+      [enumField({ type: 'number', enum: ['1'] }, { 1: 'a' }), /an enum field must be of type string/],
+      [enumField({ type: 'string', enum: ['1'] }, undefined), /enumLabels must be an object/],
+      [enumField({ type: 'string', enum: ['1', '2'] }, { 1: 'a' }), /enumLabels has no label for 2/],
+      [enumField({ type: 'string', enum: ['1'] }, { 1: 'a', 9: 'b' }), /enumLabels names codes outside dataType.enum: 9/],
+      [field({ description: ' ' }), /description must be a non-empty string/],
+    ];
+    for (const [value, message] of cases) {
+      const result = run(manifestWith(value));
+      assert.equal(result.ok, false, String(message));
+      assert.match(result.output, message);
     }
   });
 
