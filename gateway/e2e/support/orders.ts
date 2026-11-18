@@ -258,6 +258,15 @@ export function describeOrderFlow(kind: 'sales-order' | 'purchase-order'): void 
         assert.equal(res.json.data.attributes.document_status, 'CO');
         assert.notEqual(String(res.json.data.attributes.order_date), '2026-10-15', 'the refused PATCH did not land');
       });
+
+      it('a PATCH sending only currency_rate on the completed order answers 422 and leaves the rate unchanged', async () => {
+        const { res: before, etag } = await readWithEtag(itemPath(completable));
+        const rateBefore = Number(before.json.data.attributes.currency_rate);
+        const sent = rateBefore + 0.5;
+        expectErrorDocument(await patch(completable, { currency_rate: sent }, etag), COMPLETED_WRITE_STATUS);
+        const { res } = await readWithEtag(itemPath(completable));
+        assert.equal(Number(res.json.data.attributes.currency_rate), rateBefore, 'the refused PATCH did not change currency_rate');
+      });
     });
   });
 }
