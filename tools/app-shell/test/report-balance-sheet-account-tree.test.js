@@ -608,12 +608,14 @@ describe('balance-sheet template.hbs — Reference Amount column visibility', ()
   });
 });
 
-// round2 / numCellType live in each report's helpers.js (not canonical), so the Excel render path
-// registers them from the real file, as jsreport does.
-function registerReportExtras(hb, code) {
+// The Excel render path gets its helpers the way production does (report-api.js): the jsreport
+// helper string built from the canonical set plus the report's own helpers.js, evaluated.
+function registerJsreportHelpers(hb, code) {
+  const built = buildJsreportHelpersString(code);
+  const names = [...built.matchAll(/^function\s+(\w+)\s*\(/gm)].map((m) => m[1]);
   // eslint-disable-next-line no-new-func
-  const extras = new Function(`${code}\nreturn { round2, numCellType };`)();
-  for (const [name, fn] of Object.entries(extras)) hb.registerHelper(name, fn);
+  const helpers = new Function(`${built}\nreturn { ${names.join(', ')} };`)();
+  for (const [name, fn] of Object.entries(helpers)) hb.registerHelper(name, fn);
 }
 
 // ── Excel ───────────────────────────────────────────────────────────────────
@@ -621,7 +623,7 @@ function registerReportExtras(hb, code) {
 function renderExcel({ compareTo, locale = 'en_US', rows = ROWS } = {}) {
   const hb = Handlebars.create();
   registerReportHelpers(hb, HELPERS_CODE);
-  registerReportExtras(hb, HELPERS_CODE);
+  registerJsreportHelpers(hb, HELPERS_CODE);
   const template = hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-excel.hbs'), 'utf8'));
   return template({
     css: '',
@@ -829,7 +831,7 @@ function typeMeta(contract, locale, compareTo = false, labelOverrides = {}) {
 function renderExportExcel(dir, meta, rows = TYPE_ROWS) {
   const hb = Handlebars.create();
   registerReportHelpers(hb);
-  registerReportExtras(hb, readFileSync(resolve(dir, 'helpers.js'), 'utf8'));
+  registerJsreportHelpers(hb, readFileSync(resolve(dir, 'helpers.js'), 'utf8'));
   return hb.compile(readFileSync(resolve(dir, 'template-excel.hbs'), 'utf8'))({ css: '', meta, rows });
 }
 
@@ -954,7 +956,7 @@ describe('balance-sheet exports — shared with profit-loss (ETP-6080)', () => {
   it('compare on but no variation labels: no variation columns, and a null % cell is never a number cell', () => {
     const hb = Handlebars.create();
     registerReportHelpers(hb, HELPERS_CODE);
-    registerReportExtras(hb, HELPERS_CODE);
+    registerJsreportHelpers(hb, HELPERS_CODE);
     const excel = hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-excel.hbs'), 'utf8'))({
       meta: { ...META_BASE, labels: LABELS.en_US, params: { compareTo: 'true' } },
       rows: [{ ...ROWS[0], variationAmount: 1, variationPct: null }],

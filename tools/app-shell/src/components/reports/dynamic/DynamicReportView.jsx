@@ -266,7 +266,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   };
   const reset = () => { setState(initialState(selectedOrgId, opening, defaultLevel)); refold('level'); };
 
-  const orgName = orgs.length > 1 ? orgs.find((o) => o.id === state.orgId)?.name : undefined;
+  const orgName = orgs.find((o) => o.id === state.orgId)?.name;
   const [exporting, setExporting] = useState(null);
   const [exportError, setExportError] = useState(null);
   // PDF prints what the screen shows; Excel / CSV print every period, up to the cap (D5).
@@ -303,7 +303,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   };
 
   const fmt = (d) => (d ? formatCalendarDate(d, locale.replace('_', '-')) : '');
-  const chips = buildChips({ state, ui, label, fmt, orgName, reference, splitDimensions });
+  const chips = buildChips({ state, ui, label, fmt, orgName: orgs.length > 1 ? orgName : undefined, reference, splitDimensions });
 
   // The strip's badge counts what the user chose to narrow; the period and the (required) org are always on.
   const activeFilterCount = chips.filter((c) => c.clear).length;

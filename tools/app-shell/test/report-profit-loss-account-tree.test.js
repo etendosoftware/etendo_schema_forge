@@ -520,12 +520,14 @@ describe('profit-loss template.hbs — Reference Amount column visibility', () =
   });
 });
 
-// round2 / numCellType live in each report's helpers.js (not canonical), so the Excel render path
-// registers them from the real file, as jsreport does.
-function registerReportExtras(hb, code) {
+// The Excel render path gets its helpers the way production does (report-api.js): the jsreport
+// helper string built from the canonical set plus the report's own helpers.js, evaluated.
+function registerJsreportHelpers(hb, code) {
+  const built = buildJsreportHelpersString(code);
+  const names = [...built.matchAll(/^function\s+(\w+)\s*\(/gm)].map((m) => m[1]);
   // eslint-disable-next-line no-new-func
-  const extras = new Function(`${code}\nreturn { round2, numCellType };`)();
-  for (const [name, fn] of Object.entries(extras)) hb.registerHelper(name, fn);
+  const helpers = new Function(`${built}\nreturn { ${names.join(', ')} };`)();
+  for (const [name, fn] of Object.entries(helpers)) hb.registerHelper(name, fn);
 }
 
 // ── Excel ───────────────────────────────────────────────────────────────────
@@ -533,7 +535,7 @@ function registerReportExtras(hb, code) {
 function renderExcel({ compareTo, locale = 'en_US', rows = ROWS } = {}) {
   const hb = Handlebars.create();
   registerReportHelpers(hb, HELPERS_CODE);
-  registerReportExtras(hb, HELPERS_CODE);
+  registerJsreportHelpers(hb, HELPERS_CODE);
   const template = hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-excel.hbs'), 'utf8'));
   return template({
     css: '',
@@ -907,7 +909,7 @@ describe('profit-loss exports — variation (ETP-6080)', () => {
     void variationAmount; void variationPct;
     const hb = Handlebars.create();
     registerReportHelpers(hb, HELPERS_CODE);
-    registerReportExtras(hb, HELPERS_CODE);
+    registerJsreportHelpers(hb, HELPERS_CODE);
     const excel = hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-excel.hbs'), 'utf8'))({
       meta: { ...META_BASE, labels: noVariation, params: { compareTo: 'true' } }, rows: VAR_ROWS,
     });
@@ -983,7 +985,7 @@ describe('profit-loss exports — headline cards and compared period (ETP-6239)'
     const hb = Handlebars.create();
     registerReportHelpers(hb, HELPERS_CODE);
     const data = { meta: meta('es_ES', { columns: 'quarter', compareMode: 'prev' }), rows: [PROW] };
-    registerReportExtras(hb, HELPERS_CODE);
+    registerJsreportHelpers(hb, HELPERS_CODE);
     const excel = hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-excel.hbs'), 'utf8'))(data);
     assert.match(excel, /<th>T1 26 Comparado \(T4 25\)<\/th>/);
     assert.match(excel, /<th>Total Comparado \(01\/11\/2025 – 31\/12\/2025\)<\/th>/);
@@ -1063,7 +1065,7 @@ describe('profit-loss exports — nullable variation cells (ETP-6080)', () => {
       meta: { ...META_BASE, locale: 'en_US', labels: LABELS.en_US, periods: PERIODS, columnPages: [[0]], columnPageSize: 1, params: { periods: PARAM, columns: 'month', compareMode: 'sly' } },
       rows: [{ ...ROWS[1], cells: [{ amount: 10, sly: ref }] }],
     });
-    const excel = (d) => { const hb = Handlebars.create(); registerReportHelpers(hb, HELPERS_CODE); registerReportExtras(hb, HELPERS_CODE); return hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-excel.hbs'), 'utf8'))(d); };
+    const excel = (d) => { const hb = Handlebars.create(); registerReportHelpers(hb, HELPERS_CODE); registerJsreportHelpers(hb, HELPERS_CODE); return hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-excel.hbs'), 'utf8'))(d); };
     const csv = (d) => {
       const built = buildJsreportHelpersString(HELPERS_CODE);
       const names = [...built.matchAll(/^function\s+(\w+)\s*\(/gm)].map((m) => m[1]);
