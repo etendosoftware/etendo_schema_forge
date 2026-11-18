@@ -72,7 +72,6 @@ Each public resource publishes its fields in one of two ways, decided per entity
 |--------|------------------|
 | Curated: at least one field declares `publicApi.exposed: true` | Exactly the curated fields. The rest of the window form is ignored. |
 | Not curated | The fields its window form shows (see [Default exposure: window form](#default-exposure-window-form)). |
-| Fiscal monitors `monitor-verifactu`, `sii-monitor`, `tbai-facturas-enviadas` | Their curation only. They never derive fields from the form; without curation they publish `id` and, when present, `updated`. |
 
 In both cases `id` and `updated` are added as described in [Field rules](#field-rules-applied-by-the-manifest-generator).
 The manifest records the rule as `policy.fieldSelection: "curated-publicApi-else-window-form"`.
@@ -146,7 +145,7 @@ absent) through `publicFieldName()`:
 - Fields with `visibility` `system` or `discarded` are skipped even when `exposed` is `true`.
 - Fields in `policy.excludedFields` are skipped even when `exposed` is `true` or the form shows them.
 - Two fields resolving to the same public name make the generator throw (`Public field name collision`).
-- `direction` is `inout` only when the entity has at least one `POST`, `PUT` or `PATCH` endpoint in `backendContract.endpoints` and the field's visibility is `editable`; otherwise `out`. The rule is the same for curated and derived fields, so a `readOnly` form field is always `out`. It is computed from those endpoints, independently of the fiscal-monitor override that fixes a resource's operations to `GET`, `LIST`.
+- `direction` is `inout` only when the entity has at least one `POST`, `PUT` or `PATCH` endpoint in `backendContract.endpoints` and the field's visibility is `editable`; otherwise `out`. The rule is the same for curated and derived fields, so a `readOnly` form field is always `out`. Entity-level and field-level read-only policies also force the corresponding fields to `out`.
 - API-only fields declared in `publicApi.inputFields` ([configuration guide](public-api-configuration.md#3-add-input-only-fields)) are `in`, or `inout` with `readable: true`, and only on a resource with a write endpoint. With `writable: false` the field is read-only (`out`, never `required`) and is published on any resource: a value the entity's handler adds on read.
 - `id` is always present and its internal path is always `id` (the NEO response key). When `id` is not curated it is added as a read-only (`out`) field; when it is curated, its curated direction is kept and only the internal path is forced to `id`.
 - `dataType` comes from the contract field `type`: `amount`, `decimal`, `price`, `quantity` and `number` give `{ "type": "number", "format": "double" }`; `integer` gives `{ "type": "integer", "format": "int32" }`; `boolean` gives `{ "type": "boolean" }`; `date` gives `{ "type": "string", "format": "date" }`; `dateTime` (and the older spelling `datetime`) gives `{ "type": "string", "format": "date-time" }`. Every other type (`string`, `text`, `textarea`, `enum`, `list`, `button`, `foreignKey`, `productAttribute`, `image`) gives `{ "type": "string" }`. The `dataType` is what the OpenAPI document declares for the field and decides which filter operators it accepts ([4.10](#410-list-queries-pagination-sorting-and-filtering)).
@@ -176,11 +175,23 @@ artifacts/<window>/contract.json
 ### Manifest: `generate-base-public-api-manifest.mjs` to `base.v1.json`
 
 - The gateway loads `process.env.PUBLIC_API_SCHEMA_PATH`, defaulting to `../public-api/base.v1.json`; the Docker image sets it to `/app/public-api/base.v1.json` (`gateway/src/schema/schema.provider.ts`, `gateway/Dockerfile`).
-- The generator scans every `artifacts/*/contract.json`, skipping the windows in `excludedWindows` and the categories `accounting`, `configuration`, `crm`, `finance`, `hr`, `settings`, `setup`. `excludedWindows` includes `document`, `project` and `uom`, which have no NeoServlet spec. Projects are therefore not published in v1: the only project window with a spec, `service-project`, belongs to the excluded `finance` category until that category is curated; the getting-started text of `/api` says so. Units of measure are not published either: the `unit-of-measure` window was removed on purpose by ETP-4191, and an API-only artifact for it would break pipeline rule F3 (every window with a `contract.json` must be registered in `registry.js`). `document` is a mock window with no AD window behind it.
+- V1 publishes an explicit allowlist from `publicApiV1Entities` in the generator. It is checked before loading contracts or raw schemas, so excluded artifacts cannot block generation or silently expand the API. The manifest records this map in `policy.allowedResources`.
+
+  | Window | Published resources | Access |
+  |--------|---------------------|--------|
+  | Contacts | `contacts`, `contacts-locationAddress`, `contacts-contact` | Read and write |
+  | Products | `product`, `product-category` | Read and write |
+  | Product costs | `product-costing` | `GET`, `LIST` only |
+  | Sales orders | `sales-order`, `sales-order-lines` | Read and write; header `complete` |
+  | Purchase orders | `purchase-order`, `purchase-order-lines` | Read and write; header `complete` |
+  | Quotations | `sales-quotation`, `sales-quotation-quotationLine` | Read and write |
+
+  Invoices and their lines/exchange rates, shipments, receipts, goods movements, internal consumption, physical inventory, return receipts/shipments, warehouses, matched purchase invoices and fiscal monitors are outside V1. Contacts expose only addresses and contact persons as children. Taxes, tax categories, conversion rates and contact categories are not published in this version. Excluded collections answer `404` (a gateway error, without `code`); removing a collection does not remove the app's corresponding window.
+
 - Every published window must have `artifacts/<window>/schema-raw.json`. The file is gitignored, so a clean checkout lacks it; when it is missing the generator fails and names the file, instead of producing a manifest without child resources and `updated`. Windows that are not published do not need it.
-- Resources are the primary entity of each window plus child tabs whose parent foreign key is found in `schema-raw.json`. When `decisions.window.secondaryTabs` is non-empty, only the listed tabs are published. Child tabs whose name matches `accounting`, or is exactly `Bank Account`, are skipped. The manifest lists these patterns in `policy.excludedChildTabs`. A tab under a child tab (`level: subline` in `schema-raw.json`, AD tab level 2, e.g. the order's *Line Tax*) is not published either: Etendo filters it by the child record, while the gateway nests one level and would pass the window's id, so it always read empty (ETP-6012).
+- Resources must belong to the explicit allowlist. Allowed child tabs must also have their parent foreign key in `schema-raw.json`. When `decisions.window.secondaryTabs` is non-empty, only the listed tabs are published. Child tabs whose name matches `accounting`, or is exactly `Bank Account`, are skipped. The manifest lists these patterns in `policy.excludedChildTabs`. A tab under a child tab (`level: subline` in `schema-raw.json`, AD tab level 2, e.g. the order's *Line Tax*) is not published either: Etendo filters it by the child record, while the gateway nests one level and would pass the window's id, so it always read empty (ETP-6012).
 - The public resource name is `specName` for the primary entity and `specName-entityName` for the others.
-- Operations come from `backendContract.endpoints` plus a forced `GET` and `LIST`; `PATCH` is added whenever `PUT` exists. The windows `monitor-verifactu`, `sii-monitor` and `tbai-facturas-enviadas` are fixed to `GET`, `LIST`; field directions are not affected by this override (see [Field rules](#field-rules-applied-by-the-manifest-generator)). A resource with no field of direction `in` or `inout` is read-only: its operations are reduced to `GET`, `LIST`.
+- Operations come from `backendContract.endpoints` plus a forced `GET` and `LIST`; `PATCH` is added whenever `PUT` exists. A resource with no field of direction `in` or `inout` is read-only: its operations are reduced to `GET`, `LIST`.
 - The functional texts (`functional.functionalSummary`, `functional.functionalCapabilities`) come from `docs/generated-custom-windows/<window>.md`. Capability lines and summary sentences that cite a ticket (`ETP-<number>`) or Jira are not published; when no summary sentence remains, the summary is `Public API resource for the <window> window.`
 - A relationship is added to a field whose `reference` resolves to another public resource.
 - `scripts/validate-base-public-api-manifest.mjs` checks: `publicApi` is `true`; `fields.id.internalPath` is `id`; no resource named or titled `accounting`; every child has a parent, a foreign key, a path segment, `GET` and `LIST`, and either none or all of `POST`, `PUT`, `PATCH`, `DELETE`; every relationship target exists and has a valid cardinality and foreign key.
@@ -236,8 +247,7 @@ The route table is fixed controller code; resource and child lookup use the mani
   (`draftMode` with `processField: documentAction`) **and** opts in with `window.publicApi.actions: ["complete"]`
   in its `decisions.json` (absent means no actions; see [Public API configuration](public-api-configuration.md)); the generator derives it structurally and sends
   `{"docAction": "<processValue>"}` to `POST /sws/neo/{specName}{path}`. In v1 `complete` is the only
-  public action: declared `processEndpoints` are not exposed. Fiscal monitors and child resources
-  declare none.
+  public action: declared `processEndpoints` are not exposed. Child resources declare none.
 - **Published today.** `sales-order` and `purchase-order` publish `complete`
   (`POST /api/v1/sales-order/{id}/actions/complete`, `POST /api/v1/purchase-order/{id}/actions/complete`); no
   other resource publishes an action. Completing runs the same document process as the application's
@@ -266,7 +276,7 @@ to find an id it cannot know beforehand, for example a payment method.
   top-level resources and published reference fields can have one; anything else fails the
   generation. A field without a lookup, a field that is not published and a child resource answer
   `404` (code `unknown_lookup` for a field of the resource), and nothing is sent to Etendo.
-- **Published today.** All four list payment methods (`type` `payment-method`):
+- **Published today.** Four payment-method lookups (`type` `payment-method`) and two order warehouse lookups (`type` `warehouse`):
 
   | Route | Field | Fixed context sent to Etendo |
   |-------|-------|------------------------------|
@@ -274,8 +284,17 @@ to find an id it cannot know beforehand, for example a payment method.
   | `GET /api/v1/purchase-order/lookups/payment_method` | The purchase order's payment method | `IsSOTrx=N` |
   | `GET /api/v1/contacts/lookups/payment_method` | The contact's payment method as a customer | `FIN_ISRECEIPT=Y` |
   | `GET /api/v1/contacts/lookups/purchase_payment_method` | The contact's payment method as a vendor | `FIN_ISRECEIPT=N` |
+  | `GET /api/v1/sales-order/lookups/warehouse` | The sales order's warehouse | None |
+  | `GET /api/v1/purchase-order/lookups/warehouse` | The purchase order's warehouse | None |
 
-  Each lists the tenant's active payment methods, the same list the app offers in that field. The
+  Choose an order's warehouse with that order's warehouse lookup and send the selected id as
+  `data.attributes.warehouse` on create. The field is optional: if it is omitted, Etendo assigns
+  a warehouse when the order is created. There is no `relationships.warehouse`, because the
+  warehouse collection is outside V1. Partial `PATCH` requests may omit an unchanged warehouse.
+  On completed orders the app locks the field; the public API applies the same upstream
+  document validation.
+
+  Each payment-method lookup lists the tenant's active payment methods, the same list the app offers in that field. The
   fixed context is forwarded to the field's selector; whether it narrows the list depends on that
   field's validation rule, as in the app. Integrators must not rely on the list being filtered by
   sales or purchase.
@@ -442,7 +461,7 @@ export PUBLIC_API_KEY_READONLY='<clientId>:<secret>'   # optional: enables the 4
 make public-api-e2e                                    # or: cd gateway && npm run test:e2e
 ```
 
-- The key needs `public-api:read`, `public-api:write` (deletes included) and `public-api:process` (the order flows complete an order; without it the `complete` call answers `403`) over the published windows. The test tenant needs at least one warehouse (the orders use it) and at least one active payment method (the order flows find it through the lookups; a tenant created by the onboarding has them).
+- The key needs `public-api:read`, `public-api:write` (deletes included) and `public-api:process` (the order flows complete an order; without it the `complete` call answers `403`) over the published windows. The test tenant needs at least one warehouse (the orders select it through their warehouse lookups) and at least one active payment method (the order flows find it through the lookups; a tenant created by the onboarding has them).
 - **Localhost guard.** The suite writes and deletes records, so it refuses to start (every file fails with a clear message) when the host of `PUBLIC_API_BASE_URL` is not `localhost` or `127.0.0.1`. `PUBLIC_API_E2E_ALLOW_REMOTE=1` lifts the guard; use it only against a disposable environment, never production.
 - **Data hygiene.** Every record carries a per-run prefix `e2e-<timestamp>-<random>` in its name or search key. An `after` hook deletes whatever the run created, newest first, even when a test failed; a record it could not delete is printed to stderr. A completed order cannot be deleted, so a run that completes orders leaves, per order flow, the completed order and its line, and the contact (with its address) and product the order uses, which their references keep from being deleted (`409`). All of them carry the run prefix. Every complete run therefore leaves, per order flow, one completed order with its line, one contact with its address, and one product; the draft orders are deleted.
 - **Rate limit.** The gateway allows 100 requests per key per 60 s by default ([4.11](#411-rate-limiting)); the client waits for `Retry-After` and retries on `429`, so a full run takes a little longer than its request count suggests. Raise `PUBLIC_API_RATE_LIMIT` on the local gateway to run faster.
@@ -806,7 +825,7 @@ Testable statements derived from this document, each linked to its section.
 ### Field selection and generation ([2](#2-field-selection-publicapi-curation-and-window-form-default), [3](#3-generation-chain))
 - [ ] A curated entity publishes only its fields with `publicApi.exposed === true` ([2](#2-field-selection-publicapi-curation-and-window-form-default))
 - [ ] A non-curated entity publishes its window form fields (`form` not `false`, visibility not `system` or `discarded`) and no grid-only field ([2](#default-exposure-window-form))
-- [ ] The fiscal monitors publish no form-derived field ([2](#2-field-selection-publicapi-curation-and-window-form-default))
+- [ ] The manifest publishes exactly the twelve V1 resources listed in `policy.allowedResources`, including only address/contact-person children of contacts and read-only product costs
 - [ ] No field in `policy.excludedFields` appears in the manifest, curated or derived ([2](#default-exposure-window-form))
 - [ ] The manifest declares `policy.fieldSelection` `curated-publicApi-else-window-form` and lists `policy.excludedFields` ([2](#2-field-selection-publicapi-curation-and-window-form-default))
 - [ ] Fields with `visibility` `system` or `discarded` are excluded even when exposed ([2](#field-rules-applied-by-the-manifest-generator))
@@ -815,7 +834,7 @@ Testable statements derived from this document, each linked to its section.
 - [ ] Every manifest resource has an `id` field with internal path `id`; `updated` (read-only) is present only when the entity's raw schema has an `updated` field ([2](#field-rules-applied-by-the-manifest-generator))
 - [ ] `amount`, `decimal`, `price`, `quantity` and `number` fields are declared `number`/`double`; `dateTime` and `datetime` are `string`/`date-time`; ids, codes and text are `string` ([2](#field-rules-applied-by-the-manifest-generator))
 - [ ] A curated `id` keeps its curated direction and gets internal path `id` ([2](#field-rules-applied-by-the-manifest-generator))
-- [ ] Field `direction` is `inout` only for editable fields of an entity with a write endpoint, including for fiscal-monitor windows whose operations are `GET`, `LIST` ([2](#field-rules-applied-by-the-manifest-generator))
+- [ ] Field `direction` is `inout` only for editable fields of an entity with a write endpoint ([2](#field-rules-applied-by-the-manifest-generator))
 - [ ] The public name derivation matches the table, including the override table, the `pO` to `purchase` rule and the generic snake_case rule ([2](#name-derivation))
 - [ ] `make generate-base-public-api-manifest` produces a manifest that passes the validator ([3](#manifest-generate-base-public-api-manifestmjs-to-basev1json))
 - [ ] `document`, `project`, `uom`, the `Bank Account` child tab and tabs under a child tab (`subline`) are not published ([3](#manifest-generate-base-public-api-manifestmjs-to-basev1json))

@@ -9,7 +9,6 @@ import { join } from 'node:path';
 import {
   assertNoFieldMapping,
   buildEntity,
-  fiscalMonitorWindows,
   generateManifest,
   inputFieldsOf,
   isCurated,
@@ -78,7 +77,7 @@ describe('isCurated', () => {
 describe('isPublicField', () => {
   it('never publishes system, discarded or excluded fields, curated or not', () => {
     for (const curated of [true, false]) {
-      const options = { curated, specName: 'sales-order' };
+      const options = { curated };
       assert.equal(isPublicField({ name: 'x', visibility: 'system', publicApi: { exposed: true } }, options), false);
       assert.equal(isPublicField({ name: 'x', visibility: 'discarded', publicApi: { exposed: true } }, options), false);
       for (const name of neverExposedFields) {
@@ -240,31 +239,6 @@ describe('buildEntity — API-only input fields declared in decisions.json', () 
   });
 });
 
-describe('buildEntity — fiscal monitors are not derived', () => {
-  it('publishes no form field for any fiscal monitor without curation', () => {
-    for (const specName of fiscalMonitorWindows) {
-      const entity = build(specName, formFields);
-      assert.deepEqual(Object.keys(entity.fields), ['id'], specName);
-      assert.deepEqual(entity.operations, ['GET', 'LIST'], specName);
-      assert.equal(entity.group, 'Fiscal Monitors', specName);
-    }
-  });
-
-  it('covers the three monitors owned by the localization team', () => {
-    assert.deepEqual([...fiscalMonitorWindows].sort(), ['monitor-verifactu', 'sii-monitor', 'tbai-facturas-enviadas']);
-  });
-
-  it('publishes the curation of a curated fiscal monitor, still without excluded fields', () => {
-    const entity = build('sii-monitor', [
-      { name: 'documentNo', visibility: 'readOnly', form: true, type: 'string', publicApi: { exposed: true } },
-      { name: 'client', visibility: 'readOnly', form: true, type: 'foreignKey', publicApi: { exposed: true } },
-      { name: 'orderDate', visibility: 'editable', form: true, type: 'date' },
-    ]);
-    assert.deepEqual(Object.keys(entity.fields).sort(), ['document_no', 'id']);
-    assert.deepEqual(entity.operations, ['GET', 'LIST']);
-  });
-});
-
 describe('buildEntity — operations', () => {
   it('makes a resource with no writable field read-only, even if its window accepts writes', () => {
     const entity = build('matched-purchase-invoices', [
@@ -299,15 +273,6 @@ describe('buildEntity — conservative base exposure', () => {
     assert.deepEqual(buildWith({ window: { publicApi: { actions: [] } } }).processes, []);
     const entity = buildWith({ window: { publicApi: { actions: ['complete'] } } });
     assert.deepEqual(entity.processes.map((process) => process.action), ['complete']);
-  });
-
-  it('never publishes actions on a fiscal monitor, whatever the decisions say', () => {
-    const contract = completeContract();
-    const entity = buildEntity({
-      specName: [...fiscalMonitorWindows][0], entityName: 'header', contract, functional,
-      parent: null, rawEntity: null, policy: { actions: ['complete'], readOnly: false, readOnlyFields: new Set() },
-    });
-    assert.deepEqual(entity.processes, []);
   });
 
   it('publishes an entity with publicApi.readOnly as GET/LIST with every field out', () => {
@@ -394,10 +359,10 @@ describe('generateManifest — lines survive explicit child visibility', () => {
         { name: 'doc', type: 'foreignKey', visibility: 'system', reference: { targetTable: 'd_head', keyColumn: 'd_head_id' } },
       ],
     });
-    mkdirSync(join(root, 'doc'), { recursive: true });
-    writeFileSync(join(root, 'doc', 'contract.json'), JSON.stringify(contract));
-    writeFileSync(join(root, 'doc', 'decisions.json'), JSON.stringify({ window: { secondaryTabs: { exchangeRates: {} } } }));
-    writeFileSync(join(root, 'doc', 'schema-raw.json'), JSON.stringify({
+    mkdirSync(join(root, 'sales-order'), { recursive: true });
+    writeFileSync(join(root, 'sales-order', 'contract.json'), JSON.stringify(contract));
+    writeFileSync(join(root, 'sales-order', 'decisions.json'), JSON.stringify({ window: { secondaryTabs: { exchangeRates: {} } } }));
+    writeFileSync(join(root, 'sales-order', 'schema-raw.json'), JSON.stringify({
       entities: [
         { tableName: 'd_head', fields: [{ name: 'id', type: 'id', visibility: 'system', columnName: 'd_head_id' }] },
         child('d_line'), child('d_rate'), child('d_other'),
@@ -406,10 +371,10 @@ describe('generateManifest — lines survive explicit child visibility', () => {
   });
   after(() => rmSync(root, { recursive: true, force: true }));
 
-  it('keeps lines with CRUD next to the declared secondary tabs, and still drops undeclared children', async () => {
+  it('keeps order lines with CRUD and excludes even explicitly declared auxiliary tabs', async () => {
     const { entities } = await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'none') });
-    assert.deepEqual(Object.keys(entities).sort(), ['doc', 'doc-exchangeRates', 'doc-lines']);
-    assert.deepEqual([...entities['doc-lines'].operations].sort(), ['GET', 'LIST', 'PATCH', 'POST', 'PUT']);
+    assert.deepEqual(Object.keys(entities).sort(), ['sales-order', 'sales-order-lines']);
+    assert.deepEqual([...entities['sales-order-lines'].operations].sort(), ['GET', 'LIST', 'PATCH', 'POST', 'PUT']);
   });
 });
 
@@ -517,6 +482,14 @@ describe('generateManifest — schema-raw.json is required', () => {
     assert.deepEqual(Object.keys(manifest.entities), []);
   });
 
+  it('does not require raw schemas for excluded operational or fiscal resources', async () => {
+    for (const specName of ['invoice-inbox', 'sales-invoice', 'purchase-invoice', 'warehouse', 'monitor-verifactu', 'sii-monitor', 'tbai-facturas-enviadas']) {
+      writeArtifact(root, specName, contractFor(specName, formFields), { rawSchema: false });
+    }
+    const { entities } = await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'docs') });
+    assert.deepEqual(Object.keys(entities), []);
+  });
+
   it('does not require schema-raw.json for windows that are not published', async () => {
     writeArtifact(root, 'absence', contractFor('absence', formFields), { rawSchema: false });
     const manifest = await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'docs') });
@@ -539,6 +512,7 @@ describe('generateManifest — child tabs and functional texts', () => {
           bankAccount: tab('c_bp_bankaccount', 'Bank Account'),
           locationAddress: tab('c_bpartner_location', 'Location/Address'),
           addressNote: tab('c_bp_address_note', 'Address Note'),
+          extra: tab('c_bp_extra', 'Extra'),
         },
       },
       backendContract: {
@@ -561,6 +535,7 @@ describe('generateManifest — child tabs and functional texts', () => {
         { tableName: 'c_bpartner', fields: [{ name: 'id', type: 'id', visibility: 'system', columnName: 'c_bpartner_id' }] },
         child('c_bp_bankaccount'),
         child('c_bpartner_location'),
+        child('c_bp_extra'),
         // A tab under a child tab (AD level 2), linked to the window's record as well.
         { ...child('c_bp_address_note'), level: 'subline' },
       ],

@@ -170,7 +170,8 @@
           "createNamePlaceholderKey": "paymentTermDaysPlaceholder"
         },
         "warehouse": {
-          "inputMode": "search"
+          "inputMode": "search",
+          "publicApi": { "lookup": true }
         },
         "salesRepresentative": {
           "visibility": "system"

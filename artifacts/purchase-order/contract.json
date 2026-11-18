@@ -1,8 +1,8 @@
 {
-  "version": "0.58.0",
+  "version": "0.59.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-11-16T18:47:24.736Z",
-  "checksum": "7f572820cd9ee321",
+  "updatedAt": "2026-11-16T18:48:34.847Z",
+  "checksum": "fd4ff4e1123c3fac",
   "frontendContract": {
     "window": {
       "id": "181",
@@ -307,6 +307,9 @@
             "validation": {
               "required": true,
               "maxLength": 22
+            },
+            "publicApi": {
+              "lookup": true
             },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
