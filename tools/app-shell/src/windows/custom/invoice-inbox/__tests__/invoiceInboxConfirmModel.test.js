@@ -104,6 +104,16 @@ describe('contiguousRange / numberingText', () => {
   it('keeps the zero padding across a width-preserving boundary (FC0999 -> FC1000)', () => {
     assert.deepEqual(contiguousRange(['FC0999', 'FC1000']), { from: 'FC0999', to: 'FC1000' });
   });
+  it('splits the trailing digit run: digit-only numbers, null/empty, trailing non-digit, line terminators', () => {
+    assert.deepEqual(contiguousRange(['7', '8', '9']), { from: '7', to: '9' });
+    assert.deepEqual(contiguousRange(['A1B007', 'A1B008']), { from: 'A1B007', to: 'A1B008' });
+    assert.equal(contiguousRange(['', '']), null);
+    assert.equal(contiguousRange([null, undefined]), null);
+    assert.equal(contiguousRange(['FC1 ', 'FC2 ']), null);
+    assert.equal(contiguousRange(['FC\n1', 'FC\n2']), null);
+    assert.equal(contiguousRange(['FC1\n2', 'FC1\n3']), null);
+    assert.equal(contiguousRange(['FC1\u20282', 'FC1\u20283']), null);
+  });
   it('a repeated number is not a run', () => {
     assert.equal(contiguousRange(['FC1', 'FC1']), null);
   });

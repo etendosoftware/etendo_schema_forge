@@ -70,8 +70,12 @@ export function summarizeConfirm(rows, fallbackCurrency = '') {
 
 /** `FC1000143` -> `{prefix: 'FC', digits: '1000143'}`; null when the number does not end in digits. */
 function splitNumber(documentNo) {
-  const match = /^(.*?)(\d+)$/.exec(String(documentNo ?? ''));
-  return match ? { prefix: match[1], digits: match[2] } : null;
+  const text = String(documentNo ?? '');
+  // Linear scan (no backtracking regex). Any line terminator yields null, as the old `.` did.
+  if (/[\n\r\u2028\u2029]/.test(text)) return null;
+  let start = text.length;
+  while (start > 0 && text.charCodeAt(start - 1) >= 48 && text.charCodeAt(start - 1) <= 57) start -= 1;
+  return start === text.length ? null : { prefix: text.slice(0, start), digits: text.slice(start) };
 }
 
 /**
