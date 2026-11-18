@@ -274,6 +274,7 @@ Q9. New product and the KPI (section 3b): keep "always adjusted", or pre-fill ca
 - SPA/backend parity on a non-numeric `taxRate`: SPA `lineRate` when `taxRate` is a non-numeric string (fallback to `tax.rate` like the backend) + fixture
   case `taxRate: ""`.
 - `ETGO_REQUIRE_SPA_FIXTURE=true` in the CI job that has the SPA repo (totals parity must not skip silently).
+  Superseded 2026-11-18: dropped. The cross-repo fixture read was removed and the flag no longer exists; each repo owns its own cases.
 - Single-invoice "Extraer y completar" and MCP OCR show discounted lines at the gross printed price (W6): map
   `discount_percent` / `discount_amount` there too (separate small change, same shared schema).
 - Mapping facts ETP-6051 depends on (already recorded): `tax.id`, `listPrice` / `etgoDiscount` (not `unitPrice`),
@@ -380,7 +381,7 @@ completing invoices concurrently.
 Follow-up tickets:
 
 - Numbering / concurrency benchmark (5-10 documents, concurrent users).
-- `ETGO_REQUIRE_SPA_FIXTURE=true` in the CI job that checks out the SPA.
+- `ETGO_REQUIRE_SPA_FIXTURE=true` in the CI job that checks out the SPA. (Superseded 2026-11-18: dropped, the flag no longer exists.)
 - Row kebab with Confirm / Retry.
 - Concept (non-product) lines.
 - Tax-included price lists via `grossUnitPrice`.

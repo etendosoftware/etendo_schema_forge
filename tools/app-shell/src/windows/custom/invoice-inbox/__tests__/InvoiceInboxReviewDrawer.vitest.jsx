@@ -502,7 +502,7 @@ describe('review drawer — header section, currency and totals', () => {
   it('totals: base, one IVA row per rate (ascending) and "Total *" with the document total', async () => {
     await renderLoaded(makeReview({}, {
       lines: [line({ index: 0, quantity: 1, unitPrice: 100, taxRate: 21 }), line({ index: 1, quantity: 2, unitPrice: 50, taxRate: 10 }), line({ index: 2, quantity: 1, unitPrice: 100, taxRate: 21 })],
-      header: { totalAmount: 352, totalSource: 'printed' },
+      header: { totalAmount: 400, totalSource: 'printed' },
     }));
     expect(tid('invoice-inbox-review-total-base')).toHaveTextContent(M(300));
     const rows = screen.getAllByTestId(/^invoice-inbox-review-total-tax-\d+$/);
@@ -510,7 +510,24 @@ describe('review drawer — header section, currency and totals', () => {
     expect(tid('invoice-inbox-review-total-tax-21')).toHaveTextContent(M(42));
     expect(tid('invoice-inbox-review-total-tax-21-label')).toHaveTextContent(`IVA 21% s/ ${M(200)}`);
     expect(tid('invoice-inbox-review-total-label')).toHaveTextContent('Total*');
+    // The printed 400 never reaches the big Total: it is the lines total (the banner carries the printed one).
     expect(tid('invoice-inbox-review-total')).toHaveTextContent(M(352));
+  });
+
+  it('a confirmed row shows the grand total of the created invoice as its Total', async () => {
+    await renderLoaded(makeReview({ status: 'CONFIRMED', editable: false, invoice: { id: 'I1', documentNo: 'FC1', identifier: 'FC1', grandTotal: 217.8 } }, {
+      lines: [line({ index: 0, quantity: 1, unitPrice: 180, taxRate: 21 })],
+      header: { totalAmount: 257.8, totalSource: 'printed' },
+    }));
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(M(217.8));
+  });
+
+  it('a confirmed row without an invoice total falls back to the lines total', async () => {
+    await renderLoaded(makeReview({ status: 'CONFIRMED', editable: false, invoice: { id: 'I1', documentNo: 'FC1', identifier: 'FC1' } }, {
+      lines: [line({ index: 0, quantity: 1, unitPrice: 180, taxRate: 21 })],
+      header: { totalAmount: 257.8, totalSource: 'printed' },
+    }));
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(M(217.8));
   });
 
   it('the totals card is always shown, also on a settled document', async () => {
@@ -797,6 +814,14 @@ describe('review drawer — confirm', () => {
     expect(confirmBtn()).toBeEnabled();
     expect(tid('invoice-inbox-review-banner-confirm-failed-title')).toHaveTextContent(L('invoiceInboxErrorConfirmFailed'));
     expect(tid('invoice-inbox-review-banner-confirm-failed')).toHaveTextContent('No hay un período contable abierto');
+  });
+
+  it('a failed confirm with a stored identifier shows it translated, from errorInfo, not the raw JSON', async () => {
+    const info = { code: 'step_failed', params: { step: 'line', n: 2, reason: 'Tax is required' } };
+    await withConfirm(makeReview({ status: 'ERROR', errorCode: 'CONFIRM_FAILED', errorDetail: '{"v":1,"code":"step_failed"}', errorInfo: info, updated: 'T0' }));
+    const banner = tid('invoice-inbox-review-banner-confirm-failed');
+    expect(banner).toHaveTextContent('Línea 2: Tax is required');
+    expect(banner).not.toHaveTextContent('"v":1');
   });
 
   it('a failed confirm without a stored reason shows the no-detail text', async () => {

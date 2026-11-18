@@ -42,7 +42,7 @@ export async function confirmRow(apiFetch, row) {
     const code = discardFailureCode(outcome);
     return {
       ok: false,
-      failure: { ...base, code, reasonKey: confirmReasonKey(code), detail: outcome.detail ?? null },
+      failure: { ...base, code, reasonKey: confirmReasonKey(code), detail: outcome.detail ?? null, detailInfo: outcome.detailInfo ?? null },
       stops: CONFIRM_STOPPING_CODES.has(code),
     };
   } catch (err) {

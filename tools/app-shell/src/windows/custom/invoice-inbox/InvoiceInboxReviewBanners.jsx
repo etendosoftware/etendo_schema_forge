@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { XIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { formatMoney } from './invoiceInboxMoney.js';
-import { errorCodeLabelKey } from './invoiceInboxMessages.js';
+import { confirmFailedDetail, errorCodeLabelKey } from './invoiceInboxMessages.js';
 import {
   computeTotals, currencyScale, isSettledStatus, reviewBanners, totalMismatch,
 } from './invoiceInboxReviewModel.js';
@@ -85,7 +85,7 @@ export default function InvoiceInboxReviewBanners({ review }) {
                 testId="invoice-inbox-review-banner-confirm-failed"
                 title={ui(errorCodeLabelKey('CONFIRM_FAILED'))}
                 data-testid="ReviewBanner__838958">
-                {banner.detail || ui('invoiceInboxConfirmFailedNoDetail')}
+                {confirmFailedDetail(ui, banner.info, banner.detail) || ui('invoiceInboxConfirmFailedNoDetail')}
               </ReviewBanner>
             );
           case 'blocker': {
