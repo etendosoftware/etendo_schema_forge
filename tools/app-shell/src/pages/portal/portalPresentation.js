@@ -38,28 +38,29 @@ export const PORTAL_KIND_META = Object.freeze({
 /**
  * The list tabs per kind (design Listado: "Todos / Por responder / Aceptados / Rechazados"): the
  * customer-facing status groups the backend defines (`PortalDocumentQuery.GROUPS`), each with its
- * label. "All" is the implicit first tab. The mapping is recorded in the plan (§B.4); the badges in
- * the rows keep the app's own status labels.
+ * label. "All" is the implicit first tab. The mapping is recorded in the plan (§B.4). Labels are
+ * the app's own status keys (PO answer: the same status names as the app), the ones its badges
+ * use; only "delivered" keeps a portal key, as the app has no status of that name.
  */
 export const PORTAL_KIND_GROUPS = Object.freeze({
   QUOTATION: [
-    { code: 'awaiting', labelKey: 'portalGroupAwaiting' },
-    { code: 'accepted', labelKey: 'portalGroupAccepted' },
-    { code: 'rejected', labelKey: 'portalGroupRejected' },
+    { code: 'awaiting', labelKey: 'statusUnderEvaluation' },
+    { code: 'accepted', labelKey: 'statusAccepted' },
+    { code: 'rejected', labelKey: 'statusRejected' },
   ],
   ORDER: [
-    { code: 'inProgress', labelKey: 'portalGroupInProgress' },
-    { code: 'completed', labelKey: 'portalGroupCompleted' },
-    { code: 'voided', labelKey: 'portalGroupVoided' },
+    { code: 'inProgress', labelKey: 'statusInProcess' },
+    { code: 'completed', labelKey: 'statusComplete' },
+    { code: 'voided', labelKey: 'statusVoid' },
   ],
   SHIPMENT: [
     { code: 'delivered', labelKey: 'portalGroupDelivered' },
-    { code: 'voided', labelKey: 'portalGroupVoided' },
+    { code: 'voided', labelKey: 'statusVoid' },
   ],
   INVOICE: [
-    { code: 'pending', labelKey: 'portalGroupPending' },
-    { code: 'overdue', labelKey: 'portalGroupOverdue' },
-    { code: 'paid', labelKey: 'portalGroupPaid' },
+    { code: 'pending', labelKey: 'statusPending' },
+    { code: 'overdue', labelKey: 'statusOverdue' },
+    { code: 'paid', labelKey: 'statusPaid' },
   ],
 });
 

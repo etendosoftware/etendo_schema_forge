@@ -548,7 +548,8 @@ describe('PortalPage — rail', () => {
 
     const rail = screen.getByTestId('portal-sidebar');
     expect(rail).toHaveAttribute('data-collapsed', 'false');
-    expect(within(rail).getByTestId('portal-promo-cta')).toHaveAttribute('href', 'https://etendo.ai');
+    // "Empieza gratis" opens the app's sign-up (PO answer).
+    expect(within(rail).getByTestId('portal-promo-cta')).toHaveAttribute('href', 'https://app.etendo.ai/onboarding');
 
     await user.click(screen.getByTestId('portal-rail-toggle'));
 
@@ -567,20 +568,17 @@ describe('PortalPage — rail', () => {
 });
 
 describe('PortalPage — language', () => {
-  it('opens the language menu from its trigger, names Spanish by default and switches to English', async () => {
+  it('offers the language only in the user menu, opened from the customer, and switches to English', async () => {
     const user = userEvent.setup();
     localeState.locale = undefined;
     renderPortal();
     await shellReady();
 
-    // The rail has no language switch (as in the Figma); the mobile top bar's compact trigger
-    // shows the current language's flag — Spanish when none is set.
-    expect(within(screen.getByTestId('portal-sidebar')).queryByTestId('portal-language-switch')).not.toBeInTheDocument();
-    const trigger = screen.getAllByTestId('portal-language-switch')[0];
-    expect(trigger).toHaveTextContent('🇪🇸');
-    // The menu is closed until its trigger is clicked.
+    // As in the app (PO answer): no standalone language switch; the user (the rail's customer row
+    // or the mobile avatar) opens a menu with the language section.
+    expect(screen.queryByTestId('portal-language-switch')).not.toBeInTheDocument();
     expect(screen.queryByTestId('portal-language-en')).not.toBeInTheDocument();
-    await user.click(trigger);
+    await user.click(within(screen.getByTestId('portal-sidebar')).getByTestId('portal-customer'));
 
     await user.click(screen.getByTestId('portal-language-en'));
     expect(localeState.setLocale).toHaveBeenCalledWith('en_US');
@@ -593,7 +591,7 @@ describe('PortalPage — language', () => {
       renderPortal();
       await shellReady();
 
-      await user.click(screen.getAllByTestId('portal-language-switch')[0]);
+      await user.click(screen.getAllByTestId('portal-customer-avatar')[0]);
 
       for (const short of ['es', 'en']) {
         const { className } = screen.getByTestId(`portal-language-${short}`);
@@ -785,30 +783,16 @@ describe('PortalPage — document list', () => {
     }
   });
 
-  it('enables "Descargar seleccionados" only with a ticked row, and saves one PDF per document in turn', async () => {
-    const user = userEvent.setup();
+  it('offers no bulk download and no row checkboxes (PO: out for now)', async () => {
     renderPortal(listPath('INVOICE'));
     await listReady();
 
-    const download = screen.getByTestId('portal-download-selected');
-    expect(download).toBeDisabled();
-    const boxes = screen.getAllByTestId('portal-select-row');
-    await user.click(boxes[0]);
-    await user.click(boxes[1]);
-    expect(download).toBeEnabled();
-    // Ticking a row never opens it.
-    expect(urlView()).toEqual({ view: 'list', kind: 'INVOICE' });
-
-    await user.click(download);
-
-    await waitFor(() => expect(saveBlobAsFile).toHaveBeenCalledTimes(2));
-    expect(saveBlobAsFile.mock.calls.map(([, name]) => name)).toEqual(['FV-0001.pdf', 'FV-0002.pdf']);
-    expect(callsTo('/documents/invoice/inv-1/pdf')).toHaveLength(1);
-    expect(callsTo('/documents/invoice/inv-2/pdf')).toHaveLength(1);
+    expect(screen.queryByTestId('portal-download-selected')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('portal-select-all')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('portal-select-row')).not.toBeInTheDocument();
   });
 
-  it('ticks every shown row from the header, and sums the shown rows per currency', async () => {
-    const user = userEvent.setup();
+  it('sums the shown rows per currency', async () => {
     LISTS.invoice = {
       ...LISTS.invoice,
       documents: [...INVOICES, { ...INVOICES[0], id: 'inv-usd', documentNo: 'US/0001', currency: 'USD', taxBase: 10, grandTotal: 12 }],
@@ -817,8 +801,6 @@ describe('PortalPage — document list', () => {
       renderPortal(listPath('INVOICE'));
       await listReady();
 
-      await user.click(screen.getByTestId('portal-select-all'));
-      expect(screen.getAllByTestId('portal-select-row').every((box) => box.checked)).toBe(true);
       const totals = screen.getAllByTestId('portal-document-totals');
       expect(totals).toHaveLength(2);
       expect(totals[0]).toHaveTextContent(/1\.400,00\s€/);

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  ArrowsClockwiseIcon, CalendarBlankIcon, CaretDownIcon, CheckIcon, DownloadSimpleIcon, FunnelIcon,
+  ArrowsClockwiseIcon, CalendarBlankIcon, CaretDownIcon, CheckIcon, FunnelIcon,
 } from '@phosphor-icons/react';
 import { useLocaleSwitch, useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -77,15 +77,15 @@ function DateRangeButton({ value, onChange }) {
 
 /**
  * The view toolbar (padding 8px): the kind's status tabs, the date range and the filter button on
- * the left; refresh and "Descargar seleccionados" (disabled until a row is ticked) on the right.
+ * the left; refresh on the right. "Descargar seleccionados" and the row checkboxes are out for now
+ * (PO answer: bulk download is a performance risk); a document downloads from its detail.
  *
  * The funnel offers the same status groups as a menu. The portal has no other quick filter, and the
  * design gives the funnel no content of its own, so it adds no new filter — it keeps the status
  * choice reachable when the tabs do not fit.
  */
 export function PortalListToolbar({
-  kind, tabs, group, onGroup, range, onRange, onRefresh, selectedCount, downloading,
-  onDownloadSelected,
+  kind, tabs, group, onGroup, range, onRange, onRefresh,
 }) {
   const ui = useUI();
   return (
@@ -138,16 +138,6 @@ export function PortalListToolbar({
         <button type="button" aria-label={ui('portalRefresh')} title={ui('portalRefresh')} onClick={onRefresh} className={cn(TOOL, 'w-10 p-2')} data-testid="portal-refresh">
           <ArrowsClockwiseIcon size={20} aria-hidden="true" data-testid="ArrowsClockwise__b71e0c" />
         </button>
-        <button
-          type="button"
-          onClick={onDownloadSelected}
-          disabled={selectedCount === 0 || downloading}
-          className="inline-flex h-10 items-center justify-center gap-1 rounded-lg bg-[#325CFF] px-3 py-2 text-white transition-colors hover:bg-[#2849CC] disabled:pointer-events-none disabled:bg-[#B0BEFF]"
-          data-testid="portal-download-selected"
-        >
-          <DownloadSimpleIcon size={20} aria-hidden="true" data-testid="DownloadSimple__b71e0c" />
-          <span className="px-1 text-sm font-medium leading-6">{ui('portalDownloadSelected')}</span>
-        </button>
       </div>
     </div>
   );
@@ -175,25 +165,6 @@ function ValidityCell({ document }) {
 /** The 24px status badge of the table (r360, no border, 12/16, Figma palette). */
 const TABLE_BADGE = 'h-6 rounded-full border-transparent px-2 py-1 font-normal tracking-[-0.005em]';
 
-/** One checkbox cell: 32px wide, 8px left padding, a 24px box. */
-function CheckCell({ as: Cell, checked, indeterminate = false, onChange, label, testId }) {
-  return (
-    <Cell className="w-8 pl-2" onClick={(event) => event.stopPropagation()}>
-      <span className="flex h-6 w-6 items-center justify-center">
-        <input
-          type="checkbox"
-          checked={checked}
-          ref={(element) => { if (element) element.indeterminate = indeterminate; }}
-          onChange={onChange}
-          aria-label={label}
-          className={`h-[14.5px] w-[14.5px] cursor-pointer rounded accent-[#325CFF] ${PORTAL_FIGMA_SHADOW}`}
-          data-testid={testId}
-        />
-      </span>
-    </Cell>
-  );
-}
-
 /**
  * Sums of the rows shown, one per currency (never two currencies in one figure). A shipment list
  * has no amounts and no totals.
@@ -211,19 +182,17 @@ function totalsByCurrency(documents) {
 }
 
 /**
- * The table (Figma "Tabla"): a checkbox column with select-all, the kind's columns at the Figma's
- * widths, 40px rows split by #E3E7EC rules, and a "Total" row per currency of the rows shown.
+ * The table (Figma "Tabla"): the kind's columns at the Figma's widths (no checkbox column: bulk
+ * download is out), 40px rows split by #E3E7EC rules, and a "Total" row per currency of the rows shown.
  * Quotations: date (semibold), number, reference, "Válido hasta" with its dot, status, tax base,
  * total. Invoices keep the story's columns (document type, due date, payment state, outstanding);
- * shipments carry no amounts. A row opens its document; its checkbox only ticks it.
+ * shipments carry no amounts. A row opens its document.
  */
-export function PortalListTable({ kind, documents, onOpen, selected, onToggle, onToggleAll }) {
+export function PortalListTable({ kind, documents, onOpen }) {
   const ui = useUI();
   const isInvoice = kind === 'INVOICE';
   const isQuotation = kind === 'QUOTATION';
   const hasAmounts = kind !== 'SHIPMENT';
-  const allChecked = documents.length > 0 && documents.every((document) => selected.has(document.id));
-  const someChecked = !allChecked && documents.some((document) => selected.has(document.id));
   const th = 'h-10 whitespace-nowrap px-3 text-left text-xs font-semibold leading-4 tracking-[-0.005em] text-[#1B1A1F]';
   const td = 'h-10 whitespace-nowrap px-3 text-sm leading-5 text-[#1B1A1F]';
   // Invoices carry three more columns than the quotation list: up to a 1280px screen the tax base
@@ -235,14 +204,6 @@ export function PortalListTable({ kind, documents, onOpen, selected, onToggle, o
       <table className="w-full border-collapse" data-testid="portal-document-table">
         <thead>
           <tr className="border-b border-[#E3E7EC]">
-            <CheckCell
-              as="th"
-              checked={allChecked}
-              indeterminate={someChecked}
-              onChange={onToggleAll}
-              label={ui('selectAll')}
-              testId="portal-select-all"
-              data-testid="CheckCell__b71e0c" />
             <th className={cn(th, 'w-[178px]')}>{ui(PORTAL_KIND_META[kind].dateColumnKey)}</th>
             {isInvoice ? <th className={th}>{ui('documentType')}</th> : null}
             <th className={cn(th, 'w-[140px]')}>{ui('portalColDocumentNo')}</th>
@@ -264,13 +225,6 @@ export function PortalListTable({ kind, documents, onOpen, selected, onToggle, o
               {...portalRowActivation(() => onOpen(document), `${ui(documentLabelKey(document))} ${document.documentNo ?? ''}`.trim())}
               data-testid="portal-document-row"
             >
-              <CheckCell
-                as="td"
-                checked={selected.has(document.id)}
-                onChange={() => onToggle(document.id)}
-                label={`${ui('selectRow')} ${document.documentNo ?? ''}`.trim()}
-                testId="portal-select-row"
-                data-testid="CheckCell__b71e0c" />
               <td className={cn(td, 'font-semibold tabular-nums')}><PortalDate value={document.date} data-testid="PortalDate__b71e0c" /></td>
               {isInvoice ? <td className={td}><PortalInvoiceTypeBadge document={document} data-testid="PortalInvoiceTypeBadge__b71e0c" /></td> : null}
               <td className={td}>
@@ -314,7 +268,7 @@ export function PortalListTable({ kind, documents, onOpen, selected, onToggle, o
           ))}
           {hasAmounts ? totalsByCurrency(documents).map((total) => (
             <tr key={total.currency ?? 'none'} className="font-semibold" data-testid="portal-document-totals">
-              <td colSpan={leadingColumns + 1} className="h-10 pl-11 pr-3 text-sm leading-5 text-[#1B1A1F]">{ui('portalTotal')}</td>
+              <td colSpan={leadingColumns} className="h-10 px-3 text-sm leading-5 text-[#1B1A1F]">{ui('portalTotal')}</td>
               <td className={cn('h-10 px-3 text-right text-sm leading-5 tabular-nums text-[#1B1A1F]', taxBase)}>
                 <PortalMoney currency={total.currency} value={total.taxBase} data-testid="PortalMoney__b71e0c" />
               </td>

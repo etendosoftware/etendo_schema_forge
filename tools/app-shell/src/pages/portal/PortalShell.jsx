@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Languages, LayoutGrid, Search } from 'lucide-react';
+import { LayoutGrid, Search } from 'lucide-react';
 // The main screen's glyphs are the design's own Phosphor icons (spec of 2026-11-17), imported with
 // the library's `*Icon` names like the rest of the app (`pages/first-steps/firstStepsIcons.js`).
 import {
@@ -13,15 +13,18 @@ import { PORTAL_DOCUMENT_KINDS } from '@/lib/portal/portalApi.js';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { APP_LOCALES, LanguageMenuSection } from '@/components/LanguageMenuSection.jsx';
+import { LanguageMenuSection } from '@/components/LanguageMenuSection.jsx';
 import { PortalTag } from './PortalBits.jsx';
 import { PORTAL_HIGHLIGHTS, PORTAL_KIND_META } from './portalPresentation.js';
 
-/**
- * The product's site (no shared constant exists for it): the rail's etendo.ai brand and the promo
- * card's "Empieza gratis" (pending with the PO: Jira comment 149666 — one place to change it).
- */
+/** The product's site (no shared constant exists for it): the rail's etendo.ai brand. */
 export const ETENDO_AI_URL = 'https://etendo.ai';
+
+/**
+ * Where the promo card's "Empieza gratis" sends the visitor to create an account (PO answer): the
+ * app's own public sign-up route, `/onboarding` (`runtime-routes.jsx`), on app.etendo.ai.
+ */
+export const ETENDO_SIGNUP_URL = 'https://app.etendo.ai/onboarding';
 
 /**
  * Icon per destination: the design's Phosphor glyphs, the same everywhere a kind is drawn (rail,
@@ -133,36 +136,20 @@ export function PortalBrand({ identity, logoUrl, size = 'sm' }) {
 }
 
 /**
- * The language choice (§B.8), the way the app offers it. In the app it is the "Idioma" section of
- * the user menu (`UserAvatarButton`); the portal has no user menu, so a discreet trigger — the
- * `Languages` icon with the current flag and name — opens the app's own `DropdownMenu` holding
- * that same section (`LanguageMenuSection`: the app's `APP_LOCALES`, rows and active marker).
- * Spanish is the default; the choice is the viewer's.
+ * The user menu (PO answer, provisional): as in the app, clicking the user opens a menu whose only
+ * section is the language (§B.8). It is the app's own `DropdownMenu` with the app's
+ * `LanguageMenuSection` (`APP_LOCALES`, rows and active marker), the same section the app's
+ * `UserAvatarButton` shows; the rest of that menu (account, companies, logout) needs a login the
+ * portal does not have. Spanish is the default; the choice is the viewer's. Without a locale
+ * switcher the trigger renders alone.
  */
-export function PortalLanguageSwitch({ align = 'start', side = 'top', compact = false }) {
-  const ui = useUI();
+function PortalUserMenu({ align = 'end', side = 'bottom', children }) {
   const { locale, setLocale } = useLocaleSwitch();
-  if (!setLocale) return null;
-  const current = APP_LOCALES.find((entry) => entry.code === locale)
-    ?? APP_LOCALES.find((entry) => entry.code === 'es_ES');
+  if (!setLocale) return children;
   return (
     <DropdownMenu data-testid="DropdownMenu__a5d12f">
       <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__a5d12f">
-        <button
-          type="button"
-          aria-label={ui('language')}
-          className="flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          data-testid="portal-language-switch"
-        >
-          <Languages
-            className="h-3.5 w-3.5 shrink-0"
-            aria-hidden="true"
-            data-testid="Languages__a5d12f" />
-          <span className="text-sm leading-none" aria-hidden="true">{current.flag}</span>
-          {/* `compact` (mobile top bars): icon + flag only, so the brand keeps the room; the
-              trigger's label still names it, and the same menu opens. */}
-          {compact ? null : <span className="truncate">{current.label}</span>}
-        </button>
+        {children}
       </DropdownMenuTrigger>
       <DropdownMenuContent
         side={side}
@@ -182,8 +169,8 @@ export function PortalLanguageSwitch({ align = 'start', side = 'top', compact = 
 /**
  * The customer the link belongs to (`/me`'s `businessPartnerName`), shown where the design puts
  * its user (Main: the sidebar's user row; Movil-*: the avatar on the top bar's right). Purely
- * informative: the portal has no login, so there is no account menu, no chevron and nothing to
- * click. Nothing renders without a name.
+ * the trigger of the user menu ({@link PortalUserMenu}: the language, as in the app). Nothing
+ * renders without a name.
  *
  * The app has no shared initials helper — `UserAvatarButton` takes the first letter inline and
  * `OrgLogoField` keeps its own private function — so the initials come from this file's
@@ -197,16 +184,18 @@ export function PortalCustomer({ identity, variant = 'row' }) {
   if (!name) return null;
   if (variant === 'avatar') {
     return (
-      <span
-        role="img"
-        aria-label={name}
-        title={name}
-        // ≈40 px on a phone (360), the board's 48 px from 640 up (the 720 board).
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-semibold text-background sm:h-12 sm:w-12"
-        data-testid="portal-customer-avatar"
-      >
-        {initialsOf(name)}
-      </span>
+      <PortalUserMenu data-testid="PortalUserMenu__a5d12f">
+        <button
+          type="button"
+          aria-label={name}
+          title={name}
+          // ≈40 px on a phone (360), the board's 48 px from 640 up (the 720 board).
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-semibold text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-12 sm:w-12"
+          data-testid="portal-customer-avatar"
+        >
+          {initialsOf(name)}
+        </button>
+      </PortalUserMenu>
     );
   }
   return (
@@ -220,8 +209,8 @@ export function PortalCustomer({ identity, variant = 'row' }) {
 }
 
 /**
- * The mobile top bar of Inicio (design Movil-Inicio): the brand, a search button and the language
- * switch in place of the design's account avatar (the portal has no account).
+ * The mobile top bar of Inicio (design Movil-Inicio): the brand, a search button and the customer's
+ * avatar, which opens the user menu (the language).
  */
 export function PortalMobileBrandBar({ identity, logoUrl, onSearch }) {
   const ui = useUI();
@@ -250,11 +239,6 @@ export function PortalMobileBrandBar({ identity, logoUrl, onSearch }) {
             <Search className="h-5 w-5" aria-hidden="true" data-testid="Search__a5d12f" />
           </button>
         ) : null}
-        <PortalLanguageSwitch
-          align="end"
-          side="bottom"
-          compact
-          data-testid="PortalLanguageSwitch__a5d12f" />
         <PortalCustomer identity={identity} variant="avatar" data-testid="PortalCustomer__a5d12f" />
       </div>
     </header>
@@ -294,11 +278,12 @@ const RAIL_HEADING = 'px-4 py-1 text-xs leading-6 tracking-[-0.005em] text-[#6B7
  * Desktop: the design's left rail beside the view's own column. Expanded (the default): the
  * etendo.ai brand with the collapse button, the company the portal belongs to, "General · Inicio",
  * "Mis documentos" with one entry per kind and its count chip, the promo card ("Lleva tu negocio más
- * lejos" — only while expanded), and at the bottom the customer and the ES/EN switch. Collapsed
+ * lejos" — only while expanded), and at the bottom the help link and the customer, which opens the
+ * user menu (the language). Collapsed
  * (56 px): icons only — Inicio, and "Mis documentos" with the total count, which expands the rail
  * to choose a kind. The choice is remembered per browser. Mobile: the view's own top bar (each
- * view draws it) and the bottom navigation (Inicio, Presupuestos, Facturas, Más). There is no
- * account menu and no help link: the portal has no login and no support channel yet.
+ * view draws it) and the bottom navigation (Inicio, Presupuestos, Facturas, Más). The user menu
+ * holds only the language: the portal has no login.
  */
 export default function PortalShell({ identity, logoUrl, current, tiles, onNavigate, children }) {
   const ui = useUI();
@@ -532,9 +517,8 @@ const PORTAL_HELP_URL = 'https://help.etendo.ai';
 
 /**
  * The rail's footer ("Pie"): a top rule, then "Ayuda y soporte" (the help site, new tab) and the
- * customer, 32px items with the Figma's chevron; collapsed, two 36×36 grey buttons. No language
- * switch here, as in the Figma (user decision, 2026-11-17): the language resolves as before, and
- * the mobile top bars keep their switch.
+ * customer, 32px items with the Figma's chevron; collapsed, two 36×36 grey buttons. The customer
+ * opens the user menu (the language, as the app's user menu does; PO answer).
  */
 function PortalRailFooter({ identity, collapsed }) {
   const ui = useUI();
@@ -555,9 +539,11 @@ function PortalRailFooter({ identity, collapsed }) {
             <HeadsetIcon size={20} aria-hidden="true" data-testid="Headset__a5d12f" />
           </a>
           {name ? (
-            <span role="img" aria-label={name} title={name} className={RAIL_ICON_BUTTON} data-testid="portal-customer">
-              <RailUserAvatar data-testid="RailUserAvatar__a5d12f" />
-            </span>
+            <PortalUserMenu side="right" align="end" data-testid="PortalUserMenu__a5d12f">
+              <button type="button" aria-label={name} title={name} className={RAIL_ICON_BUTTON} data-testid="portal-customer">
+                <RailUserAvatar data-testid="RailUserAvatar__a5d12f" />
+              </button>
+            </PortalUserMenu>
           ) : null}
         </div>
       </div>
@@ -572,11 +558,13 @@ function PortalRailFooter({ identity, collapsed }) {
           <CaretRightIcon size={20} className="shrink-0 text-[#81848F]" aria-hidden="true" data-testid="CaretRight__a5d12f" />
         </a>
         {name ? (
-          <div className={cn(RAIL_ITEM, 'hover:bg-transparent')} title={name} data-testid="portal-customer">
-            <RailUserAvatar data-testid="RailUserAvatar__a5d12f" />
-            <span className="min-w-0 flex-1 truncate pl-2 pr-4" data-testid="portal-customer-name">{name}</span>
-            <CaretRightIcon size={20} className="shrink-0 text-[#81848F]" aria-hidden="true" data-testid="CaretRight__a5d12f" />
-          </div>
+          <PortalUserMenu side="right" align="end" data-testid="PortalUserMenu__a5d12f">
+            <button type="button" className={RAIL_ITEM} title={name} data-testid="portal-customer">
+              <RailUserAvatar data-testid="RailUserAvatar__a5d12f" />
+              <span className="min-w-0 flex-1 truncate pl-2 pr-4" data-testid="portal-customer-name">{name}</span>
+              <CaretRightIcon size={20} className="shrink-0 text-[#81848F]" aria-hidden="true" data-testid="CaretRight__a5d12f" />
+            </button>
+          </PortalUserMenu>
         ) : null}
       </div>
     </div>
@@ -585,8 +573,7 @@ function PortalRailFooter({ identity, collapsed }) {
 
 /**
  * The expanded rail's banner ("Lleva tu negocio más lejos"), at the bottom of the menu list.
- * "Empieza gratis" opens the product's site in a new tab; its final destination is pending with the
- * PO (Jira comment 149666).
+ * "Empieza gratis" opens the app's sign-up (`ETENDO_SIGNUP_URL`) in a new tab (PO answer).
  */
 function PortalPromo() {
   const ui = useUI();
@@ -600,7 +587,7 @@ function PortalPromo() {
         <span className="text-xs leading-4 text-[#6B7280]">{ui('portalPromoDescription')}</span>
       </div>
       <a
-        href={ETENDO_AI_URL}
+        href={ETENDO_SIGNUP_URL}
         target="_blank"
         rel="noopener noreferrer"
         className="flex h-8 w-full items-center justify-center rounded-lg bg-[#325CFF] px-2 py-1 text-sm font-medium leading-6 text-white hover:bg-[#2849CC]"

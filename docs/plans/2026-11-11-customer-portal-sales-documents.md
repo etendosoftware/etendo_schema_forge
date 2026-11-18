@@ -983,16 +983,45 @@ arrives, so every shared piece takes the new look as an opt-in (`PortalSection v
   dashboard helpers' round ticks and a dark tooltip with month and amount on hover or focus.
 - **Colours.** Badges keep the app's status tokens (statuses must look as in the app), which differ
   slightly from the spec's hex values (e.g. the info blue).
-- **Pending with the PO (Jira comment 149666):** "Empieza gratis" goes to https://etendo.ai for now
-  (`ETENDO_AI_URL` in `PortalShell.jsx`); no microphone in the search; no "Albaranes de devolución"
-  in the rail (not a portal document kind); the "Ingresos" / "Gastos" legend is not drawn — the
-  single invoiced series keeps its label. Not built either: the top-bar buttons the design hides.
+- **Pending with the PO (Jira comment 149666) — answered 2026-11-18, see "PO answers to the
+  redesign" below.** Still open: the "Ingresos" / "Gastos" legend is not drawn (the single invoiced
+  series keeps its label) and "Ayuda y soporte" stays provisional (pending marketing). Not built
+  either: the top-bar buttons the design hides.
+- **PO answers to the redesign (2026-11-18).**
+  1. "Empieza gratis" opens the app's public sign-up, `https://app.etendo.ai/onboarding`
+     (`ETENDO_SIGNUP_URL` in `PortalShell.jsx`; the route is `onboarding` in `runtime-routes.jsx`),
+     in a new tab with `rel="noopener noreferrer"`. The etendo.ai brand still opens etendo.ai.
+  2. Search: the PO asked for the app's own search component without the microphone. **Not
+     reused:** the app's search is not a component but inline markup inside `TopBar.jsx`, wired to
+     the authenticated app context (`useGlobalSearch` / `GlobalSearchProvider`, vector-search
+     contracts, the menu); extracting it is a shared-component refactor of its own, and forking it
+     was ruled out. The portal keeps its search pill on `searchPortalDocuments`. The app's search
+     has no microphone either.
+  3. "Albaranes de devolución": not shown anywhere in the portal (no kind, tab or filter; the
+     backend lists only `C-` shipments and leaves return-material orders out). Nothing to remove.
+  4. "Ingresos" / "Gastos": no answer yet, unchanged.
+  5. "Ayuda y soporte": pending marketing, unchanged.
+  6. Status names: the list tabs (and the funnel's choices) use the app's status keys
+     (`statusUnderEvaluation`, `statusAccepted`, `statusRejected`, `statusInProcess`,
+     `statusComplete`, `statusVoid`, `statusPending`, `statusOverdue`, `statusPaid`); the portal
+     copies `portalGroup*` were removed from the locales. "Entregados" (`portalGroupDelivered`)
+     stays, as the app has no status of that name. The row badges already used the app's
+     `statusLabel`. The home's attention tiles ("Por responder", "Vencidas", "En curso", "Este
+     mes") are counts, not statuses, and are unchanged.
+  7. Language: provisionally as in the app, inside the user menu. The customer (the rail's row,
+     expanded or collapsed, and the mobile avatar on Inicio and the lists) opens the app's
+     `DropdownMenu` with the app's `LanguageMenuSection`; the standalone language switch is gone.
+     The menu holds only the language: the portal has no login, so the app's account entries do
+     not apply. With no customer name there is no user, hence no menu.
+  8. Comments box: never built in the portal (an agreed OUT item); nothing to remove.
+  9. "Descargar seleccionados" and the row checkboxes (select-all included) are removed for now
+     (performance); a document still downloads from its detail.
 - **Pixel pass against the Figma (2026-11-17, user: "tal cual el figma").** Compared side by side
   with the reference captures at 1440×703 in both rail states. Icons are the design's Phosphor ones
   (`@phosphor-icons/react`, already a dependency). The rail footer is a rule, then "Ayuda y soporte"
   (https://help.etendo.ai, provisional, new tab) and the customer, each with a chevron; **no
-  language switch in the rail** (user decision; the language resolves as before and the mobile top
-  bars keep theirs). The company box shows the tenant logo, its name and a decorative chevron.
+  language switch in the rail** (user decision; superseded 2026-11-18: the language now lives in
+  the user menu opened from the customer, see the PO answers above). The company box shows the tenant logo, its name and a decorative chevron.
   Badges on the main screen use the Figma's hex colours (`PortalTag palette="figma"`), not the app
   palette: a quotation awaiting an answer is blue, an invoice to pay yellow. The status **names**
   stay the app's ("Bajo evaluación", "Completado", "Vencidas") until the PO decides (they conflict
@@ -1032,9 +1061,8 @@ arrives, so every shared piece takes the new look as an opt-in (`PortalSection v
   "Mis documentos / <kind>" breadcrumb; the white search pill. Toolbar (padding 8px): the kind's
   status tabs (#F3F5F9, selected white + shadow-sm), the date-range button (the app's picker in the
   Figma's button), a funnel with the same status choices (the portal has no other quick filter),
-  refresh and "Descargar seleccionados" (disabled until a row is ticked; it downloads each ticked
-  document's PDF one after another through the detail's download path — no zip, a provisional
-  default). Table: checkbox column with select-all, the kind's columns at the Figma's widths, 40px
+  and refresh ("Descargar seleccionados" and the checkbox column were removed by the PO answers of
+  2026-11-18). Table: the kind's columns at the Figma's widths, 40px
   rows with #E3E7EC rules, "Válido hasta" with a #FFC233 dot while the quotation can be answered
   (red once past), Figma-palette status badges, and one "Total" row per currency of the rows shown.
   Orders, shipments and invoices keep their own tabs and columns (invoices: type, due date,

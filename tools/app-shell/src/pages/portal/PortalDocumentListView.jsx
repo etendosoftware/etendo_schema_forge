@@ -3,11 +3,9 @@ import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { getDateBounds } from '@/lib/dateRangeBounds.js';
-import { PORTAL_ERROR, fetchPortalDocumentPdf, fetchPortalDocuments } from '@/lib/portal/portalApi.js';
-import { portalPdfFileName } from '@/lib/portal/portalInvoices.js';
-import { saveBlobAsFile } from '@/lib/portal/portalDownload.js';
+import { PORTAL_ERROR, fetchPortalDocuments } from '@/lib/portal/portalApi.js';
 import { PortalListToolbar as DesktopToolbar, PortalListTable as DesktopTable } from './PortalListDesktop.jsx';
-import { PortalCustomer, PortalLanguageSwitch } from './PortalShell.jsx';
+import { PortalCustomer } from './PortalShell.jsx';
 import {
   PortalCountChip, PortalDate, PortalDesktopHeader, PortalDocumentStatus, PortalMain,
   PortalMoney, PortalRowBadge, PortalSearchPill,
@@ -29,8 +27,9 @@ const SEARCH_DEBOUNCE_MS = 300;
  * rolling last month by default, D-2; all time when the link named a group) and refresh. Columns follow the design,
  * adapted per kind: quotations show "Válido hasta" with its dot, invoices their due date,
  * payment state and outstanding; shipments carry no amounts. A totals row closes the table and
- * "Todos los registros cargados" the list. Checkboxes, "Descargar seleccionados" and the advanced
- * "Filtros" are agreed OUT items.
+ * "Todos los registros cargados" the list. Checkboxes and "Descargar seleccionados" are out (PO
+ * answer: bulk download is a performance risk; a document downloads from its detail), and so are
+ * the advanced "Filtros".
  */
 export default function PortalDocumentListView({
   apiFetch, token, kind, group = null, identity = null, kindCount = null, onNavigate, onInvalid,
@@ -44,10 +43,6 @@ export default function PortalDocumentListView({
   const [failed, setFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [reload, setReload] = useState(0);
-  // "Descargar seleccionados" (Figma PC Presupuestos): the rows ticked in the desktop table.
-  const [selected, setSelected] = useState(() => new Set());
-  const [downloading, setDownloading] = useState(false);
-  const [downloadFailures, setDownloadFailures] = useState(0);
 
   // A new kind starts from the defaults: the rolling last month, or all time when the link named a
   // status group (`initialPortalRange`). Switching tabs inside the list keeps the chosen range.
@@ -111,53 +106,7 @@ export default function PortalDocumentListView({
     }
   }, [apiFetch, token, query, page?.documents?.length, onInvalid]);
 
-  // A new query shows other rows: what was ticked no longer applies.
-  useEffect(() => {
-    setSelected(new Set());
-    setDownloadFailures(0);
-  }, [query, reload]);
-
   const documents = page?.documents ?? [];
-  const toggleSelected = (id) => setSelected((current) => {
-    const next = new Set(current);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    return next;
-  });
-  const toggleAll = () => setSelected((current) => (
-    documents.length > 0 && documents.every((document) => current.has(document.id))
-      ? new Set() : new Set(documents.map((document) => document.id))));
-
-  /**
-   * Downloads each ticked document's PDF, one file per document and one after another, through the
-   * same path as the detail's "Descargar PDF" (the email's printable; no zip — provisional default).
-   * A document without a printable, or one that fails, is counted and reported; the rest still go.
-   */
-  const downloadSelected = async () => {
-    setDownloading(true);
-    setDownloadFailures(0);
-    let failures = 0;
-    try {
-      for (const document of documents.filter((row) => selected.has(row.id))) {
-        try {
-          // Sequential on purpose: one request at a time, and one save dialog at a time.
-          // eslint-disable-next-line no-await-in-loop
-          const blob = await fetchPortalDocumentPdf(apiFetch, token, document.kind || kind, document.id);
-          saveBlobAsFile(new Blob([blob], { type: 'application/pdf' }), portalPdfFileName(document));
-        } catch (error) {
-          if (error?.code === PORTAL_ERROR.invalidLink) {
-            onInvalid();
-            return;
-          }
-          failures += 1;
-        }
-      }
-    } finally {
-      setDownloading(false);
-      setDownloadFailures(failures);
-    }
-  };
-
   const totalCount = page?.totalCount ?? 0;
   const hasMore = documents.length < totalCount;
   const plural = ui(PORTAL_KIND_META[kind].pluralKey);
@@ -249,18 +198,13 @@ export default function PortalDocumentListView({
       {/* Mobile header (design Movil-Listado) */}
       <header className="flex shrink-0 flex-col gap-3.5 border-b border-border bg-card px-4 py-4 sm:px-6 md:hidden">
         <div className="flex items-center justify-between gap-3">
-          {/* At 360 px the title steps down to 24 px so it, the count, the language and the avatar
-              share one line; the board's 28 px from 640 up. */}
+          {/* At 360 px the title steps down to 24 px so it, the count and the avatar (the user
+              menu, with the language) share one line; the board's 28 px from 640 up. */}
           <div className="flex min-w-0 items-center gap-2.5">
             <h1 className="truncate text-2xl font-bold leading-9 sm:text-[28px]">{plural}</h1>
             <PortalCountChip count={totalCount} data-testid="PortalCountChip__c7f7d2" />
           </div>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-            <PortalLanguageSwitch
-              align="end"
-              side="bottom"
-              compact
-              data-testid="PortalLanguageSwitch__c7f7d2" />
             <PortalCustomer identity={identity} variant="avatar" data-testid="PortalCustomer__c7f7d2" />
           </div>
         </div>
@@ -290,15 +234,7 @@ export default function PortalDocumentListView({
           range={range}
           onRange={setRange}
           onRefresh={() => setReload((value) => value + 1)}
-          selectedCount={selected.size}
-          downloading={downloading}
-          onDownloadSelected={downloadSelected}
           data-testid="DesktopToolbar__c7f7d2" />
-        {downloadFailures > 0 ? (
-          <p className="hidden px-3 pb-2 text-sm text-destructive md:block" role="alert" data-testid="portal-download-selected-error">
-            {ui('portalDownloadSelectedFailed', { count: downloadFailures })}
-          </p>
-        ) : null}
 
         <div className="md:px-3">{state}</div>
 
@@ -308,9 +244,6 @@ export default function PortalDocumentListView({
               kind={kind}
               documents={documents}
               onOpen={open}
-              selected={selected}
-              onToggle={toggleSelected}
-              onToggleAll={toggleAll}
               data-testid="DesktopTable__c7f7d2" />
             <ul className="flex flex-col gap-3 md:hidden" data-testid="portal-document-cards">
               {documents.map((document) => (
