@@ -331,7 +331,7 @@ describe('etendo-go plugin: context.url at the environment Tomcat', () => {
   });
 });
 
-describe('etendo-go plugin: Copilot with `copilot on`', () => {
+describe('etendo-go plugin: Copilot with `setting copilot=on`', () => {
   let bin;
 
   beforeEach(() => {
@@ -342,7 +342,7 @@ describe('etendo-go plugin: Copilot with `copilot on`', () => {
     write('modules/com.etendoerp.copilot/run.py', '');
     write('gradle.properties', 'copilot.host=host.docker.internal\nCOPILOT_PORT=5005\n');
     for (const rel of ESCAPED_FILES) write(rel, 'copilot.host=host.docker.internal\ncopilot.port=5005\n');
-    write('worktree.conf', 'core - env/x\ncopilot on\n');
+    write('worktree.conf', 'core - env/x\nsetting copilot=on\n');
   });
 
   it('starts it on a reserved pair of ports, points the backend at it, shows it and stops it', () => {
@@ -366,16 +366,16 @@ describe('etendo-go plugin: Copilot with `copilot on`', () => {
     assert.match(runHook('status', { spaPort: 3105 }).stdout, /^Copilot\t.*\(stopped\)$/m);
   });
 
-  it('does nothing without `copilot on`, and warns when the module is not in the checkout', () => {
+  it('does nothing without `setting copilot=on`, and warns when the module is not in the checkout', () => {
     write('worktree.conf', 'core - env/x\n');
     const off = runHook('up', { spaPort: 3105, worktree: 'w1', pathPrefix: bin });
     assert.doesNotMatch(off.all, /Copilot/);
     assert.doesNotMatch(runHook('status', { spaPort: 3105 }).stdout, /Copilot/);
 
-    write('worktree.conf', 'core - env/x\ncopilot on\n');
+    write('worktree.conf', 'core - env/x\nsetting copilot=on\n');
     rmSync(join(env, 'modules', 'com.etendoerp.copilot'), { recursive: true });
     const missing = runHook('up', { spaPort: 3105, worktree: 'w1', pathPrefix: bin });
-    assert.match(missing.stderr, /copilot on, but .*run\.py is not in this checkout/);
+    assert.match(missing.stderr, /setting copilot=on, but .*run\.py is not in this checkout/);
     for (const rel of ESCAPED_FILES) assert.match(read(rel), /^copilot\.host=host\.docker\.internal$/m, rel);
   });
 });
