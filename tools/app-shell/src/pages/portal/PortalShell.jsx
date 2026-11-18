@@ -442,7 +442,8 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
                         <PortalTag
                           tone={badge.tone}
                           palette="figma"
-                          className="rounded-full px-2 py-1 font-normal"
+                          // Figma pill: 24px tall, 10px each side (Badge 4px 8px + Wrap 0 2px), not a circle.
+                          className="h-6 rounded-full px-2.5 py-0 font-normal"
                           testId="portal-nav-count"
                           data-testid="PortalTag__a5d12f">
                           {badge.count}
