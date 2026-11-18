@@ -440,8 +440,8 @@ describe('SendDocumentModal', () => {
   it('shows duplicate state as an error (nothing was sent) and keeps the modal open', async () => {
     const user = userEvent.setup();
     global.fetch.mockResolvedValueOnce({
-      ok: false,
-      status: 409,
+      ok: true,
+      status: 200,
       json: async () => ({
         response: { data: { status: 'DUPLICATE' } },
       }),
@@ -1028,8 +1028,8 @@ describe('SendDocumentModal — onSent success callback (ETP-5069)', () => {
     const user = userEvent.setup();
     const onSent = vi.fn();
     global.fetch.mockResolvedValueOnce({
-      ok: false,
-      status: 409,
+      ok: true,
+      status: 200,
       json: async () => ({ response: { data: { status: 'DUPLICATE', auditId: 'aud-2' } } }),
     });
 
