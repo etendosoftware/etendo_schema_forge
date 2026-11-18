@@ -254,6 +254,22 @@ describe('sanitizeEventProperties', () => {
     });
   });
 
+  // ETP-6072 — tenant_type is a closed set of strings: anything else is dropped, never passed through.
+  it('keeps tenant_type only when it is demo or productive', () => {
+    expect(sanitizeEventProperties({ tenant_type: 'demo' })).toEqual({ tenant_type: 'demo' });
+    expect(sanitizeEventProperties({ tenant_type: 'productive' })).toEqual({ tenant_type: 'productive' });
+  });
+
+  it.each([
+    ['an unknown value', 'free'],
+    ['the backend casing', 'PRODUCTIVE'],
+    ['a list', ['demo']],
+    ['a boolean', true],
+    ['an empty string', ''],
+  ])('drops tenant_type when it is %s', (_label, value) => {
+    expect(sanitizeEventProperties({ tenant_type: value, category: 'sales' })).toEqual({ category: 'sales' });
+  });
+
   it('returns empty object for empty input', () => {
     expect(sanitizeEventProperties({})).toEqual({});
   });

@@ -158,6 +158,7 @@ Wait for that exact confirmation before proceeding.
 ## Step 12: Open PR
 Execute:
   gh pr create \
+    --assignee @me \
     --title "<pr_title_prefix> <summary>" \
     --base <base_branch> \
     --head <branch_name> \

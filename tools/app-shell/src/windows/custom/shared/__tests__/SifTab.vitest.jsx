@@ -1161,6 +1161,23 @@ describe('SifTab', () => {
       expect(screen.queryByText(/^F3 - /)).not.toBeInTheDocument();
     });
 
+    // ETP-5747 CP-6: a rectificative invoice is only ever R1-R5 for VERI*FACTU.
+    it('offers only R1-R5 on a rectificative invoice', () => {
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', isRectificative: true } })} />);
+      ['R1', 'R2', 'R3', 'R4', 'R5'].forEach((v) => {
+        expect(screen.getByText(`${v} - sifDataTabs.option.vf${v}`)).toBeInTheDocument();
+      });
+      expect(screen.queryByText(/^F[1-3] - sifDataTabs\.option\.vf/)).not.toBeInTheDocument();
+      // ETP-6179's mandatory mark still renders with the filtered list.
+      expect(screen.getByTestId('RequiredMark__sif_sif-vfInvType')).toBeInTheDocument();
+    });
+
+    // A legacy F1 still stored on a rectificative keeps its label on the trigger, not blank.
+    it('keeps the label of a non-R value stored on a rectificative invoice', () => {
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', isRectificative: true, etvfacInvType: 'F1' } })} />);
+      expect(document.querySelector('#sif-vfInvType')).toHaveTextContent('F1 - sifDataTabs.option.vfF1');
+    });
+
     // One "CODE - Label" format: a locale label that already starts with its code
     // ("F1 - Factura…", the real VERI*FACTU labels) is shown as it is, so the code never doubles.
     it('shows the code once when the translated label already starts with it', () => {
@@ -1535,33 +1552,68 @@ describe('SifTab', () => {
       expect(rCalls).toHaveLength(2);
     });
 
-    it('sales: never overrides a type the user picked in the Select', () => {
-      const onChange = vi.fn();
-      const props = (claveTipo) => makeProps({
-        data: { documentStatus: 'DR', isRectificative: true, aeatsiiClaveTipo: claveTipo },
-        onChange,
+    // ETP-5747 review W1 repro: the server enforces 'R' on a sales rectificative draft, so the
+    // Select must not offer F1/F2/F4 there — a pick would silently revert to R after the save.
+    it('sales: the type Select offers only R on a rectificative invoice', () => {
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', isRectificative: true, aeatsiiClaveTipo: 'R' },
+      })} />);
+      expect(screen.getByTestId('mock-select-option-R')).toBeInTheDocument();
+      ['F1', 'F2', 'F4'].forEach((v) => {
+        expect(screen.queryByTestId(`mock-select-option-${v}`)).not.toBeInTheDocument();
       });
-      const { rerender } = render(<SifTab {...props('R')} />);
-      fireEvent.click(screen.getByTestId('mock-select-option-F1'));
-      expect(onChange).toHaveBeenCalledWith('aeatsiiClaveTipo', 'F1');
-      rerender(<SifTab {...props('F1')} />);
-      expect(onChange).not.toHaveBeenCalledWith('aeatsiiClaveTipo', 'R');
+      // ETP-6179's mandatory marks still render with the filtered list.
+      expect(screen.getByTestId('RequiredMark__sif_sif-siiType')).toBeInTheDocument();
+      expect(screen.getByTestId('RequiredMark__sif_sif-siiMotivoRectif')).toBeInTheDocument();
     });
 
-    it('sales: a type picked on one record does not block the R default on the next record', () => {
+    it('sales: a non-R type still held by a rectificative keeps its label on the trigger', () => {
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', isRectificative: true, aeatsiiClaveTipo: 'F1' },
+      })} />);
+      expect(document.querySelector('#sif-siiType')).toHaveTextContent('F1 - sifDataTabs.option.invoice');
+    });
+
+    it('sales: a plain invoice keeps every SII type', () => {
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiClaveTipo: 'F1' } })} />);
+      ['F1', 'F2', 'F4', 'R'].forEach((v) => {
+        expect(screen.getByTestId(`mock-select-option-${v}`)).toBeInTheDocument();
+      });
+    });
+
+    // The "only R" filter is sales-only: purchase types have no 'R', so filtering a purchase
+    // rectificative would leave the Select empty.
+    it('purchase: the type Select keeps every purchase type on a rectificative invoice', () => {
+      render(<SifTab {...makeProps({
+        apiBaseUrl: '/sws/neo/purchase-invoice',
+        data: { documentStatus: 'DR', isRectificative: true, aeatsiiClaveTipoFc: 'F1' },
+      })} />);
+      ['F6', 'LC', 'F5', 'F1'].forEach((v) => {
+        expect(screen.getByTestId(`mock-select-option-${v}`)).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('mock-select-option-R')).not.toBeInTheDocument();
+    });
+
+    it('sales: a refetch carrying a non-R type re-fires R, and data holding R does not fire again', () => {
       const onChange = vi.fn();
-      const props = (recordId, claveTipo) => makeProps({
-        recordId,
+      const props = (claveTipo) => makeProps({
+        recordId: 'inv-1',
         data: { documentStatus: 'DR', isRectificative: true, aeatsiiClaveTipo: claveTipo },
         onChange,
       });
-      const { rerender } = render(<SifTab {...props('inv-A', 'R')} />);
-      fireEvent.click(screen.getByTestId('mock-select-option-F1'));
-      rerender(<SifTab {...props('inv-A', 'F1')} />);
-      expect(onChange).not.toHaveBeenCalledWith('aeatsiiClaveTipo', 'R');
+      const rCalls = () => onChange.mock.calls.filter(([f, v]) => f === 'aeatsiiClaveTipo' && v === 'R');
 
-      rerender(<SifTab {...props('inv-B', 'F1')} />);
-      expect(onChange).toHaveBeenLastCalledWith('aeatsiiClaveTipo', 'R');
+      const { rerender } = render(<SifTab {...props('R')} />);
+      expect(rCalls()).toHaveLength(0);
+
+      // Refetch replaces the record data with the stored F1.
+      rerender(<SifTab {...props('F1')} />);
+      expect(rCalls()).toHaveLength(1);
+
+      // The pending 'R' lands in data: no further call (no loop).
+      rerender(<SifTab {...props('R')} />);
+      rerender(<SifTab {...props('R')} />);
+      expect(rCalls()).toHaveLength(1);
     });
 
     it('sales: sets R when isRectificative flips from false to true on the same record', () => {

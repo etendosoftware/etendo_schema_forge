@@ -126,6 +126,9 @@ TITLE="Feature ETP-1234: Some description"
 printf '%s' "$TITLE" | LC_ALL=C grep -q "[\"'\\\`$]" && echo "REJECTED: prohibited char" || echo "ok"
 ```
 
+Always pass `--assignee @me`, so the PR is assigned to whoever creates it (another handle only
+when the user names one).
+
 Same convention as commits otherwise: `Feature ETP-1234: Description`, `Epic ETP-1234: ...`,
 `Issue #N: ...`.
 

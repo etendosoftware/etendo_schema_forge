@@ -1,8 +1,8 @@
 {
-  "version": "0.94.0",
+  "version": "0.95.0",
   "generatedAt": "2026-10-19T17:29:21.531Z",
-  "updatedAt": "2026-11-05T13:33:52.854Z",
-  "checksum": "04aee433b679c46b",
+  "updatedAt": "2026-11-18T15:10:53.247Z",
+  "checksum": "88aacfce30a7e237",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -1640,8 +1640,8 @@
             "apiKey": "eTGOCurrencyRate",
             "column": "EM_ETGO_Currency_Rate",
             "label": "EM_ETGO_Currency_Rate",
-            "type": "string",
-            "tsType": "string",
+            "type": "decimal",
+            "tsType": "number",
             "visibility": "editable",
             "required": false,
             "grid": false,
@@ -4428,7 +4428,7 @@
             "name": "eTGOCurrencyRate",
             "apiKey": "eTGOCurrencyRate",
             "column": "EM_ETGO_Currency_Rate",
-            "type": "string",
+            "type": "decimal",
             "visibility": "editable",
             "required": false
           },
@@ -9025,7 +9025,7 @@
         "entity": "header",
         "field": "eTGOCurrencyRate",
         "runner": "node",
-        "description": "Field 'eTGOCurrencyRate' should have type 'string' in header"
+        "description": "Field 'eTGOCurrencyRate' should have type 'number' in header"
       },
       {
         "id": "t-field-type-header-eTGODeliveryStatus",

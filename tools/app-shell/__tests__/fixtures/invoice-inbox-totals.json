@@ -411,6 +411,50 @@
       }
     },
     {
+      "name": "a non-numeric taxRate (empty or text) falls back to the resolved tax's rate",
+      "lines": [
+        {
+          "quantity": 1,
+          "unitPrice": 10,
+          "taxRate": "",
+          "tax": {
+            "state": "resolved",
+            "rate": 21
+          }
+        },
+        {
+          "quantity": 1,
+          "unitPrice": 10,
+          "taxRate": "abc",
+          "tax": {
+            "state": "resolved",
+            "rate": 21
+          }
+        }
+      ],
+      "expected": {
+        "lines": [
+          {
+            "unit6": "10.000000",
+            "net": "10.00"
+          },
+          {
+            "unit6": "10.000000",
+            "net": "10.00"
+          }
+        ],
+        "base": "20.00",
+        "taxes": [
+          {
+            "rate": 21,
+            "base": "20.00",
+            "amount": "4.20"
+          }
+        ],
+        "linesTotal": "24.20"
+      }
+    },
+    {
       "name": "rate rounded to two decimals before grouping (10.555 is 10.56)",
       "lines": [
         {

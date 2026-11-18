@@ -6,7 +6,6 @@ import {toast} from 'sonner';
 import {SquareCheckbox} from './SquareCheckbox';
 import RequiredMark from '@/components/ui/required-mark.jsx';
 import {CopyButton} from '@/components/ui/copy-button.jsx';
-import {TONE_STYLES} from '@/components/ui/status-tag-tokens.js';
 import {
     DEFAULT_COUNTRY_LIMIT,
     DEFAULT_COUNTRY_QUERY,
@@ -86,6 +85,12 @@ const ADDRESS_PREVIEW_BADGE_BY_STATE = {
  * a locked pill with the truncated value, and a copy button. `testId` is reused as the base for
  * the copy button's id (`${testId}-copy`) — callers pass the existing
  * `location-legacy-banner-address{1,2}` ids unchanged.
+ *
+ * CP-7 (ETP-5806 QA, Isa) — the copy button stays icon-only, matching the shared `CopyButton`
+ * primitive's only other call site in the codebase (`CopyBlock` in
+ * `@etendosoftware/app-shell-core/components/ui/copy-button.jsx`), which never passes a `label`.
+ * An earlier round added `label={ui('copy')}` here on a misread of the Figma "Pop Up Alert"
+ * reference; Isa confirmed the icon-only button was fine as-is.
  */
 function LegacyAddressLineRow({ label, value, testId }) {
     return (
@@ -569,9 +574,10 @@ export default function LocationEditorModal({
     // ETP-5806 — true for an EXISTING record that has free-text Address1/Address2 but none of
     // the 3 structured fields; drives the legacy-address warning banner.
     const [isLegacyAddress, setIsLegacyAddress] = useState(false);
-    // ETP-5806 follow-up — lets the user dismiss the legacy-address banner once they have
-    // copied what they needed into Street/Number/Building Name. Reset on every modal open
-    // (see the reset block below) so it never carries over into the next record.
+    // CP-7 (ETP-5806 QA, Isa) — local dismiss state for the legacy-address banner's "X". Reset
+    // to false by the same "Reset and load data on open" effect that seeds `isLegacyAddress`
+    // (keyed on `open`, below) — so dismissing it does not persist across closing and reopening
+    // the modal, even for the same record: nothing was saved, so the warning must come back.
     const [legacyBannerDismissed, setLegacyBannerDismissed] = useState(false);
     const [countryPickerOpen, setCountryPickerOpen] = useState(false);
     const [countryQuery, setCountryQuery] = useState('');
@@ -1237,6 +1243,40 @@ export default function LocationEditorModal({
         }
     }
 
+    // CP-9 (ETP-5806 QA, Isa) — Escape closes, Enter saves. This is a hand-rolled
+    // `role="dialog"` div with no keyboard handling of its own (not built on a shared
+    // Dialog primitive that might already supply it), matching the convention used by
+    // other plain-div dialogs in this codebase (see ConfirmInOutModal.jsx's
+    // `onKeyDown={e => e.key === 'Escape' && onClose()}` on its own root).
+    //
+    // Escape is routed to the innermost open thing first — the country/region picker,
+    // if either is open — exactly like RecordCreateModal's own comment on this: "Escape
+    // belongs to the innermost dismissable thing". Without this, Escape while a picker is
+    // open would bubble past it (both pickers currently close only via their own X button
+    // or an outside click) straight to this handler and close the WHOLE modal instead of
+    // just the picker.
+    //
+    // Enter saves via the same `handleSave` the Save button calls, so it goes through the
+    // identical `saveDisabled`/`attemptedSave` gating — no second save path to keep in
+    // sync. Enter is ignored while a picker is open (its own search input has no Enter
+    // behavior of its own yet, so letting it fall through would save the form instead of
+    // doing nothing) and inside a <textarea> (none exist here today, but a literal newline
+    // must never be hijacked into a submit if one is added later).
+    function handleDialogKeyDown(e) {
+        if (e.key === 'Escape') {
+            if (countryPickerOpen) { setCountryPickerOpen(false); return; }
+            if (regionPickerOpen) { setRegionPickerOpen(false); return; }
+            onClose();
+            return;
+        }
+        if (e.key === 'Enter') {
+            if (countryPickerOpen || regionPickerOpen) return;
+            if (e.target?.tagName === 'TEXTAREA') return;
+            e.preventDefault();
+            handleSave();
+        }
+    }
+
     if (!open) return null;
 
     const INPUT = {
@@ -1275,8 +1315,15 @@ export default function LocationEditorModal({
         // dialog stays usable (useForeignDialog). Without it a tour that opens this
         // modal dims it from above and the user cannot type. It is also simply
         // correct a11y for a focus-trapping overlay.
-        <div role="dialog" aria-modal="true" data-testid="location-modal" style={{ position: 'fixed', inset: 0, zIndex: 150, background: 'hsl(var(--foreground) / .35)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ background: 'hsl(var(--card))', borderRadius: 16, boxShadow: '0 8px 40px hsl(var(--foreground) / .18)', width: '100%', maxWidth: 560, margin: 16, display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 64px)', animation: 'fm-modal-in .2s cubic-bezier(.4,0,.2,1)' }}>
+        <div role="dialog" aria-modal="true" data-testid="location-modal" onKeyDown={handleDialogKeyDown} style={{ position: 'fixed', inset: 0, zIndex: 150, background: 'hsl(var(--foreground) / .35)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {/* ETP-5806 CP-6 (Isa) — maxWidth raised from 560 to 680 so the "Primera línea"
+                preview pill (location-resulting-address1) always fits on one line, even at
+                the real worst case: Address1 is capped at 60 chars
+                (ADDRESS_LINE_MAX_LENGTH in schema_forge_core's locationAddress.js). At 560
+                the available text width (~372px after padding/label/icon/border) was a few
+                px short of a 60-char line at this font size; 680 clears it with margin.
+                Verified visually at localhost:3100 with a synthetic 60-char Primera línea. */}
+            <div style={{ background: 'hsl(var(--card))', borderRadius: 16, boxShadow: '0 8px 40px hsl(var(--foreground) / .18)', width: '100%', maxWidth: 680, margin: 16, display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 64px)', animation: 'fm-modal-in .2s cubic-bezier(.4,0,.2,1)' }}>
 
                 {/* Header */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 20px 0', gap: 12 }}>
@@ -1326,56 +1373,66 @@ export default function LocationEditorModal({
                                 form.streetName/buildingNumber/buildingName here: that was the bug
                                 — as soon as the user pasted the old first line into Calle, the
                                 second line vanished from the (then reactive) preview before they
-                                had a chance to copy it. */}
+                                had a chance to copy it.
+
+                                CP-7 (ETP-5806 QA, Isa) — the dismiss "X" stays: an earlier round
+                                removed it reading Figma's "Pop Up Alert" reference as having no
+                                dismiss control, but Isa confirmed the X should be there. Dismissal
+                                is local component state (`legacyBannerDismissed`), reset whenever
+                                `isLegacyAddress` is re-seeded (new record loaded/opened) — see the
+                                `useEffect`s calling `setIsLegacyAddress`. */}
                             {structuredAddressEnabled && isLegacyAddress && !legacyBannerDismissed && (
                                 <div
                                     data-testid="location-legacy-address-banner"
-                                    style={{
-                                        display: 'flex', flexDirection: 'column', gap: 8,
-                                        padding: '10px 12px', borderRadius: 8,
-                                        border: `1px solid ${TONE_STYLES.info.color}33`,
-                                        background: TONE_STYLES.info.background,
-                                    }}
+                                    className="border-l-2 rounded-[0_8px_8px_0] border-status-info-border bg-status-info"
+                                    style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 12px' }}
                                 >
-                                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                                            <Info
-                                                size={16}
-                                                style={{ color: TONE_STYLES.info.color, flexShrink: 0, marginTop: 1 }}
-                                                data-testid="Info__location-legacy-banner" />
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                                        <Info
+                                            size={16}
+                                            className="text-status-info-foreground"
+                                            style={{ flexShrink: 0, marginTop: 1 }}
+                                            data-testid="Info__location-legacy-banner" />
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                                <div style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
+                                                <div className="text-status-info-foreground" style={{ fontSize: 13, fontWeight: 600 }}>
                                                     {ui('legacyAddressBannerTitle')}
                                                 </div>
-                                                <div style={{ fontSize: 13, color: 'hsl(var(--foreground))' }}>
+                                                <div className="text-status-info-foreground" style={{ fontSize: 13 }}>
                                                     {ui('legacyAddressWarning')}
                                                 </div>
                                             </div>
+                                            {/* Nested inside the title/description column (not as a sibling of
+                                                the icon row) so its left edge lines up with the banner text
+                                                instead of the icon — a sibling here renders flush with the
+                                                icon's own left edge, visibly "corrido" relative to the text
+                                                above it. */}
+                                            <LegacyAddressLineRow
+                                                label={ui('legacyAddressOldTextLabel')}
+                                                value={form.address}
+                                                testId="location-legacy-banner-address1"
+                                                data-testid="LegacyAddressLineRow__927831"
+                                            />
+                                            {Boolean(form.address2) && (
+                                                <LegacyAddressLineRow
+                                                    label={ui('legacyAddressOldTextLabel2')}
+                                                    value={form.address2}
+                                                    testId="location-legacy-banner-address2"
+                                                    data-testid="LegacyAddressLineRow__927831"
+                                                />
+                                            )}
                                         </div>
                                         <button
                                             type="button"
                                             onClick={() => setLegacyBannerDismissed(true)}
-                                            aria-label={ui('close')}
+                                            aria-label={ui('dismiss')}
                                             data-testid="location-legacy-banner-dismiss"
-                                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, flexShrink: 0, display: 'flex', alignItems: 'center' }}
+                                            className="text-status-info-foreground rounded-full p-1 transition-colors hover:bg-status-info-border/20"
+                                            style={{ flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer' }}
                                         >
-                                            <X size={14} style={{ color: 'hsl(var(--text-disabled))' }} data-testid="X__location-legacy-banner-dismiss" />
+                                            <X size={14} data-testid="X__location-legacy-banner" />
                                         </button>
                                     </div>
-                                    <LegacyAddressLineRow
-                                        label={ui('legacyAddressOldTextLabel')}
-                                        value={form.address}
-                                        testId="location-legacy-banner-address1"
-                                        data-testid="LegacyAddressLineRow__927831"
-                                    />
-                                    {Boolean(form.address2) && (
-                                        <LegacyAddressLineRow
-                                            label={ui('legacyAddressOldTextLabel2')}
-                                            value={form.address2}
-                                            testId="location-legacy-banner-address2"
-                                            data-testid="LegacyAddressLineRow__927831"
-                                        />
-                                    )}
                                 </div>
                             )}
 
@@ -1635,12 +1692,13 @@ export default function LocationEditorModal({
                             // (tools/app-shell/src/walkthrough/flows/create-contact.json).
                             // Renaming it breaks a shipped tour.
                             data-testid="location-save"
-                            // Colours live in classes, not in `style`: an inline `background`
-                            // beats any Tailwind rule including :hover, so the brand-yellow
-                            // hover every other primary action has (ListView's "+ Nuevo
-                            // contacto", RecordCreateModal / InlineCreateModal's save) could
-                            // never paint. Geometry stays inline — it is not themed.
-                            className="border border-[hsl(var(--foreground))] bg-[hsl(var(--foreground))] text-[hsl(var(--card))] transition-colors enabled:hover:border-[hsl(var(--accent-highlight))] enabled:hover:bg-[hsl(var(--accent-highlight))] enabled:hover:text-[hsl(var(--accent-highlight-foreground))]"
+                            // CP-7 (ETP-5806 QA, Isa) — standard primary-action blue, matching
+                            // `InlineCreateModal`'s actual submit button (`inline-create-submit`:
+                            // `bg-primary text-primary-foreground` / `enabled:hover:bg-primary/90`).
+                            // A previous comment here claimed the black/lime pattern below
+                            // "matches every other primary action... including InlineCreateModal's
+                            // save" — that was factually wrong; InlineCreateModal uses `bg-primary`.
+                            className="border border-primary bg-primary text-primary-foreground transition-colors enabled:hover:bg-primary/90"
                             style={{ font: '600 14px/20px system-ui', padding: '9px 20px', borderRadius: 20, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, opacity: saveDisabled ? 0.5 : 1 }}
                         >
                             {saving && <Loader2

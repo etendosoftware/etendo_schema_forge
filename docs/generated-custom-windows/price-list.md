@@ -77,3 +77,7 @@ The product-prices `CustomLines` now receive `editing=false` when the role tier 
 ## Agent prompt on prices — ETP-5852
 
 `priceListLine.agentPrompt`: there is no bulk price update (in the app either); agents list a version's prices, confirm the new ones with the user and update them one by one. Feedback M-175.
+
+## Rate and cost fields are numeric — ETP-6342
+
+Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. **Cost** (`cost`, `Cost`) on `productPrice` is now `decimal` in the contract (`tsType: number`): the generated form renders it as a number input, without the former 12-character `maxLength`.

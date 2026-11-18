@@ -1,8 +1,8 @@
 {
-  "version": "0.2.1",
+  "version": "0.4.0",
   "generatedAt": "2026-11-03T14:49:56.386Z",
-  "updatedAt": "2026-11-03T14:50:17.594Z",
-  "contractChecksum": "c56db59e273c80c1",
+  "updatedAt": "2026-11-17T16:54:48.911Z",
+  "contractChecksum": "474f1c6317c8daa9",
   "apiPrediction": {
     "specName": "invoice-inbox",
     "baseUrl": "/sws/neo/invoice-inbox",
@@ -47,6 +47,14 @@
         "reference": "Invoice",
         "inputMode": "search",
         "url": "/sws/neo/invoice-inbox/header/selectors/duplicateOfInvoice"
+      },
+      {
+        "entity": "header",
+        "field": "currency",
+        "column": "C_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/invoice-inbox/header/selectors/currency"
       }
     ],
     "actions": [],
@@ -142,6 +150,20 @@
             "readOnly": true,
             "required": true,
             "defaultValue": "@#Date@"
+          },
+          "currency": {
+            "readOnly": true
+          },
+          "errorDetail": {
+            "readOnly": true
+          },
+          "newProducts": {
+            "readOnly": true
+          },
+          "totalMismatch": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
           }
         }
       }
@@ -172,5 +194,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "5a39589254a3daf6"
+  "checksum": "7c51b224bee6de86"
 }

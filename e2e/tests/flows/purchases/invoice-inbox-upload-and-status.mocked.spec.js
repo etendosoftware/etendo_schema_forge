@@ -9,6 +9,11 @@
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/useInvoiceInboxDiscard.js
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxDiscardDialog.jsx
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxRowActions.jsx
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxConfirmDialog.jsx
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/useInvoiceInboxConfirm.js
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxConfirmModel.js
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxCells.jsx
+// @covers tools/app-shell/src/windows/custom/invoice-inbox/InvoiceInboxInvoiceLink.jsx
 import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 
@@ -52,6 +57,10 @@ async function installInboxMock(page, state) {
   state.listRequests = [];
   state.uploads = [];
   state.discards = [];
+  state.confirms = [];
+  state.inFlight = 0;
+  state.maxInFlight = 0;
+  state.invoiceSeq = 0;
   await page.route(`**/sws/neo/${SPEC}/**`, async (route) => {
     const req = route.request();
     const url = new URL(req.url());
@@ -80,6 +89,34 @@ async function installInboxMock(page, state) {
       await route.fulfill({
         status: 200, contentType: 'application/json',
         body: JSON.stringify({ id, status: 'DISCARDED', discardedAt: '2026-08-10T09:30:00Z', alreadyDiscarded: false }),
+      });
+      return;
+    }
+    const confirm = url.pathname.match(/\/header\/([^/]+)\/action\/confirm$/);
+    if (req.method() === 'POST' && confirm) {
+      const id = decodeURIComponent(confirm[1]);
+      state.confirms.push(id);
+      state.inFlight += 1;
+      state.maxInFlight = Math.max(state.maxInFlight, state.inFlight);
+      await new Promise((resolve) => { setTimeout(resolve, state.confirmDelay ?? 120); });
+      state.inFlight -= 1;
+      const forced = state.confirmRefuse?.[id];
+      if (forced === 'abort') { await route.abort('failed'); return; }
+      if (forced) {
+        await route.fulfill({ status: forced.status, contentType: 'application/json', body: JSON.stringify({ error: forced.error }) });
+        return;
+      }
+      state.invoiceSeq += 1;
+      const documentNo = state.docNos?.[id] ?? `FC${1000142 + state.invoiceSeq}`;
+      const target = state.rows.find((r) => r.id === id);
+      if (target) { target.status = 'CONFIRMED'; target.invoice = `inv-${id}`; target['invoice$documentNo'] = documentNo; }
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          id, status: 'CONFIRMED', invoice: { id: `inv-${id}`, documentNo, identifier: documentNo },
+          adjusted: false, createdVendor: false, createdProducts: state.createdProducts?.[id] ?? 0,
+          totalMismatch: Boolean(state.mismatch?.has(id)), alreadyConfirmed: false,
+        }),
       });
       return;
     }
@@ -188,14 +225,18 @@ test.describe('Invoice Inbox', () => {
     expect(state.listRequests.some((r) => r.criteria.some((c) => c.fieldName === 'id' && c.operator === 'inSet'))).toBe(true);
   });
 
-  test('the batch bar shows the selection with Discard enabled and Confirm disabled', async ({ page }) => {
+  test('the batch bar shows the selection with Discard and Confirm enabled for a confirmable row; Confirm is disabled, with its tooltip, for an unreadable one', async ({ page }) => {
     await openInbox(page, state);
     const reviewRow = page.locator('tr').filter({ has: page.getByTestId('invoice-inbox-document-review1') });
     await reviewRow.getByRole('checkbox').check({ force: true });
     await expect(page.getByTestId('invoice-inbox-selection-bar')).toBeVisible();
     await expect(page.getByTestId('invoice-inbox-bulk-mark-review')).toBeDisabled();
-    await expect(page.getByTestId('invoice-inbox-bulk-confirm')).toBeDisabled();
+    await expect(page.getByTestId('invoice-inbox-bulk-confirm')).toBeEnabled();
     await expect(page.getByTestId('invoice-inbox-bulk-discard')).toBeEnabled();
+    await reviewRow.getByRole('checkbox').uncheck({ force: true });
+    await page.locator('tr').filter({ has: page.getByTestId('invoice-inbox-document-err1') }).getByRole('checkbox').check({ force: true });
+    await expect(page.getByTestId('invoice-inbox-bulk-confirm')).toBeDisabled();
+    await expect(page.getByTestId('invoice-inbox-bulk-confirm').locator('xpath=..')).toHaveAttribute('title', 'Ninguno de los documentos seleccionados se puede confirmar');
   });
 
   const rowOf = (page, id) => page.locator('tr').filter({ has: page.getByTestId(`invoice-inbox-document-${id}`) });
@@ -248,5 +289,160 @@ test.describe('Invoice Inbox', () => {
     await expect(confirmed.getByTestId('invoice-inbox-row-edit-conf1')).toBeVisible();
     await expect(confirmed.getByTestId('invoice-inbox-row-discard-conf1')).toHaveCount(0);
     await expect(rowOf(page, 'proc1').getByTestId('invoice-inbox-row-actions-proc1')).toHaveCount(0);
+  });
+});
+
+test.describe('Invoice Inbox — batch confirm', () => {
+  let state;
+  const toasts = (page) => page.locator('[data-sonner-toast]');
+  const pick = async (page, ...ids) => {
+    for (const id of ids) await page.locator('tr').filter({ has: page.getByTestId(`invoice-inbox-document-${id}`) }).getByRole('checkbox').check({ force: true });
+  };
+  const openConfirm = async (page) => {
+    await page.getByTestId('invoice-inbox-bulk-confirm').click();
+    await expect(page.getByTestId('invoice-inbox-confirm-dialog')).toBeVisible();
+  };
+
+  test.beforeEach(() => {
+    state = { rows: seedRows(), confirmRefuse: {}, docNos: {}, mismatch: new Set(), createdProducts: {} };
+    state.rows.push(row('cf1', 'ERROR', { errorCode: 'CONFIRM_FAILED', grandTotalAmount: 40, invoiceDate: '2026-08-02' }));
+    state.rows.find((r) => r.id === 'review1').grandTotalAmount = 50;
+  });
+
+  test('two rows go ONE AT A TIME in list order; the toast gives the numbering range and the counters, the rows and their link update', async ({ page }) => {
+    await openInbox(page, state);
+    await pick(page, 'ready1', 'review1');
+    await openConfirm(page);
+    await expect(page.getByTestId('invoice-inbox-confirm-dialog-title')).toHaveText('Confirmar 2 facturas');
+    await expect(page.getByTestId('invoice-inbox-confirm-totals')).toContainText('150');
+    await page.getByTestId('invoice-inbox-confirm-confirm').click();
+    await expect(page.getByTestId('invoice-inbox-confirm-dialog')).toHaveCount(0);
+    expect(state.confirms).toEqual(['ready1', 'review1']);
+    expect(state.maxInFlight).toBe(1);
+    await expect(toasts(page).filter({ hasText: '2 facturas registradas en Etendo' })).toContainText('FC1000143 a FC1000144');
+    await expect(page.getByTestId('invoice-inbox-selection-bar')).toHaveCount(0);
+    // confirmed 1 -> 3, pending (PROCESSING + READY + PENDING_REVIEW) 3 -> 1
+    await expect(page.getByTestId('invoice-inbox-filter-count-confirmed')).toHaveText('3');
+    await expect(page.getByTestId('invoice-inbox-filter-count-pending')).toHaveText('1');
+  });
+
+  test('a CONFIRMED row shows "{doc} · Completada" as a link to its purchase invoice, and clicking it does not open the review panel', async ({ page }) => {
+    state.rows.find((r) => r.id === 'conf1').invoice = 'inv-conf1';
+    state.rows.find((r) => r.id === 'conf1')['invoice$documentNo'] = 'FC77';
+    await openInbox(page, state);
+    const link = page.getByTestId('invoice-inbox-status-reason-conf1');
+    await expect(link).toHaveText('FC77 · Completada');
+    await expect(link).toHaveAttribute('href', /\/purchase-invoice\/inv-conf1$/);
+    await link.click();
+    await expect(page.getByTestId('invoice-inbox-review-drawer')).toHaveCount(0);
+    await expect(page).toHaveURL(/\/purchase-invoice\/inv-conf1/);
+  });
+
+  test('non contiguous numbers are listed, not shown as a range', async ({ page }) => {
+    state.docNos = { ready1: 'FC10', review1: 'FC12' };
+    await openInbox(page, state);
+    await pick(page, 'ready1', 'review1');
+    await openConfirm(page);
+    await page.getByTestId('invoice-inbox-confirm-confirm').click();
+    const toast = toasts(page).filter({ hasText: '2 facturas registradas en Etendo' });
+    await expect(toast).toContainText('FC10, FC12');
+    await expect(toast).not.toContainText(' a FC12');
+  });
+
+  test('the dialog counts skipped rows, a failed row does not stop the others and the toast is a warning with its reason', async ({ page }) => {
+    state.confirmRefuse = { review1: { status: 409, error: { code: 'duplicate_invoice' } } };
+    await openInbox(page, state);
+    await pick(page, 'ready1', 'review1', 'err1');
+    await openConfirm(page);
+    await expect(page.getByTestId('invoice-inbox-confirm-dialog-title')).toHaveText('Confirmar 2 facturas');
+    await expect(page.getByTestId('invoice-inbox-confirm-skipped')).toContainText('1 documento seleccionado');
+    await page.getByTestId('invoice-inbox-confirm-confirm').click();
+    const toast = toasts(page).filter({ hasText: '1 no se pudo confirmar' });
+    await expect(toast).toContainText('ya existe una factura de este proveedor con el mismo número');
+    // The unreadable row is never sent.
+    expect(state.confirms).toEqual(['ready1', 'review1']);
+  });
+
+  test('a stopping code (the feature flag is off) stops the run: the rest is reported as unsent', async ({ page }) => {
+    state.confirmRefuse = { ready1: { status: 403, error: { code: 'feature_disabled' } } };
+    await openInbox(page, state);
+    await pick(page, 'ready1', 'review1');
+    await openConfirm(page);
+    await page.getByTestId('invoice-inbox-confirm-confirm').click();
+    const toast = toasts(page).filter({ hasText: '1 sin confirmar' });
+    await expect(toast).toBeVisible();
+    expect(state.confirms).toEqual(['ready1']);
+  });
+
+  test('a network failure stops the run and tells the user', async ({ page }) => {
+    state.confirmRefuse = { ready1: 'abort' };
+    await openInbox(page, state);
+    await pick(page, 'ready1', 'review1');
+    await openConfirm(page);
+    await page.getByTestId('invoice-inbox-confirm-confirm').click();
+    await expect(toasts(page).filter({ hasText: '1 sin confirmar' })).toBeVisible();
+    expect(state.confirms).toEqual(['ready1']);
+  });
+
+  test('while it runs the dialog shows the progress and ignores Escape', async ({ page }) => {
+    state.confirmDelay = 700;
+    await openInbox(page, state);
+    await pick(page, 'ready1', 'review1');
+    await openConfirm(page);
+    await page.getByTestId('invoice-inbox-confirm-confirm').click();
+    await expect(page.getByTestId('invoice-inbox-confirm-dialog-body')).toContainText(/Confirmando \d de 2/);
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('invoice-inbox-confirm-dialog')).toBeVisible();
+    await expect(page.getByTestId('invoice-inbox-confirm-confirm')).toBeDisabled();
+    await expect(page.getByTestId('invoice-inbox-confirm-dialog')).toHaveCount(0, { timeout: 10_000 });
+    expect(state.confirms).toEqual(['ready1', 'review1']);
+  });
+
+  test('a failed confirm (ERROR / CONFIRM_FAILED) is confirmable again from the batch bar', async ({ page }) => {
+    await openInbox(page, state);
+    await pick(page, 'cf1');
+    await expect(page.getByTestId('invoice-inbox-bulk-confirm')).toBeEnabled();
+    await openConfirm(page);
+    await page.getByTestId('invoice-inbox-confirm-confirm').click();
+    await expect(toasts(page).filter({ hasText: 'Factura registrada en Etendo' })).toBeVisible();
+    expect(state.confirms).toEqual(['cf1']);
+  });
+
+  test('new products and a printed-total mismatch are announced in the dialog and in the toast', async ({ page }) => {
+    state.rows.find((r) => r.id === 'ready1').newProducts = 2;
+    state.rows.find((r) => r.id === 'ready1').totalMismatch = 'Y';
+    state.createdProducts = { ready1: 2 };
+    state.mismatch = new Set(['ready1']);
+    await openInbox(page, state);
+    await pick(page, 'ready1');
+    await openConfirm(page);
+    await expect(page.getByTestId('invoice-inbox-confirm-new-products')).toContainText('2 productos nuevos');
+    await expect(page.getByTestId('invoice-inbox-confirm-mismatch')).toContainText('1 factura tiene un total impreso distinto');
+    await page.getByTestId('invoice-inbox-confirm-confirm').click();
+    const toast = toasts(page).filter({ hasText: 'Factura registrada en Etendo' });
+    await expect(toast).toContainText('2 productos creados');
+    await expect(toast).toContainText('1 con total distinto al impreso');
+  });
+
+  test('rows in two currencies show one total line per currency, and each row total is formatted in its own currency', async ({ page }) => {
+    const ready = state.rows.find((r) => r.id === 'ready1');
+    ready.currency = 'USD';
+    ready.grandTotalAmount = 100;
+    state.rows.find((r) => r.id === 'review1').currency = 'EUR';
+    await openInbox(page, state);
+    await expect(page.getByTestId('invoice-inbox-document-ready1').locator('xpath=ancestor::tr')).toContainText(/\$/);
+    await pick(page, 'ready1', 'review1');
+    await openConfirm(page);
+    await expect(page.getByTestId('invoice-inbox-confirm-total-USD')).toContainText('Importe total (USD)');
+    await expect(page.getByTestId('invoice-inbox-confirm-total-EUR')).toContainText('Importe total (EUR)');
+  });
+
+  test('Cancel sends nothing', async ({ page }) => {
+    await openInbox(page, state);
+    await pick(page, 'ready1');
+    await openConfirm(page);
+    await page.getByTestId('invoice-inbox-confirm-cancel').click();
+    await expect(page.getByTestId('invoice-inbox-confirm-dialog')).toHaveCount(0);
+    expect(state.confirms).toEqual([]);
   });
 });
