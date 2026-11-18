@@ -49,7 +49,7 @@ function Tab({ selected, onClick, testId, children }) {
   );
 }
 
-/** "Todo el tiempo" and the other ranges: the app's date-range picker, in the Figma's button. */
+/** The all-time range and the others: the app's date-range picker, in the Figma's button. */
 function DateRangeButton({ value, onChange }) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();

@@ -281,6 +281,161 @@ const RAIL_ITEM = 'flex h-8 w-full items-center rounded-lg border border-transpa
 /** A group heading ("General", "Mis documentos"). */
 const RAIL_HEADING = 'px-4 py-1 text-xs leading-6 tracking-[-0.005em] text-[#6B7280]';
 
+/** The rail's header (62px): the etendo.ai brand and, expanded, the button that collapses it. */
+function RailHeader({ collapsed, onToggle }) {
+  const ui = useUI();
+  return (
+    <div className={cn('flex h-[62px] shrink-0 items-center px-2', collapsed ? 'justify-center' : 'justify-between')}>
+      <a
+        href={ETENDO_AI_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={ui('portalCreatedWith')}
+        className="flex items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        data-testid="portal-created-with"
+      >
+        <img src="/logo-etendo-ai.png" alt="" className="h-10 w-10 shrink-0 rounded-lg" />
+        {collapsed ? null : <span className="text-lg font-semibold leading-7 tracking-[-0.01em] text-[#1B1A1F]">etendo.ai</span>}
+      </a>
+      {collapsed ? null : (
+        <button
+          type="button"
+          aria-label={ui('collapseMenu')}
+          aria-expanded
+          onClick={onToggle}
+          className={RAIL_ICON_BUTTON}
+          data-testid="portal-rail-toggle"
+        >
+          <ArrowLineLeftIcon size={20} aria-hidden="true" data-testid="ArrowLineLeft__a5d12f" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** The collapsed rail's icons: expand, the company, Inicio and "Mis documentos" with its total. */
+function RailCollapsedMenu({
+  identity, logoUrl, isActive, documentsActive, totalBadge, onToggle, onNavigate,
+}) {
+  const ui = useUI();
+  return (
+    <div className="flex flex-col gap-2">
+      <button
+        type="button"
+        aria-label={ui('expandMenu')}
+        aria-expanded={false}
+        onClick={onToggle}
+        className={RAIL_ICON_BUTTON}
+        data-testid="portal-rail-toggle"
+      >
+        <ArrowLineRightIcon size={20} aria-hidden="true" data-testid="ArrowLineRight__a5d12f" />
+      </button>
+      <PortalCompany identity={identity} logoUrl={logoUrl} collapsed data-testid="PortalCompany__a5d12f" />
+      <button
+        type="button"
+        aria-label={ui('portalNavHome')}
+        aria-current={isActive('home') ? 'page' : undefined}
+        onClick={() => onNavigate({ view: 'home' })}
+        className={cn(RAIL_ICON_BUTTON, isActive('home') ? RAIL_ACTIVE : '')}
+        data-testid="portal-nav-home"
+      >
+        <HouseSimpleIcon size={20} weight={isActive('home') ? 'fill' : 'regular'} aria-hidden="true" data-testid="HouseSimple__a5d12f" />
+      </button>
+      <button
+        type="button"
+        aria-label={ui('portalNavMyDocuments')}
+        onClick={onToggle}
+        className={cn(RAIL_ICON_BUTTON, documentsActive ? RAIL_ACTIVE : '')}
+        data-testid="portal-nav-documents"
+      >
+        <FilesIcon size={20} aria-hidden="true" data-testid="Files__a5d12f" />
+        {totalBadge > 0 ? (
+          <span
+            className="absolute -top-1.5 left-5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#F3164E] px-1 text-[11px] font-semibold leading-3 text-white"
+            data-testid="portal-nav-documents-count"
+          >
+            {/* A 36px icon cannot carry a 4-digit badge: past 99 it reads "99+"; the
+                expanded rail shows each kind's exact count. */}
+            {totalBadge > 99 ? '99+' : totalBadge}
+          </span>
+        ) : null}
+      </button>
+    </div>
+  );
+}
+
+/** One kind of the expanded rail: its name and, when something needs attention, its count chip. */
+function RailKindItem({ kind, badge, active, onNavigate }) {
+  const ui = useUI();
+  return (
+    <button
+      type="button"
+      aria-current={active ? 'page' : undefined}
+      onClick={() => onNavigate({ view: 'list', kind })}
+      className={cn(RAIL_ITEM, active ? `${RAIL_ACTIVE} font-medium` : '')}
+      data-testid={`portal-nav-${kind.toLowerCase()}`}
+    >
+      <span className="min-w-0 flex-1 truncate pl-2 pr-4">{ui(PORTAL_KIND_META[kind].pluralKey)}</span>
+      {badge ? (
+        <PortalTag
+          tone={badge.tone}
+          palette="figma"
+          // Figma pill: 24px tall, 10px each side from the outer edge (1px border + 9px), not a circle.
+          className="h-6 rounded-full px-[9px] py-0 font-normal"
+          testId="portal-nav-count"
+          data-testid="PortalTag__a5d12f">
+          {badge.count}
+        </PortalTag>
+      ) : null}
+    </button>
+  );
+}
+
+/** The expanded rail's menu: the company, "General", "Mis documentos" and the promo card. */
+function RailExpandedMenu({ identity, logoUrl, kinds, tiles, isActive, onNavigate }) {
+  const ui = useUI();
+  return (
+    <div className="flex flex-1 flex-col gap-2 pb-2">
+      <PortalCompany identity={identity} logoUrl={logoUrl} data-testid="PortalCompany__a5d12f" />
+      <div className="flex flex-col gap-1">
+        <span className={RAIL_HEADING}>{ui('portalNavGeneral')}</span>
+        <button
+          type="button"
+          aria-current={isActive('home') ? 'page' : undefined}
+          onClick={() => onNavigate({ view: 'home' })}
+          className={cn(RAIL_ITEM, isActive('home') ? `${RAIL_ACTIVE} font-medium` : '')}
+          data-testid="portal-nav-home"
+        >
+          <span className="flex shrink-0 pl-1">
+            <HouseSimpleIcon
+              size={20}
+              weight={isActive('home') ? 'fill' : 'regular'}
+              className="text-[#81848F]"
+              aria-hidden="true"
+              data-testid="HouseSimple__a5d12f" />
+          </span>
+          <span className="min-w-0 flex-1 truncate pl-2 pr-4">{ui('portalNavHome')}</span>
+        </button>
+      </div>
+      {/* Figma layer "Operaciones": no leading icon, a trailing count. */}
+      <div className="flex flex-col gap-1">
+        <span className={RAIL_HEADING}>{ui('portalNavMyDocuments')}</span>
+        {kinds.map((kind) => (
+          <RailKindItem
+            key={kind}
+            kind={kind}
+            badge={navBadgeOf(tiles, kind)}
+            active={isActive('list', kind) || isActive('doc', kind)}
+            onNavigate={onNavigate}
+            data-testid="RailKindItem__a5d12f" />
+        ))}
+      </div>
+      <div className="flex-1" />
+      <PortalPromo data-testid="PortalPromo__a5d12f" />
+    </div>
+  );
+}
+
 /**
  * The portal's frame (ETP-6209 Part B, design "Escritorio" / "Móvil"; the main screen aligned with
  * the designer's spec of 2026-11-17).
@@ -328,134 +483,32 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
         data-testid="portal-sidebar"
       >
         {/* Cabecera: 62px */}
-        <div className={cn('flex h-[62px] shrink-0 items-center px-2', collapsed ? 'justify-center' : 'justify-between')}>
-          <a
-            href={ETENDO_AI_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={ui('portalCreatedWith')}
-            className="flex items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            data-testid="portal-created-with"
-          >
-            <img src="/logo-etendo-ai.png" alt="" className="h-10 w-10 shrink-0 rounded-lg" />
-            {collapsed ? null : <span className="text-lg font-semibold leading-7 tracking-[-0.01em] text-[#1B1A1F]">etendo.ai</span>}
-          </a>
-          {collapsed ? null : (
-            <button
-              type="button"
-              aria-label={ui('collapseMenu')}
-              aria-expanded
-              onClick={toggleRail}
-              className={RAIL_ICON_BUTTON}
-              data-testid="portal-rail-toggle"
-            >
-              <ArrowLineLeftIcon size={20} aria-hidden="true" data-testid="ArrowLineLeft__a5d12f" />
-            </button>
-          )}
-        </div>
+        <RailHeader
+          collapsed={collapsed}
+          onToggle={toggleRail}
+          data-testid="RailHeader__a5d12f" />
 
         {/* Menu list */}
         <div className={cn('flex min-h-0 flex-1 flex-col overflow-y-auto', collapsed ? 'pl-2' : 'px-2')}>
           {collapsed ? (
-            <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                aria-label={ui('expandMenu')}
-                aria-expanded={false}
-                onClick={toggleRail}
-                className={RAIL_ICON_BUTTON}
-                data-testid="portal-rail-toggle"
-              >
-                <ArrowLineRightIcon size={20} aria-hidden="true" data-testid="ArrowLineRight__a5d12f" />
-              </button>
-              <PortalCompany identity={identity} logoUrl={logoUrl} collapsed data-testid="PortalCompany__a5d12f" />
-              <button
-                type="button"
-                aria-label={ui('portalNavHome')}
-                aria-current={isActive('home') ? 'page' : undefined}
-                onClick={() => onNavigate({ view: 'home' })}
-                className={cn(RAIL_ICON_BUTTON, isActive('home') ? RAIL_ACTIVE : '')}
-                data-testid="portal-nav-home"
-              >
-                <HouseSimpleIcon size={20} weight={isActive('home') ? 'fill' : 'regular'} aria-hidden="true" data-testid="HouseSimple__a5d12f" />
-              </button>
-              <button
-                type="button"
-                aria-label={ui('portalNavMyDocuments')}
-                onClick={toggleRail}
-                className={cn(RAIL_ICON_BUTTON, documentsActive ? RAIL_ACTIVE : '')}
-                data-testid="portal-nav-documents"
-              >
-                <FilesIcon size={20} aria-hidden="true" data-testid="Files__a5d12f" />
-                {totalBadge > 0 ? (
-                  <span
-                    className="absolute -top-1.5 left-5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#F3164E] px-1 text-[11px] font-semibold leading-3 text-white"
-                    data-testid="portal-nav-documents-count"
-                  >
-                    {/* A 36px icon cannot carry a 4-digit badge: past 99 it reads "99+"; the
-                        expanded rail shows each kind's exact count. */}
-                    {totalBadge > 99 ? '99+' : totalBadge}
-                  </span>
-                ) : null}
-              </button>
-            </div>
+            <RailCollapsedMenu
+              identity={identity}
+              logoUrl={logoUrl}
+              isActive={isActive}
+              documentsActive={documentsActive}
+              totalBadge={totalBadge}
+              onToggle={toggleRail}
+              onNavigate={onNavigate}
+              data-testid="RailCollapsedMenu__a5d12f" />
           ) : (
-            <div className="flex flex-1 flex-col gap-2 pb-2">
-              <PortalCompany identity={identity} logoUrl={logoUrl} data-testid="PortalCompany__a5d12f" />
-              <div className="flex flex-col gap-1">
-                <span className={RAIL_HEADING}>{ui('portalNavGeneral')}</span>
-                <button
-                  type="button"
-                  aria-current={isActive('home') ? 'page' : undefined}
-                  onClick={() => onNavigate({ view: 'home' })}
-                  className={cn(RAIL_ITEM, isActive('home') ? `${RAIL_ACTIVE} font-medium` : '')}
-                  data-testid="portal-nav-home"
-                >
-                  <span className="flex shrink-0 pl-1">
-                    <HouseSimpleIcon
-                      size={20}
-                      weight={isActive('home') ? 'fill' : 'regular'}
-                      className="text-[#81848F]"
-                      aria-hidden="true"
-                      data-testid="HouseSimple__a5d12f" />
-                  </span>
-                  <span className="min-w-0 flex-1 truncate pl-2 pr-4">{ui('portalNavHome')}</span>
-                </button>
-              </div>
-              {/* Figma layer "Operaciones": no leading icon, a trailing count. */}
-              <div className="flex flex-col gap-1">
-                <span className={RAIL_HEADING}>{ui('portalNavMyDocuments')}</span>
-                {kinds.map((kind) => {
-                  const badge = navBadgeOf(tiles, kind);
-                  const active = isActive('list', kind) || isActive('doc', kind);
-                  return (
-                    <button
-                      key={kind}
-                      type="button"
-                      aria-current={active ? 'page' : undefined}
-                      onClick={() => onNavigate({ view: 'list', kind })}
-                      className={cn(RAIL_ITEM, active ? `${RAIL_ACTIVE} font-medium` : '')}
-                      data-testid={`portal-nav-${kind.toLowerCase()}`}
-                    >
-                      <span className="min-w-0 flex-1 truncate pl-2 pr-4">{ui(PORTAL_KIND_META[kind].pluralKey)}</span>
-                      {badge ? (
-                        <PortalTag
-                          tone={badge.tone}
-                          palette="figma"
-                          // Figma pill: 24px tall, 10px each side from the outer edge (1px border + 9px), not a circle.
-                          className="h-6 rounded-full px-[9px] py-0 font-normal"
-                          testId="portal-nav-count"
-                          data-testid="PortalTag__a5d12f">
-                          {badge.count}
-                        </PortalTag>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="flex-1" />
-              <PortalPromo data-testid="PortalPromo__a5d12f" />
-            </div>
+            <RailExpandedMenu
+              identity={identity}
+              logoUrl={logoUrl}
+              kinds={kinds}
+              tiles={tiles}
+              isActive={isActive}
+              onNavigate={onNavigate}
+              data-testid="RailExpandedMenu__a5d12f" />
           )}
         </div>
 

@@ -212,6 +212,26 @@ class ResultBoundary extends Component {
   }
 }
 
+/** The result's title and description: what was just applied, else what the decision's state says. */
+function decisionResultCopy(decision, ui) {
+  if (decision.state === PORTAL_DECISION_STATE.confirmed && decision.appliedNow) {
+    const accepted = decision.decision === 'ACCEPT';
+    return {
+      title: ui(accepted ? 'portalDecisionAcceptedTitle' : 'portalDecisionRejectedTitle'),
+      description: ui(accepted ? 'portalDecisionAcceptedDescription' : 'portalDecisionRejectedDescription'),
+    };
+  }
+  const copy = STATE_COPY[decision.state] ?? STATE_COPY[PORTAL_DECISION_STATE.notPending];
+  const params = { number: decision.documentNo ?? '', tenantName: decision.tenantName ?? '' };
+  return { title: ui(copy.titleKey), description: ui(copy.descriptionKey, params) };
+}
+
+/** The result bubble's tone: only a confirmed decision is coloured, by which way it went. */
+function decisionResultTone(decision) {
+  if (decision.state !== PORTAL_DECISION_STATE.confirmed) return 'neutral';
+  return decision.decision === 'ACCEPT' ? 'success' : 'destructive';
+}
+
 /** The confirmation's result, with the way into the portal when the answer carries one. */
 function DecisionResult({ decision }) {
   const ui = useUI();
@@ -220,25 +240,15 @@ function DecisionResult({ decision }) {
   const enter = entryPath
     ? () => navigate(entryPath, { replace: true })
     : null;
-  const params = { number: decision.documentNo ?? '', tenantName: decision.tenantName ?? '' };
   const confirmed = decision.state === PORTAL_DECISION_STATE.confirmed;
   const appliedNow = confirmed && decision.appliedNow;
-  const accepted = decision.decision === 'ACCEPT';
-  const copy = STATE_COPY[decision.state] ?? STATE_COPY[PORTAL_DECISION_STATE.notPending];
-  let title = ui(copy.titleKey);
-  let description = ui(copy.descriptionKey, params);
-  if (appliedNow) {
-    title = ui(accepted ? 'portalDecisionAcceptedTitle' : 'portalDecisionRejectedTitle');
-    description = ui(accepted ? 'portalDecisionAcceptedDescription' : 'portalDecisionRejectedDescription');
-  }
-  let tone = 'neutral';
-  if (confirmed) tone = accepted ? 'success' : 'destructive';
+  const { title, description } = decisionResultCopy(decision, ui);
   return (
     <Frame onEnter={enter} data-testid="Frame__be410c">
       <Result
         testId={appliedNow ? 'portal-decision-applied' : `portal-decision-${decision.state}`}
         Icon={confirmed ? CheckCircleIcon : FileTextIcon}
-        tone={tone}
+        tone={decisionResultTone(decision)}
         title={title}
         description={description}
         data-testid="Result__be410c">

@@ -269,6 +269,93 @@ function usePortalIsMobile() {
   return isMobile;
 }
 
+/**
+ * Where the page is: the view the URL asks for, else the document the link was sent with.
+ *
+ * An entry document of a kind this page does not know (a backend newer than the bundle) falls
+ * back to home rather than indexing PORTAL_KIND_META with it, as readPortalView does for the URL.
+ * A link whose own document is no longer visible (entryDocument null, entryKind set) opens that
+ * kind's list, or home when the kind is unknown, with a notice (plan §A.8.8).
+ * Only when the backend said so (entryKind): a valid link with neither field just opens home.
+ */
+function resolvePortalLocation(requested, identity) {
+  const entry = identity?.entryDocument;
+  const entryHidden = !requested && identity?.state === PORTAL_LINK_STATE.valid && !entry
+    && Boolean(identity?.entryKind);
+  const fallbackKind = PORTAL_KIND_META[identity?.entryKind] ? identity.entryKind : null;
+  let current = { view: 'home' };
+  if (requested) {
+    current = requested;
+  } else if (entry?.id && PORTAL_KIND_META[entry.kind]) {
+    current = { view: 'doc', kind: entry.kind, id: entry.id };
+  } else if (entryHidden && fallbackKind) {
+    current = { view: 'list', kind: fallbackKind };
+  }
+  return { current, entryHidden };
+}
+
+/**
+ * The current view's content. Each view draws its own headers (desktop and mobile) and content
+ * card, as the design does: they differ per screen (search pill, count chip, back button, mobile
+ * top bars).
+ */
+function portalViewBody({
+  current, isMobile, apiFetch, token, identity, logoUrl, home, months, onMonthsChange, onNavigate,
+  onInvalid,
+}) {
+  if (current.view !== 'list' && current.view !== 'doc') {
+    return (
+      <PortalHomeView
+        apiFetch={apiFetch}
+        token={token}
+        identity={identity}
+        logoUrl={logoUrl}
+        home={home}
+        months={months}
+        onMonthsChange={onMonthsChange}
+        onNavigate={onNavigate}
+        onInvalid={onInvalid}
+        data-testid="PortalHomeView__3db5f6" />
+    );
+  }
+  // Desktop (Figma prototype): a document opens as a drawer OVER its kind's list, which stays
+  // mounted underneath — closing returns to it with its tab, range and scroll as they were. A
+  // deep link to a document (the email's) renders that kind's list behind it too. Mobile keeps
+  // the full-page detail, so its list is hidden (still mounted) while a document is open.
+  const showDoc = current.view === 'doc';
+  return (
+    <>
+      <div className={showDoc && isMobile ? 'hidden' : 'contents'}>
+        <PortalDocumentListView
+          apiFetch={apiFetch}
+          token={token}
+          kind={current.kind}
+          group={current.group ?? null}
+          identity={identity}
+          kindCount={home?.tiles?.[current.kind]?.count}
+          onNavigate={onNavigate}
+          onInvalid={onInvalid}
+          data-testid="PortalDocumentListView__3db5f6" />
+      </div>
+      {showDoc ? (
+        <PortalDocumentDetailView
+          key={`${current.kind}:${current.id}`}
+          apiFetch={apiFetch}
+          token={token}
+          kind={current.kind}
+          id={current.id}
+          listGroup={current.group ?? null}
+          presentation={isMobile ? 'page' : 'drawer'}
+          identity={identity}
+          logoUrl={logoUrl}
+          onNavigate={onNavigate}
+          onInvalid={onInvalid}
+          data-testid="PortalDocumentDetailView__3db5f6" />
+      ) : null}
+    </>
+  );
+}
+
 export default function PortalPage() {
   // The token arrives as a path segment because an email link cannot carry a header.
   const { token = '' } = useParams();
@@ -416,23 +503,7 @@ export default function PortalPage() {
   // The view lives in the search string (`?view=list&kind=INVOICE`), never the token: back and
   // forward work, and the link the customer bookmarks still opens the document it was sent with.
   const requested = readPortalView(searchParams);
-  const entry = identity?.entryDocument;
-  // An entry document of a kind this page does not know (a backend newer than the bundle) falls
-  // back to home rather than indexing PORTAL_KIND_META with it, as readPortalView does for the URL.
-  // A link whose own document is no longer visible (entryDocument null, entryKind set) opens that
-  // kind's list, or home when the kind is unknown, with a notice (plan §A.8.8).
-  // Only when the backend said so (entryKind): a valid link with neither field just opens home.
-  const entryHidden = !requested && identity?.state === PORTAL_LINK_STATE.valid && !entry
-    && Boolean(identity?.entryKind);
-  const fallbackKind = PORTAL_KIND_META[identity?.entryKind] ? identity.entryKind : null;
-  let current = { view: 'home' };
-  if (requested) {
-    current = requested;
-  } else if (entry?.id && PORTAL_KIND_META[entry.kind]) {
-    current = { view: 'doc', kind: entry.kind, id: entry.id };
-  } else if (entryHidden && fallbackKind) {
-    current = { view: 'list', kind: fallbackKind };
-  }
+  const { current, entryHidden } = resolvePortalLocation(requested, identity);
 
   const navigate = useCallback((target) => {
     recheckedRef.current = false;
@@ -443,61 +514,19 @@ export default function PortalPage() {
     () => setAttempt((value) => value + 1));
   if (statusScreen) return statusScreen;
 
-  // Each view draws its own headers (desktop and mobile) and content card, as the design does:
-  // they differ per screen (search pill, count chip, back button, mobile top bars).
-  let body;
-  if (current.view === 'list' || current.view === 'doc') {
-    // Desktop (Figma prototype): a document opens as a drawer OVER its kind's list, which stays
-    // mounted underneath — closing returns to it with its tab, range and scroll as they were. A
-    // deep link to a document (the email's) renders that kind's list behind it too. Mobile keeps
-    // the full-page detail, so its list is hidden (still mounted) while a document is open.
-    const showDoc = current.view === 'doc';
-    body = (
-      <>
-        <div className={showDoc && isMobile ? 'hidden' : 'contents'}>
-          <PortalDocumentListView
-            apiFetch={apiFetch}
-            token={trimmedToken}
-            kind={current.kind}
-            group={current.group ?? null}
-            identity={identity}
-            kindCount={home?.tiles?.[current.kind]?.count}
-            onNavigate={navigate}
-            onInvalid={showInvalid}
-            data-testid="PortalDocumentListView__3db5f6" />
-        </div>
-        {showDoc ? (
-          <PortalDocumentDetailView
-            key={`${current.kind}:${current.id}`}
-            apiFetch={apiFetch}
-            token={trimmedToken}
-            kind={current.kind}
-            id={current.id}
-            listGroup={current.group ?? null}
-            presentation={isMobile ? 'page' : 'drawer'}
-            identity={identity}
-            logoUrl={logoUrl}
-            onNavigate={navigate}
-            onInvalid={showInvalid}
-            data-testid="PortalDocumentDetailView__3db5f6" />
-        ) : null}
-      </>
-    );
-  } else {
-    body = (
-      <PortalHomeView
-        apiFetch={apiFetch}
-        token={trimmedToken}
-        identity={identity}
-        logoUrl={logoUrl}
-        home={home}
-        months={months}
-        onMonthsChange={changeMonths}
-        onNavigate={navigate}
-        onInvalid={showInvalid}
-        data-testid="PortalHomeView__3db5f6" />
-    );
-  }
+  const body = portalViewBody({
+    current,
+    isMobile,
+    apiFetch,
+    token: trimmedToken,
+    identity,
+    logoUrl,
+    home,
+    months,
+    onMonthsChange: changeMonths,
+    onNavigate: navigate,
+    onInvalid: showInvalid,
+  });
 
   return (
     <PortalShell
