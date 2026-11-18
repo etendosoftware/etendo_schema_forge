@@ -1969,6 +1969,10 @@ const IMPORT_REFUSAL_KEYS = {
 };
 
 function importRefusalKey(code, details) {
+  // ETP-6002 CP-30: a quantity of 0 or below; the sign is the problem, not the pending.
+  if (code === 'importQuantityExceedsPending' && details?.quantityNotPositive === true) {
+    return 'backendError.importQuantityMustBePositive';
+  }
   // ETP-6002 CP-30: the edit of a saved line; its maximum counts what the line already holds.
   if (code === 'importQuantityExceedsPending' && details?.maximumAllowed != null) {
     return 'backendError.importQuantityExceedsLineMaximum';

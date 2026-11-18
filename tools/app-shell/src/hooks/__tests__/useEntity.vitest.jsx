@@ -485,6 +485,8 @@ describe('useEntity', () => {
         'The warehouse is closed for inventory',
       ],
     ])('a refused save shows %s', async (_label, error, expected) => {
+      // The module mock's vi.fn() keeps its calls across tests; only this save's toast counts.
+      toast.error.mockClear();
       globalThis.fetch.mockImplementation(async (url, opts) => {
         if (url.includes('/defaults')) {
           return { ok: true, json: async () => ({ defaults: {} }) };
@@ -509,7 +511,8 @@ describe('useEntity', () => {
 
       expect(saved).toBeNull();
       expect(result.current.saveError).toBe(expected);
-      expect(toast.error).toHaveBeenCalledWith(expected);
+      expect(toast.error).toHaveBeenCalledTimes(1);
+      expect(toast.error).toHaveBeenLastCalledWith(expected);
     });
 
     it('returns null when editing is null', async () => {

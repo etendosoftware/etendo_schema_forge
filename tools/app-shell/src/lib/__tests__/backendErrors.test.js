@@ -4989,6 +4989,13 @@ describe('translateImportRefusal / isImportRefusalCode — line-import refusals 
       ['es_ES', 'a line maximum of 0', { ...DETAILS, pending: 0, maximumAllowed: 0 },
         'No se puede guardar 9 de Fernet: el máximo para esta línea es 0.'],
       ['es_ES', 'a null maximum', { ...DETAILS, maximumAllowed: null }, ES_ABOVE_PENDING],
+      // A quantity of 0 or below: the sign is the problem, whatever is pending (create or edit).
+      ['es_ES', 'a quantity not above 0', { ...DETAILS, requested: 0, quantityNotPositive: true },
+        'La cantidad de Fernet tiene que ser mayor que 0.'],
+      ['en_US', 'a quantity not above 0', { ...DETAILS, requested: -1, quantityNotPositive: true },
+        'The quantity of Fernet must be greater than 0.'],
+      ['es_ES', 'a negative edit with a maximum', { ...DETAILS, requested: -1, maximumAllowed: 4, quantityNotPositive: true },
+        'La cantidad de Fernet tiene que ser mayor que 0.'],
     ];
 
     for (const [locale, label, details, expected] of SENTENCES) {

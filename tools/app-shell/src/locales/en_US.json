@@ -17411,6 +17411,7 @@
     "backendError.importQuantityExceedsPending": "Cannot import {requested} of {product}: only {pending} is still pending on this line (quantities already in draft documents count as taken).",
     "backendError.importQuantityNothingPendingOnLine": "Cannot import {requested} of {product}: nothing is pending on this line (quantities already in draft documents count as taken).",
     "backendError.importQuantityExceedsLineMaximum": "Cannot save {requested} of {product}: the maximum for this line is {pending}.",
+    "backendError.importQuantityMustBePositive": "The quantity of {product} must be greater than 0.",
     "backendError.importLineNotInDocument": "One of the selected lines does not belong to the source document.",
     "backendError.importNothingPending": "There is nothing left to import from this document.",
     "backendError.importInvalidLine": "One of the selected lines or quantities is not valid.",
