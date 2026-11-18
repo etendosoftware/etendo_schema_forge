@@ -772,6 +772,15 @@ window's lookup, works too.
 
 Evidence: `gateway/e2e/support/orders.ts` (`complete action`). Contract: `docs/public-api.md` §4.2.2.
 
+## Public API V1 warehouse selection
+
+The public API exposes this order and its lines, including the header's `complete` action.
+Choose the warehouse with `GET /api/v1/purchase-order/lookups/warehouse` and send the selected id as
+`data.attributes.warehouse` when creating the order. The field is optional: if it is omitted,
+Etendo assigns a warehouse when the order is created. There is no `relationships.warehouse`,
+because the warehouse collection is outside V1. Partial updates can omit an unchanged
+warehouse. Document-state validation remains with the runtime, as in the app.
+
 ## Fiscal data step before the invoice is created — ETP-6179
 
 - **Confirmar** with *Crear factura* ticked (`ConfirmModal` in `PurchaseOrderActions.jsx`) and
@@ -787,3 +796,7 @@ Evidence: `gateway/e2e/support/orders.ts` (`complete action`). Contract: `docs/p
 
 How the step itself works — the backend `sifDefaults` preview, when it appears, the
 `sifFields` it sends and the fail-open rule — is described once in [sales-order.md → Fiscal data step before the invoice is created](sales-order.md#fiscal-data-step-before-the-invoice-is-created--etp-6179).
+
+## Rate and cost fields are numeric — ETP-6342
+
+Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. The header `eTGOCurrencyRate` (`EM_ETGO_Currency_Rate`) and the payment-details **Exchange Rate** (`finaccTxnConvertRate`, `Finacc_Txn_Convert_Rate`, read-only) are now `decimal` in the contract (`tsType: number`); the latter renders as a number field, without the former 12-character `maxLength`.

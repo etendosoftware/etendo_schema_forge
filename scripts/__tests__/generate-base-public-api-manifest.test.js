@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import {
   assertNoFieldMapping,
   buildEntity,
-  fiscalMonitorWindows,
+  enumOf,
   generateManifest,
   inputFieldsOf,
   isCurated,
@@ -18,6 +18,7 @@ import {
   isPublicField,
   lookupOf,
   neverExposedFields,
+  publicDescriptionOf,
   publicFieldName,
   publicFunctionalText,
 } from '../generate-base-public-api-manifest.mjs';
@@ -78,7 +79,7 @@ describe('isCurated', () => {
 describe('isPublicField', () => {
   it('never publishes system, discarded or excluded fields, curated or not', () => {
     for (const curated of [true, false]) {
-      const options = { curated, specName: 'sales-order' };
+      const options = { curated };
       assert.equal(isPublicField({ name: 'x', visibility: 'system', publicApi: { exposed: true } }, options), false);
       assert.equal(isPublicField({ name: 'x', visibility: 'discarded', publicApi: { exposed: true } }, options), false);
       for (const name of neverExposedFields) {
@@ -156,6 +157,44 @@ describe('buildEntity — non-curated entity derives its form and read-only list
     assert.deepEqual(fields.active.dataType, { type: 'boolean' });
     assert.deepEqual(fields.status.dataType, { type: 'string' });
     assert.deepEqual(fields.description.dataType, { type: 'string' });
+  });
+
+  it('publishes the codes of an AD list as dataType.enum with their labels, on any resource', () => {
+    const { fields } = build('sales-order', [
+      { name: 'docStatus', visibility: 'readOnly', form: true, type: 'enum', enumValues: [
+        { value: 'DR', name: 'Draft', labels: { es_ES: 'Borrador' } }, { value: 'CO', name: 'Completed' },
+        { value: 'DR', name: 'Duplicate' }, { value: '', name: 'Empty' }, { name: 'No code' },
+      ] },
+      { name: 'unnamed', visibility: 'editable', form: true, type: 'enum', enumValues: [{ value: 'X' }] },
+      { name: 'noValues', visibility: 'editable', form: true, type: 'enum', enumValues: [] },
+      { name: 'flag', visibility: 'editable', form: true, type: 'boolean', enumValues: [{ value: 'Y', name: 'Yes' }] },
+      { name: 'partner', visibility: 'editable', form: true, type: 'foreignKey', reference: 'BusinessPartner', enumValues: [{ value: 'A', name: 'A' }] },
+    ]);
+    assert.deepEqual(fields.doc_status.dataType, { type: 'string', enum: ['DR', 'CO'] }, 'the first label of a repeated code wins; empty codes are dropped');
+    assert.deepEqual(fields.doc_status.enumLabels, { DR: 'Draft', CO: 'Completed' }, 'the label is the AD name, not a translation');
+    assert.deepEqual(fields.unnamed.enumLabels, { X: 'X' }, 'a code without a name is its own label');
+    for (const name of ['no_values', 'flag', 'partner']) {
+      assert.equal(fields[name].dataType.enum, undefined, `${name} publishes no enum`);
+      assert.equal(fields[name].enumLabels, undefined, `${name} publishes no labels`);
+    }
+    assert.equal(enumOf({ enumValues: null }), null);
+  });
+
+  it('publishes publicApi.description from decisions.json, and refuses an empty one or one citing an internal reference', () => {
+    const fieldsOf = (description) => {
+      const policy = exposurePolicyOf({ entities: { header: { fields: { name: { publicApi: { exposed: true, description } } } } } }, 'header');
+      return buildEntity({
+        specName: 'contacts', entityName: 'header', functional, parent: null, rawEntity: null, policy,
+        contract: contractFor('contacts', [{ name: 'name', visibility: 'editable', form: true, type: 'string' }]),
+      }).fields;
+    };
+    assert.equal(fieldsOf('  Required for a company.  ').name.description, 'Required for a company.');
+    assert.equal(fieldsOf(undefined).name.description, undefined);
+    assert.equal(build('contacts', [{ name: 'name', visibility: 'editable', form: true, type: 'string' }]).fields.name.description, undefined);
+    assert.throws(() => fieldsOf(''), /header\.name: publicApi\.description must be a non-empty string/);
+    assert.throws(() => fieldsOf(7), /must be a non-empty string/);
+    assert.throws(() => fieldsOf('See ETP-6175.'), /cites an internal reference/);
+    assert.throws(() => publicDescriptionOf({ publicApi: { description: 'Ask in Jira' } }, 'x'), /cites an internal reference/);
   });
 
   it('marks every derived field out when the entity has no write endpoint', () => {
@@ -240,31 +279,6 @@ describe('buildEntity — API-only input fields declared in decisions.json', () 
   });
 });
 
-describe('buildEntity — fiscal monitors are not derived', () => {
-  it('publishes no form field for any fiscal monitor without curation', () => {
-    for (const specName of fiscalMonitorWindows) {
-      const entity = build(specName, formFields);
-      assert.deepEqual(Object.keys(entity.fields), ['id'], specName);
-      assert.deepEqual(entity.operations, ['GET', 'LIST'], specName);
-      assert.equal(entity.group, 'Fiscal Monitors', specName);
-    }
-  });
-
-  it('covers the three monitors owned by the localization team', () => {
-    assert.deepEqual([...fiscalMonitorWindows].sort(), ['monitor-verifactu', 'sii-monitor', 'tbai-facturas-enviadas']);
-  });
-
-  it('publishes the curation of a curated fiscal monitor, still without excluded fields', () => {
-    const entity = build('sii-monitor', [
-      { name: 'documentNo', visibility: 'readOnly', form: true, type: 'string', publicApi: { exposed: true } },
-      { name: 'client', visibility: 'readOnly', form: true, type: 'foreignKey', publicApi: { exposed: true } },
-      { name: 'orderDate', visibility: 'editable', form: true, type: 'date' },
-    ]);
-    assert.deepEqual(Object.keys(entity.fields).sort(), ['document_no', 'id']);
-    assert.deepEqual(entity.operations, ['GET', 'LIST']);
-  });
-});
-
 describe('buildEntity — operations', () => {
   it('makes a resource with no writable field read-only, even if its window accepts writes', () => {
     const entity = build('matched-purchase-invoices', [
@@ -299,15 +313,6 @@ describe('buildEntity — conservative base exposure', () => {
     assert.deepEqual(buildWith({ window: { publicApi: { actions: [] } } }).processes, []);
     const entity = buildWith({ window: { publicApi: { actions: ['complete'] } } });
     assert.deepEqual(entity.processes.map((process) => process.action), ['complete']);
-  });
-
-  it('never publishes actions on a fiscal monitor, whatever the decisions say', () => {
-    const contract = completeContract();
-    const entity = buildEntity({
-      specName: [...fiscalMonitorWindows][0], entityName: 'header', contract, functional,
-      parent: null, rawEntity: null, policy: { actions: ['complete'], readOnly: false, readOnlyFields: new Set() },
-    });
-    assert.deepEqual(entity.processes, []);
   });
 
   it('publishes an entity with publicApi.readOnly as GET/LIST with every field out', () => {
@@ -394,10 +399,10 @@ describe('generateManifest — lines survive explicit child visibility', () => {
         { name: 'doc', type: 'foreignKey', visibility: 'system', reference: { targetTable: 'd_head', keyColumn: 'd_head_id' } },
       ],
     });
-    mkdirSync(join(root, 'doc'), { recursive: true });
-    writeFileSync(join(root, 'doc', 'contract.json'), JSON.stringify(contract));
-    writeFileSync(join(root, 'doc', 'decisions.json'), JSON.stringify({ window: { secondaryTabs: { exchangeRates: {} } } }));
-    writeFileSync(join(root, 'doc', 'schema-raw.json'), JSON.stringify({
+    mkdirSync(join(root, 'sales-order'), { recursive: true });
+    writeFileSync(join(root, 'sales-order', 'contract.json'), JSON.stringify(contract));
+    writeFileSync(join(root, 'sales-order', 'decisions.json'), JSON.stringify({ window: { secondaryTabs: { exchangeRates: {} } } }));
+    writeFileSync(join(root, 'sales-order', 'schema-raw.json'), JSON.stringify({
       entities: [
         { tableName: 'd_head', fields: [{ name: 'id', type: 'id', visibility: 'system', columnName: 'd_head_id' }] },
         child('d_line'), child('d_rate'), child('d_other'),
@@ -406,10 +411,10 @@ describe('generateManifest — lines survive explicit child visibility', () => {
   });
   after(() => rmSync(root, { recursive: true, force: true }));
 
-  it('keeps lines with CRUD next to the declared secondary tabs, and still drops undeclared children', async () => {
+  it('keeps order lines with CRUD and excludes even explicitly declared auxiliary tabs', async () => {
     const { entities } = await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'none') });
-    assert.deepEqual(Object.keys(entities).sort(), ['doc', 'doc-exchangeRates', 'doc-lines']);
-    assert.deepEqual([...entities['doc-lines'].operations].sort(), ['GET', 'LIST', 'PATCH', 'POST', 'PUT']);
+    assert.deepEqual(Object.keys(entities).sort(), ['sales-order', 'sales-order-lines']);
+    assert.deepEqual([...entities['sales-order-lines'].operations].sort(), ['GET', 'LIST', 'PATCH', 'POST', 'PUT']);
   });
 });
 
@@ -517,6 +522,14 @@ describe('generateManifest — schema-raw.json is required', () => {
     assert.deepEqual(Object.keys(manifest.entities), []);
   });
 
+  it('does not require raw schemas for excluded operational or fiscal resources', async () => {
+    for (const specName of ['invoice-inbox', 'sales-invoice', 'purchase-invoice', 'warehouse', 'monitor-verifactu', 'sii-monitor', 'tbai-facturas-enviadas']) {
+      writeArtifact(root, specName, contractFor(specName, formFields), { rawSchema: false });
+    }
+    const { entities } = await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'docs') });
+    assert.deepEqual(Object.keys(entities), []);
+  });
+
   it('does not require schema-raw.json for windows that are not published', async () => {
     writeArtifact(root, 'absence', contractFor('absence', formFields), { rawSchema: false });
     const manifest = await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'docs') });
@@ -539,6 +552,7 @@ describe('generateManifest — child tabs and functional texts', () => {
           bankAccount: tab('c_bp_bankaccount', 'Bank Account'),
           locationAddress: tab('c_bpartner_location', 'Location/Address'),
           addressNote: tab('c_bp_address_note', 'Address Note'),
+          extra: tab('c_bp_extra', 'Extra'),
         },
       },
       backendContract: {
@@ -561,6 +575,7 @@ describe('generateManifest — child tabs and functional texts', () => {
         { tableName: 'c_bpartner', fields: [{ name: 'id', type: 'id', visibility: 'system', columnName: 'c_bpartner_id' }] },
         child('c_bp_bankaccount'),
         child('c_bpartner_location'),
+        child('c_bp_extra'),
         // A tab under a child tab (AD level 2), linked to the window's record as well.
         { ...child('c_bp_address_note'), level: 'subline' },
       ],
@@ -712,7 +727,7 @@ describe('buildEntity — lookups declared in decisions.json', () => {
   });
 });
 
-describe('validate-base-public-api-manifest — lookup shape', () => {
+describe('validate-base-public-api-manifest — lookup, enum and description shape', () => {
   let root;
   const validator = new URL('../validate-base-public-api-manifest.mjs', import.meta.url).pathname;
   const field = (extra = {}) => ({ sourceVisibility: 'editable', direction: 'inout', internalPath: 'paymentMethod', dataType: { type: 'string' }, reference: 'PaymentMethod', ...extra });
@@ -760,6 +775,32 @@ describe('validate-base-public-api-manifest — lookup shape', () => {
       const result = run(manifestWith(field({ lookup: { selector: 'paymentMethod', type: 'payment-method', context: { [name]: '1' } } })));
       assert.equal(result.ok, false, name);
       assert.match(result.output, new RegExp(`context cannot use reserved parameter "${name}"`));
+    }
+  });
+
+  it('accepts an enum with a label per code, and a description, and counts the enum', () => {
+    const result = run(manifestWith(field({ reference: null, dataType: { type: 'string', enum: ['1', '2'] }, enumLabels: { 1: 'NIF', 2: 'VAT' }, description: 'Kind of tax id.' })));
+    assert.equal(result.ok, true, result.output);
+    assert.match(result.output, /1 enums/);
+  });
+
+  it('rejects a malformed enum, its labels or an empty description', () => {
+    const enumField = (dataType, enumLabels, extra = {}) => field({ reference: null, dataType, enumLabels, ...extra });
+    const cases = [
+      [enumField({ type: 'string', enum: [] }, {}), /dataType.enum must be a non-empty list of distinct string codes/],
+      [enumField({ type: 'string', enum: ['1', '1'] }, { 1: 'a' }), /distinct string codes/],
+      [enumField({ type: 'string', enum: [1] }, { 1: 'a' }), /distinct string codes/],
+      [enumField({ type: 'string' }, { 1: 'a' }), /distinct string codes/],
+      [enumField({ type: 'number', enum: ['1'] }, { 1: 'a' }), /an enum field must be of type string/],
+      [enumField({ type: 'string', enum: ['1'] }, undefined), /enumLabels must be an object/],
+      [enumField({ type: 'string', enum: ['1', '2'] }, { 1: 'a' }), /enumLabels has no label for 2/],
+      [enumField({ type: 'string', enum: ['1'] }, { 1: 'a', 9: 'b' }), /enumLabels names codes outside dataType.enum: 9/],
+      [field({ description: ' ' }), /description must be a non-empty string/],
+    ];
+    for (const [value, message] of cases) {
+      const result = run(manifestWith(value));
+      assert.equal(result.ok, false, String(message));
+      assert.match(result.output, message);
     }
   });
 

@@ -7,12 +7,21 @@ import { RUN_PREFIX } from './env.ts';
 export const CONTACT_HINT =
   'Locally this is usually a 502 because the tenant lacks the EM_Etgo_Identifier sequence (known environment gap, not a gateway bug).';
 
-export async function createContact(label: string) {
+/** Creates a company: a contact with `name` and no `is_person` (a contact is a company by default). */
+export async function createContact(label: string, attributes: Record<string, unknown> = {}) {
   return createRecord(
     'contacts',
-    resource('contacts', { name: `${RUN_PREFIX}-${label}`, email: `${RUN_PREFIX}-${label}@example.com`, phone: '600000000' }),
+    resource('contacts', { name: `${RUN_PREFIX}-${label}`, email: `${RUN_PREFIX}-${label}@example.com`, phone: '600000000', ...attributes }),
     CONTACT_HINT,
   );
+}
+
+/** Attributes of a person: `is_person` with a first and last name, never `name` (Etendo derives it). */
+export function personAttributes(label: string): Record<string, unknown> {
+  return {
+    is_person: true, first_name: `${RUN_PREFIX}-${label}`, last_name: 'Person',
+    email: `${RUN_PREFIX}-${label}@example.com`, phone: '600000001',
+  };
 }
 
 export async function createAddress(contactId: string, attributes: Record<string, unknown> = {}) {
@@ -38,10 +47,11 @@ export async function createProduct(label: string, attributes: Record<string, un
   );
 }
 
-export async function firstWarehouseId(): Promise<string> {
-  const res = await api('GET', 'warehouse?page[size]=1');
-  expectStatus(res, 200, 'orders need a warehouse; the tenant has none readable through the public API');
+export async function firstWarehouseId(kind: 'sales-order' | 'purchase-order'): Promise<string> {
+  const res = await api('GET', `${kind}/lookups/warehouse?page[size]=1`);
+  expectStatus(res, 200, 'orders need a warehouse; the UI selector offers no warehouse');
   const id = res.json.data?.[0]?.id;
   assert.ok(id, 'no warehouse available to create an order');
+  assert.equal(res.json.data[0].type, 'warehouse');
   return id;
 }

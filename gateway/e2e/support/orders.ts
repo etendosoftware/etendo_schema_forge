@@ -27,11 +27,13 @@ export function describeOrderFlow(kind: 'sales-order' | 'purchase-order'): void 
       addressId = (await createAddress(contactId)).id;
       const product = await createProduct('item');
       productId = product.id;
-      warehouseId = await firstWarehouseId();
+      warehouseId = await firstWarehouseId(kind);
 
       const header = await createDraftOrder(kind, { contactId, addressId, warehouseId });
       order = { collection: kind, type: kind, id: header.id, firstPatch: { order_date: '2026-10-15' }, secondPatch: { order_date: '2026-10-16' } };
       assert.equal(header.data.relationships?.business_partner?.data?.id, contactId);
+      assert.equal(header.data.attributes.warehouse, warehouseId);
+      assert.equal(header.data.relationships?.warehouse, undefined);
 
       const created = await createRecord(
         `${kind}/${order.id}/lines`,
@@ -43,6 +45,19 @@ export function describeOrderFlow(kind: 'sales-order' | 'purchase-order'): void 
       };
       grossBefore = Number(created.data.attributes.line_gross_amount);
       assert.ok(Number.isFinite(grossBefore) && grossBefore > 0, 'the line carries a positive line_gross_amount');
+    });
+
+    it('assigns a warehouse on create when the new order omits it', async () => {
+      const draft = await createRecord(
+        kind,
+        resource(kind, { order_date: '2026-10-14', partner_address: addressId }, { business_partner: ['contacts', contactId] }),
+        'an order without warehouse is accepted',
+      );
+      const { res } = await readWithEtag(`${kind}/${draft.id}`);
+      const warehouse = res.json.data.attributes.warehouse;
+      assert.equal(typeof warehouse, 'string', 'the created order carries a warehouse');
+      assert.ok(warehouse.length > 0, 'Etendo assigned a non-empty warehouse');
+      await expectDeleted({ collection: kind, id: draft.id });
     });
 
     it('reads the header with its ETag and a grand total, and lists it', async () => {
@@ -198,9 +213,8 @@ async function createDraftOrder(
 ) {
   return createRecord(
     kind,
-    resource(kind, { order_date: '2026-10-14', partner_address: addressId }, {
+    resource(kind, { order_date: '2026-10-14', partner_address: addressId, warehouse: warehouseId }, {
       business_partner: ['contacts', contactId],
-      warehouse: ['warehouse', warehouseId],
     }),
   );
 }

@@ -120,7 +120,29 @@ beforehand (a payment method). Declare it on the field:
   value that is a published resource (a contact, a product) is found by listing that resource.
 
 Published today: `sales-order` and `purchase-order` `paymentMethod` (`IsSOTrx` `Y` / `N`) and
-`contacts` `paymentMethod` / `pOPaymentMethod` (`FIN_ISRECEIPT` `Y` / `N`).
+`warehouse` (no context), and `contacts` `paymentMethod` / `pOPaymentMethod` (`FIN_ISRECEIPT` `Y` / `N`)
+and `businessPartnerCategory` (no context: the form's category selector has no validation rule).
+
+## 4c. Describe a field, and list values
+
+When a field has a rule its type cannot express (it is required only in some cases, or refused in
+others), describe it on the field. The text is the field's description in the OpenAPI document:
+
+```json
+"name": { "publicApi": { "exposed": true, "description": "Required for a company. Refused for a person." } }
+```
+
+Real example: `artifacts/contacts/decisions.json`, where `name`, `etgoFirstname`, `etgoLastname`,
+`etgoIsperson`, `taxID`, `oBTIKTaxIDKey` and `businessPartnerCategory` describe the person-or-company rules.
+
+The description must be a non-empty string and must not cite an internal reference (a ticket or
+Jira); anything else fails the generation. Write it for an external integrator. The manifest
+`required` flag cannot express a conditional rule: leave a conditionally required field without
+`required` and state the condition here. NEO is what enforces the rule.
+
+AD list values need no decision: a published field that holds an AD list publishes its codes
+(`dataType.enum`) and their labels (`enumLabels`) on its own, on every resource. Publishing the
+field (`exposed: true` on a curated entity) is all it takes.
 
 ## 5. What the platform guarantees (you cannot override it)
 
@@ -129,8 +151,10 @@ These live in the generator and win over any decision:
 - `neverExposedFields` (`policy.excludedFields` in the manifest): `client`, `organization`,
   `grantPortalAccess`, bank identifiers (`accountNo`, `bankName`, `displayedAccount`, `iBAN`,
   `swiftCode`) and the accounting bulk-posting fields. `exposed: true` does not publish them.
-- Fiscal monitors (`monitor-verifactu`, `sii-monitor`, `tbai-facturas-enviadas`): read-only, `id` and
-  `updated` only, no actions.
+- The V1 allowlist (`publicApiV1Entities`, `policy.allowedResources` in the manifest): only
+  `contacts`, `product`, `product-category`, `sales-quotation`, `sales-order` and `purchase-order`,
+  with the child entities listed there, are published. A window outside it stays out whatever its
+  `decisions.json` says; adding one is a change to the generator, not a decision.
 - Conservative defaults: `system`/`discarded` fields are never published, excluded categories,
   windows and child tabs stay out, no action without opt-in, a resource with no writable field is
   read-only.
@@ -145,6 +169,6 @@ These live in the generator and win over any decision:
    from a checkout that has it.
 3. `make generate-base-public-api-manifest` (also validates the result).
 4. `git diff public-api/base.v1.json`: only the resources you meant to change differ; check the
-   `direction` of each touched field, its `lookup`, and `operations` / `processes` of each touched resource.
+   `direction` of each touched field, its `lookup`, `enum` and `description`, and `operations` / `processes` of each touched resource.
 5. `node --test scripts/__tests__/*.test.js` and `cd gateway && npm test`.
 6. Commit `decisions.json` and `public-api/base.v1.json` together.

@@ -875,6 +875,15 @@ window's lookup, works too.
 
 Evidence: `gateway/e2e/support/orders.ts` (`complete action`). Contract: `docs/public-api.md` §4.2.2.
 
+## Public API V1 warehouse selection
+
+The public API exposes this order and its lines, including the header's `complete` action.
+Choose the warehouse with `GET /api/v1/sales-order/lookups/warehouse` and send the selected id as
+`data.attributes.warehouse` when creating the order. The field is optional: if it is omitted,
+Etendo assigns a warehouse when the order is created. There is no `relationships.warehouse`,
+because the warehouse collection is outside V1. Partial updates can omit an unchanged
+warehouse. Document-state validation remains with the runtime, as in the app.
+
 ## Fiscal data step before the invoice is created — ETP-6179
 
 - **Confirmar** with *Crear factura* ticked (`ConfirmModal` in `OrderCreateInvoice.jsx`) and
@@ -923,3 +932,7 @@ operación* and, with VERI*FACTU active, *Fecha operación*; on a rectificative 
 rectification code, which order flows never preselect — only a customer return's preview comes with `R1`). The rule is shared with the invoices' SIF tab:
 `docs/ui-customization.md` §21b.
 Backend reference: `com.etendoerp.go` `docs/neo-headless.md` §4.12.36b (ETP-6179).
+
+## Rate and cost fields are numeric — ETP-6342
+
+Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. The header `eTGOCurrencyRate` (`EM_ETGO_Currency_Rate`) is now `decimal` in the contract (`tsType: number`).
