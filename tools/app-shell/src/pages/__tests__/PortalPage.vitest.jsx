@@ -7,12 +7,19 @@
 // @covers tools/app-shell/src/pages/portal/PortalDetailPanel.jsx
 // @covers tools/app-shell/src/pages/portal/PortalBits.jsx
 // @covers tools/app-shell/src/components/layout/SearchBar.jsx
+// @covers tools/app-shell/src/lib/portal/usePortalApiFetch.js
 // Mocks BEFORE imports.
 const apiFetchMock = vi.fn();
 
 // The page's only door to the network. Mocked at the hook rather than at `fetch` so the
 // request OPTIONS are observable — that is what the plan's §5.4 assertion below reads.
-vi.mock('@/lib/portal/usePortalApiFetch.js', () => ({ usePortalApiFetch: () => apiFetchMock }));
+// `real` lets the cold-open test drive the page through the REAL client over a stubbed `fetch`,
+// to see what the session scope does to the answers.
+const hookMode = { real: false };
+vi.mock('@/lib/portal/usePortalApiFetch.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { usePortalApiFetch: (base) => (hookMode.real ? actual.usePortalApiFetch(base) : apiFetchMock) };
+});
 
 // The download plumbing lives in its own module so a test can see what would be saved.
 vi.mock('@/lib/portal/portalDownload.js', () => ({ saveBlobAsFile: vi.fn() }));
@@ -75,6 +82,7 @@ import { StrictMode } from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { registerApiSession, resetApiSessionForTests } from '@etendosoftware/app-shell-core/auth';
 import PortalPage from '../PortalPage.jsx';
 import { saveBlobAsFile } from '@/lib/portal/portalDownload.js';
 
@@ -360,6 +368,46 @@ describe('PortalPage — token handling (plan §5.4)', () => {
 
     await waitFor(() => expect(screen.getByTestId('portal-invalid-link')).toBeInTheDocument());
     expect(apiFetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('PortalPage — a cold open from the email', () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    hookMode.real = false;
+    globalThis.fetch = realFetch;
+    resetApiSessionForTests();
+  });
+
+  it('shows the portal when the app session identity settles while its first requests are in flight', async () => {
+    // The customer has no app session: the auth bootstrap resolves the identity (unknown, then
+    // anonymous) in parallel with /me and /home. Their answers must not be discarded as belonging
+    // to a superseded session, which would put a valid link on the load-error screen.
+    let identityReplaced = false;
+    registerApiSession({
+      getToken: () => null,
+      onUnauthorized: vi.fn(),
+      scope: {
+        capture: () => ({}),
+        isSameIdentity: () => !identityReplaced,
+        isCurrent: () => !identityReplaced,
+      },
+    });
+    globalThis.fetch = vi.fn(async (url) => {
+      identityReplaced = true;
+      return new Response(JSON.stringify(String(url).endsWith('/sws/portal/me') ? IDENTITY : HOME), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    hookMode.real = true;
+
+    renderPortal();
+    await shellReady();
+
+    expect(screen.getByTestId('portal-home')).toBeInTheDocument();
+    expect(screen.getByTestId('portal-customer-name').textContent).toBe('Cliente Uno');
+    expect(screen.queryByTestId('portal-load-error')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('portal-invalid-link')).not.toBeInTheDocument();
   });
 });
 

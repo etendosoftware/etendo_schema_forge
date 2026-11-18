@@ -16,6 +16,8 @@ import { test, expect } from '../../helpers/test.js';
  * C. A pending quotation is rejected (with a reason) or accepted: the request only emails a
  *    confirmation; the email's landing (`/portal/decision/:token`) confirms it and opens the portal
  *    on the quotation, with no notice.
+ * D. The landing's confirmation is lost on the way back: its one automatic resend answers "already
+ *    applied", and the customer reads that instead of the failure card.
  *
  * The portal is a public page: no `login()`, no session. Every `/sws/portal/*` route is mocked here
  * and answers 401 unless the request carries the token in the `X-Portal-Token` header, so a request
@@ -73,7 +75,7 @@ const json = (route, body, status = 200) => route.fulfill({
  * Two routes, not one brace pattern (see the e2e guide's glob gotcha): `/sws/portal/**` covers every
  * sub-path, and the catch-all `/sws/**` is registered first so the portal route wins (LIFO).
  */
-async function installPortalMock(page, { me, confirmAnswer = null }) {
+async function installPortalMock(page, { me, confirmAnswer = null, loseFirstConfirm = false }) {
   const requests = [];
   await page.route('**/sws/**', (route) => json(route, {}));
   await page.route('**/sws/portal/**', async (route) => {
@@ -83,6 +85,7 @@ async function installPortalMock(page, { me, confirmAnswer = null }) {
     // The confirmation landing carries the decision token in its own header, never the portal one.
     if (path === '/decisions/confirm' && request.method() === 'POST') {
       requests.decisionConfirms = (requests.decisionConfirms ?? 0) + 1;
+      if (loseFirstConfirm && requests.decisionConfirms === 1) return route.abort('connectionreset');
       return request.headers()['x-portal-decision-token'] === DECISION_TOKEN
         ? json(route, confirmAnswer) : json(route, {}, 401);
     }
@@ -269,4 +272,25 @@ test.describe('Customer portal — mocked', () => {
       expectTokenOnlyInHeader(requests);
     });
   }
+
+  test('D: a confirmation lost on the way back is resent once and reads as already applied', async ({ page }) => {
+    const requests = await installPortalMock(page, {
+      me: { state: 'valid', businessPartnerName: 'Cliente Uno', tenantName: 'Acme SA', hasLogo: false },
+      loseFirstConfirm: true,
+      confirmAnswer: {
+        state: 'confirmed', appliedNow: false, decision: 'REJECT', documentNo: 'PR/0001', tenantName: 'Acme SA',
+      },
+    });
+
+    await page.goto(`/portal/decision/${DECISION_TOKEN}`);
+
+    await expect(page.getByTestId('portal-decision-confirmed')).toBeVisible();
+    await expect(page.getByTestId('portal-decision-summary-number')).toContainText('PR/0001');
+    await expect(page.getByTestId('portal-decision-failed')).toHaveCount(0);
+    await expect(page.getByTestId('portal-decision-applied')).toHaveCount(0);
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    expect(requests.decisionConfirms).toBe(2);
+    // The resend answered: the read-only view, the last resort, was never needed.
+    expect(requests.some((request) => request.path === '/decisions/view')).toBe(false);
+  });
 });
