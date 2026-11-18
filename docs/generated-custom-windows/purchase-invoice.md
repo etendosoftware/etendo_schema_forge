@@ -2070,8 +2070,17 @@ Tests: `ocr/__tests__/hasExtractedData.test.js`, `useOcrExtraction.vitest.jsx`,
 ## OCR reader — product matching assigns only exact or near-identical matches silently
 
 Line products are looked up with `simSearch` (Product, `minSimPercent: 50`, `qtyResults: 3`; raised from 30 in ETP-5654 to cut low-similarity noise from the suggestions).
-`classifyProductMatch` (`ocr/ingest/purchaseInvoiceDescriptor.js`) decides per line:
+`classifyProductMatch` (`ocr/ingest/purchaseInvoiceDescriptor.js`) decides per line, in this order:
 
+- **Vendor history (ETP-6364), first:** once the vendor is known (an existing business partner;
+  a vendor being created has none), `findProductHistory` asks the invoice lines action
+  `POST …/purchase-invoice/lines/new/action/productHistory` with `{ vendorId, descriptions }` for the
+  products this vendor's **completed** purchase invoices booked lines with the same description to
+  (case, spaces and accents ignored; the OCR keeps the read description on each line it creates).
+  Exactly **one** product → assigned automatically, whatever the similarity search says; it is a
+  learned alias ("TORN M6X20 INOX" → "Tornillo hexagonal M6x20 inox" after the user picked it once).
+  Two or more → the most frequent is only suggested. No history, or the action failing → the
+  rules below. The Java twin answers from the same service.
 - **Exactly one candidate whose name equals the line description** (trim, case-insensitive and
   **accent-insensitive**) → assigned automatically. Names are compared through
   `normalizeProductName` (NFC, trim, lowercase, diacritics stripped), mirrored by
@@ -2106,6 +2115,16 @@ Line products are looked up with `simSearch` (Product, `minSimPercent: 50`, `qty
   `PRODUCT_AUTO_MATCH_LEGACY_MIN_SCORE`). A missing, blank or non-numeric value
   (`undefined`, `''`, `NaN`, `"96.7%"`) never qualifies. The Java OCR review (`OcrProductMatch`,
   `auto_matched` state) applies the same rule.
+- **Exactly one candidate a typo away (ETP-6364):** when nothing above applies, `isTypoAway`
+  compares the normalized description and name with the optimal string alignment distance (a
+  letter wrong, missing, extra, or two adjacent letters swapped, each 1 edit): at most **1 edit**
+  for a description of up to 8 characters and **2** for a longer one, never for one shorter than
+  5 characters (`PRODUCT_EDIT_*`). A different **number** ("0,33L" vs "0,5L", "M8" vs "M9"), a
+  different **one-letter token** ("talla L" vs "talla M") or a different count of **ñ** ("año" vs
+  "ano") is never a typo. One such candidate → assigned; two or more → suggestion. On the demo
+  catalog (80 products) this resolves 73 of 80 descriptions with one wrong letter, 62 with two
+  swapped letters, 56 missing the last letter and 74 missing one in the middle (the
+  whole-string rule alone: 2, 0, 15 and 4), with no wrong assignment.
 - **Any other candidate** (nothing equal and no clear near-identical name, or two products with the same
   exact name) → the line goes to the "Asociar productos" popup, where the best candidate is only **suggested**
   (ETP-5654): the row starts undecided and the suggestion shows as a one-click chip below the
