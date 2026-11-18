@@ -5,7 +5,6 @@
 // @covers tools/app-shell/src/pages/portal/PortalHomeView.jsx
 // @covers tools/app-shell/src/pages/portal/PortalDecisionActions.jsx
 // @covers tools/app-shell/src/pages/PortalDecisionPage.jsx
-// @covers tools/app-shell/src/pages/portal/PortalArrivalNotice.jsx
 import { test, expect } from '../../helpers/test.js';
 
 /**
@@ -16,7 +15,7 @@ import { test, expect } from '../../helpers/test.js';
  * B. An expired link renews itself: exactly one POST /renew, then the "new link sent" message.
  * C. A pending quotation is rejected (with a reason) or accepted: the request only emails a
  *    confirmation; the email's landing (`/portal/decision/:token`) confirms it and opens the portal
- *    on the quotation with a one-off notice that a reload does not bring back.
+ *    on the quotation, with no notice.
  *
  * The portal is a public page: no `login()`, no session. Every `/sws/portal/*` route is mocked here
  * and answers 401 unless the request carries the token in the `X-Portal-Token` header, so a request
@@ -210,7 +209,7 @@ test.describe('Customer portal — mocked', () => {
     expectTokenOnlyInHeader(requests);
   });
 
-  for (const { decision, answer, expectedBody, notice, reason } of [
+  for (const { decision, answer, expectedBody } of [
     {
       decision: 'Rechazar, with a reason',
       answer: async (page) => {
@@ -224,8 +223,6 @@ test.describe('Customer portal — mocked', () => {
         await page.getByTestId('portal-check-email-ok').click();
       },
       expectedBody: { decision: 'REJECT', reasonCode: 'OTHER', reasonText: 'Ya no lo necesitamos' },
-      notice: /Has rechazado el presupuesto PR\/0001|You have rejected quotation PR\/0001/,
-      reason: /Ya no lo necesitamos/,
     },
     {
       decision: 'Aceptar',
@@ -236,11 +233,9 @@ test.describe('Customer portal — mocked', () => {
         await page.getByTestId('portal-check-email-ok').click();
       },
       expectedBody: { decision: 'ACCEPT' },
-      notice: /Has aceptado el presupuesto PR\/0001|You have accepted quotation PR\/0001/,
-      reason: null,
     },
   ]) {
-    test(`C: ${decision} emails a confirmation, whose landing confirms and leads to the quotation with a one-off notice`, async ({ page }) => {
+    test(`C: ${decision} emails a confirmation, whose landing confirms and leads to the quotation`, async ({ page }) => {
       const requests = await installPortalMock(page, {
         me: {
           state: 'valid', businessPartnerName: 'Cliente Uno', tenantName: 'Acme SA', hasLogo: false,
@@ -260,22 +255,14 @@ test.describe('Customer portal — mocked', () => {
       expect(requests.decisionBodies).toEqual([expectedBody]);
 
       // The email's button: the landing confirms once and shows the result; "Portal de clientes"
-      // opens the quotation, with the notice.
+      // opens the quotation, with no notice (the Figma has none).
       await page.goto(`/portal/decision/${DECISION_TOKEN}`);
       await expect(page.getByTestId('portal-decision-applied')).toBeVisible();
       await page.getByTestId('portal-decision-enter').click();
-      const arrival = page.getByTestId('portal-arrival-notice');
-      await expect(arrival).toContainText(notice);
       expect(requests.decisionConfirms).toBe(1);
       const landed = new URL(page.url());
       expect(landed.pathname).toBe(`/portal/${TOKEN}`);
       expect(Object.fromEntries(landed.searchParams)).toEqual({ view: 'doc', kind: 'QUOTATION', id: 'q-1' });
-      await expect(page.getByTestId('portal-panel-title')).toContainText('PR/0001');
-      if (reason) await expect(page.getByTestId('portal-arrival-notice-reason')).toContainText(reason);
-      else await expect(page.getByTestId('portal-arrival-notice-reason')).toHaveCount(0);
-
-      // The notice lived in the history entry's state only: a reload does not replay it.
-      await page.reload();
       await expect(page.getByTestId('portal-panel-title')).toContainText('PR/0001');
       await expect(page.getByTestId('portal-arrival-notice')).toHaveCount(0);
       expect(requests.decisionConfirms).toBe(1);

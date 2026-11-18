@@ -1117,8 +1117,8 @@ arrives, so every shared piece takes the new look as an opt-in (`PortalSection v
   of the original send, shown in full). The email link's landing no longer enters the portal by itself:
   it shows "¡Presupuesto aceptado!" / "¡Presupuesto rechazado!" with the summary (number, issue date
   or reason, total, status — app label, Figma colour) and "La empresa emisora ha sido notificada…",
-  and its "Portal de clientes" button enters the portal on the quotation with the one-off notice
-  (hidden without a portal token). The other landing states keep their logic in the same page.
+  and its "Portal de clientes" button enters the portal on the quotation, with no notice (removed
+  2026-11-18: the Figma has none; hidden without a portal token). The other landing states keep their logic in the same page.
   Backend fields (additive, `com.etendoerp.go`): `date`, `grandTotal`, `currency`, `documentStatus`
   on the decision view/confirm answers; `decision.email` on a decidable quotation's detail.
 
@@ -1418,10 +1418,11 @@ Built in both repos following C.0–C.11.
    `LINK_ORIGIN = DECISION`, parent = the decision's link, root = its root) and marks it usable at
    once, since no email carries it (`PortalDecisionEntry`). Its raw token comes back only in the
    confirm POST's answer (`portalToken`, `quotationId`). The SPA opens
-   `/portal/<token>?view=doc&kind=QUOTATION&id=<quotationId>` and hands it a one-off notice through
-   router state, dropped from the history entry once read (`PortalArrivalNotice`): "Has aceptado el
-   presupuesto {n}", "Has rechazado el presupuesto {n}" with "Motivo: …", "Ya habías respondido este
-   presupuesto", no longer pending, expired. Opening the portal records `portal.link.opened` as usual
+   `/portal/<token>?view=doc&kind=QUOTATION&id=<quotationId>` (replacing the landing in the history),
+   with no notice: the one-off arrival banner ("Has aceptado / rechazado el presupuesto {n}", "Ya
+   habías respondido…", `PortalArrivalNotice`, router state) was removed on 2026-11-18, as the Figma
+   has none and the confirmation page already says what happened; its `portalNotice*` keys left the
+   locales. Opening the portal records `portal.link.opened` as usual
    (origin `DECISION`). No link, and the landing keeps its card: invalid token, portal closed for the
    customer by the access checks, or minting failed; the decision itself is applied or not exactly as
    before. Bound: at most 10 `DECISION` links per decision link and day, besides the confirm route's

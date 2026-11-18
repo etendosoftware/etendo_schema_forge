@@ -7,7 +7,6 @@
 // @covers tools/app-shell/src/pages/portal/PortalDetailPanel.jsx
 // @covers tools/app-shell/src/pages/portal/PortalBits.jsx
 // @covers tools/app-shell/src/components/layout/SearchBar.jsx
-// @covers tools/app-shell/src/pages/portal/PortalArrivalNotice.jsx
 // Mocks BEFORE imports.
 const apiFetchMock = vi.fn();
 
@@ -1279,49 +1278,5 @@ describe('PortalPage — link states', () => {
     await waitFor(() => expect(screen.getByTestId('portal-renewed')).toBeInTheDocument());
     expect(callsTo('/renew')).toHaveLength(2);
     expect(screen.queryByTestId('portal-renew-error')).not.toBeInTheDocument();
-  });
-});
-
-describe('PortalPage — the notice of a decision confirmation (router state)', () => {
-  /** The entry the confirmation landing opens: the portal, with the notice in its state. */
-  const arrivalEntry = (notice) => ({ pathname: `/portal/${TOKEN}`, state: { portalNotice: notice } });
-
-  it('shows the notice once, with its reason, and drops it from the history entry so a reload shows nothing', async () => {
-    const { unmount } = renderPortal(arrivalEntry({
-      messageKey: 'portalNoticeRejected', tone: 'success', number: 'PR/0001',
-      reasonCode: 'OTHER', reasonText: 'Ya no lo necesitamos',
-    }));
-    await shellReady();
-
-    expect(screen.getAllByTestId('portal-arrival-notice')).toHaveLength(1);
-    expect(screen.getByTestId('portal-arrival-notice').querySelector('p').textContent)
-      .toBe('portalNoticeRejected {"number":"PR/0001"}');
-    expect(screen.getByTestId('portal-arrival-notice-reason').textContent)
-      .toBe('portalRejectReasonLabel: portalRejectReasonOther — Ya no lo necesitamos');
-    // The entry was replaced without its state, while the notice stays on screen.
-    await waitFor(() => expect(screen.getByTestId('location-probe').dataset.state).toBe('null'));
-    expect(screen.getByTestId('portal-arrival-notice')).toBeInTheDocument();
-
-    // A reload opens the same entry again, which no longer carries the notice.
-    const reloaded = { pathname: `/portal/${TOKEN}`, state: JSON.parse(screen.getByTestId('location-probe').dataset.state) };
-    unmount();
-    renderPortal(reloaded);
-    await shellReady();
-    expect(screen.queryByTestId('portal-arrival-notice')).not.toBeInTheDocument();
-  });
-
-  it('closes on dismiss; an acceptance has no reason line', async () => {
-    const user = userEvent.setup();
-    renderPortal(arrivalEntry({
-      messageKey: 'portalNoticeAccepted', tone: 'success', number: 'PR/0001', reasonCode: null, reasonText: null,
-    }));
-    await shellReady();
-
-    expect(screen.getByTestId('portal-arrival-notice').querySelector('p').textContent)
-      .toBe('portalNoticeAccepted {"number":"PR/0001"}');
-    expect(screen.queryByTestId('portal-arrival-notice-reason')).not.toBeInTheDocument();
-
-    await user.click(screen.getByTestId('portal-arrival-notice-dismiss'));
-    expect(screen.queryByTestId('portal-arrival-notice')).not.toBeInTheDocument();
   });
 });

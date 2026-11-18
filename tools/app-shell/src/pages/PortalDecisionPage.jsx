@@ -16,9 +16,7 @@ import { PORTAL_REJECT_REASONS, PORTAL_REJECT_REASON_OTHER } from './portal/port
 import {
   PortalDate, PortalDocumentStatus, PortalMoney, PORTAL_FIGMA_BUTTON_PRIMARY, PORTAL_FIGMA_SHADOW,
 } from './portal/PortalBits.jsx';
-import {
-  PORTAL_NOTICE_STATE_KEY, portalDecisionNotice, portalEntryPath,
-} from './portal/portalDecisionArrival.js';
+import { portalEntryPath } from './portal/portalDecisionArrival.js';
 
 /**
  * The confirmation page of a portal quotation decision (ETP-6209 Part C, redesign "Página de
@@ -293,9 +291,7 @@ export default function PortalDecisionPage({ resendDelayMs = CONFIRM_RESEND_DELA
 
   const entryPath = view === VIEW.ready ? portalEntryPath(decision) : null;
   const enter = entryPath
-    ? () => navigate(entryPath, {
-      replace: true, state: { [PORTAL_NOTICE_STATE_KEY]: portalDecisionNotice(decision) },
-    })
+    ? () => navigate(entryPath, { replace: true })
     : null;
 
   if (view === VIEW.applying) {
