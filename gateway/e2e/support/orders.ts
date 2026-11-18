@@ -262,6 +262,7 @@ export function describeOrderFlow(kind: 'sales-order' | 'purchase-order'): void 
       it('a PATCH sending only currency_rate on the completed order answers 422 and leaves the rate unchanged', async () => {
         const { res: before, etag } = await readWithEtag(itemPath(completable));
         const rateBefore = Number(before.json.data.attributes.currency_rate);
+        assert.ok(Number.isFinite(rateBefore), `the completed order must expose a numeric currency_rate, got ${JSON.stringify(before.json.data.attributes.currency_rate)}`);
         const sent = rateBefore + 0.5;
         expectErrorDocument(await patch(completable, { currency_rate: sent }, etag), COMPLETED_WRITE_STATUS);
         const { res } = await readWithEtag(itemPath(completable));
