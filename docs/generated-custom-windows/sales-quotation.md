@@ -641,3 +641,7 @@ configuration (`quotation` entity) withholds them with a reason, and `etendo_sch
 
 How the step itself works — the backend `sifDefaults` preview, when it appears, the
 `sifFields` it sends and the fail-open rule — is described once in [sales-order.md → Fiscal data step before the invoice is created](sales-order.md#fiscal-data-step-before-the-invoice-is-created--etp-6179).
+
+## Rate and cost fields are numeric — ETP-6342
+
+Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. `eTGOCurrencyRate` (`EM_ETGO_Currency_Rate`) on the `quotation` entity is now `decimal` in the contract (`tsType: number`).
