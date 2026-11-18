@@ -321,7 +321,7 @@ export const price = [
     "priceListVersion": "Sample priceListVersion",
     "standardPrice": "Sample standardPrice",
     "listPrice": "Sample listPrice",
-    "cost": "Sample cost",
+    "cost": 99.44,
     "productId": "mock-product-001"
   },
   {
@@ -329,7 +329,7 @@ export const price = [
     "priceListVersion": "Sample priceListVersion",
     "standardPrice": "Sample standardPrice",
     "listPrice": "Sample listPrice",
-    "cost": "Sample cost",
+    "cost": 96.94,
     "productId": "mock-product-002"
   },
   {
@@ -337,7 +337,7 @@ export const price = [
     "priceListVersion": "Sample priceListVersion",
     "standardPrice": "Sample standardPrice",
     "listPrice": "Sample listPrice",
-    "cost": "Sample cost",
+    "cost": 12.48,
     "productId": "mock-product-003"
   },
   {
@@ -345,7 +345,7 @@ export const price = [
     "priceListVersion": "Sample priceListVersion",
     "standardPrice": "Sample standardPrice",
     "listPrice": "Sample listPrice",
-    "cost": "Sample cost",
+    "cost": 96.31,
     "productId": "mock-product-004"
   },
   {
@@ -353,7 +353,7 @@ export const price = [
     "priceListVersion": "Sample priceListVersion",
     "standardPrice": "Sample standardPrice",
     "listPrice": "Sample listPrice",
-    "cost": "Sample cost",
+    "cost": 31.27,
     "productId": "mock-product-005"
   },
   {
@@ -361,7 +361,7 @@ export const price = [
     "priceListVersion": "Sample priceListVersion",
     "standardPrice": "Sample standardPrice",
     "listPrice": "Sample listPrice",
-    "cost": "Sample cost",
+    "cost": 76.52,
     "productId": "mock-product-006"
   },
   {
@@ -369,7 +369,7 @@ export const price = [
     "priceListVersion": "Sample priceListVersion",
     "standardPrice": "Sample standardPrice",
     "listPrice": "Sample listPrice",
-    "cost": "Sample cost",
+    "cost": 2.66,
     "productId": "mock-product-007"
   },
   {
@@ -377,7 +377,7 @@ export const price = [
     "priceListVersion": "Sample priceListVersion",
     "standardPrice": "Sample standardPrice",
     "listPrice": "Sample listPrice",
-    "cost": "Sample cost",
+    "cost": 10.03,
     "productId": "mock-product-008"
   },
   {
@@ -385,7 +385,7 @@ export const price = [
     "priceListVersion": "Sample priceListVersion",
     "standardPrice": "Sample standardPrice",
     "listPrice": "Sample listPrice",
-    "cost": "Sample cost",
+    "cost": 93.97,
     "productId": "mock-product-009"
   },
   {
@@ -393,7 +393,7 @@ export const price = [
     "priceListVersion": "Sample priceListVersion",
     "standardPrice": "Sample standardPrice",
     "listPrice": "Sample listPrice",
-    "cost": "Sample cost",
+    "cost": 1.1,
     "productId": "mock-product-010"
   },
   {
@@ -401,7 +401,7 @@ export const price = [
     "priceListVersion": "Sample priceListVersion",
     "standardPrice": "Sample standardPrice",
     "listPrice": "Sample listPrice",
-    "cost": "Sample cost",
+    "cost": 79.99,
     "productId": "mock-product-011"
   },
   {
@@ -409,7 +409,7 @@ export const price = [
     "priceListVersion": "Sample priceListVersion",
     "standardPrice": "Sample standardPrice",
     "listPrice": "Sample listPrice",
-    "cost": "Sample cost",
+    "cost": 53.61,
     "productId": "mock-product-012"
   }
 ];
