@@ -991,7 +991,8 @@ arrives, so every shared piece takes the new look as an opt-in (`PortalSection v
   1. "Empieza gratis" opens the app's public sign-up, `https://app.etendo.ai/onboarding`
      (`ETENDO_SIGNUP_URL` in `PortalShell.jsx`; the route is `onboarding` in `runtime-routes.jsx`),
      in a new tab with `rel="noopener noreferrer"`. The etendo.ai brand still opens etendo.ai.
-  2. Search: the PO asked for the app's own search component without the microphone. **Not
+  2. Search (superseded by the PO final answers below: the pill is now shared): the PO asked for
+     the app's own search component without the microphone. **Not
      reused:** the app's search is not a component but inline markup inside `TopBar.jsx`, wired to
      the authenticated app context (`useGlobalSearch` / `GlobalSearchProvider`, vector-search
      contracts, the menu); extracting it is a shared-component refactor of its own, and forking it
@@ -1017,7 +1018,14 @@ arrives, so every shared piece takes the new look as an opt-in (`PortalSection v
   9. "Descargar seleccionados" and the row checkboxes (select-all included) are removed for now
      (performance); a document still downloads from its detail.
 - **PO final answers (2026-11-18, supersede the matching points above).**
-  - 2 (search): pending a decision; unchanged.
+  - 2 (search): decided. Only the visual pill was extracted from the app's top bar into the shared,
+    presentational `components/layout/SearchBar.jsx` (search icon, optional leading slot, input; no
+    microphone, no state); `TopBar.jsx` renders it with the same classes and test ids and keeps
+    `useGlobalSearch`, the scopes, the vector search and its popup. The portal's `PortalSearchPill`
+    now renders that bar on Inicio and the lists (the old Phosphor/Lucide pill and its `header`
+    variant are gone), keeping its own data source (`searchPortalDocuments`, the list's query) and
+    its own results panel, so the customer only sees their documents. Visible change in the portal:
+    the pill takes the app's look (44px, the app's search background) on desktop and mobile.
   - 4: the chart's legend reads only "Gastos" (en "Expenses", the app's `expenses` key): one series,
     since what the customer was invoiced is their expense. The legend swatch is green to match the
     bars (user decision; the Figma's red "Gastos" swatch was an artefact of the generic chart).

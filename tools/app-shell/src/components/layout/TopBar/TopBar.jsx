@@ -9,6 +9,7 @@ import { useCopilot } from '@/components/CopilotContext';
 import { WalkthroughLauncher } from '@etendosoftware/app-shell-core/walkthrough';
 import { cn } from '@/lib/utils.js';
 import { useGlobalSearch } from '@/components/global-search/GlobalSearchContext.jsx';
+import { SearchBar } from '@/components/layout/SearchBar.jsx';
 import {
   resolveVectorSearchTargetForPath,
   resolveVectorSearchTargets,
@@ -33,7 +34,6 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover.jsx';
 import {
-  Search,
   Sparkles,
   MoreVertical,
   MoreHorizontal,
@@ -646,22 +646,18 @@ export default function TopBar({
             which ignored the Navigation Rail width and covered the title at 1280px. `min-w-0` +
             `max-w-full` let it shrink instead of overlapping if the bar ever gets too narrow. */}
         <div className="col-start-2 flex min-w-0 items-center justify-center" data-testid="topbar-search-slot">
-          <div
-            className="relative flex h-11 w-[392px] max-w-full items-center rounded-full border border-transparent bg-search-bg px-4 text-sm transition-colors hover:bg-search-bg/80 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20"
+          <SearchBar
+            className="w-[392px] max-w-full"
             onClick={(event) => {
               handleSearchClick(event);
               requestAnimationFrame(() => searchInputRef.current?.focus());
             }}
-            data-testid="global-search-trigger"
-            role="button"
-            tabIndex={0}
             onKeyDown={(event) => {
               if (event.target !== event.currentTarget) return;
               if (event.key === 'Enter' || event.key === ' ') handleSearchClick(event);
             }}
-          >
-            <Search className="mr-2 h-5 w-5 shrink-0 text-search-placeholder" data-testid="Search__133e64" />
-            {selectedScope && selectedScope.label && (
+            testId="global-search-trigger"
+            leading={selectedScope && selectedScope.label && (
               <span
                 className="mr-2 inline-flex min-w-0 max-w-[12rem] shrink items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground"
                 data-testid="topbar-vector-search-scope"
@@ -678,23 +674,24 @@ export default function TopBar({
                 </button>
               </span>
             )}
-            <input
-              ref={searchInputRef}
-              value={searchValue}
-              onChange={(event) => {
-                const nextValue = event.target.value;
-                setSearchValue(nextValue);
-                if (nextValue.length === 0) {
-                  clearCurrentWindowScope();
-                }
-              }}
-              onFocus={handleSearchClick}
-              onMouseDown={() => setSearchOpen(true)}
-              onClick={(event) => {
+            inputRef={searchInputRef}
+            value={searchValue}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              setSearchValue(nextValue);
+              if (nextValue.length === 0) {
+                clearCurrentWindowScope();
+              }
+            }}
+            placeholder={resolvedPlaceholder}
+            inputProps={{
+              onFocus: handleSearchClick,
+              onMouseDown: () => setSearchOpen(true),
+              onClick: (event) => {
                 event.stopPropagation();
                 handleSearchClick(event);
-              }}
-              onKeyDown={(event) => {
+              },
+              onKeyDown: (event) => {
                 // When the input owns focus, handle the shortcut here and stop
                 // propagation so the document listener cannot toggle twice.
                 if (event.key.toLowerCase() === 'k' && (event.ctrlKey || event.metaKey)) {
@@ -718,14 +715,11 @@ export default function TopBar({
                 }
                 const result = handleSearchKeyDown(event);
                 if (event.key === 'Enter' && !result?.keepOpen) setSearchOpen(false);
-              }}
-              placeholder={resolvedPlaceholder}
-              aria-label={resolvedPlaceholder}
-              cmdk-input=""
-              className="min-w-0 flex-1 bg-transparent text-left text-sm text-foreground outline-none placeholder:text-search-placeholder"
-              data-testid="global-search-input"
-            />
-          </div>
+              },
+              'cmdk-input': '',
+            }}
+            inputTestId="global-search-input"
+            data-testid="SearchBar__133e64" />
         </div>
 
         {/* Right: action icons */}

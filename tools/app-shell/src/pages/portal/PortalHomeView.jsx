@@ -61,7 +61,6 @@ export default function PortalHomeView({
       placeholder={ui('portalSearchAllPlaceholder')}
       label={ui('portalSearch')}
       testId="portal-global-search"
-      variant="header"
       data-testid="PortalSearchPill__beaeb4">
       <SearchResults search={search} onOpen={open} data-testid="SearchResults__beaeb4" />
     </PortalSearchPill>

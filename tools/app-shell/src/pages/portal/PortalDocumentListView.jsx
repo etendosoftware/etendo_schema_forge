@@ -157,7 +157,6 @@ export default function PortalDocumentListView({
       placeholder={ui('portalSearchPlaceholder')}
       testId={mobile ? 'portal-search-mobile' : 'portal-search'}
       className={mobile ? 'flex-1' : undefined}
-      variant={mobile ? undefined : 'header'}
       data-testid="PortalSearchPill__c7f7d2" />
   );
 

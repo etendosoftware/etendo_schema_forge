@@ -6,6 +6,7 @@
 // @covers tools/app-shell/src/pages/portal/PortalDocumentDetailView.jsx
 // @covers tools/app-shell/src/pages/portal/PortalDetailPanel.jsx
 // @covers tools/app-shell/src/pages/portal/PortalBits.jsx
+// @covers tools/app-shell/src/components/layout/SearchBar.jsx
 // @covers tools/app-shell/src/pages/portal/PortalArrivalNotice.jsx
 // Mocks BEFORE imports.
 const apiFetchMock = vi.fn();
@@ -762,7 +763,12 @@ describe('PortalPage — home', () => {
     renderPortal();
     await shellReady();
 
-    await user.type(screen.getByTestId('portal-global-search'), 'FV');
+    // The app's own search bar (shared with the top bar), not a portal copy; it never reaches the
+    // app's global search: the query goes to the portal's /search only.
+    const input = screen.getByTestId('portal-global-search');
+    expect(input.closest('.bg-search-bg')).not.toBeNull();
+    expect(screen.queryByTestId('global-search-trigger')).not.toBeInTheDocument();
+    await user.type(input, 'FV');
 
     await waitFor(() => expect(screen.getAllByTestId('portal-search-result')).toHaveLength(1));
     expect(new URL(callsTo('/search')[0][0], 'http://portal').searchParams.get('q')).toBe('FV');

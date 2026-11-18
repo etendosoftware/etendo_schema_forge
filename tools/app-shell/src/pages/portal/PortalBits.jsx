@@ -1,5 +1,4 @@
-import { Search } from 'lucide-react';
-import { MagnifyingGlassIcon } from '@phosphor-icons/react';
+import { SearchBar } from '@/components/layout/SearchBar.jsx';
 import { useLocale, useLocaleSwitch, useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { getStatusTone, statusLabel } from '@/lib/statusBadge.js';
@@ -276,42 +275,24 @@ export function PortalSection({ title, action, children, className = '', testId,
 }
 
 /**
- * The design's search pill (header of Inicio and the lists). `variant="header"` is the main
- * screen's top-bar pill (spec of 2026-11-17): white, 40px tall, on the page background.
+ * The portal's search box: the app's own search bar (`components/layout/SearchBar.jsx`, the top
+ * bar's pill, no microphone; PO answer, ETP-6209) around the portal's own search — the caller keeps
+ * its data source (`searchPortalDocuments` on Inicio, the list's own query) and passes its results
+ * panel as `children`, so the customer only ever sees their documents. Full width of its container.
  */
 export function PortalSearchPill({
-  value, onChange, placeholder, label, testId, className, children, variant,
+  value, onChange, placeholder, label, testId, className, children,
 }) {
   return (
     <div className={cn('relative min-w-0', className)}>
-      <label className={cn(
-        'flex h-12 items-center gap-2.5 rounded-full bg-muted px-4 md:gap-2 md:px-3.5',
-        variant === 'header' ? 'md:h-10 md:bg-card md:px-4' : 'md:h-9',
-      )}>
-        {/* The main screen's top-bar pill takes the design's Phosphor glyph (spec of 2026-11-17);
-            the lists keep theirs until their own spec arrives. */}
-        {variant === 'header' ? (
-          <MagnifyingGlassIcon
-            size={20}
-            className="shrink-0 text-muted-foreground"
-            aria-hidden="true"
-            data-testid="MagnifyingGlass__7a317e" />
-        ) : (
-          <Search
-            className="h-4 w-4 shrink-0 text-muted-foreground"
-            aria-hidden="true"
-            data-testid="Search__7a317e" />
-        )}
-        <input
-          type="search"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          aria-label={label ?? placeholder}
-          placeholder={placeholder}
-          className="min-w-0 flex-1 border-0 bg-transparent text-base outline-none md:text-sm"
-          data-testid={testId}
-        />
-      </label>
+      <SearchBar
+        className="w-full"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        ariaLabel={label ?? placeholder}
+        inputTestId={testId}
+        data-testid="SearchBar__7a317e" />
       {children}
     </div>
   );
