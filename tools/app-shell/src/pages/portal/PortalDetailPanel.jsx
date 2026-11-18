@@ -51,20 +51,20 @@ export function PortalDetailsCard({ document }) {
           <span className="tabular-nums" data-testid="portal-details-total">{money(document.grandTotal)}</span>
         </div>
       ) : null}
-      <DetailRow label={ui('portalFieldDate')}><PortalDate value={document.date} data-testid="PortalDate__d3c1a0" /></DetailRow>
+      <DetailRow label={ui('portalFieldDate')} data-testid="DetailRow__c1fc7f"><PortalDate value={document.date} data-testid="PortalDate__d3c1a0" /></DetailRow>
       {document.kind === 'QUOTATION' ? (
-        <DetailRow label={ui('portalColValidUntil')}><PortalDate value={document.validUntil} data-testid="PortalDate__d3c1a0" /></DetailRow>
+        <DetailRow label={ui('portalColValidUntil')} data-testid="DetailRow__c1fc7f"><PortalDate value={document.validUntil} data-testid="PortalDate__d3c1a0" /></DetailRow>
       ) : null}
       {isInvoice ? (
-        <DetailRow label={ui('portalColDueDate')}><PortalDate value={document.dueDate} data-testid="PortalDate__d3c1a0" /></DetailRow>
+        <DetailRow label={ui('portalColDueDate')} data-testid="DetailRow__c1fc7f"><PortalDate value={document.dueDate} data-testid="PortalDate__d3c1a0" /></DetailRow>
       ) : null}
-      <DetailRow label={ui('portalColStatus')}>
+      <DetailRow label={ui('portalColStatus')} data-testid="DetailRow__c1fc7f">
         {document.documentStatus ? (
           <PortalDocumentStatus status={document.documentStatus} palette="figma" className={PANEL_BADGE} data-testid="PortalDocumentStatus__d3c1a0" />
         ) : '—'}
       </DetailRow>
       {isInvoice ? (
-        <DetailRow label={ui('portalColPaymentStatus')}>
+        <DetailRow label={ui('portalColPaymentStatus')} data-testid="DetailRow__c1fc7f">
           <PortalPaymentStatus
             document={document}
             installments={document.installments}
@@ -73,10 +73,10 @@ export function PortalDetailsCard({ document }) {
             data-testid="PortalPaymentStatus__d3c1a0" />
         </DetailRow>
       ) : null}
-      {isInvoice ? <DetailRow label={ui('portalColOutstanding')}>{money(document.outstandingAmount)}</DetailRow> : null}
-      {document.paymentMethod ? <DetailRow label={ui('portalFieldPaymentMethod')}>{document.paymentMethod}</DetailRow> : null}
-      {hasAmounts ? <DetailRow label={ui('portalColTaxBase')}>{money(document.taxBase)}</DetailRow> : null}
-      {hasAmounts ? <DetailRow label={ui('portalFieldTaxes')}>{money(taxesTotal)}</DetailRow> : null}
+      {isInvoice ? <DetailRow label={ui('portalColOutstanding')} data-testid="DetailRow__c1fc7f">{money(document.outstandingAmount)}</DetailRow> : null}
+      {document.paymentMethod ? <DetailRow label={ui('portalFieldPaymentMethod')} data-testid="DetailRow__c1fc7f">{document.paymentMethod}</DetailRow> : null}
+      {hasAmounts ? <DetailRow label={ui('portalColTaxBase')} data-testid="DetailRow__c1fc7f">{money(document.taxBase)}</DetailRow> : null}
+      {hasAmounts ? <DetailRow label={ui('portalFieldTaxes')} data-testid="DetailRow__c1fc7f">{money(taxesTotal)}</DetailRow> : null}
     </section>
   );
 }
