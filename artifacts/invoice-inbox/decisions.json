@@ -95,6 +95,26 @@
           "grid": false,
           "form": false
         },
+        "errorDetail": {
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false
+        },
+        "currency": {
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false
+        },
+        "newProducts": {
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false
+        },
+        "totalMismatch": {
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false
+        },
         "discardedAt": {
           "visibility": "readOnly",
           "grid": false,

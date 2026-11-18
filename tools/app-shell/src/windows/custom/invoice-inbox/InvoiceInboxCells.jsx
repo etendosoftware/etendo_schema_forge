@@ -7,6 +7,8 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 import { STATUS, isProcessingRow } from './invoiceInboxFilters.js';
 import { errorCodeLabelKey, statusLabelKey, STATUS_TONES } from './invoiceInboxMessages.js';
 import { isImageFileName } from './invoiceInboxUploadPolicy.js';
+import InvoiceInboxInvoiceLink from './InvoiceInboxInvoiceLink.jsx';
+import { rowCurrencyCode } from './invoiceInboxConfirmModel.js';
 
 const EMPTY = '—';
 const SUBLINE_CLASS = 'mt-1 text-xs leading-4';
@@ -173,11 +175,18 @@ export function InvoiceDateCell({ row, locale }) {
   return <span className="whitespace-nowrap">{formatCalendarDate(row.invoiceDate, locale)}</span>;
 }
 
-/** Total in the organization currency: the inbox row has no currency of its own yet. */
+/**
+ * Total in the document's own currency (the row's `currency`, ETP-6051); `currency` is the
+ * organization's, used only for a row that carries none (an older answer).
+ */
 export function TotalCell({ row, currency }) {
   if (isProcessingRow(row)) return <Shimmer width={64} data-testid="Shimmer__85f13c" />;
   if (row.grandTotalAmount == null) return <Muted data-testid="Muted__85f13c">{EMPTY}</Muted>;
-  return <span className="whitespace-nowrap font-semibold tabular-nums">{formatCurrency(currency, row.grandTotalAmount)}</span>;
+  return (
+    <span className="whitespace-nowrap font-semibold tabular-nums">
+      {formatCurrency(rowCurrencyCode(row) ?? currency, row.grandTotalAmount)}
+    </span>
+  );
 }
 
 /**
@@ -205,12 +214,16 @@ function StatusSubline({ row, ui, locale }) {
   // The plain document number; the DAL identifier ("no - date - amount") only when it is absent.
   const invoiceDoc = row['invoice$documentNo'] || row['invoice$_identifier'];
   if (row.status === STATUS.CONFIRMED && invoiceDoc) {
+    // The document number and "Completada" as a link to the purchase invoice it created.
+    const text = ui('invoiceInboxConfirmedAs', { doc: invoiceDoc });
     return (
-      <CellText
-        text={ui('invoiceInboxConfirmedAs', { doc: invoiceDoc })}
-        className={`${SUBLINE_CLASS} font-mono text-primary`}
+      <InvoiceInboxInvoiceLink
+        invoiceId={row.invoice}
+        className={`${SUBLINE_CLASS} block truncate font-mono text-primary hover:underline`}
         testId={`invoice-inbox-status-reason-${row.id}`}
-        data-testid="CellText__85f13c" />
+        data-testid="InvoiceInboxInvoiceLink__85f13c">
+        <span title={text}>{text}</span>
+      </InvoiceInboxInvoiceLink>
     );
   }
   const discardedDay = row.status === STATUS.DISCARDED ? formatDiscardedDay(row.discardedAt, locale) : '';

@@ -297,3 +297,67 @@ describe('useInvoiceInboxReviewNav — focus restore', () => {
     expect(document.activeElement).toBe(pencil);
   });
 });
+
+describe('useInvoiceInboxReviewNav — documents confirmed from the panel (skipIds)', () => {
+  function mountRowWithPencil(id) {
+    const tr = document.createElement('tr');
+    tr.tabIndex = -1;
+    const pencil = document.createElement('button');
+    pencil.setAttribute('data-testid', `invoice-inbox-row-edit-${id}`);
+    tr.appendChild(pencil);
+    document.body.appendChild(tr);
+    return { tr, pencil };
+  }
+
+  it('leave the walk and the counter at once; the open one always stays', () => {
+    const { result } = setup({ skipIds: ['a'] });
+    act(() => result.current.open(row('b')));
+    expect(result.current).toMatchObject({ openId: 'b', position: 1, total: 2, canPrev: false, canNext: true });
+    act(() => result.current.goNext());
+    expect(result.current.openId).toBe('c');
+  });
+
+  it('a skipped document that is the open one still counts, so the panel does not lose its position', () => {
+    const { result } = setup({ skipIds: ['b'] });
+    act(() => result.current.open(row('b')));
+    expect(result.current.openId).toBe('b');
+    expect(result.current.position).not.toBeNull();
+  });
+
+  it('skipped documents are not reached by prev/next', () => {
+    const { result } = setup({ rows: [row('a'), row('b'), row('c'), row('d')], skipIds: ['b', 'c'] });
+    act(() => result.current.open(row('a')));
+    act(() => result.current.goNext());
+    expect(result.current.openId).toBe('d');
+    act(() => result.current.goPrev());
+    expect(result.current.openId).toBe('a');
+  });
+
+  it('with more pages the denominator stays the server total (the page reloads the counters after each confirm)', () => {
+    const { result } = setup({ rows: [row('a'), row('b'), row('c')], hasMore: true, serverTotal: 10, skipIds: ['a'] });
+    act(() => result.current.open(row('b')));
+    expect(result.current.total).toBe(10);
+    expect(result.current.position).toBe(1);
+  });
+
+  it('goTo shows another document without touching the remembered opener', () => {
+    const { pencil } = mountRowWithPencil('a');
+    mountRowWithPencil('b');
+    pencil.focus();
+    const { result } = setup();
+    act(() => result.current.open(row('a')));
+    act(() => result.current.goTo('c'));
+    expect(result.current.openId).toBe('c');
+    document.body.focus();
+    act(() => result.current.restoreFocus());
+    expect(document.activeElement).toBe(pencil);
+  });
+
+  it('goTo marks the document as visited so closing reports it', () => {
+    const { result, props } = setup();
+    act(() => result.current.open(row('a')));
+    act(() => result.current.goTo('c'));
+    act(() => result.current.close());
+    expect(props.onClosed).toHaveBeenCalledWith(['a', 'c']);
+  });
+});

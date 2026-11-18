@@ -7,10 +7,12 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 const mockFetchReview = vi.fn();
 const mockApply = vi.fn();
 const mockMark = vi.fn();
+const mockConfirm = vi.fn();
 vi.mock('../invoiceInboxApi.js', () => ({
   fetchReview: (...a) => mockFetchReview(...a),
   applyOperations: (...a) => mockApply(...a),
   markReviewed: (...a) => mockMark(...a),
+  confirmInboxDocument: (...a) => mockConfirm(...a),
 }));
 
 import { useInvoiceInboxReviewEditor } from '../useInvoiceInboxReviewEditor.js';
@@ -39,7 +41,7 @@ async function mount(id = 'D1', review = reviewOf('T0')) {
 const qty = (r) => r.current.review.document.lines[0].quantity;
 
 beforeEach(() => {
-  mockFetchReview.mockReset(); mockApply.mockReset(); mockMark.mockReset();
+  mockFetchReview.mockReset(); mockApply.mockReset(); mockMark.mockReset(); mockConfirm.mockReset();
 });
 
 describe('useInvoiceInboxReviewEditor', () => {
@@ -303,5 +305,391 @@ describe('useInvoiceInboxReviewEditor', () => {
     await waitFor(() => expect(result.current.save.status).toBe('error'));
     await act(async () => { await result.current.retry(); });
     expect(result.current.save.status).toBe('idle');
+  });
+});
+
+// ── Confirm from the panel ────────────────────────────────────────────────────────────────────
+describe('useInvoiceInboxReviewEditor — confirm', () => {
+  const CONFIRMED = { id: 'D1', status: 'CONFIRMED', invoice: { id: 'I1', documentNo: 'FC1' }, createdProducts: 0 };
+
+  it('flushes pending edits first, then confirms with the refreshed token and resolves the answer', async () => {
+    mockApply.mockResolvedValue(okOutcome(reviewOf('T1', [lineOf({ quantity: 3 })])));
+    mockConfirm.mockResolvedValue({ status: 'confirmed', result: CONFIRMED });
+    const { result } = await mount();
+    act(() => { result.current.commit('line:0:quantity', buildOp.setLine(0, { quantity: 3 })); });
+    let answer;
+    await act(async () => { answer = await result.current.confirm(); });
+    expect(answer).toEqual(CONFIRMED);
+    expect(mockApply.mock.invocationCallOrder[0]).toBeLessThan(mockConfirm.mock.invocationCallOrder[0]);
+    expect(mockConfirm).toHaveBeenCalledWith(apiFetch, 'D1', 'T1');
+    expect(result.current.confirming).toBe(false);
+    expect(result.current.refusal).toBeNull();
+  });
+
+  it('confirming is on while in flight and counts as saving', async () => {
+    const gate = deferred();
+    mockConfirm.mockReturnValue(gate.promise);
+    const { result } = await mount();
+    let run;
+    act(() => { run = result.current.confirm(); });
+    expect(result.current.confirming).toBe(true);
+    expect(result.current.saving).toBe(true);
+    await act(async () => { gate.resolve({ status: 'confirmed', result: CONFIRMED }); await run; });
+    expect(result.current.confirming).toBe(false);
+  });
+
+  it('a double confirm sends ONE request', async () => {
+    const gate = deferred();
+    mockConfirm.mockReturnValue(gate.promise);
+    const { result } = await mount();
+    let first; let second;
+    act(() => { first = result.current.confirm(); });
+    await act(async () => { second = await result.current.confirm(); });
+    expect(second).toBeNull();
+    await act(async () => { gate.resolve({ status: 'confirmed', result: CONFIRMED }); await first; });
+    expect(mockConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it('an open save is awaited, its token adopted, and ONE confirm is sent (a second click during it sends nothing)', async () => {
+    const saveGate = deferred();
+    mockApply.mockReturnValue(saveGate.promise);
+    mockConfirm.mockResolvedValue({ status: 'confirmed', result: CONFIRMED });
+    const { result } = await mount();
+    act(() => { result.current.commit('line:0:quantity', buildOp.setLine(0, { quantity: 3 })); });
+    let first; let second;
+    act(() => { first = result.current.confirm(); });
+    await act(async () => { second = await result.current.confirm(); });
+    expect(second).toBeNull();
+    expect(mockConfirm).not.toHaveBeenCalled();
+    await act(async () => { saveGate.resolve(okOutcome(reviewOf('T1', [lineOf({ quantity: 3 })]))); await first; });
+    expect(mockConfirm).toHaveBeenCalledTimes(1);
+    expect(mockConfirm).toHaveBeenCalledWith(apiFetch, 'D1', 'T1');
+    expect(mockApply.mock.invocationCallOrder[0]).toBeLessThan(mockConfirm.mock.invocationCallOrder[0]);
+  });
+
+  it('a save that left required fields pending sends no confirm and no refusal', async () => {
+    mockApply.mockResolvedValue(okOutcome(reviewOf('T1', [lineOf()], { document: { header: { documentNo: 'F1' }, lines: [lineOf()], validation: { missing: ['vendor'] } } })));
+    const { result } = await mount();
+    act(() => { result.current.commit('header:documentNo', buildOp.setHeader({ documentNo: 'Z' })); });
+    let answer;
+    await act(async () => { answer = await result.current.confirm(); });
+    expect(answer).toBeNull();
+    expect(mockConfirm).not.toHaveBeenCalled();
+    expect(result.current.confirming).toBe(false);
+  });
+
+  it('a failed save sends no confirm and the save error stays', async () => {
+    mockApply.mockResolvedValue(failed('invalid_value', { httpStatus: 422 }));
+    const { result } = await mount();
+    act(() => { result.current.commit('line:0:quantity', buildOp.setLine(0, { quantity: 3 })); });
+    await act(async () => { await result.current.confirm(); });
+    expect(mockConfirm).not.toHaveBeenCalled();
+    expect(result.current.save.status).toBe('error');
+  });
+
+  it('does not confirm when the flush failed', async () => {
+    mockApply.mockResolvedValue(failed('invalid_value', { httpStatus: 422 }));
+    const { result } = await mount();
+    act(() => { result.current.commit('line:0:quantity', buildOp.setLine(0, { quantity: 3 })); });
+    let answer;
+    await act(async () => { answer = await result.current.confirm(); });
+    expect(answer).toBeNull();
+    expect(mockConfirm).not.toHaveBeenCalled();
+    expect(result.current.confirming).toBe(false);
+  });
+
+  it.each([
+    ['duplicate_invoice', 'invoiceInboxConfirmErrorDuplicate'],
+    ['price_list_tax_included', 'invoiceInboxConfirmErrorPriceListTax'],
+    ['missing_exchange_rate', 'invoiceInboxConfirmErrorExchangeRate'],
+    ['vendor_address_missing', 'invoiceInboxConfirmErrorVendorAddress'],
+    ['QUOTA_EXCEEDED', 'invoiceInboxConfirmErrorQuota'],
+  ])('%s sets a refusal (full banner), does not reload and leaves no retry state', async (code, key) => {
+    mockConfirm.mockResolvedValue(failed(code, { httpStatus: 422 }));
+    const { result } = await mount();
+    const reads = mockFetchReview.mock.calls.length;
+    let answer;
+    await act(async () => { answer = await result.current.confirm(); });
+    expect(answer).toBeNull();
+    expect(result.current.refusal).toEqual({ code, key });
+    expect(mockFetchReview.mock.calls.length).toBe(reads);
+    expect(result.current.save.status).toBe('idle');
+    expect(result.current.notice).toBeNull();
+  });
+
+  it('a refusal is cleared by the next edit and by dismissRefusal', async () => {
+    mockConfirm.mockResolvedValue(failed('duplicate_invoice', { httpStatus: 409 }));
+    mockApply.mockResolvedValue(okOutcome(reviewOf('T1')));
+    const { result } = await mount();
+    await act(async () => { await result.current.confirm(); });
+    expect(result.current.refusal).not.toBeNull();
+    act(() => { result.current.dismissRefusal(); });
+    expect(result.current.refusal).toBeNull();
+    await act(async () => { await result.current.confirm(); });
+    expect(result.current.refusal).not.toBeNull();
+    act(() => { result.current.commit('header:documentNo', buildOp.setHeader({ documentNo: 'Z' })); });
+    expect(result.current.refusal).toBeNull();
+  });
+
+  it('a refusal is cleared by the next confirm', async () => {
+    mockConfirm.mockResolvedValueOnce(failed('duplicate_invoice', { httpStatus: 409 })).mockResolvedValueOnce({ status: 'confirmed', result: CONFIRMED });
+    const { result } = await mount();
+    await act(async () => { await result.current.confirm(); });
+    expect(result.current.refusal).not.toBeNull();
+    await act(async () => { await result.current.confirm(); });
+    expect(result.current.refusal).toBeNull();
+  });
+
+  it('a refusal is cleared when the open document changes', async () => {
+    mockConfirm.mockResolvedValue(failed('duplicate_invoice', { httpStatus: 409 }));
+    const { result, rerender } = await mount();
+    await act(async () => { await result.current.confirm(); });
+    expect(result.current.refusal).not.toBeNull();
+    mockFetchReview.mockResolvedValue(okOutcome(reviewOf('T5', [lineOf()], { id: 'D2' })));
+    rerender({ docId: 'D2' });
+    await waitFor(() => expect(result.current.refusal).toBeNull());
+  });
+
+  it('confirm_failed re-reads the document (the stored ERROR and its detail), adopts its token, shows no refusal', async () => {
+    mockConfirm.mockResolvedValueOnce(failed('confirm_failed', { httpStatus: 500, detail: 'boom' }));
+    const { result } = await mount();
+    mockFetchReview.mockResolvedValue(okOutcome(reviewOf('T7', [lineOf()], { status: 'ERROR', errorCode: 'CONFIRM_FAILED', errorDetail: 'boom' })));
+    await act(async () => { await result.current.confirm(); });
+    expect(result.current.refusal).toBeNull();
+    expect(result.current.review).toMatchObject({ status: 'ERROR', errorCode: 'CONFIRM_FAILED', errorDetail: 'boom' });
+    mockConfirm.mockResolvedValueOnce({ status: 'confirmed', result: CONFIRMED });
+    await act(async () => { await result.current.confirm(); });
+    expect(mockConfirm).toHaveBeenLastCalledWith(apiFetch, 'D1', 'T7');
+  });
+
+  it.each([
+    ['stale_document', { }, 'invoiceInboxSaveErrorStale'],
+    ['not_confirmable', { documentStatus: 'CONFIRMED' }, 'invoiceInboxSaveErrorNotConfirmable'],
+  ])('%s reloads the document with a notice and no refusal', async (code, extra, key) => {
+    mockConfirm.mockResolvedValueOnce(failed(code, extra));
+    const { result } = await mount();
+    const reads = mockFetchReview.mock.calls.length;
+    await act(async () => { await result.current.confirm(); });
+    expect(result.current.notice).toEqual({ key });
+    expect(mockFetchReview.mock.calls.length).toBe(reads + 1);
+    expect(result.current.refusal).toBeNull();
+  });
+
+  it('not_valid adopts the recomputed missing and the new token without a reload', async () => {
+    mockConfirm.mockResolvedValue(failed('not_valid', { httpStatus: 422, missing: ['exchangeRate'], documentStatus: 'ERROR', updated: 'T9' }));
+    const { result } = await mount();
+    const reads = mockFetchReview.mock.calls.length;
+    await act(async () => { await result.current.confirm(); });
+    expect(mockFetchReview.mock.calls.length).toBe(reads);
+    expect(result.current.review.updated).toBe('T9');
+    expect(result.current.review.document.validation.missing).toEqual(['exchangeRate']);
+    expect(result.current.save).toMatchObject({ status: 'error', errorKey: 'invoiceInboxSaveErrorNotValid' });
+  });
+
+  it('access_denied sets a refusal with the access-denied reason key', async () => {
+    mockConfirm.mockResolvedValue(failed('access_denied', { httpStatus: 403 }));
+    const { result } = await mount();
+    await act(async () => { await result.current.confirm(); });
+    expect(result.current.refusal).toEqual({ code: 'access_denied', key: 'invoiceInboxSaveErrorAccess' });
+  });
+
+  it('a network error rolls back with the translated text and resolves null', async () => {
+    mockConfirm.mockRejectedValue(Object.assign(new Error('Sin red'), { name: 'NetworkError', code: 'NETWORK', reason: 'offline' }));
+    const { result } = await mount();
+    let answer;
+    await act(async () => { answer = await result.current.confirm(); });
+    expect(answer).toBeNull();
+    expect(result.current.save).toMatchObject({ status: 'error', errorText: 'Sin red' });
+    expect(result.current.confirming).toBe(false);
+  });
+
+  it('a confirmed invoice is handed back even if the open document changed meanwhile', async () => {
+    const gate = deferred();
+    mockConfirm.mockReturnValue(gate.promise);
+    const { result, rerender } = await mount();
+    let run;
+    act(() => { run = result.current.confirm(); });
+    // The request is on the wire (the flush before it is asynchronous) when the document changes.
+    await waitFor(() => expect(mockConfirm).toHaveBeenCalledTimes(1));
+    mockFetchReview.mockResolvedValue(okOutcome(reviewOf('T5', [lineOf()], { id: 'D2' })));
+    rerender({ docId: 'D2' });
+    let answer;
+    await act(async () => { gate.resolve({ status: 'confirmed', result: CONFIRMED }); answer = await run; });
+    expect(answer).toEqual(CONFIRMED);
+  });
+});
+
+// ── Mark as reviewed: same ordering contract as confirm ───────────────────────────────────────
+describe('useInvoiceInboxReviewEditor — markReviewed ordering', () => {
+  it('waits for the open save, adopts its token and sends ONE mark-reviewed', async () => {
+    const saveGate = deferred();
+    mockApply.mockReturnValue(saveGate.promise);
+    mockMark.mockResolvedValue(okOutcome(reviewOf('T2', [lineOf({ quantity: 3 })], { status: 'READY', reviewed: true })));
+    const { result } = await mount();
+    act(() => { result.current.commit('line:0:quantity', buildOp.setLine(0, { quantity: 3 })); });
+    let run;
+    act(() => { run = result.current.markReviewed(); });
+    expect(mockMark).not.toHaveBeenCalled();
+    await act(async () => { saveGate.resolve(okOutcome(reviewOf('T1', [lineOf({ quantity: 3 })]))); await run; });
+    expect(mockMark).toHaveBeenCalledTimes(1);
+    expect(mockMark).toHaveBeenCalledWith(apiFetch, 'D1', 'T1');
+  });
+
+  it('a failed save sends no mark-reviewed and the save error stays', async () => {
+    mockApply.mockResolvedValue(failed('invalid_value', { httpStatus: 422 }));
+    const { result } = await mount();
+    act(() => { result.current.commit('line:0:quantity', buildOp.setLine(0, { quantity: 3 })); });
+    let ok;
+    await act(async () => { ok = await result.current.markReviewed(); });
+    expect(ok).toBe(false);
+    expect(mockMark).not.toHaveBeenCalled();
+    expect(result.current.save.status).toBe('error');
+  });
+});
+
+// ── A reload code is handled by the re-read: the NEXT click must send again, with the fresh token ──
+describe('useInvoiceInboxReviewEditor — retry after a refusal', () => {
+  const CONFIRMED = { id: 'D1', status: 'CONFIRMED', invoice: { id: 'I1', documentNo: 'FC1' }, createdProducts: 0 };
+  const RELOAD = ['stale_document', 'not_confirmable', 'processing', 'not_editable'];
+
+  it.each(RELOAD)('a second confirm after %s sends again with the re-read token', async (code) => {
+    mockConfirm.mockResolvedValueOnce(failed(code)).mockResolvedValueOnce({ status: 'confirmed', result: CONFIRMED });
+    const { result } = await mount();
+    mockFetchReview.mockResolvedValue(okOutcome(reviewOf('T7')));
+    await act(async () => { expect(await result.current.confirm()).toBeNull(); });
+    expect(mockConfirm).toHaveBeenCalledTimes(1);
+    let answer;
+    await act(async () => { answer = await result.current.confirm(); });
+    expect(answer).toEqual(CONFIRMED);
+    expect(mockConfirm).toHaveBeenCalledTimes(2);
+    expect(mockConfirm).toHaveBeenLastCalledWith(apiFetch, 'D1', 'T7');
+  });
+
+  it.each(['stale_document', 'not_reviewable'])('a second mark-reviewed after %s sends again with the re-read token', async (code) => {
+    mockMark.mockResolvedValueOnce(failed(code)).mockResolvedValueOnce(okOutcome(reviewOf('T8', [lineOf()], { status: 'READY', reviewed: true })));
+    const { result } = await mount();
+    mockFetchReview.mockResolvedValue(okOutcome(reviewOf('T7')));
+    await act(async () => { expect(await result.current.markReviewed()).toBe(false); });
+    let ok;
+    await act(async () => { ok = await result.current.markReviewed(); });
+    expect(ok).toBe(true);
+    expect(mockMark).toHaveBeenCalledTimes(2);
+    expect(mockMark).toHaveBeenLastCalledWith(apiFetch, 'D1', 'T7');
+  });
+
+  it('a failed re-read keeps the block: no confirm is sent until the document is read again', async () => {
+    mockConfirm.mockResolvedValueOnce(failed('stale_document'));
+    const { result } = await mount();
+    mockFetchReview.mockResolvedValue({ status: 'failed', code: 'network' });
+    await act(async () => { await result.current.confirm(); });
+    let answer;
+    await act(async () => { answer = await result.current.confirm(); });
+    expect(answer).toBeNull();
+    expect(mockConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it('a second confirm after duplicate_invoice sends again', async () => {
+    mockConfirm.mockResolvedValueOnce(failed('duplicate_invoice', { httpStatus: 422 })).mockResolvedValueOnce({ status: 'confirmed', result: CONFIRMED });
+    const { result } = await mount();
+    await act(async () => { await result.current.confirm(); });
+    let answer;
+    await act(async () => { answer = await result.current.confirm(); });
+    expect(answer).toEqual(CONFIRMED);
+    expect(mockConfirm).toHaveBeenCalledTimes(2);
+  });
+
+  it('a second confirm after a network error sends again', async () => {
+    mockConfirm.mockRejectedValueOnce(Object.assign(new Error('Sin red'), { name: 'NetworkError', code: 'NETWORK', reason: 'offline' }))
+      .mockResolvedValueOnce({ status: 'confirmed', result: CONFIRMED });
+    const { result } = await mount();
+    await act(async () => { await result.current.confirm(); });
+    let answer;
+    await act(async () => { answer = await result.current.confirm(); });
+    expect(answer).toEqual(CONFIRMED);
+    expect(mockConfirm).toHaveBeenCalledTimes(2);
+  });
+
+  it('a second confirm after confirm_failed sends again', async () => {
+    mockConfirm.mockResolvedValueOnce(failed('confirm_failed', { httpStatus: 500 })).mockResolvedValueOnce({ status: 'confirmed', result: CONFIRMED });
+    const { result } = await mount();
+    await act(async () => { await result.current.confirm(); });
+    await act(async () => { await result.current.confirm(); });
+    expect(mockConfirm).toHaveBeenCalledTimes(2);
+  });
+
+  it('a second confirm after not_valid sends again', async () => {
+    mockConfirm.mockResolvedValueOnce(failed('not_valid', { httpStatus: 422, missing: [], documentStatus: 'PENDING_REVIEW', updated: 'T9' }))
+      .mockResolvedValueOnce({ status: 'confirmed', result: CONFIRMED });
+    const { result } = await mount();
+    await act(async () => { await result.current.confirm(); });
+    await act(async () => { await result.current.confirm(); });
+    expect(mockConfirm).toHaveBeenCalledTimes(2);
+    expect(mockConfirm).toHaveBeenLastCalledWith(apiFetch, 'D1', 'T9');
+  });
+
+  it('a failed SAVE still blocks the confirm (the block is not cleared by a later click)', async () => {
+    mockApply.mockResolvedValue(failed('invalid_value', { httpStatus: 422 }));
+    const { result } = await mount();
+    act(() => { result.current.commit('line:0:quantity', buildOp.setLine(0, { quantity: 3 })); });
+    await act(async () => { await result.current.confirm(); });
+    await act(async () => { await result.current.confirm(); });
+    expect(mockConfirm).not.toHaveBeenCalled();
+  });
+});
+
+// ── Mark-reviewed and confirm are mutually exclusive, and `marking` is on from the first instant ──
+describe('useInvoiceInboxReviewEditor — one request on the document at a time', () => {
+  const CONFIRMED = { id: 'D1', status: 'CONFIRMED', invoice: { id: 'I1', documentNo: 'FC1' }, createdProducts: 0 };
+
+  it('a double click on mark-reviewed sends ONE request; marking is true before flush resolves', async () => {
+    const gate = deferred();
+    mockMark.mockReturnValue(gate.promise);
+    const { result } = await mount();
+    let first; let second;
+    act(() => { first = result.current.markReviewed(); second = result.current.markReviewed(); });
+    // Synchronously after the click, before any await resolved.
+    expect(result.current.marking).toBe(true);
+    expect(result.current.saving).toBe(true);
+    expect(await second).toBe(false);
+    await waitFor(() => expect(mockMark).toHaveBeenCalledTimes(1));
+    await act(async () => { gate.resolve(okOutcome(reviewOf('T2', [lineOf()], { status: 'READY', reviewed: true }))); await first; });
+    expect(mockMark).toHaveBeenCalledTimes(1);
+    expect(result.current.marking).toBe(false);
+  });
+
+  it('a confirm click while mark-reviewed runs is ignored', async () => {
+    const gate = deferred();
+    mockMark.mockReturnValue(gate.promise);
+    const { result } = await mount();
+    let run; let answer;
+    act(() => { run = result.current.markReviewed(); });
+    await act(async () => { answer = await result.current.confirm(); });
+    expect(answer).toBeNull();
+    expect(mockConfirm).not.toHaveBeenCalled();
+    await act(async () => { gate.resolve(okOutcome(reviewOf('T2', [lineOf()], { status: 'READY', reviewed: true }))); await run; });
+    expect(mockConfirm).not.toHaveBeenCalled();
+  });
+
+  it('a mark-reviewed click while confirm runs is ignored', async () => {
+    const gate = deferred();
+    mockConfirm.mockReturnValue(gate.promise);
+    const { result } = await mount();
+    let run; let ok;
+    act(() => { run = result.current.confirm(); });
+    await act(async () => { ok = await result.current.markReviewed(); });
+    expect(ok).toBe(false);
+    expect(mockMark).not.toHaveBeenCalled();
+    await act(async () => { gate.resolve({ status: 'confirmed', result: CONFIRMED }); await run; });
+    expect(mockMark).not.toHaveBeenCalled();
+  });
+
+  it('marking is released after a refused mark-reviewed, so the next click may send', async () => {
+    mockMark.mockResolvedValueOnce(failed('access_denied', { httpStatus: 403 }))
+      .mockResolvedValueOnce(okOutcome(reviewOf('T2', [lineOf()], { status: 'READY', reviewed: true })));
+    const { result } = await mount();
+    await act(async () => { await result.current.markReviewed(); });
+    expect(result.current.marking).toBe(false);
+    await act(async () => { await result.current.markReviewed(); });
+    expect(mockMark).toHaveBeenCalledTimes(2);
   });
 });
