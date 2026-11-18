@@ -20,6 +20,7 @@ import RequiredMark from '@/components/ui/required-mark.jsx';
 import { isSifFieldRequired } from '@/windows/custom/shared/sifRequiredFields.js';
 // ETP-6284: purchase imports with DUA, behind the sii-import-dua flag (renders nothing when off).
 import SiiImportDuaSection from '@/windows/custom/shared/SiiImportDuaSection.jsx';
+import SiiImportTaxesSection from '@/windows/custom/shared/SiiImportTaxesSection.jsx';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 function Field({ label, htmlFor, children, required = false }) {
@@ -318,7 +319,10 @@ function applyCalloutMessages(messages) {
 }
 
 
-export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, onVisibilityChange, accessReadOnly = false }) {
+export default function SifTab({
+  recordId, data, token, apiBaseUrl, onChange, onVisibilityChange, onHeaderRefresh, isNew = false,
+  accessReadOnly = false,
+}) {
   const {
     ui,
     specName,
@@ -697,6 +701,19 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                 onChange={onChange}
                 readOnly={siiFieldReadOnly}
                 data-testid="SiiImportDuaSection__b99c8b" />
+            )}
+            {isPurchaseInvoice && (
+              <SiiImportTaxesSection
+                ui={ui}
+                siiTypeKey={getVal(siiTypeField)}
+                multiDua={getVal('aeatsiiMultiDua') === true || getVal('aeatsiiMultiDua') === 'Y'}
+                recordId={isNew ? null : (data?.id || recordId)}
+                data={data}
+                apiBaseUrl={apiBaseUrl}
+                token={token}
+                readOnly={siiFieldReadOnly || !isDraft}
+                onHeaderRefresh={onHeaderRefresh}
+                data-testid="SiiImportTaxesSection__b99c8b" />
             )}
             <SifAttachmentsSection
               tableName="aeatsii_facturas"

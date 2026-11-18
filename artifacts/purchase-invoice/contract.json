@@ -1,8 +1,8 @@
 {
-  "version": "0.10.0",
+  "version": "0.11.0",
   "generatedAt": "2026-09-17T15:12:05.434Z",
-  "updatedAt": "2026-11-17T18:34:04.054Z",
-  "checksum": "480d7a56c668b3ce",
+  "updatedAt": "2026-11-18T15:54:12.796Z",
+  "checksum": "eaf99089522f6792",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -3567,7 +3567,7 @@
             "label": "Tax",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true,
             "grid": true,
             "form": true,
@@ -3591,7 +3591,7 @@
             "label": "Tax Amount",
             "type": "amount",
             "tsType": "number",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true,
             "grid": true,
             "form": true,
@@ -3616,7 +3616,7 @@
             "label": "Taxable Amount",
             "type": "amount",
             "tsType": "number",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true,
             "grid": true,
             "form": true,
@@ -3633,6 +3633,58 @@
               "evaluable": true,
               "js": "(record['processed'] === true || record['processed'] === 'Y') || (record['recalculate'] === true || record['recalculate'] === 'Y')"
             }
+          },
+          {
+            "name": "recalculate",
+            "apiKey": "recalculate",
+            "column": "Recalculate",
+            "label": "Recalculate",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
+          },
+          {
+            "name": "aeatsiiDua",
+            "apiKey": "aeatsiiDua",
+            "column": "EM_Aeatsii_Dua",
+            "label": "DUA",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "aeatsiiFechaDua",
+            "apiKey": "aeatsiiFechaDua",
+            "column": "EM_Aeatsii_Fecha_Dua",
+            "label": "DUA date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 19
+            }
           }
         ],
         "searchableFields": [],
@@ -3642,6 +3694,13 @@
             "derivation": {
               "type": "lookup",
               "source": "SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM C_INVOICETAX WHERE C_Invoice_ID=@C_Invoice_ID@"
+            }
+          },
+          {
+            "name": "recalculate",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
             }
           }
         ]
@@ -7619,7 +7678,7 @@
             "apiKey": "tax",
             "column": "C_Tax_ID",
             "type": "foreignKey",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -7627,7 +7686,7 @@
             "apiKey": "taxAmount",
             "column": "TaxAmt",
             "type": "amount",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -7635,7 +7694,7 @@
             "apiKey": "taxableAmount",
             "column": "TaxBaseAmt",
             "type": "amount",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -7643,7 +7702,7 @@
             "apiKey": "recalculate",
             "column": "Recalculate",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -7651,7 +7710,7 @@
             "apiKey": "aeatsiiDua",
             "column": "EM_Aeatsii_Dua",
             "type": "string",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -7659,7 +7718,7 @@
             "apiKey": "aeatsiiFechaDua",
             "column": "EM_Aeatsii_Fecha_Dua",
             "type": "date",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -10011,17 +10070,13 @@
       "tax": {
         "get": true,
         "getById": true,
-        "post": false,
-        "put": false,
-        "patch": false,
-        "delete": false,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
         "listUrl": "/sws/neo/purchase-invoice/tax",
         "detailUrl": "/sws/neo/purchase-invoice/tax/{id}",
-        "supportedFilters": [],
-        "methods": [
-          "GET",
-          "GETBYID"
-        ]
+        "supportedFilters": []
       },
       "basicDiscounts": {
         "get": true,
@@ -11534,6 +11589,14 @@
         "field": "lineNo",
         "runner": "node",
         "description": "Default value for 'lineNo' in tax should be a string"
+      },
+      {
+        "id": "t-default-value-type-tax-recalculate",
+        "category": "default-value-type",
+        "entity": "tax",
+        "field": "recalculate",
+        "runner": "node",
+        "description": "Default value for 'recalculate' in tax should be a string"
       },
       {
         "id": "t-displaylogic-evaluable-header-adOrgId",
@@ -13256,12 +13319,36 @@
         "description": "Field 'motivo' should be present in siiData"
       },
       {
+        "id": "t-field-presence-tax-aeatsiiDua",
+        "category": "field-presence",
+        "entity": "tax",
+        "field": "aeatsiiDua",
+        "runner": "node",
+        "description": "Field 'aeatsiiDua' should be present in tax"
+      },
+      {
+        "id": "t-field-presence-tax-aeatsiiFechaDua",
+        "category": "field-presence",
+        "entity": "tax",
+        "field": "aeatsiiFechaDua",
+        "runner": "node",
+        "description": "Field 'aeatsiiFechaDua' should be present in tax"
+      },
+      {
         "id": "t-field-presence-tax-lineNo",
         "category": "field-presence",
         "entity": "tax",
         "field": "lineNo",
         "runner": "node",
         "description": "Field 'lineNo' should be present in tax"
+      },
+      {
+        "id": "t-field-presence-tax-recalculate",
+        "category": "field-presence",
+        "entity": "tax",
+        "field": "recalculate",
+        "runner": "node",
+        "description": "Field 'recalculate' should be present in tax"
       },
       {
         "id": "t-field-presence-tax-tax",
@@ -14560,12 +14647,36 @@
         "description": "Field 'motivo' should have type 'string' in siiData"
       },
       {
+        "id": "t-field-type-tax-aeatsiiDua",
+        "category": "field-type",
+        "entity": "tax",
+        "field": "aeatsiiDua",
+        "runner": "node",
+        "description": "Field 'aeatsiiDua' should have type 'string' in tax"
+      },
+      {
+        "id": "t-field-type-tax-aeatsiiFechaDua",
+        "category": "field-type",
+        "entity": "tax",
+        "field": "aeatsiiFechaDua",
+        "runner": "node",
+        "description": "Field 'aeatsiiFechaDua' should have type 'string' in tax"
+      },
+      {
         "id": "t-field-type-tax-lineNo",
         "category": "field-type",
         "entity": "tax",
         "field": "lineNo",
         "runner": "node",
         "description": "Field 'lineNo' should have type 'number' in tax"
+      },
+      {
+        "id": "t-field-type-tax-recalculate",
+        "category": "field-type",
+        "entity": "tax",
+        "field": "recalculate",
+        "runner": "node",
+        "description": "Field 'recalculate' should have type 'boolean' in tax"
       },
       {
         "id": "t-field-type-tax-tax",
@@ -18905,22 +19016,6 @@
         "description": "System field 'active' should exist in backend but not frontend for tax"
       },
       {
-        "id": "t-system-field-tax-aeatsiiDua",
-        "category": "system-field",
-        "entity": "tax",
-        "field": "aeatsiiDua",
-        "runner": "node",
-        "description": "System field 'aeatsiiDua' should exist in backend but not frontend for tax"
-      },
-      {
-        "id": "t-system-field-tax-aeatsiiFechaDua",
-        "category": "system-field",
-        "entity": "tax",
-        "field": "aeatsiiFechaDua",
-        "runner": "node",
-        "description": "System field 'aeatsiiFechaDua' should exist in backend but not frontend for tax"
-      },
-      {
         "id": "t-system-field-tax-client",
         "category": "system-field",
         "entity": "tax",
@@ -18975,14 +19070,6 @@
         "field": "organization",
         "runner": "node",
         "description": "System field 'organization' should exist in backend but not frontend for tax"
-      },
-      {
-        "id": "t-system-field-tax-recalculate",
-        "category": "system-field",
-        "entity": "tax",
-        "field": "recalculate",
-        "runner": "node",
-        "description": "System field 'recalculate' should exist in backend but not frontend for tax"
       },
       {
         "id": "t-system-field-tax-updated",
@@ -19093,25 +19180,25 @@
       }
     ],
     "summary": {
-      "total": 1028,
+      "total": 1032,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 13,
-        "default-value-type": 40,
+        "default-value-type": 41,
         "displaylogic-evaluable": 28,
         "displaylogic-valid": 28,
-        "field-presence": 163,
-        "field-type": 163,
+        "field-presence": 166,
+        "field-type": 166,
         "readonlylogic-evaluable": 76,
         "readonlylogic-valid": 76,
         "rule-declared": 23,
         "searchable-filters": 6,
         "selector-endpoint": 54,
-        "system-field": 319,
+        "system-field": 316,
         "visibility": 13
       },
       "byRunner": {
-        "node": 1028,
+        "node": 1032,
         "junit": 0
       }
     }

@@ -1252,6 +1252,9 @@ export const tax = [
     "tax": "VAT 21%",
     "taxAmount": "VAT 21%",
     "taxableAmount": "VAT 21%",
+    "recalculate": "Sample recalculate",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-15",
     "headerId": "mock-header-001"
   },
   {
@@ -1260,6 +1263,9 @@ export const tax = [
     "tax": "VAT 10%",
     "taxAmount": "VAT 10%",
     "taxableAmount": "VAT 10%",
+    "recalculate": "Sample recalculate",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-16",
     "headerId": "mock-header-002"
   },
   {
@@ -1268,6 +1274,9 @@ export const tax = [
     "tax": "VAT 0%",
     "taxAmount": "VAT 0%",
     "taxableAmount": "VAT 0%",
+    "recalculate": "Sample recalculate",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-17",
     "headerId": "mock-header-003"
   },
   {
@@ -1276,6 +1285,9 @@ export const tax = [
     "tax": "Sales Tax 8.5%",
     "taxAmount": "Sales Tax 8.5%",
     "taxableAmount": "Sales Tax 8.5%",
+    "recalculate": "Sample recalculate",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-18",
     "headerId": "mock-header-004"
   },
   {
@@ -1284,6 +1296,9 @@ export const tax = [
     "tax": "Exempt",
     "taxAmount": "Exempt",
     "taxableAmount": "Exempt",
+    "recalculate": "Sample recalculate",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-19",
     "headerId": "mock-header-005"
   },
   {
@@ -1292,6 +1307,9 @@ export const tax = [
     "tax": "Reduced Rate 5%",
     "taxAmount": "Reduced Rate 5%",
     "taxableAmount": "Reduced Rate 5%",
+    "recalculate": "Sample recalculate",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-20",
     "headerId": "mock-header-006"
   },
   {
@@ -1300,6 +1318,9 @@ export const tax = [
     "tax": "Standard Rate 20%",
     "taxAmount": "Standard Rate 20%",
     "taxableAmount": "Standard Rate 20%",
+    "recalculate": "Sample recalculate",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-21",
     "headerId": "mock-header-007"
   },
   {
@@ -1308,6 +1329,9 @@ export const tax = [
     "tax": "VAT 21%",
     "taxAmount": "VAT 21%",
     "taxableAmount": "VAT 21%",
+    "recalculate": "Sample recalculate",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-22",
     "headerId": "mock-header-008"
   },
   {
@@ -1316,6 +1340,9 @@ export const tax = [
     "tax": "VAT 10%",
     "taxAmount": "VAT 10%",
     "taxableAmount": "VAT 10%",
+    "recalculate": "Sample recalculate",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-23",
     "headerId": "mock-header-009"
   },
   {
@@ -1324,6 +1351,9 @@ export const tax = [
     "tax": "VAT 0%",
     "taxAmount": "VAT 0%",
     "taxableAmount": "VAT 0%",
+    "recalculate": "Sample recalculate",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-24",
     "headerId": "mock-header-010"
   },
   {
@@ -1332,6 +1362,9 @@ export const tax = [
     "tax": "Sales Tax 8.5%",
     "taxAmount": "Sales Tax 8.5%",
     "taxableAmount": "Sales Tax 8.5%",
+    "recalculate": "Sample recalculate",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-25",
     "headerId": "mock-header-011"
   },
   {
@@ -1340,6 +1373,9 @@ export const tax = [
     "tax": "Exempt",
     "taxAmount": "Exempt",
     "taxableAmount": "Exempt",
+    "recalculate": "Sample recalculate",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-26",
     "headerId": "mock-header-012"
   }
 ];

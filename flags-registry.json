@@ -2952,7 +2952,7 @@
     },
     {
       "id": "sii-import-dua",
-      "description": "Purchase invoice imports with DUA for SII (step 1): the SII panel of the purchase-invoice SIF tab shows an \"Importación (DUA)\" block with DUA (C_Invoice.EM_Aeatsii_Dua), DUA date (EM_Aeatsii_Fecha_Dua) and Multiple DUA (EM_Aeatsii_Multi_Dua) when the SII invoice type key is F5 or LC, mirroring the Classic display logic, so an F5 invoice can be saved with the DUA data the SII module demands. Off: the SIF tab as before. The three header fields are exposed by NEO regardless of the flag (decisions.json); the flag only hides the block.",
+      "description": "Purchase invoice imports with DUA for SII (step 1): the SII panel of the purchase-invoice SIF tab shows an \"Importación (DUA)\" block with DUA (C_Invoice.EM_Aeatsii_Dua), DUA date (EM_Aeatsii_Fecha_Dua) and Multiple DUA (EM_Aeatsii_Multi_Dua) when the SII invoice type key is F5 or LC, mirroring the Classic display logic, so an F5 invoice can be saved with the DUA data the SII module demands. Step 2 adds an \"Impuestos de importación\" block right after it (same F5/LC gate): add / edit / delete the manual import tax lines of the invoice (C_InvoiceTax with Recalculate=N: tax, taxable base, tax amount computed by the Classic SL_InvoiceTax_Amt callout), with DUA and DUA date per line while Multiple DUA is checked. Off: the SIF tab as before. The header fields and the now-writable tax entity are exposed by NEO regardless of the flag (decisions.json); the flag only hides the blocks.",
       "owner": "AyelenGarcia01",
       "jira": "ETP-6284",
       "created": "2026-11-17",
@@ -2967,18 +2967,21 @@
           "SiiImportDuaSection",
           "sifDataTabs.field.dua",
           "sifDataTabs.field.duaDate",
-          "sifDataTabs.field.multiDua"
+          "sifDataTabs.field.multiDua",
+          "SiiImportTaxesSection",
+          "sifDataTabs.importTaxes."
         ],
         "$symbolsComment": "SiiImportDuaSection is how SifTab.jsx mounts the feature without naming the flag; the sifDataTabs.field.dua/duaDate/multiDua keys are the locale entries it adds to en_US/es_ES (the block title reuses the existing sifDataTabs.option.importDua)."
       },
       "$gatingComment": "Frontend-only, per account/user (the SPA evaluation context carries the account email). No backend evaluator: the SII module validates DUA/DUA date on its own whatever the flag says.",
       "paths": {
         "frontend": [
-          "tools/app-shell/src/windows/custom/shared/SiiImportDuaSection.jsx"
+          "tools/app-shell/src/windows/custom/shared/SiiImportDuaSection.jsx",
+          "tools/app-shell/src/windows/custom/shared/SiiImportTaxesSection.jsx"
         ],
         "backend": []
       },
-      "$pathsComment": "Owned code only. Shared toggle points (removal cost): SifTab.jsx (one mount, purchase invoices only), flag-keys.js, lib/flags/index.js, en_US.json, es_ES.json. The decisions.json declaration of the three header fields and their ETGO_SF_FIELD rows are not flag-gated and stay when the flag retires.",
+      "$pathsComment": "Owned code only. Shared toggle points (removal cost): SifTab.jsx (one mount, purchase invoices only), flag-keys.js, lib/flags/index.js, en_US.json, es_ES.json. The decisions.json declaration of the three header fields, the writable purchase-invoice tax entity (ETP-6284 step 2) and their ETGO_SF_ENTITY/ETGO_SF_FIELD rows are not flag-gated and stay when the flag retires. DetailView.jsx passes onHeaderRefresh to every custom tab; that prop is generic and stays too.",
       "testSpecs": {
         "unit": [
           {
@@ -2986,6 +2989,12 @@
             "path": "tools/app-shell/src/windows/custom/shared/__tests__/SiiImportDuaSection.vitest.jsx",
             "expected": true,
             "note": "To be written by tester-functional: flag off renders nothing; F5/LC show the block, F1/F6 hide it; Multiple DUA hides DUA/date; required mark on F5 only; readOnly disables all three."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/shared/__tests__/SiiImportTaxesSection.vitest.jsx",
+            "expected": true,
+            "note": "To be written by tester-functional: flag off / F1 / F6 render nothing; only Recalculate=N rows listed; add/edit/delete hit /tax with parentId, lineNo MAX+10, recalculate false; callout fills tax amount; DUA columns and required DUA only with Multiple DUA; readOnly hides add/edit/delete; onHeaderRefresh after every write; saveFirst on an unsaved invoice."
           }
         ]
       }
