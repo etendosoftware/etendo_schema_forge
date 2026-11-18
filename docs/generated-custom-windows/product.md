@@ -1833,3 +1833,13 @@ Product-only visual changes, all driven by tokens and opt-in props so no other w
 
 The JS side is `chartSeriesColor(index)` and `CHART_AREA_OPACITY_VAR` in `tools/app-shell/src/lib/chartPalette.js` (they only return `var(...)` references, no colour literal in components). Positive quantities reuse the existing `--status-success-fg`.
 - **Height and scroll model.** See "Layout and scroll model" in the Movements tab section: the 340 px floor supersedes the 200 px floor of "Movements tab scroll bound" above, and the box height is the remaining space (`maxHeight`), not a fixed guess.
+
+## Agent prompt — ETP-5850
+
+`product/transactions` (the Movements tab, read-only) carries an `agentPrompt`: it is every stock
+movement of the product (receipts, shipments, returns, warehouse movements, inventories,
+consumptions, production), listed with `parentId` = the product id, with `etgoDocKind` naming the
+document type. Before it, an agent asked "what moved for this product" read the lines of each
+document type and failed (`goodsReceiptLine` and others cannot be listed across parents). MCP test
+`q-product-movements` (suite `okr`). The text lives in this window's `decisions.json` and in
+`com.etendoerp.go`'s `ETGO_SF_ENTITY` sourcedata; keep both equal.
