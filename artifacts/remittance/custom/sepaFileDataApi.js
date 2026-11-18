@@ -86,6 +86,26 @@ export async function fetchSepaFileData(apiFetch, remittanceId, accountId, organ
 }
 
 /**
+ * The bank logo of a financial account (`providerLogoUrl`, the connected bank's own, persisted from the
+ * PSD2 provider catalog) and its type, for AccountLogoAvatar. Best effort: any failure is null, the
+ * avatar then shows its generic bank icon.
+ *
+ * @param {Function} accountsApiFetch - `useApiFetch(getApiBase())` (absolute NEO paths)
+ * @returns {Promise<{ providerLogoUrl: string|null, type: string|null }|null>}
+ */
+export async function fetchAccountLogo(accountsApiFetch, accountId) {
+  try {
+    const res = await accountsApiFetch(`${ACCOUNT_PATH}/${encodeURIComponent(accountId)}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    const record = Array.isArray(json?.response?.data) ? json.response.data[0] : (json?.response?.data ?? json);
+    return { providerLogoUrl: record?.providerLogoUrl || null, type: record?.type || null };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Stores `iban` on the financial account (not on the remittance).
  *
  * @param {Function} accountsApiFetch - `useApiFetch(getApiBase())` (absolute NEO paths)

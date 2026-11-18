@@ -5,6 +5,7 @@
 // refusal goes through the real throwHttpError.
 import {
   NEW_RECORD_SEGMENT,
+  fetchAccountLogo,
   fetchSepaFileData,
   normalizeSepaFileData,
   saveAccountIban,
@@ -145,5 +146,24 @@ describe('saveAccountIban', () => {
     const err = await saveAccountIban(apiFetch, 'acc/1', 'XX00').catch((e) => e);
     expect(err).toBeInstanceOf(Error);
     expect(err).toMatchObject({ status: 400, code: null, body, message: 'Se necesita el País para una cuenta IBAN.' });
+  });
+});
+
+describe('fetchAccountLogo', () => {
+  it('reads the account record\'s providerLogoUrl and type', async () => {
+    const apiFetch = vi.fn().mockResolvedValue(jsonResponse({ response: { data: { providerLogoUrl: 'https://cdn/b.svg', type: 'B' } } }));
+    await expect(fetchAccountLogo(apiFetch, 'acc 1')).resolves.toEqual({ providerLogoUrl: 'https://cdn/b.svg', type: 'B' });
+    expect(apiFetch).toHaveBeenCalledWith('/sws/neo/financial-account/account/acc%201');
+  });
+
+  it('answers null for a refusal or a broken body (the avatar then shows its generic icon)', async () => {
+    await expect(fetchAccountLogo(vi.fn().mockResolvedValue(jsonResponse({}, { ok: false, status: 403 })), 'a')).resolves.toBeNull();
+    await expect(fetchAccountLogo(vi.fn().mockResolvedValue(brokenJsonResponse({ ok: true, status: 200 })), 'a')).resolves.toBeNull();
+    await expect(fetchAccountLogo(vi.fn().mockRejectedValue(new Error('net')), 'a')).resolves.toBeNull();
+  });
+
+  it('a record without a logo yields a null providerLogoUrl', async () => {
+    const apiFetch = vi.fn().mockResolvedValue(jsonResponse({ response: { data: [{ type: 'C' }] } }));
+    await expect(fetchAccountLogo(apiFetch, 'a')).resolves.toEqual({ providerLogoUrl: null, type: 'C' });
   });
 });

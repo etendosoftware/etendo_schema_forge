@@ -1660,7 +1660,7 @@
       ]
     },
     "1ff82f378ae21bc327da4382fb94121e5e53f4ea9283f7c46698b579c45f2078": {
-      "checksum": "dc86d0653d99d32f5b55a560b8842cdaf818da7412912771f59751f85ae06080",
+      "checksum": "eb3796e1e269c5c535d87c2c0e76f2f0fa9e963ccea166a9b5eecc7c12c1a769",
       "params": [
         [
           "A57088821ED94129B1F252AD80F75E5A",
@@ -1704,6 +1704,12 @@
           "name": "Recurring",
           "name_es": "Adeudo recurrente",
           "value": "RCUR"
+        },
+        {
+          "ad_reference_id": "A57088821ED94129B1F252AD80F75E5A",
+          "name": "Sent to bank",
+          "name_es": "Sent to bank",
+          "value": "SB"
         },
         {
           "ad_reference_id": "A57088821ED94129B1F252AD80F75E5A",

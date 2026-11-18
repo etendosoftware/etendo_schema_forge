@@ -48,7 +48,7 @@ import RemittancePage from '@generated/remittance/generated/web/remittance/Remit
 import RemittanceBottomPanel from '@generated/remittance/custom/RemittanceBottomPanel';
 import RemittanceProcessConfirmModal from '@generated/remittance/custom/RemittanceProcessConfirmModal';
 import RemittanceSepaFileData from '@generated/remittance/custom/RemittanceSepaFileData';
-import { evalDisplayLogicRaw, dispatchProcessAction, canShowAddLineArea, resolveCanAddLines } from '@/components/contract-ui/detailViewHelpers.jsx';
+import { evalDisplayLogicRaw, dispatchProcessAction, canShowAddLineArea, resolveCanAddLines, WINDOW_HIDE_STATUS_PILL_FOR } from '@/components/contract-ui/detailViewHelpers.jsx';
 import enUS from '@/locales/en_US.json';
 import esES from '@/locales/es_ES.json';
 import esAR from '@/locales/es_AR.json';
@@ -86,26 +86,53 @@ const visibleProcessNames = (processes, data, lines) => processes
 const ONE_LINE = [{ id: 'line-1' }];
 
 describe('RemittancePage — header processes', () => {
-  it('declares exactly «process» and «reactivate»', () => {
-    expect(detailProps().processes.map((p) => p.name)).toEqual(['process', 'reactivate']);
+  it('declares exactly «confirm», «reactivate» and «returnLines» as header buttons (the advance steps are the status chip selector)', () => {
+    expect(detailProps().processes.map((p) => p.name)).toEqual(['confirm', 'reactivate', 'returnLines']);
   });
 
+  // ETP-6247 — the step-by-step flow: PE -> Confirmar -> PR -> Marcar enviada -> SB -> Marcar cobrada -> CT/PT.
   it.each([
-    ['a pending remittance with lines', { processed: false }, ONE_LINE, ['process']],
-    ['a pending remittance (Y/N) with lines', { processed: 'N' }, ONE_LINE, ['process']],
-    ['a pending remittance without lines', { processed: false }, [], []],
-    ['a processed remittance with lines', { processed: true }, ONE_LINE, ['reactivate']],
-    ['a processed remittance (Y/N) with lines', { processed: 'Y' }, ONE_LINE, ['reactivate']],
-    ['a processed remittance without lines', { processed: true }, [], ['reactivate']],
+    ['a pending remittance with lines', { processed: false, remittanceStatus: 'PE' }, ONE_LINE, ['confirm']],
+    ['a pending remittance (Y/N) with lines', { processed: 'N', remittanceStatus: 'PE' }, ONE_LINE, ['confirm']],
+    ['a pending remittance without lines', { processed: false, remittanceStatus: 'PE' }, [], []],
+    ['a Pendiente de envío remittance (PR): only «Reactivar» (the advance is the status chip)', { processed: 'Y', remittanceStatus: 'PR' }, ONE_LINE, ['reactivate']],
+    ['an Enviada al banco remittance (SB): only «Reactivar»', { processed: 'Y', remittanceStatus: 'SB' }, ONE_LINE, ['reactivate']],
+    ['a Cobrada remittance (CT): «Devolver» only', { processed: 'Y', remittanceStatus: 'CT' }, ONE_LINE, ['returnLines']],
+    ['a Pagada remittance (PT): nothing', { processed: 'Y', remittanceStatus: 'PT' }, ONE_LINE, []],
+    ['a partially collected remittance (CP): «Devolver» for what is left', { processed: 'Y', remittanceStatus: 'CP' }, ONE_LINE, ['returnLines']],
+    ['a partially paid remittance (PP)', { processed: 'Y', remittanceStatus: 'PP' }, ONE_LINE, []],
+    ['an Anulada remittance (AN)', { processed: 'Y', remittanceStatus: 'AN' }, ONE_LINE, []],
+    ['a PR remittance without lines keeps «Reactivar»', { processed: 'Y', remittanceStatus: 'PR' }, [], ['reactivate']],
   ])('on %s shows %#', (_label, data, lines, expected) => {
     const { processes } = detailProps();
     expect(visibleProcessNames(processes, { id: 'rem-1', ...data }, lines)).toEqual(expected);
   });
 
-  it('«process» is the primary action and asks for the grouping, default P', () => {
-    const process = detailProps().processes.find((p) => p.name === 'process');
+  it('«Devolver» is never offered before the remittance is collected', () => {
+    const { processes } = detailProps();
+    for (const status of ['PE', 'PR', 'SB']) {
+      expect(visibleProcessNames(processes, { id: 'rem-1', remittanceStatus: status }, ONE_LINE)).not.toContain('returnLines');
+    }
+  });
+
+  it('no blue advance button in the header: markSent and markCollected are not header processes', () => {
+    const names = detailProps().processes.map((p) => p.name);
+    expect(names).not.toContain('markSent');
+    expect(names).not.toContain('markCollected');
+  });
+
+  it('the header status chip is the window\'s own selector (topbarExtra), and the plain pill is hidden for PR and SB', () => {
+    const { topbarExtra } = detailProps();
+    expect(topbarExtra).toBeTruthy();
+    expect(topbarExtra.name ?? topbarExtra.displayName).toBe('RemittanceStatusSelector');
+    expect(WINDOW_HIDE_STATUS_PILL_FOR.remittance).toEqual(new Set(['PR', 'SB']));
+  });
+
+  it('«confirm» is the primary action, opens the confirm modal and declares the grouping, default P', () => {
+    const process = detailProps().processes.find((p) => p.name === 'confirm');
     expect(process.style).toBe('positive');
     expect(process.requiresLines).toBe(true);
+    expect(process.confirmModal).toBe(true);
     expect(process.params).toEqual([{
       key: 'grouping',
       type: 'select',
@@ -119,13 +146,23 @@ describe('RemittancePage — header processes', () => {
     }]);
   });
 
-  it('«process» opens the parameter dialog, not the confirmation and not a direct run', () => {
+  it('«Devolver» opens the return dialog through the window’s modal, never a direct run', () => {
+    const { processes, processConfirmModal } = detailProps();
+    const ret = processes.find((p) => p.name === 'returnLines');
+    expect(ret).toMatchObject({ label: 'remittanceReturnAction', style: 'primary-danger', requiresLines: true, confirmModal: true });
+    const ctx = { processConfirmModal, setConfirmProcess: vi.fn(), setParamDialogProcess: vi.fn(), handleProcess: vi.fn() };
+    dispatchProcessAction(ret, ctx);
+    expect(ctx.setConfirmProcess).toHaveBeenCalledWith(ret);
+    expect(ctx.handleProcess).not.toHaveBeenCalled();
+  });
+
+  it('«confirm» goes to the window’s confirm modal, not the parameter dialog and not a direct run', () => {
     const { processes, processConfirmModal } = detailProps();
     const ctx = { processConfirmModal, setConfirmProcess: vi.fn(), setParamDialogProcess: vi.fn(), handleProcess: vi.fn() };
-    const process = processes.find((p) => p.name === 'process');
+    const process = processes.find((p) => p.name === 'confirm');
     dispatchProcessAction(process, ctx);
-    expect(ctx.setParamDialogProcess).toHaveBeenCalledWith(process);
-    expect(ctx.setConfirmProcess).not.toHaveBeenCalled();
+    expect(ctx.setConfirmProcess).toHaveBeenCalledWith(process);
+    expect(ctx.setParamDialogProcess).not.toHaveBeenCalled();
     expect(ctx.handleProcess).not.toHaveBeenCalled();
   });
 
@@ -142,7 +179,7 @@ describe('RemittancePage — header processes', () => {
   });
 
   it.each(LOCALES)('every process and parameter label is translated in %s', (_loc, json) => {
-    const keys = ['process', 'reactivate', 'remittanceGrouping', 'remittanceGroupingNone', 'remittanceGroupingByBpAndDueDate',
+    const keys = ['confirm', 'reactivate', 'remittanceGrouping', 'remittanceGroupingNone', 'remittanceGroupingByBpAndDueDate',
       'remittanceReactivateConfirmTitle', 'remittanceReactivateConfirmBody'];
     for (const key of keys) expect(json.genericLabels[key], key).toEqual(expect.stringMatching(/\S/));
   });
@@ -293,7 +330,7 @@ describe('RemittancePage — Lines tab', () => {
     const status = linesColumns().find((c) => c.key === 'status');
     expect(status.type).toBe('status');
     expect(status.enumLabels).toEqual({
-      RPAP: 'statusRpap', RPAE: 'statusRpae', RPVOID: 'statusRpvoid', REM_SENT: 'statusRemSent', PPM: 'statusPpm',
+      RPAP: 'statusRpap', RPAE: 'statusRpae', RPVOID: 'remittanceReceiptReturned', REM_SENT: 'statusRemSent', PPM: 'statusPpm',
       RPR: 'statusRpr', REM_CANCEL: 'statusRemCancel', RDNC: 'statusRdnc', PWNC: 'statusPwnc', RPPC: 'statusRppc',
       ETGOERR: 'statusEtgoerr',
     });
@@ -305,7 +342,7 @@ describe('RemittancePage — Lines tab', () => {
     ['REM_CANCEL', 'Liquidado en remesa', 'success'],
     ['RPR', 'Cobrado', 'success'],
     ['PPM', 'Pagado', 'warning'],
-    ['RPVOID', 'Anulado', 'destructive'],
+    ['RPVOID', 'Devuelto', 'destructive'], // the voided payment a return leaves
     ['ETGOERR', 'Pago con error', 'destructive'],
   ])('shows %s as «%s» in the %s tone', (code, label, tone) => {
     const status = linesColumns().find((c) => c.key === 'status');

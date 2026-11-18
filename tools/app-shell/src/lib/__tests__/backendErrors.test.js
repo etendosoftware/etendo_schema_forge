@@ -1497,6 +1497,10 @@ describe('translateBackendError — SEPA remittance refusals (ETP-6148)', () => 
     ['ETGO_RemittanceAlreadyProcessed', 'backendError.remittanceAlreadyProcessed'],
     ['ETGO_RemittanceNoLines', 'backendError.remittanceNoLines'],
     ['ETGO_RemittanceNotProcessed', 'backendError.remittanceNotProcessed'],
+    // ETP-6247 — markSent / markCollected / reactivate refusals (the step-by-step flow).
+    ['ETGO_RemittanceMarkSentNotAllowed', 'backendError.remittanceMarkSentNotAllowed'],
+    ['ETGO_RemittanceMarkCollectedNotAllowed', 'backendError.remittanceMarkCollectedNotAllowed'],
+    ['ETGO_RemittanceReactivateNotAllowed', 'backendError.remittanceReactivateNotAllowed'],
     // syncDueItems / the in-place «A remesar» cell (422).
     ['ETGO_RemittanceLineAmountInvalid', 'backendError.remittanceLineAmountInvalid'],
     ['ETGO_RemittanceLineAmountNotEditable', 'backendError.remittanceLineAmountNotEditable'],
@@ -1509,6 +1513,7 @@ describe('translateBackendError — SEPA remittance refusals (ETP-6148)', () => 
     ['ETGO_RemittanceDueItemsSelectionFailed', 'backendError.remittanceDueItemsSelectionFailed'],
     ['ETGO_RemittanceProcessFailed', 'backendError.remittanceProcessFailed'],
     ['ETGO_RemittanceReactivateFailed', 'backendError.remittanceReactivateFailed'],
+    ['ETGO_RemittanceMarkCollectedFailed', 'backendError.remittanceMarkCollectedFailed'],
   ];
   const LOCALES = ['en_US', 'es_ES', 'es_AR'];
   const labels = Object.fromEntries(LOCALES.map((loc) => [

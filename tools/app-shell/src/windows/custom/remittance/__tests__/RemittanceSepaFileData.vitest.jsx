@@ -14,6 +14,9 @@ vi.mock('@/hooks/useNeoResource.js', async (importOriginal) => ({
   getApiBase: () => '/accounts-base',
 }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }));
+// ETP-6247 — the SEPA file card under this block has its own requests and its own tests
+// (RemittanceFileCard.vitest.jsx); stubbed here so the mocked fetch sequence stays this block's.
+vi.mock('@generated/remittance/custom/RemittanceFileCard.jsx', () => ({ default: () => null }));
 
 const mockDictionary = {
   'backendError.countryIban': 'T:countryIban',

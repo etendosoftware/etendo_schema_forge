@@ -9,6 +9,7 @@ export const remittance = [
     "dueDate": "2026-01-15",
     "name": "Sample name",
     "financialAccount": "Sample financialAccount",
+    "eTARAutomaticprocess": "Sample eTARAutomaticprocess",
     "processed": "Sample processed",
     "remittanceStatus": "DR"
   },
@@ -20,6 +21,7 @@ export const remittance = [
     "dueDate": "2026-01-16",
     "name": "Sample name",
     "financialAccount": "Sample financialAccount",
+    "eTARAutomaticprocess": "Sample eTARAutomaticprocess",
     "processed": "Sample processed",
     "remittanceStatus": "CO"
   },
@@ -31,6 +33,7 @@ export const remittance = [
     "dueDate": "2026-01-17",
     "name": "Sample name",
     "financialAccount": "Sample financialAccount",
+    "eTARAutomaticprocess": "Sample eTARAutomaticprocess",
     "processed": "Sample processed",
     "remittanceStatus": "VO"
   },
@@ -42,6 +45,7 @@ export const remittance = [
     "dueDate": "2026-01-18",
     "name": "Sample name",
     "financialAccount": "Sample financialAccount",
+    "eTARAutomaticprocess": "Sample eTARAutomaticprocess",
     "processed": "Sample processed",
     "remittanceStatus": "IP"
   },
@@ -53,6 +57,7 @@ export const remittance = [
     "dueDate": "2026-01-19",
     "name": "Sample name",
     "financialAccount": "Sample financialAccount",
+    "eTARAutomaticprocess": "Sample eTARAutomaticprocess",
     "processed": "Sample processed",
     "remittanceStatus": "DR"
   },
@@ -64,6 +69,7 @@ export const remittance = [
     "dueDate": "2026-01-20",
     "name": "Sample name",
     "financialAccount": "Sample financialAccount",
+    "eTARAutomaticprocess": "Sample eTARAutomaticprocess",
     "processed": "Sample processed",
     "remittanceStatus": "CO"
   },
@@ -75,6 +81,7 @@ export const remittance = [
     "dueDate": "2026-01-21",
     "name": "Sample name",
     "financialAccount": "Sample financialAccount",
+    "eTARAutomaticprocess": "Sample eTARAutomaticprocess",
     "processed": "Sample processed",
     "remittanceStatus": "VO"
   },
@@ -86,6 +93,7 @@ export const remittance = [
     "dueDate": "2026-01-22",
     "name": "Sample name",
     "financialAccount": "Sample financialAccount",
+    "eTARAutomaticprocess": "Sample eTARAutomaticprocess",
     "processed": "Sample processed",
     "remittanceStatus": "IP"
   },
@@ -97,6 +105,7 @@ export const remittance = [
     "dueDate": "2026-01-23",
     "name": "Sample name",
     "financialAccount": "Sample financialAccount",
+    "eTARAutomaticprocess": "Sample eTARAutomaticprocess",
     "processed": "Sample processed",
     "remittanceStatus": "DR"
   },
@@ -108,6 +117,7 @@ export const remittance = [
     "dueDate": "2026-01-24",
     "name": "Sample name",
     "financialAccount": "Sample financialAccount",
+    "eTARAutomaticprocess": "Sample eTARAutomaticprocess",
     "processed": "Sample processed",
     "remittanceStatus": "CO"
   },
@@ -119,6 +129,7 @@ export const remittance = [
     "dueDate": "2026-01-25",
     "name": "Sample name",
     "financialAccount": "Sample financialAccount",
+    "eTARAutomaticprocess": "Sample eTARAutomaticprocess",
     "processed": "Sample processed",
     "remittanceStatus": "VO"
   },
@@ -130,6 +141,7 @@ export const remittance = [
     "dueDate": "2026-01-26",
     "name": "Sample name",
     "financialAccount": "Sample financialAccount",
+    "eTARAutomaticprocess": "Sample eTARAutomaticprocess",
     "processed": "Sample processed",
     "remittanceStatus": "IP"
   }

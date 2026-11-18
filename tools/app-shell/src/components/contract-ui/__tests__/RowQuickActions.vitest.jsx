@@ -1,5 +1,5 @@
 // @covers tools/app-shell/src/components/contract-ui/RowQuickActions.jsx
-import { render, screen, within, act } from '@testing-library/react';
+import { render, screen, within, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
 
@@ -245,6 +245,74 @@ describe('RowQuickActions', () => {
     await user.click(screen.getByText('Custom'));
     expect(onClick).toHaveBeenCalledTimes(1);
     expect(onMenuActionExecuted).toHaveBeenCalled();
+  });
+
+  // ETP-6247 — a kebab entry with a `submenu` opens a side panel instead of running anything.
+  describe('kebab entries with a submenu', () => {
+    const buildSubmenu = (onPick = vi.fn()) => ([{
+      key: 'changeStatus',
+      label: 'Change status',
+      submenu: [
+        { key: 'a', label: 'Alpha', disabled: true, onClick: onPick },
+        { key: 'b', content: <span data-testid="chip-b">Beta chip</span>, onClick: onPick },
+      ],
+    }]);
+
+    it('shows the parent with a chevron, the submenu closed until it is opened', async () => {
+      const user = userEvent.setup();
+      setup({ menuActions: buildSubmenu() });
+      await user.click(screen.getByTestId('row-quick-action-more'));
+      expect(screen.getByTestId('menu-action-changeStatus')).toHaveTextContent('Change status');
+      expect(screen.getByTestId('menu-action-changeStatus')).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByTestId('submenu-changeStatus')).toBeNull();
+    });
+
+    it('a click opens it to the side, listing every item (a disabled one stays listed but dimmed)', async () => {
+      const user = userEvent.setup();
+      setup({ menuActions: buildSubmenu() });
+      await user.click(screen.getByTestId('row-quick-action-more'));
+      await user.click(screen.getByTestId('menu-action-changeStatus'));
+      expect(screen.getByTestId('submenu-changeStatus')).toBeInTheDocument();
+      expect(screen.getByTestId('submenu-action-changeStatus-a')).toBeDisabled();
+      expect(screen.getByTestId('submenu-action-changeStatus-b')).toBeEnabled();
+      expect(screen.getByTestId('chip-b')).toBeInTheDocument();
+    });
+
+    it('a disabled item does nothing; an enabled one closes the kebab and runs its onClick with the row', async () => {
+      const user = userEvent.setup();
+      const onPick = vi.fn();
+      setup({ menuActions: buildSubmenu(onPick) });
+      await user.click(screen.getByTestId('row-quick-action-more'));
+      await user.click(screen.getByTestId('menu-action-changeStatus'));
+      fireEvent.click(screen.getByTestId('submenu-action-changeStatus-a'));
+      expect(onPick).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByTestId('submenu-action-changeStatus-b'));
+      expect(onPick).toHaveBeenCalledTimes(1);
+      expect(onPick.mock.calls[0][0]).toMatchObject({ row: expect.objectContaining({ id: '1' }) });
+      expect(screen.queryByTestId('menu-action-changeStatus')).toBeNull();
+    });
+
+    it('the submenu closes when the pointer leaves the entry; entries without a submenu are unchanged', async () => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      setup({ menuActions: [...buildSubmenu(), { key: 'plain', label: 'Plain', onClick }] });
+      await user.click(screen.getByTestId('row-quick-action-more'));
+      await user.click(screen.getByTestId('menu-action-changeStatus'));
+      expect(screen.getByTestId('submenu-changeStatus')).toBeInTheDocument();
+      await user.unhover(screen.getByTestId('menu-action-changeStatus'));
+      expect(screen.queryByTestId('submenu-changeStatus')).toBeNull();
+      await user.click(screen.getByText('Plain'));
+      expect(onClick).toHaveBeenCalledTimes(1);
+    });
+
+    it('honours visibleWhen on the parent entry', async () => {
+      const user = userEvent.setup();
+      const menuActions = [{ ...buildSubmenu()[0], visibleWhen: "@DocumentStatus@='XX'" }, { key: 'plain', label: 'Plain', onClick: vi.fn() }];
+      setup({ menuActions });
+      await user.click(screen.getByTestId('row-quick-action-more'));
+      expect(screen.queryByTestId('menu-action-changeStatus')).toBeNull();
+      expect(screen.getByText('Plain')).toBeInTheDocument();
+    });
   });
 
   // ETP-3914 slice 3 — in-flight + visibleWhen

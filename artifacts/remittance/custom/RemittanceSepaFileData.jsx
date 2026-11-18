@@ -18,6 +18,7 @@ import {
 } from '@/lib/backendErrors.js';
 import { dueItemsErrorMessage } from './remittanceDueItemsApi.js';
 import { fetchSepaFileData, saveAccountIban } from './sepaFileDataApi.js';
+import RemittanceFileCard from './RemittanceFileCard.jsx';
 
 // Same keys as the Edit-account form's IBAN check (validateIbanForCountry codes).
 const IBAN_ERROR_KEYS = {
@@ -272,6 +273,7 @@ export default function RemittanceSepaFileData({ data, apiBaseUrl }) {
   // `mx-2`: the header form sits in DetailView's `p-2` card body (inline-editable lines layout),
   // so the card shares the form grid's left and right edges; `mt-3 mb-3` ≈ the form's own row gap.
   return (
+    <>
     <section
       className="mx-2 mt-3 mb-3 overflow-hidden rounded-xl border border-[hsl(var(--border-subtle))] bg-card"
       aria-labelledby="remittance-sepa-title"
@@ -283,5 +285,8 @@ export default function RemittanceSepaFileData({ data, apiBaseUrl }) {
       </header>
       <div className="px-4 py-2.5">{body}</div>
     </section>
+    {/* ETP-6247 — «Antes de confirmar» / «Fichero SEPA», the next card of the same block. */}
+    <RemittanceFileCard data={data} apiBaseUrl={apiBaseUrl} data-testid="RemittanceFileCard__sepa" />
+    </>
   );
 }
