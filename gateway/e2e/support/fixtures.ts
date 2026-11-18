@@ -7,12 +7,21 @@ import { RUN_PREFIX } from './env.ts';
 export const CONTACT_HINT =
   'Locally this is usually a 502 because the tenant lacks the EM_Etgo_Identifier sequence (known environment gap, not a gateway bug).';
 
-export async function createContact(label: string) {
+/** Creates a company: a contact with `name` and no `is_person` (a contact is a company by default). */
+export async function createContact(label: string, attributes: Record<string, unknown> = {}) {
   return createRecord(
     'contacts',
-    resource('contacts', { name: `${RUN_PREFIX}-${label}`, email: `${RUN_PREFIX}-${label}@example.com`, phone: '600000000' }),
+    resource('contacts', { name: `${RUN_PREFIX}-${label}`, email: `${RUN_PREFIX}-${label}@example.com`, phone: '600000000', ...attributes }),
     CONTACT_HINT,
   );
+}
+
+/** Attributes of a person: `is_person` with a first and last name, never `name` (Etendo derives it). */
+export function personAttributes(label: string): Record<string, unknown> {
+  return {
+    is_person: true, first_name: `${RUN_PREFIX}-${label}`, last_name: 'Person',
+    email: `${RUN_PREFIX}-${label}@example.com`, phone: '600000001',
+  };
 }
 
 export async function createAddress(contactId: string, attributes: Record<string, unknown> = {}) {

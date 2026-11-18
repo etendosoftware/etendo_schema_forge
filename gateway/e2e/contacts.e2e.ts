@@ -1,8 +1,8 @@
 // @covers gateway/src/public-api/public-api.controller.ts
 import { after, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { api, cleanupCreated, expectStatus } from './support/client.ts';
-import { createAddress, createContact } from './support/fixtures.ts';
+import { api, cleanupCreated, createRecord, expectErrorDocument, expectStatus, resource } from './support/client.ts';
+import { CONTACT_HINT, createAddress, createContact, personAttributes } from './support/fixtures.ts';
 import {
   expectDeleted, expectListed, expectMissingIfMatchRefused, expectPatchWithEtag, expectStaleEtagRefused,
   readWithEtag, type LifecycleSpec,
@@ -69,5 +69,119 @@ describe('contacts and their location address', () => {
   it('deletes the address and the contact, and both answer 404 afterwards', async () => {
     await expectDeleted(address);
     await expectDeleted(contact);
+  });
+});
+
+// A contact is a person (is_person true: first_name and last_name, name derived) or a company
+// (name). Cases marked [GO] need the person/company rules of the Etendo GO server: a server
+// without them answers 201 where a 400 is expected, or leaves the derived name empty.
+describe('contacts as a person or a company', () => {
+  it('[GO] creates a person from first and last name and reads back is_person and the derived name', async () => {
+    const attributes = personAttributes('person');
+    const created = await createRecord('contacts', resource('contacts', attributes), CONTACT_HINT);
+    const res = await api('GET', `contacts/${created.id}`);
+    expectStatus(res, 200);
+    const read = res.json.data.attributes;
+    assert.equal(read.is_person, true);
+    assert.equal(read.first_name, attributes.first_name);
+    assert.equal(read.last_name, 'Person');
+    assert.equal(read.name, `${attributes.first_name} Person`, 'name is derived from first_name and last_name');
+    assert.equal(read.phone, '600000001', 'a person keeps its phone');
+  });
+
+  it('[GO] accepts a person with a name matching first_name and last_name', async () => {
+    const attributes = personAttributes('matching-name');
+    attributes.name = `${attributes.first_name} ${attributes.last_name}`;
+    const created = await createRecord('contacts', resource('contacts', attributes), CONTACT_HINT);
+    const { res } = await readWithEtag(`contacts/${created.id}`);
+    const read = res.json.data.attributes;
+    assert.equal(read.is_person, true);
+    assert.equal(read.first_name, attributes.first_name);
+    assert.equal(read.last_name, attributes.last_name);
+    assert.equal(read.name, attributes.name);
+  });
+
+  it('[GO] refuses first and last name without is_person and explains how to create a person', async () => {
+    const attributes = personAttributes('missing-type');
+    delete attributes.is_person;
+    const error = expectErrorDocument(await api('POST', 'contacts', {
+      body: resource('contacts', attributes),
+    }), 400);
+    assert.match(error.detail, /is_person\s*:\s*true/, 'the error tells the integrator to send is_person: true');
+  });
+
+  it('[GO] switching a person to a company clears the persisted first and last name', async () => {
+    const attributes = personAttributes('becomes-company');
+    const created = await createRecord('contacts', resource('contacts', attributes), CONTACT_HINT);
+    const { res: before, etag } = await readWithEtag(`contacts/${created.id}`);
+    assert.equal(before.json.data.attributes.first_name, attributes.first_name);
+    assert.equal(before.json.data.attributes.last_name, attributes.last_name);
+    expectStatus(await api('PATCH', `contacts/${created.id}`, {
+      body: resource('contacts', { is_person: false }, undefined, created.id),
+      headers: { 'If-Match': etag },
+    }), 200);
+    const { res } = await readWithEtag(`contacts/${created.id}`);
+    const read = res.json.data.attributes;
+    assert.equal(read.is_person, false);
+    for (const field of ['first_name', 'last_name']) {
+      assert.ok(read[field] === null || read[field] === '', `${field} is empty in the persisted company`);
+    }
+    assert.equal(read.name, before.json.data.attributes.name, 'changing only the type preserves the contact name');
+    assert.equal(read.phone, attributes.phone, 'changing only the type preserves the phone');
+  });
+
+  it('creates a company with name, and reads it back as not a person', async () => {
+    const created = await createContact('company', { is_person: false });
+    const read = (await api('GET', `contacts/${created.id}`)).json.data.attributes;
+    assert.equal(read.is_person, false);
+    assert.match(read.name, /-company$/);
+    assert.equal(read.phone, '600000000', 'a company keeps its phone');
+  });
+
+  it('[GO] refuses a company with first_name', async () => {
+    const res = await api('POST', 'contacts', {
+      body: resource('contacts', { name: 'e2e-company-with-first-name', first_name: 'Ana' }),
+    });
+    expectErrorDocument(res, 400);
+  });
+
+  it('[GO] refuses a person without last_name', async () => {
+    const attributes = personAttributes('no-last-name');
+    delete attributes.last_name;
+    expectErrorDocument(await api('POST', 'contacts', { body: resource('contacts', attributes) }), 400);
+  });
+
+  it('[GO] refuses a person with name', async () => {
+    const attributes = { ...personAttributes('with-name'), name: 'e2e-person-with-name' };
+    expectErrorDocument(await api('POST', 'contacts', { body: resource('contacts', attributes) }), 400);
+  });
+
+  it('lists the contact categories and creates a contact in one of them', async () => {
+    const lookup = await api('GET', 'contacts/lookups/category?page[size]=5');
+    expectStatus(lookup, 200, 'the category selector offers no value');
+    const first = lookup.json.data?.[0];
+    assert.ok(first, 'no contact category available');
+    assert.equal(first.type, 'business-partner-category');
+    assert.equal(typeof first.attributes.label, 'string');
+    const created = await createContact('category', { category: first.id });
+    const read = (await api('GET', `contacts/${created.id}`)).json.data.attributes;
+    assert.equal(read.category, first.id);
+  });
+
+  it('accepts tax_id_key with a valid NIF and reads the key back', async () => {
+    const created = await createContact('tax-id-key', { tax_id_key: '1', tax_id: '12345678Z' });
+    const read = (await api('GET', `contacts/${created.id}`)).json.data.attributes;
+    assert.equal(read.tax_id_key, '1');
+    assert.equal(read.tax_id, '12345678Z');
+  });
+
+  it('refuses an invalid NIF on create, with the key sent and [GO] with the key defaulted', async () => {
+    // 12345678 takes the control letter Z; A makes the NIF invalid.
+    expectErrorDocument(await api('POST', 'contacts', {
+      body: resource('contacts', { name: 'e2e-invalid-nif', tax_id_key: '1', tax_id: '12345678A' }),
+    }), 400);
+    expectErrorDocument(await api('POST', 'contacts', {
+      body: resource('contacts', { name: 'e2e-invalid-nif-default-key', tax_id: '12345678A' }),
+    }), 400);
   });
 });

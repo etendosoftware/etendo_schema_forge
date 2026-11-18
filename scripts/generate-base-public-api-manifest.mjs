@@ -222,7 +222,7 @@ export function publicFieldName(internalName) {
 // AD reference (amount, price, quantity, generic number) is a JSON number; the
 // contract spells date-time `dateTime` (`datetime` is kept for older contracts).
 // Everything else (ids, list codes, buttons, text) is a string.
-function openApiType(fieldType) {
+export function openApiType(fieldType) {
   switch (fieldType) {
     case 'boolean': return { type: 'boolean' };
     case 'integer': return { type: 'integer', format: 'int32' };
@@ -236,6 +236,37 @@ function openApiType(fieldType) {
     case 'datetime': return { type: 'string', format: 'date-time' };
     default: return { type: 'string' };
   }
+}
+
+// The codes of an AD list (`enumValues` in the contract: `[{ value, name }]`), published so the
+// OpenAPI document lists what a list field accepts. NEO reads and writes the code (`value`);
+// `name` is the label the application shows for it. Generic: every published string field that
+// carries list values gets them, whatever its resource. Returns null when the field has none.
+export function enumOf(field) {
+  if (!Array.isArray(field?.enumValues) || field.enumValues.length === 0) return null;
+  const labels = {};
+  for (const option of field.enumValues) {
+    const code = option?.value;
+    if (typeof code !== 'string' || code === '' || Object.hasOwn(labels, code)) continue;
+    labels[code] = typeof option.name === 'string' && option.name ? option.name : code;
+  }
+  const codes = Object.keys(labels);
+  return codes.length ? { codes, labels } : null;
+}
+
+// A public description of a field, declared in decisions.json as `publicApi.description`. It is
+// published verbatim in the OpenAPI document, so it must be a non-empty string and must not cite
+// an internal reference (a ticket or Jira), like the functional texts.
+export function publicDescriptionOf(field, where) {
+  const description = field?.publicApi?.description;
+  if (description === undefined) return undefined;
+  if (typeof description !== 'string' || !description.trim()) {
+    throw new Error(`${where}: publicApi.description must be a non-empty string`);
+  }
+  if (internalReference.test(description)) {
+    throw new Error(`${where}: publicApi.description cites an internal reference (a ticket or Jira); it is published as is`);
+  }
+  return description.trim();
 }
 
 /**
@@ -309,6 +340,8 @@ export function lookupOf(field, where) {
 // - `entities.<entity>.fields.<field>.publicApi.required: true`: a writable field the API
 //   refuses to create without. Declared, not derived: the contract's `required` also covers
 //   fields NEO fills by itself (e.g. an order's address or price list).
+// - `entities.<entity>.fields.<field>.publicApi.description`: a text published as the field's
+//   OpenAPI description, for rules the type cannot express (see publicDescriptionOf).
 // Field names are the internal (contract) names. Platform guardrails
 // (`neverExposedFields`) are applied by the generator and win over this.
 export function exposurePolicyOf(decisions, entityName) {
@@ -327,12 +360,18 @@ export function exposurePolicyOf(decisions, entityName) {
     const lookup = lookupOf(field, `${entityName}.${name}`);
     if (lookup) lookups.set(name, lookup);
   }
+  const descriptions = new Map();
+  for (const [name, field] of Object.entries(entity?.fields ?? {})) {
+    const description = publicDescriptionOf(field, `${entityName}.${name}`);
+    if (description) descriptions.set(name, description);
+  }
   return {
     actions: Array.isArray(actions) ? actions : [],
     readOnly: entity?.publicApi?.readOnly === true,
     readOnlyFields,
     requiredFields,
     lookups,
+    descriptions,
   };
 }
 
@@ -366,7 +405,7 @@ function attachLookups({ fields, lookups, specName, entityName, parent }) {
 
 export function buildEntity({
   specName, entityName, contract, functional, parent, rawEntity, inputFields = [],
-  policy = { actions: [], readOnly: false, readOnlyFields: new Set(), requiredFields: new Set(), lookups: new Map() },
+  policy = { actions: [], readOnly: false, readOnlyFields: new Set(), requiredFields: new Set(), lookups: new Map(), descriptions: new Map() },
 }) {
   if (parent && pathSegment(entityName) === LOOKUPS_SEGMENT) {
     throw new Error(`${specName}/${entityName}: a child resource cannot use the path segment "${LOOKUPS_SEGMENT}", it is kept for lookups (hygiene: the two kinds of route stay apart)`);
@@ -403,12 +442,17 @@ export function buildEntity({
       throw new Error(`Public field name collision in ${specName}/${entityName}: ${apiName}`);
     }
     const direction = writable && field.visibility === 'editable' && !policy.readOnlyFields.has(field.name) ? 'inout' : 'out';
+    const dataType = openApiType(field.type);
+    const values = dataType.type === 'string' && !field.reference ? enumOf(field) : null;
+    const description = policy.descriptions?.get(field.name);
     fields[apiName] = {
       sourceVisibility: field.visibility,
       direction,
       internalPath: field.name,
-      dataType: openApiType(field.type),
+      dataType: values ? { ...dataType, enum: values.codes } : dataType,
       reference: field.reference ?? null,
+      ...(values ? { enumLabels: values.labels } : {}),
+      ...(description ? { description } : {}),
       ...(direction === 'inout' && policy.requiredFields?.has(field.name) ? { required: true } : {}),
     };
   }
@@ -659,6 +703,8 @@ export async function generateManifest({
       readOnlyFields: 'fields.<field>.publicApi.readOnly or entities.<entity>.publicApi.readOnlyFields in decisions.json',
       inputFields: 'entities.<entity>.publicApi.inputFields in decisions.json',
       lookups: 'entities.<entity>.fields.<field>.publicApi.lookup in decisions.json (top-level resources only)',
+      enums: 'the AD list values of a published string field (contract enumValues): dataType.enum plus enumLabels',
+      descriptions: 'entities.<entity>.fields.<field>.publicApi.description in decisions.json',
       failClosed: true,
     },
     entities,
