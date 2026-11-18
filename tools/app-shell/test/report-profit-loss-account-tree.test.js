@@ -520,11 +520,20 @@ describe('profit-loss template.hbs — Reference Amount column visibility', () =
   });
 });
 
+// round2 / numCellType live in each report's helpers.js (not canonical), so the Excel render path
+// registers them from the real file, as jsreport does.
+function registerReportExtras(hb, code) {
+  // eslint-disable-next-line no-new-func
+  const extras = new Function(`${code}\nreturn { round2, numCellType };`)();
+  for (const [name, fn] of Object.entries(extras)) hb.registerHelper(name, fn);
+}
+
 // ── Excel ───────────────────────────────────────────────────────────────────
 
 function renderExcel({ compareTo, locale = 'en_US', rows = ROWS } = {}) {
   const hb = Handlebars.create();
   registerReportHelpers(hb, HELPERS_CODE);
+  registerReportExtras(hb, HELPERS_CODE);
   const template = hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-excel.hbs'), 'utf8'));
   return template({
     css: '',
@@ -898,6 +907,7 @@ describe('profit-loss exports — variation (ETP-6080)', () => {
     void variationAmount; void variationPct;
     const hb = Handlebars.create();
     registerReportHelpers(hb, HELPERS_CODE);
+    registerReportExtras(hb, HELPERS_CODE);
     const excel = hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-excel.hbs'), 'utf8'))({
       meta: { ...META_BASE, labels: noVariation, params: { compareTo: 'true' } }, rows: VAR_ROWS,
     });
@@ -973,6 +983,7 @@ describe('profit-loss exports — headline cards and compared period (ETP-6239)'
     const hb = Handlebars.create();
     registerReportHelpers(hb, HELPERS_CODE);
     const data = { meta: meta('es_ES', { columns: 'quarter', compareMode: 'prev' }), rows: [PROW] };
+    registerReportExtras(hb, HELPERS_CODE);
     const excel = hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-excel.hbs'), 'utf8'))(data);
     assert.match(excel, /<th>T1 26 Comparado \(T4 25\)<\/th>/);
     assert.match(excel, /<th>Total Comparado \(01\/11\/2025 – 31\/12\/2025\)<\/th>/);
@@ -1016,5 +1027,65 @@ describe('profit-loss exports — headline cards and compared period (ETP-6239)'
     assert.match(note('es_ES', 2), /^No se muestran 2 períodos anteriores\./);
     assert.match(note('en_US', 1), /^Not shown: 1 earlier period\./);
     assert.match(note('en_US', 5), /^Not shown: 5 earlier periods\./);
+  });
+});
+
+// ETP-6080 (QA CP-31) — a null % (reference 0) must be an empty STRING cell: html-to-xlsx writes an
+// empty number cell as the literal NaN, which is invalid XML. Values are rounded to 2 decimals.
+describe('profit-loss exports — nullable variation cells (ETP-6080)', () => {
+  const NROWS = [
+    { ...ROWS[1], variationAmount: 5, variationPct: null },
+    { ...ROWS[2], variationAmount: 0, variationPct: 0 },
+    { ...ROWS[3], variationAmount: 12.3456, variationPct: 91.5492957746479 },
+  ];
+  const excelCells = (html) => [...html.matchAll(/<td data-cell-type="(\w+)">([^<]*)<\/td>/g)].map((m) => [m[1], m[2]]);
+
+  it('Excel rows: null % is an empty string cell, 0 stays numeric, long decimals are rounded', () => {
+    const cells = excelCells(renderExcel({ compareTo: true, rows: NROWS }));
+    assert.ok(cells.some(([t, v]) => t === 'string' && v === ''), 'null % -> empty string cell');
+    assert.ok(cells.some(([t, v]) => t === 'number' && v === '91.55'));
+    assert.ok(cells.some(([t, v]) => t === 'number' && v === '12.35'));
+    assert.ok(cells.filter(([t, v]) => t === 'number' && v === '0').length >= 1);
+    assert.ok(!cells.some(([t, v]) => t === 'number' && v === ''), 'no empty number cell (NaN in xlsx)');
+  });
+
+  it('CSV rows: empty cell for null, 0 for 0, rounded values', () => {
+    const lines = renderCsv({ compareTo: true, rows: NROWS }).trim().split('\n').slice(1);
+    assert.ok(lines[0].endsWith(',8000,5,'), lines[0]);
+    assert.ok(lines[1].endsWith(',0,0,0'), lines[1]);
+    assert.ok(lines[2].endsWith(',0,12.35,91.55'), lines[2]);
+  });
+
+  describe('period columns', () => {
+    const PERIODS = [{ idx: 0, dateFrom: '2026-01-01', dateTo: '2026-01-31', partial: false }];
+    const PARAM = '2026-01-01..2026-01-31|2025-01-01..2025-01-31|2025-12-01..2025-12-31';
+    const mk = (ref) => ({
+      meta: { ...META_BASE, locale: 'en_US', labels: LABELS.en_US, periods: PERIODS, columnPages: [[0]], columnPageSize: 1, params: { periods: PARAM, columns: 'month', compareMode: 'sly' } },
+      rows: [{ ...ROWS[1], cells: [{ amount: 10, sly: ref }] }],
+    });
+    const excel = (d) => { const hb = Handlebars.create(); registerReportHelpers(hb, HELPERS_CODE); registerReportExtras(hb, HELPERS_CODE); return hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-excel.hbs'), 'utf8'))(d); };
+    const csv = (d) => {
+      const built = buildJsreportHelpersString(HELPERS_CODE);
+      const names = [...built.matchAll(/^function\s+(\w+)\s*\(/gm)].map((m) => m[1]);
+      // eslint-disable-next-line no-new-func
+      const helpers = new Function(`${built}\nreturn { ${names.join(', ')} };`)();
+      const hb = Handlebars.create();
+      for (const [n, fn] of Object.entries(helpers)) hb.registerHelper(n, fn);
+      return hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-csv.hbs'), 'utf8'))(d);
+    };
+
+    it('Excel: reference 0 gives an empty string cell for the %, a real 0 stays numeric', () => {
+      const zero = excelCells(excel(mk({ amount: 0, variationAmount: 10, variationPct: null })));
+      assert.ok(zero.some(([t, v]) => t === 'string' && v === ''));
+      assert.ok(!zero.some(([t, v]) => t === 'number' && v === ''));
+      const real = excelCells(excel(mk({ amount: 10, variationAmount: 0, variationPct: 0 })));
+      assert.ok(real.filter(([t, v]) => t === 'number' && v === '0').length >= 2);
+    });
+
+    it('CSV: reference 0 gives an empty % cell, long decimals are rounded', () => {
+      const row = (d) => csv(d).trim().split('\n')[1];
+      assert.ok(row(mk({ amount: 0, variationAmount: 10, variationPct: null })).endsWith(',10,0,10,'));
+      assert.ok(row(mk({ amount: 5, variationAmount: 5, variationPct: 91.5492957746479 })).endsWith(',5,5,91.55'));
+    });
   });
 });

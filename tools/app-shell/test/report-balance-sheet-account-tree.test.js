@@ -608,11 +608,20 @@ describe('balance-sheet template.hbs — Reference Amount column visibility', ()
   });
 });
 
+// round2 / numCellType live in each report's helpers.js (not canonical), so the Excel render path
+// registers them from the real file, as jsreport does.
+function registerReportExtras(hb, code) {
+  // eslint-disable-next-line no-new-func
+  const extras = new Function(`${code}\nreturn { round2, numCellType };`)();
+  for (const [name, fn] of Object.entries(extras)) hb.registerHelper(name, fn);
+}
+
 // ── Excel ───────────────────────────────────────────────────────────────────
 
 function renderExcel({ compareTo, locale = 'en_US', rows = ROWS } = {}) {
   const hb = Handlebars.create();
   registerReportHelpers(hb, HELPERS_CODE);
+  registerReportExtras(hb, HELPERS_CODE);
   const template = hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-excel.hbs'), 'utf8'));
   return template({
     css: '',
@@ -820,11 +829,12 @@ function typeMeta(contract, locale, compareTo = false, labelOverrides = {}) {
 function renderExportExcel(dir, meta, rows = TYPE_ROWS) {
   const hb = Handlebars.create();
   registerReportHelpers(hb);
+  registerReportExtras(hb, readFileSync(resolve(dir, 'helpers.js'), 'utf8'));
   return hb.compile(readFileSync(resolve(dir, 'template-excel.hbs'), 'utf8'))({ css: '', meta, rows });
 }
 
 function renderExportCsv(dir, meta, rows = TYPE_ROWS) {
-  const built = buildJsreportHelpersString();
+  const built = buildJsreportHelpersString(readFileSync(resolve(dir, 'helpers.js'), 'utf8'));
   const helperNames = [...built.matchAll(/^function\s+(\w+)\s*\(/gm)].map((m) => m[1]);
   // eslint-disable-next-line no-new-func
   const helpers = new Function(`${built}\nreturn { ${helperNames.join(', ')} };`)();
@@ -931,3 +941,25 @@ for (const { report, dir, contract } of TYPE_REPORTS) {
     });
   });
 }
+
+// ETP-6080 — the Excel/CSV templates and the number helpers are shared with profit-loss.
+describe('balance-sheet exports — shared with profit-loss (ETP-6080)', () => {
+  const pl = resolve(import.meta.dirname, '../../../artifacts/profit-loss');
+  for (const f of ['template-excel.hbs', 'template-csv.hbs', 'helpers.js']) {
+    it(`${f} stays byte-identical to profit-loss`, () => {
+      assert.equal(readFileSync(resolve(ARTIFACT_DIR, f), 'utf8'), readFileSync(resolve(pl, f), 'utf8'));
+    });
+  }
+
+  it('compare on but no variation labels: no variation columns, and a null % cell is never a number cell', () => {
+    const hb = Handlebars.create();
+    registerReportHelpers(hb, HELPERS_CODE);
+    registerReportExtras(hb, HELPERS_CODE);
+    const excel = hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-excel.hbs'), 'utf8'))({
+      meta: { ...META_BASE, labels: LABELS.en_US, params: { compareTo: 'true' } },
+      rows: [{ ...ROWS[0], variationAmount: 1, variationPct: null }],
+    });
+    assert.doesNotMatch(excel, /Variation/);
+    assert.doesNotMatch(excel, /data-cell-type="number"><\/td>/);
+  });
+});
