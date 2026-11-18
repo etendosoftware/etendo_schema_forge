@@ -141,7 +141,7 @@ export default function PortalHomeView({
         {/* A row at least 320px tall (it grows with its content): "Documentos recientes" and the chart keep the design's 520 : 840 at every
             width (the Figma's 520px card beside a growing chart, as a ratio so neither empties),
             the documents never under the 440px their widest row needs on one line. */}
-        <div className="grid gap-3 md:grid-cols-[minmax(440px,520fr)_minmax(0,840fr)] md:gap-4">
+        <div className="grid gap-3 md:grid-cols-[minmax(440px,520fr)_minmax(0,824fr)] md:gap-4">
           <PortalSection
             title={ui('portalRecentDocuments')}
             action={(
