@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Component, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import {
@@ -176,6 +176,80 @@ function DecisionSummary({ decision, notified }) {
   );
 }
 
+/** The card of a confirmation that shows no result: the customer can always try again. */
+function FailedCard({ onRetry }) {
+  const ui = useUI();
+  return (
+    <Frame data-testid="Frame__be410c">
+      <Result
+        testId="portal-decision-failed"
+        Icon={WarningCircleIcon}
+        tone="destructive"
+        title={ui('portalDecisionConfirmFailed')}
+        data-testid="Result__be410c">
+        <button type="button" className={PORTAL_FIGMA_BUTTON_PRIMARY} onClick={onRetry} data-testid="portal-decision-retry">
+          <span className="px-1">{ui('retry')}</span>
+        </button>
+      </Result>
+    </Frame>
+  );
+}
+
+/**
+ * Keeps a result that cannot be rendered inside the page: a render error is no promise rejection,
+ * so the confirmation chain's `.catch` never sees it. It is mounted only while the result shows, so
+ * the retry, which moves the page back to "applying", also discards the caught error.
+ */
+class ResultBoundary extends Component {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
+/** The confirmation's result, with the way into the portal when the answer carries one. */
+function DecisionResult({ decision }) {
+  const ui = useUI();
+  const navigate = useNavigate();
+  const entryPath = portalEntryPath(decision);
+  const enter = entryPath
+    ? () => navigate(entryPath, { replace: true })
+    : null;
+  const params = { number: decision.documentNo ?? '', tenantName: decision.tenantName ?? '' };
+  const confirmed = decision.state === PORTAL_DECISION_STATE.confirmed;
+  const appliedNow = confirmed && decision.appliedNow;
+  const accepted = decision.decision === 'ACCEPT';
+  const copy = STATE_COPY[decision.state] ?? STATE_COPY[PORTAL_DECISION_STATE.notPending];
+  let title = ui(copy.titleKey);
+  let description = ui(copy.descriptionKey, params);
+  if (appliedNow) {
+    title = ui(accepted ? 'portalDecisionAcceptedTitle' : 'portalDecisionRejectedTitle');
+    description = ui(accepted ? 'portalDecisionAcceptedDescription' : 'portalDecisionRejectedDescription');
+  }
+  let tone = 'neutral';
+  if (confirmed) tone = accepted ? 'success' : 'destructive';
+  return (
+    <Frame onEnter={enter} data-testid="Frame__be410c">
+      <Result
+        testId={appliedNow ? 'portal-decision-applied' : `portal-decision-${decision.state}`}
+        Icon={confirmed ? CheckCircleIcon : FileTextIcon}
+        tone={tone}
+        title={title}
+        description={description}
+        data-testid="Result__be410c">
+        {decision.documentNo ? (
+          <DecisionSummary decision={decision} notified={confirmed} data-testid="DecisionSummary__be410c" />
+        ) : null}
+      </Result>
+    </Frame>
+  );
+}
+
 export default function PortalDecisionPage({ resendDelayMs = CONFIRM_RESEND_DELAY_MS } = {}) {
   const { token = '' } = useParams();
   const ui = useUI();
@@ -185,7 +259,6 @@ export default function PortalDecisionPage({ resendDelayMs = CONFIRM_RESEND_DELA
   const apiFetch = usePortalApiFetch(baseUrl);
   const [view, setView] = useState(VIEW.applying);
   const [decision, setDecision] = useState(null);
-  const navigate = useNavigate();
 
   // The token whose confirmation was already sent: the POST goes out once per open, also under
   // StrictMode's double effect in development (a second POST would answer "already applied").
@@ -250,8 +323,9 @@ export default function PortalDecisionPage({ resendDelayMs = CONFIRM_RESEND_DELA
    * own lost call apart from an earlier open of the same link (no timestamp, no request id), and
    * claiming "you have just rejected…" would be false for a genuinely re-opened link.
    *
-   * Anything that throws past these steps (rendering the result, navigating) ends on the failure
-   * card with its retry, never stuck on "applying". Once the page is gone, the chain stops.
+   * Anything that throws in these steps ends on the failure card with its retry, never stuck on
+   * "applying"; so does a result that cannot be rendered, through {@link ResultBoundary}, because
+   * that error happens later and never reaches this chain. Once the page is gone, the chain stops.
    */
   const apply = useCallback(() => {
     const trimmed = token.trim();
@@ -289,11 +363,6 @@ export default function PortalDecisionPage({ resendDelayMs = CONFIRM_RESEND_DELA
     apply();
   }, [apply, token]);
 
-  const entryPath = view === VIEW.ready ? portalEntryPath(decision) : null;
-  const enter = entryPath
-    ? () => navigate(entryPath, { replace: true })
-    : null;
-
   if (view === VIEW.applying) {
     return (
       <Frame data-testid="Frame__be410c">
@@ -318,49 +387,12 @@ export default function PortalDecisionPage({ resendDelayMs = CONFIRM_RESEND_DELA
       </Frame>
     );
   }
-  if (view === VIEW.failed) {
-    return (
-      <Frame data-testid="Frame__be410c">
-        <Result
-          testId="portal-decision-failed"
-          Icon={WarningCircleIcon}
-          tone="destructive"
-          title={ui('portalDecisionConfirmFailed')}
-          data-testid="Result__be410c">
-          <button type="button" className={PORTAL_FIGMA_BUTTON_PRIMARY} onClick={() => apply()} data-testid="portal-decision-retry">
-            <span className="px-1">{ui('retry')}</span>
-          </button>
-        </Result>
-      </Frame>
-    );
-  }
+  const failedCard = <FailedCard onRetry={() => apply()} data-testid="FailedCard__be410c" />;
+  if (view === VIEW.failed) return failedCard;
 
-  const params = { number: decision.documentNo ?? '', tenantName: decision.tenantName ?? '' };
-  const confirmed = decision.state === PORTAL_DECISION_STATE.confirmed;
-  const appliedNow = confirmed && decision.appliedNow;
-  const accepted = decision.decision === 'ACCEPT';
-  const copy = STATE_COPY[decision.state] ?? STATE_COPY[PORTAL_DECISION_STATE.notPending];
-  let title = ui(copy.titleKey);
-  let description = ui(copy.descriptionKey, params);
-  if (appliedNow) {
-    title = ui(accepted ? 'portalDecisionAcceptedTitle' : 'portalDecisionRejectedTitle');
-    description = ui(accepted ? 'portalDecisionAcceptedDescription' : 'portalDecisionRejectedDescription');
-  }
-  let tone = 'neutral';
-  if (confirmed) tone = accepted ? 'success' : 'destructive';
   return (
-    <Frame onEnter={enter} data-testid="Frame__be410c">
-      <Result
-        testId={appliedNow ? 'portal-decision-applied' : `portal-decision-${decision.state}`}
-        Icon={confirmed ? CheckCircleIcon : FileTextIcon}
-        tone={tone}
-        title={title}
-        description={description}
-        data-testid="Result__be410c">
-        {decision.documentNo ? (
-          <DecisionSummary decision={decision} notified={confirmed} data-testid="DecisionSummary__be410c" />
-        ) : null}
-      </Result>
-    </Frame>
+    <ResultBoundary fallback={failedCard} data-testid="ResultBoundary__be410c">
+      <DecisionResult decision={decision} data-testid="DecisionResult__be410c" />
+    </ResultBoundary>
   );
 }

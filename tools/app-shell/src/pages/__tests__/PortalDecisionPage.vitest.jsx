@@ -23,7 +23,20 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 
-import { StrictMode } from 'react';
+// Rendering the result is what fails in the trailing-catch test: the summary's amount throws.
+const renderFailure = { armed: false };
+vi.mock('../portal/PortalBits.jsx', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    PortalMoney: (props) => {
+      if (renderFailure.armed) throw new Error('the result could not be rendered');
+      return actual.PortalMoney(props);
+    },
+  };
+});
+
+import { Component, StrictMode } from 'react';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
@@ -388,6 +401,44 @@ describe('PortalDecisionPage — a confirm whose answer was lost', () => {
     renderLanding();
 
     await waitFor(() => expect(screen.getByTestId('portal-decision-invalid')).toBeInTheDocument());
+  });
+});
+
+describe('PortalDecisionPage — a result that cannot be rendered', () => {
+  /** Keeps a render error from tearing the test's root down, and shows that it got this far. */
+  class RenderFailureProbe extends Component {
+    state = { failed: false };
+
+    static getDerivedStateFromError() { return { failed: true }; }
+
+    render() {
+      return this.state.failed ? <output data-testid="render-failure-escaped" /> : this.props.children;
+    }
+  }
+
+  afterEach(() => {
+    renderFailure.armed = false;
+    vi.restoreAllMocks();
+  });
+
+  it('ends on the failure card with its retry, never stuck on "applying"', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    renderFailure.armed = true;
+
+    render(
+      <RenderFailureProbe>
+        <MemoryRouter initialEntries={[`/portal/decision/${DECISION_TOKEN}`]}>
+          <Routes>
+            <Route path="portal/decision/:token" element={<PortalDecisionPage resendDelayMs={0} />} />
+          </Routes>
+        </MemoryRouter>
+      </RenderFailureProbe>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('portal-decision-failed')).toBeInTheDocument());
+    expect(screen.getByTestId('portal-decision-retry')).toBeInTheDocument();
+    expect(screen.queryByTestId('portal-decision-applying')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('render-failure-escaped')).not.toBeInTheDocument();
   });
 });
 
