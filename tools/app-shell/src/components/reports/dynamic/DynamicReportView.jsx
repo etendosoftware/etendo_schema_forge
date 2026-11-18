@@ -30,6 +30,11 @@ const EXPORTS = [
   { format: 'csv', label: 'CSV', icon: FileText },
 ];
 const SPLIT_DIMENSIONS = [['org', 'orgId'], ['bpartner', 'bPartnerId'], ['product', 'productId']];
+
+/** Same rule as the org picker: the Organización split only exists for a role with several orgs. */
+function splitDimensionsFor(multiOrg, label) {
+  return SPLIT_DIMENSIONS.filter(([value]) => value !== 'org' || multiOrg).map(([value, name]) => ({ value, label: label(name) }));
+}
 const COLUMN_LABELS = { total: 'dynamicReportColumnsTotal', month: 'dynamicReportColumnsMonth', quarter: 'dynamicReportColumnsQuarter' };
 const ERROR_KEYS = { org_access_denied: 'reportErrorOrgAccess', report_access_denied: 'reportErrorReportAccess',
   period_range_too_long: 'reportErrorPeriodRangeTooLong', invalid_periods: 'reportErrorInvalidPeriods',
@@ -62,11 +67,12 @@ async function downloadRender(apiFetch, reportId, format, body) {
 }
 
 /** The chips under the title: the active filters, each one with a `clear` removable. */
-function buildChips({ state, ui, label, fmt, orgName, reference, splitDimensions }) {
+function buildChips({ state, ui, label, fmt, orgName, multiOrg, reference, splitDimensions }) {
   return [
     { key: 'period', label: ui('dynamicReportPeriodChip'), value: `${fmt(state.dateFrom)} – ${fmt(state.dateTo)}` },
     // The org has no `clear` on purpose: the query requires one, so it is changed in the panel, never removed.
-    orgName && { key: 'org', label: label('orgId'), value: orgName },
+    // Shown only for a multi-org role (the export header keeps the name regardless).
+    multiOrg && orgName && { key: 'org', label: label('orgId'), value: orgName },
     state.bPartnerId && { key: 'bp', label: label('bPartnerId'), value: state._display_bPartnerId || state.bPartnerId, clear: { bPartnerId: '', _display_bPartnerId: '', _names_bPartnerId: null } },
     state.productId && { key: 'product', label: label('productId'), value: state._display_productId || state.productId, clear: { productId: '', _display_productId: '', _names_productId: null } },
     state.columns !== 'total' && { key: 'columns', label: ui('dynamicReportColumns'), value: ui(COLUMN_LABELS[state.columns]), clear: { columns: 'total' } },
@@ -118,7 +124,8 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   // Q7: the org picker only when the role reaches more than one org; `0` (*) is not an org to pick.
   const orgs = useMemo(() => roleOrgs.filter((o) => o?.id && o.id !== '0'), [roleOrgs]);
   // Same rule for the Organización split and chip: with one org there is nothing to tell apart.
-  const splitDimensions = SPLIT_DIMENSIONS.filter(([value]) => value !== 'org' || orgs.length > 1).map(([value, name]) => ({ value, label: label(name) }));
+  const multiOrg = orgs.length > 1;
+  const splitDimensions = splitDimensionsFor(multiOrg, label);
 
   useSetPageMeta({
     title,
@@ -303,7 +310,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   };
 
   const fmt = (d) => (d ? formatCalendarDate(d, locale.replace('_', '-')) : '');
-  const chips = buildChips({ state, ui, label, fmt, orgName: orgs.length > 1 ? orgName : undefined, reference, splitDimensions });
+  const chips = buildChips({ state, ui, label, fmt, orgName, multiOrg, reference, splitDimensions });
 
   // The strip's badge counts what the user chose to narrow; the period and the (required) org are always on.
   const activeFilterCount = chips.filter((c) => c.clear).length;
