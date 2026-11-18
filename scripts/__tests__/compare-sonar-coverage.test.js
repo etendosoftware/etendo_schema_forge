@@ -15,7 +15,9 @@ import {
   SonarReadError,
   UsageError,
   createSonarClient,
+  describeCondition,
   evaluateCoverage,
+  formatQualityGate,
   formatResult,
   isEntryPoint,
   isSameOrigin,
@@ -24,6 +26,7 @@ import {
   parseReportTask,
   readMetric,
   readProjectKey,
+  readQualityGate,
   resolveThresholds,
   waitForCeTask,
 } from '../compare-sonar-coverage.js';
@@ -36,9 +39,11 @@ const jsonResp = (body, status = 200) => ({ ok: status < 400, status, json: asyn
 
 /**
  * Fake fetch routing on the URL: `ce` (the CE task responses, consumed in order),
- * `current` / `base` (coverage values or a Response-like / Error to return).
+ * `current` / `base` (coverage values or a Response-like / Error to return),
+ * `analysisId` (carried by every CE task answer) and `gate` (the project_status body, or a
+ * Response-like / Error to return).
  */
-function fakeFetch({ ce = [], current, base, baseBranch = 'develop' } = {}) {
+function fakeFetch({ ce = [], current, base, baseBranch = 'develop', analysisId, gate } = {}) {
   const calls = [];
   const queue = [...ce];
   const answer = (v) => {
@@ -50,7 +55,12 @@ function fakeFetch({ ce = [], current, base, baseBranch = 'develop' } = {}) {
     calls.push({ url, init });
     if (url.includes('/api/ce/task')) {
       const next = queue.shift() ?? 'SUCCESS';
-      return typeof next === 'string' ? jsonResp({ task: { status: next } }) : answer(next);
+      return typeof next === 'string' ? jsonResp({ task: { status: next, ...(analysisId && { analysisId }) } }) : answer(next);
+    }
+    if (url.includes('/api/qualitygates/project_status')) {
+      if (gate instanceof Error) throw gate;
+      if (gate && typeof gate === 'object' && 'ok' in gate) return gate;
+      return jsonResp(gate ?? null, gate === undefined ? 404 : 200);
     }
     if (url.includes('/api/measures/component') && url.includes(`&branch=${encodeURIComponent(baseBranch)}&metricKeys`)) {
       return answer(base);
@@ -289,6 +299,14 @@ describe('parseArgs', () => {
   it('rejects a non-numeric or non-positive --wait-timeout', () => {
     assert.throws(() => parseArgs(['--base-branch', 'd', '--wait-timeout', 'abc']), /positive number/);
     assert.throws(() => parseArgs(['--base-branch', 'd', '--wait-timeout', '0']), /positive number/);
+  });
+
+  it('takes --check-quality-gate as a flag without value, and only with --report-task', () => {
+    const opts = parseArgs(['--base-branch', 'd', '--report-task', 'r.txt', '--check-quality-gate', '--context', 'ci']);
+    assert.equal(opts.checkQualityGate, true);
+    assert.equal(opts.context, 'ci');
+    assert.equal(parseArgs(['--base-branch', 'd']).checkQualityGate, false);
+    assert.throws(() => parseArgs(['--base-branch', 'd', '--check-quality-gate']), /needs --report-task/);
   });
 
   it('applies defaults and derives the label', () => {
@@ -750,6 +768,103 @@ describe('main', () => {
   });
 });
 
+describe('quality gate', () => {
+  const gateDoc = (status, conditions = []) => ({ projectStatus: { status, conditions } });
+  const failedCondition = { status: 'ERROR', metricKey: 'new_violations', actualValue: '3', comparator: 'GT', errorThreshold: '0' };
+
+  it('describes a failed condition with its metric, value and threshold', () => {
+    assert.equal(describeCondition(failedCondition), 'new_violations: 3 (GT 0)');
+    assert.equal(describeCondition({}), '?: ? (? ?)');
+  });
+
+  it('formats ERROR as a failure listing the conditions, OK and NONE as passes', () => {
+    const failed = formatQualityGate({ status: 'ERROR', failed: [failedCondition] });
+    assert.equal(failed.exitCode, 1);
+    assert.match(failed.lines.join('\n'), /QUALITY GATE FAILED[\s\S]*- new_violations: 3 \(GT 0\)/);
+    assert.equal(failed.annotation, 'Quality gate failed: new_violations: 3 (GT 0).');
+    assert.match(formatQualityGate({ status: 'ERROR', failed: [] }).lines.join('\n'), /\(none listed\)/);
+    assert.equal(formatQualityGate({ status: 'OK', failed: [] }).exitCode, 0);
+    assert.equal(formatQualityGate({ status: 'NONE', failed: [] }).exitCode, 0);
+    assert.equal(formatQualityGate({ status: 'WARN', failed: [] }).exitCode, null);
+  });
+
+  it('reads the gate of the analysis the CE task produced, keeping only the ERROR conditions', async () => {
+    const fetchImpl = fakeFetch({
+      analysisId: 'A 1', gate: gateDoc('ERROR', [failedCondition, { ...failedCondition, status: 'OK' }]),
+    });
+    const getJson = createSonarClient({ hostUrl: 'https://sonar.example', token: 't', fetchImpl, warn() {} });
+    const gate = await readQualityGate(getJson, 'https://sonar.example/api/ce/task?id=T1');
+    assert.equal(gate.status, 'ERROR');
+    assert.deepEqual(gate.failed, [failedCondition]);
+    assert.equal(fetchImpl.calls[1].url, 'https://sonar.example/api/qualitygates/project_status?analysisId=A%201');
+  });
+
+  it('throws a SonarReadError when the task has no analysisId or the gate is missing', async () => {
+    const getJson = (fetchImpl) => createSonarClient({ hostUrl: 'https://sonar.example', token: 't', fetchImpl, warn() {} });
+    await assert.rejects(readQualityGate(getJson(fakeFetch({ gate: gateDoc('OK') })), 'https://sonar.example/api/ce/task?id=T1'),
+      (e) => e instanceof SonarReadError && /no analysisId/.test(e.message));
+    await assert.rejects(readQualityGate(getJson(fakeFetch({ analysisId: 'A1' })), 'https://sonar.example/api/ce/task?id=T1'),
+      (e) => e instanceof SonarReadError && /no quality gate/.test(e.message));
+  });
+
+  describe('main --check-quality-gate', () => {
+    let dir;
+    let report;
+    before(() => {
+      dir = mkdtempSync(join(tmpdir(), 'cmp-qg-'));
+      report = join(dir, 'report-task.txt');
+      writeFileSync(report, 'ceTaskId=T1\nceTaskUrl=https://sonar.example/api/ce/task?id=T1\n');
+    });
+    after(() => rmSync(dir, { recursive: true, force: true }));
+    const args = (context = 'ci') => ['--base-branch', 'develop', '--project-key', 'p', '--pull-request', '7',
+      '--report-task', report, '--check-quality-gate', '--context', context];
+
+    it('passes when the coverage is fine and the gate is OK', async () => {
+      const r = await run(args(), { fetchImpl: fakeFetch({ current: '85', base: '85', analysisId: 'A1', gate: gateDoc('OK') }) });
+      assert.equal(r.code, 0);
+      assert.match(r.text, /Coverage is OK[\s\S]*==> Quality gate\n {4}Quality gate passed/);
+    });
+
+    it('fails on a failed gate even when the coverage is fine, and annotates it in ci', async () => {
+      const fetchImpl = fakeFetch({ current: '85', base: '85', analysisId: 'A1', gate: gateDoc('ERROR', [failedCondition]) });
+      const r = await run(args(), { fetchImpl });
+      assert.equal(r.code, 1);
+      assert.match(r.text, /QUALITY GATE FAILED/);
+      assert.match(r.text, /::error title=Quality gate::Quality gate failed: new_violations: 3 \(GT 0\)\./);
+    });
+
+    it('fails when the coverage drops even though the gate is OK', async () => {
+      const r = await run(args(), { fetchImpl: fakeFetch({ current: '75', base: '85', analysisId: 'A1', gate: gateDoc('OK') }) });
+      assert.equal(r.code, 1);
+      assert.match(r.text, /Quality gate passed/);
+    });
+
+    it('passes with a note when the project has no gate', async () => {
+      const r = await run(args(), { fetchImpl: fakeFetch({ current: '85', base: '85', analysisId: 'A1', gate: gateDoc('NONE') }) });
+      assert.equal(r.code, 0);
+      assert.match(r.text, /no quality gate: nothing to check/);
+    });
+
+    it('an unreadable or unexpected gate fails in ci and is skipped on a push', async () => {
+      for (const gate of [jsonResp(null, 500), gateDoc('WARN')]) {
+        let r = await run(args('ci'), { fetchImpl: fakeFetch({ current: '85', base: '85', analysisId: 'A1', gate }) });
+        assert.equal(r.code, 1);
+        assert.match(r.text, /QUALITY GATE NOT EVALUATED[\s\S]*::error title=Quality gate::/);
+        r = await run(args('push'), { fetchImpl: fakeFetch({ current: '85', base: '85', analysisId: 'A1', gate }) });
+        assert.equal(r.code, 0);
+        assert.match(r.text, /SKIPPED ⚠️ {2}(the quality gate could not be read|unexpected quality gate status)/);
+      }
+    });
+
+    it('does not read the gate without the flag', async () => {
+      const fetchImpl = fakeFetch({ current: '85', base: '85', analysisId: 'A1', gate: gateDoc('ERROR') });
+      const r = await run(['--base-branch', 'develop', '--project-key', 'p', '--report-task', report, '--context', 'ci'], { fetchImpl });
+      assert.equal(r.code, 0);
+      assert.ok(!fetchImpl.calls.some((c) => c.url.includes('qualitygates')));
+    });
+  });
+});
+
 describe('CLI entry point', () => {
   it('isEntryPoint matches only the script itself', () => {
     const url = pathToFileURL(SCRIPT).href;
@@ -786,7 +901,7 @@ describe('wiring guardrails', () => {
     assert.ok(step, 'compare step present in the sonar job');
     assert.match(step, /if: github\.event_name == 'pull_request' && needs\.test\.result == 'success'/);
     assert.match(step, /node scripts\/compare-sonar-coverage\.js --context ci/);
-    assert.match(step, /--report-task \.scannerwork\/report-task\.txt/);
+    assert.match(step, /--report-task \.scannerwork\/report-task\.txt --check-quality-gate/);
     assert.match(step, /--pull-request "\$PR_NUMBER" --base-branch "\$BASE_BRANCH"/);
     assert.ok(job.indexOf('sonarqube-scan-action') < job.indexOf('Compare coverage with the base branch'),
       'compare runs after the scan');

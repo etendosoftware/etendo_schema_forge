@@ -101,6 +101,8 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
       # Same rule as Jenkins' Compare Coverage Results; fails this check on a drop.
+      # --check-quality-gate (ETP-6374) also fails it on the analysis's quality gate, the one
+      # "SonarQube Code Analysis" reports, read in the same wait.
       - uses: actions/setup-node@v4
         if: github.event_name == 'pull_request' && needs.test.result == 'success'
         with:
@@ -121,7 +123,7 @@ jobs:
         run: >-
           node scripts/compare-sonar-coverage.js --context ci
           --pull-request "$PR_NUMBER" --base-branch "$BASE_BRANCH"
-          --report-task .scannerwork/report-task.txt
+          --report-task .scannerwork/report-task.txt --check-quality-gate
 
       # Fail closed: a PR whose tests failed (or did not finish) must not get a
       # green required check just because the coverage comparison was skipped.
