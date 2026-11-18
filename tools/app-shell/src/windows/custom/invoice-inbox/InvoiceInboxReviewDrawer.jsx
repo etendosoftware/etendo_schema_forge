@@ -99,9 +99,9 @@ export default function InvoiceInboxReviewDrawer({
       closingRef.current = false;
     }
   }, [flush, onClose, editor.confirming]);
-  const goPrev = useCallback(async () => { if (!editor.confirming && await flush()) nav.goPrev(); }, [flush, nav, editor.confirming]);
-  const goNext = useCallback(async () => { if (!editor.confirming && await flush()) nav.goNext(); }, [flush, nav, editor.confirming]);
-  const discard = useCallback(async () => { if (!editor.confirming && await flush()) onDiscard(review ?? row); }, [flush, onDiscard, review, row, editor.confirming]);
+  const goPrev = useCallback(async () => { if (!editor.confirming && (await flush())) nav.goPrev(); }, [flush, nav, editor.confirming]);
+  const goNext = useCallback(async () => { if (!editor.confirming && (await flush())) nav.goNext(); }, [flush, nav, editor.confirming]);
+  const discard = useCallback(async () => { if (!editor.confirming && (await flush())) onDiscard(review ?? row); }, [flush, onDiscard, review, row, editor.confirming]);
   const confirmEditor = editor.confirm;
   const confirm = useCallback(async () => {
     const result = await confirmEditor();
