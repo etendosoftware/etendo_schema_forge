@@ -155,8 +155,6 @@ export default function ImportLinesModal({
                          // lines not needed (for eagerLoadLines={false}); all hidden → allImportedMessageKey
   getDocumentTotal,      // (doc) => number | null: the row total while the document's lines are NOT
                          // loaded; once loaded (or null/undefined, or no prop) the sum of its lines
-  countLinesInFooter = false, // true: the footer reads «1 línea seleccionada» / «N líneas
-                              // seleccionadas»; false keeps the generic «N Seleccionados»
   describeLine,          // (line, { imported }) => string | null: the note under a line's product
                          // (e.g. the draft invoice holding it). On a greyed-out line null/absent
                          // keeps the default («ya importado», or the line's draft shipments); on a
@@ -454,9 +452,8 @@ export default function ImportLinesModal({
   const selectionSize = selected.size;
   const importDisabled = selected.size === 0 || importing;
 
-  // ETP-5828 (QA UI-6) — with `countLinesInFooter` (the order popups) the footer counts the
-  // selected LINES in the singular or the plural: «1 línea seleccionada», «2 líneas seleccionadas».
-  // Every other popup keeps the generic «N Seleccionados».
+  // ETP-5651 — every import popup (order, invoice, shipment) counts the selected LINES in the
+  // footer, singular or plural: «1 línea seleccionada», «2 líneas seleccionadas».
   const renderLinesCount = () => {
     const one = selectionSize === 1;
     return (
@@ -474,7 +471,7 @@ export default function ImportLinesModal({
     return (
       <>
         <CircleCheck size={20} aria-hidden="true" className={cn('shrink-0', ICON_COLOR)} data-testid="CircleCheck__b0ad7a" />
-        <span>{countLinesInFooter ? renderLinesCount() : ui('selected', { count: selectionSize })}</span>
+        <span>{renderLinesCount()}</span>
       </>
     );
   };

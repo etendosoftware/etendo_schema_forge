@@ -3420,16 +3420,15 @@ with the shared round `RowExpandToggle` (ETP-5593, sized 24 × 24 through `class
 adornment slot and the amount; an expanded document shows a bordered lines table with a master
 checkbox and a −/+ quantity stepper (`NumberStepperInput`, bounded by the line's available
 quantity, typed values still validated on blur); the footer has the selection hint and the
-«Cancelar» / primary pills. The hint reads «N Seleccionados» (`selected`) and the primary button
-counts the selected lines; with `countLinesInFooter` the hint counts LINES with singular/plural
-wording instead (see the prop table).
+«Cancelar» / primary pills. The hint counts the selected LINES with singular/plural wording («1 línea
+seleccionada» / «N líneas seleccionadas», ETP-5651, in every import popup) and the primary button
+counts them too.
 
 **Optional props added by ETP-5828** (all default to the previous behaviour):
 
 | Prop | Effect |
 |---|---|
 | `renderSelectionPanel(selection)` | Renders the fixed-height notice area under the list (`ImportLinesModal__selectionPanelSlot`). Return an `<ImportNotice tone="neutral"\|"warning" title body control? />` (exported from the same file); `null` shows the neutral «Información de importación» notice. Without the prop there is no notice area. |
-| `countLinesInFooter` | Default `false` («N Seleccionados»). `true`: the footer reads «**1 línea** seleccionada» / «**N líneas** seleccionadas» (keys `importLinesSelectedCountOne/Many`, `importLinesSelectedSuffixOne/Many`). Opted in only by the invoices' «Importar desde pedido» (`InvoiceOrderImportModal`, ETP-5828 QA UI-6), which until then counted ORDERS through the removed `selectedDocumentsKey` prop («1 pedido(s)» with two lines). |
 | `describeLine(line, { imported })` | The note under a line's product. On a greyed-out line return a string (e.g. the order import's «en factura borrador FV1000002», from the line's `inDraftInvoices`, ETP-5828 QA UI-4) or `null` to keep the default («ya importado», or «en albarán: …» from `_inDraftShipments`) — `ImportLinesModal__importedNote`. On a selectable line a string adds a note (e.g. «1 en factura borrador FC1000020» for a line another draft holds part of, QA OBS-2), `null` shows none — `ImportLinesModal__lineNote`. Every note (the default one too) wraps onto at most 2 lines inside the fixed product column, so the 64 px row never grows, with its full text as a tooltip (`title`) — QA BUG-1: a single truncated line cut the draft number. |
 | `importButtonKey` | i18n key of the primary button (default `importSelected`; `{count}` receives `" (N)"` or `""`). |
 
