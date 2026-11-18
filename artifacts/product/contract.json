@@ -1,8 +1,8 @@
 {
-  "version": "0.18.0",
+  "version": "0.19.0",
   "generatedAt": "2026-09-11T00:36:11.322Z",
-  "updatedAt": "2026-11-11T19:46:04.971Z",
-  "checksum": "b2d7bff4956b5a67",
+  "updatedAt": "2026-11-18T15:10:51.683Z",
+  "checksum": "0491bdcee14a1e8f",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -236,7 +236,7 @@
             "exampleKey": "importExampleProductCost",
             "labelKey": "importHeaderCost",
             "column": "Cost",
-            "type": "string"
+            "type": "decimal"
           },
           {
             "required": false,
@@ -1049,8 +1049,8 @@
             "apiKey": "cost",
             "column": "Cost",
             "label": "Cost",
-            "type": "string",
-            "tsType": "string",
+            "type": "decimal",
+            "tsType": "number",
             "visibility": "editable",
             "required": true,
             "grid": false,
@@ -2846,7 +2846,7 @@
             "exampleKey": "importExampleProductCost",
             "labelKey": "importHeaderCost",
             "column": "Cost",
-            "type": "string"
+            "type": "decimal"
           },
           {
             "required": false,
@@ -4001,7 +4001,7 @@
             "name": "cost",
             "apiKey": "cost",
             "column": "Cost",
-            "type": "string",
+            "type": "decimal",
             "visibility": "editable",
             "required": true
           },
@@ -7913,7 +7913,7 @@
         "entity": "price",
         "field": "cost",
         "runner": "node",
-        "description": "Field 'cost' should have type 'string' in price"
+        "description": "Field 'cost' should have type 'number' in price"
       },
       {
         "id": "t-field-type-price-listPrice",

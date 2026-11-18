@@ -329,6 +329,31 @@ test('declares one GET path per top-level lookup, with search and page parameter
   assert.equal(resource.properties.attributes.properties.name.description, undefined);
 });
 
+test('an AD list field documents its codes with their labels, and a field description joins the generated texts', () => {
+  const documented = structuredClone(writableSchema) as any;
+  documented.entities.product.fields.tax_id_key = {
+    publicApi: true, direction: 'inout', internalPath: 'oBTIKTaxIDKey',
+    dataType: { type: 'string', enum: ['1', '3'] }, enumLabels: { 1: 'NIF', 3: 'Passport' },
+    description: 'Kind of tax id.',
+  };
+  documented.entities.product.fields.category = {
+    publicApi: true, direction: 'inout', internalPath: 'productCategory', dataType: { type: 'string' }, reference: 'ProductCategory',
+    description: 'Required for a person.',
+    lookup: { selector: 'productCategory', type: 'product-category', context: {} },
+  };
+  const paths = buildPerEntityOpenApiPaths(documented) as any;
+  const body = paths['/api/v1/product'].post.requestBody.content['application/json'].schema.properties.data.properties.attributes.properties;
+  assert.deepEqual(body.tax_id_key, {
+    type: 'string', enum: ['1', '3'], 'x-enumDescriptions': { 1: 'NIF', 3: 'Passport' },
+    description: 'Kind of tax id. One of: `1` (NIF), `3` (Passport).',
+  });
+  assert.equal(body.category.description, 'Required for a person. Id of a valid value; list them with GET /api/v1/product/lookups/category.');
+  const read = paths['/api/v1/product/{id}'].get.responses['200'].content['application/json'].schema.properties.data.properties.attributes.properties;
+  assert.deepEqual(read.tax_id_key.enum, ['1', '3', null], 'a response still accepts null');
+  assert.equal(read.tax_id_key.description, body.tax_id_key.description);
+  assert.equal(documented.entities.product.fields.tax_id_key.description, 'Kind of tax id.', 'the manifest is not mutated');
+});
+
 test('a list operation documents page, sort and one filter per readable filterable field', () => {
   const rich = structuredClone(schema) as any;
   rich.entities.product.fields.active = { publicApi: true, direction: 'inout', internalPath: 'isActive', dataType: { type: 'boolean' } };

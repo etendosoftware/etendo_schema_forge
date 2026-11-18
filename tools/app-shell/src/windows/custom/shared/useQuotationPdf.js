@@ -47,14 +47,14 @@ function reasonOfPortalNote(line) {
 /**
  * The quotation's notes and its printed reject reason (ETP-6209 Part C, Jira comment 149518 point 5).
  *
- * A rejected quotation (`CJ`) prints one observation line "Motivo: <reason>": the tenant's reject
- * reason (`C_Reject_Reason`, `rejectReason$_identifier`) when the seller has set one, otherwise the
- * customer's portal reason (the "Otros" text included) read from the portal's line in the notes.
- * That portal line is taken out of the notes so the observations never say "Motivo" twice.
+ * A rejected quotation (`CJ`) prints one observation line "Motivo: <reason>" with the customer's
+ * own portal reason only (the "Otros" text included), read from the portal's line in the notes.
+ * That portal line is taken out of the notes so the observations never say "Motivo" twice. A
+ * quotation rejected without a portal reason (e.g. in the app) prints no reason.
  *
- * **The tenant's internal reason is visible to the customer**: this PDF is the one the customer
- * downloads from the portal and receives by email. The user accepted this explicitly (2026-11-16);
- * do not "fix" it without a product decision.
+ * **The tenant's reject reason (`C_Reject_Reason`, `rejectReason$_identifier`) is never printed**:
+ * it can be internal, and this PDF is the one the customer downloads from the portal and receives
+ * by email (ETP-6209 QA).
  *
  * Other statuses keep their notes untouched and print no reason. Mirrored by
  * `QuotationPrintableData.notesAndRejectReason` (server-side render) — change both together.
@@ -78,8 +78,7 @@ export function quotationNotesAndRejectReason(header) {
     }
   }
   const notes = kept.join('\n').trim() || null;
-  const tenantReason = header['rejectReason$_identifier'] || null;
-  return { notes, rejectReason: tenantReason || portalReason };
+  return { notes, rejectReason: portalReason };
 }
 
 // ---------------------------------------------------------------------------
