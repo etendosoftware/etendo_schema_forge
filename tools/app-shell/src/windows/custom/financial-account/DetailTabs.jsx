@@ -1,4 +1,9 @@
-import { ArrowLeftRight, Scale, FileText, History } from 'lucide-react';
+import {
+  ArrowsLeftRightIcon,
+  ScalesIcon,
+  FileTextIcon,
+  ClockCounterClockwiseIcon,
+} from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -25,14 +30,14 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 const TAB_DEFS = [
   {
     key: 'movements',
-    icon: ArrowLeftRight,
+    icon: ArrowsLeftRightIcon,
     labelKey: 'financeAccountDetailTabMovements',
     testId: 'detail-tab-movements',
     visible: () => true,
   },
   {
     key: 'reconciliation',
-    icon: Scale,
+    icon: ScalesIcon,
     labelKey: 'financeAccountDetailTabReconciliation',
     testId: 'detail-tab-reconciliation',
     visible: () => true,
@@ -40,7 +45,7 @@ const TAB_DEFS = [
   {
     // A cash drawer has no bank statements to import.
     key: 'statements',
-    icon: FileText,
+    icon: FileTextIcon,
     labelKey: 'financeAccountDetailTabStatements',
     testId: 'detail-tab-statements',
     visible: (isCash) => isCash === false,
@@ -48,7 +53,7 @@ const TAB_DEFS = [
   {
     // Read-only history of the FIN_Reconciliation documents the cash close produces.
     key: 'reconciliationList',
-    icon: History,
+    icon: ClockCounterClockwiseIcon,
     labelKey: 'financeAccountDetailTabReconciliations',
     testId: 'detail-tab-reconciliation-list',
     visible: (isCash) => isCash === true,

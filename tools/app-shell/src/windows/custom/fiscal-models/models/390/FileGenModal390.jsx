@@ -7,7 +7,7 @@
 // rejected or could not validate then shows the result step (same banner as the direct
 // presentation's result); the file is downloaded in every case.
 import React, { useState } from 'react';
-import { OctagonAlert, TriangleAlert } from 'lucide-react';
+import { WarningIcon, WarningOctagonIcon } from '@phosphor-icons/react';
 import { CircularProgress, useSimulatedProgress } from '@/windows/custom/fiscal-config/CircularProgress.jsx';
 import { formatAmount } from '../../fiscalModelsUtils.js';
 import { AeatResultBanner } from '../303/AeatResultBanner.jsx';
@@ -46,7 +46,7 @@ function validationBanner(validation, t) {
     return (
       <AeatResultBanner
         tone="warning"
-        icon={<TriangleAlert size={18} data-testid="TriangleAlert__filegen390Warnings" />}
+        icon={<WarningIcon size={18} data-testid="TriangleAlert__filegen390Warnings" />}
         title={t('fm.m390.file_validation.warnings.title')}
         data-testid="AeatResultBanner__filegen390Warnings">
         <ul style={{ margin: '6px 0 0', paddingLeft: 18 }} data-testid="FileGenModal390__warnings">
@@ -61,7 +61,7 @@ function validationBanner(validation, t) {
       <>
       <AeatResultBanner
         tone="danger"
-        icon={<OctagonAlert size={18} data-testid="OctagonAlert__filegen390" />}
+        icon={<WarningOctagonIcon size={18} data-testid="OctagonAlert__filegen390" />}
         title={t('fm.m390.file_validation.rejected.title')}
         data-testid="AeatResultBanner__filegen390Rejected">
         <ul style={{ margin: '6px 0 0', paddingLeft: 18 }} data-testid="FileGenModal390__errors">
@@ -78,7 +78,7 @@ function validationBanner(validation, t) {
   return (
     <AeatResultBanner
       tone="warning"
-      icon={<TriangleAlert size={18} data-testid="TriangleAlert__filegen390" />}
+      icon={<WarningIcon size={18} data-testid="TriangleAlert__filegen390" />}
       title={t('fm.m390.file_validation.unavailable.title')}
       body={t('fm.m390.file_validation.unavailable.body')}
       data-testid="AeatResultBanner__filegen390Unavailable" />

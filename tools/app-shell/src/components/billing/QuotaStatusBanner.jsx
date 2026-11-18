@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Gauge } from 'lucide-react';
+import { GaugeIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
 import { Button } from '@/components/ui/button';
@@ -96,7 +96,7 @@ export function QuotaStatusBanner() {
   return (
     <InfoBanner
       tone={denied ? 'danger' : 'warning'}
-      icon={Gauge}
+      icon={GaugeIcon}
       dismissible={!pinned}
       onDismiss={dismiss}
       dismissTestId="quota-status-banner-dismiss"

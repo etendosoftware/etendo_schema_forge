@@ -27,7 +27,7 @@ import { createPortal } from 'react-dom';
 // ETP-4576 - module-level helpers cannot hold a hook, so they take the module-level
 // apiFetch: same credential, same CSRF proof, resolved from the published session.
 import { apiFetch as moduleApiFetch } from '@/auth/api.js';
-import { MoreVertical, Receipt, Truck } from 'lucide-react';
+import { DotsThreeVerticalIcon, ReceiptIcon, TruckIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button.jsx';
 import {
   DropdownMenu,
@@ -221,7 +221,7 @@ export default function BulkOrderMoreMenu({ selectedRows, clearSelection, token,
           title={ui('more')}
           disabled={running}
           data-testid="Button__3f1293">
-          <MoreVertical className="h-4 w-4" data-testid="MoreVertical__3f1293" />
+          <DotsThreeVerticalIcon className="h-4 w-4" data-testid="MoreVertical__3f1293" />
           <span className="sr-only">{ui('more')}</span>
         </Button>
       </DropdownMenuTrigger>
@@ -230,14 +230,14 @@ export default function BulkOrderMoreMenu({ selectedRows, clearSelection, token,
           onSelect={handleSelect('createDraftInvoice')}
           disabled={running}
           data-testid="DropdownMenuItem__3f1293">
-          <Receipt className="h-4 w-4" data-testid="Receipt__3f1293" />
+          <ReceiptIcon className="h-4 w-4" data-testid="Receipt__3f1293" />
           {ui('soBulkCreateInvoices')} ({selectedRows.length})
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={handleSelect('createShipment')}
           disabled={running}
           data-testid="DropdownMenuItem__3f1293">
-          <Truck className="h-4 w-4" data-testid="Truck__3f1293" />
+          <TruckIcon className="h-4 w-4" data-testid="Truck__3f1293" />
           {ui('soBulkCreateShipments')} ({selectedRows.length})
         </DropdownMenuItem>
       </DropdownMenuContent>

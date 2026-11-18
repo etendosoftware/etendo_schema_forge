@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { TrendingUp } from 'lucide-react';
+import { TrendUpIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { DASHBOARD_KPI_IDS, trackDashboardKpi } from '@/lib/dashboardKpiTelemetry.js';
 
@@ -19,7 +19,7 @@ export function QuickActionsList({ actions = [] }) {
       {/* Container: padding 12px, gap 12px, flex-col */}
       <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
         {actions.map((action) => {
-          const Icon = action.icon || TrendingUp;
+          const Icon = action.icon || TrendUpIcon;
           return (
             <Link
               key={action.to}

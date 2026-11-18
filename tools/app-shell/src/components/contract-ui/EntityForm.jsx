@@ -5,7 +5,7 @@ import { DateField } from '@/components/ui/date-field';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FIELD_HEIGHT, ROW_GAP_Y, LABEL_GAP } from '@/components/ui/formDensity';
 import { PillToggle } from '@/components/PillToggle';
-import { ArrowUpRight, Loader2, Search } from 'lucide-react';
+import { ArrowUpRightIcon, CircleNotchIcon, MagnifyingGlassIcon } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { useLabel, useLocaleSwitch, useMenuLabel, useUI } from '@/i18n';
 import { clampNumericFieldMax, getNumericFieldError, numericFieldToastId, trackSaveBlockToast } from '@/lib/numericValidation.js';
@@ -145,7 +145,7 @@ function PopupSearchInput({ field, value, displayValue, onChange, label, selecto
         {...(displayText ? {} : { 'data-placeholder': '' })}
         className={`w-full ${FIELD_HEIGHT} text-sm rounded-lg border border-[hsl(var(--border-control))] bg-card p-2 text-left flex items-center gap-2 shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)] hover:bg-[hsl(var(--field-hover))] ring-2 ring-transparent focus:ring-primary focus:outline-none`}
       >
-        <Search
+        <MagnifyingGlassIcon
           className="h-4 w-4 text-muted-foreground shrink-0"
           data-testid={"Search__" + field.id} />
         {displayText ? (
@@ -304,7 +304,7 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
         <SelectValue
           placeholder={selectPlaceholder}
           data-testid={"SelectValue__" + field.id} />
-        {loading && <Loader2
+        {loading && <CircleNotchIcon
           className="h-4 w-4 text-muted-foreground animate-spin ml-auto mr-1"
           data-testid={"Loader2__" + field.id} />}
       </SelectTrigger>
@@ -335,7 +335,7 @@ function LookupFormField({ field, value, displayValue, row, selectorUrl, selecto
         onClick={() => setOpen(true)}
         className={`w-full flex items-center gap-2 ${FIELD_HEIGHT} rounded-lg border border-[hsl(var(--border-control))] bg-card p-2 text-sm text-left shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)] hover:bg-[hsl(var(--field-hover))] ring-2 ring-transparent focus:ring-primary focus:outline-none`}
       >
-        <Search
+        <MagnifyingGlassIcon
           className="h-4 w-4 text-muted-foreground shrink-0"
           data-testid={"Search__" + field.id} />
         {display ? (
@@ -992,7 +992,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
             className={`${FIELD_HEIGHT} inline-flex w-full items-center justify-between gap-1 rounded-md border border-border-subtle bg-card px-3 text-left text-sm text-foreground underline decoration-[hsl(var(--border-control))] underline-offset-4 hover:decoration-[hsl(var(--foreground))]`}
             data-testid={`fk-link-${f.key}`}>
             <span className="truncate">{displayValue}</span>
-            <ArrowUpRight className="h-3 w-3 shrink-0" data-testid="ArrowUpRight__a8d626" />
+            <ArrowUpRightIcon className="h-3 w-3 shrink-0" data-testid="ArrowUpRight__a8d626" />
           </button>
         ) : (
           <Input

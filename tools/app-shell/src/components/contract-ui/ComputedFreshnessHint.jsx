@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock } from 'lucide-react';
+import { ClockIcon } from '@phosphor-icons/react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { useUI } from '@/i18n';
 
@@ -37,7 +37,7 @@ export function ComputedFreshnessHint({ computed }) {
             aria-label={ui('computedFreshnessAria')}
             className="inline-flex items-center cursor-help text-muted-foreground"
           >
-            <Clock className="h-3.5 w-3.5" aria-hidden="true" data-testid="Clock__2a800a" />
+            <ClockIcon className="h-3.5 w-3.5" aria-hidden="true" data-testid="Clock__2a800a" />
           </span>
         </TooltipTrigger>
         <TooltipContent data-testid="TooltipContent__2a800a">{ui(key)}</TooltipContent>

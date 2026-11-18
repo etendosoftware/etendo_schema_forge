@@ -1,5 +1,14 @@
 import * as React from 'react';
-import { ArrowLeft, Bot, History, Loader2, Maximize2, Minimize2, Sparkles, X } from 'lucide-react';
+import {
+  ArrowLeftIcon,
+  RobotIcon,
+  ClockCounterClockwiseIcon,
+  CircleNotchIcon,
+  ArrowsOutIcon,
+  ArrowsInIcon,
+  SparkleIcon,
+  XIcon,
+} from '@phosphor-icons/react';
 import { useLocation } from 'react-router-dom';
 import { useCopilot } from './CopilotContext';
 import { useCurrentWindowContext } from './CurrentWindowContext';
@@ -83,8 +92,8 @@ function PageHelpCallout({ state, actions }) {
 
 function PageHelpButton({ isLoading, onClick }) {
   const icon = isLoading
-    ? <Loader2 className="h-4 w-4 animate-spin" data-testid="PageHelpLoading__bbc4ba" />
-    : <Sparkles className="h-4 w-4" data-testid="PageHelpSparkles__bbc4ba" />;
+    ? <CircleNotchIcon className="h-4 w-4 animate-spin" data-testid="PageHelpLoading__bbc4ba" />
+    : <SparkleIcon className="h-4 w-4" data-testid="PageHelpSparkles__bbc4ba" />;
   return (
     <Button
       onClick={onClick}
@@ -334,10 +343,10 @@ export function CopilotWidget({ hideTrigger = false }) {
                   onClick={handleBackToSelection}
                   aria-label={ui('copilotBackToProfiles')}
                   data-testid="Button__bbc4ba">
-                  <ArrowLeft className="h-4 w-4" data-testid="ArrowLeft__bbc4ba" />
+                  <ArrowLeftIcon className="h-4 w-4" data-testid="ArrowLeft__bbc4ba" />
                 </Button>
               ) : (
-                <Sparkles
+                <SparkleIcon
                   className="h-4 w-4 shrink-0 text-primary animate-pulse"
                   data-testid="Sparkles__bbc4ba" />
               )}
@@ -354,7 +363,7 @@ export function CopilotWidget({ hideTrigger = false }) {
                   onClick={toggleSidebar}
                   aria-label={ui('copilotConversations')}
                   data-testid="Button__bbc4ba">
-                  <History className="h-4 w-4" data-testid="History__bbc4ba" />
+                  <ClockCounterClockwiseIcon className="h-4 w-4" data-testid="History__bbc4ba" />
                 </Button>
               )}
               <Button
@@ -365,9 +374,9 @@ export function CopilotWidget({ hideTrigger = false }) {
                 aria-label={maximized ? ui('copilotMinimize') : ui('copilotMaximize')}
                 data-testid="Button__bbc4ba">
                 {maximized ? (
-                  <Minimize2 className="h-4 w-4" data-testid="Minimize2__bbc4ba" />
+                  <ArrowsInIcon className="h-4 w-4" data-testid="Minimize2__bbc4ba" />
                 ) : (
-                  <Maximize2 className="h-4 w-4" data-testid="Maximize2__bbc4ba" />
+                  <ArrowsOutIcon className="h-4 w-4" data-testid="Maximize2__bbc4ba" />
                 )}
               </Button>
               <Button
@@ -377,7 +386,7 @@ export function CopilotWidget({ hideTrigger = false }) {
                 onClick={closePanel}
                 aria-label={ui('closeCopilot')}
                 data-testid="Button__bbc4ba">
-                <X className="h-4 w-4" data-testid="X__bbc4ba" />
+                <XIcon className="h-4 w-4" data-testid="X__bbc4ba" />
               </Button>
             </div>
           </CardHeader>
@@ -422,11 +431,11 @@ export function CopilotWidget({ hideTrigger = false }) {
         aria-label={open ? ui('closeCopilot') : ui('openCopilot')}
         data-testid="Button__bbc4ba">
         {open ? (
-          <X className="h-5 w-5" data-testid="X__bbc4ba" />
+          <XIcon className="h-5 w-5" data-testid="X__bbc4ba" />
         ) : (
           <span className="relative">
-            <Bot className="h-5 w-5" data-testid="Bot__bbc4ba" />
-            <Sparkles
+            <RobotIcon className="h-5 w-5" data-testid="Bot__bbc4ba" />
+            <SparkleIcon
               className="absolute -top-1 -right-1 h-3 w-3 text-status-warning-foreground animate-spin [animation-duration:3s]"
               data-testid="Sparkles__bbc4ba" />
           </span>

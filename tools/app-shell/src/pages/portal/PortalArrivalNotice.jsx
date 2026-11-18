@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { CheckCircle2, Info, X } from 'lucide-react';
+import { CheckCircleIcon, InfoIcon, XIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { PORTAL_REJECT_REASONS } from './portalPresentation.js';
 import { PORTAL_NOTICE_STATE_KEY } from './portalDecisionArrival.js';
@@ -53,7 +53,7 @@ const TONE_CLASS = Object.freeze({
 export default function PortalArrivalNotice({ notice, onDismiss }) {
   const ui = useUI();
   if (!notice) return null;
-  const Icon = notice.tone === 'success' ? CheckCircle2 : Info;
+  const Icon = notice.tone === 'success' ? CheckCircleIcon : InfoIcon;
   return (
     <div
       role="status"
@@ -72,7 +72,7 @@ export default function PortalArrivalNotice({ notice, onDismiss }) {
         className="shrink-0 rounded p-0.5 hover:bg-background/40"
         data-testid="portal-arrival-notice-dismiss"
       >
-        <X className="h-4 w-4" aria-hidden="true" data-testid="PortalArrivalNotice-close-icon" />
+        <XIcon className="h-4 w-4" aria-hidden="true" data-testid="PortalArrivalNotice-close-icon" />
       </button>
     </div>
   );

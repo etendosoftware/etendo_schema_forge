@@ -1,4 +1,4 @@
-import { AlertTriangle } from 'lucide-react';
+import { WarningIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { ACCOUNT_TYPE } from './tokens';
 import { canConnectToSaltEdge } from './saltEdgeEligibility.js';
@@ -34,7 +34,7 @@ export function SyncStatusInline({ account, onConnect, windowReadOnly = false, s
   if (account.bankConnectionPending) {
     return (
       <span className="inline-flex items-center gap-1 text-xs text-[var(--status-warning-fg)]">
-        <AlertTriangle className="h-3 w-3" data-testid="AlertTriangle__8e9c56" />
+        <WarningIcon className="h-3 w-3" data-testid="AlertTriangle__8e9c56" />
         {ui('financeAccountsSyncPending')}
       </span>
     );

@@ -57,7 +57,7 @@ import { followUpInputLabels, readConfiguredFollowUpEntries, readFollowUpInputVa
  * @property {string} descriptionKey  description sentence; receives `{ count }` (pending lines)
  * @property {string} [descriptionOneKey] singular variant, used when exactly one line is pending
  * @property {string} actionLabelKey  primary button label in the single-option layout (e.g. «Crear albarán»)
- * @property {import('react').ComponentType<{size?: number}>} [icon] card icon (lucide)
+ * @property {import('react').ComponentType<{size?: number}>} [icon] card icon (Phosphor)
  * @property {string} [badgeKey]      optional badge (e.g. 'draft', 'soRecommended')
  * @property {'success'|'info'} [badgeTone='success'] badge colours: 'success' green
  *                                    («Recomendado»), 'info' blue («Borrador»)

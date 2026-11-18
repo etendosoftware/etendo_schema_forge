@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Info, Loader2, X } from 'lucide-react';
+import { InfoIcon, CircleNotchIcon, XIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { MODAL_STYLES } from '@/components/contract-ui/modal-styles.js';
 import { TONE_STYLES } from '@/components/ui/status-tag-tokens.js';
@@ -127,7 +127,7 @@ export default function SendToEvaluationModal({
         style={dialogStyle}
       >
         <button type="button" onClick={onClose} aria-label={ui('close')} style={closeBtnStyle}>
-          <X size={20} />
+          <XIcon size={20} />
         </button>
 
         <div style={headerStyle}>
@@ -146,7 +146,7 @@ export default function SendToEvaluationModal({
 
           <div style={sectionStyle}>
             <div style={alertStyle}>
-              <Info size={24} style={alertIconStyle} />
+              <InfoIcon size={24} style={alertIconStyle} />
               <p style={alertTextStyle}>{ui('sqSendToEvalDesc')}</p>
             </div>
 
@@ -163,7 +163,7 @@ export default function SendToEvaluationModal({
                 disabled={submitDisabled}
                 style={getPrimaryBtnStyle(submitDisabled)}
               >
-                {loading && <Loader2 size={24} className="animate-spin" />}
+                {loading && <CircleNotchIcon size={24} className="animate-spin" />}
                 {loading ? ui('soProcessing') : ui('sqSendToEvalConfirm')}
               </button>
             </div>

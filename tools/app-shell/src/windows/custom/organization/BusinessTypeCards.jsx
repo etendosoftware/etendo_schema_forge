@@ -1,4 +1,4 @@
-import { Building2, User, Check } from 'lucide-react';
+import { BuildingsIcon, UserIcon, CheckIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 
 /**
@@ -26,8 +26,8 @@ import { useUI } from '@/i18n';
  * Icon/label ink color on selected stays --eg-ink, it does NOT turn yellow.
  */
 const OPTIONS = [
-  { value: 'CO', labelKey: 'orgBusinessTypeCompany', descKey: 'orgBusinessTypeCompanyDesc', Icon: Building2 },
-  { value: 'FL', labelKey: 'orgBusinessTypeFreelancer', descKey: 'orgBusinessTypeFreelancerDesc', Icon: User },
+  { value: 'CO', labelKey: 'orgBusinessTypeCompany', descKey: 'orgBusinessTypeCompanyDesc', Icon: BuildingsIcon },
+  { value: 'FL', labelKey: 'orgBusinessTypeFreelancer', descKey: 'orgBusinessTypeFreelancerDesc', Icon: UserIcon },
 ];
 
 export default function BusinessTypeCards({ value, onChange, readOnly = false }) {
@@ -64,7 +64,7 @@ export default function BusinessTypeCards({ value, onChange, readOnly = false })
               }
               data-testid={`BusinessTypeCards__dot-${optValue}`}>
               {selected && (
-                <Check className="h-2.5 w-2.5 text-[var(--eg-ink)]" data-testid={`BusinessTypeCards__check-${optValue}`} />
+                <CheckIcon className="h-2.5 w-2.5 text-[var(--eg-ink)]" data-testid={`BusinessTypeCards__check-${optValue}`} />
               )}
             </span>
           </button>

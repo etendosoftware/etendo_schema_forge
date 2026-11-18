@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { X } from 'lucide-react';
+import { XIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { formatMoney } from './invoiceInboxMoney.js';
 import { errorCodeLabelKey } from './invoiceInboxMessages.js';
@@ -188,7 +188,7 @@ export function InvoiceInboxReviewNotice({ noticeKey, onDismiss }) {
         title={ui('close')}
         className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full text-current opacity-70 hover:opacity-100"
         data-testid="invoice-inbox-review-notice-dismiss">
-        <X className="h-3.5 w-3.5" aria-hidden="true" data-testid="X__review-notice" />
+        <XIcon className="h-3.5 w-3.5" aria-hidden="true" data-testid="X__review-notice" />
       </button>
     </div>
   );
@@ -223,7 +223,7 @@ export function InvoiceInboxReviewRefusal({ refusalKey, onDismiss }) {
         title={ui('close')}
         className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full text-current opacity-70 hover:opacity-100"
         data-testid="invoice-inbox-review-refusal-dismiss">
-        <X className="h-3.5 w-3.5" aria-hidden="true" data-testid="X__review-refusal" />
+        <XIcon className="h-3.5 w-3.5" aria-hidden="true" data-testid="X__review-refusal" />
       </button>
     </div>
   );

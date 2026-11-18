@@ -1,4 +1,4 @@
-import { AlertTriangle } from 'lucide-react';
+import { WarningIcon } from '@phosphor-icons/react';
 import {
   Dialog,
   DialogContent,
@@ -38,7 +38,7 @@ export function CashCloseConfirmDialog({
         </DialogHeader>
 
         <div className="flex items-start gap-3 rounded-lg border border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] p-3">
-          <AlertTriangle
+          <WarningIcon
             className="mt-0.5 h-[18px] w-[18px] shrink-0 text-[var(--status-warning-fg)]"
             data-testid="AlertTriangle__c7cba9" />
           <div className="text-[13px] leading-[18px] text-[var(--status-warning-fg)]">

@@ -1,5 +1,13 @@
 import { useRef, useState } from 'react';
-import { Edit2, FileText, Loader2, AlertCircle, Mail, Download, Wallet } from 'lucide-react';
+import {
+  PencilSimpleIcon,
+  FileTextIcon,
+  CircleNotchIcon,
+  WarningCircleIcon,
+  EnvelopeSimpleIcon,
+  DownloadSimpleIcon,
+  WalletIcon,
+} from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button.jsx';
 import { useMenuLabel, useUI } from '@/i18n';
 import { getLatestInstallmentDueDate } from '@/lib/invoiceDueDate';
@@ -53,7 +61,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, sifLabelKey 
           className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground [&_svg]:size-5"
           onClick={onEmail}
           data-testid="Button__cf88e6">
-          <Mail data-testid="Mail__cf88e6" />
+          <EnvelopeSimpleIcon data-testid="Mail__cf88e6" />
           {ui('invoicePreviewSend')}
         </Button>
       )}
@@ -64,7 +72,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, sifLabelKey 
           className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-border shadow-sm text-foreground [&_svg]:size-5"
           onClick={onOpenSif}
           data-testid="Button__cf88e6">
-          <FileText className="text-muted-foreground" data-testid="FileText__cf88e6" />
+          <FileTextIcon className="text-muted-foreground" data-testid="FileText__cf88e6" />
           {ui(sifLabelKey)}
         </Button>
       )}
@@ -77,7 +85,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, sifLabelKey 
         onClick={canAddPayment ? onAddPayment : undefined}
         title={addPaymentBlockedByDraft ? ui('cpAddPaymentBlockedByDraft') : undefined}
         data-testid="Button__cf88e6">
-        <Wallet className="text-muted-foreground" data-testid="Wallet__cf88e6" />
+        <WalletIcon className="text-muted-foreground" data-testid="Wallet__cf88e6" />
         {ui(isSalesInvoice ? 'invoicePreviewAddCollection' : 'invoicePreviewAddPayment')}
       </Button>}
       {isSalesInvoice && (
@@ -88,7 +96,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, sifLabelKey 
           onClick={hasPdf && onDownloadPdf ? onDownloadPdf : undefined}
           disabled={!hasPdf || !onDownloadPdf}
           data-testid="Button__cf88e6">
-          <Download className="text-muted-foreground" data-testid="Download__cf88e6" />
+          <DownloadSimpleIcon className="text-muted-foreground" data-testid="Download__cf88e6" />
           {ui('invoicePreviewDownloadPdf')}
         </Button>
       )}
@@ -98,7 +106,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, sifLabelKey 
         className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-border shadow-sm text-foreground [&_svg]:size-5"
         onClick={triggerEdit}
         data-testid="Button__cf88e6">
-        <Edit2 className="text-muted-foreground" data-testid="Edit2__cf88e6" />
+        <PencilSimpleIcon className="text-muted-foreground" data-testid="Edit2__cf88e6" />
         {ui('invoicePreviewEdit')}
       </Button>
     </>
@@ -278,13 +286,13 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
     <div className="flex flex-col h-full min-h-0 w-full overflow-hidden">
       {p.pdfLoading && (
         <div className="flex flex-1 items-center justify-center gap-2 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__cf88e6" />
+          <CircleNotchIcon className="h-5 w-5 animate-spin" data-testid="Loader2__cf88e6" />
           <span className="text-sm">{ui('invoicePdfGenerating')}</span>
         </div>
       )}
       {p.pdfError && !p.pdfLoading && (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-          <AlertCircle className="h-8 w-8 text-status-warning-foreground" data-testid="AlertCircle__cf88e6" />
+          <WarningCircleIcon className="h-8 w-8 text-status-warning-foreground" data-testid="AlertCircle__cf88e6" />
           <p className="text-sm text-muted-foreground">{ui('invoicePdfError')}</p>
           <p className="text-xs text-muted-foreground/60">{p.pdfError}</p>
         </div>

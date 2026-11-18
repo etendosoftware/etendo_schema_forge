@@ -11,7 +11,14 @@
 // via the `dimensions` prop, the account's headerDimensions).
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { X, Check, Save, ArrowDown, ArrowUp, BarChart3 } from 'lucide-react';
+import {
+  XIcon,
+  CheckIcon,
+  FloppyDiskIcon,
+  ArrowDownIcon,
+  ArrowUpIcon,
+  ChartBarIcon,
+} from '@phosphor-icons/react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useUI } from '@/i18n';
 import { useCreateMovement, useUpdateMovement } from '@/hooks/useCreateMovement';
@@ -51,8 +58,8 @@ const OPTIONAL_DIMS = [
 function DirectionToggle({ value, onChange, disabled }) {
   const ui = useUI();
   const options = [
-    { id: 'in', label: ui('financeAccountTxNewTypeIn'), Icon: ArrowDown, active: 'bg-[var(--status-success-fg)]' },
-    { id: 'out', label: ui('financeAccountTxNewTypeOut'), Icon: ArrowUp, active: 'bg-[var(--status-destructive-fg)]' },
+    { id: 'in', label: ui('financeAccountTxNewTypeIn'), Icon: ArrowDownIcon, active: 'bg-[var(--status-success-fg)]' },
+    { id: 'out', label: ui('financeAccountTxNewTypeOut'), Icon: ArrowUpIcon, active: 'bg-[var(--status-destructive-fg)]' },
   ];
   return (
     <div className={`inline-flex h-[42px] w-full gap-[3px] rounded-[9px] bg-[hsl(var(--page-bg))] p-[3px] ${disabled ? 'opacity-60' : ''}`}>
@@ -248,7 +255,7 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
             aria-label={ui('financeAccountTxNewCancel')}
             data-testid="tx-new-close"
             className="mt-0.5 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))]">
-            <X className="h-5 w-5" data-testid="X__tx" />
+            <XIcon className="h-5 w-5" data-testid="X__tx" />
           </button>
         </div>
 
@@ -314,7 +321,7 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
           {/* Accounting dimensions — Contacto always, the rest conditionally */}
           <div className="border-t border-[hsl(var(--border-subtle))] pt-4">
             <div className="mb-3.5 flex items-center gap-2">
-              <BarChart3 className="h-[15px] w-[15px] text-[hsl(var(--text-secondary))]" data-testid="BarChart3__tx" />
+              <ChartBarIcon className="h-[15px] w-[15px] text-[hsl(var(--text-secondary))]" data-testid="BarChart3__tx" />
               <span className="text-sm font-semibold leading-[19px] text-[hsl(var(--text-primary))]">{ui('financeAccountTxNewDimensionsTitle')}</span>
               <span className="text-xs leading-4 text-[hsl(var(--muted-foreground))]">{ui('financeAccountTxNewDimensionsOptional')}</span>
             </div>
@@ -354,7 +361,7 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
             disabled={!valid || busy}
             onClick={() => handleSave(false)}
             data-testid="tx-new-save">
-            <Save className="h-[14px] w-[14px]" data-testid="Save__tx" />
+            <FloppyDiskIcon className="h-[14px] w-[14px]" data-testid="Save__tx" />
             {busy ? ui('financeAccountTxNewSaving') : ui('financeAccountTxNewSave')}
           </button>
           {!lockWhileProcessed && (
@@ -364,7 +371,7 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
               disabled={!valid || busy}
               onClick={() => handleSave(true)}
               data-testid="tx-new-confirm">
-              <Check className="h-[14px] w-[14px]" data-testid="Check__tx" />
+              <CheckIcon className="h-[14px] w-[14px]" data-testid="Check__tx" />
               {busy ? ui('financeAccountTxNewSaving') : ui('financeAccountTxNewConfirm')}
             </button>
           )}

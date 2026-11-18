@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, ChevronDown } from 'lucide-react';
+import { CheckIcon, CaretDownIcon } from '@phosphor-icons/react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
@@ -88,7 +88,7 @@ export function AmountFilter({ value, onChange }) {
           className="inline-flex h-10 items-center justify-between gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[#121217] hover:bg-[hsl(var(--muted))]"
         >
           <span className="truncate text-left">{triggerLabel}</span>
-          <ChevronDown
+          <CaretDownIcon
             className="h-4 w-4 shrink-0 text-[#828FA3]"
             data-testid="ChevronDown__c66309" />
         </button>
@@ -105,7 +105,7 @@ export function AmountFilter({ value, onChange }) {
             )}
           >
             <span className="flex-1">{ui('financeAccountMovementsFilterAmountAll')}</span>
-            {!value ? <Check className="h-4 w-4 shrink-0" data-testid="Check__c66309" /> : null}
+            {!value ? <CheckIcon className="h-4 w-4 shrink-0" data-testid="Check__c66309" /> : null}
           </button>
           {presets.map((preset) => {
             const active = activePresetId === preset.id;
@@ -120,7 +120,7 @@ export function AmountFilter({ value, onChange }) {
                 )}
               >
                 <span className="flex-1">{preset.label}</span>
-                {active ? <Check className="h-4 w-4 shrink-0" data-testid="Check__c66309" /> : null}
+                {active ? <CheckIcon className="h-4 w-4 shrink-0" data-testid="Check__c66309" /> : null}
               </button>
             );
           })}

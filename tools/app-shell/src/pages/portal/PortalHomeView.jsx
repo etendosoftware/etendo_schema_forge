@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
-import {
-  ArrowRight, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, FileText,
-} from 'lucide-react';
+import { ArrowRightIcon, CalendarBlankIcon, CaretDownIcon, CaretRightIcon, CheckCircleIcon, FileTextIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import {
@@ -225,7 +223,7 @@ function Greeting({ identity, months, onMonthsChange }) {
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex items-center gap-3">
         <div className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[hsl(var(--accent-highlight))] text-[hsl(var(--accent-highlight-foreground))] md:flex">
-          <FileText
+          <FileTextIcon
             className="h-[18px] w-[18px]"
             aria-hidden="true"
             data-testid="FileText__beaeb4" />
@@ -253,9 +251,9 @@ function Greeting({ identity, months, onMonthsChange }) {
             className="hidden h-9 items-center gap-2 rounded-lg border border-border bg-card px-3 font-medium md:inline-flex"
             data-testid="portal-period"
           >
-            <CalendarDays className="h-4 w-4" aria-hidden="true" data-testid="CalendarDays__beaeb4" />
+            <CalendarBlankIcon className="h-4 w-4" aria-hidden="true" data-testid="CalendarDays__beaeb4" />
             {ui('portalPeriodMonths', { count: months })}
-            <ChevronDown
+            <CaretDownIcon
               className="h-3.5 w-3.5"
               aria-hidden="true"
               data-testid="ChevronDown__beaeb4" />
@@ -320,7 +318,7 @@ function MobilePendingHero({ balances, onNavigate }) {
           data-testid="portal-view-pending-invoices"
         >
           {ui('portalViewPendingInvoices')}
-          <ArrowRight className="h-4 w-4" aria-hidden="true" data-testid="ArrowRight__beaeb4" />
+          <ArrowRightIcon className="h-4 w-4" aria-hidden="true" data-testid="ArrowRight__beaeb4" />
         </button>
       ) : null}
     </section>
@@ -458,7 +456,7 @@ function RecentDocuments({ recent, onOpen }) {
                 value={document.grandTotal}
                 data-testid="PortalMoney__beaeb4" />
             </span>
-            <ChevronRight
+            <CaretRightIcon
               className="h-3.5 w-3.5 text-muted-foreground"
               aria-hidden="true"
               data-testid="ChevronRight__beaeb4" />
@@ -506,7 +504,7 @@ function InvoicedChart({ chart, year }) {
     <div className="flex flex-col gap-2.5 px-3.5 py-3">
       {year?.total > 0 ? (
         <span className="flex items-center gap-2 text-xs text-[var(--status-success-fg)]" data-testid="portal-up-to-date">
-          <CheckCircle2
+          <CheckCircleIcon
             className="h-3.5 w-3.5"
             aria-hidden="true"
             data-testid="CheckCircle2__beaeb4" />

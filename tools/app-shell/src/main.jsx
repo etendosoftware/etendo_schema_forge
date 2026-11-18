@@ -23,8 +23,11 @@ const flagsReady = initFeatureFlags();
 initBrowserObservability({ flagsReady });
 import { ThemeProvider } from 'next-themes';
 import { Toaster } from 'sonner';
+import { IconContext } from '@phosphor-icons/react';
 import App from './App.jsx';
+import { ICON_DEFAULTS } from './lib/iconDefaults.js';
 import './index.css';
+
 
 if (import.meta.env.VITE_APP_TITLE) {
   document.title = import.meta.env.VITE_APP_TITLE;
@@ -36,20 +39,25 @@ createRoot(document.getElementById('root')).render(
     defaultTheme="light"
     forcedTheme="light"
     data-testid="ThemeProvider__bc6e1f">
-    <App data-testid="App__bc6e1f" />
-    <Toaster
-      position="bottom-right"
-      richColors
-      data-testid="Toaster__bc6e1f"
-      containerAriaLabel="Notifications"
-      toastOptions={{
-        classNames: {
-          error: 'toast-error',
-          success: 'toast-success',
-          warning: 'toast-warning',
-          info: 'toast-info',
-        },
-      }}
-    />
+    {/* ETP-6155 — Phosphor is the only icon set. Regular weight everywhere (the navigation
+        rail opts into Fill itself), and 24px for an icon that sets no size of its own, so
+        it keeps the footprint it had before the migration from lucide. */}
+    <IconContext.Provider value={ICON_DEFAULTS}>
+      <App data-testid="App__bc6e1f" />
+      <Toaster
+        position="bottom-right"
+        richColors
+        data-testid="Toaster__bc6e1f"
+        containerAriaLabel="Notifications"
+        toastOptions={{
+          classNames: {
+            error: 'toast-error',
+            success: 'toast-success',
+            warning: 'toast-warning',
+            info: 'toast-info',
+          },
+        }}
+      />
+    </IconContext.Provider>
   </ThemeProvider>
 );

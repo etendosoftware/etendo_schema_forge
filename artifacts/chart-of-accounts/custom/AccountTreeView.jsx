@@ -4,7 +4,7 @@ import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
 import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
 import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Lock } from 'lucide-react';
+import { LockIcon } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { ACCOUNT_TYPE_UI_KEYS, accountTypeLabel, ELEMENT_LEVEL_UI_KEYS, elementLevelLabel } from './accountTypeLabels';
@@ -454,7 +454,7 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, on
             </button>
           )}
           {isProtected && (
-            <Lock
+            <LockIcon
               size={12}
               className="shrink-0 text-[hsl(var(--text-disabled))]"
               data-testid={`account-tree-locked-${item.id}`}

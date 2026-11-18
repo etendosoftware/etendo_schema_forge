@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Minus, Plus } from 'lucide-react';
+import { MinusIcon, PlusIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { useContactsCacheInvalidation } from './contactsCacheInvalidation';
 import BillingPreferencesForm from './BillingPreferencesForm';
@@ -110,7 +110,7 @@ function CreditLimitStepper({ value, readOnly, onChange, onBlur, saving }) {
           disabled={readOnly}
           className="w-10 h-[38px] flex items-center justify-center border-l border-border-structural text-icon-secondary hover:bg-muted disabled:bg-muted disabled:text-text-disabled shrink-0"
         >
-          <Minus size={16} data-testid="Minus__d55d36" />
+          <MinusIcon size={16} data-testid="Minus__d55d36" />
         </button>
         <button
           type="button"
@@ -118,7 +118,7 @@ function CreditLimitStepper({ value, readOnly, onChange, onBlur, saving }) {
           disabled={readOnly}
           className="w-10 h-[38px] flex items-center justify-center border-l border-border-structural text-icon-secondary hover:bg-muted disabled:bg-muted disabled:text-text-disabled shrink-0"
         >
-          <Plus size={16} data-testid="Plus__d55d36" />
+          <PlusIcon size={16} data-testid="Plus__d55d36" />
         </button>
       </div>
     </div>

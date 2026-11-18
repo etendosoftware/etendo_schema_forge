@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { ArrowsClockwiseIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -239,7 +239,7 @@ export default function PortalDocumentListView({
             onClick={() => setReload((value) => value + 1)}
             data-testid="portal-refresh"
           >
-            <RefreshCw className="h-4 w-4" aria-hidden="true" data-testid="RefreshCw__c7f7d2" />
+            <ArrowsClockwiseIcon className="h-4 w-4" aria-hidden="true" data-testid="RefreshCw__c7f7d2" />
           </Button>
         </div>
 

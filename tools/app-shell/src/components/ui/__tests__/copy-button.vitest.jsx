@@ -11,9 +11,9 @@ vi.mock('sonner', () => ({
   toast: { success: sonnerMocks.success, error: sonnerMocks.error },
 }));
 
-vi.mock('lucide-react', () => ({
-  Copy: (props) => <span {...props}>Copy</span>,
-  Check: (props) => <span {...props}>Check</span>,
+vi.mock('@phosphor-icons/react', () => ({
+  CopyIcon: (props) => <span {...props}>Copy</span>,
+  CheckIcon: (props) => <span {...props}>Check</span>,
 }));
 
 import { render, screen, waitFor } from '@testing-library/react';

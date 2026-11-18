@@ -28,7 +28,7 @@ vi.mock('@/i18n', () => ({
 vi.mock('@/lib/selectorCatalog.js', () => ({ getCatalogOptions: () => [] }));
 
 // Stub every icon the tree pulls in (shared Dialog, CreatableSearchSelect, the steppers).
-vi.mock('lucide-react', () => {
+vi.mock('@phosphor-icons/react', () => {
   const isReserved = (prop) => typeof prop !== 'string' || prop === 'then' || prop === '__esModule';
   return new Proxy({}, {
     has: (_t, prop) => !isReserved(prop),

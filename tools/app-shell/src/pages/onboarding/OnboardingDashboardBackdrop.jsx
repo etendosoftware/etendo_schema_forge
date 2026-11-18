@@ -1,6 +1,6 @@
 import React from 'react';
-import { Headphones } from 'lucide-react';
 import {
+  HeadsetIcon,
   HouseIcon as House,
   StarIcon as Star,
   IdentificationCardIcon as IdentificationCard,
@@ -57,7 +57,7 @@ function RailSkeleton() {
         <div className="mb-1 w-10 self-center border-t border-[hsl(var(--border-subtle))]" />
         <div className="flex justify-center">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-page-bg text-muted-foreground">
-            <Headphones className="h-5 w-5" data-testid="Headphones__2c996d" />
+            <HeadsetIcon className="h-5 w-5" data-testid="Headphones__2c996d" />
           </div>
         </div>
         <div className="flex justify-center">

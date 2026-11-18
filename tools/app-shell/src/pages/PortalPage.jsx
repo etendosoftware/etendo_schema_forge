@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { AlertCircle, Ban, FileText, Loader2, MailCheck } from 'lucide-react';
+import { CircleNotchIcon, EnvelopeSimpleOpenIcon, FileTextIcon, ProhibitIcon, WarningCircleIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { usePortalApiFetch } from '@/lib/portal/usePortalApiFetch.js';
@@ -109,7 +109,7 @@ function portalStatusScreen(view, ui, tenantName, onRetry) {
       <PortalFrame data-testid="PortalFrame__3db5f6">
         <PortalNotice
           testId="portal-loading"
-          icon={<Loader2
+          icon={<CircleNotchIcon
             className="h-8 w-8 animate-spin text-primary"
             data-testid="Loader2__3db5f6" />}
           title={ui('portalLoading')}
@@ -127,7 +127,7 @@ function portalStatusScreen(view, ui, tenantName, onRetry) {
           testId="portal-invalid-link"
           icon={(
             <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
-              <FileText className="h-6 w-6" data-testid="FileText__3db5f6" />
+              <FileTextIcon className="h-6 w-6" data-testid="FileText__3db5f6" />
             </span>
           )}
           title={ui('portalInvalidLinkTitle')}
@@ -142,7 +142,7 @@ function portalStatusScreen(view, ui, tenantName, onRetry) {
       <PortalFrame data-testid="PortalFrame__3db5f6">
         <PortalNotice
           testId="portal-renewing"
-          icon={<Loader2
+          icon={<CircleNotchIcon
             className="h-8 w-8 animate-spin text-primary"
             data-testid="Loader2__3db5f6" />}
           title={ui('portalRenewingTitle')}
@@ -160,7 +160,7 @@ function portalStatusScreen(view, ui, tenantName, onRetry) {
           testId={recently ? 'portal-recently-sent' : 'portal-renewed'}
           icon={(
             <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <MailCheck className="h-6 w-6" data-testid="MailCheck__3db5f6" />
+              <EnvelopeSimpleOpenIcon className="h-6 w-6" data-testid="MailCheck__3db5f6" />
             </span>
           )}
           title={ui(recently ? 'portalRecentlySentTitle' : 'portalRenewedTitle')}
@@ -179,7 +179,7 @@ function portalStatusScreen(view, ui, tenantName, onRetry) {
           testId="portal-unavailable"
           icon={(
             <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
-              <Ban className="h-6 w-6" data-testid="Ban__3db5f6" />
+              <ProhibitIcon className="h-6 w-6" data-testid="Ban__3db5f6" />
             </span>
           )}
           title={ui('portalUnavailableTitle')}
@@ -198,7 +198,7 @@ function portalStatusScreen(view, ui, tenantName, onRetry) {
           testId="portal-renew-error"
           icon={(
             <span className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-              <AlertCircle className="h-6 w-6" data-testid="AlertCircle__3db5f6" />
+              <WarningCircleIcon className="h-6 w-6" data-testid="AlertCircle__3db5f6" />
             </span>
           )}
           title={ui('portalRenewErrorTitle')}
@@ -224,7 +224,7 @@ function portalStatusScreen(view, ui, tenantName, onRetry) {
           testId="portal-load-error"
           icon={(
             <span className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-              <AlertCircle className="h-6 w-6" data-testid="AlertCircle__3db5f6" />
+              <WarningCircleIcon className="h-6 w-6" data-testid="AlertCircle__3db5f6" />
             </span>
           )}
           title={ui('portalLoadErrorTitle')}

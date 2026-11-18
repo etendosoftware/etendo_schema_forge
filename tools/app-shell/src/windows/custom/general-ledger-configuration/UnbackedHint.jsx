@@ -1,4 +1,4 @@
-import { Info } from 'lucide-react';
+import { InfoIcon } from '@phosphor-icons/react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { useUI } from '@/i18n';
 
@@ -26,7 +26,7 @@ export default function UnbackedHint({ withText = false }) {
         <Tooltip data-testid="Tooltip__4308b0">
           <TooltipTrigger asChild data-testid="TooltipTrigger__4308b0">
             <span className="inline-flex items-center" tabIndex={0} aria-label={ui('glc.unbacked.tooltip')}>
-              <Info size={13} className="text-[var(--status-warning-fg)]" data-testid="Info__4308b0" />
+              <InfoIcon size={13} className="text-[var(--status-warning-fg)]" data-testid="Info__4308b0" />
             </span>
           </TooltipTrigger>
           <TooltipContent className="max-w-[220px] text-xs" data-testid="TooltipContent__4308b0">{ui('glc.unbacked.tooltip')}</TooltipContent>

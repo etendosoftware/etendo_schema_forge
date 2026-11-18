@@ -110,7 +110,6 @@ vi.mock('../DocumentStatusPill.jsx', () => ({
     </span>
   ),
 }));
-vi.mock('@/components/attachments/AttachmentIcon', () => ({ AttachmentIcon: () => <span>A</span> }));
 
 const mockUseCapabilitiesSafe = vi.fn();
 vi.mock('@/hooks/useCapabilitiesSafe.js', () => ({
