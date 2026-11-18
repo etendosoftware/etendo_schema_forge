@@ -875,6 +875,15 @@ window's lookup, works too.
 
 Evidence: `gateway/e2e/support/orders.ts` (`complete action`). Contract: `docs/public-api.md` §4.2.2.
 
+## Public API V1 warehouse selection
+
+The public API exposes this order and its lines, including the header's `complete` action.
+Choose the warehouse with `GET /api/v1/sales-order/lookups/warehouse` and send the selected id as
+`data.attributes.warehouse` when creating the order. The field is optional: if it is omitted,
+Etendo assigns a warehouse when the order is created. There is no `relationships.warehouse`,
+because the warehouse collection is outside V1. Partial updates can omit an unchanged
+warehouse. Document-state validation remains with the runtime, as in the app.
+
 ## Fiscal data step before the invoice is created — ETP-6179
 
 - **Confirmar** with *Crear factura* ticked (`ConfirmModal` in `OrderCreateInvoice.jsx`) and

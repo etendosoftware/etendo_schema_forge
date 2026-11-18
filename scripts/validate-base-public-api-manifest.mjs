@@ -80,10 +80,40 @@ for (const [resource, entity] of Object.entries(entities)) {
   }
 }
 
+// Enums (the AD list values of a field): a non-empty list of distinct string codes, and a label
+// for each code. A field description, when present, is a non-empty string.
+let enums = 0;
+for (const [resource, entity] of Object.entries(entities)) {
+  for (const [field, value] of Object.entries(entity.fields ?? {})) {
+    const where = `${resource}.${field}`;
+    if (value.description !== undefined && (typeof value.description !== 'string' || !value.description.trim())) {
+      errors.push(`${where}: description must be a non-empty string`);
+    }
+    const codes = value.dataType?.enum;
+    if (codes === undefined && value.enumLabels === undefined) continue;
+    enums += 1;
+    if (!Array.isArray(codes) || codes.length === 0 || codes.some((code) => typeof code !== 'string')
+      || new Set(codes).size !== codes.length) {
+      errors.push(`${where}: dataType.enum must be a non-empty list of distinct string codes`);
+      continue;
+    }
+    if (value.dataType.type !== 'string') errors.push(`${where}: an enum field must be of type string`);
+    const labels = value.enumLabels;
+    if (typeof labels !== 'object' || labels === null || Array.isArray(labels)) {
+      errors.push(`${where}: enumLabels must be an object with a label per code`);
+      continue;
+    }
+    const missing = codes.filter((code) => typeof labels[code] !== 'string' || !labels[code]);
+    const unknown = Object.keys(labels).filter((code) => !codes.includes(code));
+    if (missing.length) errors.push(`${where}: enumLabels has no label for ${missing.join(', ')}`);
+    if (unknown.length) errors.push(`${where}: enumLabels names codes outside dataType.enum: ${unknown.join(', ')}`);
+  }
+}
+
 if (errors.length) {
   console.error(errors.join('\n'));
   process.exitCode = 1;
 } else {
   const children = Object.values(entities).filter((entity) => entity.parent).length;
-  console.log(`Validated ${Object.keys(entities).length} resources, ${children} child resources, ${relationships.length} relationships, ${lookups} lookups`);
+  console.log(`Validated ${Object.keys(entities).length} resources, ${children} child resources, ${relationships.length} relationships, ${lookups} lookups, ${enums} enums`);
 }

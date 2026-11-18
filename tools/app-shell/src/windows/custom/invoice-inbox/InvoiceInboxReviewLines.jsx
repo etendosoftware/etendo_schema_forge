@@ -35,7 +35,7 @@ const COL_LABEL = Object.freeze({
 const GRID = 'grid grid-cols-[minmax(0,1fr)_54px_74px_52px_56px_80px_30px] items-center gap-1';
 /** Below this inner width the row stacks: the description on its own row, the five numbers under it. */
 export const STACKED_BELOW_PX = 460;
-const STACKED_NUMBERS = 'grid grid-cols-[1fr_1.4fr_0.9fr_0.9fr_1.4fr] items-end gap-1.5';
+const STACKED_NUMBERS = 'grid grid-cols-[1fr_1.5fr_1fr_1fr] items-end gap-1.5';
 const CELL = 'h-[34px] px-2 text-[13px]';
 const MAX_QUANTITY_DECIMALS = 4;
 const MAX_PRICE_DECIMALS = 6;
@@ -80,6 +80,26 @@ function discountText(line) {
   return value === 0 ? '' : `${formatGroupedNumber(value, { maximumFractionDigits: MAX_DISCOUNT_DECIMALS })}%`;
 }
 
+/**
+ * Where a pre-filled value of a new product came from (ETP-6051): `ocr` = read from the document
+ * ("del documento", with the printed text of the unit as secondary text), `default` = the tenant
+ * default ("por defecto"). `manual`, an empty source (legacy rows) and a read-only form show nothing.
+ */
+function SourceHint({ source, printed = '', readOnly, testId }) {
+  const ui = useUI();
+  if (readOnly || (source !== 'ocr' && source !== 'default')) return null;
+  const text = ui(source === 'ocr' ? 'invoiceInboxReviewSourceOcr' : 'invoiceInboxReviewSourceDefault');
+  const shown = source === 'ocr' && printed ? `${text} · “${printed}”` : text;
+  return (
+    <span
+      className="ml-1.5 text-[11px] font-normal text-muted-foreground"
+      title={source === 'ocr' && printed ? ui('invoiceInboxReviewUnitPrinted', { unit: printed }) : undefined}
+      data-testid={testId}>
+      {shown}
+    </span>
+  );
+}
+
 /** Name, category and unit of a NEW product: the alta is only stored; the product is created on confirm. */
 function NewProductForm({ line, lineIndex, position, readOnly, missing, apiBaseUrl }) {
   const ui = useUI();
@@ -91,17 +111,17 @@ function NewProductForm({ line, lineIndex, position, readOnly, missing, apiBaseU
   // The names are resolved from the ids at read time and only present when the id resolves: a
   // committed id with no name is shown as unknown (never as an empty choice); only ids are ever sent.
   const unknownName = ui('invoiceInboxReviewNameUnknown');
-  const label = (text) => <span className="mb-1 block text-xs font-medium text-foreground">{text}<span className="ml-0.5 text-destructive" aria-hidden="true">*</span></span>;
+  const label = (text, hint = null) => <span className="mb-1 block text-xs font-medium text-foreground">{text}<span className="ml-0.5 text-destructive" aria-hidden="true">*</span>{hint}</span>;
   return (
     <div className="flex flex-col gap-2.5" data-testid={`invoice-inbox-review-line-${position}-new-product`}>
       <div>
-        {label(ui('invoiceInboxReviewFieldName'))}
+        {label(ui('invoiceInboxReviewProductName'))}
         <CommitInput
           value={newProductName(line)}
           display={(value) => String(value ?? '')}
           readOnly={readOnly}
           maxLength={MAX_TEXT}
-          ariaLabel={ui('invoiceInboxReviewFieldName')}
+          ariaLabel={ui('invoiceInboxReviewProductName')}
           className="h-[34px] text-[13px]"
           onCommit={(value) => editor?.commit(`product:${lineIndex}:name`, buildOp.newProduct(lineIndex, { name: value }))}
           testId={`invoice-inbox-review-line-${position}-new-name`}
@@ -109,7 +129,13 @@ function NewProductForm({ line, lineIndex, position, readOnly, missing, apiBaseU
       </div>
       <div className="grid grid-cols-2 gap-2.5">
         <div data-testid={`invoice-inbox-review-line-${position}-new-category`} data-invalid={noCategory || undefined}>
-          {label(ui('invoiceInboxReviewProductCategory'))}
+          {label(ui('invoiceInboxReviewProductCategory'), (
+            <SourceHint
+              source={fresh.categorySource}
+              readOnly={readOnly}
+              testId={`invoice-inbox-review-line-${position}-new-category-source`}
+              data-testid="SourceHint__category" />
+          ))}
           {readOnly || !editor ? (
             <p className="text-[13px] text-muted-foreground">{fresh.category ?? (fresh.categoryId ? unknownName : '')}</p>
           ) : (
@@ -129,7 +155,14 @@ function NewProductForm({ line, lineIndex, position, readOnly, missing, apiBaseU
           )}
         </div>
         <div data-testid={`invoice-inbox-review-line-${position}-new-uom`} data-invalid={noUom || undefined}>
-          {label(ui('invoiceInboxReviewProductUom'))}
+          {label(ui('invoiceInboxReviewProductUom'), (
+            <SourceHint
+              source={fresh.uomSource}
+              printed={String(line.unitPrinted ?? '').trim()}
+              readOnly={readOnly}
+              testId={`invoice-inbox-review-line-${position}-new-uom-source`}
+              data-testid="SourceHint__uom" />
+          ))}
           {readOnly || !editor ? (
             <p className="text-[13px] text-muted-foreground">{fresh.uom ?? (fresh.uomId ? unknownName : '')}</p>
           ) : (
@@ -563,7 +596,11 @@ function LineRow({ line, position, currency, scale, missing, readOnly, showActio
             <Labeled label={ui(COL_LABEL.price)} data-testid="Labeled__price">{cells.price}</Labeled>
             <Labeled label={ui(COL_LABEL.discount)} data-testid="Labeled__discount">{cells.discount}</Labeled>
             <Labeled label={ui(COL_LABEL.tax)} data-testid="Labeled__tax">{cells.tax}</Labeled>
-            <Labeled label={ui(COL_LABEL.amount)} data-testid="Labeled__amount">{cells.amount}</Labeled>
+          </div>
+          {/* The amount is not an input: it gets its own line, so the four inputs keep room for their digits at 360px. */}
+          <div className="flex items-center justify-between gap-2" data-testid="invoice-inbox-review-line-amount-row">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{ui(COL_LABEL.amount)}</span>
+            {cells.amount}
           </div>
         </div>
       ) : (

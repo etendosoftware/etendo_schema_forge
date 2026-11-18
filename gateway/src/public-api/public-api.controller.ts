@@ -416,7 +416,10 @@ export class PublicApiController {
   }
 
   private entityOrThrow(entityName: string): PublicApiEntity & { entityName?: string } {
-    const entity = this.schema.entities[entityName] as (PublicApiEntity & { entityName?: string }) | undefined;
+    // Own keys only: a name such as `constructor` or `__proto__` is inherited by every object.
+    const entity = Object.hasOwn(this.schema.entities, entityName)
+      ? this.schema.entities[entityName] as PublicApiEntity & { entityName?: string }
+      : undefined;
     if (!entity) throw new NotFoundException(`Unknown public entity: ${entityName}`);
     return entity;
   }
