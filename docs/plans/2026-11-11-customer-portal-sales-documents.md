@@ -1075,7 +1075,9 @@ arrives, so every shared piece takes the new look as an opt-in (`PortalSection v
   slide-in respects reduced motion. `?view=doc&kind=&id=` keeps working: a deep link (the email's,
   the home's tiles and recent rows) renders that kind's list behind the drawer, and closing lands on
   it; a document opened from a tab carries `&group=` so closing returns to that tab. "Documentos
-  relacionados" lists the document itself first ("Este", not a link). Mobile keeps the full-page
+  relacionados" lists only the other documents: the open one is left out (user decision,
+  2026-11-18; it used to head the list as "Este", key `portalRelatedThis`, now removed), and with
+  none the section shows its empty state. Mobile keeps the full-page
   detail (its list stays mounted but hidden).
 - **Decision popups and confirmation page (Figma, 2026-11-17).** One 456px modal style (white, r8,
   the "Overlay/Light" shadow, 32px round close, 40px fully rounded buttons). Aceptar → "¿Deseas aceptar

@@ -318,7 +318,6 @@ export default function PortalDocumentDetailView({
             ) : null}
             <div className="px-3">
               <PortalRelatedList
-                current={document}
                 related={document.related}
                 refreshing={refreshingRelated}
                 onRefresh={refreshRelated}

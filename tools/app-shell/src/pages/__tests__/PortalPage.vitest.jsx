@@ -1095,8 +1095,8 @@ describe('PortalPage — document detail', () => {
     // The list stays underneath, not re-read.
     expect(screen.getByTestId('portal-document-list')).toBeInTheDocument();
     expect(urlView()).toEqual({ view: 'doc', kind: 'INVOICE', id: 'inv-1', group: 'pending' });
-    // The document itself heads its related documents, as "Este".
-    expect(screen.getByTestId('portal-related-current')).toHaveTextContent('portalRelatedThis');
+    // The open document is not one of its own related documents (user decision).
+    expect(screen.queryByTestId('portal-related-current')).not.toBeInTheDocument();
 
     await user.keyboard('{Escape}');
 
