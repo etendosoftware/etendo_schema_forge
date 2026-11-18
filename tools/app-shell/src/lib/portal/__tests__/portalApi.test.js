@@ -152,6 +152,7 @@ describe('fetchPortalIdentity', () => {
       state: 'expired',
       entryDocument: { kind: ' invoice ', id: ' inv-9 ' },
       businessPartnerName: '  Cliente Uno  ',
+      email: ' cliente@uno.es ',
       tenantName: 'Acme SA',
       hasLogo: true,
     }));
@@ -161,6 +162,7 @@ describe('fetchPortalIdentity', () => {
       entryDocument: { kind: 'invoice', id: 'inv-9' },
       entryKind: null,
       businessPartnerName: 'Cliente Uno',
+      email: 'cliente@uno.es',
       tenantName: 'Acme SA',
       hasLogo: true,
     });
@@ -174,6 +176,7 @@ describe('fetchPortalIdentity', () => {
       entryDocument: null,
       entryKind: null,
       businessPartnerName: null,
+      email: null,
       tenantName: null,
       hasLogo: false,
     });
@@ -187,6 +190,7 @@ describe('fetchPortalIdentity', () => {
       entryDocument: null,
       entryKind: null,
       businessPartnerName: null,
+      email: null,
       tenantName: null,
       hasLogo: false,
     });

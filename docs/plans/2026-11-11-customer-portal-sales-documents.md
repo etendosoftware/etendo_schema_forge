@@ -1016,6 +1016,24 @@ arrives, so every shared piece takes the new look as an opt-in (`PortalSection v
   8. Comments box: never built in the portal (an agreed OUT item); nothing to remove.
   9. "Descargar seleccionados" and the row checkboxes (select-all included) are removed for now
      (performance); a document still downloads from its detail.
+- **PO final answers (2026-11-18, supersede the matching points above).**
+  - 2 (search): pending a decision; unchanged.
+  - 4: the chart's legend reads only "Gastos" (en "Expenses", the app's `expenses` key): one series,
+    since what the customer was invoiced is their expense. The legend swatch takes the Figma's
+    "Gastos" swatch (#F53D6B, 14×4); the bars keep the green success gradient.
+  - 5: "Ayuda y soporte" is removed from the rail (link, help URL constant and icon). The
+    `helpAndSupport` key stays: the app's side menu uses it.
+  - 7: the user menu has the app's user-popup look: a header with the customer's name and email,
+    then the language. `GET /sws/portal/me` now also answers `email` (additive): the first valid To
+    of the link's root send, the address the portal already treats as the customer
+    (`PortalDecisionService.confirmationRecipient`), `""` when none.
+  - A (app, sales quotation: create a reject reason from the editable "Motivo de rechazo"): not
+    built. The generic `allowCreate` (`InlineCreateSelector`) POSTs `{ name }` to a CRUD spec
+    (`/sws/neo/{createSpec}/{createEntity}`); reject reasons have no NEO spec and are created
+    through the `createRejectReason` action on the quotation, which the generic field cannot call.
+    Options are with the coordinator.
+  - B (internal reasons in the notes): investigated, no change. No path writes the tenant's reason
+    into the notes; the only notes write is the portal's own line (`PortalDecisionService.appendNote`).
 - **Pixel pass against the Figma (2026-11-17, user: "tal cual el figma").** Compared side by side
   with the reference captures at 1440×703 in both rail states. Icons are the design's Phosphor ones
   (`@phosphor-icons/react`, already a dependency). The rail footer is a rule, then "Ayuda y soporte"

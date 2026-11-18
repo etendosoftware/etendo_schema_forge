@@ -4,7 +4,7 @@ import { LayoutGrid, Search } from 'lucide-react';
 // the library's `*Icon` names like the rest of the app (`pages/first-steps/firstStepsIcons.js`).
 import {
   ArrowLineLeftIcon, ArrowLineRightIcon, CaretDownIcon, CaretRightIcon, FilesIcon, FileTextIcon,
-  HeadsetIcon, HouseSimpleIcon, PackageIcon, ReceiptIcon, RocketLaunchIcon, ShoppingCartSimpleIcon,
+  HouseSimpleIcon, PackageIcon, ReceiptIcon, RocketLaunchIcon, ShoppingCartSimpleIcon,
   UserIcon,
 } from '@phosphor-icons/react';
 import { useLocaleSwitch, useUI } from '@/i18n';
@@ -136,16 +136,16 @@ export function PortalBrand({ identity, logoUrl, size = 'sm' }) {
 }
 
 /**
- * The user menu (PO answer, provisional): as in the app, clicking the user opens a menu whose only
- * section is the language (§B.8). It is the app's own `DropdownMenu` with the app's
- * `LanguageMenuSection` (`APP_LOCALES`, rows and active marker), the same section the app's
- * `UserAvatarButton` shows; the rest of that menu (account, companies, logout) needs a login the
- * portal does not have. Spanish is the default; the choice is the viewer's. Without a locale
- * switcher the trigger renders alone.
+ * The user menu (PO answer): as in the app, clicking the user opens the app's user popup look — a
+ * header with the customer's name and email (`/me`), then the language (§B.8) through the app's
+ * own `DropdownMenu` and `LanguageMenuSection` (`APP_LOCALES`, rows and active marker), as the
+ * app's `UserAvatarButton` shows them. The rest of that menu (account, companies, logout) needs a
+ * login the portal does not have. Spanish is the default; the choice is the viewer's.
  */
-function PortalUserMenu({ align = 'end', side = 'bottom', children }) {
+function PortalUserMenu({ identity, align = 'end', side = 'bottom', children }) {
   const { locale, setLocale } = useLocaleSwitch();
-  if (!setLocale) return children;
+  const name = identity?.businessPartnerName;
+  const email = identity?.email;
   return (
     <DropdownMenu data-testid="DropdownMenu__a5d12f">
       <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__a5d12f">
@@ -154,13 +154,23 @@ function PortalUserMenu({ align = 'end', side = 'bottom', children }) {
       <DropdownMenuContent
         side={side}
         align={align}
-        className="w-48"
+        className="w-56"
         data-testid="DropdownMenuContent__a5d12f">
-        <LanguageMenuSection
-          locale={locale}
-          setLocale={setLocale}
-          testIdFor={(code) => `portal-language-${code.slice(0, 2).toLowerCase()}`}
-          data-testid="LanguageMenuSection__a5d12f" />
+        <div className="border-b px-4 py-3" data-testid="portal-user-menu-header">
+          <p className="truncate text-sm font-semibold" title={name ?? undefined}>{name || '—'}</p>
+          {email ? (
+            <p className="mt-1 truncate text-xs text-muted-foreground" title={email} data-testid="portal-user-menu-email">
+              {email}
+            </p>
+          ) : null}
+        </div>
+        {setLocale ? (
+          <LanguageMenuSection
+            locale={locale}
+            setLocale={setLocale}
+            testIdFor={(code) => `portal-language-${code.slice(0, 2).toLowerCase()}`}
+            data-testid="LanguageMenuSection__a5d12f" />
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -168,8 +178,8 @@ function PortalUserMenu({ align = 'end', side = 'bottom', children }) {
 
 /**
  * The customer the link belongs to (`/me`'s `businessPartnerName`), shown where the design puts
- * its user (Main: the sidebar's user row; Movil-*: the avatar on the top bar's right). Purely
- * the trigger of the user menu ({@link PortalUserMenu}: the language, as in the app). Nothing
+ * its user (Main: the sidebar's user row; Movil-*: the avatar on the top bar's right). It is
+ * the trigger of the user menu ({@link PortalUserMenu}: name, email and language). Nothing
  * renders without a name.
  *
  * The app has no shared initials helper — `UserAvatarButton` takes the first letter inline and
@@ -184,7 +194,7 @@ export function PortalCustomer({ identity, variant = 'row' }) {
   if (!name) return null;
   if (variant === 'avatar') {
     return (
-      <PortalUserMenu data-testid="PortalUserMenu__a5d12f">
+      <PortalUserMenu identity={identity} data-testid="PortalUserMenu__a5d12f">
         <button
           type="button"
           aria-label={name}
@@ -512,39 +522,24 @@ function PortalCompany({ identity, logoUrl, collapsed = false }) {
   );
 }
 
-/** The help site (`components/support/helpDocs.js` points at the same). Provisional for the portal. */
-const PORTAL_HELP_URL = 'https://help.etendo.ai';
-
 /**
- * The rail's footer ("Pie"): a top rule, then "Ayuda y soporte" (the help site, new tab) and the
- * customer, 32px items with the Figma's chevron; collapsed, two 36×36 grey buttons. The customer
- * opens the user menu (the language, as the app's user menu does; PO answer).
+ * The rail's footer ("Pie"): a top rule, then the customer, a 32px item with the Figma's chevron;
+ * collapsed, a 36×36 grey button. The customer opens the user menu (name, email and language, as
+ * the app's user popup; PO answer). "Ayuda y soporte" was removed (PO answer, 2026-11-18). Nothing
+ * renders without a customer.
  */
 function PortalRailFooter({ identity, collapsed }) {
-  const ui = useUI();
   const name = identity?.businessPartnerName;
+  if (!name) return null;
   if (collapsed) {
     return (
       <div className="shrink-0 px-2">
         <div className="flex flex-col justify-end gap-1 border-t border-[#E3E7EC] py-2">
-          <a
-            href={PORTAL_HELP_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={ui('helpAndSupport')}
-            title={ui('helpAndSupport')}
-            className={RAIL_ICON_BUTTON}
-            data-testid="portal-help"
-          >
-            <HeadsetIcon size={20} aria-hidden="true" data-testid="Headset__a5d12f" />
-          </a>
-          {name ? (
-            <PortalUserMenu side="right" align="end" data-testid="PortalUserMenu__a5d12f">
-              <button type="button" aria-label={name} title={name} className={RAIL_ICON_BUTTON} data-testid="portal-customer">
-                <RailUserAvatar data-testid="RailUserAvatar__a5d12f" />
-              </button>
-            </PortalUserMenu>
-          ) : null}
+          <PortalUserMenu identity={identity} side="right" align="end" data-testid="PortalUserMenu__a5d12f">
+            <button type="button" aria-label={name} title={name} className={RAIL_ICON_BUTTON} data-testid="portal-customer">
+              <RailUserAvatar data-testid="RailUserAvatar__a5d12f" />
+            </button>
+          </PortalUserMenu>
         </div>
       </div>
     );
@@ -552,13 +547,8 @@ function PortalRailFooter({ identity, collapsed }) {
   return (
     <div className="shrink-0 px-2">
       <div className="flex flex-col gap-1 border-t border-[#E3E7EC] py-2">
-        <a href={PORTAL_HELP_URL} target="_blank" rel="noopener noreferrer" className={RAIL_ITEM} data-testid="portal-help">
-          <HeadsetIcon size={20} className="shrink-0 text-[#81848F]" aria-hidden="true" data-testid="Headset__a5d12f" />
-          <span className="min-w-0 flex-1 truncate pl-2 pr-4">{ui('helpAndSupport')}</span>
-          <CaretRightIcon size={20} className="shrink-0 text-[#81848F]" aria-hidden="true" data-testid="CaretRight__a5d12f" />
-        </a>
         {name ? (
-          <PortalUserMenu side="right" align="end" data-testid="PortalUserMenu__a5d12f">
+          <PortalUserMenu identity={identity} side="right" align="end" data-testid="PortalUserMenu__a5d12f">
             <button type="button" className={RAIL_ITEM} title={name} data-testid="portal-customer">
               <RailUserAvatar data-testid="RailUserAvatar__a5d12f" />
               <span className="min-w-0 flex-1 truncate pl-2 pr-4" data-testid="portal-customer-name">{name}</span>

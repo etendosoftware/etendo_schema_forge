@@ -180,7 +180,8 @@ async function portalGet(fetchImpl, token, path, {
  * error state. `state` defaults to `valid`: a backend that predates ETP-6209 answered 200 only
  * for a valid link.
  *
- * @returns {Promise<{ state: string, businessPartnerName: string|null, tenantName: string|null,
+ * @returns {Promise<{ state: string, businessPartnerName: string|null, email: string|null,
+ *   tenantName: string|null,
  *   hasLogo: boolean, entryDocument: { kind: string, id: string }|null,
  *   entryKind: string|null }>}
  *
@@ -197,6 +198,8 @@ export async function fetchPortalIdentity(fetchImpl, token) {
     entryDocument: entryKind && entryId ? { kind: entryKind, id: entryId } : null,
     entryKind: entryKind && entryId ? null : readableText(data?.entryKind),
     businessPartnerName: readableText(data?.businessPartnerName),
+    // The customer's address the portal uses (the root send's To), shown in the user menu.
+    email: readableText(data?.email),
     tenantName: readableText(data?.tenantName),
     // The backend says whether there is a logo, so the page never requests one that does not
     // exist and never has to hide a broken image. Defaults to false: a backend that predates

@@ -91,7 +91,7 @@ const TOKEN = 'tok-abcdef0123456789';
 /** A euro amount exactly as the canonical formatter produces it (non-breaking space). */
 const eur = (digits) => `${digits} €`;
 
-const IDENTITY = { businessPartnerName: 'Cliente Uno', tenantName: 'Acme SA' };
+const IDENTITY = { businessPartnerName: 'Cliente Uno', email: 'cliente@uno.es', tenantName: 'Acme SA' };
 const WITH_ENTRY = { ...IDENTITY, entryDocument: { kind: 'INVOICE', id: 'inv-1' } };
 
 const HOME = {
@@ -534,6 +534,8 @@ describe('PortalPage — shell', () => {
     await shellReady();
 
     expect(screen.getByTestId('portal-nav-home')).toHaveAttribute('aria-current', 'page');
+    // "Ayuda y soporte" was removed from the rail (PO answer).
+    expect(screen.queryByTestId('portal-help')).not.toBeInTheDocument();
     expect(within(screen.getByTestId('portal-nav-quotation')).getByTestId('portal-nav-count').textContent).toBe('2');
     expect(within(screen.getByTestId('portal-nav-invoice')).getByTestId('portal-nav-count').textContent).toBe('1');
     expect(within(screen.getByTestId('portal-nav-order')).queryByTestId('portal-nav-count')).not.toBeInTheDocument();
@@ -579,6 +581,10 @@ describe('PortalPage — language', () => {
     expect(screen.queryByTestId('portal-language-switch')).not.toBeInTheDocument();
     expect(screen.queryByTestId('portal-language-en')).not.toBeInTheDocument();
     await user.click(within(screen.getByTestId('portal-sidebar')).getByTestId('portal-customer'));
+    // The app's user popup look: the customer's name and email, then the language.
+    const header = screen.getByTestId('portal-user-menu-header');
+    expect(header).toHaveTextContent('Cliente Uno');
+    expect(within(header).getByTestId('portal-user-menu-email').textContent).toBe('cliente@uno.es');
 
     await user.click(screen.getByTestId('portal-language-en'));
     expect(localeState.setLocale).toHaveBeenCalledWith('en_US');

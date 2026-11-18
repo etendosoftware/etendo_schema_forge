@@ -556,11 +556,6 @@ const GRID_DOTS_VERTICAL = Object.freeze({ backgroundImage: GRID_DOT, background
 export const PORTAL_CHART_ORIENTATIONS = Object.freeze(['vertical', 'horizontal']);
 
 /**
- * The chart's series. One today: what was invoiced per month. Kept as a list so a second series
- * can be added beside it (the spec's "Ingresos" / "Gastos" legend is pending with the PO: Jira
- * comment 149666) without reshaping the chart; every series reads its own amount from a bar.
- */
-/**
  * The vertical chart's column gap, as a share of the plot width: the Figma draws 6 bars of
  * ~79.33px with 56px gaps in a 756px plot, and every period keeps that bar:gap proportion.
  */
@@ -572,12 +567,18 @@ function chartColumnGap(count) {
   return `${(share * 100).toFixed(4)}%`;
 }
 
+/**
+ * The chart's series. One: what the customer was invoiced per month, named "Gastos" (PO answer:
+ * for the customer, what they were invoiced is their expense). Kept as a list so a series can be
+ * added without reshaping the chart; every series reads its own amount from a bar. The legend
+ * swatch is the Figma's "Gastos" one (#F53D6B, 14×4); the bars keep the success gradient.
+ */
 const CHART_SERIES = Object.freeze([
   {
     key: 'invoiced',
-    labelKey: 'invoiced',
+    labelKey: 'expenses',
     amountOf: (bar) => bar.amount,
-    swatch: 'bg-[hsl(var(--status-done-badge))]',
+    swatch: 'bg-[#F53D6B]',
     // The spec's gradient (#26A95F → #EEFBF4), from the app's success tokens.
     vertical: 'bg-gradient-to-t from-[var(--status-success-bg)] to-[hsl(var(--status-done-badge))]',
     horizontal: 'bg-gradient-to-r from-[var(--status-success-bg)] to-[hsl(var(--status-done-badge))]',
@@ -672,7 +673,7 @@ function InvoicedChart({ chart, year }) {
           <span className="flex items-center gap-4" data-testid="portal-chart-legend">
             {CHART_SERIES.map((series) => (
               <span key={series.key} className="flex items-center gap-1.5 text-xs text-foreground">
-                <span className={cn('h-[3px] w-3.5 rounded-sm', series.swatch)} aria-hidden="true" />
+                <span className={cn('h-1 w-3.5 rounded-sm', series.swatch)} aria-hidden="true" />
                 {ui(series.labelKey)}
               </span>
             ))}
