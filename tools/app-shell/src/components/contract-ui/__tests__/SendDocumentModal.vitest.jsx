@@ -437,7 +437,7 @@ describe('SendDocumentModal', () => {
     expect(screen.getByRole('status')).toHaveTextContent('sendModalThrottled');
   });
 
-  it('shows duplicate state as a successful idempotent send even with non-2xx HTTP', async () => {
+  it('shows duplicate state as an error (nothing was sent) and keeps the modal open', async () => {
     const user = userEvent.setup();
     global.fetch.mockResolvedValueOnce({
       ok: false,
@@ -458,9 +458,10 @@ describe('SendDocumentModal', () => {
     await user.click(getSendButton());
 
     await waitFor(() => {
-      expect(toast.success).toHaveBeenCalledWith('sendModalDuplicate:{"documentType":"Invoice"}');
+      expect(toast.error).toHaveBeenCalledWith('sendModalDuplicate:{"documentType":"Invoice"}');
     });
-    expect(BASE.onClose).toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(BASE.onClose).not.toHaveBeenCalled();
   });
 
   it('shows unauthorized state from the email contract executor', async () => {
@@ -603,9 +604,6 @@ describe('SendDocumentModal', () => {
 
 // ETP-4226 coverage closure: error-message branches, download paths, the iframe
 // preview render path, and the standalone SendDocumentButton export.
-// NOTE: line 18 (the DUPLICATE branch inside resolveEmailSendErrorMessage) is
-// intentionally NOT covered — DUPLICATE is handled as success before the error
-// resolver runs, so it is unreachable from the send flow.
 describe('SendDocumentModal — error resolver branches', () => {
   // Each test mocks the single send fetch (cachePreviewBeforeSend is false in
   // BASE, so the preview cache fetch is skipped) and asserts the toast key.
@@ -1026,7 +1024,7 @@ describe('SendDocumentModal — onSent success callback (ETP-5069)', () => {
     expect(onSent).toHaveBeenCalledWith({ status: 'SENT', auditId: 'aud-1', requestId: 'req-1' });
   });
 
-  it('fires onSent on a DUPLICATE response — an idempotent re-send is still a success', async () => {
+  it('does not fire onSent on a DUPLICATE response — no email went out', async () => {
     const user = userEvent.setup();
     const onSent = vi.fn();
     global.fetch.mockResolvedValueOnce({
@@ -1038,8 +1036,8 @@ describe('SendDocumentModal — onSent success callback (ETP-5069)', () => {
     render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" onSent={onSent} />);
     await user.click(getSendButton());
 
-    await waitFor(() => expect(onSent).toHaveBeenCalledTimes(1));
-    expect(onSent).toHaveBeenCalledWith(expect.objectContaining({ status: 'DUPLICATE', auditId: 'aud-2' }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(onSent).not.toHaveBeenCalled();
   });
 
   it('fires onSent BEFORE onClose, so the caller can react while the outcome is still known', async () => {
