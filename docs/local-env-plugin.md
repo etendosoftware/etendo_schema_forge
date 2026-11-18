@@ -15,11 +15,11 @@ the project skill [`.claude/skills/local-env/SKILL.md`](../.claude/skills/local-
 
 | local-env hook | The plugin |
 |---|---|
-| `manifest` | prints `seed GOClient v1`, which becomes part of the DB fingerprint, so a DB with the GO sample client never shares a cached snapshot with one without it |
+| `manifest` | prints `seed GOClient v2`, which becomes part of the DB fingerprint, so a DB with the GO sample client never shares a cached snapshot with one without it. The fingerprint does not hash `com.etendoerp.go`'s GOClient dataset, so the version is bumped when a dataset change must reach every seeded DB (v2, ETP-5850: the contact identifier sequence; the first `up` after it installs and seeds once) |
 | `db-seed` | prints the gradle invocations that load it, one per line: `import.sample.data -Pclient=GOClient`, then `prepareOnboardingSampledata --info`. local-env runs them right after `install`, against its own guarded DB, before the DB is snapshotted; every later DB comes from a snapshot that already carries the seed. A failed seed aborts `local-env up` |
 | `worktree-create` | reserves a free `SPA_PORT` (from 3101) and `BFF_PORT` (from 3401) for the new environment, skipping the ports other environments reserved and anything listening, and appends them to the environment's `build/local-env/env`, together with `ETGO_ALLOWED_ORIGINS` for that SPA port (see *Allowed origins* below), and points `etgo.mcp.public.url` / `etgo.oauth2.public.url` at that port (see *MCP and OAuth public URLs* below), and points `ETENDO_URL` in `tools/app-shell/.env.local` and `context.url` at the environment's Tomcat (see *app-shell .env.local* and *context.url* below). The main checkout keeps 3100 / 3400 |
-| `up` | first the backend configuration, whatever happens to the SPA: `context.url`, the boolean `feature-flag` lines as `ETGO_FLAG_*` and, with `copilot on`, the environment's Copilot (see *context.url*, *Backend feature flags* and *Copilot* below). Then, in the background: `npm install` in this environment's `schema_forge_core` and `make install` in its `schema_forge`, each only when its `node_modules` is missing or its `package-lock.json` is newer than the last install (local-env clones `node_modules` into new worktrees from the source checkout, so they can lag the branch); then, in `schema_forge`, `make dev-local-core ETENDO_URL=<this environment's Tomcat URL> SPA_PORT=… BFF_PORT=… SCHEMA_FORGE_CORE=… ETENDO_MCP_URL=<Tomcat URL>/sws/mcp ETENDO_USAGE_URL=<Tomcat URL>/sws/neo/usage`. The AI BFF reads `ETENDO_MCP_URL`, not `ETENDO_URL`, and would otherwise call the main checkout's :8080. A branch whose Makefile predates `SPA_PORT` runs on :3100/:3400 and frees them first, so in a worktree it is started only while both are free (otherwise a warning, no SPA). Prints the SPA URL; log and pid in `build/local-env/plugins/etendo-go/` |
-| `status` | `SPA  http://localhost:<port> (running\|starting\|stopped)`. `<port>` is the one the SPA really listens on (`lsof` on its process group, vite's listener), so a branch whose Makefile ignores `SPA_PORT` shows its own port, flagged `not the reserved :<SPA_PORT>`; until it listens, the reserved port with `(starting)`. local-env puts the URL into `progress.json` (`urls.SPA`). With `copilot on`, also `Copilot  http://localhost:<port> (running\|stopped)` |
+| `up` | first the backend configuration, whatever happens to the SPA: `context.url`, the boolean `feature-flag` lines as `ETGO_FLAG_*` and, with `setting copilot=on`, the environment's Copilot (see *context.url*, *Backend feature flags* and *Copilot* below). Then, in the background: `npm install` in this environment's `schema_forge_core` and `make install` in its `schema_forge`, each only when its `node_modules` is missing or its `package-lock.json` is newer than the last install (local-env clones `node_modules` into new worktrees from the source checkout, so they can lag the branch); then, in `schema_forge`, `make dev-local-core ETENDO_URL=<this environment's Tomcat URL> SPA_PORT=… BFF_PORT=… SCHEMA_FORGE_CORE=… ETENDO_MCP_URL=<Tomcat URL>/sws/mcp ETENDO_USAGE_URL=<Tomcat URL>/sws/neo/usage`. The AI BFF reads `ETENDO_MCP_URL`, not `ETENDO_URL`, and would otherwise call the main checkout's :8080. A branch whose Makefile predates `SPA_PORT` runs on :3100/:3400 and frees them first, so in a worktree it is started only while both are free (otherwise a warning, no SPA). Prints the SPA URL; log and pid in `build/local-env/plugins/etendo-go/` |
+| `status` | `SPA  http://localhost:<port> (running\|starting\|stopped)`. `<port>` is the one the SPA really listens on (`lsof` on its process group, vite's listener), so a branch whose Makefile ignores `SPA_PORT` shows its own port, flagged `not the reserved :<SPA_PORT>`; until it listens, the reserved port with `(starting)`. local-env puts the URL into `progress.json` (`urls.SPA`). With `setting copilot=on`, also `Copilot  http://localhost:<port> (running\|stopped)` |
 | `stop`, `off`, `worktree-rm` | stops this environment's SPA + BFF (one process group) and its Copilot, nobody else's |
 | `sync` | nothing for now (it exits 0). `local-env sync` refuses to run while this SPA is up, since it runs from inside the environment: `local-env stop` first |
 
@@ -49,7 +49,7 @@ them only at startup; restart the SPA/environment to apply edits. The **boolean*
 also reach the backend: see *Backend feature flags* below.
 
 For OCR (`etendo_extract_invoice_document`, *Subir factura*, the invoice inbox) and any other
-Copilot-backed feature, add `copilot on` to `worktree.conf`: see *Copilot* below.
+Copilot-backed feature, add `setting copilot=on` to `worktree.conf`: see *Copilot* below.
 
 **Recommended in Claude Code: the progress mod.** etendo-localenv ships a Claude Code mod
 that shows each environment's `local-env` run (phase, step N of M, gradle task, elapsed,
@@ -176,7 +176,8 @@ replaces exactly those: a flag removed from `worktree.conf` is dropped, a hand-w
 
 ## Copilot
 
-With `copilot on` in `worktree.conf` (default off), `up` runs the environment's own
+`setting` lines need a local-env that accepts them (etendo-localenv#29); an older one stops
+on the line. With `setting copilot=on` in `worktree.conf` (default off), `up` runs the environment's own
 `modules/com.etendoerp.copilot` with the module's entry point, `uv run python run.py`, in its own
 session, logging to `build/local-env/plugins/etendo-go/copilot.log`:
 
@@ -191,7 +192,7 @@ session, logging to `build/local-env/plugins/etendo-go/copilot.log`:
   `config/Openbravo.properties`, `WebContent/WEB-INF` and the deployed copy. The copied
   `host.docker.internal` resolves only from a container. Same restart rule as `context.url`.
 - **Needs** `uv` and the module in the checkout; without either, `up` warns and goes on.
-  `copilot off`, or no line, stops a Copilot this plugin started.
+  `setting copilot=off`, or no line, stops a Copilot this plugin started.
 
 ## Ports outside local-env
 

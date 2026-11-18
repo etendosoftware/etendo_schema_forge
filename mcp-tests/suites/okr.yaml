@@ -2168,3 +2168,43 @@ probes:
         notPossible:
           kind: goal
           reason: "Holded's upload_inbox takes the file's bytes inline as a tool argument, so the image has to pass through the conversation; Etendo hands out an upload URL instead. The agent has the file, not its bytes in context."
+
+  # Q4 feature (ETP-5791, roadmap #1): a new contact inherits its types from its category. Behind the
+  # per-account flag contact-category-type (off by default): with it off the category is ignored
+  # and the contact is created as a customer, so the measured account must have it on. The prompt
+  # names the category only; sending customer/vendor explicitly wins over the category, by design.
+  - id: w-contact-category-vendor
+    category: write
+    mode: write
+    prompt: "Dá de alta a Distribuciones {{marker}} en la categoría de contacto Proveedor."
+    platforms:
+      etendo-go:
+        expectEffect:
+          tool: etendo_list
+          args: { spec: contacts, entity: businessPartner,
+                  filters: { name: "Distribuciones {{marker}}", vendor: true, customer: false } }
+      holded:
+        notPossible:
+          kind: goal
+          reason: "Holded has no contact categories that define the contact type: a contact has one type of its own."
+
+  # Same feature, on a category of our own that is customer and vendor: the setup creates it.
+  - id: w-contact-own-category
+    category: write
+    mode: write
+    prompt: "Dá de alta a Servicios {{marker}} en la categoría de contacto Categoría {{marker}}."
+    platforms:
+      etendo-go:
+        setup:
+          - tool: etendo_create
+            args: { spec: business-partner-category,
+                    fields: { name: "Categoría {{marker}}", searchKey: "{{marker}}",
+                              etgoIscustomer: true, etgoIsvendor: true } }
+        expectEffect:
+          tool: etendo_list
+          args: { spec: contacts, entity: businessPartner,
+                  filters: { name: "Servicios {{marker}}", customer: true, vendor: true } }
+      holded:
+        notPossible:
+          kind: goal
+          reason: "Holded has no contact categories that define the contact type: a contact has one type of its own."
