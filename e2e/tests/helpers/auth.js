@@ -452,47 +452,118 @@ export async function login(page, {
 
   await page.goto('/onboarding');
 
-  // If already logged in, the page redirects away from /onboarding (to dashboard,
-  // environment list, or the last visited window). Detect this and go to dashboard.
-  const stayedOnOnboarding = await page.waitForURL('**/onboarding**', { timeout: 2_000 }).then(() => true).catch(() => false);
-  if (!stayedOnOnboarding) {
-    // Already logged in — navigate to dashboard and return
+  // ETP-6163 — the onboarding first asks the backend whether a session exists, then either shows
+  // the login (or register) view or, already signed in, leaves /onboarding. Wait for whichever
+  // happens. The previous check, `waitForURL('**/onboarding**')`, resolved at once because the URL
+  // already matched, so the "already signed in" branch never ran.
+  const loginEmail = page.locator('#login-email');
+  const switchToLogin = page.getByTestId('action-switch-to-login');
+  const entry = await firstSettled([
+    loginEmail.waitFor({ state: 'visible', timeout: 30_000 }).then(() => 'login'),
+    switchToLogin.waitFor({ state: 'visible', timeout: 30_000 }).then(() => 'register'),
+    page.waitForURL((url) => !url.pathname.includes('/onboarding'), { timeout: 30_000 })
+      .then(() => 'signed-in'),
+  ]);
+  if (entry === 'signed-in') {
     if (!page.url().includes('/dashboard')) {
       await page.goto('/dashboard', { waitUntil: 'domcontentloaded', timeout: 10_000 });
     }
     return;
   }
-
-  const switchToLogin = page.getByTestId('action-switch-to-login');
-  if (await switchToLogin.isVisible({ timeout: 3_000 }).catch(() => false)) {
+  if (entry === 'register') {
     await switchToLogin.click();
   }
 
-  await page.locator('#login-email').fill(user);
+  await loginEmail.fill(user);
   await page.locator('#login-password').fill(password);
   const sessionResponsePromise = page.waitForResponse(
     response => response.request().method() === 'POST'
       && new URL(response.url()).pathname.endsWith('/sws/go/session'),
     { timeout: 30_000 },
   );
-  await page.getByTestId('action-login-submit').click();
-  const sessionResponse = await sessionResponsePromise;
-  if (sessionResponse.status() === 401) {
-    throw new Error('E2E login rejected by POST /sws/go/session (HTTP 401). '
-      + 'Check the selected E2E_USER/E2E_PASSWORD pair or refresh onboarding credentials.');
+  const authFailures = watchAuthFailures(page);
+  try {
+    await page.getByTestId('action-login-submit').click();
+    const sessionResponse = await sessionResponsePromise;
+    if (sessionResponse.status() === 401) {
+      throw new Error('E2E login rejected by POST /sws/go/session (HTTP 401). '
+        + 'Check the selected E2E_USER/E2E_PASSWORD pair or refresh onboarding credentials.');
+    }
+    if (!sessionResponse.ok()) {
+      throw new Error(`E2E login failed at POST /sws/go/session (HTTP ${sessionResponse.status()}).`);
+    }
+
+    await expectAnyEnvironmentOrDashboard(page, authFailures.failures);
+
+    if (page.url().includes('/dashboard')) return;
+
+    const enterButton = page.locator('[data-testid^="action-enter-environment-"]').first();
+    await enterButton.click({ timeout: 30_000 });
+    await page.waitForURL('**/dashboard', { timeout: 30_000 }).catch((error) => {
+      throw new Error(describeLoginFailure({
+        reason: 'timeout', url: page.url(), failures: authFailures.failures,
+      }), { cause: error });
+    });
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  } finally {
+    authFailures.stop();
   }
-  if (!sessionResponse.ok()) {
-    throw new Error(`E2E login failed at POST /sws/go/session (HTTP ${sessionResponse.status()}).`);
-  }
+}
 
-  await expectAnyEnvironmentOrDashboard(page);
+const SESSION_REFUSAL_STATUSES = new Set([401, 403]);
 
-  if (page.url().includes('/dashboard')) return;
+/**
+ * ETP-6163 — records every `/sws/**` call the page sees answered 401 or 403, from the login
+ * click on. Those are the answers that send a freshly signed-in page back to the onboarding:
+ * the onboarding shows "Tu sesión se cerró" on a 401 (or a 403 account mismatch), and the app
+ * shell's session restore sends a 401 back to /onboarding. Without this, such a login only
+ * failed as a 30 s timeout waiting for the dashboard, with nothing pointing at the call.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @returns {{ failures: string[], stop: () => void }}
+ */
+export function watchAuthFailures(page) {
+  const failures = [];
+  const onResponse = (response) => {
+    const status = response.status();
+    if (!SESSION_REFUSAL_STATUSES.has(status)) return;
+    let pathname;
+    try {
+      pathname = new URL(response.url()).pathname;
+    } catch {
+      return;
+    }
+    if (!pathname.includes('/sws/')) return;
+    failures.push(`${response.request().method()} ${pathname} -> ${status}`);
+  };
+  page.on('response', onResponse);
+  return { failures, stop: () => page.off('response', onResponse) };
+}
 
-  const enterButton = page.locator('[data-testid^="action-enter-environment-"]').first();
-  await enterButton.click({ timeout: 30_000 });
-  await page.waitForURL('**/dashboard', { timeout: 30_000 });
-  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+/**
+ * ETP-6163 — the error a real-backend login fails with once POST /sws/go/session succeeded but
+ * the page never reached the dashboard.
+ *
+ * @param {{ reason: 'session-lost' | 'timeout', url: string, failures: string[] }} outcome
+ * @returns {string}
+ */
+export function describeLoginFailure({ reason, url, failures }) {
+  const where = reason === 'session-lost'
+    ? 'the onboarding showed its "session lost" screen'
+    : `the page never reached the dashboard (last URL: ${url})`;
+  const calls = failures.length > 0
+    ? `Refused calls after the login: ${failures.join('; ')}.`
+    : 'No /sws/ call was refused with 401/403 after the login.';
+  return `E2E login: POST /sws/go/session succeeded, but ${where}. ${calls}`;
+}
+
+/**
+ * Resolves with the first of `racers` to resolve; rejects only when the first to settle rejects.
+ * The losers settle later on their own timeouts, so their rejections are handled here.
+ */
+function firstSettled(racers) {
+  racers.forEach((racer) => racer.catch(() => {}));
+  return Promise.race(racers);
 }
 
 /**
@@ -514,11 +585,21 @@ export async function login(page, {
  * the redirect is also the one that POSTs `markSeen()`. Worked example:
  * `user-invitation.email.integration.spec.js#acceptExistingInvitation`.
  */
-async function expectAnyEnvironmentOrDashboard(page) {
-  await Promise.race([
-    page.waitForURL('**/dashboard', { timeout: 30_000 }),
-    page.locator('[data-testid^="action-enter-environment-"]').first().waitFor({ state: 'visible', timeout: 30_000 }),
-  ]);
+async function expectAnyEnvironmentOrDashboard(page, failures = []) {
+  // ETP-6163 — the "session lost" screen is a dead end: fail at once and name the refused calls,
+  // instead of waiting out the timeout.
+  const outcome = await firstSettled([
+    page.waitForURL('**/dashboard', { timeout: 30_000 }).then(() => 'dashboard'),
+    page.locator('[data-testid^="action-enter-environment-"]').first()
+      .waitFor({ state: 'visible', timeout: 30_000 }).then(() => 'environments'),
+    page.getByTestId('onboarding-session-lost')
+      .waitFor({ state: 'visible', timeout: 30_000 }).then(() => 'session-lost'),
+  ]).catch((error) => {
+    throw new Error(describeLoginFailure({ reason: 'timeout', url: page.url(), failures }), { cause: error });
+  });
+  if (outcome === 'session-lost') {
+    throw new Error(describeLoginFailure({ reason: 'session-lost', url: page.url(), failures }));
+  }
 }
 
 /**
