@@ -69,7 +69,7 @@ function Frame({ onEnter, children }) {
         <header className="flex items-center justify-between gap-3 p-5">
           <span className="flex items-center gap-2">
             <img src="/logo-etendo-ai.png" alt="" className="h-11 w-11 rounded-[8.8px] object-contain" />
-            <span className="text-lg font-semibold tracking-[-0.01em] text-[#1B1A1F]">etendo.ai</span>
+            <span className="text-lg font-semibold tracking-[-0.01em] text-[#1B1A1F]">{ui('portalBrandName')}</span>
           </span>
           {onEnter ? (
             <button

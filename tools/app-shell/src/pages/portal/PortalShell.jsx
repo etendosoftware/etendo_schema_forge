@@ -295,7 +295,7 @@ function RailHeader({ collapsed, onToggle }) {
         data-testid="portal-created-with"
       >
         <img src="/logo-etendo-ai.png" alt="" className="h-10 w-10 shrink-0 rounded-lg" />
-        {collapsed ? null : <span className="text-lg font-semibold leading-7 tracking-[-0.01em] text-[#1B1A1F]">etendo.ai</span>}
+        {collapsed ? null : <span className="text-lg font-semibold leading-7 tracking-[-0.01em] text-[#1B1A1F]">{ui('portalBrandName')}</span>}
       </a>
       {collapsed ? null : (
         <button

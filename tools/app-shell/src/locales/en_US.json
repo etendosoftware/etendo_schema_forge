@@ -26622,6 +26622,7 @@
     "walkthroughProductStepPriceAddBody": "A price always belongs to a tariff. Sales and purchase tariffs are separate -- the toggle on the left switches between them.",
     "walkthroughProductStepPriceSetTitle": "Set the price",
     "walkthroughProductStepPriceSetBody": "Enter the unit price and the list price, then pick the tariff under Name: the row is saved the moment you pick it. The list price is the one before discounts; the unit price is what is actually charged.",
+    "portalBrandName": "etendo.ai",
     "portalPageTitle": "Customer portal",
     "portalGreeting": "Hello, {name}",
     "portalLoading": "Loading your portal...",

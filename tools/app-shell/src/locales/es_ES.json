@@ -26860,6 +26860,7 @@
     "walkthroughProductStepPriceAddBody": "Un precio siempre pertenece a una tarifa. Las de venta y las de compra son distintas: el selector de la izquierda cambia de una a otra.",
     "walkthroughProductStepPriceSetTitle": "Pon el precio",
     "walkthroughProductStepPriceSetBody": "Escribe el precio unitario y el precio de lista, y luego elige la tarifa en Nombre: la fila se guarda en el momento en que la eliges. El precio de lista es el de antes de descuentos; el unitario es el que se cobra.",
+    "portalBrandName": "etendo.ai",
     "portalPageTitle": "Portal del cliente",
     "portalGreeting": "Hola, {name}",
     "portalLoading": "Cargando tu portal...",
