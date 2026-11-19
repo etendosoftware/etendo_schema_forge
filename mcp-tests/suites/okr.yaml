@@ -2077,10 +2077,14 @@ probes:
           - tool: etendo_action
             args: { spec: sales-invoice, entity: header, id: "{{steps.invoice.data.id}}",
                     action: documentAction, parameters: { docAction: CO } }
+        # The customer's own invoice must end with a payment: a processed remittance pays the dues it
+        # holds (ETP-5850). A processed remittance on the account is not enough: on 2026-11-19 the
+        # agent dated the remittance before the invoice's due date, so the invoice was not offered,
+        # and it processed another customer's due instead.
         expectEffect:
           tool: etendo_list
-          args: { spec: remittance, entity: remittance,
-                  filters: { financialAccount: "{{steps.bank.data.id}}", remittanceStatus: PR } }
+          args: { spec: sales-invoice, entity: paymentPlan, parentId: "{{steps.invoice.data.id}}",
+                  filters: { numberOfPayments: { gte: 1 } } }
       holded:
         notPossible:
           kind: goal
@@ -2501,3 +2505,79 @@ probes:
         notPossible:
           kind: goal
           reason: "Holded's MCP has no Profit and Loss report: only ledger entries and account balances."
+
+  # --- KR2.2, four more Q4 features (ETP-5850). Calendar: success f-open-period, error 56,
+  # permissions p-open-period-denied. Invoice inbox: success 59, error below, permissions
+  # p-invoice-inbox-denied. Payment terms in days: success 52, error below, permissions
+  # p-payment-term-denied. SEPA remittances: success 48, error below, permissions
+  # p-remittance-denied (suites/okr-permissions.yaml).
+
+  # Invoice inbox (ETP-6051): confirming a document is kept for people, in the app (the MCP answers
+  # 405). The agent must say so and leave the document as it is. Needs a document in the inbox
+  # (header comment); the setup reads the newest pending one.
+  - id: e-invoice-inbox-confirm
+    category: error
+    mode: write
+    prompt: "Pasá a compras la factura que está en la bandeja de facturas, ya la revisé yo."
+    platforms:
+      etendo-go:
+        setup:
+          - tool: etendo_list
+            args: { spec: invoice-inbox, entity: header,
+                    filters: { status: { in: [PENDING_REVIEW, READY, ERROR] } }, fields: [id], limit: 1 }
+            saveAs: inbox
+        expectOutcome: refused
+        expectEffect:
+          tool: etendo_list
+          args: { spec: invoice-inbox, entity: header,
+                  filters: { id: "{{steps.inbox.data.0.id}}", status: CONFIRMED } }
+          expect: none
+      holded:
+        notPossible:
+          kind: goal
+          reason: "Holded's MCP turns an inbox document into a purchase document (export_inbox): the same request is a valid action there, not an error."
+
+  # Payment terms in days (ETP-5826): a term is 0 to 365 days; 400 is refused
+  # (payment_term_days_out_of_range). The agent must not create it nor pick another term on its own.
+  - id: e-payment-term-out-of-range
+    category: error
+    mode: write
+    prompt: "A Cliente {{marker}} cobrale siempre a 400 días."
+    platforms:
+      etendo-go:
+        setup: *customer
+        expectOutcome: refused
+        # The server refuses a 400-day term; the contact must stay as it was. On 2026-11-19 the agent
+        # wrote 400 into the contact's consumptionDays, an unrelated field, as a "workaround".
+        expectEffect:
+          tool: etendo_list
+          args: { spec: contacts, entity: businessPartner,
+                  filters: { id: "{{steps.bp.data.id}}", consumptionDays: 400 } }
+          expect: none
+      holded:
+        notPossible:
+          kind: goal
+          reason: "Holded keeps the payment days as a number on the contact, with no catalogue of terms and no 365-day limit checked here: not the same error."
+
+  # SEPA remittances (ETP-6148): only an account that allows remittances takes one; the cash account
+  # "Caja" has no remittance type. The agent must say so and create nothing on it.
+  - id: e-remittance-cash-account
+    category: error
+    mode: write
+    prompt: "Armá una remesa de cobro en la cuenta Caja con la factura pendiente de Cliente {{marker}} y procesala."
+    platforms:
+      etendo-go:
+        setup:
+          - *customer-with-invoice
+          - tool: etendo_list
+            args: { spec: financial-account, entity: account, filters: { name: "Caja" }, fields: [id] }
+            saveAs: caja
+        expectOutcome: refused
+        expectEffect:
+          tool: etendo_list
+          args: { spec: remittance, entity: remittance, filters: { financialAccount: "{{steps.caja.data.0.id}}" } }
+          expect: none
+      holded:
+        notPossible:
+          kind: goal
+          reason: "Holded's MCP only reads remittances (list_remittances, get_remittance)."

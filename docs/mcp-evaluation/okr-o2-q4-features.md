@@ -10,8 +10,8 @@ secundaria: una prueba que Holded no puede hacer igual suma, como Solo Etendo.
 | | Pruebas | Posibles en ambos | Solo Etendo |
 |---|---:|---:|---:|
 | Suite inicial (1-47) | 47 | 39 | 8 |
-| Agregadas en la T3 (48-65) | 18 | 4 | 14 |
-| **Total** | **65** | **43** | **22** |
+| Agregadas en la T3 (48-68) | 21 | 4 | 17 |
+| **Total** | **68** | **43** | **25** |
 
 - **KR2.1** (Etendo Win ÷ posibles en ambos): 79,5 % (31 de 39), medido sobre las 47 iniciales, no
   oficial. Las 15 nuevas todavía no entraron en una medición contra Holded.
@@ -100,7 +100,7 @@ muestre; queda registrado quién lo pidió y no cuenta como "enviado por email".
 
 ## KR2.2: tres funcionalidades del Q4 validadas por agente
 
-KR2.2 (registro del OKR): validar de extremo a extremo la operación agéntica de al menos 3
+KR2.2 (registro del OKR, meta 3; validadas 7): validar de extremo a extremo la operación agéntica de al menos 3
 funcionalidades del ERP desarrolladas en Q4: casos exitosos, errores de negocio y restricciones de
 permisos, vía agente, comparando con el recorrido por la interfaz, sin intervención manual.
 
@@ -109,20 +109,32 @@ permisos, vía agente, comparando con el recorrido por la interfaz, sin interven
 | Categoría de contacto (ETP-5791) | 54, 55 | 63 `e-contact-without-type`: un contacto sin tipo se rechaza (`ETGO_BPartnerContactTypeRequired`) y no se crea | `p-contact-create-denied`: Contactos de solo lectura, 403 | Contactos > Nuevo hereda el tipo de la categoría; sin tipo no guarda; el rol Inventory ve Contactos sin "Nuevo" |
 | Portal del cliente (ETP-6209) | 62 | 64 `e-portal-link-without-email`: sin email no hay link (`contact_without_email`) | `p-portal-link-denied`: `portalLink` es escritura en Contactos, 403 | El link sale en el email de cada documento; sin email no se envía; el rol Inventory no envía documentos |
 | PyG por mes o trimestre (ETP-6080, ETP-6239) | 60, 61 | 65 `e-profit-by-month-long-range`: más de 24 meses se rechaza y el agente lo resuelve en dos pedidos | `p-profit-denied`: sin Informes financieros, 403 | Informes > Pérdidas y Ganancias, vista Mes / Trimestre; el rol Inventory no tiene Informes financieros en el menú |
+| Calendario contable (ETP-5577) | `f-open-period` | 56 `e-fiscal-year-start`: el inicio del ejercicio no se cambia por MCP, el agente manda a Primeros pasos | `p-open-period-denied`: sin Control de períodos, 403 | Contabilidad > Calendario > abrir el período; el inicio del ejercicio, en Primeros pasos |
+| Bandeja de facturas (ETP-6046) | 59 | 66 `e-invoice-inbox-confirm`: confirmar lo hace una persona en la app; el documento no cambia | `p-invoice-inbox-denied`: sin la ventana Bandeja, 403 | Compras > Bandeja de facturas > Confirmar |
+| Condiciones de pago en días (ETP-5826) | 52 | 67 `e-payment-term-out-of-range`: 400 días se rechaza (rango 0 a 365) y el contacto no se toca | `p-payment-term-denied`: Contactos de solo lectura, 403 | Contactos > Condiciones de pago; Condiciones de pago > Nuevo valida el rango |
+| Remesas SEPA (ETP-6148) | 48 | 68 `e-remittance-cash-account`: la cuenta Caja no admite remesas | `p-remittance-denied`: sin Remesas ni Cuentas financieras, 403 | Finanzas > Remesas > Nueva; solo ofrece cuentas con remesas |
 
 Las de permisos están en `mcp-tests/suites/okr-permissions.yaml` y corren con un target cuyo token es
 un usuario con **solo** la plantilla Inventory (en GOClient: "Almacén MCP", creado con
 `etendo_create` en `user/user` y la acción `assignRoles`; la contraseña se pone desde la invitación de
 la app, el MCP no la guarda). En el dataset, el cliente "Juan Perez" tiene facturas.
 
-Piloto (19 nov 2026, local-env sobre `develop` + `feature/ETP-5850`, una corrida por prueba): las
-nueve pasan. Hallazgos que corrigió ETP-5850 en el camino:
+Piloto (19 nov 2026, local-env sobre `develop` + `feature/ETP-5850`, una corrida por prueba): las 7
+funcionalidades pasan sus tres casos. Hallazgos que corrigió ETP-5850 en el camino:
 
 - **62 pasaba por error.** El agente devolvía el link de la ficha del contacto
   (`/contacts/<id>`), que solo abre para usuarios de la app, y la prueba aceptaba cualquier link con
   la palabra "portal". Ahora la prueba rechaza `contacts`, y el MCP agrega `urlNote` junto a cada
   `url` de registro (y en el `hint` de discover): ese link es para usuarios de la app y para un cliente
   está la acción `portalLink`. Con eso el agente usa `portalLink`.
+- **48 pasaba por error.** El agente fechaba la remesa hoy, la factura vencía mañana, no aparecía
+  entre las disponibles y el agente procesaba la de **otro cliente**; la prueba solo pedía "una remesa
+  procesada en la cuenta". Ahora pide que la factura del cliente termine con un pago, y
+  `availableDueItems` agrega `laterDues` y un `hint` cuando hay vencimientos después de la fecha de la
+  remesa. Con eso el agente corre la fecha y remesa la factura correcta.
+- **67:** con el rechazo de 400 días, el agente guardó 400 en otro campo del contacto
+  (`consumptionDays`) como "arreglo". El rechazo ahora trae un `hint` (preguntar al usuario, no guardar
+  el número en otro campo) y la prueba verifica que el contacto no cambió.
 - **Un filtro con un valor que no existe devolvía 0 filas** (`status: "pending"` en la bandeja). Ahora
   el MCP responde 422 con los códigos válidos (ver *Mejoras*).
 
