@@ -1947,3 +1947,12 @@ In both cases the location `name` is `"<city>, <addressLine1>"`. Calle and Núme
 - The number is never written twice. The keys are not gated by the flag: where it was never on, the structured columns are empty and Calle carries the same address line as before.
 
 **Shared composer.** `composeAddressLines` and the field-length constants come from the core helper `@etendosoftware/app-shell-core/lib/locationAddress.js`, imported by both `LocationEditorModal.jsx` and the import descriptor, so the modal and the import build the same address (see "Shared address composer" above).
+
+## Agent prompt: portal link — ETP-5850
+
+The `businessPartner` entity's `agentPrompt` adds that a link for a customer to see their documents
+is the customer portal link (contacts action `portalLink`, com.etendoerp.go
+`ContactPortalLinkAction`), and that the contact's record URL only opens for users of the app. In the
+first pilots of MCP test `w-portal-link` the agent handed over the record URL instead. The text lives
+in this window's `decisions.json` and in `com.etendoerp.go`'s `ETGO_SF_ENTITY` sourcedata; keep both
+equal.
