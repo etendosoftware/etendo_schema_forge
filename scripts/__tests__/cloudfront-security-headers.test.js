@@ -202,6 +202,18 @@ describe('applyEnvironment (attach-only)', () => {
     assert.equal(run(f, { replaceExisting: true }).updated, true);
   });
 
+  it('reports edge response hooks in the dry-run plan and the snapshot', () => {
+    const hooked = distConfig({}, {
+      a: { FunctionAssociations: { Quantity: 1, Items: [{ EventType: 'viewer-response', FunctionARN: 'f' }] } },
+    });
+    const f = fakeAws({ policies: [storedPolicy()], dist: hooked });
+    assert.deepEqual(run(f, { dryRun: true }).plan.edgeHooks, ['/etendo/*']);
+    const dir = snapDir();
+    run(f, { snapshotDir: dir });
+    const snap = JSON.parse(readFileSync(join(dir, readdirSync(dir)[0]), 'utf8'));
+    assert.deepEqual(snap.Report.edgeHooks, ['/etendo/*']);
+  });
+
   it('fails cleanly on ETag conflict without retrying', () => {
     const f = fakeAws({ policies: [storedPolicy()] });
     const racing = (args, body) => {
@@ -227,6 +239,14 @@ describe('verifyEnvironment (read-only)', () => {
     const f = fakeAws({ policies: [storedPolicy()], dist: distConfig({ default: 'POL1' }) });
     assert.deepEqual(verifyEnvironment({ aws: f.aws, distributionId: 'D1' }), { ok: false, missing: ['/etendo/*', '/mcp'], policyId: 'POL1' });
     assert.equal(f.count(/create-|update-/), 0);
+  });
+  it('is not ok when the stored policy drifted from the repo JSON', () => {
+    const drift = structuredClone(desired);
+    drift.SecurityHeadersConfig.FrameOptions.FrameOption = 'DENY';
+    const f = fakeAws({ policies: [storedPolicy(drift)], dist: distConfig({ default: 'POL1', a: 'POL1', b: 'POL1' }) });
+    const v = verifyEnvironment({ aws: f.aws, distributionId: 'D1' });
+    assert.equal(v.ok, false);
+    assert.equal(v.drift, true);
   });
   it('is ok when every behavior has the policy and fails when the policy is absent', () => {
     const ok = fakeAws({ policies: [storedPolicy()], dist: distConfig({ default: 'POL1', a: 'POL1', b: 'POL1' }) });

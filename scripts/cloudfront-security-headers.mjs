@@ -32,6 +32,7 @@ const POLICY_FILE = join(
   dirname(fileURLToPath(import.meta.url)),
   '..', 'infra', 'cloudfront-response-headers', `${POLICY_NAME}.json`,
 );
+const UPDATE_DISTRIBUTION = 'update-distribution';
 const PLACEHOLDER_ID = '<policy-id-after-policy-step>';
 const EDGE_RESPONSE_EVENTS = new Set(['viewer-response', 'origin-response']);
 
@@ -40,7 +41,10 @@ const cf = (aws, op, args = [], body) => aws(['cloudfront', op, ...args], body);
 const listPolicies = (aws) =>
   (cf(aws, 'list-response-headers-policies', ['--type', 'custom']).ResponseHeadersPolicyList?.Items ?? [])
     .map((i) => i.ResponseHeadersPolicy);
+const IF_MATCH = '--if-match';
 const getDistributionConfig = (aws, id) => cf(aws, 'get-distribution-config', ['--id', id]);
+const updateDistribution = (aws, id, etag, config) =>
+  cf(aws, UPDATE_DISTRIBUTION, ['--id', id, IF_MATCH, etag], config);
 
 export function loadDesiredPolicy(file = POLICY_FILE) {
   return JSON.parse(readFileSync(file, 'utf8'));
@@ -88,7 +92,7 @@ export function policyEnvironment({ aws, desired = loadDesiredPolicy(), dryRun =
     return { action: 'create', id: cf(aws, 'create-response-headers-policy', [], desired).ResponseHeadersPolicy.Id };
   }
   const { ETag } = cf(aws, 'get-response-headers-policy', ['--id', plan.id]);
-  cf(aws, 'update-response-headers-policy', ['--id', plan.id, '--if-match', ETag], desired);
+  cf(aws, 'update-response-headers-policy', ['--id', plan.id, IF_MATCH, ETag], desired);
   return plan;
 }
 
@@ -136,7 +140,9 @@ function findPolicy(aws, desired) {
 export function verifyEnvironment({ aws, distributionId, desired = loadDesiredPolicy() }) {
   const { plan, found } = findPolicy(aws, desired);
   if (!found) throw new Error(`policy ${desired.Name} not found`);
-  return { ...verifyDistribution(getDistributionConfig(aws, distributionId).DistributionConfig, plan.id), policyId: plan.id };
+  const v = verifyDistribution(getDistributionConfig(aws, distributionId).DistributionConfig, plan.id);
+  const drift = plan.action === 'update';
+  return { ...v, ok: v.ok && !drift, drift, policyId: plan.id };
 }
 
 const stamp = () => new Date().toISOString().replace(/[:.]/g, '-');
@@ -168,7 +174,7 @@ export function applyEnvironment({
     throw new Error(`behaviors already use another policy (pass --replace-existing): ${conflicts.map((c) => `${c.label}=${c.current}`).join(', ')}`);
   }
 
-  cf(aws, 'update-distribution', ['--id', distributionId, '--if-match', got.ETag], config);
+  updateDistribution(aws, distributionId, got.ETag, config);
   const check = verifyDistribution(getDistributionConfig(aws, distributionId).DistributionConfig, policy.id);
   if (!check.ok) throw new Error(`policy missing on behaviors: ${check.missing.join(', ')}`);
   return { ...result, updated: true };
@@ -204,7 +210,7 @@ export function rollbackEnvironment({ aws, distributionId, snapshotFile, snapsho
     else behavior.ResponseHeadersPolicyId = before;
     changed = true;
   }
-  if (changed) cf(aws, 'update-distribution', ['--id', distributionId, '--if-match', cur.ETag], cur.DistributionConfig);
+  if (changed) updateDistribution(aws, distributionId, cur.ETag, cur.DistributionConfig);
   return { restored: changed };
 }
 
@@ -212,7 +218,7 @@ export function rollbackEnvironment({ aws, distributionId, snapshotFile, snapsho
 const BODY_FLAG = {
   'create-response-headers-policy': '--response-headers-policy-config',
   'update-response-headers-policy': '--response-headers-policy-config',
-  'update-distribution': '--distribution-config',
+  [UPDATE_DISTRIBUTION]: '--distribution-config',
 };
 export function cliAws(args, body) {
   const dir = mkdtempSync(join(tmpdir(), 'cf-'));

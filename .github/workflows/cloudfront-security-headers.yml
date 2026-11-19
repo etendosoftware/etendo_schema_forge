@@ -124,7 +124,7 @@ jobs:
           aws-secret-access-key: ${{ vars.FRONT_RELEASE_ROLE_ARN == '' && secrets.AWS_SECRET_ACCESS_KEY || '' }}
           aws-region:            ${{ vars.AWS_REGION }}
 
-      - name: Download rollback snapshot
+      - name: Validate snapshot run id
         if: inputs.action == 'rollback'
         env:
           RUN_ID: ${{ inputs.snapshot_run_id }}
