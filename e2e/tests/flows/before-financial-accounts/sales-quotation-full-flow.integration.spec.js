@@ -13,7 +13,7 @@ import { login, navigateTo } from '../../helpers/auth.js';
 import { noteFinancialAccountPrecondition } from '../../helpers/financial-account-helpers.js';
 import { ensureOpenPeriod } from '../../helpers/period-helpers.js';
 import { ensureStockOnHand, DEFAULT_WAREHOUSE_NAME } from '../../helpers/inventory-helpers.js';
-import { selectCustomerWithAddress } from '../../helpers/sales-helpers.js';
+import { ensureCustomerSetup, selectCustomerWithAddress } from '../../helpers/sales-helpers.js';
 import { waitForLoadingIndicatorsGone } from '../../helpers/selectors.js';
 import {
   ensureProductFixtures, PRODUCT_FIXTURE_ALPHA, PRODUCT_FIXTURE_BETA,
@@ -436,6 +436,9 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     await slow(page);
     // Runs before any spec creates a financial account; see the folder's README.
     await noteFinancialAccountPrecondition(page, test.info());
+    // A fresh tenant has no contacts; provision the customer instead of borrowing one
+    // an earlier spec left behind (it never touches financial accounts).
+    await ensureCustomerSetup(page);
 
     // ETP-5079: the onboarding dataset no longer seeds any visible product, so
     // the lines added below have nothing to pick unless the suite provisions
@@ -952,6 +955,9 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     await slow(page);
     // Runs before any spec creates a financial account; see the folder's README.
     await noteFinancialAccountPrecondition(page, test.info());
+    // A fresh tenant has no contacts; provision the customer instead of borrowing one
+    // an earlier spec left behind (it never touches financial accounts).
+    await ensureCustomerSetup(page);
 
     // ETP-5079: no product is seeded on a fresh tenant — provision the two
     // fixtures the negative lines below are built from.

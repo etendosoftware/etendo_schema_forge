@@ -11,7 +11,7 @@ import { noteFinancialAccountPrecondition } from '../../helpers/financial-accoun
 import {
   ensureProductFixtures, PRODUCT_FIXTURE_ALPHA, PRODUCT_FIXTURE_BETA,
 } from '../../helpers/product-helpers.js';
-import { selectCustomerWithAddress } from '../../helpers/sales-helpers.js';
+import { ensureCustomerSetup, selectCustomerWithAddress } from '../../helpers/sales-helpers.js';
 import { waitForLoadingIndicatorsGone } from '../../helpers/selectors.js';
 import { createDraftWithFirstLine } from '../../helpers/purchase-helpers.js';
 
@@ -90,6 +90,9 @@ test.describe('Sales Order — Happy path (integration)', () => {
       await slow(page);
       // Runs before any spec creates a financial account; see the folder's README.
       await noteFinancialAccountPrecondition(page, test.info());
+      // A fresh tenant has no contacts; provision the customer instead of borrowing one
+      // an earlier spec left behind (it never touches financial accounts).
+      await ensureCustomerSetup(page);
     });
 
     // ETP-5079: the onboarding dataset no longer seeds any visible product
