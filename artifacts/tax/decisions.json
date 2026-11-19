@@ -86,6 +86,7 @@
     },
     "taxParameter": { "exclude": true },
     "tax": {
+      "publicApi": { "readOnly": true },
       "fields": {
         "name": {
           "visibility": "readOnly",
