@@ -26,6 +26,11 @@ jobs:
   deploy:
     name: Build & deploy to S3 + CloudFront
     runs-on: ubuntu-latest
+    # id-token: write lets the job assume FRONT_RELEASE_ROLE_ARN via OIDC (no stored AWS keys).
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     env:
       SF_ROOT: ${{ github.workspace }}
 
@@ -200,8 +205,11 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # OIDC role when FRONT_RELEASE_ROLE_ARN is set (etendo-ai); static keys otherwise.
+          role-to-assume:        ${{ vars.FRONT_RELEASE_ROLE_ARN }}
+          role-session-name:     spa-release-${{ github.run_id }}
+          aws-access-key-id:     ${{ vars.FRONT_RELEASE_ROLE_ARN == '' && secrets.AWS_ACCESS_KEY_ID || '' }}
+          aws-secret-access-key: ${{ vars.FRONT_RELEASE_ROLE_ARN == '' && secrets.AWS_SECRET_ACCESS_KEY || '' }}
           aws-region:            ${{ vars.AWS_REGION }}
 
       # One package per commit and environment (the build bakes in per-target

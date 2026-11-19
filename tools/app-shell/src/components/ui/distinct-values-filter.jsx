@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { CaretDownIcon } from '@phosphor-icons/react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DistinctValuesList } from '@/components/contract-ui/DistinctValuesList';
 
@@ -62,7 +62,7 @@ export function DistinctValuesFilter({
           className="inline-flex h-10 items-center justify-between gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium leading-6 text-[#121217] transition-colors hover:bg-[hsl(var(--muted))]"
         >
           <span className="truncate text-left">{triggerLabel}</span>
-          <ChevronDown
+          <CaretDownIcon
             className="h-4 w-4 shrink-0 text-[#828FA3]"
             data-testid="ChevronDown__cd3aa9" />
         </button>

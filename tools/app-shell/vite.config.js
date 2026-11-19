@@ -334,7 +334,7 @@ export default defineConfig(({ mode }) => {
     // node_modules (same mechanism that already makes react-router-dom resolve).
     // Harmless when LOCAL_CORE is unset: these deps already resolve from root.
     dedupe: [
-      'react', 'react-dom', 'react-router-dom', 'sonner', 'lucide-react',
+      'react', 'react-dom', 'react-router-dom', 'sonner', '@phosphor-icons/react',
       'clsx', 'cmdk', 'next-themes', 'date-fns', 'react-day-picker',
       'class-variance-authority', 'tailwind-merge',
       ...CORE_RADIX_DEPS,

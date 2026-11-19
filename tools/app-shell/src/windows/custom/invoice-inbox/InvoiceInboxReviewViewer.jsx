@@ -1,5 +1,11 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, FileText, Loader2, ZoomIn, ZoomOut } from 'lucide-react';
+import {
+  DownloadSimpleIcon,
+  FileTextIcon,
+  CircleNotchIcon,
+  MagnifyingGlassPlusIcon,
+  MagnifyingGlassMinusIcon,
+} from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { useMainAttachment } from '@/windows/custom/shared/useMainAttachment.js';
@@ -121,7 +127,7 @@ export default function InvoiceInboxReviewViewer({ documentId, fileName, token =
       <Centered
         testId="invoice-inbox-review-viewer-loading"
         data-testid="Centered__e8a41d">
-        <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" data-testid="Loader2__review-viewer" />
+        <CircleNotchIcon className="h-5 w-5 animate-spin" aria-hidden="true" data-testid="Loader2__review-viewer" />
         <span className="text-xs">{ui('invoiceInboxReviewViewerLoading')}</span>
       </Centered>
     );
@@ -129,7 +135,7 @@ export default function InvoiceInboxReviewViewer({ documentId, fileName, token =
   if (!storedFile) {
     return (
       <Centered testId="invoice-inbox-review-viewer-empty" data-testid="Centered__e8a41d">
-        <FileText className="h-8 w-8 opacity-40" aria-hidden="true" data-testid="FileText__review-viewer" />
+        <FileTextIcon className="h-8 w-8 opacity-40" aria-hidden="true" data-testid="FileText__review-viewer" />
         <span className="text-xs">{ui('invoiceInboxReviewViewerEmpty')}</span>
       </Centered>
     );
@@ -148,7 +154,7 @@ export default function InvoiceInboxReviewViewer({ documentId, fileName, token =
           disabled={zoom <= ZOOM_MIN}
           testId="invoice-inbox-review-viewer-zoom-out"
           data-testid="ToolbarButton__e8a41d">
-          <ZoomOut className="h-4 w-4" aria-hidden="true" data-testid="ZoomOut__review-viewer" />
+          <MagnifyingGlassMinusIcon className="h-4 w-4" aria-hidden="true" data-testid="ZoomOut__review-viewer" />
         </ToolbarButton>
         <span className="w-11 text-center font-mono text-xs font-medium tabular-nums" data-testid="invoice-inbox-review-viewer-zoom">
           {zoom}%
@@ -159,7 +165,7 @@ export default function InvoiceInboxReviewViewer({ documentId, fileName, token =
           disabled={zoom >= ZOOM_MAX}
           testId="invoice-inbox-review-viewer-zoom-in"
           data-testid="ToolbarButton__e8a41d">
-          <ZoomIn className="h-4 w-4" aria-hidden="true" data-testid="ZoomIn__review-viewer" />
+          <MagnifyingGlassPlusIcon className="h-4 w-4" aria-hidden="true" data-testid="ZoomIn__review-viewer" />
         </ToolbarButton>
         {storedFile.objectUrl && (
           <Button
@@ -174,7 +180,7 @@ export default function InvoiceInboxReviewViewer({ documentId, fileName, token =
               aria-label={ui('download')}
               title={ui('download')}
               data-testid="invoice-inbox-review-viewer-download">
-              <Download className="h-4 w-4" aria-hidden="true" data-testid="Download__review-viewer" />
+              <DownloadSimpleIcon className="h-4 w-4" aria-hidden="true" data-testid="Download__review-viewer" />
             </a>
           </Button>
         )}
@@ -197,7 +203,7 @@ export default function InvoiceInboxReviewViewer({ documentId, fileName, token =
               <Centered
                 testId="invoice-inbox-review-viewer-suspense"
                 data-testid="Centered__e8a41d">
-                <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" data-testid="Loader2__review-viewer-lazy" />
+                <CircleNotchIcon className="h-5 w-5 animate-spin" aria-hidden="true" data-testid="Loader2__review-viewer-lazy" />
               </Centered>
             )}
             data-testid="Suspense__review-viewer">

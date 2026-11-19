@@ -13,11 +13,11 @@ vi.mock('@/lib/utils', () => ({
   cn: (...args) => args.filter(Boolean).join(' '),
 }));
 
-vi.mock('lucide-react', () => ({
-  Check: () => <svg data-testid="icon-check" />,
-  Pencil: () => <svg data-testid="icon-pencil" />,
-  RotateCcw: () => <svg data-testid="icon-restore" />,
-  Trash2: () => <svg data-testid="icon-trash" />,
+vi.mock('@phosphor-icons/react', () => ({
+  CheckIcon: () => <svg data-testid="icon-check" />,
+  PencilSimpleIcon: () => <svg data-testid="icon-pencil" />,
+  ArrowCounterClockwiseIcon: () => <svg data-testid="icon-restore" />,
+  TrashIcon: () => <svg data-testid="icon-trash" />,
 }));
 
 import { render, screen, fireEvent } from '@testing-library/react';

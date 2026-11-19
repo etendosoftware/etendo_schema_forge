@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Truck, FileText } from 'lucide-react';
+import { TruckIcon, FileTextIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -337,14 +337,14 @@ export default function OrderConfirmModal({
           <CheckboxCard
             checked={createShipment}
             onChange={() => setCreateShipment(v => !v)}
-            icon={<Truck size={16} />}
+            icon={<TruckIcon size={16} />}
             title={ui('soCreateShipmentTitle')}
             subtitle={ui('soCreateShipmentCheckDesc')}
           />
           <CheckboxCard
             checked={createInvoice}
             onChange={() => setCreateInvoice(v => !v)}
-            icon={<FileText size={16} />}
+            icon={<FileTextIcon size={16} />}
             title={ui('soCreateInvoiceTitle')}
             subtitle={ui('soCreateInvoiceCheckDesc')}
           />

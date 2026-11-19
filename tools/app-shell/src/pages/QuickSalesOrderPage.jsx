@@ -1,7 +1,7 @@
 import { useState, useReducer, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useUI, useMenuLabel } from '@/i18n';
 import { toast } from 'sonner';
-import { Receipt, TrendingUp, Loader2, ScanBarcode } from 'lucide-react';
+import { ReceiptIcon, TrendUpIcon, CircleNotchIcon, BarcodeIcon } from '@phosphor-icons/react';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import CustomerSelector from './quick-sales-order/CustomerSelector.jsx';
@@ -310,7 +310,7 @@ export default function QuickSalesOrderPage({ apiBaseUrl }) {
     return (
       <div className="h-full flex items-center justify-center" data-testid="quick-sales-order-page">
         <div className="flex items-center gap-2 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__79898e" />
+          <CircleNotchIcon className="h-5 w-5 animate-spin" data-testid="Loader2__79898e" />
           <span className="text-sm">{ui('qsoLoading')}</span>
         </div>
       </div>
@@ -321,7 +321,7 @@ export default function QuickSalesOrderPage({ apiBaseUrl }) {
     return (
       <div className="h-full flex items-center justify-center" data-testid="quick-sales-order-page">
         <div className="text-center space-y-2">
-          <Receipt
+          <ReceiptIcon
             className="h-10 w-10 text-muted-foreground/30 mx-auto"
             data-testid="Receipt__79898e" />
           <p className="text-sm font-medium text-destructive">{dataError}</p>
@@ -359,7 +359,7 @@ export default function QuickSalesOrderPage({ apiBaseUrl }) {
                     : 'border-border bg-card text-muted-foreground/40'
                 }`}
               >
-                <ScanBarcode className="h-4 w-4" data-testid="ScanBarcode__79898e" />
+                <BarcodeIcon className="h-4 w-4" data-testid="ScanBarcode__79898e" />
               </div>
               <button
                 onClick={() => setShowPriority(prev => !prev)}
@@ -370,7 +370,7 @@ export default function QuickSalesOrderPage({ apiBaseUrl }) {
                     : 'border-border bg-card text-muted-foreground hover:bg-muted/30'
                 }`}
               >
-                <TrendingUp className="h-4 w-4" data-testid="TrendingUp__79898e" />
+                <TrendUpIcon className="h-4 w-4" data-testid="TrendingUp__79898e" />
               </button>
             </div>
             <div className="flex-1 overflow-auto">

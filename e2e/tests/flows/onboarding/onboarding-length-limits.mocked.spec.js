@@ -141,6 +141,10 @@ test.describe('ETP-4665 — Step 1 length limits', () => {
     await page.goto('/onboarding');
     await page.getByTestId('action-switch-to-register').click();
 
+    // The register error is resolved with ui() at submit time: before the lazily loaded locale
+    // dictionary arrives it returns the raw key, and that string is kept. Wait for translated copy.
+    await expect(page.getByRole('heading', { name: /Crea tu cuenta gratis/i })).toBeVisible();
+
     await page.locator('#reg-name').fill('QA User');
     await page.locator('#reg-email').fill('qa@example.com');
     await page.getByTestId('sector-select').selectOption('servicios');

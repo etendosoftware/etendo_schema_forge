@@ -426,7 +426,7 @@ Notes:
 | react, react-dom | Core framework | Low (Meta-maintained, widely audited) |
 | react-router-dom | Client routing | Low (Remix/React team) |
 | @radix-ui/* | Accessible UI primitives | Low (well-maintained, minimal deps) |
-| lucide-react | Icons (SVG) | Low (open source, tree-shakeable) |
+| @phosphor-icons/react | Icons (SVG) | Low (open source, tree-shakeable) |
 | sonner | Toast notifications | Medium (smaller maintainer base) |
 | cmdk | Command palette | Medium (smaller maintainer base) |
 | next-themes | Theme switching | Medium (used outside Next.js context) |

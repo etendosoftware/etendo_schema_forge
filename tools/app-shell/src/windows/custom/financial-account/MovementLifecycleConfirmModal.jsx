@@ -1,4 +1,4 @@
-import { RotateCcw, Trash2 } from 'lucide-react';
+import { ArrowCounterClockwiseIcon, TrashIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import LifecycleConfirmModal from '@/windows/custom/shared/LifecycleConfirmModal';
 
@@ -50,8 +50,8 @@ const CONFIRM_LABEL_KEY_BY_ACTION = {
 const CONFIRM_LABEL_KEY_DELETE_PLAIN = 'financeAccountTxConfirmDeleteBtnPlain';
 
 const CONFIRM_ICON_BY_ACTION = {
-  delete: Trash2,
-  reactivate: RotateCcw,
+  delete: TrashIcon,
+  reactivate: ArrowCounterClockwiseIcon,
 };
 
 function resolveStateKey(reconciled, posted) {

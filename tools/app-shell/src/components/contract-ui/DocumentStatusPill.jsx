@@ -1,13 +1,13 @@
-import { Clock, Check, X, AlertTriangle } from 'lucide-react';
+import { ClockIcon, CheckIcon, XIcon, WarningIcon } from '@phosphor-icons/react';
 import { useLocale } from '@/i18n';
 import { getStatusTone, statusLabel } from '@/lib/statusBadge.js';
 import { TONE_STYLES } from '@/components/ui/status-tag-tokens.js';
 
 const TONE_ICON = {
-  success: Check,
-  warning: Clock,
-  destructive: X,
-  caution: AlertTriangle,
+  success: CheckIcon,
+  warning: ClockIcon,
+  destructive: XIcon,
+  caution: WarningIcon,
   neutral: null,
 };
 

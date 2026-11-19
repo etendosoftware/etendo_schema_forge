@@ -237,7 +237,11 @@ test.describe('Calendar — guided tour (ETP-5577)', () => {
     await page.getByTestId('first-steps-calendar-review-view-guide').click();
 
     const overlay = page.getByTestId('walkthrough-overlay');
-    const atStep = (id) => expect(overlay).toHaveAttribute('data-walkthrough-step', id, { timeout: 20_000 });
+    const atStep = async (id) => {
+      await expect(overlay).toHaveAttribute('data-walkthrough-step', id, { timeout: 20_000 });
+      // Returning to the list changes the step before its target and click handler are ready.
+      await expect(overlay).toHaveAttribute('data-walkthrough-phase', 'active', { timeout: 20_000 });
+    };
     const card = page.getByTestId('walkthrough-card');
 
     await atStep('calendar-list');

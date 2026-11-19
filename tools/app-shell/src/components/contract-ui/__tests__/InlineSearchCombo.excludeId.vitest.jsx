@@ -18,7 +18,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-vi.mock('lucide-react', () => ({ ChevronDown: () => <span data-testid="chevron" /> }));
+vi.mock('@phosphor-icons/react', () => ({ CaretDownIcon: () => <span data-testid="chevron" /> }));
 vi.mock('@/lib/buildUrlWithParams.js', () => ({
   buildUrlWithParams: (url, params) => {
     const qs = new URLSearchParams(params).toString();

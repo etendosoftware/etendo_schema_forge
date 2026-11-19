@@ -4,14 +4,14 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/componen
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
-  Store,
-  ShoppingCart,
-  FlaskConical,
-  Package,
-  Loader2,
-  CheckCircle2,
-  ExternalLink,
-} from 'lucide-react';
+  StorefrontIcon,
+  ShoppingCartIcon,
+  FlaskIcon,
+  PackageIcon,
+  CircleNotchIcon,
+  CheckCircleIcon,
+  ArrowSquareOutIcon,
+} from '@phosphor-icons/react';
 import { APP_CATALOG } from '@/apps-registry.js';
 import {
   useInstalledApps,
@@ -21,14 +21,14 @@ import {
 import { lockAppStore } from '@/hooks/useAppStoreUnlock.js';
 
 const ICON_MAP = {
-  ShoppingCart,
-  FlaskConical,
-  Package,
-  Store,
+  ShoppingCart: ShoppingCartIcon,
+  FlaskConical: FlaskIcon,
+  Package: PackageIcon,
+  Store: StorefrontIcon,
 };
 
 function pickIcon(name) {
-  return ICON_MAP[name] || Package;
+  return ICON_MAP[name] || PackageIcon;
 }
 
 function AppCard({ app, installed, busy, onInstall, onUninstall }) {
@@ -54,7 +54,7 @@ function AppCard({ app, installed, busy, onInstall, onUninstall }) {
           </div>
           {installed && (
             <Badge variant="secondary" className="gap-1" data-testid="Badge__3e8c79">
-              <CheckCircle2 className="h-3 w-3" data-testid="CheckCircle2__3e8c79" />
+              <CheckCircleIcon className="h-3 w-3" data-testid="CheckCircle2__3e8c79" />
               {ui("installed")}
             </Badge>
           )}
@@ -76,7 +76,7 @@ function AppCard({ app, installed, busy, onInstall, onUninstall }) {
         </div>
 
         <div className="flex items-center gap-1 text-xs text-muted-foreground">
-          <ExternalLink className="h-3 w-3" data-testid="ExternalLink__3e8c79" />
+          <ArrowSquareOutIcon className="h-3 w-3" data-testid="ExternalLink__3e8c79" />
           <span className="truncate">{app.iframeUrl}</span>
         </div>
       </CardContent>
@@ -98,7 +98,7 @@ function AppCard({ app, installed, busy, onInstall, onUninstall }) {
             data-testid="Button__3e8c79">
             {busy ? (
               <>
-                <Loader2 className="h-3 w-3 animate-spin" data-testid="Loader2__3e8c79" />
+                <CircleNotchIcon className="h-3 w-3 animate-spin" data-testid="Loader2__3e8c79" />
                 {ui("installing")}
               </>
             ) : (
@@ -135,7 +135,7 @@ export default function AppStorePage() {
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10">
-            <Store className="h-5 w-5 text-primary" data-testid="Store__3e8c79" />
+            <StorefrontIcon className="h-5 w-5 text-primary" data-testid="Store__3e8c79" />
           </div>
           <div>
             <h1 className="text-xl font-semibold">{ui("appStore")}</h1>

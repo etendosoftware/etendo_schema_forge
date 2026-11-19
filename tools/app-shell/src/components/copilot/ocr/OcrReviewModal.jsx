@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertCircle, X } from 'lucide-react';
+import { WarningCircleIcon, XIcon } from '@phosphor-icons/react';
 import { getRouterBase } from '@/lib/deploymentBasePath.js';
 import { useUI } from '@/i18n';
 import KindRenderer from './kinds/KindRenderer.jsx';
@@ -110,7 +110,7 @@ function ReceiverTaxIdAbsentNotice({ show }) {
       className="mt-3 flex items-start gap-2 rounded-lg border border-status-warning-border bg-status-warning px-3 py-2 text-xs text-status-warning-foreground"
       data-testid="ocr-review-receiver-absent"
     >
-      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" data-testid="AlertCircle__80a87a" />
+      <WarningCircleIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" data-testid="AlertCircle__80a87a" />
       <p className="min-w-0 flex-1">{ui('ocrReceiverTaxIdAbsent')}</p>
     </div>
   );
@@ -121,7 +121,7 @@ function VendorAddressNotice({ status, onRecheck }) {
   if (status !== 'missing') return null;
   return (
     <div className="mb-2 flex items-start gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
-      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" data-testid="AlertCircle__80a87a" />
+      <WarningCircleIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" data-testid="AlertCircle__80a87a" />
       <div className="min-w-0 flex-1">
         <p>{ui('ocrReviewVendorNoAddress')}</p>
         <button
@@ -300,7 +300,7 @@ export default function OcrReviewModal({
               aria-label={ui('ocrReviewCancel')}
               className="text-muted-foreground hover:text-muted-foreground"
             >
-              <X size={18} data-testid="X__80a87a" />
+              <XIcon size={18} data-testid="X__80a87a" />
             </button>
           </div>
 

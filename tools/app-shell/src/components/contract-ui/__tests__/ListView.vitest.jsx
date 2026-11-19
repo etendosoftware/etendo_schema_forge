@@ -1,5 +1,7 @@
 // @covers tools/app-shell/src/components/contract-ui/ListView.jsx
 import { render, screen, fireEvent, act } from '@testing-library/react';
+import { PrinterIcon } from '@phosphor-icons/react';
+import { findIcon } from '@/test/iconGlyph.js';
 import userEvent from '@testing-library/user-event';
 
 const gridViewTestState = vi.hoisted(() => ({
@@ -390,8 +392,10 @@ describe('ListView', () => {
     // The selection-bar print button (<Printer> icon) renders and is sized by
     // iconSizeClass(selectionBarSize). Default selectionBarSize is 'sm', so
     // iconSizeClass returns 'h-3.5 w-3.5'.
-    const printIcon = document.querySelector('button svg.lucide-printer.h-3\\.5.w-3\\.5');
+    const printIcon = findIcon(document.body, PrinterIcon);
     expect(printIcon).toBeInTheDocument();
+    expect(printIcon.closest('button')).not.toBeNull();
+    expect(printIcon).toHaveClass('h-3.5', 'w-3.5');
   });
 
   it('renders the clone button in the selection toolbar when onCloneRow is provided', () => {

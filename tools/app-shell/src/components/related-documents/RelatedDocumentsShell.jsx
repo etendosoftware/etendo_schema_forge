@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
+import { CircleNotchIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 
 /**
@@ -59,7 +59,7 @@ export default function RelatedDocumentsShell({ loading, onRefresh, children }) 
     return (
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__7b605d" />
+          <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__7b605d" />
           {ui('loading')}
         </span>
         {refreshBtn}

@@ -12,6 +12,8 @@
 // table and only drives the page flows (it gets the open/close/discard integration cases instead).
 // The sections are rendered together through the drawer, the way a user sees them.
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
+import { FileTextIcon, ImageIcon } from '@phosphor-icons/react';
+import { findIcon } from '@/test/iconGlyph.js';
 import userEvent from '@testing-library/user-event';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -168,11 +170,11 @@ describe('review drawer — shell, loading and the header', () => {
 
   it('header: the file icon follows the file type (PDF document, image picture)', async () => {
     const pdf = await renderLoaded(makeReview());
-    expect(tid('FileIcon__review-header').getAttribute('class')).toMatch(/file-text/);
+    expect(findIcon(tid('invoice-inbox-review-header'), FileTextIcon)).toBe(tid('FileIcon__review-header'));
     pdf.unmount();
     answers = {};
     await renderLoaded(makeReview({ fileName: 'scan.PNG' }));
-    expect(tid('FileIcon__review-header').getAttribute('class')).toMatch(/lucide-image/);
+    expect(findIcon(tid('invoice-inbox-review-header'), ImageIcon)).toBe(tid('FileIcon__review-header'));
   });
 
   it('header: "{n} de {total}" never wraps, and prev / next call the nav', async () => {

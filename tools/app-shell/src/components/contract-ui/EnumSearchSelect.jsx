@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { Search } from 'lucide-react';
+import { MagnifyingGlassIcon } from '@phosphor-icons/react';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
 
 /**
@@ -74,7 +74,7 @@ export function EnumSearchSelect({ options, value, onChange, placeholder, ui, id
   return (
     <div className="relative" data-testid={testId}>
       <div className="group relative flex items-center gap-2 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)] focus-within:ring-2 focus-within:ring-primary">
-        <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" data-testid={`${testId}-search-icon`} />
+        <MagnifyingGlassIcon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" data-testid={`${testId}-search-icon`} />
         {showChip ? (
           <button
             type="button"

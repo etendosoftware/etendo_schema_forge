@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Edit2 } from 'lucide-react';
+import { PencilSimpleIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button.jsx';
 import { useUI, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly';
@@ -86,7 +86,7 @@ export default function GoodsReceiptPreview({ receipt, token, apiBaseUrl, window
         className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[hsl(var(--border-control))] shadow-sm text-[hsl(var(--foreground))] [&_svg]:size-5"
         onClick={() => modalRef.current?.triggerEdit?.()}
         data-testid="Button__ba7c74">
-        <Edit2 className="text-[hsl(var(--text-disabled))]" data-testid="Edit2__ba7c74" />
+        <PencilSimpleIcon className="text-[hsl(var(--text-disabled))]" data-testid="Edit2__ba7c74" />
         {ui('invoicePreviewEdit')}
       </Button>
     </>

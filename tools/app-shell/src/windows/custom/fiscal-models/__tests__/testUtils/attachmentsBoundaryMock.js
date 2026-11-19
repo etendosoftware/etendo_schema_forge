@@ -7,7 +7,7 @@
  *
  * Why a boundary stub instead of the real tab: AttachmentsTab renders the generic
  * DataTable (ETP-5526), whose import graph pulls icons and hooks that these suites'
- * closed `lucide-react` / `@/i18n` mocks do not list, so the files failed at import
+ * closed `@phosphor-icons/react` / `@/i18n` mocks do not list, so the files failed at import
  * time. The receipt tab keeps its integrated coverage in
  * `models/349/__tests__/FmModel349Page.receiptTab.realAttachments.vitest.jsx` and its
  * mocked coverage in the `*.receiptTab.vitest.jsx` suites.

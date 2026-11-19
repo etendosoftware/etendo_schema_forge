@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
-import { FileText, Upload } from 'lucide-react';
+import { FileTextIcon, UploadSimpleIcon } from '@phosphor-icons/react';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import CertModal from './CertModal.jsx';
@@ -38,7 +38,7 @@ export default function CertSection({ context, orgId, apiBaseUrl, refreshKey = 0
       <>
         <div className="flex items-center justify-between rounded-xl border border-border bg-muted/10 px-4 py-3 gap-4">
           <div className="flex items-center gap-2.5">
-            <FileText
+            <FileTextIcon
               size={16}
               className="text-muted-foreground flex-shrink-0"
               data-testid="FileText__e7cbc5" />
@@ -83,9 +83,8 @@ export default function CertSection({ context, orgId, apiBaseUrl, refreshKey = 0
             : 'border-[hsl(var(--border-control))] hover:border-foreground/40 hover:bg-muted/20'}`}
       >
         <div className="mx-auto mb-2 w-9 h-9 rounded-xl border border-[hsl(var(--border-subtle))] bg-card flex items-center justify-center shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]">
-          <Upload
+          <UploadSimpleIcon
             size={16}
-            strokeWidth={1.75}
             className="text-[hsl(var(--text-disabled))]"
             data-testid="Upload__e7cbc5" />
         </div>

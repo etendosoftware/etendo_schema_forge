@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { XIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import CreateRejectReasonModal from './CreateRejectReasonModal';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -153,7 +153,7 @@ export default function RejectQuotationModal({
           style={{ ...closeBtnStyle, opacity: loading ? 0.5 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}
           aria-label={ui('cancel')}
         >
-          <X size={20} />
+          <XIcon size={20} />
         </button>
 
         <div style={headerStyle}>

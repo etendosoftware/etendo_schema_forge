@@ -4,7 +4,7 @@
 // back to the most-recent `motivo` from the issuedInvoicesSiiData /
 // receivedInvoicesSiiData entity for that invoice.
 
-import { allIconsAs } from '@/test/lucideIconMock.js';
+import { allIconsAs } from '@/test/iconMock.js';
 const invoiceRow = (overrides = {}) => ({
   id: 'inv-1',
   invoiceDate: '2026-01-10',
@@ -31,7 +31,7 @@ vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => currentApiFetch }));
 vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u }));
 vi.mock('@/lib/formatAmount.js', () => ({ formatAmount: (v) => String(v ?? '') }));
-vi.mock('lucide-react', async (importOriginal) => allIconsAs(() => null, importOriginal));
+vi.mock('@phosphor-icons/react', async (importOriginal) => allIconsAs(() => null, importOriginal));
 vi.mock('@/components/ui/checkbox', () => ({
   Checkbox: ({ checked, onChange }) => <input type="checkbox" checked={!!checked} onChange={onChange ?? (() => {})} />,
 }));

@@ -48,20 +48,12 @@ vi.mock('../FmBoxes303.jsx', () => ({ default: () => null }));
 // ("Cannot create proxy with a non-object as target or handler"), most likely because some
 // property access along Vitest's/Vite's module-interop path (e.g. a well-known symbol or an
 // enumeration step) doesn't tolerate a trap that unconditionally returns a function for any
-// key. AeatSubmitFlow.jsx is mocked wholesale below, so its own lucide-react imports (Loader2,
+// key. AeatSubmitFlow.jsx is mocked wholesale below, so its own @phosphor-icons/react imports (Loader2,
 // TriangleAlert, OctagonAlert, CircleCheck, Download, Landmark) never execute in this file —
 // only FmModel303Page.jsx's own icon imports need stubbing here (Landmark included since
 // FmModel303Page.jsx also uses it for the "Go to Organization" button).
-vi.mock('lucide-react', () => ({
-  // ETP-5584 — the detail status chip shows DocumentStatusPill's Check icon for success tones.
-  Check: () => null,
-  Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null,
-  TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
-  Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
-  TrendingUp: () => null, TrendingDown: () => null, Clock: () => null,
-  ClipboardCheck: () => null, ReceiptText: () => null, Folder: () => null,
-  FileCheck: () => null, Landmark: () => null,
-}));
+import { allIconsAs } from '@/test/iconMock.js';
+vi.mock('@phosphor-icons/react', async importOriginal => allIconsAs(() => null, importOriginal));
 
 // PresentModal mock: renders a button that, when clicked, reports the
 // 'aeat_telematic' sentinel status — exactly like selecting the 3rd path

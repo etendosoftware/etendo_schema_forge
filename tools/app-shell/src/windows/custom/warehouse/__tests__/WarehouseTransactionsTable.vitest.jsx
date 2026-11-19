@@ -19,13 +19,13 @@ vi.mock('../useWarehouseStock', () => ({
   useWarehouseStock: vi.fn(),
 }));
 
-vi.mock('lucide-react', async (importOriginal) => ({
+vi.mock('@phosphor-icons/react', async (importOriginal) => ({
   ...await importOriginal(),
-  Loader2: (props) => <span data-testid="loader" {...props} />,
-  ArrowUpDown: (props) => <span data-testid="icon-sort" {...props} />,
-  ArrowUp: (props) => <span data-testid="icon-up" {...props} />,
-  ArrowDown: (props) => <span data-testid="icon-down" {...props} />,
-  ArrowUpRight: (props) => <span data-testid="icon-arrow-up-right" {...props} />,
+  CircleNotchIcon: (props) => <span data-testid="loader" {...props} />,
+  ArrowsDownUpIcon: (props) => <span data-testid="icon-sort" {...props} />,
+  ArrowUpIcon: (props) => <span data-testid="icon-up" {...props} />,
+  ArrowDownIcon: (props) => <span data-testid="icon-down" {...props} />,
+  ArrowUpRightIcon: (props) => <span data-testid="icon-arrow-up-right" {...props} />,
 }));
 
 // --- Import under test ---

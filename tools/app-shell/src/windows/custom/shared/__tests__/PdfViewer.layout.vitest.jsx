@@ -26,9 +26,9 @@ vi.mock('react-pdf', async () => {
 
 // The fit icon signals "active" through its inline colour; expose it as an attribute
 // (jsdom drops `hsl(var(...))` from a parsed style declaration).
-vi.mock('lucide-react', () => {
+vi.mock('@phosphor-icons/react', () => {
   const icon = (props) => <svg data-testid={props['data-testid']} data-color={props.style?.color} />;
-  return { ZoomIn: icon, ZoomOut: icon, Maximize2: icon, Loader2: icon, AlertCircle: icon };
+  return { MagnifyingGlassPlusIcon: icon, MagnifyingGlassMinusIcon: icon, ArrowsOutIcon: icon, CircleNotchIcon: icon, WarningCircleIcon: icon };
 });
 
 import { render, screen, act } from '@testing-library/react';

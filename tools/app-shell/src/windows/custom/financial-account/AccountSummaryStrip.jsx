@@ -1,4 +1,4 @@
-import { Copy } from 'lucide-react';
+import { CopyIcon } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { AccountLogoAvatar } from '@/components/financial-accounts/AccountLogoAvatar';
@@ -74,7 +74,7 @@ function AccountIdentifierBlock({ account, mode }) {
                 className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))]"
                 aria-label={ui('financeAccountDetailIbanCopyAria')}
               >
-                <Copy className="h-4 w-4" data-testid="Copy__748dd1" />
+                <CopyIcon className="h-4 w-4" data-testid="Copy__748dd1" />
               </button>
             ) : null}
           </div>

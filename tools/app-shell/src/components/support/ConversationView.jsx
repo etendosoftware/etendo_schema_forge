@@ -1,9 +1,17 @@
 import * as React from 'react';
 import { toast } from 'sonner';
 import {
-  ChevronRight, X, Plus, ArrowUp, Paperclip,
-  Users, CheckCircle, Smile, Maximize2, Minimize2,
-} from 'lucide-react';
+  CaretRightIcon,
+  XIcon,
+  PlusIcon,
+  ArrowUpIcon,
+  PaperclipIcon,
+  UsersIcon,
+  CheckCircleIcon,
+  SmileyIcon,
+  ArrowsOutIcon,
+  ArrowsInIcon,
+} from '@phosphor-icons/react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { ValerIATile } from './ValerIATile.jsx';
 import { useAuth } from '@/auth/AuthContext.jsx';
@@ -313,7 +321,7 @@ function AttachmentItem({ attachment, ui, getLocalImageUrl }) {
   if (isUnsupported) {
     return (
       <div className="sc-att sc-att-unsupported">
-        <Paperclip size={14} data-testid="Paperclip__50ab90" />
+        <PaperclipIcon size={14} data-testid="Paperclip__50ab90" />
         <span className="sc-a-name">{ui('supportAttachmentUnsupported')}</span>
       </div>
     );
@@ -330,7 +338,7 @@ function AttachmentItem({ attachment, ui, getLocalImageUrl }) {
     }
     return (
       <div className="sc-att">
-        <Paperclip size={14} data-testid="Paperclip__50ab90" />
+        <PaperclipIcon size={14} data-testid="Paperclip__50ab90" />
         <span className="sc-a-name">{name}</span>
       </div>
     );
@@ -348,7 +356,7 @@ function AttachmentItem({ attachment, ui, getLocalImageUrl }) {
     };
     return (
       <div className="sc-att">
-        <Paperclip size={14} data-testid="Paperclip__50ab90" />
+        <PaperclipIcon size={14} data-testid="Paperclip__50ab90" />
         <button
           type="button"
           className="sc-a-name sc-att-download"
@@ -363,7 +371,7 @@ function AttachmentItem({ attachment, ui, getLocalImageUrl }) {
 
   return (
     <div className="sc-att">
-      <Paperclip size={14} data-testid="Paperclip__50ab90" />
+      <PaperclipIcon size={14} data-testid="Paperclip__50ab90" />
       <span className="sc-a-name">{name}</span>
     </div>
   );
@@ -373,14 +381,14 @@ function PendingAttachmentChip({ file, onRemove }) {
   return (
     <div className="sc-att-chip">
       <div className="sc-a-thumb">
-        <Paperclip size={12} data-testid="Paperclip__50ab90" />
+        <PaperclipIcon size={12} data-testid="Paperclip__50ab90" />
       </div>
       <span className="sc-a-name">{file.name}</span>
       <span style={{ color: 'var(--sc-fg-3)', fontSize: 11 }}>
         · {(file.size / 1024).toFixed(0)} KB
       </span>
       <span className="sc-x" onClick={onRemove}>
-        <X size={12} data-testid="X__50ab90" />
+        <XIcon size={12} data-testid="X__50ab90" />
       </span>
     </div>
   );
@@ -439,7 +447,7 @@ function ConversationMessageItem({ message, index, messages, seenCount, dateLoca
   if (message.handover) {
     return (
       <div className="sc-handover">
-        <div className="sc-handover-icn"><Users size={16} data-testid="Users__50ab90" /></div>
+        <div className="sc-handover-icn"><UsersIcon size={16} data-testid="Users__50ab90" /></div>
         <div>
           <div className="sc-handover-txt">
             {ui('supportHandoverIntro', { name: message.agentName })}
@@ -485,7 +493,7 @@ function ConversationHeader({
   return (
     <div className="sc-conv-head">
       <button className="sc-back" onClick={onBack} aria-label={ui('back')}>
-        <ChevronRight
+        <CaretRightIcon
           size={16}
           style={{ transform: 'rotate(180deg)' }}
           data-testid="ChevronRight__50ab90" />
@@ -518,9 +526,9 @@ function ConversationHeader({
           aria-label={isExpanded ? ui('collapse') : ui('expand')}
           title={isExpanded ? ui('collapse') : ui('expand')}
         >
-          {isExpanded ? <Minimize2 size={16} data-testid="Minimize2__50ab90" /> : <Maximize2 size={16} data-testid="Maximize2__50ab90" />}
+          {isExpanded ? <ArrowsInIcon size={16} data-testid="Minimize2__50ab90" /> : <ArrowsOutIcon size={16} data-testid="Maximize2__50ab90" />}
         </button>
-        <button className="sc-head-icn" onClick={onClose} aria-label={ui('close')}><X size={16} data-testid="X__50ab90" /></button>
+        <button className="sc-head-icn" onClick={onClose} aria-label={ui('close')}><XIcon size={16} data-testid="X__50ab90" /></button>
       </div>
     </div>
   );
@@ -727,7 +735,7 @@ export function ConversationView({
       {isDragging && (
         <div className={`sc-drop-overlay${isClosed ? ' closed' : ''}`}>
           <div className="sc-drop-inner">
-            <Paperclip size={28} data-testid="Paperclip__50ab90" />
+            <PaperclipIcon size={28} data-testid="Paperclip__50ab90" />
             <span>{isClosed ? ui('supportClosedConversation') : ui('supportDropToAttach')}</span>
           </div>
         </div>
@@ -757,7 +765,7 @@ export function ConversationView({
               aria-label={ui('supportDismissEscalateBar')}
               title={ui('supportDismissEscalateBar')}
             >
-              <X size={12} data-testid="X__50ab90" />
+              <XIcon size={12} data-testid="X__50ab90" />
             </button>
           </div>
         </div>
@@ -815,7 +823,7 @@ export function ConversationView({
 
         {isClosed && (
           <div className="sc-closed-bar">
-            <CheckCircle size={14} data-testid="CheckCircle__50ab90" />
+            <CheckCircleIcon size={14} data-testid="CheckCircle__50ab90" />
             {ui('supportConversationEnded')}
           </div>
         )}
@@ -829,7 +837,7 @@ export function ConversationView({
 
         {isClosed && isRated && (
           <div className="sc-csat-thanks">
-            <CheckCircle data-testid="CheckCircle__50ab90" />
+            <CheckCircleIcon data-testid="CheckCircle__50ab90" />
             {ui('supportRatingThanks')}
           </div>
         )}
@@ -860,7 +868,7 @@ export function ConversationView({
         <div className="sc-input-row">
           {/* Attach file */}
           <button className="sc-clip" onClick={() => fileRef.current?.click()} aria-label={ui('supportAttachFile')}>
-            <Plus size={16} data-testid="Plus__50ab90" />
+            <PlusIcon size={16} data-testid="Plus__50ab90" />
           </button>
           <input
             ref={fileRef}
@@ -878,7 +886,7 @@ export function ConversationView({
               onClick={() => setShowEmoji((v) => !v)}
               aria-label="Emoji"
             >
-              <Smile size={16} data-testid="Smile__50ab90" />
+              <SmileyIcon size={16} data-testid="Smile__50ab90" />
             </button>
             {showEmoji && (
               <div className="sc-emoji-picker">
@@ -909,7 +917,7 @@ export function ConversationView({
             onClick={send}
             aria-label={ui('send')}
           >
-            <ArrowUp size={14} data-testid="ArrowUp__50ab90" />
+            <ArrowUpIcon size={14} data-testid="ArrowUp__50ab90" />
           </button>
         </div>
         <div className="sc-footer-hint">

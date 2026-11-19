@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertTriangle, Loader2 } from 'lucide-react';
+import { WarningIcon, CircleNotchIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import {
@@ -136,7 +136,7 @@ export default function ChangeSifDialog({
             className="rounded-lg border border-[hsl(var(--border-subtle))] bg-muted/40 p-4 text-sm text-[hsl(var(--foreground))]"
             data-testid="ChangeSifDialog__notice">
             <div className="mb-1 flex items-center gap-2 font-medium">
-              <AlertTriangle size={15} className="text-status-warning-foreground" data-testid="ChangeSifDialog__noticeIcon" />
+              <WarningIcon size={15} className="text-status-warning-foreground" data-testid="ChangeSifDialog__noticeIcon" />
               {ui('fiscal.changeSif.notice.title')}
             </div>
             <p className="leading-relaxed text-muted-foreground">{ui(noticeKey)}</p>
@@ -164,7 +164,7 @@ export default function ChangeSifDialog({
             onClick={handleConfirm}
             disabled={saving}
             data-testid="ChangeSifDialog__confirm">
-            {saving && <Loader2 size={14} className="mr-1.5 animate-spin" data-testid="ChangeSifDialog__spinner" />}
+            {saving && <CircleNotchIcon size={14} className="mr-1.5 animate-spin" data-testid="ChangeSifDialog__spinner" />}
             {saving ? ui('fiscal.changeSif.deactivating') : ui('fiscal.changeSif.confirm')}
           </Button>
         </DialogFooter>
