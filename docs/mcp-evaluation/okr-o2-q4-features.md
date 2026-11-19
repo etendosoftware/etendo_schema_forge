@@ -10,8 +10,8 @@ secundaria: una prueba que Holded no puede hacer igual suma, como Solo Etendo.
 | | Pruebas | Posibles en ambos | Solo Etendo |
 |---|---:|---:|---:|
 | Suite inicial (1-47) | 47 | 39 | 8 |
-| Agregadas en la T3 (48-62) | 15 | 4 | 11 |
-| **Total** | **62** | **43** | **19** |
+| Agregadas en la T3 (48-65) | 18 | 4 | 14 |
+| **Total** | **65** | **43** | **22** |
 
 - **KR2.1** (Etendo Win ÷ posibles en ambos): 79,5 % (31 de 39), medido sobre las 47 iniciales, no
   oficial. Las 15 nuevas todavía no entraron en una medición contra Holded.
@@ -82,6 +82,8 @@ foto no imprime el NIF del receptor: la extracción lo avisa (`receiver_tax_id_a
 | Portal del cliente (ETP-6209) | El link solo salía dentro del email del documento | Acción `portalLink` en Contactos: el link del cliente para compartirlo (com.etendoerp.go) | 62 |
 | Movimientos por producto (ETP-5889) | El agente no encontraba `product/transactions` | Prompt en `product/transactions` y en `goods-movements` | 57, 58 |
 | Bandeja de facturas (ETP-6046) | El agente filtró `status: "pending"`, que no existe, y el MCP respondió 0 filas sin error | Prompt en `invoice-inbox/header` con los códigos de estado | 59 |
+| Portal del cliente (ETP-6209) | El agente entregaba la `url` de la ficha del contacto, que solo abre para usuarios de la app | `urlNote` junto a cada `url` de registro y prompt en `contacts/businessPartner` | 62, 64 |
+| Filtros sobre campos de lista | Un valor que no es un código (`"pending"`, `"co"`) devolvía 0 filas | 422 `validation_error` con los códigos en `available` | 59 |
 | Calendario contable (ETP-5577) | Nada le decía al agente que el inicio del ejercicio no se cambia por MCP | Prompt en `fiscal-calendar/year` | 56 |
 | Factura de proveedor desde una foto: fecha | `invoiceDateIso` venía con la fecha escrita | Corregido (com.etendoerp.go #1656) | 53 |
 | Remesas: selector del tipo | El selector de `remittanceType` devolvía vacío | Corregido (com.etendoerp.go #1656) | 48 |
@@ -95,6 +97,34 @@ de la cuenta; acceso de escritura a Contactos; el cliente no puede estar bloquea
 necesita un email de contacto (un link vencido se renueva por email) y algún documento que el portal
 muestre; queda registrado quién lo pidió y no cuenta como "enviado por email". Detalle en
 `com.etendoerp.go/docs/customer-portal.md` §6c.
+
+## KR2.2: tres funcionalidades del Q4 validadas por agente
+
+KR2.2 (registro del OKR): validar de extremo a extremo la operación agéntica de al menos 3
+funcionalidades del ERP desarrolladas en Q4: casos exitosos, errores de negocio y restricciones de
+permisos, vía agente, comparando con el recorrido por la interfaz, sin intervención manual.
+
+| Funcionalidad | Éxito | Error de negocio | Permisos (usuario con rol Inventory) | Recorrido en la app |
+|---|---|---|---|---|
+| Categoría de contacto (ETP-5791) | 54, 55 | 63 `e-contact-without-type`: un contacto sin tipo se rechaza (`ETGO_BPartnerContactTypeRequired`) y no se crea | `p-contact-create-denied`: Contactos de solo lectura, 403 | Contactos > Nuevo hereda el tipo de la categoría; sin tipo no guarda; el rol Inventory ve Contactos sin "Nuevo" |
+| Portal del cliente (ETP-6209) | 62 | 64 `e-portal-link-without-email`: sin email no hay link (`contact_without_email`) | `p-portal-link-denied`: `portalLink` es escritura en Contactos, 403 | El link sale en el email de cada documento; sin email no se envía; el rol Inventory no envía documentos |
+| PyG por mes o trimestre (ETP-6080, ETP-6239) | 60, 61 | 65 `e-profit-by-month-long-range`: más de 24 meses se rechaza y el agente lo resuelve en dos pedidos | `p-profit-denied`: sin Informes financieros, 403 | Informes > Pérdidas y Ganancias, vista Mes / Trimestre; el rol Inventory no tiene Informes financieros en el menú |
+
+Las de permisos están en `mcp-tests/suites/okr-permissions.yaml` y corren con un target cuyo token es
+un usuario con **solo** la plantilla Inventory (en GOClient: "Almacén MCP", creado con
+`etendo_create` en `user/user` y la acción `assignRoles`; la contraseña se pone desde la invitación de
+la app, el MCP no la guarda). En el dataset, el cliente "Juan Perez" tiene facturas.
+
+Piloto (19 nov 2026, local-env sobre `develop` + `feature/ETP-5850`, una corrida por prueba): las
+nueve pasan. Hallazgos que corrigió ETP-5850 en el camino:
+
+- **62 pasaba por error.** El agente devolvía el link de la ficha del contacto
+  (`/contacts/<id>`), que solo abre para usuarios de la app, y la prueba aceptaba cualquier link con
+  la palabra "portal". Ahora la prueba rechaza `contacts`, y el MCP agrega `urlNote` junto a cada
+  `url` de registro (y en el `hint` de discover): ese link es para usuarios de la app y para un cliente
+  está la acción `portalLink`. Con eso el agente usa `portalLink`.
+- **Un filtro con un valor que no existe devolvía 0 filas** (`status: "pending"` en la bandeja). Ahora
+  el MCP responde 422 con los códigos válidos (ver *Mejoras*).
 
 ## Flags para la corrida oficial
 

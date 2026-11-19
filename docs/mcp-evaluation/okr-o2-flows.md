@@ -98,6 +98,9 @@ fija. Se itera; todavía **no son pruebas de la suite**.
 | 60 | `q-profit-quarter` | Resultado de un trimestre en Pérdidas y Ganancias (ETP-6080/6239) | Informes | 📄 | no |
 | 61 | `q-profit-by-month` | Pérdidas y Ganancias mes a mes (ETP-6239) | Informes | 📄 | no |
 | 62 | `w-portal-link` | El link del portal de un cliente para mandárselo (ETP-6209) | Contactos, Portal | 📄 | sí |
+| 63 | `e-contact-without-type` | Registrar un contacto que no es cliente ni proveedor: se rechaza (KR2.2) | Contactos | 📄 | no |
+| 64 | `e-portal-link-without-email` | Link del portal de un cliente sin email: no hay link (KR2.2) | Contactos, Portal | 📄 | no |
+| 65 | `e-profit-by-month-long-range` | PyG mes a mes de 30 meses: el límite de 24 y cómo lo resuelve el agente (KR2.2) | Informes | 📄 | no |
 | | **Errores y negativas** | | | | |
 | 39 | `e-unknown-document` | Documento que no existe | Factura | 📄 | sí |
 | 40 | ~~`e-invalid-write`~~ | Cantidad negativa — **retirada del KR** (Etendo la acepta por diseño) | Pedido | 📄 | — |
