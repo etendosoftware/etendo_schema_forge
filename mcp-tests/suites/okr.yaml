@@ -2432,9 +2432,14 @@ probes:
           - tool: etendo_action
             args: { spec: sales-invoice, entity: header, id: "{{steps.invoice.data.id}}",
                     action: documentAction, parameters: { docAction: CO } }
+          # The app's base URL, as the MCP reports it: the portal link is <baseUrl>/portal/<token>; the
+          # record URL (<baseUrl>/contacts/<id>) does not match. The agent's own report is part of the
+          # answer, so a bare word ("contacts") cannot be refused.
+          - tool: etendo_discover
+            args: { spec: contacts }
+            saveAs: disc
         expectAnswer:
-          all: [{ text: "portal" }, { anyOf: [{ text: "http" }, { text: "https" }] }]
-          none: [{ text: "contacts" }]
+          all: [{ text: "{{steps.disc.app.baseUrl}}/portal" }]
       holded:
         setup: *h-customer
         expectAnswer:
@@ -2473,11 +2478,15 @@ probes:
     prompt: "Pasame el link del portal de Cliente {{marker}} así se lo mando por WhatsApp."
     platforms:
       etendo-go:
-        setup: *customer-with-invoice
+        setup:
+          - *customer-with-invoice
+          - tool: etendo_discover
+            args: { spec: contacts }
+            saveAs: disc
         expectOutcome: refused
         expectAnswer:
           all: [{ anyOf: [{ text: "email" }, { text: "correo" }, { text: "mail" }] }]
-          none: [{ text: "http" }]
+          none: [{ text: "{{steps.disc.app.baseUrl}}/portal" }]
       holded:
         notPossible:
           kind: goal
