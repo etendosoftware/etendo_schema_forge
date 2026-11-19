@@ -1,5 +1,13 @@
 import * as React from 'react';
-import { Home, MessageCircle, HelpCircle, ChevronRight, Search, X, ExternalLink } from 'lucide-react';
+import {
+  HouseIcon,
+  ChatCircleIcon,
+  QuestionIcon,
+  CaretRightIcon,
+  MagnifyingGlassIcon,
+  XIcon,
+  ArrowSquareOutIcon,
+} from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { useCopilot } from '@/components/CopilotContext';
 import { useSupportChat } from './SupportChatContext.jsx';
@@ -25,7 +33,7 @@ function InicioTab({ onStartChat, onSwitchTab, onClose }) {
         </div>
         <div className="sc-head-actions" style={{ position: 'absolute', top: 14, right: 14 }}>
           <button className="sc-head-icn" onClick={onClose} aria-label={ui('close')}>
-            <X size={16} data-testid="X__4d85ab" />
+            <XIcon size={16} data-testid="X__4d85ab" />
           </button>
         </div>
       </div>
@@ -46,11 +54,11 @@ function InicioTab({ onStartChat, onSwitchTab, onClose }) {
         <div className="sc-inicio-search-card" style={{ marginTop: 24 }}>
           <div className="sc-entry-search" onClick={() => onSwitchTab('ayuda')}>
             <input placeholder={ui('supportSearchHelp')} readOnly />
-            <Search size={16} data-testid="Search__4d85ab" />
+            <MagnifyingGlassIcon size={16} data-testid="Search__4d85ab" />
           </div>
           <div className="sc-inicio-search-result" onClick={() => onSwitchTab('ayuda')}>
             <span>{ui('supportSampleSearchResult')}</span>
-            <ChevronRight
+            <CaretRightIcon
               size={16}
               style={{ color: 'var(--sc-fg-3)' }}
               data-testid="ChevronRight__4d85ab" />
@@ -76,7 +84,7 @@ function HelpPageRow({ page, snippet }) {
         <div className="sc-h-title">{page.title}</div>
         {snippet ? <div className="sc-h-desc">{snippet}…</div> : null}
       </div>
-      <ExternalLink
+      <ArrowSquareOutIcon
         size={16}
         style={{ color: 'var(--sc-fg-3)', flexShrink: 0 }}
         data-testid="ExternalLink__4d85ab" />
@@ -89,7 +97,7 @@ function AyudaTabHeader({ showCollectionPages, activeCollection, onBack, onClose
     <div className="sc-head" style={{ paddingBottom: 8 }}>
       {showCollectionPages ? (
         <button className="sc-back" onClick={onBack} aria-label={ui('back')}>
-          <ChevronRight
+          <CaretRightIcon
             size={16}
             style={{ transform: 'rotate(180deg)' }}
             data-testid="ChevronRight__4d85ab" />
@@ -101,7 +109,7 @@ function AyudaTabHeader({ showCollectionPages, activeCollection, onBack, onClose
         </h1>
       </div>
       <div className="sc-head-actions" style={{ position: 'absolute', top: 14, right: 14 }}>
-        <button className="sc-head-icn" onClick={onClose} aria-label={ui('close')}><X size={16} data-testid="X__4d85ab" /></button>
+        <button className="sc-head-icn" onClick={onClose} aria-label={ui('close')}><XIcon size={16} data-testid="X__4d85ab" /></button>
       </div>
     </div>
   );
@@ -127,7 +135,7 @@ function AyudaTabCollectionsList({ collections, onSelectCollection, ui }) {
             <div className="sc-h-title">{c.title}</div>
             <div className="sc-h-count-s">{ui('supportArticlesCount', { count: c.pages.length })}</div>
           </div>
-          <ChevronRight
+          <CaretRightIcon
             size={16}
             style={{ color: 'var(--sc-fg-3)', flexShrink: 0 }}
             data-testid="ChevronRight__4d85ab" />
@@ -209,7 +217,7 @@ function AyudaTab({ onClose }) {
         data-testid="AyudaTabHeader__4d85ab" />
       <div className="sc-help-search">
         <div className="sc-help-search-inner">
-          <Search size={16} data-testid="Search__4d85ab" />
+          <MagnifyingGlassIcon size={16} data-testid="Search__4d85ab" />
           <input
             placeholder={ui('supportSearchArticles')}
             value={query}
@@ -262,13 +270,13 @@ function MensajesTab({ conversations, activeConversationId, isLoading, onSelect,
           <h1 className="sc-head-title" style={{ fontSize: 16, lineHeight: '24px' }}>{ui('supportTabMessages')}</h1>
         </div>
         <div className="sc-head-actions" style={{ position: 'absolute', top: 14, right: 14 }}>
-          <button className="sc-head-icn" onClick={onClose} aria-label={ui('close')}><X size={16} data-testid="X__4d85ab" /></button>
+          <button className="sc-head-icn" onClick={onClose} aria-label={ui('close')}><XIcon size={16} data-testid="X__4d85ab" /></button>
         </div>
       </div>
       {conversations.length > 0 && (
         <div className="sc-msg-search">
           <div className="sc-msg-search-inner">
-            <Search size={16} data-testid="Search__4d85ab" />
+            <MagnifyingGlassIcon size={16} data-testid="Search__4d85ab" />
             <input
               placeholder={ui('supportSearchPlaceholder')}
               value={searchQuery}
@@ -302,9 +310,9 @@ function MensajesTab({ conversations, activeConversationId, isLoading, onSelect,
 export function SupportChatWidget() {
   const ui = useUI();
   const TABS = [
-    { id: 'inicio',    icon: <Home size={20} data-testid="Home__4d85ab" />,          label: ui('supportTabHome') },
-    { id: 'mensajes',  icon: <MessageCircle size={20} data-testid="MessageCircle__4d85ab" />, label: ui('supportTabMessages') },
-    { id: 'ayuda',     icon: <HelpCircle size={20} data-testid="HelpCircle__4d85ab" />,    label: ui('supportTabHelp') },
+    { id: 'inicio',    icon: <HouseIcon size={20} data-testid="Home__4d85ab" />,          label: ui('supportTabHome') },
+    { id: 'mensajes',  icon: <ChatCircleIcon size={20} data-testid="MessageCircle__4d85ab" />, label: ui('supportTabMessages') },
+    { id: 'ayuda',     icon: <QuestionIcon size={20} data-testid="HelpCircle__4d85ab" />,    label: ui('supportTabHelp') },
   ];
   const { state, actions } = useSupportChat();
   const {
@@ -452,7 +460,7 @@ export function SupportChatWidget() {
           aria-label={ui('supportDismissFab')}
           title={ui('supportDismissFab')}
         >
-          <X size={12} data-testid="X__4d85ab" />
+          <XIcon size={12} data-testid="X__4d85ab" />
         </button>
       </div>
     );

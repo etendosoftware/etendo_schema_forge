@@ -1,5 +1,5 @@
 import { useAuth } from '@/auth/AuthContext.jsx';
-import { Building2, Shield } from 'lucide-react';
+import { BuildingsIcon, ShieldIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 
 // TODO ETP-3690: switchContext removed — revisit if Settings UI is resurrected
@@ -40,12 +40,12 @@ export default function SettingsPage() {
         </h2>
         <div className="space-y-3 text-sm">
           <div className="flex items-center gap-2">
-            <Shield className="h-4 w-4 text-muted-foreground" data-testid="Shield__b7d1d4" />
+            <ShieldIcon className="h-4 w-4 text-muted-foreground" data-testid="Shield__b7d1d4" />
             <span className="text-muted-foreground">{ui('role')}:</span>
             <span className="font-medium">{selectedRole?.name || selectedRole?.id || '\u2014'}</span>
           </div>
           <div className="flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-muted-foreground" data-testid="Building2__b7d1d4" />
+            <BuildingsIcon className="h-4 w-4 text-muted-foreground" data-testid="Building2__b7d1d4" />
             <span className="text-muted-foreground">{ui('organization')}:</span>
             <span className="font-medium">{selectedOrg?.name || selectedOrg?.id || '\u2014'}</span>
           </div>

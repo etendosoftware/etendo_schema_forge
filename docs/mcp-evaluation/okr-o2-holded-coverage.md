@@ -163,7 +163,7 @@ herramientas) al 2026-11-04. Son candidatas a **Holded Only** y, como dice el pl
 | Pipelines de documentos | Etapas propias por tipo de documento y aprobaciones | `set_*_pipeline`, `approve_*` |
 | Producción | Órdenes de producción con materiales | `create_production_order`, … |
 | Previsión de tesorería | Previsiones de cobro y plan de negocio contra lo real | `create_invoicing_forecast`, `list_business_plan_goals`, `list_business_plan_scenarios` |
-| Remesas | Consultar remesas de cobro | `list_remittances`, `get_remittance` |
+| Remesas | Consultar remesas de cobro (solo lectura; la cuenta de prueba no tiene el módulo: ver *Features del Q4*) | `list_remittances`, `get_remittance` |
 | Portal del cliente | Link al portal de un contacto | `get_contact_portal_link` |
 | Canales de venta | Alta y gestión de canales | `create_sales_channel`, … |
 | Usuarios de la cuenta | Invitar usuarios por correo y cambiarles el rol | `inviteAccountUser`, `update_account_user`, `listAccountUsers` |
@@ -203,3 +203,52 @@ acción que haría un agente, la comprobación antes y después):
 Quedaron afuera, por ahora: contabilizar una factura (Holded contabiliza al aprobar: sería Solo
 Etendo), el cobro en otra moneda (sin confirmar en Holded), la búsqueda por significado (Holded solo
 busca contactos) y la antigüedad de saldos (Holded no tiene el informe).
+
+## Features del Q4 (17 nov)
+
+**Las remesas son Solo Etendo.** Etendo GO las hace completas por MCP (spec `remittance`: crear,
+`selectDueItems`, `process`, `reactivate`, `sepaFileData`, detrás del flag `sepa-remittances`). En
+Holded no se puede ni preparar el dato de una prueba de consulta:
+
+- **El MCP solo lee.** `list_remittances` y `get_remittance` (`accounting:remittances.read`) son
+  todo lo que hay: nada para crear una remesa, agregarle facturas, procesarla o generar el fichero
+  SEPA. La API pública (v2 y v1) tampoco las crea. Confirmado con un token nuevo el 17 nov: 374
+  herramientas, las mismas que antes.
+- **La cuenta de prueba no tiene el módulo.** *Tesorería › Remesas* redirige a
+  `app.holded.com/upsell/remittances` ("Remesas Bancarias… Elige tu plan"). No se crea desde la
+  interfaz sin pagar un plan mayor, y por decisión no se paga. `list_remittances` responde, vacío.
+
+Datos que quedaron en la cuenta de Holded por si el módulo se habilita: la cuenta bancaria
+*MCPREMESA Banco* (con IBAN e identificador de acreedor), el cliente *MCPREMESA Cliente* (con IBAN y
+mandato SEPA) y una factura de venta aprobada de 121,00 € pendiente de cobro.
+
+Prueba agregada: `f-sepa-remittance` (48), Solo Etendo. El setup crea su propia cuenta de banco
+(solo las cuentas Bank creadas con el flag prendido reciben los métodos de remesa), con país e IBAN,
+y un cliente con NIF (de ahí sale el identificador del mandato SEPA) con una factura completada.
+Piloteada sin agente en un local-env sobre `develop` con el flag prendido: crear, mover la fecha de
+la remesa (la factura vence mañana y solo aparece en `availableDueItems` si la remesa vence después),
+`selectDueItems` con `ids`, `process` → estado `PR`; la verificación filtra por cuenta y estado.
+
+**Movimientos rechazados (`bank-bounce-suggestions`): sin prueba por ahora.** `discardPair` solo
+acepta líneas importadas por la sincronización PSD2 (con `EM_PSD2_Transaction_Identifier`); un
+extracto cargado a mano o importado de un fichero no las tiene, y por MCP no hay otra forma de
+crearlas. Una prueba reproducible necesita un banco PSD2 de prueba conectado a la cuenta.
+
+**Más pruebas de features del Q4** (49 a 53), pensadas para dar cobertura a Etendo; los bloques de
+Holded de 49, 50 y 52 están escritos pero todavía sin pilotear:
+
+| Prueba | Feature | Etendo | Holded |
+|---|---|---|---|
+| `f-foreign-currency-invoice` | Tipo de cambio según la fecha del documento (ETP-5840) | `currency` USD; `eTGOCurrencyRate` igual al rango EUR → USD | `create_invoice` con `currency` |
+| `f-order-global-discount` | El descuento global del pedido pasa a la factura (ETP-5828) | `etgoTotalDiscount` 10 en la factura | `convert_document` conserva `discount` |
+| `w-customer-vendor-contact` | Contacto cliente y proveedor (ETP-5791) | `customer` y `vendor` | No: un contacto tiene un solo tipo |
+| `w-payment-term-days` | Condiciones de pago en días (ETP-5826) | `paymentTerms` = la de 45 días | `defaults.due_days` |
+| `f-invoice-from-photo` | Factura de proveedor desde una foto (ETP-5735) | upload URL + `etendo_extract_invoice_document` + `etendo_batch`; borrador de 211,75 € | No: `upload_inbox` pide los bytes como argumento |
+
+Sin prueba por ahora:
+
+- **Pérdidas y Ganancias por mes o trimestre** (ETP-6080, ETP-6239): `generate_profit_loss` filtra
+  por fechas y compara con otro período, pero no tiene las columnas por mes o trimestre de la UI. Y
+  la cifra esperada necesita el `yearId` del calendario de la organización, que el MCP no expone
+  (en GOClient hay dos años 2026, de dos calendarios).
+- **Movimientos de producto** (ETP-5889), **Modelo 390**: no están en el MCP.

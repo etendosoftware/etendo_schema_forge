@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { CaretDownIcon } from '@phosphor-icons/react';
 
 const ORG_COLORS = ['bg-destructive', 'bg-status-info', 'bg-status-success', 'bg-status-warning', 'bg-primary', 'bg-status-info'];
 
@@ -36,7 +36,7 @@ export default function FiscalOrgDropdown({ selectedOrg, orgList, onSelect }) {
           {initial}
         </span>
         <span className="text-sm font-medium">{selectedOrg.name}</span>
-        {canSwitch && <ChevronDown
+        {canSwitch && <CaretDownIcon
           size={13}
           className="text-muted-foreground"
           data-testid="ChevronDown__e2fb94" />}

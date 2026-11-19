@@ -162,8 +162,6 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
 
   // ETP-5745 CP-23: the record id the heads-up rectification-code toast already fired for.
   const rectifCodeToastRef = useRef(null);
-  // ETP-5747: the record id the user explicitly picked an SII invoice type for (see setSiiType).
-  const siiTypeUserChoiceRef = useRef(null);
 
   function getVal(key) {
     return data?.[key] ?? '';
@@ -173,10 +171,9 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
     return normalizeDateInputValue(data?.[key] ?? '');
   }
 
-  // ETP-5747: the SII "Tipo factura" Select writes through here, so the auto-set-to-R effect
-  // below can tell a type the USER chose (respected) from one the record state was reset to.
+  // The SII "Tipo factura" Select writes through here. On a sales rectificative the Select only
+  // offers 'R' (SifTab.jsx), since the server enforces it (SalesRectificativeFiscalDefaults).
   function setSiiType(value) {
-    siiTypeUserChoiceRef.current = recordId;
     onChange?.(siiTypeField, value);
   }
 
@@ -226,19 +223,22 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
   // the failure). Purchase-side corrective-invoice support (rectification-reason handling,
   // AEAT XML payload) isn't implemented yet, so purchase invoices stay at 'F1' for now.
   //
-  // ETP-5747: no longer a one-shot per record. The value it writes is a PENDING edit (saved with
-  // the "Motivo de rectificación", which EM_AEATSII_C_INV_RECT_CHK requires alongside 'R'), and
-  // anything that re-reads the record replaces pending edits with the stored 'F1' — "Importar
+  // ETP-5747: no longer a one-shot per record. The value it writes is a PENDING edit, and anything
+  // that re-reads the record before it is stored replaces pending edits — "Importar
   // desde factura origen" does exactly that after importing (DetailView onRefresh → fetchById).
   // The old `${recordId}:rectif` guard had already fired, so the tab showed F1 until a page
-  // reload reset the guard. It now re-applies whenever the record shows anything but 'R',
-  // unless the user picked a type in the Select (setSiiType) — that choice is never overridden.
+  // reload reset the guard. It now re-applies whenever the record shows anything but 'R'. There
+  // is no user choice to respect: on a sales rectificative 'R' is the only type the Select offers
+  // and the one the server stores (ETP-5747 review W1). Loop-free: once 'R', it is a no-op.
+  // ETP-5747 QA pass 1: the server now stores 'R' + 'I' itself on every write of a rectificative
+  // draft (SalesRectificativeFiscalDefaults), and EM_AEATSII_C_INV_RECT_CHK only demands the
+  // motivo once the invoice is processed, so this pending 'R' saves without the motivo (CP-10) and
+  // the effect is a no-op once the record has been saved.
   useEffect(() => {
     if (isPurchaseInvoice) return;
     if (!showSii || !isDraft || !recordId) return;
     if (!data?.isRectificative) return;
     if (data?.[siiTypeField] === 'R') return; // already correct — no-op
-    if (siiTypeUserChoiceRef.current === recordId) return; // the user chose — respect it
     onChange?.(siiTypeField, 'R');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPurchaseInvoice, showSii, isDraft, recordId, data?.isRectificative, siiTypeField, data?.[siiTypeField], onChange]);
@@ -301,7 +301,7 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
   // panel — the UI only ever lets the user pick "Motivo de rectificación" (aeatsiiMotivoRectif),
   // via the Select in SifTab.jsx. But `EM_AEATSII_C_INV_RECT_CHK` (the DB check constraint,
   // shared by sales AND purchase: see its `ISSOTRX` branches) requires BOTH columns non-null
-  // once the SII type is 'R' — setting only the motivo left `aeatsiiTipoRectif` NULL on any
+  // once the SII type is 'R' and the invoice is processed (ETP-5747: drafts are exempt) — setting only the motivo left `aeatsiiTipoRectif` NULL on any
   // invoice that never had it populated (e.g. one created via "Import from source invoice"),
   // and Confirm failed with a raw, untranslated DB constraint violation instead of a validation
   // message. Mirrors the etvfacReverseinvtype pattern above: always 'I' (Por diferencias) — the

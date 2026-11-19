@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Command as CommandPrimitive } from 'cmdk';
-import { Search, X } from 'lucide-react';
+import { MagnifyingGlassIcon, XIcon } from '@phosphor-icons/react';
 
 import { cn } from '@/lib/utils.js';
 
@@ -64,7 +64,7 @@ const CommandDialog = ({ children, onOpenChange, open, ...props }) => {
           aria-label="Close"
           className="absolute right-3 top-3 rounded-sm p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
-          <X className="h-4 w-4" aria-hidden="true" data-testid="X__2fc146" />
+          <XIcon className="h-4 w-4" aria-hidden="true" data-testid="X__2fc146" />
         </button>
       </Command>
     </div>
@@ -73,7 +73,7 @@ const CommandDialog = ({ children, onOpenChange, open, ...props }) => {
 
 const CommandInput = React.forwardRef(({ className, ...props }, ref) => (
   <div className="flex items-center border-b px-3" cmdk-input-wrapper="">
-    <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" data-testid="Search__2fc146" />
+    <MagnifyingGlassIcon className="mr-2 h-4 w-4 shrink-0 opacity-50" data-testid="Search__2fc146" />
     <CommandPrimitive.Input
       ref={ref}
       className={cn(

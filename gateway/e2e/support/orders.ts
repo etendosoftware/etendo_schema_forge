@@ -9,6 +9,11 @@ import {
   itemPath, patch, readWithEtag, type LifecycleSpec,
 } from './lifecycle.ts';
 
+const PARTNER_ROLE = {
+  'sales-order': { is_customer: true },
+  'purchase-order': { is_vendor: true },
+} as const;
+
 export function describeOrderFlow(kind: 'sales-order' | 'purchase-order'): void {
   after(cleanupCreated);
 
@@ -22,7 +27,9 @@ export function describeOrderFlow(kind: 'sales-order' | 'purchase-order'): void 
     let warehouseId = '';
 
     it('creates header and line from prerequisites', async () => {
-      const contact = await createContact('partner');
+      // The role is set explicitly: the default of is_customer / is_vendor depends on the tenant, and a
+      // purchase order only accepts a vendor as its business partner.
+      const contact = await createContact('partner', PARTNER_ROLE[kind]);
       contactId = contact.id;
       addressId = (await createAddress(contactId)).id;
       const product = await createProduct('item');
@@ -59,6 +66,20 @@ export function describeOrderFlow(kind: 'sales-order' | 'purchase-order'): void 
       assert.ok(warehouse.length > 0, 'Etendo assigned a non-empty warehouse');
       await expectDeleted({ collection: kind, id: draft.id });
     });
+
+    if (kind === 'purchase-order') {
+      it('refuses a contact that is explicitly not a vendor: 422 reference_not_allowed', async () => {
+        // The 422 comes from the purchase-order business-partner selector, which only offers vendors (ETP-6176 parity validation).
+        const customerOnly = await createContact('customer-only', { is_customer: true, is_vendor: false });
+        const address = await createAddress(customerOnly.id);
+        const res = await api('POST', kind, {
+          body: resource(kind, { order_date: '2026-10-14', partner_address: address.id, warehouse: warehouseId }, {
+            business_partner: ['contacts', customerOnly.id],
+          }),
+        });
+        expectErrorDocument(res, 422, 'reference_not_allowed');
+      });
+    }
 
     it('reads the header with its ETag and a grand total, and lists it', async () => {
       const { res } = await readWithEtag(`${kind}/${order.id}`);

@@ -11,6 +11,8 @@
 // own dedicated test files.
 
 import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react';
+import { CopyIcon, PencilSimpleIcon, TrashIcon } from '@phosphor-icons/react';
+import { findIcon } from '@/test/iconGlyph.js';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Keep the request boundary stable while allowing each case to route API answers.
@@ -2093,13 +2095,13 @@ describe('ListModalWindow — personal grid views', () => {
   });
 });
 
-// The hover row actions drew lucide Pencil / Copy / Trash2 at 16px with their own button classes,
-// while every other list (RowQuickActions) uses the Iconic set at 20px on the shared row-action
+// The hover row actions drew Pencil / Copy / Trash2 at 16px with their own button classes,
+// while every other list (RowQuickActions) uses the same Phosphor icons at 20px on the shared row-action
 // buttons. Same icons, same buttons, same delete loader now.
 describe('ListModalWindow — row actions match the list quick actions', () => {
   const ROW = { id: 'QA-1', name: 'Rule', priority: 10, active: true };
 
-  it('uses the shared row-action buttons and the Iconic icons at 20px', async () => {
+  it('uses the shared row-action buttons and the Phosphor icons at 20px', async () => {
     const { ROW_ACTION_BUTTON_NEUTRAL, ROW_ACTION_BUTTON_DESTRUCTIVE } = await import('../rowVisuals.js');
     neoState.data = [ROW];
     renderWindow({ config: { allowClone: true } });
@@ -2111,13 +2113,13 @@ describe('ListModalWindow — row actions match the list quick actions', () => {
     expect(del.className).toContain(ROW_ACTION_BUTTON_DESTRUCTIVE);
     // Keyboard parity with ROW_STICKY_ACTIONS: tabbing onto an action must reveal the band.
     expect(edit.parentElement.className).toContain('focus-within:opacity-100');
-    for (const [button, label] of [[edit, 'edit'], [clone, 'clone'], [del, 'delete']]) {
+    for (const [button, label, Icon] of [[edit, 'edit', PencilSimpleIcon], [clone, 'clone', CopyIcon], [del, 'delete', TrashIcon]]) {
       expect(button).toHaveAttribute('aria-label', label);
       expect(button).toHaveAttribute('title', label);
       const icon = button.querySelector('svg');
-      // Iconic set (no lucide class), sized 20px by class like RowQuickActions.
+      // The Phosphor icons RowQuickActions uses, sized 20px by class like it.
       expect(icon.getAttribute('class')).toContain('h-5 w-5');
-      expect(icon.getAttribute('class')).not.toContain('lucide');
+      expect(findIcon(button, Icon)).toBe(icon);
     }
   });
 

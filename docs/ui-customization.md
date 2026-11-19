@@ -92,6 +92,64 @@ auto-synced when a generated prop's shape changes.
 
 ---
 
+## Icons (ETP-6155)
+
+**Every icon comes from `@phosphor-icons/react`** — tabs, toolbars, buttons, forms, tables,
+selectors, pop-ups, notifications and empty states. lucide-react and the hand-drawn SVG icons
+(the Attachments clip, the "Iconic" row-action set, the product box, the pricing coins) were
+replaced; only brand marks (logo, isotype) keep their own artwork.
+
+`@phosphor-icons/react` is in the `dedupe` lists of `vite.config.js` / `vitest.config.js` so core icons share
+the app's single Phosphor instance (and its `IconContext`). `lucide-react` stays in
+`tools/app-shell/package.json` (and those lists) for one reason only: the published `@etendosoftware/app-shell-core` and
+`@etendosoftware/etendo-go-core` packages still import it at runtime (and declare it as a peer
+dependency). The app-shell source itself has no lucide import (enforced by
+`test/icon-library-policy.test.js`). Uninstall it once those core packages are migrated to Phosphor
+and a release is consumed here.
+
+- **Import the `*Icon` name** (`TrashIcon`, `MagnifyingGlassIcon`), not the deprecated
+  unsuffixed alias: it never collides with a component or a browser global (`Link`, `File`,
+  `Image`).
+- **Weight: Regular.** It is the default (`IconContext` in `src/main.jsx`), so pass no `weight`.
+  The only exception is the Navigation Rail, which draws its active entry with `weight="fill"`.
+- **Size and colour:** size with Tailwind classes (`h-4 w-4`, `size-5`) or `size`, colour with
+  `text-*` (the glyph is `currentColor`). An icon with no size is 24px. Phosphor ignores
+  `strokeWidth`; do not pass it.
+- **One action, one icon** — reuse these rather than picking a look-alike:
+
+| Action | Icon |
+|---|---|
+| New / add | `PlusIcon` |
+| Save | `FloppyDiskIcon` |
+| Edit | `PencilSimpleIcon` |
+| Delete | `TrashIcon` |
+| Duplicate / copy | `CopyIcon` |
+| Filter | `FunnelSimpleIcon` |
+| Search | `MagnifyingGlassIcon` |
+| Export / download | `DownloadSimpleIcon` |
+| Import / upload | `UploadSimpleIcon` |
+| Attachments | `PaperclipIcon` |
+| Print | `PrinterIcon` |
+| Send by email | `EnvelopeSimpleIcon` |
+| Refresh | `ArrowsClockwiseIcon` |
+| More actions | `DotsThreeVerticalIcon` |
+| Close | `XIcon` |
+| Loading | `CircleNotchIcon` + `animate-spin` |
+| Open externally | `ArrowSquareOutIcon` |
+| Warning / error / info | `WarningIcon` / `WarningCircleIcon` / `InfoIcon` |
+
+Exception (ETP-4997, SHELL-02): the list toolbar Export/Import buttons follow the direction the *data* travels (export = `UploadSimpleIcon`, import = `DownloadSimpleIcon`); asserted by `ListViewExport.vitest.js`. Pending Design confirmation.
+
+- **Tests:** a suite that mocks the icons mocks `@phosphor-icons/react`; prefer
+  `allIconsAs` (`src/test/iconMock.js`) over a hand-written list. Phosphor stamps no class on its
+  `svg`, so find a rendered icon with `findIcon(root, Icon)` (`src/test/iconGlyph.js`).
+- Guardrail: `tools/app-shell/test/icon-library-policy.test.js` fails on a file that imports
+  or mocks lucide-react or one of the replaced hand-drawn icon modules.
+- Icons rendered by `@etendosoftware/app-shell-core` (dialogs, selects, date pickers) are owned by
+  that package and migrate there.
+
+---
+
 ## Default column widths by field type (ETP-5833)
 
 One lookup (`tools/app-shell/src/lib/linesColumnWidth.js`) sizes **and** expands every grid column from its `type`. `columnFlex()` feeds the lines grid (`InlineLinesPanel`) and the add-row colgroup; `columnMinWidthPx()` feeds the plain list (`DataTable` list mode, header + body + `<col>`). Both read the same tables, so the surfaces cannot disagree. Bases are **constants per type, never measured from content**: sorting or paging cannot move a column (ETP-5182), and there is no autofit. The only measured input is the plain-list **header label** (below), which depends on label + locale, never on row data. **One exception, lines grid only (ETP-5133):** a no-truncate column (any lookup selector, or `noTruncate: true` — see `docs/decisions-reference.md`) gets `contentWidthPx` from `withContentWidths()` (`lib/linesContentWidth.js`): the widest identifier among the loaded lines plus the add-row draft (published by `DataTable` through `lib/linesScrollHost.js`), measured with `measureTextPx` in the cell font. `columnFlex()` only ever raises the type basis to it (no maximum), so header, lines, totals and the add-row colgroup stay aligned and the grid's horizontal scroll absorbs the overflow.
@@ -1170,18 +1228,10 @@ inheriting shadcn's baked-in sizing. Reach for a plain `<button>` (styled
 with the `--floating-toolbar-*` CSS variables, same as the shell itself) for
 any new bulk-toolbar action button, rather than `<Button size="sm">`.
 
-**Icons: lucide-react, deliberately not Figma's "Iconic" library glyphs.**
-The Figma spec for the two text-bearing buttons above sources its icons
-(`file-plus`/`file-checkmark`) from the "Iconic" icon library, whose glyphs
-draw the plus/check as a badge overlapping the file's corner with a heavier
-stroke — visually different from this app's lucide-react set (`FilePlus`/
-`FileCheck`), which draws the same glyphs contained inside the file body
-with a thinner stroke. This is a **confirmed, deliberate decision, not a
-drift from Figma to fix**: lucide-react's versions were kept for visual
-consistency with every other icon already in this toolbar (`Trash2`, `X`,
-`Printer`, `Copy` — all lucide, thin stroke) rather than pixel-matching
-Figma's specific icon-library glyph. Do not "fix" this back to Iconic's glyph
-shape without re-confirming with design first.
+**Icons: Phosphor, like the rest of the app (ETP-6155).** The two
+text-bearing buttons above draw `FilePlusIcon` / `SealCheckIcon` from
+`@phosphor-icons/react`, the single icon family of the app — see
+**Icons** above.
 
 **Real examples:** `ListView.jsx` (grid multi-select), `DetailView.jsx` (two
 usages), `AmortizationLinesTable.jsx`, `AssetsAmortizationPanel.jsx`,
@@ -1913,7 +1963,7 @@ classes.
   rowActions={[
     {
       key: 'archive',            // unique key — also the default data-testid suffix
-      icon: ArchiveIcon,         // any lucide-react icon component
+      icon: ArchiveIcon,         // any @phosphor-icons/react icon component
       tooltip: ui('archiveLineTooltip'),   // aria-label + title — the icon's only label, matches Pencil/Trash's own pattern
       onClick: (row) => handleArchive(row),
       show: (row) => row.status !== 'archived',  // optional: boolean OR (row) => boolean, defaults to visible
@@ -2952,6 +3002,28 @@ server-side ordering on a large catalog.
 
 ---
 
+### 19d. A window's own create modal on a selector — `FieldCreateContext` (ETP-6209)
+
+For a selector whose record the generic `allowCreate` (§19c) cannot create — it only POSTs `{ name }`
+to a CRUD spec — a custom window can give the field a "+ create" row that opens the window's OWN modal.
+The window wraps its `GeneratedApp` in `FieldCreateContext.Provider`
+(`tools/app-shell/src/components/contract-ui/FieldCreateContext.js`) with a value keyed by field key:
+
+```jsx
+<FieldCreateContext.Provider value={{
+  rejectReason: { label: `+ ${ui('createRejectReason')}`, onOpen: (query, onSelect) => openMyModal(query, onSelect) },
+}}>
+```
+
+`EntityForm`'s searchable selector (`renderSearchSelectField` → `CreatableSearchSelect`) shows the row
+for that field; `onOpen(query, onSelect)` opens the modal, and calling `onSelect({ id, name })` selects
+the created record in the field. No provider, a field the value does not name, or a field that declares
+`allowCreate` (which wins): exactly the previous behaviour. Nothing in `decisions.json` — the context
+lives in the window's custom code, so it survives regeneration. Only user: sales-quotation's
+`rejectReason` (editable on a rejected quotation), which opens the reject flow's
+`CreateRejectReasonModal` (`createRejectReason` action) — `tools/app-shell/src/windows/custom/sales-quotation/index.jsx`.
+Sibling of `CreateContactContext` (the contact create on `type: 'search'` fields).
+
 ### 20. Follow-up documents — `FollowUpDocumentButton` + `draftMode.afterProcess` (ETP-5576)
 
 A generic flow that offers the document that naturally follows a completed one (today:
@@ -2990,7 +3062,7 @@ options: {
     descriptionOneKey,             // optional singular variant (count === 1)
     badgeKey, badgeTone,           // optional badge; tone 'success' (green, default) | 'info' (blue)
     actionLabelKey,                // primary button in the single-option layout («Crear albarán»)
-    icon,                          // lucide component
+    icon,                          // Phosphor icon component
     titleKey, buttonLabelKey,      // used when this is the only follow-up offered; separate keys: the
                                    // modal title asks («¿Gestionar envío?»), the button does not («Gestionar envío»)
     resultDocType,                 // ConfirmResultModal doc type (see §21 for the full list) — drives the
@@ -3156,7 +3228,7 @@ no amount, and its title, banner and buttons are computed:
 | `devolucionCompra` | Devolución de compra | Devolución de compra creada | `confirmResultModal.view.devolucion` | feminine | goods-receipt «Crear devolución» (opens `/return-to-vendor-shipment/{id}`) |
 | `pedidoVenta` | Pedido de venta | Pedido creado | `sqViewOrder` | masculine | sales-quotation «Crear pedido» |
 
-Adding a document type = one `TYPE_CONFIG` row (label key, title key, view key, lucide icon,
+Adding a document type = one `TYPE_CONFIG` row (label key, title key, view key, Phosphor icon,
 gender) plus its `confirmResultModal.docType.*` / `confirmResultModal.title.*` keys in all three
 locales. Shared hooks pass the type through instead of a title: `invoiceDocType` in
 `useRowConfirmAction` / `ReturnWindowShell`'s `confirmAction`, `invoiceType` in

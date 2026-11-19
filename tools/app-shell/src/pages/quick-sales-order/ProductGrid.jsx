@@ -1,7 +1,7 @@
 import { useMemo, useRef, useLayoutEffect } from 'react';
 import { useUI } from '@/i18n';
 import { Badge } from '@/components/ui/badge';
-import { Plus, TrendingUp, LayoutGrid, List } from 'lucide-react';
+import { PlusIcon, TrendUpIcon, SquaresFourIcon, ListBulletsIcon } from '@phosphor-icons/react';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 
 const AVATAR_COLORS = [
@@ -106,7 +106,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
                     <Badge
                       className="bg-status-warning hover:bg-status-warning text-status-warning-foreground text-[9px] px-1 py-0 gap-0.5 shrink-0"
                       data-testid="Badge__ff9d59">
-                      <TrendingUp className="h-2 w-2" data-testid="TrendingUp__ff9d59" />
+                      <TrendUpIcon className="h-2 w-2" data-testid="TrendingUp__ff9d59" />
                       {ui('qsoTopSeller')}
                     </Badge>
                   )}
@@ -132,7 +132,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
               {/* Add icon on hover */}
               <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                 <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                  <Plus className="h-3.5 w-3.5" data-testid="Plus__ff9d59" />
+                  <PlusIcon className="h-3.5 w-3.5" data-testid="Plus__ff9d59" />
                 </div>
               </div>
             </button>
@@ -164,7 +164,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
                   <Badge
                     className="bg-status-warning hover:bg-status-warning text-status-warning-foreground text-[10px] px-1.5 py-0 gap-0.5"
                     data-testid="Badge__ff9d59">
-                    <TrendingUp className="h-2.5 w-2.5" data-testid="TrendingUp__ff9d59" />
+                    <TrendUpIcon className="h-2.5 w-2.5" data-testid="TrendingUp__ff9d59" />
                     {ui('qsoTopSeller')}
                   </Badge>
                 </div>
@@ -202,7 +202,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
               {/* Hover add icon */}
               <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                  <Plus className="h-3.5 w-3.5" data-testid="Plus__ff9d59" />
+                  <PlusIcon className="h-3.5 w-3.5" data-testid="Plus__ff9d59" />
                 </div>
               </div>
             </button>
@@ -243,7 +243,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              <LayoutGrid className="h-3.5 w-3.5" data-testid="LayoutGrid__ff9d59" />
+              <SquaresFourIcon className="h-3.5 w-3.5" data-testid="LayoutGrid__ff9d59" />
             </button>
             <button
               type="button"
@@ -255,7 +255,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              <List className="h-3.5 w-3.5" data-testid="List__ff9d59" />
+              <ListBulletsIcon className="h-3.5 w-3.5" data-testid="List__ff9d59" />
             </button>
           </div>
         )}

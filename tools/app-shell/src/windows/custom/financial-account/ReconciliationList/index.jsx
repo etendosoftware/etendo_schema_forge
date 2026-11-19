@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeftIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { getDateBounds } from '@/lib/dateRangeBounds';
 import { parseCalendarDate } from '@/lib/dateOnly';
@@ -86,7 +86,7 @@ export function ReconciliationListTab({
           onClick={() => navigate(-1)}
           className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-card text-[#828FA3] transition-colors hover:bg-[hsl(var(--muted))] hover:text-foreground"
         >
-          <ArrowLeft className="h-5 w-5" data-testid="ArrowLeft__f4e9e1" />
+          <ArrowLeftIcon className="h-5 w-5" data-testid="ArrowLeft__f4e9e1" />
         </button>
         <DateRangePopover
           value={dateRange}

@@ -1,5 +1,5 @@
 import { forwardRef } from 'react';
-import { Copy, Mail, Upload } from 'lucide-react';
+import { CopyIcon, EnvelopeSimpleIcon, UploadSimpleIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { ACCEPT_ATTRIBUTE } from './invoiceInboxUploadPolicy.js';
 
@@ -39,7 +39,7 @@ function InvoiceInboxEmailCard() {
   return (
     <div className={`${CARD_CLASS} border border-border bg-muted/40`} data-testid="invoice-inbox-email-card">
       <span className={`${ICON_BOX_CLASS} border border-border bg-card text-muted-foreground`}>
-        <Mail className="h-5 w-5" aria-hidden="true" data-testid="Mail__6da916" />
+        <EnvelopeSimpleIcon className="h-5 w-5" aria-hidden="true" data-testid="Mail__6da916" />
       </span>
       <div className="min-w-0 flex-1">
         <div className="text-xs text-muted-foreground">{ui('invoiceInboxEmailLabel')}</div>
@@ -54,7 +54,7 @@ function InvoiceInboxEmailCard() {
           className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-card px-3 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
           data-testid="invoice-inbox-email-copy"
         >
-          <Copy className="h-3.5 w-3.5" aria-hidden="true" data-testid="Copy__6da916" />
+          <CopyIcon className="h-3.5 w-3.5" aria-hidden="true" data-testid="Copy__6da916" />
           {ui('copy')}
         </button>
       </span>
@@ -79,7 +79,7 @@ export default function InvoiceInboxDropZone({ onPick }) {
         data-testid="invoice-inbox-dropzone"
       >
         <span className={`${ICON_BOX_CLASS} bg-primary/10 text-primary`}>
-          <Upload className="h-5 w-5" aria-hidden="true" data-testid="Upload__6da916" />
+          <UploadSimpleIcon className="h-5 w-5" aria-hidden="true" data-testid="Upload__6da916" />
         </span>
         <span className="min-w-0">
           <span className="block text-sm font-semibold">

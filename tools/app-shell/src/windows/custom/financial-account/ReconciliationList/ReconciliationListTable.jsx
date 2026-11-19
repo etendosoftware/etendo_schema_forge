@@ -1,6 +1,6 @@
 import { FinancialGridView, FinancialGridRow } from '../FinancialGridView.jsx';
 import { Fragment, useMemo, useState } from 'react';
-import { Scale } from 'lucide-react';
+import { ScalesIcon } from '@phosphor-icons/react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -261,7 +261,7 @@ function renderBody({ loading, reconciliations, ui, currency, cellCtx, openId, t
     return (
       <div className="flex flex-col items-center gap-2 px-4 py-16 text-center">
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[hsl(var(--muted))]">
-          <Scale
+          <ScalesIcon
             className="h-5 w-5 text-[hsl(var(--text-disabled))]"
             data-testid="Scale__d80a75" />
         </div>

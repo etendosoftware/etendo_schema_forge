@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { TrendingUp, TrendingDown } from 'lucide-react';
+import { TrendUpIcon, TrendDownIcon } from '@phosphor-icons/react';
 import { useMenuLabel } from '@/i18n';
 import { useLocaleSwitch } from '@/i18n';
 import { formatDashboardAmount, formatDashboardNumber, localeFromUi } from '@/lib/dashboardNumberFormat.js';
@@ -79,9 +79,9 @@ export function KPICard({ label, value, format, trend, previousValue, icon: Icon
             )}
           >
             {isPositive ? (
-              <TrendingUp className="h-3.5 w-3.5" data-testid="TrendingUp__e18695" />
+              <TrendUpIcon className="h-3.5 w-3.5" data-testid="TrendingUp__e18695" />
             ) : (
-              <TrendingDown className="h-3.5 w-3.5" data-testid="TrendingDown__e18695" />
+              <TrendDownIcon className="h-3.5 w-3.5" data-testid="TrendingDown__e18695" />
             )}
             <span>
               {isPositive ? '+' : ''}

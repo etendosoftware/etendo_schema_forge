@@ -53,7 +53,6 @@ const reexportModules = [
   ['checkbox', '../components/ui/checkbox.jsx'],
   ['collapsible', '../components/ui/collapsible.jsx'],
   ['command', '../components/ui/command.jsx'],
-  ['custom icons', '../components/ui/custom-icons.jsx'],
   ['date field', '../components/ui/date-field.jsx'],
   ['dialog', '../components/ui/dialog.jsx'],
   ['dropdown menu', '../components/ui/dropdown-menu.jsx'],

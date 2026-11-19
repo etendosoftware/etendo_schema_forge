@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/windows/custom/invoice-inbox/invoiceInboxApi.js
 import { describe, it, expect, vi } from 'vitest';
-import { fetchRowsByIdChunked, IDS_PER_REQUEST, fetchNextPage, fetchCount, fetchCounts, fetchRowsById, uploadInboxFile, fetchStreamPage, discardInboxDocument, DISCARD_ACTION, fetchReview, REVIEW_ACTION, applyOperations, markReviewed } from '../invoiceInboxApi.js';
+import { fetchRowsByIdChunked, IDS_PER_REQUEST, fetchNextPage, fetchCount, fetchCounts, fetchRowsById, uploadInboxFile, fetchStreamPage, discardInboxDocument, DISCARD_ACTION, fetchReview, REVIEW_ACTION, applyOperations, markReviewed, confirmInboxDocument, CONFIRM_ACTION } from '../invoiceInboxApi.js';
 import { INBOX_FILTERS } from '../invoiceInboxFilters.js';
 
 const json = (body, { ok = true, status = 200 } = {}) => ({ ok, status, json: async () => body });
@@ -363,5 +363,60 @@ describe('applyOperations / markReviewed (ETP-6050 S2)', () => {
   it('markReviewed 422 not_valid exposes missing, the NEW token and the document status', async () => {
     const apiFetch = vi.fn(async () => ({ ok: false, status: 422, json: async () => ({ error: { code: 'not_valid', missing: ['vendor'], updated: 'u9', documentStatus: 'ERROR' } }) }));
     expect(await markReviewed(apiFetch, 'D1', 'u')).toMatchObject({ status: 'failed', code: 'not_valid', missing: ['vendor'], updated: 'u9', documentStatus: 'ERROR' });
+  });
+});
+
+describe('confirmInboxDocument', () => {
+  const answer = { id: 'D1', status: 'CONFIRMED', invoice: { id: 'I1', documentNo: 'FC1', identifier: 'FC1 - x' }, adjusted: false, createdVendor: true, createdProducts: 2, totalMismatch: true, alreadyConfirmed: false };
+
+  it('POSTs the confirm action with no timeout and no body when no token is given', async () => {
+    const apiFetch = vi.fn(async () => json(answer));
+    expect(await confirmInboxDocument(apiFetch, 'D/1')).toEqual({ status: 'confirmed', result: answer });
+    expect(CONFIRM_ACTION).toBe('confirm');
+    const [path, init] = apiFetch.mock.calls[0];
+    expect(path).toMatch(/\/D%2F1\/action\/confirm$/);
+    expect(init).toEqual({ method: 'POST', timeout: 0 });
+    expect('body' in init).toBe(false);
+  });
+
+  it('sends {updated} only when a token is given', async () => {
+    const apiFetch = vi.fn(async () => json(answer));
+    await confirmInboxDocument(apiFetch, 'D1', 'tok-1');
+    expect(JSON.parse(apiFetch.mock.calls[0][1].body)).toEqual({ updated: 'tok-1' });
+    await confirmInboxDocument(apiFetch, 'D1', null);
+    expect('body' in apiFetch.mock.calls[1][1]).toBe(false);
+  });
+
+  it('keeps the whole 200 answer (invoice, createdProducts, adjusted, totalMismatch, alreadyConfirmed)', async () => {
+    const out = await confirmInboxDocument(vi.fn(async () => json({ ...answer, alreadyConfirmed: true })), 'D1');
+    expect(out.result).toMatchObject({ invoice: { documentNo: 'FC1' }, createdProducts: 2, totalMismatch: true, alreadyConfirmed: true, createdVendor: true, adjusted: false });
+  });
+
+  it('maps a coded refusal: code, detail, invoice and missing', async () => {
+    const dup = vi.fn(async () => json({ error: { code: 'duplicate_invoice', invoice: { id: 'I9', documentNo: 'FC9' } } }, { ok: false, status: 409 }));
+    expect(await confirmInboxDocument(dup, 'D1')).toMatchObject({ status: 'failed', code: 'duplicate_invoice', httpStatus: 409, invoice: { documentNo: 'FC9' }, detail: null });
+    const failed = vi.fn(async () => json({ error: { code: 'confirm_failed', detail: 'No hay período abierto', updated: 'u2' } }, { ok: false, status: 500 }));
+    expect(await confirmInboxDocument(failed, 'D1')).toMatchObject({ code: 'confirm_failed', detail: 'No hay período abierto', detailInfo: null, updated: 'u2', invoice: null });
+    const coded = vi.fn(async () => json({ error: { code: 'confirm_failed', detail: 'line 2: x', detailCode: 'step_failed', detailParams: { step: 'line', n: 2 } } }, { ok: false, status: 422 }));
+    expect(await confirmInboxDocument(coded, 'D1')).toMatchObject({ code: 'confirm_failed', detailInfo: { code: 'step_failed', params: { step: 'line', n: 2 } } });
+    const invalid = vi.fn(async () => json({ error: { code: 'not_valid', missing: ['exchangeRate'] } }, { ok: false, status: 422 }));
+    expect(await confirmInboxDocument(invalid, 'D1')).toMatchObject({ code: 'not_valid', missing: ['exchangeRate'] });
+  });
+
+  it('a code-less 403 becomes access_denied; a code-less non-403 keeps a null code', async () => {
+    const gate = vi.fn(async () => json({ error: { message: 'Access denied to spec for current role' } }, { ok: false, status: 403 }));
+    expect(await confirmInboxDocument(gate, 'D1')).toMatchObject({ status: 'failed', code: 'access_denied', httpStatus: 403 });
+    const other = vi.fn(async () => json({}, { ok: false, status: 500 }));
+    expect(await confirmInboxDocument(other, 'D1')).toMatchObject({ status: 'failed', code: null, httpStatus: 500 });
+  });
+
+  it('an unreadable 200 body is a failure, not a confirm', async () => {
+    const noJson = vi.fn(async () => ({ ok: true, status: 200, json: async () => { throw new Error('x'); } }));
+    expect((await confirmInboxDocument(noJson, 'D1')).status).toBe('failed');
+  });
+
+  it('a request with no HTTP answer rejects with the network error', async () => {
+    const err = Object.assign(new Error('offline'), { name: 'NetworkError' });
+    await expect(confirmInboxDocument(vi.fn(async () => { throw err; }), 'D1')).rejects.toBe(err);
   });
 });

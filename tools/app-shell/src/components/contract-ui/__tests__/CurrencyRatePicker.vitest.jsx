@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 // @covers tools/app-shell/src/components/contract-ui/CurrencyRatePicker.jsx
+import { allIconsAs } from '@/test/iconMock.js';
+import { currencyRateIconOverrides } from '@/test/currencyRateIconOverrides.jsx';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -26,13 +28,8 @@ vi.mock('@/i18n', async (importOriginal) => {
   return { ...actual, useUI: () => ui };
 });
 
-vi.mock('lucide-react', () => ({
-  ChevronDown: (props) => <span data-testid={props['data-testid'] || 'icon-chevron'} />,
-  Loader2: (props) => <span data-testid={props['data-testid'] || 'icon-loader'} />,
-  Pencil: (props) => <span data-testid={props['data-testid'] || 'icon-pencil'} />,
-  Check: (props) => <span data-testid={props['data-testid'] || 'icon-check'} />,
-  X: (props) => <span data-testid={props['data-testid'] || 'icon-x'} />,
-}));
+vi.mock('@phosphor-icons/react', async importOriginal =>
+  allIconsAs(() => null, importOriginal, currencyRateIconOverrides));
 
 import { CurrencyRatePicker, resolveRateDateField } from '../CurrencyRatePicker.jsx';
 

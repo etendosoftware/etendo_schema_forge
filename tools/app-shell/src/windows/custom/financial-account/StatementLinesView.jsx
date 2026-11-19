@@ -1,4 +1,4 @@
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeftIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { useBankStatementLines } from '@/hooks/useBankStatementLines';
 import { StatementLinesTable } from './StatementLinesTable';
@@ -29,7 +29,7 @@ export function StatementLinesView({ statementId, statementName, currency, onBac
           onClick={onBack}
           className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[hsl(var(--border-control))] bg-card text-[hsl(var(--muted-foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
         >
-          <ArrowLeft className="h-4 w-4" data-testid="ArrowLeft__4e62e5" />
+          <ArrowLeftIcon className="h-4 w-4" data-testid="ArrowLeft__4e62e5" />
         </button>
         <div className="flex flex-col">
           <span className="text-sm font-semibold text-[hsl(var(--foreground))]">

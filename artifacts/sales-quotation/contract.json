@@ -1,8 +1,8 @@
 {
-  "version": "0.35.0",
+  "version": "0.36.0",
   "generatedAt": "2026-06-26T16:40:04.731Z",
-  "updatedAt": "2026-11-16T13:50:00.211Z",
-  "checksum": "0b99ca74327459c8",
+  "updatedAt": "2026-11-18T15:10:53.793Z",
+  "checksum": "0e5e0f8d2b1066ed",
   "frontendContract": {
     "window": {
       "id": "6CB5B67ED33F47DFA334079D3EA2340E",
@@ -654,8 +654,8 @@
             "apiKey": "eTGOCurrencyRate",
             "column": "EM_ETGO_Currency_Rate",
             "label": "EM_ETGO_Currency_Rate",
-            "type": "string",
-            "tsType": "string",
+            "type": "decimal",
+            "tsType": "number",
             "visibility": "editable",
             "required": false,
             "grid": false,
@@ -1981,7 +1981,7 @@
             "name": "eTGOCurrencyRate",
             "apiKey": "eTGOCurrencyRate",
             "column": "EM_ETGO_Currency_Rate",
-            "type": "string",
+            "type": "decimal",
             "visibility": "editable",
             "required": false
           },
@@ -3629,7 +3629,7 @@
         "entity": "quotation",
         "field": "eTGOCurrencyRate",
         "runner": "node",
-        "description": "Field 'eTGOCurrencyRate' should have type 'string' in quotation"
+        "description": "Field 'eTGOCurrencyRate' should have type 'number' in quotation"
       },
       {
         "id": "t-field-type-quotation-etgoTotalDiscount",

@@ -8,7 +8,18 @@ import { useRowDelete } from '@/hooks/useRowDelete';
 import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
-import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Download, Trash2, Loader2 } from 'lucide-react';
+import {
+  CaretDownIcon,
+  PlusIcon,
+  LinkSimpleIcon,
+  PrinterIcon,
+  SquaresFourIcon,
+  ArrowsClockwiseIcon,
+  CopyIcon,
+  DownloadSimpleIcon,
+  TrashIcon,
+  CircleNotchIcon,
+} from '@phosphor-icons/react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useCopyPageLink } from '@/hooks/useCopyLinkAction.js';
@@ -247,7 +258,7 @@ function ListTableRegion({
 }
 
 function RefreshButton({ RefreshIconComponent, iconButtonHover, onRefresh, label }) {
-  const RefreshEl = RefreshIconComponent || RefreshCw;
+  const RefreshEl = RefreshIconComponent || ArrowsClockwiseIcon;
   return (
     <button
       onClick={onRefresh}
@@ -287,7 +298,7 @@ export function ViewToggle({ galleryRenderer, onSelectList, onSelectGallery, vie
         onClick={onSelectGallery}
         className={`flex items-center justify-center w-12 h-8 rounded-lg transition-all ${viewMode === "gallery" ? "bg-card shadow-sm" : ""}`}
       >
-        <LayoutGrid
+        <SquaresFourIcon
           className="h-6 w-6"
           style={{ color: 'hsl(var(--text-disabled))' }}
           data-testid="LayoutGrid__620cbc" />
@@ -470,8 +481,8 @@ function printButtonLabel(isPrinting, ui) {
 
 function printButtonIcon(isPrinting, selectionBarSize) {
   return isPrinting
-    ? <Loader2 className={`${iconSizeClass(selectionBarSize)} animate-spin`} data-testid="Loader2__620cbc" />
-    : <Printer className={iconSizeClass(selectionBarSize)} data-testid="Printer__620cbc" />;
+    ? <CircleNotchIcon className={`${iconSizeClass(selectionBarSize)} animate-spin`} data-testid="Loader2__620cbc" />
+    : <PrinterIcon className={iconSizeClass(selectionBarSize)} data-testid="Printer__620cbc" />;
 }
 
 /**
@@ -1437,7 +1448,7 @@ export function ListView({
                     aria-label={ui('cloneOrderBtn')}
                     onClick={() => onCloneRow(selectedRows)}
                     data-testid="Button__620cbc">
-                    <Copy className={iconSizeClass(selectionBarSize)} data-testid="Copy__620cbc" />
+                    <CopyIcon className={iconSizeClass(selectionBarSize)} data-testid="Copy__620cbc" />
                   </Button>
                 )}
                 {/* ETP-4656 — generic "Delete selected". Suppressed when the window is
@@ -1464,7 +1475,7 @@ export function ListView({
                     title={ui('delete')}
                     aria-label={ui('delete')}
                     data-testid="bulk-delete-selected">
-                    <Trash2 className={iconSizeClass(selectionBarSize)} data-testid="Trash2__620cbc" />
+                    <TrashIcon className={iconSizeClass(selectionBarSize)} data-testid="Trash2__620cbc" />
                   </Button>
                 )}
                 {bulkActions && bulkActions({ selectedRows, clearSelection, token, apiBaseUrl, windowName, api, refresh: refreshList, windowReadOnly: customActionsReadOnly })}
@@ -1610,7 +1621,7 @@ export function ListView({
                       aria-label={ui('copyLink')}
                       data-testid="list-share-link"
                       className="h-10 w-10 flex items-center justify-center rounded-lg border border-border text-[#828FA3] hover:bg-[hsl(var(--muted))] transition-colors">
-                      <Link2 className="h-5 w-5" data-testid="Link2__620cbc" />
+                      <LinkSimpleIcon className="h-5 w-5" data-testid="Link2__620cbc" />
                     </button>
                   )}
                   <ListSortPopover
@@ -1647,7 +1658,7 @@ export function ListView({
                       title={ui('import')}
                       data-testid="ListView__importButton"
                     >
-                      <Download className="h-5 w-5" data-testid="Download__ListViewImport" />
+                      <DownloadSimpleIcon className="h-5 w-5" data-testid="Download__ListViewImport" />
                     </Button>
                   )}
                   {importConfig?.enabled && (
@@ -1667,7 +1678,7 @@ export function ListView({
                       aria-label={ui('print')}
                       title={ui('print')}
                       data-testid="Button__620cbc">
-                      <Printer className="h-5 w-5" data-testid="Printer__620cbc" />
+                      <PrinterIcon className="h-5 w-5" data-testid="Printer__620cbc" />
                     </Button>
                   )}
                   {/* Split "New" button */}
@@ -1678,7 +1689,7 @@ export function ListView({
                         data-testid="action-new"
                         onClick={handleNew}
                       >
-                        <Plus
+                        <PlusIcon
                           className="h-5 w-5 text-white/90 group-hover:text-[hsl(var(--accent-highlight-foreground))]"
                           data-testid="Plus__620cbc" />
                         {newLabel ?? tMenu(entityLabel, { field: 'newLabel' }) ?? ui('newRecord')}
@@ -1693,7 +1704,7 @@ export function ListView({
                                 aria-label={ui('moreOptions')}
                                 title={ui('moreOptions')}
                                 data-testid="action-new-more">
-                                <ChevronDown className="h-3.5 w-3.5" data-testid="ChevronDown__620cbc" />
+                                <CaretDownIcon className="h-3.5 w-3.5" data-testid="ChevronDown__620cbc" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" data-testid="DropdownMenuContent__620cbc">

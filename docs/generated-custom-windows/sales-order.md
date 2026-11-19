@@ -957,3 +957,7 @@ list's prices unconverted. Existing lines are not re-priced when the
 header currency or rate changes, in the window or through the API.
 
 Contract: `docs/public-api.md` §4.12.
+
+## Rate and cost fields are numeric — ETP-6342
+
+Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. The header `eTGOCurrencyRate` (`EM_ETGO_Currency_Rate`) is now `decimal` in the contract (`tsType: number`).

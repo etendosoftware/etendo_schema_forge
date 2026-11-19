@@ -1,11 +1,18 @@
-import { X } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { XIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { formatMoney } from './invoiceInboxMoney.js';
-import { errorCodeLabelKey } from './invoiceInboxMessages.js';
+import { confirmFailedDetail, errorCodeLabelKey } from './invoiceInboxMessages.js';
 import {
   computeTotals, currencyScale, isSettledStatus, reviewBanners, totalMismatch,
 } from './invoiceInboxReviewModel.js';
 import { ReviewBanner } from './InvoiceInboxReviewParts.jsx';
+import InvoiceInboxInvoiceLink from './InvoiceInboxInvoiceLink.jsx';
+
+const BLOCKER_LABEL_KEYS = Object.freeze({
+  exchangeRate: ['invoiceInboxBlockerExchangeRateTitle', 'invoiceInboxBlockerExchangeRateBody'],
+  vendorAddress: ['invoiceInboxBlockerVendorAddressTitle', 'invoiceInboxBlockerVendorAddressBody'],
+});
 
 /**
  * ETP-6050 F5 / F7 — the banners at the TOP of the form: confirmed (green; the title shows the invoice's document number),
@@ -38,6 +45,15 @@ export default function InvoiceInboxReviewBanners({ review }) {
                 title={ui('invoiceInboxReviewConfirmedTitle', { doc })}
                 data-testid="ReviewBanner__838958">
                 {ui('invoiceInboxReviewConfirmedBody')}
+                {review.invoice?.id && (
+                  <InvoiceInboxInvoiceLink
+                    invoiceId={review.invoice.id}
+                    className="ml-1 font-medium underline"
+                    testId="invoice-inbox-review-invoice-link"
+                    data-testid="InvoiceInboxInvoiceLink__838958">
+                    {ui('invoiceInboxReviewOpenInvoice', { doc })}
+                  </InvoiceInboxInvoiceLink>
+                )}
               </ReviewBanner>
             );
           }
@@ -61,6 +77,30 @@ export default function InvoiceInboxReviewBanners({ review }) {
                 title={ui(errorCodeLabelKey(banner.code))}
                 data-testid="ReviewBanner__838958" />
             );
+          case 'confirmFailed':
+            return (
+              <ReviewBanner
+                key="confirmFailed"
+                tone="destructive"
+                testId="invoice-inbox-review-banner-confirm-failed"
+                title={ui(errorCodeLabelKey('CONFIRM_FAILED'))}
+                data-testid="ReviewBanner__838958">
+                {confirmFailedDetail(ui, banner.info, banner.detail) || ui('invoiceInboxConfirmFailedNoDetail')}
+              </ReviewBanner>
+            );
+          case 'blocker': {
+            const [titleKey, bodyKey] = BLOCKER_LABEL_KEYS[banner.blocker];
+            return (
+              <ReviewBanner
+                key={`blocker-${banner.blocker}`}
+                tone="destructive"
+                testId={`invoice-inbox-review-banner-blocker-${banner.blocker}`}
+                title={ui(titleKey)}
+                data-testid="ReviewBanner__838958">
+                {ui(bodyKey)}
+              </ReviewBanner>
+            );
+          }
           case 'duplicate':
             return (
               <ReviewBanner
@@ -148,7 +188,42 @@ export function InvoiceInboxReviewNotice({ noticeKey, onDismiss }) {
         title={ui('close')}
         className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full text-current opacity-70 hover:opacity-100"
         data-testid="invoice-inbox-review-notice-dismiss">
-        <X className="h-3.5 w-3.5" aria-hidden="true" data-testid="X__review-notice" />
+        <XIcon className="h-3.5 w-3.5" aria-hidden="true" data-testid="X__review-notice" />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * ETP-6051 — a confirm refusal that retrying cannot fix (a duplicate invoice, a price list with tax
+ * included, a missing exchange rate or vendor address, the plan quota…): a full-width banner at the
+ * top of the form with its complete, wrapping text and no retry. Dismissible; it also goes away on
+ * the next edit or confirm.
+ *
+ * @param {{refusalKey: string, onDismiss: () => void}} props
+ */
+export function InvoiceInboxReviewRefusal({ refusalKey, onDismiss }) {
+  const ui = useUI();
+  const ref = useRef(null);
+  // The form pane scrolls: bring the cause into view even when the user was down in the lines.
+  useEffect(() => { ref.current?.scrollIntoView?.({ block: 'nearest' }); }, []);
+  return (
+    <div ref={ref} className="relative" data-testid="invoice-inbox-review-refusal-wrap">
+      <ReviewBanner
+        tone="destructive"
+        testId="invoice-inbox-review-refusal"
+        title={ui('invoiceInboxConfirmRefusedTitle')}
+        data-testid="ReviewBanner__refusal">
+        <span className="pr-6">{ui(refusalKey)}</span>
+      </ReviewBanner>
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label={ui('close')}
+        title={ui('close')}
+        className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full text-current opacity-70 hover:opacity-100"
+        data-testid="invoice-inbox-review-refusal-dismiss">
+        <XIcon className="h-3.5 w-3.5" aria-hidden="true" data-testid="X__review-refusal" />
       </button>
     </div>
   );

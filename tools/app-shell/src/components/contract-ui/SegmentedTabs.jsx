@@ -2,7 +2,7 @@
  * Figma segmented control: a 40px muted group of 32px tabs, the active one raised on a card.
  * Shared by the list toolbar's subset tabs (ListView) and custom windows' top bars (ETP-5736).
  * Presentational only: the caller owns the active index and translates labels and `ariaLabel`.
- * Must not import lucide icons — custom-window tests mock `lucide-react` with a narrow icon set.
+ * Must not import icons — custom-window tests mock `@phosphor-icons/react` with a narrow icon set.
  *
  * @param {object} props
  * Optional per-item counter (ETP-6049): `count` (a number) renders a small badge after the label;

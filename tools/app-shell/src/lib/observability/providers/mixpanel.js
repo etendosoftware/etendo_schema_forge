@@ -1,6 +1,7 @@
 import { createMixpanelAdapter } from '@etendosoftware/app-shell-core/observability/adapters/mixpanel';
 import { loadMixpanel } from '../sdk.js';
 import { SAFE_EVENT_PROPERTY_KEYS } from '../payload.js';
+import { TRUSTED_CONTEXT_KEYS } from '../core.js';
 
 /**
  * The host's Mixpanel provider (ETP-4578): the core's adapter with this app's environment
@@ -35,6 +36,8 @@ export function createMixpanelProvider({
     apiHost,
     debug,
     allowedKeys: SAFE_EVENT_PROPERTY_KEYS,
+    // The gateway already trusts these; without it this adapter's own sanitizer redacts `reportSessionId`.
+    trustedKeys: TRUSTED_CONTEXT_KEYS,
     logger,
     storage,
   }), { analytics: true });

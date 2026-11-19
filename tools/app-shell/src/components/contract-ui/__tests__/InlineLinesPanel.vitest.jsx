@@ -12,12 +12,12 @@ import { toast } from 'sonner';
 
 // --- Mocks (one block, no spreading across files) ---
 
-// The line edit/delete buttons render the Iconic edit/trash from the core custom-icons
-// barrel; the published core may predate them, so stub them while keeping every other icon real.
-vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
+// Stub TrashIcon / PencilSimpleIcon from @phosphor-icons/react with marker svgs so the tests can
+// assert which glyph a row action renders, while every other icon stays real.
+vi.mock('@phosphor-icons/react', async (importOriginal) => ({
   ...(await importOriginal()),
-  IconicTrashIcon: (props) => <svg data-icon="iconic-trash" {...props} />,
-  IconicEditIcon: (props) => <svg data-icon="iconic-edit" {...props} />,
+  TrashIcon: (props) => <svg data-icon="phosphor-trash" {...props} />,
+  PencilSimpleIcon: (props) => <svg data-icon="phosphor-pencil" {...props} />,
 }));
 
 vi.mock('sonner', () => ({
@@ -382,8 +382,8 @@ describe('InlineLinesPanel', () => {
     const actions = within(row).getByTestId('line-actions');
     // Edit (pencil) must still render — only delete is gated.
     expect(within(actions).queryByTestId('Pencil__3b7ec2')).toBeInTheDocument();
-    // ETP-5600 — the edit glyph is the Figma Iconic edit; the testid stays stable.
-    expect(within(actions).getByTestId('Pencil__3b7ec2')).toHaveAttribute('data-icon', 'iconic-edit');
+    // ETP-5600 — the edit glyph is the Phosphor pencil; the testid stays stable.
+    expect(within(actions).getByTestId('Pencil__3b7ec2')).toHaveAttribute('data-icon', 'phosphor-pencil');
     expect(within(actions).queryByTestId('IconicTrashIcon__3b7ec2')).toBeNull();
     expect(within(actions).queryByRole('button', { name: /delete/i })).toBeNull();
   });
@@ -443,7 +443,7 @@ describe('InlineLinesPanel', () => {
       expect(del).toHaveClass(...DESTRUCTIVE_TOKENS);
       expect(del).not.toHaveClass('text-[hsl(var(--sf-icon-outline-secondary))]');
       const icon = within(del).getByTestId('IconicTrashIcon__3b7ec2');
-      expect(icon).toHaveAttribute('data-icon', 'iconic-trash');
+      expect(icon).toHaveAttribute('data-icon', 'phosphor-trash');
       expect(icon).toHaveClass('h-5', 'w-5');
     });
 

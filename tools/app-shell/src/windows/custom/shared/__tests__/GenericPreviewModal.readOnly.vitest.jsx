@@ -23,12 +23,12 @@ vi.mock('../PdfViewer.jsx', () => ({
   default: () => <div data-testid="pdf-viewer" />,
 }));
 
-vi.mock('lucide-react', () => ({
-  X: () => <span />,
-  Upload: () => <span />,
-  Trash2: () => <span />,
-  Loader2: () => <span />,
-  Download: () => <span />,
+vi.mock('@phosphor-icons/react', () => ({
+  XIcon: () => <span />,
+  UploadSimpleIcon: () => <span />,
+  TrashIcon: () => <span />,
+  CircleNotchIcon: () => <span />,
+  DownloadSimpleIcon: () => <span />,
 }));
 
 import { render, screen } from '@testing-library/react';

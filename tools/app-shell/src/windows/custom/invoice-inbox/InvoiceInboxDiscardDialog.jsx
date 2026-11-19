@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { Loader2, Trash2 } from 'lucide-react';
+import { CircleNotchIcon, TrashIcon } from '@phosphor-icons/react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog.jsx';
@@ -82,11 +82,11 @@ export default function InvoiceInboxDiscardDialog({ open, count, running = false
             onClick={onConfirm}
             data-testid="invoice-inbox-discard-confirm">
             {running
-              ? <Loader2
+              ? <CircleNotchIcon
                   aria-hidden="true"
                   className="!size-3.5 animate-spin [animation-duration:0.8s]"
                   data-testid="invoice-inbox-discard-spinner" />
-              : <Trash2 aria-hidden="true" data-testid="Trash2__invoice-inbox-discard" />}
+              : <TrashIcon aria-hidden="true" data-testid="Trash2__invoice-inbox-discard" />}
             {copy.confirm}
           </Button>
         </DialogFooter>

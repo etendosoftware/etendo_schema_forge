@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowRight } from 'lucide-react';
+import { WarningCircleIcon, ArrowRightIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 
 /**
@@ -41,7 +41,7 @@ export function SessionConflictNotice({
   return (
     <div className="text-center" data-testid={testId}>
       <div className="mx-auto mb-5 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-destructive/10 text-destructive">
-        <AlertCircle className="h-8 w-8" data-testid={`${testId}-icon`} />
+        <WarningCircleIcon className="h-8 w-8" data-testid={`${testId}-icon`} />
       </div>
       <h1 className="text-3xl font-semibold tracking-[-0.06em] text-foreground sm:text-[2.7rem] sm:leading-[1.04]">
         {title}
@@ -68,7 +68,7 @@ export function SessionConflictNotice({
         data-testid={primaryTestId}
       >
         <span>{primaryLabel}</span>
-        {primaryFilled && <ArrowRight className="h-4 w-4 shrink-0" data-testid={`${testId}-primary-arrow`} />}
+        {primaryFilled && <ArrowRightIcon className="h-4 w-4 shrink-0" data-testid={`${testId}-primary-arrow`} />}
       </Button>
 
       {secondaryLabel && primaryFilled && (
@@ -91,7 +91,7 @@ function SecondaryAction({ className, variant, label, onClick, testId, warning, 
     <>
       <Button variant={variant} className={className} onClick={onClick} disabled={busy} data-testid={testId}>
         <span>{label}</span>
-        {withArrow && <ArrowRight className="h-4 w-4 shrink-0" data-testid={`${testId}-arrow`} />}
+        {withArrow && <ArrowRightIcon className="h-4 w-4 shrink-0" data-testid={`${testId}-arrow`} />}
       </Button>
       {warning && <p className="mt-2 text-xs text-muted-foreground">{warning}</p>}
     </>

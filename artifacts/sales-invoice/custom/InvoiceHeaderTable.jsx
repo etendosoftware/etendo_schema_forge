@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check } from 'lucide-react';
+import { CheckIcon } from '@phosphor-icons/react';
 import { DataTable } from '@/components/contract-ui';
 import { TruncatedText } from '@/components/ui/truncated-text';
 import { useLocale, useLocaleSwitch, useUI } from '@/i18n';
@@ -275,7 +275,7 @@ export default function InvoiceHeaderTable(props) {
           if (badge.kind === 'credit-applied') {
             return (
               <span style={{...NOWRAP_FLEX,display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'var(--status-success-bg)',color:'var(--status-success-fg)'}}>
-                <Check size={12}/>{ui('cpCreditFullyApplied')}
+                <CheckIcon size={12}/>{ui('cpCreditFullyApplied')}
               </span>
             );
           }
@@ -301,7 +301,7 @@ export default function InvoiceHeaderTable(props) {
           if (badge.kind === 'paid') {
             return (
               <span style={{...NOWRAP_FLEX,display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'var(--status-success-bg)',color:'var(--status-success-fg)'}}>
-                <Check size={12}/>{t('cobrada')}
+                <CheckIcon size={12}/>{t('cobrada')}
               </span>
             );
           }

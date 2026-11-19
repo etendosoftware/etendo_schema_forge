@@ -1201,7 +1201,7 @@ export const paymentDetails = [
     "writeoffAmount": 38907,
     "expectedConverted": 38907,
     "paidConverted": 38907,
-    "finaccTxnConvertRate": "Sample finaccTxnConvertRate",
+    "finaccTxnConvertRate": 99.44,
     "canceled": "Sample canceled",
     "status": "DR",
     "headerId": "mock-header-001"
@@ -1218,7 +1218,7 @@ export const paymentDetails = [
     "writeoffAmount": 9306,
     "expectedConverted": 9306,
     "paidConverted": 9306,
-    "finaccTxnConvertRate": "Sample finaccTxnConvertRate",
+    "finaccTxnConvertRate": 96.94,
     "canceled": "Sample canceled",
     "status": "CO",
     "headerId": "mock-header-002"
@@ -1235,7 +1235,7 @@ export const paymentDetails = [
     "writeoffAmount": 11544,
     "expectedConverted": 11544,
     "paidConverted": 11544,
-    "finaccTxnConvertRate": "Sample finaccTxnConvertRate",
+    "finaccTxnConvertRate": 12.48,
     "canceled": "Sample canceled",
     "status": "VO",
     "headerId": "mock-header-003"
@@ -1252,7 +1252,7 @@ export const paymentDetails = [
     "writeoffAmount": 11872,
     "expectedConverted": 11872,
     "paidConverted": 11872,
-    "finaccTxnConvertRate": "Sample finaccTxnConvertRate",
+    "finaccTxnConvertRate": 96.31,
     "canceled": "Sample canceled",
     "status": "IP",
     "headerId": "mock-header-004"
@@ -1269,7 +1269,7 @@ export const paymentDetails = [
     "writeoffAmount": 48460,
     "expectedConverted": 48460,
     "paidConverted": 48460,
-    "finaccTxnConvertRate": "Sample finaccTxnConvertRate",
+    "finaccTxnConvertRate": 31.27,
     "canceled": "Sample canceled",
     "status": "DR",
     "headerId": "mock-header-005"
@@ -1286,7 +1286,7 @@ export const paymentDetails = [
     "writeoffAmount": 45418,
     "expectedConverted": 45418,
     "paidConverted": 45418,
-    "finaccTxnConvertRate": "Sample finaccTxnConvertRate",
+    "finaccTxnConvertRate": 76.52,
     "canceled": "Sample canceled",
     "status": "CO",
     "headerId": "mock-header-006"
@@ -1303,7 +1303,7 @@ export const paymentDetails = [
     "writeoffAmount": 33840,
     "expectedConverted": 33840,
     "paidConverted": 33840,
-    "finaccTxnConvertRate": "Sample finaccTxnConvertRate",
+    "finaccTxnConvertRate": 2.66,
     "canceled": "Sample canceled",
     "status": "VO",
     "headerId": "mock-header-007"
@@ -1320,7 +1320,7 @@ export const paymentDetails = [
     "writeoffAmount": 25716,
     "expectedConverted": 25716,
     "paidConverted": 25716,
-    "finaccTxnConvertRate": "Sample finaccTxnConvertRate",
+    "finaccTxnConvertRate": 10.03,
     "canceled": "Sample canceled",
     "status": "IP",
     "headerId": "mock-header-008"
@@ -1337,7 +1337,7 @@ export const paymentDetails = [
     "writeoffAmount": 44780,
     "expectedConverted": 44780,
     "paidConverted": 44780,
-    "finaccTxnConvertRate": "Sample finaccTxnConvertRate",
+    "finaccTxnConvertRate": 93.97,
     "canceled": "Sample canceled",
     "status": "DR",
     "headerId": "mock-header-009"
@@ -1354,7 +1354,7 @@ export const paymentDetails = [
     "writeoffAmount": 12483,
     "expectedConverted": 12483,
     "paidConverted": 12483,
-    "finaccTxnConvertRate": "Sample finaccTxnConvertRate",
+    "finaccTxnConvertRate": 1.1,
     "canceled": "Sample canceled",
     "status": "CO",
     "headerId": "mock-header-010"
@@ -1371,7 +1371,7 @@ export const paymentDetails = [
     "writeoffAmount": 46022,
     "expectedConverted": 46022,
     "paidConverted": 46022,
-    "finaccTxnConvertRate": "Sample finaccTxnConvertRate",
+    "finaccTxnConvertRate": 79.99,
     "canceled": "Sample canceled",
     "status": "VO",
     "headerId": "mock-header-011"
@@ -1388,7 +1388,7 @@ export const paymentDetails = [
     "writeoffAmount": 38634,
     "expectedConverted": 38634,
     "paidConverted": 38634,
-    "finaccTxnConvertRate": "Sample finaccTxnConvertRate",
+    "finaccTxnConvertRate": 53.61,
     "canceled": "Sample canceled",
     "status": "IP",
     "headerId": "mock-header-012"

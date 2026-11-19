@@ -2247,6 +2247,21 @@
           {
             "root": "frontend",
             "path": "tools/app-shell/src/components/reports/dynamic/__tests__/useReportPanelCollapsed.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/reports/dynamic/__tests__/reportUrlState.vitest.js",
+            "note": "ETP-6239: what a report persists in the URL, validation of restored values, the offers rule."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/reports/dynamic/__tests__/StickyHScroll.vitest.jsx",
+            "note": "ETP-6239: the sticky bottom scrollbar proxy mirrors the table box."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/test/report-api-selector-ids.test.js",
+            "note": "ETP-6239: the dev engine mirror of the selector ids lookup (source-reading)."
           }
         ],
         "e2e": [

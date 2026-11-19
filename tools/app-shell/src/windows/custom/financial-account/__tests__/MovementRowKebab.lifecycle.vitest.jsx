@@ -55,17 +55,17 @@ vi.mock('@/hooks/useCreateMovement', () => ({
 // through `DeleteConfirmDialog` (ETP-5111). Before the kebab routed its non-cartel deletes to that
 // dialog, no Radix dialog ever mounted here and the omission was invisible — its absence then
 // failed ~20 tests at once with an error that names the mock rather than the cause.
-vi.mock('lucide-react', () => ({
-  MoreVertical: () => null,
-  ExternalLink: () => null,
+vi.mock('@phosphor-icons/react', () => ({
+  DotsThreeVerticalIcon: () => null,
+  ArrowSquareOutIcon: () => null,
   GitMerge: () => null,
-  BookOpen: () => null,
-  BookX: () => null,
-  CheckCircle2: () => null,
-  RotateCcw: () => null,
-  Trash2: () => null,
-  Pencil: () => null,
-  X: () => null,
+  BookOpenIcon: () => null,
+  BookIcon: () => null,
+  CheckCircleIcon: () => null,
+  ArrowCounterClockwiseIcon: () => null,
+  TrashIcon: () => null,
+  PencilSimpleIcon: () => null,
+  XIcon: () => null,
 }));
 
 vi.mock('@/components/ui/dropdown-menu', () => ({

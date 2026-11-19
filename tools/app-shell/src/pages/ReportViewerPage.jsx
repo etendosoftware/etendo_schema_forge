@@ -1,6 +1,16 @@
 import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FileText, Printer, FileDown, FileSpreadsheet, Loader2, X, ChevronDown, Info, ExternalLink } from 'lucide-react';
+import {
+  FileTextIcon,
+  PrinterIcon,
+  DownloadSimpleIcon,
+  FileXlsIcon,
+  CircleNotchIcon,
+  XIcon,
+  CaretDownIcon,
+  InfoIcon,
+  ArrowSquareOutIcon,
+} from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -424,7 +434,7 @@ function SearchInput({ selector, value, displayValue, onChange, multi, minLength
               className="shrink-0 h-full px-2 text-muted-foreground hover:text-foreground hover:bg-muted/60 flex items-center justify-center"
               aria-label={`Clear ${label || 'product'}`}
             >
-              <X className="h-3.5 w-3.5" data-testid="X__3c998a" />
+              <XIcon className="h-3.5 w-3.5" data-testid="X__3c998a" />
             </button>
           )}
         </div>
@@ -480,7 +490,7 @@ function SearchInput({ selector, value, displayValue, onChange, multi, minLength
             className="absolute right-1 top-1.5 h-5 w-5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-muted/60 flex items-center justify-center"
             aria-label={`Toggle ${label || 'selector'} options`}
           >
-            <ChevronDown className="h-3.5 w-3.5" data-testid="ChevronDown__3c998a" />
+            <CaretDownIcon className="h-3.5 w-3.5" data-testid="ChevronDown__3c998a" />
           </button>
         )}
         {multi && selected.length > 0 && (
@@ -491,7 +501,7 @@ function SearchInput({ selector, value, displayValue, onChange, multi, minLength
             className="absolute right-7 top-1.5 h-5 w-5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-muted/60 flex items-center justify-center"
             aria-label={`Clear ${label || 'selector'}`}
           >
-            <X className="h-3.5 w-3.5" data-testid="X__3c998a" />
+            <XIcon className="h-3.5 w-3.5" data-testid="X__3c998a" />
           </button>
         )}
       </div>
@@ -509,7 +519,7 @@ function SearchInput({ selector, value, displayValue, onChange, multi, minLength
 
 // Multi-select popup: shows selected tags + a "+" button that opens a modal with
 // a searchable list and checkboxes. Used for Business Partner, Product, Project.
-export function PopupMultiSelector({ selector, label, onChange, value = '', displayValue = '' }) {
+export function PopupMultiSelector({ selector, label, onChange, value = '', displayValue = '', displayNames = null, maxItems = Infinity }) {
   const ui = useUI();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -524,7 +534,8 @@ export function PopupMultiSelector({ selector, label, onChange, value = '', disp
   const [confirmed, setConfirmed] = useState(() => {
     if (!value) return [];
     const ids = value.split(',').filter(Boolean);
-    const names = displayValue ? displayValue.split(', ') : [];
+    // `displayNames` (an array) is exact; the joined string splits wrongly on a name containing ", ".
+    const names = displayNames ?? (displayValue ? displayValue.split(', ') : []);
     return ids.map((id, i) => ({ id, name: names[i] || id }));
   });
   // Frozen at openModal() time — "what was confirmed as of the last OK". Options matching
@@ -569,24 +580,25 @@ export function PopupMultiSelector({ selector, label, onChange, value = '', disp
 
   const toggleItem = (item) => {
     const exists = pending.some(s => s.id === item.id);
+    if (!exists && pending.length >= maxItems) return; // at the cap: the hint below says why
     setPending(exists ? pending.filter(s => s.id !== item.id) : [...pending, item]);
   };
 
   const confirm = () => {
     setConfirmed(pending);
-    onChange(pending.map(s => s.id).join(','), pending.map(s => s.name).join(', '));
+    onChange(pending.map(s => s.id).join(','), pending.map(s => s.name).join(', '), pending.map(s => s.name));
     setOpen(false);
   };
 
   const removeConfirmed = (id) => {
     const next = confirmed.filter(s => s.id !== id);
     setConfirmed(next);
-    onChange(next.map(s => s.id).join(','), next.map(s => s.name).join(', '));
+    onChange(next.map(s => s.id).join(','), next.map(s => s.name).join(', '), next.map(s => s.name));
   };
 
   const clearAll = () => {
     setConfirmed([]);
-    onChange('', '');
+    onChange('', '', []);
   };
 
   const MAX_VISIBLE_TAGS = 3;
@@ -603,10 +615,11 @@ export function PopupMultiSelector({ selector, label, onChange, value = '', disp
     optionsListContent = orderedOptions.map(o => {
       const isSelected = pending.some(s => s.id === o.id);
       return (
-        <label key={o.id} className="flex items-center gap-3 px-4 py-2 hover:bg-muted/40 cursor-pointer">
+        <label key={o.id} className={`flex items-center gap-3 px-4 py-2 hover:bg-muted/40 ${!isSelected && pending.length >= maxItems ? 'opacity-60' : 'cursor-pointer'}`}>
           <input
             type="checkbox"
             checked={isSelected}
+            disabled={!isSelected && pending.length >= maxItems}
             onChange={() => toggleItem(o)}
             className="w-4 h-4 accent-primary shrink-0"
           />
@@ -674,7 +687,7 @@ export function PopupMultiSelector({ selector, label, onChange, value = '', disp
               {optionsListContent}
             </div>
             <div className="flex items-center justify-between px-4 py-3 border-t border-border/30 bg-muted/20">
-              <span className="text-xs text-muted-foreground">{ui('selected', { count: pending.length })}</span>
+              <span className="text-xs text-muted-foreground">{ui('selected', { count: pending.length })}<span role="status" data-testid="PopupMultiSelector__maxItems">{pending.length >= maxItems && ` · ${ui('dynamicReportMaxItems', { max: maxItems })}`}</span></span>
               <div className="flex gap-2">
                 <button onClick={() => setOpen(false)} className="h-8 px-3 text-xs rounded-md border border-border hover:bg-muted/50">{ui('cancel')}</button>
                 <button onClick={confirm} className="h-8 px-3 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90">OK</button>
@@ -814,7 +827,7 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
               type="button"
               onClick={() => { handleChange(p.name, ''); handleChange('_display_' + p.name, ''); setDisplayValues(prev => ({ ...prev, [p.name]: '' })); }}
               className="h-9 w-7 flex items-center justify-center text-muted-foreground hover:text-destructive shrink-0"
-            ><X className="h-3.5 w-3.5" data-testid="X__3c998a" /></button>
+            ><XIcon className="h-3.5 w-3.5" data-testid="X__3c998a" /></button>
           )}
         </div>
         {hasError && <p className="text-[10px] text-destructive mt-1">{ui('required')}</p>}
@@ -1023,7 +1036,7 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
       <div className="p-2 border-b border-border/30 shrink-0">
         <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
           {ui('customizeReport')}
-          <Info className="h-3.5 w-3.5 text-muted-foreground" data-testid="Info__3c998a" />
+          <InfoIcon className="h-3.5 w-3.5 text-muted-foreground" data-testid="Info__3c998a" />
         </div>
         <p className="text-xs text-muted-foreground mt-1">{ui('customizeReportHint')}</p>
       </div>
@@ -1054,7 +1067,7 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
                   }`}
                 >
                   {sectionLabel}
-                  <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} data-testid="ReportSectionChevron__3c998a" />
+                  <CaretDownIcon className={`h-3.5 w-3.5 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} data-testid="ReportSectionChevron__3c998a" />
                 </button>
                 {isOpen && <div className="px-2 py-2">{renderSection(id, sectionParams)}</div>}
               </div>
@@ -1200,7 +1213,7 @@ function DrillDownViewer({ report, token, baseParams, bpId, bpName, targetReport
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-2">
       <div className="flex items-center gap-2 px-1">
-        {[{ id: 'pdf', labelKey: 'PDF', icon: FileDown }, { id: 'xlsx', labelKey: 'Excel', icon: FileSpreadsheet }, { id: 'csv', labelKey: 'CSV', icon: FileText }].map(f => (
+        {[{ id: 'pdf', labelKey: 'PDF', icon: DownloadSimpleIcon }, { id: 'xlsx', labelKey: 'Excel', icon: FileXlsIcon }, { id: 'csv', labelKey: 'CSV', icon: FileTextIcon }].map(f => (
           <button key={f.id} onClick={() => fetchFormat(f.id)} disabled={loading}
             className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-medium border border-border bg-background hover:bg-muted disabled:opacity-50">
             <f.icon className="h-3.5 w-3.5" />{ui(f.labelKey)}
@@ -1208,13 +1221,13 @@ function DrillDownViewer({ report, token, baseParams, bpId, bpName, targetReport
         ))}
         <button onClick={openFullReport}
           className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-medium border border-border bg-background hover:bg-muted disabled:opacity-50">
-          <ExternalLink className="h-3.5 w-3.5" data-testid="ExternalLink__3c998a" />{ui('openFullReport')}
+          <ArrowSquareOutIcon className="h-3.5 w-3.5" data-testid="ExternalLink__3c998a" />{ui('openFullReport')}
         </button>
       </div>
       <div className="flex-1 bg-card rounded-lg border border-border/30 overflow-hidden relative">
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-card/80 z-10 gap-2 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__3c998a" /><span>{ui('loadingDetails')}</span>
+            <CircleNotchIcon className="h-5 w-5 animate-spin" data-testid="Loader2__3c998a" /><span>{ui('loadingDetails')}</span>
           </div>
         )}
         {error && (
@@ -1623,9 +1636,9 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
   }, [title]);
 
   const DOWNLOAD_FORMATS = [
-    { id: 'pdf', labelKey: 'PDF', icon: FileDown },
-    { id: 'xlsx', labelKey: 'Excel', icon: FileSpreadsheet },
-    { id: 'csv', labelKey: 'CSV', icon: FileText },
+    { id: 'pdf', labelKey: 'PDF', icon: DownloadSimpleIcon },
+    { id: 'xlsx', labelKey: 'Excel', icon: FileXlsIcon },
+    { id: 'csv', labelKey: 'CSV', icon: FileTextIcon },
   ];
 
   return (
@@ -1653,7 +1666,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
               <button onClick={clearGeneratedResult} disabled={loading}
                 data-testid="action-clear-result"
                 className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium border border-border bg-card text-foreground hover:bg-muted/50 disabled:opacity-40">
-                <X className="h-3.5 w-3.5" data-testid="ClearResultIcon__3c998a" />{ui('clearResult')}
+                <XIcon className="h-3.5 w-3.5" data-testid="ClearResultIcon__3c998a" />{ui('clearResult')}
               </button>
             )}
             {DOWNLOAD_FORMATS.map(fmt => {
@@ -1668,7 +1681,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
             <div className="w-px h-6 bg-border/50 mx-1" />
             <button onClick={handlePrint} disabled={loading || !hasAllRequiredFilled}
               className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-              <Printer className="h-3.5 w-3.5" data-testid="Printer__3c998a" />{ui('print')}
+              <PrinterIcon className="h-3.5 w-3.5" data-testid="Printer__3c998a" />{ui('print')}
             </button>
           </div>
         </div>
@@ -1711,7 +1724,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
             <div className="bg-card rounded-lg shadow-sm h-full overflow-hidden relative border border-border/30">
               {loading && (
                 <div className="absolute inset-0 flex items-center justify-center bg-card/80 z-10 gap-2 text-muted-foreground">
-                  <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__3c998a" /><span>{ui('renderingReport')}</span>
+                  <CircleNotchIcon className="h-5 w-5 animate-spin" data-testid="Loader2__3c998a" /><span>{ui('renderingReport')}</span>
                 </div>
               )}
               {error && (
@@ -1938,13 +1951,13 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
   if (loading) {
     reportListContent = (
       <div className="flex items-center justify-center h-32 gap-2 text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__3c998a" /> {ui('loading')}
+        <CircleNotchIcon className="h-5 w-5 animate-spin" data-testid="Loader2__3c998a" /> {ui('loading')}
       </div>
     );
   } else if (filtered.length === 0) {
     reportListContent = (
       <div className="text-center text-muted-foreground py-12">
-        <FileText
+        <FileTextIcon
           className="h-10 w-10 mx-auto mb-3 opacity-30"
           data-testid="FileText__3c998a" />
         <p>{ui('noResults')}</p>
@@ -2109,18 +2122,25 @@ export default function ReportViewerPage() {
   // ETP-6080 F10: a report picked from the list was opened from the menu; any other arrival
   // (a pasted URL, a favourite, a reload) counts as a deep link for `report_opened.source`.
   const [pickedReportId, setPickedReportId] = useState(null);
+  // A report's own selections live in the query string (the dynamic view writes them, the old viewer reads
+  // deep links from it), so they belong to that report only: leaving it keeps the category and nothing
+  // else, and a report picked from the list starts with just the category and itself (ETP-6239).
+  const categoryOnly = () => {
+    const params = new URLSearchParams();
+    if (categoryFilter) params.set('category', categoryFilter);
+    return params;
+  };
   const selectReport = (report) => {
     setPickedReportId(report.id);
-    const params = new URLSearchParams(searchParams);
+    const params = categoryOnly();
     params.set('report', report.id);
     setSearchParams(params);
   };
 
-  const clearReport = () => {
-    const params = new URLSearchParams(searchParams);
-    params.delete('report');
-    setSearchParams(params);
-  };
+  const clearReport = () => setSearchParams(categoryOnly());
+  // The dynamic view's own writes go through the router (replace: no new history entry), so the
+  // router and the address bar never disagree.
+  const writeViewSearch = useCallback((next) => setSearchParams(new URLSearchParams(next), { replace: true }), [setSearchParams]);
 
   // ETP-5116 — the Financial Reports and Informes de inventario pages had zero
   // real access control (any authenticated user, any role, could reach either
@@ -2142,7 +2162,7 @@ export default function ReportViewerPage() {
   if (selectedReport && opensDynamicView(selectedReport.id, dynamicReportsOn)) {
     return (
       <Suspense
-        fallback={<Loader2
+        fallback={<CircleNotchIcon
           className="w-5 h-5 m-auto animate-spin text-muted-foreground"
           data-testid="Loader2__3c998a" />}
         data-testid="Suspense__3c998a">
@@ -2153,6 +2173,8 @@ export default function ReportViewerPage() {
           roleOrgs={selectedRole?.orgList || []}
           source={pickedReportId === selectedReport.id ? 'menu' : 'deep_link'}
           reportAccess={reportAccess}
+          search={searchParams.toString()}
+          onSearchChange={writeViewSearch}
           data-testid="DynamicReportView__3c998a" />
       </Suspense>
     );

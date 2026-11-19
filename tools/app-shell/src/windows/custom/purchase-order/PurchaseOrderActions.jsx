@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
-import { FileText, Check } from 'lucide-react';
+import { FileTextIcon, CheckIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
@@ -551,14 +551,14 @@ function ConfirmOrderModal({
           <OptionCard
             selected={selected === 'invoice'}
             onClick={() => setSelected('invoice')}
-            icon={<FileText size={16} data-testid="FileText__4da6de" />}
+            icon={<FileTextIcon size={16} data-testid="FileText__4da6de" />}
             title={ui('poConfirmWithInvoice')}
             subtitle={ui('poConfirmWithInvoiceDesc')}
             data-testid="OptionCard__4da6de" />
           <OptionCard
             selected={selected === 'confirm'}
             onClick={() => setSelected('confirm')}
-            icon={<Check size={16} data-testid="Check__4da6de" />}
+            icon={<CheckIcon size={16} data-testid="Check__4da6de" />}
             title={ui('soConfirmOnly')}
             subtitle={ui('soOnlyConfirmDesc')}
             data-testid="OptionCard__4da6de" />

@@ -29,12 +29,12 @@ vi.mock('@/lib/selectorCatalog.js', () => ({
 // the `X` icon, plus ChevronDown/Loader2 (via CreatableSearchSelect). Return a stub
 // for ANY icon name so every icon in the tree resolves. A few well-known icons keep
 // the stable test-ids the existing assertions rely on.
-vi.mock('lucide-react', () => {
+vi.mock('@phosphor-icons/react', () => {
   const named = {
-    Loader2: (props) => <span {...props} data-testid="loader" />,
-    Minus: (props) => <span {...props} data-testid="minus-icon" />,
-    Plus: (props) => <span {...props} data-testid="plus-icon" />,
-    Trash2: (props) => <span {...props} data-testid="trash-icon" />,
+    CircleNotchIcon: (props) => <span {...props} data-testid="loader" />,
+    MinusIcon: (props) => <span {...props} data-testid="minus-icon" />,
+    PlusIcon: (props) => <span {...props} data-testid="plus-icon" />,
+    TrashIcon: (props) => <span {...props} data-testid="trash-icon" />,
   };
   const isReserved = (prop) =>
     typeof prop !== 'string' || prop === 'then' || prop === '__esModule';

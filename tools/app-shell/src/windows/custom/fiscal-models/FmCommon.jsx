@@ -1,6 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { Info } from 'lucide-react';
+import { InfoIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import './fiscal-models.css';
 
@@ -135,9 +135,8 @@ export function FmInfoTooltip({ text, size = 12, iconColor = 'var(--fm-fg-3)', '
       onMouseLeave={() => setShow(false)}
       data-testid={testId}
     >
-      <Info
+      <InfoIcon
         size={size}
-        strokeWidth={1.75}
         style={{ color: iconColor, cursor: 'help' }}
         data-testid={testId ? `${testId}-icon` : undefined} />
       {show && coords && typeof document !== 'undefined' && createPortal(

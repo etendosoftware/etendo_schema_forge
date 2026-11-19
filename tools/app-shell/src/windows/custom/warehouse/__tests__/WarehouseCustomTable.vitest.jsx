@@ -150,6 +150,39 @@ describe('WarehouseCustomTable', () => {
       const cell = await screen.findByTestId('col-locationAddress-wh-6');
       expect(cell).toHaveTextContent('—');
     });
+
+    // ETP-5806 follow-up — a dash-joined identifier with consecutive empty segments
+    // (e.g. a missing region) is collapsed via sanitizeDashJoinedIdentifier (@/lib/locationAddress.js)
+    // before rendering.
+    it('collapses consecutive empty segments in the $_identifier value', async () => {
+      globalThis.fetch.mockImplementation(() => makeFetchOk({ response: { data: [] } }));
+
+      render(
+        <WarehouseCustomTable
+          {...BASE_PROPS}
+          data={[{ id: 'wh-7', name: 'WH', 'locationAddress$_identifier': 'Calle, 123 -  -  - Madrid -  - España' }]}
+        />,
+      );
+
+      const cell = await screen.findByTestId('col-locationAddress-wh-7');
+      expect(cell).toHaveTextContent('Calle, 123 - Madrid - España');
+    });
+
+    // Same sanitization applies to the plain `locationAddress` fallback value, not only
+    // the $_identifier key.
+    it('collapses consecutive empty segments in the locationAddress fallback value', async () => {
+      globalThis.fetch.mockImplementation(() => makeFetchOk({ response: { data: [] } }));
+
+      render(
+        <WarehouseCustomTable
+          {...BASE_PROPS}
+          data={[{ id: 'wh-8', name: 'WH', locationAddress: 'Calle, 123 -  -  - Madrid -  - España' }]}
+        />,
+      );
+
+      const cell = await screen.findByTestId('col-locationAddress-wh-8');
+      expect(cell).toHaveTextContent('Calle, 123 - Madrid - España');
+    });
   });
 
   // ------------------------------------------------------------------ productCount cell

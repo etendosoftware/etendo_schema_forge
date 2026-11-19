@@ -84,6 +84,14 @@ export const api = {
       "reference": "Invoice",
       "inputMode": "search",
       "url": "/sws/neo/invoice-inbox/header/selectors/duplicateOfInvoice"
+    },
+    {
+      "entity": "header",
+      "field": "currency",
+      "column": "C_Currency_ID",
+      "reference": "Currency",
+      "inputMode": "selector",
+      "url": "/sws/neo/invoice-inbox/header/selectors/currency"
     }
   ],
   "actions": [],
