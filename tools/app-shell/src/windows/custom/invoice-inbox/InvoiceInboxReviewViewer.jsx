@@ -27,7 +27,7 @@ function lazyPdfViewerFor(attempt) {
 
 /**
  * Contains a failure of the viewer pane (the lazy chunk failing to load: a deploy, a dropped
- * network) so it never blanks the review drawer. Renders `fallback(reset)`; no error text leaks.
+ * network) so it never blanks the review drawer. Renders `<FallbackComponent onRetry={reset} />`; no error text leaks.
  */
 class ViewerBoundary extends Component {
   state = { failed: false };
@@ -35,7 +35,8 @@ class ViewerBoundary extends Component {
   componentDidCatch(error) { console.error('[invoice-inbox] viewer failed to load', error); }
   reset = () => { this.setState({ failed: false }); this.props.onRetry(); };
   render() {
-    return this.state.failed ? this.props.fallback(this.reset) : this.props.children;
+    const { FallbackComponent } = this.props;
+    return this.state.failed ? <FallbackComponent onRetry={this.reset} data-testid="FallbackComponent__e8a41d" /> : this.props.children;
   }
 }
 
@@ -55,6 +56,24 @@ function Centered({ testId, children }) {
     >
       {children}
     </div>
+  );
+}
+
+/** The boundary's fallback: a short message plus a retry that remounts the viewer. */
+function ViewerFailed({ onRetry }) {
+  const ui = useUI();
+  return (
+    <Centered testId="invoice-inbox-review-viewer-error" data-testid="Centered__e8a41d">
+      <span className="text-xs">{ui('invoiceInboxReviewViewerFailed')}</span>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={onRetry}
+        data-testid="invoice-inbox-review-viewer-retry">
+        {ui('retry')}
+      </Button>
+    </Centered>
   );
 }
 
@@ -228,19 +247,8 @@ export default function InvoiceInboxReviewViewer({ documentId, fileName, token =
           <ViewerBoundary
             key={attempt}
             onRetry={retryViewer}
-            fallback={(reset) => (
-              <Centered testId="invoice-inbox-review-viewer-error">
-                <span className="text-xs">{ui('invoiceInboxReviewViewerFailed')}</span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={reset}
-                  data-testid="invoice-inbox-review-viewer-retry">
-                  {ui('retry')}
-                </Button>
-              </Centered>
-            )}>
+            FallbackComponent={ViewerFailed}
+            data-testid="ViewerBoundary__e8a41d">
           <Suspense
             fallback={(
               <Centered
