@@ -3,7 +3,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { DateField } from '@/components/ui/date-field';
 import RequiredMark from '@/components/ui/required-mark.jsx';
-import SegmentedTabs from '@/components/contract-ui/SegmentedTabs.jsx';
+import { Switch } from '@/components/ui/switch';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
 import SiiPanelCard from '@/windows/custom/shared/SiiPanelCard.jsx';
 import { useFeatureFlag, SII_IMPORT_DUA } from '@/lib/flags';
@@ -14,9 +14,9 @@ import { useFeatureFlag, SII_IMPORT_DUA } from '@/lib/flags';
  *
  * Mirrors the Classic display logic of the purchase invoice header (C_Invoice, module SII):
  *   - Multiple DUA (`aeatsiiMultiDua`): org in SII AND invoice type key is F5 or LC. Shown as the
- *     "Un DUA | Varios DUA" segmented control at the top right of the card (same field).
+ *     "Múltiple DUA" switch at the top right of the card (Classic label, same field).
  *   - DUA (`aeatsiiDua`) and DUA date (`aeatsiiFechaDua`): the same AND Multiple DUA unchecked
- *     ("Un DUA"). With "Varios DUA" they move to each import tax line (SiiImportTaxesSection).
+ *     (switch off). With Multiple DUA on they move to each import tax line (SiiImportTaxesSection).
  * "Org in SII" is the caller's `showSii` gate: the card is mounted inside the SII panel only.
  *
  * Read-only: every control follows the lock of the invoice type key it depends on (`readOnly`,
@@ -27,24 +27,24 @@ import { useFeatureFlag, SII_IMPORT_DUA } from '@/lib/flags';
  * and DUA date unless Multiple DUA is checked, so both carry the red `*` (and the error outline
  * while empty) in that case.
  *
- * MRN format: an MRN has 18 characters. The counter and the warning are a hint only — the SII
+ * DUA format: a DUA has 18 characters. The counter and the warning are a hint only — the SII
  * module checks the DUA format for IGIC organizations only, so for IVA it must never block a save.
  *
  * Writes go through `onChange` into DetailView's shared editing state, like every other SIF
  * field; the header save persists them.
  */
 const DUA_TYPE_KEYS = new Set(['F5', 'LC']);
-export const MRN_LENGTH = 18;
+export const DUA_LENGTH = 18;
 const ERROR_OUTLINE = 'border-destructive focus-visible:ring-destructive focus-within:ring-destructive';
 
 function isChecked(value) {
   return value === true || value === 'Y';
 }
 
-/** True when a non-empty DUA does not have the 18 characters of an MRN (hint only, never blocks). */
-export function isMrnLengthOff(value) {
+/** True when a non-empty DUA does not have its 18 characters (hint only, never blocks). */
+export function isDuaLengthOff(value) {
   const length = String(value ?? '').trim().length;
-  return length > 0 && length !== MRN_LENGTH;
+  return length > 0 && length !== DUA_LENGTH;
 }
 
 function DuaField({ label, htmlFor, required, aside, helper, children }) {
@@ -78,17 +78,17 @@ export default function SiiImportDuaSection({ ui, siiTypeKey, getVal, getDateVal
   const dateMissing = duaRequired && !duaDate;
 
   const modeControl = (
-    <fieldset disabled={readOnly} className={readOnly ? 'opacity-60' : undefined} data-testid="SiiImportDuaSection__mode">
-      <SegmentedTabs
-        items={[
-          { key: 'single', label: ui('sifDataTabs.dua.single'), testId: 'SegmentedTabs__siiDuaSingle' },
-          { key: 'multiple', label: ui('sifDataTabs.dua.multiple'), testId: 'SegmentedTabs__siiDuaMultiple' },
-        ]}
-        active={multiDua ? 1 : 0}
-        onChange={index => onChange?.('aeatsiiMultiDua', index === 1)}
-        ariaLabel={ui('sifDataTabs.field.multiDua')}
-        data-testid="SegmentedTabs__siiDuaMode" />
-    </fieldset>
+    <div className="flex items-center gap-2" data-testid="SiiImportDuaSection__mode">
+      <Switch
+        id="sif-multiDua"
+        checked={multiDua}
+        onCheckedChange={val => onChange?.('aeatsiiMultiDua', val)}
+        disabled={readOnly}
+        data-testid="Switch__siiMultiDua" />
+      <Label htmlFor="sif-multiDua" className="text-sm text-foreground font-medium" data-testid="Label__siiMultiDua">
+        {ui('sifDataTabs.field.multiDua')}
+      </Label>
+    </div>
   );
 
   return (
@@ -107,9 +107,9 @@ export default function SiiImportDuaSection({ ui, siiTypeKey, getVal, getDateVal
             required={duaRequired}
             aside={(
               <span
-                className={`text-xs tabular-nums ${isMrnLengthOff(dua) ? 'text-status-warning-foreground' : 'text-muted-foreground'}`}
-                data-testid="SiiImportDuaSection__mrnCounter">
-                {`${dua.trim().length} / ${MRN_LENGTH}`}
+                className={`text-xs tabular-nums ${isDuaLengthOff(dua) ? 'text-status-warning-foreground' : 'text-muted-foreground'}`}
+                data-testid="SiiImportDuaSection__duaCounter">
+                {`${dua.trim().length} / ${DUA_LENGTH}`}
               </span>
             )}
             data-testid="DuaField__dua">
@@ -139,14 +139,14 @@ export default function SiiImportDuaSection({ ui, siiTypeKey, getVal, getDateVal
               className={dateMissing ? ERROR_OUTLINE : undefined}
               data-testid="DateField__siiDuaDate" />
           </DuaField>
-          {isMrnLengthOff(dua) && (
+          {isDuaLengthOff(dua) && (
             <InfoBanner
               tone="warning"
               icon={TriangleAlert}
               dismissible={false}
               className="col-span-2"
-              data-testid="SiiImportDuaSection__mrnHint">
-              {ui('sifDataTabs.dua.mrnHint')}
+              data-testid="SiiImportDuaSection__duaHint">
+              {ui('sifDataTabs.dua.lengthHint')}
             </InfoBanner>
           )}
         </div>

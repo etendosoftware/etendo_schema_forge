@@ -28,12 +28,12 @@ import { useFeatureFlag, SII_IMPORT_DUA } from '@/lib/flags';
  * tax lines (`C_InvoiceTax` with `Recalculate = 'N'`) next to the ones the invoice lines generate.
  * The core trigger `C_INVOICETAX_TRG2` adds a manual line's tax amount to the invoice grand total,
  * and `C_Invoice_Post` keeps those lines on completion (and copies them, negated, on a reversal).
- * With "Varios DUA" on the header, each line carries its own DUA and DUA date
+ * With Multiple DUA on the header, each line carries its own DUA and DUA date
  * (`C_InvoiceTax.EM_Aeatsii_Dua` / `EM_Aeatsii_Fecha_Dua`).
  *
  * Inline editable table: Impuesto*, Tipo (rate, read-only), Base imponible*, Cuota (read-only,
  * computed by the Classic callout `SL_InvoiceTax_Amt` — base x rate, currency precision — through
- * the NEO callout endpoint) and a delete icon; with "Varios DUA" each line gets a sub-row with
+ * the NEO callout endpoint) and a delete icon; with Multiple DUA each line gets a sub-row with
  * DUA* / Fecha DUA* (no extra columns, so no horizontal scroll).
  *
  * Saving: each row saves ITSELF as soon as it is complete — on choosing the tax, on committing the
@@ -42,7 +42,7 @@ import { useFeatureFlag, SII_IMPORT_DUA } from '@/lib/flags';
  * A saved row only PATCHes when a value really changed. Each write re-reads the rows and the header
  * totals (`onHeaderRefresh`).
  *
- * DUA / DUA date are REQUIRED per line with "Varios DUA". Classic declares that rule in
+ * DUA / DUA date are REQUIRED per line with Multiple DUA. Classic declares that rule in
  * `InvoiceTaxEventHandler` but its `showMsg` never throws, so the backend does not enforce it —
  * this card is the only place it holds.
  *
@@ -250,7 +250,7 @@ function DuaSubRowField({ ui, htmlFor, labelKey, required, children }) {
 }
 
 /**
- * "Varios DUA": the line's DUA and DUA date live on a sub-row right below it (same `<tbody>` row
+ * Multiple DUA: the line's DUA and DUA date live on a sub-row right below it (same `<tbody>` row
  * group, no separator between the two rows), starting at the Impuesto column's content edge, with
  * stacked labels and two equal-width controls — so the table keeps its 4 columns + delete and
  * never needs a horizontal scroll.

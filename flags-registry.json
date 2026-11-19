@@ -2991,13 +2991,13 @@
             "root": "frontend",
             "path": "tools/app-shell/src/windows/custom/shared/__tests__/SiiImportDuaSection.vitest.jsx",
             "expected": true,
-            "note": "To be written by tester-functional: flag off renders nothing; F5/LC show the card, F1/F6 hide it; the Un DUA / Varios DUA segmented control writes aeatsiiMultiDua; Varios DUA hides DUA/date; required mark and error outline on F5 and LC; MRN counter and non-blocking warning when length != 18; readOnly disables everything."
+            "note": "To be written by tester-functional: flag off renders nothing; F5/LC show the card, F1/F6 hide it; the Multiple DUA switch writes aeatsiiMultiDua; Multiple DUA hides DUA/date; required mark and error outline on F5 and LC; DUA length counter and non-blocking warning when length != 18; readOnly disables everything."
           },
           {
             "root": "frontend",
             "path": "tools/app-shell/src/windows/custom/shared/__tests__/SiiImportTaxesSection.vitest.jsx",
             "expected": true,
-            "note": "To be written by tester-functional: flag off / F1 / F6 render nothing; only Recalculate=N rows listed; a draft row saves itself only once complete (tax, base, callout amount, plus DUA/date with Varios DUA) via POST /tax with parentId, lineNo MAX+10, recalculate false; a saved row PATCHes only on a real change; incomplete cells get the error outline; Tipo from labelPrefix or tax$rate; summary sums; delete (draft local, saved with confirm); readOnly renders plain cells; onHeaderRefresh after every write; saveFirst on an unsaved invoice."
+            "note": "To be written by tester-functional: flag off / F1 / F6 render nothing; only Recalculate=N rows listed; a draft row saves itself only once complete (tax, base, callout amount, plus DUA/date with Multiple DUA) via POST /tax with parentId, lineNo MAX+10, recalculate false; a saved row PATCHes only on a real change; incomplete cells get the error outline; Tipo from labelPrefix or tax$rate; summary sums; delete (draft local, saved with confirm); readOnly renders plain cells; onHeaderRefresh after every write; saveFirst on an unsaved invoice."
           }
         ]
       }
