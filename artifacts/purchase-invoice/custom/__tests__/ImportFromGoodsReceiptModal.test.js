@@ -11,14 +11,15 @@ import {
 import { orderLineApiKey } from '../../../_test-support/contractApiKey.js';
 import { listAll, listLines, newestCreatedFirst } from '../../../../tools/app-shell/src/windows/custom/shared/importActionClient.js';
 import { pricingContextOf } from '../../../../tools/app-shell/src/windows/custom/shared/invoiceImportPricing.js';
+import { draftDocumentsOf } from '../../../../tools/app-shell/src/windows/custom/shared/inOutImport.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const { helpers, source: src } = loadCustomModule(
   join(__dirname, '..', 'ImportFromGoodsReceiptModal.jsx'),
-  { moduleApiFetch: apiFetchToGlobalFetch, listAll, listLines, pricingContextOf, newestCreatedFirst },
+  { moduleApiFetch: apiFetchToGlobalFetch, listAll, listLines, pricingContextOf, newestCreatedFirst, draftDocumentsOf },
 );
-const { fetchDocuments, fetchLines, buildLineBody } = helpers;
+const { fetchDocuments, fetchLines, buildLineBody, describeReceiptLine } = helpers;
 
 const ORDER_LINE_FK = orderLineApiKey('purchase-invoice');
 
@@ -283,6 +284,19 @@ describe('ImportFromGoodsReceiptModal — lines shown on expand', () => {
       assert.equal(line._maxQty, c.max);
     });
   }
+
+  // ETP-5828 — a line other draft invoices took (`inDraftDocuments`) is greyed and names them.
+  it('names the other draft invoices holding a line taken by them', async () => {
+    const ui = (key, params) => `${key}:${JSON.stringify(params)}`;
+    const [one, many] = await linesOf([
+      row({ id: 'rl1', pendingQuantity: 0, inDraftDocuments: ['FC1000020'] }),
+      row({ id: 'rl2', pendingQuantity: 0, inDraftDocuments: ['FC1', 'FC2'] }),
+    ]);
+    assert.equal(one._alreadyImported, true);
+    assert.equal(describeReceiptLine(one, { imported: true }, ui), 'inDraftInvoiceOne:{"documentNo":"FC1000020"}');
+    assert.equal(describeReceiptLine(many, { imported: true }, ui), 'inDraftInvoiceMany:{"documentNos":"FC1, FC2"}');
+    assert.equal(describeReceiptLine({ ...one, importedHere: true }, { imported: true }, ui), null); // «ya importado»
+  });
 });
 
 describe('ImportFromGoodsReceiptModal — buildLineBody order line FK (ETP-5381)', () => {

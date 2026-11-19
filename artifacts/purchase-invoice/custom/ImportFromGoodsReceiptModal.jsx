@@ -1,8 +1,10 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
+import { useUI } from '@/i18n';
 import { apiFetch as moduleApiFetch } from '@/auth/api.js';
 import { listAll, listLines, newestCreatedFirst } from '@/windows/custom/shared/importActionClient.js';
 import useImportLoadFailureToast from '@/windows/custom/shared/useImportLoadFailureToast.js';
 import { pricingContextOf } from '@/windows/custom/shared/invoiceImportPricing.js';
+import { draftDocumentsOf } from '@/windows/custom/shared/inOutImport.js';
 
 /**
  * Goods receipt lines don't carry pricing — unit price, tax, and uOM are
@@ -139,8 +141,9 @@ const fetchDocuments = async ({ base, bpId, invoiceId }) => {
 /**
  * One `availableReceiptLines` row in the shape the popup reads. A line already on this invoice or
  * on another one is greyed «ya importado» (and shows its received quantity, as before); otherwise it
- * offers what the server says is left (draft invoices deducted), as the sales sibling. The order line's
- * discount travels to the import;
+ * offers what the server says is left (draft invoices deducted), as the sales sibling. The OTHER
+ * draft invoices holding it (`inDraftDocuments`, documentNos) feed `describeReceiptLine`. The order
+ * line's discount travels to the import;
  * the price (callout, `priceData`) feeds the row total.
  */
 const receiptLineRow = (r, priceData = {}) => {
@@ -156,8 +159,23 @@ const receiptLineRow = (r, priceData = {}) => {
     _tax: priceData.tax || null,
     _uOM: priceData.uOM || r.uOM || null,
     _alreadyImported: imported,
+    _inDraftInvoices: draftDocumentsOf(r),
     _orderDiscount: Number(r.orderLineDiscount) || 0,
   };
+};
+
+/**
+ * ETP-5828 — the note of a greyed line other draft INVOICES took: «en factura borrador FC…»
+ * (several: «en facturas borrador …»), the same keys the order import uses. A line on THIS
+ * invoice, or with no other draft holding it, keeps the default «ya importado» (null). Selectable
+ * lines show no note. `ui` is injected (pure).
+ */
+const describeReceiptLine = (line, { imported }, ui) => {
+  const drafts = line?._inDraftInvoices;
+  if (!imported || line?.importedHere || !drafts?.length) return null;
+  return drafts.length === 1
+    ? ui('inDraftInvoiceOne', { documentNo: drafts[0] })
+    : ui('inDraftInvoiceMany', { documentNos: drafts.join(', ') });
 };
 
 /** ONE `availableReceiptLines` read per goods receipt, lines with nothing left included. */
@@ -227,6 +245,7 @@ const buildLineBody = async ({ line, qty, invoiceId, lineNo, sharedContext, base
 
 export default function ImportFromGoodsReceiptModal(props) {
   // ETP-6099 — a failed read is not «nothing to import»: tell the user, show an empty list.
+  const ui = useUI();
   const handlers = useImportLoadFailureToast(fetchDocuments, fetchLines);
   return (
     <ImportLinesModal
@@ -245,6 +264,7 @@ export default function ImportFromGoodsReceiptModal(props) {
       fetchLines={handlers.fetchLines}
       getDocDisplay={getDocDisplay}
       buildLineBody={buildLineBody}
+      describeLine={(line, state) => describeReceiptLine(line, state, ui)}
     />
   );
 }
