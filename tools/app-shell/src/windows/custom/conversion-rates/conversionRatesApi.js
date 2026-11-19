@@ -4,18 +4,23 @@
  * paths below are relative to it:
  *
  * - list           GET    /conversionRate?criteria=…           (forward rows only, see the model)
- * - create         POST   /conversionRate                       {toCurrency, multipleRateBy, validFromDate}
- * - update         PATCH  /conversionRate/{id}                  {multipleRateBy?, validFromDate?}
  * - delete         DELETE /conversionRate/{id}                  (the server removes both directions)
- * - read actions   POST   /conversionRate/new/action/{name}     answer in `response.data`
+ * - actions        POST   /conversionRate/new/action/{name}     answer in `response.data`
  *     manualCurrencyOptions {withoutRates?} → [{id, isoCode, name, symbol}]
- *     previewManualRate {toCurrency, multipleRateBy, validFromDate} → {creates, closes, error?, errorKey?}
+ *     previewManualRate {mode: "newCurrency"|"newRate", toCurrency, multipleRateBy, validFromDate}
+ *       → {creates, closes, error?, errorKey?, errorField?}
+ *     createManualCurrency {toCurrency, multipleRateBy, validFromDate?}   ("Nueva divisa")
+ *     createManualRate {toCurrency, multipleRateBy, validFromDate?}       ("Nueva tasa")
+ *     updateManualRate {id, multipleRateBy, confirm?}                     ("Modificar tasa")
+ *       without `confirm` it saves nothing and answers {saved: false, proposal: {forward: {old, new},
+ *       inverse: {old, new}, validFrom, validTo}, warning}; with `confirm: true` it saves.
  *     currentRates → [{currencyId, isoCode, name, symbol, origin, rate, validFrom, lastDownloadAt}]
  *     serverClock → {now: "yyyy-MM-ddTHH:mm:00"} (the server's wall clock: default and upper bound
  *       of "Válido desde", which can never be later than now)
  *
- * The server creates the inverse rate, closes the previous open range at `start − 1 minute`
- * and refuses overlaps; the UI never computes any of that, it only shows the preview.
+ * The writes go through the same actions the MCP uses, so both channels run one process: the
+ * server creates the inverse rate, closes the previous open range at `start − 1 minute`, refuses
+ * overlaps and future starts, and proposes the inverse of an edit. The UI computes none of that.
  */
 import { buildHistoryQuery } from './conversionRatesModel.js';
 
@@ -88,23 +93,37 @@ export async function previewManualRate(apiFetch, body, signal) {
 }
 
 /**
- * Write helpers resolve to the raw `Response`: the caller reads the NEO error envelope
- * (`extractErrorMessage`) on a refusal (400/409/422) and shows its translated message as is.
+ * A write action. Resolves to `{ res, data }`: the raw `Response` (a refusal — 400 / 409 / 422 —
+ * is read by the caller through `extractErrorMessage`, whose body is still unread thanks to the
+ * clone) and `response.data` of a 2xx answer (`data.error` when the action refuses in-band).
  */
-export function createManualRate(apiFetch, body) {
-  return apiFetch(ENTITY_PATH, {
+async function writeAction(apiFetch, name, body, signal) {
+  const res = await apiFetch(actionPath(name), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    signal,
   });
+  const json = res.ok ? await readJson(res.clone()) : null;
+  return { res, data: json?.response?.data ?? null };
 }
 
-export function updateManualRate(apiFetch, id, body) {
-  return apiFetch(`${ENTITY_PATH}/${encodeURIComponent(id)}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+/** "Nueva divisa": the first two rates of a currency with none. */
+export function createManualCurrency(apiFetch, body) {
+  return writeAction(apiFetch, 'createManualCurrency', body);
+}
+
+/** "Nueva tasa": a new range for a manual currency, closing the one in force. */
+export function createManualRate(apiFetch, body) {
+  return writeAction(apiFetch, 'createManualRate', body);
+}
+
+/**
+ * "Modificar tasa": without `confirm` the server only proposes (`{saved: false, proposal,
+ * warning}`); with `confirm: true` it saves both directions.
+ */
+export function updateManualRate(apiFetch, { id, multipleRateBy, confirm = false }, signal) {
+  return writeAction(apiFetch, 'updateManualRate', confirm ? { id, multipleRateBy, confirm: true } : { id, multipleRateBy }, signal);
 }
 
 export function deleteManualRate(apiFetch, id) {

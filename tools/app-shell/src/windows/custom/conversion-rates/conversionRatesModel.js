@@ -192,9 +192,9 @@ export function periodBounds(period, custom = {}, reference = new Date()) {
 }
 
 /**
- * NEO criteria of the history list. The period keeps every range IN FORCE during it —
- * `validFromDate < periodEnd AND validToDate >= periodStart` — so a rate that started before the
- * period and is still open (`9999-12-31`) is listed too. Only FORWARD rows are listed (`currency` = the
+ * NEO criteria of the history list. The period filters by the START of the range (story
+ * ETP-6365: "Solo se muestran tasas con Válido desde dentro de los últimos 30 días"):
+ * `periodStart <= validFromDate < periodEnd`. Only FORWARD rows are listed (`currency` = the
  * organization currency); the inverse row of each period is never shown, its value is the
  * forward row's `divideRateBy`. Every filter is a real column, so it runs in the backend.
  *
@@ -210,8 +210,8 @@ export function buildHistoryCriteria({ orgCurrencyId, currencyId, status = 'all'
   if (orgCurrencyId) criteria.push({ fieldName: 'currency', operator: 'equals', value: orgCurrencyId });
   if (currencyId) criteria.push({ fieldName: 'toCurrency', operator: 'equals', value: currencyId });
   if (status && status !== 'all') criteria.push({ fieldName: 'etgoRateStatus', operator: 'equals', value: status });
+  if (bounds?.from) criteria.push({ fieldName: 'validFromDate', operator: 'greaterOrEqual', value: bounds.from });
   if (bounds?.to) criteria.push({ fieldName: 'validFromDate', operator: 'lessThan', value: bounds.to });
-  if (bounds?.from) criteria.push({ fieldName: 'validToDate', operator: 'greaterOrEqual', value: bounds.from });
   return criteria;
 }
 

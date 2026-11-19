@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { InfoIcon, WarningCircleIcon, XIcon } from '@phosphor-icons/react';
+import { InfoIcon, WarningCircleIcon, WarningIcon, XIcon } from '@phosphor-icons/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog.jsx';
 import { DateField } from '@/components/ui/date-field';
 import { Input } from '@/components/ui/input';
@@ -12,10 +12,11 @@ import { extractErrorMessage } from '@/hooks/useEntity.js';
 import { OriginBadge } from './ConversionRateBadges.jsx';
 import { formatRate } from './conversionRatesFormat.js';
 import {
-  fetchManualCurrencyOptions, fetchServerClock, previewManualRate, createManualRate, updateManualRate,
+  fetchManualCurrencyOptions, fetchServerClock, previewManualRate,
+  createManualCurrency, createManualRate, updateManualRate,
 } from './conversionRatesApi.js';
 import {
-  formatWallClock, formatWallClockDate, nowWallClock, parseWallClock, toWallClock,
+  formatWallClock, nowWallClock, parseWallClock, toWallClock,
   wallClockDate, wallClockTime, isOpenEnded, displayValidTo, addMillisToWallClock, isAfterWallClock,
 } from './conversionRatesModel.js';
 
@@ -29,8 +30,9 @@ const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
  * - `newCurrency` — "Nueva divisa": the destination is picked among the active currencies that
  *   have no rates yet (`manualCurrencyOptions {withoutRates: true}`);
  * - `newRate` — "Nueva tasa · CHF": the destination is fixed (a manual card or group header);
- * - `edit` — "Modificar tasa · CHF": PATCH of a manual row's RATE only (any state); the range is
- *   read-only (change it by deleting the rate and creating a new one).
+ * - `edit` — "Modificar tasa · CHF": the RATE of a manual row only (any state), through action
+ *   `updateManualRate`; the range is read-only (change it by deleting the rate and creating a new
+ *   one). Saving asks for confirmation in a second dialog.
  */
 export const DIALOG_MODES = Object.freeze({ NEW_CURRENCY: 'newCurrency', NEW_RATE: 'newRate', EDIT: 'edit' });
 
@@ -80,11 +82,6 @@ export function refusedField(answer) {
   return keys.some((k) => START_FIELD_ERROR_KEYS.includes(k)) ? 'validFromDate' : null;
 }
 
-/** The inverse of a rate, for the edit summary only (the server stores the real one). */
-function inverseOf(rate) {
-  return rate ? 1 / rate : null;
-}
-
 function PreviewLine({ item, ui }) {
   const range = isOpenEnded(item.validTo)
     ? ui('convRatePreviewOpenRange', { from: formatWallClock(item.validFrom) })
@@ -116,8 +113,7 @@ function PreviewSummary({ preview, mode, destIso, orgIso, ui }) {
           {ui('convRatePreviewCloses', {
             currency: destIso,
             from: formatWallClock(forwardClose.validFrom),
-            date: formatWallClockDate(forwardClose.newValidTo),
-            time: wallClockTime(forwardClose.newValidTo),
+            to: formatWallClock(forwardClose.newValidTo),
           })}
         </div>
       )}
@@ -125,19 +121,87 @@ function PreviewSummary({ preview, mode, destIso, orgIso, ui }) {
   );
 }
 
+/**
+ * Old → new of both directions, from the server's `updateManualRate` proposal (never computed in
+ * the browser). While the proposal for the typed rate is loading, the forward line shows the
+ * typed rate and the inverse an ellipsis.
+ */
+export function editLines(row, rate, proposal) {
+  const forward = proposal?.forward;
+  const inverse = proposal?.inverse;
+  return {
+    forwardOld: formatRate(forward?.old ?? row.multipleRateBy),
+    forwardNew: formatRate(forward?.new ?? rate ?? row.multipleRateBy),
+    inverseOld: formatRate(inverse?.old ?? row.divideRateBy),
+    inverseNew: inverse?.new != null ? formatRate(inverse.new) : '…',
+  };
+}
+
 /** Edit summary: both directions, old value → new value. */
-function EditSummary({ row, rate, destIso, orgIso, ui }) {
-  const newRate = rate ?? Number(row.multipleRateBy);
+function EditSummary({ lines, destIso, orgIso, ui }) {
   return (
     <div className="flex flex-col gap-1.5 rounded-[10px] bg-muted/60 px-3.5 py-3 text-[13px]" data-testid="convrate-dialog-summary">
       <div className="font-semibold">{ui('convRateEditSummaryTitle')}</div>
       <div data-testid="convrate-dialog-summary-forward">
-        {`${orgIso} → ${destIso} · ${formatRate(row.multipleRateBy)} → ${formatRate(newRate)}`}
+        {`${orgIso} → ${destIso} · ${lines.forwardOld} → ${lines.forwardNew}`}
       </div>
       <div data-testid="convrate-dialog-summary-inverse">
-        {`${destIso} → ${orgIso} · ${formatRate(row.divideRateBy)} → ${formatRate(inverseOf(newRate))}`}
+        {`${destIso} → ${orgIso} · ${lines.inverseOld} → ${lines.inverseNew}`}
       </div>
     </div>
+  );
+}
+
+/**
+ * "¿Confirma el cambio de tasa?" — the second step of Modificar (design PopupEditarConfirmar):
+ * an alert dialog over the edit dialog. "Volver" returns to the edit dialog with its values;
+ * "Confirmar cambio" is the only action that saves.
+ */
+function ConfirmRateChangeDialog({ open, lines, row, destIso, orgIso, saving, onBack, onConfirm, ui }) {
+  const period = row && !isOpenEnded(row.validToDate)
+    ? ui('convRateConfirmPeriodClosed', { from: formatWallClock(row.validFromDate), to: displayValidTo(row) })
+    : ui('convRateConfirmPeriodOpen', { from: formatWallClock(row?.validFromDate) });
+  return (
+    <Dialog open={open} onOpenChange={(next) => { if (!next && !saving) onBack(); }} data-testid="Dialog__convrate-confirm">
+      <DialogContent
+        role="alertdialog"
+        className="flex w-[460px] max-w-[calc(100vw-32px)] flex-col gap-0 rounded-[14px] border-0 bg-card p-0 [&>button]:hidden"
+        aria-busy={saving || undefined}
+        data-testid="convrate-confirm-dialog">
+        <div className="flex items-start gap-3.5 px-[22px] pb-2 pt-[22px]">
+          <span
+            aria-hidden="true"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+            style={{ background: '#FFF6E5', color: '#B45309' }}>
+            <WarningIcon className="h-5 w-5" data-testid="WarningIcon__convrate" />
+          </span>
+          <div>
+            <DialogTitle className="mb-2 text-[17px] font-semibold" data-testid="convrate-confirm-title">
+              {ui('convRateConfirmTitle')}
+            </DialogTitle>
+            <DialogDescription asChild data-testid="DialogDescription__convrate-confirm">
+              <div className="flex flex-col gap-2.5 leading-normal text-foreground/80">
+                <div className="rounded-[10px] bg-muted/60 px-3 py-2.5 text-[13px] text-foreground" data-testid="convrate-confirm-summary">
+                  <div>{`${orgIso} → ${destIso} · ${lines.forwardOld} → `}<b className="font-semibold">{lines.forwardNew}</b></div>
+                  <div>{`${destIso} → ${orgIso} · ${lines.inverseOld} → `}<b className="font-semibold">{lines.inverseNew}</b></div>
+                  <div className="mt-1 text-muted-foreground" data-testid="convrate-confirm-period">{period}</div>
+                </div>
+                <p className="m-0">{ui('convRateConfirmNewDocs')}</p>
+                <p className="m-0">{ui('convRateConfirmExistingDocs')}</p>
+              </div>
+            </DialogDescription>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2.5 px-[22px] py-[18px]">
+          <Button type="button" variant="outline" onClick={onBack} disabled={saving} data-testid="convrate-confirm-back">
+            {ui('convRateConfirmBack')}
+          </Button>
+          <Button type="button" onClick={onConfirm} disabled={saving} data-testid="convrate-confirm-submit">
+            {saving ? ui('saving') : ui('convRateConfirmSubmit')}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -210,6 +274,9 @@ export function ManualRateDialog({
   const [preview, setPreview] = useState(null);
   const [submitError, setSubmitError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  // Modificar: the server's proposal for the typed rate, and the confirmation step.
+  const [proposal, setProposal] = useState(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   // Reset every time the dialog opens (a new target or a new row).
   useEffect(() => {
@@ -218,6 +285,8 @@ export function ManualRateDialog({
     setDestId(null);
     setTouched({ rate: false, date: false });
     setPreview(null);
+    setProposal(null);
+    setConfirmOpen(false);
     setSubmitError(null);
     setSubmitting(false);
   }, [open, mode, row]);
@@ -296,6 +365,7 @@ export function ManualRateDialog({
     const ctrl = new AbortController();
     const timer = setTimeout(() => {
       previewManualRate(apiFetch, {
+        mode,
         toCurrency: destCurrencyId,
         multipleRateBy: rate,
         validFromDate: validFrom,
@@ -307,7 +377,34 @@ export function ManualRateDialog({
       clearTimeout(timer);
       ctrl.abort();
     };
-  }, [open, isEdit, inputsValid, apiFetch, destCurrencyId, rate, validFrom]);
+  }, [open, isEdit, mode, inputsValid, apiFetch, destCurrencyId, rate, validFrom]);
+
+  // Modificar: debounced proposal (`updateManualRate` without `confirm`) for the typed rate — the
+  // summary and the confirmation show the server's old → new of both directions.
+  const proposalSeq = useRef(0);
+  const rowId = row?.id ?? null;
+  useEffect(() => {
+    if (!open || !isEdit || !rowId || rate == null) {
+      setProposal(null);
+      return undefined;
+    }
+    const seq = ++proposalSeq.current;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => {
+      updateManualRate(apiFetch, { id: rowId, multipleRateBy: rate }, ctrl.signal)
+        .then(({ res, data }) => {
+          if (seq !== proposalSeq.current) return;
+          setProposal(res.ok && data?.proposal ? { rate, ...data.proposal } : null);
+        })
+        .catch(() => { if (seq === proposalSeq.current) setProposal(null); });
+    }, PREVIEW_DEBOUNCE_MS);
+    return () => {
+      clearTimeout(timer);
+      ctrl.abort();
+    };
+  }, [open, isEdit, rowId, rate, apiFetch]);
+  const currentProposal = proposal && proposal.rate === rate ? proposal : null;
+  const lines = isEdit && row ? editLines(row, rate, currentProposal) : null;
 
   const previewError = preview?.error ?? null;
   const [submitErrorField, setSubmitErrorField] = useState(null);
@@ -317,36 +414,80 @@ export function ManualRateDialog({
   const rateInError = Boolean(rateError) || errorField === 'multipleRateBy';
   const canSubmit = inputsValid && !submitting && !previewError;
 
+  /** Shows a refusal: a non-2xx answer (read through `extractErrorMessage`) or an in-band `data.error`. */
+  async function showRefusal(res, data) {
+    if (!res.ok) {
+      const body = await res.clone().json().catch(() => null);
+      setSubmitErrorField(refusedField(body?.error ?? body));
+      setSubmitError(await extractErrorMessage(res, ui));
+      return;
+    }
+    setSubmitErrorField(refusedField(data));
+    setSubmitError(typeof data?.error === 'string' ? data.error : ui('convRateSaveFailed'));
+  }
+
   async function submit(event) {
     event?.preventDefault();
     setTouched({ rate: true, date: true });
     if (!canSubmit) return;
-    setSubmitting(true);
     setSubmitError(null);
     setSubmitErrorField(null);
-    try {
-      let res;
-      if (isEdit) {
-        if (rate === Number(row.multipleRateBy)) {
-          onClose();
+    if (isEdit) {
+      // An unchanged rate saves nothing; otherwise "Guardar cambios" only opens the confirmation.
+      if (rate === Number(row.multipleRateBy)) {
+        onClose();
+        return;
+      }
+      setSubmitting(true);
+      try {
+        const { res, data } = await updateManualRate(apiFetch, { id: row.id, multipleRateBy: rate });
+        if (!res.ok || data?.error || !data?.proposal) {
+          await showRefusal(res, data);
           return;
         }
-        res = await updateManualRate(apiFetch, row.id, { multipleRateBy: rate });
-      } else {
-        res = await createManualRate(apiFetch, {
-          toCurrency: dest.currencyId,
-          multipleRateBy: rate,
-          validFromDate: validFrom,
-        });
+        setProposal({ rate, ...data.proposal });
+        setConfirmOpen(true);
+      } catch (e) {
+        setSubmitError(e?.message || ui('convRateSaveFailed'));
+      } finally {
+        setSubmitting(false);
       }
-      if (!res.ok) {
-        const body = await res.clone().json().catch(() => null);
-        setSubmitErrorField(refusedField(body?.error ?? body));
-        setSubmitError(await extractErrorMessage(res, ui));
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const create = isNewCurrency ? createManualCurrency : createManualRate;
+      const { res, data } = await create(apiFetch, {
+        toCurrency: dest.currencyId,
+        multipleRateBy: rate,
+        validFromDate: validFrom,
+      });
+      if (!res.ok || data?.error) {
+        await showRefusal(res, data);
         return;
       }
       onSaved();
     } catch (e) {
+      setSubmitError(e?.message || ui('convRateSaveFailed'));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  /** "Confirmar cambio": the only step of Modificar that saves (`updateManualRate` + `confirm`). */
+  async function confirmChange() {
+    setSubmitting(true);
+    try {
+      const { res, data } = await updateManualRate(apiFetch, { id: row.id, multipleRateBy: rate, confirm: true });
+      if (!res.ok || data?.error || data?.saved === false) {
+        setConfirmOpen(false);
+        await showRefusal(res, data);
+        return;
+      }
+      setConfirmOpen(false);
+      onSaved();
+    } catch (e) {
+      setConfirmOpen(false);
       setSubmitError(e?.message || ui('convRateSaveFailed'));
     } finally {
       setSubmitting(false);
@@ -422,7 +563,7 @@ export function ManualRateDialog({
   const destText = dest ? [dest.isoCode, dest.name].filter(Boolean).join(' · ') : '';
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next && !submitting) onClose(); }} data-testid="Dialog__convrate">
+    <Dialog open={open} onOpenChange={(next) => { if (!next && !submitting && !confirmOpen) onClose(); }} data-testid="Dialog__convrate">
       <DialogContent
         className="flex w-[520px] max-w-[calc(100vw-32px)] flex-col gap-0 rounded-[14px] border-0 bg-card p-0 [&>button]:hidden"
         aria-busy={submitting || undefined}
@@ -539,8 +680,7 @@ export function ManualRateDialog({
             {isEdit && row && (
               <>
                 <EditSummary
-                  row={row}
-                  rate={rate}
+                  lines={lines}
                   destIso={destIso}
                   orgIso={orgIso}
                   ui={ui}
@@ -570,6 +710,19 @@ export function ManualRateDialog({
           </div>
         </form>
       </DialogContent>
+      {isEdit && row && (
+        <ConfirmRateChangeDialog
+          open={confirmOpen}
+          lines={lines}
+          row={row}
+          destIso={destIso}
+          orgIso={orgIso}
+          saving={submitting}
+          onBack={() => setConfirmOpen(false)}
+          onConfirm={confirmChange}
+          ui={ui}
+          data-testid="ConfirmRateChangeDialog__51f9a2" />
+      )}
     </Dialog>
   );
 }
