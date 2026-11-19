@@ -16426,6 +16426,8 @@
     }
   },
   "genericLabels": {
+    "dateTimeFieldTime": "Time",
+    "dateTimeFieldNow": "Now",
     "convRateEditNote": "You will be asked to confirm the change when saving.",
     "convRatePreviewCloses": "The {currency} rate in force (since {from}) will get Valid to {to}, in both directions.",
     "convRateConfirmTitle": "Confirm the rate change?",
@@ -16492,7 +16494,6 @@
     "convRateRate": "Rate",
     "convRateRateRequired": "Enter a rate greater than zero.",
     "convRateValidFromRequired": "Enter a valid date and time.",
-    "convRateTime": "Time",
     "convRateValidFromHint": "Defaults to now. You can change it.",
     "convRatePreviewNewCurrencyTitle": "{currency} will be added as a manual currency with two rates",
     "convRatePreviewNewRateTitle": "Two rates will be created",

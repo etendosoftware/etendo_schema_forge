@@ -16631,6 +16631,8 @@
     }
   },
   "genericLabels": {
+    "dateTimeFieldTime": "Hora",
+    "dateTimeFieldNow": "Ahora",
     "convRateEditNote": "Al guardar se le pedirá que confirme el cambio.",
     "convRatePreviewCloses": "La tasa vigente de {currency} (desde {from}) pasará a tener Válido hasta {to}, en los dos sentidos.",
     "convRateConfirmTitle": "¿Confirma el cambio de tasa?",
@@ -16697,7 +16699,6 @@
     "convRateRate": "Tasa",
     "convRateRateRequired": "Introduzca una tasa mayor que cero.",
     "convRateValidFromRequired": "Introduzca una fecha y una hora válidas.",
-    "convRateTime": "Hora",
     "convRateValidFromHint": "Por defecto, ahora. Puede cambiarlo.",
     "convRatePreviewNewCurrencyTitle": "Se añadirá {currency} como divisa manual con dos tasas",
     "convRatePreviewNewRateTitle": "Se crearán dos tasas",

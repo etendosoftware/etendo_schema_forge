@@ -150,6 +150,17 @@ Exception (ETP-4997, SHELL-02): the list toolbar Export/Import buttons follow th
 
 ---
 
+## Date and time in one field — `DateTimeField` (ETP-6365)
+
+`tools/app-shell/src/components/ui/date-time-field.jsx` (pure helpers in `date-time-field-model.js`) is the date-and-time sibling of the shared `DateField`: ONE field showing `19/11/2026 14:20` (locale date order + `HH:mm`, 24h), built on the same pieces (`DateField`'s field shell, calendar-icon trigger, `Popover`, `Calendar`, the `HeaderRow` / `PillButton` chrome of `date-picker-chrome.jsx`), so it looks like `DateField`: height, border, focus ring, hover, disabled look; `aria-invalid` paints the destructive border.
+
+- **Value:** a wall-clock string `yyyy-MM-ddTHH:mm` (`:ss` accepted), emitted as `yyyy-MM-ddTHH:mm:00` — never through `Date`/UTC (NeoDateFormat convention, ETP-5100). `onChange('')` when cleared, `onChange(null)` when the typed text is not a real day plus a 24h time (the field stays in error until fixed).
+- **Typing:** digits only; separators, the space and the colon are inserted (`191120261420` → `19/11/2026 14:20`); committed on blur or Enter (Enter does not submit the surrounding form, as in `DateField`); Esc restores the committed text.
+- **Popover:** the calendar picks the day and keeps the time; a time input (`HH:mm`) inside sets the time; *Ahora* sets `max` (or the browser's minute), *Limpiar* empties it; Esc closes it.
+- **Props:** `value`, `onChange`, `onBlur`, `placeholder` (default `dd/mm/aaaa hh:mm`), `disabled`, `readOnly` (disabled-looking shell, no popover; an empty value shows `placeholder`, e.g. *— (sin fecha de fin)*), `invalid` / `aria-invalid`, `max` (days after it disabled; a later value is flagged, not clamped), `required`, `id`, `name`, `className`, `aria-label`, `data-testid` (on the text input; popover parts derive `-trigger`, `-time`, `-now`, `-clear`, `-calendar`).
+- **i18n:** `dateTimeFieldTime`, `dateTimeFieldNow` (plus the existing `datePickerOpen`, `clear`).
+- **First user:** Currency Conversion's *Válido desde* (Nueva divisa / Nueva tasa, `max` = the server clock) and the read-only *Válido desde* / *Válido hasta* of *Modificar tasa*.
+
 ## Default column widths by field type (ETP-5833)
 
 One lookup (`tools/app-shell/src/lib/linesColumnWidth.js`) sizes **and** expands every grid column from its `type`. `columnFlex()` feeds the lines grid (`InlineLinesPanel`) and the add-row colgroup; `columnMinWidthPx()` feeds the plain list (`DataTable` list mode, header + body + `<col>`). Both read the same tables, so the surfaces cannot disagree. Bases are **constants per type, never measured from content**: sorting or paging cannot move a column (ETP-5182), and there is no autofit. The only measured input is the plain-list **header label** (below), which depends on label + locale, never on row data. **One exception, lines grid only (ETP-5133):** a no-truncate column (any lookup selector, or `noTruncate: true` — see `docs/decisions-reference.md`) gets `contentWidthPx` from `withContentWidths()` (`lib/linesContentWidth.js`): the widest identifier among the loaded lines plus the add-row draft (published by `DataTable` through `lib/linesScrollHost.js`), measured with `measureTextPx` in the cell font. `columnFlex()` only ever raises the type basis to it (no maximum), so header, lines, totals and the add-row colgroup stay aligned and the grid's horizontal scroll absorbs the overflow.

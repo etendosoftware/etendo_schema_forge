@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { InfoIcon, WarningCircleIcon, WarningIcon, XIcon } from '@phosphor-icons/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog.jsx';
-import { DateField } from '@/components/ui/date-field';
+import { DateTimeField } from '@/components/ui/date-time-field';
+import { splitWallClock, joinWallClock } from '@/components/ui/date-time-field-model.js';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
@@ -16,14 +17,13 @@ import {
   createManualCurrency, createManualRate, updateManualRate,
 } from './conversionRatesApi.js';
 import {
-  formatWallClock, nowWallClock, parseWallClock, toWallClock,
-  wallClockDate, wallClockTime, isOpenEnded, displayValidTo, addMillisToWallClock, isAfterWallClock,
+  formatWallClock, nowWallClock,
+  isOpenEnded, displayValidTo, addMillisToWallClock, isAfterWallClock,
 } from './conversionRatesModel.js';
 
 /** Debounce of the preview request while the user types. */
 export const PREVIEW_DEBOUNCE_MS = 350;
 
-const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 /**
  * The dialog modes:
@@ -36,12 +36,10 @@ const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
  */
 export const DIALOG_MODES = Object.freeze({ NEW_CURRENCY: 'newCurrency', NEW_RATE: 'newRate', EDIT: 'edit' });
 
-/** `yyyy-MM-ddTHH:mm:00`, or null while the date or the time is not valid yet. */
-export function composeValidFrom(dateIso, time) {
-  const date = parseWallClock(dateIso);
-  const t = TIME_RE.exec(time ?? '');
-  if (!date || !t) return null;
-  return toWallClock({ ...date, hour: Number(t[1]), minute: Number(t[2]) });
+/** The start as `yyyy-MM-ddTHH:mm:00`, or null while the DateTimeField holds no valid value. */
+export function normalizeValidFrom(value) {
+  const parts = splitWallClock(value);
+  return parts ? joinWallClock(parts.date, parts.time) : null;
 }
 
 /** The rate typed by the user, or null when empty / not a positive number. */
@@ -58,11 +56,10 @@ function initialState(mode, row, now = nowWallClock()) {
   if (mode === DIALOG_MODES.EDIT && row) {
     return {
       rateText: row.multipleRateBy == null ? '' : String(row.multipleRateBy),
-      dateIso: wallClockDate(row.validFromDate),
-      time: wallClockTime(row.validFromDate),
+      validFrom: row.validFromDate ?? '',
     };
   }
-  return { rateText: '', dateIso: wallClockDate(now), time: wallClockTime(now) };
+  return { rateText: '', validFrom: now };
 }
 
 /** Message keys whose refusal belongs to "Válido desde" when the answer names no field. */
@@ -302,7 +299,7 @@ export function ManualRateDialog({
         serverNowReadAt.current = Date.now();
         setServerNow(now);
         if (mode !== DIALOG_MODES.EDIT) {
-          setForm((f) => ({ ...f, dateIso: wallClockDate(now), time: wallClockTime(now) }));
+          setForm((f) => ({ ...f, validFrom: now }));
         }
       })
       .catch(() => {});
@@ -340,7 +337,7 @@ export function ManualRateDialog({
   const destCurrencyId = dest?.currencyId ?? null;
 
   const rate = parseRateInput(form.rateText);
-  const validFrom = composeValidFrom(form.dateIso, form.time);
+  const validFrom = normalizeValidFrom(form.validFrom);
   const rateError = touched.rate && rate == null ? ui('convRateRateRequired') : null;
   // No future starts: the server refuses them, so they are refused here first (field error,
   // confirm disabled). The bound is the server clock aged by the time the dialog has been open.
@@ -532,29 +529,18 @@ export function ManualRateDialog({
   // the start (overlap, future); the hint stays under it, as in the error design.
   const validFromField = (
     <Field label={ui('convRateValidFromDateTime')} required className="min-w-0" data-testid="Field__convrate-from">
-      {/* One control inside the grid cell: the date takes the free width (min-w-0 lets it shrink),
-          the time a fixed narrow width, so the pair never overflows the 520px dialog. */}
-      <div className={`flex min-w-0 gap-1.5${startInError ? ' [&>div]:border-destructive' : ''}`} data-invalid={startInError ? 'true' : undefined}>
-        <DateField
-          className="min-w-0 flex-1"
-          value={form.dateIso}
-          onChange={(iso) => {
-            setForm((f) => ({ ...f, dateIso: iso }));
-            setTouched((t) => ({ ...t, date: true }));
-          }}
-          required
-          data-testid="convrate-dialog-date" />
-        <Input
-          type="time"
-          value={form.time}
-          onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))}
-          onBlur={() => setTouched((t) => ({ ...t, date: true }))}
-          required
-          aria-label={ui('convRateTime')}
-          aria-invalid={startInError ? true : undefined}
-          className={`w-[92px] shrink-0 bg-card px-2${startInError ? ' border-destructive' : ''}`}
-          data-testid="convrate-dialog-time" />
-      </div>
+      <DateTimeField
+        value={form.validFrom}
+        onChange={(next) => {
+          setForm((f) => ({ ...f, validFrom: next }));
+          setTouched((t) => ({ ...t, date: true }));
+        }}
+        onBlur={() => setTouched((t) => ({ ...t, date: true }))}
+        max={nowBound ?? undefined}
+        invalid={startInError}
+        required
+        aria-label={ui('convRateValidFromDateTime')}
+        data-testid="convrate-dialog-valid-from-input" />
       {dateError && (
         <span className="block text-xs font-normal text-destructive" data-testid="convrate-dialog-date-error">{dateError}</span>
       )}
@@ -653,18 +639,17 @@ export function ManualRateDialog({
                 <div className="max-w-[240px]">{rateField}</div>
                 <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
                   <Field label={ui('convRateValidFromDateTime')} className="min-w-0" data-testid="Field__convrate-from">
-                    <Input
-                      value={formatWallClock(row?.validFromDate)}
+                    <DateTimeField
+                      value={row?.validFromDate}
                       readOnly
-                      disabled
                       aria-label={ui('convRateValidFromDateTime')}
                       data-testid="convrate-dialog-valid-from" />
                   </Field>
                   <Field label={ui('convRateValidToDateTime')} className="min-w-0" data-testid="Field__convrate-to">
-                    <Input
-                      value={displayValidTo(row) ?? ui('convRateOpenEnd')}
+                    <DateTimeField
+                      value={isOpenEnded(row?.validToDate) ? null : row.validToDate}
                       readOnly
-                      disabled
+                      placeholder={ui('convRateOpenEnd')}
                       aria-label={ui('convRateValidToDateTime')}
                       data-testid="convrate-dialog-valid-to" />
                   </Field>

@@ -76,8 +76,8 @@ The former lock (`etgoUsedInAccounting`) is gone: editing or deleting a rate nev
 | Control | Shared component |
 |---|---|
 | Toolbar filters Divisa / Periodo / Estado | `DistinctValuesFilter` (app-shell-core, the list filter of Not Posted Documents; opens on the committed value) |
-| Custom period from / to, dialog date | `DateField` |
-| Dialog time | shared `Input` with `type="time"` — the app has no time or datetime field component |
+| Custom period from / to | `DateField` |
+| Válido desde (create dialogs) and Válido desde / hasta (Modificar, read-only) | `DateTimeField` (`components/ui/date-time-field.jsx`, built for ETP-6365 on `DateField`'s pieces: one field `19/11/2026 14:20`, `max` = server clock) |
 | Moneda destino (Nueva divisa) | `CreatableSearchSelect` with `staticOptions` (`value` + `displayValue`) |
 | Rate | `MaskedAmountInput` (`bare`, `grouping={false}`), as the payment modal's conversion rate |
 | Read-only origin / destination / edit range | shared `Input` (`readOnly`, `disabled`) inside `Field` |
@@ -97,7 +97,7 @@ Nothing in the window is hand-drawn any more: the former symbol chip and accordi
 ## Gap assessment
 - The organization currency name in *Moneda origen* comes from `Intl.DisplayNames` (no action used here serves the AD currency name).
 - Dates are always `dd/MM/yyyy HH:mm` (story ETP-6365), whatever the UI locale.
-- Válido desde is a date field plus a time input: the app has no combined datetime field.
+- Válido desde is ONE field (`DateTimeField`), as in the design.
 
 ## Manual verification
 1. Open `/conversion-rates` from **Finanzas**: the menu, the title and the breadcrumb read *Conversión de divisas*.
