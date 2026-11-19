@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ArrowLeft, ArrowLeftRight, ChevronDown, Plus } from 'lucide-react';
+import { ArrowLeftIcon, ArrowsLeftRightIcon, CaretDownIcon, PlusIcon } from '@phosphor-icons/react';
 import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
 import { AdvancedFilterButton } from '@/components/contract-ui/AdvancedFilterButton.jsx';
@@ -25,7 +25,7 @@ function MovementsSplitButton({ ui, onNewMovement, onTransfer }) {
         onClick={onNewMovement}
         className="inline-flex h-10 items-center gap-2 rounded-l-lg bg-[#121217] px-3 text-sm font-medium leading-6 text-white transition-colors hover:bg-accent-highlight hover:text-accent-highlight-foreground"
       >
-        <Plus className="h-5 w-5" data-testid="Plus__f863ac" />
+        <PlusIcon className="h-5 w-5" data-testid="Plus__f863ac" />
         {ui('financeAccountTxNewAction')}
       </button>
       <button
@@ -37,7 +37,7 @@ function MovementsSplitButton({ ui, onNewMovement, onTransfer }) {
         onClick={() => setOpen((o) => !o)}
         className="inline-flex h-10 w-10 items-center justify-center rounded-r-lg border-l border-primary-foreground/20 bg-[#121217] text-white transition-colors hover:bg-accent-highlight hover:text-accent-highlight-foreground"
       >
-        <ChevronDown
+        <CaretDownIcon
           className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`}
           data-testid="ChevronDown__f863ac" />
       </button>
@@ -53,7 +53,7 @@ function MovementsSplitButton({ ui, onNewMovement, onTransfer }) {
             onClick={() => { setOpen(false); onTransfer?.(); }}
             className="flex w-full items-center gap-2 px-2 py-1 text-left hover:bg-[hsl(var(--page-bg))]"
           >
-            <ArrowLeftRight className="h-6 w-6 shrink-0 text-[hsl(var(--text-disabled))]" data-testid="ArrowLeftRight__f863ac" />
+            <ArrowsLeftRightIcon className="h-6 w-6 shrink-0 text-[hsl(var(--text-disabled))]" data-testid="ArrowLeftRight__f863ac" />
             <span className="text-sm text-[hsl(var(--text-primary))]">{ui('financeAccountTransferAction')}</span>
           </button>
         </div>
@@ -106,7 +106,7 @@ export function MovementsToolbar({
         onClick={() => navigate(-1)}
         className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-card text-[#828FA3] transition-colors hover:bg-[hsl(var(--muted))] hover:text-foreground"
       >
-        <ArrowLeft className="h-5 w-5" data-testid="ArrowLeft__f863ac" />
+        <ArrowLeftIcon className="h-5 w-5" data-testid="ArrowLeft__f863ac" />
       </button>
       {/* Quick filters — type/status first, then date, mirroring the standard
           list toolbar (e.g. Sales Order). */}

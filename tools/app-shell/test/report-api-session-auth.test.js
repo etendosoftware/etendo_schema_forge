@@ -25,9 +25,9 @@
  */
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 
@@ -667,6 +667,72 @@ describe('vite.config.js — /jsreport proxy', () => {
     const config = await loadViteConfig();
     assert.equal(config.server.proxy['/jsreport'].target, 'http://localhost:5488');
     assert.equal(config.preview.proxy['/jsreport'].target, 'http://localhost:5488');
+  });
+});
+
+// Radix keeps open layers in a module-level registry. In dev, if Dialog is pre-bundled by Vite
+// while Popover is served raw (or the reverse), they get separate registries and a popover opened
+// inside a modal dialog keeps `pointer-events: none` (calendar day clicks fall through). Every
+// `@radix-ui/*` dependency of app-shell-core must therefore be both deduped and pre-bundled.
+describe('vite.config.js — core Radix deps are deduped and pre-bundled together', () => {
+  const VITE_CONFIG_SRC = readFileSync(VITE_CONFIG_PATH, 'utf8');
+  let savedCwd;
+  let emptyEnvDir;
+
+  beforeEach(() => {
+    savedCwd = process.cwd();
+    emptyEnvDir = mkdtempSync(join(tmpdir(), 'vite-env-'));
+  });
+
+  afterEach(() => {
+    process.chdir(savedCwd);
+    rmSync(emptyEnvDir, { recursive: true, force: true });
+  });
+
+  function coreRadixDeps() {
+    // The package does not export ./package.json, so walk up node_modules like Node would.
+    let pkgPath;
+    for (let dir = dirname(VITE_CONFIG_PATH); !pkgPath; dir = dirname(dir)) {
+      const candidate = join(dir, 'node_modules/@etendosoftware/app-shell-core/package.json');
+      if (existsSync(candidate)) pkgPath = candidate;
+      else if (dirname(dir) === dir) {
+        assert.fail('cannot find node_modules/@etendosoftware/app-shell-core/package.json; run npm install');
+      }
+    }
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+    // Core declares Radix as peerDependencies (the host app supplies the single copy).
+    const deps = [...Object.keys(pkg.dependencies ?? {}), ...Object.keys(pkg.peerDependencies ?? {})];
+    const radix = deps.filter((d) => d.startsWith('@radix-ui/'));
+    assert.ok(radix.length > 0, 'app-shell-core declares no @radix-ui dependencies or peerDependencies');
+    return radix;
+  }
+
+  async function loadViteConfig() {
+    const { loadConfigFromFile } = await import('vite');
+    process.chdir(emptyEnvDir);
+    const loaded = await loadConfigFromFile({ mode: 'development', command: 'serve' }, VITE_CONFIG_PATH);
+    return loaded.config;
+  }
+
+  it('pre-bundles every @radix-ui dependency of app-shell-core (optimizeDeps.include)', async () => {
+    const config = await loadViteConfig();
+    const missing = coreRadixDeps().filter((d) => !config.optimizeDeps.include.includes(d));
+    assert.deepEqual(missing, [], `missing from optimizeDeps.include: ${missing.join(', ')}`);
+  });
+
+  it('dedupes every @radix-ui dependency of app-shell-core (resolve.dedupe)', async () => {
+    const config = await loadViteConfig();
+    const missing = coreRadixDeps().filter((d) => !config.resolve.dedupe.includes(d));
+    assert.deepEqual(missing, [], `missing from resolve.dedupe: ${missing.join(', ')}`);
+  });
+
+  it('feeds both lists from the single CORE_RADIX_DEPS constant', () => {
+    assert.match(VITE_CONFIG_SRC, /const CORE_RADIX_DEPS = \[/);
+    assert.match(VITE_CONFIG_SRC, /dedupe:\s*\[[^\]]*\.\.\.CORE_RADIX_DEPS/s);
+    assert.match(VITE_CONFIG_SRC, /include:\s*\[[^\]]*\.\.\.CORE_RADIX_DEPS/s);
+    const outside = VITE_CONFIG_SRC.replace(/const CORE_RADIX_DEPS = \[[^\]]*\];/, '')
+      .replace(/\/\/.*$/gm, '').match(/['"]@radix-ui\/[^'"]+['"]/g);
+    assert.equal(outside, null, 'radix package names must be listed only in CORE_RADIX_DEPS');
   });
 });
 

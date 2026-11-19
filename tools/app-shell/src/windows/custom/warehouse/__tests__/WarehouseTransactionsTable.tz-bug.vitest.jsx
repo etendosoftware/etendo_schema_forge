@@ -13,7 +13,7 @@
 // make the bug reproducible regardless of the CI machine's default timezone
 // (verified empirically: process.env.TZ takes effect per-call in this
 // project's Node/Vitest setup, no ICU caching issue).
-import { allIconsAs } from '@/test/lucideIconMock.js';
+import { allIconsAs } from '@/test/iconMock.js';
 
 // --- Mocks (before imports) ---
 
@@ -32,9 +32,9 @@ vi.mock('../useWarehouseStock', () => ({
   useWarehouseStock: vi.fn(),
 }));
 
-vi.mock('lucide-react', async (importOriginal) => allIconsAs(() => null, importOriginal, {
-  Loader2: (props) => <span data-testid="loader" {...props} />,
-  ArrowUpRight: (props) => <span data-testid="icon-arrow-up-right" {...props} />,
+vi.mock('@phosphor-icons/react', async (importOriginal) => allIconsAs(() => null, importOriginal, {
+  CircleNotchIcon: (props) => <span data-testid="loader" {...props} />,
+  ArrowUpRightIcon: (props) => <span data-testid="icon-arrow-up-right" {...props} />,
 }));
 
 // --- Import under test ---

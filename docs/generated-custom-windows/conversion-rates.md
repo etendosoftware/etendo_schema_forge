@@ -68,11 +68,16 @@ The entity is curated (`publicApi.exposed: true`) on `currency`, `toCurrency`, `
 `validToDate`, `multipleRateBy` and `divideRateBy`, so the downloader's `sMFCRSynced` flag stays out
 of the public API while the window keeps showing it (and keeps using it in `readOnlyLogic`).
 
-`multipleRateBy` and `divideRateBy` declare `"type": "number"`. Their AD reference (800019, Rate) is
-not mapped by the core extractor, which extracts them as `string`, while NEO answers a JSON number
-(the default CRUD serializes the `BigDecimal` as is). The override fixes the public type
-(`number`/`double`) and makes the read-only form and grid render the values as numbers. Same
-workaround as `sales-invoice` `exchangeRates.rate`; remove it once reference 800019 is mapped in
-`schema_forge_core`. Regenerated with `make regen ONLY=conversion-rates SKIP_EXTRACT=1 FROM_CACHE=1`
-(contract `0.7.0`; `ConversionRateForm.jsx`, `ConversionRateTable.jsx` and `mockData.js` change).
+`multipleRateBy` and `divideRateBy` declare `"type": "number"` in `decisions.json`, and the public
+API publishes them as `number`/`double`, the type NEO answers (the default CRUD serializes the
+`BigDecimal` as is). The override was added while AD reference 800019 (Rate) was not mapped by the
+core extractor, which extracted the fields as `string`. Core 0.3.110 now maps that reference to
+`decimal` (see the ETP-6342 section below), which the manifest generator also maps to
+`number`/`double`, so the override is redundant. Removing it is a follow-up, together with the
+generator test that pins it. Same override as `sales-invoice` `exchangeRates.rate`. Regenerated
+with `make regen-check FROM_CACHE=1` (contract `0.7.0`).
 Contract: `docs/public-api.md` §3.
+
+## Rate and cost fields are numeric — ETP-6342
+
+Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. **Multiple Rate By** (`multipleRateBy`, `MultiplyRate`) and **Divide Rate By** (`divideRateBy`, `DivideRate`) are now `decimal` in the contract (`tsType: number`): the form renders them as number inputs and the list as numeric columns, without the former 22-character `maxLength`. While the ETP-6174 `"type": "number"` override on both fields is in place (see the section above), the contract keeps them as `number` with `validation.maxLength: 22`; the public API type is `number`/`double` either way.

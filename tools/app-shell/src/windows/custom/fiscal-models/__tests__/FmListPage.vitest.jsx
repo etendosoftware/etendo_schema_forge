@@ -3,6 +3,7 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/catalogAvailability.js
 // Vitest component tests for FmListPage.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-models/FmListPage.jsx
+import { allIconsAs } from '@/test/iconMock.js';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { setSessionCredentials, CREDENTIAL_MODES } from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
 import React from 'react';
@@ -103,16 +104,7 @@ vi.mock('@/windows/custom/shared/CheckboxField.jsx', () => ({
       onChange: e => onToggle?.(e.target.checked),
     }),
 }));
-vi.mock('lucide-react', () => ({
-  LayoutGrid: () => null, Settings: () => null, ListFilter: () => null,
-  ArrowUpDown: () => null, ChevronDown: () => null, MoreHorizontal: () => null,
-  MoreVertical: () => null, Calendar: () => null, Clock: () => null,
-  TriangleAlert: () => null, OctagonAlert: () => null, ArrowUpRight: () => null,
-  Search: () => null, Play: () => null, Check: () => null,
-  // FmRowActions.jsx (ETP-5187 Edit/Delete for draft rows, ETP-5338 Reactivate for
-  // submitted/submitted_ack rows) imports these 4.
-  Pencil: () => null, Trash2: () => null, Loader2: () => null, RotateCcw: () => null,
-}));
+vi.mock('@phosphor-icons/react', async importOriginal => allIconsAs(() => null, importOriginal));
 vi.mock('../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
   ResultPill: () => null,

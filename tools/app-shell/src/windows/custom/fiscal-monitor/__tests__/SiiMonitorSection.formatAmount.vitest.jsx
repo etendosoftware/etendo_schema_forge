@@ -5,7 +5,7 @@
 // implementation. This file deliberately does NOT mock it, to catch the
 // missing-grouping / hardcoded-locale bug at this consumer too.
 
-import { allIconsAs } from '@/test/lucideIconMock.js';
+import { allIconsAs } from '@/test/iconMock.js';
 const stableApiFetch = vi.fn();
 const stableSetSelectedIds = vi.fn();
 const stableToggleAll = vi.fn();
@@ -15,7 +15,7 @@ const stableSelectedIds = new Set();
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => stableApiFetch }));
 vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u }));
-vi.mock('lucide-react', async (importOriginal) => allIconsAs(() => null, importOriginal));
+vi.mock('@phosphor-icons/react', async (importOriginal) => allIconsAs(() => null, importOriginal));
 vi.mock('@/components/ui/checkbox', () => ({
   Checkbox: ({ checked, onChange }) => <input type="checkbox" checked={!!checked} onChange={onChange ?? (() => {})} />,
 }));

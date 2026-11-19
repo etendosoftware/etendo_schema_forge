@@ -19,10 +19,11 @@
       Variation columns (ETP-6080): only with a comparison AND only for a
       contract that declares `labels.variationAmount` (Profit & Loss; the
       Balance Sheet shares this file byte for byte and has no variation yet).
-      Raw values like the amounts; an empty cell when there is no % (reference 0).
+      Raw values like the amounts, rounded to 2 decimals (round2); a null value (no % when the reference is 0)
+      is an empty cell typed "string" via numCellType, never an empty number cell (html-to-xlsx writes NaN).
       Period columns (ETP-6239): with `meta.periods` the amount columns become one group per
       bucket (every bucket, the range total last), each `label`, and with a comparison also
-      `label Compared`, `label Var.` and `label Var. %`. The Balance Sheet copy of this file
+      `label Compared (compared period)`, `label Var.` and `label Var. %`. The Balance Sheet copy of this file
       keeps the same loops, which come out empty for it (it never sends `periods`). --}}
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8">
@@ -43,7 +44,7 @@
       {{#if meta.periods}}
       {{#each (periodOrder meta.periods) as |idx|}}
       {{#with (periodLabel (lookup @root.meta.periods idx) @root.meta.params.columns @root.meta.locale @root.meta.labels.T) as |label|}}
-      <th>{{label}}</th>{{#if (periodMode @root.meta.params.compareMode)}}<th>{{label}} {{@root.meta.labels.periodCompared}}</th><th>{{label}} {{@root.meta.labels.periodVarAmount}}</th><th>{{label}} {{@root.meta.labels.periodVarPct}}</th>{{/if}}
+      <th>{{label}}</th>{{#if (periodMode @root.meta.params.compareMode)}}<th>{{label}} {{periodComparedHeader @root.meta.labels.periodCompared @root.meta.params.periods idx @root.meta.params.compareMode @root.meta.params.columns @root.meta.locale}}</th><th>{{label}} {{@root.meta.labels.periodVarAmount}}</th><th>{{label}} {{@root.meta.labels.periodVarPct}}</th>{{/if}}
       {{/with}}
       {{/each}}
       {{else}}
@@ -62,12 +63,12 @@
         {{#if @root.meta.periods}}
         {{#each (periodOrder @root.meta.periods) as |idx|}}
         {{#with (lookup ../cells idx) as |cell|}}
-        <td data-cell-type="number">{{cell.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#with (lookup cell (periodMode @root.meta.params.compareMode)) as |ref|}}<td data-cell-type="number">{{ref.amount}}</td><td data-cell-type="number">{{ref.variationAmount}}</td><td data-cell-type="number">{{ref.variationPct}}</td>{{/with}}{{/if}}
+        <td data-cell-type="number">{{cell.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#with (lookup cell (periodMode @root.meta.params.compareMode)) as |ref|}}<td data-cell-type="number">{{ref.amount}}</td><td data-cell-type="{{numCellType ref.variationAmount}}">{{round2 ref.variationAmount}}</td><td data-cell-type="{{numCellType ref.variationPct}}">{{round2 ref.variationPct}}</td>{{/with}}{{/if}}
         {{/with}}
         {{/each}}
         {{else}}
         <td data-cell-type="number">{{this.amount}}</td>
-        {{#ifCond @root.meta.params.compareTo '===' 'true'}}<td data-cell-type="number">{{this.amount_ref}}</td>{{#if @root.meta.labels.variationAmount}}<td data-cell-type="number">{{this.variationAmount}}</td><td data-cell-type="number">{{this.variationPct}}</td>{{/if}}{{/ifCond}}
+        {{#ifCond @root.meta.params.compareTo '===' 'true'}}<td data-cell-type="number">{{this.amount_ref}}</td>{{#if @root.meta.labels.variationAmount}}<td data-cell-type="{{numCellType this.variationAmount}}">{{round2 this.variationAmount}}</td><td data-cell-type="{{numCellType this.variationPct}}">{{round2 this.variationPct}}</td>{{/if}}{{/ifCond}}
         {{/if}}
       </tr>
       {{/each}}

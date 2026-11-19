@@ -83,6 +83,15 @@ fija. Se itera; todavía **no son pruebas de la suite**.
 | 45 | `f-shipment-to-invoice` | Albarán entregado → factura | Albarán, Factura | ✅ | sí |
 | 46 | `f-purchase-order-to-invoice` | Factura del proveedor de un pedido de compra | Pedido de compra, Factura de compra | ✅ | sí |
 | 47 | `f-bank-reconciliation` | Conciliar un movimiento del banco con la factura que paga | Extracto, Conciliación | ✅ | sí |
+| 48 | `f-sepa-remittance` | Remesa de cobro SEPA con una factura pendiente, procesada (feature del Q4, ETP-5850) | Remesas | 📄 | no |
+| 49 | `f-foreign-currency-invoice` | Factura en dólares con el tipo de cambio vigente (feature del Q4, ETP-5840) | Factura, Rangos de conversión | 📄 | verificar |
+| 50 | `f-order-global-discount` | Facturar un pedido con descuento global, que pasa a la factura (ETP-5828) | Pedido, Factura | 📄 | verificar |
+| 51 | `w-customer-vendor-contact` | Contacto cliente y proveedor a la vez (ETP-5791) | Contactos | 📄 | no |
+| 52 | `w-payment-term-days` | Condición de pago a 45 días como predeterminada del cliente (ETP-5826) | Contactos, Condiciones de pago | 📄 | verificar |
+| 53 | `f-invoice-from-photo` | Factura de proveedor desde una foto JPG, en borrador (ETP-5735) | Factura de compra (Subir factura) | 📄 | no |
+| 54 | `w-contact-category-vendor` | Contacto en la categoría Proveedor: hereda solo proveedor (ETP-5791, flag `contact-category-type`) | Contactos, Categoría de contacto | 📄 | no |
+| 55 | `w-contact-own-category` | Contacto en una categoría propia cliente y proveedor: hereda los dos (ETP-5791) | Contactos, Categoría de contacto | 📄 | no |
+| 56 | `e-fiscal-year-start` | Pedir un ejercicio de julio a junio: el MCP no lo cambia y el agente manda a Primeros pasos (ETP-5577) | Calendario | 📄 | no |
 | | **Errores y negativas** | | | | |
 | 39 | `e-unknown-document` | Documento que no existe | Factura | 📄 | sí |
 | 40 | ~~`e-invalid-write`~~ | Cantidad negativa — **retirada del KR** (Etendo la acepta por diseño) | Pedido | 📄 | — |

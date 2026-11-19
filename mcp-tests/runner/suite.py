@@ -25,6 +25,10 @@ SUITE_SCHEMA_VERSIONS = (1, 2)
 PLATFORMS = ("etendo-go", "holded")
 CATEGORIES = ("query", "write", "flow", "error")
 NOT_POSSIBLE_KINDS = ("goal", "setup")
+#: ETP-5850: the files a probe hands the agent (`files:`), by bare name, from this folder. The
+#: agent uploads them with the harness's `upload_file` tool, as a real client would with its own
+#: file access; the platform's MCP decides where they go.
+FILES_DIR = Path(__file__).resolve().parent.parent / "fixtures" / "files"
 #: Tool-shaped words a prompt may never contain, whatever the catalogue says:
 #: Etendo's own tool family. The live catalogue check at preflight covers the
 #: rest (any other vendor's names), see `prompt_tool_mentions`.
@@ -162,6 +166,8 @@ class Probe:
     platforms: dict[str, PlatformBlock] | None = field(default=None, compare=False)
     # ETP-6236: the routine of the resolved platform block, if it declares one.
     routine: Routine | None = None
+    # ETP-5850: names of files under FILES_DIR handed to the agent (see agent.UPLOAD_TOOL).
+    files: tuple[str, ...] = ()
 
     @property
     def verifies(self) -> bool:
@@ -387,10 +393,24 @@ def _load_v2_probes(data: dict[str, Any], path: Path) -> list[Probe]:
                                  f"`platforms.{platform}` cannot declare one.")
         prompt = entry["prompt"].strip()
         probe = Probe(id=probe_id, mode=entry.get("mode", "read"), prompt=prompt,
-                      exclusive=exclusive, category=category, platforms=blocks)
+                      exclusive=exclusive, category=category, platforms=blocks,
+                      files=_parse_files(entry.get("files"), probe_id))
         _lint_prompt(probe)
         probes.append(probe)
     return probes
+
+
+def _parse_files(raw: Any, probe_id: str) -> tuple[str, ...]:
+    """The `files:` of a v2 probe: bare names of files that exist under FILES_DIR."""
+    if raw is None:
+        return ()
+    if not isinstance(raw, list) or not raw:
+        raise ValueError(f"Probe {probe_id!r}: files must be a non-empty list of file names.")
+    for name in raw:
+        if not isinstance(name, str) or Path(name).name != name or not (FILES_DIR / name).is_file():
+            raise ValueError(f"Probe {probe_id!r}: file {name!r} is not a file name under "
+                             f"{FILES_DIR.relative_to(FILES_DIR.parent.parent)}/.")
+    return tuple(raw)
 
 
 #: A routine name as `etendo_routine` accepts it.

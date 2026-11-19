@@ -1,5 +1,11 @@
 import { useState } from 'react';
-import { X, Loader2, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import {
+  XIcon,
+  CircleNotchIcon,
+  WarningIcon,
+  CaretDownIcon,
+  CaretUpIcon,
+} from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { toast } from 'sonner';
@@ -143,7 +149,7 @@ export default function VfSolveErrorModal({ open, onClose, rows, neoApiBase, onR
             )}
           </div>
           <button className="fm-config-modal__close" onClick={onClose} aria-label={ui('close')}>
-            <X size={16} data-testid="X__a6e471" />
+            <XIcon size={16} data-testid="X__a6e471" />
           </button>
         </div>
 
@@ -157,7 +163,7 @@ export default function VfSolveErrorModal({ open, onClose, rows, neoApiBase, onR
               padding: '10px 12px', marginBottom: 14,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                <AlertTriangle
+                <WarningIcon
                   size={13}
                   style={{ color: 'hsl(var(--destructive))', flexShrink: 0 }}
                   data-testid="AlertTriangle__a6e471" />
@@ -191,7 +197,7 @@ export default function VfSolveErrorModal({ open, onClose, rows, neoApiBase, onR
                         cursor: 'pointer', padding: '4px 0', textDecoration: 'underline',
                       }}
                     >
-                      {showDetail ? <ChevronUp size={12} data-testid="ChevronUp__a6e471" /> : <ChevronDown size={12} data-testid="ChevronDown__a6e471" />}
+                      {showDetail ? <CaretUpIcon size={12} data-testid="ChevronUp__a6e471" /> : <CaretDownIcon size={12} data-testid="ChevronDown__a6e471" />}
                       {showDetail ? ui('vfSolveError.hideDetail') : ui('vfSolveError.showDetail')}
                     </button>
                   )}
@@ -244,7 +250,7 @@ export default function VfSolveErrorModal({ open, onClose, rows, neoApiBase, onR
               onClick={handleResolve}
               disabled={saving}
             >
-              {saving && <Loader2
+              {saving && <CircleNotchIcon
                 size={13}
                 style={{ animation: 'spin 1s linear infinite' }}
                 data-testid="Loader2__a6e471" />}

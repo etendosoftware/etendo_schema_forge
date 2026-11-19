@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useUI } from '@/i18n';
-import { OctagonAlert, TriangleAlert, X } from 'lucide-react';
+import { WarningOctagonIcon, WarningIcon, XIcon } from '@phosphor-icons/react';
 
 const WARN_DAYS     = 60;
 const CRITICAL_DAYS = 30;
@@ -59,7 +59,7 @@ export default function CertExpiryBanner({ daysLeft, variant = 'prominent' }) {
             aria-label={ui('fiscal.cert.expiry.dismiss')}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: c.fg, opacity: 0.5, padding: '0 2px', display: 'flex' }}
           >
-            <X size={14} strokeWidth={2} data-testid="X__15abdc" />
+            <XIcon size={14} data-testid="X__15abdc" />
           </button>
         )}
       </div>
@@ -74,8 +74,8 @@ export default function CertExpiryBanner({ daysLeft, variant = 'prominent' }) {
     }}>
       <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
         {isCritical
-          ? <OctagonAlert size={18} strokeWidth={1.75} data-testid="OctagonAlert__15abdc" />
-          : <TriangleAlert size={18} strokeWidth={1.75} data-testid="TriangleAlert__15abdc" />}
+          ? <WarningOctagonIcon size={18} data-testid="OctagonAlert__15abdc" />
+          : <WarningIcon size={18} data-testid="TriangleAlert__15abdc" />}
       </span>
       <div style={{ flex: 1 }}>
         <div style={{ fontWeight: 600, fontSize: 14 }}>
@@ -92,7 +92,7 @@ export default function CertExpiryBanner({ daysLeft, variant = 'prominent' }) {
           aria-label={ui('fiscal.cert.expiry.dismiss')}
           style={{ background: 'none', border: 'none', cursor: 'pointer', color: c.fg, opacity: 0.45, flexShrink: 0, display: 'flex' }}
         >
-          <X size={16} strokeWidth={2} data-testid="X__15abdc" />
+          <XIcon size={16} data-testid="X__15abdc" />
         </button>
       )}
     </div>

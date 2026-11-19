@@ -1,5 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Check, ChevronRight, FileText, ReceiptText, Truck, X } from 'lucide-react';
+import {
+  CheckIcon,
+  CaretRightIcon,
+  FileTextIcon,
+  ReceiptIcon,
+  TruckIcon,
+  XIcon,
+} from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { StatusTag } from '@/components/ui/status-tag';
 import { isOwnEscape, useDialogFocusTrap } from './ActionChoiceModal.jsx';
@@ -9,16 +16,16 @@ import { isOwnEscape, useDialogFocusTrap } from './ActionChoiceModal.jsx';
 // glyph and grammatical gender (drives the «Completado/Completada» badge).
 
 const TYPE_CONFIG = {
-  salida:               { labelKey: 'confirmResultModal.docType.salida',               titleKey: 'confirmResultModal.title.albaran',              viewKey: 'soViewShipment', Icon: Truck,       gender: 'masculine' },
-  entrada:              { labelKey: 'confirmResultModal.docType.entrada',              titleKey: 'confirmResultModal.title.albaranCompra',         viewKey: 'poViewReceipt',  Icon: Truck,       gender: 'masculine' },
-  facturaVenta:         { labelKey: 'confirmResultModal.docType.facturaVenta',         titleKey: 'confirmResultModal.title.factura',              viewKey: 'soViewInvoice',  Icon: ReceiptText, gender: 'feminine' },
-  facturaCompra:        { labelKey: 'confirmResultModal.docType.facturaCompra',        titleKey: 'confirmResultModal.title.factura',              viewKey: 'poViewInvoice',  Icon: ReceiptText, gender: 'feminine' },
-  facturaRectificativa: { labelKey: 'confirmResultModal.docType.facturaRectificativa', titleKey: 'confirmResultModal.title.facturaRectificativa', viewKey: 'soViewInvoice',  Icon: ReceiptText, gender: 'feminine' },
-  pedidoVenta:          { labelKey: 'confirmResultModal.docType.pedidoVenta',          titleKey: 'confirmResultModal.title.pedido',               viewKey: 'sqViewOrder',    Icon: FileText,    gender: 'masculine' },
+  salida:               { labelKey: 'confirmResultModal.docType.salida',               titleKey: 'confirmResultModal.title.albaran',              viewKey: 'soViewShipment', Icon: TruckIcon,       gender: 'masculine' },
+  entrada:              { labelKey: 'confirmResultModal.docType.entrada',              titleKey: 'confirmResultModal.title.albaranCompra',         viewKey: 'poViewReceipt',  Icon: TruckIcon,       gender: 'masculine' },
+  facturaVenta:         { labelKey: 'confirmResultModal.docType.facturaVenta',         titleKey: 'confirmResultModal.title.factura',              viewKey: 'soViewInvoice',  Icon: ReceiptIcon, gender: 'feminine' },
+  facturaCompra:        { labelKey: 'confirmResultModal.docType.facturaCompra',        titleKey: 'confirmResultModal.title.factura',              viewKey: 'poViewInvoice',  Icon: ReceiptIcon, gender: 'feminine' },
+  facturaRectificativa: { labelKey: 'confirmResultModal.docType.facturaRectificativa', titleKey: 'confirmResultModal.title.facturaRectificativa', viewKey: 'soViewInvoice',  Icon: ReceiptIcon, gender: 'feminine' },
+  pedidoVenta:          { labelKey: 'confirmResultModal.docType.pedidoVenta',          titleKey: 'confirmResultModal.title.pedido',               viewKey: 'sqViewOrder',    Icon: FileTextIcon,    gender: 'masculine' },
   // Purchases-side returns (return-to-vendor shipment and its rectificative invoice).
-  devolucionCompra:           { labelKey: 'confirmResultModal.docType.devolucionCompra',           titleKey: 'confirmResultModal.title.devolucionCompra',           viewKey: 'confirmResultModal.view.devolucion', Icon: Truck,       gender: 'feminine' },
-  devolucionVenta:            { labelKey: 'confirmResultModal.docType.devolucionVenta',            titleKey: 'confirmResultModal.title.devolucionVenta',            viewKey: 'confirmResultModal.view.devolucion', Icon: Truck,       gender: 'feminine' },
-  facturaRectificativaCompra: { labelKey: 'confirmResultModal.docType.facturaRectificativaCompra', titleKey: 'confirmResultModal.title.facturaRectificativaCompra', viewKey: 'poViewInvoice',                     Icon: ReceiptText, gender: 'feminine' },
+  devolucionCompra:           { labelKey: 'confirmResultModal.docType.devolucionCompra',           titleKey: 'confirmResultModal.title.devolucionCompra',           viewKey: 'confirmResultModal.view.devolucion', Icon: TruckIcon,       gender: 'feminine' },
+  devolucionVenta:            { labelKey: 'confirmResultModal.docType.devolucionVenta',            titleKey: 'confirmResultModal.title.devolucionVenta',            viewKey: 'confirmResultModal.view.devolucion', Icon: TruckIcon,       gender: 'feminine' },
+  facturaRectificativaCompra: { labelKey: 'confirmResultModal.docType.facturaRectificativaCompra', titleKey: 'confirmResultModal.title.facturaRectificativaCompra', viewKey: 'poViewInvoice',                     Icon: ReceiptIcon, gender: 'feminine' },
 };
 
 // Unknown types keep the historical fallback of this component.
@@ -81,7 +88,7 @@ function DocCard({ doc, index, ui, onOpen }) {
       </span>
       {navigable && (
         <span style={chevronBoxStyle} aria-hidden="true">
-          <ChevronRight size={20} data-testid="ChevronRight__a46cc0" />
+          <CaretRightIcon size={20} data-testid="ChevronRight__a46cc0" />
         </span>
       )}
     </>
@@ -231,7 +238,7 @@ export function ConfirmResultModal({ docs = [], navigate, onClose, onNavigate })
           className={FOCUS_RING_CLS}
           style={closeIconBtnStyle}
         >
-          <X size={20} data-testid="X__a46cc0" />
+          <XIcon size={20} data-testid="X__a46cc0" />
         </button>
 
         <div style={headerStyle}>
@@ -242,8 +249,8 @@ export function ConfirmResultModal({ docs = [], navigate, onClose, onNavigate })
           {banner && (
             <div style={bannerWrapperStyle}>
               <div role="status" data-testid="confirm-result-banner" style={bannerStyle}>
-                {/* Figma: bare check mark (no circle) in a 24×24 box; lucide's glyph is ~16×11 at size 24. */}
-                <Check size={24} strokeWidth={1.5} color={SUCCESS_ACCENT} style={{ flexShrink: 0 }} aria-hidden="true" data-testid="Check__a46cc0" />
+                {/* Figma: bare check mark (no circle) in a 24×24 box. */}
+                <CheckIcon size={24} color={SUCCESS_ACCENT} style={{ flexShrink: 0 }} aria-hidden="true" data-testid="Check__a46cc0" />
                 <div style={bannerTextStyle}>
                   <div style={bannerLineStyle}>{banner}</div>
                   <div style={bannerHintStyle}>{bannerHint}</div>

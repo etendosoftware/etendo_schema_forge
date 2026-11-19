@@ -1,4 +1,4 @@
-import { ChevronDown, Check } from 'lucide-react';
+import { CaretDownIcon, CheckIcon } from '@phosphor-icons/react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 
@@ -38,7 +38,7 @@ export function ListModalToolbarFilter({ filter, value, onChange, ui }) {
           className="inline-flex h-10 items-center justify-between gap-2 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-normal leading-6 text-muted-foreground shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] transition-colors hover:bg-[hsl(var(--muted))]"
         >
           <span className="truncate text-left">{active.label}</span>
-          <ChevronDown
+          <CaretDownIcon
             className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
             data-testid="ChevronDown__a4c11d" />
         </button>
@@ -61,7 +61,7 @@ export function ListModalToolbarFilter({ filter, value, onChange, ui }) {
                 data-testid={`list-modal-filter-${filter.key}-option-${String(opt.value ?? 'all')}`}
               >
                 <span className="flex-1 text-left">{opt.label}</span>
-                {selected ? <Check className="h-4 w-4 text-[hsl(var(--foreground))]" data-testid="Check__a4c11d" /> : null}
+                {selected ? <CheckIcon className="h-4 w-4 text-[hsl(var(--foreground))]" data-testid="Check__a4c11d" /> : null}
               </button>
             );
           })}

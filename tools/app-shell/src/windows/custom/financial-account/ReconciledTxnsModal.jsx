@@ -1,7 +1,12 @@
 import { FinancialGridView, FinancialGridRow } from './FinancialGridView.jsx';
 import { getContractGridColumns } from '@/components/financial-accounts/contractColumns';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Link2, ArrowUpRight, CheckCircle2, AlertTriangle } from 'lucide-react';
+import {
+  LinkSimpleIcon,
+  ArrowUpRightIcon,
+  CheckCircleIcon,
+  WarningIcon,
+} from '@phosphor-icons/react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import {
   Dialog,
@@ -146,12 +151,12 @@ export function ReconciledTxnsModal({ line, currency = 'EUR', onClose }) {
               <WidgetField label={ui('financeAccountStatementLinesTxnReconciliation')} data-testid="WidgetField__2dbb84">
                 {balanced ? (
                   <span className="inline-flex items-center gap-1 text-base font-medium leading-6 text-[var(--status-success-fg)]">
-                    <CheckCircle2 className="h-4 w-4" data-testid="CheckCircle2__2dbb84" />
+                    <CheckCircleIcon className="h-4 w-4" data-testid="CheckCircle2__2dbb84" />
                     {ui('financeAccountStatementLinesTxnBalancedShort')}
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 text-sm font-medium leading-6 text-[var(--status-warning-fg)]">
-                    <AlertTriangle className="h-4 w-4 flex-none" data-testid="AlertTriangle__2dbb84" />
+                    <WarningIcon className="h-4 w-4 flex-none" data-testid="AlertTriangle__2dbb84" />
                     {ui('financeAccountStatementLinesTxnDiff', { amount: formatSigned(diff, currency) })}
                   </span>
                 )}
@@ -163,7 +168,7 @@ export function ReconciledTxnsModal({ line, currency = 'EUR', onClose }) {
         {/* Tab strip */}
         <div className="mt-2 flex items-center border-b border-[hsl(var(--border-subtle))] px-6">
           <div className="-mb-px flex items-center gap-1.5 border-b-2 border-[hsl(var(--foreground))] pb-3 pr-3 pt-2">
-            <Link2 className="h-4 w-4 text-[hsl(var(--foreground))]" data-testid="Link2__2dbb84" />
+            <LinkSimpleIcon className="h-4 w-4 text-[hsl(var(--foreground))]" data-testid="Link2__2dbb84" />
             <span className="text-sm font-medium text-[hsl(var(--foreground))]">
               {ui('financeAccountStatementLinesTxnModalAssociated')}
             </span>
@@ -228,7 +233,7 @@ export function ReconciledTxnsModal({ line, currency = 'EUR', onClose }) {
                     onClick={() => goToMovement(t)}
                     className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-md border border-[hsl(var(--border-subtle))] bg-card text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--border-control))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
                   >
-                    <ArrowUpRight className="h-3.5 w-3.5" data-testid="ArrowUpRight__2dbb84" />
+                    <ArrowUpRightIcon className="h-3.5 w-3.5" data-testid="ArrowUpRight__2dbb84" />
                   </button>
                 ) : null}
               </span>

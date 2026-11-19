@@ -3,11 +3,19 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import {
-  Download, Save,
-  OctagonAlert, TriangleAlert, CircleCheck,
-  Calculator, Loader2, TrendingUp, TrendingDown,
-  ClipboardCheck, ReceiptText, FileCheck,
-} from 'lucide-react';
+  DownloadSimpleIcon,
+  FloppyDiskIcon,
+  WarningOctagonIcon,
+  WarningIcon,
+  CheckCircleIcon,
+  CalculatorIcon,
+  CircleNotchIcon,
+  TrendUpIcon,
+  TrendDownIcon,
+  ClipboardTextIcon,
+  ReceiptIcon,
+  SealCheckIcon,
+} from '@phosphor-icons/react';
 import { Tabs, KpiWidget } from '../../FmCommon.jsx';
 import { FmStatusChip, FmDetailHeader, FmDetailActionBar, FmDetailButton, useFmDetailPageMeta, buildDeclTitle, tabCount, incidentsTabBadge } from '../../FmDetailChrome.jsx';
 import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
@@ -1526,17 +1534,17 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
 
   const tabs = [
     { id: 'boxes',     label: t('fm.tab.boxes') ?? 'Casillas',
-      icon: <ClipboardCheck size={16} strokeWidth={1.75} data-testid="ClipboardCheck__4f6c0d" /> },
+      icon: <ClipboardTextIcon size={16} data-testid="ClipboardCheck__4f6c0d" /> },
     { id: 'sources',   label: t('fm.tab.sources') ?? 'Facturas',
       badge: sourcesTabBadge(snapshotServed, invoiceCount, liveSources ?? decl.sources),
-      icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__4f6c0d" /> },
+      icon: <ReceiptIcon size={16} data-testid="ReceiptText__4f6c0d" /> },
     // P12 (ETP-5584) — every list tab shows its count, 0 included (FmDetailChrome's rule).
     { id: 'incidents', label: t('fm.tab.incidents') ?? 'Incidencias',
       ...incidentsTabBadge(blocking, warning),
-      icon: <TriangleAlert size={16} strokeWidth={1.75} data-testid="TriangleAlert__4f6c0d" /> },
+      icon: <WarningIcon size={16} data-testid="TriangleAlert__4f6c0d" /> },
     { id: 'receipt',   label: t('fm.tab.receipt') ?? 'Justificante',
       badge: tabCount(receiptCount),
-      icon: <FileCheck size={16} strokeWidth={1.75} data-testid="FileCheck__4f6c0d" /> },
+      icon: <SealCheckIcon size={16} data-testid="FileCheck__4f6c0d" /> },
   ];
 
 
@@ -1592,8 +1600,8 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
                 data-testid="FmModel303Page__compute"
               >
                 {computing
-                  ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__4f6c0d" />
-                  : <Calculator size={16} strokeWidth={1.75} data-testid="Calculator__4f6c0d" />}
+                  ? <CircleNotchIcon size={16} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__4f6c0d" />
+                  : <CalculatorIcon size={16} data-testid="Calculator__4f6c0d" />}
                 {computing ? (t('fm.action.computing') ?? 'Calculando…') : (t('fm.action.compute') ?? 'Calcular')}
               </FmDetailButton>
               {/* ETP-5438 — hidden once submitted (the whole right group is): a declaration
@@ -1643,9 +1651,8 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
                 disabled={generating}
                 data-testid="FmModel303Page__generate"
               >
-                <Download
+                <DownloadSimpleIcon
                   size={16}
-                  strokeWidth={1.75}
                   style={{ color: fileBlocked ? 'hsl(var(--destructive))' : 'hsl(var(--foreground))' }}
                   data-testid="Download__4f6c0d" />
                 {t('fm.action.gen303') ?? 'Generar fichero 303'}
@@ -1661,8 +1668,8 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
                 data-testid="FmModel303Page__save"
               >
                 {isSavingManualData
-                  ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__save" />
-                  : <Save size={16} strokeWidth={1.75} data-testid="Save__save" />}
+                  ? <CircleNotchIcon size={16} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__save" />
+                  : <FloppyDiskIcon size={16} data-testid="Save__save" />}
                 {t('fm.action.save') ?? 'Guardar'}
               </FmDetailButton>
               <FmDetailButton
@@ -1717,7 +1724,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
                 }}
                 data-testid="FmModel303Page__present"
               >
-                <CircleCheck size={16} strokeWidth={1.75} data-testid="CircleCheck__4f6c0d" />
+                <CheckCircleIcon size={16} data-testid="CircleCheck__4f6c0d" />
                 {t('fm.action.submit') ?? 'Registrar/Presentar'}
               </FmDetailButton>
             </>
@@ -1740,7 +1747,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
             alignItems: 'center',
             gap: 8,
           }}>
-            <TriangleAlert size={14} strokeWidth={1.75} data-testid="TriangleAlert__duplicatePeriod" />
+            <WarningIcon size={14} data-testid="TriangleAlert__duplicatePeriod" />
             {t('fm.duplicate_period.warning') ?? 'Ya existe otra declaración para el mismo período. Marca "Autoliquidación rectificativa" antes de presentar esta declaración.'}
           </div>
         )}
@@ -1760,8 +1767,8 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
           {/* Incidencias */}
           <KpiWidget
             icon={blocking > 0
-              ? <OctagonAlert size={20} strokeWidth={1.75} data-testid="OctagonAlert__4f6c0d" />
-              : <TriangleAlert size={20} strokeWidth={1.75} data-testid="TriangleAlert__4f6c0d" />
+              ? <WarningOctagonIcon size={20} data-testid="OctagonAlert__4f6c0d" />
+              : <WarningIcon size={20} data-testid="TriangleAlert__4f6c0d" />
             }
             iconColor={incidentIconColor}
             label={t('fm.tab.incidents') ?? 'Incidencias'}
@@ -1773,7 +1780,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
 
           {/* IVA Devengado */}
           <KpiWidget
-            icon={<TrendingUp size={20} strokeWidth={1.75} data-testid="TrendingUp__4f6c0d" />}
+            icon={<TrendUpIcon size={20} data-testid="TrendingUp__4f6c0d" />}
             iconColor="hsl(var(--foreground))"
             label={t('fm.m303.summary.accrued') ?? 'IVA Devengado'}
             value={formatAmount(summary.accrued ?? 0)}
@@ -1784,7 +1791,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
 
           {/* IVA Deducible */}
           <KpiWidget
-            icon={<TrendingDown size={20} strokeWidth={1.75} data-testid="TrendingDown__4f6c0d" />}
+            icon={<TrendDownIcon size={20} data-testid="TrendingDown__4f6c0d" />}
             iconColor="hsl(var(--foreground))"
             label={t('fm.m303.summary.deductible') ?? 'IVA Deducible'}
             value={formatAmount(summary.deductible ?? 0)}
@@ -1796,7 +1803,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
           {/* Resultado — color-coded by sign (ETP-5236 / M303-01): green when the org owes
               money ('I'), blue when refundable/offsettable ('V'/'C'), neutral otherwise. */}
           <KpiWidget
-            icon={<Calculator size={20} strokeWidth={1.75} data-testid="Calculator__4f6c0d" />}
+            icon={<CalculatorIcon size={20} data-testid="Calculator__4f6c0d" />}
             iconColor="hsl(var(--foreground))"
             label={t('fm.m303.summary.result') ?? 'Resultado'}
             value={formatAmount(summary.result ?? 0)}

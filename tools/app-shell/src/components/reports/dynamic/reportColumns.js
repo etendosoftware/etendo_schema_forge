@@ -1,5 +1,5 @@
-import { formatCalendarMonthShort, formatCalendarQuarterShort } from '@/lib/dateOnly.js';
-import { buildPeriodValues, EXPORT_MAX_BUCKETS } from '@etendosoftware/schema-forge-cli/src/report-periods.js';
+import { formatCalendarDate, formatCalendarMonthShort, formatCalendarQuarterShort } from '@/lib/dateOnly.js';
+import { buildPeriodValues, EXPORT_MAX_BUCKETS, SCREEN_PERIODS } from '@etendosoftware/schema-forge-cli/src/report-periods.js';
 import { comparedRanges, serializePeriods } from './dynamicDates.js';
 
 /**
@@ -13,8 +13,15 @@ const MODES = { '': 'none', 'same-last-year': 'sly', previous: 'prev' };
 export const modeOf = (compare) => MODES[compare] ?? 'none';
 
 export const COLUMN_GRAINS = Object.freeze(['total', 'month', 'quarter']);
-/** Periods the screen and the PDF show besides the range; Excel / CSV print every one. */
-export const SCREEN_PERIODS = Object.freeze({ month: 6, quarter: 4 });
+/**
+ * Periods the screen and the PDF show besides the range (`SCREEN_PERIODS`, from core: `{ month|quarter: { plain, compared } }`);
+ * Excel / CSV print every one. The single source for the screen, the PDF request, the note and, in core, the row visibility.
+ */
+export { SCREEN_PERIODS };
+/** How many periods (besides the range) a grain shows in a comparison mode; Infinity for the Total grain. */
+export const periodLimit = (grain, mode) => SCREEN_PERIODS[grain]?.[mode === 'none' ? 'plain' : 'compared'] ?? Infinity;
+/** Periods a comparison mode hides on top of what the request left out (the answer always holds the plain limit). */
+export const modeHiddenCount = (periods, grain, mode) => Math.max(0, (periods?.length ?? 1) - 1 - periodLimit(grain, mode));
 /**
  * Excel / CSV refusal: asks the server's own validator (core report-periods.js, D5), so the cap can
  * never drift from it. `plan` is `periodBuckets(range, grain)`.
@@ -36,25 +43,38 @@ const COLUMNS_WITH_COMPARISON = ['current', 'compared', 'variation', 'variationP
  * The column groups of a result. `periods` are the answer's (`{idx, dateFrom, dateTo, partial}`),
  * `grain` the `columns` the answer was asked with. Each group: `pos` (its index in `row.cells`),
  * `label` (short, `*` when partial), `partial`, `current` (its range), `compared` (the range the
- * comparison reads, null without one) and `columns` (the sub-columns it shows).
+ * comparison reads, null without one), `comparedLabel` (what Comparado is compared against: the
+ * compared month / quarter's short label, or for the Total group and Total mode the compared
+ * range's dates; '' without a comparison) and `columns` (the sub-columns it shows).
  */
 export function columnModel({ periods, grain, mode, locale, quarterPrefix, totalLabel }) {
   const lang = (locale || 'en_US').replace('_', '-');
   const short = (p) => (grain === 'quarter' ? formatCalendarQuarterShort(p.dateFrom, quarterPrefix) : formatCalendarMonthShort(p.dateFrom, lang));
+  const comparedLabelOf = (p, compared) => {
+    if (!compared) return '';
+    if (grain === 'total' || p.idx === 0) return `${formatCalendarDate(compared.from, lang)} – ${formatCalendarDate(compared.to, lang)}`;
+    return short({ dateFrom: compared.from });
+  };
   const groups = (periods || []).map((p, pos) => {
     const partialMark = p.partial ? '*' : '';
     const label = p.idx === 0 ? totalLabel : `${short(p)}${partialMark}`;
+    const compared = mode === 'none' ? null : comparedRanges(p, grain)[mode];
     return {
       pos,
       label,
       partial: Boolean(p.partial),
       current: { from: p.dateFrom, to: p.dateTo },
-      compared: mode === 'none' ? null : comparedRanges(p, grain)[mode],
+      compared,
+      comparedLabel: comparedLabelOf(p, compared),
       columns: mode === 'none' ? ['current'] : COLUMNS_WITH_COMPARISON,
     };
   });
+  // Only the last `periodLimit` periods of the mode show; `pos` still indexes the answer's `row.cells`.
+  const total = (periods || []).length;
+  const limit = periodLimit(grain, mode);
+  const kept = groups.filter((g) => g.pos === 0 || g.pos > total - 1 - limit);
   // The range's total goes last on screen ("se agrega al final la columna de total"); `pos` still indexes `row.cells`.
-  return [...groups.slice(1), ...groups.slice(0, 1)];
+  return [...kept.slice(1), ...kept.slice(0, 1)];
 }
 
 /** How many table columns after Concepto the groups take. */

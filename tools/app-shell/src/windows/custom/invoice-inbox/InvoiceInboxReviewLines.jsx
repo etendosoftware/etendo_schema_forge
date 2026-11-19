@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
-  CircleAlert, ChevronDown, ChevronUp, Package, PackagePlus, Plus, Search, Trash2,
-} from 'lucide-react';
+  WarningCircleIcon,
+  CaretDownIcon,
+  CaretUpIcon,
+  PackageIcon,
+  PlusIcon,
+  MagnifyingGlassIcon,
+  TrashIcon,
+} from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,7 +41,7 @@ const COL_LABEL = Object.freeze({
 const GRID = 'grid grid-cols-[minmax(0,1fr)_54px_74px_52px_56px_80px_30px] items-center gap-1';
 /** Below this inner width the row stacks: the description on its own row, the five numbers under it. */
 export const STACKED_BELOW_PX = 460;
-const STACKED_NUMBERS = 'grid grid-cols-[1fr_1.4fr_0.9fr_0.9fr_1.4fr] items-end gap-1.5';
+const STACKED_NUMBERS = 'grid grid-cols-[1fr_1.5fr_1fr_1fr] items-end gap-1.5';
 const CELL = 'h-[34px] px-2 text-[13px]';
 const MAX_QUANTITY_DECIMALS = 4;
 const MAX_PRICE_DECIMALS = 6;
@@ -80,6 +86,26 @@ function discountText(line) {
   return value === 0 ? '' : `${formatGroupedNumber(value, { maximumFractionDigits: MAX_DISCOUNT_DECIMALS })}%`;
 }
 
+/**
+ * Where a pre-filled value of a new product came from (ETP-6051): `ocr` = read from the document
+ * ("del documento", with the printed text of the unit as secondary text), `default` = the tenant
+ * default ("por defecto"). `manual`, an empty source (legacy rows) and a read-only form show nothing.
+ */
+function SourceHint({ source, printed = '', readOnly, testId }) {
+  const ui = useUI();
+  if (readOnly || (source !== 'ocr' && source !== 'default')) return null;
+  const text = ui(source === 'ocr' ? 'invoiceInboxReviewSourceOcr' : 'invoiceInboxReviewSourceDefault');
+  const shown = source === 'ocr' && printed ? `${text} · “${printed}”` : text;
+  return (
+    <span
+      className="ml-1.5 text-[11px] font-normal text-muted-foreground"
+      title={source === 'ocr' && printed ? ui('invoiceInboxReviewUnitPrinted', { unit: printed }) : undefined}
+      data-testid={testId}>
+      {shown}
+    </span>
+  );
+}
+
 /** Name, category and unit of a NEW product: the alta is only stored; the product is created on confirm. */
 function NewProductForm({ line, lineIndex, position, readOnly, missing, apiBaseUrl }) {
   const ui = useUI();
@@ -91,17 +117,17 @@ function NewProductForm({ line, lineIndex, position, readOnly, missing, apiBaseU
   // The names are resolved from the ids at read time and only present when the id resolves: a
   // committed id with no name is shown as unknown (never as an empty choice); only ids are ever sent.
   const unknownName = ui('invoiceInboxReviewNameUnknown');
-  const label = (text) => <span className="mb-1 block text-xs font-medium text-foreground">{text}<span className="ml-0.5 text-destructive" aria-hidden="true">*</span></span>;
+  const label = (text, hint = null) => <span className="mb-1 block text-xs font-medium text-foreground">{text}<span className="ml-0.5 text-destructive" aria-hidden="true">*</span>{hint}</span>;
   return (
     <div className="flex flex-col gap-2.5" data-testid={`invoice-inbox-review-line-${position}-new-product`}>
       <div>
-        {label(ui('invoiceInboxReviewFieldName'))}
+        {label(ui('invoiceInboxReviewProductName'))}
         <CommitInput
           value={newProductName(line)}
           display={(value) => String(value ?? '')}
           readOnly={readOnly}
           maxLength={MAX_TEXT}
-          ariaLabel={ui('invoiceInboxReviewFieldName')}
+          ariaLabel={ui('invoiceInboxReviewProductName')}
           className="h-[34px] text-[13px]"
           onCommit={(value) => editor?.commit(`product:${lineIndex}:name`, buildOp.newProduct(lineIndex, { name: value }))}
           testId={`invoice-inbox-review-line-${position}-new-name`}
@@ -109,7 +135,13 @@ function NewProductForm({ line, lineIndex, position, readOnly, missing, apiBaseU
       </div>
       <div className="grid grid-cols-2 gap-2.5">
         <div data-testid={`invoice-inbox-review-line-${position}-new-category`} data-invalid={noCategory || undefined}>
-          {label(ui('invoiceInboxReviewProductCategory'))}
+          {label(ui('invoiceInboxReviewProductCategory'), (
+            <SourceHint
+              source={fresh.categorySource}
+              readOnly={readOnly}
+              testId={`invoice-inbox-review-line-${position}-new-category-source`}
+              data-testid="SourceHint__category" />
+          ))}
           {readOnly || !editor ? (
             <p className="text-[13px] text-muted-foreground">{fresh.category ?? (fresh.categoryId ? unknownName : '')}</p>
           ) : (
@@ -129,7 +161,14 @@ function NewProductForm({ line, lineIndex, position, readOnly, missing, apiBaseU
           )}
         </div>
         <div data-testid={`invoice-inbox-review-line-${position}-new-uom`} data-invalid={noUom || undefined}>
-          {label(ui('invoiceInboxReviewProductUom'))}
+          {label(ui('invoiceInboxReviewProductUom'), (
+            <SourceHint
+              source={fresh.uomSource}
+              printed={String(line.unitPrinted ?? '').trim()}
+              readOnly={readOnly}
+              testId={`invoice-inbox-review-line-${position}-new-uom-source`}
+              data-testid="SourceHint__uom" />
+          ))}
           {readOnly || !editor ? (
             <p className="text-[13px] text-muted-foreground">{fresh.uom ?? (fresh.uomId ? unknownName : '')}</p>
           ) : (
@@ -273,7 +312,7 @@ function ProductPanel({ line, position, lineIndex, readOnly, state, missing, api
           </div>
         ) : (
           <div className="relative">
-            <Search
+            <MagnifyingGlassIcon
               className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
               aria-hidden="true"
               data-testid={`Search__review-line-${position}`} />
@@ -299,7 +338,7 @@ function ChipBody({ line, state, position }) {
     const matchedKey = PRODUCT_MATCHED_BY_KEYS[product.matchedBy];
     return (
       <>
-        <Package className="h-3.5 w-3.5 flex-none text-muted-foreground" aria-hidden="true" data-testid={`Package__review-line-${position}`} />
+        <PackageIcon className="h-3.5 w-3.5 flex-none text-muted-foreground" aria-hidden="true" data-testid={`Package__review-line-${position}`} />
         <span className="min-w-0 truncate text-xs font-medium" data-testid={`invoice-inbox-review-line-${position}-product-name`}>{details.name}</span>
         {details.searchKey && <span className="whitespace-nowrap font-mono text-[11px] text-muted-foreground">{details.searchKey}</span>}
         {matchedKey && <span className="whitespace-nowrap text-[11px] text-muted-foreground">· {ui(matchedKey)}</span>}
@@ -327,7 +366,7 @@ function ChipBody({ line, state, position }) {
         <ReviewTag
           tone="info"
           label={ui('invoiceInboxReviewProductNewTag')}
-          icon={PackagePlus}
+          icon={PackageIcon}
           testId={`invoice-inbox-review-line-${position}-product-tag`}
           data-testid="ReviewTag__21702d" />
         <span className="min-w-0 truncate text-xs text-muted-foreground">
@@ -338,7 +377,7 @@ function ChipBody({ line, state, position }) {
   }
   return (
     <>
-      <CircleAlert className="h-3.5 w-3.5 flex-none text-destructive" aria-hidden="true" data-testid={`CircleAlert__review-line-${position}`} />
+      <WarningCircleIcon className="h-3.5 w-3.5 flex-none text-destructive" aria-hidden="true" data-testid={`CircleAlert__review-line-${position}`} />
       <span className="text-xs font-medium text-destructive">{ui('invoiceInboxReviewProductNone')}</span>
     </>
   );
@@ -346,7 +385,7 @@ function ChipBody({ line, state, position }) {
 
 /** The product chip as a button that toggles its panel (chevron at the right). */
 function ProductChip({ line, position, state, open, onToggle }) {
-  const Chevron = open ? ChevronUp : ChevronDown;
+  const Chevron = open ? CaretUpIcon : CaretDownIcon;
   return (
     <button
       type="button"
@@ -377,7 +416,7 @@ function DeleteLineButton({ position, onDelete }) {
       title={ui('deleteRowTooltip')}
       className="flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--destructive))] opacity-0 transition-all hover:bg-[var(--status-destructive-bg)] focus-visible:opacity-100 group-hover/line:opacity-100"
       data-testid={`invoice-inbox-review-line-delete-${position}`}>
-      <Trash2 className="h-4 w-4" aria-hidden="true" data-testid={`Trash2__review-line-${position}`} />
+      <TrashIcon className="h-4 w-4" aria-hidden="true" data-testid={`Trash2__review-line-${position}`} />
     </button>
   );
 }
@@ -563,7 +602,11 @@ function LineRow({ line, position, currency, scale, missing, readOnly, showActio
             <Labeled label={ui(COL_LABEL.price)} data-testid="Labeled__price">{cells.price}</Labeled>
             <Labeled label={ui(COL_LABEL.discount)} data-testid="Labeled__discount">{cells.discount}</Labeled>
             <Labeled label={ui(COL_LABEL.tax)} data-testid="Labeled__tax">{cells.tax}</Labeled>
-            <Labeled label={ui(COL_LABEL.amount)} data-testid="Labeled__amount">{cells.amount}</Labeled>
+          </div>
+          {/* The amount is not an input: it gets its own line, so the four inputs keep room for their digits at 360px. */}
+          <div className="flex items-center justify-between gap-2" data-testid="invoice-inbox-review-line-amount-row">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{ui(COL_LABEL.amount)}</span>
+            {cells.amount}
           </div>
         </div>
       ) : (
@@ -794,7 +837,7 @@ export default function InvoiceInboxReviewLines({
               className="mt-1.5"
               onClick={addLine}
               data-testid="invoice-inbox-review-add-line">
-              <Plus className="h-4 w-4" aria-hidden="true" data-testid="Plus__review-add-line" />
+              <PlusIcon className="h-4 w-4" aria-hidden="true" data-testid="Plus__review-add-line" />
               {ui('invoiceInboxReviewAddLine')}
             </Button>
           )}

@@ -1,8 +1,8 @@
 {
-  "version": "0.13.0",
+  "version": "0.14.0",
   "generatedAt": "2026-09-20T18:16:41.258Z",
-  "updatedAt": "2026-11-16T15:40:09.364Z",
-  "checksum": "ebb16e88f19fbca2",
+  "updatedAt": "2026-11-18T20:02:10.276Z",
+  "checksum": "328c708fc989d926",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -1045,6 +1045,11 @@
               "required": true,
               "maxLength": 1
             },
+            "publicApi": {
+              "exposed": true,
+              "name": "isCustomer",
+              "description": "true when the contact can be used on sales documents. When omitted on create, Etendo applies the default (true), or the type defined by the contact's category."
+            },
             "displayLogic": {
               "raw": "false",
               "evaluable": true,
@@ -1067,6 +1072,11 @@
             "validation": {
               "required": true,
               "maxLength": 1
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "isVendor",
+              "description": "true when the contact can be used on purchase documents; a purchase order only accepts a vendor as its contact. When omitted on create, Etendo applies the default (false), or the type defined by the contact's category."
             },
             "displayLogic": {
               "raw": "false",

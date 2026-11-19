@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Loader2 } from 'lucide-react';
+import { CircleNotchIcon } from '@phosphor-icons/react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useUI } from '@/i18n';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
@@ -270,7 +270,7 @@ export function SelectorInput({
         className={triggerClassName ?? defaultTriggerClass}
       >
         <SelectValue placeholder={placeholderText} data-testid={"SelectValue__" + field.id} />
-        {fetching && <Loader2
+        {fetching && <CircleNotchIcon
           className="h-4 w-4 text-muted-foreground animate-spin ml-auto mr-1"
           data-testid={"Loader2__" + field.id} />}
       </SelectTrigger>

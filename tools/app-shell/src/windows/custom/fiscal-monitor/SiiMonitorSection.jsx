@@ -6,7 +6,7 @@ import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { formatAmount } from '@/lib/formatAmount.js';
-import { FileUp, FileDown } from 'lucide-react';
+import { UploadSimpleIcon, DownloadSimpleIcon } from '@phosphor-icons/react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { StatusPill, NumFactura, ScrollSentinel, isErrorStatus, isPendingStatus, fmtDate, PAGE_SIZE, ExportIcon, useFmSelection, fetchCsvAndDownload, selectedRowClassName } from './FmPrimitives.jsx';
 import { pickMostRecentMotivo } from './fiscalMonitor.utils.js';
@@ -403,7 +403,7 @@ export default function SiiMonitorSection({
             className={`tab${tab === 'issued' ? ' active' : ''}`}
             onClick={() => changeTab('issued', period)}
           >
-            <FileUp size={14} strokeWidth={2} data-testid="FileUp__be1aa5" />
+            <UploadSimpleIcon size={14} data-testid="FileUp__be1aa5" />
             {ui('fiscalMonitor.sii.tab.issued')}
             {issuedTotal > 0 && <span className="tab-count">{issuedTotal}</span>}
           </button>
@@ -411,7 +411,7 @@ export default function SiiMonitorSection({
             className={`tab${tab === 'received' ? ' active' : ''}`}
             onClick={() => changeTab('received', period)}
           >
-            <FileDown size={14} strokeWidth={2} data-testid="FileDown__be1aa5" />
+            <DownloadSimpleIcon size={14} data-testid="FileDown__be1aa5" />
             {ui('fiscalMonitor.sii.tab.received')}
             {receivedTotal > 0 && <span className="tab-count">{receivedTotal}</span>}
           </button>
@@ -432,7 +432,7 @@ export default function SiiMonitorSection({
               className={`fm-filter-pill${tab === 'issued' ? ' active' : ''}`}
               onClick={() => changeTab('issued', period)}
             >
-              <FileUp size={14} strokeWidth={2} data-testid="FileUp__be1aa5" />
+              <UploadSimpleIcon size={14} data-testid="FileUp__be1aa5" />
               {ui('fiscalMonitor.sii.tab.issued')}
               {issuedTotal > 0 && <span className="pill-count">{issuedTotal}</span>}
             </button>
@@ -440,7 +440,7 @@ export default function SiiMonitorSection({
               className={`fm-filter-pill${tab === 'received' ? ' active' : ''}`}
               onClick={() => changeTab('received', period)}
             >
-              <FileDown size={14} strokeWidth={2} data-testid="FileDown__be1aa5" />
+              <DownloadSimpleIcon size={14} data-testid="FileDown__be1aa5" />
               {ui('fiscalMonitor.sii.tab.received')}
               {receivedTotal > 0 && <span className="pill-count">{receivedTotal}</span>}
             </button>

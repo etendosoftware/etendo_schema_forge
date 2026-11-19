@@ -1,7 +1,7 @@
 import {
   useCallback, useEffect, useMemo, useRef, useState,
 } from 'react';
-import { CheckCircle2, Circle, Loader2 } from 'lucide-react';
+import { CheckCircleIcon, CircleIcon, CircleNotchIcon } from '@phosphor-icons/react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -335,7 +335,7 @@ export function PlanChangeDialog({
             className="flex items-center gap-2 text-sm text-muted-foreground"
             data-testid="PlanChangeDialog__loading"
           >
-            <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__plan-change" />
+            <CircleNotchIcon className="h-4 w-4 animate-spin" data-testid="Loader2__plan-change" />
             {ui('loading')}
           </div>
         )}
@@ -412,9 +412,9 @@ export function PlanChangeDialog({
                   >
                     <span className="flex min-w-0 items-center gap-3">
                       {isSelected
-                        ? <CheckCircle2 className="h-5 w-5 shrink-0 text-primary" aria-hidden="true"
+                        ? <CheckCircleIcon className="h-5 w-5 shrink-0 text-primary" aria-hidden="true"
                           data-testid="PlanChangeDialog__optionSelectedIcon" />
-                        : <Circle className="h-5 w-5 shrink-0 text-muted-foreground/50" aria-hidden="true"
+                        : <CircleIcon className="h-5 w-5 shrink-0 text-muted-foreground/50" aria-hidden="true"
                           data-testid="PlanChangeDialog__optionIcon" />}
                       <span className="min-w-0">
                         <span className={`block text-sm font-medium ${isSelected ? 'text-primary' : ''}`}
@@ -493,7 +493,7 @@ export function PlanChangeDialog({
               onClick={handleConfirm}
               data-testid="PlanChangeDialog__confirm">
               {submitting
-                ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__plan-change-confirm" />
+                ? <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__plan-change-confirm" />
                 : ui('planChangeConfirm')}
             </Button>
           )}

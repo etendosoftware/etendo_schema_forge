@@ -1,6 +1,7 @@
 import { createDatadogAdapter } from '@etendosoftware/app-shell-core/observability/adapters/datadog';
 import { loadDatadog } from '../sdk.js';
 import { SAFE_EVENT_PROPERTY_KEYS } from '../payload.js';
+import { TRUSTED_CONTEXT_KEYS } from '../core.js';
 
 /**
  * The host's Datadog Browser RUM provider (ETP-5605, moved behind the gateway in ETP-4578): the
@@ -42,7 +43,7 @@ export function createDatadogProvider({
     traceSampleRate: resolvedEnv.VITE_DATADOG_TRACE_SAMPLE_RATE,
     remoteConfigurationId: resolvedEnv.VITE_DATADOG_REMOTE_CONFIGURATION_ID || undefined,
     allowedKeys: SAFE_EVENT_PROPERTY_KEYS,
-    trustedKeys: [SUPPORT_SESSION_CONTEXT_KEY],
+    trustedKeys: TRUSTED_CONTEXT_KEYS,
     logger,
   });
 }

@@ -4,7 +4,7 @@
 // origin and its actions ("Ir a la casilla", "Ver facturas", "Editar en Organización", "Ver
 // facturas de venta/compra"). The incidents come from the backend (incidents390.js).
 import React from 'react';
-import { ChevronRight } from 'lucide-react';
+import { CaretRightIcon } from '@phosphor-icons/react';
 import { IncidentsTab } from '../../FmTabContent.jsx';
 import {
   incidentActions390, incidentOrigin390, incidentText390, normalizeIncidents390,
@@ -37,7 +37,7 @@ function ActionButtons({ actions, handlers, t }) {
           data-testid={`Incidents390Tab__action_${a.id}`}
         >
           {t(a.labelKey, { box: a.box })}
-          <ChevronRight size={13} strokeWidth={2} aria-hidden="true" data-testid="ChevronRight__incident390" />
+          <CaretRightIcon size={13} aria-hidden="true" data-testid="ChevronRight__incident390" />
         </button>
       ))}
     </span>

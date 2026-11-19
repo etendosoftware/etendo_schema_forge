@@ -918,6 +918,8 @@ function translateExchangeRateMissing(messageKeys, messageParams, t) {
  * @returns {string} the translated message
  */
 export function translateBackendErrorBody(body, t, fallback) {
+  const importRefusal = translateMappedImportRefusal(body, t);
+  if (importRefusal) return importRefusal;
   const message = body?.error?.message || body?.response?.message || pickBackendErrorText(body) || fallback;
   return translateBackendError(message, t, {
     messageKeys: extractBackendMessageKeys(body),
@@ -1967,11 +1969,47 @@ const IMPORT_REFUSAL_KEYS = {
 };
 
 function importRefusalKey(code, details) {
+  // ETP-6002 CP-30: a quantity of 0 or below; the sign is the problem, not the pending.
+  if (code === 'importQuantityExceedsPending' && details?.quantityNotPositive === true) {
+    return 'backendError.importQuantityMustBePositive';
+  }
+  // ETP-6002 CP-30: the edit of a saved line; its maximum counts what the line already holds.
+  if (code === 'importQuantityExceedsPending' && details?.maximumAllowed != null) {
+    return 'backendError.importQuantityExceedsLineMaximum';
+  }
   // "nothing is pending on this line" is the same code with pending 0: its own sentence.
   if (code === 'importQuantityExceedsPending' && Number(details?.pending) === 0) {
     return 'backendError.importQuantityNothingPendingOnLine';
   }
   return IMPORT_REFUSAL_KEYS[code];
+}
+
+// The sentence of an import refusal with the details its body carries, or null when the code has
+// no sentence or the locale lacks it.
+function renderImportRefusal(code, body, t) {
+  const details = body?.error && typeof body.error === 'object' ? body.error : {};
+  const key = importRefusalKey(code, details);
+  if (!key || typeof t !== 'function') return null;
+  const translated = t(key, {
+    product: details.product ?? '',
+    requested: details.requested ?? '',
+    pending: details.pending ?? '',
+  });
+  return translated && translated !== key ? translated : null;
+}
+
+/**
+ * The translated sentence of a mapped line-import refusal, or `null` for any other body. For the
+ * paths that are not an import action but can receive one of these refusals: a goods shipment line
+ * saved above its invoice line's pending answers `importQuantityExceedsPending` (ETP-6002 CP-30).
+ *
+ * @param {object|null|undefined} body parsed JSON error body
+ * @param {function} t the `ui` function from `useUI()`
+ * @returns {string|null}
+ */
+export function translateMappedImportRefusal(body, t) {
+  const code = extractBackendErrorCode(body);
+  return Object.hasOwn(IMPORT_REFUSAL_KEYS, code ?? '') ? renderImportRefusal(code, body, t) : null;
 }
 
 /**
@@ -1999,15 +2037,7 @@ export function isImportRefusalCode(code) {
 export function translateImportRefusal(body, t, fallback) {
   const code = extractBackendErrorCode(body);
   if (!isImportRefusalCode(code)) return translateBackendErrorBody(body, t, fallback);
-  const details = body?.error && typeof body.error === 'object' ? body.error : {};
-  const key = importRefusalKey(code, details);
-  if (!key || typeof t !== 'function') return fallback;
-  const translated = t(key, {
-    product: details.product ?? '',
-    requested: details.requested ?? '',
-    pending: details.pending ?? '',
-  });
-  return translated && translated !== key ? translated : fallback;
+  return renderImportRefusal(code, body, t) ?? fallback;
 }
 
 export function isDuplicateConflict(status, code) {
@@ -2072,6 +2102,8 @@ export async function parseBackendError(res) {
     ...(quota ? { quota } : {}),
     ...(quotaCheckFailed ? { quotaCheckFailed } : {}),
     ...codeEntry(data),
+    // ETP-6002 CP-30: its sentence needs the details of the body, which the fields above drop.
+    ...(Object.hasOwn(IMPORT_REFUSAL_KEYS, extractBackendErrorCode(data) ?? '') ? { importRefusalBody: data } : {}),
   };
 }
 
@@ -2091,8 +2123,10 @@ export async function parseBackendErrorMessage(res) {
  */
 export async function translateBackendErrorResponse(res, t) {
   const {
-    message, messageKeys, messageParams, quota, quotaCheckFailed, code,
+    message, messageKeys, messageParams, quota, quotaCheckFailed, code, importRefusalBody,
   } = await parseBackendError(res);
+  const importRefusal = translateMappedImportRefusal(importRefusalBody, t);
+  if (importRefusal) return importRefusal;
   return translateBackendError(message ?? `Error ${res.status}`, t,
     { messageKeys, messageParams, quota, quotaCheckFailed, code });
 }

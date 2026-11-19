@@ -10,10 +10,10 @@ vi.mock('@/components/ui/label', () => ({
   Label: ({ children, ...props }) => <label {...props}>{children}</label>,
 }));
 
-vi.mock('lucide-react', () => ({
-  MapPin: (props) => <span data-testid="icon-mappin" {...props} />,
-  ChevronRight: (props) => <span data-testid="icon-chevron-right" {...props} />,
-  Pencil: (props) => <span data-testid="icon-pencil" {...props} />,
+vi.mock('@phosphor-icons/react', () => ({
+  MapPinIcon: (props) => <span data-testid="icon-mappin" {...props} />,
+  CaretRightIcon: (props) => <span data-testid="icon-chevron-right" {...props} />,
+  PencilSimpleIcon: (props) => <span data-testid="icon-pencil" {...props} />,
 }));
 
 // Stub the heavy editor modal: it renders its incoming props as data-attributes
@@ -94,6 +94,18 @@ describe('LocationModalField', () => {
       renderField({ value: 'loc-99', displayValue: 'Santa Fe - Rio Cuarto - España' });
       expect(screen.getByText('Santa Fe - Rio Cuarto - España')).toBeInTheDocument();
       expect(screen.queryByText('locationFieldPlaceholder')).not.toBeInTheDocument();
+    });
+
+    // CP-8b (ETP-5806 QA, Isa) — repro: the server's raw `$_identifier` string joins every
+    // segment with " - " unconditionally, so a blank optional part (segunda línea, región)
+    // used to surface as a dangling "- -" in Organización/Almacén. Must render sanitized.
+    it('sanitizes a raw identifier with blank segments instead of rendering doubled/dangling separators', () => {
+      renderField({
+        value: 'loc-100',
+        displayValue: 'Calle de Alcalá, 40 -  - 28014 - Madrid -  - España',
+      });
+      expect(screen.getByText('Calle de Alcalá, 40 - 28014 - Madrid - España')).toBeInTheDocument();
+      expect(screen.queryByText(/- -/)).not.toBeInTheDocument();
     });
 
     it('opens the modal in EDIT mode (rowId = value)', () => {

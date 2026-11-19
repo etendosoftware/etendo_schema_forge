@@ -431,11 +431,11 @@ within one request each operation compares with the state left by the previous o
 | `selectVendor` (choose among candidates; change a linked vendor; replace none/new by an existing one) | yes, except re-selecting the id that is already linked |
 | `selectProduct` (same, per line) | yes, except re-selecting the id already linked |
 | `newVendor` (alta) | NO when it is the unmodified creation (no `fields`, or every field equals the stored `extracted` value) from `ambiguous`, `none` or `new`; YES when any field differs, or when the previous state was `linked` (changing an auto-linked vendor) |
-| `newProduct` (alta) | ALWAYS (decision S2-D7, product owner 2026-11-13): creating a new product, and choosing or changing its category and / or unit, counts as modifying the alta. A `newProduct` operation always marks `ADJUSTED` (the server treats it like `addLine`) |
+| `newProduct` (alta) | UPDATED in ETP-6051: `NEW_PRODUCT_ALWAYS_MARKS` is now `false`. The server pre-fills a new product's category and unit (from the OCR unit, else the tenant default) and stores each with its source (`ocr` / `default` / `manual`). A `newProduct` marks `ADJUSTED` only when it CHANGES a stored value (a different `categoryId` / `uomId` / name); re-sending the same id is a no-op, and switching ambiguous / none to "create new" without changing the pre-fill does not mark. A user change flips that field's source to `manual` |
 | no-op (same value, blur without change, retry), server-derived changes (tax, duplicates, total, status, validation), a refused request | no (nothing written) |
 | `mark-reviewed`, confirm, discard, the `review` read | no (not edits) |
 
-Decided by the product owner (S2-D7, replaces the earlier reading of N1): a `newProduct` ALWAYS marks `ADJUSTED`; `newVendor` marks only when its data differ from the extracted data (or the previous state was `linked`). The SPA never computes `adjusted`: it only shows what the server returns.
+Decided by the product owner (S2-D7, 2026-11-13) a `newProduct` always marked `ADJUSTED`; ETP-6051 replaced that (see the row above) so the written KPI ("an alta with the extracted data unmodified does not count") holds; `newVendor` marks only when its data differ from the extracted data (or the previous state was `linked`). The SPA never computes `adjusted`: it only shows what the server returns.
 
 ### 9.4 The line discount, end to end
 
@@ -523,7 +523,7 @@ column. The inbox follows it (inbox `unitPrice` = the price BEFORE discount = `l
   worker behaviour change, cents at most) and `invoiceInboxReviewModel.js` (`lineAmount`, `computeTotals`,
   `documentTotal`, `totalMismatch`). The shared fixture
   `tools/app-shell/__tests__/fixtures/invoice-inbox-totals.json` (SPA repo; read by the Vitest and by the JUnit test, which skips when
-  the SPA is not beside the module, the `OcrConfigTest` precedent) must contain: no discount; a plain 10 %; two rates;
+  the SPA is not beside the module, the `OcrConfigTest` precedent; superseded 2026-11-18: the Java test now reads its own copy, `invoice-inbox-totals-cases.json`, from its classpath, and the two case files are independent copies that nothing keeps in sync automatically, so a rounding change must update both) must contain: no discount; a plain 10 %; two rates;
   a half-cent line (HALF_UP away from zero) and its negative twin; discount absent vs 0; and the ORDER cases: quantity
   48324, price 0.2771, discount 77.1721 -> real rule 3056.78, exact product 3056.79 (a regression to the one-rounding
   formula fails it); quantity 88782, price 0.5049, discount 26.3805 -> 33000.71 (exact 33000.70); quantity 80422,
@@ -691,3 +691,26 @@ SPA fixes made after the live run: a code-less 403 on `apply` / `mark-reviewed` 
 ### Currency scale and tax mode (2026-11-16)
 
 Answers (`review`, `apply`) carry `currency = {id, isoCode, symbol, scale}` (scale = the invoice currency's StdPrecision: 0 for JPY-like currencies, 2 usually; the currency is the vendor's purchase price list currency, else the organization / client currency, stored as `document.header.currencyId`; read only in S2) and `lines[i].tax.docTaxAmount` (`D` document-based amount by rate, `L` line-based). Totals (9.4c amended): `net = round_scale(quantity x unit6)` with `scale = currency.scale`; D lines are grouped per rate and rounded once on the sum of the nets, L lines are rounded per line and summed, a rate may have a D row and an L row (ascending by rate, D before L); effective rate = `taxRate`, else `tax.rate`, scaled to 2 decimals HALF_UP before grouping; default D. Input scales: quantity 4, unit price 6, discount 4, rate 2. The shared fixture has 20 cases with an optional `scale` per case and optional `tax.docTaxAmount` per line; the SPA model test reads the whole file. The mismatch tolerance is one minimal unit of the scale. The SPA formats amounts through `formatCurrency` with the document scale as min / max fraction digits (`invoiceInboxMoney.js`); the list's total cell keeps the organization currency because the list payload has no currency.
+
+## Open findings of this story, status after ETP-6051 (2026-11-17)
+
+Decided by the product owner: the leftovers of ETP-6050 are fixed inside ETP-6051.
+
+- Second identical `newProduct` is a no-op: now expected and documented (matrix 9.3). Closed.
+- Narrow viewport (360 / 390 / 420 px): fixed (header wraps the status tag, line inputs in four columns with the
+  amount on its own row, footer actions full width under 480px). Checked with screenshots against a mocked
+  backend only.
+- SPA/backend parity on a non-numeric `taxRate` (`lineRate`): fixed in the SPA (falls back to the resolved tax's rate) and
+  pinned by a fixture case; the backend mirrors it.
+- SPA fixture in CI: `ETGO_REQUIRE_SPA_FIXTURE=true` is still to be set in the CI job that checks out the SPA repo
+  (the totals parity must not skip silently). Open, owned by CI.
+  Superseded 2026-11-18: dropped. The JUnit test no longer reads the SPA fixture and the flag no longer exists; closed as dropped.
+- W6 (single-invoice "Extraer y completar" and MCP OCR show discounted lines at the gross price): open, a
+  separate small follow-up (map `discount_percent` / `discount_amount` in those flows).
+- Lines without product, the global two-decimal `formatCurrency` / `round2` assumption, the `Rendered more hooks`
+  console error seen once, and the stored language of `new.category`: open, unchanged.
+- New in ETP-6051: the printed-total warning rule is aligned (`totalMismatch`, see `ETP-6051-invoice-inbox-confirm.md`).
+
+Superseded 2026-11-18 (S2-D3 and 9.5, "the totals card shows the printed total as the document's"): the big Total of the review panel is now ALWAYS the total computed from the lines, so it matches the invoice that will be created; the printed total only feeds the non-blocking mismatch banner. For a CONFIRMED row the Total (panel and list) is the grand total of the created invoice. See `docs/generated-custom-windows/invoice-inbox.md` and `neo-headless.md` 4.6b.
+
+> Superseded 2026-11-18: the list column Total of a PENDING row is the LINES total (owner decision "the lines always win"), no longer the header/printed total mentioned in 9.5 and the `totalSource = printed` notes above for the list. The panel and the banner rules are unchanged.

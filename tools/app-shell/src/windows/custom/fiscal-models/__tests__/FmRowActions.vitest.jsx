@@ -12,11 +12,11 @@ import { render, screen, fireEvent } from '@testing-library/react';
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
-vi.mock('lucide-react', () => ({
-  Pencil: () => null,
-  Trash2: () => null,
-  Loader2: () => null,
-  RotateCcw: () => null,
+vi.mock('@phosphor-icons/react', () => ({
+  PencilSimpleIcon: () => null,
+  TrashIcon: () => null,
+  CircleNotchIcon: () => null,
+  ArrowCounterClockwiseIcon: () => null,
 }));
 
 import FmRowActions from '../FmRowActions.jsx';

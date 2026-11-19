@@ -1,11 +1,11 @@
-import { ArrowDownRight, ArrowUpRight, Info } from 'lucide-react';
+import { ArrowDownRightIcon, ArrowUpRightIcon, InfoIcon } from '@phosphor-icons/react';
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { cn } from '@/lib/utils';
-import { kpiTrend } from './reportVisuals.js';
+import { kpiCards } from './reportVisuals.js';
 
 const fmt = (v) => formatCurrency(null, v);
 const PILL_CLASS = {
@@ -15,7 +15,7 @@ const PILL_CLASS = {
 
 /** ▲/▼ pill with the change of a figure, green when it is good news, red when it is not. */
 export function TrendPill({ trend, up, children, testId }) {
-  const Arrow = up ? ArrowUpRight : ArrowDownRight;
+  const Arrow = up ? ArrowUpRightIcon : ArrowDownRightIcon;
   return (
     <span
       className={cn('inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-medium tabular-nums', PILL_CLASS[trend] || 'bg-muted text-muted-foreground')}
@@ -32,33 +32,22 @@ function kpiText(v, percent) {
   return percent ? `${fmt(v)} %` : fmt(v);
 }
 
-/** The change against the compared period: points for a percentage, a relative % otherwise. */
-function kpiDelta(value, refValue, percent) {
-  if (value == null || refValue == null || value === refValue) return null;
-  if (percent) return `${fmt(value - refValue)} pp`;
-  if (!refValue) return null;
-  return `${fmt(((value - refValue) / Math.abs(refValue)) * 100)} %`;
-}
+const TONE_CLASS = {
+  positive: 'border-border/60 bg-card shadow-[inset_3px_0_0_hsl(var(--accent-highlight))]',
+  negative: 'border-border/60 bg-card shadow-[inset_3px_0_0_hsl(var(--destructive))]',
+};
 
-function resultTone(result) {
-  if (result > 0) return 'border-border/60 bg-card shadow-[inset_3px_0_0_hsl(var(--accent-highlight))]';
-  if (result < 0) return 'border-border/60 bg-card shadow-[inset_3px_0_0_hsl(var(--destructive))]';
-  return null;
-}
-
-function Kpi({ id, label, hint, value, refValue, compare, percent, tone }) {
+function Kpi({ card: { id, value, refValue, percent, delta, trend, up, tone }, label, hint, compare }) {
   const ui = useUI();
-  const trend = kpiTrend(id, value, refValue);
   const text = (v) => kpiText(v, percent);
-  const delta = compare ? kpiDelta(value, refValue, percent) : null;
   return (
-    <div className={cn('min-w-0 rounded-xl border p-4 flex flex-col gap-1', tone || 'border-border/60 bg-card')} data-testid={`DynamicReportKpis__${id}`}>
+    <div className={cn('min-w-0 rounded-xl border p-4 flex flex-col gap-1', TONE_CLASS[tone] || 'border-border/60 bg-card')} data-testid={`DynamicReportKpis__${id}`}>
       <span className="flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {label}
         <Tooltip delayDuration={200} data-testid="Tooltip__5cc5db">
           <TooltipTrigger asChild data-testid="TooltipTrigger__5cc5db">
             <button type="button" className="rounded-full hover:text-foreground" aria-label={hint} data-testid={`DynamicReportKpis__${id}Info`}>
-              <Info className="w-3.5 h-3.5" aria-hidden="true" data-testid="Info__5cc5db" />
+              <InfoIcon className="w-3.5 h-3.5" aria-hidden="true" data-testid="Info__5cc5db" />
             </button>
           </TooltipTrigger>
           <TooltipContent
@@ -71,9 +60,9 @@ function Kpi({ id, label, hint, value, refValue, compare, percent, tone }) {
         <span className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0 text-xs text-muted-foreground">
           {delta && <TrendPill
             trend={trend}
-            up={value > refValue}
+            up={up}
             testId={`DynamicReportKpis__${id}Trend`}
-            data-testid="TrendPill__5cc5db">{delta}</TrendPill>}
+            data-testid="TrendPill__5cc5db">{`${fmt(delta.amount)} ${delta.unit}`}</TrendPill>}
           <span className="tabular-nums whitespace-nowrap">{ui('dynamicReportKpiVs', { value: text(refValue) })}</span>
         </span>
       )}
@@ -87,43 +76,35 @@ function Kpi({ id, label, hint, value, refValue, compare, percent, tone }) {
  */
 export default function DynamicReportKpis({ kpis, compare }) {
   const ui = useUI();
-  const { current: c, ref: r } = kpis;
+  const cards = kpiCards(kpis, compare);
+  const [income, expenses, result, margin] = cards;
+  const shared = { compare, 'data-testid': 'Kpi__5cc5db' };
   return (
     <TooltipProvider>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-5" data-testid="DynamicReportKpis">
         <Kpi
-          id="income"
+          card={income}
           label={ui('dynamicReportKpiIncome')}
           hint={ui('dynamicReportKpiIncomeHint')}
-          value={c.income}
-          refValue={r.income}
-          compare={compare}
+          {...shared}
           data-testid="Kpi__5cc5db" />
         <Kpi
-          id="expenses"
+          card={expenses}
           label={ui('dynamicReportKpiExpenses')}
           hint={ui('dynamicReportKpiExpensesHint')}
-          value={c.expenses}
-          refValue={r.expenses}
-          compare={compare}
+          {...shared}
           data-testid="Kpi__5cc5db" />
         <Kpi
-          id="result"
+          card={result}
           label={ui('dynamicReportKpiResult')}
           hint={ui('dynamicReportKpiResultHint')}
-          value={c.result}
-          refValue={r.result}
-          compare={compare}
-          tone={resultTone(c.result)}
+          {...shared}
           data-testid="Kpi__5cc5db" />
         <Kpi
-          id="margin"
+          card={margin}
           label={ui('dynamicReportKpiMargin')}
           hint={ui('dynamicReportKpiMarginHint')}
-          value={c.margin}
-          refValue={r.margin}
-          compare={compare}
-          percent
+          {...shared}
           data-testid="Kpi__5cc5db" />
       </div>
     </TooltipProvider>

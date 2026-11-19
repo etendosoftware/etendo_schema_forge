@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
-import { TriangleAlert, X } from 'lucide-react';
+import { WarningIcon, XIcon } from '@phosphor-icons/react';
 import { ConfigDrawer } from './FmOverlays.jsx';
 import { showIaeActivityReminder } from './fiscalModelsUtils.js';
 import { listModels, getModel } from './modelRegistry.js';
@@ -24,7 +24,7 @@ function SiiActivationWarning({ sinceLabel, onCancel, onConfirm, t }) {
   return (
     <div className="fm-banner fm-banner--warning fm-catalog-sii-warning" role="alertdialog" aria-live="polite" data-testid="FmCatalogPage__siiWarning">
       <div className="fm-catalog-sii-warning__msg">
-        <TriangleAlert size={16} strokeWidth={1.75} className="fm-catalog-sii-warning__icon" data-testid="TriangleAlert__fmCatalogSii" />
+        <WarningIcon size={16} className="fm-catalog-sii-warning__icon" data-testid="TriangleAlert__fmCatalogSii" />
         <span>
           <strong>{sinceLabel ? t('fm.catalog.sii_warning_since_title', { date: sinceLabel }) : t('fm.catalog.sii_warning_title')}</strong>
           {' '}
@@ -180,7 +180,7 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, unavailabl
               aria-label={t('fm.action.close') ?? 'Cerrar'}
               style={{ marginLeft: 'auto' }}
             >
-              <X size={16} strokeWidth={1.75} data-testid="X__4ee693" />
+              <XIcon size={16} data-testid="X__4ee693" />
             </button>
           </div>
           {/* List */}

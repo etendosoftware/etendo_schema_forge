@@ -54,6 +54,47 @@ DEFAULT_MAX_RESULT_CHARS = 20000
 #: the agent chose; it is the call that never answered.
 MAX_EMPTY_COMPLETIONS = 3
 
+#: ETP-5850: the harness tool a probe with `files:` gets next to the MCP's tools. It stands for
+#: what a real client does with its own file access (Claude Code runs the server's curl): PUT the
+#: bytes of one of the files the user handed over to a URL the server gave. It knows nothing about
+#: any platform, so the MCP alone decides how a file gets in.
+UPLOAD_TOOL = "upload_file"
+
+
+def upload_tool(files: dict[str, Path]) -> Any:
+    """The `upload_file` tool over `files` (name -> path), or a refusal for any other name."""
+    import asyncio
+    import mimetypes
+    import urllib.error
+    import urllib.request
+
+    from langchain_core.tools import StructuredTool
+
+    def put(file_name: str, url: str) -> str:
+        path = files.get(file_name)
+        if path is None:
+            return f"No file named {file_name!r}. The files you have: {', '.join(sorted(files))}."
+        if not url.startswith(("http://", "https://")):
+            return "The URL must start with http:// or https://."
+        request = urllib.request.Request(
+            url, data=path.read_bytes(), method="PUT",
+            headers={"Content-Type": mimetypes.guess_type(file_name)[0] or "application/octet-stream"})
+        try:
+            with urllib.request.urlopen(request, timeout=120) as response:
+                return f"HTTP {response.status}: {response.read(2000).decode('utf-8', 'replace')}"
+        except urllib.error.HTTPError as exc:
+            return f"HTTP {exc.code}: {exc.read(2000).decode('utf-8', 'replace')}"
+        except (urllib.error.URLError, OSError) as exc:
+            return f"Upload failed: {exc}"
+
+    async def upload_file(file_name: str, url: str) -> str:
+        return await asyncio.to_thread(put, file_name, url)
+
+    return StructuredTool.from_function(
+        coroutine=upload_file, name=UPLOAD_TOOL,
+        description=("Upload one of the files the user gave you, by its file name, to a URL with "
+                     f"HTTP PUT (the raw bytes, no auth header). Your files: {', '.join(sorted(files))}."))
+
 
 class EmptyCompletion(RuntimeError):
     """The model kept answering with nothing at all (see MAX_EMPTY_COMPLETIONS)."""
@@ -357,6 +398,7 @@ async def run_probe(
     max_result_chars: int = DEFAULT_MAX_RESULT_CHARS,
     on_event: Callable[[str, dict[str, Any]], None] | None = None,
     feedback_tools: bool = False,
+    files: dict[str, Path] | None = None,
 ) -> dict[str, Any]:
     """Run one probe to completion and return its verdict plus the objective record.
 
@@ -376,6 +418,8 @@ async def run_probe(
     from langgraph.prebuilt import create_react_agent
 
     tools = await load_mcp_tools(session)
+    if files:
+        tools.append(upload_tool(files))
     model = build_model(provider)
     agent = create_react_agent(model, tools, prompt=system_prompt(feedback_tools=feedback_tools))
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Settings, TrendingUp, FileText, Landmark, Package } from 'lucide-react';
+import { GearIcon, TrendUpIcon, FileTextIcon, BankIcon, PackageIcon } from '@phosphor-icons/react';
 import { fetchRolesOverview } from '@/lib/rolesApi.js';
 import menuConfig from '../../menu.json' with { type: 'json' };
 
@@ -78,7 +78,7 @@ export const ROLE_ORDER = ['admin', 'sales', 'purchasing', 'finance', 'inventory
 /**
  * Role icon per role "kind" (see `resolveRoleKind`), used by both the summary
  * cards and the matrix's column headers. `sales`/`purchasing`/`finance`/
- * `inventory` intentionally reuse the exact same 4 lucide icons
+ * `inventory` intentionally reuse the exact same 4 icons
  * (`TrendingUp`/`FileText`/`Landmark`/`Package`) chosen on the sibling
  * `feature/ETP-4906` branch for the User window's own role-preview matrix
  * (`UserRolesTab.jsx`'s `ROLE_ICONS`) — kept consistent across both screens
@@ -88,11 +88,11 @@ export const ROLE_ORDER = ['admin', 'sales', 'purchasing', 'finance', 'inventory
  * `ROLE_ICONS` map, since that map is keyed by the 4 fixed template names.
  */
 export const ROLE_ICONS = {
-  admin: Settings,
-  sales: TrendingUp,
-  purchasing: FileText,
-  finance: Landmark,
-  inventory: Package,
+  admin: GearIcon,
+  sales: TrendUpIcon,
+  purchasing: FileTextIcon,
+  finance: BankIcon,
+  inventory: PackageIcon,
 };
 
 const FIXED_ROLE_KIND_BY_NAME = {

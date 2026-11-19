@@ -11,12 +11,12 @@ vi.mock('react-router-dom', () => {
   };
 });
 
-vi.mock('lucide-react', () => ({
-  FileJson: (props) => <svg data-testid="file-json-icon" {...props} />,
-  Search: (props) => <svg data-testid="search-icon" {...props} />,
-  History: (props) => <svg data-testid="history-icon" {...props} />,
-  Loader2: (props) => <svg data-testid="loader-icon" {...props} />,
-  FolderOpen: (props) => <svg data-testid="folder-icon" {...props} />,
+vi.mock('@phosphor-icons/react', () => ({
+  FileCodeIcon: (props) => <svg data-testid="file-json-icon" {...props} />,
+  MagnifyingGlassIcon: (props) => <svg data-testid="search-icon" {...props} />,
+  ClockCounterClockwiseIcon: (props) => <svg data-testid="history-icon" {...props} />,
+  CircleNotchIcon: (props) => <svg data-testid="loader-icon" {...props} />,
+  FolderOpenIcon: (props) => <svg data-testid="folder-icon" {...props} />,
 }));
 
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';

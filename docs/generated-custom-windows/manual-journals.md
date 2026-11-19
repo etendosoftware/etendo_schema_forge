@@ -431,3 +431,7 @@ description would not survive `make regen PUSH_TO_NEO=1`.
 ## Agent prompt on journal lines — ETP-5852
 
 `entities.lines.agentPrompt` tells agents that a journal line has no description (dropped in ETP-5210) and that the note goes in the header `description`. Feedback M-104.
+
+## Rate and cost fields are numeric — ETP-6342
+
+Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. The system field `rate` (`CurrencyRate`) on `gLJournal` is now `decimal` in the backend contract. It stays hidden; no visible UI change.

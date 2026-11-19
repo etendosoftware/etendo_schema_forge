@@ -2,7 +2,7 @@
 // Integration tests for the TbaiMonitorSection CSV export button.
 // Uses mockRows={[]} to bypass real API calls and put the component in a stable state.
 
-import { allIconsAs } from '@/test/lucideIconMock.js';
+import { allIconsAs } from '@/test/iconMock.js';
 // Stable function reference — prevents useEffect from re-firing on every render.
 const mockApiFetch = vi.hoisted(() =>
   vi.fn().mockResolvedValue({
@@ -18,7 +18,7 @@ vi.mock('@/i18n', () => ({
   useLocale: () => ({ genericLabels: {}, statuses: {} }),
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
-vi.mock('lucide-react', async (importOriginal) => allIconsAs(() => null, importOriginal));
+vi.mock('@phosphor-icons/react', async (importOriginal) => allIconsAs(() => null, importOriginal));
 vi.mock('@/auth/useApiFetch.js', () => ({
   useApiFetch: () => mockApiFetch,
 }));

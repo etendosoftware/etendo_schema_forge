@@ -3,7 +3,13 @@
 // with a link that opens each 303. Data: `GET /fiscal390/preload` (preload390.js). The amounts it
 // preloads into block 9 are the period results [69] (the full result of a rectificativa too).
 import React from 'react';
-import { CircleAlert, ExternalLink, Info, Loader2, TriangleAlert } from 'lucide-react';
+import {
+  WarningCircleIcon,
+  ArrowSquareOutIcon,
+  InfoIcon,
+  CircleNotchIcon,
+  WarningIcon,
+} from '@phosphor-icons/react';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
 import { FmStatusChip, formatDeclPeriod } from '../../FmDetailChrome.jsx';
 import { formatAmount, formatPercent } from '../../fiscalModelsUtils.js';
@@ -42,19 +48,19 @@ export default function Settlements303Table390({ preload, loading, error, year, 
       <p className="fm-390-hint">{t('fm.m390.preload.table_hint')}</p>
       {loading && rows.length === 0 && (
         <p className="fm-390-hint" data-testid="Settlements303Table390__loading">
-          <Loader2 size={14} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite', verticalAlign: 'middle', marginRight: 6 }} data-testid="Loader2__settlements390" />
+          <CircleNotchIcon size={14} style={{ animation: 'spin 1s linear infinite', verticalAlign: 'middle', marginRight: 6 }} data-testid="Loader2__settlements390" />
           {t('fm.m390.preload.loading')}
         </p>
       )}
       {(error || (!loading && rows.length === 0)) && (
         <div className="fm-390-notices">
           {error && (
-            <InfoBanner tone="danger" icon={CircleAlert} dismissible={false} role="alert" data-testid="Settlements303Table390__error">
+            <InfoBanner tone="danger" icon={WarningCircleIcon} dismissible={false} role="alert" data-testid="Settlements303Table390__error">
               {t('fm.m390.preload.error', { message: error })}
             </InfoBanner>
           )}
           {!loading && !error && rows.length === 0 && (
-            <InfoBanner tone="info" icon={Info} dismissible={false} data-testid="Settlements303Table390__empty">
+            <InfoBanner tone="info" icon={InfoIcon} dismissible={false} data-testid="Settlements303Table390__empty">
               {t('fm.m390.preload.empty', { year })}
             </InfoBanner>
           )}
@@ -96,7 +102,7 @@ export default function Settlements303Table390({ preload, loading, error, year, 
                         aria-label={t('fm.m390.preload.open_period', { period: formatDeclPeriod({ year, period: r.period }, bcpLocale) })}
                         data-testid={`Settlements303Table390__open_${r.period}`}
                       >
-                        <ExternalLink size={13} strokeWidth={1.75} style={{ verticalAlign: 'middle', marginRight: 4 }} data-testid="ExternalLink__settlements390" />
+                        <ArrowSquareOutIcon size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} data-testid="ExternalLink__settlements390" />
                         {t('fm.m390.preload.open')}
                       </button>
                     )}
@@ -110,12 +116,12 @@ export default function Settlements303Table390({ preload, loading, error, year, 
       {(preload?.territory || missing || warnings.length > 0) && (
         <div className="fm-390-notices">
           {preload?.territory && (
-            <InfoBanner tone="info" icon={Info} dismissible={false} data-testid="Settlements303Table390__territory">
+            <InfoBanner tone="info" icon={InfoIcon} dismissible={false} data-testid="Settlements303Table390__territory">
               {t('fm.m390.preload.territory_hint', { period: preload.lastPeriod ?? '', common: formatPercent(Number(preload.inputs?.COMMON_TERRITORY ?? 0)) })}
             </InfoBanner>
           )}
           {missing && (
-            <InfoBanner tone="warning" icon={TriangleAlert} dismissible={false} role="status" data-testid="Settlements303Table390__missing">
+            <InfoBanner tone="warning" icon={WarningIcon} dismissible={false} role="status" data-testid="Settlements303Table390__missing">
               <strong className="fm-390-notice__lead">{t('fm.m390.new_decl.missing_303_lead', { year, periods: missing })}</strong>
               {' '}
               {t('fm.m390.new_decl.missing_303_body', { year, periods: missing })}
@@ -125,7 +131,7 @@ export default function Settlements303Table390({ preload, loading, error, year, 
             <InfoBanner
               key={`${w.code}-${i}`}
               tone="warning"
-              icon={TriangleAlert}
+              icon={WarningIcon}
               dismissible={false}
               role="status"
               data-testid={`Settlements303Table390__warning_${w.code}`}

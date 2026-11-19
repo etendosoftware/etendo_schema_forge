@@ -9,11 +9,12 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog.jsx';
 import { extractApiErrorMessage } from '@/lib/apiError';
-import { Link2 } from 'lucide-react';
+import { LinkSimpleIcon } from '@phosphor-icons/react';
 import { useContactsCacheInvalidation } from './contactsCacheInvalidation';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { stripUrlScheme, toWebsiteHref } from './contactsWebUrl.js';
 import ContactsEmptyState from './ContactsEmptyState.jsx';
+import { sanitizeDashJoinedIdentifier } from '@/lib/locationAddress.js';
 
 const filters = ['searchKey', 'name', 'etgoFirstname', 'etgoLastname'];
 
@@ -90,7 +91,7 @@ function WebsiteCell({ value }) {
         variant="neutral"
         className="gap-1 max-w-full !rounded-md transition-shadow duration-300 ease-out group-hover/web:shadow-[inset_0_0_0_999px_rgba(18,18,23,0.05)]"
         data-testid="Tag__5c74a8">
-        <Link2 className="h-4 w-4 shrink-0 text-[#828FA3]" aria-hidden="true" data-testid="Link2__5c74a8" />
+        <LinkSimpleIcon className="h-4 w-4 shrink-0 text-[#828FA3]" aria-hidden="true" data-testid="Link2__5c74a8" />
         <span className="min-w-0 truncate">{label}</span>
       </Tag>
     </a>
@@ -222,7 +223,16 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
         // minus prefix is required, a trailing ` desc` makes Openbravo miss the
         // identifier path and answer 500.
         sortMode: 'identifier',
-        render: (row) => <TextCell value={row['eTGOLocation$_identifier']} data-testid="TextCell__5c74a8" />,
+        render: (row) => {
+          const locationIdentifier = row['eTGOLocation$_identifier'];
+          // Guarded: sanitizeDashJoinedIdentifier coerces a non-string (null/undefined, the
+          // "no address" case) to '', which would defeat TextCell's `value ?? '—'` fallback.
+          return (
+            <TextCell
+              value={locationIdentifier ? sanitizeDashJoinedIdentifier(locationIdentifier) : locationIdentifier}
+              data-testid="TextCell__5c74a8" />
+          );
+        },
       },
       {
         key: 'etgoWeb', column: 'EM_Etgo_Web', type: 'string', label: t('webColumn'),
