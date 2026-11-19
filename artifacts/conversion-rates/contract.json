@@ -1,19 +1,16 @@
 {
-  "version": "0.7.0",
+  "version": "0.8.0",
   "generatedAt": "2026-05-21T20:22:50.312Z",
-  "updatedAt": "2026-11-17T12:12:20.028Z",
-  "checksum": "c49eb86ffd6e19e4",
+  "updatedAt": "2026-11-19T16:24:27.481Z",
+  "checksum": "4d55ca631e9f9b7c",
   "frontendContract": {
     "window": {
       "id": "116",
-      "name": "Conversion Rates",
+      "name": "Currency Conversion",
       "primaryEntity": "conversionRate",
       "category": "finance",
-      "hideCreate": true,
-      "readOnly": true,
-      "hideDelete": true,
       "detailEntity": null,
-      "layoutType": "default"
+      "layoutType": "custom"
     },
     "entities": {
       "conversionRate": {
@@ -23,13 +20,37 @@
         "uiPattern": "STD",
         "fields": [
           {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "label": "Organization",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "fromConfig",
+              "source": "context.organization"
+            },
+            "reference": "Org",
+            "inputMode": "selector",
+            "defaultValue": "@AD_Org_ID@",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
+          },
+          {
             "name": "currency",
             "apiKey": "currency",
             "column": "C_Currency_ID",
             "label": "Currency",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": true,
             "form": true,
@@ -47,11 +68,6 @@
             },
             "publicApi": {
               "exposed": true
-            },
-            "readOnlyLogic": {
-              "raw": "@sMFCRSynced@='Y'",
-              "evaluable": true,
-              "js": "(record['sMFCRSynced'] === true || record['sMFCRSynced'] === 'Y')"
             }
           },
           {
@@ -118,7 +134,7 @@
             "label": "Valid To Date",
             "type": "date",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": false,
             "grid": true,
             "form": true,
@@ -127,11 +143,6 @@
             },
             "publicApi": {
               "exposed": true
-            },
-            "readOnlyLogic": {
-              "raw": "@sMFCRSynced@='Y'",
-              "evaluable": true,
-              "js": "(record['sMFCRSynced'] === true || record['sMFCRSynced'] === 'Y')"
             }
           },
           {
@@ -170,7 +181,7 @@
             "label": "Divide Rate By",
             "type": "number",
             "tsType": "number",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": true,
             "form": true,
@@ -185,11 +196,6 @@
             },
             "publicApi": {
               "exposed": true
-            },
-            "readOnlyLogic": {
-              "raw": "@sMFCRSynced@='Y'",
-              "evaluable": true,
-              "js": "(record['sMFCRSynced'] === true || record['sMFCRSynced'] === 'Y')"
             }
           },
           {
@@ -212,6 +218,86 @@
             "validation": {
               "maxLength": 1
             }
+          },
+          {
+            "name": "conversionRateType",
+            "apiKey": "conversionRateType",
+            "column": "ConversionRateType",
+            "label": "Conversion Rate Type",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "S"
+            },
+            "enumValues": [
+              {
+                "value": "A",
+                "name": "Average",
+                "labels": {
+                  "es_ES": "Promedio"
+                }
+              },
+              {
+                "value": "C",
+                "name": "Company",
+                "labels": {
+                  "es_ES": "Empresa"
+                }
+              },
+              {
+                "value": "F",
+                "name": "Fixed",
+                "labels": {
+                  "es_ES": "Fijo"
+                }
+              },
+              {
+                "value": "M",
+                "name": "Manual Rate",
+                "labels": {
+                  "es_ES": "Porcentaje manual"
+                }
+              },
+              {
+                "value": "N",
+                "name": "None",
+                "labels": {
+                  "es_ES": "Ninguno"
+                }
+              },
+              {
+                "value": "P",
+                "name": "Period End",
+                "labels": {
+                  "es_ES": "Fin periodo"
+                }
+              },
+              {
+                "value": "S",
+                "name": "Spot",
+                "labels": {
+                  "es_ES": "Punto"
+                }
+              },
+              {
+                "value": "U",
+                "name": "User Type",
+                "labels": {
+                  "es_ES": "Definido por el usuario"
+                }
+              }
+            ],
+            "defaultValue": "S",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           }
         ],
         "searchableFields": [
@@ -219,6 +305,13 @@
           "toCurrency"
         ],
         "computedFields": [
+          {
+            "name": "organization",
+            "derivation": {
+              "type": "fromConfig",
+              "source": "context.organization"
+            }
+          },
           {
             "name": "currency",
             "derivation": {
@@ -239,6 +332,13 @@
               "type": "computed",
               "source": "N"
             }
+          },
+          {
+            "name": "conversionRateType",
+            "derivation": {
+              "type": "computed",
+              "source": "S"
+            }
           }
         ]
       }
@@ -247,13 +347,11 @@
   "backendContract": {
     "window": {
       "id": "116",
-      "name": "Conversion Rates",
+      "name": "Currency Conversion",
       "primaryEntity": "conversionRate",
       "category": "finance",
-      "hideCreate": true,
-      "readOnly": true,
-      "hideDelete": true,
-      "detailEntity": null
+      "detailEntity": null,
+      "layoutType": "custom"
     },
     "entities": {
       "conversionRate": {
@@ -266,7 +364,7 @@
             "apiKey": "organization",
             "column": "AD_Org_ID",
             "type": "foreignKey",
-            "visibility": "system",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -274,7 +372,7 @@
             "apiKey": "currency",
             "column": "C_Currency_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -298,7 +396,7 @@
             "apiKey": "validToDate",
             "column": "ValidTo",
             "type": "date",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -314,7 +412,7 @@
             "apiKey": "divideRateBy",
             "column": "DivideRate",
             "type": "number",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -354,7 +452,7 @@
             "apiKey": "conversionRateType",
             "column": "ConversionRateType",
             "type": "enum",
-            "visibility": "system",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -399,8 +497,7 @@
         "entity": "conversionRate",
         "supportedFilters": [
           "currency",
-          "toCurrency",
-          "conversionRateType"
+          "toCurrency"
         ]
       },
       {
@@ -437,10 +534,10 @@
       "conversionRate": {
         "get": true,
         "getById": true,
-        "post": false,
-        "put": false,
-        "patch": false,
-        "delete": false,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
         "listUrl": "/sws/neo/conversion-rates/conversionRate",
         "detailUrl": "/sws/neo/conversion-rates/conversionRate/{id}",
         "supportedFilters": [
@@ -450,6 +547,14 @@
       }
     },
     "selectors": [
+      {
+        "entity": "conversionRate",
+        "field": "organization",
+        "column": "AD_Org_ID",
+        "reference": "Org",
+        "inputMode": "selector",
+        "url": "/sws/neo/conversion-rates/conversionRate/selectors/organization"
+      },
       {
         "entity": "conversionRate",
         "field": "currency",
@@ -482,8 +587,7 @@
       "parentFilter": "parentId={id} for child entities"
     },
     "window": {
-      "category": "finance",
-      "readOnly": true
+      "category": "finance"
     }
   },
   "testManifest": {
@@ -496,12 +600,28 @@
         "description": "CRUD flags for 'conversionRate' should all be booleans"
       },
       {
+        "id": "t-default-value-type-conversionRate-conversionRateType",
+        "category": "default-value-type",
+        "entity": "conversionRate",
+        "field": "conversionRateType",
+        "runner": "node",
+        "description": "Default value for 'conversionRateType' in conversionRate should be a string"
+      },
+      {
         "id": "t-default-value-type-conversionRate-currency",
         "category": "default-value-type",
         "entity": "conversionRate",
         "field": "currency",
         "runner": "node",
         "description": "Default value for 'currency' in conversionRate should be a string"
+      },
+      {
+        "id": "t-default-value-type-conversionRate-organization",
+        "category": "default-value-type",
+        "entity": "conversionRate",
+        "field": "organization",
+        "runner": "node",
+        "description": "Default value for 'organization' in conversionRate should be a string"
       },
       {
         "id": "t-default-value-type-conversionRate-sMFCRSynced",
@@ -518,6 +638,14 @@
         "field": "toCurrency",
         "runner": "node",
         "description": "Default value for 'toCurrency' in conversionRate should be a string"
+      },
+      {
+        "id": "t-field-presence-conversionRate-conversionRateType",
+        "category": "field-presence",
+        "entity": "conversionRate",
+        "field": "conversionRateType",
+        "runner": "node",
+        "description": "Field 'conversionRateType' should be present in conversionRate"
       },
       {
         "id": "t-field-presence-conversionRate-currency",
@@ -542,6 +670,14 @@
         "field": "multipleRateBy",
         "runner": "node",
         "description": "Field 'multipleRateBy' should be present in conversionRate"
+      },
+      {
+        "id": "t-field-presence-conversionRate-organization",
+        "category": "field-presence",
+        "entity": "conversionRate",
+        "field": "organization",
+        "runner": "node",
+        "description": "Field 'organization' should be present in conversionRate"
       },
       {
         "id": "t-field-presence-conversionRate-sMFCRSynced",
@@ -576,6 +712,14 @@
         "description": "Field 'validToDate' should be present in conversionRate"
       },
       {
+        "id": "t-field-type-conversionRate-conversionRateType",
+        "category": "field-type",
+        "entity": "conversionRate",
+        "field": "conversionRateType",
+        "runner": "node",
+        "description": "Field 'conversionRateType' should have type 'string' in conversionRate"
+      },
+      {
         "id": "t-field-type-conversionRate-currency",
         "category": "field-type",
         "entity": "conversionRate",
@@ -598,6 +742,14 @@
         "field": "multipleRateBy",
         "runner": "node",
         "description": "Field 'multipleRateBy' should have type 'number' in conversionRate"
+      },
+      {
+        "id": "t-field-type-conversionRate-organization",
+        "category": "field-type",
+        "entity": "conversionRate",
+        "field": "organization",
+        "runner": "node",
+        "description": "Field 'organization' should have type 'string' in conversionRate"
       },
       {
         "id": "t-field-type-conversionRate-sMFCRSynced",
@@ -632,22 +784,6 @@
         "description": "Field 'validToDate' should have type 'string' in conversionRate"
       },
       {
-        "id": "t-readonlylogic-evaluable-conversionRate-currency",
-        "category": "readonlylogic-evaluable",
-        "entity": "conversionRate",
-        "field": "currency",
-        "runner": "node",
-        "description": "Read-only logic for 'currency' in conversionRate should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-conversionRate-divideRateBy",
-        "category": "readonlylogic-evaluable",
-        "entity": "conversionRate",
-        "field": "divideRateBy",
-        "runner": "node",
-        "description": "Read-only logic for 'divideRateBy' in conversionRate should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-conversionRate-multipleRateBy",
         "category": "readonlylogic-evaluable",
         "entity": "conversionRate",
@@ -672,30 +808,6 @@
         "description": "Read-only logic for 'validFromDate' in conversionRate should have evaluable flag"
       },
       {
-        "id": "t-readonlylogic-evaluable-conversionRate-validToDate",
-        "category": "readonlylogic-evaluable",
-        "entity": "conversionRate",
-        "field": "validToDate",
-        "runner": "node",
-        "description": "Read-only logic for 'validToDate' in conversionRate should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-valid-conversionRate-currency",
-        "category": "readonlylogic-valid",
-        "entity": "conversionRate",
-        "field": "currency",
-        "runner": "node",
-        "description": "Read-only logic for 'currency' in conversionRate should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-conversionRate-divideRateBy",
-        "category": "readonlylogic-valid",
-        "entity": "conversionRate",
-        "field": "divideRateBy",
-        "runner": "node",
-        "description": "Read-only logic for 'divideRateBy' in conversionRate should be valid JS"
-      },
-      {
         "id": "t-readonlylogic-valid-conversionRate-multipleRateBy",
         "category": "readonlylogic-valid",
         "entity": "conversionRate",
@@ -718,14 +830,6 @@
         "field": "validFromDate",
         "runner": "node",
         "description": "Read-only logic for 'validFromDate' in conversionRate should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-conversionRate-validToDate",
-        "category": "readonlylogic-valid",
-        "entity": "conversionRate",
-        "field": "validToDate",
-        "runner": "node",
-        "description": "Read-only logic for 'validToDate' in conversionRate should be valid JS"
       },
       {
         "id": "t-rule-declared-AD-Client-Security-validation",
@@ -773,6 +877,14 @@
         "description": "Selector endpoint for 'currency' in conversionRate should exist"
       },
       {
+        "id": "t-selector-endpoint-conversionRate-organization",
+        "category": "selector-endpoint",
+        "entity": "conversionRate",
+        "field": "organization",
+        "runner": "node",
+        "description": "Selector endpoint for 'organization' in conversionRate should exist"
+      },
+      {
         "id": "t-selector-endpoint-conversionRate-toCurrency",
         "category": "selector-endpoint",
         "entity": "conversionRate",
@@ -795,14 +907,6 @@
         "field": "client",
         "runner": "node",
         "description": "System field 'client' should exist in backend but not frontend for conversionRate"
-      },
-      {
-        "id": "t-system-field-conversionRate-conversionRateType",
-        "category": "system-field",
-        "entity": "conversionRate",
-        "field": "conversionRateType",
-        "runner": "node",
-        "description": "System field 'conversionRateType' should exist in backend but not frontend for conversionRate"
       },
       {
         "id": "t-system-field-conversionRate-createdBy",
@@ -829,14 +933,6 @@
         "description": "System field 'id' should exist in backend but not frontend for conversionRate"
       },
       {
-        "id": "t-system-field-conversionRate-organization",
-        "category": "system-field",
-        "entity": "conversionRate",
-        "field": "organization",
-        "runner": "node",
-        "description": "System field 'organization' should exist in backend but not frontend for conversionRate"
-      },
-      {
         "id": "t-system-field-conversionRate-updated",
         "category": "system-field",
         "entity": "conversionRate",
@@ -861,22 +957,22 @@
       }
     ],
     "summary": {
-      "total": 47,
+      "total": 46,
       "byCategory": {
         "crud-flags": 1,
-        "default-value-type": 3,
-        "field-presence": 7,
-        "field-type": 7,
-        "readonlylogic-evaluable": 6,
-        "readonlylogic-valid": 6,
+        "default-value-type": 5,
+        "field-presence": 9,
+        "field-type": 9,
+        "readonlylogic-evaluable": 3,
+        "readonlylogic-valid": 3,
         "rule-declared": 3,
         "searchable-filters": 2,
-        "selector-endpoint": 2,
-        "system-field": 9,
+        "selector-endpoint": 3,
+        "system-field": 7,
         "visibility": 1
       },
       "byRunner": {
-        "node": 47,
+        "node": 46,
         "junit": 0
       }
     }

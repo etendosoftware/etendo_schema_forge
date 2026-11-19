@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0",
+  "version": "0.8.0",
   "generatedAt": "2026-05-21T20:22:50.312Z",
-  "updatedAt": "2026-07-15T18:13:15.696Z",
-  "contractChecksum": "c49eb86ffd6e19e4",
+  "updatedAt": "2026-11-19T16:24:27.481Z",
+  "contractChecksum": "4d55ca631e9f9b7c",
   "apiPrediction": {
     "specName": "conversion-rates",
     "baseUrl": "/sws/neo/conversion-rates",
@@ -10,10 +10,10 @@
       "conversionRate": {
         "get": true,
         "getById": true,
-        "post": false,
-        "put": false,
-        "patch": false,
-        "delete": false,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
         "listUrl": "/sws/neo/conversion-rates/conversionRate",
         "detailUrl": "/sws/neo/conversion-rates/conversionRate/{id}",
         "supportedFilters": [
@@ -23,6 +23,14 @@
       }
     },
     "selectors": [
+      {
+        "entity": "conversionRate",
+        "field": "organization",
+        "column": "AD_Org_ID",
+        "reference": "Org",
+        "inputMode": "selector",
+        "url": "/sws/neo/conversion-rates/conversionRate/selectors/organization"
+      },
       {
         "entity": "conversionRate",
         "field": "currency",
@@ -55,17 +63,21 @@
       "parentFilter": "parentId={id} for child entities"
     },
     "window": {
-      "category": "finance",
-      "readOnly": true
+      "category": "finance"
     }
   },
   "formState": {
     "entities": {
       "conversionRate": {
         "fields": {
-          "currency": {
+          "organization": {
+            "readOnly": true,
             "required": true,
-            "readOnlyLogic": "@sMFCRSynced@='Y'",
+            "defaultValue": "@AD_Org_ID@"
+          },
+          "currency": {
+            "readOnly": true,
+            "required": true,
             "defaultValue": "@SQL=SELECT C_CURRENCY_ID FROM AD_CLIENT  WHERE AD_CLIENT_ID = @AD_CLIENT_ID@"
           },
           "toCurrency": {
@@ -78,19 +90,24 @@
             "readOnlyLogic": "@sMFCRSynced@='Y'"
           },
           "validToDate": {
-            "readOnlyLogic": "@sMFCRSynced@='Y'"
+            "readOnly": true
           },
           "multipleRateBy": {
             "required": true,
             "readOnlyLogic": "@sMFCRSynced@='Y'"
           },
           "divideRateBy": {
-            "required": true,
-            "readOnlyLogic": "@sMFCRSynced@='Y'"
+            "readOnly": true,
+            "required": true
           },
           "sMFCRSynced": {
             "readOnly": true,
             "defaultValue": "N"
+          },
+          "conversionRateType": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "S"
           }
         }
       }
@@ -99,17 +116,15 @@
     "evaluationMode": "runtime"
   },
   "agentProfile": {
-    "purpose": "Manage conversion rates financial records.",
+    "purpose": "Manage currency conversion financial records.",
     "whenToUse": [
-      "Use for conversion rates management."
+      "Use for currency conversion management."
     ],
     "minimumCreate": {
       "headerFields": [
-        "currency",
         "toCurrency",
         "validFromDate",
-        "multipleRateBy",
-        "divideRateBy"
+        "multipleRateBy"
       ],
       "recommendedOrder": [
         "createHeader"
@@ -128,11 +143,9 @@
         "operation": "createHeader",
         "description": "Create a draft header with the minimum required editable fields.",
         "fields": [
-          "currency",
           "toCurrency",
           "validFromDate",
-          "multipleRateBy",
-          "divideRateBy"
+          "multipleRateBy"
         ]
       }
     ],
@@ -142,5 +155,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "b97bf0dc23badc29"
+  "checksum": "da8de981cd2b55cf"
 }

@@ -2,25 +2,28 @@
   "$schema": "decisions-v2",
   "window": {
     "category": "finance",
-    "name": "Conversion Rates",
+    "name": "Currency Conversion",
     "detailEntity": null,
-    "readOnly": true
+    "layoutType": "custom",
+    "readOnly": false
   },
   "entities": {
     "header": {
       "name": "conversionRate",
       "publicApi": { "readOnly": true },
       "fields": {
-        "organization": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'" },
-        "currency": { "grid": true, "form": true, "searchable": true, "inputMode": "selector", "readOnlyLogic": "@sMFCRSynced@='Y'", "publicApi": { "exposed": true } },
+        "organization": { "grid": false, "form": false, "visibility": "readOnly" },
+        "currency": { "grid": true, "form": true, "searchable": true, "inputMode": "selector", "visibility": "readOnly", "publicApi": { "exposed": true } },
         "toCurrency": { "grid": true, "form": true, "searchable": true, "inputMode": "selector", "readOnlyLogic": "@sMFCRSynced@='Y'", "publicApi": { "exposed": true } },
-        "conversionRateType": { "grid": true, "form": true, "searchable": true, "readOnlyLogic": "@sMFCRSynced@='Y'" },
+        "conversionRateType": { "grid": false, "form": false, "visibility": "readOnly" },
         "validFromDate": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'", "publicApi": { "exposed": true } },
-        "validToDate": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'", "publicApi": { "exposed": true } },
+        "validToDate": { "grid": true, "form": true, "visibility": "readOnly", "publicApi": { "exposed": true } },
         "multipleRateBy": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'", "type": "number", "publicApi": { "exposed": true }, "_note": "Explicit numeric type: AD reference 800019 (Rate) is not mapped by the core extractor, so it is extracted as string while NEO answers a JSON number. Remove once ref 800019 is mapped in schema_forge_core." },
-        "divideRateBy": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'", "type": "number", "publicApi": { "exposed": true }, "_note": "Explicit numeric type, same reason as multipleRateBy." },
-        "active": { "grid": false, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'" },
-        "sMFCRSynced": { "visibility": "readOnly", "grid": true, "form": true, "section": "principal" }
+        "divideRateBy": { "grid": true, "form": true, "visibility": "readOnly", "type": "number", "publicApi": { "exposed": true }, "_note": "Explicit numeric type, same reason as multipleRateBy. Read-only since ETP-6365: the server derives it from multipleRateBy." },
+        "active": { "grid": false, "form": false },
+        "sMFCRSynced": { "visibility": "readOnly", "grid": true, "form": true, "section": "principal" },
+        "etgoRateStatus": { "visibility": "readOnly", "grid": true, "form": true, "_note": "ETP-6365: virtual column served by com.etendoerp.go (CURRENT | POSTED | UNUSED); filterable." },
+        "etgoUsedInAccounting": { "visibility": "readOnly", "grid": true, "form": true, "_note": "ETP-6365: virtual column, true when the rate already has posted documents (the lock); filterable." }
       }
     }
   },

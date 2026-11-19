@@ -4,15 +4,17 @@ import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import ConversionRateTable from './ConversionRateTable';
 import ConversionRateForm from './ConversionRateForm';
-import { AttachmentsTab } from '@/components/attachments';
 import catalogs from './mockCatalogs';
 
 
-const breadcrumb = 'Finance / Conversion Rates';
+const breadcrumb = 'Finance / Currency Conversion';
 
 
 // @sf-generated-start summary:conversionRate
 const summary = [
+  { key: 'currency', column: 'C_Currency_ID', type: 'selector' },
+  { key: 'validToDate', column: 'ValidTo', type: 'date' },
+  { key: 'divideRateBy', column: 'DivideRate', type: 'number' },
   { key: 'sMFCRSynced', column: 'EM_SMFCR_Is_Synced', type: 'boolean' },
 ];
 
@@ -36,7 +38,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:conversionRate
 
 // @sf-generated-start requiredHeaderFields:conversionRate
-const requiredHeaderFields = ['currency', 'toCurrency', 'validFromDate', 'multipleRateBy', 'divideRateBy'];
+const requiredHeaderFields = ['toCurrency', 'validFromDate', 'multipleRateBy'];
 // @sf-generated-end requiredHeaderFields:conversionRate
 
 
@@ -48,10 +50,10 @@ export const api = {
     "conversionRate": {
       "get": true,
       "getById": true,
-      "post": false,
-      "put": false,
-      "patch": false,
-      "delete": false,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": true,
       "listUrl": "/sws/neo/conversion-rates/conversionRate",
       "detailUrl": "/sws/neo/conversion-rates/conversionRate/{id}",
       "supportedFilters": [
@@ -61,6 +63,14 @@ export const api = {
     }
   },
   "selectors": [
+    {
+      "entity": "conversionRate",
+      "field": "organization",
+      "column": "AD_Org_ID",
+      "reference": "Org",
+      "inputMode": "selector",
+      "url": "/sws/neo/conversion-rates/conversionRate/selectors/organization"
+    },
     {
       "entity": "conversionRate",
       "field": "currency",
@@ -93,8 +103,7 @@ export const api = {
     "parentFilter": "parentId={id} for child entities"
   },
   "window": {
-    "category": "finance",
-    "readOnly": true
+    "category": "finance"
   }
 };
 
@@ -123,7 +132,6 @@ export default function ConversionRatePage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
-        customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Conversion_Rate", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
         {...props} window={effectiveWindow}
       />
@@ -135,11 +143,10 @@ export default function ConversionRatePage({ windowName, recordId, ...props }) {
     <ListView
       entity="conversionRate"
       Table={ConversionRateTable}
-      entityLabel="Conversion Rates"
+      entityLabel="Currency Conversion"
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
-      hideCreate
       rowQuickActions={{}}
       {...props} window={effectiveWindow}
     />
