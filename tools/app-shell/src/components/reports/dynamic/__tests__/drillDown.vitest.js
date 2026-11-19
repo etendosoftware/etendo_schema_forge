@@ -89,6 +89,13 @@ describe('drillDown — chart-tree rows (ETP-6084)', () => {
     expect(ledgerParams(VIEW, { node_id: 'N', value: '1' })).not.toHaveProperty('openingEntryAmount'); // the P&L never sends it
   });
 
+  it('the ledger gets the TB toggle as is, for either value and with a comparison range', () => {
+    const row = { node_id: 'A', value: '430' };
+    for (const v of ['true', 'false']) expect(ledgerParams({ ...TB_VIEW, openingEntryAmount: v }, row)).toHaveProperty('openingEntryAmount', v);
+    expect(ledgerParams({ ...TB_VIEW, openingEntryAmount: 'true' }, row, { from: '2025-01-01', to: '2025-01-31' }))
+      .toMatchObject({ openingEntryAmount: 'true', dateFrom: '2025-01-01', dateTo: '2025-01-31' });
+  });
+
   it('canDrill: leaf accounts and dimension rows with an id; not summaries, formulas or an empty dimension', () => {
     expect(canDrill({ value: '700', hasChildren: false })).toBe(true);
     expect(canDrill({ value: '700', hasChildren: true, hasDimensionChildren: true })).toBe(true);

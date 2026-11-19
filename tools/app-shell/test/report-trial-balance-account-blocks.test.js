@@ -1,11 +1,13 @@
 // @covers artifacts/report-trial-balance/template.hbs
 // @covers artifacts/report-trial-balance/template-excel.hbs
 // @covers artifacts/report-trial-balance/template-csv.hbs
+// @covers artifacts/report-trial-balance/report-contract.json
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import Handlebars from 'handlebars';
+import { buildContractLabels } from '@etendosoftware/schema-forge-cli/src/report-i18n.js';
 import {
   registerReportHelpers,
   buildJsreportHelpersString,
@@ -30,6 +32,7 @@ import {
 // leaks a literal 'undefined' into the blank-dimension row fails here.
 
 const ARTIFACT_DIR = resolve(import.meta.dirname, '../../../artifacts/report-trial-balance');
+const CONTRACT = JSON.parse(readFileSync(join(ARTIFACT_DIR, 'report-contract.json'), 'utf8'));
 const HELPERS_CODE = readFileSync(join(ARTIFACT_DIR, 'helpers.js'), 'utf8');
 // ETP-5013 added `{{> document-branding}}` to template.hbs's .report-header —
 // NOT a native Handlebars partial (see report-api.js's own comment on
@@ -354,7 +357,7 @@ describe('report-trial-balance — template-csv.hbs dimension column (ETP-5013)'
 // ── Part 4 (ETP-6084): the chart-tree shape, used when meta.chartTotals is present ─────────────
 // The old flat/grouped shape (Parts 1-3) must stay byte-identical; the dynamic view's tree adds a branch.
 
-function renderChart(file, { mode = '', movements = false, balanced = true } = {}) {
+function renderChart(file, { mode = '', movements = false, balanced = true, realLabels = false } = {}) {
   const built = buildJsreportHelpersString(HELPERS_CODE);
   const names = [...built.matchAll(/^function\s+(\w+)\s*\(/gm)].map((m) => m[1]);
   // eslint-disable-next-line no-new-func
@@ -368,7 +371,7 @@ function renderChart(file, { mode = '', movements = false, balanced = true } = {
   const rows = [node('43', 'Deudores', 0, 'C', false, [0, 10, 5, 5]), node('430', 'Clientes', 1, 'S', false, [0, 10, 5, 5]), node('', 'Laura, M', 2, 'DIM', true, [0, 10, 5, 5])];
   const meta = {
     ...buildMeta({ groupBy: '', grouped: false }),
-    labels: { ...LABELS, level: 'Nivel', periodCompared: 'Comparado', periodVarAmount: 'Var.', periodVarPct: 'Var. %', unbalanced: 'Descuadre',
+    labels: realLabels ? buildContractLabels(CONTRACT, 'es_ES') : { ...LABELS, level: 'Nivel', periodCompared: 'Comparado', periodVarAmount: 'Var.', periodVarPct: 'Var. %', unbalanced: 'Descuadre',
       cmpDebit: 'Debe comparado', varDebit: 'Var. debe', varPctDebit: 'Var. % debe', cmpCredit: 'Haber comparado', varCredit: 'Var. haber', varPctCredit: 'Var. % haber', cmpClosing: 'Saldo final comparado', varClosing: 'Var. saldo final', varPctClosing: 'Var. % saldo final' },
     params: { accountLevel: 'S', groupBy: '', compareMode: mode, periods: '2026-01-01..2026-01-31|2025-01-01..2025-01-31|2025-12-01..2025-12-31', dateFrom: '2026-01-01', dateTo: '2026-01-31' },
     locale: 'es_ES', compareMovements: movements,
@@ -450,5 +453,30 @@ describe('report-trial-balance — chart-tree Excel and CSV (ETP-6084)', () => {
     const lines = renderChart('template-csv.hbs', { mode: 'sly', movements: true }).trim().split('\n');
     const count = (l) => l.replace(/"[^"]*"/g, 'x').split(',').length;
     assert.ok(lines.every((l) => count(l) === count(lines[0])), lines.map(count).join());
+  });
+});
+
+// ETP-6084 QA gap 7: the headers must read the contract's labels through the real label pipeline
+// (buildContractLabels, what /render ships as meta.labels), never a hand-written label map.
+describe('report-trial-balance — chart-tree headers with the real label pipeline (ETP-6084)', () => {
+  const EXPECTED = ['Nº Cuenta', 'Nombre', 'Nivel', 'Debe comparado', 'Var. debe', 'Var. % debe', 'Haber comparado',
+    'Var. haber', 'Var. % haber', 'Saldo final comparado', 'Var. saldo final', 'Var. % saldo final'];
+
+  it('CSV: every header cell comes from the contract labels, none renders "undefined"', () => {
+    const header = renderChart('template-csv.hbs', { mode: 'sly', movements: true, realLabels: true }).split('\n')[0];
+    assert.doesNotMatch(header, /undefined/);
+    for (const label of EXPECTED) assert.ok(header.includes(label), `${label} missing in: ${header}`);
+    assert.ok(header.split(',').every((cell) => cell.trim() !== ''), header);
+  });
+
+  it('Excel: every header cell comes from the contract labels, none renders "undefined"', () => {
+    const html = renderChart('template-excel.hbs', { mode: 'sly', movements: true, realLabels: true });
+    assert.doesNotMatch(html, /undefined/);
+    const ths = [...html.matchAll(/<th>([\s\S]*?)<\/th>/g)].map((m) => m[1].trim());
+    assert.ok(ths.every(Boolean), ths.join('|'));
+    // The Excel template builds the compare captions itself (Title Case, amount first), still from the labels.
+    for (const cell of ['Nº Cuenta', 'Nombre', 'Nivel', 'Debe Comparado', 'Haber Comparado', 'Saldo Final Comparado']) {
+      assert.ok(ths.some((t) => t.includes(cell)), `${cell} missing in ${ths.join('|')}`);
+    }
   });
 });

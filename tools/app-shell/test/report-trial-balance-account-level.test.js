@@ -1,5 +1,7 @@
 // @covers artifacts/report-trial-balance/report-contract.json
 // @covers tools/app-shell/vite-plugins/report-api.js
+// @covers artifacts/report-general-ledger/report-contract.json
+// @covers tools/app-shell/src/components/reports/dynamic/reportTree.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -8,6 +10,8 @@ import Handlebars from 'handlebars';
 import { registerReportHelpers } from '../../../templates/reports/helpers/report-html-helpers.js';
 import { pickLabel } from '@etendosoftware/schema-forge-cli/src/report-i18n.js';
 import { filterAndTransformParams } from '@etendosoftware/schema-forge-cli/src/report-filters.js';
+import { loadReportCli } from '../vite-plugins/report-cli.js';
+import { expansionForLevel, levelHiddenIds, visibleRows } from '../src/components/reports/dynamic/reportTree.js';
 
 // ETP-4898 — report-trial-balance ("Balance de Sumas y Saldos") new
 // `accountLevel` parameter.
@@ -533,5 +537,155 @@ describe('report-trial-balance chart tree queries', () => {
     assert.match(src, /chartTree: isChartTreeRender\(contract, params\)/);
     assert.match(src, /buildRenderChartTree\(rows, params/);
     assert.match(src, /\.\.\.chartMeta/);
+  });
+});
+
+// ── ETP-6084 chart-tree QA gaps ─────────────────────────────────────────────
+// buildChartAccountTree / buildRenderChartTree live in schema_forge_core; they only exist in the
+// local core until it is published, so these run with LOCAL_CORE=1 (docs/repo-topology.md).
+const { buildChartAccountTree, buildRenderChartTree } = await loadReportCli('report-grouping');
+const NO_CORE = typeof buildChartAccountTree !== 'function' && 'core without the chart tree (run with LOCAL_CORE=1)';
+
+const leaf = (id, parent, level, dr, cr, o = 0) => ({ node_id: id, parent_id: parent, value: id, name: id, elementlevel: level,
+  sort_path: id, account_id: id, dimension_id: null, opening_balance: o, activity_debit: dr, activity_credit: cr, closing_balance: o + dr - cr });
+const heading = (id, parent, level) => leaf(id, parent, level, 0, 0);
+const byValue = (rows, v) => rows.find((r) => r.value === v);
+
+describe('chart tree — mixed-level chart (ETP-6084 QA gap 1)', { skip: NO_CORE }, () => {
+  // E1 > [S1, C1 > S2, E2 > S3] ; D1 > D2 > S4 ; S5 has no ancestor at all (parent '0').
+  const ROWS = [heading('E1', '0', 'E'), leaf('S1', 'E1', 'S', 100, 0), heading('C1', 'E1', 'C'), leaf('S2', 'C1', 'S', 0, 40),
+    heading('E2', 'E1', 'E'), leaf('S3', 'E2', 'S', 0, 50), heading('D1', '0', 'D'), heading('D2', 'D1', 'D'),
+    leaf('S4', 'D2', 'S', 20, 20), leaf('S5', '0', 'S', 0, 10)];
+  const tree = buildChartAccountTree(ROWS, null, {});
+
+  it('rolls every leaf up its parent chain: heading = the sum of what hangs under it', () => {
+    assert.equal(byValue(tree.rows, 'E1').debit, 100);
+    assert.equal(byValue(tree.rows, 'E1').credit, 90);
+    assert.equal(byValue(tree.rows, 'E2').credit, 50);
+    assert.equal(byValue(tree.rows, 'D1').debit, 20);
+  });
+
+  it('totals = the sum of the roots, each leaf counted once (also the orphan with no ancestor)', () => {
+    const roots = tree.rows.filter((r) => r.indent === 0);
+    assert.ok(roots.some((r) => r.value === 'S5'), 'the orphan leaf is a root row');
+    assert.equal(tree.totals[0].debit.amount, roots.reduce((a, r) => a + r.debit, 0));
+    assert.equal(tree.totals[0].credit.amount, roots.reduce((a, r) => a + r.credit, 0));
+    assert.equal(tree.totals[0].debit.amount, 120);
+    assert.equal(tree.totals[0].credit.amount, 120);
+    assert.equal(tree.balance.balanced, true);
+  });
+
+  it('level fold: C shows the nested same-level children, folds the deeper ones; S shows everything', () => {
+    const shown = (level) => visibleRows(tree.rows, expansionForLevel(tree.rows, level, { nested: true }), levelHiddenIds(tree.rows, level)).map((r) => r.value);
+    assert.deepEqual(shown('E'), ['D1', 'E1', 'E2', 'S5']); // tree order = sort_path
+    assert.ok(shown('E').every((v) => !['S1', 'C1', 'D2', 'S4'].includes(v)));
+    assert.ok(shown('C').includes('C1') && shown('C').includes('E2'));
+    assert.ok(!shown('C').includes('S2'), 'a leaf under a C account folds at level C');
+    assert.deepEqual(shown('S').sort(), ROWS.map((r) => r.value).sort());
+  });
+});
+
+describe('chart tree — raw sums and balance (ETP-6084 QA gap 3)', { skip: NO_CORE }, () => {
+  it('keeps a negative debit / credit as is (no abs) and still balances', () => {
+    // a reversal: S_a debit -30, S_b credit -30 => closing -30 / +30
+    const t = buildChartAccountTree([leaf('A', '0', 'S', -30, 0), leaf('B', '0', 'S', 0, -30)], null, {});
+    assert.equal(byValue(t.rows, 'A').debit, -30);
+    assert.equal(byValue(t.rows, 'B').credit, -30);
+    assert.equal(t.totals[0].debit.amount, -30);
+    assert.equal(t.totals[0].credit.amount, -30);
+    assert.deepEqual(t.balance, { balanced: true, debitCreditDiff: 0, closingDiff: 0 });
+  });
+
+  it('flags an unbalanced set (debit - credit and closing both off)', () => {
+    const t = buildChartAccountTree([leaf('A', '0', 'S', -30, 0), leaf('B', '0', 'S', 0, 10)], null, {});
+    assert.equal(t.balance.balanced, false);
+    assert.equal(t.balance.debitCreditDiff, -40);
+  });
+});
+
+describe('chart tree — per-range openings (ETP-6084 QA gap 2)', { skip: NO_CORE }, () => {
+  // Rows as periodQuery returns them: each bucket carries ITS OWN opening (O entries of that range's start included).
+  const periods = [{ idx: 0 }, { idx: 1 }];
+  const pr = (idx, o, dr, cr) => ({ idx, account_id: 'A', dimension_id: null, opening_balance: o, activity_debit: dr, activity_credit: cr, closing_balance: o + dr - cr });
+
+  it('a range keeps its own opening; a comparison column can open non-zero while the first opens at 0', () => {
+    const t = buildChartAccountTree([leaf('A', '0', 'S', 5, 0)], [pr(0, 0, 5, 0), pr(1, 70, 0, 20)], { periods });
+    const [row] = t.rows;
+    assert.equal(row.cells[0].opening.amount, 0);
+    assert.equal(row.cells[1].opening.amount, 70);
+    assert.equal(row.cells[1].closing.amount, 50);
+    assert.equal(t.totals[1].opening.amount, 70);
+    assert.equal(t.totals[0].opening.amount, 0);
+  });
+
+  it('periodQuery applies the opening-entry toggle with each bucket\'s own start date (f, sf, pf), never the hull', () => {
+    const q = CONTRACT.sql.periodQuery;
+    for (const col of ['f', 'sf', 'pf']) {
+      assert.match(q, new RegExp(`d\\.dateacct < b\\.${col} OR \\(d\\.dateacct = b\\.${col} AND d\\.is_o AND '__OPENINGENTRYAMOUNT__' = 'true'\\)`));
+      assert.match(q, new RegExp(`NOT \\(d\\.dateacct = b\\.${col} AND d\\.is_o AND '__OPENINGENTRYAMOUNT__' = 'true'\\)`));
+    }
+    assert.doesNotMatch(q, /__DATEFROM__/, 'the range start must come from the bucket, not the hull');
+  });
+});
+
+describe('chart tree — account active only in the compared period (ETP-6084 QA gap 4)', { skip: NO_CORE }, () => {
+  it('is visible in sly, hidden in none, with only-with-value on', () => {
+    const periods = [{ idx: 0 }];
+    const priorOnly = { idx: 0, account_id: 'P', dimension_id: null, opening_balance: 0, activity_debit: 0, activity_credit: 0, closing_balance: 0,
+      opening_balance_sly: 0, activity_debit_sly: 60, activity_credit_sly: 0, closing_balance_sly: 60 };
+    const live = { idx: 0, account_id: 'L', dimension_id: null, opening_balance: 0, activity_debit: 10, activity_credit: 0, closing_balance: 10 };
+    const t = buildChartAccountTree([leaf('P', '0', 'S', 0, 0), leaf('L', '0', 'S', 10, 0)], [priorOnly, live], { periods, showOnlyWithValue: true });
+    const p = byValue(t.rows, 'P');
+    assert.equal(p.visible.none, false);
+    assert.equal(p.visible.sly, true);
+    assert.equal(p.cells[0].debit.sly.amount, 60);
+    assert.equal(byValue(t.rows, 'L').visible.none, true);
+  });
+});
+
+describe('chart tree — render path (ETP-6084)', { skip: NO_CORE }, () => {
+  it('buildRenderChartTree totals stay the sum of the roots and hide all-zero rows', () => {
+    const { rows, meta } = buildRenderChartTree([heading('E1', '0', 'E'), leaf('S1', 'E1', 'S', 40, 0), leaf('S2', 'E1', 'S', 0, 40), leaf('Z', '0', 'S', 0, 0)],
+      { showOnlyAccountsWithValue: 'true' }, null);
+    assert.deepEqual(rows.map((r) => r.value), ['E1', 'S1', 'S2']);
+    assert.equal(meta.chartTotals[0].debit.amount, 40);
+    assert.equal(meta.chartBalance.balanced, true);
+  });
+});
+
+describe('trial-balance SQL — dimension filters with groupBy (ETP-6084 QA gap 5)', () => {
+  for (const key of ['treeQuery', 'periodQuery']) {
+    const q = CONTRACT.sql[key];
+    it(`${key}: product / project / cost-centre filters and the grouping column are both applied`, () => {
+      assert.match(q, /'__PRODUCTID__' = '' OR fa\.m_product_id = '__PRODUCTID__'/);
+      assert.match(q, /'__PROJECTID__' = '' OR fa\.c_project_id = '__PROJECTID__'/);
+      assert.match(q, /'__COSTCENTERID__' = '' OR fa\.c_costcenter_id = '__COSTCENTERID__'/);
+      for (const [by, col] of [['bpartner', 'c_bpartner_id'], ['product', 'm_product_id'], ['project', 'c_project_id'], ['costcenter', 'c_costcenter_id']]) {
+        assert.match(q, new RegExp(`WHEN '${by}' THEN fa\\.${col}`), `${by} grouping column`);
+      }
+      // filter in WHERE (before the GROUP BY), grouping in the select list: both on the same fact_acct scan
+      assert.ok(q.indexOf("fa.c_project_id = '__PROJECTID__'") < q.indexOf('GROUP BY 1, 2'));
+    });
+  }
+});
+
+describe('general ledger parity with the trial-balance drill (ETP-6084 QA gap 6)', () => {
+  const GL = JSON.parse(readFileSync(join(ROOT, 'artifacts', 'report-general-ledger', 'report-contract.json'), 'utf8'));
+
+  it('GL declares the openingEntryAmount parameter the drill sends', () => {
+    assert.ok(GL.parameters.some((p) => p.name === 'openingEntryAmount'));
+  });
+
+  it('with openingEntryAmount=true the O entries on dateFrom leave the lines and enter the opening, and vice versa', () => {
+    const lines = GL.sql.query;
+    const opening = GL.sql.openingQuery;
+    assert.match(lines, /NOT \(fa\.dateacct = '__DATEFROM__'::date AND fa\.factaccttype = 'O' AND '__OPENINGENTRYAMOUNT__' = 'true'\)/);
+    assert.match(opening, /fa\.dateacct = '__DATEFROM__'::date AND fa\.factaccttype = 'O' AND '__OPENINGENTRYAMOUNT__' = 'true'/);
+  });
+
+  it('the TB opening uses the very same predicate as the GL opening', () => {
+    const pred = "fa.dateacct = '__DATEFROM__'::date AND fa.factaccttype = 'O' AND '__OPENINGENTRYAMOUNT__' = 'true'";
+    assert.ok(CONTRACT.sql.treeQuery.includes(pred));
+    assert.ok(GL.sql.openingQuery.includes(pred));
   });
 });
